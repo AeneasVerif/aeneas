@@ -32,7 +32,11 @@ val pop_frame : C.config -> bool -> (V.typed_value option -> m_fun) -> m_fun
     Note: there are no region parameters, because they should be erased.
  *)
 val instantiate_fun_sig :
-  T.ety list -> T.const_generic list -> LA.fun_sig -> LA.inst_fun_sig
+  C.eval_ctx ->
+  T.egeneric_args ->
+  T.rtrait_instance_id ->
+  LA.fun_sig ->
+  LA.inst_fun_sig
 
 (** Helper.
 

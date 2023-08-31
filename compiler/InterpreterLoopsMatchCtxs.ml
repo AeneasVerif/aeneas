@@ -149,20 +149,25 @@ let rec match_types (match_distinct_types : 'r T.ty -> 'r T.ty -> 'r T.ty)
     (match_regions : 'r -> 'r -> 'r) (ty0 : 'r T.ty) (ty1 : 'r T.ty) : 'r T.ty =
   let match_rec = match_types match_distinct_types match_regions in
   match (ty0, ty1) with
-  | Adt (id0, regions0, tys0, cgs0), Adt (id1, regions1, tys1, cgs1) ->
+  | Adt (id0, generics0), Adt (id1, generics1) ->
       assert (id0 = id1);
-      assert (cgs0 = cgs1);
+      assert (generics0.const_generics = generics1.const_generics);
+      assert (generics0.trait_refs = generics1.trait_refs);
       let id = id0 in
-      let cgs = cgs1 in
+      let const_generics = generics1.const_generics in
+      let trait_refs = generics1.trait_refs in
       let regions =
         List.map
           (fun (id0, id1) -> match_regions id0 id1)
-          (List.combine regions0 regions1)
+          (List.combine generics0.regions generics1.regions)
       in
-      let tys =
-        List.map (fun (ty0, ty1) -> match_rec ty0 ty1) (List.combine tys0 tys1)
+      let types =
+        List.map
+          (fun (ty0, ty1) -> match_rec ty0 ty1)
+          (List.combine generics0.types generics1.types)
       in
-      Adt (id, regions, tys, cgs)
+      let generics = { T.regions; types; const_generics; trait_refs } in
+      Adt (id, generics)
   | TypeVar vid0, TypeVar vid1 ->
       assert (vid0 = vid1);
       let vid = vid0 in

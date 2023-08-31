@@ -3,6 +3,7 @@ module V = Values
 module E = Expressions
 module C = Contexts
 module Subst = Substitute
+module Assoc = AssociatedTypes
 module L = Logging
 open Cps
 open InterpreterExpansion
@@ -56,12 +57,10 @@ val compute_expanded_bottom_tuple_value : T.ety list -> V.typed_value
 
 (** Compute an expanded ADT ⊥ value *)
 val compute_expanded_bottom_adt_value :
-  T.type_decl T.TypeDeclId.Map.t ->
+  C.eval_ctx ->
   T.TypeDeclId.id ->
   T.VariantId.id option ->
-  T.erased_region list ->
-  T.ety list ->
-  T.const_generic list ->
+  T.egeneric_args ->
   V.typed_value
 
 (** Compute an expanded [Option] ⊥ value *)

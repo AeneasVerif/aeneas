@@ -57,6 +57,9 @@ let borrows_log = L.get_logger "MainLogger.Interpreter.Borrows"
 (** Logger for Invariants *)
 let invariants_log = L.get_logger "MainLogger.Interpreter.Invariants"
 
+(** Logger for AssociatedTypes *)
+let associated_types_log = L.get_logger "MainLogger.AssociatedTypes"
+
 (** Logger for SCC *)
 let scc_log = L.get_logger "MainLogger.Graph.SCC"
 

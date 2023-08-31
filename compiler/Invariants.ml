@@ -7,6 +7,7 @@ module V = Values
 module E = Expressions
 module C = Contexts
 module Subst = Substitute
+module Assoc = AssociatedTypes
 module A = LlbcAst
 module L = Logging
 open Cps
@@ -406,13 +407,14 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (match (tv.V.value, tv.V.ty) with
         | V.Literal cv, T.Literal ty -> check_literal_type cv ty
         (* ADT case *)
-        | V.Adt av, T.Adt (T.AdtId def_id, regions, tys, cgs) ->
+        | V.Adt av, T.Adt (T.AdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = C.ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
-            assert (List.length regions = List.length def.region_params);
-            assert (List.length tys = List.length def.type_params);
+            assert (
+              List.length generics.regions = List.length def.generics.regions);
+            assert (List.length generics.types = List.length def.generics.types);
             (* Check that the variant id is consistent *)
             (match (av.V.variant_id, def.T.kind) with
             | Some variant_id, T.Enum variants ->
@@ -421,8 +423,8 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | _ -> raise (Failure "Erroneous typing"));
             (* Check that the field types are correct *)
             let field_types =
-              Subst.type_decl_get_instantiated_field_etypes def av.V.variant_id
-                tys cgs
+              Assoc.type_decl_get_inst_norm_field_etypes ctx def av.V.variant_id
+                generics
             in
             let fields_with_types =
               List.combine av.V.field_values field_types
@@ -431,20 +433,28 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               (fun ((v, ty) : V.typed_value * T.ety) -> assert (v.V.ty = ty))
               fields_with_types
         (* Tuple case *)
-        | V.Adt av, T.Adt (T.Tuple, regions, tys, cgs) ->
-            assert (regions = []);
-            assert (cgs = []);
+        | V.Adt av, T.Adt (T.Tuple, generics) ->
+            assert (generics.regions = []);
+            assert (generics.const_generics = []);
             assert (av.V.variant_id = None);
             (* Check that the fields have the proper values - and check that there
              * are as many fields as field types at the same time *)
-            let fields_with_types = List.combine av.V.field_values tys in
+            let fields_with_types =
+              List.combine av.V.field_values generics.types
+            in
             List.iter
               (fun ((v, ty) : V.typed_value * T.ety) -> assert (v.V.ty = ty))
               fields_with_types
         (* Assumed type case *)
-        | V.Adt av, T.Adt (T.Assumed aty_id, regions, tys, cgs) -> (
+        | V.Adt av, T.Adt (T.Assumed aty_id, generics) -> (
             assert (av.V.variant_id = None || aty_id = T.Option);
-            match (aty_id, av.V.field_values, regions, tys, cgs) with
+            match
+              ( aty_id,
+                av.V.field_values,
+                generics.regions,
+                generics.types,
+                generics.const_generics )
+            with
             (* Box *)
             | T.Box, [ inner_value ], [], [ inner_ty ], []
             | T.Option, [ inner_value ], [], [ inner_ty ], [] ->
@@ -520,14 +530,17 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (* Check the current pair (value, type) *)
         (match (atv.V.value, atv.V.ty) with
         (* ADT case *)
-        | V.AAdt av, T.Adt (T.AdtId def_id, regions, tys, cgs) ->
+        | V.AAdt av, T.Adt (T.AdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = C.ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
-            assert (List.length regions = List.length def.region_params);
-            assert (List.length tys = List.length def.type_params);
-            assert (List.length cgs = List.length def.const_generic_params);
+            assert (
+              List.length generics.regions = List.length def.generics.regions);
+            assert (List.length generics.types = List.length def.generics.types);
+            assert (
+              List.length generics.const_generics
+              = List.length def.generics.const_generics);
             (* Check that the variant id is consistent *)
             (match (av.V.variant_id, def.T.kind) with
             | Some variant_id, T.Enum variants ->
@@ -536,8 +549,8 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | _ -> raise (Failure "Erroneous typing"));
             (* Check that the field types are correct *)
             let field_types =
-              Subst.type_decl_get_instantiated_field_rtypes def av.V.variant_id
-                regions tys cgs
+              Assoc.type_decl_get_inst_norm_field_rtypes ctx def av.V.variant_id
+                generics
             in
             let fields_with_types =
               List.combine av.V.field_values field_types
@@ -546,20 +559,28 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               (fun ((v, ty) : V.typed_avalue * T.rty) -> assert (v.V.ty = ty))
               fields_with_types
         (* Tuple case *)
-        | V.AAdt av, T.Adt (T.Tuple, regions, tys, cgs) ->
-            assert (regions = []);
-            assert (cgs = []);
+        | V.AAdt av, T.Adt (T.Tuple, generics) ->
+            assert (generics.regions = []);
+            assert (generics.const_generics = []);
             assert (av.V.variant_id = None);
             (* Check that the fields have the proper values - and check that there
              * are as many fields as field types at the same time *)
-            let fields_with_types = List.combine av.V.field_values tys in
+            let fields_with_types =
+              List.combine av.V.field_values generics.types
+            in
             List.iter
               (fun ((v, ty) : V.typed_avalue * T.rty) -> assert (v.V.ty = ty))
               fields_with_types
         (* Assumed type case *)
-        | V.AAdt av, T.Adt (T.Assumed aty_id, regions, tys, cgs) -> (
+        | V.AAdt av, T.Adt (T.Assumed aty_id, generics) -> (
             assert (av.V.variant_id = None);
-            match (aty_id, av.V.field_values, regions, tys, cgs) with
+            match
+              ( aty_id,
+                av.V.field_values,
+                generics.regions,
+                generics.types,
+                generics.const_generics )
+            with
             (* Box *)
             | T.Box, [ boxed_value ], [], [ boxed_ty ], [] ->
                 assert (boxed_value.V.ty = boxed_ty)

@@ -13,6 +13,9 @@ module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
 module FunDeclId = A.FunDeclId
 module GlobalDeclId = A.GlobalDeclId
+module TraitDeclId = T.TraitDeclId
+module TraitImplId = T.TraitImplId
+module TraitClauseId = T.TraitClauseId
 
 (** We redefine identifiers for loop: in {!Values}, the identifiers are global
     (they monotonically increase across functions) while in {!module:Pure} we want
@@ -38,6 +41,10 @@ type integer_type = T.integer_type [@@deriving show, ord]
 type const_generic_var = T.const_generic_var [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
+type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
+type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
+type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
+type trait_item_name = T.trait_item_name [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -177,6 +184,14 @@ class ['self] iter_ty_base =
     inherit! [_] T.iter_const_generic
     inherit! [_] PV.iter_literal_type
     method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
+    method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
+    method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> unit =
+      fun _ _ -> ()
+
+    method visit_trait_item_name : 'env -> trait_item_name -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
@@ -186,6 +201,18 @@ class ['self] map_ty_base =
     inherit! [_] T.map_const_generic
     inherit! [_] PV.map_literal_type
     method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id =
+      fun _ x -> x
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id =
+      fun _ x -> x
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> trait_clause_id =
+      fun _ x -> x
+
+    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
@@ -195,6 +222,18 @@ class virtual ['self] reduce_ty_base =
     inherit! [_] T.reduce_const_generic
     inherit! [_] PV.reduce_literal_type
     method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
@@ -206,10 +245,24 @@ class virtual ['self] mapreduce_ty_base =
 
     method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
       fun _ x -> (x, self#zero)
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_clause_id
+        : 'env -> trait_clause_id -> trait_clause_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_item_name
+        : 'env -> trait_item_name -> trait_item_name * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 type ty =
-  | Adt of type_id * ty list * const_generic list
+  | Adt of type_id * generic_args
       (** {!Adt} encodes ADTs and tuples and assumed types.
 
           TODO: what about the ended regions? (ADTs may be parameterized
@@ -220,6 +273,23 @@ type ty =
   | TypeVar of type_var_id
   | Literal of literal_type
   | Arrow of ty * ty
+
+and trait_ref = { trait_id : trait_instance_id; generics : generic_args }
+
+and generic_args = {
+  types : ty list;
+  const_generics : const_generic list;
+  trait_refs : trait_ref list;
+}
+
+and trait_instance_id =
+  | Self
+  | TraitImpl of trait_impl_id
+  | Clause of trait_clause_id
+  | ParentClause of trait_instance_id * trait_clause_id
+  | ItemClause of trait_instance_id * trait_item_name * trait_clause_id
+  | TraitRef of trait_ref
+  | UnknownTrait of string
 [@@deriving
   show,
     visitors
@@ -265,11 +335,24 @@ type type_decl_kind = Struct of field list | Enum of variant list | Opaque
 
 type type_var = T.type_var [@@deriving show]
 
+type trait_clause = {
+  clause_id : trait_clause_id;
+  trait_id : trait_decl_id;
+  generics : generic_args;
+}
+[@@deriving show]
+
+type generic_params = {
+  types : type_var list;
+  const_generics : const_generic_var list;
+  trait_clauses : trait_clause list;
+}
+[@@deriving show]
+
 type type_decl = {
   def_id : TypeDeclId.id;
   name : name;
-  type_params : type_var list;
-  const_generic_params : const_generic_var list;
+  generics : generic_params;
   kind : type_decl_kind;
 }
 [@@deriving show]
@@ -463,18 +546,13 @@ type qualif_id =
   | Proj of projection  (** Field projector *)
 [@@deriving show]
 
-(** An instantiated qualified.
+(** An instantiated qualifier.
 
     Note that for now we have a clear separation between types and expressions,
-    which explains why we have the [type_params] field: a function or ADT
+    which explains why we have the [generics] field: a function or ADT
     constructor is always fully instantiated.
  *)
-type qualif = {
-  id : qualif_id;
-  type_args : ty list;
-  const_generic_args : const_generic list;
-}
-[@@deriving show]
+type qualif = { id : qualif_id; generics : generic_args } [@@deriving show]
 
 type field_id = FieldId.id [@@deriving show, ord]
 type var_id = VarId.id [@@deriving show, ord]

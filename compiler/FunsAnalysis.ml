@@ -70,14 +70,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
           method! visit_rvalue _env rv =
             match rv with
-            | Use _ | Ref _ | Global _ | Discriminant _ | Aggregate _ -> ()
+            | Use _ | RvRef _ | Global _ | Discriminant _ | Aggregate _ -> ()
             | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := EU.binop_can_fail bop || !can_fail
 
           method! visit_Call env call =
             (match call.func with
-            | Regular id ->
+            | FunId (Regular id) ->
                 if FunDeclId.Set.mem id fun_ids then (
                   can_diverge := true;
                   is_rec := true)
@@ -86,9 +86,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                   self#may_fail info.can_fail;
                   stateful := !stateful || info.stateful;
                   can_diverge := !can_diverge || info.can_diverge
-            | Assumed id ->
+            | FunId (Assumed id) ->
                 (* None of the assumed functions can diverge nor are considered stateful *)
-                can_fail := !can_fail || Assumed.assumed_can_fail id);
+                can_fail := !can_fail || Assumed.assumed_can_fail id
+            | TraitMethod _ ->
+                (* We consider trait functions can fail, diverge, and are not stateful *)
+                can_fail := true;
+                can_diverge := true);
             super#visit_Call env call
 
           method! visit_Panic env =
@@ -141,7 +145,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
   let rec analyze_decl_groups (decls : declaration_group list) : unit =
     match decls with
     | [] -> ()
-    | Type _ :: decls' -> analyze_decl_groups decls'
+    | (Type _ | TraitDecl _ | TraitImpl _) :: decls' ->
+        analyze_decl_groups decls'
     | Fun decl :: decls' ->
         analyze_fun_decl_group decl;
         analyze_decl_groups decls'

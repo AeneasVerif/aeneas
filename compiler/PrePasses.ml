@@ -107,7 +107,7 @@ let remove_useless_cf_merges (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
         false
     | Assign (_, rv) -> (
         match rv with
-        | Use _ | Ref _ -> not must_end_with_exit
+        | Use _ | RvRef _ -> not must_end_with_exit
         | Aggregate (AggregatedTuple, []) -> not must_end_with_exit
         | _ -> false)
     | FakeRead _ | Drop _ | Nop -> not must_end_with_exit
@@ -376,7 +376,7 @@ let remove_shallow_borrows (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
 
         method! visit_Assign env p rv =
           match (p.projection, rv) with
-          | [], E.Ref (_, E.Shallow) ->
+          | [], E.RvRef (_, E.Shallow) ->
               (* Filter *)
               filtered := E.VarId.Set.add p.var_id !filtered;
               Nop

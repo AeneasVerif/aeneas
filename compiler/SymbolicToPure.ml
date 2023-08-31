@@ -52,6 +52,9 @@ type fun_context = {
 type global_context = { llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t }
 [@@deriving show]
 
+type trait_decls_context = A.trait_decl A.TraitDeclId.Map.t [@@deriving show]
+type trait_impls_context = A.trait_impl A.TraitImplId.Map.t [@@deriving show]
+
 (** Whenever we translate a function call or an ended abstraction, we
     store the related information (this is useful when translating ended
     children abstractions).
@@ -120,6 +123,8 @@ type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
   global_context : global_context;
+  trait_decls_ctx : trait_decls_context;
+  trait_impls_ctx : trait_impls_context;
   fun_decl : A.fun_decl;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sg : fun_sig;
@@ -205,7 +210,7 @@ type bs_ctx = {
 let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.Ast.ast_formatter =
   Print.Ast.decls_and_fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
     ctx.fun_context.llbc_fun_decls ctx.global_context.llbc_global_decls
-    ctx.fun_decl
+    ctx.trait_decls_ctx ctx.trait_impls_ctx ctx.fun_decl
 
 let bs_ctx_to_ctx_formatter (ctx : bs_ctx) : Print.Contexts.ctx_formatter =
   let rvar_to_string = Print.Types.region_var_id_to_string in
@@ -223,16 +228,19 @@ let bs_ctx_to_ctx_formatter (ctx : bs_ctx) : Print.Contexts.ctx_formatter =
     adt_variant_to_string = ast_fmt.adt_variant_to_string;
     var_id_to_string;
     adt_field_names = ast_fmt.adt_field_names;
+    trait_decl_id_to_string = ast_fmt.trait_decl_id_to_string;
+    trait_impl_id_to_string = ast_fmt.trait_impl_id_to_string;
+    trait_clause_id_to_string = ast_fmt.trait_clause_id_to_string;
   }
 
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
-  let type_params = ctx.fun_decl.signature.type_params in
-  let cg_params = ctx.fun_decl.signature.const_generic_params in
+  let generics = ctx.fun_decl.signature.generics in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
-  PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
-    cg_params
+  PrintPure.mk_ast_formatter type_decls fun_decls global_decls
+    ctx.trait_decls_ctx ctx.trait_impls_ctx generics.types
+    generics.const_generics
 
 let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
   let fmt = bs_ctx_to_ctx_formatter ctx in
@@ -254,12 +262,11 @@ let rty_to_string (ctx : bs_ctx) (ty : T.rty) : string =
   Print.PT.rty_to_string fmt ty
 
 let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
-  let type_params = def.type_params in
-  let cg_params = def.const_generic_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
   let fmt =
-    PrintPure.mk_type_formatter type_decls global_decls type_params cg_params
+    PrintPure.mk_type_formatter type_decls global_decls ctx.trait_decls_ctx
+      ctx.trait_impls_ctx def.generics.types def.generics.const_generics
   in
   PrintPure.type_decl_to_string fmt def
 

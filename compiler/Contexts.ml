@@ -255,11 +255,28 @@ type fun_context = { fun_decls : fun_decl FunDeclId.Map.t } [@@deriving show]
 type global_context = { global_decls : global_decl GlobalDeclId.Map.t }
 [@@deriving show]
 
+type trait_decls_context = { trait_decls : trait_decl TraitDeclId.Map.t }
+[@@deriving show]
+
+type trait_impls_context = { trait_impls : trait_impl TraitImplId.Map.t }
+[@@deriving show]
+
+type decls_ctx = {
+  type_ctx : type_context;
+  fun_ctx : fun_context;
+  global_ctx : global_context;
+  trait_decls_ctx : trait_decls_context;
+  trait_impls_ctx : trait_impls_context;
+}
+[@@deriving show]
+
 (** Evaluation context *)
 type eval_ctx = {
   type_context : type_context;
   fun_context : fun_context;
   global_context : global_context;
+  trait_decls_context : trait_decls_context;
+  trait_impls_context : trait_impls_context;
   region_groups : RegionGroupId.id list;
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
@@ -267,6 +284,7 @@ type eval_ctx = {
       (** The map from const generic vars to their values. Those values
           can be symbolic values or concrete values (in the latter case:
           if we run in interpreter mode) *)
+  trait_clauses : etrait_ref list;
   env : env;
   ended_regions : RegionId.Set.t;
 }
@@ -307,6 +325,12 @@ let ctx_lookup_fun_decl (ctx : eval_ctx) (fid : FunDeclId.id) : fun_decl =
 let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) :
     global_decl =
   GlobalDeclId.Map.find gid ctx.global_context.global_decls
+
+let ctx_lookup_trait_decl (ctx : eval_ctx) (id : TraitDeclId.id) : trait_decl =
+  TraitDeclId.Map.find id ctx.trait_decls_context.trait_decls
+
+let ctx_lookup_trait_impl (ctx : eval_ctx) (id : TraitImplId.id) : trait_impl =
+  TraitImplId.Map.find id ctx.trait_impls_context.trait_impls
 
 (** Retrieve a variable's value in the current frame *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =

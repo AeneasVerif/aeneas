@@ -8,6 +8,9 @@ type type_formatter = {
   type_decl_id_to_string : TypeDeclId.id -> string;
   const_generic_var_id_to_string : ConstGenericVarId.id -> string;
   global_decl_id_to_string : GlobalDeclId.id -> string;
+  trait_decl_id_to_string : TraitDeclId.id -> string;
+  trait_impl_id_to_string : TraitImplId.id -> string;
+  trait_clause_id_to_string : TraitClauseId.id -> string;
 }
 
 type value_formatter = {
@@ -18,6 +21,9 @@ type value_formatter = {
   adt_variant_to_string : TypeDeclId.id -> VariantId.id -> string;
   var_id_to_string : VarId.id -> string;
   adt_field_names : TypeDeclId.id -> VariantId.id option -> string list option;
+  trait_decl_id_to_string : TraitDeclId.id -> string;
+  trait_impl_id_to_string : TraitImplId.id -> string;
+  trait_clause_id_to_string : TraitClauseId.id -> string;
 }
 
 let value_to_type_formatter (fmt : value_formatter) : type_formatter =
@@ -26,6 +32,9 @@ let value_to_type_formatter (fmt : value_formatter) : type_formatter =
     type_decl_id_to_string = fmt.type_decl_id_to_string;
     const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
     global_decl_id_to_string = fmt.global_decl_id_to_string;
+    trait_decl_id_to_string = fmt.trait_decl_id_to_string;
+    trait_impl_id_to_string = fmt.trait_impl_id_to_string;
+    trait_clause_id_to_string = fmt.trait_clause_id_to_string;
   }
 
 (* TODO: we need to store which variables we have encountered so far, and
@@ -42,6 +51,9 @@ type ast_formatter = {
   adt_field_names : TypeDeclId.id -> VariantId.id option -> string list option;
   fun_decl_id_to_string : FunDeclId.id -> string;
   global_decl_id_to_string : GlobalDeclId.id -> string;
+  trait_decl_id_to_string : TraitDeclId.id -> string;
+  trait_impl_id_to_string : TraitImplId.id -> string;
+  trait_clause_id_to_string : TraitClauseId.id -> string;
 }
 
 let ast_to_value_formatter (fmt : ast_formatter) : value_formatter =
@@ -53,6 +65,9 @@ let ast_to_value_formatter (fmt : ast_formatter) : value_formatter =
     adt_variant_to_string = fmt.adt_variant_to_string;
     var_id_to_string = fmt.var_id_to_string;
     adt_field_names = fmt.adt_field_names;
+    trait_decl_id_to_string = fmt.trait_decl_id_to_string;
+    trait_impl_id_to_string = fmt.trait_impl_id_to_string;
+    trait_clause_id_to_string = fmt.trait_clause_id_to_string;
   }
 
 let ast_to_type_formatter (fmt : ast_formatter) : type_formatter =
@@ -70,31 +85,51 @@ let literal_type_to_string = Print.PrimitiveValues.literal_type_to_string
 let scalar_value_to_string = Print.PrimitiveValues.scalar_value_to_string
 let literal_to_string = Print.PrimitiveValues.literal_to_string
 
+(* Remark: not using generic_params on purpose, because we may use parameters
+   which either come from LLBC or from pure, and the [generic_params] type
+   for those ASTs is not the same. Note that it works because we actually don't
+   need to know the trait clauses to print the AST: we can thus ignore them.
+*)
 let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     (global_decls : A.global_decl GlobalDeclId.Map.t)
-    (type_params : type_var list)
+    (trait_decls : A.trait_decl TraitDeclId.Map.t)
+    (trait_impls : A.trait_impl TraitImplId.Map.t) (type_params : type_var list)
     (const_generic_params : const_generic_var list) : type_formatter =
   let type_var_id_to_string vid =
-    let var = T.TypeVarId.nth type_params vid in
+    let var = TypeVarId.nth type_params vid in
     type_var_to_string var
   in
   let const_generic_var_id_to_string vid =
-    let var = T.ConstGenericVarId.nth const_generic_params vid in
+    let var = ConstGenericVarId.nth const_generic_params vid in
     const_generic_var_to_string var
   in
   let type_decl_id_to_string def_id =
-    let def = T.TypeDeclId.Map.find def_id type_decls in
+    let def = TypeDeclId.Map.find def_id type_decls in
     name_to_string def.name
   in
   let global_decl_id_to_string def_id =
-    let def = T.GlobalDeclId.Map.find def_id global_decls in
+    let def = GlobalDeclId.Map.find def_id global_decls in
     name_to_string def.name
+  in
+  let trait_decl_id_to_string def_id =
+    let def = TraitDeclId.Map.find def_id trait_decls in
+    name_to_string def.name
+  in
+  let trait_impl_id_to_string def_id =
+    let def = TraitImplId.Map.find def_id trait_impls in
+    name_to_string def.name
+  in
+  let trait_clause_id_to_string id =
+    Print.PT.trait_clause_id_to_pretty_string id
   in
   {
     type_var_id_to_string;
     type_decl_id_to_string;
     const_generic_var_id_to_string;
     global_decl_id_to_string;
+    trait_decl_id_to_string;
+    trait_impl_id_to_string;
+    trait_clause_id_to_string;
   }
 
 (* TODO: there is a bit of duplication with Print.fun_decl_to_ast_formatter.
@@ -106,7 +141,8 @@ let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
 let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     (fun_decls : A.fun_decl FunDeclId.Map.t)
     (global_decls : A.global_decl GlobalDeclId.Map.t)
-    (type_params : type_var list)
+    (trait_decls : A.trait_decl TraitDeclId.Map.t)
+    (trait_impls : A.trait_impl TraitImplId.Map.t) (type_params : type_var list)
     (const_generic_params : const_generic_var list) : ast_formatter =
   let type_var_id_to_string vid =
     let var = T.TypeVarId.nth type_params vid in
@@ -141,6 +177,17 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     let def = GlobalDeclId.Map.find def_id global_decls in
     global_name_to_string def.name
   in
+  let trait_decl_id_to_string def_id =
+    let def = TraitDeclId.Map.find def_id trait_decls in
+    name_to_string def.name
+  in
+  let trait_impl_id_to_string def_id =
+    let def = TraitImplId.Map.find def_id trait_impls in
+    name_to_string def.name
+  in
+  let trait_clause_id_to_string id =
+    Print.PT.trait_clause_id_to_pretty_string id
+  in
   {
     type_var_id_to_string;
     const_generic_var_id_to_string;
@@ -151,6 +198,9 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     adt_field_to_string;
     fun_decl_id_to_string;
     global_decl_id_to_string;
+    trait_decl_id_to_string;
+    trait_impl_id_to_string;
+    trait_clause_id_to_string;
   }
 
 let assumed_ty_to_string (aty : assumed_ty) : string =
@@ -182,20 +232,18 @@ let const_generic_to_string (fmt : type_formatter) (cg : T.const_generic) :
 
 let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
   match ty with
-  | Adt (id, tys, cgs) -> (
-      let tys = List.map (ty_to_string fmt false) tys in
-      let cgs = List.map (const_generic_to_string fmt) cgs in
-      let params = List.append tys cgs in
+  | Adt (id, generics) -> (
       match id with
       | Tuple ->
-          assert (cgs = []);
-          "(" ^ String.concat " * " tys ^ ")"
+          let generics = generic_args_to_strings fmt false generics in
+          "(" ^ String.concat " * " generics ^ ")"
       | AdtId _ | Assumed _ ->
-          let params_s =
-            if params = [] then "" else " " ^ String.concat " " params
+          let generics = generic_args_to_strings fmt true generics in
+          let generics_s =
+            if generics = [] then "" else " " ^ String.concat " " generics
           in
-          let ty_s = type_id_to_string fmt id ^ params_s in
-          if params <> [] && inside then "(" ^ ty_s ^ ")" else ty_s)
+          let ty_s = type_id_to_string fmt id ^ generics_s in
+          if generics <> [] && inside then "(" ^ ty_s ^ ")" else ty_s)
   | TypeVar tv -> fmt.type_var_id_to_string tv
   | Literal lty -> literal_type_to_string lty
   | Arrow (arg_ty, ret_ty) ->
@@ -203,6 +251,62 @@ let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
         ty_to_string fmt true arg_ty ^ " -> " ^ ty_to_string fmt false ret_ty
       in
       if inside then "(" ^ ty ^ ")" else ty
+
+and generic_args_to_strings (fmt : type_formatter) (inside : bool)
+    (generics : generic_args) : string list =
+  let tys = List.map (ty_to_string fmt inside) generics.types in
+  let cgs = List.map (const_generic_to_string fmt) generics.const_generics in
+  let trait_refs =
+    List.map (trait_ref_to_string fmt inside) generics.trait_refs
+  in
+  List.concat [ tys; cgs; trait_refs ]
+
+and generic_args_to_string (fmt : type_formatter) (generics : generic_args) :
+    string =
+  String.concat " " (generic_args_to_strings fmt true generics)
+
+and trait_ref_to_string (fmt : type_formatter) (inside : bool) (tr : trait_ref)
+    : string =
+  let trait_id = trait_instance_id_to_string fmt false tr.trait_id in
+  let generics = generic_args_to_string fmt tr.generics in
+  let s = trait_id ^ generics in
+  if tr.generics = empty_generic_args || not inside then s else "(" ^ s ^ ")"
+
+and trait_instance_id_to_string (fmt : type_formatter) (inside : bool)
+    (id : trait_instance_id) : string =
+  match id with
+  | Self -> "Self"
+  | TraitImpl id -> fmt.trait_impl_id_to_string id
+  | Clause id -> fmt.trait_clause_id_to_string id
+  | ParentClause (inst_id, clause_id) ->
+      let inst_id = trait_instance_id_to_string fmt false inst_id in
+      let clause_id = fmt.trait_clause_id_to_string clause_id in
+      "parent(" ^ inst_id ^ ")::" ^ clause_id
+  | ItemClause (inst_id, item_name, clause_id) ->
+      let inst_id = trait_instance_id_to_string fmt false inst_id in
+      let clause_id = fmt.trait_clause_id_to_string clause_id in
+      "(" ^ inst_id ^ ")::" ^ item_name ^ "::[" ^ clause_id ^ "]"
+  | TraitRef tr -> trait_ref_to_string fmt inside tr
+  | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
+
+let trait_clause_to_string (fmt : type_formatter) (clause : trait_clause) :
+    string =
+  let clause_id = fmt.trait_clause_id_to_string clause.clause_id in
+  let trait_id = fmt.trait_decl_id_to_string clause.trait_id in
+  let generics = generic_args_to_strings fmt true clause.generics in
+  let generics =
+    if generics = [] then "" else " " ^ String.concat " " generics
+  in
+  "[" ^ clause_id ^ "]: " ^ trait_id ^ generics
+
+let generic_params_to_strings (fmt : type_formatter) (generics : generic_params)
+    : string list =
+  let tys = List.map type_var_to_string generics.types in
+  let cgs = List.map const_generic_var_to_string generics.const_generics in
+  let trait_clauses =
+    List.map (trait_clause_to_string fmt) generics.trait_clauses
+  in
+  List.concat [ tys; cgs; trait_clauses ]
 
 let field_to_string fmt inside (f : field) : string =
   match f.field_name with
@@ -217,11 +321,10 @@ let variant_to_string fmt (v : variant) : string =
   ^ ")"
 
 let type_decl_to_string (fmt : type_formatter) (def : type_decl) : string =
-  let types = def.type_params in
   let name = name_to_string def.name in
   let params =
-    if types = [] then ""
-    else " " ^ String.concat " " (List.map type_var_to_string types)
+    if def.generics = empty_generic_params then ""
+    else " " ^ String.concat " " (generic_params_to_strings fmt def.generics)
   in
   match def.kind with
   | Struct fields ->
@@ -353,10 +456,10 @@ let adt_g_value_to_string (fmt : value_formatter)
     (field_values : 'v list) (ty : ty) : string =
   let field_values = List.map value_to_string field_values in
   match ty with
-  | Adt (Tuple, _, _) ->
+  | Adt (Tuple, _) ->
       (* Tuple *)
       "(" ^ String.concat ", " field_values ^ ")"
-  | Adt (AdtId def_id, _, _) ->
+  | Adt (AdtId def_id, _) ->
       (* "Regular" ADT *)
       let adt_ident =
         match variant_id with
@@ -378,7 +481,7 @@ let adt_g_value_to_string (fmt : value_formatter)
             let field_values = String.concat " " field_values in
             adt_ident ^ " { " ^ field_values ^ " }"
       else adt_ident
-  | Adt (Assumed aty, _, _) -> (
+  | Adt (Assumed aty, _) -> (
       (* Assumed type *)
       match aty with
       | State ->
@@ -631,7 +734,7 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
   (* There are two possibilities: either the [app] is an instantiated,
    * top-level qualifier (function, ADT constructore...), or it is a "regular"
    * expression *)
-  let app, tys =
+  let app, generics =
     match app.e with
     | Qualif qualif ->
         (* Qualifier case *)
@@ -656,9 +759,9 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
         in
         (* Convert the type instantiation *)
         let ty_fmt = ast_to_type_formatter fmt in
-        let tys = List.map (ty_to_string ty_fmt true) qualif.type_args in
+        let generics = generic_args_to_strings ty_fmt true qualif.generics in
         (* *)
-        (qualif_s, tys)
+        (qualif_s, generics)
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in
@@ -673,7 +776,7 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
     texpression_to_string fmt inside indent1 indent_incr
   in
   let args = List.map arg_to_string args in
-  let all_args = List.append tys args in
+  let all_args = List.append generics args in
   (* Put together *)
   let e =
     if all_args = [] then app else app ^ " " ^ String.concat " " all_args

@@ -280,9 +280,7 @@ let translate_crate_to_pure (crate : A.crate) :
   log#ldebug (lazy "translate_crate_to_pure");
 
   (* Compute the type and function contexts *)
-  let type_context, fun_context, global_context =
-    compute_type_fun_global_contexts crate
-  in
+  let type_context, fun_context, global_context = compute_contexts crate in
   let fun_infos =
     FA.analyze_module crate fun_context.C.fun_decls
       global_context.C.global_decls !Config.use_state

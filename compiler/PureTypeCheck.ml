@@ -9,17 +9,19 @@ open PureUtils
     of fields is fixed: it shouldn't be used for arrays, slices, etc.
  *)
 let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
-    (type_id : type_id) (variant_id : VariantId.id option) (tys : ty list)
-    (cgs : const_generic list) : ty list =
+    (type_id : type_id) (variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
   match type_id with
   | Tuple ->
       (* Tuple *)
+      assert (generics.const_generics = []);
+      assert (generics.trait_refs = []);
       assert (variant_id = None);
-      tys
+      generics.types
   | AdtId def_id ->
       (* "Regular" ADT *)
       let def = TypeDeclId.Map.find def_id type_decls in
-      type_decl_get_instantiated_fields_types def variant_id tys cgs
+      type_decl_get_instantiated_fields_types def variant_id generics
   | Assumed aty -> (
       (* Assumed type *)
       match aty with
@@ -27,14 +29,14 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           (* This type is opaque *)
           raise (Failure "Unreachable: opaque type")
       | Result ->
-          let ty = Collections.List.to_cons_nil tys in
+          let ty = Collections.List.to_cons_nil generics.types in
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
           else
             raise (Failure "Unreachable: improper variant id for result type")
       | Error ->
-          assert (tys = []);
+          assert (generics = empty_generic_args);
           let variant_id = Option.get variant_id in
           assert (
             variant_id = error_failure_id || variant_id = error_out_of_fuel_id);
@@ -45,14 +47,14 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
           else raise (Failure "Unreachable: improper variant id for fuel type")
       | Option ->
-          let ty = Collections.List.to_cons_nil tys in
+          let ty = Collections.List.to_cons_nil generics.types in
           let variant_id = Option.get variant_id in
           if variant_id = option_some_id then [ ty ]
           else if variant_id = option_none_id then []
           else
             raise (Failure "Unreachable: improper variant id for option type")
       | Range ->
-          let ty = Collections.List.to_cons_nil tys in
+          let ty = Collections.List.to_cons_nil generics.types in
           assert (variant_id = None);
           [ ty; ty ]
       | Vec | Array | Slice | Str ->
@@ -88,12 +90,13 @@ let rec check_typed_pattern (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
       { ctx with env }
   | PatAdt av ->
       (* Compute the field types *)
-      let type_id, tys, cgs = ty_as_adt v.ty in
+      let type_id, generics = ty_as_adt v.ty in
       let field_tys =
-        get_adt_field_types ctx.type_decls type_id av.variant_id tys cgs
+        get_adt_field_types ctx.type_decls type_id av.variant_id generics
       in
       let check_value (ctx : tc_ctx) (ty : ty) (v : typed_pattern) : tc_ctx =
         if ty <> v.ty then (
+          (* TODO: we need to normalize the types *)
           log#serror
             ("check_typed_pattern: not the same types:" ^ "\n- ty: "
            ^ show_ty ty ^ "\n- v.ty: " ^ show_ty v.ty);
@@ -142,31 +145,29 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
           (* Note we can only project fields of structures (not enumerations) *)
           (* Deconstruct the projector type *)
           let adt_ty, field_ty = destruct_arrow e.ty in
-          let adt_id, adt_type_args, adt_cg_args = ty_as_adt adt_ty in
+          let adt_id, adt_generics = ty_as_adt adt_ty in
           (* Check the ADT type *)
           assert (adt_id = proj_adt_id);
-          assert (adt_type_args = qualif.type_args);
-          assert (adt_cg_args = qualif.const_generic_args);
+          assert (adt_generics = qualif.generics);
           (* Retrieve and check the expected field type *)
           let variant_id = None in
           let expected_field_tys =
             get_adt_field_types ctx.type_decls proj_adt_id variant_id
-              qualif.type_args qualif.const_generic_args
+              qualif.generics
           in
           let expected_field_ty = FieldId.nth expected_field_tys field_id in
           assert (expected_field_ty = field_ty)
       | AdtCons id -> (
           let expected_field_tys =
             get_adt_field_types ctx.type_decls id.adt_id id.variant_id
-              qualif.type_args qualif.const_generic_args
+              qualif.generics
           in
           let field_tys, adt_ty = destruct_arrows e.ty in
           assert (expected_field_tys = field_tys);
           match adt_ty with
-          | Adt (type_id, tys, cgs) ->
+          | Adt (type_id, generics) ->
               assert (type_id = id.adt_id);
-              assert (tys = qualif.type_args);
-              assert (cgs = qualif.const_generic_args)
+              assert (generics = qualif.generics)
           | _ -> raise (Failure "Unreachable")))
   | Let (monadic, pat, re, e_next) ->
       let expected_pat_ty = if monadic then destruct_result re.ty else re.ty in
@@ -212,15 +213,14 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
          | Some ty -> assert (ty = e.ty));
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
-      let adt_id, adt_type_args, adt_cg_args = ty_as_adt e.ty in
+      let adt_id, adt_generics = ty_as_adt e.ty in
       assert (adt_id = supd.struct_id);
       (* The id can only be: a custom type decl or an array *)
       match adt_id with
       | AdtId _ ->
           let variant_id = None in
           let expected_field_tys =
-            get_adt_field_types ctx.type_decls adt_id variant_id adt_type_args
-              adt_cg_args
+            get_adt_field_types ctx.type_decls adt_id variant_id adt_generics
           in
           List.iter
             (fun (fid, fe) ->
@@ -229,7 +229,9 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
               check_texpression ctx fe)
             supd.updates
       | Assumed Array ->
-          let expected_field_ty = Collections.List.to_cons_nil adt_type_args in
+          let expected_field_ty =
+            Collections.List.to_cons_nil adt_generics.types
+          in
           List.iter
             (fun (_, fe) ->
               assert (expected_field_ty = fe.ty);

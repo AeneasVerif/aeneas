@@ -100,15 +100,18 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
     (compare_regions : T.RegionId.id T.region -> T.RegionId.id T.region -> bool)
     (ty1 : T.rty) (ty2 : T.rty) : bool =
   let compare = compare_rtys default combine compare_regions in
+  (* Normalize the associated types *)
   match (ty1, ty2) with
   | T.Literal lit1, T.Literal lit2 ->
       assert (lit1 = lit2);
       default
-  | T.Adt (id1, regions1, tys1, cgs1), T.Adt (id2, regions2, tys2, cgs2) ->
+  | T.Adt (id1, generics1), T.Adt (id2, generics2) ->
       assert (id1 = id2);
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
-      assert (cgs1 = cgs2);
+      assert (generics1.const_generics = generics2.const_generics);
+
+      (* We also ignore the trait refs *)
 
       (* The check for the ADTs is very crude: we simply compare the arguments
        * two by two.
@@ -123,14 +126,14 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
        * this check would still be a reasonable conservative approximation. *)
 
       (* Check the region parameters *)
-      let regions = List.combine regions1 regions2 in
+      let regions = List.combine generics1.regions generics2.regions in
       let params_b =
         List.fold_left
           (fun b (r1, r2) -> combine b (compare_regions r1 r2))
           default regions
       in
       (* Check the type parameters *)
-      let tys = List.combine tys1 tys2 in
+      let tys = List.combine generics1.types generics2.types in
       let tys_b =
         List.fold_left
           (fun b (ty1, ty2) -> combine b (compare ty1 ty2))
@@ -149,6 +152,11 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
       combine regions_b tys_b
   | T.TypeVar id1, T.TypeVar id2 ->
       assert (id1 = id2);
+      default
+  | T.TraitType _, T.TraitType _ ->
+      (* The types should have been normalized. If after normalization we
+         get trait types, we can consider them as variables *)
+      assert (ty1 = ty2);
       default
   | _ ->
       log#lerror

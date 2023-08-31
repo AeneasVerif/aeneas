@@ -12,6 +12,7 @@
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
  (libraries charon core_unix unionFind ocamlgraph)
  (modules
+  AssociatedTypes
   Assumed
   Collections
   Config
