@@ -586,6 +586,8 @@ type extraction_ctx = {
           in case a Rust function only has one backward translation
           and we filter the forward function because it returns unit.
         *)
+  trait_decl_id : trait_decl_id option;
+      (** If we are extracting a trait declaration, identifies it *)
 }
 
 (** Debugging function, used when communicating name collisions to the user,
@@ -885,12 +887,24 @@ let ctx_add_const_generic_params (vars : const_generic_var list)
       ctx_add_const_generic_var var.name var.index ctx)
     ctx vars
 
-let ctx_add_type_const_generic_params (tvars : type_var list)
-    (cgvars : const_generic_var list) (ctx : extraction_ctx) :
-    extraction_ctx * string list * string list =
-  let ctx, tys = ctx_add_type_params tvars ctx in
-  let ctx, cgs = ctx_add_const_generic_params cgvars ctx in
-  (ctx, tys, cgs)
+let ctx_add_trait_clauses (clauses : trait_clause list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (c : trait_clause) -> ctx_add_trait_clause c ctx)
+    ctx clauses
+
+(** Returns the lists of names for:
+    - the type variables
+    - the const generic variables
+    - the trait clauses
+  *)
+let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
+    extraction_ctx * string list * string list * string list =
+  let { types; const_generics; trait_clauses } = generics in
+  let ctx, tys = ctx_add_type_params types ctx in
+  let ctx, cgs = ctx_add_const_generic_params const_generics ctx in
+  let ctx, tcs = ctx_add_trait_clauses trait_clauses ctx in
+  (ctx, tys, cgs, tcs)
 
 let ctx_add_type_decl_struct (def : type_decl) (ctx : extraction_ctx) :
     extraction_ctx * string =
@@ -1003,13 +1017,10 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     | None -> None
     | Some rg_id ->
         let rg = T.RegionGroupId.nth sg.regions_hierarchy rg_id in
-        let regions =
-          List.map
-            (fun rid -> T.RegionVarId.nth sg.region_params rid)
-            rg.regions
-        in
         let region_names =
-          List.map (fun (r : T.region_var) -> r.name) regions
+          List.map
+            (fun rid -> (T.RegionVarId.nth sg.generics.regions rid).name)
+            rg.regions
         in
         Some { id = rg_id; region_names }
   in
