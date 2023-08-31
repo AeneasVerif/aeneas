@@ -251,6 +251,15 @@ let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
         ty_to_string fmt true arg_ty ^ " -> " ^ ty_to_string fmt false ret_ty
       in
       if inside then "(" ^ ty ^ ")" else ty
+  | TraitType (trait_ref, generics, type_name) ->
+      let trait_ref = trait_ref_to_string fmt false trait_ref in
+      let s =
+        if generics = empty_generic_args then trait_ref ^ "::" ^ type_name
+        else
+          let generics = generic_args_to_string fmt generics in
+          "(" ^ trait_ref ^ " " ^ generics ^ ")::" ^ type_name
+      in
+      if inside then "(" ^ s ^ ")" else s
 
 and generic_args_to_strings (fmt : type_formatter) (inside : bool)
     (generics : generic_args) : string list =
@@ -567,10 +576,10 @@ let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
 
 let fun_sig_to_string (fmt : ast_formatter) (sg : fun_sig) : string =
   let ty_fmt = ast_to_type_formatter fmt in
-  let type_params = List.map type_var_to_string sg.type_params in
+  let generics = generic_params_to_strings ty_fmt sg.generics in
   let inputs = List.map (ty_to_string ty_fmt false) sg.inputs in
   let output = ty_to_string ty_fmt false sg.output in
-  let all_types = List.concat [ type_params; inputs; [ output ] ] in
+  let all_types = List.concat [ generics; inputs; [ output ] ] in
   String.concat " -> " all_types
 
 let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =

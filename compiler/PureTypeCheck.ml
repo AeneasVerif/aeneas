@@ -69,6 +69,7 @@ type tc_ctx = {
   env : ty VarId.Map.t;  (** Environment from variables to types *)
   const_generics : ty T.ConstGenericVarId.Map.t;
       (** The types of the const generics *)
+      (* TODO: add trait type constraints *)
 }
 
 let check_literal (v : literal) (ty : literal_type) : unit =

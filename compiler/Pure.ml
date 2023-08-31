@@ -273,6 +273,8 @@ type ty =
   | TypeVar of type_var_id
   | Literal of literal_type
   | Arrow of ty * ty
+  | TraitType of trait_ref * generic_args * string
+      (** The string is for the name of the associated type *)
 
 and trait_ref = { trait_id : trait_instance_id; generics : generic_args }
 
@@ -867,11 +869,10 @@ type fun_sig_info = {
     - etc.
  *)
 type fun_sig = {
-  type_params : type_var list;
-  const_generic_params : const_generic_var list;
+  generics : generic_params;
       (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
   inputs : ty list;
-      (** The input types.
+      (** The types of the inputs.
 
           Note that those input types take into account the [fuel] parameter,
           if the function uses fuel for termination, and the [state] parameter,
