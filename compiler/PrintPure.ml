@@ -144,17 +144,18 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     (trait_decls : A.trait_decl TraitDeclId.Map.t)
     (trait_impls : A.trait_impl TraitImplId.Map.t) (type_params : type_var list)
     (const_generic_params : const_generic_var list) : ast_formatter =
-  let type_var_id_to_string vid =
-    let var = T.TypeVarId.nth type_params vid in
-    type_var_to_string var
-  in
-  let const_generic_var_id_to_string vid =
-    let var = T.ConstGenericVarId.nth const_generic_params vid in
-    const_generic_var_to_string var
-  in
-  let type_decl_id_to_string def_id =
-    let def = T.TypeDeclId.Map.find def_id type_decls in
-    name_to_string def.name
+  let ({
+         type_var_id_to_string;
+         type_decl_id_to_string;
+         const_generic_var_id_to_string;
+         global_decl_id_to_string;
+         trait_decl_id_to_string;
+         trait_impl_id_to_string;
+         trait_clause_id_to_string;
+       }
+        : type_formatter) =
+    mk_type_formatter type_decls global_decls trait_decls trait_impls
+      type_params const_generic_params
   in
   let adt_variant_to_string =
     Print.Types.type_ctx_to_adt_variant_to_string_fun type_decls
@@ -172,21 +173,6 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
   let fun_decl_id_to_string def_id =
     let def = FunDeclId.Map.find def_id fun_decls in
     fun_name_to_string def.name
-  in
-  let global_decl_id_to_string def_id =
-    let def = GlobalDeclId.Map.find def_id global_decls in
-    global_name_to_string def.name
-  in
-  let trait_decl_id_to_string def_id =
-    let def = TraitDeclId.Map.find def_id trait_decls in
-    name_to_string def.name
-  in
-  let trait_impl_id_to_string def_id =
-    let def = TraitImplId.Map.find def_id trait_impls in
-    name_to_string def.name
-  in
-  let trait_clause_id_to_string id =
-    Print.PT.trait_clause_id_to_pretty_string id
   in
   {
     type_var_id_to_string;
