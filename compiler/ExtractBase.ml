@@ -111,9 +111,9 @@ let decl_is_first_from_group (kind : decl_kind) : bool =
 let decl_is_not_last_from_group (kind : decl_kind) : bool =
   not (decl_is_last_from_group kind)
 
-(* TODO: this should a module we give to a functor! *)
-
 type type_decl_kind = Enum | Struct
+
+(* TODO: this should be a module we give to a functor! *)
 
 (** A formatter's role is twofold:
     1. Come up with name suggestions.
@@ -125,6 +125,9 @@ type type_decl_kind = Enum | Struct
     snake case, adding prefixes/suffixes, etc.
 
     2. Format some specific terms, like constants.
+
+    TODO: unclear that this is useful now that all the backends are so much
+    entangled in Extract.ml
  *)
 type formatter = {
   bool_name : string;
@@ -288,6 +291,13 @@ type formatter = {
       (** Generates a type variable basename. *)
   const_generic_var_basename : StringSet.t -> string -> string;
       (** Generates a const generic variable basename. *)
+  trait_clause_basename : StringSet.t -> trait_clause -> string;
+      (** Return a base name for a trait clause. We might add a suffix to prevent
+          collisions.
+
+          In the traduction we explicitely manipulate the trait clause instances,
+          that is we introduce one input variable for each trait clause.
+       *)
   append_index : string -> int -> string;
       (** Appends an index to a name - we use this to generate unique
           names: when doing so, the role of the formatter is just to concatenate
@@ -396,6 +406,9 @@ type id =
   | TypeVarId of TypeVarId.id
   | ConstGenericVarId of ConstGenericVarId.id
   | VarId of VarId.id
+  | TraitDeclId of TraitDeclId.id
+  | TraitImplId of TraitImplId.id
+  | TraitClauseId of TraitClauseId.id
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
           should always be in context, etc. and which can't be linked to one
@@ -718,6 +731,9 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | ConstGenericVarId id ->
       "const_generic_var_id: " ^ ConstGenericVarId.to_string id
   | VarId id -> "var_id: " ^ VarId.to_string id
+  | TraitDeclId id -> "trait_decl_id: " ^ TraitDeclId.to_string id
+  | TraitImplId id -> "trait_impl_id: " ^ TraitImplId.to_string id
+  | TraitClauseId id -> "trait_clause_id: " ^ TraitClauseId.to_string id
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
@@ -787,6 +803,14 @@ let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get_type is_opaque (Assumed id) ctx
 
+let ctx_get_trait_decl (with_opaque_pre : bool) (id : trait_decl_id)
+    (ctx : extraction_ctx) : string =
+  ctx_get with_opaque_pre (TraitDeclId id) ctx
+
+let ctx_get_trait_impl (with_opaque_pre : bool) (id : trait_impl_id)
+    (ctx : extraction_ctx) : string =
+  ctx_get with_opaque_pre (TraitImplId id) ctx
+
 let ctx_get_var (id : VarId.id) (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get is_opaque (VarId id) ctx
@@ -799,6 +823,11 @@ let ctx_get_const_generic_var (id : ConstGenericVarId.id) (ctx : extraction_ctx)
     : string =
   let is_opaque = false in
   ctx_get is_opaque (ConstGenericVarId id) ctx
+
+let ctx_get_trait_clause_var (id : TraitClauseId.id) (ctx : extraction_ctx) :
+    string =
+  let is_opaque = false in
+  ctx_get is_opaque (TraitClauseId id) ctx
 
 let ctx_get_field (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
@@ -865,6 +894,16 @@ let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
   let ctx = ctx_add is_opaque (VarId id) name ctx in
   (ctx, name)
 
+(** Generate a unique trait clause name and add it to the context *)
+let ctx_add_trait_clause (basename : string) (id : TraitClauseId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let is_opaque = false in
+  let name =
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+  in
+  let ctx = ctx_add is_opaque (TraitClauseId id) name ctx in
+  (ctx, name)
+
 (** See {!ctx_add_var} *)
 let ctx_add_vars (vars : var list) (ctx : extraction_ctx) :
     extraction_ctx * string list =
@@ -890,7 +929,9 @@ let ctx_add_const_generic_params (vars : const_generic_var list)
 let ctx_add_trait_clauses (clauses : trait_clause list) (ctx : extraction_ctx) :
     extraction_ctx * string list =
   List.fold_left_map
-    (fun ctx (c : trait_clause) -> ctx_add_trait_clause c ctx)
+    (fun ctx (c : trait_clause) ->
+      let basename = ctx.fmt.trait_clause_basename ctx.names_map.names_set c in
+      ctx_add_trait_clause basename c.clause_id ctx)
     ctx clauses
 
 (** Returns the lists of names for:
