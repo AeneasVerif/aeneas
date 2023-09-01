@@ -40,6 +40,7 @@ type dummy_var_id = DummyVarId.id [@@deriving show, ord]
     fn f x : fun_type =
       let id = fresh_id () in
       ...
+      fun () -> ...
    
     let g = f x in   // <-- the fresh identifier gets generated here
     let x1 = g () in // <-- no fresh generation here
@@ -315,7 +316,6 @@ type eval_ctx = {
       (** The map from const generic vars to their values. Those values
           can be symbolic values or concrete values (in the latter case:
           if we run in interpreter mode) *)
-  trait_clauses : etrait_ref list;
   norm_trait_etypes : ety ETraitTypeRefMap.t;
       (** The normalized trait types (a map from trait types to their representatives).
           Note that this doesn't support account higher-order types. *)

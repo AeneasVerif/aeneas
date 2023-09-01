@@ -14,9 +14,85 @@ module A = LlbcAst
 module C = Contexts
 module Subst = Substitute
 module L = Logging
+module UF = UnionFind
 
 (** The local logger *)
 let log = L.associated_types_log
+
+let trait_type_ref_substitute (subst : ('r, 'r1) Subst.subst)
+    (r : 'r C.trait_type_ref) : 'r1 C.trait_type_ref =
+  let { C.trait_ref; type_name } = r in
+  let trait_ref = Subst.trait_ref_substitute subst trait_ref in
+  { C.trait_ref; type_name }
+
+module RTyOrd = struct
+  type t = T.rty
+
+  let compare = T.compare_rty
+  let to_string = T.show_rty
+  let pp_t = T.pp_rty
+  let show_t = T.show_rty
+end
+
+module RTyMap = Collections.MakeMap (RTyOrd)
+
+(** Compute the representative classes of trait associated types, for normalization *)
+let compute_norm_trait_types_from_preds
+    (trait_type_constraints : T.rtrait_type_constraint list) :
+    T.ety C.ETraitTypeRefMap.t * T.rty C.RTraitTypeRefMap.t =
+  (* Compute a union-find structure by recursively exploring the predicates and clauses *)
+  let norm : T.rty UF.elem RTyMap.t ref = ref RTyMap.empty in
+  let get_ref (ty : T.rty) : T.rty UF.elem =
+    match RTyMap.find_opt ty !norm with
+    | Some r -> r
+    | None ->
+        let r = UF.make ty in
+        norm := RTyMap.add ty r !norm;
+        r
+  in
+  let add_trait_type_constraint (c : T.rtrait_type_constraint) =
+    let trait_ty = T.TraitType (c.trait_ref, c.generics, c.type_name) in
+    let trait_ty_ref = get_ref trait_ty in
+    let ty_ref = get_ref c.ty in
+    let new_repr = UF.get ty_ref in
+    let merged = UF.union trait_ty_ref ty_ref in
+    (* Not sure the set operation is necessary, but I want to control which
+       representative is chosen *)
+    UF.set merged new_repr
+  in
+  (* Explore the local predicates *)
+  List.iter add_trait_type_constraint trait_type_constraints;
+  (* TODO: explore the local clauses *)
+  (* Compute the norm maps *)
+  let rbindings =
+    List.map (fun (k, v) -> (k, UF.get v)) (RTyMap.bindings !norm)
+  in
+  (* Filter the keys to keep only the trait type aliases *)
+  let rbindings =
+    List.filter_map
+      (fun (k, v) ->
+        match k with
+        | T.TraitType (trait_ref, generics, type_name) ->
+            assert (generics = TypesUtils.mk_empty_generic_args);
+            Some ({ C.trait_ref; type_name }, v)
+        | _ -> None)
+      rbindings
+  in
+  let ebindings =
+    List.map
+      (fun (k, v) ->
+        ( trait_type_ref_substitute Subst.erase_regions_subst k,
+          Subst.erase_regions v ))
+      rbindings
+  in
+  (C.ETraitTypeRefMap.of_list ebindings, C.RTraitTypeRefMap.of_list rbindings)
+
+let ctx_add_norm_trait_types_from_preds (ctx : C.eval_ctx)
+    (trait_type_constraints : T.rtrait_type_constraint list) : C.eval_ctx =
+  let norm_trait_etypes, norm_trait_rtypes =
+    compute_norm_trait_types_from_preds trait_type_constraints
+  in
+  { ctx with C.norm_trait_etypes; norm_trait_rtypes }
 
 (** A trait instance id refers to a local clause if it only uses the variants:
     [Self], [Clause], [ParentClause], [ItemClause] *)
@@ -244,29 +320,41 @@ and ctx_normalize_trait_decl_ref (ctx : 'r norm_ctx)
   let decl_generics = ctx_normalize_generic_args ctx decl_generics in
   { T.trait_decl_id; decl_generics }
 
-let ctx_normalize_rty (ctx : C.eval_ctx) (ty : T.rty) : T.rty =
+let ctx_normalize_trait_type_constraint (ctx : 'r norm_ctx)
+    (ttc : 'r T.trait_type_constraint) : 'r T.trait_type_constraint =
+  let { T.trait_ref; generics; type_name; ty } = ttc in
+  let trait_ref = ctx_normalize_trait_ref ctx trait_ref in
+  let generics = ctx_normalize_generic_args ctx generics in
+  let ty = ctx_normalize_ty ctx ty in
+  { T.trait_ref; generics; type_name; ty }
+
+let mk_rnorm_ctx (ctx : C.eval_ctx) : T.RegionId.id T.region norm_ctx =
   let get_ty_repr x = C.RTraitTypeRefMap.find_opt x ctx.norm_trait_rtypes in
-  let ctx : T.RegionId.id T.region norm_ctx =
-    {
-      ctx;
-      get_ty_repr;
-      convert_ety = TypesUtils.ety_no_regions_to_rty;
-      convert_etrait_ref = TypesUtils.etrait_ref_no_regions_to_gr_trait_ref;
-    }
-  in
-  ctx_normalize_ty ctx ty
+  {
+    ctx;
+    get_ty_repr;
+    convert_ety = TypesUtils.ety_no_regions_to_rty;
+    convert_etrait_ref = TypesUtils.etrait_ref_no_regions_to_gr_trait_ref;
+  }
+
+let mk_enorm_ctx (ctx : C.eval_ctx) : T.erased_region norm_ctx =
+  let get_ty_repr x = C.ETraitTypeRefMap.find_opt x ctx.norm_trait_etypes in
+  {
+    ctx;
+    get_ty_repr;
+    convert_ety = (fun x -> x);
+    convert_etrait_ref = (fun x -> x);
+  }
+
+let ctx_normalize_rty (ctx : C.eval_ctx) (ty : T.rty) : T.rty =
+  ctx_normalize_ty (mk_rnorm_ctx ctx) ty
 
 let ctx_normalize_ety (ctx : C.eval_ctx) (ty : T.ety) : T.ety =
-  let get_ty_repr x = C.ETraitTypeRefMap.find_opt x ctx.norm_trait_etypes in
-  let ctx : T.erased_region norm_ctx =
-    {
-      ctx;
-      get_ty_repr;
-      convert_ety = (fun x -> x);
-      convert_etrait_ref = (fun x -> x);
-    }
-  in
-  ctx_normalize_ty ctx ty
+  ctx_normalize_ty (mk_enorm_ctx ctx) ty
+
+let ctx_normalize_rtrait_type_constraint (ctx : C.eval_ctx)
+    (ttc : T.rtrait_type_constraint) : T.rtrait_type_constraint =
+  ctx_normalize_trait_type_constraint (mk_rnorm_ctx ctx) ttc
 
 (** Same as [type_decl_get_instantiated_variants_fields_rtypes] but normalizes the types *)
 let type_decl_get_inst_norm_variants_fields_rtypes (ctx : C.eval_ctx)
@@ -329,7 +417,10 @@ let ctx_subst_norm_signature (ctx : C.eval_ctx)
     Subst.substitute_signature asubst r_subst ty_subst cg_subst tr_subst tr_self
       sg
   in
-  let { A.regions_hierarchy; inputs; output } = sg in
+  let { A.regions_hierarchy; inputs; output; trait_type_constraints } = sg in
   let inputs = List.map (ctx_normalize_rty ctx) inputs in
   let output = ctx_normalize_rty ctx output in
-  { regions_hierarchy; inputs; output }
+  let trait_type_constraints =
+    List.map (ctx_normalize_rtrait_type_constraint ctx) trait_type_constraints
+  in
+  { regions_hierarchy; inputs; output; trait_type_constraints }

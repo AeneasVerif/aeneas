@@ -41,30 +41,35 @@ let ty_substitute_visitor (subst : ('r1, 'r2) subst) =
 
 (** Substitute types variables and regions in a type.
 
-    **IMPORTANT**: this doesn't normalize the type.
+    **IMPORTANT**: this doesn't normalize the types.
  *)
 let ty_substitute (subst : ('r1, 'r2) subst) (ty : 'r1 T.ty) : 'r2 T.ty =
   let visitor = ty_substitute_visitor subst in
   visitor#visit_ty () ty
 
-(** **IMPORTANT**: this doesn't normalize the trait ref. *)
+(** **IMPORTANT**: this doesn't normalize the types. *)
 let trait_ref_substitute (subst : ('r1, 'r2) subst) (tr : 'r1 T.trait_ref) :
     'r2 T.trait_ref =
   let visitor = ty_substitute_visitor subst in
   visitor#visit_trait_ref () tr
 
+(** **IMPORTANT**: this doesn't normalize the types. *)
+let generic_args_substitute (subst : ('r1, 'r2) subst) (g : 'r1 T.generic_args)
+    : 'r2 T.generic_args =
+  let visitor = ty_substitute_visitor subst in
+  visitor#visit_generic_args () g
+
+let erase_regions_subst : ('r, T.erased_region) subst =
+  {
+    r_subst = (fun _ -> T.Erased);
+    ty_subst = (fun vid -> T.TypeVar vid);
+    cg_subst = (fun id -> T.ConstGenericVar id);
+    tr_subst = (fun id -> T.Clause id);
+    tr_self = T.Self;
+  }
+
 (** Convert an {!T.rty} to an {!T.ety} by erasing the region variables *)
-let erase_regions (ty : 'r T.ty) : T.ety =
-  let subst =
-    {
-      r_subst = (fun _ -> T.Erased);
-      ty_subst = (fun vid -> T.TypeVar vid);
-      cg_subst = (fun id -> T.ConstGenericVar id);
-      tr_subst = (fun id -> T.Clause id);
-      tr_self = T.Self;
-    }
-  in
-  ty_substitute subst ty
+let erase_regions (ty : 'r T.ty) : T.ety = ty_substitute erase_regions_subst ty
 
 (** Generate fresh regions for region variables.
 
@@ -425,6 +430,15 @@ let fun_body_substitute_in_body
   let body = statement_substitute subst body.body in
   (locals, body)
 
+let trait_type_constraint_substitute (subst : ('r1, 'r2) subst)
+    (ttc : 'r1 T.trait_type_constraint) : 'r2 T.trait_type_constraint =
+  let { T.trait_ref; generics; type_name; ty } = ttc in
+  let visitor = ty_substitute_visitor subst in
+  let trait_ref = visitor#visit_trait_ref () trait_ref in
+  let generics = visitor#visit_generic_args () generics in
+  let ty = visitor#visit_ty () ty in
+  { T.trait_ref; generics; type_name; ty }
+
 (** Substitute a function signature.
 
     **IMPORTANT:** this function doesn't normalize the types.
@@ -448,7 +462,12 @@ let substitute_signature (asubst : T.RegionGroupId.id -> V.AbstractionId.id)
     { id; regions; parents }
   in
   let regions_hierarchy = List.map subst_region_group sg.A.regions_hierarchy in
-  { A.regions_hierarchy; inputs; output }
+  let trait_type_constraints =
+    List.map
+      (trait_type_constraint_substitute subst)
+      sg.preds.trait_type_constraints
+  in
+  { A.inputs; output; regions_hierarchy; trait_type_constraints }
 
 (** Substitute variable identifiers in a type *)
 let ty_substitute_ids (ty_subst : T.TypeVarId.id -> T.TypeVarId.id)
