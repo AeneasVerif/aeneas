@@ -583,8 +583,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             | Qualif
                 {
                   id = AdtCons { adt_id = AdtId adt_id; variant_id = None };
-                  type_args = _;
-                  const_generic_args = _;
+                  generics = _;
                 } ->
                 (* Lookup the def *)
                 let decl =
@@ -767,9 +766,9 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
  *)
 let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
     (id0 : A.fun_id) (lp_id0 : LoopId.id option)
-    (rg_id0 : T.RegionGroupId.id option) (tys0 : ty list)
+    (rg_id0 : T.RegionGroupId.id option) (generics0 : generic_args)
     (args0 : texpression list) (e : texpression) : bool =
-  let check_call (fun_id1 : fun_or_op_id) (tys1 : ty list)
+  let check_call (fun_id1 : fun_or_op_id) (generics1 : generic_args)
       (args1 : texpression list) : bool =
     (* Check the fun_ids, to see if call1's function is a child of call0's function *)
     match fun_id1 with
@@ -816,8 +815,8 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
             let input_eq (v0, v1) =
               PureUtils.remove_meta v0 = PureUtils.remove_meta v1
             in
-            (* Compare the input types and the prefix of the input arguments *)
-            tys0 = tys1 && List.for_all input_eq args
+            (* Compare the generics and the prefix of the input arguments *)
+            generics0 = generics1 && List.for_all input_eq args
           else (* Not a child *)
             false
         else (* Not the same function *)
@@ -843,8 +842,8 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
         | Let (_, _, re, e) -> (
             match opt_destruct_function_call re with
             | None -> fun () -> self#visit_texpression env e ()
-            | Some (func1, tys1, args1) ->
-                let call_is_child = check_call func1 tys1 args1 in
+            | Some (func1, generics1, args1) ->
+                let call_is_child = check_call func1 generics1 args1 in
                 if call_is_child then fun () -> true
                 else fun () -> self#visit_texpression env e ())
         | App _ -> (
@@ -1085,8 +1084,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             | Qualif
                 {
                   id = AdtCons { adt_id = AdtId adt_id; variant_id = None };
-                  type_args;
-                  const_generic_args;
+                  generics;
                 } ->
                 (* This is a struct *)
                 (* Retrieve the definiton, to find how many fields there are *)
@@ -1107,7 +1105,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                    * [x.field] for some variable [x], and where the projection
                    * is for the proper ADT *)
                   let to_var_proj (i : int) (arg : texpression) :
-                      (ty list * const_generic list * var_id) option =
+                      (generic_args * var_id) option =
                     match arg.e with
                     | App (proj, x) -> (
                         match (proj.e, x.e) with
@@ -1115,16 +1113,14 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                               {
                                 id =
                                   Proj { adt_id = AdtId proj_adt_id; field_id };
-                                type_args = proj_type_args;
-                                const_generic_args = proj_const_generic_args;
+                                generics = proj_generics;
                               },
                             Var v ) ->
                             (* We check that this is the proper ADT, and the proper field *)
                             if
                               proj_adt_id = adt_id
                               && FieldId.to_int field_id = i
-                            then
-                              Some (proj_type_args, proj_const_generic_args, v)
+                            then Some (proj_generics, v)
                             else None
                         | _ -> None)
                     | _ -> None
@@ -1135,14 +1131,13 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   if List.length args = num_fields then
                     (* Check that this is the same variable we project from -
                      * note that we checked above that there is at least one field *)
-                    let (_, _, x), end_args = Collections.List.pop args in
-                    if List.for_all (fun (_, _, y) -> y = x) end_args then (
+                    let (_, x), end_args = Collections.List.pop args in
+                    if List.for_all (fun (_, y) -> y = x) end_args then (
                       (* We can substitute *)
                       (* Sanity check: all types correct *)
                       assert (
                         List.for_all
-                          (fun (tys, cgs, _) ->
-                            tys = type_args && cgs = const_generic_args)
+                          (fun (generics1, _) -> generics1 = generics)
                           args);
                       { e with e = Var x })
                     else super#visit_texpression env e
@@ -1161,8 +1156,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   | ( Qualif
                         {
                           id = Proj { adt_id = AdtId proj_adt_id; field_id };
-                          type_args = _;
-                          const_generic_args = _;
+                          generics = _;
                         },
                       Var v ) ->
                       (* We check that this is the proper ADT, and the proper field *)
@@ -1360,8 +1354,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
 
             let loop_sig =
               {
-                type_params = fun_sig.type_params;
-                const_generic_params = fun_sig.const_generic_params;
+                generics = fun_sig.generics;
                 inputs = inputs_tys;
                 output;
                 doutputs;
@@ -2142,16 +2135,7 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
           let num_filtered =
             List.length (List.filter (fun b -> not b) used_info)
           in
-          let {
-            type_params;
-            const_generic_params;
-            inputs;
-            output;
-            doutputs;
-            info;
-          } =
-            decl.signature
-          in
+          let { generics; inputs; output; doutputs; info } = decl.signature in
           let {
             has_fuel;
             num_fwd_inputs_with_fuel_no_state;
@@ -2177,16 +2161,7 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
               effect_info;
             }
           in
-          let signature =
-            {
-              type_params;
-              const_generic_params;
-              inputs;
-              output;
-              doutputs;
-              info;
-            }
-          in
+          let signature = { generics; inputs; output; doutputs; info } in
 
           { decl with signature }
     in

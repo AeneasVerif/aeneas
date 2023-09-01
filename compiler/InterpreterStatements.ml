@@ -1086,7 +1086,7 @@ and eval_transparent_function_call_concrete (config : C.config)
       | Some body -> body
     in
     (* TODO: we need to normalize the types if we want to correctly support traits *)
-    assert (ctx.trait_clauses = [] && generics.trait_refs = []);
+    assert (generics.trait_refs = []);
     (* There shouldn't be any reference to Self *)
     let tr_self = T.UnknownTrait __FUNCTION__ in
     let subst =
