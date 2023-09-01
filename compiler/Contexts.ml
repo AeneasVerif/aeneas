@@ -270,6 +270,37 @@ type decls_ctx = {
 }
 [@@deriving show]
 
+(** A reference to a trait associated type *)
+type 'r trait_type_ref = { trait_ref : 'r trait_ref; type_name : string }
+[@@deriving show, ord]
+
+type etrait_type_ref = erased_region trait_type_ref [@@deriving show, ord]
+
+type rtrait_type_ref = Types.RegionId.id Types.region trait_type_ref
+[@@deriving show, ord]
+
+(* TODO: correctly use the functors so as not to have a duplication below *)
+module ETraitTypeRefOrd = struct
+  type t = etrait_type_ref
+
+  let compare = compare_etrait_type_ref
+  let to_string = show_etrait_type_ref
+  let pp_t = pp_etrait_type_ref
+  let show_t = show_etrait_type_ref
+end
+
+module RTraitTypeRefOrd = struct
+  type t = rtrait_type_ref
+
+  let compare = compare_rtrait_type_ref
+  let to_string = show_rtrait_type_ref
+  let pp_t = pp_rtrait_type_ref
+  let show_t = show_rtrait_type_ref
+end
+
+module ETraitTypeRefMap = Collections.MakeMap (ETraitTypeRefOrd)
+module RTraitTypeRefMap = Collections.MakeMap (RTraitTypeRefOrd)
+
 (** Evaluation context *)
 type eval_ctx = {
   type_context : type_context;
@@ -285,6 +316,18 @@ type eval_ctx = {
           can be symbolic values or concrete values (in the latter case:
           if we run in interpreter mode) *)
   trait_clauses : etrait_ref list;
+  norm_trait_etypes : ety ETraitTypeRefMap.t;
+      (** The normalized trait types (a map from trait types to their representatives).
+          Note that this doesn't support account higher-order types. *)
+  norm_trait_rtypes : rty RTraitTypeRefMap.t;
+      (** We need this because we manipulate two kinds of types.
+          Note that we actually forbid regions from appearing both in the trait
+          references and in the constraints given to the associated types,
+          meaning that we don't have to worry about mismatches due to changes
+          in region ids.
+
+          TODO: how not to duplicate?
+       *)
   env : env;
   ended_regions : RegionId.Set.t;
 }

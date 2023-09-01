@@ -326,7 +326,7 @@ let get_assumed_function_return_type (ctx : C.eval_ctx) (fid : A.assumed_fun_id)
         Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
           sg.output
       in
-      Assoc.ctx_normalize_type ctx ty
+      Assoc.ctx_normalize_ety ctx ty
 
 let move_return_value (config : C.config) (pop_return_value : bool)
     (cf : V.typed_value option -> m_fun) : m_fun =

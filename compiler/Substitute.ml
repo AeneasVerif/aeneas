@@ -39,13 +39,22 @@ let ty_substitute_visitor (subst : ('r1, 'r2) subst) =
     method! visit_Self _ = subst.tr_self
   end
 
-(** Substitute types variables and regions in a type. *)
+(** Substitute types variables and regions in a type.
+
+    **IMPORTANT**: this doesn't normalize the type.
+ *)
 let ty_substitute (subst : ('r1, 'r2) subst) (ty : 'r1 T.ty) : 'r2 T.ty =
   let visitor = ty_substitute_visitor subst in
   visitor#visit_ty () ty
 
+(** **IMPORTANT**: this doesn't normalize the trait ref. *)
+let trait_ref_substitute (subst : ('r1, 'r2) subst) (tr : 'r1 T.trait_ref) :
+    'r2 T.trait_ref =
+  let visitor = ty_substitute_visitor subst in
+  visitor#visit_trait_ref () tr
+
 (** Convert an {!T.rty} to an {!T.ety} by erasing the region variables *)
-let erase_regions (ty : T.rty) : T.ety =
+let erase_regions (ty : 'r T.ty) : T.ety =
   let subst =
     {
       r_subst = (fun _ -> T.Erased);
@@ -169,9 +178,28 @@ let make_trait_subst_from_clauses (clauses : T.trait_clause list)
     trs
 
 let make_subst_from_generics (params : T.generic_params)
-    (args : 'r T.generic_args) (tr_self : 'r T.trait_instance_id) :
-    (T.region_var_id T.region, 'r) subst =
+    (args : 'r T.region T.generic_args)
+    (tr_self : 'r T.region T.trait_instance_id) :
+    (T.region_var_id T.region, 'r T.region) subst =
   let r_subst = make_region_subst_from_vars params.T.regions args.T.regions in
+  let ty_subst = make_type_subst_from_vars params.T.types args.T.types in
+  let cg_subst =
+    make_const_generic_subst_from_vars params.T.const_generics
+      args.T.const_generics
+  in
+  let tr_subst =
+    make_trait_subst_from_clauses params.T.trait_clauses args.T.trait_refs
+  in
+  { r_subst; ty_subst; cg_subst; tr_subst; tr_self }
+
+let make_subst_from_generics_no_regions :
+      'r.
+      T.generic_params ->
+      'r T.generic_args ->
+      'r T.trait_instance_id ->
+      (T.region_var_id T.region, 'r) subst =
+ fun params args tr_self ->
+  let r_subst _ = raise (Failure "Unexpected region") in
   let ty_subst = make_type_subst_from_vars params.T.types args.T.types in
   let cg_subst =
     make_const_generic_subst_from_vars params.T.const_generics
