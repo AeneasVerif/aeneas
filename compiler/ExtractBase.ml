@@ -458,21 +458,34 @@ type names_map = {
        *)
 }
 
-let names_map_add (id_to_string : id -> string) (is_opaque : bool) (id : id)
-    (name : string) (nm : names_map) : names_map =
-  (* Check if there is a clash *)
-  (match StringMap.find_opt name nm.name_to_id with
+(** Small helper to report name collision *)
+let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
+    (name : string) : unit =
+  let id1 = "\n- " ^ id_to_string id1 in
+  let id2 = "\n- " ^ id_to_string id2 in
+  let err =
+    "Name clash detected: the following identifiers are bound to the same name \
+     \"" ^ name ^ "\":" ^ id1 ^ id2
+    ^ "\nYou may want to rename some of your definitions, or report an issue."
+  in
+  log#serror err;
+  raise (Failure err)
+
+let names_map_get_id_from_name (name : string) (nm : names_map) : id option =
+  StringMap.find_opt name nm.name_to_id
+
+let names_map_check_collision (id_to_string : id -> string) (id : id)
+    (name : string) (nm : names_map) : unit =
+  match names_map_get_id_from_name name nm with
   | None -> () (* Ok *)
   | Some clash ->
       (* There is a clash: print a nice debugging message for the user *)
-      let id1 = "\n- " ^ id_to_string clash in
-      let id2 = "\n- " ^ id_to_string id in
-      let err =
-        "Name clash detected: the following identifiers are bound to the same \
-         name \"" ^ name ^ "\":" ^ id1 ^ id2
-      in
-      log#serror err;
-      raise (Failure err));
+      report_name_collision id_to_string clash id name
+
+let names_map_add (id_to_string : id -> string) (is_opaque : bool) (id : id)
+    (name : string) (nm : names_map) : names_map =
+  (* Check if there is a clash *)
+  names_map_check_collision id_to_string id name nm;
   (* Sanity check *)
   assert (not (StringSet.mem name nm.names_set));
   (* Insert *)
@@ -743,17 +756,42 @@ let allow_collisions (id : id) : bool =
 
 let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
-  (* We do not use the same name map if we allow/disallow collisions *)
+  (* The id_to_string function to print nice debugging messages if there are
+   * collisions *)
+  let id_to_string (id : id) : string = id_to_string id ctx in
+  (* We do not use the same name map if we allow/disallow collisions.
+     We notably use it for field names: some backends like Lean can use the
+     type information to disambiguate field projections.
+
+     Remark: what we do is actually subtle. Taking the example of fields:
+     - we allow fields from different ADT definitions to collide
+     - we do *not* allow field names to collide with other names
+     For instance, we don't allow naming a field "let". We enforce this by
+     not checking collision between ids for which we permit collisions (ex.:
+     between fields), but still checking collisions between those ids and the
+     others (ex.: fields and keywords).
+  *)
   if allow_collisions id then (
     assert (not is_opaque);
+    (* Check with the other ids *)
+    names_map_check_collision id_to_string id name ctx.names_map;
     {
       ctx with
       unsafe_names_map = unsafe_names_map_add id name ctx.unsafe_names_map;
     })
   else
-    (* The id_to_string function to print nice debugging messages if there are
-     * collisions *)
-    let id_to_string (id : id) : string = id_to_string id ctx in
+    (* Remark: we don't check that there are no collisions with the unsafe ids.
+       Importantly, we don't want some safe ids like keywords to clash with
+       unsafe ids like fields names. For this, we leverage the fact that we register
+       keywords *first*, then unsafe ids (meaning the clash will be detected with
+       the check in the other branch of the if ... then ... else ..., and we do
+       have to check for all possible collisions, which may be slightly too
+       restrictive).
+
+       TODO: this is a bit hacky, we might want to improve the way we detect
+       clashes by being more precise. Overall, there is only an issue with
+       field names which are allowed to clash with each other.
+    *)
     let names_map =
       names_map_add id_to_string is_opaque id name ctx.names_map
     in
