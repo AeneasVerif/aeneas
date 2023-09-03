@@ -1007,6 +1007,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
       fun_name_info = PureUtils.RegularFunIdMap.empty;
       trait_decl_id = None (* None by default *);
+      is_provided_method = false (* false by default *);
     }
   in
 

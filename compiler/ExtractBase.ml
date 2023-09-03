@@ -291,6 +291,7 @@ type formatter = {
       (** Generates a type variable basename. *)
   const_generic_var_basename : StringSet.t -> string -> string;
       (** Generates a const generic variable basename. *)
+  trait_self_clause_basename : string;
   trait_clause_basename : StringSet.t -> trait_clause -> string;
       (** Return a base name for a trait clause. We might add a suffix to prevent
           collisions.
@@ -409,10 +410,44 @@ type id =
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
   | LocalTraitClauseId of TraitClauseId.id
-  | LocalTraitAssocTypeId of string  (** Specifically for: [Self::Ty] *)
   | TraitAssocTypeId of TraitDeclId.id * string  (** A trait associated type *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
   | TraitItemClauseId of TraitDeclId.id * string * TraitClauseId.id
+  | TraitSelfClauseId
+      (** Specifically for the clause: [Self : Trait].
+
+          For now, we forbid provided methods (methods in trait declarations
+          with a default implementation) from being overriden in trait implementations.
+          We extract trait provided methods such that they take an instance of
+          the trait as input: this instance is given by the trait self clause.
+
+          For instance:
+          {[
+            //
+            // Rust
+            //
+            trait ToU64 {
+              fn to_u64(&self) -> u64;
+
+              // Provided method
+              fn is_pos(&self) -> bool {
+                self.to_u64() > 0
+              }
+            }
+
+            //
+            // Generated code
+            //
+            struct ToU64 (T : Type) {
+              to_u64 : T -> u64;
+            }
+
+            //                    The trait self clause
+            //                    vvvvvvvvvvvvvvvvvvvvvv
+            let is_pos (T : Type) (trait_self : ToU64 T) (self : T) : bool =
+              trait_self.to_u64 self > 0
+          ]}
+       *)
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
           should always be in context, etc. and which can't be linked to one
@@ -618,6 +653,7 @@ type extraction_ctx = {
         *)
   trait_decl_id : trait_decl_id option;
       (** If we are extracting a trait declaration, identifies it *)
+  is_provided_method : bool;
 }
 
 (** Debugging function, used when communicating name collisions to the user,
@@ -752,7 +788,6 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TraitImplId id -> "trait_impl_id: " ^ TraitImplId.to_string id
   | LocalTraitClauseId id ->
       "local_trait_clause_id: " ^ TraitClauseId.to_string id
-  | LocalTraitAssocTypeId type_name -> "local_trait_assoc_type_id: " ^ type_name
   | TraitParentClauseId (id, clause_id) ->
       "trait_parent_clause_id: decl_id:" ^ TraitDeclId.to_string id
       ^ ", clause_id: "
@@ -764,11 +799,14 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TraitAssocTypeId (id, type_name) ->
       "trait_assoc_type_id: decl_id:" ^ TraitDeclId.to_string id
       ^ ", type name: " ^ type_name
+  | TraitSelfClauseId -> "trait_self_clause"
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
   match id with
-  | FieldId (_, _) -> !Config.record_fields_short_names
+  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitAssocTypeId _
+    ->
+      !Config.record_fields_short_names
   | _ -> false
 
 let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
@@ -858,6 +896,10 @@ let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get_type is_opaque (Assumed id) ctx
 
+let ctx_get_trait_self_clause (ctx : extraction_ctx) : string =
+  let with_opaque_pre = false in
+  ctx_get with_opaque_pre TraitSelfClauseId ctx
+
 let ctx_get_trait_decl (with_opaque_pre : bool) (id : trait_decl_id)
     (ctx : extraction_ctx) : string =
   ctx_get with_opaque_pre (TraitDeclId id) ctx
@@ -870,11 +912,6 @@ let ctx_get_trait_assoc_type (id : trait_decl_id) (type_name : string)
     (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get is_opaque (TraitAssocTypeId (id, type_name)) ctx
-
-let ctx_get_local_trait_assoc_type (type_name : string) (ctx : extraction_ctx) :
-    string =
-  let is_opaque = false in
-  ctx_get is_opaque (LocalTraitAssocTypeId type_name) ctx
 
 let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
     (ctx : extraction_ctx) : string =
@@ -967,6 +1004,16 @@ let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
   in
   let ctx = ctx_add is_opaque (VarId id) name ctx in
+  (ctx, name)
+
+(** Generate a unique variable name for the trait self clause and add it to the context *)
+let ctx_add_trait_self_clause (ctx : extraction_ctx) : extraction_ctx * string =
+  let is_opaque = false in
+  let basename = ctx.fmt.trait_self_clause_basename in
+  let name =
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+  in
+  let ctx = ctx_add is_opaque TraitSelfClauseId name ctx in
   (ctx, name)
 
 (** Generate a unique trait clause name and add it to the context *)
