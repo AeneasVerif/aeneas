@@ -33,7 +33,18 @@ type trans_ctx = {
 
 type fun_and_loops = { f : Pure.fun_decl; loops : Pure.fun_decl list }
 type pure_fun_translation_no_loops = Pure.fun_decl * Pure.fun_decl list
-type pure_fun_translation = { fwd : fun_and_loops; backs : fun_and_loops list }
+
+type pure_fun_translation = {
+  keep_fwd : bool;
+      (** Should we extract the forward function?
+
+          If the forward function returns `()` and there is exactly one
+          backward function, we may merge the forward into the backward
+          function and thus don't extract the forward function)?
+       *)
+  fwd : fun_and_loops;
+  backs : fun_and_loops list;
+}
 
 let trans_ctx_to_type_formatter (ctx : trans_ctx)
     (type_params : Pure.type_var list)

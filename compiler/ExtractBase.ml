@@ -663,7 +663,7 @@ type extraction_ctx = {
       (** If we are extracting a trait declaration, identifies it *)
   is_provided_method : bool;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
-  trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t;
+  trans_funs : pure_fun_translation A.FunDeclId.Map.t;
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;

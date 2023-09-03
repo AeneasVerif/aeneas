@@ -1460,8 +1460,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
     In such situation, we can remove the forward function definition
     altogether.
   *)
-let keep_forward (trans : pure_fun_translation) : bool =
-  let { fwd; backs } = trans in
+let keep_forward (fwd : fun_and_loops) (backs : fun_and_loops list) : bool =
   (* Note that at this point, the output types are no longer seen as tuples:
    * they should be lists of length 1. *)
   if
@@ -1977,8 +1976,8 @@ end
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 
 (** Filter the useless loop input parameters. *)
-let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
-    (bool * pure_fun_translation) list =
+let filter_loop_inputs (transl : pure_fun_translation list) :
+    pure_fun_translation list =
   (* We need to explore groups of mutually recursive functions. In order
      to compute which parameters are useless, we need to explore the
      functions by groups of mutually recursive definitions.
@@ -1996,7 +1995,7 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
       (List.concat
          (List.concat
             (List.map
-               (fun (_, { fwd; backs }) ->
+               (fun { fwd; backs; _ } ->
                  [ fwd.f :: fwd.loops ]
                  :: List.map
                       (fun { f = back; loops = loops_back } ->
@@ -2246,13 +2245,13 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
   in
   let transl =
     List.map
-      (fun (b, { fwd; backs }) ->
+      (fun trans ->
         let filter_fun_and_loops f =
           { f = filter_in_one f.f; loops = List.map filter_in_one f.loops }
         in
-        let fwd = filter_fun_and_loops fwd in
-        let backs = List.map filter_fun_and_loops backs in
-        (b, { fwd; backs }))
+        let fwd = filter_fun_and_loops trans.fwd in
+        let backs = List.map filter_fun_and_loops trans.backs in
+        { trans with fwd; backs })
       transl
   in
 
@@ -2273,18 +2272,17 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
     but convenient.
  *)
 let apply_passes_to_pure_fun_translations (ctx : trans_ctx)
-    (transl : (fun_decl * fun_decl list) list) :
-    (bool * pure_fun_translation) list =
-  let apply_to_one (trans : fun_decl * fun_decl list) :
-      bool * pure_fun_translation =
+    (transl : (fun_decl * fun_decl list) list) : pure_fun_translation list =
+  let apply_to_one (trans : fun_decl * fun_decl list) : pure_fun_translation =
     (* Apply the passes to the individual functions *)
     let fwd, backs = trans in
     let fwd = Option.get (apply_passes_to_def ctx fwd) in
     let backs = List.filter_map (apply_passes_to_def ctx) backs in
-    let trans = { fwd; backs } in
     (* Compute whether we need to filter the forward function or not *)
-    (keep_forward trans, trans)
+    let keep_fwd = keep_forward fwd backs in
+    { keep_fwd; fwd; backs }
   in
+
   let transl = List.map apply_to_one transl in
 
   (* Filter the useless inputs in the loop functions *)
