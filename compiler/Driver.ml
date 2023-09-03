@@ -17,7 +17,9 @@ let log = main_log
 let _ =
   (* Set up the logging - for now we use default values - TODO: use the
    * command-line arguments *)
-  (* By setting a level for the main_logger_handler, we filter everything *)
+  (* By setting a level for the main_logger_handler, we filter everything.
+     To have a good trace: one should switch between Info and Debug.
+  *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
   main_log#set_level EL.Info;
   llbc_of_json_logger#set_level EL.Info;

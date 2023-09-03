@@ -242,6 +242,12 @@ let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
     ctx.trait_decls_ctx ctx.trait_impls_ctx generics.types
     generics.const_generics
 
+let ctx_egeneric_args_to_string (ctx : bs_ctx) (args : T.egeneric_args) : string
+    =
+  let fmt = bs_ctx_to_ctx_formatter ctx in
+  let fmt = Print.PC.ctx_to_etype_formatter fmt in
+  Print.PT.egeneric_args_to_string fmt args
+
 let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
   let fmt = bs_ctx_to_ctx_formatter ctx in
   let fmt = Print.PC.ctx_to_rtype_formatter fmt in
@@ -381,8 +387,8 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
    of types: sty, forward types, backward types, etc.) *)
 let rec translate_generic_args (translate_ty : 'r T.ty -> ty)
     (generics : 'r T.generic_args) : generic_args =
-  (* Can't translate types with regions for now *)
-  assert (generics.regions = []);
+  (* We ignore the regions: if they didn't cause trouble for the symbolic execution,
+     then everything's fine *)
   let types = List.map translate_ty generics.types in
   let const_generics = generics.const_generics in
   let trait_refs =
@@ -1588,6 +1594,10 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
+  log#ldebug
+    (lazy
+      ("translate_function_call:\n"
+      ^ ctx_egeneric_args_to_string ctx call.generics));
   (* Translate the function call *)
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
   let args =
