@@ -1084,9 +1084,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          * those are handled later *)
         let is_global = fwd_def.Pure.is_global_decl_body in
         if is_global then ctx
-        else
-          Extract.extract_fun_decl_register_names ctx trans.keep_fwd
-            gen_decr_clause trans)
+        else Extract.extract_fun_decl_register_names ctx gen_decr_clause trans)
       ctx
       (A.FunDeclId.Map.values trans_funs)
   in

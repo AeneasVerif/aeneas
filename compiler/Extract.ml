@@ -2326,7 +2326,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
 (** Compute the names for all the pure functions generated from a rust function
     (forward function and backward functions).
  *)
-let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
+let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
   let { f = fwd; loops = loop_fwds } = def.fwd in
@@ -2344,7 +2344,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     else ctx
   in
   let ctx = List.fold_left register_decreases ctx (fwd :: loop_fwds) in
-  let register_fun ctx f = ctx_add_fun_decl (keep_fwd, def) f ctx in
+  let register_fun ctx f = ctx_add_fun_decl def f ctx in
   let register_funs ctx fl = List.fold_left register_fun ctx fl in
   (* Register the forward functions' names *)
   let ctx = register_funs ctx (fwd :: loop_fwds) in
@@ -3971,7 +3971,9 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
   (* TODO: for the methods, we need to add fields for the forward/backward functions *)
   raise (Failure "TODO");
   List.fold_left
-    (fun ctx (name, id) -> ctx_add_trait_method trait_decl name ctx)
+    (fun ctx (name, id) ->
+      (* We add one field per required forward/backward function *)
+      ctx_add_trait_method trait_decl name ctx)
     ctx required_methods
 
 (** Similar to {!extract_type_decl_register_names} *)
