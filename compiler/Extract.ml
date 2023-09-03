@@ -2329,7 +2329,8 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
 let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  let { f = fwd; loops = loop_fwds }, back_ls = def in
+  let { f = fwd; loops = loop_fwds } = def.fwd in
+  let back_ls = def.backs in
   (* Register the decrease clauses, if necessary *)
   let register_decreases ctx def =
     if has_decreases_clause def then

@@ -33,7 +33,7 @@ type trans_ctx = {
 
 type fun_and_loops = { f : Pure.fun_decl; loops : Pure.fun_decl list }
 type pure_fun_translation_no_loops = Pure.fun_decl * Pure.fun_decl list
-type pure_fun_translation = fun_and_loops * fun_and_loops list
+type pure_fun_translation = { fwd : fun_and_loops; backs : fun_and_loops list }
 
 let trans_ctx_to_type_formatter (ctx : trans_ctx)
     (type_params : Pure.type_var list)

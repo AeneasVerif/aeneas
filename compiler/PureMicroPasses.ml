@@ -1461,12 +1461,12 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
     altogether.
   *)
 let keep_forward (trans : pure_fun_translation) : bool =
-  let { f = fwd; _ }, backs = trans in
+  let { fwd; backs } = trans in
   (* Note that at this point, the output types are no longer seen as tuples:
    * they should be lists of length 1. *)
   if
     !Config.filter_useless_functions
-    && fwd.signature.output = mk_result_ty mk_unit_ty
+    && fwd.f.signature.output = mk_result_ty mk_unit_ty
     && backs <> []
   then false
   else true
@@ -1996,8 +1996,8 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
       (List.concat
          (List.concat
             (List.map
-               (fun (_, ({ f = fwd; loops = loops_fwd }, backs)) ->
-                 [ fwd :: loops_fwd ]
+               (fun (_, { fwd; backs }) ->
+                 [ fwd.f :: fwd.loops ]
                  :: List.map
                       (fun { f = back; loops = loops_back } ->
                         [ back :: loops_back ])
@@ -2246,13 +2246,13 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
   in
   let transl =
     List.map
-      (fun (b, (fwd, backs)) ->
+      (fun (b, { fwd; backs }) ->
         let filter_fun_and_loops f =
           { f = filter_in_one f.f; loops = List.map filter_in_one f.loops }
         in
         let fwd = filter_fun_and_loops fwd in
         let backs = List.map filter_fun_and_loops backs in
-        (b, (fwd, backs)))
+        (b, { fwd; backs }))
       transl
   in
 
@@ -2278,10 +2278,10 @@ let apply_passes_to_pure_fun_translations (ctx : trans_ctx)
   let apply_to_one (trans : fun_decl * fun_decl list) :
       bool * pure_fun_translation =
     (* Apply the passes to the individual functions *)
-    let forward, backwards = trans in
-    let forward = Option.get (apply_passes_to_def ctx forward) in
-    let backwards = List.filter_map (apply_passes_to_def ctx) backwards in
-    let trans = (forward, backwards) in
+    let fwd, backs = trans in
+    let fwd = Option.get (apply_passes_to_def ctx fwd) in
+    let backs = List.filter_map (apply_passes_to_def ctx) backs in
+    let trans = { fwd; backs } in
     (* Compute whether we need to filter the forward function or not *)
     (keep_forward trans, trans)
   in

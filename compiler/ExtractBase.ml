@@ -1197,7 +1197,7 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
   in
   let sg = llbc_def.signature in
   let num_rgs = List.length sg.regions_hierarchy in
-  let keep_fwd, (_, backs) = trans_group in
+  let keep_fwd, { fwd = _; backs } = trans_group in
   let num_backs = List.length backs in
   let rg_info =
     match def.back_id with

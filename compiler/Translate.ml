@@ -439,8 +439,8 @@ let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
   in
   let has_opaque_funs =
     A.FunDeclId.Map.exists
-      (fun _ ((_, (fwd, _)) : bool * pure_fun_translation) ->
-        Option.is_none fwd.f.body)
+      (fun _ ((_, trans) : bool * pure_fun_translation) ->
+        Option.is_none trans.fwd.f.body)
       ctx.trans_funs
   in
   (has_opaque_types, has_opaque_funs)
@@ -552,11 +552,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : A.GlobalDeclId.id) : unit =
   let global_decls = ctx.trans_ctx.global_context.global_decls in
   let global = A.GlobalDeclId.Map.find id global_decls in
-  let _, ({ f = body; loops = loop_fwds }, body_backs) =
-    A.FunDeclId.Map.find global.body_id ctx.trans_funs
-  in
-  assert (body_backs = []);
-  assert (loop_fwds = []);
+  let _, trans = A.FunDeclId.Map.find global.body_id ctx.trans_funs in
+  assert (trans.fwd.loops = []);
+  assert (trans.backs = []);
+  let body = trans.fwd.f in
 
   let is_opaque = Option.is_none body.Pure.body in
   if
@@ -676,7 +675,7 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   (* Extract the decrease clauses template bodies *)
   if config.extract_template_decreases_clauses then
     List.iter
-      (fun (_, (fwd, _)) ->
+      (fun (_, { fwd; _ }) ->
         (* We only generate decreases clauses for the forward functions, because
            the termination argument should only depend on the forward inputs.
            The backward functions thus use the same decreases clauses as the
@@ -711,15 +710,13 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   let decls =
     List.concat
       (List.map
-         (fun (keep_fwd, (fwd, (back_ls : fun_and_loops list))) ->
+         (fun (keep_fwd, { fwd; backs }) ->
            let fwd = if keep_fwd then List.append fwd.loops [ fwd.f ] else [] in
-           let back : Pure.fun_decl list =
+           let backs : Pure.fun_decl list =
              List.concat
-               (List.map
-                  (fun back -> List.append back.loops [ back.f ])
-                  back_ls)
+               (List.map (fun back -> List.append back.loops [ back.f ]) backs)
            in
-           List.append fwd back)
+           List.append fwd backs)
          pure_ls)
   in
 
@@ -737,8 +734,9 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   (* Insert unit tests if necessary *)
   if config.test_trans_unit_functions then
     List.iter
-      (fun (keep_fwd, (fwd, _)) ->
-        if keep_fwd then Extract.extract_unit_test_if_unit_fun ctx fmt fwd.f)
+      (fun (keep_fwd, trans) ->
+        if keep_fwd then
+          Extract.extract_unit_test_if_unit_fun ctx fmt trans.fwd.f)
       pure_ls
 
 (** Export a trait declaration. *)
@@ -790,7 +788,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
            extract their type directly in the records we generate for
            the trait declarations themselves, there is no point in having
            separate type definitions) *)
-        match (fst (snd pure_fun)).f.Pure.kind with
+        match (snd pure_fun).fwd.f.Pure.kind with
         | TraitMethodDecl _ -> ()
         | _ ->
             (* Translate *)
@@ -995,7 +993,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
    * whether we should generate a decrease clause or not. *)
   let rec_functions =
     List.map
-      (fun (_, (fwd, _)) ->
+      (fun (_, { fwd; _ }) ->
         let fwd_f =
           if fwd.f.Pure.signature.info.effect_info.is_rec then
             [ (fwd.f.def_id, None) ]
@@ -1022,8 +1020,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   let trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t =
     A.FunDeclId.Map.of_list
       (List.map
-         (fun ((keep_fwd, (fwd, bdl)) : bool * pure_fun_translation) ->
-           (fwd.f.def_id, (keep_fwd, (fwd, bdl))))
+         (fun ((keep_fwd, { fwd; backs }) : bool * pure_fun_translation) ->
+           (fwd.f.def_id, (keep_fwd, { fwd; backs })))
          trans_funs)
   in
 
@@ -1077,7 +1075,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       (fun ctx ((keep_fwd, defs) : bool * pure_fun_translation) ->
         (* If requested by the user, register termination measures and decreases
            proofs for all the recursive functions *)
-        let fwd_def = (fst defs).f in
+        let fwd_def = defs.fwd.f in
         let gen_decr_clause (def : Pure.fun_decl) =
           !Config.extract_decreases_clauses
           && PureUtils.FunLoopIdSet.mem
