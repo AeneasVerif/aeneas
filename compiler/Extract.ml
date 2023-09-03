@@ -1239,7 +1239,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                 | Assumed _ -> true
                 | _ -> raise (Failure "Unreachable")
               in
-              if const_generics <> [] && print_tys then (
+              if types <> [] && print_tys then (
                 let print_paren = List.length types > 1 in
                 if print_paren then F.pp_print_string fmt "(";
                 Collections.List.iter_link
