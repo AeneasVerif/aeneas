@@ -4000,17 +4000,26 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
 
     The type `ty` is to be understood in a very general sense.
  *)
-let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
-    (item_name : string) (ty : unit -> unit) : unit =
+let extract_trait_item (ctx : extraction_ctx) (fmt : F.formatter)
+    (item_name : string) (separator : string) (ty : unit -> unit) : unit =
   F.pp_print_space fmt ();
   F.pp_open_vbox fmt ctx.indent_incr;
   F.pp_print_string fmt item_name;
   F.pp_print_space fmt ();
-  F.pp_print_string fmt ":";
+  (* ":" or "=" *)
+  F.pp_print_string fmt separator;
   F.pp_print_space fmt ();
   ty ();
   F.pp_print_string fmt ";";
   F.pp_close_box fmt ()
+
+let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
+    (item_name : string) (ty : unit -> unit) : unit =
+  extract_trait_item ctx fmt item_name ":" ty
+
+let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
+    (item_name : string) (ty : unit -> unit) : unit =
+  extract_trait_item ctx fmt item_name "=" ty
 
 (** Small helper - TODO: move *)
 let generic_params_drop_prefix (g1 : generic_params) (g2 : generic_params) :
@@ -4094,7 +4103,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let use_forall = false in
   let as_implicits = false in
   extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall as_implicits
-    None None decl.generics type_params cg_params trait_clauses;
+    None None generics type_params cg_params trait_clauses;
 
   F.pp_print_space fmt ();
   F.pp_print_string fmt "{";
@@ -4164,10 +4173,155 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
+(** Small helper.
+
+    Extract the items for a method in a trait impl.
+ *)
+let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
+    (impl : trait_impl) (item_name : string) (id : fun_decl_id)
+    (impl_generics : string list * string list * string list) : unit =
+  let trait_decl_id = impl.impl_trait.trait_decl_id in
+  (* Lookup the definition *)
+  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+  (* Extract the items *)
+  let funs = if trans.keep_fwd then trans.fwd :: trans.backs else trans.backs in
+  let extract_method (f : fun_and_loops) =
+    let f = f.f in
+    let fun_name = ctx_get_trait_method trait_decl_id item_name f.back_id ctx in
+    let ty () =
+      (* Extract the generics - we need to quantify over the generics which
+         are specific to the method, and call it will all the generics
+         (trait impl + method generics) *)
+      let f_generics =
+        generic_params_drop_prefix impl.generics f.signature.generics
+      in
+      let ctx, f_tys, f_cgs, f_tcs = ctx_add_generic_params f_generics ctx in
+      let use_forall = f_generics <> empty_generic_params in
+      let use_implicits = false in
+      extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall
+        use_implicits None None f_generics f_tys f_cgs f_tcs;
+      if use_forall then F.pp_print_string fmt ",";
+      (* Extract the function call *)
+      F.pp_print_space fmt ();
+      let id = ctx_get_local_function false f.def_id None f.back_id ctx in
+      F.pp_print_string fmt id;
+      let all_generics =
+        let i_tys, i_cgs, i_tcs = impl_generics in
+        List.concat [ i_tys; f_tys; i_cgs; f_cgs; i_tcs; f_tcs ]
+      in
+      List.iter
+        (fun p ->
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt p)
+        all_generics
+    in
+    extract_trait_impl_item ctx fmt fun_name ty
+  in
+  List.iter extract_method funs
+
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
-    (trait_impl : trait_impl) : unit =
-  raise (Failure "TODO")
+    (impl : trait_impl) : unit =
+  (* Retrieve the impl name *)
+  let with_opaque_pre = false in
+  let impl_name = ctx_get_trait_impl with_opaque_pre impl.def_id ctx in
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Print a comment to link the extracted type to its original rust definition *)
+  extract_comment fmt [ "[" ^ Print.name_to_string impl.name ^ "]" ];
+  F.pp_print_break fmt 0 0;
+  (* Open two boxes for the definition, so that whenever possible it gets printed on
+   * one line and indents are correct *)
+  F.pp_open_hvbox fmt 0;
+  F.pp_open_vbox fmt ctx.indent_incr;
+
+  (* `let Trait (....) =` *)
+  (* Open the box for the name + generics *)
+  F.pp_open_vbox fmt ctx.indent_incr;
+  let qualif =
+    Option.get (ctx.fmt.type_decl_kind_to_qualif SingleNonRec None)
+  in
+  F.pp_print_string fmt qualif;
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt impl_name;
+
+  (* Print the generics *)
+  (* Add the type and const generic params - note that we need those bindings only for the
+   * body translation (they are not top-level) *)
+  let ctx, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params impl.generics ctx
+  in
+  let all_generics = (type_params, cg_params, trait_clauses) in
+  let use_forall = false in
+  let as_implicits = false in
+  extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall as_implicits
+    None None impl.generics type_params cg_params trait_clauses;
+
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "{";
+
+  (* Close the box for the name + generics *)
+  F.pp_close_box fmt ();
+
+  (*
+   * Extract the items
+   *)
+
+  (* The parent clauses - we retrieve those from the impl_ref *)
+  let trait_decl_id = impl.impl_trait.trait_decl_id in
+  TraitClauseId.iteri
+    (fun clause_id trait_ref ->
+      let item_name = ctx_get_trait_parent_clause trait_decl_id clause_id ctx in
+      let ty () =
+        extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
+      in
+      extract_trait_impl_item ctx fmt item_name ty)
+    impl.impl_trait.decl_generics.trait_refs;
+
+  (* The constants *)
+  List.iter
+    (fun (name, (_, id)) ->
+      let item_name = ctx_get_trait_const trait_decl_id name ctx in
+      let ty () = F.pp_print_string fmt (ctx_get_global false id ctx) in
+
+      extract_trait_impl_item ctx fmt item_name ty)
+    impl.consts;
+
+  (* The types *)
+  List.iter
+    (fun (name, (trait_refs, ty)) ->
+      (* Extract the type *)
+      let item_name = ctx_get_trait_type trait_decl_id name ctx in
+      let ty () = extract_ty ctx fmt TypeDeclId.Set.empty false ty in
+      extract_trait_impl_item ctx fmt item_name ty;
+      (* Extract the clauses *)
+      TraitClauseId.iteri
+        (fun clause_id trait_ref ->
+          let item_name =
+            ctx_get_trait_item_clause trait_decl_id name clause_id ctx
+          in
+          let ty () =
+            extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
+          in
+          extract_trait_impl_item ctx fmt item_name ty)
+        trait_refs)
+    impl.types;
+
+  (* The required methods *)
+  List.iter
+    (fun (name, id) ->
+      extract_trait_impl_method_items ctx fmt impl name id all_generics)
+    impl.required_methods;
+
+  (* Close the brackets *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "}";
+
+  (* Close the two outer boxes for the definition *)
+  F.pp_close_box fmt ();
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
 
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).
