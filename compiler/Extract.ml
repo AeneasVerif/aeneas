@@ -720,6 +720,41 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fname ^ suffix
   in
 
+  let trait_decl_name (trait_decl : trait_decl) : string =
+    type_name_to_snake_case trait_decl.name
+  in
+
+  let trait_impl_name (trait_impl : trait_impl) : string =
+    get_fun_name trait_impl.name
+  in
+
+  let trait_parent_clause_name (trait_decl : trait_decl) (clause : trait_clause)
+      : string =
+    (* TODO: improve - it would be better to not use indices *)
+    let clause = "parent_clause_" ^ TraitClauseId.to_string clause.clause_id in
+    if !Config.record_fields_short_names then clause
+    else trait_decl_name trait_decl ^ "_" ^ clause
+  in
+  let trait_type_name (trait_decl : trait_decl) (item : string) : string =
+    if !Config.record_fields_short_names then item
+    else trait_decl_name trait_decl ^ "_" ^ item
+  in
+  let trait_const_name (trait_decl : trait_decl) (item : string) : string =
+    if !Config.record_fields_short_names then item
+    else trait_decl_name trait_decl ^ "_" ^ item
+  in
+  let trait_method_name (trait_decl : trait_decl) (item : string) : string =
+    if !Config.record_fields_short_names then item
+    else trait_decl_name trait_decl ^ "_" ^ item
+  in
+  let trait_type_clause_name (trait_decl : trait_decl) (item : string)
+      (clause : trait_clause) : string =
+    (* TODO: improve - it would be better to not use indices *)
+    trait_type_name trait_decl item
+    ^ "_clause_"
+    ^ TraitClauseId.to_string clause.clause_id
+  in
+
   let termination_measure_name (_fid : A.FunDeclId.id) (fname : fun_name)
       (num_loops : int) (loop_id : LoopId.id option) : string =
     let fname = get_fun_name fname in
@@ -933,6 +968,13 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fun_name;
     termination_measure_name;
     decreases_proof_name;
+    trait_decl_name;
+    trait_impl_name;
+    trait_parent_clause_name;
+    trait_const_name;
+    trait_type_name;
+    trait_method_name;
+    trait_type_clause_name;
     opaque_pre;
     var_basename;
     type_var_basename;
@@ -1233,8 +1275,8 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_ref ctx fmt no_params_tys false trait_ref;
         extract_generic_args ctx fmt no_params_tys generics;
         let name =
-          ctx_get_trait_assoc_type trait_ref.trait_decl_ref.trait_decl_id
-            type_name ctx
+          ctx_get_trait_type trait_ref.trait_decl_ref.trait_decl_id type_name
+            ctx
         in
         if use_brackets then F.pp_print_string fmt ")";
         F.pp_print_string fmt ("." ^ name))
@@ -1250,7 +1292,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
            types should have been normalized.
         *)
         let trait_decl_id = Option.get ctx.trait_decl_id in
-        let item_name = ctx_get_trait_assoc_type trait_decl_id type_name ctx in
+        let item_name = ctx_get_trait_type trait_decl_id type_name ctx in
         assert (generics = empty_generic_args);
         if ctx.is_provided_method then
           (* Provided method: use the trait self clause *)
@@ -3885,9 +3927,45 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_break fmt 0 0
 
 (** Similar to {!extract_type_decl_register_names} *)
-let extract_trait_decl_register_names (ctx : extraction_ctx) (d : trait_decl) :
-    extraction_ctx =
-  raise (Failure "TODO")
+let extract_trait_decl_register_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl) : extraction_ctx =
+  let {
+    def_id = _;
+    name = _;
+    generics;
+    preds = _;
+    all_trait_clauses = _;
+    consts;
+    types;
+    required_methods;
+    provided_methods = _;
+  } =
+    trait_decl
+  in
+  let ctx = ctx_add_trait_decl trait_decl ctx in
+  let ctx =
+    List.fold_left
+      (fun ctx clause -> ctx_add_trait_parent_clause trait_decl clause ctx)
+      ctx generics.trait_clauses
+  in
+  let ctx =
+    List.fold_left
+      (fun ctx (name, (_, _)) -> ctx_add_trait_const trait_decl name ctx)
+      ctx consts
+  in
+  let ctx =
+    List.fold_left
+      (fun ctx (name, (clauses, _)) ->
+        let ctx = ctx_add_trait_type trait_decl name ctx in
+        List.fold_left
+          (fun ctx clause ->
+            ctx_add_trait_type_clause trait_decl name clause ctx)
+          ctx clauses)
+      ctx types
+  in
+  List.fold_left
+    (fun ctx (name, _) -> ctx_add_trait_method trait_decl name ctx)
+    ctx required_methods
 
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_impl_register_names (ctx : extraction_ctx) (d : trait_impl) :

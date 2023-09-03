@@ -242,6 +242,13 @@ type formatter = {
             the same purpose as in {!field:fun_name}.
           - loop identifier, if this is for a loop
        *)
+  trait_decl_name : trait_decl -> string;
+  trait_impl_name : trait_impl -> string;
+  trait_parent_clause_name : trait_decl -> trait_clause -> string;
+  trait_const_name : trait_decl -> string -> string;
+  trait_type_name : trait_decl -> string -> string;
+  trait_method_name : trait_decl -> string -> string;
+  trait_type_clause_name : trait_decl -> string -> trait_clause -> string;
   opaque_pre : unit -> string;
       (** TODO: obsolete, remove.
 
@@ -410,7 +417,7 @@ type id =
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
   | LocalTraitClauseId of TraitClauseId.id
-  | TraitAssocTypeId of TraitDeclId.id * string  (** A trait associated type *)
+  | TraitItemId of TraitDeclId.id * string  (** A trait associated item *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
   | TraitItemClauseId of TraitDeclId.id * string * TraitClauseId.id
   | TraitSelfClauseId
@@ -798,16 +805,15 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       "trait_item_clause_id: decl_id:" ^ TraitDeclId.to_string id
       ^ ", item name: " ^ item_name ^ ", clause_id: "
       ^ TraitClauseId.to_string clause_id
-  | TraitAssocTypeId (id, type_name) ->
-      "trait_assoc_type_id: decl_id:" ^ TraitDeclId.to_string id
-      ^ ", type name: " ^ type_name
+  | TraitItemId (id, name) ->
+      "trait_item_id: decl_id:" ^ TraitDeclId.to_string id ^ ", type name: "
+      ^ name
   | TraitSelfClauseId -> "trait_self_clause"
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
   match id with
-  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitAssocTypeId _
-    ->
+  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _ ->
       !Config.record_fields_short_names
   | _ -> false
 
@@ -910,10 +916,22 @@ let ctx_get_trait_impl (with_opaque_pre : bool) (id : trait_impl_id)
     (ctx : extraction_ctx) : string =
   ctx_get with_opaque_pre (TraitImplId id) ctx
 
-let ctx_get_trait_assoc_type (id : trait_decl_id) (type_name : string)
+let ctx_get_trait_item (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
   let is_opaque = false in
-  ctx_get is_opaque (TraitAssocTypeId (id, type_name)) ctx
+  ctx_get is_opaque (TraitItemId (id, item_name)) ctx
+
+let ctx_get_trait_const (id : trait_decl_id) (item_name : string)
+    (ctx : extraction_ctx) : string =
+  ctx_get_trait_item id item_name ctx
+
+let ctx_get_trait_type (id : trait_decl_id) (item_name : string)
+    (ctx : extraction_ctx) : string =
+  ctx_get_trait_item id item_name ctx
+
+let ctx_get_trait_method (id : trait_decl_id) (item_name : string)
+    (ctx : extraction_ctx) : string =
+  ctx_get_trait_item id item_name ctx
 
 let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
     (ctx : extraction_ctx) : string =
@@ -1204,6 +1222,50 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
       PureUtils.RegularFunIdMap.add fun_id { keep_fwd; num_backs }
         ctx.fun_name_info;
   }
+
+let ctx_add_trait_decl (d : trait_decl) (ctx : extraction_ctx) : extraction_ctx
+    =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_decl_name d in
+  ctx_add is_opaque (TraitDeclId d.def_id) name ctx
+
+let ctx_add_trait_impl (d : trait_impl) (ctx : extraction_ctx) : extraction_ctx
+    =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_impl_name d in
+  ctx_add is_opaque (TraitImplId d.def_id) name ctx
+
+let ctx_add_trait_const (d : trait_decl) (item : string) (ctx : extraction_ctx)
+    : extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_const_name d item in
+  ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
+
+let ctx_add_trait_type (d : trait_decl) (item : string) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_type_name d item in
+  ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
+
+let ctx_add_trait_method (d : trait_decl) (item : string) (ctx : extraction_ctx)
+    : extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_method_name d item in
+  ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
+
+let ctx_add_trait_parent_clause (d : trait_decl) (clause : trait_clause)
+    (ctx : extraction_ctx) : extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_parent_clause_name d clause in
+  ctx_add is_opaque (TraitParentClauseId (d.def_id, clause.clause_id)) name ctx
+
+let ctx_add_trait_type_clause (d : trait_decl) (item : string)
+    (clause : trait_clause) (ctx : extraction_ctx) : extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_type_clause_name d item clause in
+  ctx_add is_opaque
+    (TraitItemClauseId (d.def_id, item, clause.clause_id))
+    name ctx
 
 type names_map_init = {
   keywords : string list;
