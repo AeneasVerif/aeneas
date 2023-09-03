@@ -417,7 +417,14 @@ type id =
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
   | LocalTraitClauseId of TraitClauseId.id
-  | TraitItemId of TraitDeclId.id * string  (** A trait associated item *)
+  | TraitMethodId of
+      TraitDeclId.id * string * LoopId.id option * T.RegionGroupId.id option
+      (** Something peculiar with trait methods: because we have to take into
+          account forward/backward functions, we may need to generate fields
+          items per method.
+       *)
+  | TraitItemId of TraitDeclId.id * string
+      (** A trait associated item which is not a method *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
   | TraitItemClauseId of TraitDeclId.id * string * TraitClauseId.id
   | TraitSelfClauseId
@@ -677,6 +684,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   let global_decls = ctx.trans_ctx.global_context.global_decls in
   let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
   let type_decls = ctx.trans_ctx.type_context.type_decls in
+  let trait_decls = ctx.trans_ctx.trait_decls_context.trait_decls in
   (* TODO: factorize the pretty-printing with what is in PrintPure *)
   let get_type_name (id : type_id) : string =
     match id with
@@ -812,6 +820,24 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TraitItemId (id, name) ->
       "trait_item_id: decl_id:" ^ TraitDeclId.to_string id ^ ", type name: "
       ^ name
+  | TraitMethodId (trait_decl_id, fun_name, lp_id, rg_id) ->
+      let trait_name =
+        Print.fun_name_to_string
+          (A.TraitDeclId.Map.find trait_decl_id trait_decls).name
+      in
+      let lp_kind =
+        match lp_id with
+        | None -> ""
+        | Some lp_id -> "loop " ^ LoopId.to_string lp_id ^ ", "
+      in
+
+      let fwd_back_kind =
+        match rg_id with
+        | None -> "forward"
+        | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
+      in
+      "trait " ^ trait_name ^ " method name (" ^ lp_kind ^ fwd_back_kind ^ "): "
+      ^ fun_name
   | TraitSelfClauseId -> "trait_self_clause"
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
@@ -1185,11 +1211,8 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   let ctx = ctx_add is_opaque body (name ^ "_body") ctx in
   ctx
 
-let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
-    (ctx : extraction_ctx) : extraction_ctx =
-  (* Sanity check: the function should not be a global body - those are handled
-   * separately *)
-  assert (not def.is_global_decl_body);
+let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
+    (ctx : extraction_ctx) : string =
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
   let llbc_def =
@@ -1211,12 +1234,22 @@ let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
         in
         Some { id = rg_id; region_names }
   in
+  (* Add the function name *)
+  ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
+    (keep_fwd, num_backs)
+
+let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
+    (ctx : extraction_ctx) : extraction_ctx =
+  (* Sanity check: the function should not be a global body - those are handled
+   * separately *)
+  assert (not def.is_global_decl_body);
+  (* Lookup the LLBC def to compute the region group information *)
+  let def_id = def.def_id in
+  let { keep_fwd; fwd = _; backs } = trans_group in
+  let num_backs = List.length backs in
   let is_opaque = def.body = None in
   (* Add the function name *)
-  let def_name =
-    ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
-      (keep_fwd, num_backs)
-  in
+  let def_name = ctx_compute_fun_name trans_group def ctx in
   let fun_id = (A.Regular def_id, def.loop_id, def.back_id) in
   let ctx = ctx_add is_opaque (FunId (FromLlbc fun_id)) def_name ctx in
   (* Add the name info *)
@@ -1251,11 +1284,24 @@ let ctx_add_trait_type (d : trait_decl) (item : string) (ctx : extraction_ctx) :
   let name = ctx.fmt.trait_type_name d item in
   ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
 
-let ctx_add_trait_method (d : trait_decl) (item : string) (ctx : extraction_ctx)
-    : extraction_ctx =
+let ctx_add_trait_method (d : trait_decl) (item_name : string) (f : fun_decl)
+    (ctx : extraction_ctx) : extraction_ctx =
+  (* We do something special: we use the base name but remove everything
+         but the crate (because [get_name] removes it) and the last ident.
+         This allows us to reuse the [ctx_compute_fun_decl] function.
+  *)
+  let basename : name =
+    match (f.basename : name) with
+    | Ident crate :: name -> Ident crate :: [ Collections.List.last name ]
+    | _ -> raise (Failure "Unexpected")
+  in
+  let f = { f with basename } in
+  let trans = A.FunDeclId.Map.find f.def_id ctx.trans_funs in
+  let name = ctx_compute_fun_name trans f ctx in
   let is_opaque = false in
-  let name = ctx.fmt.trait_method_name d item in
-  ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
+  ctx_add is_opaque
+    (TraitMethodId (d.def_id, item_name, f.loop_id, f.back_id))
+    name ctx
 
 let ctx_add_trait_parent_clause (d : trait_decl) (clause : trait_clause)
     (ctx : extraction_ctx) : extraction_ctx =
