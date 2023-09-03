@@ -2329,7 +2329,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
 let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  let (fwd, loop_fwds), back_ls = def in
+  let { f = fwd; loops = loop_fwds }, back_ls = def in
   (* Register the decrease clauses, if necessary *)
   let register_decreases ctx def =
     if has_decreases_clause def then
@@ -2350,7 +2350,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
   (* Register the backward functions' names *)
   let ctx =
     List.fold_left
-      (fun ctx (back, loop_backs) ->
+      (fun ctx { f = back; loops = loop_backs } ->
         let ctx = register_fun ctx back in
         register_funs ctx loop_backs)
       ctx back_ls

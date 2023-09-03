@@ -31,7 +31,7 @@ type trans_ctx = {
   trait_impls_context : trait_impls_context;
 }
 
-type fun_and_loops = Pure.fun_decl * Pure.fun_decl list
+type fun_and_loops = { f : Pure.fun_decl; loops : Pure.fun_decl list }
 type pure_fun_translation_no_loops = Pure.fun_decl * Pure.fun_decl list
 type pure_fun_translation = fun_and_loops * fun_and_loops list
 

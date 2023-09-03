@@ -1461,7 +1461,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
     altogether.
   *)
 let keep_forward (trans : pure_fun_translation) : bool =
-  let (fwd, _), backs = trans in
+  let { f = fwd; _ }, backs = trans in
   (* Note that at this point, the output types are no longer seen as tuples:
    * they should be lists of length 1. *)
   if
@@ -1908,7 +1908,7 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     [ctx]: used only for printing.
  *)
 let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
-    (fun_decl * fun_decl list) option =
+    fun_and_loops option =
   (* Debug *)
   log#ldebug
     (lazy
@@ -1949,9 +1949,9 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
       let def, loops = decompose_loops def in
 
       (* Apply the remaining passes *)
-      let def = apply_end_passes_to_def ctx def in
+      let f = apply_end_passes_to_def ctx def in
       let loops = List.map (apply_end_passes_to_def ctx) loops in
-      Some (def, loops)
+      Some { f; loops }
 
 (** Small utility for {!filter_loop_inputs} *)
 let filter_prefix (keep : bool list) (ls : 'a list) : 'a list =
@@ -1996,10 +1996,11 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
       (List.concat
          (List.concat
             (List.map
-               (fun (_, ((fwd, loops_fwd), backs)) ->
+               (fun (_, ({ f = fwd; loops = loops_fwd }, backs)) ->
                  [ fwd :: loops_fwd ]
                  :: List.map
-                      (fun (back, loops_back) -> [ back :: loops_back ])
+                      (fun { f = back; loops = loops_back } ->
+                        [ back :: loops_back ])
                       backs)
                transl)))
   in
@@ -2246,8 +2247,8 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
   let transl =
     List.map
       (fun (b, (fwd, backs)) ->
-        let filter_fun_and_loops (f, fl) =
-          (filter_in_one f, List.map filter_in_one fl)
+        let filter_fun_and_loops f =
+          { f = filter_in_one f.f; loops = List.map filter_in_one f.loops }
         in
         let fwd = filter_fun_and_loops fwd in
         let backs = List.map filter_fun_and_loops backs in
