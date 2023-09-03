@@ -621,6 +621,7 @@ type fun_name_info = { keep_fwd : bool; num_backs : int }
     functions, etc.
  *)
 type extraction_ctx = {
+  crate : A.crate;
   trans_ctx : trans_ctx;
   names_map : names_map;
       (** The map for id to names, where we forbid name collisions
@@ -661,6 +662,9 @@ type extraction_ctx = {
   trait_decl_id : trait_decl_id option;
       (** If we are extracting a trait declaration, identifies it *)
   is_provided_method : bool;
+  trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
+  trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t;
+  functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
 }

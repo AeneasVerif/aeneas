@@ -3943,16 +3943,19 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     trait_decl
   in
   let ctx = ctx_add_trait_decl trait_decl ctx in
+  (* Parent clauses *)
   let ctx =
     List.fold_left
       (fun ctx clause -> ctx_add_trait_parent_clause trait_decl clause ctx)
       ctx generics.trait_clauses
   in
+  (* Constants *)
   let ctx =
     List.fold_left
       (fun ctx (name, (_, _)) -> ctx_add_trait_const trait_decl name ctx)
       ctx consts
   in
+  (* Types *)
   let ctx =
     List.fold_left
       (fun ctx (name, (clauses, _)) ->
@@ -3963,19 +3966,156 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
           ctx clauses)
       ctx types
   in
+  (* Required methods *)
+  (* TODO: for the methods, we need to add fields for the forward/backward functions *)
+  raise (Failure "TODO");
   List.fold_left
-    (fun ctx (name, _) -> ctx_add_trait_method trait_decl name ctx)
+    (fun ctx (name, id) -> ctx_add_trait_method trait_decl name ctx)
     ctx required_methods
 
 (** Similar to {!extract_type_decl_register_names} *)
-let extract_trait_impl_register_names (ctx : extraction_ctx) (d : trait_impl) :
-    extraction_ctx =
+let extract_trait_impl_register_names (ctx : extraction_ctx)
+    (trait_impl : trait_impl) : extraction_ctx =
+  (* For now we do not support overriding provided methods *)
+  assert (trait_impl.provided_methods = []);
+  (* Everything is actually taken care of by {!extract_trait_decl_register_names} *)
+  ctx
+
+(** Small helper.
+
+    The type `ty` is to be understood in a very general sense.
+ *)
+let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
+    (item_name : string) (ty : unit -> unit) : unit =
+  F.pp_print_space fmt ();
+  F.pp_open_vbox fmt ctx.indent_incr;
+  F.pp_print_string fmt item_name;
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt ":";
+  F.pp_print_space fmt ();
+  ty ();
+  F.pp_print_string fmt ";";
+  F.pp_close_box fmt ()
+
+(** Small helper.
+
+    Extract the items for a method in a trait decl.
+ *)
+let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
+    (decl : trait_decl) (name : string) (id : fun_decl_id) : unit =
+  let item_name = ctx_get_trait_const decl.def_id name ctx in
+  (* Lookup the definition *)
+  (* let def =
+     FunDeclId.Map.find ctx.
+     in *)
   raise (Failure "TODO")
 
 (** Extract a trait declaration *)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
-    (trait_decl : trait_decl) : unit =
-  raise (Failure "TODO")
+    (decl : trait_decl) : unit =
+  (* Retrieve the trait name *)
+  let with_opaque_pre = false in
+  let decl_name = ctx_get_trait_decl with_opaque_pre decl.def_id ctx in
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Print a comment to link the extracted type to its original rust definition *)
+  extract_comment fmt [ "[" ^ Print.name_to_string decl.name ^ "]" ];
+  F.pp_print_break fmt 0 0;
+  (* Open two boxes for the definition, so that whenever possible it gets printed on
+   * one line and indents are correct *)
+  F.pp_open_hvbox fmt 0;
+  F.pp_open_vbox fmt ctx.indent_incr;
+
+  (* `struct Trait (....) =` *)
+  (* Open the box for the name + generics *)
+  F.pp_open_vbox fmt ctx.indent_incr;
+  let qualif =
+    Option.get (ctx.fmt.type_decl_kind_to_qualif SingleNonRec (Some Struct))
+  in
+  F.pp_print_string fmt qualif;
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt decl_name;
+
+  (* Print the generics *)
+  (* We ignore the trait clauses, which we extract as *fields* *)
+  let generics = { decl.generics with trait_clauses = [] } in
+  (* Add the type and const generic params - note that we need those bindings only for the
+   * body translation (they are not top-level) *)
+  let ctx, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params generics ctx
+  in
+  let use_forall = false in
+  let as_implicits = false in
+  extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall as_implicits
+    None None decl.generics type_params cg_params trait_clauses;
+
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "{";
+
+  (* Close the box for the name + generics *)
+  F.pp_close_box fmt ();
+
+  (*
+   * Extract the items
+   *)
+
+  (* The parent clauses *)
+  List.iter
+    (fun clause ->
+      let item_name =
+        ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
+      in
+      let ty () =
+        extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+      in
+      extract_trait_decl_item ctx fmt item_name ty)
+    decl.generics.trait_clauses;
+
+  (* The constants *)
+  List.iter
+    (fun (name, (ty, _)) ->
+      let item_name = ctx_get_trait_const decl.def_id name ctx in
+      let ty () =
+        let inside = false in
+        extract_ty ctx fmt TypeDeclId.Set.empty inside ty
+      in
+      extract_trait_decl_item ctx fmt item_name ty)
+    decl.consts;
+
+  (* The types *)
+  List.iter
+    (fun (name, (clauses, _)) ->
+      (* Extract the type *)
+      let item_name = ctx_get_trait_type decl.def_id name ctx in
+      let ty () = F.pp_print_string fmt (type_keyword ()) in
+      extract_trait_decl_item ctx fmt item_name ty;
+      (* Extract the clauses *)
+      List.iter
+        (fun clause ->
+          let item_name =
+            ctx_get_trait_item_clause decl.def_id name clause.clause_id ctx
+          in
+          let ty () =
+            extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+          in
+          extract_trait_decl_item ctx fmt item_name ty)
+        clauses)
+    decl.types;
+
+  (* The required methods *)
+  List.iter
+    (fun (name, id) -> extract_trait_decl_method_items ctx fmt decl name id)
+    decl.required_methods;
+
+  (* Close the brackets *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "}";
+
+  (* Close the two outer boxes for the definition *)
+  F.pp_close_box fmt ();
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
 
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
