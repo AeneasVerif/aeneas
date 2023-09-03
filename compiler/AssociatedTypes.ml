@@ -100,7 +100,7 @@ let rec trait_instance_id_is_local_clause (id : 'r T.trait_instance_id) : bool =
   match id with
   | T.Self | Clause _ -> true
   | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ -> false
-  | ParentClause (id, _) | ItemClause (id, _, _) ->
+  | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
       trait_instance_id_is_local_clause id
 
 (** About the conversion functions: for now we need them (TODO: merge ety, rty, etc.),
@@ -212,14 +212,14 @@ and ctx_normalize_trait_instance_id :
       (id, None)
   | Clause _ -> (id, None)
   | BuiltinOrAuto _ -> (id, None)
-  | ParentClause (inst_id, clause_id) -> (
+  | ParentClause (inst_id, decl_id, clause_id) -> (
       let inst_id, impl = ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
       match impl with
       | None ->
           (* This is actually a local clause *)
           assert (trait_instance_id_is_local_clause inst_id);
-          (ParentClause (inst_id, clause_id), None)
+          (ParentClause (inst_id, decl_id, clause_id), None)
       | Some impl ->
           (* We figure out the parent clause by doing the following:
              {[
@@ -243,14 +243,14 @@ and ctx_normalize_trait_instance_id :
           (* Sanity check: the clause necessarily refers to an impl *)
           let _ = TypesUtils.trait_instance_id_as_trait_impl clause.trait_id in
           (TraitRef clause, Some clause))
-  | ItemClause (inst_id, item_name, clause_id) -> (
+  | ItemClause (inst_id, decl_id, item_name, clause_id) -> (
       let inst_id, impl = ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
       match impl with
       | None ->
           (* This is actually a local clause *)
           assert (trait_instance_id_is_local_clause inst_id);
-          (ParentClause (inst_id, clause_id), None)
+          (ParentClause (inst_id, decl_id, clause_id), None)
       | Some impl ->
           (* We figure out the item clause by doing the following:
              {[

@@ -273,11 +273,11 @@ and trait_instance_id_to_string (fmt : type_formatter) (inside : bool)
   | Self -> "Self"
   | TraitImpl id -> fmt.trait_impl_id_to_string id
   | Clause id -> fmt.trait_clause_id_to_string id
-  | ParentClause (inst_id, clause_id) ->
+  | ParentClause (inst_id, _decl_id, clause_id) ->
       let inst_id = trait_instance_id_to_string fmt false inst_id in
       let clause_id = fmt.trait_clause_id_to_string clause_id in
       "parent(" ^ inst_id ^ ")::" ^ clause_id
-  | ItemClause (inst_id, item_name, clause_id) ->
+  | ItemClause (inst_id, _decl_id, item_name, clause_id) ->
       let inst_id = trait_instance_id_to_string fmt false inst_id in
       let clause_id = fmt.trait_clause_id_to_string clause_id in
       "(" ^ inst_id ^ ")::" ^ item_name ^ "::[" ^ clause_id ^ "]"

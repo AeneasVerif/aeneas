@@ -393,7 +393,15 @@ and translate_trait_ref (translate_ty : 'r T.ty -> ty) (tr : 'r T.trait_ref) :
     trait_ref =
   let trait_id = translate_trait_instance_id translate_ty tr.trait_id in
   let generics = translate_generic_args translate_ty tr.generics in
-  { trait_id; generics }
+  let trait_decl_ref =
+    translate_trait_decl_ref translate_ty tr.trait_decl_ref
+  in
+  { trait_id; generics; trait_decl_ref }
+
+and translate_trait_decl_ref (translate_ty : 'r T.ty -> ty)
+    (tr : 'r T.trait_decl_ref) : trait_decl_ref =
+  let decl_generics = translate_generic_args translate_ty tr.decl_generics in
+  { trait_decl_id = tr.trait_decl_id; decl_generics }
 
 and translate_trait_instance_id (translate_ty : 'r T.ty -> ty)
     (id : 'r T.trait_instance_id) : trait_instance_id =
@@ -405,12 +413,12 @@ and translate_trait_instance_id (translate_ty : 'r T.ty -> ty)
       (* We should have eliminated those in the prepasses *)
       raise (Failure "Unreachable")
   | Clause id -> Clause id
-  | ParentClause (inst_id, clause_id) ->
+  | ParentClause (inst_id, decl_id, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
-      ParentClause (inst_id, clause_id)
-  | ItemClause (inst_id, item_name, clause_id) ->
+      ParentClause (inst_id, decl_id, clause_id)
+  | ItemClause (inst_id, decl_id, item_name, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
-      ItemClause (inst_id, item_name, clause_id)
+      ItemClause (inst_id, decl_id, item_name, clause_id)
   | TraitRef tr -> TraitRef (translate_trait_ref translate_ty tr)
   | UnknownTrait s -> raise (Failure ("Unknown trait found: " ^ s))
 
@@ -2644,7 +2652,14 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       let trait_refs =
         List.map
           (fun (c : trait_clause) ->
-            { trait_id = Clause c.clause_id; generics = empty_generic_args })
+            let trait_decl_ref =
+              { trait_decl_id = c.trait_id; decl_generics = empty_generic_args }
+            in
+            {
+              trait_id = Clause c.clause_id;
+              generics = empty_generic_args;
+              trait_decl_ref;
+            })
           trait_clauses
       in
       { types; const_generics; trait_refs }

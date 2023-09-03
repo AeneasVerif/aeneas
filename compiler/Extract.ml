@@ -1223,23 +1223,29 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt ")"
   | TraitType (trait_ref, generics, type_name) ->
       if !parameterize_trait_types then raise (Failure "Unimplemented")
-      else (
+      else if trait_ref.trait_id <> Self then (
         (* HOL4 doesn't have 1st class types *)
         assert (!backend <> HOL4);
-        if trait_ref.trait_id <> Self then (
-          F.pp_print_string fmt "(";
-          extract_trait_ref ctx fmt no_params_tys false trait_ref;
-          extract_generic_args ctx fmt no_params_tys generics;
-          (* TODO: lookup the type name *)
-          F.pp_print_string fmt (")." ^ type_name))
-        else
-          (* Can only happen when extracting the signature of a trait method
-             *declaration*. If extracting items for a trait method implementation,
-             the type should have been normalized. For trait method declarations
-             we directly reference the item. *)
-          let trait_decl_id = Option.get ctx.trait_decl_id in
-          assert (generics = empty_generic_args);
-          F.pp_print_string fmt type_name)
+        let use_brackets = generics <> empty_generic_args in
+        if use_brackets then F.pp_print_string fmt "(";
+        extract_trait_ref ctx fmt no_params_tys false trait_ref;
+        extract_generic_args ctx fmt no_params_tys generics;
+        let name =
+          ctx_get_trait_assoc_type trait_ref.trait_decl_ref.trait_decl_id
+            type_name ctx
+        in
+        if use_brackets then F.pp_print_string fmt ")";
+        F.pp_print_string fmt ("." ^ name))
+      else
+        (* Can only happen when extracting the signature of a trait method
+           *declaration* or a provided trait method (for a declaration).
+           If extracting items for a trait method implementation,
+           the type should have been normalized. For trait method declarations
+           we directly reference the item. *)
+        assert (ctx.trait_decl_id <> None);
+      assert (generics = empty_generic_args);
+      let name = ctx_get_local_trait_assoc_type type_name ctx in
+      F.pp_print_string fmt name
 
 and extract_trait_ref (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_ref) : unit =
@@ -1270,17 +1276,35 @@ and extract_generic_args (ctx : extraction_ctx) (fmt : F.formatter)
       (extract_trait_ref ctx fmt no_params_tys true)
       trait_refs)
 
-and extract_trait_instance_id (_ctx : extraction_ctx) (_fmt : F.formatter)
-    (_no_params_tys : TypeDeclId.Set.t) (_inside : bool)
-    (id : trait_instance_id) : unit =
+and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
+    : unit =
+  let with_opaque_pre = false in
   match id with
-  | Self -> raise (Failure "TODO")
-  | TraitImpl _ -> raise (Failure "TODO")
-  | Clause _ -> raise (Failure "TODO")
-  | ParentClause _ -> raise (Failure "TODO")
-  | ItemClause _ -> raise (Failure "TODO")
-  | TraitRef _ -> raise (Failure "TODO")
-  | UnknownTrait _ -> raise (Failure "TODO")
+  | Self ->
+      (* This has specific treatment depending on the item we're extracting
+         (associated type, etc.). We should have caught this elsewhere. *)
+      raise (Failure "Unexpected")
+  | TraitImpl id ->
+      let name = ctx_get_trait_impl with_opaque_pre id ctx in
+      F.pp_print_string fmt name
+  | Clause id ->
+      let name = ctx_get_local_trait_clause id ctx in
+      F.pp_print_string fmt name
+  | ParentClause (inst_id, decl_id, clause_id) ->
+      (* Use the trait decl id to lookup the name *)
+      let name = ctx_get_trait_parent_clause decl_id clause_id ctx in
+      extract_trait_instance_id ctx fmt no_params_tys true inst_id;
+      F.pp_print_string fmt ("." ^ name)
+  | ItemClause (inst_id, decl_id, item_name, clause_id) ->
+      (* Use the trait decl id to lookup the name *)
+      let name = ctx_get_trait_item_clause decl_id item_name clause_id ctx in
+      extract_trait_instance_id ctx fmt no_params_tys true inst_id;
+      F.pp_print_string fmt ("." ^ name)
+  | TraitRef trait_ref -> extract_trait_ref ctx fmt no_params_tys true trait_ref
+  | UnknownTrait _ ->
+      (* This is an error case *)
+      raise (Failure "Unexpected")
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type
@@ -1673,7 +1697,7 @@ let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
         insert_req_space ();
         (* ( *)
         left_bracket ();
-        let n = ctx_get_trait_clause_var clause.clause_id ctx in
+        let n = ctx_get_local_trait_clause clause.clause_id ctx in
         F.pp_print_string fmt n;
         F.pp_print_space fmt ();
         F.pp_print_string fmt ":";

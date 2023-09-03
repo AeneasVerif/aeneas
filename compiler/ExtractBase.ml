@@ -408,7 +408,11 @@ type id =
   | VarId of VarId.id
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
-  | TraitClauseId of TraitClauseId.id
+  | LocalTraitClauseId of TraitClauseId.id
+  | LocalTraitAssocTypeId of string  (** Specifically for: [Self::Ty] *)
+  | TraitAssocTypeId of TraitDeclId.id * string  (** A trait associated type *)
+  | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
+  | TraitItemClauseId of TraitDeclId.id * string * TraitClauseId.id
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
           should always be in context, etc. and which can't be linked to one
@@ -746,7 +750,20 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | VarId id -> "var_id: " ^ VarId.to_string id
   | TraitDeclId id -> "trait_decl_id: " ^ TraitDeclId.to_string id
   | TraitImplId id -> "trait_impl_id: " ^ TraitImplId.to_string id
-  | TraitClauseId id -> "trait_clause_id: " ^ TraitClauseId.to_string id
+  | LocalTraitClauseId id ->
+      "local_trait_clause_id: " ^ TraitClauseId.to_string id
+  | LocalTraitAssocTypeId type_name -> "local_trait_assoc_type_id: " ^ type_name
+  | TraitParentClauseId (id, clause_id) ->
+      "trait_parent_clause_id: decl_id:" ^ TraitDeclId.to_string id
+      ^ ", clause_id: "
+      ^ TraitClauseId.to_string clause_id
+  | TraitItemClauseId (id, item_name, clause_id) ->
+      "trait_item_clause_id: decl_id:" ^ TraitDeclId.to_string id
+      ^ ", item name: " ^ item_name ^ ", clause_id: "
+      ^ TraitClauseId.to_string clause_id
+  | TraitAssocTypeId (id, type_name) ->
+      "trait_assoc_type_id: decl_id:" ^ TraitDeclId.to_string id
+      ^ ", type name: " ^ type_name
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
@@ -849,6 +866,26 @@ let ctx_get_trait_impl (with_opaque_pre : bool) (id : trait_impl_id)
     (ctx : extraction_ctx) : string =
   ctx_get with_opaque_pre (TraitImplId id) ctx
 
+let ctx_get_trait_assoc_type (id : trait_decl_id) (type_name : string)
+    (ctx : extraction_ctx) : string =
+  let is_opaque = false in
+  ctx_get is_opaque (TraitAssocTypeId (id, type_name)) ctx
+
+let ctx_get_local_trait_assoc_type (type_name : string) (ctx : extraction_ctx) :
+    string =
+  let is_opaque = false in
+  ctx_get is_opaque (LocalTraitAssocTypeId type_name) ctx
+
+let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
+    (ctx : extraction_ctx) : string =
+  let with_opaque_pre = false in
+  ctx_get with_opaque_pre (TraitParentClauseId (id, clause)) ctx
+
+let ctx_get_trait_item_clause (id : trait_decl_id) (item : string)
+    (clause : trait_clause_id) (ctx : extraction_ctx) : string =
+  let with_opaque_pre = false in
+  ctx_get with_opaque_pre (TraitItemClauseId (id, item, clause)) ctx
+
 let ctx_get_var (id : VarId.id) (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get is_opaque (VarId id) ctx
@@ -862,10 +899,10 @@ let ctx_get_const_generic_var (id : ConstGenericVarId.id) (ctx : extraction_ctx)
   let is_opaque = false in
   ctx_get is_opaque (ConstGenericVarId id) ctx
 
-let ctx_get_trait_clause_var (id : TraitClauseId.id) (ctx : extraction_ctx) :
+let ctx_get_local_trait_clause (id : TraitClauseId.id) (ctx : extraction_ctx) :
     string =
   let is_opaque = false in
-  ctx_get is_opaque (TraitClauseId id) ctx
+  ctx_get is_opaque (LocalTraitClauseId id) ctx
 
 let ctx_get_field (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
@@ -933,13 +970,13 @@ let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
   (ctx, name)
 
 (** Generate a unique trait clause name and add it to the context *)
-let ctx_add_trait_clause (basename : string) (id : TraitClauseId.id)
+let ctx_add_local_trait_clause (basename : string) (id : TraitClauseId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let is_opaque = false in
   let name =
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
   in
-  let ctx = ctx_add is_opaque (TraitClauseId id) name ctx in
+  let ctx = ctx_add is_opaque (LocalTraitClauseId id) name ctx in
   (ctx, name)
 
 (** See {!ctx_add_var} *)
@@ -964,12 +1001,12 @@ let ctx_add_const_generic_params (vars : const_generic_var list)
       ctx_add_const_generic_var var.name var.index ctx)
     ctx vars
 
-let ctx_add_trait_clauses (clauses : trait_clause list) (ctx : extraction_ctx) :
-    extraction_ctx * string list =
+let ctx_add_local_trait_clauses (clauses : trait_clause list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (c : trait_clause) ->
       let basename = ctx.fmt.trait_clause_basename ctx.names_map.names_set c in
-      ctx_add_trait_clause basename c.clause_id ctx)
+      ctx_add_local_trait_clause basename c.clause_id ctx)
     ctx clauses
 
 (** Returns the lists of names for:
@@ -982,7 +1019,7 @@ let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
   let { types; const_generics; trait_clauses } = generics in
   let ctx, tys = ctx_add_type_params types ctx in
   let ctx, cgs = ctx_add_const_generic_params const_generics ctx in
-  let ctx, tcs = ctx_add_trait_clauses trait_clauses ctx in
+  let ctx, tcs = ctx_add_local_trait_clauses trait_clauses ctx in
   (ctx, tys, cgs, tcs)
 
 let ctx_add_type_decl_struct (def : type_decl) (ctx : extraction_ctx) :

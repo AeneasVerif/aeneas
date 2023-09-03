@@ -276,7 +276,16 @@ type ty =
   | TraitType of trait_ref * generic_args * string
       (** The string is for the name of the associated type *)
 
-and trait_ref = { trait_id : trait_instance_id; generics : generic_args }
+and trait_ref = {
+  trait_id : trait_instance_id;
+  generics : generic_args;
+  trait_decl_ref : trait_decl_ref;
+}
+
+and trait_decl_ref = {
+  trait_decl_id : trait_decl_id;
+  decl_generics : generic_args; (* The name: annoying field collisions... *)
+}
 
 and generic_args = {
   types : ty list;
@@ -288,8 +297,9 @@ and trait_instance_id =
   | Self
   | TraitImpl of trait_impl_id
   | Clause of trait_clause_id
-  | ParentClause of trait_instance_id * trait_clause_id
-  | ItemClause of trait_instance_id * trait_item_name * trait_clause_id
+  | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
+  | ItemClause of
+      trait_instance_id * trait_decl_id * trait_item_name * trait_clause_id
   | TraitRef of trait_ref
   | UnknownTrait of string
 [@@deriving
