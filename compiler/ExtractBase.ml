@@ -417,8 +417,7 @@ type id =
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
   | LocalTraitClauseId of TraitClauseId.id
-  | TraitMethodId of
-      TraitDeclId.id * string * LoopId.id option * T.RegionGroupId.id option
+  | TraitMethodId of TraitDeclId.id * string * T.RegionGroupId.id option
       (** Something peculiar with trait methods: because we have to take into
           account forward/backward functions, we may need to generate fields
           items per method.
@@ -820,23 +819,17 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TraitItemId (id, name) ->
       "trait_item_id: decl_id:" ^ TraitDeclId.to_string id ^ ", type name: "
       ^ name
-  | TraitMethodId (trait_decl_id, fun_name, lp_id, rg_id) ->
+  | TraitMethodId (trait_decl_id, fun_name, rg_id) ->
       let trait_name =
         Print.fun_name_to_string
           (A.TraitDeclId.Map.find trait_decl_id trait_decls).name
       in
-      let lp_kind =
-        match lp_id with
-        | None -> ""
-        | Some lp_id -> "loop " ^ LoopId.to_string lp_id ^ ", "
-      in
-
       let fwd_back_kind =
         match rg_id with
         | None -> "forward"
         | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
       in
-      "trait " ^ trait_name ^ " method name (" ^ lp_kind ^ fwd_back_kind ^ "): "
+      "trait " ^ trait_name ^ " method name (" ^ fwd_back_kind ^ "): "
       ^ fun_name
   | TraitSelfClauseId -> "trait_self_clause"
 
@@ -960,8 +953,9 @@ let ctx_get_trait_type (id : trait_decl_id) (item_name : string)
   ctx_get_trait_item id item_name ctx
 
 let ctx_get_trait_method (id : trait_decl_id) (item_name : string)
-    (ctx : extraction_ctx) : string =
-  ctx_get_trait_item id item_name ctx
+    (rg_id : T.RegionGroupId.id option) (ctx : extraction_ctx) : string =
+  let with_opaque_pre = false in
+  ctx_get with_opaque_pre (TraitMethodId (id, item_name, rg_id)) ctx
 
 let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
     (ctx : extraction_ctx) : string =
@@ -1299,9 +1293,7 @@ let ctx_add_trait_method (d : trait_decl) (item_name : string) (f : fun_decl)
   let trans = A.FunDeclId.Map.find f.def_id ctx.trans_funs in
   let name = ctx_compute_fun_name trans f ctx in
   let is_opaque = false in
-  ctx_add is_opaque
-    (TraitMethodId (d.def_id, item_name, f.loop_id, f.back_id))
-    name ctx
+  ctx_add is_opaque (TraitMethodId (d.def_id, item_name, f.back_id)) name ctx
 
 let ctx_add_trait_parent_clause (d : trait_decl) (clause : trait_clause)
     (ctx : extraction_ctx) : extraction_ctx =
