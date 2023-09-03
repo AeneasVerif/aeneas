@@ -654,6 +654,8 @@ type extraction_ctx = {
   trait_decl_id : trait_decl_id option;
       (** If we are extracting a trait declaration, identifies it *)
   is_provided_method : bool;
+  trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
+  trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
 }
 
 (** Debugging function, used when communicating name collisions to the user,

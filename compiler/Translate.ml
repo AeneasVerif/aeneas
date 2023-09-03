@@ -301,8 +301,13 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   (* Return *)
   (pure_forward, pure_backwards)
 
+(* TODO: factor out the return type *)
 let translate_crate_to_pure (crate : A.crate) :
-    trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
+    trans_ctx
+    * Pure.type_decl list
+    * (bool * pure_fun_translation) list
+    * Pure.trait_decl list
+    * Pure.trait_impl list =
   (* Debug *)
   log#ldebug (lazy "translate_crate_to_pure");
 
@@ -368,13 +373,28 @@ let translate_crate_to_pure (crate : A.crate) :
       (A.FunDeclId.Map.values crate.functions)
   in
 
+  (* Translate the trait declarations *)
+  let type_infos = trans_ctx.type_context.type_infos in
+  let trait_decls =
+    List.map
+      (SymbolicToPure.translate_trait_decl type_infos)
+      (T.TraitDeclId.Map.values trans_ctx.trait_decls_context.trait_decls)
+  in
+
+  (* Translate the trait implementations *)
+  let trait_impls =
+    List.map
+      (SymbolicToPure.translate_trait_impl type_infos)
+      (T.TraitImplId.Map.values trans_ctx.trait_impls_context.trait_impls)
+  in
+
   (* Apply the micro-passes *)
   let pure_translations =
     Micro.apply_passes_to_pure_fun_translations trans_ctx pure_translations
   in
 
   (* Return *)
-  (trans_ctx, type_decls, pure_translations)
+  (trans_ctx, type_decls, pure_translations, trait_decls, trait_impls)
 
 (** Extraction context *)
 type gen_ctx = {
@@ -735,14 +755,8 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) : unit =
   let trait_decl =
-    T.TraitDeclId.Map.find trait_decl_id
-      ctx.extract_ctx.trans_ctx.trait_decls_context.trait_decls
+    T.TraitDeclId.Map.find trait_decl_id ctx.extract_ctx.trans_trait_decls
   in
-  (* We translate the trait declaration on the fly (note that
-     trait declarations do not directly contain functions, constants,
-     etc.: they simply refer to them). *)
-  let type_infos = ctx.extract_ctx.trans_ctx.type_context.type_infos in
-  let trait_decl = SymbolicToPure.translate_trait_decl type_infos trait_decl in
   let ctx = ctx.extract_ctx in
   let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
   Extract.extract_trait_decl ctx fmt trait_decl
@@ -751,14 +765,8 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
   let trait_impl =
-    T.TraitImplId.Map.find trait_impl_id
-      ctx.extract_ctx.trans_ctx.trait_impls_context.trait_impls
+    T.TraitImplId.Map.find trait_impl_id ctx.extract_ctx.trans_trait_impls
   in
-  (* We translate the trait implementation on the fly (note that
-     trait implementations do not directly contain functions, constants,
-     etc.: they simply refer to them). *)
-  let type_infos = ctx.extract_ctx.trans_ctx.type_context.type_infos in
-  let trait_impl = SymbolicToPure.translate_trait_impl type_infos trait_impl in
   Extract.extract_trait_impl ctx.extract_ctx fmt trait_impl
 
 (** A generic utility to generate the extracted definitions: as we may want to
@@ -978,7 +986,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
 let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
     unit =
   (* Translate the module to the pure AST *)
-  let trans_ctx, trans_types, trans_funs = translate_crate_to_pure crate in
+  let trans_ctx, trans_types, trans_funs, trans_trait_decls, trans_trait_impls =
+    translate_crate_to_pure crate
+  in
 
   (* Initialize the extraction context - for now we extract only to F*.
    * We initialize the names map by registering the keywords used in the
@@ -997,6 +1007,18 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   in
   (* Put everything in the context *)
   let ctx =
+    let trans_trait_decls =
+      T.TraitDeclId.Map.of_list
+        (List.map
+           (fun (d : Pure.trait_decl) -> (d.def_id, d))
+           trans_trait_decls)
+    in
+    let trans_trait_impls =
+      T.TraitImplId.Map.of_list
+        (List.map
+           (fun (d : Pure.trait_impl) -> (d.def_id, d))
+           trans_trait_impls)
+    in
     {
       ExtractBase.trans_ctx;
       names_map;
@@ -1008,6 +1030,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       fun_name_info = PureUtils.RegularFunIdMap.empty;
       trait_decl_id = None (* None by default *);
       is_provided_method = false (* false by default *);
+      trans_trait_decls;
+      trans_trait_impls;
     }
   in
 
@@ -1034,7 +1058,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   in
   let rec_functions = PureUtils.FunLoopIdSet.of_list rec_functions in
 
-  (* Register unique names for all the top-level types, globals and functions.
+  (* Register unique names for all the top-level types, globals, functions...
    * Note that the order in which we generate the names doesn't matter:
    * we just need to generate a mapping from identifier to name, and make
    * sure there are no name clashes. *)
@@ -1069,6 +1093,16 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   let ctx =
     List.fold_left Extract.extract_global_decl_register_names ctx
       (A.GlobalDeclId.Map.values crate.globals)
+  in
+
+  let ctx =
+    List.fold_left Extract.extract_trait_decl_register_names ctx
+      trans_trait_decls
+  in
+
+  let ctx =
+    List.fold_left Extract.extract_trait_impl_register_names ctx
+      trans_trait_impls
   in
 
   (* Open the output file *)

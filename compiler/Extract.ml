@@ -1650,7 +1650,7 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
     We add the trait self clause for provided methods (see {!TraitSelfClauseId}).
  *)
 let extract_trait_self_clause (insert_req_space : unit -> unit)
-    (ctx : extraction_ctx) (fmt : F.formatter) (trait_decl : A.trait_decl)
+    (ctx : extraction_ctx) (fmt : F.formatter) (trait_decl : trait_decl)
     (params : string list) : unit =
   insert_req_space ();
   F.pp_print_string fmt "(";
@@ -1673,7 +1673,7 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
  *)
 let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (use_forall : bool) (as_implicits : bool)
-    (space : bool ref option) (trait_decl : A.trait_decl option)
+    (space : bool ref option) (trait_decl : trait_decl option)
     (generics : generic_params) (type_params : string list)
     (cg_params : string list) (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
@@ -3111,10 +3111,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   let ctx, trait_decl =
     match def.kind with
     | TraitMethodProvided (decl_id, _) ->
-        let trait_decl =
-          T.TraitDeclId.Map.find decl_id
-            ctx.trans_ctx.trait_decls_context.trait_decls
-        in
+        let trait_decl = T.TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
         let ctx, _ = ctx_add_trait_self_clause ctx in
         let ctx = { ctx with is_provided_method = true } in
         (ctx, Some trait_decl)
@@ -3886,6 +3883,16 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
              F.pp_print_string fmt body));
       (* Add a break to insert lines between declarations *)
       F.pp_print_break fmt 0 0
+
+(** Similar to {!extract_type_decl_register_names} *)
+let extract_trait_decl_register_names (ctx : extraction_ctx) (d : trait_decl) :
+    extraction_ctx =
+  raise (Failure "TODO")
+
+(** Similar to {!extract_type_decl_register_names} *)
+let extract_trait_impl_register_names (ctx : extraction_ctx) (d : trait_impl) :
+    extraction_ctx =
+  raise (Failure "TODO")
 
 (** Extract a trait declaration *)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
