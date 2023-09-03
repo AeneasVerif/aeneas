@@ -4,6 +4,7 @@ open Pure
 open PureUtils
 module Id = Identifiers
 module C = Contexts
+module A = LlbcAst
 module S = SymbolicAst
 module TA = TypesAnalysis
 module L = Logging
@@ -473,6 +474,20 @@ let translate_trait_clause (clause : T.trait_clause) : trait_clause =
   let generics = translate_sgeneric_args generics in
   { clause_id; trait_id; generics }
 
+let translate_strait_type_constraint (ttc : T.strait_type_constraint) :
+    trait_type_constraint =
+  let { T.trait_ref; generics; type_name; ty } = ttc in
+  let trait_ref = translate_strait_ref trait_ref in
+  let generics = translate_sgeneric_args generics in
+  let ty = translate_sty ty in
+  { trait_ref; generics; type_name; ty }
+
+let translate_predicates (preds : T.predicates) : predicates =
+  let trait_type_constraints =
+    List.map translate_strait_type_constraint preds.trait_type_constraints
+  in
+  { trait_type_constraints }
+
 let translate_generic_params (generics : T.generic_params) : generic_params =
   let { T.regions = _; types; const_generics; trait_clauses } = generics in
   let trait_clauses = List.map translate_trait_clause trait_clauses in
@@ -515,7 +530,8 @@ let translate_type_decl (def : T.type_decl) : type_decl =
   let trait_clauses = List.map translate_trait_clause trait_clauses in
   let generics = { types; const_generics; trait_clauses } in
   let kind = translate_type_decl_kind def.T.kind in
-  { def_id; name; generics; kind }
+  let preds = translate_predicates def.preds in
+  { def_id; name; generics; kind; preds }
 
 let translate_type_id (id : T.type_id) : type_id =
   match id with
@@ -952,7 +968,8 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
       effect_info;
     }
   in
-  let sg = { generics; inputs; output; doutputs; info } in
+  let preds = translate_predicates sg.A.preds in
+  let sg = { generics; preds; inputs; output; doutputs; info } in
   { sg; output_names }
 
 let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * typed_pattern =
@@ -2932,6 +2949,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let def =
     {
       def_id;
+      kind = def.kind;
       num_loops;
       loop_id;
       back_id = bid;
@@ -3002,3 +3020,91 @@ let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
   List.fold_left
     (fun m (id, sg) -> RegularFunIdNotLoopMap.add id sg m)
     RegularFunIdNotLoopMap.empty translated
+
+let translate_trait_decl (type_infos : TA.type_infos)
+    (trait_decl : A.trait_decl) : trait_decl =
+  let {
+    A.def_id;
+    name;
+    generics;
+    preds;
+    all_trait_clauses;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  } =
+    trait_decl
+  in
+  let generics = translate_generic_params generics in
+  let preds = translate_predicates preds in
+  let all_trait_clauses = List.map translate_trait_clause all_trait_clauses in
+  let consts =
+    List.map
+      (fun (name, (ty, id)) -> (name, (translate_fwd_ty type_infos ty, id)))
+      consts
+  in
+  let types =
+    List.map
+      (fun (name, (trait_clauses, ty)) ->
+        ( name,
+          ( List.map translate_trait_clause trait_clauses,
+            Option.map (translate_fwd_ty type_infos) ty ) ))
+      types
+  in
+  {
+    def_id;
+    name;
+    generics;
+    preds;
+    all_trait_clauses;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  }
+
+let translate_trait_impl (type_infos : TA.type_infos)
+    (trait_impl : A.trait_impl) : trait_impl =
+  let {
+    A.def_id;
+    name;
+    impl_trait;
+    generics;
+    preds;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  } =
+    trait_impl
+  in
+  let impl_trait =
+    translate_trait_decl_ref (translate_fwd_ty type_infos) impl_trait
+  in
+  let generics = translate_generic_params generics in
+  let preds = translate_predicates preds in
+  let consts =
+    List.map
+      (fun (name, (ty, id)) -> (name, (translate_fwd_ty type_infos ty, id)))
+      consts
+  in
+  let types =
+    List.map
+      (fun (name, (trait_refs, ty)) ->
+        ( name,
+          ( List.map (translate_fwd_trait_ref type_infos) trait_refs,
+            translate_fwd_ty type_infos ty ) ))
+      types
+  in
+  {
+    def_id;
+    name;
+    impl_trait;
+    generics;
+    preds;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  }

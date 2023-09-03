@@ -45,6 +45,8 @@ type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
 type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
 type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
 type trait_item_name = T.trait_item_name [@@deriving show, ord]
+type global_decl_id = T.global_decl_id [@@deriving show, ord]
+type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -361,11 +363,23 @@ type generic_params = {
 }
 [@@deriving show]
 
+type trait_type_constraint = {
+  trait_ref : trait_ref;
+  generics : generic_args;
+  type_name : trait_item_name;
+  ty : ty;
+}
+[@@deriving show]
+
+type predicates = { trait_type_constraints : trait_type_constraint list }
+[@@deriving show]
+
 type type_decl = {
   def_id : TypeDeclId.id;
   name : name;
   generics : generic_params;
   kind : type_decl_kind;
+  preds : predicates;
 }
 [@@deriving show]
 
@@ -881,6 +895,7 @@ type fun_sig_info = {
 type fun_sig = {
   generics : generic_params;
       (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  preds : predicates;
   inputs : ty list;
       (** The types of the inputs.
 
@@ -952,8 +967,11 @@ type fun_body = {
 }
 [@@deriving show]
 
+type fun_kind = A.fun_kind [@@deriving show]
+
 type fun_decl = {
   def_id : FunDeclId.id;
+  kind : fun_kind;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
           of loops appearing in the original Rust functions, unless some loops are
@@ -971,5 +989,31 @@ type fun_decl = {
   signature : fun_sig;
   is_global_decl_body : bool;
   body : fun_body option;
+}
+[@@deriving show]
+
+type trait_decl = {
+  def_id : trait_decl_id;
+  name : name;
+  generics : generic_params;
+  preds : predicates;
+  all_trait_clauses : trait_clause list;
+  consts : (trait_item_name * (ty * global_decl_id option)) list;
+  types : (trait_item_name * (trait_clause list * ty option)) list;
+  required_methods : (trait_item_name * fun_decl_id) list;
+  provided_methods : trait_item_name list;
+}
+[@@deriving show]
+
+type trait_impl = {
+  def_id : trait_impl_id;
+  name : name;
+  impl_trait : trait_decl_ref;
+  generics : generic_params;
+  preds : predicates;
+  consts : (trait_item_name * (ty * global_decl_id)) list;
+  types : (trait_item_name * (trait_ref list * ty)) list;
+  required_methods : (trait_item_name * fun_decl_id) list;
+  provided_methods : (trait_item_name * fun_decl_id) list;
 }
 [@@deriving show]

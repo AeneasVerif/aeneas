@@ -5,6 +5,7 @@ module T = Types
 module A = LlbcAst
 module SA = SymbolicAst
 module Micro = PureMicroPasses
+module C = Contexts
 open PureUtils
 open TranslateCore
 
@@ -28,18 +29,34 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : A.fun_decl)
       ("translate_function_to_symbolics: "
       ^ Print.fun_name_to_string fdef.A.name));
 
-  let { type_context; fun_context; global_context } = trans_ctx in
+  let {
+    type_context;
+    fun_context;
+    global_context;
+    trait_decls_context;
+    trait_impls_context;
+  } =
+    trans_ctx
+  in
   let fun_context = { C.fun_decls = fun_context.fun_decls } in
+
+  (* TODO: we should merge trans_ctx and decls_ctx *)
+  let decls_ctx : C.decls_ctx =
+    {
+      C.type_ctx = type_context;
+      fun_ctx = fun_context;
+      global_ctx = global_context;
+      trait_decls_ctx = trait_decls_context;
+      trait_impls_ctx = trait_impls_context;
+    }
+  in
 
   match fdef.body with
   | None -> None
   | Some _ ->
       (* Evaluate *)
       let synthesize = true in
-      let inputs, symb =
-        evaluate_function_symbolic synthesize type_context fun_context
-          global_context fdef
-      in
+      let inputs, symb = evaluate_function_symbolic synthesize decls_ctx fdef in
       Some (inputs, Option.get symb)
 
 (** Translate a function, by generating its forward and backward translations.
@@ -57,7 +74,15 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     (lazy
       ("translate_function_to_pure: " ^ Print.fun_name_to_string fdef.A.name));
 
-  let { type_context; fun_context; global_context } = trans_ctx in
+  let {
+    type_context;
+    fun_context;
+    global_context;
+    trait_decls_context;
+    trait_impls_context;
+  } =
+    trans_ctx
+  in
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs, if the function is transparent *)
@@ -148,6 +173,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       type_context;
       fun_context;
       global_context;
+      trait_decls_ctx = trait_decls_context.trait_decls;
+      trait_impls_ctx = trait_impls_context.trait_impls;
       fun_decl = fdef;
       forward_inputs = [];
       (* Empty for now *)
@@ -280,13 +307,21 @@ let translate_crate_to_pure (crate : A.crate) :
   log#ldebug (lazy "translate_crate_to_pure");
 
   (* Compute the type and function contexts *)
-  let type_context, fun_context, global_context = compute_contexts crate in
+  let decls_ctx = compute_contexts crate in
   let fun_infos =
-    FA.analyze_module crate fun_context.C.fun_decls
-      global_context.C.global_decls !Config.use_state
+    FA.analyze_module crate decls_ctx.fun_ctx.C.fun_decls
+      decls_ctx.global_ctx.C.global_decls !Config.use_state
   in
-  let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
-  let trans_ctx = { type_context; fun_context; global_context } in
+  let fun_context = { fun_decls = decls_ctx.fun_ctx.fun_decls; fun_infos } in
+  let trans_ctx =
+    {
+      type_context = decls_ctx.type_ctx;
+      fun_context;
+      global_context = decls_ctx.global_ctx;
+      trait_decls_context = decls_ctx.trait_decls_ctx;
+      trait_impls_context = decls_ctx.trait_impls_ctx;
+    }
+  in
 
   (* Translate all the type definitions *)
   let type_decls =
@@ -323,7 +358,7 @@ let translate_crate_to_pure (crate : A.crate) :
   let sigs = List.append assumed_sigs local_sigs in
   let fun_sigs =
     SymbolicToPure.translate_fun_signatures fun_context.fun_infos
-      type_context.type_infos sigs
+      decls_ctx.type_ctx.type_infos sigs
   in
 
   (* Translate all the *transparent* functions *)
@@ -696,6 +731,36 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
           Extract.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
       pure_ls
 
+(** Export a trait declaration. *)
+let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
+    (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) : unit =
+  let trait_decl =
+    T.TraitDeclId.Map.find trait_decl_id
+      ctx.extract_ctx.trans_ctx.trait_decls_context.trait_decls
+  in
+  (* We translate the trait declaration on the fly (note that
+     trait declarations do not directly contain functions, constants,
+     etc.: they simply refer to them). *)
+  let type_infos = ctx.extract_ctx.trans_ctx.type_context.type_infos in
+  let trait_decl = SymbolicToPure.translate_trait_decl type_infos trait_decl in
+  let ctx = ctx.extract_ctx in
+  let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
+  Extract.extract_trait_decl ctx fmt trait_decl
+
+(** Export a trait implementation. *)
+let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
+    (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
+  let trait_impl =
+    T.TraitImplId.Map.find trait_impl_id
+      ctx.extract_ctx.trans_ctx.trait_impls_context.trait_impls
+  in
+  (* We translate the trait implementation on the fly (note that
+     trait implementations do not directly contain functions, constants,
+     etc.: they simply refer to them). *)
+  let type_infos = ctx.extract_ctx.trans_ctx.type_context.type_infos in
+  let trait_impl = SymbolicToPure.translate_trait_impl type_infos trait_impl in
+  Extract.extract_trait_impl ctx.extract_ctx fmt trait_impl
+
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control
     what is precisely extracted.
@@ -710,6 +775,8 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_functions_group = export_functions_group fmt config ctx in
   let export_global = export_global fmt config ctx in
   let export_types_group = export_types_group fmt config ctx in
+  let export_trait_decl = export_trait_decl fmt config ctx in
+  let export_trait_impl = export_trait_impl fmt config ctx in
 
   let export_state_type () : unit =
     let kind =
@@ -723,11 +790,18 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | Type (NonRec id) ->
         if config.extract_types then export_types_group false [ id ]
     | Type (Rec ids) -> if config.extract_types then export_types_group true ids
-    | Fun (NonRec id) ->
+    | Fun (NonRec id) -> (
         (* Lookup *)
         let pure_fun = A.FunDeclId.Map.find id ctx.trans_funs in
-        (* Translate *)
-        export_functions_group [ pure_fun ]
+        (* Special case: we skip trait method *declarations* (we will
+           extract their type directly in the records we generate for
+           the trait declarations themselves, there is no point in having
+           separate type definitions) *)
+        match (fst (fst (snd pure_fun))).Pure.kind with
+        | TraitMethodDecl _ -> ()
+        | _ ->
+            (* Translate *)
+            export_functions_group [ pure_fun ])
     | Fun (Rec ids) ->
         (* General case of mutually recursive functions *)
         (* Lookup *)
@@ -737,11 +811,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Translate *)
         export_functions_group pure_funs
     | Global id -> export_global id
+    | TraitDecl id -> export_trait_decl id
+    | TraitImpl id -> export_trait_impl id
   in
 
   (* If we need to export the state type: we try to export it after we defined
    * the type definitions, because if the user wants to define a model for the
-   * type, he might want to reuse those in the state type.
+   * type, they might want to reuse those in the state type.
    * More specifically: if we extract functions in the same file as the type,
    * we have no choice but to define the state type before the functions,
    * because they may reuse this state type: in this case, we define/declare
@@ -930,6 +1006,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       use_opaque_pre = !Config.split_files;
       use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
       fun_name_info = PureUtils.RegularFunIdMap.empty;
+      trait_decl_id = None (* None by default *);
     }
   in
 

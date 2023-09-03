@@ -22,6 +22,7 @@ type trait_decls_context = C.trait_decls_context [@@deriving show]
 type trait_impls_context = C.trait_impls_context [@@deriving show]
 type global_context = C.global_context [@@deriving show]
 
+(* TODO: we should use Contexts.decls_ctx *)
 type trans_ctx = {
   type_context : type_context;
   fun_context : fun_context;

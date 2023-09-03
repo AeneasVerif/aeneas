@@ -1301,7 +1301,8 @@ and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
       let name = ctx_get_trait_item_clause decl_id item_name clause_id ctx in
       extract_trait_instance_id ctx fmt no_params_tys true inst_id;
       F.pp_print_string fmt ("." ^ name)
-  | TraitRef trait_ref -> extract_trait_ref ctx fmt no_params_tys true trait_ref
+  | TraitRef trait_ref ->
+      extract_trait_ref ctx fmt no_params_tys inside trait_ref
   | UnknownTrait _ ->
       (* This is an error case *)
       raise (Failure "Unexpected")
@@ -3773,6 +3774,16 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
              F.pp_print_string fmt body));
       (* Add a break to insert lines between declarations *)
       F.pp_print_break fmt 0 0
+
+(** Extract a trait declaration *)
+let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (trait_decl : trait_decl) : unit =
+  raise (Failure "TODO")
+
+(** Extract a trait implementation *)
+let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
+    (trait_impl : trait_impl) : unit =
+  raise (Failure "TODO")
 
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).

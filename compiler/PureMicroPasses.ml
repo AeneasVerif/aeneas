@@ -1355,6 +1355,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
             let loop_sig =
               {
                 generics = fun_sig.generics;
+                preds = fun_sig.preds;
                 inputs = inputs_tys;
                 output;
                 doutputs;
@@ -1419,6 +1420,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
             let loop_def =
               {
                 def_id = def.def_id;
+                kind = def.kind;
                 num_loops;
                 loop_id = Some loop.loop_id;
                 back_id = def.back_id;
@@ -2135,7 +2137,9 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
           let num_filtered =
             List.length (List.filter (fun b -> not b) used_info)
           in
-          let { generics; inputs; output; doutputs; info } = decl.signature in
+          let { generics; preds; inputs; output; doutputs; info } =
+            decl.signature
+          in
           let {
             has_fuel;
             num_fwd_inputs_with_fuel_no_state;
@@ -2161,7 +2165,7 @@ let filter_loop_inputs (transl : (bool * pure_fun_translation) list) :
               effect_info;
             }
           in
-          let signature = { generics; inputs; output; doutputs; info } in
+          let signature = { generics; preds; inputs; output; doutputs; info } in
 
           { decl with signature }
     in
