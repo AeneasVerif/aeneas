@@ -58,8 +58,6 @@ sig
     val betree_store_internal_node_fwd_def : thm
     val betree_store_leaf_node_fwd_def : thm
     val betree_upsert_update_fwd_def : thm
-    val core_num_u64_max_body_def : thm
-    val core_num_u64_max_c_def : thm
     val main_fwd_def : thm
   
   val betreeMain_Funs_grammars : type_grammar.grammar * term_grammar.grammar
@@ -1215,21 +1213,13 @@ sig
             case st of
               BetreeUpsertFunStateAdd v =>
                 do
-                  margin <- u64_sub core_num_u64_max_c prev0;
+                  margin <- u64_sub core_u64_max prev0;
                   if u64_ge margin v then u64_add prev0 v
-                  else Return core_num_u64_max_c
+                  else Return core_u64_max
                 od
             | BetreeUpsertFunStateSub v' =>
               if u64_ge prev0 v' then u64_sub prev0 v'
               else Return (int_to_u64 0)
-   
-   [core_num_u64_max_body_def]  Definition
-      
-      ⊢ core_num_u64_max_body = Return (int_to_u64 18446744073709551615)
-   
-   [core_num_u64_max_c_def]  Definition
-      
-      ⊢ core_num_u64_max_c = get_return_value core_num_u64_max_body
    
    [main_fwd_def]  Definition
       

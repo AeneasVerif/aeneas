@@ -132,10 +132,6 @@ def HashMap.insert_no_resize
         let v ← Vec.index_mut_back (List T) self.slots hash_mod l0
         Result.ret { self with slots := v }
 
-/- [core::num::u32::{8}::MAX] -/
-def core_num_u32_max_body : Result U32 := Result.ret (U32.ofInt 4294967295)
-def core_num_u32_max_c : U32 := eval_global core_num_u32_max_body (by simp)
-
 /- [hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 divergent def HashMap.move_elements_from_list_loop
@@ -184,7 +180,7 @@ def HashMap.move_elements
    (there is a single backward function, and the forward function returns ()) -/
 def HashMap.try_resize (T : Type) (self : HashMap T) : Result (HashMap T) :=
   do
-    let max_usize ← Scalar.cast .Usize core_num_u32_max_c
+    let max_usize ← Scalar.cast .Usize core_u32_max
     let capacity := Vec.len (List T) self.slots
     let n1 ← max_usize / (Usize.ofInt 2)
     let (i, i0) := self.max_load_factor

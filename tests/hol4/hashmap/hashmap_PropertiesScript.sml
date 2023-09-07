@@ -1296,7 +1296,7 @@ Proof
   rw [hash_map_try_resize_fwd_back_def] >>
   (* “_ <-- mk_usize (u32_to_int core_num_u32_max_c)” *)
   assume_tac usize_u32_bounds >>
-  fs [core_num_u32_max_c_def, core_num_u32_max_body_def, get_return_value_def, u32_max_def] >>
+  fs [core_u32_max_def, u32_max_def] >>
   massage >> fs [mk_usize_def, u32_max_def] >>
   (* / 2 *)
   progress >>

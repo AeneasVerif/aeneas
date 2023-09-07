@@ -139,10 +139,6 @@ let hash_map_insert_no_resize_fwd_back
     let* v = vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 in
     Return { self with hash_map_slots = v }
 
-(** [core::num::u32::{8}::MAX] *)
-let core_num_u32_max_body : result u32 = Return 4294967295
-let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
-
 (** [hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 let rec hash_map_move_elements_from_list_loop_fwd_back
@@ -194,7 +190,7 @@ let hash_map_move_elements_fwd_back
     (there is a single backward function, and the forward function returns ()) *)
 let hash_map_try_resize_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
-  let* max_usize = scalar_cast U32 Usize core_num_u32_max_c in
+  let* max_usize = scalar_cast U32 Usize core_u32_max in
   let capacity = vec_len (list_t t) self.hash_map_slots in
   let* n1 = usize_div max_usize 2 in
   let (i, i0) = self.hash_map_max_load_factor in

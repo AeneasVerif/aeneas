@@ -190,10 +190,6 @@ Definition hash_map_insert_no_resize_fwd_back
       |})
 .
 
-(** [core::num::u32::{8}::MAX] *)
-Definition core_num_u32_max_body : result u32 := Return 4294967295%u32.
-Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
-
 (** [hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Fixpoint hash_map_move_elements_from_list_loop_fwd_back
@@ -259,7 +255,7 @@ Definition hash_map_move_elements_fwd_back
     (there is a single backward function, and the forward function returns ()) *)
 Definition hash_map_try_resize_fwd_back
   (T : Type) (n : nat) (self : Hash_map_t T) : result (Hash_map_t T) :=
-  max_usize <- scalar_cast U32 Usize core_num_u32_max_c;
+  max_usize <- scalar_cast U32 Usize core_u32_max;
   let capacity := vec_len (List_t T) self.(Hash_map_slots) in
   n1 <- usize_div max_usize 2%usize;
   let (i, i0) := self.(Hash_map_max_load_factor) in

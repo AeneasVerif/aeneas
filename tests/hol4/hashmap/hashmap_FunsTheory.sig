@@ -3,8 +3,6 @@ sig
   type thm = Thm.thm
   
   (*  Definitions  *)
-    val core_num_u32_max_body_def : thm
-    val core_num_u32_max_c_def : thm
     val hash_key_fwd_def : thm
     val hash_map_allocate_slots_fwd_def : thm
     val hash_map_allocate_slots_loop_fwd_def : thm
@@ -47,14 +45,6 @@ sig
   val hashmap_Funs_grammars : type_grammar.grammar * term_grammar.grammar
 (*
    [hashmap_Types] Parent theory of "hashmap_Funs"
-   
-   [core_num_u32_max_body_def]  Definition
-      
-      ⊢ core_num_u32_max_body = Return (int_to_u32 4294967295)
-   
-   [core_num_u32_max_c_def]  Definition
-      
-      ⊢ core_num_u32_max_c = get_return_value core_num_u32_max_body
    
    [hash_key_fwd_def]  Definition
       
@@ -472,7 +462,7 @@ sig
       ⊢ ∀self.
           hash_map_try_resize_fwd_back self =
           do
-            max_usize <- mk_usize (u32_to_int core_num_u32_max_c);
+            max_usize <- mk_usize (u32_to_int core_u32_max);
             capacity <<- vec_len self.hash_map_slots;
             n1 <- usize_div max_usize (int_to_usize 2);
             (i,i0) <<- self.hash_map_max_load_factor;

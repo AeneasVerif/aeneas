@@ -60,10 +60,6 @@ let betree_node_id_counter_fresh_id_back
   let* i = u64_add self.betree_node_id_counter_next_node_id 1 in
   Return { betree_node_id_counter_next_node_id = i }
 
-(** [core::num::u64::{9}::MAX] *)
-let core_num_u64_max_body : result u64 = Return 18446744073709551615
-let core_num_u64_max_c : u64 = eval_global core_num_u64_max_body
-
 (** [betree_main::betree::upsert_update]: forward function *)
 let betree_upsert_update_fwd
   (prev : option u64) (st : betree_upsert_fun_state_t) : result u64 =
@@ -76,8 +72,8 @@ let betree_upsert_update_fwd
   | Some prev0 ->
     begin match st with
     | BetreeUpsertFunStateAdd v ->
-      let* margin = u64_sub core_num_u64_max_c prev0 in
-      if margin >= v then u64_add prev0 v else Return core_num_u64_max_c
+      let* margin = u64_sub core_u64_max prev0 in
+      if margin >= v then u64_add prev0 v else Return core_u64_max
     | BetreeUpsertFunStateSub v ->
       if prev0 >= v then u64_sub prev0 v else Return 0
     end

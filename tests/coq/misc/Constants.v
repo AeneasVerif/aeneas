@@ -12,12 +12,8 @@ Module Constants.
 Definition x0_body : result u32 := Return 0%u32.
 Definition x0_c : u32 := x0_body%global.
 
-(** [core::num::u32::{8}::MAX] *)
-Definition core_num_u32_max_body : result u32 := Return 4294967295%u32.
-Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
-
 (** [constants::X1] *)
-Definition x1_body : result u32 := Return core_num_u32_max_c.
+Definition x1_body : result u32 := Return core_u32_max.
 Definition x1_c : u32 := x1_body%global.
 
 (** [constants::X2] *)
