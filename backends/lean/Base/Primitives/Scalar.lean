@@ -410,32 +410,32 @@ def Scalar.cast {src_ty : ScalarTy} (tgt_ty : ScalarTy) (x : Scalar src_ty) : Re
 @[reducible] def U128  := Scalar .U128
 
 -- TODO: reducible?
-@[reducible] def isize_min : Isize := Scalar.ofInt Isize.min (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Isize))
-@[reducible] def isize_max : Isize := Scalar.ofInt Isize.max (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Isize))
-@[reducible] def i8_min : I8 := Scalar.ofInt I8.min
-@[reducible] def i8_max : I8 := Scalar.ofInt I8.max
-@[reducible] def i16_min : I16 := Scalar.ofInt I16.min
-@[reducible] def i16_max : I16 := Scalar.ofInt I16.max
-@[reducible] def i32_min : I32 := Scalar.ofInt I32.min
-@[reducible] def i32_max : I32 := Scalar.ofInt I32.max
-@[reducible] def i64_min : I64 := Scalar.ofInt I64.min
-@[reducible] def i64_max : I64 := Scalar.ofInt I64.max
-@[reducible] def i128_min : I128 := Scalar.ofInt I128.min
-@[reducible] def i128_max : I128 := Scalar.ofInt I128.max
+@[reducible] def core_isize_min : Isize := Scalar.ofInt Isize.min (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Isize))
+@[reducible] def core_isize_max : Isize := Scalar.ofInt Isize.max (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Isize))
+@[reducible] def core_i8_min : I8 := Scalar.ofInt I8.min
+@[reducible] def core_i8_max : I8 := Scalar.ofInt I8.max
+@[reducible] def core_i16_min : I16 := Scalar.ofInt I16.min
+@[reducible] def core_i16_max : I16 := Scalar.ofInt I16.max
+@[reducible] def core_i32_min : I32 := Scalar.ofInt I32.min
+@[reducible] def core_i32_max : I32 := Scalar.ofInt I32.max
+@[reducible] def core_i64_min : I64 := Scalar.ofInt I64.min
+@[reducible] def core_i64_max : I64 := Scalar.ofInt I64.max
+@[reducible] def core_i128_min : I128 := Scalar.ofInt I128.min
+@[reducible] def core_i128_max : I128 := Scalar.ofInt I128.max
 
 -- TODO: reducible?
-@[reducible] def usize_min : Usize := Scalar.ofInt Usize.min
-@[reducible] def usize_max : Usize := Scalar.ofInt Usize.max (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Usize))
-@[reducible] def u8_min : U8 := Scalar.ofInt U8.min
-@[reducible] def u8_max : U8 := Scalar.ofInt U8.max
-@[reducible] def u16_min : U16 := Scalar.ofInt U16.min
-@[reducible] def u16_max : U16 := Scalar.ofInt U16.max
-@[reducible] def u32_min : U32 := Scalar.ofInt U32.min
-@[reducible] def u32_max : U32 := Scalar.ofInt U32.max
-@[reducible] def u64_min : U64 := Scalar.ofInt U64.min
-@[reducible] def u64_max : U64 := Scalar.ofInt U64.max
-@[reducible] def u128_min : U128 := Scalar.ofInt U128.min
-@[reducible] def u128_max : U128 := Scalar.ofInt U128.max
+@[reducible] def core_usize_min : Usize := Scalar.ofInt Usize.min
+@[reducible] def core_usize_max : Usize := Scalar.ofInt Usize.max (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Usize))
+@[reducible] def core_u8_min : U8 := Scalar.ofInt U8.min
+@[reducible] def core_u8_max : U8 := Scalar.ofInt U8.max
+@[reducible] def core_u16_min : U16 := Scalar.ofInt U16.min
+@[reducible] def core_u16_max : U16 := Scalar.ofInt U16.max
+@[reducible] def core_u32_min : U32 := Scalar.ofInt U32.min
+@[reducible] def core_u32_max : U32 := Scalar.ofInt U32.max
+@[reducible] def core_u64_min : U64 := Scalar.ofInt U64.min
+@[reducible] def core_u64_max : U64 := Scalar.ofInt U64.max
+@[reducible] def core_u128_min : U128 := Scalar.ofInt U128.min
+@[reducible] def core_u128_max : U128 := Scalar.ofInt U128.max
 
 -- TODO: below: not sure this is the best way.
 -- Should we rather overload operations like +, -, etc.?

@@ -8,7 +8,6 @@ open Pure
 open PureUtils
 open TranslateCore
 open ExtractBase
-open ExtractAssumed
 open StringUtils
 open Config
 module F = Format
