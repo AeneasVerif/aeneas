@@ -12,3 +12,23 @@ let lookup_fun_name (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
   match fun_id with
   | Regular id -> (FunDeclId.Map.find id fun_decls).name
   | Assumed aid -> Assumed.get_assumed_name aid
+
+(** Return the opaque declarations found in the crate.
+
+    Remark: the list of functions also contains the list of opaque global bodies.
+ *)
+let crate_get_opaque_decls (k : crate) : T.type_decl list * fun_decl list =
+  let open ExtractAssumed in
+  let is_opaque_fun (d : fun_decl) : bool =
+    let sname = name_to_simple_name d.name in
+    d.body = None && not (SimpleNameMap.mem sname assumed_globals_map)
+  in
+  let is_opaque_type (d : T.type_decl) : bool = d.kind = T.Opaque in
+  (* Note that by checking the function bodies we also the globals *)
+  ( List.filter is_opaque_type (T.TypeDeclId.Map.values k.types),
+    List.filter is_opaque_fun (FunDeclId.Map.values k.functions) )
+
+(** Return true if the crate contains opaque declarations, ignoring the assumed
+    definitions. *)
+let crate_has_opaque_decls (k : crate) : bool =
+  crate_get_opaque_decls k <> ([], [])

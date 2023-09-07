@@ -430,19 +430,9 @@ type gen_config = {
 }
 
 (** Returns the pair: (has opaque type decls, has opaque fun decls) *)
-let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
-  let has_opaque_types =
-    Pure.TypeDeclId.Map.exists
-      (fun _ (d : Pure.type_decl) ->
-        match d.kind with Opaque -> true | _ -> false)
-      ctx.trans_types
-  in
-  let has_opaque_funs =
-    A.FunDeclId.Map.exists
-      (fun _ (trans : pure_fun_translation) -> Option.is_none trans.fwd.f.body)
-      ctx.trans_funs
-  in
-  (has_opaque_types, has_opaque_funs)
+let crate_has_opaque_decls (ctx : gen_ctx) : bool * bool =
+  let types, funs = LlbcAstUtils.crate_get_opaque_decls ctx.crate in
+  (types <> [], funs <> [])
 
 (** Export a type declaration.
 
@@ -557,11 +547,20 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let body = trans.fwd.f in
 
   let is_opaque = Option.is_none body.Pure.body in
-  if
+  (* Check if we extract the global *)
+  let extract =
     config.extract_globals
     && (((not is_opaque) && config.extract_transparent)
        || (is_opaque && config.extract_opaque))
-  then
+  in
+  (* Check if it is an assumed global - if yes, we ignore it because we
+     map the definition to one in the standard library *)
+  let open ExtractAssumed in
+  let sname = name_to_simple_name global.name in
+  let extract =
+    extract && SimpleNameMap.find_opt sname assumed_globals_map = None
+  in
+  if extract then
     (* We don't wrap global declaration groups between calls to functions
        [{start, end}_global_decl_group] (which don't exist): global declaration
        groups are always singletons, so the [extract_global_decl] function
@@ -828,7 +827,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     config.extract_opaque && config.extract_fun_decls
     && !Config.wrap_opaque_in_sig
     &&
-    let _, opaque_funs = module_has_opaque_decls ctx in
+    let _, opaque_funs = crate_has_opaque_decls ctx in
     opaque_funs
   in
   if wrap_in_sig then (
@@ -1233,7 +1232,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
 
      (* Check if there are opaque types and functions - in which case we need
       * to split *)
-     let has_opaque_types, has_opaque_funs = module_has_opaque_decls ctx in
+     let has_opaque_types, has_opaque_funs = crate_has_opaque_decls ctx in
      let has_opaque_types = has_opaque_types || !Config.use_state in
 
      (* Extract the types *)
@@ -1302,7 +1301,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
         in
         extract_file template_clauses_config ctx file_info);
 
-     (* Extract the opaque functions, if needed *)
+     (* Extract the opaque declarations, if needed *)
      let opaque_funs_module =
        if has_opaque_funs then (
          (* In the case of Lean we generate a template file *)
@@ -1330,6 +1329,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
            {
              base_gen_config with
              extract_fun_decls = true;
+             extract_globals = true;
              extract_transparent = false;
              extract_opaque = true;
              interface = true;

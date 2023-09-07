@@ -8,6 +8,7 @@ open Pure
 open PureUtils
 open TranslateCore
 open ExtractBase
+open ExtractAssumed
 open StringUtils
 open Config
 module F = Format
@@ -3852,8 +3853,13 @@ let extract_global_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the type *)
   F.pp_open_hovbox fmt 0;
   extract_ty ctx fmt TypeDeclId.Set.empty false ty;
+  (* Close the definition *)
+  F.pp_print_string fmt ")";
   F.pp_close_box fmt ();
-  (* Close the definition boxe *) F.pp_close_box fmt ()
+  (* Close the definition box *)
+  F.pp_close_box fmt ();
+  (* Add a line *)
+  F.pp_print_space fmt ()
 
 (** Extract a global declaration.
 

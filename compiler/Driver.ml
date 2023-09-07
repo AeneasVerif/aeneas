@@ -222,20 +222,6 @@ let () =
       in
       if has_loops then log#lwarning (lazy "Support for loops is experimental");
 
-      (* If we target Lean, we request the crates to be split into several files
-         whenever there are opaque functions *)
-      if
-        !backend = Lean
-        && A.FunDeclId.Map.exists
-             (fun _ (d : A.fun_decl) -> d.body = None)
-             m.functions
-        && not !split_files
-      then (
-        log#error
-          "For Lean, we request the -split-file option whenever using opaque \
-           functions";
-        fail ());
-
       (* We don't support mutually recursive definitions with decreases clauses in Lean *)
       if
         !backend = Lean && !extract_decreases_clauses

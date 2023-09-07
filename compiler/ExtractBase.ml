@@ -5,6 +5,7 @@ open TranslateCore
 module C = Contexts
 module RegionVarId = T.RegionVarId
 module F = Format
+open ExtractAssumed
 
 (** The local logger *)
 let log = L.pure_to_extract_log
@@ -1198,12 +1199,23 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   (* TODO: update once the body id can be an option *)
   let is_opaque = false in
-  let name = ctx.fmt.global_name def.name in
   let decl = GlobalId def.def_id in
-  let body = FunId (FromLlbc (Regular def.body_id, None, None)) in
-  let ctx = ctx_add is_opaque decl (name ^ "_c") ctx in
-  let ctx = ctx_add is_opaque body (name ^ "_body") ctx in
-  ctx
+
+  (* Check if the global corresponds to an assumed global that we should map
+     to a custom definition in our standard library (for instance, happens
+     with "core::num::usize::MAX") *)
+  let sname = name_to_simple_name def.name in
+  match SimpleNameMap.find_opt sname assumed_globals_map with
+  | Some name ->
+      (* Yes: register the custom binding *)
+      ctx_add is_opaque decl name ctx
+  | None ->
+      (* Not the case: "standard" registration *)
+      let name = ctx.fmt.global_name def.name in
+      let body = FunId (FromLlbc (Regular def.body_id, None, None)) in
+      let ctx = ctx_add is_opaque decl (name ^ "_c") ctx in
+      let ctx = ctx_add is_opaque body (name ^ "_body") ctx in
+      ctx
 
 let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
     (ctx : extraction_ctx) : string =
