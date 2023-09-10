@@ -453,7 +453,7 @@ let give_back_symbolic_value (_config : C.config)
     ->
       ()
   | FunCallRet | SynthInput | Global | LoopOutput | LoopJoin | Aggregate
-  | ConstGeneric ->
+  | ConstGeneric | TraitConst ->
       raise (Failure "Unreachable"));
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in

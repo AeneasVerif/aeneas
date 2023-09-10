@@ -38,7 +38,9 @@ let compute_body_fun_deps (e : texpression) : FunIdSet.t =
 
       method! visit_qualif _ id =
         match id.id with
-        | FunOrOp (Unop _ | Binop _) | Global _ | AdtCons _ | Proj _ -> ()
+        | FunOrOp (Unop _ | Binop _)
+        | Global _ | AdtCons _ | Proj _ | TraitConst _ ->
+            ()
         | FunOrOp (Fun fid) -> (
             match fid with
             | Pure _ -> ()

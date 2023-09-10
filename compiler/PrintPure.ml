@@ -733,6 +733,7 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
     match app.e with
     | Qualif qualif ->
         (* Qualifier case *)
+        let ty_fmt = ast_to_type_formatter fmt in
         (* Convert the qualifier identifier *)
         let qualif_s =
           match qualif.id with
@@ -751,9 +752,14 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
               let field_s = adt_field_to_string value_fmt adt_id field_id in
               (* Adopting an F*-like syntax *)
               ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s
+          | TraitConst (trait_ref, generics, const_name) ->
+              let trait_ref = trait_ref_to_string ty_fmt true trait_ref in
+              let generics_s = generic_args_to_string ty_fmt generics in
+              if generics <> empty_generic_args then
+                "(" ^ trait_ref ^ generics_s ^ ")." ^ const_name
+              else trait_ref ^ "." ^ const_name
         in
         (* Convert the type instantiation *)
-        let ty_fmt = ast_to_type_formatter fmt in
         let generics = generic_args_to_strings ty_fmt true qualif.generics in
         (* *)
         (qualif_s, generics)

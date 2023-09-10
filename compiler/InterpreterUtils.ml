@@ -256,7 +256,7 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
             else ()
         | V.SynthInput | V.SynthInputGivenBack | V.FunCallGivenBack
         | V.SynthRetGivenBack | V.Global | V.LoopGivenBack | V.Aggregate
-        | V.ConstGeneric ->
+        | V.ConstGeneric | V.TraitConst ->
             ()
     end
   in

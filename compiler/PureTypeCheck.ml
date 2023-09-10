@@ -142,6 +142,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       match qualif.id with
       | FunOrOp _ -> () (* TODO *)
       | Global _ -> () (* TODO *)
+      | TraitConst _ -> () (* TODO *)
       | Proj { adt_id = proj_adt_id; field_id } ->
           (* Note we can only project fields of structures (not enumerations) *)
           (* Deconstruct the projector type *)

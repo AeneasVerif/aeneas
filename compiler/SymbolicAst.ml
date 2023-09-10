@@ -120,6 +120,9 @@ class ['self] iter_expression_base =
 
     method visit_symbolic_expansion : 'env -> V.symbolic_expansion -> unit =
       fun _ _ -> ()
+
+    method visit_etrait_ref : 'env -> T.etrait_ref -> unit = fun _ _ -> ()
+    method visit_egeneric_args : 'env -> T.egeneric_args -> unit = fun _ _ -> ()
   end
 
 (** **Rem.:** here, {!expression} is not at all equivalent to the expressions
@@ -174,7 +177,8 @@ type expression =
           This is used for instance when reorganizing the environment to compute
           fixed points: we duplicate some shared symbolic values to destructure
           the shared values, in order to make the environment a bit more general
-          (while losing precision of course).
+          (while losing precision of course). We also use it to introduce symbolic
+          values when evaluating constant generics, or trait constants.
 
           The context is the evaluation context from before introducing the new
           value. It has the same purpose as for the {!Return} case.
@@ -256,6 +260,8 @@ and value_aggregate =
   | ConstGenericValue of T.const_generic_var_id
       (** This is used when evaluating a const generic value: in the interpreter,
           we introduce a fresh symbolic value. *)
+  | TraitConstValue of T.etrait_ref * T.egeneric_args * string
+      (** A trait constant value *)
 [@@deriving
   show,
     visitors

@@ -271,9 +271,41 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
       match cv.value with
       | E.CLiteral lit ->
           cf (literal_to_typed_value (TypesUtils.ty_as_literal cv.ty) lit) ctx
-      | E.TraitConst (_trait_ref, _generics, _const_name) ->
-          (* TODO *)
-          raise (Failure "Unimplemented")
+      | E.TraitConst (trait_ref, generics, const_name) -> (
+          assert (generics = TypesUtils.mk_empty_generic_args);
+          match trait_ref.trait_id with
+          | T.TraitImpl _ ->
+              (* This shouldn't happen: if we refer to a concrete implementation, we
+                 should directly refer to the top-level constant *)
+              raise (Failure "Unreachable")
+          | _ -> (
+              (* We refer to a constant defined in a local clause: simply
+                 introduce a fresh symbolic value *)
+              let ctx0 = ctx in
+              (* Lookup the trait declaration to retrieve the type of the symbolic value *)
+              let trait_decl =
+                C.ctx_lookup_trait_decl ctx
+                  trait_ref.trait_decl_ref.trait_decl_id
+              in
+              let _, (ty, _) =
+                List.find (fun (name, _) -> name = const_name) trait_decl.consts
+              in
+              (* Introduce a fresh symbolic value *)
+              let v = mk_fresh_symbolic_typed_value_from_ety V.TraitConst ty in
+              (* Continue the evaluation *)
+              let e = cf v ctx in
+              (* We have to wrap the generated expression *)
+              match e with
+              | None -> None
+              | Some e ->
+                  Some
+                    (SymbolicAst.IntroSymbolic
+                       ( ctx0,
+                         None,
+                         value_as_symbolic v.value,
+                         SymbolicAst.TraitConstValue
+                           (trait_ref, generics, const_name),
+                         e ))))
       | E.CVar vid -> (
           let ctx0 = ctx in
           (* Lookup the const generic value *)
@@ -283,7 +315,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
           let ctx, v = copy_value allow_adt_copy config ctx cv in
           (* Continue *)
           let e = cf v ctx in
-          (* We have to wrap the expression to introduce *)
+          (* We have to wrap the generated expression *)
           match e with
           | None -> None
           | Some e ->

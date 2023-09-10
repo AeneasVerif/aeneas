@@ -567,9 +567,11 @@ type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
 
 type qualif_id =
   | FunOrOp of fun_or_op_id  (** A function or an operation *)
-  | Global of GlobalDeclId.id
+  | Global of global_decl_id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
+  | TraitConst of trait_ref * generic_args * string
+      (** A trait associated constant *)
 [@@deriving show]
 
 (** An instantiated qualifier.

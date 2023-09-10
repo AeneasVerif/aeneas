@@ -2411,8 +2411,9 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
 
-  (* Translate the value: there are two cases, depending on whether this
-     is a "regular" let-binding or an array aggregate.
+  (* Translate the value: there are several cases, depending on whether this
+     is a "regular" let-binding, an array aggregate, a const generic or
+     a trait associated constant.
   *)
   let v =
     match v with
@@ -2428,6 +2429,13 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         in
         { e = StructUpdate su; ty = var.ty }
     | ConstGenericValue cg_id -> { e = CVar cg_id; ty = var.ty }
+    | TraitConstValue (trait_ref, generics, const_name) ->
+        let type_infos = ctx.type_context.type_infos in
+        let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
+        let generics = translate_fwd_generic_args type_infos generics in
+        let qualif_id = TraitConst (trait_ref, generics, const_name) in
+        let qualif = { id = qualif_id; generics = empty_generic_args } in
+        { e = Qualif qualif; ty = var.ty }
   in
 
   (* Make the let-binding *)
