@@ -122,7 +122,7 @@ let synthesize_global_eval (gid : A.GlobalDeclId.id) (dest : V.symbolic_value)
     (e : expression option) : expression option =
   Option.map (fun e -> EvalGlobal (gid, dest, e)) e
 
-let synthesize_regular_function_call (fun_id : A.fun_id)
+let synthesize_regular_function_call (fun_id : A.fun_id_or_trait_method_ref)
     (call_id : V.FunCallId.id) (ctx : Contexts.eval_ctx)
     (abstractions : V.AbstractionId.id list) (generics : T.egeneric_args)
     (args : V.typed_value list) (args_places : mplace option list)

@@ -1082,12 +1082,12 @@ and eval_function_call_concrete (config : C.config) (call : A.call) : st_cm_fun
        * where we haven't panicked. Of course, the translation needs to take the
        * panic case into account... *)
       eval_assumed_function_call_concrete config fid call (cf Unit) ctx
-  | A.TraitMethod (_, _) -> raise (Failure "Unimplemented")
+  | A.TraitMethod _ -> raise (Failure "Unimplemented")
 
 and eval_function_call_symbolic (config : C.config) (call : A.call) : st_cm_fun
     =
   match call.func with
-  | A.FunId (A.Regular _) | A.TraitMethod (_, _) ->
+  | A.FunId (A.Regular _) | A.TraitMethod _ ->
       eval_transparent_function_call_symbolic config call
   | A.FunId (A.Assumed fid) ->
       eval_assumed_function_call_symbolic config fid call
@@ -1182,7 +1182,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
     : st_cm_fun =
  fun cf ctx ->
   (* Instantiate the signature and introduce fresh abstractions and region ids while doing so *)
-  let def, inst_sg =
+  let func, def, self_trait_ref, inst_sg =
     match call.func with
     | A.FunId (A.Regular fid) ->
         let def = C.ctx_lookup_fun_decl ctx fid in
@@ -1190,11 +1190,19 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
         let inst_sg =
           instantiate_fun_sig ctx call.generics tr_self def.A.signature
         in
-        (def, inst_sg)
+        (call.func, def, None, inst_sg)
     | A.FunId (A.Assumed _) ->
         (* Unreachable: must be a transparent function *)
         raise (Failure "Unreachable")
-    | A.TraitMethod (trait_ref, method_name) -> (
+    | A.TraitMethod (trait_ref, method_name, _) -> (
+        log#ldebug
+          (lazy
+            ("trait method call:\n- call: " ^ call_to_string ctx call
+           ^ "\n- method name: " ^ method_name ^ "\n- generics:\n"
+            ^ egeneric_args_to_string ctx call.generics
+            ^ "\n- trait and method generics:\n"
+            ^ egeneric_args_to_string ctx
+                (Option.get call.trait_and_method_generic_args)));
         (* When instantiating, we need to group the generics for the trait ref
            and the method *)
         let generics = Option.get call.trait_and_method_generic_args in
@@ -1202,31 +1210,97 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
            depending on whethere we call a top-level trait method impl or the
            method from a local clause *)
         match trait_ref.trait_id with
-        | TraitImpl impl_id ->
+        | TraitImpl impl_id -> (
             (* Lookup the trait impl *)
             let trait_impl = C.ctx_lookup_trait_impl ctx impl_id in
-            let _, method_id =
-              List.find
+            log#ldebug
+              (lazy ("trait impl: " ^ trait_impl_to_string ctx trait_impl));
+            (* First look in the required methods *)
+            let method_id =
+              List.find_opt
                 (fun (s, _) -> s = method_name)
                 trait_impl.required_methods
             in
-            let method_def = C.ctx_lookup_fun_decl ctx method_id in
-            (* Instantiate *)
-            let tr_self = T.UnknownTrait __FUNCTION__ in
-            let inst_sg =
-              instantiate_fun_sig ctx generics tr_self method_def.A.signature
-            in
-            (method_def, inst_sg)
+            match method_id with
+            | Some (_, id) ->
+                let method_def = C.ctx_lookup_fun_decl ctx id in
+                (* Instantiate *)
+                let tr_self =
+                  T.TraitRef (etrait_ref_no_regions_to_gr_trait_ref trait_ref)
+                in
+                let inst_sg =
+                  instantiate_fun_sig ctx generics tr_self
+                    method_def.A.signature
+                in
+                (call.func, method_def, None, inst_sg)
+            | None ->
+                (* If not found, lookup the methods provided by the trait *declaration*
+                   (remember: for now, we forbid overriding provided methods) *)
+                assert (trait_impl.provided_methods = []);
+                let trait_decl =
+                  C.ctx_lookup_trait_decl ctx
+                    trait_ref.trait_decl_ref.trait_decl_id
+                in
+                let _, method_id =
+                  List.find
+                    (fun (s, _) -> s = method_name)
+                    trait_decl.provided_methods
+                in
+                let method_id = Option.get method_id in
+                let method_def = C.ctx_lookup_fun_decl ctx method_id in
+                (* For the instantiation we have to do something perculiar
+                   because the method was defined for the trait declaration.
+                   We have to group:
+                   - the parameters given to the trait decl reference
+                   - the parameters given to the method itself
+                   For instance:
+                   {[
+                     trait Foo<T> {
+                       fn f<U>(...) { ... }
+                     }
+
+                     fn g<G>(x : G) where Clause0: Foo<G, bool>
+                     {
+                       x.f::<u32>(...) // The arguments to f are: <G, bool, u32>
+                     }
+                   ]}
+                *)
+                let generics =
+                  TypesUtils.merge_generic_args
+                    trait_ref.trait_decl_ref.decl_generics call.generics
+                in
+                log#ldebug
+                  (lazy
+                    ("provided method call:" ^ "\n- method name: " ^ method_name
+                   ^ "\n- generics:\n"
+                    ^ egeneric_args_to_string ctx generics));
+                let tr_self =
+                  T.TraitRef (etrait_ref_no_regions_to_gr_trait_ref trait_ref)
+                in
+                let inst_sg =
+                  instantiate_fun_sig ctx generics tr_self
+                    method_def.A.signature
+                in
+                (* We directly call the function, pretending it is not a trait method call *)
+                (* TODO: we need to add the self trait ref *)
+                let func = A.FunId (A.Regular method_def.def_id) in
+                (func, method_def, Some trait_ref, inst_sg))
         | _ ->
             (* We are using a local clause - we lookup the trait decl *)
             let trait_decl =
               C.ctx_lookup_trait_decl ctx trait_ref.trait_decl_ref.trait_decl_id
             in
-            (* Lookup the method decl *)
+            (* Lookup the method decl in the required *and* the provided methods *)
             let _, method_id =
+              let provided =
+                List.filter_map
+                  (fun (id, f) ->
+                    match f with None -> None | Some f -> Some (id, f))
+                  trait_decl.provided_methods
+              in
               List.find
                 (fun (s, _) -> s = method_name)
-                trait_decl.required_methods
+                (List.append trait_decl.required_methods provided)
             in
             let method_def = C.ctx_lookup_fun_decl ctx method_id in
             (* Instantiate *)
@@ -1238,26 +1312,30 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             let inst_sg =
               instantiate_fun_sig ctx generics tr_self method_def.A.signature
             in
-            (method_def, inst_sg))
+            (call.func, method_def, None, inst_sg))
   in
   (* Sanity check *)
   assert (List.length call.args = List.length def.A.signature.inputs);
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config call.func inst_sg
+  eval_function_call_symbolic_from_inst_sig config func inst_sg self_trait_ref
     call.generics call.args call.dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
     This allows us to factorize the evaluation of local and non-local function
     calls in symbolic mode: only their signatures matter.
+
+    The [self_trait_ref] trait ref refers to [Self]. We use it when calling
+    a provided trait method, because those methods have a special treatment:
+    we dot not group them with the required trait methods, and forbid (for now)
+    overriding them. We treat them as regular method, which take an additional
+    trait ref as input.
  *)
 and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (fid : A.fun_id_or_trait_method_ref) (inst_sg : A.inst_fun_sig)
-    (generics : T.egeneric_args) (args : E.operand list) (dest : E.place) :
-    st_cm_fun =
+    (self_trait_ref : T.etrait_ref option) (generics : T.egeneric_args)
+    (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
-  (* TODO: trait methods are not supported yet *)
-  let fid = match fid with A.FunId fid -> fid | _ -> raise (Failure "TODO") in
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
   let ret_spc = mk_fresh_symbolic_value V.FunCallRet ret_sv_ty in
@@ -1427,7 +1505,7 @@ and eval_assumed_function_call_symbolic (config : C.config)
 
       (* Evaluate the function call *)
       eval_function_call_symbolic_from_inst_sig config (A.FunId (A.Assumed fid))
-        inst_sig generics args dest cf ctx
+        inst_sig None generics args dest cf ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =

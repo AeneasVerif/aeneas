@@ -306,6 +306,7 @@ and trait_instance_id =
   | UnknownTrait of string
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_ty";
@@ -369,7 +370,7 @@ type trait_type_constraint = {
   type_name : trait_item_name;
   ty : ty;
 }
-[@@deriving show]
+[@@deriving show, ord]
 
 type predicates = { trait_type_constraints : trait_type_constraint list }
 [@@deriving show]
@@ -530,8 +531,15 @@ type pure_assumed_fun_id =
   | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
 [@@deriving show, ord]
 
+type fun_id_or_trait_method_ref =
+  | FunId of A.fun_id
+  | TraitMethod of trait_ref * string * fun_decl_id
+      (** The fun decl id is not really needed and here for convenience purposes *)
+[@@deriving show, ord]
+
 (** A function id for a non-assumed function *)
-type regular_fun_id = A.fun_id * LoopId.id option * T.RegionGroupId.id option
+type regular_fun_id =
+  fun_id_or_trait_method_ref * LoopId.id option * T.RegionGroupId.id option
 [@@deriving show, ord]
 
 (** A function identifier *)
@@ -1003,7 +1011,7 @@ type trait_decl = {
   consts : (trait_item_name * (ty * global_decl_id option)) list;
   types : (trait_item_name * (trait_clause list * ty option)) list;
   required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : trait_item_name list;
+  provided_methods : (trait_item_name * fun_decl_id option) list;
 }
 [@@deriving show]
 

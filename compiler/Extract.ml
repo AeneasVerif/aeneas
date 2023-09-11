@@ -3411,7 +3411,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   let { keep_fwd; num_backs } =
     PureUtils.RegularFunIdMap.find
-      (A.Regular def.def_id, def.loop_id, def.back_id)
+      (Pure.FunId (A.Regular def.def_id), def.loop_id, def.back_id)
       ctx.fun_name_info
   in
   let comment_pre = "[" ^ Print.fun_name_to_string def.basename ^ "]: " in
@@ -3908,7 +3908,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let decl_name = ctx_get_global with_opaque_pre global.def_id ctx in
   let body_name =
     ctx_get_function with_opaque_pre
-      (FromLlbc (Regular global.body_id, None, None))
+      (FromLlbc (Pure.FunId (Regular global.body_id), None, None))
       ctx
   in
 

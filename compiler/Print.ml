@@ -698,10 +698,18 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PE.operand_to_string fmt op
 
+  let call_to_string (ctx : C.eval_ctx) (call : A.call) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PA.call_to_string fmt "" call
+
   let statement_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (e : A.statement) : string =
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.statement_to_string fmt indent indent_incr e
+
+  let trait_impl_to_string (ctx : C.eval_ctx) (timpl : A.trait_impl) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PA.trait_impl_to_string fmt "  " "  " timpl
 
   let env_elem_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (ev : C.env_elem) : string =

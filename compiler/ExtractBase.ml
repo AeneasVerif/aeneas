@@ -703,10 +703,13 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       | FromLlbc (fid, lp_id, rg_id) ->
           let fun_name =
             match fid with
-            | Regular fid ->
+            | FunId (Regular fid) ->
                 Print.fun_name_to_string
                   (A.FunDeclId.Map.find fid fun_decls).name
-            | Assumed aid -> A.show_assumed_fun_id aid
+            | FunId (Assumed aid) -> A.show_assumed_fun_id aid
+            | TraitMethod _ ->
+                (* Shouldn't happen *)
+                raise (Failure "Unexpected")
           in
 
           let lp_kind =
@@ -908,7 +911,7 @@ let ctx_get_function (with_opaque_pre : bool) (id : fun_id)
 let ctx_get_local_function (with_opaque_pre : bool) (id : A.FunDeclId.id)
     (lp : LoopId.id option) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
-  ctx_get_function with_opaque_pre (FromLlbc (Regular id, lp, rg)) ctx
+  ctx_get_function with_opaque_pre (FromLlbc (FunId (Regular id), lp, rg)) ctx
 
 let ctx_get_type (with_opaque_pre : bool) (id : type_id) (ctx : extraction_ctx)
     : string =
@@ -1212,7 +1215,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   | None ->
       (* Not the case: "standard" registration *)
       let name = ctx.fmt.global_name def.name in
-      let body = FunId (FromLlbc (Regular def.body_id, None, None)) in
+      let body = FunId (FromLlbc (FunId (Regular def.body_id), None, None)) in
       let ctx = ctx_add is_opaque decl (name ^ "_c") ctx in
       let ctx = ctx_add is_opaque body (name ^ "_body") ctx in
       ctx
@@ -1256,7 +1259,7 @@ let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
   let is_opaque = def.body = None in
   (* Add the function name *)
   let def_name = ctx_compute_fun_name trans_group def ctx in
-  let fun_id = (A.Regular def_id, def.loop_id, def.back_id) in
+  let fun_id = (Pure.FunId (Regular def_id), def.loop_id, def.back_id) in
   let ctx = ctx_add is_opaque (FunId (FromLlbc fun_id)) def_name ctx in
   (* Add the name info *)
   {
@@ -1381,7 +1384,8 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
   in
   let assumed_functions =
     List.map
-      (fun (fid, rg, name) -> (FromLlbc (A.Assumed fid, None, rg), name))
+      (fun (fid, rg, name) ->
+        (FromLlbc (Pure.FunId (A.Assumed fid), None, rg), name))
       init.assumed_llbc_functions
     @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
   in

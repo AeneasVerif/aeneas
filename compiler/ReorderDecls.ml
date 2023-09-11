@@ -46,8 +46,8 @@ let compute_body_fun_deps (e : texpression) : FunIdSet.t =
             | Pure _ -> ()
             | FromLlbc (fid, lp_id, rg_id) -> (
                 match fid with
-                | Assumed _ -> ()
-                | Regular fid ->
+                | FunId (Assumed _) -> ()
+                | TraitMethod (_, _, fid) | FunId (Regular fid) ->
                     let id = { def_id = fid; lp_id; rg_id } in
                     ids := FunIdSet.add id !ids))
     end

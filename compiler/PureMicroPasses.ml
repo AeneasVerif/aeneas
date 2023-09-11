@@ -765,7 +765,7 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
     In this situation, we can remove the call [f@fwd x].
  *)
 let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
-    (id0 : A.fun_id) (lp_id0 : LoopId.id option)
+    (id0 : fun_id_or_trait_method_ref) (lp_id0 : LoopId.id option)
     (rg_id0 : T.RegionGroupId.id option) (generics0 : generic_args)
     (args0 : texpression list) (e : texpression) : bool =
   let check_call (fun_id1 : fun_or_op_id) (generics1 : generic_args)
@@ -791,6 +791,11 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
                   (* We need to use the regions hierarchy *)
                   (* First, lookup the signature of the LLBC function *)
                   let sg =
+                    let id0 =
+                      match id0 with
+                      | FunId fun_id -> fun_id
+                      | TraitMethod (_, _, fun_decl_id) -> A.Regular fun_decl_id
+                    in
                     LlbcAstUtils.lookup_fun_sig id0 ctx.fun_context.fun_decls
                   in
                   (* Compute the set of ancestors of the function in call1 *)
@@ -1521,7 +1526,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         match opt_destruct_function_call e with
         | Some (fun_id, _tys, args) -> (
             match fun_id with
-            | Fun (FromLlbc (A.Assumed aid, _lp_id, rg_id)) -> (
+            | Fun (FromLlbc (FunId (A.Assumed aid), _lp_id, rg_id)) -> (
                 (* Below, when dealing with the arguments: we consider the very
                  * general case, where functions could be boxed (meaning we
                  * could have: [box_new f x])
@@ -2024,7 +2029,6 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
      additional parameters.
   *)
   let used_map = ref FunLoopIdMap.empty in
-  let fun_id_to_fun_loop_id (fid, loop_id, _) = (fid, loop_id) in
 
   (* We start by computing the filtering information, for each function *)
   let compute_one_filter_info (decl : fun_decl) =
@@ -2069,8 +2073,8 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
               match e_app.e with
               | Qualif qualif -> (
                   match qualif.id with
-                  | FunOrOp (Fun (FromLlbc fun_id')) ->
-                      if fun_id_to_fun_loop_id fun_id' = fun_id then (
+                  | FunOrOp (Fun (FromLlbc (FunId fun_id', loop_id', _))) ->
+                      if (fun_id', loop_id') = fun_id then (
                         (* For each argument, check if it is exactly the original
                            input parameter. Note that there shouldn't be partial
                            applications of loop functions: the number of arguments
@@ -2129,9 +2133,9 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
   (* We then apply the filtering to all the function definitions at once *)
   let filter_in_one (decl : fun_decl) : fun_decl =
     (* Filter the function signature *)
-    let fun_id = (A.Regular decl.def_id, decl.loop_id, decl.back_id) in
+    let fun_id = (A.Regular decl.def_id, decl.loop_id) in
     let decl =
-      match FunLoopIdMap.find_opt (fun_id_to_fun_loop_id fun_id) !used_map with
+      match FunLoopIdMap.find_opt fun_id !used_map with
       | None -> (* Nothing to filter *) decl
       | Some used_info ->
           let num_filtered =
@@ -2179,9 +2183,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
           let { inputs; inputs_lvs; body } = body in
 
           let inputs, inputs_lvs =
-            match
-              FunLoopIdMap.find_opt (fun_id_to_fun_loop_id fun_id) !used_map
-            with
+            match FunLoopIdMap.find_opt fun_id !used_map with
             | None -> (* Nothing to filter *) (inputs, inputs_lvs)
             | Some used_info ->
                 let inputs = filter_prefix used_info inputs in
@@ -2201,11 +2203,10 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
                     match e_app.e with
                     | Qualif qualif -> (
                         match qualif.id with
-                        | FunOrOp (Fun (FromLlbc fun_id)) -> (
+                        | FunOrOp (Fun (FromLlbc (FunId fun_id, loop_id, _)))
+                          -> (
                             match
-                              FunLoopIdMap.find_opt
-                                (fun_id_to_fun_loop_id fun_id)
-                                !used_map
+                              FunLoopIdMap.find_opt (fun_id, loop_id) !used_map
                             with
                             | None -> super#visit_texpression env e
                             | Some used_info ->

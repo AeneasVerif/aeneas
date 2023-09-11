@@ -629,8 +629,11 @@ let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   | FromLlbc (fid, lp_id, rg_id) ->
       let f =
         match fid with
-        | Regular fid -> fmt.fun_decl_id_to_string fid
-        | Assumed fid -> llbc_assumed_fun_id_to_string fid
+        | FunId (Regular fid) -> fmt.fun_decl_id_to_string fid
+        | FunId (Assumed fid) -> llbc_assumed_fun_id_to_string fid
+        | TraitMethod (trait_ref, method_name, _) ->
+            let fmt = ast_to_type_formatter fmt in
+            trait_ref_to_string fmt true trait_ref ^ "." ^ method_name
       in
       f ^ fun_suffix lp_id rg_id
   | Pure fid -> pure_assumed_fun_id_to_string fid
