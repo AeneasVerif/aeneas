@@ -136,7 +136,7 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
           ("ctx_normalize_ty: trait type: " ^ ctx.ty_to_string ty
          ^ "\n- trait_ref: "
           ^ ctx.trait_ref_to_string trait_ref
-          ^ "\n- raw trait ref: "
+          ^ "\n- raw trait ref:\n"
           ^ T.show_trait_ref ctx.pp_r trait_ref));
       (* Normalize and attempt to project the type from the trait ref *)
       let trait_ref = ctx_normalize_trait_ref ctx trait_ref in
@@ -197,7 +197,7 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
                 ("ctx_normalize_ty: trait type: not a trait ref: "
                ^ ctx.ty_to_string ty ^ "\n- trait_ref: "
                 ^ ctx.trait_ref_to_string trait_ref
-                ^ "\n- raw trait ref: "
+                ^ "\n- raw trait ref:\n"
                 ^ T.show_trait_ref ctx.pp_r trait_ref));
             (* We can't project *)
             assert (trait_instance_id_is_local_clause trait_ref.trait_id);

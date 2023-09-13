@@ -64,15 +64,39 @@ let initialize_eval_context (ctx : C.decls_ctx)
     C.ended_regions = T.RegionId.Set.empty;
   }
 
-(** Instantiate a function signature for a symbolic execution *)
-let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (fdef : A.fun_decl) :
+(** Small helper.
+
+    Normalize an instantiated function signature provided we used this signature
+    to compute a normalization map (for the associated types) and that we added
+    it in the context.
+ *)
+let normalize_inst_fun_sig (ctx : C.eval_ctx) (sg : A.inst_fun_sig) :
     A.inst_fun_sig =
+  let { A.regions_hierarchy = _; trait_type_constraints = _; inputs; output } =
+    sg
+  in
+  let norm = AssociatedTypes.ctx_normalize_rty ctx in
+  let inputs = List.map norm inputs in
+  let output = norm output in
+  { sg with A.inputs; output }
+
+(** Instantiate a function signature for a symbolic execution.
+
+    We return a new context because we compute and add the type normalization
+    map in the same step.
+
+    **WARNING**: this doesn't normalize the types. This step has to be done
+    separately. Remark: we need to normalize essentially because of the where
+    clauses (we are not considering a function call, so we don't need to
+    normalize because a trait clause was instantiated with a specific trait ref).
+ *)
+let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (fdef : A.fun_decl) :
+    C.eval_ctx * A.inst_fun_sig =
   let sg = fdef.signature in
   let tr_self =
     match fdef.kind with
     | RegularKind | TraitMethodImpl _ -> T.UnknownTrait __FUNCTION__
-    | TraitMethodDecl _ | TraitMethodProvided _ ->
-        raise (Failure "Unimplemented")
+    | TraitMethodDecl _ | TraitMethodProvided _ -> T.Self
   in
   let generics =
     let { T.regions; types; const_generics; trait_clauses } = sg.generics in
@@ -98,12 +122,27 @@ let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (fdef : A.fun_decl) :
           let { T.trait_id = trait_decl_id; generics; _ } = c in
           let generics = Subst.generic_args_substitute subst generics in
           let trait_decl_ref = { T.trait_decl_id; decl_generics = generics } in
-          { T.trait_id = T.Clause c.clause_id; generics; trait_decl_ref })
+          (* Note that because we directly refer to the clause, we give it
+             empty generics *)
+          {
+            T.trait_id = T.Clause c.clause_id;
+            generics = TypesUtils.mk_empty_generic_args;
+            trait_decl_ref;
+          })
         trait_clauses
     in
     { T.regions; types; const_generics; trait_refs }
   in
-  instantiate_fun_sig ctx generics tr_self sg
+  let inst_sg = instantiate_fun_sig ctx generics tr_self sg in
+  (* Compute the normalization maps *)
+  let ctx =
+    AssociatedTypes.ctx_add_norm_trait_types_from_preds ctx
+      inst_sg.trait_type_constraints
+  in
+  (* Normalize the signature *)
+  let inst_sg = normalize_inst_fun_sig ctx inst_sg in
+  (* Return *)
+  (ctx, inst_sg)
 
 (** Initialize an evaluation context to execute a function.
 
@@ -140,13 +179,10 @@ let initialize_symbolic_context_for_fun (ctx : C.decls_ctx) (fdef : A.fun_decl)
     initialize_eval_context ctx region_groups sg.generics.types
       sg.generics.const_generics
   in
-  (* Instantiate the signature *)
-  let inst_sg = symbolic_instantiate_fun_sig ctx fdef in
-  (* Compute the normalization maps *)
-  let ctx =
-    AssociatedTypes.ctx_add_norm_trait_types_from_preds ctx
-      inst_sg.trait_type_constraints
-  in
+  (* Instantiate the signature. This updates the context because we compute
+     at the same time the normalization map for the associated types.
+  *)
+  let ctx, inst_sg = symbolic_instantiate_fun_sig ctx fdef in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
     List.map (fun ty -> mk_fresh_symbolic_value V.SynthInput ty) inst_sg.inputs
@@ -221,7 +257,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
   let sg = fdef.signature in
-  let ret_inst_sg = symbolic_instantiate_fun_sig ctx fdef in
+  let _, ret_inst_sg = symbolic_instantiate_fun_sig ctx fdef in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in

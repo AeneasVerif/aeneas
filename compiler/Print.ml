@@ -732,6 +732,10 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.fun_decl_to_string fmt "" "  " f
 
+  let fun_sig_to_string (ctx : C.eval_ctx) (x : A.fun_sig) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PA.fun_sig_to_string fmt "" "  " x
+
   let statement_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (e : A.statement) : string =
     let fmt = PC.eval_ctx_to_ast_formatter ctx in

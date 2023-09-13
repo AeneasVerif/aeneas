@@ -5,6 +5,7 @@ open LlbcAst
 module V = Values
 open ValuesUtils
 open Identifiers
+module L = Logging
 
 (** The [Id] module for dummy variables.
 
@@ -16,6 +17,9 @@ module DummyVarId =
 IdGen ()
 
 type dummy_var_id = DummyVarId.id [@@deriving show, ord]
+
+(** The local logger *)
+let log = L.contexts_log
 
 (** Some global counters.
 
@@ -449,6 +453,15 @@ let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
 *)
 let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
     =
+  log#ldebug
+    (lazy
+      ("push_vars:\n"
+      ^ String.concat "\n"
+          (List.map
+             (fun (var, value) ->
+               (* We can unfortunately not use Print because it depends on Contexts... *)
+               show_var var ^ " -> " ^ V.show_typed_value value)
+             vars)));
   assert (
     List.for_all
       (fun (var, (value : typed_value)) -> var.var_ty = value.ty)

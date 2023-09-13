@@ -664,6 +664,13 @@ let eval_assumed_function_call_concrete (config : C.config)
 
 let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.egeneric_args)
     (tr_self : T.rtrait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
+  log#ldebug
+    (lazy
+      ("instantiate_fun_sig:" ^ "\n- generics: "
+      ^ egeneric_args_to_string ctx generics
+      ^ "\n- tr_self: "
+      ^ rtrait_instance_id_to_string ctx tr_self
+      ^ "\n- sg: " ^ fun_sig_to_string ctx sg));
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let rg_abs_ids_bindings =

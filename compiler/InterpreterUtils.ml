@@ -39,6 +39,8 @@ let typed_avalue_to_string = PA.typed_avalue_to_string
 let place_to_string = PA.place_to_string
 let operand_to_string = PA.operand_to_string
 let egeneric_args_to_string = PA.egeneric_args_to_string
+let rtrait_instance_id_to_string = PA.rtrait_instance_id_to_string
+let fun_sig_to_string = PA.fun_sig_to_string
 let fun_decl_to_string = PA.fun_decl_to_string
 let call_to_string = PA.call_to_string
 

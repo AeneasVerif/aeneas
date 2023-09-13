@@ -9,6 +9,9 @@ let pre_passes_log = L.get_logger "MainLogger.PrePasses"
 (** Logger for Translate *)
 let translate_log = L.get_logger "MainLogger.Translate"
 
+(** Logger for Contexts *)
+let contexts_log = L.get_logger "MainLogger.Contexts"
+
 (** Logger for PureUtils *)
 let pure_utils_log = L.get_logger "MainLogger.PureUtils"
 
