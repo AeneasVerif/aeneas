@@ -346,43 +346,6 @@ let bs_ctx_lookup_local_function_sig (def_id : A.FunDeclId.id)
   let id = (A.Regular def_id, back_id) in
   (RegularFunIdNotLoopMap.find id ctx.fun_context.fun_sigs).sg
 
-let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
-    (args : texpression list) (ctx : bs_ctx) : bs_ctx =
-  let calls = ctx.calls in
-  assert (not (V.FunCallId.Map.mem call_id calls));
-  let info =
-    { forward; forward_inputs = args; backwards = T.RegionGroupId.Map.empty }
-  in
-  let calls = V.FunCallId.Map.add call_id info calls in
-  { ctx with calls }
-
-(** [back_args]: the *additional* list of inputs received by the backward function *)
-let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
-    (back_id : T.RegionGroupId.id) (back_args : texpression list) (ctx : bs_ctx)
-    : bs_ctx * fun_or_op_id =
-  (* Insert the abstraction in the call informations *)
-  let info = V.FunCallId.Map.find call_id ctx.calls in
-  assert (not (T.RegionGroupId.Map.mem back_id info.backwards));
-  let backwards =
-    T.RegionGroupId.Map.add back_id (abs, back_args) info.backwards
-  in
-  let info = { info with backwards } in
-  let calls = V.FunCallId.Map.add call_id info ctx.calls in
-  (* Insert the abstraction in the abstractions map *)
-  let abstractions = ctx.abstractions in
-  assert (not (V.AbstractionId.Map.mem abs.abs_id abstractions));
-  let abstractions =
-    V.AbstractionId.Map.add abs.abs_id (abs, back_args) abstractions
-  in
-  (* Retrieve the fun_id *)
-  let fun_id =
-    match info.forward.call_id with
-    | S.Fun (fid, _) -> Fun (FromLlbc (fid, None, Some back_id))
-    | S.Unop _ | S.Binop _ -> raise (Failure "Unreachable")
-  in
-  (* Update the context and return *)
-  ({ ctx with calls; abstractions }, fun_id)
-
 (* Some generic translation functions (we need to translate different "flavours"
    of types: sty, forward types, backward types, etc.) *)
 let rec translate_generic_args (translate_ty : 'r T.ty -> ty)

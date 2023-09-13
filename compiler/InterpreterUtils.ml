@@ -39,8 +39,12 @@ let typed_avalue_to_string = PA.typed_avalue_to_string
 let place_to_string = PA.place_to_string
 let operand_to_string = PA.operand_to_string
 let egeneric_args_to_string = PA.egeneric_args_to_string
+let fun_decl_to_string = PA.fun_decl_to_string
 let call_to_string = PA.call_to_string
-let trait_impl_to_string = PA.trait_impl_to_string
+
+let trait_impl_to_string ctx =
+  PA.trait_impl_to_string { ctx with type_vars = []; const_generic_vars = [] }
+
 let statement_to_string ctx = PA.statement_to_string ctx "" "  "
 let statement_to_string_with_tab ctx = PA.statement_to_string ctx "  " "  "
 let env_elem_to_string ctx = PA.env_elem_to_string ctx "" "  "

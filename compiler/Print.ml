@@ -479,19 +479,23 @@ module Contexts = struct
     PV.value_to_rtype_formatter fmt
 
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
-    (* We shouldn't use rvar_to_string *)
-    let rvar_to_string _r =
-      raise (Failure "Unexpected use of rvar_to_string")
+    let rvar_to_string r =
+      (* In theory we shouldn't use rvar_to_string, but it can happen
+         when printing definitions for instance... *)
+      T.RegionVarId.to_string r
     in
     let r_to_string r = PT.region_id_to_string r in
 
     let type_var_id_to_string vid =
-      let v = C.lookup_type_var ctx vid in
-      v.name
+      (* The context may be invalid *)
+      match C.lookup_type_var_opt ctx vid with
+      | None -> T.TypeVarId.to_string vid
+      | Some v -> v.name
     in
     let const_generic_var_id_to_string vid =
-      let v = C.lookup_const_generic_var ctx vid in
-      v.name
+      match C.lookup_const_generic_var_opt ctx vid with
+      | None -> T.ConstGenericVarId.to_string vid
+      | Some v -> v.name
     in
     let type_decl_id_to_string def_id =
       let def = C.ctx_lookup_type_decl ctx def_id in
@@ -701,6 +705,10 @@ module EvalCtxLlbcAst = struct
   let call_to_string (ctx : C.eval_ctx) (call : A.call) : string =
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.call_to_string fmt "" call
+
+  let fun_decl_to_string (ctx : C.eval_ctx) (f : A.fun_decl) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PA.fun_decl_to_string fmt "" "  " f
 
   let statement_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (e : A.statement) : string =

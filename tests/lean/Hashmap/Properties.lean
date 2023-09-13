@@ -303,19 +303,17 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
    | some _ => nhm.len_s = hm.len_s) := by
   rw [insert_no_resize]
   simp only [hash_key, bind_tc_ret] -- TODO: annoying
-  have _ : (Vec.len (List α) hm.slots).val ≠ 0 := by checkpoint
+  have _ : (Vec.len (List α) hm.slots).val ≠ 0 := by
    intro
    simp_all [inv]
-  progress keep _ as ⟨ hash_mod, hhm ⟩
-  have _ : 0 ≤ hash_mod.val := by checkpoint scalar_tac
+  progress as ⟨ hash_mod, hhm ⟩
+  have _ : 0 ≤ hash_mod.val := by scalar_tac
   have _ : hash_mod.val < Vec.length hm.slots := by
     have : 0 < hm.slots.val.len := by
       simp [inv] at hinv
       simp [hinv]
     -- TODO: we want to automate that
     simp [*, Int.emod_lt_of_pos]
-  -- TODO: change the spec of Vec.index_mut to introduce a let-binding.
-  -- or: make progress introduce the let-binding by itself (this is clearer)
   progress as ⟨ l, h_leq ⟩
   -- TODO: make progress use the names written in the goal
   progress as ⟨ inserted ⟩

@@ -1198,7 +1198,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
         log#ldebug
           (lazy
             ("trait method call:\n- call: " ^ call_to_string ctx call
-           ^ "\n- method name: " ^ method_name ^ "\n- generics:\n"
+           ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
             ^ egeneric_args_to_string ctx call.generics
             ^ "\n- trait and method generics:\n"
             ^ egeneric_args_to_string ctx
@@ -1273,7 +1273,10 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                   (lazy
                     ("provided method call:" ^ "\n- method name: " ^ method_name
                    ^ "\n- generics:\n"
-                    ^ egeneric_args_to_string ctx generics));
+                    ^ egeneric_args_to_string ctx generics
+                    ^ "\n- parent params info: "
+                    ^ Print.option_to_string A.show_params_info
+                        method_def.signature.parent_params_info));
                 let tr_self =
                   T.TraitRef (etrait_ref_no_regions_to_gr_trait_ref trait_ref)
                 in
@@ -1303,6 +1306,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                 (List.append trait_decl.required_methods provided)
             in
             let method_def = C.ctx_lookup_fun_decl ctx method_id in
+            log#ldebug (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
             (* Instantiate *)
             let tr_self = T.TraitRef trait_ref in
             let tr_self =
