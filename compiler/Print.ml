@@ -651,6 +651,28 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.ctx_to_rtype_formatter fmt in
     PT.rty_to_string fmt t
 
+  let etrait_ref_to_string (ctx : C.eval_ctx) (x : T.etrait_ref) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_etype_formatter fmt in
+    PT.etrait_ref_to_string fmt x
+
+  let rtrait_ref_to_string (ctx : C.eval_ctx) (x : T.rtrait_ref) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_rtype_formatter fmt in
+    PT.rtrait_ref_to_string fmt x
+
+  let etrait_instance_id_to_string (ctx : C.eval_ctx) (x : T.etrait_instance_id)
+      : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_etype_formatter fmt in
+    PT.etrait_instance_id_to_string fmt x
+
+  let rtrait_instance_id_to_string (ctx : C.eval_ctx) (x : T.rtrait_instance_id)
+      : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_rtype_formatter fmt in
+    PT.rtrait_instance_id_to_string fmt x
+
   let egeneric_args_to_string (ctx : C.eval_ctx) (x : T.egeneric_args) : string
       =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in

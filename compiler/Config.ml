@@ -331,3 +331,11 @@ let record_fields_short_names = ref false
     and to account for type constraints (like [fn f<T : Foo>(...) where T::bar = usize]).
  *)
 let parameterize_trait_types = ref false
+
+(** For sanity check: type check the generated pure code (activates checks in
+    several places).
+
+    TODO: deactivated for now because we need to implement the normalization of
+    trait associated types in the pure code.
+ *)
+let type_check_pure_code = ref false

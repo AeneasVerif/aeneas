@@ -15,6 +15,7 @@ module C = Contexts
 module Subst = Substitute
 module L = Logging
 module UF = UnionFind
+module PA = Print.EvalCtxLlbcAst
 
 (** The local logger *)
 let log = L.associated_types_log
@@ -111,6 +112,10 @@ type 'r norm_ctx = {
   get_ty_repr : 'r C.trait_type_ref -> 'r T.ty option;
   convert_ety : T.ety -> 'r T.ty;
   convert_etrait_ref : T.etrait_ref -> 'r T.trait_ref;
+  ty_to_string : 'r T.ty -> string;
+  trait_ref_to_string : 'r T.trait_ref -> string;
+  trait_instance_id_to_string : 'r T.trait_instance_id -> string;
+  pp_r : Format.formatter -> 'r -> unit;
 }
 
 (** Normalize a type by simplyfying the references to trait associated types
@@ -118,6 +123,7 @@ type 'r norm_ctx = {
     enforced by local clauses (i.e., `where Trait1::T = Trait2::U`. *)
 let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
  fun ctx ty ->
+  log#ldebug (lazy ("ctx_normalize_ty: " ^ ctx.ty_to_string ty));
   match ty with
   | T.Adt (id, generics) -> Adt (id, ctx_normalize_generic_args ctx generics)
   | TypeVar _ | Literal _ | Never -> ty
@@ -125,19 +131,56 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
       let ty = ctx_normalize_ty ctx ty in
       T.Ref (r, ty, rkind)
   | TraitType (trait_ref, generics, type_name) -> (
+      log#ldebug
+        (lazy
+          ("ctx_normalize_ty: trait type: " ^ ctx.ty_to_string ty
+         ^ "\n- trait_ref: "
+          ^ ctx.trait_ref_to_string trait_ref
+          ^ "\n- raw trait ref: "
+          ^ T.show_trait_ref ctx.pp_r trait_ref));
       (* Normalize and attempt to project the type from the trait ref *)
       let trait_ref = ctx_normalize_trait_ref ctx trait_ref in
       let generics = ctx_normalize_generic_args ctx generics in
       let ty : 'r T.ty =
         match trait_ref.trait_id with
-        | T.TraitRef { T.trait_id = T.TraitImpl impl_id; generics; _ } ->
+        | T.TraitRef
+            { T.trait_id = T.TraitImpl impl_id; generics = ref_generics; _ } ->
+            assert (ref_generics = TypesUtils.mk_empty_generic_args);
+            log#ldebug
+              (lazy
+                ("ctx_normalize_ty: trait type: trait ref: "
+               ^ ctx.ty_to_string ty));
             (* Lookup the implementation *)
             let trait_impl = C.ctx_lookup_trait_impl ctx.ctx impl_id in
             (* Lookup the type *)
             let ty = snd (List.assoc type_name trait_impl.types) in
             (* Annoying: convert etype to an stype - TODO: hwo to avoid that? *)
             let ty : T.sty = TypesUtils.ety_no_regions_to_gr_ty ty in
-            (* Substitute - annoying: we can't use *)
+            (* Substitute *)
+            let tr_self = T.UnknownTrait __FUNCTION__ in
+            let subst =
+              Subst.make_subst_from_generics_no_regions trait_impl.generics
+                generics tr_self
+            in
+            let ty = Subst.ty_substitute subst ty in
+            (* Reconvert *)
+            let ty : 'r T.ty = ctx.convert_ety (Subst.erase_regions ty) in
+            (* Normalize *)
+            ctx_normalize_ty ctx ty
+        | T.TraitImpl impl_id ->
+            (* This happens. This doesn't come from the substituations
+               performed by Aeneas (the [TraitImpl] would be wrapped in a
+               [TraitRef] but from non-normalized traits translated from
+               the Rustc AST.
+               TODO: factor out with the branch above.
+            *)
+            (* Lookup the implementation *)
+            let trait_impl = C.ctx_lookup_trait_impl ctx.ctx impl_id in
+            (* Lookup the type *)
+            let ty = snd (List.assoc type_name trait_impl.types) in
+            (* Annoying: convert etype to an stype - TODO: hwo to avoid that? *)
+            let ty : T.sty = TypesUtils.ety_no_regions_to_gr_ty ty in
+            (* Substitute *)
             let tr_self = T.UnknownTrait __FUNCTION__ in
             let subst =
               Subst.make_subst_from_generics_no_regions trait_impl.generics
@@ -149,6 +192,13 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
             (* Normalize *)
             ctx_normalize_ty ctx ty
         | _ ->
+            log#ldebug
+              (lazy
+                ("ctx_normalize_ty: trait type: not a trait ref: "
+               ^ ctx.ty_to_string ty ^ "\n- trait_ref: "
+                ^ ctx.trait_ref_to_string trait_ref
+                ^ "\n- raw trait ref: "
+                ^ T.show_trait_ref ctx.pp_r trait_ref));
             (* We can't project *)
             assert (trait_instance_id_is_local_clause trait_ref.trait_id);
             T.TraitType (trait_ref, generics, type_name)
@@ -307,11 +357,31 @@ and ctx_normalize_generic_args (ctx : 'r norm_ctx)
 
 and ctx_normalize_trait_ref (ctx : 'r norm_ctx) (trait_ref : 'r T.trait_ref) :
     'r T.trait_ref =
+  log#ldebug
+    (lazy
+      ("ctx_normalize_trait_ref: "
+      ^ ctx.trait_ref_to_string trait_ref
+      ^ "\n- raw trait ref:\n"
+      ^ T.show_trait_ref ctx.pp_r trait_ref));
   let { T.trait_id; generics; trait_decl_ref } = trait_ref in
-  let trait_id, _ = ctx_normalize_trait_instance_id ctx trait_id in
-  let generics = ctx_normalize_generic_args ctx generics in
-  let trait_decl_ref = ctx_normalize_trait_decl_ref ctx trait_decl_ref in
-  { T.trait_id; generics; trait_decl_ref }
+  (* Check if the id is an impl, otherwise normalize it *)
+  let trait_id, norm_trait_ref = ctx_normalize_trait_instance_id ctx trait_id in
+  match norm_trait_ref with
+  | None ->
+      log#ldebug
+        (lazy
+          ("ctx_normalize_trait_ref: no norm: "
+          ^ ctx.trait_instance_id_to_string trait_id));
+      let generics = ctx_normalize_generic_args ctx generics in
+      let trait_decl_ref = ctx_normalize_trait_decl_ref ctx trait_decl_ref in
+      { T.trait_id; generics; trait_decl_ref }
+  | Some trait_ref ->
+      log#ldebug
+        (lazy
+          ("ctx_normalize_trait_ref: normalized to: "
+          ^ ctx.trait_ref_to_string trait_ref));
+      assert (generics = TypesUtils.mk_empty_generic_args);
+      trait_ref
 
 (* Not sure this one is really necessary *)
 and ctx_normalize_trait_decl_ref (ctx : 'r norm_ctx)
@@ -335,6 +405,10 @@ let mk_rnorm_ctx (ctx : C.eval_ctx) : T.RegionId.id T.region norm_ctx =
     get_ty_repr;
     convert_ety = TypesUtils.ety_no_regions_to_rty;
     convert_etrait_ref = TypesUtils.etrait_ref_no_regions_to_gr_trait_ref;
+    ty_to_string = PA.rty_to_string ctx;
+    trait_ref_to_string = PA.rtrait_ref_to_string ctx;
+    trait_instance_id_to_string = PA.rtrait_instance_id_to_string ctx;
+    pp_r = T.pp_region T.pp_region_id;
   }
 
 let mk_enorm_ctx (ctx : C.eval_ctx) : T.erased_region norm_ctx =
@@ -344,6 +418,10 @@ let mk_enorm_ctx (ctx : C.eval_ctx) : T.erased_region norm_ctx =
     get_ty_repr;
     convert_ety = (fun x -> x);
     convert_etrait_ref = (fun x -> x);
+    ty_to_string = PA.ety_to_string ctx;
+    trait_ref_to_string = PA.etrait_ref_to_string ctx;
+    trait_instance_id_to_string = PA.etrait_instance_id_to_string ctx;
+    pp_r = T.pp_erased_region;
   }
 
 let ctx_normalize_rty (ctx : C.eval_ctx) (ty : T.rty) : T.rty =

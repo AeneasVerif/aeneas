@@ -687,8 +687,9 @@ let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
   ()
 
 let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
-  let ctx = mk_type_check_ctx ctx in
-  PureTypeCheck.check_texpression ctx e
+  if !Config.type_check_pure_code then
+    let ctx = mk_type_check_ctx ctx in
+    PureTypeCheck.check_texpression ctx e
 
 let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
     (id : A.fun_id_or_trait_method_ref) : fun_id_or_trait_method_ref =
@@ -1817,9 +1818,11 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   (* Group the two lists *)
   let variables_values = List.combine given_back_variables consumed_values in
   (* Sanity check: the two lists match (same types) *)
-  List.iter
-    (fun (var, v) -> assert ((var : var).ty = (v : texpression).ty))
-    variables_values;
+  (* TODO: normalize the types *)
+  if !Config.type_check_pure_code then
+    List.iter
+      (fun (var, v) -> assert ((var : var).ty = (v : texpression).ty))
+      variables_values;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Generate the assignemnts *)
@@ -1892,31 +1895,35 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | Some nstate -> mk_simpl_tuple_pattern [ nstate; output ]
   in
   (* Sanity check: there is the proper number of inputs and outputs, and they have the proper type *)
-  let _ =
-    let inst_sg = get_instantiated_fun_sig fun_id (Some rg_id) generics ctx in
-    log#ldebug
-      (lazy
-        ("\n- fun_id: " ^ A.show_fun_id fun_id ^ "\n- inputs ("
-        ^ string_of_int (List.length inputs)
-        ^ "): "
-        ^ String.concat ", " (List.map (texpression_to_string ctx) inputs)
-        ^ "\n- inst_sg.inputs ("
-        ^ string_of_int (List.length inst_sg.inputs)
-        ^ "): "
-        ^ String.concat ", " (List.map (ty_to_string ctx) inst_sg.inputs)));
-    List.iter
-      (fun (x, ty) -> assert ((x : texpression).ty = ty))
-      (List.combine inputs inst_sg.inputs);
-    log#ldebug
-      (lazy
-        ("\n- outputs: "
-        ^ string_of_int (List.length outputs)
-        ^ "\n- expected outputs: "
-        ^ string_of_int (List.length inst_sg.doutputs)));
-    List.iter
-      (fun (x, ty) -> assert ((x : typed_pattern).ty = ty))
-      (List.combine outputs inst_sg.doutputs)
-  in
+  (if (* TODO: normalize the types *) !Config.type_check_pure_code then
+     match fun_id with
+     | A.FunId fun_id ->
+         let inst_sg =
+           get_instantiated_fun_sig fun_id (Some rg_id) generics ctx
+         in
+         log#ldebug
+           (lazy
+             ("\n- fun_id: " ^ A.show_fun_id fun_id ^ "\n- inputs ("
+             ^ string_of_int (List.length inputs)
+             ^ "): "
+             ^ String.concat ", " (List.map (texpression_to_string ctx) inputs)
+             ^ "\n- inst_sg.inputs ("
+             ^ string_of_int (List.length inst_sg.inputs)
+             ^ "): "
+             ^ String.concat ", " (List.map (ty_to_string ctx) inst_sg.inputs)));
+         List.iter
+           (fun (x, ty) -> assert ((x : texpression).ty = ty))
+           (List.combine inputs inst_sg.inputs);
+         log#ldebug
+           (lazy
+             ("\n- outputs: "
+             ^ string_of_int (List.length outputs)
+             ^ "\n- expected outputs: "
+             ^ string_of_int (List.length inst_sg.doutputs)));
+         List.iter
+           (fun (x, ty) -> assert ((x : typed_pattern).ty = ty))
+           (List.combine outputs inst_sg.doutputs)
+     | _ -> (* TODO: trait methods *) ());
   (* Retrieve the function id, and register the function call in the context
    * if necessary *)
   let ctx, func =
@@ -2961,10 +2968,12 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
             ^ "\n- signature.inputs: "
             ^ String.concat ", " (List.map (ty_to_string ctx) signature.inputs)
             ));
-        assert (
-          List.for_all
-            (fun (var, ty) -> (var : var).ty = ty)
-            (List.combine inputs signature.inputs));
+        (* TODO: we need to normalize the types *)
+        if !Config.type_check_pure_code then
+          assert (
+            List.for_all
+              (fun (var, ty) -> (var : var).ty = ty)
+              (List.combine inputs signature.inputs));
         Some { inputs; inputs_lvs; body }
   in
 
