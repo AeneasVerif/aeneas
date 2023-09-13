@@ -529,7 +529,15 @@ let type_decl_kind_to_qualif (kind : decl_kind)
            *)
           Some "with"
       | (Assumed | Declared), None -> Some "Axiom"
-      | _ -> raise (Failure "Unexpected"))
+      | SingleNonRec, None ->
+          (* This is for traits *)
+          Some "Record"
+      | _ ->
+          raise
+            (Failure
+               ("Unexpected: (" ^ show_decl_kind kind ^ ", "
+               ^ Print.option_to_string show_type_decl_kind type_kind
+               ^ ")")))
   | Lean -> (
       match kind with
       | SingleNonRec ->

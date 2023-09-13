@@ -339,3 +339,7 @@ let parameterize_trait_types = ref false
     trait associated types in the pure code.
  *)
 let type_check_pure_code = ref false
+
+(** Shall we fail hard if there is an issue at code-generation time?
+    We may not want in case outputting a code with holes helps debugging *)
+let extract_fail_hard = ref false

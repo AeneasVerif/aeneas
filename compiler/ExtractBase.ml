@@ -78,6 +78,7 @@ type decl_kind =
           F*:  [val x : Type0]
           Coq: [Axiom x : Type.]
        *)
+[@@deriving show]
 
 (** Return [true] if the declaration is the last from its group of declarations.
 
@@ -112,7 +113,7 @@ let decl_is_first_from_group (kind : decl_kind) : bool =
 let decl_is_not_last_from_group (kind : decl_kind) : bool =
   not (decl_is_last_from_group kind)
 
-type type_decl_kind = Enum | Struct
+type type_decl_kind = Enum | Struct [@@deriving show]
 
 (* TODO: this should be a module we give to a functor! *)
 
@@ -533,7 +534,8 @@ let names_map_check_collision (id_to_string : id -> string) (id : id)
   | None -> () (* Ok *)
   | Some clash ->
       (* There is a clash: print a nice debugging message for the user *)
-      report_name_collision id_to_string clash id name
+      if !Config.extract_fail_hard then
+        report_name_collision id_to_string clash id name
 
 let names_map_add (id_to_string : id -> string) (is_opaque : bool) (id : id)
     (name : string) (nm : names_map) : names_map =
@@ -707,9 +709,12 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
                 Print.fun_name_to_string
                   (A.FunDeclId.Map.find fid fun_decls).name
             | FunId (Assumed aid) -> A.show_assumed_fun_id aid
-            | TraitMethod _ ->
+            | TraitMethod (_, method_name, _) ->
                 (* Shouldn't happen *)
-                raise (Failure "Unexpected")
+                if !Config.extract_fail_hard then raise (Failure "Unexpected")
+                else (
+                  log#serror ("Unexpected trait method: " ^ method_name);
+                  method_name)
           in
 
           let lp_kind =
@@ -899,7 +904,8 @@ let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
         if with_opaque_pre && is_opaque then ctx.fmt.opaque_pre () ^ s else s
     | None ->
         log#serror ("Could not find: " ^ id_to_string id ctx);
-        raise Not_found
+        if !Config.extract_fail_hard then raise (Failure "Not found")
+        else "(ERROR: \"" ^ id_to_string id ctx ^ "\")"
 
 let ctx_get_global (with_opaque_pre : bool) (id : A.GlobalDeclId.id)
     (ctx : extraction_ctx) : string =
