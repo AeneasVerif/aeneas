@@ -840,7 +840,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
   match id with
-  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _ ->
+  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
+  | TraitMethodId _ ->
       !Config.record_fields_short_names
   | _ -> false
 
@@ -1285,19 +1286,29 @@ let ctx_add_trait_const (d : trait_decl) (item : string) (ctx : extraction_ctx)
     : extraction_ctx =
   let is_opaque = false in
   let name = ctx.fmt.trait_const_name d item in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
   ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
 
 let ctx_add_trait_type (d : trait_decl) (item : string) (ctx : extraction_ctx) :
     extraction_ctx =
   let is_opaque = false in
   let name = ctx.fmt.trait_type_name d item in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
   ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
 
 let ctx_add_trait_method (d : trait_decl) (item_name : string) (f : fun_decl)
     (ctx : extraction_ctx) : extraction_ctx =
   (* We do something special: we use the base name but remove everything
-         but the crate (because [get_name] removes it) and the last ident.
-         This allows us to reuse the [ctx_compute_fun_decl] function.
+     but the crate (because [get_name] removes it) and the last ident.
+     This allows us to reuse the [ctx_compute_fun_decl] function.
   *)
   let basename : name =
     match (f.basename : name) with
@@ -1307,6 +1318,11 @@ let ctx_add_trait_method (d : trait_decl) (item_name : string) (f : fun_decl)
   let f = { f with basename } in
   let trans = A.FunDeclId.Map.find f.def_id ctx.trans_funs in
   let name = ctx_compute_fun_name trans f ctx in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
   let is_opaque = false in
   ctx_add is_opaque (TraitMethodId (d.def_id, item_name, f.back_id)) name ctx
 
@@ -1314,12 +1330,22 @@ let ctx_add_trait_parent_clause (d : trait_decl) (clause : trait_clause)
     (ctx : extraction_ctx) : extraction_ctx =
   let is_opaque = false in
   let name = ctx.fmt.trait_parent_clause_name d clause in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
   ctx_add is_opaque (TraitParentClauseId (d.def_id, clause.clause_id)) name ctx
 
 let ctx_add_trait_type_clause (d : trait_decl) (item : string)
     (clause : trait_clause) (ctx : extraction_ctx) : extraction_ctx =
   let is_opaque = false in
   let name = ctx.fmt.trait_type_clause_name d item clause in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
   ctx_add is_opaque
     (TraitItemClauseId (d.def_id, item, clause.clause_id))
     name ctx
