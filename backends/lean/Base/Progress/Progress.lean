@@ -110,8 +110,9 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     -- then continue splitting the post-condition
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
-    simpAt [] [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
-           [hEq.fvarId!] (.targets #[] true)
+    tryTac (
+      simpAt [] [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+             [hEq.fvarId!] (.targets #[] true))
     -- Clear the equality, unless the user requests not to do so
     let mgoal ← do
       if keep.isSome then getMainGoal
@@ -314,12 +315,14 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
     else pure none
   let ids :=
     let args := asArgs.getArgs
-    let args := (args.get! 2).getSepArgs
-    args.map (λ s => if s.isIdent then some s.getId else none)
+    if args.size > 2 then
+      let args := (args.get! 2).getSepArgs
+      args.map (λ s => if s.isIdent then some s.getId else none)
+    else #[]
   trace[Progress] "User-provided ids: {ids}"
   let splitPost : Bool :=
     let args := asArgs.getArgs
-    (args.get! 3).getArgs.size > 0
+    args.size > 3 ∧ (args.get! 3).getArgs.size > 0
   trace[Progress] "Split post: {splitPost}"
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
@@ -343,11 +346,11 @@ elab "progress" args:progressArgs : tactic =>
 namespace Test
   open Primitives Result
 
-  set_option trace.Progress true
-  set_option pp.rawOnError true
+  -- set_option trace.Progress true
+  -- set_option pp.rawOnError true
 
-  #eval showStoredPSpec
-  #eval showStoredPSpecClass
+  -- #eval showStoredPSpec
+  -- #eval showStoredPSpecClass
 
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)

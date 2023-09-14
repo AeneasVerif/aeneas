@@ -1089,7 +1089,7 @@ namespace Tests
       intro i hpos h
       -- We can directly use `rw [list_nth]`!
       rw [list_nth]; simp
-      split <;> simp [*]
+      split <;> try simp [*]
       . tauto
       . -- TODO: we shouldn't have to do that
         have hneq : 0 < i := by cases i <;> rename_i a _ <;> simp_all; cases a <;> simp_all
