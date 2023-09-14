@@ -270,7 +270,7 @@ namespace Fix
     simp [karrow_rel, result_rel]
     have hg := hg Hrgh; simp [result_rel] at hg
     cases heq0: g fg <;> simp_all
-    rename_i y _
+    rename_i _ y
     have hh := hh y Hrgh; simp [result_rel] at hh
     simp_all
 
@@ -546,7 +546,7 @@ namespace FixI
   termination_by for_all_fin_aux n _ m h => n - m
   decreasing_by
     simp_wf
-    apply Nat.sub_add_lt_sub <;> simp
+    apply Nat.sub_add_lt_sub <;> try simp
     simp_all [Arith.add_one_le_iff_le_ne]
 
   def for_all_fin {n : Nat} (f : Fin n → Prop) := for_all_fin_aux f 0 (by simp)
@@ -569,7 +569,6 @@ namespace FixI
       intro i h3; cases i; simp_all
       linarith
     case succ k hi =>
-      simp_all
       intro m hk hmn
       intro hf i hmi
       have hne: m ≠ n := by
@@ -580,7 +579,6 @@ namespace FixI
         -- Yes: simply use the `for_all_fin_aux` hyp
         unfold for_all_fin_aux at hf
         simp_all
-        tauto
       else
         -- No: use the induction hypothesis
         have hlt: m < i := by simp_all [Nat.lt_iff_le_and_ne]
@@ -726,8 +724,8 @@ namespace Ex1
   theorem list_nth_body_is_valid: ∀ k x, is_valid_p k (λ k => @list_nth_body a k x) := by
     intro k x
     simp [list_nth_body]
-    split <;> simp
-    split <;> simp
+    split <;> try simp
+    split <;> try simp
 
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
@@ -767,8 +765,8 @@ namespace Ex2
   theorem list_nth_body_is_valid: ∀ k x, is_valid_p k (λ k => @list_nth_body a k x) := by
     intro k x
     simp [list_nth_body]
-    split <;> simp
-    split <;> simp
+    split <;> try simp
+    split <;> try simp
     apply is_valid_p_bind <;> intros <;> simp_all
 
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
@@ -845,7 +843,7 @@ namespace Ex3
     ∀ k x, is_valid_p k (λ k => is_even_is_odd_body k x) := by
     intro k x
     simp [is_even_is_odd_body]
-    split <;> simp <;> split <;> simp
+    split <;> (try simp) <;> split <;> try simp
     apply is_valid_p_bind; simp
     intros; split <;> simp
     apply is_valid_p_bind; simp
@@ -878,7 +876,7 @@ namespace Ex3
     -- inductives on the fly).
     -- The simplest is to repeatedly split then simplify (we identify
     -- the outer match or monadic let-binding, and split on its scrutinee)
-    split <;> simp
+    split <;> try simp
     cases H0 : fix is_even_is_odd_body (Sum.inr (i - 1)) <;> simp
     rename_i v
     split <;> simp
@@ -891,7 +889,7 @@ namespace Ex3
     simp [is_even, is_odd]
     conv => lhs; rw [Heq]; simp; rw [is_even_is_odd_body]; simp
     -- Same remark as for `even`
-    split <;> simp
+    split <;> try simp
     cases H0 : fix is_even_is_odd_body (Sum.inl (i - 1)) <;> simp
     rename_i v
     split <;> simp
@@ -938,7 +936,7 @@ namespace Ex4
     intro k
     apply (Funs.is_valid_p_is_valid_p tys)
     simp [Funs.is_valid_p]
-    (repeat (apply And.intro)) <;> intro x <;> simp at x <;>
+    (repeat (apply And.intro)) <;> intro x <;> (try simp at x) <;>
     simp only [is_even_body, is_odd_body]
     -- Prove the validity of the individual bodies
     . split <;> simp
@@ -995,9 +993,9 @@ namespace Ex5
     (ls : List a) :
     is_valid_p k (λ k => map (f k) ls) := by
     induction ls <;> simp [map]
-    apply is_valid_p_bind <;> simp_all
+    apply is_valid_p_bind <;> try simp_all
     intros
-    apply is_valid_p_bind <;> simp_all
+    apply is_valid_p_bind <;> try simp_all
 
   /- An example which uses map -/
   inductive Tree (a : Type) :=
@@ -1016,8 +1014,8 @@ namespace Ex5
     ∀ k x, is_valid_p k (λ k => @id_body a k x) := by
     intro k x
     simp only [id_body]
-    split <;> simp
-    apply is_valid_p_bind <;> simp [*]
+    split <;> try simp
+    apply is_valid_p_bind <;> try simp [*]
     -- We have to show that `map k tl` is valid
     apply map_is_valid;
     -- Remark: if we don't do the intro, then the last step is expensive:
@@ -1077,12 +1075,11 @@ namespace Ex6
     intro k
     apply (Funs.is_valid_p_is_valid_p tys)
     simp [Funs.is_valid_p]
-    (repeat (apply And.intro)); intro x; simp at x
+    (repeat (apply And.intro)); intro x; try simp at x
     simp only [list_nth_body]
     -- Prove the validity of the individual bodies
     intro k x
-    simp [list_nth_body]
-    split <;> simp
+    split <;> try simp
     split <;> simp
 
   -- Writing the proof terms explicitly
