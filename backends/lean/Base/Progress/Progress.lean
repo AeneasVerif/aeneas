@@ -110,8 +110,9 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     -- then continue splitting the post-condition
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
-    simpAt [] [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
-           [hEq.fvarId!] (.targets #[] true)
+    tryTac (
+      simpAt [] [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+             [hEq.fvarId!] (.targets #[] true))
     -- Clear the equality, unless the user requests not to do so
     let mgoal ← do
       if keep.isSome then getMainGoal
@@ -345,11 +346,11 @@ elab "progress" args:progressArgs : tactic =>
 namespace Test
   open Primitives Result
 
-  set_option trace.Progress true
-  set_option pp.rawOnError true
+  -- set_option trace.Progress true
+  -- set_option pp.rawOnError true
 
-  #eval showStoredPSpec
-  #eval showStoredPSpecClass
+  -- #eval showStoredPSpec
+  -- #eval showStoredPSpecClass
 
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)

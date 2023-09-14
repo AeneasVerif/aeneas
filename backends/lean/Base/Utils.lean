@@ -303,7 +303,7 @@ example (x : Bool) : Nat := by
 
 -- Attempt to apply a tactic
 def tryTac (tac : TacticM Unit) : TacticM Unit := do
-  let _ := tryTactic tac
+  let _ ← tryTactic tac
 
 -- Repeatedly apply a tactic
 partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do

@@ -332,12 +332,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
         simp_all
         simp [inv] at hinv
         int_tac
-      -- TODO: progress fails in command line mode with "index out of bounds"
-      -- and I have no idea how to fix this. The error happens after progress
-      -- introduced the new goals. It must be when we exit the "withApp", etc.
-      -- helpers.
-      -- progress as ⟨ z, hp ⟩
-      have ⟨ z, hp ⟩ := Usize.add_spec hbounds
+      progress as ⟨ z, hp ⟩
       simp [hp]
     else
       simp [*, Pure.pure]
@@ -408,7 +403,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     -- TODO: canonize addition by default? We need a tactic to simplify arithmetic equalities
     -- with addition and substractions ((ℤ, +) is a group or something - there should exist a tactic
     -- somewhere in mathlib?)
-    simp [Int.add_assoc, Int.add_comm, Int.add_left_comm] <;>
+    (try simp [Int.add_assoc, Int.add_comm, Int.add_left_comm]) <;>
     int_tac
   have hinv : inv nhm := by
     simp [inv] at *
