@@ -314,12 +314,14 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
     else pure none
   let ids :=
     let args := asArgs.getArgs
-    let args := (args.get! 2).getSepArgs
-    args.map (λ s => if s.isIdent then some s.getId else none)
+    if args.size > 2 then
+      let args := (args.get! 2).getSepArgs
+      args.map (λ s => if s.isIdent then some s.getId else none)
+    else #[]
   trace[Progress] "User-provided ids: {ids}"
   let splitPost : Bool :=
     let args := asArgs.getArgs
-    (args.get! 3).getArgs.size > 0
+    args.size > 3 ∧ (args.get! 3).getArgs.size > 0
   trace[Progress] "Split post: {splitPost}"
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
