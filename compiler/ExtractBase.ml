@@ -952,7 +952,8 @@ let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
         in
         log#serror err;
         if !Config.extract_fail_hard then raise (Failure err)
-        else "(ERROR: \"" ^ id_to_string id ctx ^ "\")")
+        else
+          "(%%%ERROR: unknown identifier\": " ^ id_to_string id ctx ^ "\"%%%)")
   else
     let m = ctx.names_map.id_to_name in
     match IdMap.find_opt id m with

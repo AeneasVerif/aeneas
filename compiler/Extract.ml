@@ -681,15 +681,20 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   in
   let field_name (def_name : name) (field_id : FieldId.id)
       (field_name : string option) : string =
-    let field_name =
+    let field_name_s =
       match field_name with
       | Some field_name -> field_name
-      | None -> FieldId.to_string field_id
+      | None ->
+          (* TODO: extract structs with no field names to tuples *)
+          FieldId.to_string field_id
     in
-    if !Config.record_fields_short_names then field_name
+    if !Config.record_fields_short_names then
+      if field_name = None then (* TODO: this is a bit ugly *)
+        "_" ^ field_name_s
+      else field_name_s
     else
       let def_name = type_name_to_snake_case def_name ^ "_" in
-      def_name ^ field_name
+      def_name ^ field_name_s
   in
   let variant_name (def_name : name) (variant : string) : string =
     match !backend with
@@ -894,7 +899,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   let trait_clause_basename (_varset : StringSet.t) (_clause : trait_clause) :
       string =
     (* TODO: actually use the clause to derive the name *)
-    "cl"
+    "inst"
   in
   let trait_self_clause_basename = "self_clause" in
   let append_index (basename : string) (i : int) : string =
@@ -1330,6 +1335,17 @@ and extract_trait_ref (ctx : extraction_ctx) (fmt : F.formatter)
   extract_generic_args ctx fmt no_params_tys tr.generics;
   if use_brackets then F.pp_print_string fmt ")"
 
+and extract_trait_decl_ref (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_decl_ref) :
+    unit =
+  let use_brackets = tr.decl_generics <> empty_generic_args && inside in
+  let is_opaque = false in
+  let name = ctx_get_trait_decl is_opaque tr.trait_decl_id ctx in
+  if use_brackets then F.pp_print_string fmt "(";
+  F.pp_print_string fmt name;
+  extract_generic_args ctx fmt no_params_tys tr.decl_generics;
+  if use_brackets then F.pp_print_string fmt ")"
+
 and extract_generic_args (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (generics : generic_args) : unit =
   let { types; const_generics; trait_refs } = generics in
@@ -1734,8 +1750,9 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
    method and need to insert a trait self clause (see {!TraitSelfClauseId}).
  *)
 let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) (use_forall : bool) (as_implicits : bool)
-    (space : bool ref option) (trait_decl : trait_decl option)
+    (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
+    ?(use_forall_use_sep = true) ?(as_implicits : bool = false)
+    ?(space : bool ref option = None) ?(trait_decl : trait_decl option = None)
     (generics : generic_params) (type_params : string list)
     (cg_params : string list) (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
@@ -1757,9 +1774,10 @@ let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the type/const generic parameters *)
   if all_params <> [] then (
     if use_forall then (
+      if use_forall_use_sep then (
+        insert_req_space ();
+        F.pp_print_string fmt ":");
       insert_req_space ();
-      F.pp_print_string fmt ":";
-      F.pp_print_space fmt ();
       F.pp_print_string fmt "forall");
     (* Small helper - we may need to split the parameters *)
     let print_generics (type_params : string list)
@@ -1917,9 +1935,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      support trait clauses *)
   assert ((cg_params = [] && trait_clauses = []) || !backend <> HOL4);
   (* Print the generic parameters *)
-  let as_implicits = false in
-  extract_generic_params ctx_body fmt type_decl_group use_forall as_implicits
-    None None def.generics type_params cg_params trait_clauses;
+  extract_generic_params ctx_body fmt type_decl_group ~use_forall def.generics
+    type_params cg_params trait_clauses;
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
@@ -2149,11 +2166,9 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           let field_name = ctx_get_field (AdtId decl.def_id) field_id ctx in
           F.pp_print_string fmt field_name;
           (* Print the generics *)
-          let use_forall = false in
           let as_implicits = true in
-          extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall
-            as_implicits None None decl.generics type_params cg_params
-            trait_clauses;
+          extract_generic_params ctx fmt TypeDeclId.Set.empty ~as_implicits
+            decl.generics type_params cg_params trait_clauses;
           (* Print the record parameter *)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "(";
@@ -3220,11 +3235,9 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Print the generics *)
   (* Open a box for the generics *)
   F.pp_open_hovbox fmt 0;
-  let use_forall = false in
-  let as_implicits = false in
-  extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall as_implicits
-    (Some space) trait_decl def.signature.generics type_params cg_params
-    trait_clauses;
+  (let space = Some space in
+   extract_generic_params ctx fmt TypeDeclId.Set.empty ~space ~trait_decl
+     def.signature.generics type_params cg_params trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)
@@ -4064,14 +4077,13 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
 let extract_trait_item (ctx : extraction_ctx) (fmt : F.formatter)
     (item_name : string) (separator : string) (ty : unit -> unit) : unit =
   F.pp_print_space fmt ();
-  F.pp_open_vbox fmt ctx.indent_incr;
+  F.pp_open_hovbox fmt ctx.indent_incr;
   F.pp_print_string fmt item_name;
   F.pp_print_space fmt ();
   (* ":" or "=" *)
   F.pp_print_string fmt separator;
-  F.pp_print_space fmt ();
   ty ();
-  F.pp_print_string fmt ";";
+  (match !Config.backend with Lean -> () | _ -> F.pp_print_string fmt ";");
   F.pp_close_box fmt ()
 
 let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
@@ -4080,7 +4092,8 @@ let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
 
 let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
     (item_name : string) (ty : unit -> unit) : unit =
-  extract_trait_item ctx fmt item_name "=" ty
+  let assign = match !Config.backend with Lean -> ":=" | _ -> "=" in
+  extract_trait_item ctx fmt item_name assign ty
 
 (** Small helper - TODO: move *)
 let generic_params_drop_prefix (g1 : generic_params) (g2 : generic_params) :
@@ -4115,9 +4128,9 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
         ctx_add_generic_params generics ctx
       in
       let use_forall = generics <> empty_generic_params in
-      let use_implicits = false in
-      extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall
-        use_implicits None None generics type_params cg_params trait_clauses;
+      let use_forall_use_sep = false in
+      extract_generic_params ctx fmt TypeDeclId.Set.empty ~use_forall
+        ~use_forall_use_sep generics type_params cg_params trait_clauses;
       if use_forall then F.pp_print_string fmt ",";
       (* Extract the inputs and output *)
       F.pp_print_space fmt ();
@@ -4136,23 +4149,29 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt [ "[" ^ Print.name_to_string decl.name ^ "]" ];
+  extract_comment fmt
+    [ "Trait declaration: [" ^ Print.name_to_string decl.name ^ "]" ];
   F.pp_print_break fmt 0 0;
-  (* Open two boxes for the definition, so that whenever possible it gets printed on
-   * one line and indents are correct *)
-  F.pp_open_hvbox fmt 0;
-  F.pp_open_vbox fmt ctx.indent_incr;
+  (* Open two outer boxes for the definition, so that whenever possible it gets printed on
+     one line and indents are correct.
+
+     There is just an exception with Lean: in this backend, line breaks are important
+     for the parsing, so we always open a vertical box.
+  *)
+  if !Config.backend = Lean then F.pp_open_vbox fmt ctx.indent_incr
+  else (
+    F.pp_open_hvbox fmt 0;
+    F.pp_open_hvbox fmt ctx.indent_incr);
 
   (* `struct Trait (....) =` *)
   (* Open the box for the name + generics *)
-  F.pp_open_vbox fmt ctx.indent_incr;
+  F.pp_open_hovbox fmt ctx.indent_incr;
   let qualif =
     Option.get (ctx.fmt.type_decl_kind_to_qualif SingleNonRec (Some Struct))
   in
   F.pp_print_string fmt qualif;
   F.pp_print_space fmt ();
   F.pp_print_string fmt decl_name;
-
   (* Print the generics *)
   (* We ignore the trait clauses, which we extract as *fields* *)
   let generics = { decl.generics with trait_clauses = [] } in
@@ -4161,13 +4180,13 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let ctx, type_params, cg_params, trait_clauses =
     ctx_add_generic_params generics ctx
   in
-  let use_forall = false in
-  let as_implicits = false in
-  extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall as_implicits
-    None None generics type_params cg_params trait_clauses;
+  extract_generic_params ctx fmt TypeDeclId.Set.empty generics type_params
+    cg_params trait_clauses;
 
   F.pp_print_space fmt ();
-  F.pp_print_string fmt "{";
+  (match !backend with
+  | Lean -> F.pp_print_string fmt "where"
+  | _ -> F.pp_print_string fmt "{");
 
   (* Close the box for the name + generics *)
   F.pp_close_box fmt ();
@@ -4225,11 +4244,14 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     decl.required_methods;
 
   (* Close the brackets *)
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "}";
+  (match !Config.backend with
+  | Lean -> ()
+  | _ ->
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "}");
 
-  (* Close the two outer boxes for the definition *)
-  F.pp_close_box fmt ();
+  (* Close the outer boxes for the definition *)
+  if !Config.backend <> Lean then F.pp_close_box fmt ();
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
@@ -4258,9 +4280,8 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
       in
       let ctx, f_tys, f_cgs, f_tcs = ctx_add_generic_params f_generics ctx in
       let use_forall = f_generics <> empty_generic_params in
-      let use_implicits = false in
-      extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall
-        use_implicits None None f_generics f_tys f_cgs f_tcs;
+      extract_generic_params ctx fmt TypeDeclId.Set.empty ~use_forall f_generics
+        f_tys f_cgs f_tcs;
       if use_forall then F.pp_print_string fmt ",";
       (* Extract the function call *)
       F.pp_print_space fmt ();
@@ -4289,19 +4310,27 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt [ "[" ^ Print.name_to_string impl.name ^ "]" ];
+  extract_comment fmt
+    [ "Trait implementation: [" ^ Print.name_to_string impl.name ^ "]" ];
   F.pp_print_break fmt 0 0;
-  (* Open two boxes for the definition, so that whenever possible it gets printed on
-   * one line and indents are correct *)
-  F.pp_open_hvbox fmt 0;
-  F.pp_open_vbox fmt ctx.indent_incr;
 
-  (* `let Trait (....) =` *)
+  (* Open two outer boxes for the definition, so that whenever possible it gets printed on
+     one line and indents are correct.
+
+     There is just an exception with Lean: in this backend, line breaks are important
+     for the parsing, so we always open a vertical box.
+  *)
+  if !Config.backend = Lean then (
+    F.pp_open_vbox fmt 0;
+    F.pp_open_vbox fmt ctx.indent_incr)
+  else (
+    F.pp_open_hvbox fmt 0;
+    F.pp_open_hvbox fmt ctx.indent_incr);
+
+  (* `let (....) : Trait ... =` *)
   (* Open the box for the name + generics *)
-  F.pp_open_vbox fmt ctx.indent_incr;
-  let qualif =
-    Option.get (ctx.fmt.type_decl_kind_to_qualif SingleNonRec None)
-  in
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  let qualif = Option.get (ctx.fmt.fun_decl_kind_to_qualif SingleNonRec) in
   F.pp_print_string fmt qualif;
   F.pp_print_space fmt ();
   F.pp_print_string fmt impl_name;
@@ -4313,13 +4342,18 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_add_generic_params impl.generics ctx
   in
   let all_generics = (type_params, cg_params, trait_clauses) in
-  let use_forall = false in
-  let as_implicits = false in
-  extract_generic_params ctx fmt TypeDeclId.Set.empty use_forall as_implicits
-    None None impl.generics type_params cg_params trait_clauses;
+  extract_generic_params ctx fmt TypeDeclId.Set.empty impl.generics type_params
+    cg_params trait_clauses;
+
+  (* Print the type *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt ":";
+  F.pp_print_space fmt ();
+  extract_trait_decl_ref ctx fmt TypeDeclId.Set.empty false impl.impl_trait;
 
   F.pp_print_space fmt ();
-  F.pp_print_string fmt "{";
+  if !Config.backend = Lean then F.pp_print_string fmt ":= {"
+  else F.pp_print_string fmt "= {";
 
   (* Close the box for the name + generics *)
   F.pp_close_box fmt ();
@@ -4374,12 +4408,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
       extract_trait_impl_method_items ctx fmt impl name id all_generics)
     impl.required_methods;
 
-  (* Close the brackets *)
+  (* Close the outer boxes for the definition, as well as the brackets *)
+  F.pp_close_box fmt ();
   F.pp_print_space fmt ();
   F.pp_print_string fmt "}";
-
-  (* Close the two outer boxes for the definition *)
-  F.pp_close_box fmt ();
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
