@@ -4368,6 +4368,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (fun clause_id trait_ref ->
       let item_name = ctx_get_trait_parent_clause trait_decl_id clause_id ctx in
       let ty () =
+        F.pp_print_space fmt ();
         extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
       in
       extract_trait_impl_item ctx fmt item_name ty)
@@ -4377,7 +4378,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   List.iter
     (fun (name, (_, id)) ->
       let item_name = ctx_get_trait_const trait_decl_id name ctx in
-      let ty () = F.pp_print_string fmt (ctx_get_global false id ctx) in
+      let ty () =
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt (ctx_get_global false id ctx)
+      in
 
       extract_trait_impl_item ctx fmt item_name ty)
     impl.consts;
@@ -4387,7 +4391,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (fun (name, (trait_refs, ty)) ->
       (* Extract the type *)
       let item_name = ctx_get_trait_type trait_decl_id name ctx in
-      let ty () = extract_ty ctx fmt TypeDeclId.Set.empty false ty in
+      let ty () =
+        F.pp_print_space fmt ();
+        extract_ty ctx fmt TypeDeclId.Set.empty false ty
+      in
       extract_trait_impl_item ctx fmt item_name ty;
       (* Extract the clauses *)
       TraitClauseId.iteri
@@ -4396,6 +4403,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
             ctx_get_trait_item_clause trait_decl_id name clause_id ctx
           in
           let ty () =
+            F.pp_print_space fmt ();
             extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
           in
           extract_trait_impl_item ctx fmt item_name ty)
