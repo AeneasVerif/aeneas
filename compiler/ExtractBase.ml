@@ -245,7 +245,7 @@ type formatter = {
           - loop identifier, if this is for a loop
        *)
   trait_decl_name : trait_decl -> string;
-  trait_impl_name : trait_impl -> string;
+  trait_impl_name : trait_decl -> trait_impl -> string;
   trait_parent_clause_name : trait_decl -> trait_clause -> string;
   trait_const_name : trait_decl -> string -> string;
   trait_type_name : trait_decl -> string -> string;
@@ -523,7 +523,8 @@ let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
     ^ "\nYou may want to rename some of your definitions, or report an issue."
   in
   log#serror err;
-  raise (Failure err)
+  (* If we fail hard on errors, raise an exception *)
+  if !Config.extract_fail_hard then raise (Failure err)
 
 let names_map_get_id_from_name (name : string) (nm : names_map) : id option =
   StringMap.find_opt name nm.name_to_id
@@ -534,15 +535,21 @@ let names_map_check_collision (id_to_string : id -> string) (id : id)
   | None -> () (* Ok *)
   | Some clash ->
       (* There is a clash: print a nice debugging message for the user *)
-      if !Config.extract_fail_hard then
-        report_name_collision id_to_string clash id name
+      report_name_collision id_to_string clash id name
 
 let names_map_add (id_to_string : id -> string) (is_opaque : bool) (id : id)
     (name : string) (nm : names_map) : names_map =
   (* Check if there is a clash *)
   names_map_check_collision id_to_string id name nm;
   (* Sanity check *)
-  assert (not (StringSet.mem name nm.names_set));
+  if StringSet.mem name nm.names_set then (
+    let err =
+      "Error when registering the name for id: " ^ id_to_string id
+      ^ ":\nThe chosen name is already in the names set: " ^ name
+    in
+    log#serror err;
+    (* If we fail hard on errors, raise an exception *)
+    if !Config.extract_fail_hard then raise (Failure err));
   (* Insert *)
   let id_to_name = IdMap.add id name nm.id_to_name in
   let name_to_id = StringMap.add name id nm.name_to_id in
@@ -1284,8 +1291,13 @@ let ctx_add_trait_decl (d : trait_decl) (ctx : extraction_ctx) : extraction_ctx
 
 let ctx_add_trait_impl (d : trait_impl) (ctx : extraction_ctx) : extraction_ctx
     =
+  (* We need to lookup the trait decl that is implemented by the trait impl *)
+  let decl =
+    Pure.TraitDeclId.Map.find d.impl_trait.trait_decl_id ctx.trans_trait_decls
+  in
+  (* Compute the name *)
   let is_opaque = false in
-  let name = ctx.fmt.trait_impl_name d in
+  let name = ctx.fmt.trait_impl_name decl d in
   ctx_add is_opaque (TraitImplId d.def_id) name ctx
 
 let ctx_add_trait_const (d : trait_decl) (item : string) (ctx : extraction_ctx)

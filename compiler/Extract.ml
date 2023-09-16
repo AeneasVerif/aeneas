@@ -655,6 +655,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | _ ->
         raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
   in
+  let flatten_name (name : string list) : string =
+    match !backend with
+    | FStar | Coq | HOL4 -> String.concat "_" name
+    | Lean -> String.concat "." name
+  in
   let get_type_name = get_name in
   let type_name_to_camel_case name =
     let name = get_type_name name in
@@ -708,9 +713,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   let get_fun_name fname =
     let fname = get_name fname in
     (* TODO: don't convert to snake case for Coq, HOL4, F* *)
-    match !backend with
-    | FStar | Coq | HOL4 -> String.concat "_" (List.map to_snake_case fname)
-    | Lean -> String.concat "." fname
+    flatten_name fname
   in
   let global_name (name : global_name) : string =
     (* Converting to snake case also lowercases the letters (in Rust, global
@@ -732,8 +735,18 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     type_name_to_snake_case trait_decl.name
   in
 
-  let trait_impl_name (trait_impl : trait_impl) : string =
-    get_fun_name trait_impl.name
+  let trait_impl_name (trait_decl : trait_decl) (trait_impl : trait_impl) :
+      string =
+    (* TODO: provisional: we concatenate the trait impl name (which is its type)
+       with the trait decl name *)
+    let inst_keyword =
+      match !backend with
+      | HOL4 | FStar | Coq -> "_instance"
+      | Lean -> "Instance"
+    in
+    flatten_name
+      (get_type_name trait_impl.name
+      @ [ trait_decl_name trait_decl ^ inst_keyword ])
   in
 
   let trait_parent_clause_name (trait_decl : trait_decl) (clause : trait_clause)
@@ -4017,8 +4030,9 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
   (* For now we do not support overriding provided methods *)
   assert (trait_impl.provided_methods = []);
-  (* Everything is actually taken care of by {!extract_trait_decl_register_names} *)
-  ctx
+  (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
+     the name of the implementation itself *)
+  ctx_add_trait_impl trait_impl ctx
 
 (** Small helper.
 
