@@ -1734,7 +1734,9 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
   F.pp_print_string fmt "(";
   let self_clause = ctx_get_trait_self_clause ctx in
   F.pp_print_string fmt self_clause;
+  F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
+  F.pp_print_space fmt ();
   let with_opaque_pre = false in
   let trait_id = ctx_get_trait_decl with_opaque_pre trait_decl.def_id ctx in
   F.pp_print_string fmt trait_id;
@@ -2648,17 +2650,20 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
          (i.e., when we do not use a trait parameter) are desugared to regular
          function calls.
       *)
-      let fun_name =
-        match fun_id with
-        | FromLlbc
-            (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id, rg_id)
-          ->
-            assert (lp_id = None);
+      (match fun_id with
+      | FromLlbc
+          (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id, rg_id) ->
+          assert (lp_id = None);
+          extract_trait_ref ctx fmt TypeDeclId.Set.empty true trait_ref;
+          let fun_name =
             ctx_get_trait_method trait_ref.trait_decl_ref.trait_decl_id
               method_name rg_id ctx
-        | _ -> ctx_get_function with_opaque_pre fun_id ctx
-      in
-      F.pp_print_string fmt fun_name;
+          in
+          F.pp_print_string fmt ("." ^ fun_name)
+      | _ ->
+          let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
+          F.pp_print_string fmt fun_name);
+
       (* Sanity check: HOL4 doesn't support const generics *)
       assert (generics.const_generics = [] || !backend <> HOL4);
       (* Print the generics *)

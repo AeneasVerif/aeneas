@@ -1201,7 +1201,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
     | A.FunId (A.Assumed _) ->
         (* Unreachable: must be a transparent function *)
         raise (Failure "Unreachable")
-    | A.TraitMethod (trait_ref, method_name, _) -> (
+    | A.TraitMethod (trait_ref, method_name, method_decl_id) -> (
         log#ldebug
           (lazy
             ("trait method call:\n- call: " ^ call_to_string ctx call
@@ -1230,6 +1230,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             in
             match method_id with
             | Some (_, id) ->
+                (* This is a required method *)
                 let method_def = C.ctx_lookup_fun_decl ctx id in
                 (* Instantiate *)
                 let tr_self =
@@ -1239,7 +1240,11 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                   instantiate_fun_sig ctx generics tr_self
                     method_def.A.signature
                 in
-                (call.func, method_def, None, inst_sg)
+                (* Also update the function identifier: we want to forget
+                   the fact that we called a trait method, and treat it as
+                   a regular function acll. *)
+                let func = A.FunId (A.Regular method_decl_id) in
+                (func, method_def, None, inst_sg)
             | None ->
                 (* If not found, lookup the methods provided by the trait *declaration*
                    (remember: for now, we forbid overriding provided methods) *)
