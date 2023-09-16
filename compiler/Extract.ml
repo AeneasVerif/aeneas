@@ -2618,7 +2618,31 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the function name *)
       let with_opaque_pre = ctx.use_opaque_pre in
-      let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
+      (* For the function name: the id is not the same depending on whether
+         we call a trait method and a "regular" function (remark: trait
+         method *implementations* are considered as regular functions here;
+         only calls to method of traits which are parameterized in a where
+         clause have a special treatment.
+
+         Remark: the reason why trait method declarations have a special
+         treatment is that, as traits are extracted to records, we may
+         allow collisions between trait item names and some other names,
+         while we do not allow collisions between function names.
+
+         Remark: calls to trait methods when the implementation is known
+         (i.e., when we do not use a trait parameter) are desugared to regular
+         function calls.
+      *)
+      let fun_name =
+        match fun_id with
+        | FromLlbc
+            (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id, rg_id)
+          ->
+            assert (lp_id = None);
+            ctx_get_trait_method trait_ref.trait_decl_ref.trait_decl_id
+              method_name rg_id ctx
+        | _ -> ctx_get_function with_opaque_pre fun_id ctx
+      in
       F.pp_print_string fmt fun_name;
       (* Sanity check: HOL4 doesn't support const generics *)
       assert (generics.const_generics = [] || !backend <> HOL4);
@@ -3974,7 +3998,7 @@ let extract_trait_decl_method_register_names (ctx : extraction_ctx)
 
   let register_fun ctx f = ctx_add_trait_method trait_decl name f.f ctx in
   (* Register the names *)
-  let funs = if trans.keep_fwd then trans.fwd :: trans.backs else trans.backs in
+  let funs = trans.fwd :: trans.backs in
   List.fold_left register_fun ctx funs
 
 (** Similar to {!extract_type_decl_register_names} *)

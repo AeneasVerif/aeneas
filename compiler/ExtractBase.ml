@@ -713,6 +713,12 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
   let type_decls = ctx.trans_ctx.type_context.type_decls in
   let trait_decls = ctx.trans_ctx.trait_decls_context.trait_decls in
+  let trait_decl_id_to_string (id : A.TraitDeclId.id) : string =
+    let trait_name =
+      Print.fun_name_to_string (A.TraitDeclId.Map.find id trait_decls).name
+    in
+    "trait_decl: " ^ trait_name ^ " (id: " ^ A.TraitDeclId.to_string id ^ ")"
+  in
   (* TODO: factorize the pretty-printing with what is in PrintPure *)
   let get_type_name (id : type_id) : string =
     match id with
@@ -735,12 +741,13 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
                 Print.fun_name_to_string
                   (A.FunDeclId.Map.find fid fun_decls).name
             | FunId (Assumed aid) -> A.show_assumed_fun_id aid
-            | TraitMethod (_, method_name, _) ->
+            | TraitMethod (trait_ref, method_name, _) ->
                 (* Shouldn't happen *)
                 if !Config.extract_fail_hard then raise (Failure "Unexpected")
-                else (
-                  log#serror ("Unexpected trait method: " ^ method_name);
-                  method_name)
+                else
+                  "Trait method: decl: "
+                  ^ TraitDeclId.to_string trait_ref.trait_decl_ref.trait_decl_id
+                  ^ ", method_name: " ^ method_name
           in
 
           let lp_kind =
@@ -800,8 +807,16 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             if variant_id = option_some_id then "@option::Some"
             else if variant_id = option_none_id then "@option::None"
             else raise (Failure "Unreachable")
-        | Assumed (State | Vec | Fuel | Array | Slice | Str | Range) ->
-            raise (Failure "Unreachable")
+        | Assumed Fuel ->
+            if variant_id = fuel_zero_id then "@fuel::0"
+            else if variant_id = fuel_succ_id then "@fuel::Succ"
+            else raise (Failure "Unreachable")
+        | Assumed (State | Vec | Array | Slice | Str | Range) ->
+            raise
+              (Failure
+                 ("Unreachable: variant id ("
+                 ^ VariantId.to_string variant_id
+                 ^ ") for " ^ show_type_id id))
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
@@ -844,28 +859,22 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | LocalTraitClauseId id ->
       "local_trait_clause_id: " ^ TraitClauseId.to_string id
   | TraitParentClauseId (id, clause_id) ->
-      "trait_parent_clause_id: decl_id:" ^ TraitDeclId.to_string id
-      ^ ", clause_id: "
+      "trait_parent_clause_id: " ^ trait_decl_id_to_string id ^ ", clause_id: "
       ^ TraitClauseId.to_string clause_id
   | TraitItemClauseId (id, item_name, clause_id) ->
-      "trait_item_clause_id: decl_id:" ^ TraitDeclId.to_string id
-      ^ ", item name: " ^ item_name ^ ", clause_id: "
+      "trait_item_clause_id: " ^ trait_decl_id_to_string id ^ ", item name: "
+      ^ item_name ^ ", clause_id: "
       ^ TraitClauseId.to_string clause_id
   | TraitItemId (id, name) ->
-      "trait_item_id: decl_id:" ^ TraitDeclId.to_string id ^ ", type name: "
-      ^ name
+      "trait_item_id: " ^ trait_decl_id_to_string id ^ ", type name: " ^ name
   | TraitMethodId (trait_decl_id, fun_name, rg_id) ->
-      let trait_name =
-        Print.fun_name_to_string
-          (A.TraitDeclId.Map.find trait_decl_id trait_decls).name
-      in
       let fwd_back_kind =
         match rg_id with
         | None -> "forward"
         | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
       in
-      "trait " ^ trait_name ^ " method name (" ^ fwd_back_kind ^ "): "
-      ^ fun_name
+      trait_decl_id_to_string trait_decl_id
+      ^ ", method name (" ^ fwd_back_kind ^ "): " ^ fun_name
   | TraitSelfClauseId -> "trait_self_clause"
 
 (** Return [true] if we are strict on collisions for this id (i.e., we forbid
@@ -924,15 +933,39 @@ let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
 (** [with_opaque_pre]: if [true] and the definition is opaque, add the opaque prefix *)
 let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
   (* We do not use the same name map if we allow/disallow collisions *)
-  if allow_collisions id then IdMap.find id ctx.unsafe_names_map.id_to_name
+  let map_to_string (m : string IdMap.t) : string =
+    "[\n"
+    ^ String.concat ","
+        (List.map
+           (fun (id, n) -> "\n  " ^ id_to_string id ctx ^ " -> " ^ n)
+           (IdMap.bindings m))
+    ^ "\n]"
+  in
+  if allow_collisions id then (
+    let m = ctx.unsafe_names_map.id_to_name in
+    match IdMap.find_opt id m with
+    | Some s -> s
+    | None ->
+        let err =
+          "Could not find: " ^ id_to_string id ctx ^ "\nNames map:\n"
+          ^ map_to_string m
+        in
+        log#serror err;
+        if !Config.extract_fail_hard then raise (Failure err)
+        else "(ERROR: \"" ^ id_to_string id ctx ^ "\")")
   else
-    match IdMap.find_opt id ctx.names_map.id_to_name with
+    let m = ctx.names_map.id_to_name in
+    match IdMap.find_opt id m with
     | Some s ->
         let is_opaque = IdSet.mem id ctx.names_map.opaque_ids in
         if with_opaque_pre && is_opaque then ctx.fmt.opaque_pre () ^ s else s
     | None ->
-        log#serror ("Could not find: " ^ id_to_string id ctx);
-        if !Config.extract_fail_hard then raise (Failure "Not found")
+        let err =
+          "Could not find: " ^ id_to_string id ctx ^ "\nNames map:\n"
+          ^ map_to_string m
+        in
+        log#serror err;
+        if !Config.extract_fail_hard then raise (Failure err)
         else "(ERROR: \"" ^ id_to_string id ctx ^ "\")"
 
 let ctx_get_global (with_opaque_pre : bool) (id : A.GlobalDeclId.id)
