@@ -403,6 +403,8 @@ type gen_config = {
   extract_decreases_clauses : bool;
   extract_template_decreases_clauses : bool;
   extract_fun_decls : bool;
+  extract_trait_decls : bool;
+  extract_trait_impls : bool;
   extract_transparent : bool;
       (** If [true], extract the transparent declarations, otherwise ignore. *)
   extract_opaque : bool;
@@ -429,9 +431,22 @@ type gen_config = {
   test_trans_unit_functions : bool;
 }
 
-(** Returns the pair: (has opaque type decls, has opaque fun decls) *)
-let crate_has_opaque_decls (ctx : gen_ctx) : bool * bool =
-  let types, funs = LlbcAstUtils.crate_get_opaque_decls ctx.crate in
+(** Returns the pair: (has opaque type decls, has opaque fun decls).
+
+    [filter_assumed]: if [true], do not consider as opaque the external definitions
+    that we will map to definitions from the standard library.
+ *)
+let crate_has_opaque_decls (ctx : gen_ctx) (filter_assumed : bool) : bool * bool
+    =
+  let types, funs =
+    LlbcAstUtils.crate_get_opaque_decls ctx.crate filter_assumed
+  in
+  log#ldebug
+    (lazy
+      ("Opaque decls:" ^ "\n- types:\n"
+      ^ String.concat ",\n" (List.map T.show_type_decl types)
+      ^ "\n- functions:\n"
+      ^ String.concat ",\n" (List.map A.show_fun_decl funs)));
   (types <> [], funs <> [])
 
 (** Export a type declaration.
@@ -800,8 +815,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Translate *)
         export_functions_group pure_funs
     | Global id -> export_global id
-    | TraitDecl id -> export_trait_decl id
-    | TraitImpl id -> export_trait_impl id
+    | TraitDecl id ->
+        if config.extract_trait_decls && config.extract_transparent then
+          export_trait_decl id
+    | TraitImpl id ->
+        if config.extract_trait_impls && config.extract_transparent then
+          export_trait_impl id
   in
 
   (* If we need to export the state type: we try to export it after we defined
@@ -827,7 +846,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     config.extract_opaque && config.extract_fun_decls
     && !Config.wrap_opaque_in_sig
     &&
-    let _, opaque_funs = crate_has_opaque_decls ctx in
+    let _, opaque_funs = crate_has_opaque_decls ctx true in
     opaque_funs
   in
   if wrap_in_sig then (
@@ -1235,6 +1254,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          extract_decreases_clauses = !Config.extract_decreases_clauses;
          extract_template_decreases_clauses = false;
          extract_fun_decls = false;
+         extract_trait_decls = false;
+         extract_trait_impls = false;
          extract_transparent = true;
          extract_opaque = false;
          extract_state_type = false;
@@ -1246,7 +1267,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
 
      (* Check if there are opaque types and functions - in which case we need
       * to split *)
-     let has_opaque_types, has_opaque_funs = crate_has_opaque_decls ctx in
+     let has_opaque_types, has_opaque_funs = crate_has_opaque_decls ctx true in
      let has_opaque_types = has_opaque_types || !Config.use_state in
 
      (* Extract the types *)
@@ -1267,6 +1288,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        {
          base_gen_config with
          extract_types = true;
+         extract_trait_decls = true;
          extract_opaque = true;
          extract_state_type = !Config.use_state;
          interface = has_opaque_types;
@@ -1343,6 +1365,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
            {
              base_gen_config with
              extract_fun_decls = true;
+             extract_trait_impls = true;
              extract_globals = true;
              extract_transparent = false;
              extract_opaque = true;
@@ -1376,6 +1399,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        {
          base_gen_config with
          extract_fun_decls = true;
+         extract_trait_impls = true;
          extract_globals = true;
          test_trans_unit_functions = !Config.test_trans_unit_functions;
        }
@@ -1411,6 +1435,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          extract_template_decreases_clauses =
            !Config.extract_template_decreases_clauses;
          extract_fun_decls = true;
+         extract_trait_decls = true;
+         extract_trait_impls = true;
          extract_transparent = true;
          extract_opaque = true;
          extract_state_type = !Config.use_state;
