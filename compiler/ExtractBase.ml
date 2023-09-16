@@ -1339,7 +1339,7 @@ let ctx_add_trait_method (d : trait_decl) (item_name : string) (f : fun_decl)
   (* Add a prefix if necessary *)
   let name =
     if !Config.record_fields_short_names then name
-    else ctx.fmt.trait_decl_name d ^ name
+    else ctx.fmt.trait_decl_name d ^ "_" ^ name
   in
   let is_opaque = false in
   ctx_add is_opaque (TraitMethodId (d.def_id, item_name, f.back_id)) name ctx

@@ -732,21 +732,20 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   in
 
   let trait_decl_name (trait_decl : trait_decl) : string =
-    type_name_to_snake_case trait_decl.name
+    type_name trait_decl.name
   in
 
   let trait_impl_name (trait_decl : trait_decl) (trait_impl : trait_impl) :
       string =
     (* TODO: provisional: we concatenate the trait impl name (which is its type)
        with the trait decl name *)
-    let inst_keyword =
+    let trait_decl =
+      let name = trait_decl.name in
       match !backend with
-      | HOL4 | FStar | Coq -> "_instance"
-      | Lean -> "Instance"
+      | FStar | Coq | HOL4 -> type_name_to_snake_case name ^ "_instance"
+      | Lean -> String.concat "" (get_type_name name) ^ "Instance"
     in
-    flatten_name
-      (get_type_name trait_impl.name
-      @ [ trait_decl_name trait_decl ^ inst_keyword ])
+    flatten_name (get_type_name trait_impl.name @ [ trait_decl ])
   in
 
   let trait_parent_clause_name (trait_decl : trait_decl) (clause : trait_clause)
