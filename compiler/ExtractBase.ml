@@ -467,6 +467,8 @@ type id =
       (** Used for stored various strings like keywords, definitions which
           should always be in context, etc. and which can't be linked to one
           of the above.
+
+          TODO: rename to "keyword"
        *)
 [@@deriving show, ord]
 
@@ -511,6 +513,14 @@ type names_map = {
           with regards to the names map.
        *)
 }
+
+let empty_names_map : names_map =
+  {
+    id_to_name = IdMap.empty;
+    name_to_id = StringMap.empty;
+    names_set = StringSet.empty;
+    opaque_ids = IdSet.empty;
+  }
 
 (** Small helper to report name collision *)
 let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
@@ -645,6 +655,15 @@ type extraction_ctx = {
   unsafe_names_map : unsafe_names_map;
       (** The map for id to names, where we allow name collisions
           (ex.: we might allow record field name collisions). *)
+  strict_names_map : names_map;
+      (** This map is a sub-map of [names_map]. For the ids in this map we also
+          forbid collisions with names in the [unsafe_names_map].
+
+          We do so for keywords for instance, but also for types (in a dependently
+          typed language, we might have an issue if the field of a record has, say,
+          the name "u32", and another field of the same record refers to "u32"
+          (for instance in its type).
+       *)
   fmt : formatter;
   indent_incr : int;
       (** The indent increment we insert whenever we need to indent more *)
@@ -849,6 +868,11 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       ^ fun_name
   | TraitSelfClauseId -> "trait_self_clause"
 
+(** Return [true] if we are strict on collisions for this id (i.e., we forbid
+    collisions even with the ids in the unsafe names map) *)
+let strict_collisions (id : id) : bool =
+  match id with UnknownId | TypeId _ -> true | _ -> false
+
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
   match id with
@@ -866,9 +890,9 @@ let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
      We notably use it for field names: some backends like Lean can use the
      type information to disambiguate field projections.
 
-     Remark: what we do is actually subtle. Taking the example of fields:
-     - we allow fields from different ADT definitions to collide
-     - we do *not* allow field names to collide with other names
+     Remark: we still need to check that those "unsafe" ids don't collide with
+     the ids that we mark as "strict on collision".
+
      For instance, we don't allow naming a field "let". We enforce this by
      not checking collision between ids for which we permit collisions (ex.:
      between fields), but still checking collisions between those ids and the
@@ -876,29 +900,26 @@ let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
   *)
   if allow_collisions id then (
     assert (not is_opaque);
-    (* Check with the other ids *)
-    names_map_check_collision id_to_string id name ctx.names_map;
+    (* Check with the ids which are considered to be strict on collisions *)
+    names_map_check_collision id_to_string id name ctx.strict_names_map;
     {
       ctx with
       unsafe_names_map = unsafe_names_map_add id name ctx.unsafe_names_map;
     })
   else
-    (* Remark: we don't check that there are no collisions with the unsafe ids.
-       Importantly, we don't want some safe ids like keywords to clash with
-       unsafe ids like fields names. For this, we leverage the fact that we register
-       keywords *first*, then unsafe ids (meaning the clash will be detected with
-       the check in the other branch of the if ... then ... else ..., and we do
-       have to check for all possible collisions, which may be slightly too
-       restrictive).
-
-       TODO: this is a bit hacky, we might want to improve the way we detect
-       clashes by being more precise. Overall, there is only an issue with
-       field names which are allowed to clash with each other.
+    (* Remark: if we are strict on collisions:
+       - we add the id to the strict collisions map
+       - we check that the id doesn't collide with the unsafe map
     *)
+    let strict_names_map =
+      if strict_collisions id then
+        names_map_add id_to_string is_opaque id name ctx.strict_names_map
+      else ctx.strict_names_map
+    in
     let names_map =
       names_map_add id_to_string is_opaque id name ctx.names_map
     in
-    { ctx with names_map }
+    { ctx with strict_names_map; names_map }
 
 (** [with_opaque_pre]: if [true] and the definition is opaque, add the opaque prefix *)
 let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
