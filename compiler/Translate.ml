@@ -316,10 +316,7 @@ let translate_crate_to_pure (crate : A.crate) :
       (A.FunDeclId.Map.values crate.functions)
   in
   let sigs = List.append assumed_sigs local_sigs in
-  let fun_sigs =
-    SymbolicToPure.translate_fun_signatures trans_ctx.fun_ctx.fun_infos
-      trans_ctx.type_ctx.type_infos sigs
-  in
+  let fun_sigs = SymbolicToPure.translate_fun_signatures trans_ctx sigs in
 
   (* Translate all the *transparent* functions *)
   let pure_translations =

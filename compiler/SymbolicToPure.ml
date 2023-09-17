@@ -826,10 +826,11 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     of the forward function) which we use as hints to generate pretty names
     in the extracted code.
  *)
-let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
-    (fun_id : A.fun_id) (type_infos : TA.type_infos) (sg : A.fun_sig)
-    (input_names : string option list) (bid : T.RegionGroupId.id option) :
-    fun_sig_named_outputs =
+let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
+    (sg : A.fun_sig) (input_names : string option list)
+    (bid : T.RegionGroupId.id option) : fun_sig_named_outputs =
+  let fun_infos = decls_ctx.fun_ctx.fun_infos in
+  let type_infos = decls_ctx.type_ctx.type_infos in
   (* Retrieve the list of parent backward functions *)
   let gid, parents =
     match bid with
@@ -3021,8 +3022,7 @@ let translate_type_decls (type_decls : T.type_decl list) : type_decl list =
     - optional names for the outputs values (we derive them for the backward
       functions)
  *)
-let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
-    (type_infos : TA.type_infos)
+let translate_fun_signatures (decls_ctx : C.decls_ctx)
     (functions : (A.fun_id * string option list * A.fun_sig) list) :
     fun_sig_named_outputs RegularFunIdNotLoopMap.t =
   (* For every function, translate the signatures of:
@@ -3033,17 +3033,14 @@ let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
       (sg : A.fun_sig) : (regular_fun_id_not_loop * fun_sig_named_outputs) list
       =
     (* The forward function *)
-    let fwd_sg =
-      translate_fun_sig fun_infos fun_id type_infos sg input_names None
-    in
+    let fwd_sg = translate_fun_sig decls_ctx fun_id sg input_names None in
     let fwd_id = (fun_id, None) in
     (* The backward functions *)
     let back_sgs =
       List.map
         (fun (rg : T.region_var_group) ->
           let tsg =
-            translate_fun_sig fun_infos fun_id type_infos sg input_names
-              (Some rg.id)
+            translate_fun_sig decls_ctx fun_id sg input_names (Some rg.id)
           in
           let id = (fun_id, Some rg.id) in
           (id, tsg))
