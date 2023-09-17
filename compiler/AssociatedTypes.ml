@@ -26,6 +26,7 @@ let trait_type_ref_substitute (subst : ('r, 'r1) Subst.subst)
   let trait_ref = Subst.trait_ref_substitute subst trait_ref in
   { C.trait_ref; type_name }
 
+(* TODO: how not to duplicate below? *)
 module RTyOrd = struct
   type t = T.rty
 
@@ -35,58 +36,114 @@ module RTyOrd = struct
   let show_t = T.show_rty
 end
 
+module STyOrd = struct
+  type t = T.sty
+
+  let compare = T.compare_sty
+  let to_string = T.show_sty
+  let pp_t = T.pp_sty
+  let show_t = T.show_sty
+end
+
 module RTyMap = Collections.MakeMap (RTyOrd)
+module STyMap = Collections.MakeMap (STyOrd)
+
+(* TODO: is it possible not to have this? *)
+module type TypeWrapper = sig
+  type t
+end
+
+(* TODO: don't manage to get the syntax right so using a functor *)
+module MakeNormalizer
+    (R : TypeWrapper)
+    (RTyMap : Collections.Map with type key = R.t T.region T.ty)
+    (M : Collections.Map with type key = R.t T.region C.trait_type_ref) =
+struct
+  let compute_norm_trait_types_from_preds
+      (trait_type_constraints : R.t T.region T.trait_type_constraint list) :
+      R.t T.region T.ty M.t =
+    (* Compute a union-find structure by recursively exploring the predicates and clauses *)
+    let norm : R.t T.region T.ty UF.elem RTyMap.t ref = ref RTyMap.empty in
+    let get_ref (ty : R.t T.region T.ty) : R.t T.region T.ty UF.elem =
+      match RTyMap.find_opt ty !norm with
+      | Some r -> r
+      | None ->
+          let r = UF.make ty in
+          norm := RTyMap.add ty r !norm;
+          r
+    in
+    let add_trait_type_constraint (c : R.t T.region T.trait_type_constraint) =
+      let trait_ty = T.TraitType (c.trait_ref, c.generics, c.type_name) in
+      let trait_ty_ref = get_ref trait_ty in
+      let ty_ref = get_ref c.ty in
+      let new_repr = UF.get ty_ref in
+      let merged = UF.union trait_ty_ref ty_ref in
+      (* Not sure the set operation is necessary, but I want to control which
+         representative is chosen *)
+      UF.set merged new_repr
+    in
+    (* Explore the local predicates *)
+    List.iter add_trait_type_constraint trait_type_constraints;
+    (* TODO: explore the local clauses *)
+    (* Compute the norm maps *)
+    let rbindings =
+      List.map (fun (k, v) -> (k, UF.get v)) (RTyMap.bindings !norm)
+    in
+    (* Filter the keys to keep only the trait type aliases *)
+    let rbindings =
+      List.filter_map
+        (fun (k, v) ->
+          match k with
+          | T.TraitType (trait_ref, generics, type_name) ->
+              assert (generics = TypesUtils.mk_empty_generic_args);
+              Some ({ C.trait_ref; type_name }, v)
+          | _ -> None)
+        rbindings
+    in
+    M.of_list rbindings
+end
+
+(** Compute the representative classes of trait associated types, for normalization *)
+let compute_norm_trait_stypes_from_preds
+    (trait_type_constraints : T.strait_type_constraint list) :
+    T.sty C.STraitTypeRefMap.t =
+  (* Compute the normalization map for the types with regions *)
+  let module R = struct
+    type t = T.region_var_id
+  end in
+  let module M = C.STraitTypeRefMap in
+  let module Norm = MakeNormalizer (R) (STyMap) (M) in
+  Norm.compute_norm_trait_types_from_preds trait_type_constraints
 
 (** Compute the representative classes of trait associated types, for normalization *)
 let compute_norm_trait_types_from_preds
     (trait_type_constraints : T.rtrait_type_constraint list) :
     T.ety C.ETraitTypeRefMap.t * T.rty C.RTraitTypeRefMap.t =
-  (* Compute a union-find structure by recursively exploring the predicates and clauses *)
-  let norm : T.rty UF.elem RTyMap.t ref = ref RTyMap.empty in
-  let get_ref (ty : T.rty) : T.rty UF.elem =
-    match RTyMap.find_opt ty !norm with
-    | Some r -> r
-    | None ->
-        let r = UF.make ty in
-        norm := RTyMap.add ty r !norm;
-        r
-  in
-  let add_trait_type_constraint (c : T.rtrait_type_constraint) =
-    let trait_ty = T.TraitType (c.trait_ref, c.generics, c.type_name) in
-    let trait_ty_ref = get_ref trait_ty in
-    let ty_ref = get_ref c.ty in
-    let new_repr = UF.get ty_ref in
-    let merged = UF.union trait_ty_ref ty_ref in
-    (* Not sure the set operation is necessary, but I want to control which
-       representative is chosen *)
-    UF.set merged new_repr
-  in
-  (* Explore the local predicates *)
-  List.iter add_trait_type_constraint trait_type_constraints;
-  (* TODO: explore the local clauses *)
-  (* Compute the norm maps *)
+  (* Compute the normalization map for the types with regions *)
+  let module R = struct
+    type t = T.region_id
+  end in
+  let module M = C.RTraitTypeRefMap in
+  let module Norm = MakeNormalizer (R) (RTyMap) (M) in
   let rbindings =
-    List.map (fun (k, v) -> (k, UF.get v)) (RTyMap.bindings !norm)
+    Norm.compute_norm_trait_types_from_preds trait_type_constraints
   in
-  (* Filter the keys to keep only the trait type aliases *)
-  let rbindings =
-    List.filter_map
-      (fun (k, v) ->
-        match k with
-        | T.TraitType (trait_ref, generics, type_name) ->
-            assert (generics = TypesUtils.mk_empty_generic_args);
-            Some ({ C.trait_ref; type_name }, v)
-        | _ -> None)
-      rbindings
-  in
+  (* Compute the normalization map for the types with erased regions *)
   let ebindings =
     List.map
       (fun (k, v) ->
         ( trait_type_ref_substitute Subst.erase_regions_subst k,
           Subst.erase_regions v ))
-      rbindings
+      (M.bindings rbindings)
   in
-  (C.ETraitTypeRefMap.of_list ebindings, C.RTraitTypeRefMap.of_list rbindings)
+  (C.ETraitTypeRefMap.of_list ebindings, rbindings)
+
+let ctx_add_norm_trait_stypes_from_preds (ctx : C.eval_ctx)
+    (trait_type_constraints : T.strait_type_constraint list) : C.eval_ctx =
+  let norm_trait_stypes =
+    compute_norm_trait_stypes_from_preds trait_type_constraints
+  in
+  { ctx with C.norm_trait_stypes }
 
 let ctx_add_norm_trait_types_from_preds (ctx : C.eval_ctx)
     (trait_type_constraints : T.rtrait_type_constraint list) : C.eval_ctx =
@@ -398,6 +455,19 @@ let ctx_normalize_trait_type_constraint (ctx : 'r norm_ctx)
   let ty = ctx_normalize_ty ctx ty in
   { T.trait_ref; generics; type_name; ty }
 
+let mk_snorm_ctx (ctx : C.eval_ctx) : T.RegionVarId.id T.region norm_ctx =
+  let get_ty_repr x = C.STraitTypeRefMap.find_opt x ctx.norm_trait_stypes in
+  {
+    ctx;
+    get_ty_repr;
+    convert_ety = TypesUtils.ety_no_regions_to_sty;
+    convert_etrait_ref = TypesUtils.etrait_ref_no_regions_to_gr_trait_ref;
+    ty_to_string = PA.sty_to_string ctx;
+    trait_ref_to_string = PA.strait_ref_to_string ctx;
+    trait_instance_id_to_string = PA.strait_instance_id_to_string ctx;
+    pp_r = T.pp_region T.pp_region_var_id;
+  }
+
 let mk_rnorm_ctx (ctx : C.eval_ctx) : T.RegionId.id T.region norm_ctx =
   let get_ty_repr x = C.RTraitTypeRefMap.find_opt x ctx.norm_trait_rtypes in
   {
@@ -423,6 +493,9 @@ let mk_enorm_ctx (ctx : C.eval_ctx) : T.erased_region norm_ctx =
     trait_instance_id_to_string = PA.etrait_instance_id_to_string ctx;
     pp_r = T.pp_erased_region;
   }
+
+let ctx_normalize_sty (ctx : C.eval_ctx) (ty : T.sty) : T.sty =
+  ctx_normalize_ty (mk_snorm_ctx ctx) ty
 
 let ctx_normalize_rty (ctx : C.eval_ctx) (ty : T.rty) : T.rty =
   ctx_normalize_ty (mk_rnorm_ctx ctx) ty

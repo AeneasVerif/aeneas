@@ -842,6 +842,33 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   (* Is the function stateful, and can it fail? *)
   let lid = None in
   let effect_info = get_fun_effect_info fun_infos (A.FunId fun_id) lid bid in
+  (* We need an evaluation context to normalize the types (to normalize the
+     associated types, etc. - for instance it may happen that the types
+     refer to the types associated to a trait ref, but where the trait ref
+     is a known impl). *)
+  (* Create the context *)
+  let ctx =
+    let region_groups =
+      List.map (fun (g : T.region_var_group) -> g.id) sg.regions_hierarchy
+    in
+    let ctx =
+      InterpreterUtils.initialize_eval_context decls_ctx region_groups
+        sg.generics.types sg.generics.const_generics
+    in
+    (* Compute the normalization map for the *sty* types and add it to the context *)
+    AssociatedTypes.ctx_add_norm_trait_stypes_from_preds ctx
+      sg.preds.trait_type_constraints
+  in
+
+  (* Normalize the signature *)
+  let sg =
+    let ({ A.inputs; output; _ } : A.fun_sig) = sg in
+    let norm = AssociatedTypes.ctx_normalize_sty ctx in
+    let inputs = List.map norm inputs in
+    let output = norm output in
+    { sg with A.inputs; output }
+  in
+
   (* List the inputs for:
    * - the fuel
    * - the forward function

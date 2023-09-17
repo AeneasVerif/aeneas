@@ -35,38 +35,6 @@ let compute_contexts (m : A.crate) : C.decls_ctx =
   let trait_impls_ctx = { C.trait_impls } in
   { C.type_ctx; fun_ctx; global_ctx; trait_decls_ctx; trait_impls_ctx }
 
-(** **WARNING**: this function doesn't compute the normalized types
-    (for the trait type aliases). This should be computed afterwards.
- *)
-let initialize_eval_context (ctx : C.decls_ctx)
-    (region_groups : T.RegionGroupId.id list) (type_vars : T.type_var list)
-    (const_generic_vars : T.const_generic_var list) : C.eval_ctx =
-  C.reset_global_counters ();
-  let const_generic_vars_map =
-    T.ConstGenericVarId.Map.of_list
-      (List.map
-         (fun (cg : T.const_generic_var) ->
-           let ty = TypesUtils.ety_no_regions_to_rty (T.Literal cg.ty) in
-           let cv = mk_fresh_symbolic_typed_value V.ConstGeneric ty in
-           (cg.index, cv))
-         const_generic_vars)
-  in
-  {
-    C.type_context = ctx.type_ctx;
-    C.fun_context = ctx.fun_ctx;
-    C.global_context = ctx.global_ctx;
-    C.trait_decls_context = ctx.trait_decls_ctx;
-    C.trait_impls_context = ctx.trait_impls_ctx;
-    C.region_groups;
-    C.type_vars;
-    C.const_generic_vars;
-    C.const_generic_vars_map;
-    C.norm_trait_etypes = C.ETraitTypeRefMap.empty (* Empty for now *);
-    C.norm_trait_rtypes = C.RTraitTypeRefMap.empty (* Empty for now *);
-    C.env = [ C.Frame ];
-    C.ended_regions = T.RegionId.Set.empty;
-  }
-
 (** Small helper.
 
     Normalize an instantiated function signature provided we used this signature
@@ -93,11 +61,10 @@ let normalize_inst_fun_sig (ctx : C.eval_ctx) (sg : A.inst_fun_sig) :
     clauses (we are not considering a function call, so we don't need to
     normalize because a trait clause was instantiated with a specific trait ref).
  *)
-let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (fdef : A.fun_decl) :
-    C.eval_ctx * A.inst_fun_sig =
-  let sg = fdef.signature in
+let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
+    (kind : A.fun_kind) : C.eval_ctx * A.inst_fun_sig =
   let tr_self =
-    match fdef.kind with
+    match kind with
     | RegularKind | TraitMethodImpl _ -> T.UnknownTrait __FUNCTION__
     | TraitMethodDecl _ | TraitMethodProvided _ -> T.Self
   in
@@ -185,7 +152,9 @@ let initialize_symbolic_context_for_fun (ctx : C.decls_ctx) (fdef : A.fun_decl)
   (* Instantiate the signature. This updates the context because we compute
      at the same time the normalization map for the associated types.
   *)
-  let ctx, inst_sg = symbolic_instantiate_fun_sig ctx fdef in
+  let ctx, inst_sg =
+    symbolic_instantiate_fun_sig ctx fdef.signature fdef.kind
+  in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
     List.map (fun ty -> mk_fresh_symbolic_value V.SynthInput ty) inst_sg.inputs
@@ -260,7 +229,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
   let sg = fdef.signature in
-  let _, ret_inst_sg = symbolic_instantiate_fun_sig ctx fdef in
+  let _, ret_inst_sg =
+    symbolic_instantiate_fun_sig ctx fdef.signature fdef.kind
+  in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in

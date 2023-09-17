@@ -662,67 +662,6 @@ let eval_assumed_function_call_concrete (config : C.config)
       (* Compose and apply *)
       comp cf_eval_ops cf_eval_call
 
-let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.egeneric_args)
-    (tr_self : T.rtrait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
-  log#ldebug
-    (lazy
-      ("instantiate_fun_sig:" ^ "\n- generics: "
-      ^ egeneric_args_to_string ctx generics
-      ^ "\n- tr_self: "
-      ^ rtrait_instance_id_to_string ctx tr_self
-      ^ "\n- sg: " ^ fun_sig_to_string ctx sg));
-  (* Generate fresh abstraction ids and create a substitution from region
-   * group ids to abstraction ids *)
-  let rg_abs_ids_bindings =
-    List.map
-      (fun rg ->
-        let abs_id = C.fresh_abstraction_id () in
-        (rg.T.id, abs_id))
-      sg.regions_hierarchy
-  in
-  let asubst_map : V.AbstractionId.id T.RegionGroupId.Map.t =
-    List.fold_left
-      (fun mp (rg_id, abs_id) -> T.RegionGroupId.Map.add rg_id abs_id mp)
-      T.RegionGroupId.Map.empty rg_abs_ids_bindings
-  in
-  let asubst (rg_id : T.RegionGroupId.id) : V.AbstractionId.id =
-    T.RegionGroupId.Map.find rg_id asubst_map
-  in
-  (* Generate fresh regions and their substitutions *)
-  let _, rsubst, _ = Subst.fresh_regions_with_substs sg.generics.regions in
-  (* Generate the type substitution
-   * Note that we need the substitution to map the type variables to
-   * {!rty} types (not {!ety}). In order to do that, we convert the
-   * type parameters to types with regions. This is possible only
-   * if those types don't contain any regions.
-   * This is a current limitation of the analysis: there is still some
-   * work to do to properly handle full type parametrization.
-   * *)
-  let rtype_params = List.map ety_no_regions_to_rty generics.types in
-  let tsubst = Subst.make_type_subst_from_vars sg.generics.types rtype_params in
-  let cgsubst =
-    Subst.make_const_generic_subst_from_vars sg.generics.const_generics
-      generics.const_generics
-  in
-  (* TODO: something annoying with the trait ref subst: we need to use region
-     types, but the arguments use erased regions. For now we use the fact
-     that no regions should appear inside. In the future: we should merge
-     ety and rty. *)
-  let trait_refs =
-    List.map TypesUtils.etrait_ref_no_regions_to_gr_trait_ref
-      generics.trait_refs
-  in
-  let tr_subst =
-    Subst.make_trait_subst_from_clauses sg.generics.trait_clauses trait_refs
-  in
-  (* Substitute the signature *)
-  let inst_sig =
-    Assoc.ctx_subst_norm_signature ctx asubst rsubst tsubst cgsubst tr_subst
-      tr_self sg
-  in
-  (* Return *)
-  inst_sig
-
 (** Helper
  
     Create abstractions (with no avalues, which have to be inserted afterwards)

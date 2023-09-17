@@ -25,19 +25,6 @@ open InterpreterExpressions
  *)
 val pop_frame : C.config -> bool -> (V.typed_value option -> m_fun) -> m_fun
 
-(** Instantiate a function signature, introducing **fresh** abstraction ids and
-    region ids. This is mostly used in preparation of function calls, when
-    evaluating in symbolic mode of course.
-
-    Note: there are no region parameters, because they should be erased.
- *)
-val instantiate_fun_sig :
-  C.eval_ctx ->
-  T.egeneric_args ->
-  T.rtrait_instance_id ->
-  LA.fun_sig ->
-  LA.inst_fun_sig
-
 (** Helper.
 
     Create a list of abstractions from a list of regions groups, and insert

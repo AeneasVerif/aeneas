@@ -288,6 +288,9 @@ type etrait_type_ref = erased_region trait_type_ref [@@deriving show, ord]
 type rtrait_type_ref = Types.RegionId.id Types.region trait_type_ref
 [@@deriving show, ord]
 
+type strait_type_ref = Types.RegionVarId.id Types.region trait_type_ref
+[@@deriving show, ord]
+
 (* TODO: correctly use the functors so as not to have a duplication below *)
 module ETraitTypeRefOrd = struct
   type t = etrait_type_ref
@@ -307,8 +310,18 @@ module RTraitTypeRefOrd = struct
   let show_t = show_rtrait_type_ref
 end
 
+module STraitTypeRefOrd = struct
+  type t = strait_type_ref
+
+  let compare = compare_strait_type_ref
+  let to_string = show_strait_type_ref
+  let pp_t = pp_strait_type_ref
+  let show_t = show_strait_type_ref
+end
+
 module ETraitTypeRefMap = Collections.MakeMap (ETraitTypeRefOrd)
 module RTraitTypeRefMap = Collections.MakeMap (RTraitTypeRefOrd)
+module STraitTypeRefMap = Collections.MakeMap (STraitTypeRefOrd)
 
 (** Evaluation context *)
 type eval_ctx = {
@@ -335,6 +348,13 @@ type eval_ctx = {
           in region ids.
 
           TODO: how not to duplicate?
+       *)
+  norm_trait_stypes : sty STraitTypeRefMap.t;
+      (** We sometimes need to normalize types in non-instantiated signatures.
+
+          Note that we either need to use the etypes/rtypes maps, or the stypes map.
+          This means that we either compute the maps for etypes and rtypes, or compute
+          the one for stypes (we don't always compute and carry all the maps).
        *)
   env : env;
   ended_regions : RegionId.Set.t;

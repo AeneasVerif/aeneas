@@ -478,6 +478,9 @@ module Contexts = struct
   let ctx_to_rtype_formatter (fmt : ctx_formatter) : PT.rtype_formatter =
     PV.value_to_rtype_formatter fmt
 
+  let ctx_to_stype_formatter (fmt : ctx_formatter) : PT.stype_formatter =
+    PV.value_to_stype_formatter fmt
+
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
     let rvar_to_string r =
       (* In theory we shouldn't use rvar_to_string, but it can happen
@@ -651,6 +654,11 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.ctx_to_rtype_formatter fmt in
     PT.rty_to_string fmt t
 
+  let sty_to_string (ctx : C.eval_ctx) (t : T.sty) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_stype_formatter fmt in
+    PT.sty_to_string fmt t
+
   let etrait_ref_to_string (ctx : C.eval_ctx) (x : T.etrait_ref) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let fmt = PC.ctx_to_etype_formatter fmt in
@@ -660,6 +668,11 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let fmt = PC.ctx_to_rtype_formatter fmt in
     PT.rtrait_ref_to_string fmt x
+
+  let strait_ref_to_string (ctx : C.eval_ctx) (x : T.strait_ref) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_stype_formatter fmt in
+    PT.strait_ref_to_string fmt x
 
   let etrait_instance_id_to_string (ctx : C.eval_ctx) (x : T.etrait_instance_id)
       : string =
@@ -672,6 +685,12 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let fmt = PC.ctx_to_rtype_formatter fmt in
     PT.rtrait_instance_id_to_string fmt x
+
+  let strait_instance_id_to_string (ctx : C.eval_ctx) (x : T.strait_instance_id)
+      : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_stype_formatter fmt in
+    PT.strait_instance_id_to_string fmt x
 
   let egeneric_args_to_string (ctx : C.eval_ctx) (x : T.egeneric_args) : string
       =
