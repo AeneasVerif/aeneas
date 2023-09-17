@@ -856,9 +856,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             | Assumed Range -> "r"
             | Assumed State -> ConstStrings.state_basename
             | AdtId adt_id ->
-                let def =
-                  TypeDeclId.Map.find adt_id ctx.type_context.type_decls
-                in
+                let def = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
                 (* Derive the var name from the last ident of the type name
                  * Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
                  *)
@@ -3115,9 +3113,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
   let extract_as_unit =
     match (!backend, supd.struct_id) with
     | HOL4, AdtId adt_id ->
-        let d =
-          TypeDeclId.Map.find adt_id ctx.trans_ctx.type_context.type_decls
-        in
+        let d = TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls in
         d.kind = Struct []
     | _ -> false
   in

@@ -255,7 +255,11 @@ type type_context = {
 }
 [@@deriving show]
 
-type fun_context = { fun_decls : fun_decl FunDeclId.Map.t } [@@deriving show]
+type fun_context = {
+  fun_decls : fun_decl FunDeclId.Map.t;
+  fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
+}
+[@@deriving show]
 
 type global_context = { global_decls : global_decl GlobalDeclId.Map.t }
 [@@deriving show]

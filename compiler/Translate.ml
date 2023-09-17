@@ -29,34 +29,12 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : A.fun_decl)
       ("translate_function_to_symbolics: "
       ^ Print.fun_name_to_string fdef.A.name));
 
-  let {
-    type_context;
-    fun_context;
-    global_context;
-    trait_decls_context;
-    trait_impls_context;
-  } =
-    trans_ctx
-  in
-  let fun_context = { C.fun_decls = fun_context.fun_decls } in
-
-  (* TODO: we should merge trans_ctx and decls_ctx *)
-  let decls_ctx : C.decls_ctx =
-    {
-      C.type_ctx = type_context;
-      fun_ctx = fun_context;
-      global_ctx = global_context;
-      trait_decls_ctx = trait_decls_context;
-      trait_impls_ctx = trait_impls_context;
-    }
-  in
-
   match fdef.body with
   | None -> None
   | Some _ ->
       (* Evaluate *)
       let synthesize = true in
-      let inputs, symb = evaluate_function_symbolic synthesize decls_ctx fdef in
+      let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
       Some (inputs, Option.get symb)
 
 (** Translate a function, by generating its forward and backward translations.
@@ -74,15 +52,6 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     (lazy
       ("translate_function_to_pure: " ^ Print.fun_name_to_string fdef.A.name));
 
-  let {
-    type_context;
-    fun_context;
-    global_context;
-    trait_decls_context;
-    trait_impls_context;
-  } =
-    trans_ctx
-  in
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs, if the function is transparent *)
@@ -107,25 +76,25 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       (List.filter_map
          (fun (tid, g) ->
            match g with Charon.GAst.NonRec _ -> None | Rec _ -> Some tid)
-         (T.TypeDeclId.Map.bindings trans_ctx.type_context.type_decls_groups))
+         (T.TypeDeclId.Map.bindings trans_ctx.type_ctx.type_decls_groups))
   in
   let type_context =
     {
-      SymbolicToPure.type_infos = type_context.type_infos;
-      llbc_type_decls = type_context.type_decls;
+      SymbolicToPure.type_infos = trans_ctx.type_ctx.type_infos;
+      llbc_type_decls = trans_ctx.type_ctx.type_decls;
       type_decls = pure_type_decls;
       recursive_decls = recursive_type_decls;
     }
   in
   let fun_context =
     {
-      SymbolicToPure.llbc_fun_decls = fun_context.fun_decls;
+      SymbolicToPure.llbc_fun_decls = trans_ctx.fun_ctx.fun_decls;
       fun_sigs;
-      fun_infos = fun_context.fun_infos;
+      fun_infos = trans_ctx.fun_ctx.fun_infos;
     }
   in
   let global_context =
-    { SymbolicToPure.llbc_global_decls = global_context.global_decls }
+    { SymbolicToPure.llbc_global_decls = trans_ctx.global_ctx.global_decls }
   in
 
   (* Compute the set of loops, and find better ids for them (starting at 0).
@@ -173,8 +142,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       type_context;
       fun_context;
       global_context;
-      trait_decls_ctx = trait_decls_context.trait_decls;
-      trait_impls_ctx = trait_impls_context.trait_impls;
+      trait_decls_ctx = trans_ctx.trait_decls_ctx.trait_decls;
+      trait_impls_ctx = trans_ctx.trait_impls_ctx.trait_impls;
       fun_decl = fdef;
       forward_inputs = [];
       (* Empty for now *)
@@ -311,22 +280,8 @@ let translate_crate_to_pure (crate : A.crate) :
   (* Debug *)
   log#ldebug (lazy "translate_crate_to_pure");
 
-  (* Compute the type and function contexts *)
-  let decls_ctx = compute_contexts crate in
-  let fun_infos =
-    FA.analyze_module crate decls_ctx.fun_ctx.C.fun_decls
-      decls_ctx.global_ctx.C.global_decls !Config.use_state
-  in
-  let fun_context = { fun_decls = decls_ctx.fun_ctx.fun_decls; fun_infos } in
-  let trans_ctx =
-    {
-      type_context = decls_ctx.type_ctx;
-      fun_context;
-      global_context = decls_ctx.global_ctx;
-      trait_decls_context = decls_ctx.trait_decls_ctx;
-      trait_impls_context = decls_ctx.trait_impls_ctx;
-    }
-  in
+  (* Compute the translation context *)
+  let trans_ctx = compute_contexts crate in
 
   (* Translate all the type definitions *)
   let type_decls =
@@ -362,8 +317,8 @@ let translate_crate_to_pure (crate : A.crate) :
   in
   let sigs = List.append assumed_sigs local_sigs in
   let fun_sigs =
-    SymbolicToPure.translate_fun_signatures fun_context.fun_infos
-      decls_ctx.type_ctx.type_infos sigs
+    SymbolicToPure.translate_fun_signatures trans_ctx.fun_ctx.fun_infos
+      trans_ctx.type_ctx.type_infos sigs
   in
 
   (* Translate all the *transparent* functions *)
@@ -374,18 +329,18 @@ let translate_crate_to_pure (crate : A.crate) :
   in
 
   (* Translate the trait declarations *)
-  let type_infos = trans_ctx.type_context.type_infos in
+  let type_infos = trans_ctx.type_ctx.type_infos in
   let trait_decls =
     List.map
       (SymbolicToPure.translate_trait_decl type_infos)
-      (T.TraitDeclId.Map.values trans_ctx.trait_decls_context.trait_decls)
+      (T.TraitDeclId.Map.values trans_ctx.trait_decls_ctx.trait_decls)
   in
 
   (* Translate the trait implementations *)
   let trait_impls =
     List.map
       (SymbolicToPure.translate_trait_impl type_infos)
-      (T.TraitImplId.Map.values trans_ctx.trait_impls_context.trait_impls)
+      (T.TraitImplId.Map.values trans_ctx.trait_impls_ctx.trait_impls)
   in
 
   (* Apply the micro-passes *)
@@ -554,7 +509,7 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
  *)
 let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : A.GlobalDeclId.id) : unit =
-  let global_decls = ctx.trans_ctx.global_context.global_decls in
+  let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = A.GlobalDeclId.Map.find id global_decls in
   let trans = A.FunDeclId.Map.find global.body_id ctx.trans_funs in
   assert (trans.fwd.loops = []);

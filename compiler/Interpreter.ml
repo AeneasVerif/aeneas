@@ -26,7 +26,10 @@ let compute_contexts (m : A.crate) : C.decls_ctx =
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list
   in
   let type_ctx = { C.type_decls_groups; type_decls; type_infos } in
-  let fun_ctx = { C.fun_decls } in
+  let fun_infos =
+    FunsAnalysis.analyze_module m fun_decls global_decls !Config.use_state
+  in
+  let fun_ctx = { C.fun_decls; fun_infos } in
   let global_ctx = { C.global_decls } in
   let trait_decls_ctx = { C.trait_decls } in
   let trait_impls_ctx = { C.trait_impls } in
@@ -567,7 +570,8 @@ module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
       environment.
    *)
-  let test_unit_function (crate : A.crate) (fid : A.FunDeclId.id) : unit =
+  let test_unit_function (crate : A.crate) (decls_ctx : C.decls_ctx)
+      (fid : A.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = A.FunDeclId.Map.find fid crate.functions in
     let body = Option.get fdef.body in
@@ -581,7 +585,6 @@ module Test = struct
     assert (body.A.arg_count = 0);
 
     (* Create the evaluation context *)
-    let decls_ctx = compute_contexts crate in
     let ctx = initialize_eval_context decls_ctx [] [] [] in
 
     (* Insert the (uninitialized) local variables *)
@@ -620,8 +623,9 @@ module Test = struct
         (fun _ -> fun_decl_is_transparent_unit)
         crate.functions
     in
+    let decls_ctx = compute_contexts crate in
     let test_unit_fun _ (def : A.fun_decl) : unit =
-      test_unit_function crate def.A.def_id
+      test_unit_function crate decls_ctx def.A.def_id
     in
     A.FunDeclId.Map.iter test_unit_fun unit_funs
 end

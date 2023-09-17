@@ -586,9 +586,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   generics = _;
                 } ->
                 (* Lookup the def *)
-                let decl =
-                  TypeDeclId.Map.find adt_id ctx.type_context.type_decls
-                in
+                let decl = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
                 (* Check that there are as many arguments as there are fields - note
                    that the def should have a body (otherwise we couldn't use the
                    constructor) *)
@@ -597,8 +595,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   (* Check if the definition is recursive *)
                   let is_rec =
                     match
-                      TypeDeclId.Map.find adt_id
-                        ctx.type_context.type_decls_groups
+                      TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls_groups
                     with
                     | NonRec _ -> false
                     | Rec _ -> true
@@ -796,7 +793,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
                       | FunId fun_id -> fun_id
                       | TraitMethod (_, _, fun_decl_id) -> A.Regular fun_decl_id
                     in
-                    LlbcAstUtils.lookup_fun_sig id0 ctx.fun_context.fun_decls
+                    LlbcAstUtils.lookup_fun_sig id0 ctx.fun_ctx.fun_decls
                   in
                   (* Compute the set of ancestors of the function in call1 *)
                   let call1_ancestors =
@@ -1094,7 +1091,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 (* This is a struct *)
                 (* Retrieve the definiton, to find how many fields there are *)
                 let adt_decl =
-                  TypeDeclId.Map.find adt_id ctx.type_context.type_decls
+                  TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls
                 in
                 let fields =
                   match adt_decl.kind with

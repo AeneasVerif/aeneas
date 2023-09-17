@@ -709,10 +709,10 @@ type extraction_ctx = {
     instance).
  *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
-  let global_decls = ctx.trans_ctx.global_context.global_decls in
-  let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
-  let type_decls = ctx.trans_ctx.type_context.type_decls in
-  let trait_decls = ctx.trans_ctx.trait_decls_context.trait_decls in
+  let global_decls = ctx.trans_ctx.global_ctx.global_decls in
+  let fun_decls = ctx.trans_ctx.fun_ctx.fun_decls in
+  let type_decls = ctx.trans_ctx.type_ctx.type_decls in
+  let trait_decls = ctx.trans_ctx.trait_decls_ctx.trait_decls in
   let trait_decl_id_to_string (id : A.TraitDeclId.id) : string =
     let trait_name =
       Print.fun_name_to_string (A.TraitDeclId.Map.find id trait_decls).name
@@ -1293,9 +1293,7 @@ let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
     (ctx : extraction_ctx) : string =
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
-  let llbc_def =
-    A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls
-  in
+  let llbc_def = A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_ctx.fun_decls in
   let sg = llbc_def.signature in
   let num_rgs = List.length sg.regions_hierarchy in
   let { keep_fwd; fwd = _; backs } = trans_group in
