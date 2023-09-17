@@ -1188,8 +1188,64 @@ and eval_transparent_function_call_concrete (config : C.config)
 and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
     : st_cm_fun =
  fun cf ctx ->
-  (* Instantiate the signature and introduce fresh abstractions and region ids while doing so *)
-  let func, def, self_trait_ref, inst_sg =
+  (* Instantiate the signature and introduce fresh abstractions and region ids while doing so.
+
+     We perform some manipulations when instantiating the signature.
+     In particular, we have a special treatment of trait method calls when
+     the trait ref is a known impl.
+
+     For instance:
+     {[
+       trait HasValue {
+         fn has_value(&self) -> bool;
+       }
+
+       impl<T> HasValue for Option<T> {
+         fn has_value(&self) {
+           match self {
+             None => false,
+             Some(_) => true,
+           }
+         }
+       }
+
+       fn option_has_value<T>(x: &Option<T>) -> bool {
+         x.has_value()
+       }
+     ]}
+
+     The generated code looks like this:
+     {[
+       structure HasValue (T : Type) = {
+         has_value : T -> result bool
+       }
+
+       let OptionHasValueImpl.has_value (T : Type) (self : T) : result bool =
+         match self with
+         | None => false
+         | Some _ => true
+
+       let OptionHasValueInstance (T : Type) : HasValue (Option T) = {
+         has_value = OptionHasValueInstance.has_value
+       }
+     ]}
+
+     In [option_has_value], we don't want to refer to the [has_value] method
+     of the instance of [HasValue] for [Option<T>]. We want to refer directly
+     to the function which implements [has_value] for [Option<T>].
+     That is, instead of generating this:
+     {[
+       let option_has_value (T : Type) (x : Option T) : result bool =
+         (OptionHasValueInstance T).has_value x
+     ]}
+
+     We want to generate this:
+     {[
+       let option_has_value (T : Type) (x : Option T) : result bool =
+         OptionHasValueImpl.has_value T x
+     ]}
+  *)
+  let func, generics, def, self_trait_ref, inst_sg =
     match call.func with
     | A.FunId (A.Regular fid) ->
         let def = C.ctx_lookup_fun_decl ctx fid in
@@ -1197,7 +1253,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
         let inst_sg =
           instantiate_fun_sig ctx call.generics tr_self def.A.signature
         in
-        (call.func, def, None, inst_sg)
+        (call.func, call.generics, def, None, inst_sg)
     | A.FunId (A.Assumed _) ->
         (* Unreachable: must be a transparent function *)
         raise (Failure "Unreachable")
@@ -1242,9 +1298,12 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                 in
                 (* Also update the function identifier: we want to forget
                    the fact that we called a trait method, and treat it as
-                   a regular function acll. *)
+                   a regular function call to the top-level function
+                   which implements the method. In order to do this properly,
+                   we also need to update the generics.
+                *)
                 let func = A.FunId (A.Regular id) in
-                (func, method_def, None, inst_sg)
+                (func, generics, method_def, None, inst_sg)
             | None ->
                 (* If not found, lookup the methods provided by the trait *declaration*
                    (remember: for now, we forbid overriding provided methods) *)
@@ -1299,7 +1358,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                 (* We directly call the function, pretending it is not a trait method call *)
                 (* TODO: we need to add the self trait ref *)
                 let func = A.FunId (A.Regular method_def.def_id) in
-                (func, method_def, Some trait_ref, inst_sg))
+                (func, generics, method_def, Some trait_ref, inst_sg))
         | _ ->
             (* We are using a local clause - we lookup the trait decl *)
             let trait_decl =
@@ -1328,13 +1387,13 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             let inst_sg =
               instantiate_fun_sig ctx generics tr_self method_def.A.signature
             in
-            (call.func, method_def, None, inst_sg))
+            (call.func, generics, method_def, None, inst_sg))
   in
   (* Sanity check *)
   assert (List.length call.args = List.length def.A.signature.inputs);
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config func inst_sg self_trait_ref
-    call.generics call.args call.dest cf ctx
+    generics call.args call.dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
