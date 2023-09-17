@@ -625,3 +625,20 @@ let rec typed_pattern_to_texpression (pat : typed_pattern) : texpression option
           Some (mk_apps cons fields_values).e
   in
   match e_opt with None -> None | Some e -> Some { e; ty = pat.ty }
+
+type trait_decl_method_decl_id = { is_provided : bool; id : fun_decl_id }
+
+let trait_decl_get_method (trait_decl : trait_decl) (method_name : string) :
+    trait_decl_method_decl_id =
+  (* First look in the required methods *)
+  let method_id =
+    List.find_opt (fun (s, _) -> s = method_name) trait_decl.required_methods
+  in
+  match method_id with
+  | Some (_, id) -> { is_provided = false; id }
+  | None ->
+      (* Must be a provided method *)
+      let _, id =
+        List.find (fun (s, _) -> s = method_name) trait_decl.provided_methods
+      in
+      { is_provided = true; id = Option.get id }

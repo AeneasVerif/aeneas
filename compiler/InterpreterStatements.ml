@@ -1191,6 +1191,9 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
   (* Instantiate the signature and introduce fresh abstractions and region ids while doing so.
 
      We perform some manipulations when instantiating the signature.
+
+     # Trait impl calls
+     ==================
      In particular, we have a special treatment of trait method calls when
      the trait ref is a known impl.
 
@@ -1216,11 +1219,11 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
 
      The generated code looks like this:
      {[
-       structure HasValue (T : Type) = {
-         has_value : T -> result bool
+       structure HasValue (Self : Type) = {
+         has_value : Self -> result bool
        }
 
-       let OptionHasValueImpl.has_value (T : Type) (self : T) : result bool =
+       let OptionHasValueImpl.has_value (Self : Type) (self : Self) : result bool =
          match self with
          | None => false
          | Some _ => true
@@ -1244,6 +1247,13 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
        let option_has_value (T : Type) (x : Option T) : result bool =
          OptionHasValueImpl.has_value T x
      ]}
+
+     # Provided trait methods
+     ========================
+     Calls to provided trait methods also have a special treatment because
+     for now we forbid overriding provided trait methods in the trait implementations,
+     which means that whenever we call a provided trait method, we do not refer
+     to a trait clause but directly to the method provided in the trait declaration.
   *)
   let func, generics, def, self_trait_ref, inst_sg =
     match call.func with
@@ -1319,7 +1329,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                 in
                 let method_id = Option.get method_id in
                 let method_def = C.ctx_lookup_fun_decl ctx method_id in
-                (* For the instantiation we have to do something perculiar
+                (* For the instantiation we have to do something peculiar
                    because the method was defined for the trait declaration.
                    We have to group:
                    - the parameters given to the trait decl reference
@@ -1336,15 +1346,15 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                      }
                    ]}
                 *)
-                let generics =
+                let all_generics =
                   TypesUtils.merge_generic_args
                     trait_ref.trait_decl_ref.decl_generics call.generics
                 in
                 log#ldebug
                   (lazy
                     ("provided method call:" ^ "\n- method name: " ^ method_name
-                   ^ "\n- generics:\n"
-                    ^ egeneric_args_to_string ctx generics
+                   ^ "\n- all_generics:\n"
+                    ^ egeneric_args_to_string ctx all_generics
                     ^ "\n- parent params info: "
                     ^ Print.option_to_string A.show_params_info
                         method_def.signature.parent_params_info));
@@ -1352,13 +1362,10 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                   T.TraitRef (etrait_ref_no_regions_to_gr_trait_ref trait_ref)
                 in
                 let inst_sg =
-                  instantiate_fun_sig ctx generics tr_self
+                  instantiate_fun_sig ctx all_generics tr_self
                     method_def.A.signature
                 in
-                (* We directly call the function, pretending it is not a trait method call *)
-                (* TODO: we need to add the self trait ref *)
-                let func = A.FunId (A.Regular method_def.def_id) in
-                (func, generics, method_def, Some trait_ref, inst_sg))
+                (call.func, call.generics, method_def, Some trait_ref, inst_sg))
         | _ ->
             (* We are using a local clause - we lookup the trait decl *)
             let trait_decl =
@@ -1387,7 +1394,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             let inst_sg =
               instantiate_fun_sig ctx generics tr_self method_def.A.signature
             in
-            (call.func, generics, method_def, None, inst_sg))
+            (call.func, call.generics, method_def, None, inst_sg))
   in
   (* Sanity check *)
   assert (List.length call.args = List.length def.A.signature.inputs);
