@@ -375,12 +375,11 @@ theorem index_itake_append_end [Inhabited α] (i j : Int) (l0 l1 : List α)
       simp_all
 
 @[simp]
-theorem index_ne
+theorem index_update_ne
   {α : Type u} [Inhabited α] (l: List α) (i: ℤ) (j: ℤ) (x: α) :
-   0 ≤ i → i < l.len → 0 ≤ j → j < l.len → j ≠ i →
-    (l.update i x).index j = l.index j
+   j ≠ i → (l.update i x).index j = l.index j
   :=
-  λ _ _ _ _ _ => match l with
+  λ _ => match l with
   | [] => by simp at *
   | hd :: tl =>
     if h: i = 0 then
@@ -391,12 +390,11 @@ theorem index_ne
       by simp [*]
     else
       by
-        simp [*]
-        simp at *
-        apply index_ne <;> scalar_tac
+        simp_all
+        apply index_update_ne; scalar_tac
 
 @[simp]
-theorem index_eq
+theorem index_update_eq
   {α : Type u} [Inhabited α] (l: List α) (i: ℤ) (x: α) :
    0 ≤ i → i < l.len →
     (l.update i x).index i = x
@@ -411,7 +409,7 @@ theorem index_eq
       by
         simp [*]
         simp at *
-        apply index_eq <;> scalar_tac
+        apply index_update_eq <;> scalar_tac
 
 theorem update_map_eq {α : Type u} {β : Type v} (ls : List α) (i : Int) (x : α) (f : α → β) :
   (ls.update i x).map f = (ls.map f).update i (f x) :=

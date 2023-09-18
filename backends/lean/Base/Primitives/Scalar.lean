@@ -395,6 +395,9 @@ def Scalar.cast {src_ty : ScalarTy} (tgt_ty : ScalarTy) (x : Scalar src_ty) : Re
 @[reducible] def U64   := Scalar .U64
 @[reducible] def U128  := Scalar .U128
 
+instance (ty : ScalarTy) : Inhabited (Scalar ty) := by
+  constructor; cases ty <;> apply (Scalar.ofInt 0)
+
 -- TODO: below: not sure this is the best way.
 -- Should we rather overload operations like +, -, etc.?
 -- Also, it is possible to automate the generation of those definitions
