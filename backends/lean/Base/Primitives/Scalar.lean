@@ -889,6 +889,22 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
 @[reducible] def U64.ofInt   := @Scalar.ofInt .U64
 @[reducible] def U128.ofInt  := @Scalar.ofInt .U128
 
+postfix:max "#isize" => Isize.ofInt
+postfix:max "#i8"    => I8.ofInt
+postfix:max "#i16"   => I16.ofInt
+postfix:max "#i32"   => I32.ofInt
+postfix:max "#i64"   => I64.ofInt
+postfix:max "#i128"  => I128.ofInt
+postfix:max "#usize" => Usize.ofInt
+postfix:max "#u8"    => U8.ofInt
+postfix:max "#u16"   => U16.ofInt
+postfix:max "#u32"   => U32.ofInt
+postfix:max "#u64"   => U64.ofInt
+postfix:max "#u128"  => U128.ofInt
+
+-- Testing the notations
+example : Result Usize := 0#usize + 1#usize
+
 @[simp] theorem Scalar.ofInt_val_eq {ty} (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : (Scalar.ofInt x h).val = x := by
   simp [Scalar.ofInt, Scalar.ofIntCore]
 
