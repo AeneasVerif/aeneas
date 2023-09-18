@@ -335,13 +335,12 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
     simp_all
   else
     simp [hx]
-    -- TODO: automatic lookup doesn't work?
     -- x - 1
-    progress with Scalar.sub_spec as ⟨ x1 ⟩
+    progress as ⟨ x1 ⟩
     -- Recursive call
     progress as ⟨ x2 ⟩
     -- x2 + 1
-    progress with Scalar.add_spec
+    progress
     -- Postcondition
     simp; scalar_tac
 -- Below: we have to prove that the recursive call performed in the proof terminates.
