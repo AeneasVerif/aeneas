@@ -105,6 +105,8 @@ support for partial functions and extrinsic proofs of termination (see
 and tactics specialized for monadic programs (see
 `./backends/lean/Base/Progress/Progress.lean` and `./backends/hol4/primitivesLib.sml`).
 
+A tutorial for the Lean backend is available [here](./tests/lean/Tutorial.lean).
+
 ## Formalization
 
 The translation has been formalized and published at ICFP2022: [Aeneas: Rust

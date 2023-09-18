@@ -243,21 +243,26 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     tryLookupApply keep ids splitPost asmTac fExpr "pspec theorem" pspec do
     -- It failed: try to lookup a *class* expr spec theorem (those are more
     -- specific than class spec theorems)
+    trace[Progress] "Failed using a pspec theorem: trying to lookup a pspec class expr theorem"
     let pspecClassExpr ← do
       match getFirstArg args with
       | none => pure none
       | some arg => do
+        trace[Progress] "Using: f:{fName}, arg: {arg}"
         let thName ← pspecClassExprAttr.find? fName arg
         pure (thName.map fun th => .Theorem th)
     tryLookupApply keep ids splitPost asmTac fExpr "pspec class expr theorem" pspecClassExpr do
     -- It failed: try to lookup a *class* spec theorem
+    trace[Progress] "Failed using a pspec class expr theorem: trying to lookup a pspec class theorem"
     let pspecClass ← do
       match ← getFirstArgAppName args with
       | none => pure none
       | some argName => do
+        trace[Progress] "Using: f: {fName}, arg: {argName}"
         let thName ← pspecClassAttr.find? fName argName
         pure (thName.map fun th => .Theorem th)
     tryLookupApply keep ids splitPost asmTac fExpr "pspec class theorem" pspecClass do
+    trace[Progress] "Failed using a pspec class theorem: trying to use a recursive assumption"
     -- Try a recursive call - we try the assumptions of kind "auxDecl"
     let ctx ← Lean.MonadLCtx.getLCtx
     let decls ← ctx.getAllDecls
@@ -346,11 +351,14 @@ elab "progress" args:progressArgs : tactic =>
 namespace Test
   open Primitives Result
 
+  -- Show the traces
   -- set_option trace.Progress true
   -- set_option pp.rawOnError true
 
+  -- The following commands display the databases of theorems
   -- #eval showStoredPSpec
   -- #eval showStoredPSpecClass
+  -- #eval showStoredPSpecExprClass
 
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)
@@ -365,6 +373,12 @@ namespace Test
     ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
     progress keep h with Scalar.add_spec as ⟨ z ⟩
     simp [*, h]
+
+  example {x y : U32}
+    (hmax : x.val + y.val ≤ U32.max) :
+    ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+    progress keep _ as ⟨ z, h1 .. ⟩
+    simp [*, h1]
 
   /- Checking that universe instantiation works: the original spec uses
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/
