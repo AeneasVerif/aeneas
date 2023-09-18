@@ -35,6 +35,10 @@ example {a: Type u} (v : Vec a) : v.length ≤ Scalar.max ScalarTy.Usize := by
 
 def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
 
+instance (α : Type u) : Inhabited (Vec α) := by
+  constructor
+  apply Vec.new
+
 -- TODO: very annoying that the α is an explicit parameter
 def Vec.len (α : Type u) (v : Vec α) : Usize :=
   Usize.ofIntCore v.val.len (by scalar_tac) (by scalar_tac)
