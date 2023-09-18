@@ -16,14 +16,15 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
    add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Isize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
-   -- Reveal the concrete bounds
+   -- Reveal the concrete bounds, simplify calls to [ofInt]
    Utils.simpAt [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
                  ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
                  ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
                  ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
                  ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max,
                  ``Usize.min
-                 ] [] [] .wildcard
+                 ] [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val] [] .wildcard
+   
 
 elab "scalar_tac_preprocess" : tactic =>
   intTacPreprocess scalarTacExtraPreprocess
@@ -48,6 +49,18 @@ example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
 
 -- Checking that we explore the goal *and* projectors correctly
 example (x : U32 × U32) : 0 ≤ x.fst.val := by
+  scalar_tac
+
+-- Checking that we properly handle [ofInt]
+example : U32.ofInt 1 ≤ U32.max := by
+  scalar_tac
+
+example (x : Int) (h0 : 0 ≤ x) (h1 : x ≤ U32.max) :
+  U32.ofInt x (by constructor <;> scalar_tac) ≤ U32.max := by
+  scalar_tac
+
+-- Not equal
+example (x : U32) (h0 : ¬ x = U32.ofInt 0) : 0 < x.val := by
   scalar_tac
 
 end Arith

@@ -211,9 +211,11 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   let _ ← introHasIntPropInstances
   -- Extra preprocessing, before we split on the disjunctions
   extraPreprocess
-  -- Split
-  let asms ← introInstances ``PropHasImp.concl lookupPropHasImp
-  splitOnAsms asms.toList
+  -- Split - note that the extra-preprocessing step might actually have
+  -- proven the goal (by doing simplifications for instance)
+  Tactic.allGoals do
+    let asms ← introInstances ``PropHasImp.concl lookupPropHasImp
+    splitOnAsms asms.toList
 
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ())
