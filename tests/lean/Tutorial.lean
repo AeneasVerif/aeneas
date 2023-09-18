@@ -6,7 +6,7 @@ open Result
 
 namespace Tutorial
 
-/- # Simple Arithmetic Example -/
+/- # Simple Arithmetic Example ################################################# -/
 
 /- As a first step, we want to consider the function below which performs
    simple arithmetic. There are several things to note.
@@ -94,6 +94,9 @@ theorem mul2_add1_spec
      The ↑ notation (\u) is used to coerce values. Here, we coerce [x], which is
      a bounded machine integer, to an unbounded mathematical integer. Note that
      writing [↑ x] is the same as writing [x.val].
+
+     Remark: we advise always writing inequalities in the same direction (that is
+     ≤ and not ≥), because it helps the simplifier.
    -/
   (h : 2 * (↑ x) + 1 ≤ U32.max)
   /- The postcondition -/
@@ -169,7 +172,7 @@ theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * (↑ x) + 1 + ↑ y ≤ 
   progress as ⟨ z .. ⟩
   simp at *; scalar_tac
 
-/- # Recursion -/
+/- # Recursion ################################################################ -/
 
 /- We can have a look at more complex examples, for example recursive functions. -/
 
@@ -278,7 +281,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       simp [hi]
       -- i0 := i - 1
       progress as ⟨ i1, hi1 ⟩
-      -- Recursive call
+      -- [progress] can handle recursion
       simp [CList.to_list] at h
       progress as ⟨ l1 ⟩
       -- Proving the postcondition
@@ -293,5 +296,65 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- apply [List.index_nzero_cons].
       have : i.val ≠ 0 := by scalar_tac
       simp [CList.to_list, *]
+
+/- # Partial functions  ################################################# -/
+
+/- Recursive functions may not terminate on all inputs.
+
+   For instance, the function below only terminates on positive inputs (note
+   that we switched to signed integers), in which cases it behaves like the
+   identity. When we need to define such a potentially partial function,
+   we use the [divergent] keyword, which means that the function may diverge
+   (i.e., infinitely loop).
+
+   We will skip the details of how [divergent] precisely handles non-termination.
+   All you need to know is that the [Result] type has actually 3 cases (we saw
+   the first 2 cases in the examples above):
+   - ret: successful computation
+   - fail: failure (panic because of overflow, etc.)
+   - div: the computation doesn't terminate.
+
+   If in a theorem we state and prove that:
+   ```
+   ∃ y, i32_id x = ret x
+   ```
+   we not only prove that the function doesn't fail, but also that it terminates.
+ -/
+divergent def i32_id (x : I32) : Result I32 :=
+  if x = I32.ofInt 0 then ret (I32.ofInt 0)
+  else do
+    let x1 ← x - I32.ofInt 1
+    let x2 ← i32_id x1
+    x2 + (I32.ofInt 1)
+
+/- We can easily prove that [i32_id] behaves like the identity on positive inputs -/
+theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
+  ∃ y, i32_id x = ret y ∧ x.val = y.val := by
+  rw [i32_id]
+  if hx : x = I32.ofInt 0 then
+    simp_all
+  else
+    simp [hx]
+    -- TODO: automatic lookup doesn't work?
+    -- x - 1
+    progress with Scalar.sub_spec as ⟨ x1 ⟩
+    -- Recursive call
+    progress as ⟨ x2 ⟩
+    -- x2 + 1
+    progress with Scalar.add_spec
+    -- Postcondition
+    simp; scalar_tac
+-- Below: we have to prove that the recursive call performed in the proof terminates.
+-- We first specify a decreasing value. Here, we state that [x], seen as a natural number,
+-- decreases at every recursive call.
+termination_by i32_id_spec x _ => x.val.toNat
+-- And we now have to prove that it indeed decreases - you can skip this for now.
+decreasing_by
+  -- We first need to "massage" the goal (in practice, all the proofs of [decreasing_by]
+  -- should start with a call to [simp_wf]).
+  simp_wf
+  -- Finish the proof
+  have : 1 ≤ x.val := by scalar_tac
+  simp [Int.toNat_sub_of_le, *]
 
 end Tutorial
