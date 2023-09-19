@@ -1194,7 +1194,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
      which means that whenever we call a provided trait method, we do not refer
      to a trait clause but directly to the method provided in the trait declaration.
   *)
-  let func, generics, def, self_trait_ref, inst_sg =
+  let func, generics, def, inst_sg =
     match call.func with
     | A.FunId (A.Regular fid) ->
         let def = C.ctx_lookup_fun_decl ctx fid in
@@ -1202,7 +1202,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
         let inst_sg =
           instantiate_fun_sig ctx call.generics tr_self def.A.signature
         in
-        (call.func, call.generics, def, None, inst_sg)
+        (call.func, call.generics, def, inst_sg)
     | A.FunId (A.Assumed _) ->
         (* Unreachable: must be a transparent function *)
         raise (Failure "Unreachable")
@@ -1252,7 +1252,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                    we also need to update the generics.
                 *)
                 let func = A.FunId (A.Regular id) in
-                (func, generics, method_def, None, inst_sg)
+                (func, generics, method_def, inst_sg)
             | None ->
                 (* If not found, lookup the methods provided by the trait *declaration*
                    (remember: for now, we forbid overriding provided methods) *)
@@ -1304,7 +1304,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                   instantiate_fun_sig ctx all_generics tr_self
                     method_def.A.signature
                 in
-                (call.func, call.generics, method_def, Some trait_ref, inst_sg))
+                (call.func, call.generics, method_def, inst_sg))
         | _ ->
             (* We are using a local clause - we lookup the trait decl *)
             let trait_decl =
@@ -1333,13 +1333,13 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             let inst_sg =
               instantiate_fun_sig ctx generics tr_self method_def.A.signature
             in
-            (call.func, call.generics, method_def, None, inst_sg))
+            (call.func, call.generics, method_def, inst_sg))
   in
   (* Sanity check *)
   assert (List.length call.args = List.length def.A.signature.inputs);
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config func inst_sg self_trait_ref
-    generics call.args call.dest cf ctx
+  eval_function_call_symbolic_from_inst_sig config func inst_sg generics
+    call.args call.dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -1354,8 +1354,8 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
  *)
 and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (fid : A.fun_id_or_trait_method_ref) (inst_sg : A.inst_fun_sig)
-    (self_trait_ref : T.etrait_ref option) (generics : T.egeneric_args)
-    (args : E.operand list) (dest : E.place) : st_cm_fun =
+    (generics : T.egeneric_args) (args : E.operand list) (dest : E.place) :
+    st_cm_fun =
  fun cf ctx ->
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
@@ -1526,7 +1526,7 @@ and eval_assumed_function_call_symbolic (config : C.config)
 
       (* Evaluate the function call *)
       eval_function_call_symbolic_from_inst_sig config (A.FunId (A.Assumed fid))
-        inst_sig None generics args dest cf ctx
+        inst_sig generics args dest cf ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =

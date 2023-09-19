@@ -747,8 +747,8 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     let trait_decl =
       let name = trait_decl.name in
       match !backend with
-      | FStar | Coq | HOL4 -> type_name_to_snake_case name ^ "_instance"
-      | Lean -> String.concat "" (get_type_name name) ^ "Instance"
+      | FStar | Coq | HOL4 -> type_name_to_snake_case name ^ "_inst"
+      | Lean -> String.concat "" (get_type_name name) ^ "Inst"
     in
     flatten_name (get_type_name trait_impl.name @ [ trait_decl ])
   in
