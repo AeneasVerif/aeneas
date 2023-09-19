@@ -146,6 +146,17 @@ example (x y : ℤ) (hx : 0 ≤ x) (hy : 0 ≤ y) : 0 ≤ x * y := by
    those proofs!).
  -/
 
+-- I actually don't find this theorem in mathlib, but I've proved it in
+-- other proof assistants
+theorem add_pos_div_pos_le (x y z : ℤ) (hx : 0 ≤ x) (hy : 0 ≤ y) (hz : 0 < z) :
+  x / z + y / z ≤ (x + y) / z := sorry
+
+example (x y z : ℤ) (hx : 0 ≤ x) (hy : 0 ≤ y) (hz : 0 < z) :
+  2 * (x / z + y / z) ≤ 2 * ((x + y) / z) := by
+  apply Int.mul_le_mul_of_nonneg_left <;> try simp
+  apply add_pos_div_pos_le <;> assumption
+  
+
 /- More generally speaking, I believe having sets of rules would really open
    the possibility of writing a wide range of specialized and quite efficient
    solvers. For instance, for the problems above I would write a set of tactics
