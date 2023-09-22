@@ -523,7 +523,10 @@ let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
             | E.BitOr ->
                 assert (int_ty1 = int_ty2);
                 T.Literal (Integer int_ty1)
-            | E.Shl | E.Shr -> raise Unimplemented
+            | E.Shl | E.Shr ->
+                (* The number of bits can be of a different integer type
+                   than the operand *)
+                T.Literal (Integer int_ty1)
             | E.Ne | E.Eq -> raise (Failure "Unreachable"))
         | _ -> raise (Failure "Invalid inputs for binop")
     in
