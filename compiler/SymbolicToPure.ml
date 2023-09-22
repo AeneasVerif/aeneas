@@ -1542,7 +1542,11 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         | [ arg0; arg1 ] ->
             let int_ty0 = ty_as_integer arg0.ty in
             let int_ty1 = ty_as_integer arg1.ty in
-            assert (int_ty0 = int_ty1);
+            (match binop with
+            (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
+            | E.Shl | E.Shr -> ()
+            | _ -> assert (int_ty0 = int_ty1)
+            );
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
