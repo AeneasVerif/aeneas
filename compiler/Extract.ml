@@ -472,7 +472,7 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
   (match (!backend, binop) with
   | HOL4, (Eq | Ne)
   | (FStar | Coq | Lean), (Eq | Lt | Le | Ne | Ge | Gt)
-  | Lean, (Div | Rem | Add | Sub | Mul) ->
+  | Lean, (Div | Rem | Add | Sub | Mul | Shl | Shr) ->
       let binop =
         match binop with
         | Eq -> "="
@@ -486,6 +486,8 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
         | Add -> "+"
         | Sub -> "-"
         | Mul -> "*"
+        | Shl -> "<<<"
+        | Shr -> ">>>"
         | _ -> raise (Failure "Unreachable")
       in
       let binop =
