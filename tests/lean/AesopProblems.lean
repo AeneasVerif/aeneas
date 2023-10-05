@@ -288,4 +288,54 @@ theorem mul2_add1_spec2 (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   progress as ⟨ x2 .. ⟩
   simp at *; scalar_tac
 
+/-#===========================================================================#
+  #
+  #     Generating proof drafts
+  #
+  #===========================================================================#-/
+
+/- I do not want to push you too much in this direction *yet* because this is not
+   what we need most at present, but following your ideas to completely
+   automate some proofs, I thought it would be nice to use [aesop] to draft
+   proofs, for instance by generating scripts which correspond to the structure
+   of the proof and that we could later modify.
+ -/
+def dist (x y : ℤ) : ℤ :=
+  if x ≤ y then y - x
+  else x - y
+
+example : ∀ x y, 0 ≤ dist x y := by
+  simp [dist]
+  /- Starting here, the structure of the proof simply follows the shape
+     of the theorem (we need to introduce the quantified variables) and the
+     structure of [dist]. Everything is very mechanical and guided by the syntax:
+     we don't have to think much.
+
+     Something important is that in order to make the proof maintanable,
+     we need to introduce names for [x] and [y] (we don't want to use [intros])
+     and write the [if ... then ... else ...] (we don't want to use [split]).
+     Of course, it is ok if the user needs to clean the proof a bit afterwards,
+     for instance by changing the names.
+   -/
+  intro x y
+  if h: x ≤ y then
+    /- Here we eventually have to think a bit to finish the proof, but [aesop]
+       could simply generate a [sorry] that we would fill later (in the present
+       situation, I of course expect [aesop] to finish the proof automatically).
+
+       Provided the proof scripts are not too big and are well structured, this might
+       provide a nice way of interacting with [aesop] in the cases it can't
+       completely finish the proofs. Instead of simply seeing the unproven goals,
+       we would have a partial proof script, which may make it easier to understand
+       where we are and why we have to prove the remaining proof obligations.
+
+       Combined with something like the [progress] tactic when doing program
+       verification, it could be quite powerful: we could generate the boring
+       part of the proof which is a bit verbose, and focus on the interesting bits.
+     -/
+    simp [h]
+  else
+    simp [h]
+    int_tac
+
 end AesopProblems
