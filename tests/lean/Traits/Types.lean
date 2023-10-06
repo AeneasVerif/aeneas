@@ -48,11 +48,11 @@ structure BoolWrapper where
 
 /- Trait declaration: [traits::WithConstTy] -/
 structure WithConstTy (Self : Type) (LEN : Usize) where
-  LEN1 :Usize
-  LEN2 :Usize
-  V :Type
-  W :Type
-  W_clause_0 :ToU64 W
+  LEN1 : Usize
+  LEN2 : Usize
+  V : Type
+  W : Type
+  W_clause_0 : ToU64 W
   f : W → Array U8 LEN → Result W
 
 /- [alloc::string::String] -/
@@ -60,7 +60,7 @@ axiom alloc.string.String : Type
 
 /- Trait declaration: [traits::ParentTrait0] -/
 structure ParentTrait0 (Self : Type) where
-  W :Type
+  W : Type
   get_name : Self → Result alloc.string.String
   get_w : Self → Result W
 
@@ -74,13 +74,13 @@ structure ChildTrait (Self : Type) where
 
 /- Trait declaration: [traits::Iterator] -/
 structure Iterator (Self : Type) where
-  Item :Type
+  Item : Type
 
 /- Trait declaration: [traits::IntoIterator] -/
 structure IntoIterator (Self : Type) where
-  Item :Type
-  IntoIter :Type
-  IntoIter_clause_0 :Iterator IntoIter
+  Item : Type
+  IntoIter : Type
+  IntoIter_clause_0 : Iterator IntoIter
   into_iter : Self → Result IntoIter
 
 end traits

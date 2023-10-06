@@ -4272,6 +4272,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
       let item_name = ctx_get_trait_const decl.def_id name ctx in
       let ty () =
         let inside = false in
+        F.pp_print_space fmt ();
         extract_ty ctx fmt TypeDeclId.Set.empty inside ty
       in
       extract_trait_decl_item ctx fmt item_name ty)
@@ -4282,7 +4283,10 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (fun (name, (clauses, _)) ->
       (* Extract the type *)
       let item_name = ctx_get_trait_type decl.def_id name ctx in
-      let ty () = F.pp_print_string fmt (type_keyword ()) in
+      let ty () =
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt (type_keyword ())
+      in
       extract_trait_decl_item ctx fmt item_name ty;
       (* Extract the clauses *)
       List.iter
@@ -4291,6 +4295,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
             ctx_get_trait_item_clause decl.def_id name clause.clause_id ctx
           in
           let ty () =
+            F.pp_print_space fmt ();
             extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
           in
           extract_trait_decl_item ctx fmt item_name ty)
