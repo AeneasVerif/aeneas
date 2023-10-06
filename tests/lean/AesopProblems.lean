@@ -69,6 +69,32 @@ more predictable version, e.g. `simp? -> simp only`. There are various options:
 - Have `aesop???` replace itself with `suffices : ... := by aesop`, where the
   `suffices` records the intended goals left over by Aesop. I like this also for
   proof readability, but it may become quite cluttered for larger proofs.
+
+SH: I'm very happy to see that mathlib wants the same as it means I'm not asking
+for something completely ad-hoc.
+
+Backward/forward:
+I think the backward rules still make sense: for instance, you could explore
+subexpressions in the context and, whenever an expression is a boolean, you
+could try to prove that it is [true] (or [false] if it failed). In the example
+above, [aesop] would attempt to prove [0 ≤ x + 1], and in doing so would apply
+the backward rule which states that it must use [linarith].
+And I'm also not keen on cluttering the context by applying forward rules.
+More specifically: [aesop] can apply forward rules when attempting to prove
+[0 ≤ x + 1], but I don't want [aesop] to introduce assumptions in the context
+that it then gives to the user.
+
+Stability:
+Yes, stability will be an issue. But can we consider it is orthogonal for now?
+For now, if we are to replace [aesop_simp] with something else, I am more in
+favour of:
+- inserting the step-by-step proof
+- using [aesop only]
+But on the other hand, it will often happen that the user sees what they want
+to simplify, but don't want to manually write it (like above: [have : 0 ≤ x + 1 := by ...]).
+Maybe we could leverage the rule sets to have specialized [aesop_simp] instances,
+and use the fact that rule sets, because they are specialized, may lead to
+more stability?...
 -/
 
 /- In the same spirit, I encountered this one a lot.
@@ -119,6 +145,16 @@ of rule would be useful. It would operate like this:
     G₂ := Γ, U ⊢ T
 
 Is this a pattern you would find useful more generally?
+
+SH: I think that might be the pattern we want. But we want to make sure that
+[U] gets applied in [T] immediately in G₂ (I guess you should be able to easily
+do that)
+
+Also, I guess the goal `T` would be a subexpression that we try to prove (for
+example `0 ≤ x + 1`, to simplify the `if 0 ≤ x + 1 then ... else ...`). Otherwise,
+we need to make sure `U` gets discarded before we return the goal to the user
+(we don't want to clutter the context with additional assumptions, we only want
+to simplify it).
 -/
 
 /- Here I am actually not sure: could Aesop solve this? I think yes, modulo
@@ -159,6 +195,17 @@ builder mentioned above. In this case, we generate a new goal
 Alternatively, we can view this variant as a `forward` rule triggered by the
 presence of a particular pattern in the goal (rather than by the presence of a
 particular hypothesis).
+
+SH: I'm happy with the hack of reducing `(l.update ...).index` to an `if-then-else`,
+provided we don't leave the `if-then-else` in the context if it can't get reduced.
+
+For the other alternative, I think we have to generate the goals:
+  G₁ := Γ ⊢ i = j
+  G₂ := Γ, (l.update i x).index j = x ⊢ T     (where we immediately use `(l.update i x).index j = x`)
+  
+  and if G₁ fails we try the alternative:
+  G₁ := Γ ⊢ i ≠ j
+  G₂ := Γ, (l.update i x).index j = l.update j x ⊢ T
 -/
 
 /-#===========================================================================#
@@ -176,6 +223,8 @@ particular hypothesis).
 /-
 JL: As mentioned, rule sets are already implemented. I heartily agree with all
 your analysis on why they're useful.
+
+SH: I'm very happy to read that :)
 -/
 
 /- A common problem using non-linear arithmetic.
@@ -234,6 +283,9 @@ reasoning support, we could try to implement something like Polya
 <https://link.springer.com/article/10.1007/s10817-015-9356-y>, a heuristic
 prover that performs 'obvious' calculation steps. Only with Aesop, we could have
 backwards rules as well. This would be extremely useful in mathlib as well.
+
+SH: this seems like a good idea. What are the problems with forward reasoning
+in Aesop as of today?
 -/
   
 
@@ -318,6 +370,16 @@ JL: Looks like another use case for the new rule builder: look for the pattern
 `↑(x - y)` in the goal and add a subgoal `y ≤ x`. I suppose this would also be
 a safe rule in practice. If it's not a safe rule, one could also case-split on
 `y ≤ x ∨ x - y = 0`.
+
+SH: Yes, I think something like `y ≤ x` might work. The only issue is that there may
+be several occurrences of substraction (`↑(x - y)`, `↑(z - w)`, etc.) and proving
+one inequality (like `y ≤ x`) might require to simplify other substractions *before*,
+so there may be a lot of backtracking. But it might be worth trying: I actually never
+encounter situations which are too complex which mix integers and natural numbers
+(because I pay attention not to use natural numbers too much).
+
+I don't think we would need `y ≤ x ∨ x - y = 0` (or at least in the situations
+I encountered).
 -/
 
 /-
@@ -392,6 +454,8 @@ Lean. These are a sort of expression trie and are used to map expression
 patterns (`Key`s) to arbitrary data, with efficient lookup of all data
 associated with a pattern that matches a given expression. They're used by
 Aesop, `simp` and typeclass synthesis.
+
+SH: this is great, thanks! I will give it a look.
 -/
 
 /-#===========================================================================#
@@ -450,6 +514,13 @@ I'm quite keen on this. I'm currently implementing the generation of partial
 tactic scripts, where Aesop makes some progress but doesn't finish the proof.
 (This is surprisingly annoying but mathlib needs it as well.) With that done,
 it'll just be a question of registering as many safe rules as possible.
+
+SH: once you have something, I will be very happy to play with it. On my side,
+I won't necessarily need to register as many rules as possible: I may want to have a
+simple rule set which shapes the proof (for instance by inserting all the instances of
+`progress` that I need, the `if then else`, etc.) and leaves holes that I could fill with
+other calls to Aesop (with potentially bigger or specialized rule sets).
+We will need to experiment of course.
 -/
 
 end AesopProblems
