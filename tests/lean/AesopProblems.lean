@@ -45,6 +45,32 @@ example (x : ℤ) (h : 0 ≤ x) :
   simp [*]
   trivial
 
+/-
+JL: This idea of having a more powerful 'make my goal nicer' tactic has recently
+also come up in mathlib, so I'm keen to do something about it. Such a tactic
+should obviously(?) be non-branching, so it would make sense to run Aesop with
+only safe rules. This is easy to implement. Isabelle also has such a tactic,
+called `safe` (I think).
+
+For `aesop_simp at ...`, backwards rules (`apply`, `constructors`, ...) don't
+make sense, but we could still run safe `forward`/`destruct` rules.
+
+I'm also quite concerned about stability. The usual way we deal with this in
+Lean (and quite a good way I think) is to replace the unstable tactic with a
+more predictable version, e.g. `simp? -> simp only`. There are various options:
+
+- Use the current `aesop?`, which replaces itself with a step-by-step proof.
+- Have `aesop??` replace itself with `aesop only` (to be implemented), listing
+  explicitly all the rules that were used. My only question about this approach
+  is whether all the properties of the rules (`safe`/`unsafe`/`norm`,
+  `apply`/`simp`/..., priority) should be given explicitly. Alternatively, we
+  could require that the rules are registered in the rule set, from which we
+  could get their properties.
+- Have `aesop???` replace itself with `suffices : ... := by aesop`, where the
+  `suffices` records the intended goals left over by Aesop. I like this also for
+  proof readability, but it may become quite cluttered for larger proofs.
+-/
+
 /- In the same spirit, I encountered this one a lot.
 
    When manipulating arrays (modeled as lists), we often find the following pattern, where
@@ -80,6 +106,21 @@ example (i j : ℤ) [Inhabited α] (l : List α) (x : α)
    But maybe this observation is too specific to the problem above...
  -/
 
+/-
+JL: Interesting. This rule doesn't fit any of my current rule builders. (It can
+be implemented as a tactic of course.) But perhaps a rule builder for this sort
+of rule would be useful. It would operate like this:
+
+  - Given a goal G := Γ ⊢ T,
+  - if you see a subterm of the form p in G
+    (maybe just in the target or in a hypothesis),
+  - then reduce G to goals
+    G₁ := Γ ⊢ U
+    G₂ := Γ, U ⊢ T
+
+Is this a pattern you would find useful more generally?
+-/
+
 /- Here I am actually not sure: could Aesop solve this? I think yes, modulo
    the fact that we need to instantiate the quantifier in [hi]. I would be very
    happy if I could use [aesop] for this, but this may take us quite far
@@ -94,6 +135,32 @@ example (i : ℤ) (l : List ℤ) (hi : ∀ i, 0 ≤ i → i < l.len → 0 < l.in
   if heq : i = j then simp [*]
   else simp [*]
 
+/-
+JL: We can hack it by reducing `(l.update ...).index` to an `if-then-else`.
+Aesop then performs case analysis on the condition:
+-/
+
+@[aesop norm simp]
+theorem index_update [Inhabited α] (l : List α) (i j : ℤ) (x : α) :
+    0 ≤ j → j < l.len →
+    (l.update i x).index j = if i = j then x else l.index j := by
+  intros; if h : i = j then simp_all else simp_all
+
+example (i : ℤ) (l : List ℤ) (hi : ∀ i, 0 ≤ i → i < l.len → 0 < l.index i)
+  (x : ℤ) (hx : 0 < x) :
+  ∀ j, 0 ≤ j → j < l.len → 0 < (l.update i x).index j := by
+  aesop
+
+/-
+However, a less hacky solution could be achieved with a variant of the new rule
+builder mentioned above. In this case, we generate a new goal
+`G₁ : Γ ⊢ i = j ∨ i ≠ j`, which Aesop would trivially solve.
+
+Alternatively, we can view this variant as a `forward` rule triggered by the
+presence of a particular pattern in the goal (rather than by the presence of a
+particular hypothesis).
+-/
+
 /-#===========================================================================#
   #
   #     Splitting the rules between different sets to have DSL solvers
@@ -105,6 +172,11 @@ example (i : ℤ) (l : List ℤ) (hi : ∀ i, 0 ≤ i → i < l.len → 0 < l.in
 
    A typical example is the following one.
  -/
+
+/-
+JL: As mentioned, rule sets are already implemented. I heartily agree with all
+your analysis on why they're useful.
+-/
 
 /- A common problem using non-linear arithmetic.
 
@@ -155,6 +227,14 @@ example (x y z : ℤ) (hx : 0 ≤ x) (hy : 0 ≤ y) (hz : 0 < z) :
   2 * (x / z + y / z) ≤ 2 * ((x + y) / z) := by
   apply Int.mul_le_mul_of_nonneg_left <;> try simp
   apply add_pos_div_pos_le <;> assumption
+
+/-
+JL: About non-linear arithmetic in general: If Aesop had good forward
+reasoning support, we could try to implement something like Polya
+<https://link.springer.com/article/10.1007/s10817-015-9356-y>, a heuristic
+prover that performs 'obvious' calculation steps. Only with Aesop, we could have
+backwards rules as well. This would be extremely useful in mathlib as well.
+-/
   
 
 /- More generally speaking, I believe having sets of rules would really open
@@ -204,6 +284,10 @@ example (x y z : ℤ) (hx : 0 ≤ x) (hy : 0 ≤ y) (hz : 0 < z) :
    mention it, because it is something I often encounter.
  -/
 
+/-
+JL: Indeed, this can be done with an `unfold` or `simp` rule.
+-/
+
 def inv (ls : List ℤ) : Prop := 0 < ls.len
 
 example (ls : List ℤ) (hinv : inv ls) : 1 ≤ ls.len := by
@@ -227,7 +311,16 @@ example (ls : List ℤ) (hinv : inv ls) : 1 ≤ ls.len := by
    [zify] and the simplifier, expect when we have substrations.
    Indeed, we have [↑(x - y) = ↑x - ↑y] (where x, y ∈ ℕ) only if we can prove
    that [y ≤ x]. I wonder how [aesop] could help us with that.
+-/
 
+/-
+JL: Looks like another use case for the new rule builder: look for the pattern
+`↑(x - y)` in the goal and add a subgoal `y ≤ x`. I suppose this would also be
+a safe rule in practice. If it's not a safe rule, one could also case-split on
+`y ≤ x ∨ x - y = 0`.
+-/
+
+/-
    Also, my [scalar_tac] could probably be implemented on top of [aesop].
    It does the following:
    - introduces the bounds for the machine integers (and some other bounds,
@@ -249,6 +342,11 @@ example (x : U32) (ls : List α) : 0 ≤ x.val + ls.len := by
   scalar_tac_preprocess
   -- Finishing off the proof
   linarith
+
+/-
+JL: Steps 1 and 2 also sound like applications of the new rule builder. Step 3
+not sure, depends on the specifics.
+-/
 
 /-#===========================================================================#
   #
@@ -287,6 +385,14 @@ theorem mul2_add1_spec2 (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   progress as ⟨ x1 .. ⟩ -- we progress by one step in the goal
   progress as ⟨ x2 .. ⟩
   simp at *; scalar_tac
+
+/-
+JL: Sounds like you're looking for discrimination trees (`DiscrTree`) from core
+Lean. These are a sort of expression trie and are used to map expression
+patterns (`Key`s) to arbitrary data, with efficient lookup of all data
+associated with a pattern that matches a given expression. They're used by
+Aesop, `simp` and typeclass synthesis.
+-/
 
 /-#===========================================================================#
   #
@@ -337,5 +443,13 @@ example : ∀ x y, 0 ≤ dist x y := by
   else
     simp [h]
     int_tac
+
+/-
+JL: Since I'm going in this direction anyway with the proof script generation,
+I'm quite keen on this. I'm currently implementing the generation of partial
+tactic scripts, where Aesop makes some progress but doesn't finish the proof.
+(This is surprisingly annoying but mathlib needs it as well.) With that done,
+it'll just be a question of registering as many safe rules as possible.
+-/
 
 end AesopProblems
