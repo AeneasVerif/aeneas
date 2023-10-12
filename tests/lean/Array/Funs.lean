@@ -53,16 +53,6 @@ def index_array_u32
   (s : Array U32 (Usize.ofInt 32)) (i : Usize) : Result U32 :=
   Array.index_shared U32 (Usize.ofInt 32) s i
 
-/- [array::index_array_generic]: forward function -/
-def index_array_generic
-  (N : Usize) (s : Array U32 N) (i : Usize) : Result U32 :=
-  Array.index_shared U32 N s i
-
-/- [array::index_array_generic_call]: forward function -/
-def index_array_generic_call
-  (N : Usize) (s : Array U32 N) (i : Usize) : Result U32 :=
-  index_array_generic N s i
-
 /- [array::index_array_copy]: forward function -/
 def index_array_copy (x : Array U32 (Usize.ofInt 32)) : Result U32 :=
   Array.index_shared U32 (Usize.ofInt 32) x (Usize.ofInt 0)
@@ -165,10 +155,6 @@ def index_index_array
     let a ←
       Array.index_shared (Array U32 (Usize.ofInt 32)) (Usize.ofInt 32) s i
     Array.index_shared U32 (Usize.ofInt 32) a j
-
-/- [array::const_gen_ret]: forward function -/
-def const_gen_ret (N : Usize) : Result Usize :=
-  Result.ret N
 
 /- [array::update_update_array]: forward function -/
 def update_update_array
@@ -430,21 +416,11 @@ def f3 : Result U32 :=
         (Array.make U32 (Usize.ofInt 2) [ (U32.ofInt 1), (U32.ofInt 2) ])
         (Usize.ofInt 0)
     let _ ← f2 i
+    let b := Array.repeat U32 (Usize.ofInt 32) (U32.ofInt 0)
     let s ←
       Array.to_slice_shared U32 (Usize.ofInt 2)
         (Array.make U32 (Usize.ofInt 2) [ (U32.ofInt 1), (U32.ofInt 2) ])
-    let s0 ←
-      f4
-        (Array.make U32 (Usize.ofInt 32) [
-          (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0),
-          (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0),
-          (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0),
-          (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0),
-          (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0),
-          (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0),
-          (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0),
-          (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0), (U32.ofInt 0)
-          ]) (Usize.ofInt 16) (Usize.ofInt 18)
+    let s0 ← f4 b (Usize.ofInt 16) (Usize.ofInt 18)
     sum2 s s0
 
 /- [array::SZ] -/
@@ -473,5 +449,10 @@ def ite : Result Unit :=
       Array.to_slice_mut_back U32 (Usize.ofInt 2)
         (Array.make U32 (Usize.ofInt 2) [ (U32.ofInt 0), (U32.ofInt 0) ]) s2
     Result.ret ()
+
+/- [array::array]: forward function -/
+def array (LEN : Usize) : Result (Array U8 LEN) :=
+  let a := Array.repeat U8 LEN (U8.ofInt 0)
+  Result.ret a
 
 end array
