@@ -298,6 +298,19 @@ module Sig = struct
   let array_subslice_sig (is_mut : bool) =
     mk_array_slice_subslice_sig true is_mut
 
+  let array_repeat_sig =
+    let generics =
+      (* <T, N> *)
+      mk_generic_params [] [ type_param_0 ] [ cg_param_0 ]
+    in
+    let regions_hierarchy = [] (* <> *) in
+    let inputs = [ tvar_0 (* T *) ] in
+    let output =
+      (* [T; N] *)
+      mk_array_ty tvar_0 cgvar_0
+    in
+    mk_sig generics regions_hierarchy inputs output
+
   let slice_subslice_sig (is_mut : bool) =
     mk_array_slice_subslice_sig false is_mut
 
@@ -384,6 +397,8 @@ let assumed_infos : assumed_info list =
       Sig.array_subslice_sig true,
       true,
       to_name [ "@ArraySubsliceMut" ] );
+    (* Array Repeat *)
+    (ArrayRepeat, Sig.array_repeat_sig, false, to_name [ "@ArrayRepeat" ]);
     (* Slice Index *)
     ( SliceIndexShared,
       Sig.slice_index_sig false,

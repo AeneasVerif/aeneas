@@ -1563,7 +1563,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     | ArraySubsliceMut | SliceIndexShared | SliceIndexMut
                     | SliceSubsliceShared | SliceSubsliceMut | ArrayIndexShared
                     | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
-                    | SliceLen ),
+                    | ArrayRepeat | SliceLen ),
                     _ ) ->
                     super#visit_texpression env e)
             | _ -> super#visit_texpression env e)

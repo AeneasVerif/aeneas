@@ -112,7 +112,19 @@ def pairwise_rel
 
 section Lemmas
 
-variable {α : Type u} 
+variable {α : Type u}
+
+def ireplicate {α : Type u} (i : ℤ) (x : α) : List α :=
+  if i ≤ 0 then []
+  else x :: ireplicate (i - 1) x
+termination_by ireplicate i x => i.toNat
+decreasing_by
+  simp_wf
+  -- TODO: simplify this kind of proofs
+  simp at *
+  have : 0 ≤ i := by linarith
+  have : 1 ≤ i := by linarith
+  simp [Int.toNat_sub_of_le, *]
 
 @[simp] theorem update_nil : update ([] : List α) i y = [] := by simp [update]
 @[simp] theorem update_zero_cons : update ((x :: tl) : List α) 0 y = y :: tl := by simp [update]
@@ -129,6 +141,10 @@ variable {α : Type u}
 @[simp] theorem slice_nil : slice i j ([] : List α) = [] := by simp [slice]
 @[simp] theorem slice_zero : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
 
+@[simp] theorem ireplicate_zero : ireplicate 0 x = [] := by rw [ireplicate]; simp
+@[simp] theorem ireplicate_nzero_cons (hne : 0 < i) : ireplicate i x = x :: ireplicate (i - 1) x := by
+  rw [ireplicate]; simp [*]; intro; linarith
+
 @[simp]
 theorem slice_nzero_cons (i j : Int) (x : α) (tl : List α) (hne : i ≠ 0) : slice i j ((x :: tl) : List α) = slice (i - 1) (j - 1) tl :=
   match tl with
@@ -143,6 +159,45 @@ theorem slice_nzero_cons (i j : Int) (x : α) (tl : List α) (hne : i ≠ 0) : s
         conv => lhs; simp [slice, *]
         conv at this => lhs; simp [slice, *]
         simp [*, slice]
+
+@[simp]
+theorem ireplicate_replicate {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
+  ireplicate l x = replicate l.toNat x :=
+  if hz: l = 0 then by
+    simp [*]
+  else by
+    have : 0 < l := by int_tac
+    have hr := ireplicate_replicate (l - 1) x (by int_tac)
+    simp [*]
+    have hl : l.toNat = .succ (l.toNat - 1) := by
+      cases hl: l.toNat <;> simp_all
+    conv => rhs; rw[hl]
+termination_by ireplicate_replicate l x h => l.toNat
+decreasing_by
+  simp_wf
+  -- TODO: simplify this kind of proofs
+  simp at *
+  have : 0 ≤ l := by linarith
+  have : 1 ≤ l := by linarith
+  simp [Int.toNat_sub_of_le, *]  
+
+@[simp]
+theorem ireplicate_len {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
+  (ireplicate l x).len = l :=
+  if hz: l = 0 then by
+    simp [*]
+  else by
+    have : 0 < l := by int_tac
+    have hr := ireplicate_len (l - 1) x (by int_tac)
+    simp [*]
+termination_by ireplicate_len l x h => l.toNat
+decreasing_by
+  simp_wf
+  -- TODO: simplify this kind of proofs
+  simp at *
+  have : 0 ≤ l := by linarith
+  have : 1 ≤ l := by linarith
+  simp [Int.toNat_sub_of_le, *]
 
 theorem len_eq_length (ls : List α) : ls.len = ls.length := by
   induction ls

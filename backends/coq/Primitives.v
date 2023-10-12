@@ -433,6 +433,9 @@ Qed.
 (* TODO: finish the definitions *)
 Axiom mk_array : forall (T : Type) (n : usize) (l : list T), array T n.
 
+(* For initialization *)
+Axiom array_repeat : forall {T : Type} (n : usize) (x : T), array T n.
+
 Axiom array_index_shared : forall (T : Type) (n : usize) (x : array T n) (i : usize), result T.
 Axiom array_index_mut_fwd : forall (T : Type) (n : usize) (x : array T n) (i : usize), result T.
 Axiom array_index_mut_back : forall (T : Type) (n : usize) (x : array T n) (i : usize) (nx : T), result (array T n).

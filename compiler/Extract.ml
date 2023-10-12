@@ -338,6 +338,7 @@ let assumed_llbc_functions () :
         (ArraySubsliceShared, None, "array_subslice_shared");
         (ArraySubsliceMut, None, "array_subslice_mut_fwd");
         (ArraySubsliceMut, rg0, "array_subslice_mut_back");
+        (ArrayRepeat, None, "array_repeat");
         (SliceIndexShared, None, "slice_index_shared");
         (SliceIndexMut, None, "slice_index_mut_fwd");
         (SliceIndexMut, rg0, "slice_index_mut_back");
@@ -369,6 +370,7 @@ let assumed_llbc_functions () :
         (ArraySubsliceShared, None, "Array.subslice_shared");
         (ArraySubsliceMut, None, "Array.subslice_mut");
         (ArraySubsliceMut, rg0, "Array.subslice_mut_back");
+        (ArrayRepeat, None, "Array.repeat");
         (SliceIndexShared, None, "Slice.index_shared");
         (SliceIndexMut, None, "Slice.index_mut");
         (SliceIndexMut, rg0, "Slice.index_mut_back");
@@ -3212,7 +3214,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_open_hvbox fmt ctx.indent_incr;
         let need_paren = inside in
         if need_paren then F.pp_print_string fmt "(";
-        (* Open the box for `Array.mk T N [` *)
+        (* Open the box for `Array.replicate T N [` *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the array constructor *)
         let cs = ctx_get_struct false (Assumed Array) ctx in

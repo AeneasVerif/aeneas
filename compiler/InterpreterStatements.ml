@@ -646,7 +646,7 @@ let eval_assumed_function_call_concrete (config : C.config)
               eval_vec_function_concrete config fid generics
           | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
           | ArrayToSliceMut | ArraySubsliceShared | ArraySubsliceMut
-          | SliceIndexShared | SliceIndexMut | SliceSubsliceShared
+          | ArrayRepeat | SliceIndexShared | SliceIndexMut | SliceSubsliceShared
           | SliceSubsliceMut | SliceLen ->
               raise (Failure "Unimplemented")
         in
