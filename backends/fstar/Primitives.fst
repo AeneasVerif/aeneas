@@ -352,6 +352,9 @@ let array_subslice_mut_fwd (a : Type0) (n : usize) (x : array a n) (r : range us
 let array_subslice_mut_back (a : Type0) (n : usize) (x : array a n) (r : range usize) (ns : slice a) : result (array a n) =
   admit()
 
+let array_repeat (a : Type0) (n : usize) (x : a) : array a n =
+  admit()
+
 let slice_subslice_shared (a : Type0) (x : slice a) (r : range usize) : result (slice a) =
   admit()
 
