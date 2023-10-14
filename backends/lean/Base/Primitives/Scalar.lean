@@ -533,6 +533,36 @@ theorem Scalar.add_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
   apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
 
+@[cepspec] theorem Isize.add_spec {x y : Isize}
+  (hmin : Isize.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ Isize.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
+  Scalar.add_spec hmin hmax
+
+@[cepspec] theorem I8.add_spec {x y : I8}
+  (hmin : I8.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I8.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
+  Scalar.add_spec hmin hmax
+
+@[cepspec] theorem I16.add_spec {x y : I16}
+  (hmin : I16.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I16.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
+  Scalar.add_spec hmin hmax
+
+@[cepspec] theorem I32.add_spec {x y : I32}
+  (hmin : I32.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I32.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
+  Scalar.add_spec hmin hmax
+
+@[cepspec] theorem I64.add_spec {x y : I64}
+  (hmin : I64.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I64.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
+  Scalar.add_spec hmin hmax
+
+@[cepspec] theorem I128.add_spec {x y : I128}
+  (hmin : I128.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I128.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
+  Scalar.add_spec hmin hmax
+
 -- Generic theorem - shouldn't be used much
 @[cpspec]
 theorem Scalar.sub_spec {ty} {x y : Scalar ty}
@@ -582,6 +612,36 @@ theorem Scalar.sub_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
   apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
 
+@[cepspec] theorem Isize.sub_spec {x y : Isize} (hmin : Isize.min ≤ x.val - y.val)
+  (hmax : x.val - y.val ≤ Isize.max) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
+  Scalar.sub_spec hmin hmax
+
+@[cepspec] theorem I8.sub_spec {x y : I8} (hmin : I8.min ≤ x.val - y.val)
+  (hmax : x.val - y.val ≤ I8.max) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
+  Scalar.sub_spec hmin hmax
+
+@[cepspec] theorem I16.sub_spec {x y : I16} (hmin : I16.min ≤ x.val - y.val)
+  (hmax : x.val - y.val ≤ I16.max) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
+  Scalar.sub_spec hmin hmax
+
+@[cepspec] theorem I32.sub_spec {x y : I32} (hmin : I32.min ≤ x.val - y.val)
+  (hmax : x.val - y.val ≤ I32.max) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
+  Scalar.sub_spec hmin hmax
+
+@[cepspec] theorem I64.sub_spec {x y : I64} (hmin : I64.min ≤ x.val - y.val)
+  (hmax : x.val - y.val ≤ I64.max) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
+  Scalar.sub_spec hmin hmax
+
+@[cepspec] theorem I128.sub_spec {x y : I128} (hmin : I128.min ≤ x.val - y.val)
+  (hmax : x.val - y.val ≤ I128.max) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
+  Scalar.sub_spec hmin hmax
+
 -- Generic theorem - shouldn't be used much
 theorem Scalar.mul_spec {ty} {x y : Scalar ty}
   (hmin : Scalar.min ty ≤ x.val * y.val)
@@ -627,6 +687,36 @@ theorem Scalar.mul_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
 @[cepspec] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
   apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem Isize.mul_spec {x y : Isize} (hmin : Isize.min ≤ x.val * y.val)
+  (hmax : x.val * y.val ≤ Isize.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
+  Scalar.mul_spec hmin hmax
+
+@[cepspec] theorem I8.mul_spec {x y : I8} (hmin : I8.min ≤ x.val * y.val)
+  (hmax : x.val * y.val ≤ I8.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
+  Scalar.mul_spec hmin hmax
+
+@[cepspec] theorem I16.mul_spec {x y : I16} (hmin : I16.min ≤ x.val * y.val)
+  (hmax : x.val * y.val ≤ I16.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
+  Scalar.mul_spec hmin hmax
+
+@[cepspec] theorem I32.mul_spec {x y : I32} (hmin : I32.min ≤ x.val * y.val)
+  (hmax : x.val * y.val ≤ I32.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
+  Scalar.mul_spec hmin hmax
+
+@[cepspec] theorem I64.mul_spec {x y : I64} (hmin : I64.min ≤ x.val * y.val)
+  (hmax : x.val * y.val ≤ I64.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
+  Scalar.mul_spec hmin hmax
+
+@[cepspec] theorem I128.mul_spec {x y : I128} (hmin : I128.min ≤ x.val * y.val)
+  (hmax : x.val * y.val ≤ I128.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
+  Scalar.mul_spec hmin hmax
 
 -- Generic theorem - shouldn't be used much
 @[cpspec]
@@ -681,6 +771,48 @@ theorem Scalar.div_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
   apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
 
+@[cepspec] theorem Isize.div_spec (x : Isize) {y : Isize}
+  (hnz : y.val ≠ 0)
+  (hmin : Isize.min ≤ scalar_div x.val y.val)
+  (hmax : scalar_div x.val y.val ≤ Isize.max):
+  ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
+  Scalar.div_spec hnz hmin hmax
+
+@[cepspec] theorem I8.div_spec (x : I8) {y : I8}
+  (hnz : y.val ≠ 0)
+  (hmin : I8.min ≤ scalar_div x.val y.val)
+  (hmax : scalar_div x.val y.val ≤ I8.max):
+  ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
+  Scalar.div_spec hnz hmin hmax
+
+@[cepspec] theorem I16.div_spec (x : I16) {y : I16}
+  (hnz : y.val ≠ 0)
+  (hmin : I16.min ≤ scalar_div x.val y.val)
+  (hmax : scalar_div x.val y.val ≤ I16.max):
+  ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
+  Scalar.div_spec hnz hmin hmax
+
+@[cepspec] theorem I32.div_spec (x : I32) {y : I32}
+  (hnz : y.val ≠ 0)
+  (hmin : I32.min ≤ scalar_div x.val y.val)
+  (hmax : scalar_div x.val y.val ≤ I32.max):
+  ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
+  Scalar.div_spec hnz hmin hmax
+
+@[cepspec] theorem I64.div_spec (x : I64) {y : I64}
+  (hnz : y.val ≠ 0)
+  (hmin : I64.min ≤ scalar_div x.val y.val)
+  (hmax : scalar_div x.val y.val ≤ I64.max):
+  ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
+  Scalar.div_spec hnz hmin hmax
+
+@[cepspec] theorem I128.div_spec (x : I128) {y : I128}
+  (hnz : y.val ≠ 0)
+  (hmin : I128.min ≤ scalar_div x.val y.val)
+  (hmax : scalar_div x.val y.val ≤ I128.max):
+  ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
+  Scalar.div_spec hnz hmin hmax
+
 -- Generic theorem - shouldn't be used much
 @[cpspec]
 theorem Scalar.rem_spec {ty} {x y : Scalar ty}
@@ -734,76 +866,89 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
   apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
 
+@[cepspec] theorem I8.rem_spec (x : I8) {y : I8}
+  (hnz : y.val ≠ 0)
+  (hmin : I8.min ≤ scalar_rem x.val y.val)
+  (hmax : scalar_rem x.val y.val ≤ I8.max):
+  ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
+  Scalar.rem_spec hnz hmin hmax
+
+@[cepspec] theorem I16.rem_spec (x : I16) {y : I16}
+  (hnz : y.val ≠ 0)
+  (hmin : I16.min ≤ scalar_rem x.val y.val)
+  (hmax : scalar_rem x.val y.val ≤ I16.max):
+  ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
+  Scalar.rem_spec hnz hmin hmax
+
+@[cepspec] theorem I32.rem_spec (x : I32) {y : I32}
+  (hnz : y.val ≠ 0)
+  (hmin : I32.min ≤ scalar_rem x.val y.val)
+  (hmax : scalar_rem x.val y.val ≤ I32.max):
+  ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
+  Scalar.rem_spec hnz hmin hmax
+
+@[cepspec] theorem I64.rem_spec (x : I64) {y : I64}
+  (hnz : y.val ≠ 0)
+  (hmin : I64.min ≤ scalar_rem x.val y.val)
+  (hmax : scalar_rem x.val y.val ≤ I64.max):
+  ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
+  Scalar.rem_spec hnz hmin hmax
+
+@[cepspec] theorem I128.rem_spec (x : I128) {y : I128}
+  (hnz : y.val ≠ 0)
+  (hmin : I128.min ≤ scalar_rem x.val y.val)
+  (hmax : scalar_rem x.val y.val ≤ I128.max):
+  ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
+  Scalar.rem_spec hnz hmin hmax
+
 -- ofIntCore
 -- TODO: typeclass?
-def Isize.ofIntCore := @Scalar.ofIntCore .Isize
-def I8.ofIntCore    := @Scalar.ofIntCore .I8
-def I16.ofIntCore   := @Scalar.ofIntCore .I16
-def I32.ofIntCore   := @Scalar.ofIntCore .I32
-def I64.ofIntCore   := @Scalar.ofIntCore .I64
-def I128.ofIntCore  := @Scalar.ofIntCore .I128
-def Usize.ofIntCore := @Scalar.ofIntCore .Usize
-def U8.ofIntCore    := @Scalar.ofIntCore .U8
-def U16.ofIntCore   := @Scalar.ofIntCore .U16
-def U32.ofIntCore   := @Scalar.ofIntCore .U32
-def U64.ofIntCore   := @Scalar.ofIntCore .U64
-def U128.ofIntCore  := @Scalar.ofIntCore .U128
+@[reducible] def Isize.ofIntCore := @Scalar.ofIntCore .Isize
+@[reducible] def I8.ofIntCore    := @Scalar.ofIntCore .I8
+@[reducible] def I16.ofIntCore   := @Scalar.ofIntCore .I16
+@[reducible] def I32.ofIntCore   := @Scalar.ofIntCore .I32
+@[reducible] def I64.ofIntCore   := @Scalar.ofIntCore .I64
+@[reducible] def I128.ofIntCore  := @Scalar.ofIntCore .I128
+@[reducible] def Usize.ofIntCore := @Scalar.ofIntCore .Usize
+@[reducible] def U8.ofIntCore    := @Scalar.ofIntCore .U8
+@[reducible] def U16.ofIntCore   := @Scalar.ofIntCore .U16
+@[reducible] def U32.ofIntCore   := @Scalar.ofIntCore .U32
+@[reducible] def U64.ofIntCore   := @Scalar.ofIntCore .U64
+@[reducible] def U128.ofIntCore  := @Scalar.ofIntCore .U128
 
 --  ofInt
 -- TODO: typeclass?
-def Isize.ofInt := @Scalar.ofInt .Isize
-def I8.ofInt    := @Scalar.ofInt .I8
-def I16.ofInt   := @Scalar.ofInt .I16
-def I32.ofInt   := @Scalar.ofInt .I32
-def I64.ofInt   := @Scalar.ofInt .I64
-def I128.ofInt  := @Scalar.ofInt .I128
-def Usize.ofInt := @Scalar.ofInt .Usize
-def U8.ofInt    := @Scalar.ofInt .U8
-def U16.ofInt   := @Scalar.ofInt .U16
-def U32.ofInt   := @Scalar.ofInt .U32
-def U64.ofInt   := @Scalar.ofInt .U64
-def U128.ofInt  := @Scalar.ofInt .U128
+@[reducible] def Isize.ofInt := @Scalar.ofInt .Isize
+@[reducible] def I8.ofInt    := @Scalar.ofInt .I8
+@[reducible] def I16.ofInt   := @Scalar.ofInt .I16
+@[reducible] def I32.ofInt   := @Scalar.ofInt .I32
+@[reducible] def I64.ofInt   := @Scalar.ofInt .I64
+@[reducible] def I128.ofInt  := @Scalar.ofInt .I128
+@[reducible] def Usize.ofInt := @Scalar.ofInt .Usize
+@[reducible] def U8.ofInt    := @Scalar.ofInt .U8
+@[reducible] def U16.ofInt   := @Scalar.ofInt .U16
+@[reducible] def U32.ofInt   := @Scalar.ofInt .U32
+@[reducible] def U64.ofInt   := @Scalar.ofInt .U64
+@[reducible] def U128.ofInt  := @Scalar.ofInt .U128
 
--- TODO: factor those lemmas out
+postfix:max "#isize" => Isize.ofInt
+postfix:max "#i8"    => I8.ofInt
+postfix:max "#i16"   => I16.ofInt
+postfix:max "#i32"   => I32.ofInt
+postfix:max "#i64"   => I64.ofInt
+postfix:max "#i128"  => I128.ofInt
+postfix:max "#usize" => Usize.ofInt
+postfix:max "#u8"    => U8.ofInt
+postfix:max "#u16"   => U16.ofInt
+postfix:max "#u32"   => U32.ofInt
+postfix:max "#u64"   => U64.ofInt
+postfix:max "#u128"  => U128.ofInt
+
+-- Testing the notations
+example : Result Usize := 0#usize + 1#usize
+
 @[simp] theorem Scalar.ofInt_val_eq {ty} (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : (Scalar.ofInt x h).val = x := by
   simp [Scalar.ofInt, Scalar.ofIntCore]
-
-@[simp] theorem Isize.ofInt_val_eq (h : Scalar.min ScalarTy.Isize ≤ x ∧ x ≤ Scalar.max ScalarTy.Isize) : (Isize.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem I8.ofInt_val_eq (h : Scalar.min ScalarTy.I8 ≤ x ∧ x ≤ Scalar.max ScalarTy.I8) : (I8.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem I16.ofInt_val_eq (h : Scalar.min ScalarTy.I16 ≤ x ∧ x ≤ Scalar.max ScalarTy.I16) : (I16.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem I32.ofInt_val_eq (h : Scalar.min ScalarTy.I32 ≤ x ∧ x ≤ Scalar.max ScalarTy.I32) : (I32.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem I64.ofInt_val_eq (h : Scalar.min ScalarTy.I64 ≤ x ∧ x ≤ Scalar.max ScalarTy.I64) : (I64.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem I128.ofInt_val_eq (h : Scalar.min ScalarTy.I128 ≤ x ∧ x ≤ Scalar.max ScalarTy.I128) : (I128.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem Usize.ofInt_val_eq (h : Scalar.min ScalarTy.Usize ≤ x ∧ x ≤ Scalar.max ScalarTy.Usize) : (Usize.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem U8.ofInt_val_eq (h : Scalar.min ScalarTy.U8 ≤ x ∧ x ≤ Scalar.max ScalarTy.U8) : (U8.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem U16.ofInt_val_eq (h : Scalar.min ScalarTy.U16 ≤ x ∧ x ≤ Scalar.max ScalarTy.U16) : (U16.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem U32.ofInt_val_eq (h : Scalar.min ScalarTy.U32 ≤ x ∧ x ≤ Scalar.max ScalarTy.U32) : (U32.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem U64.ofInt_val_eq (h : Scalar.min ScalarTy.U64 ≤ x ∧ x ≤ Scalar.max ScalarTy.U64) : (U64.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
-@[simp] theorem U128.ofInt_val_eq (h : Scalar.min ScalarTy.U128 ≤ x ∧ x ≤ Scalar.max ScalarTy.U128) : (U128.ofInt x h).val = x := by
-  apply Scalar.ofInt_val_eq h
-
 
 -- Comparisons
 instance {ty} : LT (Scalar ty) where
@@ -831,6 +976,9 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
 
 instance (ty : ScalarTy) : CoeOut (Scalar ty) Int where
   coe := λ v => v.val
+
+@[simp] theorem Scalar.neq_to_neq_val {ty} : ∀ {i j : Scalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
+  intro i j; cases i; cases j; simp
 
 -- -- We now define a type class that subsumes the various machine integer types, so
 -- -- as to write a concise definition for scalar_cast, rather than exhaustively

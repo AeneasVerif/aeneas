@@ -294,7 +294,6 @@ open Arith in
     have := tl.len_pos
     linarith
   else
-    simp at hineq
     have : 0 < i := by int_tac
     simp [*]
     apply hi
@@ -419,8 +418,8 @@ theorem index_itake_append_end [Inhabited α] (i j : Int) (l0 l1 : List α)
   match l0 with
   | [] => by
     simp at *
-    have := index_itake i j l1 (by simp_all) (by simp_all) (by simp_all; int_tac)
-    simp [*]
+    have := index_itake i j l1 (by simp_all) (by simp_all) (by int_tac)
+    try simp [*]
   | hd :: tl =>
     have : ¬ i = 0 := by simp at *; int_tac
     if hj : j = 0 then by simp_all; int_tac -- Contradiction

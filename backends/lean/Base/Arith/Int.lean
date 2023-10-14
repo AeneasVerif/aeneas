@@ -211,9 +211,11 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   let _ ← introHasIntPropInstances
   -- Extra preprocessing, before we split on the disjunctions
   extraPreprocess
-  -- Split
-  let asms ← introInstances ``PropHasImp.concl lookupPropHasImp
-  splitOnAsms asms.toList
+  -- Split - note that the extra-preprocessing step might actually have
+  -- proven the goal (by doing simplifications for instance)
+  Tactic.allGoals do
+    let asms ← introInstances ``PropHasImp.concl lookupPropHasImp
+    splitOnAsms asms.toList
 
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ())
@@ -238,7 +240,7 @@ def intTac (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Ta
   -- the goal. I think before leads to a smaller proof term?
   Tactic.allGoals (intTacPreprocess extraPreprocess)
   -- More preprocessing
-  Tactic.allGoals (Utils.simpAt [] [``nat_zero_eq_int_zero] [] .wildcard)
+  Tactic.allGoals (Utils.tryTac (Utils.simpAt [] [``nat_zero_eq_int_zero] [] .wildcard))
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call linarith
