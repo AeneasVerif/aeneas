@@ -11,6 +11,7 @@ type abs_region_groups = (AbstractionId.id, RegionId.id) g_region_groups
 (** A function signature, after instantiation *)
 type inst_fun_sig = {
   regions_hierarchy : abs_region_groups;
+  trait_type_constraints : rtrait_type_constraint list;
   inputs : rty list;
   output : rty;
 }

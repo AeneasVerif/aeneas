@@ -9,6 +9,9 @@ let pre_passes_log = L.get_logger "MainLogger.PrePasses"
 (** Logger for Translate *)
 let translate_log = L.get_logger "MainLogger.Translate"
 
+(** Logger for Contexts *)
+let contexts_log = L.get_logger "MainLogger.Contexts"
+
 (** Logger for PureUtils *)
 let pure_utils_log = L.get_logger "MainLogger.PureUtils"
 
@@ -56,6 +59,9 @@ let borrows_log = L.get_logger "MainLogger.Interpreter.Borrows"
 
 (** Logger for Invariants *)
 let invariants_log = L.get_logger "MainLogger.Interpreter.Invariants"
+
+(** Logger for AssociatedTypes *)
+let associated_types_log = L.get_logger "MainLogger.AssociatedTypes"
 
 (** Logger for SCC *)
 let scc_log = L.get_logger "MainLogger.Graph.SCC"

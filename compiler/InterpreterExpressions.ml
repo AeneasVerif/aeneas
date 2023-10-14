@@ -7,6 +7,7 @@ module E = Expressions
 open Utils
 module C = Contexts
 module Subst = Substitute
+module Assoc = AssociatedTypes
 module L = Logging
 open TypesUtils
 open ValuesUtils
@@ -141,11 +142,18 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
   | V.Adt av ->
       (* Sanity check *)
       (match v.V.ty with
-      | T.Adt (T.Assumed (T.Box | Vec), _, _, _) ->
+      | T.Adt (T.Assumed (T.Box | Vec), _) ->
           raise (Failure "Can't copy an assumed value other than Option")
-      | T.Adt (T.AdtId _, _, _, _) -> assert allow_adt_copy
-      | T.Adt ((T.Assumed Option | T.Tuple), _, _, _) -> () (* Ok *)
-      | T.Adt (T.Assumed (Slice | T.Array), [], [ ty ], []) ->
+      | T.Adt (T.AdtId _, _) -> assert allow_adt_copy
+      | T.Adt ((T.Assumed Option | T.Tuple), _) -> () (* Ok *)
+      | T.Adt
+          ( T.Assumed (Slice | T.Array),
+            {
+              regions = [];
+              types = [ ty ];
+              const_generics = [];
+              trait_refs = [];
+            } ) ->
           assert (ty_is_primitively_copyable ty)
       | _ -> raise (Failure "Unreachable"));
       let ctx, fields =
@@ -230,17 +238,16 @@ let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
   let prepare : cm_fun =
    fun cf ctx ->
     match op with
-    | Expressions.Constant (ty, cv) ->
+    | E.Constant _ ->
         (* No need to reorganize the context *)
-        literal_to_typed_value (TypesUtils.ty_as_literal ty) cv |> ignore;
         cf ctx
-    | Expressions.Copy p ->
+    | E.Copy p ->
         (* Access the value *)
         let access = Read in
         (* Expand the symbolic values, if necessary *)
         let expand_prim_copy = true in
         access_rplace_reorganize config expand_prim_copy access p cf ctx
-    | Expressions.Move p ->
+    | E.Move p ->
         (* Access the value *)
         let access = Move in
         let expand_prim_copy = false in
@@ -260,9 +267,70 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
-  | Expressions.Constant (ty, cv) ->
-      cf (literal_to_typed_value (TypesUtils.ty_as_literal ty) cv) ctx
-  | Expressions.Copy p ->
+  | E.Constant cv -> (
+      match cv.value with
+      | E.CLiteral lit ->
+          cf (literal_to_typed_value (TypesUtils.ty_as_literal cv.ty) lit) ctx
+      | E.TraitConst (trait_ref, generics, const_name) -> (
+          assert (generics = TypesUtils.mk_empty_generic_args);
+          match trait_ref.trait_id with
+          | T.TraitImpl _ ->
+              (* This shouldn't happen: if we refer to a concrete implementation, we
+                 should directly refer to the top-level constant *)
+              raise (Failure "Unreachable")
+          | _ -> (
+              (* We refer to a constant defined in a local clause: simply
+                 introduce a fresh symbolic value *)
+              let ctx0 = ctx in
+              (* Lookup the trait declaration to retrieve the type of the symbolic value *)
+              let trait_decl =
+                C.ctx_lookup_trait_decl ctx
+                  trait_ref.trait_decl_ref.trait_decl_id
+              in
+              let _, (ty, _) =
+                List.find (fun (name, _) -> name = const_name) trait_decl.consts
+              in
+              (* Introduce a fresh symbolic value *)
+              let v = mk_fresh_symbolic_typed_value_from_ety V.TraitConst ty in
+              (* Continue the evaluation *)
+              let e = cf v ctx in
+              (* We have to wrap the generated expression *)
+              match e with
+              | None -> None
+              | Some e ->
+                  Some
+                    (SymbolicAst.IntroSymbolic
+                       ( ctx0,
+                         None,
+                         value_as_symbolic v.value,
+                         SymbolicAst.TraitConstValue
+                           (trait_ref, generics, const_name),
+                         e ))))
+      | E.CVar vid -> (
+          let ctx0 = ctx in
+          (* Lookup the const generic value *)
+          let cv = C.ctx_lookup_const_generic_value ctx vid in
+          (* Copy the value *)
+          let allow_adt_copy = false in
+          let ctx, v = copy_value allow_adt_copy config ctx cv in
+          (* Continue *)
+          let e = cf v ctx in
+          (* We have to wrap the generated expression *)
+          match e with
+          | None -> None
+          | Some e ->
+              (* If we are synthesizing a symbolic AST, it means that we are in symbolic
+                 mode: the value of the const generic is necessarily symbolic. *)
+              assert (is_symbolic cv.V.value);
+              (* *)
+              Some
+                (SymbolicAst.IntroSymbolic
+                   ( ctx0,
+                     None,
+                     value_as_symbolic v.value,
+                     SymbolicAst.ConstGenericValue vid,
+                     e ))))
+  | E.Copy p ->
       (* Access the value *)
       let access = Read in
       let cc = read_place access p in
@@ -283,7 +351,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
       in
       (* Compose and apply *)
       comp cc copy cf ctx
-  | Expressions.Move p ->
+  | E.Move p ->
       (* Access the value *)
       let access = Move in
       let cc = read_place access p in
@@ -656,7 +724,8 @@ let eval_rvalue_aggregate (config : C.config)
     | E.AggregatedTuple ->
         let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
         let v = V.Adt { variant_id = None; field_values = values } in
-        let ty = T.Adt (T.Tuple, [], tys, []) in
+        let generics = TypesUtils.mk_generic_args [] tys [] [] in
+        let ty = T.Adt (T.Tuple, generics) in
         let aggregated : V.typed_value = { V.value = v; ty } in
         (* Call the continuation *)
         cf aggregated ctx
@@ -667,20 +736,22 @@ let eval_rvalue_aggregate (config : C.config)
           assert (List.length values = 1)
         else raise (Failure "Unreachable");
         (* Construt the value *)
-        let aty = T.Adt (T.Assumed T.Option, [], [ ty ], []) in
+        let generics = TypesUtils.mk_generic_args [] [ ty ] [] [] in
+        let aty = T.Adt (T.Assumed T.Option, generics) in
         let av : V.adt_value =
           { V.variant_id = Some variant_id; V.field_values = values }
         in
         let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
         (* Call the continuation *)
         cf aggregated ctx
-    | E.AggregatedAdt (def_id, opt_variant_id, regions, types, cgs) ->
+    | E.AggregatedAdt (def_id, opt_variant_id, generics) ->
         (* Sanity checks *)
         let type_decl = C.ctx_lookup_type_decl ctx def_id in
-        assert (List.length type_decl.region_params = List.length regions);
+        assert (
+          List.length type_decl.generics.regions = List.length generics.regions);
         let expected_field_types =
-          Subst.ctx_adt_get_instantiated_field_etypes ctx def_id opt_variant_id
-            types cgs
+          Assoc.ctx_adt_get_inst_norm_field_etypes ctx def_id opt_variant_id
+            generics
         in
         assert (
           expected_field_types
@@ -689,7 +760,7 @@ let eval_rvalue_aggregate (config : C.config)
         let av : V.adt_value =
           { V.variant_id = opt_variant_id; V.field_values = values }
         in
-        let aty = T.Adt (T.AdtId def_id, regions, types, cgs) in
+        let aty = T.Adt (T.AdtId def_id, generics) in
         let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
         (* Call the continuation *)
         cf aggregated ctx
@@ -709,7 +780,8 @@ let eval_rvalue_aggregate (config : C.config)
         let av : V.adt_value =
           { V.variant_id = None; V.field_values = values }
         in
-        let aty = T.Adt (T.Assumed T.Range, [], [ ety ], []) in
+        let generics = TypesUtils.mk_generic_args_from_types [ ety ] in
+        let aty = T.Adt (T.Assumed T.Range, generics) in
         let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
         (* Call the continuation *)
         cf aggregated ctx
@@ -719,7 +791,8 @@ let eval_rvalue_aggregate (config : C.config)
         (* Sanity check: the number of values is consistent with the length *)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
         assert (len = Z.of_int (List.length values));
-        let ty = T.Adt (T.Assumed T.Array, [], [ ety ], [ cg ]) in
+        let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
+        let ty = T.Adt (T.Assumed T.Array, generics) in
         (* In order to generate a better AST, we introduce a symbolic
            value equal to the array. The reason is that otherwise, the
            array we introduce here might be duplicated in the generated
@@ -752,7 +825,7 @@ let eval_rvalue_not_global (config : C.config) (rvalue : E.rvalue)
   (* Delegate to the proper auxiliary function *)
   match rvalue with
   | E.Use op -> comp_wrap (eval_operand config op) ctx
-  | E.Ref (p, bkind) -> comp_wrap (eval_rvalue_ref config p bkind) ctx
+  | E.RvRef (p, bkind) -> comp_wrap (eval_rvalue_ref config p bkind) ctx
   | E.UnaryOp (unop, op) -> eval_unary_op config unop op cf ctx
   | E.BinaryOp (binop, op1, op2) -> eval_binary_op config binop op1 op2 cf ctx
   | E.Aggregate (aggregate_kind, ops) ->

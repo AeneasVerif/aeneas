@@ -46,6 +46,30 @@ sig
   
   (*  Definitions  *)
     val bind_def : thm
+    val core_i128_max_def : thm
+    val core_i128_min_def : thm
+    val core_i16_max_def : thm
+    val core_i16_min_def : thm
+    val core_i32_max_def : thm
+    val core_i32_min_def : thm
+    val core_i64_max_def : thm
+    val core_i64_min_def : thm
+    val core_i8_max_def : thm
+    val core_i8_min_def : thm
+    val core_isize_max_def : thm
+    val core_isize_min_def : thm
+    val core_u128_max_def : thm
+    val core_u128_min_def : thm
+    val core_u16_max_def : thm
+    val core_u16_min_def : thm
+    val core_u32_max_def : thm
+    val core_u32_min_def : thm
+    val core_u64_max_def : thm
+    val core_u64_min_def : thm
+    val core_u8_max_def : thm
+    val core_u8_min_def : thm
+    val core_usize_max_def : thm
+    val core_usize_min_def : thm
     val error_BIJ : thm
     val error_CASE : thm
     val error_TY_DEF : thm
@@ -565,6 +589,102 @@ sig
       ⊢ ∀x f.
           monad_bind x f =
           case x of Return y => f y | Fail e => Fail e | Diverge => Diverge
+   
+   [core_i128_max_def]  Definition
+      
+      ⊢ core_i128_max = int_to_i128 i128_max
+   
+   [core_i128_min_def]  Definition
+      
+      ⊢ core_i128_min = int_to_i128 i128_min
+   
+   [core_i16_max_def]  Definition
+      
+      ⊢ core_i16_max = int_to_i16 i16_max
+   
+   [core_i16_min_def]  Definition
+      
+      ⊢ core_i16_min = int_to_i16 i16_min
+   
+   [core_i32_max_def]  Definition
+      
+      ⊢ core_i32_max = int_to_i32 i32_max
+   
+   [core_i32_min_def]  Definition
+      
+      ⊢ core_i32_min = int_to_i32 i32_min
+   
+   [core_i64_max_def]  Definition
+      
+      ⊢ core_i64_max = int_to_i64 i64_max
+   
+   [core_i64_min_def]  Definition
+      
+      ⊢ core_i64_min = int_to_i64 i64_min
+   
+   [core_i8_max_def]  Definition
+      
+      ⊢ core_i8_max = int_to_i8 i8_max
+   
+   [core_i8_min_def]  Definition
+      
+      ⊢ core_i8_min = int_to_i8 i8_min
+   
+   [core_isize_max_def]  Definition
+      
+      ⊢ core_isize_max = int_to_isize isize_max
+   
+   [core_isize_min_def]  Definition
+      
+      ⊢ core_isize_min = int_to_isize isize_min
+   
+   [core_u128_max_def]  Definition
+      
+      ⊢ core_u128_max = int_to_u128 u128_max
+   
+   [core_u128_min_def]  Definition
+      
+      ⊢ core_u128_min = int_to_u128 0
+   
+   [core_u16_max_def]  Definition
+      
+      ⊢ core_u16_max = int_to_u16 u16_max
+   
+   [core_u16_min_def]  Definition
+      
+      ⊢ core_u16_min = int_to_u16 0
+   
+   [core_u32_max_def]  Definition
+      
+      ⊢ core_u32_max = int_to_u32 u32_max
+   
+   [core_u32_min_def]  Definition
+      
+      ⊢ core_u32_min = int_to_u32 0
+   
+   [core_u64_max_def]  Definition
+      
+      ⊢ core_u64_max = int_to_u64 u64_max
+   
+   [core_u64_min_def]  Definition
+      
+      ⊢ core_u64_min = int_to_u64 0
+   
+   [core_u8_max_def]  Definition
+      
+      ⊢ core_u8_max = int_to_u8 u8_max
+   
+   [core_u8_min_def]  Definition
+      
+      ⊢ core_u8_min = int_to_u8 0
+   
+   [core_usize_max_def]  Definition
+      
+      ⊢ core_usize_max = int_to_usize usize_max
+   
+   [core_usize_min_def]  Definition
+      
+      ⊢ core_usize_min = int_to_usize 0
    
    [error_BIJ]  Definition
       

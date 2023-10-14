@@ -166,7 +166,7 @@ tleanp-polonius_list: OPTIONS +=
 thol4p-polonius_list: SUBDIR := misc-polonius_list
 thol4p-polonius_list: OPTIONS +=
 
-trans-constants: OPTIONS += -test-units -test-trans-units -no-split-files -no-state
+trans-constants: OPTIONS += -test-trans-units -no-split-files -no-state
 trans-constants: SUBDIR := misc
 tfstar-constants: OPTIONS +=
 tcoq-constants: OPTIONS +=

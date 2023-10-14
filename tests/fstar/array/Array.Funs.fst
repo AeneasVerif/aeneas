@@ -139,6 +139,10 @@ let index_index_array_fwd
   let* a = array_index_shared (array u32 32) 32 s i in
   array_index_shared u32 32 a j
 
+(** [array::const_gen_ret]: forward function *)
+let const_gen_ret_fwd (n : usize) : result usize =
+  Return n
+
 (** [array::update_update_array]: forward function *)
 let update_update_array_fwd
   (s : array (array u32 32) 32) (i : usize) (j : usize) : result unit =
@@ -342,6 +346,14 @@ let f3_fwd : result u32 =
         0; 0; 0; 0; 0; 0; 0; 0
         ]) 16 18 in
   sum2_fwd s s0
+
+(** [array::SZ] *)
+let sz_body : result usize = Return 32
+let sz_c : usize = eval_global sz_body
+
+(** [array::f5]: forward function *)
+let f5_fwd (x : array u32 32) : result u32 =
+  array_index_shared u32 32 x 0
 
 (** [array::ite]: forward function *)
 let ite_fwd : result unit =

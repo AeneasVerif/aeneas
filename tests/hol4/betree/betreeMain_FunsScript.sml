@@ -88,14 +88,6 @@ val betree_node_id_counter_fresh_id_back_def = Define ‘
     od
 ’
 
-(** [core::num::u64::{9}::MAX] *)
-Definition core_num_u64_max_body_def:
-  core_num_u64_max_body : u64 result = Return (int_to_u64 18446744073709551615)
-End
-Definition core_num_u64_max_c_def:
-  core_num_u64_max_c : u64 = get_return_value core_num_u64_max_body
-End
-
 val betree_upsert_update_fwd_def = Define ‘
   (** [betree_main::betree::upsert_update]: forward function *)
   betree_upsert_update_fwd
@@ -109,8 +101,8 @@ val betree_upsert_update_fwd_def = Define ‘
       (case st of
       | BetreeUpsertFunStateAdd v =>
         do
-        margin <- u64_sub core_num_u64_max_c prev0;
-        if u64_ge margin v then u64_add prev0 v else Return core_num_u64_max_c
+        margin <- u64_sub core_u64_max prev0;
+        if u64_ge margin v then u64_add prev0 v else Return core_u64_max
         od
       | BetreeUpsertFunStateSub v =>
         if u64_ge prev0 v then u64_sub prev0 v else Return (int_to_u64 0)))

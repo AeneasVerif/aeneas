@@ -14,11 +14,10 @@ type expl_info = subtype_info [@@deriving show]
 
 type type_borrows_info = {
   contains_static : bool;
-      (** Does the type (transitively) contains a static borrow? *)
-  contains_borrow : bool;
-      (** Does the type (transitively) contains a borrow? *)
+      (** Does the type (transitively) contain a static borrow? *)
+  contains_borrow : bool;  (** Does the type (transitively) contain a borrow? *)
   contains_nested_borrows : bool;
-      (** Does the type (transitively) contains nested borrows? *)
+      (** Does the type (transitively) contain nested borrows? *)
   contains_borrow_under_mut : bool;
 }
 [@@deriving show]
@@ -61,7 +60,7 @@ let initialize_g_type_info (param_infos : 'p) : 'p g_type_info =
 
 let initialize_type_decl_info (def : type_decl) : type_decl_info =
   let param_info = { under_borrow = false; under_mut_borrow = false } in
-  let param_infos = List.map (fun _ -> param_info) def.type_params in
+  let param_infos = List.map (fun _ -> param_info) def.generics.types in
   initialize_g_type_info param_infos
 
 let type_decl_info_to_partial_type_info (info : type_decl_info) :
@@ -122,7 +121,7 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
   let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
       (ty : 'r ty) : partial_type_info =
     match ty with
-    | Literal _ | Never -> ty_info
+    | Literal _ | Never | TraitType _ -> ty_info
     | TypeVar var_id -> (
         (* Update the information for the proper parameter, if necessary *)
         match ty_info.param_infos with
@@ -171,20 +170,18 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
         analyze expl_info ty_info rty
     | Adt
         ( (Tuple | Assumed (Box | Vec | Option | Slice | Array | Str | Range)),
-          _,
-          tys,
-          _ ) ->
+          generics ) ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze expl_info ty_info ty)
-          ty_info tys
-    | Adt (AdtId adt_id, regions, tys, _cgs) ->
+          ty_info generics.types
+    | Adt (AdtId adt_id, generics) ->
         (* Lookup the information for this type definition *)
         let adt_info = TypeDeclId.Map.find adt_id infos in
         (* Update the type info with the information from the adt *)
         let ty_info = update_ty_info ty_info adt_info.borrows_info in
         (* Check if 'static appears in the region parameters *)
-        let found_static = List.exists r_is_static regions in
+        let found_static = List.exists r_is_static generics.regions in
         let borrows_info = ty_info.borrows_info in
         let borrows_info =
           {
@@ -196,7 +193,7 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
         let ty_info = { ty_info with borrows_info } in
         (* For every instantiated type parameter: update the exploration info
          * then explore the type *)
-        let params_tys = List.combine adt_info.param_infos tys in
+        let params_tys = List.combine adt_info.param_infos generics.types in
         let ty_info =
           List.fold_left
             (fun ty_info (param_info, ty) ->

@@ -5,6 +5,7 @@ open TranslateCore
 module C = Contexts
 module RegionVarId = T.RegionVarId
 module F = Format
+open ExtractAssumed
 
 (** The local logger *)
 let log = L.pure_to_extract_log
@@ -77,6 +78,7 @@ type decl_kind =
           F*:  [val x : Type0]
           Coq: [Axiom x : Type.]
        *)
+[@@deriving show]
 
 (** Return [true] if the declaration is the last from its group of declarations.
 
@@ -111,9 +113,9 @@ let decl_is_first_from_group (kind : decl_kind) : bool =
 let decl_is_not_last_from_group (kind : decl_kind) : bool =
   not (decl_is_last_from_group kind)
 
-(* TODO: this should a module we give to a functor! *)
+type type_decl_kind = Enum | Struct [@@deriving show]
 
-type type_decl_kind = Enum | Struct
+(* TODO: this should be a module we give to a functor! *)
 
 (** A formatter's role is twofold:
     1. Come up with name suggestions.
@@ -125,6 +127,9 @@ type type_decl_kind = Enum | Struct
     snake case, adding prefixes/suffixes, etc.
 
     2. Format some specific terms, like constants.
+
+    TODO: unclear that this is useful now that all the backends are so much
+    entangled in Extract.ml
  *)
 type formatter = {
   bool_name : string;
@@ -239,6 +244,13 @@ type formatter = {
             the same purpose as in {!field:fun_name}.
           - loop identifier, if this is for a loop
        *)
+  trait_decl_name : trait_decl -> string;
+  trait_impl_name : trait_decl -> trait_impl -> string;
+  trait_parent_clause_name : trait_decl -> trait_clause -> string;
+  trait_const_name : trait_decl -> string -> string;
+  trait_type_name : trait_decl -> string -> string;
+  trait_method_name : trait_decl -> string -> string;
+  trait_type_clause_name : trait_decl -> string -> trait_clause -> string;
   opaque_pre : unit -> string;
       (** TODO: obsolete, remove.
 
@@ -288,6 +300,14 @@ type formatter = {
       (** Generates a type variable basename. *)
   const_generic_var_basename : StringSet.t -> string -> string;
       (** Generates a const generic variable basename. *)
+  trait_self_clause_basename : string;
+  trait_clause_basename : StringSet.t -> trait_clause -> string;
+      (** Return a base name for a trait clause. We might add a suffix to prevent
+          collisions.
+
+          In the traduction we explicitely manipulate the trait clause instances,
+          that is we introduce one input variable for each trait clause.
+       *)
   append_index : string -> int -> string;
       (** Appends an index to a name - we use this to generate unique
           names: when doing so, the role of the formatter is just to concatenate
@@ -396,10 +416,59 @@ type id =
   | TypeVarId of TypeVarId.id
   | ConstGenericVarId of ConstGenericVarId.id
   | VarId of VarId.id
+  | TraitDeclId of TraitDeclId.id
+  | TraitImplId of TraitImplId.id
+  | LocalTraitClauseId of TraitClauseId.id
+  | TraitMethodId of TraitDeclId.id * string * T.RegionGroupId.id option
+      (** Something peculiar with trait methods: because we have to take into
+          account forward/backward functions, we may need to generate fields
+          items per method.
+       *)
+  | TraitItemId of TraitDeclId.id * string
+      (** A trait associated item which is not a method *)
+  | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
+  | TraitItemClauseId of TraitDeclId.id * string * TraitClauseId.id
+  | TraitSelfClauseId
+      (** Specifically for the clause: [Self : Trait].
+
+          For now, we forbid provided methods (methods in trait declarations
+          with a default implementation) from being overriden in trait implementations.
+          We extract trait provided methods such that they take an instance of
+          the trait as input: this instance is given by the trait self clause.
+
+          For instance:
+          {[
+            //
+            // Rust
+            //
+            trait ToU64 {
+              fn to_u64(&self) -> u64;
+
+              // Provided method
+              fn is_pos(&self) -> bool {
+                self.to_u64() > 0
+              }
+            }
+
+            //
+            // Generated code
+            //
+            struct ToU64 (T : Type) {
+              to_u64 : T -> u64;
+            }
+
+            //                    The trait self clause
+            //                    vvvvvvvvvvvvvvvvvvvvvv
+            let is_pos (T : Type) (trait_self : ToU64 T) (self : T) : bool =
+              trait_self.to_u64 self > 0
+          ]}
+       *)
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
           should always be in context, etc. and which can't be linked to one
           of the above.
+
+          TODO: rename to "keyword"
        *)
 [@@deriving show, ord]
 
@@ -445,23 +514,52 @@ type names_map = {
        *)
 }
 
-let names_map_add (id_to_string : id -> string) (is_opaque : bool) (id : id)
-    (name : string) (nm : names_map) : names_map =
-  (* Check if there is a clash *)
-  (match StringMap.find_opt name nm.name_to_id with
+let empty_names_map : names_map =
+  {
+    id_to_name = IdMap.empty;
+    name_to_id = StringMap.empty;
+    names_set = StringSet.empty;
+    opaque_ids = IdSet.empty;
+  }
+
+(** Small helper to report name collision *)
+let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
+    (name : string) : unit =
+  let id1 = "\n- " ^ id_to_string id1 in
+  let id2 = "\n- " ^ id_to_string id2 in
+  let err =
+    "Name clash detected: the following identifiers are bound to the same name \
+     \"" ^ name ^ "\":" ^ id1 ^ id2
+    ^ "\nYou may want to rename some of your definitions, or report an issue."
+  in
+  log#serror err;
+  (* If we fail hard on errors, raise an exception *)
+  if !Config.extract_fail_hard then raise (Failure err)
+
+let names_map_get_id_from_name (name : string) (nm : names_map) : id option =
+  StringMap.find_opt name nm.name_to_id
+
+let names_map_check_collision (id_to_string : id -> string) (id : id)
+    (name : string) (nm : names_map) : unit =
+  match names_map_get_id_from_name name nm with
   | None -> () (* Ok *)
   | Some clash ->
       (* There is a clash: print a nice debugging message for the user *)
-      let id1 = "\n- " ^ id_to_string clash in
-      let id2 = "\n- " ^ id_to_string id in
-      let err =
-        "Name clash detected: the following identifiers are bound to the same \
-         name \"" ^ name ^ "\":" ^ id1 ^ id2
-      in
-      log#serror err;
-      raise (Failure err));
+      report_name_collision id_to_string clash id name
+
+let names_map_add (id_to_string : id -> string) (is_opaque : bool) (id : id)
+    (name : string) (nm : names_map) : names_map =
+  (* Check if there is a clash *)
+  names_map_check_collision id_to_string id name nm;
   (* Sanity check *)
-  assert (not (StringSet.mem name nm.names_set));
+  if StringSet.mem name nm.names_set then (
+    let err =
+      "Error when registering the name for id: " ^ id_to_string id
+      ^ ":\nThe chosen name is already in the names set: " ^ name
+    in
+    log#serror err;
+    (* If we fail hard on errors, raise an exception *)
+    if !Config.extract_fail_hard then raise (Failure err));
   (* Insert *)
   let id_to_name = IdMap.add id name nm.id_to_name in
   let name_to_id = StringMap.add name id nm.name_to_id in
@@ -549,6 +647,7 @@ type fun_name_info = { keep_fwd : bool; num_backs : int }
     functions, etc.
  *)
 type extraction_ctx = {
+  crate : A.crate;
   trans_ctx : trans_ctx;
   names_map : names_map;
       (** The map for id to names, where we forbid name collisions
@@ -556,6 +655,15 @@ type extraction_ctx = {
   unsafe_names_map : unsafe_names_map;
       (** The map for id to names, where we allow name collisions
           (ex.: we might allow record field name collisions). *)
+  strict_names_map : names_map;
+      (** This map is a sub-map of [names_map]. For the ids in this map we also
+          forbid collisions with names in the [unsafe_names_map].
+
+          We do so for keywords for instance, but also for types (in a dependently
+          typed language, we might have an issue if the field of a record has, say,
+          the name "u32", and another field of the same record refers to "u32"
+          (for instance in its type).
+       *)
   fmt : formatter;
   indent_incr : int;
       (** The indent increment we insert whenever we need to indent more *)
@@ -586,6 +694,14 @@ type extraction_ctx = {
           in case a Rust function only has one backward translation
           and we filter the forward function because it returns unit.
         *)
+  trait_decl_id : trait_decl_id option;
+      (** If we are extracting a trait declaration, identifies it *)
+  is_provided_method : bool;
+  trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
+  trans_funs : pure_fun_translation A.FunDeclId.Map.t;
+  functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
+  trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
+  trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
 }
 
 (** Debugging function, used when communicating name collisions to the user,
@@ -593,9 +709,16 @@ type extraction_ctx = {
     instance).
  *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
-  let global_decls = ctx.trans_ctx.global_context.global_decls in
-  let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
-  let type_decls = ctx.trans_ctx.type_context.type_decls in
+  let global_decls = ctx.trans_ctx.global_ctx.global_decls in
+  let fun_decls = ctx.trans_ctx.fun_ctx.fun_decls in
+  let type_decls = ctx.trans_ctx.type_ctx.type_decls in
+  let trait_decls = ctx.trans_ctx.trait_decls_ctx.trait_decls in
+  let trait_decl_id_to_string (id : A.TraitDeclId.id) : string =
+    let trait_name =
+      Print.fun_name_to_string (A.TraitDeclId.Map.find id trait_decls).name
+    in
+    "trait_decl: " ^ trait_name ^ " (id: " ^ A.TraitDeclId.to_string id ^ ")"
+  in
   (* TODO: factorize the pretty-printing with what is in PrintPure *)
   let get_type_name (id : type_id) : string =
     match id with
@@ -614,10 +737,17 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       | FromLlbc (fid, lp_id, rg_id) ->
           let fun_name =
             match fid with
-            | Regular fid ->
+            | FunId (Regular fid) ->
                 Print.fun_name_to_string
                   (A.FunDeclId.Map.find fid fun_decls).name
-            | Assumed aid -> A.show_assumed_fun_id aid
+            | FunId (Assumed aid) -> A.show_assumed_fun_id aid
+            | TraitMethod (trait_ref, method_name, _) ->
+                (* Shouldn't happen *)
+                if !Config.extract_fail_hard then raise (Failure "Unexpected")
+                else
+                  "Trait method: decl: "
+                  ^ TraitDeclId.to_string trait_ref.trait_decl_ref.trait_decl_id
+                  ^ ", method_name: " ^ method_name
           in
 
           let lp_kind =
@@ -677,8 +807,16 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             if variant_id = option_some_id then "@option::Some"
             else if variant_id = option_none_id then "@option::None"
             else raise (Failure "Unreachable")
-        | Assumed (State | Vec | Fuel | Array | Slice | Str | Range) ->
-            raise (Failure "Unreachable")
+        | Assumed Fuel ->
+            if variant_id = fuel_zero_id then "@fuel::0"
+            else if variant_id = fuel_succ_id then "@fuel::Succ"
+            else raise (Failure "Unreachable")
+        | Assumed (State | Vec | Array | Slice | Str | Range) ->
+            raise
+              (Failure
+                 ("Unreachable: variant id ("
+                 ^ VariantId.to_string variant_id
+                 ^ ") for " ^ show_type_id id))
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
@@ -716,43 +854,120 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | ConstGenericVarId id ->
       "const_generic_var_id: " ^ ConstGenericVarId.to_string id
   | VarId id -> "var_id: " ^ VarId.to_string id
+  | TraitDeclId id -> "trait_decl_id: " ^ TraitDeclId.to_string id
+  | TraitImplId id -> "trait_impl_id: " ^ TraitImplId.to_string id
+  | LocalTraitClauseId id ->
+      "local_trait_clause_id: " ^ TraitClauseId.to_string id
+  | TraitParentClauseId (id, clause_id) ->
+      "trait_parent_clause_id: " ^ trait_decl_id_to_string id ^ ", clause_id: "
+      ^ TraitClauseId.to_string clause_id
+  | TraitItemClauseId (id, item_name, clause_id) ->
+      "trait_item_clause_id: " ^ trait_decl_id_to_string id ^ ", item name: "
+      ^ item_name ^ ", clause_id: "
+      ^ TraitClauseId.to_string clause_id
+  | TraitItemId (id, name) ->
+      "trait_item_id: " ^ trait_decl_id_to_string id ^ ", type name: " ^ name
+  | TraitMethodId (trait_decl_id, fun_name, rg_id) ->
+      let fwd_back_kind =
+        match rg_id with
+        | None -> "forward"
+        | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
+      in
+      trait_decl_id_to_string trait_decl_id
+      ^ ", method name (" ^ fwd_back_kind ^ "): " ^ fun_name
+  | TraitSelfClauseId -> "trait_self_clause"
+
+(** Return [true] if we are strict on collisions for this id (i.e., we forbid
+    collisions even with the ids in the unsafe names map) *)
+let strict_collisions (id : id) : bool =
+  match id with UnknownId | TypeId _ -> true | _ -> false
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
   match id with
-  | FieldId (_, _) -> !Config.record_fields_short_names
+  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
+  | TraitMethodId _ ->
+      !Config.record_fields_short_names
   | _ -> false
 
 let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
-  (* We do not use the same name map if we allow/disallow collisions *)
+  (* The id_to_string function to print nice debugging messages if there are
+   * collisions *)
+  let id_to_string (id : id) : string = id_to_string id ctx in
+  (* We do not use the same name map if we allow/disallow collisions.
+     We notably use it for field names: some backends like Lean can use the
+     type information to disambiguate field projections.
+
+     Remark: we still need to check that those "unsafe" ids don't collide with
+     the ids that we mark as "strict on collision".
+
+     For instance, we don't allow naming a field "let". We enforce this by
+     not checking collision between ids for which we permit collisions (ex.:
+     between fields), but still checking collisions between those ids and the
+     others (ex.: fields and keywords).
+  *)
   if allow_collisions id then (
     assert (not is_opaque);
+    (* Check with the ids which are considered to be strict on collisions *)
+    names_map_check_collision id_to_string id name ctx.strict_names_map;
     {
       ctx with
       unsafe_names_map = unsafe_names_map_add id name ctx.unsafe_names_map;
     })
   else
-    (* The id_to_string function to print nice debugging messages if there are
-     * collisions *)
-    let id_to_string (id : id) : string = id_to_string id ctx in
+    (* Remark: if we are strict on collisions:
+       - we add the id to the strict collisions map
+       - we check that the id doesn't collide with the unsafe map
+    *)
+    let strict_names_map =
+      if strict_collisions id then
+        names_map_add id_to_string is_opaque id name ctx.strict_names_map
+      else ctx.strict_names_map
+    in
     let names_map =
       names_map_add id_to_string is_opaque id name ctx.names_map
     in
-    { ctx with names_map }
+    { ctx with strict_names_map; names_map }
 
 (** [with_opaque_pre]: if [true] and the definition is opaque, add the opaque prefix *)
 let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
   (* We do not use the same name map if we allow/disallow collisions *)
-  if allow_collisions id then IdMap.find id ctx.unsafe_names_map.id_to_name
+  let map_to_string (m : string IdMap.t) : string =
+    "[\n"
+    ^ String.concat ","
+        (List.map
+           (fun (id, n) -> "\n  " ^ id_to_string id ctx ^ " -> " ^ n)
+           (IdMap.bindings m))
+    ^ "\n]"
+  in
+  if allow_collisions id then (
+    let m = ctx.unsafe_names_map.id_to_name in
+    match IdMap.find_opt id m with
+    | Some s -> s
+    | None ->
+        let err =
+          "Could not find: " ^ id_to_string id ctx ^ "\nNames map:\n"
+          ^ map_to_string m
+        in
+        log#serror err;
+        if !Config.extract_fail_hard then raise (Failure err)
+        else
+          "(%%%ERROR: unknown identifier\": " ^ id_to_string id ctx ^ "\"%%%)")
   else
-    match IdMap.find_opt id ctx.names_map.id_to_name with
+    let m = ctx.names_map.id_to_name in
+    match IdMap.find_opt id m with
     | Some s ->
         let is_opaque = IdSet.mem id ctx.names_map.opaque_ids in
         if with_opaque_pre && is_opaque then ctx.fmt.opaque_pre () ^ s else s
     | None ->
-        log#serror ("Could not find: " ^ id_to_string id ctx);
-        raise Not_found
+        let err =
+          "Could not find: " ^ id_to_string id ctx ^ "\nNames map:\n"
+          ^ map_to_string m
+        in
+        log#serror err;
+        if !Config.extract_fail_hard then raise (Failure err)
+        else "(ERROR: \"" ^ id_to_string id ctx ^ "\")"
 
 let ctx_get_global (with_opaque_pre : bool) (id : A.GlobalDeclId.id)
     (ctx : extraction_ctx) : string =
@@ -765,7 +980,7 @@ let ctx_get_function (with_opaque_pre : bool) (id : fun_id)
 let ctx_get_local_function (with_opaque_pre : bool) (id : A.FunDeclId.id)
     (lp : LoopId.id option) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
-  ctx_get_function with_opaque_pre (FromLlbc (Regular id, lp, rg)) ctx
+  ctx_get_function with_opaque_pre (FromLlbc (FunId (Regular id), lp, rg)) ctx
 
 let ctx_get_type (with_opaque_pre : bool) (id : type_id) (ctx : extraction_ctx)
     : string =
@@ -785,6 +1000,46 @@ let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get_type is_opaque (Assumed id) ctx
 
+let ctx_get_trait_self_clause (ctx : extraction_ctx) : string =
+  let with_opaque_pre = false in
+  ctx_get with_opaque_pre TraitSelfClauseId ctx
+
+let ctx_get_trait_decl (with_opaque_pre : bool) (id : trait_decl_id)
+    (ctx : extraction_ctx) : string =
+  ctx_get with_opaque_pre (TraitDeclId id) ctx
+
+let ctx_get_trait_impl (with_opaque_pre : bool) (id : trait_impl_id)
+    (ctx : extraction_ctx) : string =
+  ctx_get with_opaque_pre (TraitImplId id) ctx
+
+let ctx_get_trait_item (id : trait_decl_id) (item_name : string)
+    (ctx : extraction_ctx) : string =
+  let is_opaque = false in
+  ctx_get is_opaque (TraitItemId (id, item_name)) ctx
+
+let ctx_get_trait_const (id : trait_decl_id) (item_name : string)
+    (ctx : extraction_ctx) : string =
+  ctx_get_trait_item id item_name ctx
+
+let ctx_get_trait_type (id : trait_decl_id) (item_name : string)
+    (ctx : extraction_ctx) : string =
+  ctx_get_trait_item id item_name ctx
+
+let ctx_get_trait_method (id : trait_decl_id) (item_name : string)
+    (rg_id : T.RegionGroupId.id option) (ctx : extraction_ctx) : string =
+  let with_opaque_pre = false in
+  ctx_get with_opaque_pre (TraitMethodId (id, item_name, rg_id)) ctx
+
+let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
+    (ctx : extraction_ctx) : string =
+  let with_opaque_pre = false in
+  ctx_get with_opaque_pre (TraitParentClauseId (id, clause)) ctx
+
+let ctx_get_trait_item_clause (id : trait_decl_id) (item : string)
+    (clause : trait_clause_id) (ctx : extraction_ctx) : string =
+  let with_opaque_pre = false in
+  ctx_get with_opaque_pre (TraitItemClauseId (id, item, clause)) ctx
+
 let ctx_get_var (id : VarId.id) (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get is_opaque (VarId id) ctx
@@ -797,6 +1052,11 @@ let ctx_get_const_generic_var (id : ConstGenericVarId.id) (ctx : extraction_ctx)
     : string =
   let is_opaque = false in
   ctx_get is_opaque (ConstGenericVarId id) ctx
+
+let ctx_get_local_trait_clause (id : TraitClauseId.id) (ctx : extraction_ctx) :
+    string =
+  let is_opaque = false in
+  ctx_get is_opaque (LocalTraitClauseId id) ctx
 
 let ctx_get_field (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
@@ -863,6 +1123,26 @@ let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
   let ctx = ctx_add is_opaque (VarId id) name ctx in
   (ctx, name)
 
+(** Generate a unique variable name for the trait self clause and add it to the context *)
+let ctx_add_trait_self_clause (ctx : extraction_ctx) : extraction_ctx * string =
+  let is_opaque = false in
+  let basename = ctx.fmt.trait_self_clause_basename in
+  let name =
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+  in
+  let ctx = ctx_add is_opaque TraitSelfClauseId name ctx in
+  (ctx, name)
+
+(** Generate a unique trait clause name and add it to the context *)
+let ctx_add_local_trait_clause (basename : string) (id : TraitClauseId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let is_opaque = false in
+  let name =
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+  in
+  let ctx = ctx_add is_opaque (LocalTraitClauseId id) name ctx in
+  (ctx, name)
+
 (** See {!ctx_add_var} *)
 let ctx_add_vars (vars : var list) (ctx : extraction_ctx) :
     extraction_ctx * string list =
@@ -885,12 +1165,26 @@ let ctx_add_const_generic_params (vars : const_generic_var list)
       ctx_add_const_generic_var var.name var.index ctx)
     ctx vars
 
-let ctx_add_type_const_generic_params (tvars : type_var list)
-    (cgvars : const_generic_var list) (ctx : extraction_ctx) :
-    extraction_ctx * string list * string list =
-  let ctx, tys = ctx_add_type_params tvars ctx in
-  let ctx, cgs = ctx_add_const_generic_params cgvars ctx in
-  (ctx, tys, cgs)
+let ctx_add_local_trait_clauses (clauses : trait_clause list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (c : trait_clause) ->
+      let basename = ctx.fmt.trait_clause_basename ctx.names_map.names_set c in
+      ctx_add_local_trait_clause basename c.clause_id ctx)
+    ctx clauses
+
+(** Returns the lists of names for:
+    - the type variables
+    - the const generic variables
+    - the trait clauses
+  *)
+let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
+    extraction_ctx * string list * string list * string list =
+  let { types; const_generics; trait_clauses } = generics in
+  let ctx, tys = ctx_add_type_params types ctx in
+  let ctx, cgs = ctx_add_const_generic_params const_generics ctx in
+  let ctx, tcs = ctx_add_local_trait_clauses trait_clauses ctx in
+  (ctx, tys, cgs, tcs)
 
 let ctx_add_type_decl_struct (def : type_decl) (ctx : extraction_ctx) :
     extraction_ctx * string =
@@ -977,49 +1271,62 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   (* TODO: update once the body id can be an option *)
   let is_opaque = false in
-  let name = ctx.fmt.global_name def.name in
   let decl = GlobalId def.def_id in
-  let body = FunId (FromLlbc (Regular def.body_id, None, None)) in
-  let ctx = ctx_add is_opaque decl (name ^ "_c") ctx in
-  let ctx = ctx_add is_opaque body (name ^ "_body") ctx in
-  ctx
 
-let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
-    (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
-  (* Sanity check: the function should not be a global body - those are handled
-   * separately *)
-  assert (not def.is_global_decl_body);
+  (* Check if the global corresponds to an assumed global that we should map
+     to a custom definition in our standard library (for instance, happens
+     with "core::num::usize::MAX") *)
+  let sname = name_to_simple_name def.name in
+  match SimpleNameMap.find_opt sname assumed_globals_map with
+  | Some name ->
+      (* Yes: register the custom binding *)
+      ctx_add is_opaque decl name ctx
+  | None ->
+      (* Not the case: "standard" registration *)
+      let name = ctx.fmt.global_name def.name in
+      let body = FunId (FromLlbc (FunId (Regular def.body_id), None, None)) in
+      let ctx = ctx_add is_opaque decl (name ^ "_c") ctx in
+      let ctx = ctx_add is_opaque body (name ^ "_body") ctx in
+      ctx
+
+let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
+    (ctx : extraction_ctx) : string =
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
-  let llbc_def =
-    A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls
-  in
+  let llbc_def = A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_ctx.fun_decls in
   let sg = llbc_def.signature in
   let num_rgs = List.length sg.regions_hierarchy in
-  let keep_fwd, (_, backs) = trans_group in
+  let { keep_fwd; fwd = _; backs } = trans_group in
   let num_backs = List.length backs in
   let rg_info =
     match def.back_id with
     | None -> None
     | Some rg_id ->
         let rg = T.RegionGroupId.nth sg.regions_hierarchy rg_id in
-        let regions =
-          List.map
-            (fun rid -> T.RegionVarId.nth sg.region_params rid)
-            rg.regions
-        in
         let region_names =
-          List.map (fun (r : T.region_var) -> r.name) regions
+          List.map
+            (fun rid -> (T.RegionVarId.nth sg.generics.regions rid).name)
+            rg.regions
         in
         Some { id = rg_id; region_names }
   in
+  (* Add the function name *)
+  ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
+    (keep_fwd, num_backs)
+
+let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
+    (ctx : extraction_ctx) : extraction_ctx =
+  (* Sanity check: the function should not be a global body - those are handled
+   * separately *)
+  assert (not def.is_global_decl_body);
+  (* Lookup the LLBC def to compute the region group information *)
+  let def_id = def.def_id in
+  let { keep_fwd; fwd = _; backs } = trans_group in
+  let num_backs = List.length backs in
   let is_opaque = def.body = None in
   (* Add the function name *)
-  let def_name =
-    ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
-      (keep_fwd, num_backs)
-  in
-  let fun_id = (A.Regular def_id, def.loop_id, def.back_id) in
+  let def_name = ctx_compute_fun_name trans_group def ctx in
+  let fun_id = (Pure.FunId (Regular def_id), def.loop_id, def.back_id) in
   let ctx = ctx_add is_opaque (FunId (FromLlbc fun_id)) def_name ctx in
   (* Add the name info *)
   {
@@ -1028,6 +1335,91 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
       PureUtils.RegularFunIdMap.add fun_id { keep_fwd; num_backs }
         ctx.fun_name_info;
   }
+
+let ctx_add_trait_decl (d : trait_decl) (ctx : extraction_ctx) : extraction_ctx
+    =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_decl_name d in
+  ctx_add is_opaque (TraitDeclId d.def_id) name ctx
+
+let ctx_add_trait_impl (d : trait_impl) (ctx : extraction_ctx) : extraction_ctx
+    =
+  (* We need to lookup the trait decl that is implemented by the trait impl *)
+  let decl =
+    Pure.TraitDeclId.Map.find d.impl_trait.trait_decl_id ctx.trans_trait_decls
+  in
+  (* Compute the name *)
+  let is_opaque = false in
+  let name = ctx.fmt.trait_impl_name decl d in
+  ctx_add is_opaque (TraitImplId d.def_id) name ctx
+
+let ctx_add_trait_const (d : trait_decl) (item : string) (ctx : extraction_ctx)
+    : extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_const_name d item in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
+  ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
+
+let ctx_add_trait_type (d : trait_decl) (item : string) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_type_name d item in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
+  ctx_add is_opaque (TraitItemId (d.def_id, item)) name ctx
+
+let ctx_add_trait_method (d : trait_decl) (item_name : string) (f : fun_decl)
+    (ctx : extraction_ctx) : extraction_ctx =
+  (* We do something special: we use the base name but remove everything
+     but the crate (because [get_name] removes it) and the last ident.
+     This allows us to reuse the [ctx_compute_fun_decl] function.
+  *)
+  let basename : name =
+    match (f.basename : name) with
+    | Ident crate :: name -> Ident crate :: [ Collections.List.last name ]
+    | _ -> raise (Failure "Unexpected")
+  in
+  let f = { f with basename } in
+  let trans = A.FunDeclId.Map.find f.def_id ctx.trans_funs in
+  let name = ctx_compute_fun_name trans f ctx in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ "_" ^ name
+  in
+  let is_opaque = false in
+  ctx_add is_opaque (TraitMethodId (d.def_id, item_name, f.back_id)) name ctx
+
+let ctx_add_trait_parent_clause (d : trait_decl) (clause : trait_clause)
+    (ctx : extraction_ctx) : extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_parent_clause_name d clause in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
+  ctx_add is_opaque (TraitParentClauseId (d.def_id, clause.clause_id)) name ctx
+
+let ctx_add_trait_type_clause (d : trait_decl) (item : string)
+    (clause : trait_clause) (ctx : extraction_ctx) : extraction_ctx =
+  let is_opaque = false in
+  let name = ctx.fmt.trait_type_clause_name d item clause in
+  (* Add a prefix if necessary *)
+  let name =
+    if !Config.record_fields_short_names then name
+    else ctx.fmt.trait_decl_name d ^ name
+  in
+  ctx_add is_opaque
+    (TraitItemClauseId (d.def_id, item, clause.clause_id))
+    name ctx
 
 type names_map_init = {
   keywords : string list;
@@ -1089,7 +1481,8 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
   in
   let assumed_functions =
     List.map
-      (fun (fid, rg, name) -> (FromLlbc (A.Assumed fid, None, rg), name))
+      (fun (fid, rg, name) ->
+        (FromLlbc (Pure.FunId (A.Assumed fid), None, rg), name))
       init.assumed_llbc_functions
     @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
   in

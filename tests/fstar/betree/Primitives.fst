@@ -169,17 +169,44 @@ let scalar_cast (src_ty : scalar_ty) (tgt_ty : scalar_ty) (x : scalar src_ty) : 
 
 /// The scalar types
 type isize : eqtype = scalar Isize
-type i8 : eqtype = scalar I8
-type i16 : eqtype = scalar I16
-type i32 : eqtype = scalar I32
-type i64 : eqtype = scalar I64
-type i128 : eqtype = scalar I128
+type i8    : eqtype = scalar I8
+type i16   : eqtype = scalar I16
+type i32   : eqtype = scalar I32
+type i64   : eqtype = scalar I64
+type i128  : eqtype = scalar I128
 type usize : eqtype = scalar Usize
-type u8 : eqtype = scalar U8
-type u16 : eqtype = scalar U16
-type u32 : eqtype = scalar U32
-type u64 : eqtype = scalar U64
-type u128 : eqtype = scalar U128
+type u8    : eqtype = scalar U8
+type u16   : eqtype = scalar U16
+type u32   : eqtype = scalar U32
+type u64   : eqtype = scalar U64
+type u128  : eqtype = scalar U128
+
+
+let core_isize_min : isize = isize_min
+let core_isize_max : isize = isize_max
+let core_i8_min    : i8 = i8_min
+let core_i8_max    : i8 = i8_max
+let core_i16_min   : i16 = i16_min
+let core_i16_max   : i16 = i16_max
+let core_i32_min   : i32 = i32_min
+let core_i32_max   : i32 = i32_max
+let core_i64_min   : i64 = i64_min
+let core_i64_max   : i64 = i64_max
+let core_i128_min  : i128 = i128_min
+let core_i128_max  : i128 = i128_max
+
+let core_usize_min : usize = usize_min
+let core_usize_max : usize = usize_max
+let core_u8_min    : u8 = u8_min
+let core_u8_max    : u8 = u8_max
+let core_u16_min   : u16 = u16_min
+let core_u16_max   : u16 = u16_max
+let core_u32_min   : u32 = u32_min
+let core_u32_max   : u32 = u32_max
+let core_u64_min   : u64 = u64_min
+let core_u64_max   : u64 = u64_max
+let core_u128_min  : u128 = u128_min
+let core_u128_max  : u128 = u128_max
 
 /// Negation
 let isize_neg = scalar_neg #Isize

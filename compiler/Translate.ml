@@ -5,6 +5,7 @@ module T = Types
 module A = LlbcAst
 module SA = SymbolicAst
 module Micro = PureMicroPasses
+module C = Contexts
 open PureUtils
 open TranslateCore
 
@@ -28,18 +29,12 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : A.fun_decl)
       ("translate_function_to_symbolics: "
       ^ Print.fun_name_to_string fdef.A.name));
 
-  let { type_context; fun_context; global_context } = trans_ctx in
-  let fun_context = { C.fun_decls = fun_context.fun_decls } in
-
   match fdef.body with
   | None -> None
   | Some _ ->
       (* Evaluate *)
       let synthesize = true in
-      let inputs, symb =
-        evaluate_function_symbolic synthesize type_context fun_context
-          global_context fdef
-      in
+      let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
       Some (inputs, Option.get symb)
 
 (** Translate a function, by generating its forward and backward translations.
@@ -57,7 +52,6 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     (lazy
       ("translate_function_to_pure: " ^ Print.fun_name_to_string fdef.A.name));
 
-  let { type_context; fun_context; global_context } = trans_ctx in
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs, if the function is transparent *)
@@ -82,25 +76,25 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       (List.filter_map
          (fun (tid, g) ->
            match g with Charon.GAst.NonRec _ -> None | Rec _ -> Some tid)
-         (T.TypeDeclId.Map.bindings trans_ctx.type_context.type_decls_groups))
+         (T.TypeDeclId.Map.bindings trans_ctx.type_ctx.type_decls_groups))
   in
   let type_context =
     {
-      SymbolicToPure.type_infos = type_context.type_infos;
-      llbc_type_decls = type_context.type_decls;
+      SymbolicToPure.type_infos = trans_ctx.type_ctx.type_infos;
+      llbc_type_decls = trans_ctx.type_ctx.type_decls;
       type_decls = pure_type_decls;
       recursive_decls = recursive_type_decls;
     }
   in
   let fun_context =
     {
-      SymbolicToPure.llbc_fun_decls = fun_context.fun_decls;
+      SymbolicToPure.llbc_fun_decls = trans_ctx.fun_ctx.fun_decls;
       fun_sigs;
-      fun_infos = fun_context.fun_infos;
+      fun_infos = trans_ctx.fun_ctx.fun_infos;
     }
   in
   let global_context =
-    { SymbolicToPure.llbc_global_decls = global_context.global_decls }
+    { SymbolicToPure.llbc_global_decls = trans_ctx.global_ctx.global_decls }
   in
 
   (* Compute the set of loops, and find better ids for them (starting at 0).
@@ -148,6 +142,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       type_context;
       fun_context;
       global_context;
+      trait_decls_ctx = trans_ctx.trait_decls_ctx.trait_decls;
+      trait_impls_ctx = trans_ctx.trait_impls_ctx.trait_impls;
       fun_decl = fdef;
       forward_inputs = [];
       (* Empty for now *)
@@ -274,21 +270,18 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   (* Return *)
   (pure_forward, pure_backwards)
 
+(* TODO: factor out the return type *)
 let translate_crate_to_pure (crate : A.crate) :
-    trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
+    trans_ctx
+    * Pure.type_decl list
+    * pure_fun_translation list
+    * Pure.trait_decl list
+    * Pure.trait_impl list =
   (* Debug *)
   log#ldebug (lazy "translate_crate_to_pure");
 
-  (* Compute the type and function contexts *)
-  let type_context, fun_context, global_context =
-    compute_type_fun_global_contexts crate
-  in
-  let fun_infos =
-    FA.analyze_module crate fun_context.C.fun_decls
-      global_context.C.global_decls !Config.use_state
-  in
-  let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
-  let trans_ctx = { type_context; fun_context; global_context } in
+  (* Compute the translation context *)
+  let trans_ctx = compute_contexts crate in
 
   (* Translate all the type definitions *)
   let type_decls =
@@ -323,10 +316,7 @@ let translate_crate_to_pure (crate : A.crate) :
       (A.FunDeclId.Map.values crate.functions)
   in
   let sigs = List.append assumed_sigs local_sigs in
-  let fun_sigs =
-    SymbolicToPure.translate_fun_signatures fun_context.fun_infos
-      type_context.type_infos sigs
-  in
+  let fun_sigs = SymbolicToPure.translate_fun_signatures trans_ctx sigs in
 
   (* Translate all the *transparent* functions *)
   let pure_translations =
@@ -335,28 +325,38 @@ let translate_crate_to_pure (crate : A.crate) :
       (A.FunDeclId.Map.values crate.functions)
   in
 
+  (* Translate the trait declarations *)
+  let type_infos = trans_ctx.type_ctx.type_infos in
+  let trait_decls =
+    List.map
+      (SymbolicToPure.translate_trait_decl type_infos)
+      (T.TraitDeclId.Map.values trans_ctx.trait_decls_ctx.trait_decls)
+  in
+
+  (* Translate the trait implementations *)
+  let trait_impls =
+    List.map
+      (SymbolicToPure.translate_trait_impl type_infos)
+      (T.TraitImplId.Map.values trans_ctx.trait_impls_ctx.trait_impls)
+  in
+
   (* Apply the micro-passes *)
   let pure_translations =
     Micro.apply_passes_to_pure_fun_translations trans_ctx pure_translations
   in
 
   (* Return *)
-  (trans_ctx, type_decls, pure_translations)
+  (trans_ctx, type_decls, pure_translations, trait_decls, trait_impls)
 
-(** Extraction context *)
-type gen_ctx = {
-  crate : A.crate;
-  extract_ctx : ExtractBase.extraction_ctx;
-  trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
-  trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t;
-  functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
-}
+type gen_ctx = ExtractBase.extraction_ctx
 
 type gen_config = {
   extract_types : bool;
   extract_decreases_clauses : bool;
   extract_template_decreases_clauses : bool;
   extract_fun_decls : bool;
+  extract_trait_decls : bool;
+  extract_trait_impls : bool;
   extract_transparent : bool;
       (** If [true], extract the transparent declarations, otherwise ignore. *)
   extract_opaque : bool;
@@ -383,21 +383,23 @@ type gen_config = {
   test_trans_unit_functions : bool;
 }
 
-(** Returns the pair: (has opaque type decls, has opaque fun decls) *)
-let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
-  let has_opaque_types =
-    Pure.TypeDeclId.Map.exists
-      (fun _ (d : Pure.type_decl) ->
-        match d.kind with Opaque -> true | _ -> false)
-      ctx.trans_types
+(** Returns the pair: (has opaque type decls, has opaque fun decls).
+
+    [filter_assumed]: if [true], do not consider as opaque the external definitions
+    that we will map to definitions from the standard library.
+ *)
+let crate_has_opaque_decls (ctx : gen_ctx) (filter_assumed : bool) : bool * bool
+    =
+  let types, funs =
+    LlbcAstUtils.crate_get_opaque_decls ctx.crate filter_assumed
   in
-  let has_opaque_funs =
-    A.FunDeclId.Map.exists
-      (fun _ ((_, ((t_fwd, _), _)) : bool * pure_fun_translation) ->
-        Option.is_none t_fwd.body)
-      ctx.trans_funs
-  in
-  (has_opaque_types, has_opaque_funs)
+  log#ldebug
+    (lazy
+      ("Opaque decls:" ^ "\n- types:\n"
+      ^ String.concat ",\n" (List.map T.show_type_decl types)
+      ^ "\n- functions:\n"
+      ^ String.concat ",\n" (List.map A.show_fun_decl funs)));
+  (types <> [], funs <> [])
 
 (** Export a type declaration.
 
@@ -429,9 +431,9 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     || ((not is_opaque) && config.extract_transparent)
   then (
     if extract_decl then
-      Extract.extract_type_decl ctx.extract_ctx fmt type_decl_group kind def;
+      Extract.extract_type_decl ctx fmt type_decl_group kind def;
     if extract_extra_info then
-      Extract.extract_type_decl_extra_info ctx.extract_ctx fmt kind def)
+      Extract.extract_type_decl_extra_info ctx fmt kind def)
 
 (** Export a group of types.
 
@@ -483,7 +485,7 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
        End
      ]}
   *)
-  Extract.start_type_decl_group ctx.extract_ctx fmt is_rec defs;
+  Extract.start_type_decl_group ctx fmt is_rec defs;
   List.iteri
     (fun i def ->
       let kind = kind_from_index i in
@@ -504,26 +506,34 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
  *)
 let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : A.GlobalDeclId.id) : unit =
-  let global_decls = ctx.extract_ctx.trans_ctx.global_context.global_decls in
+  let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = A.GlobalDeclId.Map.find id global_decls in
-  let _, ((body, loop_fwds), body_backs) =
-    A.FunDeclId.Map.find global.body_id ctx.trans_funs
-  in
-  assert (body_backs = []);
-  assert (loop_fwds = []);
+  let trans = A.FunDeclId.Map.find global.body_id ctx.trans_funs in
+  assert (trans.fwd.loops = []);
+  assert (trans.backs = []);
+  let body = trans.fwd.f in
 
   let is_opaque = Option.is_none body.Pure.body in
-  if
+  (* Check if we extract the global *)
+  let extract =
     config.extract_globals
     && (((not is_opaque) && config.extract_transparent)
        || (is_opaque && config.extract_opaque))
-  then
+  in
+  (* Check if it is an assumed global - if yes, we ignore it because we
+     map the definition to one in the standard library *)
+  let open ExtractAssumed in
+  let sname = name_to_simple_name global.name in
+  let extract =
+    extract && SimpleNameMap.find_opt sname assumed_globals_map = None
+  in
+  if extract then
     (* We don't wrap global declaration groups between calls to functions
        [{start, end}_global_decl_group] (which don't exist): global declaration
        groups are always singletons, so the [extract_global_decl] function
        takes care of generating the delimiters.
     *)
-    Extract.extract_global_decl ctx.extract_ctx fmt global body config.interface
+    Extract.extract_global_decl ctx fmt global body config.interface
 
 (** Utility.
 
@@ -604,14 +614,13 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
         then
           Some
             (fun () ->
-              Extract.extract_fun_decl ctx.extract_ctx fmt kind has_decr_clause
-                def)
+              Extract.extract_fun_decl ctx fmt kind has_decr_clause def)
         else None)
       decls
   in
   let extract_defs = List.filter_map (fun x -> x) extract_defs in
   if extract_defs <> [] then (
-    Extract.start_fun_decl_group ctx.extract_ctx fmt is_rec decls;
+    Extract.start_fun_decl_group ctx fmt is_rec decls;
     List.iter (fun f -> f ()) extract_defs;
     Extract.end_fun_decl_group fmt is_rec decls)
 
@@ -621,7 +630,7 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
     check if the forward and backward functions are mutually recursive.
  *)
 let export_functions_group (fmt : Format.formatter) (config : gen_config)
-    (ctx : gen_ctx) (pure_ls : (bool * pure_fun_translation) list) : unit =
+    (ctx : gen_ctx) (pure_ls : pure_fun_translation list) : unit =
   (* Utility to check a function has a decrease clause *)
   let has_decreases_clause (def : Pure.fun_decl) : bool =
     PureUtils.FunLoopIdSet.mem (def.def_id, def.loop_id)
@@ -631,7 +640,7 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   (* Extract the decrease clauses template bodies *)
   if config.extract_template_decreases_clauses then
     List.iter
-      (fun (_, ((fwd, loop_fwds), _)) ->
+      (fun { fwd; _ } ->
         (* We only generate decreases clauses for the forward functions, because
            the termination argument should only depend on the forward inputs.
            The backward functions thus use the same decreases clauses as the
@@ -647,19 +656,18 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
           if has_decr_clause then
             match !Config.backend with
             | Lean ->
-                Extract.extract_template_lean_termination_and_decreasing
-                  ctx.extract_ctx fmt decl
+                Extract.extract_template_lean_termination_and_decreasing ctx fmt
+                  decl
             | FStar ->
-                Extract.extract_template_fstar_decreases_clause ctx.extract_ctx
-                  fmt decl
+                Extract.extract_template_fstar_decreases_clause ctx fmt decl
             | Coq ->
                 raise (Failure "Coq doesn't have decreases/termination clauses")
             | HOL4 ->
                 raise
                   (Failure "HOL4 doesn't have decreases/termination clauses")
         in
-        extract_decrease fwd;
-        List.iter extract_decrease loop_fwds)
+        extract_decrease fwd.f;
+        List.iter extract_decrease fwd.loops)
       pure_ls;
 
   (* Concatenate the function definitions, filtering the useless forward
@@ -667,15 +675,13 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   let decls =
     List.concat
       (List.map
-         (fun (keep_fwd, ((fwd, fwd_loops), (back_ls : fun_and_loops list))) ->
-           let fwd = if keep_fwd then List.append fwd_loops [ fwd ] else [] in
-           let back : Pure.fun_decl list =
+         (fun { keep_fwd; fwd; backs } ->
+           let fwd = if keep_fwd then List.append fwd.loops [ fwd.f ] else [] in
+           let backs : Pure.fun_decl list =
              List.concat
-               (List.map
-                  (fun (back, loop_backs) -> List.append loop_backs [ back ])
-                  back_ls)
+               (List.map (fun back -> List.append back.loops [ back.f ]) backs)
            in
-           List.append fwd back)
+           List.append fwd backs)
          pure_ls)
   in
 
@@ -693,10 +699,23 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   (* Insert unit tests if necessary *)
   if config.test_trans_unit_functions then
     List.iter
-      (fun (keep_fwd, ((fwd, _), _)) ->
-        if keep_fwd then
-          Extract.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
+      (fun trans ->
+        if trans.keep_fwd then
+          Extract.extract_unit_test_if_unit_fun ctx fmt trans.fwd.f)
       pure_ls
+
+(** Export a trait declaration. *)
+let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
+    (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) : unit =
+  let trait_decl = T.TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls in
+  let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
+  Extract.extract_trait_decl ctx fmt trait_decl
+
+(** Export a trait implementation. *)
+let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
+    (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
+  let trait_impl = T.TraitImplId.Map.find trait_impl_id ctx.trans_trait_impls in
+  Extract.extract_trait_impl ctx fmt trait_impl
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control
@@ -712,12 +731,14 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_functions_group = export_functions_group fmt config ctx in
   let export_global = export_global fmt config ctx in
   let export_types_group = export_types_group fmt config ctx in
+  let export_trait_decl = export_trait_decl fmt config ctx in
+  let export_trait_impl = export_trait_impl fmt config ctx in
 
   let export_state_type () : unit =
     let kind =
       if config.interface then ExtractBase.Declared else ExtractBase.Assumed
     in
-    Extract.extract_state_type fmt ctx.extract_ctx kind
+    Extract.extract_state_type fmt ctx kind
   in
 
   let export_decl_group (dg : A.declaration_group) : unit =
@@ -725,11 +746,18 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | Type (NonRec id) ->
         if config.extract_types then export_types_group false [ id ]
     | Type (Rec ids) -> if config.extract_types then export_types_group true ids
-    | Fun (NonRec id) ->
+    | Fun (NonRec id) -> (
         (* Lookup *)
         let pure_fun = A.FunDeclId.Map.find id ctx.trans_funs in
-        (* Translate *)
-        export_functions_group [ pure_fun ]
+        (* Special case: we skip trait method *declarations* (we will
+           extract their type directly in the records we generate for
+           the trait declarations themselves, there is no point in having
+           separate type definitions) *)
+        match pure_fun.fwd.f.Pure.kind with
+        | TraitMethodDecl _ -> ()
+        | _ ->
+            (* Translate *)
+            export_functions_group [ pure_fun ])
     | Fun (Rec ids) ->
         (* General case of mutually recursive functions *)
         (* Lookup *)
@@ -739,11 +767,17 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Translate *)
         export_functions_group pure_funs
     | Global id -> export_global id
+    | TraitDecl id ->
+        if config.extract_trait_decls && config.extract_transparent then
+          export_trait_decl id
+    | TraitImpl id ->
+        if config.extract_trait_impls && config.extract_transparent then
+          export_trait_impl id
   in
 
   (* If we need to export the state type: we try to export it after we defined
    * the type definitions, because if the user wants to define a model for the
-   * type, he might want to reuse those in the state type.
+   * type, they might want to reuse those in the state type.
    * More specifically: if we extract functions in the same file as the type,
    * we have no choice but to define the state type before the functions,
    * because they may reuse this state type: in this case, we define/declare
@@ -764,7 +798,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     config.extract_opaque && config.extract_fun_decls
     && !Config.wrap_opaque_in_sig
     &&
-    let _, opaque_funs = module_has_opaque_decls ctx in
+    let _, opaque_funs = crate_has_opaque_decls ctx true in
     opaque_funs
   in
   if wrap_in_sig then (
@@ -774,7 +808,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       if config.extract_transparent then "Definitions" else "OpaqueDefs"
     in
     Format.pp_print_break fmt 0 0;
-    Format.pp_open_vbox fmt ctx.extract_ctx.indent_incr;
+    Format.pp_open_vbox fmt ctx.indent_incr;
     Format.pp_print_string fmt ("structure " ^ struct_name ^ " where");
     Format.pp_print_break fmt 0 0);
   List.iter export_decl_group ctx.crate.declarations;
@@ -904,7 +938,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
 let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
     unit =
   (* Translate the module to the pure AST *)
-  let trans_ctx, trans_types, trans_funs = translate_crate_to_pure crate in
+  let trans_ctx, trans_types, trans_funs, trans_trait_decls, trans_trait_impls =
+    translate_crate_to_pure crate
+  in
 
   (* Initialize the extraction context - for now we extract only to F*.
    * We initialize the names map by registering the keywords used in the
@@ -921,36 +957,36 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
     mk_formatter_and_names_map trans_ctx crate.name
       variant_concatenate_type_name
   in
-  (* Put everything in the context *)
-  let ctx =
-    {
-      ExtractBase.trans_ctx;
-      names_map;
-      unsafe_names_map = { id_to_name = ExtractBase.IdMap.empty };
-      fmt;
-      indent_incr = 2;
-      use_opaque_pre = !Config.split_files;
-      use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
-      fun_name_info = PureUtils.RegularFunIdMap.empty;
-    }
+  let strict_names_map =
+    let open ExtractBase in
+    let ids =
+      List.filter
+        (fun (id, _) -> strict_collisions id)
+        (IdMap.bindings names_map.id_to_name)
+    in
+    let is_opaque = false in
+    List.fold_left
+      (* id_to_string: we shouldn't need to use it *)
+        (fun m (id, n) -> names_map_add show_id is_opaque id n m)
+      empty_names_map ids
   in
 
   (* We need to compute which functions are recursive, in order to know
    * whether we should generate a decrease clause or not. *)
   let rec_functions =
     List.map
-      (fun (_, ((fwd, loop_fwds), _)) ->
-        let fwd =
-          if fwd.Pure.signature.info.effect_info.is_rec then
-            [ (fwd.def_id, None) ]
+      (fun { fwd; _ } ->
+        let fwd_f =
+          if fwd.f.Pure.signature.info.effect_info.is_rec then
+            [ (fwd.f.def_id, None) ]
           else []
         in
         let loop_fwds =
           List.map
             (fun (def : Pure.fun_decl) -> [ (def.def_id, def.loop_id) ])
-            loop_fwds
+            fwd.loops
         in
-        fwd :: loop_fwds)
+        fwd_f :: loop_fwds)
       trans_funs
   in
   let rec_functions : PureUtils.fun_loop_id list =
@@ -958,22 +994,70 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   in
   let rec_functions = PureUtils.FunLoopIdSet.of_list rec_functions in
 
-  (* Register unique names for all the top-level types, globals and functions.
+  (* Put the translated definitions in maps *)
+  let trans_types =
+    Pure.TypeDeclId.Map.of_list
+      (List.map (fun (d : Pure.type_decl) -> (d.def_id, d)) trans_types)
+  in
+  let trans_funs : pure_fun_translation A.FunDeclId.Map.t =
+    A.FunDeclId.Map.of_list
+      (List.map
+         (fun (trans : pure_fun_translation) -> (trans.fwd.f.def_id, trans))
+         trans_funs)
+  in
+
+  (* Put everything in the context *)
+  let ctx =
+    let trans_trait_decls =
+      T.TraitDeclId.Map.of_list
+        (List.map
+           (fun (d : Pure.trait_decl) -> (d.def_id, d))
+           trans_trait_decls)
+    in
+    let trans_trait_impls =
+      T.TraitImplId.Map.of_list
+        (List.map
+           (fun (d : Pure.trait_impl) -> (d.def_id, d))
+           trans_trait_impls)
+    in
+    {
+      ExtractBase.crate;
+      trans_ctx;
+      names_map;
+      unsafe_names_map = { id_to_name = ExtractBase.IdMap.empty };
+      strict_names_map;
+      fmt;
+      indent_incr = 2;
+      use_opaque_pre = !Config.split_files;
+      use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
+      fun_name_info = PureUtils.RegularFunIdMap.empty;
+      trait_decl_id = None (* None by default *);
+      is_provided_method = false (* false by default *);
+      trans_trait_decls;
+      trans_trait_impls;
+      trans_types;
+      trans_funs;
+      functions_with_decreases_clause = rec_functions;
+    }
+  in
+
+  (* Register unique names for all the top-level types, globals, functions...
    * Note that the order in which we generate the names doesn't matter:
    * we just need to generate a mapping from identifier to name, and make
    * sure there are no name clashes. *)
   let ctx =
     List.fold_left
       (fun ctx def -> Extract.extract_type_decl_register_names ctx def)
-      ctx trans_types
+      ctx
+      (Pure.TypeDeclId.Map.values trans_types)
   in
 
   let ctx =
     List.fold_left
-      (fun ctx (keep_fwd, defs) ->
+      (fun ctx (trans : pure_fun_translation) ->
         (* If requested by the user, register termination measures and decreases
            proofs for all the recursive functions *)
-        let fwd_def = fst (fst defs) in
+        let fwd_def = trans.fwd.f in
         let gen_decr_clause (def : Pure.fun_decl) =
           !Config.extract_decreases_clauses
           && PureUtils.FunLoopIdSet.mem
@@ -984,15 +1068,24 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          * those are handled later *)
         let is_global = fwd_def.Pure.is_global_decl_body in
         if is_global then ctx
-        else
-          Extract.extract_fun_decl_register_names ctx keep_fwd gen_decr_clause
-            defs)
-      ctx trans_funs
+        else Extract.extract_fun_decl_register_names ctx gen_decr_clause trans)
+      ctx
+      (A.FunDeclId.Map.values trans_funs)
   in
 
   let ctx =
     List.fold_left Extract.extract_global_decl_register_names ctx
       (A.GlobalDeclId.Map.values crate.globals)
+  in
+
+  let ctx =
+    List.fold_left Extract.extract_trait_decl_register_names ctx
+      trans_trait_decls
+  in
+
+  let ctx =
+    List.fold_left Extract.extract_trait_impl_register_names ctx
+      trans_trait_impls
   in
 
   (* Open the output file *)
@@ -1021,19 +1114,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
         in
         (* Concatenate *)
         (namespace, crate_name, Filename.concat dest_dir crate_name)
-  in
-
-  (* Put the translated definitions in maps *)
-  let trans_types =
-    Pure.TypeDeclId.Map.of_list
-      (List.map (fun (d : Pure.type_decl) -> (d.def_id, d)) trans_types)
-  in
-  let trans_funs =
-    A.FunDeclId.Map.of_list
-      (List.map
-         (fun ((keep_fwd, (fd, bdl)) : bool * pure_fun_translation) ->
-           ((fst fd).def_id, (keep_fwd, (fd, bdl))))
-         trans_funs)
   in
 
   let mkdir_if dest_dir =
@@ -1091,16 +1171,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   in
 
   (* Extract the file(s) *)
-  let gen_ctx =
-    {
-      crate;
-      extract_ctx = ctx;
-      trans_types;
-      trans_funs;
-      functions_with_decreases_clause = rec_functions;
-    }
-  in
-
   let module_delimiter =
     match !Config.backend with
     | FStar -> "."
@@ -1136,6 +1206,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          extract_decreases_clauses = !Config.extract_decreases_clauses;
          extract_template_decreases_clauses = false;
          extract_fun_decls = false;
+         extract_trait_decls = false;
+         extract_trait_impls = false;
          extract_transparent = true;
          extract_opaque = false;
          extract_state_type = false;
@@ -1147,7 +1219,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
 
      (* Check if there are opaque types and functions - in which case we need
       * to split *)
-     let has_opaque_types, has_opaque_funs = module_has_opaque_decls gen_ctx in
+     let has_opaque_types, has_opaque_funs = crate_has_opaque_decls ctx true in
      let has_opaque_types = has_opaque_types || !Config.use_state in
 
      (* Extract the types *)
@@ -1168,6 +1240,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        {
          base_gen_config with
          extract_types = true;
+         extract_trait_decls = true;
          extract_opaque = true;
          extract_state_type = !Config.use_state;
          interface = has_opaque_types;
@@ -1186,7 +1259,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          custom_includes = [];
        }
      in
-     extract_file types_config gen_ctx file_info;
+     extract_file types_config ctx file_info;
 
      (* Extract the template clauses *)
      (if needs_clauses_module && !Config.extract_template_decreases_clauses then
@@ -1214,9 +1287,9 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
             custom_includes = [];
           }
         in
-        extract_file template_clauses_config gen_ctx file_info);
+        extract_file template_clauses_config ctx file_info);
 
-     (* Extract the opaque functions, if needed *)
+     (* Extract the opaque declarations, if needed *)
      let opaque_funs_module =
        if has_opaque_funs then (
          (* In the case of Lean we generate a template file *)
@@ -1244,17 +1317,14 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
            {
              base_gen_config with
              extract_fun_decls = true;
+             extract_trait_impls = true;
+             extract_globals = true;
              extract_transparent = false;
              extract_opaque = true;
              interface = true;
            }
          in
-         let gen_ctx =
-           {
-             gen_ctx with
-             extract_ctx = { gen_ctx.extract_ctx with use_opaque_pre = false };
-           }
-         in
+         let ctx = { ctx with use_opaque_pre = false } in
          let file_info =
            {
              filename = opaque_filename;
@@ -1268,7 +1338,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
              custom_includes = [ types_module ];
            }
          in
-         extract_file opaque_config gen_ctx file_info;
+         extract_file opaque_config ctx file_info;
          (* Return the additional dependencies *)
          [ opaque_imported_module ])
        else []
@@ -1281,6 +1351,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        {
          base_gen_config with
          extract_fun_decls = true;
+         extract_trait_impls = true;
          extract_globals = true;
          test_trans_unit_functions = !Config.test_trans_unit_functions;
        }
@@ -1307,7 +1378,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
            [ types_module ] @ opaque_funs_module @ clauses_module;
        }
      in
-     extract_file fun_config gen_ctx file_info)
+     extract_file fun_config ctx file_info)
    else
      let gen_config =
        {
@@ -1316,6 +1387,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          extract_template_decreases_clauses =
            !Config.extract_template_decreases_clauses;
          extract_fun_decls = true;
+         extract_trait_decls = true;
+         extract_trait_impls = true;
          extract_transparent = true;
          extract_opaque = true;
          extract_state_type = !Config.use_state;
@@ -1337,7 +1410,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          custom_includes = [];
        }
      in
-     extract_file gen_config gen_ctx file_info);
+     extract_file gen_config ctx file_info);
 
   (* Generate the build file *)
   match !Config.backend with

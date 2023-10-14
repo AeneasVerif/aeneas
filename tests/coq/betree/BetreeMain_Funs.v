@@ -75,12 +75,6 @@ Definition betree_node_id_counter_fresh_id_back
   Return {| Betree_node_id_counter_next_node_id := i |}
 .
 
-(** [core::num::u64::{9}::MAX] *)
-Definition core_num_u64_max_body : result u64 :=
-  Return 18446744073709551615%u64
-.
-Definition core_num_u64_max_c : u64 := core_num_u64_max_body%global.
-
 (** [betree_main::betree::upsert_update]: forward function *)
 Definition betree_upsert_update_fwd
   (prev : option u64) (st : Betree_upsert_fun_state_t) : result u64 :=
@@ -93,8 +87,8 @@ Definition betree_upsert_update_fwd
   | Some prev0 =>
     match st with
     | BetreeUpsertFunStateAdd v =>
-      margin <- u64_sub core_num_u64_max_c prev0;
-      if margin s>= v then u64_add prev0 v else Return core_num_u64_max_c
+      margin <- u64_sub core_u64_max prev0;
+      if margin s>= v then u64_add prev0 v else Return core_u64_max
     | BetreeUpsertFunStateSub v =>
       if prev0 s>= v then u64_sub prev0 v else Return 0%u64
     end

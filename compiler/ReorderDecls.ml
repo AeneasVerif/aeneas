@@ -38,14 +38,16 @@ let compute_body_fun_deps (e : texpression) : FunIdSet.t =
 
       method! visit_qualif _ id =
         match id.id with
-        | FunOrOp (Unop _ | Binop _) | Global _ | AdtCons _ | Proj _ -> ()
+        | FunOrOp (Unop _ | Binop _)
+        | Global _ | AdtCons _ | Proj _ | TraitConst _ ->
+            ()
         | FunOrOp (Fun fid) -> (
             match fid with
             | Pure _ -> ()
             | FromLlbc (fid, lp_id, rg_id) -> (
                 match fid with
-                | Assumed _ -> ()
-                | Regular fid ->
+                | FunId (Assumed _) -> ()
+                | TraitMethod (_, _, fid) | FunId (Regular fid) ->
                     let id = { def_id = fid; lp_id; rg_id } in
                     ids := FunIdSet.add id !ids))
     end

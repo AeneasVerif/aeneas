@@ -52,6 +52,10 @@ type sv_kind =
       (** The result of a loop join (when computing loop fixed points) *)
   | Aggregate
       (** A symbolic value we introduce in place of an aggregate value *)
+  | ConstGeneric
+      (** A symbolic value we introduce when using a const generic as a value *)
+  | TraitConst
+      (** A symbolic value we introduce when evaluating a trait associated constant *)
 [@@deriving show, ord]
 
 (** Ancestor for {!symbolic_value} iter visitor *)

@@ -51,6 +51,15 @@ def Array.index_shared (α : Type u) (n : Usize) (v: Array α n) (i: Usize) : Re
   | none => fail .arrayOutOfBounds
   | some x => ret x
 
+-- For initialization
+def Array.repeat (α : Type u) (n : Usize) (x : α) : Array α n :=
+  ⟨ List.ireplicate n.val x, by have h := n.hmin; simp_all [Scalar.min] ⟩
+
+@[pspec]
+theorem Array.repeat_spec {α : Type u} (n : Usize) (x : α) :
+  ∃ a, Array.repeat α n x = a ∧ a.val = List.ireplicate n.val x := by
+  simp [Array.repeat]
+
 /- In the theorems below: we don't always need the `∃ ..`, but we use one
    so that `progress` introduces an opaque variable and an equality. This
    helps control the context.

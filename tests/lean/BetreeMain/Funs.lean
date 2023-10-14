@@ -64,11 +64,6 @@ def betree.NodeIdCounter.fresh_id_back
     let i ← self.next_node_id + (U64.ofInt 1)
     Result.ret { next_node_id := i }
 
-/- [core::num::u64::{9}::MAX] -/
-def core_num_u64_max_body : Result U64 :=
-  Result.ret (U64.ofInt 18446744073709551615)
-def core_num_u64_max_c : U64 := eval_global core_num_u64_max_body (by simp)
-
 /- [betree_main::betree::upsert_update]: forward function -/
 def betree.upsert_update
   (prev : Option U64) (st : betree.UpsertFunState) : Result U64 :=
@@ -81,10 +76,10 @@ def betree.upsert_update
     match st with
     | betree.UpsertFunState.Add v =>
       do
-        let margin ← core_num_u64_max_c - prev0
+        let margin ← core_u64_max - prev0
         if margin >= v
         then prev0 + v
-        else Result.ret core_num_u64_max_c
+        else Result.ret core_u64_max
     | betree.UpsertFunState.Sub v =>
       if prev0 >= v
       then prev0 - v

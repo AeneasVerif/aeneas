@@ -12,55 +12,123 @@ module SA = SymbolicAst
 (** The local logger *)
 let log = L.interpreter_log
 
-let compute_type_fun_global_contexts (m : A.crate) :
-    C.type_context * C.fun_context * C.global_context =
-  let type_decls_list, _, _ = split_declarations m.declarations in
+let compute_contexts (m : A.crate) : C.decls_ctx =
+  let type_decls_list, _, _, _, _ = split_declarations m.declarations in
   let type_decls = m.types in
   let fun_decls = m.functions in
   let global_decls = m.globals in
-  let type_decls_groups, _funs_defs_groups, _globals_defs_groups =
+  let trait_decls = m.trait_decls in
+  let trait_impls = m.trait_impls in
+  let type_decls_groups, _, _, _, _ =
     split_declarations_to_group_maps m.declarations
   in
   let type_infos =
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list
   in
-  let type_context = { C.type_decls_groups; type_decls; type_infos } in
-  let fun_context = { C.fun_decls } in
-  let global_context = { C.global_decls } in
-  (type_context, fun_context, global_context)
+  let type_ctx = { C.type_decls_groups; type_decls; type_infos } in
+  let fun_infos =
+    FunsAnalysis.analyze_module m fun_decls global_decls !Config.use_state
+  in
+  let fun_ctx = { C.fun_decls; fun_infos } in
+  let global_ctx = { C.global_decls } in
+  let trait_decls_ctx = { C.trait_decls } in
+  let trait_impls_ctx = { C.trait_impls } in
+  { C.type_ctx; fun_ctx; global_ctx; trait_decls_ctx; trait_impls_ctx }
 
-let initialize_eval_context (type_context : C.type_context)
-    (fun_context : C.fun_context) (global_context : C.global_context)
-    (region_groups : T.RegionGroupId.id list) (type_vars : T.type_var list)
-    (const_generic_vars : T.const_generic_var list) : C.eval_ctx =
-  C.reset_global_counters ();
-  {
-    C.type_context;
-    C.fun_context;
-    C.global_context;
-    C.region_groups;
-    C.type_vars;
-    C.const_generic_vars;
-    C.env = [ C.Frame ];
-    C.ended_regions = T.RegionId.Set.empty;
-  }
+(** Small helper.
+
+    Normalize an instantiated function signature provided we used this signature
+    to compute a normalization map (for the associated types) and that we added
+    it in the context.
+ *)
+let normalize_inst_fun_sig (ctx : C.eval_ctx) (sg : A.inst_fun_sig) :
+    A.inst_fun_sig =
+  let { A.regions_hierarchy = _; trait_type_constraints = _; inputs; output } =
+    sg
+  in
+  let norm = AssociatedTypes.ctx_normalize_rty ctx in
+  let inputs = List.map norm inputs in
+  let output = norm output in
+  { sg with A.inputs; output }
+
+(** Instantiate a function signature for a symbolic execution.
+
+    We return a new context because we compute and add the type normalization
+    map in the same step.
+
+    **WARNING**: this doesn't normalize the types. This step has to be done
+    separately. Remark: we need to normalize essentially because of the where
+    clauses (we are not considering a function call, so we don't need to
+    normalize because a trait clause was instantiated with a specific trait ref).
+ *)
+let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
+    (kind : A.fun_kind) : C.eval_ctx * A.inst_fun_sig =
+  let tr_self =
+    match kind with
+    | RegularKind | TraitMethodImpl _ -> T.UnknownTrait __FUNCTION__
+    | TraitMethodDecl _ | TraitMethodProvided _ -> T.Self
+  in
+  let generics =
+    let { T.regions; types; const_generics; trait_clauses } = sg.generics in
+    let regions = List.map (fun _ -> T.Erased) regions in
+    let types = List.map (fun (v : T.type_var) -> T.TypeVar v.T.index) types in
+    let const_generics =
+      List.map
+        (fun (v : T.const_generic_var) -> T.ConstGenericVar v.T.index)
+        const_generics
+    in
+    (* Annoying that we have to generate this substitution here *)
+    let r_subst _ = raise (Failure "Unexpected region") in
+    let ty_subst = Subst.make_type_subst_from_vars sg.generics.types types in
+    let cg_subst =
+      Subst.make_const_generic_subst_from_vars sg.generics.const_generics
+        const_generics
+    in
+    let tr_subst _ = raise (Failure "Unexpected local trait clause") in
+    let subst = { Subst.r_subst; ty_subst; cg_subst; tr_subst; tr_self } in
+    let trait_refs =
+      List.map
+        (fun (c : T.trait_clause) ->
+          let { T.trait_id = trait_decl_id; generics; _ } = c in
+          let generics = Subst.generic_args_substitute subst generics in
+          let trait_decl_ref = { T.trait_decl_id; decl_generics = generics } in
+          (* Note that because we directly refer to the clause, we give it
+             empty generics *)
+          {
+            T.trait_id = T.Clause c.clause_id;
+            generics = TypesUtils.mk_empty_generic_args;
+            trait_decl_ref;
+          })
+        trait_clauses
+    in
+    { T.regions; types; const_generics; trait_refs }
+  in
+  let inst_sg = instantiate_fun_sig ctx generics tr_self sg in
+  (* Compute the normalization maps *)
+  let ctx =
+    AssociatedTypes.ctx_add_norm_trait_types_from_preds ctx
+      inst_sg.trait_type_constraints
+  in
+  (* Normalize the signature *)
+  let inst_sg = normalize_inst_fun_sig ctx inst_sg in
+  (* Return *)
+  (ctx, inst_sg)
 
 (** Initialize an evaluation context to execute a function.
 
-      Introduces local variables initialized in the following manner:
-      - input arguments are initialized as symbolic values
-      - the remaining locals are initialized as [⊥]
-      Abstractions are introduced for the regions present in the function
-      signature.
-      
-      We return:
-      - the initialized evaluation context
-      - the list of symbolic values introduced for the input values
-      - the instantiated function signature
+    Introduces local variables initialized in the following manner:
+    - input arguments are initialized as symbolic values
+    - the remaining locals are initialized as [⊥]
+    Abstractions are introduced for the regions present in the function
+    signature.
+
+    We return:
+    - the initialized evaluation context
+    - the list of symbolic values introduced for the input values
+    - the instantiated function signature
  *)
-let initialize_symbolic_context_for_fun (type_context : C.type_context)
-    (fun_context : C.fun_context) (global_context : C.global_context)
-    (fdef : A.fun_decl) : C.eval_ctx * V.symbolic_value list * A.inst_fun_sig =
+let initialize_symbolic_context_for_fun (ctx : C.decls_ctx) (fdef : A.fun_decl)
+    : C.eval_ctx * V.symbolic_value list * A.inst_fun_sig =
   (* The abstractions are not initialized the same way as for function
    * calls: they contain *loan* projectors, because they "provide" us
    * with the input values (which behave as if they had been returned
@@ -78,19 +146,15 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
     List.map (fun (g : T.region_var_group) -> g.id) sg.regions_hierarchy
   in
   let ctx =
-    initialize_eval_context type_context fun_context global_context
-      region_groups sg.type_params sg.const_generic_params
+    initialize_eval_context ctx region_groups sg.generics.types
+      sg.generics.const_generics
   in
-  (* Instantiate the signature *)
-  let type_params =
-    List.map (fun (v : T.type_var) -> T.TypeVar v.T.index) sg.type_params
+  (* Instantiate the signature. This updates the context because we compute
+     at the same time the normalization map for the associated types.
+  *)
+  let ctx, inst_sg =
+    symbolic_instantiate_fun_sig ctx fdef.signature fdef.kind
   in
-  let cg_params =
-    List.map
-      (fun (v : T.const_generic_var) -> T.ConstGenericVar v.T.index)
-      sg.const_generic_params
-  in
-  let inst_sg = instantiate_fun_sig type_params cg_params sg in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
     List.map (fun ty -> mk_fresh_symbolic_value V.SynthInput ty) inst_sg.inputs
@@ -165,15 +229,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
   let sg = fdef.signature in
-  let type_params =
-    List.map (fun (v : T.type_var) -> T.TypeVar v.T.index) sg.type_params
+  let _, ret_inst_sg =
+    symbolic_instantiate_fun_sig ctx fdef.signature fdef.kind
   in
-  let cg_params =
-    List.map
-      (fun (v : T.const_generic_var) -> T.ConstGenericVar v.T.index)
-      sg.const_generic_params
-  in
-  let ret_inst_sg = instantiate_fun_sig type_params cg_params sg in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in
@@ -347,19 +405,14 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       for the synthesis)
     - the symbolic AST generated by the symbolic execution
  *)
-let evaluate_function_symbolic (synthesize : bool)
-    (type_context : C.type_context) (fun_context : C.fun_context)
-    (global_context : C.global_context) (fdef : A.fun_decl) :
-    V.symbolic_value list * SA.expression option =
+let evaluate_function_symbolic (synthesize : bool) (ctx : C.decls_ctx)
+    (fdef : A.fun_decl) : V.symbolic_value list * SA.expression option =
   (* Debug *)
   let name_to_string () = Print.fun_name_to_string fdef.A.name in
   log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
 
   (* Create the evaluation context *)
-  let ctx, input_svs, inst_sg =
-    initialize_symbolic_context_for_fun type_context fun_context global_context
-      fdef
-  in
+  let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
 
   (* Create the continuation to finish the evaluation *)
   let config = C.mk_config C.SymbolicMode in
@@ -488,7 +541,8 @@ module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
       environment.
    *)
-  let test_unit_function (crate : A.crate) (fid : A.FunDeclId.id) : unit =
+  let test_unit_function (crate : A.crate) (decls_ctx : C.decls_ctx)
+      (fid : A.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = A.FunDeclId.Map.find fid crate.functions in
     let body = Option.get fdef.body in
@@ -498,17 +552,11 @@ module Test = struct
       (lazy ("test_unit_function: " ^ Print.fun_name_to_string fdef.A.name));
 
     (* Sanity check - *)
-    assert (List.length fdef.A.signature.region_params = 0);
-    assert (List.length fdef.A.signature.type_params = 0);
+    assert (fdef.A.signature.generics = TypesUtils.mk_empty_generic_params);
     assert (body.A.arg_count = 0);
 
     (* Create the evaluation context *)
-    let type_context, fun_context, global_context =
-      compute_type_fun_global_contexts crate
-    in
-    let ctx =
-      initialize_eval_context type_context fun_context global_context [] [] []
-    in
+    let ctx = initialize_eval_context decls_ctx [] [] [] in
 
     (* Insert the (uninitialized) local variables *)
     let ctx = C.ctx_push_uninitialized_vars ctx body.A.locals in
@@ -536,9 +584,7 @@ module Test = struct
       (no parameters, no arguments) - TODO: move *)
   let fun_decl_is_transparent_unit (def : A.fun_decl) : bool =
     Option.is_some def.body
-    && def.A.signature.region_params = []
-    && def.A.signature.type_params = []
-    && def.A.signature.const_generic_params = []
+    && def.A.signature.generics = TypesUtils.mk_empty_generic_params
     && def.A.signature.inputs = []
 
   (** Test all the unit functions in a list of function definitions *)
@@ -548,24 +594,9 @@ module Test = struct
         (fun _ -> fun_decl_is_transparent_unit)
         crate.functions
     in
+    let decls_ctx = compute_contexts crate in
     let test_unit_fun _ (def : A.fun_decl) : unit =
-      test_unit_function crate def.A.def_id
+      test_unit_function crate decls_ctx def.A.def_id
     in
     A.FunDeclId.Map.iter test_unit_fun unit_funs
-
-  (** Execute the symbolic interpreter on a function. *)
-  let test_function_symbolic (synthesize : bool) (type_context : C.type_context)
-      (fun_context : C.fun_context) (global_context : C.global_context)
-      (fdef : A.fun_decl) : unit =
-    (* Debug *)
-    log#ldebug
-      (lazy ("test_function_symbolic: " ^ Print.fun_name_to_string fdef.A.name));
-
-    (* Evaluate *)
-    let _ =
-      evaluate_function_symbolic synthesize type_context fun_context
-        global_context fdef
-    in
-
-    ()
 end

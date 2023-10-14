@@ -21,6 +21,9 @@ module Values = struct
     type_decl_id_to_string : T.TypeDeclId.id -> string;
     const_generic_var_id_to_string : T.ConstGenericVarId.id -> string;
     global_decl_id_to_string : T.GlobalDeclId.id -> string;
+    trait_decl_id_to_string : T.TraitDeclId.id -> string;
+    trait_impl_id_to_string : T.TraitImplId.id -> string;
+    trait_clause_id_to_string : T.TraitClauseId.id -> string;
     adt_variant_to_string : T.TypeDeclId.id -> T.VariantId.id -> string;
     var_id_to_string : E.VarId.id -> string;
     adt_field_names :
@@ -34,6 +37,9 @@ module Values = struct
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
       PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
       PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
+      PT.trait_decl_id_to_string = fmt.trait_decl_id_to_string;
+      PT.trait_impl_id_to_string = fmt.trait_impl_id_to_string;
+      PT.trait_clause_id_to_string = fmt.trait_clause_id_to_string;
     }
 
   let value_to_rtype_formatter (fmt : value_formatter) : PT.rtype_formatter =
@@ -43,6 +49,9 @@ module Values = struct
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
       PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
       PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
+      PT.trait_decl_id_to_string = fmt.trait_decl_id_to_string;
+      PT.trait_impl_id_to_string = fmt.trait_impl_id_to_string;
+      PT.trait_clause_id_to_string = fmt.trait_clause_id_to_string;
     }
 
   let value_to_stype_formatter (fmt : value_formatter) : PT.stype_formatter =
@@ -52,6 +61,9 @@ module Values = struct
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
       PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
       PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
+      PT.trait_decl_id_to_string = fmt.trait_decl_id_to_string;
+      PT.trait_impl_id_to_string = fmt.trait_impl_id_to_string;
+      PT.trait_clause_id_to_string = fmt.trait_clause_id_to_string;
     }
 
   let var_id_to_string (id : E.VarId.id) : string =
@@ -86,10 +98,10 @@ module Values = struct
           List.map (typed_value_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.Adt (T.Tuple, _, _, _) ->
+        | T.Adt (T.Tuple, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.Adt (T.AdtId def_id, _, _, _) ->
+        | T.Adt (T.AdtId def_id, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -111,7 +123,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.Adt (T.Assumed aty, _, _, _) -> (
+        | T.Adt (T.Assumed aty, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
@@ -201,10 +213,10 @@ module Values = struct
           List.map (typed_avalue_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.Adt (T.Tuple, _, _, _) ->
+        | T.Adt (T.Tuple, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.Adt (T.AdtId def_id, _, _, _) ->
+        | T.Adt (T.AdtId def_id, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -226,7 +238,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.Adt (T.Assumed aty, _, _, _) -> (
+        | T.Adt (T.Assumed aty, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
@@ -452,6 +464,9 @@ module Contexts = struct
       PV.adt_variant_to_string = fmt.adt_variant_to_string;
       PV.var_id_to_string = fmt.var_id_to_string;
       PV.adt_field_names = fmt.adt_field_names;
+      PV.trait_decl_id_to_string = fmt.trait_decl_id_to_string;
+      PV.trait_impl_id_to_string = fmt.trait_impl_id_to_string;
+      PV.trait_clause_id_to_string = fmt.trait_clause_id_to_string;
     }
 
   let ast_to_value_formatter (fmt : PA.ast_formatter) : PV.value_formatter =
@@ -463,20 +478,27 @@ module Contexts = struct
   let ctx_to_rtype_formatter (fmt : ctx_formatter) : PT.rtype_formatter =
     PV.value_to_rtype_formatter fmt
 
+  let ctx_to_stype_formatter (fmt : ctx_formatter) : PT.stype_formatter =
+    PV.value_to_stype_formatter fmt
+
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
-    (* We shouldn't use rvar_to_string *)
-    let rvar_to_string _r =
-      raise (Failure "Unexpected use of rvar_to_string")
+    let rvar_to_string r =
+      (* In theory we shouldn't use rvar_to_string, but it can happen
+         when printing definitions for instance... *)
+      T.RegionVarId.to_string r
     in
     let r_to_string r = PT.region_id_to_string r in
 
     let type_var_id_to_string vid =
-      let v = C.lookup_type_var ctx vid in
-      v.name
+      (* The context may be invalid *)
+      match C.lookup_type_var_opt ctx vid with
+      | None -> T.TypeVarId.to_string vid
+      | Some v -> v.name
     in
     let const_generic_var_id_to_string vid =
-      let v = C.lookup_const_generic_var ctx vid in
-      v.name
+      match C.lookup_const_generic_var_opt ctx vid with
+      | None -> T.ConstGenericVarId.to_string vid
+      | Some v -> v.name
     in
     let type_decl_id_to_string def_id =
       let def = C.ctx_lookup_type_decl ctx def_id in
@@ -486,6 +508,15 @@ module Contexts = struct
       let def = C.ctx_lookup_global_decl ctx def_id in
       name_to_string def.name
     in
+    let trait_decl_id_to_string def_id =
+      let def = C.ctx_lookup_trait_decl ctx def_id in
+      name_to_string def.name
+    in
+    let trait_impl_id_to_string def_id =
+      let def = C.ctx_lookup_trait_impl ctx def_id in
+      name_to_string def.name
+    in
+    let trait_clause_id_to_string id = PT.trait_clause_id_to_pretty_string id in
     let adt_variant_to_string =
       PT.type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_decls
     in
@@ -506,6 +537,9 @@ module Contexts = struct
       adt_variant_to_string;
       var_id_to_string;
       adt_field_names;
+      trait_decl_id_to_string;
+      trait_impl_id_to_string;
+      trait_clause_id_to_string;
     }
 
   let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : PA.ast_formatter =
@@ -521,6 +555,15 @@ module Contexts = struct
       let def = C.ctx_lookup_global_decl ctx def_id in
       global_name_to_string def.name
     in
+    let trait_decl_id_to_string def_id =
+      let def = C.ctx_lookup_trait_decl ctx def_id in
+      name_to_string def.name
+    in
+    let trait_impl_id_to_string def_id =
+      let def = C.ctx_lookup_trait_impl ctx def_id in
+      name_to_string def.name
+    in
+    let trait_clause_id_to_string id = PT.trait_clause_id_to_pretty_string id in
     {
       rvar_to_string = ctx_fmt.PV.rvar_to_string;
       r_to_string = ctx_fmt.PV.r_to_string;
@@ -533,6 +576,9 @@ module Contexts = struct
       adt_field_to_string;
       fun_decl_id_to_string;
       global_decl_id_to_string;
+      trait_decl_id_to_string;
+      trait_impl_id_to_string;
+      trait_clause_id_to_string;
     }
 
   (** Split an [env] at every occurrence of [Frame], eliminating those elements.
@@ -608,6 +654,50 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.ctx_to_rtype_formatter fmt in
     PT.rty_to_string fmt t
 
+  let sty_to_string (ctx : C.eval_ctx) (t : T.sty) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_stype_formatter fmt in
+    PT.sty_to_string fmt t
+
+  let etrait_ref_to_string (ctx : C.eval_ctx) (x : T.etrait_ref) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_etype_formatter fmt in
+    PT.etrait_ref_to_string fmt x
+
+  let rtrait_ref_to_string (ctx : C.eval_ctx) (x : T.rtrait_ref) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_rtype_formatter fmt in
+    PT.rtrait_ref_to_string fmt x
+
+  let strait_ref_to_string (ctx : C.eval_ctx) (x : T.strait_ref) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_stype_formatter fmt in
+    PT.strait_ref_to_string fmt x
+
+  let etrait_instance_id_to_string (ctx : C.eval_ctx) (x : T.etrait_instance_id)
+      : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_etype_formatter fmt in
+    PT.etrait_instance_id_to_string fmt x
+
+  let rtrait_instance_id_to_string (ctx : C.eval_ctx) (x : T.rtrait_instance_id)
+      : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_rtype_formatter fmt in
+    PT.rtrait_instance_id_to_string fmt x
+
+  let strait_instance_id_to_string (ctx : C.eval_ctx) (x : T.strait_instance_id)
+      : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_stype_formatter fmt in
+    PT.strait_instance_id_to_string fmt x
+
+  let egeneric_args_to_string (ctx : C.eval_ctx) (x : T.egeneric_args) : string
+      =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_etype_formatter fmt in
+    PT.egeneric_args_to_string fmt x
+
   let borrow_content_to_string (ctx : C.eval_ctx) (bc : V.borrow_content) :
       string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
@@ -653,10 +743,26 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PE.operand_to_string fmt op
 
+  let call_to_string (ctx : C.eval_ctx) (call : A.call) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PA.call_to_string fmt "" call
+
+  let fun_decl_to_string (ctx : C.eval_ctx) (f : A.fun_decl) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PA.fun_decl_to_string fmt "" "  " f
+
+  let fun_sig_to_string (ctx : C.eval_ctx) (x : A.fun_sig) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PA.fun_sig_to_string fmt "" "  " x
+
   let statement_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (e : A.statement) : string =
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.statement_to_string fmt indent indent_incr e
+
+  let trait_impl_to_string (ctx : C.eval_ctx) (timpl : A.trait_impl) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PA.trait_impl_to_string fmt "  " "  " timpl
 
   let env_elem_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (ev : C.env_elem) : string =

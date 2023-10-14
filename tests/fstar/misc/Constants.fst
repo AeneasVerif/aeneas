@@ -9,12 +9,8 @@ open Primitives
 let x0_body : result u32 = Return 0
 let x0_c : u32 = eval_global x0_body
 
-(** [core::num::u32::{8}::MAX] *)
-let core_num_u32_max_body : result u32 = Return 4294967295
-let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
-
 (** [constants::X1] *)
-let x1_body : result u32 = Return core_num_u32_max_c
+let x1_body : result u32 = Return core_u32_max
 let x1_c : u32 = eval_global x1_body
 
 (** [constants::X2] *)

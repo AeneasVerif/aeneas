@@ -338,6 +338,7 @@ let assumed_llbc_functions () :
         (ArraySubsliceShared, None, "array_subslice_shared");
         (ArraySubsliceMut, None, "array_subslice_mut_fwd");
         (ArraySubsliceMut, rg0, "array_subslice_mut_back");
+        (ArrayRepeat, None, "array_repeat");
         (SliceIndexShared, None, "slice_index_shared");
         (SliceIndexMut, None, "slice_index_mut_fwd");
         (SliceIndexMut, rg0, "slice_index_mut_back");
@@ -369,6 +370,7 @@ let assumed_llbc_functions () :
         (ArraySubsliceShared, None, "Array.subslice_shared");
         (ArraySubsliceMut, None, "Array.subslice_mut");
         (ArraySubsliceMut, rg0, "Array.subslice_mut_back");
+        (ArrayRepeat, None, "Array.repeat");
         (SliceIndexShared, None, "Slice.index_shared");
         (SliceIndexMut, None, "Slice.index_mut");
         (SliceIndexMut, rg0, "Slice.index_mut_back");
@@ -529,7 +531,15 @@ let type_decl_kind_to_qualif (kind : decl_kind)
            *)
           Some "with"
       | (Assumed | Declared), None -> Some "Axiom"
-      | _ -> raise (Failure "Unexpected"))
+      | SingleNonRec, None ->
+          (* This is for traits *)
+          Some "Record"
+      | _ ->
+          raise
+            (Failure
+               ("Unexpected: (" ^ show_decl_kind kind ^ ", "
+               ^ Print.option_to_string show_type_decl_kind type_kind
+               ^ ")")))
   | Lean -> (
       match kind with
       | SingleNonRec ->
@@ -647,6 +657,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | _ ->
         raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
   in
+  let flatten_name (name : string list) : string =
+    match !backend with
+    | FStar | Coq | HOL4 -> String.concat "_" name
+    | Lean -> String.concat "." name
+  in
   let get_type_name = get_name in
   let type_name_to_camel_case name =
     let name = get_type_name name in
@@ -668,15 +683,20 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   in
   let field_name (def_name : name) (field_id : FieldId.id)
       (field_name : string option) : string =
-    let field_name =
+    let field_name_s =
       match field_name with
       | Some field_name -> field_name
-      | None -> FieldId.to_string field_id
+      | None ->
+          (* TODO: extract structs with no field names to tuples *)
+          FieldId.to_string field_id
     in
-    if !Config.record_fields_short_names then field_name
+    if !Config.record_fields_short_names then
+      if field_name = None then (* TODO: this is a bit ugly *)
+        "_" ^ field_name_s
+      else field_name_s
     else
       let def_name = type_name_to_snake_case def_name ^ "_" in
-      def_name ^ field_name
+      def_name ^ field_name_s
   in
   let variant_name (def_name : name) (variant : string) : string =
     match !backend with
@@ -700,9 +720,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   let get_fun_name fname =
     let fname = get_name fname in
     (* TODO: don't convert to snake case for Coq, HOL4, F* *)
-    match !backend with
-    | FStar | Coq | HOL4 -> String.concat "_" (List.map to_snake_case fname)
-    | Lean -> String.concat "." fname
+    flatten_name fname
   in
   let global_name (name : global_name) : string =
     (* Converting to snake case also lowercases the letters (in Rust, global
@@ -718,6 +736,50 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
     (* Concatenate *)
     fname ^ suffix
+  in
+
+  let trait_decl_name (trait_decl : trait_decl) : string =
+    type_name trait_decl.name
+  in
+
+  let trait_impl_name (trait_decl : trait_decl) (trait_impl : trait_impl) :
+      string =
+    (* TODO: provisional: we concatenate the trait impl name (which is its type)
+       with the trait decl name *)
+    let trait_decl =
+      let name = trait_decl.name in
+      match !backend with
+      | FStar | Coq | HOL4 -> type_name_to_snake_case name ^ "_inst"
+      | Lean -> String.concat "" (get_type_name name) ^ "Inst"
+    in
+    flatten_name (get_type_name trait_impl.name @ [ trait_decl ])
+  in
+
+  let trait_parent_clause_name (trait_decl : trait_decl) (clause : trait_clause)
+      : string =
+    (* TODO: improve - it would be better to not use indices *)
+    let clause = "parent_clause_" ^ TraitClauseId.to_string clause.clause_id in
+    if !Config.record_fields_short_names then clause
+    else trait_decl_name trait_decl ^ "_" ^ clause
+  in
+  let trait_type_name (trait_decl : trait_decl) (item : string) : string =
+    if !Config.record_fields_short_names then item
+    else trait_decl_name trait_decl ^ "_" ^ item
+  in
+  let trait_const_name (trait_decl : trait_decl) (item : string) : string =
+    if !Config.record_fields_short_names then item
+    else trait_decl_name trait_decl ^ "_" ^ item
+  in
+  let trait_method_name (trait_decl : trait_decl) (item : string) : string =
+    if !Config.record_fields_short_names then item
+    else trait_decl_name trait_decl ^ "_" ^ item
+  in
+  let trait_type_clause_name (trait_decl : trait_decl) (item : string)
+      (clause : trait_clause) : string =
+    (* TODO: improve - it would be better to not use indices *)
+    trait_type_name trait_decl item
+    ^ "_clause_"
+    ^ TraitClauseId.to_string clause.clause_id
   in
 
   let termination_measure_name (_fid : A.FunDeclId.id) (fname : fun_name)
@@ -757,6 +819,21 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
 
   let var_basename (_varset : StringSet.t) (basename : string option) (ty : ty)
       : string =
+    (* Small helper to derive var names from ADT type names.
+
+       We do the following:
+       - convert the type name to snake case
+       - take the first letter of every "letter group"
+       Ex.: "HashMap" -> "hash_map" -> "hm"
+    *)
+    let name_from_type_ident (name : string) : string =
+      let cl = to_snake_case name in
+      let cl = String.split_on_char '_' cl in
+      let cl = List.filter (fun s -> String.length s > 0) cl in
+      assert (List.length cl > 0);
+      let cl = List.map (fun s -> s.[0]) cl in
+      StringUtils.string_of_chars cl
+    in
     (* If there is a basename, we use it *)
     match basename with
     | Some basename ->
@@ -765,11 +842,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | None -> (
         (* No basename: we use the first letter of the type *)
         match ty with
-        | Adt (type_id, tys, _) -> (
+        | Adt (type_id, generics) -> (
             match type_id with
             | Tuple ->
                 (* The "pair" case is frequent enough to have its special treatment *)
-                if List.length tys = 2 then "p" else "t"
+                if List.length generics.types = 2 then "p" else "t"
             | Assumed Result -> "r"
             | Assumed Error -> ConstStrings.error_basename
             | Assumed Fuel -> ConstStrings.fuel_basename
@@ -781,24 +858,14 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             | Assumed Range -> "r"
             | Assumed State -> ConstStrings.state_basename
             | AdtId adt_id ->
-                let def =
-                  TypeDeclId.Map.find adt_id ctx.type_context.type_decls
-                in
-                (* We do the following:
-                 * - compute the type name, and retrieve the last ident
-                 * - convert this to snake case
-                 * - take the first letter of every "letter group"
+                let def = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
+                (* Derive the var name from the last ident of the type name
                  * Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
                  *)
-                (* Thename shouldn't be empty, and its last element should
+                (* The name shouldn't be empty, and its last element should
                  * be an ident *)
                 let cl = List.nth def.name (List.length def.name - 1) in
-                let cl = to_snake_case (Names.as_ident cl) in
-                let cl = String.split_on_char '_' cl in
-                let cl = List.filter (fun s -> String.length s > 0) cl in
-                assert (List.length cl > 0);
-                let cl = List.map (fun s -> s.[0]) cl in
-                StringUtils.string_of_chars cl)
+                name_from_type_ident (Names.as_ident cl))
         | TypeVar _ -> (
             (* TODO: use "t" also for F* *)
             match !backend with
@@ -806,7 +873,8 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             | Coq | Lean | HOL4 -> "t" (* lacking inspiration here... *))
         | Literal lty -> (
             match lty with Bool -> "b" | Char -> "c" | Integer _ -> "i")
-        | Arrow _ -> "f")
+        | Arrow _ -> "f"
+        | TraitType (_, _, name) -> name_from_type_ident name)
   in
   let type_var_basename (_varset : StringSet.t) (basename : string) : string =
     (* Rust type variables are snake-case and start with a capital letter *)
@@ -828,6 +896,12 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
         to_snake_case basename
     | Coq | Lean -> basename
   in
+  let trait_clause_basename (_varset : StringSet.t) (_clause : trait_clause) :
+      string =
+    (* TODO: actually use the clause to derive the name *)
+    "inst"
+  in
+  let trait_self_clause_basename = "self_clause" in
   let append_index (basename : string) (i : int) : string =
     basename ^ string_of_int i
   in
@@ -919,10 +993,19 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fun_name;
     termination_measure_name;
     decreases_proof_name;
+    trait_decl_name;
+    trait_impl_name;
+    trait_parent_clause_name;
+    trait_const_name;
+    trait_type_name;
+    trait_method_name;
+    trait_type_clause_name;
     opaque_pre;
     var_basename;
     type_var_basename;
     const_generic_var_basename;
+    trait_self_clause_basename;
+    trait_clause_basename;
     append_index;
     extract_literal;
     extract_unop;
@@ -1131,13 +1214,13 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (ty : ty) : unit =
   let extract_rec = extract_ty ctx fmt no_params_tys in
   match ty with
-  | Adt (type_id, tys, cgs) -> (
-      let has_params = tys <> [] || cgs <> [] in
+  | Adt (type_id, generics) -> (
+      let has_params = generics <> empty_generic_args in
       match type_id with
       | Tuple ->
           (* This is a bit annoying, but in F*/Coq/HOL4 [()] is not the unit type:
            * we have to write [unit]... *)
-          if tys = [] then F.pp_print_string fmt (unit_name ())
+          if generics.types = [] then F.pp_print_string fmt (unit_name ())
           else (
             F.pp_print_string fmt "(";
             Collections.List.iter_link
@@ -1152,7 +1235,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                 in
                 F.pp_print_string fmt product;
                 F.pp_print_space fmt ())
-              (extract_rec true) tys;
+              (extract_rec true) generics.types;
             F.pp_print_string fmt ")")
       | AdtId _ | Assumed _ -> (
           (* HOL4 behaves differently. Where in Coq/FStar/Lean we would write:
@@ -1169,36 +1252,34 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
               (* TODO: for now, only the opaque *functions* are extracted in the
                  opaque module. The opaque *types* are assumed. *)
               F.pp_print_string fmt (ctx_get_type with_opaque_pre type_id ctx);
-              if tys <> [] then (
-                F.pp_print_space fmt ();
-                Collections.List.iter_link (F.pp_print_space fmt)
-                  (extract_rec true) tys);
-              if cgs <> [] then (
-                F.pp_print_space fmt ();
-                Collections.List.iter_link (F.pp_print_space fmt)
-                  (extract_const_generic ctx fmt true)
-                  cgs);
+              extract_generic_args ctx fmt no_params_tys generics;
               if print_paren then F.pp_print_string fmt ")"
           | HOL4 ->
-              (* Const generics are unsupported in HOL4 *)
-              assert (cgs = []);
+              let { types; const_generics; trait_refs } = generics in
+              (* Const generics are not supported in HOL4 *)
+              assert (const_generics = []);
               let print_tys =
                 match type_id with
                 | AdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
                 | Assumed _ -> true
                 | _ -> raise (Failure "Unreachable")
               in
-              if tys <> [] && print_tys then (
-                let print_paren = List.length tys > 1 in
+              if types <> [] && print_tys then (
+                let print_paren = List.length types > 1 in
                 if print_paren then F.pp_print_string fmt "(";
                 Collections.List.iter_link
                   (fun () ->
                     F.pp_print_string fmt ",";
                     F.pp_print_space fmt ())
-                  (extract_rec true) tys;
+                  (extract_rec true) types;
                 if print_paren then F.pp_print_string fmt ")";
                 F.pp_print_space fmt ());
-              F.pp_print_string fmt (ctx_get_type with_opaque_pre type_id ctx)))
+              F.pp_print_string fmt (ctx_get_type with_opaque_pre type_id ctx);
+              if trait_refs <> [] then (
+                F.pp_print_space fmt ();
+                Collections.List.iter_link (F.pp_print_space fmt)
+                  (extract_trait_ref ctx fmt no_params_tys true)
+                  trait_refs)))
   | TypeVar vid -> F.pp_print_string fmt (ctx_get_type_var vid ctx)
   | Literal lty -> extract_literal_type ctx fmt lty
   | Arrow (arg_ty, ret_ty) ->
@@ -1209,6 +1290,113 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       extract_rec false ret_ty;
       if inside then F.pp_print_string fmt ")"
+  | TraitType (trait_ref, generics, type_name) ->
+      if !parameterize_trait_types then raise (Failure "Unimplemented")
+      else if trait_ref.trait_id <> Self then (
+        (* HOL4 doesn't have 1st class types *)
+        assert (!backend <> HOL4);
+        let use_brackets = generics <> empty_generic_args in
+        if use_brackets then F.pp_print_string fmt "(";
+        extract_trait_ref ctx fmt no_params_tys false trait_ref;
+        extract_generic_args ctx fmt no_params_tys generics;
+        let name =
+          ctx_get_trait_type trait_ref.trait_decl_ref.trait_decl_id type_name
+            ctx
+        in
+        if use_brackets then F.pp_print_string fmt ")";
+        F.pp_print_string fmt ("." ^ name))
+      else
+        (* There are two situations:
+           - we are extracting a declared item (typically a function signature)
+             for a trait declaration. We directly refer to the item (we extract
+             trait declarations as structures, so we can refer to their fields)
+           - we are extracting a provided method for a trait declaration. We
+             refer to the item in the self trait clause (see {!SelfTraitClauseId}).
+
+           Remark: we can't get there for trait *implementations* because then the
+           types should have been normalized.
+        *)
+        let trait_decl_id = Option.get ctx.trait_decl_id in
+        let item_name = ctx_get_trait_type trait_decl_id type_name ctx in
+        assert (generics = empty_generic_args);
+        if ctx.is_provided_method then
+          (* Provided method: use the trait self clause *)
+          let self_clause = ctx_get_trait_self_clause ctx in
+          F.pp_print_string fmt (self_clause ^ "." ^ item_name)
+        else
+          (* Declaration: directly refer to the item *)
+          F.pp_print_string fmt item_name
+
+and extract_trait_ref (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_ref) : unit =
+  let use_brackets = tr.generics <> empty_generic_args && inside in
+  if use_brackets then F.pp_print_string fmt "(";
+  extract_trait_instance_id ctx fmt no_params_tys inside tr.trait_id;
+  extract_generic_args ctx fmt no_params_tys tr.generics;
+  if use_brackets then F.pp_print_string fmt ")"
+
+and extract_trait_decl_ref (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_decl_ref) :
+    unit =
+  let use_brackets = tr.decl_generics <> empty_generic_args && inside in
+  let is_opaque = false in
+  let name = ctx_get_trait_decl is_opaque tr.trait_decl_id ctx in
+  if use_brackets then F.pp_print_string fmt "(";
+  F.pp_print_string fmt name;
+  extract_generic_args ctx fmt no_params_tys tr.decl_generics;
+  if use_brackets then F.pp_print_string fmt ")"
+
+and extract_generic_args (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) (generics : generic_args) : unit =
+  let { types; const_generics; trait_refs } = generics in
+  if !backend <> HOL4 then (
+    if types <> [] then (
+      F.pp_print_space fmt ();
+      Collections.List.iter_link (F.pp_print_space fmt)
+        (extract_ty ctx fmt no_params_tys true)
+        types);
+    if const_generics <> [] then (
+      assert (!backend <> HOL4);
+      F.pp_print_space fmt ();
+      Collections.List.iter_link (F.pp_print_space fmt)
+        (extract_const_generic ctx fmt true)
+        const_generics));
+  if trait_refs <> [] then (
+    F.pp_print_space fmt ();
+    Collections.List.iter_link (F.pp_print_space fmt)
+      (extract_trait_ref ctx fmt no_params_tys true)
+      trait_refs)
+
+and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
+    : unit =
+  let with_opaque_pre = false in
+  match id with
+  | Self ->
+      (* This has specific treatment depending on the item we're extracting
+         (associated type, etc.). We should have caught this elsewhere. *)
+      raise (Failure "Unexpected")
+  | TraitImpl id ->
+      let name = ctx_get_trait_impl with_opaque_pre id ctx in
+      F.pp_print_string fmt name
+  | Clause id ->
+      let name = ctx_get_local_trait_clause id ctx in
+      F.pp_print_string fmt name
+  | ParentClause (inst_id, decl_id, clause_id) ->
+      (* Use the trait decl id to lookup the name *)
+      let name = ctx_get_trait_parent_clause decl_id clause_id ctx in
+      extract_trait_instance_id ctx fmt no_params_tys true inst_id;
+      F.pp_print_string fmt ("." ^ name)
+  | ItemClause (inst_id, decl_id, item_name, clause_id) ->
+      (* Use the trait decl id to lookup the name *)
+      let name = ctx_get_trait_item_clause decl_id item_name clause_id ctx in
+      extract_trait_instance_id ctx fmt no_params_tys true inst_id;
+      F.pp_print_string fmt ("." ^ name)
+  | TraitRef trait_ref ->
+      extract_trait_ref ctx fmt no_params_tys inside trait_ref
+  | UnknownTrait _ ->
+      (* This is an error case *)
+      raise (Failure "Unexpected")
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type
@@ -1524,6 +1712,172 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
   F.pp_print_string fmt rd;
   F.pp_close_box fmt ()
 
+let extract_trait_clause_type (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) (clause : trait_clause) : unit =
+  let with_opaque_pre = false in
+  let trait_name = ctx_get_trait_decl with_opaque_pre clause.trait_id ctx in
+  F.pp_print_string fmt trait_name;
+  extract_generic_args ctx fmt no_params_tys clause.generics
+
+(** Insert a space, if necessary *)
+let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
+  if !space then space := false else F.pp_print_space fmt ()
+
+(** Extract the trait self clause.
+
+    We add the trait self clause for provided methods (see {!TraitSelfClauseId}).
+ *)
+let extract_trait_self_clause (insert_req_space : unit -> unit)
+    (ctx : extraction_ctx) (fmt : F.formatter) (trait_decl : trait_decl)
+    (params : string list) : unit =
+  insert_req_space ();
+  F.pp_print_string fmt "(";
+  let self_clause = ctx_get_trait_self_clause ctx in
+  F.pp_print_string fmt self_clause;
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt ":";
+  F.pp_print_space fmt ();
+  let with_opaque_pre = false in
+  let trait_id = ctx_get_trait_decl with_opaque_pre trait_decl.def_id ctx in
+  F.pp_print_string fmt trait_id;
+  List.iter
+    (fun p ->
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt p)
+    params;
+  F.pp_print_string fmt ")"
+
+(**
+ - [trait_decl]: if [Some], it means we are extracting the generics for a provided
+   method and need to insert a trait self clause (see {!TraitSelfClauseId}).
+ *)
+let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
+    ?(use_forall_use_sep = true) ?(as_implicits : bool = false)
+    ?(space : bool ref option = None) ?(trait_decl : trait_decl option = None)
+    (generics : generic_params) (type_params : string list)
+    (cg_params : string list) (trait_clauses : string list) : unit =
+  let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
+  (* HOL4 doesn't support const generics *)
+  assert (cg_params = [] || !backend <> HOL4);
+  let left_bracket (implicit : bool) =
+    if implicit then F.pp_print_string fmt "{" else F.pp_print_string fmt "("
+  in
+  let right_bracket (implicit : bool) =
+    if implicit then F.pp_print_string fmt "}" else F.pp_print_string fmt ")"
+  in
+  let insert_req_space () =
+    match space with
+    | None -> F.pp_print_space fmt ()
+    | Some space -> insert_req_space fmt space
+  in
+  (* Print the type/const generic parameters *)
+  if all_params <> [] then (
+    if use_forall then (
+      if use_forall_use_sep then (
+        insert_req_space ();
+        F.pp_print_string fmt ":");
+      insert_req_space ();
+      F.pp_print_string fmt "forall");
+    (* Small helper - we may need to split the parameters *)
+    let print_generics (as_implicits : bool) (type_params : string list)
+        (const_generics : const_generic_var list)
+        (trait_clauses : trait_clause list) : unit =
+      (* Note that in HOL4 we don't print the type parameters. *)
+      if !backend <> HOL4 then (
+        (* Print the type parameters *)
+        if type_params <> [] then (
+          insert_req_space ();
+          (* ( *)
+          left_bracket as_implicits;
+          List.iter
+            (fun s ->
+              F.pp_print_string fmt s;
+              F.pp_print_space fmt ())
+            type_params;
+          F.pp_print_string fmt ":";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt (type_keyword ());
+          (* ) *)
+          right_bracket as_implicits);
+        (* Print the const generic parameters *)
+        List.iter
+          (fun (var : const_generic_var) ->
+            insert_req_space ();
+            (* ( *)
+            left_bracket as_implicits;
+            let n = ctx_get_const_generic_var var.index ctx in
+            F.pp_print_string fmt n;
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt ":";
+            F.pp_print_space fmt ();
+            extract_literal_type ctx fmt var.ty;
+            (* ) *)
+            right_bracket as_implicits)
+          const_generics);
+      (* Print the trait clauses *)
+      List.iter
+        (fun (clause : trait_clause) ->
+          insert_req_space ();
+          (* ( *)
+          left_bracket as_implicits;
+          let n = ctx_get_local_trait_clause clause.clause_id ctx in
+          F.pp_print_string fmt n;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":";
+          F.pp_print_space fmt ();
+          extract_trait_clause_type ctx fmt no_params_tys clause;
+          (* ) *)
+          right_bracket as_implicits)
+        trait_clauses
+    in
+    (* If we extract the generics for a provided method for a trait declaration
+       (indicated by the trait decl given as input), we need to split the generics:
+       - we print the generics for the trait decl
+       - we print the trait self clause
+       - we print the generics for the trait method
+    *)
+    match trait_decl with
+    | None ->
+        print_generics as_implicits type_params generics.const_generics
+          generics.trait_clauses
+    | Some trait_decl ->
+        (* Split the generics between the generics specific to the trait decl
+           and those specific to the trait method *)
+        let open Collections.List in
+        let dtype_params, mtype_params =
+          split_at type_params (length trait_decl.generics.types)
+        in
+        let dcgs, mcgs =
+          split_at generics.const_generics
+            (length trait_decl.generics.const_generics)
+        in
+        let dtrait_clauses, mtrait_clauses =
+          split_at generics.trait_clauses
+            (length trait_decl.generics.trait_clauses)
+        in
+        (* Extract the trait decl generics - note that we can always deduce
+           those parameters from the trait self clause: for this reason
+           they are always implicit *)
+        print_generics true dtype_params dcgs dtrait_clauses;
+        (* Extract the trait self clause *)
+        let params =
+          concat
+            [
+              dtype_params;
+              map
+                (fun (cg : const_generic_var) ->
+                  ctx_get_const_generic_var cg.index ctx)
+                dcgs;
+              map
+                (fun c -> ctx_get_local_trait_clause c.clause_id ctx)
+                dtrait_clauses;
+            ]
+        in
+        extract_trait_self_clause insert_req_space ctx fmt trait_decl params;
+        (* Extract the method generics *)
+        print_generics as_implicits mtype_params mcgs mtrait_clauses)
+
 (** Extract a type declaration.
 
     This function is for all type declarations and all backends **at the exception**
@@ -1551,19 +1905,15 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   *)
   let is_opaque = type_kind = None in
   let is_opaque_coq = !backend = Coq && is_opaque in
-  let use_forall =
-    is_opaque_coq && (def.type_params <> [] || def.const_generic_params <> [])
-  in
+  let use_forall = is_opaque_coq && def.generics <> empty_generic_params in
   (* Retrieve the definition name *)
   let with_opaque_pre = false in
   let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
-  let ctx_body, type_params, cg_params =
-    ctx_add_type_const_generic_params def.type_params def.const_generic_params
-      ctx
+  let ctx_body, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params def.generics ctx
   in
-  let ty_cg_params = List.append type_params cg_params in
   (* Add a break before *)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
     F.pp_print_break fmt 0 0;
@@ -1583,40 +1933,12 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (match qualif with
   | Some qualif -> F.pp_print_string fmt (qualif ^ " " ^ def_name)
   | None -> F.pp_print_string fmt def_name);
-  (* HOL4 doesn't support const generics *)
-  assert (cg_params = [] || !backend <> HOL4);
-  (* Print the type/const generic parameters *)
-  if ty_cg_params <> [] && !backend <> HOL4 then (
-    if use_forall then (
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt ":";
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt "forall");
-    (* Print the type parameters *)
-    if type_params <> [] then (
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt "(";
-      List.iter
-        (fun s ->
-          F.pp_print_string fmt s;
-          F.pp_print_space fmt ())
-        type_params;
-      F.pp_print_string fmt ":";
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt (type_keyword () ^ ")"));
-    (* Print the const generic parameters *)
-    List.iter
-      (fun (var : const_generic_var) ->
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "(";
-        let n = ctx_get_const_generic_var var.index ctx in
-        F.pp_print_string fmt n;
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt ":";
-        F.pp_print_space fmt ();
-        extract_literal_type ctx fmt var.ty;
-        F.pp_print_string fmt ")")
-      def.const_generic_params);
+  (* HOL4 doesn't support const generics, and type definitions in HOL4 don't
+     support trait clauses *)
+  assert ((cg_params = [] && trait_clauses = []) || !backend <> HOL4);
+  (* Print the generic parameters *)
+  extract_generic_params ctx_body fmt type_decl_group ~use_forall def.generics
+    type_params cg_params trait_clauses;
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
@@ -1676,9 +1998,12 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   let with_opaque_pre = false in
   let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
   (* Generic parameters are unsupported *)
-  assert (def.const_generic_params = []);
+  assert (def.generics.const_generics = []);
+  (* Trait clauses on type definitions are unsupported *)
+  assert (def.generics.trait_clauses = []);
+  (* Types  *)
   (* Count the number of parameters *)
-  let num_params = List.length def.type_params in
+  let num_params = List.length def.generics.types in
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt
@@ -1699,8 +2024,7 @@ let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
   let with_opaque_pre = false in
   let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
   (* Sanity check *)
-  assert (def.type_params = []);
-  assert (def.const_generic_params = []);
+  assert (def.generics = empty_generic_params);
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ("Type " ^ def_name ^ " = “: unit”");
@@ -1740,13 +2064,12 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   assert (!backend = Coq);
   (* Generating the [Arguments] instructions is useful only if there are type parameters *)
-  if decl.type_params = [] && decl.const_generic_params = [] then ()
+  if decl.generics.types = [] && decl.generics.const_generics = [] then ()
   else
     (* Add the type params - note that we need those bindings only for the
      * body translation (they are not top-level) *)
-    let _ctx_body, type_params, cg_params =
-      ctx_add_type_const_generic_params decl.type_params
-        decl.const_generic_params ctx
+    let _ctx_body, type_params, cg_params, trait_clauses =
+      ctx_add_generic_params decl.generics ctx
     in
     (* Auxiliary function to extract an [Arguments Cons {T} _ _.] instruction *)
     let extract_arguments_info (cons_name : string) (fields : 'a list) : unit =
@@ -1754,27 +2077,22 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_break fmt 0 0;
       (* Open a box *)
       F.pp_open_hovbox fmt ctx.indent_incr;
-      (* Small utility *)
-      let print_vars () =
-        List.iter
-          (fun (var : string) ->
-            F.pp_print_space fmt ();
-            F.pp_print_string fmt ("{" ^ var ^ "}"))
-          (List.append type_params cg_params)
-      in
-      let print_fields () =
-        List.iter
-          (fun _ ->
-            F.pp_print_space fmt ();
-            F.pp_print_string fmt "_")
-          fields
-      in
       F.pp_print_break fmt 0 0;
       F.pp_print_string fmt "Arguments";
       F.pp_print_space fmt ();
       F.pp_print_string fmt cons_name;
-      print_vars ();
-      print_fields ();
+      (* Print the type/const params and the trait clauses (`{T}`) *)
+      List.iter
+        (fun (var : string) ->
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ("{" ^ var ^ "}"))
+        (List.concat [ type_params; cg_params; trait_clauses ]);
+      (* Print the fields (`_`) *)
+      List.iter
+        (fun _ ->
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "_")
+        fields;
       F.pp_print_string fmt ".";
 
       (* Close the box *)
@@ -1827,9 +2145,8 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
       let is_rec = decl_is_from_rec_group kind in
       if is_rec then
         (* Add the type params *)
-        let ctx, type_params, cg_params =
-          ctx_add_type_const_generic_params decl.type_params
-            decl.const_generic_params ctx
+        let ctx, type_params, cg_params, trait_clauses =
+          ctx_add_generic_params decl.generics ctx
         in
         let ctx, record_var = ctx_add_var "x" (VarId.of_int 0) ctx in
         let ctx, field_var = ctx_add_var "x" (VarId.of_int 1) ctx in
@@ -1850,33 +2167,12 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           F.pp_print_space fmt ();
           let field_name = ctx_get_field (AdtId decl.def_id) field_id ctx in
           F.pp_print_string fmt field_name;
-          F.pp_print_space fmt ();
-          (* Print the type parameters *)
-          if type_params <> [] then (
-            F.pp_print_string fmt "{";
-            List.iter
-              (fun p ->
-                F.pp_print_string fmt p;
-                F.pp_print_space fmt ())
-              type_params;
-            F.pp_print_string fmt ":";
-            F.pp_print_space fmt ();
-            F.pp_print_string fmt "Type}";
-            F.pp_print_space fmt ());
-          (* Print the const generic parameters *)
-          if cg_params <> [] then
-            List.iter
-              (fun (v : const_generic_var) ->
-                F.pp_print_string fmt "{";
-                let n = ctx_get_const_generic_var v.index ctx in
-                F.pp_print_string fmt n;
-                F.pp_print_string fmt ":";
-                F.pp_print_space fmt ();
-                extract_literal_type ctx fmt v.ty;
-                F.pp_print_string fmt "}";
-                F.pp_print_space fmt ())
-              decl.const_generic_params;
+          (* Print the generics *)
+          let as_implicits = true in
+          extract_generic_params ctx fmt TypeDeclId.Set.empty ~as_implicits
+            decl.generics type_params cg_params trait_clauses;
           (* Print the record parameter *)
+          F.pp_print_space fmt ();
           F.pp_print_string fmt "(";
           F.pp_print_string fmt record_var;
           F.pp_print_space fmt ();
@@ -2067,10 +2363,11 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
 (** Compute the names for all the pure functions generated from a rust function
     (forward function and backward functions).
  *)
-let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
+let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  let (fwd, loop_fwds), back_ls = def in
+  let fwd = def.fwd in
+  let backs = def.backs in
   (* Register the decrease clauses, if necessary *)
   let register_decreases ctx def =
     if has_decreases_clause def then
@@ -2083,22 +2380,19 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
       | Lean -> ctx_add_decreases_proof def ctx
     else ctx
   in
-  let ctx = List.fold_left register_decreases ctx (fwd :: loop_fwds) in
-  let register_fun ctx f = ctx_add_fun_decl (keep_fwd, def) f ctx in
+  let ctx = List.fold_left register_decreases ctx (fwd.f :: fwd.loops) in
+  let register_fun ctx f = ctx_add_fun_decl def f ctx in
   let register_funs ctx fl = List.fold_left register_fun ctx fl in
-  (* Register the forward functions' names *)
-  let ctx = register_funs ctx (fwd :: loop_fwds) in
-  (* Register the backward functions' names *)
+  (* Register the names of the forward functions *)
   let ctx =
-    List.fold_left
-      (fun ctx (back, loop_backs) ->
-        let ctx = register_fun ctx back in
-        register_funs ctx loop_backs)
-      ctx back_ls
+    if def.keep_fwd then register_funs ctx (fwd.f :: fwd.loops) else ctx
   in
-
-  (* Return *)
-  ctx
+  (* Register the names of the backward functions *)
+  List.fold_left
+    (fun ctx { f = back; loops = loop_backs } ->
+      let ctx = register_fun ctx back in
+      register_funs ctx loop_backs)
+    ctx backs
 
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
@@ -2122,11 +2416,11 @@ let extract_adt_g_value
     (inside : bool) (variant_id : VariantId.id option) (field_values : 'v list)
     (ty : ty) : extraction_ctx =
   match ty with
-  | Adt (Tuple, type_args, cg_args) ->
+  | Adt (Tuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
-      assert (List.length type_args = List.length field_values);
-      assert (cg_args = []);
+      assert (List.length generics.types = List.length field_values);
+      assert (generics.const_generics = [] && generics.trait_refs = []);
       (* This is very annoying: in Coq, we can't write [()] for the value of
          type [unit], we have to write [tt]. *)
       if !backend = Coq && field_values = [] then (
@@ -2144,7 +2438,7 @@ let extract_adt_g_value
         in
         F.pp_print_string fmt ")";
         ctx)
-  | Adt (adt_id, _, _) ->
+  | Adt (adt_id, _) ->
       (* "Regular" ADT *)
 
       (* If we are generating a pattern for a let-binding and we target Lean,
@@ -2249,6 +2543,9 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | Var var_id ->
       let var_name = ctx_get_var var_id ctx in
       F.pp_print_string fmt var_name
+  | CVar var_id ->
+      let var_name = ctx_get_const_generic_var var_id ctx in
+      F.pp_print_string fmt var_name
   | Const cv -> ctx.fmt.extract_literal fmt inside cv
   | App _ ->
       let app, args = destruct_apps e in
@@ -2279,14 +2576,23 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (* Top-level qualifier *)
       match qualif.id with
       | FunOrOp fun_id ->
-          extract_function_call ctx fmt inside fun_id qualif.type_args
-            qualif.const_generic_args args
+          extract_function_call ctx fmt inside fun_id qualif.generics args
       | Global global_id -> extract_global ctx fmt global_id
       | AdtCons adt_cons_id ->
-          extract_adt_cons ctx fmt inside adt_cons_id qualif.type_args
-            qualif.const_generic_args args
+          extract_adt_cons ctx fmt inside adt_cons_id qualif.generics args
       | Proj proj ->
-          extract_field_projector ctx fmt inside app proj qualif.type_args args)
+          extract_field_projector ctx fmt inside app proj qualif.generics args
+      | TraitConst (trait_ref, generics, const_name) ->
+          let use_brackets = generics <> empty_generic_args in
+          if use_brackets then F.pp_print_string fmt "(";
+          extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref;
+          extract_generic_args ctx fmt TypeDeclId.Set.empty generics;
+          let name =
+            ctx_get_trait_const trait_ref.trait_decl_ref.trait_decl_id
+              const_name ctx
+          in
+          if use_brackets then F.pp_print_string fmt ")";
+          F.pp_print_string fmt ("." ^ name))
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)
@@ -2309,8 +2615,8 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
 (** Subcase of the app case: function call *)
 and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (fid : fun_or_op_id) (type_args : ty list)
-    (cg_args : const_generic list) (args : texpression list) : unit =
+    (inside : bool) (fid : fun_or_op_id) (generics : generic_args)
+    (args : texpression list) : unit =
   match (fid, args) with
   | Unop unop, [ arg ] ->
       (* A unop can have *at most* one argument (the result can't be a function!).
@@ -2329,22 +2635,97 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the function name *)
       let with_opaque_pre = ctx.use_opaque_pre in
-      let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
-      F.pp_print_string fmt fun_name;
+      (* For the function name: the id is not the same depending on whether
+         we call a trait method and a "regular" function (remark: trait
+         method *implementations* are considered as regular functions here;
+         only calls to method of traits which are parameterized in a where
+         clause have a special treatment.
+
+         Remark: the reason why trait method declarations have a special
+         treatment is that, as traits are extracted to records, we may
+         allow collisions between trait item names and some other names,
+         while we do not allow collisions between function names.
+
+         # Impl trait refs:
+         ==================
+         When the trait ref refers to an impl, in
+         [InterpreterStatement.eval_transparent_function_call_symbolic] we
+         replace the call to the trait impl method to a call to the function
+         which implements the trait method (that is, we "forget" that we
+         called a trait method, and treat it as a regular function call).
+
+         # Provided trait methods:
+         =========================
+         Calls to provided trait methods also have a special treatment.
+         For now, we do not allow overriding provided trait methods (methods
+         for which a default implementation is provided in the trait declaration).
+         Whenever we translate a provided trait method, we translate it once as
+         a function which takes a trait ref as input. We have to handle this
+         case below.
+
+         With an example, if in Rust we write:
+         {[
+           fn Foo {
+             fn f(&self) -> u32; // Required
+             fn ret_true(&self) -> bool { true } // Provided
+           }
+         ]}
+
+         We generate:
+         {[
+           structure Foo (Self : Type) = {
+             f : Self -> result u32
+           }
+
+           let ret_true (Self : Type) (self_clause : Foo Self) (self : Self) : result bool =
+             true
+         ]}
+      *)
+      (match fun_id with
+      | FromLlbc
+          (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id, rg_id) ->
+          (* We have to check whether the trait method is required or provided *)
+          let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
+          let trait_decl =
+            TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
+          in
+          let method_id =
+            PureUtils.trait_decl_get_method trait_decl method_name
+          in
+
+          if not method_id.is_provided then (
+            (* Required method *)
+            assert (lp_id = None);
+            extract_trait_ref ctx fmt TypeDeclId.Set.empty true trait_ref;
+            let fun_name =
+              ctx_get_trait_method trait_ref.trait_decl_ref.trait_decl_id
+                method_name rg_id ctx
+            in
+            F.pp_print_string fmt ("." ^ fun_name))
+          else
+            (* Provided method: we see it as a regular function call, and use
+               the function name *)
+            let fun_id =
+              FromLlbc (FunId (A.Regular method_id.id), lp_id, rg_id)
+            in
+            let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
+            F.pp_print_string fmt fun_name;
+
+            (* Note that we do not need to print the generics for the trait
+               declaration: they are always implicit as they can be deduced
+               from the trait self clause.
+
+               Print the trait ref (to instantate the self clause) *)
+            F.pp_print_space fmt ();
+            extract_trait_ref ctx fmt TypeDeclId.Set.empty true trait_ref
+      | _ ->
+          let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
+          F.pp_print_string fmt fun_name);
+
       (* Sanity check: HOL4 doesn't support const generics *)
-      assert (cg_args = [] || !backend <> HOL4);
-      (* Print the type parameters, if the backend is not HOL4 *)
-      if !backend <> HOL4 then (
-        List.iter
-          (fun ty ->
-            F.pp_print_space fmt ();
-            extract_ty ctx fmt TypeDeclId.Set.empty true ty)
-          type_args;
-        List.iter
-          (fun cg ->
-            F.pp_print_space fmt ();
-            extract_const_generic ctx fmt true cg)
-          cg_args);
+      assert (generics.const_generics = [] || !backend <> HOL4);
+      (* Print the generics *)
+      extract_generic_args ctx fmt TypeDeclId.Set.empty generics;
       (* Print the arguments *)
       List.iter
         (fun ve ->
@@ -2366,9 +2747,9 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Subcase of the app case: ADT constructor *)
 and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (adt_cons : adt_cons_id) (type_args : ty list)
-    (cg_args : const_generic list) (args : texpression list) : unit =
-  let e_ty = Adt (adt_cons.adt_id, type_args, cg_args) in
+    (adt_cons : adt_cons_id) (generics : generic_args) (args : texpression list)
+    : unit =
+  let e_ty = Adt (adt_cons.adt_id, generics) in
   let is_single_pat = false in
   let _ =
     extract_adt_g_value
@@ -2382,7 +2763,7 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 (** Subcase of the app case: ADT field projector.  *)
 and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (original_app : texpression) (proj : projection)
-    (_proj_type_params : ty list) (args : texpression list) : unit =
+    (_generics : generic_args) (args : texpression list) : unit =
   (* We isolate the first argument (if there is), in order to pretty print the
    * projection ([x.field] instead of [MkAdt?.field x] *)
   match args with
@@ -2734,9 +3115,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
   let extract_as_unit =
     match (!backend, supd.struct_id) with
     | HOL4, AdtId adt_id ->
-        let d =
-          TypeDeclId.Map.find adt_id ctx.trans_ctx.type_context.type_decls
-        in
+        let d = TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls in
         d.kind = Struct []
     | _ -> false
   in
@@ -2835,17 +3214,17 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_open_hvbox fmt ctx.indent_incr;
         let need_paren = inside in
         if need_paren then F.pp_print_string fmt "(";
-        (* Open the box for `Array.mk T N [` *)
+        (* Open the box for `Array.replicate T N [` *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the array constructor *)
         let cs = ctx_get_struct false (Assumed Array) ctx in
         F.pp_print_string fmt cs;
         (* Print the parameters *)
-        let _, tys, cgs = ty_as_adt e_ty in
-        let ty = Collections.List.to_cons_nil tys in
+        let _, generics = ty_as_adt e_ty in
+        let ty = Collections.List.to_cons_nil generics.types in
         F.pp_print_space fmt ();
         extract_ty ctx fmt TypeDeclId.Set.empty true ty;
-        let cg = Collections.List.to_cons_nil cgs in
+        let cg = Collections.List.to_cons_nil generics.const_generics in
         F.pp_print_space fmt ();
         extract_const_generic ctx fmt true cg;
         F.pp_print_space fmt ();
@@ -2872,16 +3251,14 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_close_box fmt ()
     | _ -> raise (Failure "Unreachable")
 
-(** Insert a space, if necessary *)
-let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
-  if !space then space := false else F.pp_print_space fmt ()
-
 (** A small utility to print the parameters of a function signature.
 
     We return two contexts:
-    - the context augmented with bindings for the type parameters
-    - the context augmented with bindings for the type parameters *and*
+    - the context augmented with bindings for the generics
+    - the context augmented with bindings for the generics *and*
       bindings for the input values
+
+    We also return names for the type parameters, const generics, etc.
 
     TODO: do we really need the first one? We should probably always use
     the second one.
@@ -2890,57 +3267,40 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
     patterns, not the variables). We should figure a cleaner way.
  *)
 let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
-    (fmt : F.formatter) (def : fun_decl) : extraction_ctx * extraction_ctx =
+    (fmt : F.formatter) (def : fun_decl) :
+    extraction_ctx * extraction_ctx * string list =
+  (* First, add the associated types and constants if the function is a method
+     in a trait declaration.
+
+     About the order: we want to make sure the names are reserved for
+     those (variable names might collide with them but it is ok, we will add
+     suffixes to the variables).
+
+     TODO: micro-pass to update what happens when calling trait provided
+     functions.
+  *)
+  let ctx, trait_decl =
+    match def.kind with
+    | TraitMethodProvided (decl_id, _) ->
+        let trait_decl = T.TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
+        let ctx, _ = ctx_add_trait_self_clause ctx in
+        let ctx = { ctx with is_provided_method = true } in
+        (ctx, Some trait_decl)
+    | _ -> (ctx, None)
+  in
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
-  let ctx, type_params, cg_params =
-    ctx_add_type_const_generic_params def.signature.type_params
-      def.signature.const_generic_params ctx
+  let ctx, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params def.signature.generics ctx
   in
-  (* Print the parameters - rem.: we should have filtered the functions
-   * with no input parameters *)
-  (* The type parameters.
-
-     Note that in HOL4 we don't print the type parameters.
-  *)
-  if (type_params <> [] || cg_params <> []) && !backend <> HOL4 then (
-    (* Open a box for the type and const generic parameters *)
-    F.pp_open_hovbox fmt 0;
-    (* The type parameters *)
-    if type_params <> [] then (
-      insert_req_space fmt space;
-      F.pp_print_string fmt "(";
-      List.iter
-        (fun (p : type_var) ->
-          let pname = ctx_get_type_var p.index ctx in
-          F.pp_print_string fmt pname;
-          F.pp_print_space fmt ())
-        def.signature.type_params;
-      F.pp_print_string fmt ":";
-      F.pp_print_space fmt ();
-      let type_keyword =
-        match !backend with
-        | FStar -> "Type0"
-        | Coq | Lean -> "Type"
-        | HOL4 -> raise (Failure "Unreachable")
-      in
-      F.pp_print_string fmt (type_keyword ^ ")"));
-    (* The const generic parameters *)
-    if cg_params <> [] then
-      List.iter
-        (fun (p : const_generic_var) ->
-          let pname = ctx_get_const_generic_var p.index ctx in
-          insert_req_space fmt space;
-          F.pp_print_string fmt "(";
-          F.pp_print_string fmt pname;
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt ":";
-          F.pp_print_space fmt ();
-          extract_literal_type ctx fmt p.ty;
-          F.pp_print_string fmt ")")
-        def.signature.const_generic_params;
-    (* Close the box for the type parameters *)
-    F.pp_close_box fmt ());
+  (* Print the generics *)
+  (* Open a box for the generics *)
+  F.pp_open_hovbox fmt 0;
+  (let space = Some space in
+   extract_generic_params ctx fmt TypeDeclId.Set.empty ~space ~trait_decl
+     def.signature.generics type_params cg_params trait_clauses);
+  (* Close the box for the generics *)
+  F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)
   let ctx_body =
     match def.body with
@@ -2963,7 +3323,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
             ctx)
           ctx body.inputs_lvs
   in
-  (ctx, ctx_body)
+  (ctx, ctx_body, List.concat [ type_params; cg_params; trait_clauses ])
 
 (** A small utility to print the types of the input parameters in the form:
     [u32 -> list u32 -> ...]
@@ -2981,6 +3341,11 @@ let extract_fun_input_parameters_types (ctx : extraction_ctx)
     F.pp_print_space fmt ()
   in
   List.iter extract_param def.signature.inputs
+
+let extract_fun_inputs_output_parameters_types (ctx : extraction_ctx)
+    (fmt : F.formatter) (def : fun_decl) : unit =
+  extract_fun_input_parameters_types ctx fmt def;
+  extract_ty ctx fmt TypeDeclId.Set.empty false def.signature.output
 
 let assert_backend_supports_decreases_clauses () =
   match !backend with
@@ -3032,7 +3397,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   F.pp_print_space fmt ();
   (* Extract the parameters *)
   let space = ref true in
-  let _, _ = extract_fun_parameters space ctx fmt def in
+  let _, _, _ = extract_fun_parameters space ctx fmt def in
   insert_req_space fmt space;
   F.pp_print_string fmt ":";
   (* Print the signature *)
@@ -3094,7 +3459,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   F.pp_print_space fmt ();
   (* Extract the parameters *)
   let space = ref true in
-  let _, ctx_body = extract_fun_parameters space ctx fmt def in
+  let _, ctx_body, _ = extract_fun_parameters space ctx fmt def in
   (* Print the ":=" *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ":=";
@@ -3164,7 +3529,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   let { keep_fwd; num_backs } =
     PureUtils.RegularFunIdMap.find
-      (A.Regular def.def_id, def.loop_id, def.back_id)
+      (Pure.FunId (A.Regular def.def_id), def.loop_id, def.back_id)
       ctx.fun_name_info
   in
   let comment_pre = "[" ^ Print.fun_name_to_string def.basename ^ "]: " in
@@ -3234,9 +3599,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   *)
   let is_opaque_coq = !backend = Coq && is_opaque in
   let use_forall =
-    is_opaque_coq
-    && (def.signature.type_params <> []
-       || def.signature.const_generic_params <> [])
+    is_opaque_coq && def.signature.generics <> empty_generic_params
   in
   (* Print the qualifier ("assume", etc.).
 
@@ -3262,7 +3625,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "(PARAMS) :" *)
   F.pp_open_hovbox fmt 0;
   let space = ref true in
-  let ctx, ctx_body = extract_fun_parameters space ctx fmt def in
+  let ctx, ctx_body, all_params = extract_fun_parameters space ctx fmt def in
   (* Print the return type - note that we have to be careful when
    * printing the input values for the decrease clause, because
    * it introduces bindings in the context... We thus "forget"
@@ -3310,20 +3673,13 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       (* The name of the decrease clause *)
       let decr_name = ctx_get_termination_measure def.def_id def.loop_id ctx in
       F.pp_print_string fmt decr_name;
-      (* Print the type/const generic parameters - TODO: we do this many
+      (* Print the generic parameters - TODO: we do this many
          times, we should have a helper to factor it out *)
       List.iter
-        (fun (p : type_var) ->
-          let pname = ctx_get_type_var p.index ctx in
+        (fun (name : string) ->
           F.pp_print_space fmt ();
-          F.pp_print_string fmt pname)
-        def.signature.type_params;
-      List.iter
-        (fun (p : const_generic_var) ->
-          let pname = ctx_get_const_generic_var p.index ctx in
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt pname)
-        def.signature.const_generic_params;
+          F.pp_print_string fmt name)
+        all_params;
       (* Print the input values: we have to be careful here to print
        * only the input values which are in common with the *forward*
        * function (the additional input values "given back" to the
@@ -3410,19 +3766,12 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (* Open the box for [DECREASES] *)
     F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt terminates_name;
-    (* Print the type/const generic params - TODO: factor out *)
+    (* Print the generic params - TODO: factor out *)
     List.iter
-      (fun (p : type_var) ->
-        let pname = ctx_get_type_var p.index ctx in
+      (fun (name : string) ->
         F.pp_print_space fmt ();
-        F.pp_print_string fmt pname)
-      def.signature.type_params;
-    List.iter
-      (fun (p : const_generic_var) ->
-        let pname = ctx_get_const_generic_var p.index ctx in
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt pname)
-      def.signature.const_generic_params;
+        F.pp_print_string fmt name)
+      all_params;
     (* Print the variables *)
     List.iter
       (fun v ->
@@ -3480,13 +3829,10 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_get_local_function with_opaque_pre def.def_id def.loop_id def.back_id
       ctx
   in
-  assert (def.signature.const_generic_params = []);
+  assert (def.signature.generics.const_generics = []);
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
-  let ctx, _, _ =
-    ctx_add_type_const_generic_params def.signature.type_params
-      def.signature.const_generic_params ctx
-  in
+  let ctx, _, _, _ = ctx_add_generic_params def.signature.generics ctx in
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0;
   (* Open a box for the whole definition *)
@@ -3635,8 +3981,13 @@ let extract_global_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the type *)
   F.pp_open_hovbox fmt 0;
   extract_ty ctx fmt TypeDeclId.Set.empty false ty;
+  (* Close the definition *)
+  F.pp_print_string fmt ")";
   F.pp_close_box fmt ();
-  (* Close the definition boxe *) F.pp_close_box fmt ()
+  (* Close the definition box *)
+  F.pp_close_box fmt ();
+  (* Add a line *)
+  F.pp_print_space fmt ()
 
 (** Extract a global declaration.
 
@@ -3662,10 +4013,9 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : A.global_decl) (body : fun_decl) (interface : bool) : unit =
   assert body.is_global_decl_body;
   assert (Option.is_none body.back_id);
-  assert (List.length body.signature.inputs = 0);
+  assert (body.signature.inputs = []);
   assert (List.length body.signature.doutputs = 1);
-  assert (List.length body.signature.type_params = 0);
-  assert (List.length body.signature.const_generic_params = 0);
+  assert (body.signature.generics = empty_generic_params);
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
@@ -3676,7 +4026,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let decl_name = ctx_get_global with_opaque_pre global.def_id ctx in
   let body_name =
     ctx_get_function with_opaque_pre
-      (FromLlbc (Regular global.body_id, None, None))
+      (FromLlbc (Pure.FunId (Regular global.body_id), None, None))
       ctx
   in
 
@@ -3713,6 +4063,433 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
       (* Add a break to insert lines between declarations *)
       F.pp_print_break fmt 0 0
 
+(** Register the names for one trait method item *)
+let extract_trait_decl_method_register_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl) (name : string) (id : fun_decl_id) :
+    extraction_ctx =
+  (* We add one field per required forward/backward function *)
+  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+
+  let register_fun ctx f = ctx_add_trait_method trait_decl name f.f ctx in
+  (* Register the names *)
+  let funs = trans.fwd :: trans.backs in
+  List.fold_left register_fun ctx funs
+
+(** Similar to {!extract_type_decl_register_names} *)
+let extract_trait_decl_register_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl) : extraction_ctx =
+  let {
+    def_id = _;
+    name = _;
+    generics;
+    preds = _;
+    all_trait_clauses = _;
+    consts;
+    types;
+    required_methods;
+    provided_methods = _;
+  } =
+    trait_decl
+  in
+  let ctx = ctx_add_trait_decl trait_decl ctx in
+  (* Parent clauses *)
+  let ctx =
+    List.fold_left
+      (fun ctx clause -> ctx_add_trait_parent_clause trait_decl clause ctx)
+      ctx generics.trait_clauses
+  in
+  (* Constants *)
+  let ctx =
+    List.fold_left
+      (fun ctx (name, (_, _)) -> ctx_add_trait_const trait_decl name ctx)
+      ctx consts
+  in
+  (* Types *)
+  let ctx =
+    List.fold_left
+      (fun ctx (name, (clauses, _)) ->
+        let ctx = ctx_add_trait_type trait_decl name ctx in
+        List.fold_left
+          (fun ctx clause ->
+            ctx_add_trait_type_clause trait_decl name clause ctx)
+          ctx clauses)
+      ctx types
+  in
+  (* Required methods *)
+  List.fold_left
+    (fun ctx (name, id) ->
+      (* We add one field per required forward/backward function *)
+      extract_trait_decl_method_register_names ctx trait_decl name id)
+    ctx required_methods
+
+(** Similar to {!extract_type_decl_register_names} *)
+let extract_trait_impl_register_names (ctx : extraction_ctx)
+    (trait_impl : trait_impl) : extraction_ctx =
+  (* For now we do not support overriding provided methods *)
+  assert (trait_impl.provided_methods = []);
+  (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
+     the name of the implementation itself *)
+  ctx_add_trait_impl trait_impl ctx
+
+(** Small helper.
+
+    The type `ty` is to be understood in a very general sense.
+ *)
+let extract_trait_item (ctx : extraction_ctx) (fmt : F.formatter)
+    (item_name : string) (separator : string) (ty : unit -> unit) : unit =
+  F.pp_print_space fmt ();
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  F.pp_print_string fmt item_name;
+  F.pp_print_space fmt ();
+  (* ":" or "=" *)
+  F.pp_print_string fmt separator;
+  ty ();
+  (match !Config.backend with Lean -> () | _ -> F.pp_print_string fmt ";");
+  F.pp_close_box fmt ()
+
+let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
+    (item_name : string) (ty : unit -> unit) : unit =
+  extract_trait_item ctx fmt item_name ":" ty
+
+let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
+    (item_name : string) (ty : unit -> unit) : unit =
+  let assign = match !Config.backend with Lean -> ":=" | _ -> "=" in
+  extract_trait_item ctx fmt item_name assign ty
+
+(** Small helper - TODO: move *)
+let generic_params_drop_prefix (g1 : generic_params) (g2 : generic_params) :
+    generic_params =
+  let open Collections.List in
+  let types = drop (length g1.types) g2.types in
+  let const_generics = drop (length g1.const_generics) g2.const_generics in
+  let trait_clauses = drop (length g1.trait_clauses) g2.trait_clauses in
+  { types; const_generics; trait_clauses }
+
+(** Small helper.
+
+    Extract the items for a method in a trait decl.
+ *)
+let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
+    (decl : trait_decl) (item_name : string) (id : fun_decl_id) : unit =
+  (* Lookup the definition *)
+  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+  (* Extract the items *)
+  let funs = if trans.keep_fwd then trans.fwd :: trans.backs else trans.backs in
+  let extract_method (f : fun_and_loops) =
+    let f = f.f in
+    let fun_name = ctx_get_trait_method decl.def_id item_name f.back_id ctx in
+    let ty () =
+      (* Extract the generics *)
+      (* We need to add the generics specific to the method, by removing those
+         which actually apply to the trait decl *)
+      let generics =
+        generic_params_drop_prefix decl.generics f.signature.generics
+      in
+      let ctx, type_params, cg_params, trait_clauses =
+        ctx_add_generic_params generics ctx
+      in
+      let use_forall = generics <> empty_generic_params in
+      let use_forall_use_sep = false in
+      extract_generic_params ctx fmt TypeDeclId.Set.empty ~use_forall
+        ~use_forall_use_sep generics type_params cg_params trait_clauses;
+      if use_forall then F.pp_print_string fmt ",";
+      (* Extract the inputs and output *)
+      F.pp_print_space fmt ();
+      extract_fun_inputs_output_parameters_types ctx fmt f
+    in
+    extract_trait_decl_item ctx fmt fun_name ty
+  in
+  List.iter extract_method funs
+
+(** Extract a trait declaration *)
+let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (decl : trait_decl) : unit =
+  (* Retrieve the trait name *)
+  let with_opaque_pre = false in
+  let decl_name = ctx_get_trait_decl with_opaque_pre decl.def_id ctx in
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Print a comment to link the extracted type to its original rust definition *)
+  extract_comment fmt
+    [ "Trait declaration: [" ^ Print.name_to_string decl.name ^ "]" ];
+  F.pp_print_break fmt 0 0;
+  (* Open two outer boxes for the definition, so that whenever possible it gets printed on
+     one line and indents are correct.
+
+     There is just an exception with Lean: in this backend, line breaks are important
+     for the parsing, so we always open a vertical box.
+  *)
+  if !Config.backend = Lean then F.pp_open_vbox fmt ctx.indent_incr
+  else (
+    F.pp_open_hvbox fmt 0;
+    F.pp_open_hvbox fmt ctx.indent_incr);
+
+  (* `struct Trait (....) =` *)
+  (* Open the box for the name + generics *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  let qualif =
+    Option.get (ctx.fmt.type_decl_kind_to_qualif SingleNonRec (Some Struct))
+  in
+  F.pp_print_string fmt qualif;
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt decl_name;
+  (* Print the generics *)
+  (* We ignore the trait clauses, which we extract as *fields* *)
+  let generics = { decl.generics with trait_clauses = [] } in
+  (* Add the type and const generic params - note that we need those bindings only for the
+   * body translation (they are not top-level) *)
+  let ctx, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params generics ctx
+  in
+  extract_generic_params ctx fmt TypeDeclId.Set.empty generics type_params
+    cg_params trait_clauses;
+
+  F.pp_print_space fmt ();
+  (match !backend with
+  | Lean -> F.pp_print_string fmt "where"
+  | _ -> F.pp_print_string fmt "{");
+
+  (* Close the box for the name + generics *)
+  F.pp_close_box fmt ();
+
+  (*
+   * Extract the items
+   *)
+
+  (* The parent clauses *)
+  List.iter
+    (fun clause ->
+      let item_name =
+        ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
+      in
+      let ty () =
+        extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+      in
+      extract_trait_decl_item ctx fmt item_name ty)
+    decl.generics.trait_clauses;
+
+  (* The constants *)
+  List.iter
+    (fun (name, (ty, _)) ->
+      let item_name = ctx_get_trait_const decl.def_id name ctx in
+      let ty () =
+        let inside = false in
+        F.pp_print_space fmt ();
+        extract_ty ctx fmt TypeDeclId.Set.empty inside ty
+      in
+      extract_trait_decl_item ctx fmt item_name ty)
+    decl.consts;
+
+  (* The types *)
+  List.iter
+    (fun (name, (clauses, _)) ->
+      (* Extract the type *)
+      let item_name = ctx_get_trait_type decl.def_id name ctx in
+      let ty () =
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt (type_keyword ())
+      in
+      extract_trait_decl_item ctx fmt item_name ty;
+      (* Extract the clauses *)
+      List.iter
+        (fun clause ->
+          let item_name =
+            ctx_get_trait_item_clause decl.def_id name clause.clause_id ctx
+          in
+          let ty () =
+            F.pp_print_space fmt ();
+            extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+          in
+          extract_trait_decl_item ctx fmt item_name ty)
+        clauses)
+    decl.types;
+
+  (* The required methods *)
+  List.iter
+    (fun (name, id) -> extract_trait_decl_method_items ctx fmt decl name id)
+    decl.required_methods;
+
+  (* Close the brackets *)
+  (match !Config.backend with
+  | Lean -> ()
+  | _ ->
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "}");
+
+  (* Close the outer boxes for the definition *)
+  if !Config.backend <> Lean then F.pp_close_box fmt ();
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
+
+(** Small helper.
+
+    Extract the items for a method in a trait impl.
+ *)
+let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
+    (impl : trait_impl) (item_name : string) (id : fun_decl_id)
+    (impl_generics : string list * string list * string list) : unit =
+  let trait_decl_id = impl.impl_trait.trait_decl_id in
+  (* Lookup the definition *)
+  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+  (* Extract the items *)
+  let funs = if trans.keep_fwd then trans.fwd :: trans.backs else trans.backs in
+  let extract_method (f : fun_and_loops) =
+    let f = f.f in
+    let fun_name = ctx_get_trait_method trait_decl_id item_name f.back_id ctx in
+    let ty () =
+      (* Extract the generics - we need to quantify over the generics which
+         are specific to the method, and call it will all the generics
+         (trait impl + method generics) *)
+      let f_generics =
+        generic_params_drop_prefix impl.generics f.signature.generics
+      in
+      let ctx, f_tys, f_cgs, f_tcs = ctx_add_generic_params f_generics ctx in
+      let use_forall = f_generics <> empty_generic_params in
+      extract_generic_params ctx fmt TypeDeclId.Set.empty ~use_forall f_generics
+        f_tys f_cgs f_tcs;
+      if use_forall then F.pp_print_string fmt ",";
+      (* Extract the function call *)
+      F.pp_print_space fmt ();
+      let id = ctx_get_local_function false f.def_id None f.back_id ctx in
+      F.pp_print_string fmt id;
+      let all_generics =
+        let i_tys, i_cgs, i_tcs = impl_generics in
+        List.concat [ i_tys; f_tys; i_cgs; f_cgs; i_tcs; f_tcs ]
+      in
+      List.iter
+        (fun p ->
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt p)
+        all_generics
+    in
+    extract_trait_impl_item ctx fmt fun_name ty
+  in
+  List.iter extract_method funs
+
+(** Extract a trait implementation *)
+let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
+    (impl : trait_impl) : unit =
+  (* Retrieve the impl name *)
+  let with_opaque_pre = false in
+  let impl_name = ctx_get_trait_impl with_opaque_pre impl.def_id ctx in
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Print a comment to link the extracted type to its original rust definition *)
+  extract_comment fmt
+    [ "Trait implementation: [" ^ Print.name_to_string impl.name ^ "]" ];
+  F.pp_print_break fmt 0 0;
+
+  (* Open two outer boxes for the definition, so that whenever possible it gets printed on
+     one line and indents are correct.
+
+     There is just an exception with Lean: in this backend, line breaks are important
+     for the parsing, so we always open a vertical box.
+  *)
+  if !Config.backend = Lean then (
+    F.pp_open_vbox fmt 0;
+    F.pp_open_vbox fmt ctx.indent_incr)
+  else (
+    F.pp_open_hvbox fmt 0;
+    F.pp_open_hvbox fmt ctx.indent_incr);
+
+  (* `let (....) : Trait ... =` *)
+  (* Open the box for the name + generics *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  let qualif = Option.get (ctx.fmt.fun_decl_kind_to_qualif SingleNonRec) in
+  F.pp_print_string fmt qualif;
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt impl_name;
+
+  (* Print the generics *)
+  (* Add the type and const generic params - note that we need those bindings only for the
+   * body translation (they are not top-level) *)
+  let ctx, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params impl.generics ctx
+  in
+  let all_generics = (type_params, cg_params, trait_clauses) in
+  extract_generic_params ctx fmt TypeDeclId.Set.empty impl.generics type_params
+    cg_params trait_clauses;
+
+  (* Print the type *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt ":";
+  F.pp_print_space fmt ();
+  extract_trait_decl_ref ctx fmt TypeDeclId.Set.empty false impl.impl_trait;
+
+  F.pp_print_space fmt ();
+  if !Config.backend = Lean then F.pp_print_string fmt ":= {"
+  else F.pp_print_string fmt "= {";
+
+  (* Close the box for the name + generics *)
+  F.pp_close_box fmt ();
+
+  (*
+   * Extract the items
+   *)
+
+  (* The parent clauses - we retrieve those from the impl_ref *)
+  let trait_decl_id = impl.impl_trait.trait_decl_id in
+  TraitClauseId.iteri
+    (fun clause_id trait_ref ->
+      let item_name = ctx_get_trait_parent_clause trait_decl_id clause_id ctx in
+      let ty () =
+        F.pp_print_space fmt ();
+        extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
+      in
+      extract_trait_impl_item ctx fmt item_name ty)
+    impl.impl_trait.decl_generics.trait_refs;
+
+  (* The constants *)
+  List.iter
+    (fun (name, (_, id)) ->
+      let item_name = ctx_get_trait_const trait_decl_id name ctx in
+      let ty () =
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt (ctx_get_global false id ctx)
+      in
+
+      extract_trait_impl_item ctx fmt item_name ty)
+    impl.consts;
+
+  (* The types *)
+  List.iter
+    (fun (name, (trait_refs, ty)) ->
+      (* Extract the type *)
+      let item_name = ctx_get_trait_type trait_decl_id name ctx in
+      let ty () =
+        F.pp_print_space fmt ();
+        extract_ty ctx fmt TypeDeclId.Set.empty false ty
+      in
+      extract_trait_impl_item ctx fmt item_name ty;
+      (* Extract the clauses *)
+      TraitClauseId.iteri
+        (fun clause_id trait_ref ->
+          let item_name =
+            ctx_get_trait_item_clause trait_decl_id name clause_id ctx
+          in
+          let ty () =
+            F.pp_print_space fmt ();
+            extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
+          in
+          extract_trait_impl_item ctx fmt item_name ty)
+        trait_refs)
+    impl.types;
+
+  (* The required methods *)
+  List.iter
+    (fun (name, id) ->
+      extract_trait_impl_method_items ctx fmt impl name id all_generics)
+    impl.required_methods;
+
+  (* Close the outer boxes for the definition, as well as the brackets *)
+  F.pp_close_box fmt ();
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "}";
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
+
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).
 
@@ -3735,8 +4512,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
   (* Check if this is a unit function *)
   let sg = def.signature in
   if
-    sg.type_params = []
-    && sg.const_generic_params = []
+    sg.generics = empty_generic_params
     && (sg.inputs = [ mk_unit_ty ] || sg.inputs = [])
     && sg.output = mk_result_ty mk_unit_ty
   then (

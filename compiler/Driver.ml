@@ -17,11 +17,15 @@ let log = main_log
 let _ =
   (* Set up the logging - for now we use default values - TODO: use the
    * command-line arguments *)
-  (* By setting a level for the main_logger_handler, we filter everything *)
+  (* By setting a level for the main_logger_handler, we filter everything.
+     To have a good trace: one should switch between Info and Debug.
+  *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
   main_log#set_level EL.Info;
   llbc_of_json_logger#set_level EL.Info;
   pre_passes_log#set_level EL.Info;
+  associated_types_log#set_level EL.Info;
+  contexts_log#set_level EL.Info;
   interpreter_log#set_level EL.Info;
   statements_log#set_level EL.Info;
   loops_match_ctxs_log#set_level EL.Info;
@@ -219,20 +223,6 @@ let () =
           m.functions
       in
       if has_loops then log#lwarning (lazy "Support for loops is experimental");
-
-      (* If we target Lean, we request the crates to be split into several files
-         whenever there are opaque functions *)
-      if
-        !backend = Lean
-        && A.FunDeclId.Map.exists
-             (fun _ (d : A.fun_decl) -> d.body = None)
-             m.functions
-        && not !split_files
-      then (
-        log#error
-          "For Lean, we request the -split-file option whenever using opaque \
-           functions";
-        fail ());
 
       (* We don't support mutually recursive definitions with decreases clauses in Lean *)
       if

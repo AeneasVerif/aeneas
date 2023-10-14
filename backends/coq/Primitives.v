@@ -394,6 +394,20 @@ Notation "x s< y" := (scalar_ltb x y)  (at level 80) : Primitives_scope.
 Notation "x s>= y" := (scalar_geb x y)  (at level 80) : Primitives_scope.
 Notation "x s> y" := (scalar_gtb x y)  (at level 80) : Primitives_scope.
 
+(** Constants *)
+Definition core_u8_max    := u8_max %u32.
+Definition core_u16_max   := u16_max %u32.
+Definition core_u32_max   := u32_max %u32.
+Definition core_u64_max   := u64_max %u64.
+Definition core_u128_max  := u64_max %u128.
+Axiom core_usize_max : usize. (** TODO *)
+Definition core_i8_max    := i8_max %i32.
+Definition core_i16_max   := i16_max %i32.
+Definition core_i32_max   := i32_max %i32.
+Definition core_i64_max   := i64_max %i64.
+Definition core_i128_max  := i64_max %i128.
+Axiom core_isize_max : isize. (** TODO *)
+
 (*** Range *)
 Record range (T : Type) := mk_range {
   start: T;
@@ -418,6 +432,9 @@ Qed.
 
 (* TODO: finish the definitions *)
 Axiom mk_array : forall (T : Type) (n : usize) (l : list T), array T n.
+
+(* For initialization *)
+Axiom array_repeat : forall {T : Type} (n : usize) (x : T), array T n.
 
 Axiom array_index_shared : forall (T : Type) (n : usize) (x : array T n) (i : usize), result T.
 Axiom array_index_mut_fwd : forall (T : Type) (n : usize) (x : array T n) (i : usize), result T.

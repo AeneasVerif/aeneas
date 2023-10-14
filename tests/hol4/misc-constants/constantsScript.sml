@@ -13,17 +13,9 @@ Definition x0_c_def:
   x0_c : u32 = get_return_value x0_body
 End
 
-(** [core::num::u32::{8}::MAX] *)
-Definition core_num_u32_max_body_def:
-  core_num_u32_max_body : u32 result = Return (int_to_u32 4294967295)
-End
-Definition core_num_u32_max_c_def:
-  core_num_u32_max_c : u32 = get_return_value core_num_u32_max_body
-End
-
 (** [constants::X1] *)
 Definition x1_body_def:
-  x1_body : u32 result = Return core_num_u32_max_c
+  x1_body : u32 result = Return core_u32_max
 End
 Definition x1_c_def:
   x1_c : u32 = get_return_value x1_body

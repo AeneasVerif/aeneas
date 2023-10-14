@@ -323,3 +323,23 @@ let wrap_opaque_in_sig = ref false
     information), we use short names (i.e., the original field names).
  *)
 let record_fields_short_names = ref false
+
+(** Parameterize the traits with their associated types, so as not to use
+    types as first class objects.
+
+    This is useful for some backends with limited expressiveness like HOL4,
+    and to account for type constraints (like [fn f<T : Foo>(...) where T::bar = usize]).
+ *)
+let parameterize_trait_types = ref false
+
+(** For sanity check: type check the generated pure code (activates checks in
+    several places).
+
+    TODO: deactivated for now because we need to implement the normalization of
+    trait associated types in the pure code.
+ *)
+let type_check_pure_code = ref false
+
+(** Shall we fail hard if there is an issue at code-generation time?
+    We may not want in case outputting a code with holes helps debugging *)
+let extract_fail_hard = ref false

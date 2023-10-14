@@ -63,79 +63,81 @@ module Sig = struct
 
   let empty_const_generic_params : T.const_generic_var list = []
 
+  let mk_generic_args regions types const_generics : T.sgeneric_args =
+    { regions; types; const_generics; trait_refs = [] }
+
+  let mk_generic_params regions types const_generics : T.generic_params =
+    { regions; types; const_generics; trait_clauses = [] }
+
   let mk_ref_ty (r : T.RegionVarId.id T.region) (ty : T.sty) (is_mut : bool) :
       T.sty =
     let ref_kind = if is_mut then T.Mut else T.Shared in
     mk_ref_ty r ty ref_kind
 
   let mk_array_ty (ty : T.sty) (cg : T.const_generic) : T.sty =
-    Adt (Assumed Array, [], [ ty ], [ cg ])
+    Adt (Assumed Array, mk_generic_args [] [ ty ] [ cg ])
 
-  let mk_slice_ty (ty : T.sty) : T.sty = Adt (Assumed Slice, [], [ ty ], [])
-  let range_ty : T.sty = Adt (Assumed Range, [], [ usize_ty ], [])
+  let mk_slice_ty (ty : T.sty) : T.sty =
+    Adt (Assumed Slice, mk_generic_args [] [ ty ] [])
 
-  (** [fn<T>(&'a mut T, T) -> T] *)
-  let mem_replace_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] (* <'a> *) in
-    let regions_hierarchy = [ region_group_0 ] (* [{<'a>}] *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
-    let inputs =
-      [ mk_ref_ty rvar_0 tvar_0 true (* &'a mut T *); tvar_0 (* T *) ]
+  let range_ty : T.sty = Adt (Assumed Range, mk_generic_args [] [ usize_ty ] [])
+
+  let mk_sig generics regions_hierarchy inputs output : A.fun_sig =
+    let preds : T.predicates =
+      { regions_outlive = []; types_outlive = []; trait_type_constraints = [] }
     in
-    let output = tvar_0 (* T *) in
     {
-      region_params;
-      num_early_bound_regions = 0;
+      generics;
+      preds;
+      parent_params_info = None;
       regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
       inputs;
       output;
     }
 
+  (** [fn<T>(&'a mut T, T) -> T] *)
+  let mem_replace_sig : A.fun_sig =
+    (* The signature fields *)
+    let regions = [ region_param_0 ] (* <'a> *) in
+    let regions_hierarchy = [ region_group_0 ] (* [{<'a>}] *) in
+    let types = [ type_param_0 ] (* <T> *) in
+    let generics = mk_generic_params regions types [] in
+    let inputs =
+      [ mk_ref_ty rvar_0 tvar_0 true (* &'a mut T *); tvar_0 (* T *) ]
+    in
+    let output = tvar_0 (* T *) in
+    mk_sig generics regions_hierarchy inputs output
+
   (** [fn<T>(T) -> Box<T>] *)
   let box_new_sig : A.fun_sig =
-    {
-      region_params = [];
-      num_early_bound_regions = 0;
-      regions_hierarchy = [];
-      type_params = [ type_param_0 ] (* <T> *);
-      const_generic_params = empty_const_generic_params;
-      inputs = [ tvar_0 (* T *) ];
-      output = mk_box_ty tvar_0 (* Box<T> *);
-    }
+    let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
+    let regions_hierarchy = [] in
+    let inputs = [ tvar_0 (* T *) ] in
+    let output = mk_box_ty tvar_0 (* Box<T> *) in
+    mk_sig generics regions_hierarchy inputs output
 
   (** [fn<T>(Box<T>) -> ()] *)
   let box_free_sig : A.fun_sig =
-    {
-      region_params = [];
-      num_early_bound_regions = 0;
-      regions_hierarchy = [];
-      type_params = [ type_param_0 ] (* <T> *);
-      const_generic_params = empty_const_generic_params;
-      inputs = [ mk_box_ty tvar_0 (* Box<T> *) ];
-      output = mk_unit_ty (* () *);
-    }
+    let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
+    let regions_hierarchy = [] in
+    let inputs = [ mk_box_ty tvar_0 (* Box<T> *) ] in
+    let output = mk_unit_ty (* () *) in
+    mk_sig generics regions_hierarchy inputs output
 
   (** Helper for [Box::deref_shared] and [Box::deref_mut].
       Returns:
       [fn<'a, T>(&'a (mut) Box<T>) -> &'a (mut) T]
   *)
   let box_deref_gen_sig (is_mut : bool) : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params = [ type_param_0 ] (* <T> *);
-      const_generic_params = empty_const_generic_params;
-      inputs =
-        [ mk_ref_ty rvar_0 (mk_box_ty tvar_0) is_mut (* &'a (mut) Box<T> *) ];
-      output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *);
-    }
+    let inputs =
+      [ mk_ref_ty rvar_0 (mk_box_ty tvar_0) is_mut (* &'a (mut) Box<T> *) ]
+    in
+    let output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *) in
+    mk_sig generics regions_hierarchy inputs output
 
   (** [fn<'a, T>(&'a Box<T>) -> &'a T] *)
   let box_deref_shared_sig = box_deref_gen_sig false
@@ -145,27 +147,18 @@ module Sig = struct
 
   (** [fn<T>() -> Vec<T>] *)
   let vec_new_sig : A.fun_sig =
-    let region_params = [] in
+    let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
     let regions_hierarchy = [] in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs = [] in
     let output = mk_vec_ty tvar_0 (* Vec<T> *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 
   (** [fn<T>(&'a mut Vec<T>, T)] *)
   let vec_push_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs =
       [
         mk_ref_ty rvar_0 (mk_vec_ty tvar_0) true (* &'a mut Vec<T> *);
@@ -173,22 +166,14 @@ module Sig = struct
       ]
     in
     let output = mk_unit_ty (* () *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 
   (** [fn<T>(&'a mut Vec<T>, usize, T)] *)
   let vec_insert_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs =
       [
         mk_ref_ty rvar_0 (mk_vec_ty tvar_0) true (* &'a mut Vec<T> *);
@@ -197,44 +182,28 @@ module Sig = struct
       ]
     in
     let output = mk_unit_ty (* () *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 
   (** [fn<T>(&'a Vec<T>) -> usize] *)
   let vec_len_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs =
       [ mk_ref_ty rvar_0 (mk_vec_ty tvar_0) false (* &'a Vec<T> *) ]
     in
     let output = mk_usize_ty (* usize *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 
   (** Helper:
       [fn<T>(&'a (mut) Vec<T>, usize) -> &'a (mut) T]
    *)
   let vec_index_gen_sig (is_mut : bool) : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs =
       [
         mk_ref_ty rvar_0 (mk_vec_ty tvar_0) is_mut (* &'a (mut) Vec<T> *);
@@ -242,15 +211,7 @@ module Sig = struct
       ]
     in
     let output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 
   (** [fn<T>(&'a Vec<T>, usize) -> &'a T] *)
   let vec_index_shared_sig : A.fun_sig = vec_index_gen_sig false
@@ -275,10 +236,10 @@ module Sig = struct
   let mk_array_slice_borrow_sig (cgs : T.const_generic_var list)
       (input_ty : T.TypeVarId.id -> T.sty) (index_ty : T.sty option)
       (output_ty : T.TypeVarId.id -> T.sty) (is_mut : bool) : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] cgs (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs =
       [
         mk_ref_ty rvar_0
@@ -294,15 +255,7 @@ module Sig = struct
         (output_ty type_param_0.index)
         is_mut (* &'a (mut) output_ty<T> *)
     in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = cgs;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 
   let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : A.fun_sig =
     (* Array<T, N> *)
@@ -345,6 +298,19 @@ module Sig = struct
   let array_subslice_sig (is_mut : bool) =
     mk_array_slice_subslice_sig true is_mut
 
+  let array_repeat_sig =
+    let generics =
+      (* <T, N> *)
+      mk_generic_params [] [ type_param_0 ] [ cg_param_0 ]
+    in
+    let regions_hierarchy = [] (* <> *) in
+    let inputs = [ tvar_0 (* T *) ] in
+    let output =
+      (* [T; N] *)
+      mk_array_ty tvar_0 cgvar_0
+    in
+    mk_sig generics regions_hierarchy inputs output
+
   let slice_subslice_sig (is_mut : bool) =
     mk_array_slice_subslice_sig false is_mut
 
@@ -352,23 +318,15 @@ module Sig = struct
       [fn<T>(&'a [T]) -> usize]
    *)
   let slice_len_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs =
       [ mk_ref_ty rvar_0 (mk_slice_ty tvar_0) false (* &'a [T] *) ]
     in
     let output = mk_usize_ty (* usize *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 end
 
 type assumed_info = A.assumed_fun_id * A.fun_sig * bool * name
@@ -439,6 +397,8 @@ let assumed_infos : assumed_info list =
       Sig.array_subslice_sig true,
       true,
       to_name [ "@ArraySubsliceMut" ] );
+    (* Array Repeat *)
+    (ArrayRepeat, Sig.array_repeat_sig, false, to_name [ "@ArrayRepeat" ]);
     (* Slice Index *)
     ( SliceIndexShared,
       Sig.slice_index_sig false,

@@ -183,6 +183,10 @@ Definition index_index_array_fwd
   array_index_shared u32 32%usize a j
 .
 
+(** [array::const_gen_ret]: forward function *)
+Definition const_gen_ret_fwd (N : usize) : result usize :=
+  Return N.
+
 (** [array::update_update_array]: forward function *)
 Definition update_update_array_fwd
   (s : array (array u32 32%usize) 32%usize) (i : usize) (j : usize) :
@@ -445,6 +449,15 @@ Definition f3_fwd (n : nat) : result u32 :=
         0%u32; 0%u32
         ]) 16%usize 18%usize;
   sum2_fwd n s s0
+.
+
+(** [array::SZ] *)
+Definition sz_body : result usize := Return 32%usize.
+Definition sz_c : usize := sz_body%global.
+
+(** [array::f5]: forward function *)
+Definition f5_fwd (x : array u32 32%usize) : result u32 :=
+  array_index_shared u32 32%usize x 0%usize
 .
 
 (** [array::ite]: forward function *)
