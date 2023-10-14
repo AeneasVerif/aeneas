@@ -7,7 +7,7 @@ namespace Arith
 open Lean Lean.Elab Lean.Meta
 open Primitives
 
-def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
+def scalarTacExtraPreprocess (simp_only : Bool) : Tactic.TacticM Unit := do
    Tactic.withMainContext do
    -- Inroduce the bounds for the isize/usize types
    let add (e : Expr) : Tactic.TacticM Unit := do
@@ -17,24 +17,24 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
    -- Reveal the concrete bounds, simplify calls to [ofInt]
-   Utils.simpAt [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
+   -- TODO: we could even try [simpAll]
+   Utils.simpAt simp_only [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
                  ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
                  ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
                  ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
                  ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max,
                  ``Usize.min
                  ] [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val] [] .wildcard
-   
 
 elab "scalar_tac_preprocess" : tactic =>
-  intTacPreprocess scalarTacExtraPreprocess
+  intTacPreprocess (scalarTacExtraPreprocess false)
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
-def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
-  intTac splitGoalConjs scalarTacExtraPreprocess
+def scalarTac (simp_only : Bool) (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
+  intTac splitGoalConjs (scalarTacExtraPreprocess simp_only)
 
 elab "scalar_tac" : tactic =>
-  scalarTac false
+  scalarTac false false
 
 instance (ty : ScalarTy) : HasIntProp (Scalar ty) where
   -- prop_ty is inferred

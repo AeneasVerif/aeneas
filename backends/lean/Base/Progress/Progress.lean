@@ -111,7 +111,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
     tryTac (
-      simpAt [] [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+      simpAt true [] [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
              [hEq.fvarId!] (.targets #[] true))
     -- Clear the equality, unless the user requests not to do so
     let mgoal ← do
@@ -336,7 +336,7 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
     if ← Arith.goalIsLinearInt then
       -- Also: we don't try to split the goal if it is a conjunction
       -- (it shouldn't be)
-      Arith.scalarTac false
+      Arith.scalarTac false false
     else
       throwError "Not a linear arithmetic goal"
   progressAsmsOrLookupTheorem keep withArg ids splitPost (
