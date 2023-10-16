@@ -84,22 +84,64 @@ let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
       Subst.make_const_generic_subst_from_vars sg.generics.const_generics
         const_generics
     in
-    let tr_subst _ = raise (Failure "Unexpected local trait clause") in
-    let subst = { Subst.r_subst; ty_subst; cg_subst; tr_subst; tr_self } in
-    let trait_refs =
-      List.map
-        (fun (c : T.trait_clause) ->
+    (* TODO: some clauses may use the types of other clauses, so we may have to
+       reorder them.
+
+       Example:
+       If in Rust we write:
+       {[
+         pub fn use_get<'a, T: Get>(x: &'a mut T) -> u32
+         where
+             T::Item: ToU32,
+         {
+             x.get().to_u32()
+         }
+       ]}
+
+       In LLBC we get:
+       {[
+         fn demo::use_get<'a, T>(@1: &'a mut (T)) -> u32
+         where
+             [@TraitClause0]: demo::Get<T>,
+             [@TraitClause1]: demo::ToU32<@TraitClause0::Item>, // HERE
+         {
+             ... // Omitted
+         }
+       ]}
+    *)
+    (* We will need to update the trait refs map while we perform the instantiations *)
+    let mk_tr_subst
+        (tr_map : T.erased_region T.trait_instance_id T.TraitClauseId.Map.t)
+        clause_id : T.erased_region T.trait_instance_id =
+      match T.TraitClauseId.Map.find_opt clause_id tr_map with
+      | Some tr -> tr
+      | None -> raise (Failure "Local trait clause not found")
+    in
+    let mk_subst tr_map =
+      let tr_subst = mk_tr_subst tr_map in
+      { Subst.r_subst; ty_subst; cg_subst; tr_subst; tr_self }
+    in
+    let _, trait_refs =
+      List.fold_left_map
+        (fun tr_map (c : T.trait_clause) ->
+          let subst = mk_subst tr_map in
           let { T.trait_id = trait_decl_id; generics; _ } = c in
           let generics = Subst.generic_args_substitute subst generics in
           let trait_decl_ref = { T.trait_decl_id; decl_generics = generics } in
           (* Note that because we directly refer to the clause, we give it
              empty generics *)
-          {
-            T.trait_id = T.Clause c.clause_id;
-            generics = TypesUtils.mk_empty_generic_args;
-            trait_decl_ref;
-          })
-        trait_clauses
+          let trait_id = T.Clause c.clause_id in
+          let trait_ref =
+            {
+              T.trait_id;
+              generics = TypesUtils.mk_empty_generic_args;
+              trait_decl_ref;
+            }
+          in
+          (* Update the traits map *)
+          let tr_map = T.TraitClauseId.Map.add c.T.clause_id trait_id tr_map in
+          (tr_map, trait_ref))
+        T.TraitClauseId.Map.empty trait_clauses
     in
     { T.regions; types; const_generics; trait_refs }
   in
