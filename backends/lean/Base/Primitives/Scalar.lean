@@ -764,6 +764,21 @@ def U32.ofInt   := @Scalar.ofInt .U32
 def U64.ofInt   := @Scalar.ofInt .U64
 def U128.ofInt  := @Scalar.ofInt .U128
 
+postfix:74  "%isize" => Isize.ofInt
+postfix:74  "%i8"    => I8.ofInt
+postfix:74  "%i16"   => I16.ofInt
+postfix:74  "%i32"   => I32.ofInt
+postfix:74  "%i64"   => I64.ofInt
+postfix:74  "%i128"  => I128.ofInt
+postfix:74  "%usize" => Usize.ofInt
+postfix:74  "%u8"    => U8.ofInt
+postfix:74  "%u16"   => U16.ofInt
+postfix:74  "%u32"   => U32.ofInt
+postfix:74  "%u64"   => U64.ofInt
+postfix:74  "%u128"  => U128.ofInt
+
+example : Result U32 := 1%u32 + 2%u32
+
 -- TODO: factor those lemmas out
 @[simp] theorem Scalar.ofInt_val_eq {ty} (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : (Scalar.ofInt x h).val = x := by
   simp [Scalar.ofInt, Scalar.ofIntCore]

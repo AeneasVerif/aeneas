@@ -912,11 +912,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | Scalar sv -> (
         match !backend with
         | FStar -> F.pp_print_string fmt (Z.to_string sv.PV.value)
-        | Coq | HOL4 ->
+        | Coq | HOL4 | Lean ->
             let print_brackets = inside && !backend = HOL4 in
             if print_brackets then F.pp_print_string fmt "(";
             (match !backend with
-            | Coq -> ()
+            | Coq | Lean -> ()
             | HOL4 ->
                 F.pp_print_string fmt ("int_to_" ^ int_name sv.PV.int_ty);
                 F.pp_print_space fmt ()
@@ -924,30 +924,17 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             (* We need to add parentheses if the value is negative *)
             if sv.PV.value >= Z.of_int 0 then
               F.pp_print_string fmt (Z.to_string sv.PV.value)
-            else F.pp_print_string fmt ("(" ^ Z.to_string sv.PV.value ^ ")");
+            else
+              F.pp_print_string fmt
+                ("(" ^ Z.to_string sv.PV.value
+                ^ if !backend = Lean then ":Int" else "" ^ ")");
             (match !backend with
-            | Coq -> F.pp_print_string fmt ("%" ^ int_name sv.PV.int_ty)
+            | Coq | Lean ->
+                let iname = String.lowercase_ascii (int_name sv.PV.int_ty) in
+                F.pp_print_string fmt ("%" ^ iname)
             | HOL4 -> ()
             | _ -> raise (Failure "Unreachable"));
-            if print_brackets then F.pp_print_string fmt ")"
-        | Lean ->
-            F.pp_print_string fmt "(";
-            F.pp_print_string fmt (int_name sv.int_ty);
-            F.pp_print_string fmt ".ofInt ";
-            (* Something very annoying: negated values like `-3` are
-               ambiguous in Lean because of conversions, so we have to
-               be extremely explicit with negative numbers.
-            *)
-            if Z.lt sv.value Z.zero then (
-              F.pp_print_string fmt "(";
-              F.pp_print_string fmt "-";
-              F.pp_print_string fmt "(";
-              Z.pp_print fmt (Z.neg sv.value);
-              F.pp_print_string fmt ":Int";
-              F.pp_print_string fmt ")";
-              F.pp_print_string fmt ")")
-            else Z.pp_print fmt sv.value;
-            F.pp_print_string fmt ")")
+            if print_brackets then F.pp_print_string fmt ")")
     | Bool b ->
         let b =
           match !backend with
