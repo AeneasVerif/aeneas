@@ -301,6 +301,10 @@ example : Nat := by
 example (x : Bool) : Nat := by
   cases x <;> custom_let x := 3 <;> apply x
 
+-- Attempt to apply a tactic
+def tryTac (tac : TacticM Unit) : TacticM Unit := do
+  let _ ← tryTactic tac
+
 -- Repeatedly apply a tactic
 partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
   try

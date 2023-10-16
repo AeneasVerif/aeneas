@@ -8,6 +8,7 @@ require Base from "../../backends/lean"
 
 package «tests» {}
 
+@[default_target] lean_lib tutorial
 @[default_target] lean_lib betreeMain
 @[default_target] lean_lib constants
 @[default_target] lean_lib external

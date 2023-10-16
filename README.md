@@ -17,6 +17,8 @@ internal language to a pure lamdba calculus.  It is intended to be used in combi
 representation called LLBC. It currently has backends for [F\*](https://www.fstar-lang.org),
 [Coq](https://coq.inria.fr/), [HOL4](https://hol-theorem-prover.org/) and [LEAN](https://leanprover.github.io/).
 
+If you want to contribute or ask questions, we strongly encourage you to join the [Zulip](https://aeneas-verif.zulipchat.com/).
+
 ## Project Structure
 
 - `src`: the OCaml sources. Note that we rely on [Dune](https://github.com/ocaml/dune)
@@ -104,6 +106,8 @@ support for partial functions and extrinsic proofs of termination (see
 `./backends/lean/Base/Diverge/Elab.lean` and `./backends/hol4/divDefLib.sig` for instance)
 and tactics specialized for monadic programs (see
 `./backends/lean/Base/Progress/Progress.lean` and `./backends/hol4/primitivesLib.sml`).
+
+A tutorial for the Lean backend is available [here](./tests/lean/Tutorial.lean).
 
 ## Formalization
 

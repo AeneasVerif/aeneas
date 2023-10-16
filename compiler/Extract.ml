@@ -929,9 +929,12 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
                 ("(" ^ Z.to_string sv.PV.value
                 ^ if !backend = Lean then ":Int" else "" ^ ")");
             (match !backend with
-            | Coq | Lean ->
-                let iname = String.lowercase_ascii (int_name sv.PV.int_ty) in
+            | Coq ->
+                let iname = int_name sv.PV.int_ty in
                 F.pp_print_string fmt ("%" ^ iname)
+            | Lean ->
+                let iname = String.lowercase_ascii (int_name sv.PV.int_ty) in
+                F.pp_print_string fmt ("#" ^ iname)
             | HOL4 -> ()
             | _ -> raise (Failure "Unreachable"));
             if print_brackets then F.pp_print_string fmt ")")
