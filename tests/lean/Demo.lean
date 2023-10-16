@@ -94,6 +94,15 @@ def list_nth1_back
   (T : Type) (l : CList T) (i : U32) (ret0 : T) : Result (CList T) :=
   list_nth1_loop_back T l i ret0
 
+/- [demo::i32_id]: forward function -/
+divergent def i32_id (i : I32) : Result I32 :=
+  if i = 0#i32
+  then Result.ret 0#i32
+  else do
+         let i0 ← i - 1#i32
+         let i1 ← i32_id i0
+         i1 + 1#i32
+
 /- Trait declaration: [demo::ToU32] -/
 structure ToU32 (Self : Type) where
   to_u32 : Self → Result U32

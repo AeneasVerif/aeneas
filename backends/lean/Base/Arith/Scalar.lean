@@ -18,13 +18,17 @@ def scalarTacExtraPreprocess (simp_only : Bool) : Tactic.TacticM Unit := do
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
    -- Reveal the concrete bounds, simplify calls to [ofInt]
    -- TODO: we could even try [simpAll]
-   Utils.simpAt simp_only [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
-                 ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
-                 ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
-                 ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
-                 ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max,
-                 ``Usize.min
-                 ] [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val] [] .wildcard
+   let decls_to_unfold :=
+     [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
+      ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
+      ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
+      ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
+      ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max,
+      ``Usize.min
+      ]
+   let thms := [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val]
+   let hyps := []
+   Utils.simpAt simp_only decls_to_unfold thms hyps .wildcard
 
 elab "scalar_tac_preprocess" : tactic =>
   intTacPreprocess (scalarTacExtraPreprocess false)

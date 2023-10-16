@@ -58,4 +58,21 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       have : i.val ≠ 0 := by scalar_tac
       simp_all
 
+theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
+  ∃ y, i32_id x = ret y ∧ x.val = y.val := by
+  rw [i32_id]
+  if hx : x = 0#i32 then
+    simp_all
+  else
+    simp [hx]
+    progress as ⟨ x1 ⟩
+    progress as ⟨ x2 ⟩
+    progress
+    simp; scalar_tac
+termination_by i32_id_spec x _ => x.val.toNat
+decreasing_by
+  simp_wf
+  have : 1 ≤ x.val := by scalar_tac
+  simp [*]
+
 end demo
