@@ -34,11 +34,8 @@ open CList
   | CCons hd tl => hd :: tl.to_list
 
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  -- Precondition: the index is in bounds
-  (h : ↑i < l.to_list.len)
-  -- Postcondition
-  : ∃ x, list_nth T l i = ret x ∧
-  -- [x] is the ith element of [l] after conversion to [List]
+  (h : ↑i < l.to_list.len) :
+  ∃ x, list_nth T l i = ret x ∧
   x = l.to_list.index ↑i
   := by
   rw [list_nth]
