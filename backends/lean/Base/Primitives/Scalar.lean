@@ -903,33 +903,33 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
 
 -- ofIntCore
 -- TODO: typeclass?
-@[reducible] def Isize.ofIntCore := @Scalar.ofIntCore .Isize
-@[reducible] def I8.ofIntCore    := @Scalar.ofIntCore .I8
-@[reducible] def I16.ofIntCore   := @Scalar.ofIntCore .I16
-@[reducible] def I32.ofIntCore   := @Scalar.ofIntCore .I32
-@[reducible] def I64.ofIntCore   := @Scalar.ofIntCore .I64
-@[reducible] def I128.ofIntCore  := @Scalar.ofIntCore .I128
-@[reducible] def Usize.ofIntCore := @Scalar.ofIntCore .Usize
-@[reducible] def U8.ofIntCore    := @Scalar.ofIntCore .U8
-@[reducible] def U16.ofIntCore   := @Scalar.ofIntCore .U16
-@[reducible] def U32.ofIntCore   := @Scalar.ofIntCore .U32
-@[reducible] def U64.ofIntCore   := @Scalar.ofIntCore .U64
-@[reducible] def U128.ofIntCore  := @Scalar.ofIntCore .U128
+def Isize.ofIntCore := @Scalar.ofIntCore .Isize
+def I8.ofIntCore    := @Scalar.ofIntCore .I8
+def I16.ofIntCore   := @Scalar.ofIntCore .I16
+def I32.ofIntCore   := @Scalar.ofIntCore .I32
+def I64.ofIntCore   := @Scalar.ofIntCore .I64
+def I128.ofIntCore  := @Scalar.ofIntCore .I128
+def Usize.ofIntCore := @Scalar.ofIntCore .Usize
+def U8.ofIntCore    := @Scalar.ofIntCore .U8
+def U16.ofIntCore   := @Scalar.ofIntCore .U16
+def U32.ofIntCore   := @Scalar.ofIntCore .U32
+def U64.ofIntCore   := @Scalar.ofIntCore .U64
+def U128.ofIntCore  := @Scalar.ofIntCore .U128
 
 --  ofInt
 -- TODO: typeclass?
-@[reducible] def Isize.ofInt := @Scalar.ofInt .Isize
-@[reducible] def I8.ofInt    := @Scalar.ofInt .I8
-@[reducible] def I16.ofInt   := @Scalar.ofInt .I16
-@[reducible] def I32.ofInt   := @Scalar.ofInt .I32
-@[reducible] def I64.ofInt   := @Scalar.ofInt .I64
-@[reducible] def I128.ofInt  := @Scalar.ofInt .I128
-@[reducible] def Usize.ofInt := @Scalar.ofInt .Usize
-@[reducible] def U8.ofInt    := @Scalar.ofInt .U8
-@[reducible] def U16.ofInt   := @Scalar.ofInt .U16
-@[reducible] def U32.ofInt   := @Scalar.ofInt .U32
-@[reducible] def U64.ofInt   := @Scalar.ofInt .U64
-@[reducible] def U128.ofInt  := @Scalar.ofInt .U128
+abbrev Isize.ofInt := @Scalar.ofInt .Isize
+abbrev I8.ofInt    := @Scalar.ofInt .I8
+abbrev I16.ofInt   := @Scalar.ofInt .I16
+abbrev I32.ofInt   := @Scalar.ofInt .I32
+abbrev I64.ofInt   := @Scalar.ofInt .I64
+abbrev I128.ofInt  := @Scalar.ofInt .I128
+abbrev Usize.ofInt := @Scalar.ofInt .Usize
+abbrev U8.ofInt    := @Scalar.ofInt .U8
+abbrev U16.ofInt   := @Scalar.ofInt .U16
+abbrev U32.ofInt   := @Scalar.ofInt .U32
+abbrev U64.ofInt   := @Scalar.ofInt .U64
+abbrev U128.ofInt  := @Scalar.ofInt .U128
 
 postfix:max "#isize" => Isize.ofInt
 postfix:max "#i8"    => I8.ofInt
@@ -947,8 +947,45 @@ postfix:max "#u128"  => U128.ofInt
 -- Testing the notations
 example : Result Usize := 0#usize + 1#usize
 
+-- TODO: factor those lemmas out
 @[simp] theorem Scalar.ofInt_val_eq {ty} (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : (Scalar.ofInt x h).val = x := by
   simp [Scalar.ofInt, Scalar.ofIntCore]
+
+@[simp] theorem Isize.ofInt_val_eq (h : Scalar.min ScalarTy.Isize ≤ x ∧ x ≤ Scalar.max ScalarTy.Isize) : (Isize.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I8.ofInt_val_eq (h : Scalar.min ScalarTy.I8 ≤ x ∧ x ≤ Scalar.max ScalarTy.I8) : (I8.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I16.ofInt_val_eq (h : Scalar.min ScalarTy.I16 ≤ x ∧ x ≤ Scalar.max ScalarTy.I16) : (I16.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I32.ofInt_val_eq (h : Scalar.min ScalarTy.I32 ≤ x ∧ x ≤ Scalar.max ScalarTy.I32) : (I32.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I64.ofInt_val_eq (h : Scalar.min ScalarTy.I64 ≤ x ∧ x ≤ Scalar.max ScalarTy.I64) : (I64.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I128.ofInt_val_eq (h : Scalar.min ScalarTy.I128 ≤ x ∧ x ≤ Scalar.max ScalarTy.I128) : (I128.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem Usize.ofInt_val_eq (h : Scalar.min ScalarTy.Usize ≤ x ∧ x ≤ Scalar.max ScalarTy.Usize) : (Usize.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U8.ofInt_val_eq (h : Scalar.min ScalarTy.U8 ≤ x ∧ x ≤ Scalar.max ScalarTy.U8) : (U8.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U16.ofInt_val_eq (h : Scalar.min ScalarTy.U16 ≤ x ∧ x ≤ Scalar.max ScalarTy.U16) : (U16.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U32.ofInt_val_eq (h : Scalar.min ScalarTy.U32 ≤ x ∧ x ≤ Scalar.max ScalarTy.U32) : (U32.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U64.ofInt_val_eq (h : Scalar.min ScalarTy.U64 ≤ x ∧ x ≤ Scalar.max ScalarTy.U64) : (U64.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U128.ofInt_val_eq (h : Scalar.min ScalarTy.U128 ≤ x ∧ x ≤ Scalar.max ScalarTy.U128) : (U128.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
 
 -- Comparisons
 instance {ty} : LT (Scalar ty) where
