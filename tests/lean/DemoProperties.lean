@@ -17,7 +17,6 @@ theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   progress as ⟨ i' ⟩
   scalar_tac
 
-@[pspec]
 theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
   ∃ z, use_mul2_add1 x y = ret z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
@@ -64,9 +63,6 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
     progress
     simp; scalar_tac
 termination_by i32_id_spec x _ => x.val.toNat
-decreasing_by
-  simp_wf
-  have : 1 ≤ x.val := by scalar_tac
-  simp_all
+decreasing_by scalar_decr_tac
 
 end demo
