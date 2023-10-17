@@ -118,13 +118,7 @@ def ireplicate {α : Type u} (i : ℤ) (x : α) : List α :=
   if i ≤ 0 then []
   else x :: ireplicate (i - 1) x
 termination_by ireplicate i x => i.toNat
-decreasing_by
-  simp_wf
-  -- TODO: simplify this kind of proofs
-  simp at *
-  have : 0 ≤ i := by linarith
-  have : 1 ≤ i := by linarith
-  simp [Int.toNat_sub_of_le, *]
+decreasing_by int_decr_tac
 
 @[simp] theorem update_nil : update ([] : List α) i y = [] := by simp [update]
 @[simp] theorem update_zero_cons : update ((x :: tl) : List α) 0 y = y :: tl := by simp [update]
@@ -173,13 +167,7 @@ theorem ireplicate_replicate {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
       cases hl: l.toNat <;> simp_all
     conv => rhs; rw[hl]
 termination_by ireplicate_replicate l x h => l.toNat
-decreasing_by
-  simp_wf
-  -- TODO: simplify this kind of proofs
-  simp at *
-  have : 0 ≤ l := by linarith
-  have : 1 ≤ l := by linarith
-  simp [Int.toNat_sub_of_le, *]  
+decreasing_by int_decr_tac
 
 @[simp]
 theorem ireplicate_len {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
@@ -191,13 +179,7 @@ theorem ireplicate_len {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
     have hr := ireplicate_len (l - 1) x (by int_tac)
     simp [*]
 termination_by ireplicate_len l x h => l.toNat
-decreasing_by
-  simp_wf
-  -- TODO: simplify this kind of proofs
-  simp at *
-  have : 0 ≤ l := by linarith
-  have : 1 ≤ l := by linarith
-  simp [Int.toNat_sub_of_le, *]
+decreasing_by int_decr_tac
 
 theorem len_eq_length (ls : List α) : ls.len = ls.length := by
   induction ls
