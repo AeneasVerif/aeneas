@@ -162,7 +162,7 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     -- Add a declaration
     let nval ← Utils.addDeclTac name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
-    Utils.simpAt [declToUnfold] [] [] (Tactic.Location.targets #[mkIdent name] false)
+    Utils.simpAt true [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
     -- Return the new value
     pure nval
 
@@ -240,7 +240,7 @@ def intTac (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Ta
   -- the goal. I think before leads to a smaller proof term?
   Tactic.allGoals (intTacPreprocess extraPreprocess)
   -- More preprocessing
-  Tactic.allGoals (Utils.tryTac (Utils.simpAt [] [``nat_zero_eq_int_zero] [] .wildcard))
+  Tactic.allGoals (Utils.tryTac (Utils.simpAt true [] [``nat_zero_eq_int_zero] [] .wildcard))
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call linarith

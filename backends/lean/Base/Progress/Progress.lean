@@ -8,6 +8,27 @@ namespace Progress
 open Lean Elab Term Meta Tactic
 open Utils
 
+-- TODO: the scalar types annoyingly often get reduced when we use the progress
+-- tactic. We should find a way of controling reduction. For now we use rewriting
+-- lemmas to make sure the goal remains clean, but this complexifies proof terms.
+-- It seems there used to be a `fold` tactic.
+theorem scalar_isize_eq : Primitives.Scalar .Isize = Primitives.Isize := by rfl
+theorem scalar_i8_eq    : Primitives.Scalar .I8 = Primitives.I8 := by rfl
+theorem scalar_i16_eq   : Primitives.Scalar .I16 = Primitives.I16 := by rfl
+theorem scalar_i32_eq   : Primitives.Scalar .I32 = Primitives.I32 := by rfl
+theorem scalar_i64_eq   : Primitives.Scalar .I64 = Primitives.I64 := by rfl
+theorem scalar_i128_eq  : Primitives.Scalar .I128 = Primitives.I128 := by rfl
+theorem scalar_usize_eq : Primitives.Scalar .Usize = Primitives.Usize := by rfl
+theorem scalar_u8_eq    : Primitives.Scalar .U8 = Primitives.U8 := by rfl
+theorem scalar_u16_eq   : Primitives.Scalar .U16 = Primitives.U16 := by rfl
+theorem scalar_u32_eq   : Primitives.Scalar .U32 = Primitives.U32 := by rfl
+theorem scalar_u64_eq   : Primitives.Scalar .U64 = Primitives.U64 := by rfl
+theorem scalar_u128_eq  : Primitives.Scalar .U128 = Primitives.U128 := by rfl
+def scalar_eqs := [
+  ``scalar_isize_eq, ``scalar_i8_eq, ``scalar_i16_eq, ``scalar_i32_eq, ``scalar_i64_eq, ``scalar_i128_eq,
+  ``scalar_usize_eq, ``scalar_u8_eq, ``scalar_u16_eq, ``scalar_u32_eq, ``scalar_u64_eq, ``scalar_u128_eq
+]
+
 inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
@@ -111,8 +132,11 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
     tryTac (
-      simpAt [] [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+      simpAt true []
+             [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
              [hEq.fvarId!] (.targets #[] true))
+    -- TODO: remove this (some types get unfolded too much: we "fold" them back)
+    tryTac (simpAt true [] scalar_eqs [] .wildcard_dep)
     -- Clear the equality, unless the user requests not to do so
     let mgoal ← do
       if keep.isSome then getMainGoal
