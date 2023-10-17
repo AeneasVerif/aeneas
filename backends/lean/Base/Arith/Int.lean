@@ -162,7 +162,7 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     -- Add a declaration
     let nval ← Utils.addDeclTac name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
-    Utils.simpAt true [declToUnfold] [] [] (Tactic.Location.targets #[mkIdent name] false)
+    Utils.simpAt true [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
     -- Return the new value
     pure nval
 
