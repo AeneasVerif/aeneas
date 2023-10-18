@@ -13,7 +13,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   ↑y = 2 * ↑x + (1 : Int)
   := by
   rw [mul2_add1]
-  progress as ⟨ i ⟩
+  progress with U32.add_spec as ⟨ i ⟩
   progress as ⟨ i' ⟩
   scalar_tac
 
