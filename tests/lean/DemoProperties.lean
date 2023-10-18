@@ -61,7 +61,7 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
     progress as ⟨ x1 ⟩
     progress as ⟨ x2 ⟩
     progress
-    simp; scalar_tac
+    scalar_tac
 termination_by i32_id_spec x _ => x.val.toNat
 decreasing_by scalar_decr_tac
 
