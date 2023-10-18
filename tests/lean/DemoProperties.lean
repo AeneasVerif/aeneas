@@ -7,7 +7,7 @@ namespace demo
 
 #check U32.add_spec
 
-@[pspec] -- registers the theorem
+-- @[pspec]
 theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ret y ∧
   ↑y = 2 * ↑x + (1 : Int)
@@ -21,7 +21,7 @@ theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.
   ∃ z, use_mul2_add1 x y = ret z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [use_mul2_add1]
-  progress as ⟨ i ⟩
+  progress with mul2_add1_spec as ⟨ i ⟩
   progress as ⟨ i' ⟩
   scalar_tac
 
@@ -48,7 +48,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
     else
       simp_all
       progress as ⟨ i1 ⟩
-      progress as ⟨ l1 ⟩
+      progress as ⟨ x ⟩
       simp_all
 
 theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
