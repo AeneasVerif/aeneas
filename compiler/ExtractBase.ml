@@ -1482,7 +1482,7 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
   let assumed_functions =
     List.map
       (fun (fid, rg, name) ->
-        (FromLlbc (Pure.FunId (A.Assumed fid), None, rg), name))
+        (FromLlbc (Pure.FunId (Assumed fid), None, rg), name))
       init.assumed_llbc_functions
     @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
   in

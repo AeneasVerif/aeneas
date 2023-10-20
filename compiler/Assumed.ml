@@ -347,7 +347,7 @@ let assumed_infos : assumed_info list =
   let vec_pre = [ "alloc"; "vec"; "Vec" ] in
   let index_pre = [ "core"; "ops"; "index" ] in
   [
-    (A.Replace, Sig.mem_replace_sig, false, to_name [ "core"; "mem"; "replace" ]);
+    (Replace, Sig.mem_replace_sig, false, to_name [ "core"; "mem"; "replace" ]);
     (BoxNew, Sig.box_new_sig, false, to_name [ "alloc"; "boxed"; "Box"; "new" ]);
     ( BoxFree,
       Sig.box_free_sig,

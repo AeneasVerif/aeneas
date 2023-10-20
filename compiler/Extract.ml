@@ -2696,7 +2696,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
             (* Provided method: we see it as a regular function call, and use
                the function name *)
             let fun_id =
-              FromLlbc (FunId (A.Regular method_id.id), lp_id, rg_id)
+              FromLlbc (FunId (Regular method_id.id), lp_id, rg_id)
             in
             let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
             F.pp_print_string fmt fun_name;
@@ -3519,7 +3519,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   let { keep_fwd; num_backs } =
     PureUtils.RegularFunIdMap.find
-      (Pure.FunId (A.Regular def.def_id), def.loop_id, def.back_id)
+      (Pure.FunId (Regular def.def_id), def.loop_id, def.back_id)
       ctx.fun_name_info
   in
   let comment_pre = "[" ^ Print.fun_name_to_string def.basename ^ "]: " in

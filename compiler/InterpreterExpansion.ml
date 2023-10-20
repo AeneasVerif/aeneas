@@ -709,7 +709,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
             raise
               (Failure
                  "Attempted to greedily expand an ADT which can't be expanded ")
-        | T.TypeVar _ | T.Literal _ | Never | T.TraitType _ ->
+        | T.TypeVar _ | T.Literal _ | Never | T.TraitType _ | T.Arrow _ ->
             raise (Failure "Unreachable")
       in
       (* Compose and continue *)

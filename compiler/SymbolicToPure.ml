@@ -343,7 +343,7 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
 (* TODO: move *)
 let bs_ctx_lookup_local_function_sig (def_id : A.FunDeclId.id)
     (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
-  let id = (A.Regular def_id, back_id) in
+  let id = (E.Regular def_id, back_id) in
   (RegularFunIdNotLoopMap.find id ctx.fun_context.fun_sigs).sg
 
 (* Some generic translation functions (we need to translate different "flavours"
@@ -390,6 +390,7 @@ and translate_trait_instance_id (translate_ty : 'r T.ty -> ty)
       let inst_id = translate_trait_instance_id inst_id in
       ItemClause (inst_id, decl_id, item_name, clause_id)
   | TraitRef tr -> TraitRef (translate_trait_ref translate_ty tr)
+  | FnPointer _ -> raise (Failure "TODO")
   | UnknownTrait s -> raise (Failure ("Unknown trait found: " ^ s))
 
 let rec translate_sty (ty : T.sty) : ty =
@@ -427,6 +428,7 @@ let rec translate_sty (ty : T.sty) : ty =
       let trait_ref = translate_strait_ref trait_ref in
       let generics = translate_sgeneric_args generics in
       TraitType (trait_ref, generics, type_name)
+  | Arrow _ -> raise (Failure "TODO")
 
 and translate_sgeneric_args (generics : T.sgeneric_args) : generic_args =
   translate_generic_args translate_sty generics
@@ -569,6 +571,7 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
       let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
       let generics = translate_fwd_generic_args type_infos generics in
       TraitType (trait_ref, generics, type_name)
+  | Arrow _ -> raise (Failure "TODO")
 
 and translate_fwd_generic_args (type_infos : TA.type_infos)
     (generics : 'r T.generic_args) : generic_args =
@@ -658,6 +661,7 @@ let rec translate_back_ty (type_infos : TA.type_infos)
       let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
       let generics = translate_fwd_generic_args type_infos generics in
       Some (TraitType (trait_ref, generics, type_name))
+  | Arrow _ -> raise (Failure "TODO")
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
@@ -694,7 +698,7 @@ let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
 let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
     (id : A.fun_id_or_trait_method_ref) : fun_id_or_trait_method_ref =
   match id with
-  | A.FunId fun_id -> FunId fun_id
+  | FunId fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_name, fun_decl_id) ->
       let type_infos = ctx.type_context.type_infos in
       let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
@@ -795,7 +799,7 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     (fun_id : A.fun_id_or_trait_method_ref) (lid : V.LoopId.id option)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | A.TraitMethod (_, _, fid) | A.FunId (A.Regular fid) ->
+  | TraitMethod (_, _, fid) | FunId (Regular fid) ->
       let info = A.FunDeclId.Map.find fid fun_infos in
       let stateful_group = info.stateful in
       let stateful =
@@ -808,7 +812,7 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
         can_diverge = info.can_diverge;
         is_rec = info.is_rec || Option.is_some lid;
       }
-  | A.FunId (A.Assumed aid) ->
+  | FunId (Assumed aid) ->
       assert (lid = None);
       {
         can_fail = Assumed.assumed_can_fail aid;
@@ -841,7 +845,7 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   in
   (* Is the function stateful, and can it fail? *)
   let lid = None in
-  let effect_info = get_fun_effect_info fun_infos (A.FunId fun_id) lid bid in
+  let effect_info = get_fun_effect_info fun_infos (FunId fun_id) lid bid in
   (* We need an evaluation context to normalize the types (to normalize the
      associated types, etc. - for instance it may happen that the types
      refer to the types associated to a trait ref, but where the trait ref
@@ -1706,18 +1710,20 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             (ctx, Unop (Neg int_ty), effect_info, args, None)
         | _ -> raise (Failure "Unreachable"))
-    | S.Unop (E.Cast (src_ty, tgt_ty)) ->
-        (* Note that cast can fail *)
-        let effect_info =
-          {
-            can_fail = true;
-            stateful_group = false;
-            stateful = false;
-            can_diverge = false;
-            is_rec = false;
-          }
-        in
-        (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None)
+    | S.Unop (E.Cast cast_kind) -> (
+        match cast_kind with
+        | CastInteger (src_ty, tgt_ty) ->
+            (* Note that cast can fail *)
+            let effect_info =
+              {
+                can_fail = true;
+                stateful_group = false;
+                stateful = false;
+                can_diverge = false;
+                is_rec = false;
+              }
+            in
+            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None))
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -1925,7 +1931,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   (* Sanity check: there is the proper number of inputs and outputs, and they have the proper type *)
   (if (* TODO: normalize the types *) !Config.type_check_pure_code then
      match fun_id with
-     | A.FunId fun_id ->
+     | FunId fun_id ->
          let inst_sg =
            get_instantiated_fun_sig fun_id (Some rg_id) generics ctx
          in
@@ -2088,9 +2094,9 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       (* Actually the same case as [SynthInput] *)
       translate_end_abstraction_synth_input ectx abs e ctx rg_id
   | V.LoopCall ->
-      let fun_id = A.Regular ctx.fun_decl.A.def_id in
+      let fun_id = E.Regular ctx.fun_decl.A.def_id in
       let effect_info =
-        get_fun_effect_info ctx.fun_context.fun_infos (A.FunId fun_id)
+        get_fun_effect_info ctx.fun_context.fun_infos (FunId fun_id)
           (Some vloop_id) (Some rg_id)
       in
       let loop_info = LoopId.Map.find loop_id ctx.loops in
@@ -2553,9 +2559,9 @@ and translate_forward_end (ectx : C.eval_ctx)
       let org_args = args in
 
       (* Lookup the effect info for the loop function *)
-      let fid = A.Regular ctx.fun_decl.A.def_id in
+      let fid = E.Regular ctx.fun_decl.A.def_id in
       let effect_info =
-        get_fun_effect_info ctx.fun_context.fun_infos (A.FunId fid) None ctx.bid
+        get_fun_effect_info ctx.fun_context.fun_infos (FunId fid) None ctx.bid
       in
 
       (* Introduce a fresh output value for the forward function *)

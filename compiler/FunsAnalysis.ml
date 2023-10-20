@@ -76,7 +76,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                 can_fail := EU.binop_can_fail bop || !can_fail
 
           method! visit_Call env call =
-            (match call.func with
+            (match call.func.func with
             | FunId (Regular id) ->
                 if FunDeclId.Set.mem id fun_ids then (
                   can_diverge := true;

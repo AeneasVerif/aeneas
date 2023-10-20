@@ -46,6 +46,11 @@ let operand_to_string = PA.operand_to_string
 let egeneric_args_to_string = PA.egeneric_args_to_string
 let rtrait_instance_id_to_string = PA.rtrait_instance_id_to_string
 let fun_sig_to_string = PA.fun_sig_to_string
+let inst_fun_sig_to_string = PA.inst_fun_sig_to_string
+
+let fun_id_or_trait_method_ref_to_string =
+  PA.fun_id_or_trait_method_ref_to_string
+
 let fun_decl_to_string = PA.fun_decl_to_string
 let call_to_string = PA.call_to_string
 

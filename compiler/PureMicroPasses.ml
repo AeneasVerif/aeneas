@@ -791,7 +791,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
                     let id0 =
                       match id0 with
                       | FunId fun_id -> fun_id
-                      | TraitMethod (_, _, fun_decl_id) -> A.Regular fun_decl_id
+                      | TraitMethod (_, _, fun_decl_id) -> Regular fun_decl_id
                     in
                     LlbcAstUtils.lookup_fun_sig id0 ctx.fun_ctx.fun_decls
                   in
@@ -1523,29 +1523,29 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         match opt_destruct_function_call e with
         | Some (fun_id, _tys, args) -> (
             match fun_id with
-            | Fun (FromLlbc (FunId (A.Assumed aid), _lp_id, rg_id)) -> (
+            | Fun (FromLlbc (FunId (Assumed aid), _lp_id, rg_id)) -> (
                 (* Below, when dealing with the arguments: we consider the very
                  * general case, where functions could be boxed (meaning we
                  * could have: [box_new f x])
                  * *)
                 match (aid, rg_id) with
-                | A.BoxNew, _ ->
+                | BoxNew, _ ->
                     assert (rg_id = None);
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
-                | A.BoxDeref, None ->
+                | BoxDeref, None ->
                     (* [Box::deref] forward is the identity *)
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
-                | A.BoxDeref, Some _ ->
+                | BoxDeref, Some _ ->
                     (* [Box::deref] backward is [()] (doesn't give back anything) *)
                     assert (args = []);
                     mk_unit_rvalue
-                | A.BoxDerefMut, None ->
+                | BoxDerefMut, None ->
                     (* [Box::deref_mut] forward is the identity *)
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
-                | A.BoxDerefMut, Some _ ->
+                | BoxDerefMut, Some _ ->
                     (* [Box::deref_mut] back is almost the identity:
                      * let box_deref_mut (x_init : t) (x_back : t) : t = x_back
                      * *)
@@ -1555,15 +1555,15 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                       | _ -> raise (Failure "Unreachable")
                     in
                     mk_apps arg args
-                | A.BoxFree, _ ->
+                | BoxFree, _ ->
                     assert (args = []);
                     mk_unit_rvalue
-                | ( ( A.Replace | VecNew | VecPush | VecInsert | VecLen
-                    | VecIndex | VecIndexMut | ArraySubsliceShared
-                    | ArraySubsliceMut | SliceIndexShared | SliceIndexMut
-                    | SliceSubsliceShared | SliceSubsliceMut | ArrayIndexShared
-                    | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
-                    | ArrayRepeat | SliceLen ),
+                | ( ( Replace | VecNew | VecPush | VecInsert | VecLen | VecIndex
+                    | VecIndexMut | ArraySubsliceShared | ArraySubsliceMut
+                    | SliceIndexShared | SliceIndexMut | SliceSubsliceShared
+                    | SliceSubsliceMut | ArrayIndexShared | ArrayIndexMut
+                    | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat
+                    | SliceLen ),
                     _ ) ->
                     super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
@@ -2046,7 +2046,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
     let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
     assert (Option.is_some decl.loop_id);
 
-    let fun_id = (A.Regular decl.def_id, decl.loop_id) in
+    let fun_id = (E.Regular decl.def_id, decl.loop_id) in
 
     let set_used vid =
       used := List.map (fun (vid', b) -> (vid', b || vid = vid')) !used
@@ -2130,7 +2130,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
   (* We then apply the filtering to all the function definitions at once *)
   let filter_in_one (decl : fun_decl) : fun_decl =
     (* Filter the function signature *)
-    let fun_id = (A.Regular decl.def_id, decl.loop_id) in
+    let fun_id = (E.Regular decl.def_id, decl.loop_id) in
     let decl =
       match FunLoopIdMap.find_opt fun_id !used_map with
       | None -> (* Nothing to filter *) decl
