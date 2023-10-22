@@ -100,6 +100,11 @@ type scalar_ty =
 | U64
 | U128
 
+let is_unsigned = function
+| Isize | I8 | I16 | I32 | I64 | I128 -> false
+| Usize | U8 | U16 | U32 | U64 | U128 -> true
+
+
 let scalar_min (ty : scalar_ty) : int =
   match ty with
   | Isize -> isize_min
@@ -161,6 +166,15 @@ let scalar_sub (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scala
 
 let scalar_mul (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scalar ty) =
   mk_scalar ty (x * y)
+
+let scalar_lxor (#ty : scalar_ty { is_unsigned ty && ty <> Usize })
+    (x : scalar ty) (y : scalar ty) : scalar ty =
+  match ty with
+  | U8 -> FStar.UInt.logxor #8 x y
+  | U16 -> FStar.UInt.logxor #16 x y
+  | U32 -> FStar.UInt.logxor #32 x y
+  | U64 -> FStar.UInt.logxor #64 x y
+  | U128 -> FStar.UInt.logxor #128 x y
 
 (** Cast an integer from a [src_ty] to a [tgt_ty] *)
 // TODO: check the semantics of casts in Rust
@@ -258,7 +272,7 @@ let u32_add = scalar_add #U32
 let u64_add = scalar_add #U64
 let u128_add = scalar_add #U128
 
-/// Substraction
+/// Subtraction
 let isize_sub = scalar_sub #Isize
 let i8_sub = scalar_sub #I8
 let i16_sub = scalar_sub #I16
@@ -285,6 +299,13 @@ let u16_mul = scalar_mul #U16
 let u32_mul = scalar_mul #U32
 let u64_mul = scalar_mul #U64
 let u128_mul = scalar_mul #U128
+
+/// Logical operators, defined for unsigned types only, so far
+let u8_xor = scalar_lxor #U8
+let u16_xor = scalar_lxor #U16
+let u32_xor = scalar_lxor #U32
+let u64_xor = scalar_lxor #U64
+let u128_xor = scalar_lxor #U128
 
 (*** Range *)
 type range (a : Type0) = {
