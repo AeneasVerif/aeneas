@@ -169,6 +169,5 @@
           default = aeneas;
         };
         checks = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean aeneas-verify-hol4; };
-        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean aeneas-verify-hol4; };
       });
 }
