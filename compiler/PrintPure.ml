@@ -195,12 +195,9 @@ let assumed_ty_to_string (aty : assumed_ty) : string =
   | Result -> "Result"
   | Error -> "Error"
   | Fuel -> "Fuel"
-  | Option -> "Option"
-  | Vec -> "Vec"
   | Array -> "Array"
   | Slice -> "Slice"
   | Str -> "Str"
-  | Range -> "Range"
 
 let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
@@ -354,10 +351,6 @@ let rec mprojection_to_string (fmt : ast_formatter) (inside : string)
   | pe :: p' -> (
       let s = mprojection_to_string fmt inside p' in
       match pe.pkind with
-      | E.ProjOption variant_id ->
-          assert (variant_id = T.option_some_id);
-          assert (pe.field_id = T.FieldId.zero);
-          "(" ^ s ^ "as Option::Some)." ^ T.FieldId.to_string pe.field_id
       | E.ProjTuple _ -> "(" ^ s ^ ")." ^ T.FieldId.to_string pe.field_id
       | E.ProjAdt (adt_id, opt_variant_id) -> (
           let field_name =
@@ -395,8 +388,6 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
       | State | Array | Slice | Str ->
           (* Those types are opaque: we can't get there *)
           raise (Failure "Unreachable")
-      | Vec -> "@Vec"
-      | Range -> "@Range"
       | Result ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then "@Result::Return"
@@ -412,13 +403,7 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then "@Fuel::Zero"
           else if variant_id = fuel_succ_id then "@Fuel::Succ"
-          else raise (Failure "Unreachable: improper variant id for fuel type")
-      | Option ->
-          let variant_id = Option.get variant_id in
-          if variant_id = option_some_id then "@Option::Some "
-          else if variant_id = option_none_id then "@Option::None"
-          else
-            raise (Failure "Unreachable: improper variant id for result type"))
+          else raise (Failure "Unreachable: improper variant id for fuel type"))
 
 let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
     (field_id : FieldId.id) : string =
@@ -435,11 +420,10 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
   | Assumed aty -> (
       (* Assumed type *)
       match aty with
-      | Range -> FieldId.to_string field_id
-      | State | Fuel | Vec | Array | Slice | Str ->
+      | State | Fuel | Array | Slice | Str ->
           (* Opaque types: we can't get there *)
           raise (Failure "Unreachable")
-      | Result | Error | Option ->
+      | Result | Error ->
           (* Enumerations: we can't get there *)
           raise (Failure "Unreachable"))
 
@@ -510,31 +494,13 @@ let adt_g_value_to_string (fmt : value_formatter)
             | [ v ] -> "@Fuel::Succ " ^ v
             | _ -> raise (Failure "@Fuel::Succ takes exactly one value")
           else raise (Failure "Unreachable: improper variant id for fuel type")
-      | Option ->
-          let variant_id = Option.get variant_id in
-          if variant_id = option_some_id then
-            match field_values with
-            | [ v ] -> "@Option::Some " ^ v
-            | _ -> raise (Failure "Option::Some takes exactly one value")
-          else if variant_id = option_none_id then (
-            assert (field_values = []);
-            "@Option::None")
-          else
-            raise (Failure "Unreachable: improper variant id for result type")
-      | Vec | Array | Slice | Str ->
+      | Array | Slice | Str ->
           assert (variant_id = None);
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in
           let id = assumed_ty_to_string aty in
-          id ^ " [" ^ String.concat "; " field_values ^ "]"
-      | Range ->
-          assert (variant_id = None);
-          let field_values =
-            List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
-          in
-          let id = assumed_ty_to_string aty in
-          id ^ " {" ^ String.concat "; " field_values ^ "}")
+          id ^ " [" ^ String.concat "; " field_values ^ "]")
   | _ ->
       let fmt = value_to_type_formatter fmt in
       raise
@@ -593,29 +559,16 @@ let fun_suffix (lp_id : LoopId.id option) (rg_id : T.RegionGroupId.id option) :
 
 let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   match fid with
-  | Replace -> "core::mem::replace"
   | BoxNew -> "alloc::boxed::Box::new"
-  | BoxDeref -> "core::ops::deref::Deref::deref"
-  | BoxDerefMut -> "core::ops::deref::DerefMut::deref_mut"
   | BoxFree -> "alloc::alloc::box_free"
-  | VecNew -> "alloc::vec::Vec::new"
-  | VecPush -> "alloc::vec::Vec::push"
-  | VecInsert -> "alloc::vec::Vec::insert"
-  | VecLen -> "alloc::vec::Vec::len"
-  | VecIndex -> "core::ops::index::Index<alloc::vec::Vec>::index"
-  | VecIndexMut -> "core::ops::index::IndexMut<alloc::vec::Vec>::index_mut"
   | ArrayIndexShared -> "@ArrayIndexShared"
   | ArrayIndexMut -> "@ArrayIndexMut"
   | ArrayToSliceShared -> "@ArrayToSliceShared"
   | ArrayToSliceMut -> "@ArrayToSliceMut"
-  | ArraySubsliceShared -> "@ArraySubsliceShared"
-  | ArraySubsliceMut -> "@ArraySubsliceMut"
   | ArrayRepeat -> "@ArrayRepeat"
   | SliceLen -> "@SliceLen"
   | SliceIndexShared -> "@SliceIndexShared"
   | SliceIndexMut -> "@SliceIndexMut"
-  | SliceSubsliceShared -> "@SliceSubsliceShared"
-  | SliceSubsliceMut -> "@SliceSubsliceMut"
 
 let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
   match fid with

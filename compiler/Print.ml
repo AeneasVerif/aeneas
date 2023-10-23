@@ -127,17 +127,6 @@ module Values = struct
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
-            | Option, _ ->
-                if av.variant_id = Some T.option_some_id then
-                  "@Option::Some("
-                  ^ Collections.List.to_cons_nil field_values
-                  ^ ")"
-                else if av.variant_id = Some T.option_none_id then (
-                  assert (field_values = []);
-                  "@Option::None")
-                else raise (Failure "Unreachable")
-            | Range, _ -> "@Range{ " ^ String.concat ", " field_values ^ "}"
-            | Vec, _ -> "@Vec[" ^ String.concat ", " field_values ^ "]"
             | Array, _ ->
                 (* Happens when we aggregate values *)
                 "@Array[" ^ String.concat ", " field_values ^ "]"

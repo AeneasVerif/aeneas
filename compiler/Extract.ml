@@ -225,12 +225,9 @@ let assumed_adts () : (assumed_ty * string) list =
         (Result, "Result");
         (Error, "Error");
         (Fuel, "Nat");
-        (Option, "Option");
-        (Vec, "Vec");
         (Array, "Array");
         (Slice, "Slice");
         (Str, "Str");
-        (Range, "Range");
       ]
   | Coq | FStar ->
       [
@@ -238,12 +235,9 @@ let assumed_adts () : (assumed_ty * string) list =
         (Result, "result");
         (Error, "error");
         (Fuel, "nat");
-        (Option, "option");
-        (Vec, "vec");
         (Array, "array");
         (Slice, "slice");
         (Str, "str");
-        (Range, "range");
       ]
   | HOL4 ->
       [
@@ -251,20 +245,17 @@ let assumed_adts () : (assumed_ty * string) list =
         (Result, "result");
         (Error, "error");
         (Fuel, "num");
-        (Option, "option");
-        (Vec, "vec");
         (Array, "array");
         (Slice, "slice");
         (Str, "str");
-        (Range, "range");
       ]
 
 let assumed_struct_constructors () : (assumed_ty * string) list =
   match !backend with
-  | Lean -> [ (Range, "Range.mk"); (Array, "Array.make") ]
-  | Coq -> [ (Range, "mk_range"); (Array, "mk_array") ]
-  | FStar -> [ (Range, "Mkrange"); (Array, "mk_array") ]
-  | HOL4 -> [ (Range, "mk_range"); (Array, "mk_array") ]
+  | Lean -> [ (Array, "Array.make") ]
+  | Coq -> [ (Array, "mk_array") ]
+  | FStar -> [ (Array, "mk_array") ]
+  | HOL4 -> [ (Array, "mk_array") ]
 
 let assumed_variants () : (assumed_ty * VariantId.id * string) list =
   match !backend with
@@ -276,8 +267,6 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (Error, error_out_of_fuel_id, "OutOfFuel");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
-        (Option, option_some_id, "Some");
-        (Option, option_none_id, "None");
       ]
   | Coq ->
       [
@@ -287,8 +276,6 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (Error, error_out_of_fuel_id, "OutOfFuel");
         (Fuel, fuel_zero_id, "O");
         (Fuel, fuel_succ_id, "S");
-        (Option, option_some_id, "Some");
-        (Option, option_none_id, "None");
       ]
   | Lean ->
       [
@@ -297,8 +284,6 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (Error, error_failure_id, "panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
-        (Option, option_some_id, "some");
-        (Option, option_none_id, "none");
       ]
   | HOL4 ->
       [
@@ -307,8 +292,6 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (Error, error_failure_id, "Failure");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
-        (Option, option_some_id, "SOME");
-        (Option, option_none_id, "NONE");
       ]
 
 let assumed_llbc_functions () :
@@ -317,66 +300,30 @@ let assumed_llbc_functions () :
   match !backend with
   | FStar | Coq | HOL4 ->
       [
-        (Replace, None, "mem_replace_fwd");
-        (Replace, rg0, "mem_replace_back");
-        (VecNew, None, "vec_new");
-        (VecPush, None, "vec_push_fwd") (* Shouldn't be used *);
-        (VecPush, rg0, "vec_push_back");
-        (VecInsert, None, "vec_insert_fwd") (* Shouldn't be used *);
-        (VecInsert, rg0, "vec_insert_back");
-        (VecLen, None, "vec_len");
-        (VecIndex, None, "vec_index_fwd");
-        (VecIndex, rg0, "vec_index_back") (* shouldn't be used *);
-        (VecIndexMut, None, "vec_index_mut_fwd");
-        (VecIndexMut, rg0, "vec_index_mut_back");
         (ArrayIndexShared, None, "array_index_shared");
         (ArrayIndexMut, None, "array_index_mut_fwd");
         (ArrayIndexMut, rg0, "array_index_mut_back");
         (ArrayToSliceShared, None, "array_to_slice_shared");
         (ArrayToSliceMut, None, "array_to_slice_mut_fwd");
         (ArrayToSliceMut, rg0, "array_to_slice_mut_back");
-        (ArraySubsliceShared, None, "array_subslice_shared");
-        (ArraySubsliceMut, None, "array_subslice_mut_fwd");
-        (ArraySubsliceMut, rg0, "array_subslice_mut_back");
         (ArrayRepeat, None, "array_repeat");
         (SliceIndexShared, None, "slice_index_shared");
         (SliceIndexMut, None, "slice_index_mut_fwd");
         (SliceIndexMut, rg0, "slice_index_mut_back");
-        (SliceSubsliceShared, None, "slice_subslice_shared");
-        (SliceSubsliceMut, None, "slice_subslice_mut_fwd");
-        (SliceSubsliceMut, rg0, "slice_subslice_mut_back");
         (SliceLen, None, "slice_len");
       ]
   | Lean ->
       [
-        (Replace, None, "mem.replace");
-        (Replace, rg0, "mem.replace_back");
-        (VecNew, None, "Vec.new");
-        (VecPush, None, "Vec.push_fwd") (* Shouldn't be used *);
-        (VecPush, rg0, "Vec.push");
-        (VecInsert, None, "Vec.insert_fwd") (* Shouldn't be used *);
-        (VecInsert, rg0, "Vec.insert");
-        (VecLen, None, "Vec.len");
-        (VecIndex, None, "Vec.index_shared");
-        (VecIndex, rg0, "Vec.index_shared_back") (* shouldn't be used *);
-        (VecIndexMut, None, "Vec.index_mut");
-        (VecIndexMut, rg0, "Vec.index_mut_back");
         (ArrayIndexShared, None, "Array.index_shared");
         (ArrayIndexMut, None, "Array.index_mut");
         (ArrayIndexMut, rg0, "Array.index_mut_back");
         (ArrayToSliceShared, None, "Array.to_slice_shared");
         (ArrayToSliceMut, None, "Array.to_slice_mut");
         (ArrayToSliceMut, rg0, "Array.to_slice_mut_back");
-        (ArraySubsliceShared, None, "Array.subslice_shared");
-        (ArraySubsliceMut, None, "Array.subslice_mut");
-        (ArraySubsliceMut, rg0, "Array.subslice_mut_back");
         (ArrayRepeat, None, "Array.repeat");
         (SliceIndexShared, None, "Slice.index_shared");
         (SliceIndexMut, None, "Slice.index_mut");
         (SliceIndexMut, rg0, "Slice.index_mut_back");
-        (SliceSubsliceShared, None, "Slice.subslice_shared");
-        (SliceSubsliceMut, None, "Slice.subslice_mut");
-        (SliceSubsliceMut, rg0, "Slice.subslice_mut_back");
         (SliceLen, None, "Slice.len");
       ]
 
@@ -850,12 +797,9 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             | Assumed Result -> "r"
             | Assumed Error -> ConstStrings.error_basename
             | Assumed Fuel -> ConstStrings.fuel_basename
-            | Assumed Option -> "opt"
-            | Assumed Vec -> "v"
             | Assumed Array -> "a"
             | Assumed Slice -> "s"
             | Assumed Str -> "s"
-            | Assumed Range -> "r"
             | Assumed State -> ConstStrings.state_basename
             | AdtId adt_id ->
                 let def = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
@@ -1397,8 +1341,18 @@ and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
+  (* Lookup the builtin information, if there is *)
+  let open ExtractBuiltin in
+  let sname = name_to_simple_name def.name in
+  let info = SimpleNameMap.find_opt sname (builtin_types_map ()) in
   (* Compute and register the type def name *)
-  let ctx = ctx_add_type_decl def ctx in
+  let def_name =
+    match info with
+    | None -> ctx.fmt.type_name def.name
+    | Some info -> info.rust_name
+  in
+  let is_opaque = def.kind = Opaque in
+  let ctx = ctx_add is_opaque (TypeId (AdtId def.def_id)) def_name ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -1406,18 +1360,73 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   let ctx =
     match def.kind with
     | Struct fields ->
+        (* Compute the names *)
+        let field_names, cons_name =
+          match info with
+          | None ->
+              let field_names =
+                FieldId.mapi
+                  (fun fid (field : field) ->
+                    (fid, ctx.fmt.field_name def.name fid field.field_name))
+                  fields
+              in
+              let cons_name = ctx.fmt.struct_constructor def.name in
+              (field_names, cons_name)
+          | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
+              let field_names =
+                FieldId.mapi
+                  (fun fid (_, name) -> (fid, name))
+                  (List.combine fields field_names)
+              in
+              (field_names, cons_name)
+          | _ -> raise (Failure "Invalid builtin information")
+        in
         (* Add the fields *)
         let ctx =
-          fst
-            (ctx_add_fields def (FieldId.mapi (fun id f -> (id, f)) fields) ctx)
+          List.fold_left
+            (fun ctx (fid, name) ->
+              ctx_add is_opaque (FieldId (AdtId def.def_id, fid)) name ctx)
+            ctx field_names
         in
         (* Add the constructor name *)
-        fst (ctx_add_struct def ctx)
+        ctx_add is_opaque (StructId (AdtId def.def_id)) cons_name ctx
     | Enum variants ->
-        fst
-          (ctx_add_variants def
-             (VariantId.mapi (fun id v -> (id, v)) variants)
-             ctx)
+        let variant_names =
+          match info with
+          | None ->
+              VariantId.mapi
+                (fun variant_id (variant : variant) ->
+                  let name =
+                    ctx.fmt.variant_name def.name variant.variant_name
+                  in
+                  (* Add the type name prefix for Lean *)
+                  let name =
+                    if !Config.backend = Lean then
+                      let type_name = ctx.fmt.type_name def.name in
+                      type_name ^ "." ^ name
+                    else name
+                  in
+                  (variant_id, name))
+                variants
+          | Some { body_info = Some (Enum variant_infos); _ } ->
+              (* We need to compute the map from variant to variant *)
+              let variant_map =
+                StringMap.of_list
+                  (List.map
+                     (fun (info : builtin_enum_variant_info) ->
+                       (info.rust_variant_name, info.extract_variant_name))
+                     variant_infos)
+              in
+              VariantId.mapi
+                (fun variant_id (variant : variant) ->
+                  (variant_id, StringMap.find variant.variant_name variant_map))
+                variants
+          | _ -> raise (Failure "Invalid builtin information")
+        in
+        List.fold_left
+          (fun ctx (vid, vname) ->
+            ctx_add is_opaque (VariantId (AdtId def.def_id, vid)) vname ctx)
+          ctx variant_names
     | Opaque ->
         (* Nothing to do *)
         ctx

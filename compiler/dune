@@ -22,8 +22,8 @@
   Expressions
   ExpressionsUtils
   Extract
-  ExtractAssumed
   ExtractBase
+  ExtractBuiltin
   FunsAnalysis
   Identifiers
   InterpreterBorrowsCore

@@ -64,17 +64,7 @@ type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
         this state is opaque to Aeneas (the user can define it, or leave it as
         assumed)
   *)
-type assumed_ty =
-  | State
-  | Result
-  | Error
-  | Fuel
-  | Vec
-  | Option
-  | Array
-  | Slice
-  | Str
-  | Range
+type assumed_ty = State | Result | Error | Fuel | Array | Slice | Str
 [@@deriving show, ord]
 
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather

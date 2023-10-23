@@ -10,7 +10,6 @@ open TypesUtils
 open ValuesUtils
 module Inv = Invariants
 module S = SynthesizeSymbolic
-open Utils
 open Cps
 open InterpreterUtils
 open InterpreterProjectors
@@ -233,8 +232,7 @@ let set_discriminant (config : C.config) (p : E.place)
   let update_value cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match (v.V.ty, v.V.value) with
-    | T.Adt (((T.AdtId _ | T.Assumed T.Option) as type_id), generics), V.Adt av
-      -> (
+    | T.Adt ((T.AdtId _ as type_id), generics), V.Adt av -> (
         (* There are two situations:
            - either the discriminant is already the proper one (in which case we
              don't do anything)
@@ -253,24 +251,15 @@ let set_discriminant (config : C.config) (p : E.place)
                 | T.AdtId def_id ->
                     compute_expanded_bottom_adt_value ctx def_id
                       (Some variant_id) generics
-                | T.Assumed T.Option ->
-                    assert (generics.regions = []);
-                    compute_expanded_bottom_option_value variant_id
-                      (Collections.List.to_cons_nil generics.types)
                 | _ -> raise (Failure "Unreachable")
               in
               assign_to_place config bottom_v p (cf Unit) ctx)
-    | T.Adt (((T.AdtId _ | T.Assumed T.Option) as type_id), generics), V.Bottom
-      ->
+    | T.Adt ((T.AdtId _ as type_id), generics), V.Bottom ->
         let bottom_v =
           match type_id with
           | T.AdtId def_id ->
               compute_expanded_bottom_adt_value ctx def_id (Some variant_id)
                 generics
-          | T.Assumed T.Option ->
-              assert (generics.regions = []);
-              compute_expanded_bottom_option_value variant_id
-                (Collections.List.to_cons_nil generics.types)
           | _ -> raise (Failure "Unreachable")
         in
         assign_to_place config bottom_v p (cf Unit) ctx
@@ -313,7 +302,7 @@ let get_assumed_function_return_type (ctx : C.eval_ctx) (fid : A.assumed_fun_id)
       mk_unit_ty
   | _ ->
       (* Retrieve the function's signature *)
-      let sg = Assumed.get_assumed_sig fid in
+      let sg = Assumed.get_assumed_fun_sig fid in
       (* Instantiate the return type  *)
       (* There shouldn't be any reference to Self *)
       let tr_self : T.erased_region T.trait_instance_id =
@@ -427,11 +416,6 @@ let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
   comp cf_pop cf_assign
 
 (** Auxiliary function - see {!eval_assumed_function_call} *)
-let eval_replace_concrete (_config : C.config) (_generics : T.egeneric_args) :
-    cm_fun =
- fun _cf _ctx -> raise Unimplemented
-
-(** Auxiliary function - see {!eval_assumed_function_call} *)
 let eval_box_new_concrete (config : C.config) (generics : T.egeneric_args) :
     cm_fun =
  fun cf ctx ->
@@ -475,67 +459,6 @@ let eval_box_new_concrete (config : C.config) (generics : T.egeneric_args) :
       comp cf_move cf_create cf ctx
   | _ -> raise (Failure "Inconsistent state")
 
-(** Auxiliary function which factorizes code to evaluate [std::Deref::deref]
-    and [std::DerefMut::deref_mut] - see {!eval_assumed_function_call} *)
-let eval_box_deref_mut_or_shared_concrete (config : C.config)
-    (generics : T.egeneric_args) (is_mut : bool) : cm_fun =
- fun cf ctx ->
-  (* Check the arguments *)
-  match
-    (generics.regions, generics.types, generics.const_generics, ctx.env)
-  with
-  | ( [],
-      [ boxed_ty ],
-      [],
-      Var (VarBinder input_var, input_value)
-      :: Var (_ret_var, _)
-      :: C.Frame :: _ ) ->
-      (* Required type checking. We must have:
-         - input_value.ty = & (mut) Box<ty>
-         - boxed_ty = ty
-         for some ty
-      *)
-      (let _, input_ty, ref_kind = ty_get_ref input_value.V.ty in
-       assert (match ref_kind with T.Shared -> not is_mut | T.Mut -> is_mut);
-       let input_ty = ty_get_box input_ty in
-       assert (input_ty = boxed_ty));
-
-      (* Borrow the boxed value *)
-      let p =
-        { E.var_id = input_var.C.index; projection = [ E.Deref; E.DerefBox ] }
-      in
-      let borrow_kind = if is_mut then E.Mut else E.Shared in
-      let rv = E.RvRef (p, borrow_kind) in
-      let cf_borrow = eval_rvalue_not_global config rv in
-
-      (* Move the borrow to its destination *)
-      let cf_move cf res : m_fun =
-        match res with
-        | Error EPanic ->
-            (* We can't get there by borrowing a value *)
-            raise (Failure "Unreachable")
-        | Ok borrowed_value ->
-            (* Move and continue *)
-            let destp = mk_place_from_var_id E.VarId.zero in
-            assign_to_place config borrowed_value destp cf
-      in
-
-      (* Compose and apply *)
-      comp cf_borrow cf_move cf ctx
-  | _ -> raise (Failure "Inconsistent state")
-
-(** Auxiliary function - see {!eval_assumed_function_call} *)
-let eval_box_deref_concrete (config : C.config) (generics : T.egeneric_args) :
-    cm_fun =
-  let is_mut = false in
-  eval_box_deref_mut_or_shared_concrete config generics is_mut
-
-(** Auxiliary function - see {!eval_assumed_function_call} *)
-let eval_box_deref_mut_concrete (config : C.config) (generics : T.egeneric_args)
-    : cm_fun =
-  let is_mut = true in
-  eval_box_deref_mut_or_shared_concrete config generics is_mut
-
 (** Auxiliary function - see {!eval_assumed_function_call}.
 
     [Box::free] is not handled the same way as the other assumed functions:
@@ -574,11 +497,6 @@ let eval_box_free (config : C.config) (generics : T.egeneric_args)
       (* Continue *)
       cc cf ctx
   | _ -> raise (Failure "Inconsistent state")
-
-(** Auxiliary function - see {!eval_assumed_function_call} *)
-let eval_vec_function_concrete (_config : C.config) (_fid : A.assumed_fun_id)
-    (_generics : T.egeneric_args) : cm_fun =
- fun _cf _ctx -> raise Unimplemented
 
 (** Evaluate a non-local function call in concrete mode *)
 let eval_assumed_function_call_concrete (config : C.config)
@@ -636,18 +554,12 @@ let eval_assumed_function_call_concrete (config : C.config)
          * access to a body. *)
         let cf_eval_body : cm_fun =
           match fid with
-          | Replace -> eval_replace_concrete config generics
           | BoxNew -> eval_box_new_concrete config generics
-          | BoxDeref -> eval_box_deref_concrete config generics
-          | BoxDerefMut -> eval_box_deref_mut_concrete config generics
           | BoxFree ->
               (* Should have been treated above *) raise (Failure "Unreachable")
-          | VecNew | VecPush | VecInsert | VecLen | VecIndex | VecIndexMut ->
-              eval_vec_function_concrete config fid generics
           | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
-          | ArrayToSliceMut | ArraySubsliceShared | ArraySubsliceMut
-          | ArrayRepeat | SliceIndexShared | SliceIndexMut | SliceSubsliceShared
-          | SliceSubsliceMut | SliceLen ->
+          | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
+          | SliceLen ->
               raise (Failure "Unimplemented")
         in
 
@@ -1531,7 +1443,7 @@ and eval_assumed_function_call_symbolic (config : C.config)
             (* There shouldn't be any reference to Self *)
             let tr_self = T.UnknownTrait __FUNCTION__ in
             instantiate_fun_sig ctx generics tr_self
-              (Assumed.get_assumed_sig fid)
+              (Assumed.get_assumed_fun_sig fid)
       in
 
       (* Evaluate the function call *)

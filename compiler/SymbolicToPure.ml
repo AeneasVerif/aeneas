@@ -405,8 +405,6 @@ let rec translate_sty (ty : T.sty) : ty =
           mk_simpl_tuple_ty generics.types
       | T.Assumed aty -> (
           match aty with
-          | T.Vec -> Adt (Assumed Vec, generics)
-          | T.Option -> Adt (Assumed Option, generics)
           | T.Box -> (
               (* Eliminate the boxes *)
               match generics.types with
@@ -418,8 +416,7 @@ let rec translate_sty (ty : T.sty) : ty =
               )
           | T.Array -> Adt (Assumed Array, generics)
           | T.Slice -> Adt (Assumed Slice, generics)
-          | T.Str -> Adt (Assumed Str, generics)
-          | T.Range -> Adt (Assumed Range, generics)))
+          | T.Str -> Adt (Assumed Str, generics)))
   | TypeVar vid -> TypeVar vid
   | Literal ty -> Literal ty
   | Never -> raise (Failure "Unreachable")
@@ -510,12 +507,9 @@ let translate_type_id (id : T.type_id) : type_id =
   | T.Assumed aty ->
       let aty =
         match aty with
-        | T.Vec -> Vec
-        | T.Option -> Option
         | T.Array -> Array
         | T.Slice -> Slice
         | T.Str -> Str
-        | T.Range -> Range
         | T.Box ->
             (* Boxes have to be eliminated: this type id shouldn't
                be translated *)
@@ -534,8 +528,7 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
       let t_generics = translate_fwd_generic_args type_infos generics in
       (* Eliminate boxes and simplify tuples *)
       match type_id with
-      | AdtId _
-      | T.Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
+      | AdtId _ | T.Assumed (T.Array | T.Slice | T.Str) ->
           (* No general parametricity for now *)
           assert (
             not
@@ -610,8 +603,7 @@ let rec translate_back_ty (type_infos : TA.type_infos)
   match ty with
   | T.Adt (type_id, generics) -> (
       match type_id with
-      | T.AdtId _
-      | Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
+      | T.AdtId _ | Assumed (T.Array | T.Slice | T.Str) ->
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows type_infos ty));
           let type_id = translate_type_id type_id in
@@ -815,7 +807,7 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
   | FunId (Assumed aid) ->
       assert (lid = None);
       {
-        can_fail = Assumed.assumed_can_fail aid;
+        can_fail = Assumed.assumed_fun_can_fail aid;
         stateful_group = false;
         stateful = false;
         can_diverge = false;
@@ -1221,9 +1213,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* For now, only tuples can contain borrows *)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | T.AdtId _
-        | T.Assumed
-            (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
+        | T.AdtId _ | T.Assumed (T.Box | T.Array | T.Slice | T.Str) ->
             assert (field_values = []);
             None
         | T.Tuple ->
@@ -1368,9 +1358,7 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
          * vector value upon visiting the "abstraction borrow" node *)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | T.AdtId _
-        | T.Assumed
-            (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
+        | T.AdtId _ | T.Assumed (T.Box | T.Array | T.Slice | T.Str) ->
             assert (field_values = []);
             (ctx, None)
         | T.Tuple ->
@@ -2441,17 +2429,12 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
         (mk_typed_pattern_from_var var None)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
-  | T.Assumed (T.Vec | T.Array | T.Slice | T.Str) ->
+  | T.Assumed (T.Array | T.Slice | T.Str) ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
       raise (Failure "Attempt to expand a non-expandable value")
-  | T.Assumed Range -> raise (Failure "Unimplemented")
-  | T.Assumed T.Option ->
-      (* We shouldn't get there in the "one-branch" case: options have
-       * two variants *)
-      raise (Failure "Unreachable")
 
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)

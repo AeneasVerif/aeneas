@@ -447,7 +447,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               fields_with_types
         (* Assumed type case *)
         | V.Adt av, T.Adt (T.Assumed aty_id, generics) -> (
-            assert (av.V.variant_id = None || aty_id = T.Option);
+            assert (av.V.variant_id = None);
             match
               ( aty_id,
                 av.V.field_values,
@@ -456,19 +456,8 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 generics.const_generics )
             with
             (* Box *)
-            | T.Box, [ inner_value ], [], [ inner_ty ], []
-            | T.Option, [ inner_value ], [], [ inner_ty ], [] ->
+            | T.Box, [ inner_value ], [], [ inner_ty ], [] ->
                 assert (inner_value.V.ty = inner_ty)
-            | T.Option, _, [], [ _ ], [] ->
-                (* Option::None: nothing to check *)
-                ()
-            | T.Vec, fvs, [], [ vec_ty ], [] ->
-                List.iter
-                  (fun (v : V.typed_value) -> assert (v.ty = vec_ty))
-                  fvs
-            | T.Range, [ v0; v1 ], [], [ inner_ty ], [] ->
-                assert (v0.V.ty = inner_ty);
-                assert (v1.V.ty = inner_ty)
             | T.Array, inner_values, _, [ inner_ty ], [ cg ] ->
                 (* *)
                 assert (

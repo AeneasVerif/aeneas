@@ -142,10 +142,10 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
   | V.Adt av ->
       (* Sanity check *)
       (match v.V.ty with
-      | T.Adt (T.Assumed (T.Box | Vec), _) ->
+      | T.Adt (T.Assumed T.Box, _) ->
           raise (Failure "Can't copy an assumed value other than Option")
       | T.Adt (T.AdtId _, _) -> assert allow_adt_copy
-      | T.Adt ((T.Assumed Option | T.Tuple), _) -> () (* Ok *)
+      | T.Adt (T.Tuple, _) -> () (* Ok *)
       | T.Adt
           ( T.Assumed (Slice | T.Array),
             {
@@ -722,70 +722,38 @@ let eval_rvalue_aggregate (config : C.config)
    fun ctx ->
     (* Match on the aggregate kind *)
     match aggregate_kind with
-    | E.AggregatedTuple ->
-        let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
-        let v = V.Adt { variant_id = None; field_values = values } in
-        let generics = TypesUtils.mk_generic_args [] tys [] [] in
-        let ty = T.Adt (T.Tuple, generics) in
-        let aggregated : V.typed_value = { V.value = v; ty } in
-        (* Call the continuation *)
-        cf aggregated ctx
-    | E.AggregatedOption (variant_id, ty) ->
-        (* Sanity check *)
-        if variant_id = T.option_none_id then assert (values = [])
-        else if variant_id = T.option_some_id then
-          assert (List.length values = 1)
-        else raise (Failure "Unreachable");
-        (* Construt the value *)
-        let generics = TypesUtils.mk_generic_args [] [ ty ] [] [] in
-        let aty = T.Adt (T.Assumed T.Option, generics) in
-        let av : V.adt_value =
-          { V.variant_id = Some variant_id; V.field_values = values }
-        in
-        let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
-        (* Call the continuation *)
-        cf aggregated ctx
-    | E.AggregatedAdt (def_id, opt_variant_id, generics) ->
-        (* Sanity checks *)
-        let type_decl = C.ctx_lookup_type_decl ctx def_id in
-        assert (
-          List.length type_decl.generics.regions = List.length generics.regions);
-        let expected_field_types =
-          Assoc.ctx_adt_get_inst_norm_field_etypes ctx def_id opt_variant_id
-            generics
-        in
-        assert (
-          expected_field_types
-          = List.map (fun (v : V.typed_value) -> v.V.ty) values);
-        (* Construct the value *)
-        let av : V.adt_value =
-          { V.variant_id = opt_variant_id; V.field_values = values }
-        in
-        let aty = T.Adt (T.AdtId def_id, generics) in
-        let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
-        (* Call the continuation *)
-        cf aggregated ctx
-    | E.AggregatedRange ety ->
-        (* There should be two fields exactly *)
-        let v0, v1 =
-          match values with
-          | [ v0; v1 ] -> (v0, v1)
-          | _ -> raise (Failure "Unreachable")
-        in
-        (* Ranges are parametric over the type of indices. For now we only
-           support scalars, which can be of any type *)
-        assert (literal_type_is_integer (ty_as_literal ety));
-        assert (v0.ty = ety);
-        assert (v1.ty = ety);
-        (* Construct the value *)
-        let av : V.adt_value =
-          { V.variant_id = None; V.field_values = values }
-        in
-        let generics = TypesUtils.mk_generic_args_from_types [ ety ] in
-        let aty = T.Adt (T.Assumed T.Range, generics) in
-        let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
-        (* Call the continuation *)
-        cf aggregated ctx
+    | E.AggregatedAdt (type_id, opt_variant_id, generics) -> (
+        match type_id with
+        | Tuple ->
+            let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
+            let v = V.Adt { variant_id = None; field_values = values } in
+            let generics = TypesUtils.mk_generic_args [] tys [] [] in
+            let ty = T.Adt (T.Tuple, generics) in
+            let aggregated : V.typed_value = { V.value = v; ty } in
+            (* Call the continuation *)
+            cf aggregated ctx
+        | AdtId def_id ->
+            (* Sanity checks *)
+            let type_decl = C.ctx_lookup_type_decl ctx def_id in
+            assert (
+              List.length type_decl.generics.regions
+              = List.length generics.regions);
+            let expected_field_types =
+              Assoc.ctx_adt_get_inst_norm_field_etypes ctx def_id opt_variant_id
+                generics
+            in
+            assert (
+              expected_field_types
+              = List.map (fun (v : V.typed_value) -> v.V.ty) values);
+            (* Construct the value *)
+            let av : V.adt_value =
+              { V.variant_id = opt_variant_id; V.field_values = values }
+            in
+            let aty = T.Adt (T.AdtId def_id, generics) in
+            let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
+            (* Call the continuation *)
+            cf aggregated ctx
+        | Assumed _ -> raise (Failure "Unreachable"))
     | E.AggregatedArray (ety, cg) -> (
         (* Sanity check: all the values have the proper type *)
         assert (List.for_all (fun (v : V.typed_value) -> v.V.ty = ety) values);

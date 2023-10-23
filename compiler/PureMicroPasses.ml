@@ -1513,7 +1513,7 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
     function calls, and when translating end abstractions. Here, we can do
     something simpler, in one micro-pass.
  *)
-let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
@@ -1522,30 +1522,42 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       method! visit_texpression env e =
         match opt_destruct_function_call e with
         | Some (fun_id, _tys, args) -> (
+            (* Below, when dealing with the arguments: we consider the very
+             * general case, where functions could be boxed (meaning we
+             * could have: [box_new f x])
+             * *)
             match fun_id with
             | Fun (FromLlbc (FunId (Assumed aid), _lp_id, rg_id)) -> (
-                (* Below, when dealing with the arguments: we consider the very
-                 * general case, where functions could be boxed (meaning we
-                 * could have: [box_new f x])
-                 * *)
                 match (aid, rg_id) with
                 | BoxNew, _ ->
                     assert (rg_id = None);
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
-                | BoxDeref, None ->
+                | BoxFree, _ ->
+                    assert (args = []);
+                    mk_unit_rvalue
+                | ( ( SliceIndexShared | SliceIndexMut | ArrayIndexShared
+                    | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
+                    | ArrayRepeat | SliceLen ),
+                    _ ) ->
+                    super#visit_texpression env e)
+            | Fun (FromLlbc (FunId (Regular fid), _lp_id, rg_id)) -> (
+                (* Lookup the function name *)
+                let def = FunDeclId.Map.find fid ctx.fun_ctx.fun_decls in
+                match (Names.name_to_string def.name, rg_id) with
+                | "alloc::box::Boxed::deref", None ->
                     (* [Box::deref] forward is the identity *)
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
-                | BoxDeref, Some _ ->
+                | "alloc::box::Boxed::deref", Some _ ->
                     (* [Box::deref] backward is [()] (doesn't give back anything) *)
                     assert (args = []);
                     mk_unit_rvalue
-                | BoxDerefMut, None ->
+                | "alloc::box::Boxed::deref_mut", None ->
                     (* [Box::deref_mut] forward is the identity *)
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
-                | BoxDerefMut, Some _ ->
+                | "alloc::box::Boxed::deref_mut", Some _ ->
                     (* [Box::deref_mut] back is almost the identity:
                      * let box_deref_mut (x_init : t) (x_back : t) : t = x_back
                      * *)
@@ -1555,17 +1567,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                       | _ -> raise (Failure "Unreachable")
                     in
                     mk_apps arg args
-                | BoxFree, _ ->
-                    assert (args = []);
-                    mk_unit_rvalue
-                | ( ( Replace | VecNew | VecPush | VecInsert | VecLen | VecIndex
-                    | VecIndexMut | ArraySubsliceShared | ArraySubsliceMut
-                    | SliceIndexShared | SliceIndexMut | SliceSubsliceShared
-                    | SliceSubsliceMut | ArrayIndexShared | ArrayIndexMut
-                    | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat
-                    | SliceLen ),
-                    _ ) ->
-                    super#visit_texpression env e)
+                | _ -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end

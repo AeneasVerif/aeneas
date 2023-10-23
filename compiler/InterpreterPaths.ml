@@ -96,7 +96,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
   | pe :: p' -> (
       (* Match on the projection element and the value *)
       match (pe, v.V.value, v.V.ty) with
-      | ( Field (((ProjAdt (_, _) | ProjOption _) as proj_kind), field_id),
+      | ( Field ((ProjAdt (_, _) as proj_kind), field_id),
           V.Adt adt,
           T.Adt (type_id, _) ) -> (
           (* Check consistency *)
@@ -104,8 +104,6 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
           | ProjAdt (def_id, opt_variant_id), T.AdtId def_id' ->
               assert (def_id = def_id');
               assert (opt_variant_id = adt.variant_id)
-          | ProjOption variant_id, T.Assumed T.Option ->
-              assert (Some variant_id = adt.variant_id)
           | _ -> raise (Failure "Unreachable"));
           (* Actually project *)
           let fv = T.FieldId.nth adt.field_values field_id in
@@ -136,7 +134,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               Ok (ctx, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *))
-      | Field ((ProjAdt (_, _) | ProjTuple _ | ProjOption _), _), V.Bottom, _ ->
+      | Field ((ProjAdt (_, _) | ProjTuple _), _), V.Bottom, _ ->
           Error (FailBottom (1 + List.length p', pe, v.ty))
       (* Symbolic value: needs to be expanded *)
       | _, Symbolic sp, _ ->
@@ -376,20 +374,6 @@ let compute_expanded_bottom_adt_value (ctx : C.eval_ctx)
   let ty = T.Adt (T.AdtId def_id, generics) in
   { V.value = av; V.ty }
 
-let compute_expanded_bottom_option_value (variant_id : T.VariantId.id)
-    (param_ty : T.ety) : V.typed_value =
-  (* Note that the variant can be [Some] or [None]: we expand bottom values
-   * when writing to fields or setting discriminants *)
-  let field_values =
-    if variant_id = T.option_some_id then [ mk_bottom param_ty ]
-    else if variant_id = T.option_none_id then []
-    else raise (Failure "Unreachable")
-  in
-  let av = V.Adt { variant_id = Some variant_id; field_values } in
-  let generics = TypesUtils.mk_generic_args [] [ param_ty ] [] [] in
-  let ty = T.Adt (T.Assumed T.Option, generics) in
-  { V.value = av; ty }
-
 let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
     V.typed_value =
   (* Generate the field values *)
@@ -451,17 +435,6 @@ let expand_bottom_value_from_projection (access : access_kind) (p : E.place)
         T.Adt (T.AdtId def_id', generics) ) ->
         assert (def_id = def_id');
         compute_expanded_bottom_adt_value ctx def_id opt_variant_id generics
-    (* Option *)
-    | ( Field (ProjOption variant_id, _),
-        T.Adt
-          ( T.Assumed T.Option,
-            {
-              T.regions = [];
-              types = [ ty ];
-              const_generics = [];
-              trait_refs = [];
-            } ) ) ->
-        compute_expanded_bottom_option_value variant_id ty
     (* Tuples *)
     | ( Field (ProjTuple arity, _),
         T.Adt

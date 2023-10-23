@@ -5,7 +5,7 @@ open TranslateCore
 module C = Contexts
 module RegionVarId = T.RegionVarId
 module F = Format
-open ExtractAssumed
+open ExtractBuiltin
 
 (** The local logger *)
 let log = L.pure_to_extract_log
@@ -803,15 +803,11 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             if variant_id = error_failure_id then "@error::Failure"
             else if variant_id = error_out_of_fuel_id then "@error::OutOfFuel"
             else raise (Failure "Unreachable")
-        | Assumed Option ->
-            if variant_id = option_some_id then "@option::Some"
-            else if variant_id = option_none_id then "@option::None"
-            else raise (Failure "Unreachable")
         | Assumed Fuel ->
             if variant_id = fuel_zero_id then "@fuel::0"
             else if variant_id = fuel_succ_id then "@fuel::Succ"
             else raise (Failure "Unreachable")
-        | Assumed (State | Vec | Array | Slice | Str | Range) ->
+        | Assumed (State | Array | Slice | Str) ->
             raise
               (Failure
                  ("Unreachable: variant id ("
@@ -830,9 +826,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let field_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed
-            ( State | Result | Error | Fuel | Option | Vec | Array | Slice | Str
-            | Range ) ->
+        | Assumed (State | Result | Error | Fuel | Array | Slice | Str) ->
             (* We can't directly have access to the fields of those types *)
             raise (Failure "Unreachable")
         | AdtId id -> (
@@ -1186,65 +1180,6 @@ let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
   let ctx, tcs = ctx_add_local_trait_clauses trait_clauses ctx in
   (ctx, tys, cgs, tcs)
 
-let ctx_add_type_decl_struct (def : type_decl) (ctx : extraction_ctx) :
-    extraction_ctx * string =
-  assert (match def.kind with Struct _ -> true | _ -> false);
-  let is_opaque = false in
-  let cons_name = ctx.fmt.struct_constructor def.name in
-  let ctx = ctx_add is_opaque (StructId (AdtId def.def_id)) cons_name ctx in
-  (ctx, cons_name)
-
-let ctx_add_type_decl (def : type_decl) (ctx : extraction_ctx) : extraction_ctx
-    =
-  let is_opaque = def.kind = Opaque in
-  let def_name = ctx.fmt.type_name def.name in
-  let ctx = ctx_add is_opaque (TypeId (AdtId def.def_id)) def_name ctx in
-  ctx
-
-let ctx_add_field (def : type_decl) (field_id : FieldId.id) (field : field)
-    (ctx : extraction_ctx) : extraction_ctx * string =
-  let is_opaque = false in
-  let name = ctx.fmt.field_name def.name field_id field.field_name in
-  let ctx = ctx_add is_opaque (FieldId (AdtId def.def_id, field_id)) name ctx in
-  (ctx, name)
-
-let ctx_add_fields (def : type_decl) (fields : (FieldId.id * field) list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
-  List.fold_left_map
-    (fun ctx (vid, v) -> ctx_add_field def vid v ctx)
-    ctx fields
-
-let ctx_add_variant (def : type_decl) (variant_id : VariantId.id)
-    (variant : variant) (ctx : extraction_ctx) : extraction_ctx * string =
-  let is_opaque = false in
-  let name = ctx.fmt.variant_name def.name variant.variant_name in
-  (* Add the type name prefix for Lean *)
-  let name =
-    if !Config.backend = Lean then
-      let type_name = ctx.fmt.type_name def.name in
-      type_name ^ "." ^ name
-    else name
-  in
-  let ctx =
-    ctx_add is_opaque (VariantId (AdtId def.def_id, variant_id)) name ctx
-  in
-  (ctx, name)
-
-let ctx_add_variants (def : type_decl)
-    (variants : (VariantId.id * variant) list) (ctx : extraction_ctx) :
-    extraction_ctx * string list =
-  List.fold_left_map
-    (fun ctx (vid, v) -> ctx_add_variant def vid v ctx)
-    ctx variants
-
-let ctx_add_struct (def : type_decl) (ctx : extraction_ctx) :
-    extraction_ctx * string =
-  assert (match def.kind with Struct _ -> true | _ -> false);
-  let is_opaque = false in
-  let name = ctx.fmt.struct_constructor def.name in
-  let ctx = ctx_add is_opaque (StructId (AdtId def.def_id)) name ctx in
-  (ctx, name)
-
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let is_opaque = false in
@@ -1277,7 +1212,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
      to a custom definition in our standard library (for instance, happens
      with "core::num::usize::MAX") *)
   let sname = name_to_simple_name def.name in
-  match SimpleNameMap.find_opt sname assumed_globals_map with
+  match SimpleNameMap.find_opt sname builtin_globals_map with
   | Some name ->
       (* Yes: register the custom binding *)
       ctx_add is_opaque decl name ctx

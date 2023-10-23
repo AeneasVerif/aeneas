@@ -305,19 +305,7 @@ let ctx_adt_value_get_instantiated_field_rtypes (ctx : C.eval_ctx)
       generics.types
   | T.Assumed aty -> (
       match aty with
-      | T.Box | T.Vec ->
-          assert (generics.regions = []);
-          assert (List.length generics.types = 1);
-          assert (generics.const_generics = []);
-          generics.types
-      | T.Option ->
-          assert (generics.regions = []);
-          assert (List.length generics.types = 1);
-          assert (generics.const_generics = []);
-          if adt.V.variant_id = Some T.option_some_id then generics.types
-          else if adt.V.variant_id = Some T.option_none_id then []
-          else raise (Failure "Unreachable")
-      | T.Range ->
+      | T.Box ->
           assert (generics.regions = []);
           assert (List.length generics.types = 1);
           assert (generics.const_generics = []);

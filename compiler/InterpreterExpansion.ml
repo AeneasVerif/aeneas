@@ -241,17 +241,6 @@ let compute_expanded_symbolic_non_assumed_adt_value (expand_enumerations : bool)
   (* Initialize all the expanded values of all the variants *)
   List.map initialize variants_fields_types
 
-(** Compute the expansion of an Option value.
- *)
-let compute_expanded_symbolic_option_value (expand_enumerations : bool)
-    (kind : V.sv_kind) (ty : T.rty) : V.symbolic_expansion list =
-  assert expand_enumerations;
-  let some_se =
-    V.SeAdt (Some T.option_some_id, [ mk_fresh_symbolic_value kind ty ])
-  in
-  let none_se = V.SeAdt (Some T.option_none_id, []) in
-  [ none_se; some_se ]
-
 let compute_expanded_symbolic_tuple_value (kind : V.sv_kind)
     (field_types : T.rty list) : V.symbolic_expansion =
   (* Generate the field values *)
@@ -286,8 +275,6 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
         def_id generics ctx
   | T.Tuple, [], _ ->
       [ compute_expanded_symbolic_tuple_value kind generics.types ]
-  | T.Assumed T.Option, [], [ ty ] ->
-      compute_expanded_symbolic_option_value expand_enumerations kind ty
   | T.Assumed T.Box, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value kind boxed_ty ]
   | _ ->
@@ -704,7 +691,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
         | T.Adt ((Tuple | Assumed Box), _) | T.Ref (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config sv None
-        | T.Adt (Assumed (Vec | Option | Array | Slice | Str | Range), _) ->
+        | T.Adt (Assumed (Array | Slice | Str), _) ->
             (* We can't expand those *)
             raise
               (Failure

@@ -46,18 +46,7 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           if variant_id = fuel_zero_id then []
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
           else raise (Failure "Unreachable: improper variant id for fuel type")
-      | Option ->
-          let ty = Collections.List.to_cons_nil generics.types in
-          let variant_id = Option.get variant_id in
-          if variant_id = option_some_id then [ ty ]
-          else if variant_id = option_none_id then []
-          else
-            raise (Failure "Unreachable: improper variant id for option type")
-      | Range ->
-          let ty = Collections.List.to_cons_nil generics.types in
-          assert (variant_id = None);
-          [ ty; ty ]
-      | Vec | Array | Slice | Str ->
+      | Array | Slice | Str ->
           (* Array: when not symbolic values (for instance, because of aggregates),
              the array expressions are introduced as struct updates *)
           raise (Failure "Attempting to access the fields of an opaque type"))

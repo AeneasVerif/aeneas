@@ -88,7 +88,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                   can_diverge := !can_diverge || info.can_diverge
             | FunId (Assumed id) ->
                 (* None of the assumed functions can diverge nor are considered stateful *)
-                can_fail := !can_fail || Assumed.assumed_can_fail id
+                can_fail := !can_fail || Assumed.assumed_fun_can_fail id
             | TraitMethod _ ->
                 (* We consider trait functions can fail, diverge, and are not stateful *)
                 can_fail := true;

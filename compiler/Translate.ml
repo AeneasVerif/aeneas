@@ -297,9 +297,11 @@ let translate_crate_to_pure (crate : A.crate) :
   (* Translate all the function *signatures* *)
   let assumed_sigs =
     List.map
-      (fun (id, sg, _, _) ->
-        (E.Assumed id, List.map (fun _ -> None) (sg : A.fun_sig).inputs, sg))
-      Assumed.assumed_infos
+      (fun (info : Assumed.assumed_fun_info) ->
+        ( E.Assumed info.fun_id,
+          List.map (fun _ -> None) info.fun_sig.inputs,
+          info.fun_sig ))
+      Assumed.assumed_fun_infos
   in
   let local_sigs =
     List.map
@@ -425,11 +427,15 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
         (true, kind)
   in
   (* Extract, if the config instructs to do so (depending on whether the type
-   * is opaque or not) *)
-  if
+     is opaque or not). Remark: we don't check if the definitions are builtin
+     here but in the function [export_types_group]: the reason is that if one
+     definition in the group is builtin, then we must check that all the
+     definitions are marked builtin *)
+  let extract =
     (is_opaque && config.extract_opaque)
     || ((not is_opaque) && config.extract_transparent)
-  then (
+  in
+  if extract then (
     if extract_decl then
       Extract.extract_type_decl ctx fmt type_decl_group kind def;
     if extract_extra_info then
@@ -464,41 +470,58 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     List.map (fun id -> Pure.TypeDeclId.Map.find id ctx.trans_types) ids
   in
 
-  (* Extract the type declarations.
+  (* Check if the definition are builtin - if yes they must be ignored.
+     Note that if one definition in the group is builtin, then all the
+     definitions must be builtin *)
+  let builtin =
+    let open ExtractBuiltin in
+    let types_map = builtin_types_map () in
+    List.map
+      (fun (def : Pure.type_decl) ->
+        let sname = name_to_simple_name def.name in
+        SimpleNameMap.find_opt sname types_map <> None)
+      defs
+  in
 
-     Because some declaration groups are delimited, we wrap the declarations
-     between [{start,end}_type_decl_group].
+  if List.exists (fun b -> b) builtin then
+    (* Sanity check *)
+    assert (List.for_all (fun b -> b) builtin)
+  else (
+    (* Extract the type declarations.
 
-     Ex.:
-     ====
-     When targeting HOL4, the calls to [{start,end}_type_decl_group] would generate
-     the [Datatype] and [End] delimiters in the snippet of code below:
+       Because some declaration groups are delimited, we wrap the declarations
+       between [{start,end}_type_decl_group].
 
-     {[
-       Datatype:
-         tree =
-           TLeaf 'a
-         | TNode node ;
+       Ex.:
+       ====
+       When targeting HOL4, the calls to [{start,end}_type_decl_group] would generate
+       the [Datatype] and [End] delimiters in the snippet of code below:
 
-         node =
-           Node (tree list)
-       End
-     ]}
-  *)
-  Extract.start_type_decl_group ctx fmt is_rec defs;
-  List.iteri
-    (fun i def ->
-      let kind = kind_from_index i in
-      export_type_decl kind def)
-    defs;
-  Extract.end_type_decl_group fmt is_rec defs;
+       {[
+         Datatype:
+           tree =
+             TLeaf 'a
+           | TNode node ;
 
-  (* Export the extra information (ex.: [Arguments] instructions in Coq) *)
-  List.iteri
-    (fun i def ->
-      let kind = kind_from_index i in
-      export_type_extra_info kind def)
-    defs
+           node =
+             Node (tree list)
+         End
+       ]}
+    *)
+    Extract.start_type_decl_group ctx fmt is_rec defs;
+    List.iteri
+      (fun i def ->
+        let kind = kind_from_index i in
+        export_type_decl kind def)
+      defs;
+    Extract.end_type_decl_group fmt is_rec defs;
+
+    (* Export the extra information (ex.: [Arguments] instructions in Coq) *)
+    List.iteri
+      (fun i def ->
+        let kind = kind_from_index i in
+        export_type_extra_info kind def)
+      defs)
 
 (** Export a global declaration.
 
@@ -520,12 +543,12 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     && (((not is_opaque) && config.extract_transparent)
        || (is_opaque && config.extract_opaque))
   in
-  (* Check if it is an assumed global - if yes, we ignore it because we
+  (* Check if it is a builtin global - if yes, we ignore it because we
      map the definition to one in the standard library *)
-  let open ExtractAssumed in
+  let open ExtractBuiltin in
   let sname = name_to_simple_name global.name in
   let extract =
-    extract && SimpleNameMap.find_opt sname assumed_globals_map = None
+    extract && SimpleNameMap.find_opt sname builtin_globals_map = None
   in
   if extract then
     (* We don't wrap global declaration groups between calls to functions
