@@ -1,5 +1,8 @@
 (** This file declares external identifiers that we catch to map them to
-    definitions coming from the standard libraries in our backends. *)
+    definitions coming from the standard libraries in our backends.
+
+    TODO: there misses trait **implementations**
+ *)
 
 open Names
 open Config
@@ -331,20 +334,20 @@ let mk_builtin_funs_map () =
 
 let builtin_funs_map () = mk_memoized mk_builtin_funs_map
 
-type builtin_trait_info = {
+type builtin_trait_decl_info = {
   rust_name : string;
   extract_name : string;
   parent_clauses : string list;
   consts : (string * string) list;
-  types : (string * string * string list) list;
+  types : (string * (string * string list)) list;
       (** Every type has:
           - a Rust name
           - an extraction name
           - a list of clauses *)
-  funs : (string * Types.RegionGroupId.id option * string) list;
+  funs : (string * (Types.RegionGroupId.id option * string) list) list;
 }
 
-let builtin_traits () =
+let builtin_trait_decls_info () =
   let rg0 = Some Types.RegionGroupId.zero in
   [
     {
@@ -359,18 +362,20 @@ let builtin_traits () =
       types =
         [
           ( "Target",
-            (match !backend with
-            | Coq | FStar | HOL4 -> "core_ops_deref_Deref_Target"
-            | Lean -> "Target"),
-            [] );
+            ( (match !backend with
+              | Coq | FStar | HOL4 -> "core_ops_deref_Deref_Target"
+              | Lean -> "Target"),
+              [] ) );
         ];
       funs =
         [
           ( "deref",
-            None,
-            match !backend with
-            | Coq | FStar | HOL4 -> "core_ops_deref_Deref_deref"
-            | Lean -> "deref" );
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_ops_deref_Deref_deref"
+                | Lean -> "deref" );
+            ] );
         ];
     };
     {
@@ -391,15 +396,16 @@ let builtin_traits () =
       funs =
         [
           ( "deref_mut",
-            None,
-            match !backend with
-            | Coq | FStar | HOL4 -> "core_ops_deref_DerefMut_deref_mut"
-            | Lean -> "deref_mut" );
-          ( "deref_mut",
-            rg0,
-            match !backend with
-            | Coq | FStar | HOL4 -> "core_ops_deref_DerefMut_deref_mut_back"
-            | Lean -> "deref_mut_back" );
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_ops_deref_DerefMut_deref_mut"
+                | Lean -> "deref_mut" );
+              ( rg0,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_ops_deref_DerefMut_deref_mut_back"
+                | Lean -> "deref_mut_back" );
+            ] );
         ];
     };
     {
@@ -414,18 +420,20 @@ let builtin_traits () =
       types =
         [
           ( "Output",
-            (match !backend with
-            | Coq | FStar | HOL4 -> "core_ops_index_Index_Output"
-            | Lean -> "Output"),
-            [] );
+            ( (match !backend with
+              | Coq | FStar | HOL4 -> "core_ops_index_Index_Output"
+              | Lean -> "Output"),
+              [] ) );
         ];
       funs =
         [
           ( "index",
-            None,
-            match !backend with
-            | Coq | FStar | HOL4 -> "core_ops_index_Index_index"
-            | Lean -> "index" );
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_ops_index_Index_index"
+                | Lean -> "index" );
+            ] );
         ];
     };
     {
@@ -446,23 +454,24 @@ let builtin_traits () =
       funs =
         [
           ( "index_mut",
-            None,
-            match !backend with
-            | Coq | FStar | HOL4 -> "core_ops_index_IndexMut_mut"
-            | Lean -> "index_mut" );
-          ( "index_mut",
-            rg0,
-            match !backend with
-            | Coq | FStar | HOL4 -> "core_ops_index_IndexMut_mut_back"
-            | Lean -> "index_mut_back" );
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_ops_index_IndexMut_mut"
+                | Lean -> "index_mut" );
+              ( rg0,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_ops_index_IndexMut_mut_back"
+                | Lean -> "index_mut_back" );
+            ] );
         ];
     };
   ]
 
-let mk_builtin_traits_map () =
+let mk_builtin_trait_decls_map () =
   SimpleNameMap.of_list
     (List.map
        (fun info -> (string_to_simple_name info.rust_name, info))
-       (builtin_traits ()))
+       (builtin_trait_decls_info ()))
 
-let builtin_traits_map () = mk_memoized mk_builtin_traits_map
+let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map

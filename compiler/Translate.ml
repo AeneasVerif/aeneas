@@ -731,8 +731,13 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) : unit =
   let trait_decl = T.TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls in
-  let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
-  Extract.extract_trait_decl ctx fmt trait_decl
+  (* Check if the trait declaration is builtin, in which case we ignore it *)
+  let open ExtractBuiltin in
+  let sname = name_to_simple_name trait_decl.name in
+  if SimpleNameMap.find_opt sname (builtin_trait_decls_map ()) = None then
+    let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
+    Extract.extract_trait_decl ctx fmt trait_decl
+  else ()
 
 (** Export a trait implementation. *)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)

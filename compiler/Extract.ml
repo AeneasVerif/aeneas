@@ -4062,64 +4062,234 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
       (* Add a break to insert lines between declarations *)
       F.pp_print_break fmt 0 0
 
-(** Register the names for one trait method item *)
-let extract_trait_decl_method_register_names (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (name : string) (id : fun_decl_id) :
+(** Similar to {!extract_trait_decl_register_names} *)
+let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl)
+    (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
     extraction_ctx =
-  (* We add one field per required forward/backward function *)
-  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
-
-  let register_fun ctx f = ctx_add_trait_method trait_decl name f.f ctx in
+  let is_opaque = false in
+  let generics = trait_decl.generics in
+  (* Compute the clause names *)
+  let clause_names =
+    match builtin_info with
+    | None ->
+        List.map
+          (fun (c : trait_clause) ->
+            let name = ctx.fmt.trait_parent_clause_name trait_decl c in
+            (* Add a prefix if necessary *)
+            let name =
+              if !Config.record_fields_short_names then name
+              else ctx.fmt.trait_decl_name trait_decl ^ name
+            in
+            (c.clause_id, name))
+          generics.trait_clauses
+    | Some info ->
+        List.map
+          (fun (c, name) -> (c.clause_id, name))
+          (List.combine generics.trait_clauses info.parent_clauses)
+  in
   (* Register the names *)
-  let funs = trans.fwd :: trans.backs in
-  List.fold_left register_fun ctx funs
+  List.fold_left
+    (fun ctx (cid, cname) ->
+      ctx_add is_opaque (TraitParentClauseId (trait_decl.def_id, cid)) cname ctx)
+    ctx clause_names
+
+(** Similar to {!extract_trait_decl_register_names} *)
+let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl)
+    (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
+    extraction_ctx =
+  let is_opaque = false in
+  let consts = trait_decl.consts in
+  (* Compute the names *)
+  let constant_names =
+    match builtin_info with
+    | None ->
+        List.map
+          (fun (item_name, _) ->
+            let name = ctx.fmt.trait_const_name trait_decl item_name in
+            (* Add a prefix if necessary *)
+            let name =
+              if !Config.record_fields_short_names then name
+              else ctx.fmt.trait_decl_name trait_decl ^ name
+            in
+            (item_name, name))
+          consts
+    | Some info ->
+        let const_map = StringMap.of_list info.consts in
+        List.map
+          (fun (item_name, _) ->
+            (item_name, StringMap.find item_name const_map))
+          consts
+  in
+  (* Register the names *)
+  List.fold_left
+    (fun ctx (item_name, name) ->
+      ctx_add is_opaque (TraitItemId (trait_decl.def_id, item_name)) name ctx)
+    ctx constant_names
+
+(** Similar to {!extract_trait_decl_register_names} *)
+let extract_trait_decl_type_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl)
+    (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
+    extraction_ctx =
+  let is_opaque = false in
+  let types = trait_decl.types in
+  (* Compute the names *)
+  let type_names =
+    match builtin_info with
+    | None ->
+        let compute_type_name (item_name : string) : string =
+          let type_name = ctx.fmt.trait_type_name trait_decl item_name in
+          if !Config.record_fields_short_names then type_name
+          else ctx.fmt.trait_decl_name trait_decl ^ type_name
+        in
+        let compute_clause_name (item_name : string) (clause : trait_clause) :
+            TraitClauseId.id * string =
+          let name =
+            ctx.fmt.trait_type_clause_name trait_decl item_name clause
+          in
+          (* Add a prefix if necessary *)
+          let name =
+            if !Config.record_fields_short_names then name
+            else ctx.fmt.trait_decl_name trait_decl ^ name
+          in
+          (clause.clause_id, name)
+        in
+        List.map
+          (fun (item_name, (item_clauses, _)) ->
+            (* Type name *)
+            let type_name = compute_type_name item_name in
+            (* Clause names *)
+            let clauses =
+              List.map (compute_clause_name item_name) item_clauses
+            in
+            (item_name, (type_name, clauses)))
+          types
+    | Some info ->
+        let type_map = StringMap.of_list info.types in
+        List.map
+          (fun (item_name, (item_clauses, _)) ->
+            let type_name, clauses_info = StringMap.find item_name type_map in
+            let clauses =
+              List.map
+                (fun (clause, clause_name) -> (clause.clause_id, clause_name))
+                (List.combine item_clauses clauses_info)
+            in
+            (item_name, (type_name, clauses)))
+          types
+  in
+  (* Register the names *)
+  List.fold_left
+    (fun ctx (item_name, (type_name, clauses)) ->
+      let ctx =
+        ctx_add is_opaque
+          (TraitItemId (trait_decl.def_id, item_name))
+          type_name ctx
+      in
+      List.fold_left
+        (fun ctx (clause_id, clause_name) ->
+          ctx_add is_opaque
+            (TraitItemClauseId (trait_decl.def_id, item_name, clause_id))
+            clause_name ctx)
+        ctx clauses)
+    ctx type_names
+
+(** Similar to {!extract_trait_decl_register_names} *)
+let extract_trait_decl_method_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl)
+    (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
+    extraction_ctx =
+  let is_opaque = false in
+  let required_methods = trait_decl.required_methods in
+  (* Compute the names *)
+  let method_names =
+    (* We add one field per required forward/backward function *)
+    let get_funs_for_id (id : fun_decl_id) : fun_decl list =
+      let trans : pure_fun_translation = FunDeclId.Map.find id ctx.trans_funs in
+      List.map (fun f -> f.f) (trans.fwd :: trans.backs)
+    in
+    match builtin_info with
+    | None ->
+        (* We add one field per required forward/backward function *)
+        let compute_item_names (item_name : string) (id : fun_decl_id) :
+            string * (RegionGroupId.id option * string) list =
+          let compute_fun_name (f : fun_decl) : RegionGroupId.id option * string
+              =
+            (* We do something special: we use the base name but remove everything
+               but the crate (because [get_name] removes it) and the last ident.
+               This allows us to reuse the [ctx_compute_fun_decl] function.
+            *)
+            let basename : name =
+              match (f.basename : name) with
+              | Ident crate :: name ->
+                  Ident crate :: [ Collections.List.last name ]
+              | _ -> raise (Failure "Unexpected")
+            in
+            let f = { f with basename } in
+            let trans = A.FunDeclId.Map.find f.def_id ctx.trans_funs in
+            let name = ctx_compute_fun_name trans f ctx in
+            (* Add a prefix if necessary *)
+            let name =
+              if !Config.record_fields_short_names then name
+              else ctx.fmt.trait_decl_name trait_decl ^ "_" ^ name
+            in
+            (f.back_id, name)
+          in
+          let funs = get_funs_for_id id in
+          (item_name, List.map compute_fun_name funs)
+        in
+        List.map (fun (name, id) -> compute_item_names name id) required_methods
+    | Some info ->
+        let funs_map = StringMap.of_list info.funs in
+        List.map
+          (fun (item_name, fun_id) ->
+            let info = StringMap.find item_name funs_map in
+            let trans_funs = get_funs_for_id fun_id in
+            let rg_with_name_list =
+              List.map
+                (fun (trans_fun : fun_decl) ->
+                  List.find (fun (rg, _) -> rg = trans_fun.back_id) info)
+                trans_funs
+            in
+            (item_name, rg_with_name_list))
+          required_methods
+  in
+  (* Register the names *)
+  List.fold_left
+    (fun ctx (item_name, funs) ->
+      (* We add one field per required forward/backward function *)
+      List.fold_left
+        (fun ctx (rg, fun_name) ->
+          ctx_add is_opaque
+            (TraitMethodId (trait_decl.def_id, item_name, rg))
+            fun_name ctx)
+        ctx funs)
+    ctx method_names
 
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_decl_register_names (ctx : extraction_ctx)
     (trait_decl : trait_decl) : extraction_ctx =
-  let {
-    def_id = _;
-    name = _;
-    generics;
-    preds = _;
-    all_trait_clauses = _;
-    consts;
-    types;
-    required_methods;
-    provided_methods = _;
-  } =
-    trait_decl
+  (* Lookup the information if this is a builtin trait *)
+  let open ExtractBuiltin in
+  let sname = name_to_simple_name trait_decl.name in
+  let builtin_info =
+    SimpleNameMap.find_opt sname (builtin_trait_decls_map ())
   in
   let ctx = ctx_add_trait_decl trait_decl ctx in
   (* Parent clauses *)
   let ctx =
-    List.fold_left
-      (fun ctx clause -> ctx_add_trait_parent_clause trait_decl clause ctx)
-      ctx generics.trait_clauses
+    extract_trait_decl_register_parent_clause_names ctx trait_decl builtin_info
   in
   (* Constants *)
   let ctx =
-    List.fold_left
-      (fun ctx (name, (_, _)) -> ctx_add_trait_const trait_decl name ctx)
-      ctx consts
+    extract_trait_decl_register_constant_names ctx trait_decl builtin_info
   in
   (* Types *)
-  let ctx =
-    List.fold_left
-      (fun ctx (name, (clauses, _)) ->
-        let ctx = ctx_add_trait_type trait_decl name ctx in
-        List.fold_left
-          (fun ctx clause ->
-            ctx_add_trait_type_clause trait_decl name clause ctx)
-          ctx clauses)
-      ctx types
-  in
+  let ctx = extract_trait_decl_type_names ctx trait_decl builtin_info in
   (* Required methods *)
-  List.fold_left
-    (fun ctx (name, id) ->
-      (* We add one field per required forward/backward function *)
-      extract_trait_decl_method_register_names ctx trait_decl name id)
-    ctx required_methods
+  let ctx = extract_trait_decl_method_names ctx trait_decl builtin_info in
+  ctx
 
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_impl_register_names (ctx : extraction_ctx)
