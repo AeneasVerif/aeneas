@@ -862,10 +862,12 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             (* We need to add parentheses if the value is negative *)
             if sv.PV.value >= Z.of_int 0 then
               F.pp_print_string fmt (Z.to_string sv.PV.value)
-            else
+            else if !backend = Lean then
+              (* TODO: parsing issues with Lean because there are ambiguous
+                 interpretations between int values and nat values *)
               F.pp_print_string fmt
-                ("(" ^ Z.to_string sv.PV.value
-                ^ if !backend = Lean then ":Int" else "" ^ ")");
+                ("(-(" ^ Z.to_string (Z.neg sv.PV.value) ^ ":Int))")
+            else F.pp_print_string fmt ("(" ^ Z.to_string sv.PV.value ^ ")");
             (match !backend with
             | Coq ->
                 let iname = int_name sv.PV.int_ty in
