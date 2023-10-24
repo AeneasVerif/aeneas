@@ -115,7 +115,7 @@ AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/$(BA
 
 # Add specific options to some tests
 trans-no_nested_borrows trans-paper: \
-	OPTIONS += -test-units -test-trans-units -no-split-files -no-state
+	OPTIONS += -test-trans-units -no-split-files -no-state
 trans-no_nested_borrows trans-paper: SUBDIR := misc
 tfstar-no_nested_borrows tfstar-paper:
 tlean-no_nested_borrows: SUBDIR :=
@@ -157,7 +157,7 @@ tcoq-hashmap_main: OPTIONS += -use-fuel
 tlean-hashmap_main: SUBDIR :=
 thol4-hashmap_main: OPTIONS +=
 
-transp-polonius_list: OPTIONS += -test-units -test-trans-units -no-split-files -no-state
+transp-polonius_list: OPTIONS += -test-trans-units -no-split-files -no-state
 transp-polonius_list: SUBDIR := misc
 tfstarp-polonius_list: OPTIONS +=
 tcoqp-polonius_list: OPTIONS +=
