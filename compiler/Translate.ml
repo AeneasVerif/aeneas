@@ -654,78 +654,100 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
  *)
 let export_functions_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (pure_ls : pure_fun_translation list) : unit =
-  (* Utility to check a function has a decrease clause *)
-  let has_decreases_clause (def : Pure.fun_decl) : bool =
-    PureUtils.FunLoopIdSet.mem (def.def_id, def.loop_id)
-      ctx.functions_with_decreases_clause
-  in
-
-  (* Extract the decrease clauses template bodies *)
-  if config.extract_template_decreases_clauses then
-    List.iter
-      (fun { fwd; _ } ->
-        (* We only generate decreases clauses for the forward functions, because
-           the termination argument should only depend on the forward inputs.
-           The backward functions thus use the same decreases clauses as the
-           forward function.
-
-           Rem.: we might filter backward functions in {!PureMicroPasses}, but
-           we don't remove forward functions. Instead, we remember if we should
-           filter those functions at extraction time with a boolean (see the
-           type of the [pure_ls] input parameter).
-        *)
-        let extract_decrease decl =
-          let has_decr_clause = has_decreases_clause decl in
-          if has_decr_clause then
-            match !Config.backend with
-            | Lean ->
-                Extract.extract_template_lean_termination_and_decreasing ctx fmt
-                  decl
-            | FStar ->
-                Extract.extract_template_fstar_decreases_clause ctx fmt decl
-            | Coq ->
-                raise (Failure "Coq doesn't have decreases/termination clauses")
-            | HOL4 ->
-                raise
-                  (Failure "HOL4 doesn't have decreases/termination clauses")
-        in
-        extract_decrease fwd.f;
-        List.iter extract_decrease fwd.loops)
-      pure_ls;
-
-  (* Concatenate the function definitions, filtering the useless forward
-   * functions. *)
-  let decls =
-    List.concat
-      (List.map
-         (fun { keep_fwd; fwd; backs } ->
-           let fwd = if keep_fwd then List.append fwd.loops [ fwd.f ] else [] in
-           let backs : Pure.fun_decl list =
-             List.concat
-               (List.map (fun back -> List.append back.loops [ back.f ]) backs)
-           in
-           List.append fwd backs)
-         pure_ls)
-  in
-
-  (* Extract the function definitions *)
-  (if config.extract_fun_decls then
-     (* Group the mutually recursive definitions *)
-     let subgroups = ReorderDecls.group_reorder_fun_decls decls in
-
-     (* Extract the subgroups *)
-     let export_subgroup (is_rec : bool) (decls : Pure.fun_decl list) : unit =
-       export_functions_group_scc fmt config ctx is_rec decls
-     in
-     List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
-
-  (* Insert unit tests if necessary *)
-  if config.test_trans_unit_functions then
-    List.iter
-      (fun trans ->
-        if trans.keep_fwd then
-          Extract.extract_unit_test_if_unit_fun ctx fmt trans.fwd.f)
+  (* Check if the definition are builtin - if yes they must be ignored.
+     Note that if one definition in the group is builtin, then all the
+     definitions must be builtin *)
+  let builtin =
+    let open ExtractBuiltin in
+    let funs_map = builtin_funs_map () in
+    List.map
+      (fun (trans : pure_fun_translation) ->
+        let sname = name_to_simple_name trans.fwd.f.basename in
+        SimpleNameMap.find_opt sname funs_map <> None)
       pure_ls
+  in
+
+  if List.exists (fun b -> b) builtin then
+    (* Sanity check *)
+    assert (List.for_all (fun b -> b) builtin)
+  else
+    (* Utility to check a function has a decrease clause *)
+    let has_decreases_clause (def : Pure.fun_decl) : bool =
+      PureUtils.FunLoopIdSet.mem (def.def_id, def.loop_id)
+        ctx.functions_with_decreases_clause
+    in
+
+    (* Extract the decrease clauses template bodies *)
+    if config.extract_template_decreases_clauses then
+      List.iter
+        (fun { fwd; _ } ->
+          (* We only generate decreases clauses for the forward functions, because
+             the termination argument should only depend on the forward inputs.
+             The backward functions thus use the same decreases clauses as the
+             forward function.
+
+             Rem.: we might filter backward functions in {!PureMicroPasses}, but
+             we don't remove forward functions. Instead, we remember if we should
+             filter those functions at extraction time with a boolean (see the
+             type of the [pure_ls] input parameter).
+          *)
+          let extract_decrease decl =
+            let has_decr_clause = has_decreases_clause decl in
+            if has_decr_clause then
+              match !Config.backend with
+              | Lean ->
+                  Extract.extract_template_lean_termination_and_decreasing ctx
+                    fmt decl
+              | FStar ->
+                  Extract.extract_template_fstar_decreases_clause ctx fmt decl
+              | Coq ->
+                  raise
+                    (Failure "Coq doesn't have decreases/termination clauses")
+              | HOL4 ->
+                  raise
+                    (Failure "HOL4 doesn't have decreases/termination clauses")
+          in
+          extract_decrease fwd.f;
+          List.iter extract_decrease fwd.loops)
+        pure_ls;
+
+    (* Concatenate the function definitions, filtering the useless forward
+     * functions. *)
+    let decls =
+      List.concat
+        (List.map
+           (fun { keep_fwd; fwd; backs } ->
+             let fwd =
+               if keep_fwd then List.append fwd.loops [ fwd.f ] else []
+             in
+             let backs : Pure.fun_decl list =
+               List.concat
+                 (List.map
+                    (fun back -> List.append back.loops [ back.f ])
+                    backs)
+             in
+             List.append fwd backs)
+           pure_ls)
+    in
+
+    (* Extract the function definitions *)
+    (if config.extract_fun_decls then
+       (* Group the mutually recursive definitions *)
+       let subgroups = ReorderDecls.group_reorder_fun_decls decls in
+
+       (* Extract the subgroups *)
+       let export_subgroup (is_rec : bool) (decls : Pure.fun_decl list) : unit =
+         export_functions_group_scc fmt config ctx is_rec decls
+       in
+       List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
+
+    (* Insert unit tests if necessary *)
+    if config.test_trans_unit_functions then
+      List.iter
+        (fun trans ->
+          if trans.keep_fwd then
+            Extract.extract_unit_test_if_unit_fun ctx fmt trans.fwd.f)
+        pure_ls
 
 (** Export a trait declaration. *)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)

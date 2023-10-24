@@ -78,21 +78,24 @@ let builtin_globals_map : string SimpleNameMap.t =
     (List.map (fun (x, y) -> (string_to_simple_name x, y)) builtin_globals)
 
 type builtin_variant_info = { fields : (string * string) list }
+[@@deriving show]
 
 type builtin_enum_variant_info = {
   rust_variant_name : string;
   extract_variant_name : string;
   fields : string list option;
 }
+[@@deriving show]
 
 type builtin_type_body_info =
   | Struct of string * string list
     (* The constructor name and the map for the field names *)
   | Enum of builtin_enum_variant_info list
 (* For every variant, a map for the field names *)
+[@@deriving show]
 
 type builtin_type_info = {
-  rust_name : string;
+  rust_name : string list;
   extract_name : string;
   keep_params : bool list option;
       (** We might want to filter some of the type parameters.
@@ -102,6 +105,7 @@ type builtin_type_info = {
        *)
   body_info : builtin_type_body_info option;
 }
+[@@deriving show]
 
 (** The assumed types.
 
@@ -113,7 +117,7 @@ let builtin_types () : builtin_type_info list =
   [
     (* Alloc *)
     {
-      rust_name = "alloc::alloc::Global";
+      rust_name = [ "alloc"; "alloc"; "Global" ];
       extract_name =
         (match !backend with
         | Lean -> "AllocGlobal"
@@ -123,7 +127,7 @@ let builtin_types () : builtin_type_info list =
     };
     (* Vec *)
     {
-      rust_name = "alloc::vec::Vec";
+      rust_name = [ "alloc"; "vec"; "Vec" ];
       extract_name =
         (match !backend with Lean -> "Vec" | Coq | FStar | HOL4 -> "vec");
       keep_params = Some [ true; false ];
@@ -131,7 +135,7 @@ let builtin_types () : builtin_type_info list =
     };
     (* Option *)
     {
-      rust_name = "core::option::Option";
+      rust_name = [ "core"; "option"; "Option" ];
       extract_name =
         (match !backend with
         | Lean -> "Option"
@@ -163,7 +167,7 @@ let builtin_types () : builtin_type_info list =
     };
     (* Range *)
     {
-      rust_name = "core::ops::range::Range";
+      rust_name = [ "core"; "ops"; "range"; "Range" ];
       extract_name =
         (match !backend with Lean -> "Range" | Coq | FStar | HOL4 -> "range");
       keep_params = None;
@@ -180,9 +184,7 @@ let builtin_types () : builtin_type_info list =
 
 let mk_builtin_types_map () =
   SimpleNameMap.of_list
-    (List.map
-       (fun info -> (string_to_simple_name info.rust_name, info))
-       (builtin_types ()))
+    (List.map (fun info -> (info.rust_name, info)) (builtin_types ()))
 
 let builtin_types_map = mk_memoized mk_builtin_types_map
 
@@ -190,6 +192,7 @@ type builtin_fun_info = {
   rg : Types.RegionGroupId.id option;
   extract_name : string;
 }
+[@@deriving show]
 
 (** The assumed functions.
 
@@ -197,10 +200,12 @@ type builtin_fun_info = {
     parameters. For instance, in the case of the `Vec` functions, there is
     a type parameter for the allocator to use, which we want to filter.
  *)
-let builtin_funs () : (string * bool list option * builtin_fun_info list) list =
+let builtin_funs () :
+    (string list * bool list option * builtin_fun_info list) list =
   let rg0 = Some Types.RegionGroupId.zero in
+  (* TODO: fix the names below *)
   [
-    ( "core::mem::replace",
+    ( [ "core::mem::replace" ],
       None,
       [
         {
@@ -218,7 +223,7 @@ let builtin_funs () : (string * bool list option * builtin_fun_info list) list =
             | Lean -> "mem.replace_back");
         };
       ] );
-    ( "alloc::vec::Vec::new",
+    ( [ "alloc::vec::Vec::new" ],
       Some [ true; false ],
       [
         {
@@ -236,7 +241,7 @@ let builtin_funs () : (string * bool list option * builtin_fun_info list) list =
             | Lean -> "Vec.new_back");
         };
       ] );
-    ( "alloc::vec::Vec::push",
+    ( [ "alloc::vec::Vec::push" ],
       Some [ true; false ],
       [
         (* The forward function shouldn't be used *)
@@ -255,7 +260,7 @@ let builtin_funs () : (string * bool list option * builtin_fun_info list) list =
             | Lean -> "Vec.push");
         };
       ] );
-    ( "alloc::vec::Vec::insert",
+    ( [ "alloc::vec::Vec::insert" ],
       Some [ true; false ],
       [
         (* The forward function shouldn't be used *)
@@ -274,7 +279,7 @@ let builtin_funs () : (string * bool list option * builtin_fun_info list) list =
             | Lean -> "Vec.insert");
         };
       ] );
-    ( "alloc::vec::Vec::len",
+    ( [ "alloc::vec::Vec::len" ],
       Some [ true; false ],
       [
         {
@@ -285,7 +290,7 @@ let builtin_funs () : (string * bool list option * builtin_fun_info list) list =
             | Lean -> "Vec.len");
         };
       ] );
-    ( "alloc::vec::Vec::index",
+    ( [ "alloc::vec::Vec::index" ],
       Some [ true; false ],
       [
         {
@@ -304,7 +309,7 @@ let builtin_funs () : (string * bool list option * builtin_fun_info list) list =
             | Lean -> "Vec.index_shared_back");
         };
       ] );
-    ( "alloc::vec::Vec::index_mut",
+    ( [ "alloc::vec::Vec::index_mut" ],
       Some [ true; false ],
       [
         {
@@ -323,16 +328,52 @@ let builtin_funs () : (string * bool list option * builtin_fun_info list) list =
             | Lean -> "Vec.index_mut_back");
         };
       ] );
+    ( [ "alloc"; "boxed"; "Box"; "deref" ],
+      Some [ true; false ],
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "alloc_boxed_box_deref"
+            | Lean -> "alloc.boxed.Box.deref");
+        };
+        (* The backward function shouldn't be used *)
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "alloc_boxed_box_deref_back"
+            | Lean -> "alloc.boxed.Box.deref_back");
+        };
+      ] );
+    ( [ "alloc"; "boxed"; "Box"; "deref_mut" ],
+      Some [ true; false ],
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "alloc_boxed_box_deref_mut"
+            | Lean -> "alloc.boxed.Box.deref_mut");
+        };
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "alloc_boxed_box_deref_mut_back"
+            | Lean -> "alloc.boxed.Box.deref_mut_back");
+        };
+      ] );
   ]
 
 let mk_builtin_funs_map () =
   SimpleNameMap.of_list
     (List.map
-       (fun (name, filter, info) ->
-         (string_to_simple_name name, (filter, info)))
+       (fun (name, filter, info) -> (name, (filter, info)))
        (builtin_funs ()))
 
-let builtin_funs_map () = mk_memoized mk_builtin_funs_map
+let builtin_funs_map = mk_memoized mk_builtin_funs_map
 
 type builtin_trait_decl_info = {
   rust_name : string;
@@ -346,6 +387,7 @@ type builtin_trait_decl_info = {
           - a list of clauses *)
   funs : (string * (Types.RegionGroupId.id option * string) list) list;
 }
+[@@deriving show]
 
 let builtin_trait_decls_info () =
   let rg0 = Some Types.RegionGroupId.zero in
@@ -389,7 +431,7 @@ let builtin_trait_decls_info () =
         [
           (match !backend with
           | Coq | FStar | HOL4 -> "deref_inst"
-          | Lean -> "DerefInst");
+          | Lean -> "derefInst");
         ];
       consts = [];
       types = [];

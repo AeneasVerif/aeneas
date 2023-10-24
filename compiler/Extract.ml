@@ -1277,7 +1277,10 @@ and extract_trait_decl_ref (ctx : extraction_ctx) (fmt : F.formatter)
   let name = ctx_get_trait_decl is_opaque tr.trait_decl_id ctx in
   if use_brackets then F.pp_print_string fmt "(";
   F.pp_print_string fmt name;
-  extract_generic_args ctx fmt no_params_tys tr.decl_generics;
+  (* There is something subtle here: the trait obligations for the implemented
+     trait are put inside the parent clauses, so we must ignore them here *)
+  let generics = { tr.decl_generics with trait_refs = [] } in
+  extract_generic_args ctx fmt no_params_tys generics;
   if use_brackets then F.pp_print_string fmt ")"
 
 and extract_generic_args (ctx : extraction_ctx) (fmt : F.formatter)
@@ -1349,7 +1352,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   let def_name =
     match info with
     | None -> ctx.fmt.type_name def.name
-    | Some info -> info.rust_name
+    | Some info -> String.concat "." info.rust_name
   in
   let is_opaque = def.kind = Opaque in
   let ctx = ctx_add is_opaque (TypeId (AdtId def.def_id)) def_name ctx in
@@ -1363,7 +1366,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
         (* Compute the names *)
         let field_names, cons_name =
           match info with
-          | None ->
+          | None | Some { body_info = None; _ } ->
               let field_names =
                 FieldId.mapi
                   (fun fid (field : field) ->
@@ -1379,7 +1382,11 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   (List.combine fields field_names)
               in
               (field_names, cons_name)
-          | _ -> raise (Failure "Invalid builtin information")
+          | Some info ->
+              raise
+                (Failure
+                   ("Invalid builtin information: "
+                   ^ show_builtin_type_info info))
         in
         (* Add the fields *)
         let ctx =
@@ -2365,33 +2372,70 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  let fwd = def.fwd in
-  let backs = def.backs in
-  (* Register the decrease clauses, if necessary *)
-  let register_decreases ctx def =
-    if has_decreases_clause def then
-      (* Add the termination measure *)
-      let ctx = ctx_add_termination_measure def ctx in
-      (* Add the decreases proof for Lean only *)
-      match !Config.backend with
-      | Coq | FStar -> ctx
-      | HOL4 -> raise (Failure "Unexpected")
-      | Lean -> ctx_add_decreases_proof def ctx
-    else ctx
-  in
-  let ctx = List.fold_left register_decreases ctx (fwd.f :: fwd.loops) in
-  let register_fun ctx f = ctx_add_fun_decl def f ctx in
-  let register_funs ctx fl = List.fold_left register_fun ctx fl in
-  (* Register the names of the forward functions *)
-  let ctx =
-    if def.keep_fwd then register_funs ctx (fwd.f :: fwd.loops) else ctx
-  in
-  (* Register the names of the backward functions *)
-  List.fold_left
-    (fun ctx { f = back; loops = loop_backs } ->
-      let ctx = register_fun ctx back in
-      register_funs ctx loop_backs)
-    ctx backs
+  (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
+     method implementations): we do not need to refer to them directly. We will
+     only use their type for the fields of the records we generate for the trait
+     declarations *)
+  match def.fwd.f.kind with
+  | TraitMethodDecl _ -> ctx
+  | _ -> (
+      (* Check if the function is builtin *)
+      let builtin =
+        let open ExtractBuiltin in
+        let funs_map = builtin_funs_map () in
+        let sname = name_to_simple_name def.fwd.f.basename in
+        SimpleNameMap.find_opt sname funs_map
+      in
+      (* Use the builtin names if necessary *)
+      match builtin with
+      | Some (_filter, info) ->
+          let backs = List.map (fun f -> f.f) def.backs in
+          let funs = if def.keep_fwd then def.fwd.f :: backs else backs in
+          let is_opaque = false in
+          List.fold_left
+            (fun ctx (f : fun_decl) ->
+              let open ExtractBuiltin in
+              let fun_id =
+                (Pure.FunId (Regular f.def_id), f.loop_id, f.back_id)
+              in
+              let fun_name =
+                (List.find
+                   (fun (x : builtin_fun_info) -> x.rg = f.back_id)
+                   info)
+                  .extract_name
+              in
+              ctx_add is_opaque (FunId (FromLlbc fun_id)) fun_name ctx)
+            ctx funs
+      | None ->
+          let fwd = def.fwd in
+          let backs = def.backs in
+          (* Register the decrease clauses, if necessary *)
+          let register_decreases ctx def =
+            if has_decreases_clause def then
+              (* Add the termination measure *)
+              let ctx = ctx_add_termination_measure def ctx in
+              (* Add the decreases proof for Lean only *)
+              match !Config.backend with
+              | Coq | FStar -> ctx
+              | HOL4 -> raise (Failure "Unexpected")
+              | Lean -> ctx_add_decreases_proof def ctx
+            else ctx
+          in
+          let ctx =
+            List.fold_left register_decreases ctx (fwd.f :: fwd.loops)
+          in
+          let register_fun ctx f = ctx_add_fun_decl def f ctx in
+          let register_funs ctx fl = List.fold_left register_fun ctx fl in
+          (* Register the names of the forward functions *)
+          let ctx =
+            if def.keep_fwd then register_funs ctx (fwd.f :: fwd.loops) else ctx
+          in
+          (* Register the names of the backward functions *)
+          List.fold_left
+            (fun ctx { f = back; loops = loop_backs } ->
+              let ctx = register_fun ctx back in
+              register_funs ctx loop_backs)
+            ctx backs)
 
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
@@ -4539,6 +4583,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
+  log#ldebug (lazy ("extract_trait_impl: " ^ Names.name_to_string impl.name));
   (* Retrieve the impl name *)
   let with_opaque_pre = false in
   let impl_name = ctx_get_trait_impl with_opaque_pre impl.def_id ctx in
@@ -4565,9 +4610,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* `let (....) : Trait ... =` *)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  let qualif = Option.get (ctx.fmt.fun_decl_kind_to_qualif SingleNonRec) in
-  F.pp_print_string fmt qualif;
-  F.pp_print_space fmt ();
+  (match ctx.fmt.fun_decl_kind_to_qualif SingleNonRec with
+  | Some qualif ->
+      F.pp_print_string fmt qualif;
+      F.pp_print_space fmt ()
+  | None -> ());
   F.pp_print_string fmt impl_name;
 
   (* Print the generics *)

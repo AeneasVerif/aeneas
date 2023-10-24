@@ -1249,6 +1249,7 @@ let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
   ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
     (keep_fwd, num_backs)
 
+(* TODO: move to Extract *)
 let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
     (ctx : extraction_ctx) : extraction_ctx =
   (* Sanity check: the function should not be a global body - those are handled
