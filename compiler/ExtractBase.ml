@@ -251,37 +251,6 @@ type formatter = {
   trait_type_name : trait_decl -> string -> string;
   trait_method_name : trait_decl -> string -> string;
   trait_type_clause_name : trait_decl -> string -> trait_clause -> string;
-  opaque_pre : unit -> string;
-      (** TODO: obsolete, remove.
-
-          The prefix to use for opaque definitions.
-
-          We need this because for some backends like Lean and Coq, we group
-          opaque definitions in module signatures, meaning that using those
-          definitions requires to prefix them with a module parameter name (such
-          as "opaque_defs.").
-
-          For instance, if we have an opaque function [f : int -> int], which
-          is used by the non-opaque function [g], we would generate (in Coq):
-          {[
-            (* The module signature declaring the opaque definitions *)
-            module type OpaqueDefs = {
-              f_fwd : int -> int
-              ... (* Other definitions *)
-            }
-
-            (* The definitions generated for the non-opaque definitions *)
-            module Funs (opaque: OpaqueDefs) = {
-              let g ... =
-                ...
-                opaque_defs.f_fwd
-                ...
-            }
-          ]}
-
-          Upon using [f] in [g], we don't directly use the the name "f_fwd",
-          but prefix it with the "opaque_defs." identifier.
-       *)
   var_basename : StringSet.t -> string option -> ty -> string;
       (** Generates a variable basename.
 
@@ -498,20 +467,6 @@ type names_map = {
           precisely which identifiers are mapped to the same name...
        *)
   names_set : StringSet.t;
-  opaque_ids : IdSet.t;
-      (** TODO: this is obsolete. Remove.
-
-          The set of opaque definitions.
-
-          See {!formatter.opaque_pre} for detailed explanations about why
-          we need to know which definitions are opaque to compute names.
-
-          Also note that the opaque ids don't contain the ids of the assumed
-          definitions. In practice, assumed definitions are opaque_defs. However, they
-          are not grouped in the opaque module, meaning we never need to
-          prefix them (with, say, "opaque_defs."): we thus consider them as non-opaque
-          with regards to the names map.
-       *)
 }
 
 let empty_names_map : names_map =
@@ -519,7 +474,6 @@ let empty_names_map : names_map =
     id_to_name = IdMap.empty;
     name_to_id = StringMap.empty;
     names_set = StringSet.empty;
-    opaque_ids = IdSet.empty;
   }
 
 (** Small helper to report name collision *)
@@ -547,8 +501,8 @@ let names_map_check_collision (id_to_string : id -> string) (id : id)
       (* There is a clash: print a nice debugging message for the user *)
       report_name_collision id_to_string clash id name
 
-let names_map_add (id_to_string : id -> string) (is_opaque : bool) (id : id)
-    (name : string) (nm : names_map) : names_map =
+let names_map_add (id_to_string : id -> string) (id : id) (name : string)
+    (nm : names_map) : names_map =
   (* Check if there is a clash *)
   names_map_check_collision id_to_string id name nm;
   (* Sanity check *)
@@ -564,32 +518,24 @@ let names_map_add (id_to_string : id -> string) (is_opaque : bool) (id : id)
   let id_to_name = IdMap.add id name nm.id_to_name in
   let name_to_id = StringMap.add name id nm.name_to_id in
   let names_set = StringSet.add name nm.names_set in
-  let opaque_ids =
-    if is_opaque then IdSet.add id nm.opaque_ids else nm.opaque_ids
-  in
-  { id_to_name; name_to_id; names_set; opaque_ids }
+  { id_to_name; name_to_id; names_set }
 
 let names_map_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
     (name : string) (nm : names_map) : names_map =
-  let is_opaque = false in
-  names_map_add id_to_string is_opaque (TypeId (Assumed id)) name nm
+  names_map_add id_to_string (TypeId (Assumed id)) name nm
 
 let names_map_add_assumed_struct (id_to_string : id -> string) (id : assumed_ty)
     (name : string) (nm : names_map) : names_map =
-  let is_opaque = false in
-  names_map_add id_to_string is_opaque (StructId (Assumed id)) name nm
+  names_map_add id_to_string (StructId (Assumed id)) name nm
 
 let names_map_add_assumed_variant (id_to_string : id -> string)
     (id : assumed_ty) (variant_id : VariantId.id) (name : string)
     (nm : names_map) : names_map =
-  let is_opaque = false in
-  names_map_add id_to_string is_opaque
-    (VariantId (Assumed id, variant_id))
-    name nm
+  names_map_add id_to_string (VariantId (Assumed id, variant_id)) name nm
 
-let names_map_add_function (id_to_string : id -> string) (is_opaque : bool)
-    (fid : fun_id) (name : string) (nm : names_map) : names_map =
-  names_map_add id_to_string is_opaque (FunId fid) name nm
+let names_map_add_function (id_to_string : id -> string) (fid : fun_id)
+    (name : string) (nm : names_map) : names_map =
+  names_map_add id_to_string (FunId fid) name nm
 
 (** The unsafe names map stores mappings from identifiers to names which might
     collide. For some backends and some names, it might be acceptable to have
@@ -667,14 +613,6 @@ type extraction_ctx = {
   fmt : formatter;
   indent_incr : int;
       (** The indent increment we insert whenever we need to indent more *)
-  use_opaque_pre : bool;
-      (** Do we use the "opaque_defs." prefix for the opaque definitions?
-
-          Opaque function definitions might refer opaque types: if we are in the
-          opaque module, we musn't use the "opaque_defs." prefix, otherwise we
-          use it.
-          Also see {!names_map.opaque_ids}.
-       *)
   use_dep_ite : bool;
       (** For Lean: do we use dependent-if then else expressions?
 
@@ -884,8 +822,7 @@ let allow_collisions (id : id) : bool =
       !Config.record_fields_short_names
   | _ -> false
 
-let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
-    : extraction_ctx =
+let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   (* The id_to_string function to print nice debugging messages if there are
    * collisions *)
   let id_to_string (id : id) : string = id_to_string id ctx in
@@ -902,7 +839,6 @@ let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
      others (ex.: fields and keywords).
   *)
   if allow_collisions id then (
-    assert (not is_opaque);
     (* Check with the ids which are considered to be strict on collisions *)
     names_map_check_collision id_to_string id name ctx.strict_names_map;
     {
@@ -916,16 +852,13 @@ let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
     *)
     let strict_names_map =
       if strict_collisions id then
-        names_map_add id_to_string is_opaque id name ctx.strict_names_map
+        names_map_add id_to_string id name ctx.strict_names_map
       else ctx.strict_names_map
     in
-    let names_map =
-      names_map_add id_to_string is_opaque id name ctx.names_map
-    in
+    let names_map = names_map_add id_to_string id name ctx.names_map in
     { ctx with strict_names_map; names_map }
 
-(** [with_opaque_pre]: if [true] and the definition is opaque, add the opaque prefix *)
-let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
+let ctx_get (id : id) (ctx : extraction_ctx) : string =
   (* We do not use the same name map if we allow/disallow collisions *)
   let map_to_string (m : string IdMap.t) : string =
     "[\n"
@@ -951,9 +884,7 @@ let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
   else
     let m = ctx.names_map.id_to_name in
     match IdMap.find_opt id m with
-    | Some s ->
-        let is_opaque = IdSet.mem id ctx.names_map.opaque_ids in
-        if with_opaque_pre && is_opaque then ctx.fmt.opaque_pre () ^ s else s
+    | Some s -> s
     | None ->
         let err =
           "Could not find: " ^ id_to_string id ctx ^ "\nNames map:\n"
@@ -963,53 +894,38 @@ let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
         if !Config.extract_fail_hard then raise (Failure err)
         else "(ERROR: \"" ^ id_to_string id ctx ^ "\")"
 
-let ctx_get_global (with_opaque_pre : bool) (id : A.GlobalDeclId.id)
-    (ctx : extraction_ctx) : string =
-  ctx_get with_opaque_pre (GlobalId id) ctx
+let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
+  ctx_get (GlobalId id) ctx
 
-let ctx_get_function (with_opaque_pre : bool) (id : fun_id)
-    (ctx : extraction_ctx) : string =
-  ctx_get with_opaque_pre (FunId id) ctx
+let ctx_get_function (id : fun_id) (ctx : extraction_ctx) : string =
+  ctx_get (FunId id) ctx
 
-let ctx_get_local_function (with_opaque_pre : bool) (id : A.FunDeclId.id)
-    (lp : LoopId.id option) (rg : RegionGroupId.id option)
-    (ctx : extraction_ctx) : string =
-  ctx_get_function with_opaque_pre (FromLlbc (FunId (Regular id), lp, rg)) ctx
+let ctx_get_local_function (id : A.FunDeclId.id) (lp : LoopId.id option)
+    (rg : RegionGroupId.id option) (ctx : extraction_ctx) : string =
+  ctx_get_function (FromLlbc (FunId (Regular id), lp, rg)) ctx
 
-let ctx_get_type (with_opaque_pre : bool) (id : type_id) (ctx : extraction_ctx)
-    : string =
+let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> Tuple);
-  ctx_get with_opaque_pre (TypeId id) ctx
+  ctx_get (TypeId id) ctx
 
-let ctx_get_local_type (with_opaque_pre : bool) (id : TypeDeclId.id)
-    (ctx : extraction_ctx) : string =
-  ctx_get_type with_opaque_pre (AdtId id) ctx
+let ctx_get_local_type (id : TypeDeclId.id) (ctx : extraction_ctx) : string =
+  ctx_get_type (AdtId id) ctx
 
 let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
-  (* In practice, the assumed types are opaque. However, assumed types
-     are never grouped in the opaque module, meaning we never need to
-     prefix them: we thus consider them as non-opaque with regards to the
-     names map.
-  *)
-  let is_opaque = false in
-  ctx_get_type is_opaque (Assumed id) ctx
+  ctx_get_type (Assumed id) ctx
 
 let ctx_get_trait_self_clause (ctx : extraction_ctx) : string =
-  let with_opaque_pre = false in
-  ctx_get with_opaque_pre TraitSelfClauseId ctx
+  ctx_get TraitSelfClauseId ctx
 
-let ctx_get_trait_decl (with_opaque_pre : bool) (id : trait_decl_id)
-    (ctx : extraction_ctx) : string =
-  ctx_get with_opaque_pre (TraitDeclId id) ctx
+let ctx_get_trait_decl (id : trait_decl_id) (ctx : extraction_ctx) : string =
+  ctx_get (TraitDeclId id) ctx
 
-let ctx_get_trait_impl (with_opaque_pre : bool) (id : trait_impl_id)
-    (ctx : extraction_ctx) : string =
-  ctx_get with_opaque_pre (TraitImplId id) ctx
+let ctx_get_trait_impl (id : trait_impl_id) (ctx : extraction_ctx) : string =
+  ctx_get (TraitImplId id) ctx
 
 let ctx_get_trait_item (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
-  let is_opaque = false in
-  ctx_get is_opaque (TraitItemId (id, item_name)) ctx
+  ctx_get (TraitItemId (id, item_name)) ctx
 
 let ctx_get_trait_const (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
@@ -1021,83 +937,69 @@ let ctx_get_trait_type (id : trait_decl_id) (item_name : string)
 
 let ctx_get_trait_method (id : trait_decl_id) (item_name : string)
     (rg_id : T.RegionGroupId.id option) (ctx : extraction_ctx) : string =
-  let with_opaque_pre = false in
-  ctx_get with_opaque_pre (TraitMethodId (id, item_name, rg_id)) ctx
+  ctx_get (TraitMethodId (id, item_name, rg_id)) ctx
 
 let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
     (ctx : extraction_ctx) : string =
-  let with_opaque_pre = false in
-  ctx_get with_opaque_pre (TraitParentClauseId (id, clause)) ctx
+  ctx_get (TraitParentClauseId (id, clause)) ctx
 
 let ctx_get_trait_item_clause (id : trait_decl_id) (item : string)
     (clause : trait_clause_id) (ctx : extraction_ctx) : string =
-  let with_opaque_pre = false in
-  ctx_get with_opaque_pre (TraitItemClauseId (id, item, clause)) ctx
+  ctx_get (TraitItemClauseId (id, item, clause)) ctx
 
 let ctx_get_var (id : VarId.id) (ctx : extraction_ctx) : string =
-  let is_opaque = false in
-  ctx_get is_opaque (VarId id) ctx
+  ctx_get (VarId id) ctx
 
 let ctx_get_type_var (id : TypeVarId.id) (ctx : extraction_ctx) : string =
-  let is_opaque = false in
-  ctx_get is_opaque (TypeVarId id) ctx
+  ctx_get (TypeVarId id) ctx
 
 let ctx_get_const_generic_var (id : ConstGenericVarId.id) (ctx : extraction_ctx)
     : string =
-  let is_opaque = false in
-  ctx_get is_opaque (ConstGenericVarId id) ctx
+  ctx_get (ConstGenericVarId id) ctx
 
 let ctx_get_local_trait_clause (id : TraitClauseId.id) (ctx : extraction_ctx) :
     string =
-  let is_opaque = false in
-  ctx_get is_opaque (LocalTraitClauseId id) ctx
+  ctx_get (LocalTraitClauseId id) ctx
 
 let ctx_get_field (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
-  let is_opaque = false in
-  ctx_get is_opaque (FieldId (type_id, field_id)) ctx
+  ctx_get (FieldId (type_id, field_id)) ctx
 
-let ctx_get_struct (with_opaque_pre : bool) (def_id : type_id)
-    (ctx : extraction_ctx) : string =
-  ctx_get with_opaque_pre (StructId def_id) ctx
+let ctx_get_struct (def_id : type_id) (ctx : extraction_ctx) : string =
+  ctx_get (StructId def_id) ctx
 
 let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
     (ctx : extraction_ctx) : string =
-  let is_opaque = false in
-  ctx_get is_opaque (VariantId (def_id, variant_id)) ctx
+  ctx_get (VariantId (def_id, variant_id)) ctx
 
 let ctx_get_decreases_proof (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
-  let is_opaque = false in
-  ctx_get is_opaque (DecreasesProofId (Regular def_id, loop_id)) ctx
+  ctx_get (DecreasesProofId (Regular def_id, loop_id)) ctx
 
 let ctx_get_termination_measure (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
-  let is_opaque = false in
-  ctx_get is_opaque (TerminationMeasureId (Regular def_id, loop_id)) ctx
+  ctx_get (TerminationMeasureId (Regular def_id, loop_id)) ctx
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
-  let is_opaque = false in
   let name = ctx.fmt.type_var_basename ctx.names_map.names_set basename in
   let name =
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index name
   in
-  let ctx = ctx_add is_opaque (TypeVarId id) name ctx in
+  let ctx = ctx_add (TypeVarId id) name ctx in
   (ctx, name)
 
 (** Generate a unique const generic variable name and add it to the context *)
 let ctx_add_const_generic_var (basename : string) (id : ConstGenericVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
-  let is_opaque = false in
   let name =
     ctx.fmt.const_generic_var_basename ctx.names_map.names_set basename
   in
   let name =
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index name
   in
-  let ctx = ctx_add is_opaque (ConstGenericVarId id) name ctx in
+  let ctx = ctx_add (ConstGenericVarId id) name ctx in
   (ctx, name)
 
 (** See {!ctx_add_type_var} *)
@@ -1110,31 +1012,28 @@ let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
 (** Generate a unique variable name and add it to the context *)
 let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
     extraction_ctx * string =
-  let is_opaque = false in
   let name =
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
   in
-  let ctx = ctx_add is_opaque (VarId id) name ctx in
+  let ctx = ctx_add (VarId id) name ctx in
   (ctx, name)
 
 (** Generate a unique variable name for the trait self clause and add it to the context *)
 let ctx_add_trait_self_clause (ctx : extraction_ctx) : extraction_ctx * string =
-  let is_opaque = false in
   let basename = ctx.fmt.trait_self_clause_basename in
   let name =
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
   in
-  let ctx = ctx_add is_opaque TraitSelfClauseId name ctx in
+  let ctx = ctx_add TraitSelfClauseId name ctx in
   (ctx, name)
 
 (** Generate a unique trait clause name and add it to the context *)
 let ctx_add_local_trait_clause (basename : string) (id : TraitClauseId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
-  let is_opaque = false in
   let name =
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
   in
-  let ctx = ctx_add is_opaque (LocalTraitClauseId id) name ctx in
+  let ctx = ctx_add (LocalTraitClauseId id) name ctx in
   (ctx, name)
 
 (** See {!ctx_add_var} *)
@@ -1182,30 +1081,23 @@ let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
 
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let is_opaque = false in
   let name =
     ctx.fmt.decreases_proof_name def.def_id def.basename def.num_loops
       def.loop_id
   in
-  ctx_add is_opaque
-    (DecreasesProofId (Regular def.def_id, def.loop_id))
-    name ctx
+  ctx_add (DecreasesProofId (Regular def.def_id, def.loop_id)) name ctx
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let is_opaque = false in
   let name =
     ctx.fmt.termination_measure_name def.def_id def.basename def.num_loops
       def.loop_id
   in
-  ctx_add is_opaque
-    (TerminationMeasureId (Regular def.def_id, def.loop_id))
-    name ctx
+  ctx_add (TerminationMeasureId (Regular def.def_id, def.loop_id)) name ctx
 
 let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   (* TODO: update once the body id can be an option *)
-  let is_opaque = false in
   let decl = GlobalId def.def_id in
 
   (* Check if the global corresponds to an assumed global that we should map
@@ -1215,13 +1107,13 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   match SimpleNameMap.find_opt sname builtin_globals_map with
   | Some name ->
       (* Yes: register the custom binding *)
-      ctx_add is_opaque decl name ctx
+      ctx_add decl name ctx
   | None ->
       (* Not the case: "standard" registration *)
       let name = ctx.fmt.global_name def.name in
       let body = FunId (FromLlbc (FunId (Regular def.body_id), None, None)) in
-      let ctx = ctx_add is_opaque decl (name ^ "_c") ctx in
-      let ctx = ctx_add is_opaque body (name ^ "_body") ctx in
+      let ctx = ctx_add decl (name ^ "_c") ctx in
+      let ctx = ctx_add body (name ^ "_body") ctx in
       ctx
 
 let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
@@ -1259,11 +1151,10 @@ let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
   let def_id = def.def_id in
   let { keep_fwd; fwd = _; backs } = trans_group in
   let num_backs = List.length backs in
-  let is_opaque = def.body = None in
   (* Add the function name *)
   let def_name = ctx_compute_fun_name trans_group def ctx in
   let fun_id = (Pure.FunId (Regular def_id), def.loop_id, def.back_id) in
-  let ctx = ctx_add is_opaque (FunId (FromLlbc fun_id)) def_name ctx in
+  let ctx = ctx_add (FunId (FromLlbc fun_id)) def_name ctx in
   (* Add the name info *)
   {
     ctx with
@@ -1296,12 +1187,11 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
   let name_to_id =
     StringMap.of_list (List.map (fun x -> (x, UnknownId)) keywords)
   in
-  let opaque_ids = IdSet.empty in
   (* We fist initialize [id_to_name] as empty, because the id of a keyword is [UnknownId].
    * Also note that we don't need this mapping for keywords: we insert keywords only
    * to check collisions. *)
   let id_to_name = IdMap.empty in
-  let nm = { id_to_name; name_to_id; names_set; opaque_ids } in
+  let nm = { id_to_name; name_to_id; names_set } in
   (* For debugging - we are creating bindings for assumed types and functions, so
    * it is ok if we simply use the "show" function (those aren't simply identified
    * by numbers) *)
@@ -1338,15 +1228,8 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
     @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
   in
   let nm =
-    (* In practice, the assumed function are opaque. However, assumed functions
-       are never grouped in the opaque module, meaning we never need to
-       prefix them: we thus consider them as non-opaque with regards to the
-       names map.
-    *)
-    let is_opaque = false in
     List.fold_left
-      (fun nm (fid, name) ->
-        names_map_add_function id_to_string is_opaque fid name nm)
+      (fun nm (fid, name) -> names_map_add_function id_to_string fid name nm)
       nm assumed_functions
   in
   (* Return *)

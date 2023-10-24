@@ -306,13 +306,6 @@ let filter_useless_monadic_calls = ref true
  *)
 let filter_useless_functions = ref true
 
-(** Obsolete. TODO: remove.
-
-    For Lean we used to parameterize the entire development by a section variable
-    called opaque_defs, of type OpaqueDefs.
-  *)
-let wrap_opaque_in_sig = ref false
-
 (** Use short names for the record fields.
 
     Some backends can't disambiguate records when their field names have collisions.

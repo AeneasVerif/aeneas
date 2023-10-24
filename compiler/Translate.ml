@@ -851,37 +851,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   if config.extract_state_type && config.extract_fun_decls then
     export_state_type ();
 
-  (* Obsolete: (TODO: remove) For Lean we parameterize the entire development by a section
-     variable called opaque_defs, of type OpaqueDefs. The code below emits the type
-     definition for OpaqueDefs, which is a structure, in which each field is one of the
-     functions marked as Opaque. We emit the `structure ...` bit here, then rely on
-     `extract_fun_decl` to be aware of this, and skip the keyword (e.g. "axiom" or "val")
-     so as to generate valid syntax for records.
-
-     We also generate such a structure only if there actually are opaque definitions. *)
-  let wrap_in_sig =
-    config.extract_opaque && config.extract_fun_decls
-    && !Config.wrap_opaque_in_sig
-    &&
-    let _, opaque_funs = crate_has_opaque_decls ctx true in
-    opaque_funs
-  in
-  if wrap_in_sig then (
-    (* We change the name of the structure depending on whether we *only*
-       extract opaque definitions, or if we extract all definitions *)
-    let struct_name =
-      if config.extract_transparent then "Definitions" else "OpaqueDefs"
-    in
-    Format.pp_print_break fmt 0 0;
-    Format.pp_open_vbox fmt ctx.indent_incr;
-    Format.pp_print_string fmt ("structure " ^ struct_name ^ " where");
-    Format.pp_print_break fmt 0 0);
   List.iter export_decl_group ctx.crate.declarations;
 
   if config.extract_state_type && not config.extract_fun_decls then
-    export_state_type ();
-
-  if wrap_in_sig then Format.pp_close_box fmt ()
+    export_state_type ()
 
 type extract_file_info = {
   filename : string;
@@ -1029,10 +1002,9 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
         (fun (id, _) -> strict_collisions id)
         (IdMap.bindings names_map.id_to_name)
     in
-    let is_opaque = false in
     List.fold_left
       (* id_to_string: we shouldn't need to use it *)
-        (fun m (id, n) -> names_map_add show_id is_opaque id n m)
+        (fun m (id, n) -> names_map_add show_id id n m)
       empty_names_map ids
   in
 
@@ -1093,7 +1065,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       strict_names_map;
       fmt;
       indent_incr = 2;
-      use_opaque_pre = !Config.split_files;
       use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
       fun_name_info = PureUtils.RegularFunIdMap.empty;
       trait_decl_id = None (* None by default *);
@@ -1389,7 +1360,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
              interface = true;
            }
          in
-         let ctx = { ctx with use_opaque_pre = false } in
          let file_info =
            {
              filename = opaque_filename;

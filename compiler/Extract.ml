@@ -758,12 +758,6 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fname ^ lp_suffix ^ suffix
   in
 
-  let opaque_pre () =
-    match !Config.backend with
-    | FStar | Coq | HOL4 -> ""
-    | Lean -> if !Config.wrap_opaque_in_sig then "opaque_defs." else ""
-  in
-
   let var_basename (_varset : StringSet.t) (basename : string option) (ty : ty)
       : string =
     (* Small helper to derive var names from ADT type names.
@@ -934,7 +928,6 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     trait_type_name;
     trait_method_name;
     trait_type_clause_name;
-    opaque_pre;
     var_basename;
     type_var_basename;
     const_generic_var_basename;
@@ -983,11 +976,8 @@ let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
       (* In HOL4, opaque functions have a special treatment *)
       if is_single_opaque_fun_decl_group dg then ()
       else
-        let with_opaque_pre = false in
         let compute_fun_def_name (def : Pure.fun_decl) : string =
-          ctx_get_local_function with_opaque_pre def.def_id def.loop_id
-            def.back_id ctx
-          ^ "_def"
+          ctx_get_local_function def.def_id def.loop_id def.back_id ctx ^ "_def"
         in
         let names = List.map compute_fun_def_name dg in
         (* Add a break before *)
@@ -1110,7 +1100,7 @@ let extract_const_generic (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (cg : const_generic) : unit =
   match cg with
   | ConstGenericGlobal id ->
-      let s = ctx_get_global ctx.use_opaque_pre id ctx in
+      let s = ctx_get_global id ctx in
       F.pp_print_string fmt s
   | ConstGenericValue v -> ctx.fmt.extract_literal fmt inside v
   | ConstGenericVar id ->
@@ -1178,14 +1168,13 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
              In HOL4 we would write:
              `('a, 'b) tree`
           *)
-          let with_opaque_pre = false in
           match !backend with
           | FStar | Coq | Lean ->
               let print_paren = inside && has_params in
               if print_paren then F.pp_print_string fmt "(";
               (* TODO: for now, only the opaque *functions* are extracted in the
                  opaque module. The opaque *types* are assumed. *)
-              F.pp_print_string fmt (ctx_get_type with_opaque_pre type_id ctx);
+              F.pp_print_string fmt (ctx_get_type type_id ctx);
               extract_generic_args ctx fmt no_params_tys generics;
               if print_paren then F.pp_print_string fmt ")"
           | HOL4 ->
@@ -1208,7 +1197,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                   (extract_rec true) types;
                 if print_paren then F.pp_print_string fmt ")";
                 F.pp_print_space fmt ());
-              F.pp_print_string fmt (ctx_get_type with_opaque_pre type_id ctx);
+              F.pp_print_string fmt (ctx_get_type type_id ctx);
               if trait_refs <> [] then (
                 F.pp_print_space fmt ();
                 Collections.List.iter_link (F.pp_print_space fmt)
@@ -1273,8 +1262,7 @@ and extract_trait_decl_ref (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_decl_ref) :
     unit =
   let use_brackets = tr.decl_generics <> empty_generic_args && inside in
-  let is_opaque = false in
-  let name = ctx_get_trait_decl is_opaque tr.trait_decl_id ctx in
+  let name = ctx_get_trait_decl tr.trait_decl_id ctx in
   if use_brackets then F.pp_print_string fmt "(";
   F.pp_print_string fmt name;
   (* There is something subtle here: the trait obligations for the implemented
@@ -1307,14 +1295,13 @@ and extract_generic_args (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
     : unit =
-  let with_opaque_pre = false in
   match id with
   | Self ->
       (* This has specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
       raise (Failure "Unexpected")
   | TraitImpl id ->
-      let name = ctx_get_trait_impl with_opaque_pre id ctx in
+      let name = ctx_get_trait_impl id ctx in
       F.pp_print_string fmt name
   | Clause id ->
       let name = ctx_get_local_trait_clause id ctx in
@@ -1354,8 +1341,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     | None -> ctx.fmt.type_name def.name
     | Some info -> String.concat "." info.rust_name
   in
-  let is_opaque = def.kind = Opaque in
-  let ctx = ctx_add is_opaque (TypeId (AdtId def.def_id)) def_name ctx in
+  let ctx = ctx_add (TypeId (AdtId def.def_id)) def_name ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -1392,11 +1378,11 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
         let ctx =
           List.fold_left
             (fun ctx (fid, name) ->
-              ctx_add is_opaque (FieldId (AdtId def.def_id, fid)) name ctx)
+              ctx_add (FieldId (AdtId def.def_id, fid)) name ctx)
             ctx field_names
         in
         (* Add the constructor name *)
-        ctx_add is_opaque (StructId (AdtId def.def_id)) cons_name ctx
+        ctx_add (StructId (AdtId def.def_id)) cons_name ctx
     | Enum variants ->
         let variant_names =
           match info with
@@ -1432,7 +1418,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
         in
         List.fold_left
           (fun ctx (vid, vname) ->
-            ctx_add is_opaque (VariantId (AdtId def.def_id, vid)) vname ctx)
+            ctx_add (VariantId (AdtId def.def_id, vid)) vname ctx)
           ctx variant_names
     | Opaque ->
         (* Nothing to do *)
@@ -1635,9 +1621,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       (* If Coq: print the constructor name *)
       (* TODO: remove superfluous test not is_rec below *)
       if !backend = Coq && not is_rec then (
-        let with_opaque_pre = false in
-        F.pp_print_string fmt
-          (ctx_get_struct with_opaque_pre (AdtId def.def_id) ctx);
+        F.pp_print_string fmt (ctx_get_struct (AdtId def.def_id) ctx);
         F.pp_print_string fmt " ");
       (match !backend with
       | Lean -> ()
@@ -1681,16 +1665,14 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       (* We extract for Coq or Lean, and we have a recursive record, or a record in
          a group of mutually recursive types: we extract it as an inductive type *)
       assert (is_rec && (!backend = Coq || !backend = Lean));
-      let with_opaque_pre = false in
       (* Small trick: in Lean we use namespaces, meaning we don't need to prefix
          the constructor name with the name of the type at definition site,
          i.e., instead of generating `inductive Foo := | MkFoo ...` like in Coq
          we generate `inductive Foo := | mk ... *)
       let cons_name =
-        if !backend = Lean then "mk"
-        else ctx_get_struct with_opaque_pre (AdtId def.def_id) ctx
+        if !backend = Lean then "mk" else ctx_get_struct (AdtId def.def_id) ctx
       in
-      let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
+      let def_name = ctx_get_local_type def.def_id ctx in
       extract_type_decl_variant ctx fmt type_decl_group def_name type_params
         cg_params cons_name fields)
   in
@@ -1720,8 +1702,7 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
 
 let extract_trait_clause_type (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (clause : trait_clause) : unit =
-  let with_opaque_pre = false in
-  let trait_name = ctx_get_trait_decl with_opaque_pre clause.trait_id ctx in
+  let trait_name = ctx_get_trait_decl clause.trait_id ctx in
   F.pp_print_string fmt trait_name;
   extract_generic_args ctx fmt no_params_tys clause.generics
 
@@ -1743,8 +1724,7 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
   F.pp_print_space fmt ();
-  let with_opaque_pre = false in
-  let trait_id = ctx_get_trait_decl with_opaque_pre trait_decl.def_id ctx in
+  let trait_id = ctx_get_trait_decl trait_decl.def_id ctx in
   F.pp_print_string fmt trait_id;
   List.iter
     (fun p ->
@@ -1913,8 +1893,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let is_opaque_coq = !backend = Coq && is_opaque in
   let use_forall = is_opaque_coq && def.generics <> empty_generic_params in
   (* Retrieve the definition name *)
-  let with_opaque_pre = false in
-  let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
+  let def_name = ctx_get_local_type def.def_id ctx in
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
@@ -2001,8 +1980,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : type_decl) : unit =
   (* Retrieve the definition name *)
-  let with_opaque_pre = false in
-  let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
+  let def_name = ctx_get_local_type def.def_id ctx in
   (* Generic parameters are unsupported *)
   assert (def.generics.const_generics = []);
   (* Trait clauses on type definitions are unsupported *)
@@ -2027,8 +2005,7 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
     (fmt : F.formatter) (def : type_decl) : unit =
   (* Retrieve the definition name *)
-  let with_opaque_pre = false in
-  let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
+  let def_name = ctx_get_local_type def.def_id ctx in
   (* Sanity check *)
   assert (def.generics = empty_generic_params);
   (* Generate the declaration *)
@@ -2111,8 +2088,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     | Struct fields ->
         let adt_id = AdtId decl.def_id in
         (* Generate the instruction for the record constructor *)
-        let with_opaque_pre = false in
-        let cons_name = ctx_get_struct with_opaque_pre adt_id ctx in
+        let cons_name = ctx_get_struct adt_id ctx in
         extract_arguments_info cons_name fields;
         (* Generate the instruction for the record projectors, if there are *)
         let is_rec = decl_is_from_rec_group kind in
@@ -2156,11 +2132,8 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
         in
         let ctx, record_var = ctx_add_var "x" (VarId.of_int 0) ctx in
         let ctx, field_var = ctx_add_var "x" (VarId.of_int 1) ctx in
-        let with_opaque_pre = false in
-        let def_name = ctx_get_local_type with_opaque_pre decl.def_id ctx in
-        let cons_name =
-          ctx_get_struct with_opaque_pre (AdtId decl.def_id) ctx
-        in
+        let def_name = ctx_get_local_type decl.def_id ctx in
+        let cons_name = ctx_get_struct (AdtId decl.def_id) ctx in
         let extract_field_proj (field_id : FieldId.id) (_ : field) : unit =
           F.pp_print_space fmt ();
           (* Outer box for the projector definition *)
@@ -2391,7 +2364,6 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       | Some (_filter, info) ->
           let backs = List.map (fun f -> f.f) def.backs in
           let funs = if def.keep_fwd then def.fwd.f :: backs else backs in
-          let is_opaque = false in
           List.fold_left
             (fun ctx (f : fun_decl) ->
               let open ExtractBuiltin in
@@ -2404,7 +2376,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
                    info)
                   .extract_name
               in
-              ctx_add is_opaque (FunId (FromLlbc fun_id)) fun_name ctx)
+              ctx_add (FunId (FromLlbc fun_id)) fun_name ctx)
             ctx funs
       | None ->
           let fwd = def.fwd in
@@ -2509,18 +2481,14 @@ let extract_adt_g_value
          * [{ field0=...; ...; fieldn=...; }] in case of structures.
          *)
         let cons =
-          (* The ADT shouldn't be opaque *)
-          let with_opaque_pre = false in
           match variant_id with
           | Some vid -> (
               (* In the case of Lean, we might have to add the type name as a prefix *)
               match (!backend, adt_id) with
               | Lean, Assumed _ ->
-                  ctx_get_type with_opaque_pre adt_id ctx
-                  ^ "."
-                  ^ ctx_get_variant adt_id vid ctx
+                  ctx_get_type adt_id ctx ^ "." ^ ctx_get_variant adt_id vid ctx
               | _ -> ctx_get_variant adt_id vid ctx)
-          | None -> ctx_get_struct with_opaque_pre adt_id ctx
+          | None -> ctx_get_struct adt_id ctx
         in
         let use_parentheses = inside && field_values <> [] in
         if use_parentheses then F.pp_print_string fmt "(";
@@ -2539,8 +2507,7 @@ let extract_adt_g_value
 (* Extract globals in the same way as variables *)
 let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
     (id : A.GlobalDeclId.id) : unit =
-  let with_opaque_pre = ctx.use_opaque_pre in
-  F.pp_print_string fmt (ctx_get_global with_opaque_pre id ctx)
+  F.pp_print_string fmt (ctx_get_global id ctx)
 
 (** [inside]: see {!extract_ty}.
 
@@ -2676,9 +2643,9 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt "(";
       (* Open a box for the function call *)
       F.pp_open_hovbox fmt ctx.indent_incr;
-      (* Print the function name *)
-      let with_opaque_pre = ctx.use_opaque_pre in
-      (* For the function name: the id is not the same depending on whether
+      (* Print the function name.
+
+         For the function name: the id is not the same depending on whether
          we call a trait method and a "regular" function (remark: trait
          method *implementations* are considered as regular functions here;
          only calls to method of traits which are parameterized in a where
@@ -2751,7 +2718,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
             let fun_id =
               FromLlbc (FunId (Regular method_id.id), lp_id, rg_id)
             in
-            let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
+            let fun_name = ctx_get_function fun_id ctx in
             F.pp_print_string fmt fun_name;
 
             (* Note that we do not need to print the generics for the trait
@@ -2762,7 +2729,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_space fmt ();
             extract_trait_ref ctx fmt TypeDeclId.Set.empty true trait_ref
       | _ ->
-          let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
+          let fun_name = ctx_get_function fun_id ctx in
           F.pp_print_string fmt fun_name);
 
       (* Sanity check: HOL4 doesn't support const generics *)
@@ -3260,7 +3227,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         (* Open the box for `Array.replicate T N [` *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the array constructor *)
-        let cs = ctx_get_struct false (Assumed Array) ctx in
+        let cs = ctx_get_struct (Assumed Array) ctx in
         F.pp_print_string fmt cs;
         (* Print the parameters *)
         let _, generics = ty_as_adt e_ty in
@@ -3613,10 +3580,8 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
   assert (not def.is_global_decl_body);
   (* Retrieve the function name *)
-  let with_opaque_pre = false in
   let def_name =
-    ctx_get_local_function with_opaque_pre def.def_id def.loop_id def.back_id
-      ctx
+    ctx_get_local_function def.def_id def.loop_id def.back_id ctx
   in
   (* Add a break before *)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
@@ -3649,8 +3614,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      if `wrap_opaque_in_sig`: we generate a record of assumed funcions.
      TODO: this is obsolete.
   *)
-  (if not (!Config.wrap_opaque_in_sig && (kind = Assumed || kind = Declared))
-   then
+  (if not (kind = Assumed || kind = Declared) then
      let qualif = ctx.fmt.fun_decl_kind_to_qualif kind in
      match qualif with
      | Some qualif ->
@@ -3867,10 +3831,8 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   (* Retrieve the definition name *)
-  let with_opaque_pre = false in
   let def_name =
-    ctx_get_local_function with_opaque_pre def.def_id def.loop_id def.back_id
-      ctx
+    ctx_get_local_function def.def_id def.loop_id def.back_id ctx
   in
   assert (def.signature.generics.const_generics = []);
   (* Add the type/const gen parameters - note that we need those bindings
@@ -4065,10 +4027,9 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   extract_comment fmt [ "[" ^ Print.global_name_to_string global.name ^ "]" ];
   F.pp_print_space fmt ();
 
-  let with_opaque_pre = false in
-  let decl_name = ctx_get_global with_opaque_pre global.def_id ctx in
+  let decl_name = ctx_get_global global.def_id ctx in
   let body_name =
-    ctx_get_function with_opaque_pre
+    ctx_get_function
       (FromLlbc (Pure.FunId (Regular global.body_id), None, None))
       ctx
   in
@@ -4111,7 +4072,6 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
     extraction_ctx =
-  let is_opaque = false in
   let generics = trait_decl.generics in
   (* Compute the clause names *)
   let clause_names =
@@ -4135,7 +4095,7 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (cid, cname) ->
-      ctx_add is_opaque (TraitParentClauseId (trait_decl.def_id, cid)) cname ctx)
+      ctx_add (TraitParentClauseId (trait_decl.def_id, cid)) cname ctx)
     ctx clause_names
 
 (** Similar to {!extract_trait_decl_register_names} *)
@@ -4143,7 +4103,6 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
     extraction_ctx =
-  let is_opaque = false in
   let consts = trait_decl.consts in
   (* Compute the names *)
   let constant_names =
@@ -4169,7 +4128,7 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (item_name, name) ->
-      ctx_add is_opaque (TraitItemId (trait_decl.def_id, item_name)) name ctx)
+      ctx_add (TraitItemId (trait_decl.def_id, item_name)) name ctx)
     ctx constant_names
 
 (** Similar to {!extract_trait_decl_register_names} *)
@@ -4177,7 +4136,6 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
     extraction_ctx =
-  let is_opaque = false in
   let types = trait_decl.types in
   (* Compute the names *)
   let type_names =
@@ -4227,13 +4185,11 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
   List.fold_left
     (fun ctx (item_name, (type_name, clauses)) ->
       let ctx =
-        ctx_add is_opaque
-          (TraitItemId (trait_decl.def_id, item_name))
-          type_name ctx
+        ctx_add (TraitItemId (trait_decl.def_id, item_name)) type_name ctx
       in
       List.fold_left
         (fun ctx (clause_id, clause_name) ->
-          ctx_add is_opaque
+          ctx_add
             (TraitItemClauseId (trait_decl.def_id, item_name, clause_id))
             clause_name ctx)
         ctx clauses)
@@ -4244,7 +4200,6 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
     extraction_ctx =
-  let is_opaque = false in
   let required_methods = trait_decl.required_methods in
   (* Compute the names *)
   let method_names =
@@ -4305,7 +4260,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
       (* We add one field per required forward/backward function *)
       List.fold_left
         (fun ctx (rg, fun_name) ->
-          ctx_add is_opaque
+          ctx_add
             (TraitMethodId (trait_decl.def_id, item_name, rg))
             fun_name ctx)
         ctx funs)
@@ -4326,8 +4281,7 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
       | None -> ctx.fmt.trait_decl_name trait_decl
       | Some info -> info.extract_name
     in
-    let is_opaque = false in
-    ctx_add is_opaque (TraitDeclId trait_decl.def_id) trait_name ctx
+    ctx_add (TraitDeclId trait_decl.def_id) trait_name ctx
   in
   (* Parent clauses *)
   let ctx =
@@ -4369,8 +4323,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     | None -> ctx.fmt.trait_impl_name trait_decl trait_impl
     | Some name -> name
   in
-  let is_opaque = false in
-  ctx_add is_opaque (TraitImplId trait_impl.def_id) name ctx
+  ctx_add (TraitImplId trait_impl.def_id) name ctx
 
 (** Small helper.
 
@@ -4446,8 +4399,7 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (decl : trait_decl) : unit =
   (* Retrieve the trait name *)
-  let with_opaque_pre = false in
-  let decl_name = ctx_get_trait_decl with_opaque_pre decl.def_id ctx in
+  let decl_name = ctx_get_trait_decl decl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -4592,7 +4544,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
       if use_forall then F.pp_print_string fmt ",";
       (* Extract the function call *)
       F.pp_print_space fmt ();
-      let id = ctx_get_local_function false f.def_id None f.back_id ctx in
+      let id = ctx_get_local_function f.def_id None f.back_id ctx in
       F.pp_print_string fmt id;
       let all_generics =
         let i_tys, i_cgs, i_tcs = impl_generics in
@@ -4613,8 +4565,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
   log#ldebug (lazy ("extract_trait_impl: " ^ Names.name_to_string impl.name));
   (* Retrieve the impl name *)
-  let with_opaque_pre = false in
-  let impl_name = ctx_get_trait_impl with_opaque_pre impl.def_id ctx in
+  let impl_name = ctx_get_trait_impl impl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -4690,7 +4641,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
       let item_name = ctx_get_trait_const trait_decl_id name ctx in
       let ty () =
         F.pp_print_space fmt ();
-        F.pp_print_string fmt (ctx_get_global false id ctx)
+        F.pp_print_string fmt (ctx_get_global id ctx)
       in
 
       extract_trait_impl_item ctx fmt item_name ty)
@@ -4776,12 +4727,8 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "assert_norm";
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
-        (* Note that if the function is opaque, the unit test will fail
-           because the normalizer will get stuck *)
-        let with_opaque_pre = ctx.use_opaque_pre in
         let fun_name =
-          ctx_get_local_function with_opaque_pre def.def_id def.loop_id
-            def.back_id ctx
+          ctx_get_local_function def.def_id def.loop_id def.back_id ctx
         in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
@@ -4796,12 +4743,8 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "Check";
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
-        (* Note that if the function is opaque, the unit test will fail
-           because the normalizer will get stuck *)
-        let with_opaque_pre = ctx.use_opaque_pre in
         let fun_name =
-          ctx_get_local_function with_opaque_pre def.def_id def.loop_id
-            def.back_id ctx
+          ctx_get_local_function def.def_id def.loop_id def.back_id ctx
         in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
@@ -4813,12 +4756,8 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "#assert";
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
-        (* Note that if the function is opaque, the unit test will fail
-           because the normalizer will get stuck *)
-        let with_opaque_pre = ctx.use_opaque_pre in
         let fun_name =
-          ctx_get_local_function with_opaque_pre def.def_id def.loop_id
-            def.back_id ctx
+          ctx_get_local_function def.def_id def.loop_id def.back_id ctx
         in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
@@ -4832,12 +4771,8 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     | HOL4 ->
         F.pp_print_string fmt "val _ = assert_return (";
         F.pp_print_string fmt "“";
-        (* Note that if the function is opaque, the unit test will fail
-           because the normalizer will get stuck *)
-        let with_opaque_pre = ctx.use_opaque_pre in
         let fun_name =
-          ctx_get_local_function with_opaque_pre def.def_id def.loop_id
-            def.back_id ctx
+          ctx_get_local_function def.def_id def.loop_id def.back_id ctx
         in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
