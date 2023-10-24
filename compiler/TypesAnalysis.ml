@@ -232,6 +232,14 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
         in
         (* Return *)
         ty_info
+    | Arrow (inputs, output) ->
+        (* Just dive into the arrow *)
+        let ty_info =
+          List.fold_left
+            (fun ty_info ty -> analyze expl_info ty_info ty)
+            ty_info inputs
+        in
+        analyze expl_info ty_info output
   in
   (* Explore *)
   analyze expl_info_init ty_info ty

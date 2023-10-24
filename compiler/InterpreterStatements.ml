@@ -306,7 +306,7 @@ let get_assumed_function_return_type (ctx : C.eval_ctx) (fid : A.assumed_fun_id)
   assert (generics.trait_refs = []);
   (* [Box::free] has a special treatment *)
   match fid with
-  | A.BoxFree ->
+  | BoxFree ->
       assert (generics.regions = []);
       assert (List.length generics.types = 1);
       assert (generics.const_generics = []);
@@ -583,7 +583,7 @@ let eval_vec_function_concrete (_config : C.config) (_fid : A.assumed_fun_id)
 (** Evaluate a non-local function call in concrete mode *)
 let eval_assumed_function_call_concrete (config : C.config)
     (fid : A.assumed_fun_id) (call : A.call) : cm_fun =
-  let generics = call.generics in
+  let generics = call.func.generics in
   let args = call.args in
   let dest = call.dest in
   (* Sanity check: we don't fully handle the const generic vars environment
@@ -595,7 +595,7 @@ let eval_assumed_function_call_concrete (config : C.config)
      See {!eval_box_free}
   *)
   match fid with
-  | A.BoxFree ->
+  | BoxFree ->
       (* Degenerate case: box_free *)
       eval_box_free config generics args dest
   | _ ->
@@ -636,7 +636,7 @@ let eval_assumed_function_call_concrete (config : C.config)
          * access to a body. *)
         let cf_eval_body : cm_fun =
           match fid with
-          | A.Replace -> eval_replace_concrete config generics
+          | Replace -> eval_replace_concrete config generics
           | BoxNew -> eval_box_new_concrete config generics
           | BoxDeref -> eval_box_deref_concrete config generics
           | BoxDerefMut -> eval_box_deref_mut_concrete config generics
@@ -854,15 +854,14 @@ and eval_global (config : C.config) (dest : E.place) (gid : LA.GlobalDeclId.id)
   match config.mode with
   | ConcreteMode ->
       (* Treat the evaluation of the global as a call to the global body (without arguments) *)
-      let call =
+      let func =
         {
-          A.func = A.FunId (A.Regular global.body_id);
+          E.func = FunId (Regular global.body_id);
           generics = TypesUtils.mk_empty_generic_args;
           trait_and_method_generic_args = None;
-          args = [];
-          dest;
         }
       in
+      let call = { A.func; args = []; dest } in
       (eval_transparent_function_call_concrete config global.body_id call)
         cf ctx
   | SymbolicMode ->
@@ -1019,29 +1018,28 @@ and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
 and eval_function_call_concrete (config : C.config) (call : A.call) : st_cm_fun
     =
  fun cf ctx ->
-  match call.func with
-  | A.FunId (A.Regular fid) ->
+  match call.func.func with
+  | FunId (Regular fid) ->
       eval_transparent_function_call_concrete config fid call cf ctx
-  | A.FunId (A.Assumed fid) ->
+  | FunId (Assumed fid) ->
       (* Continue - note that we do as if the function call has been successful,
        * by giving {!Unit} to the continuation, because we place us in the case
        * where we haven't panicked. Of course, the translation needs to take the
        * panic case into account... *)
       eval_assumed_function_call_concrete config fid call (cf Unit) ctx
-  | A.TraitMethod _ -> raise (Failure "Unimplemented")
+  | TraitMethod _ -> raise (Failure "Unimplemented")
 
 and eval_function_call_symbolic (config : C.config) (call : A.call) : st_cm_fun
     =
-  match call.func with
-  | A.FunId (A.Regular _) | A.TraitMethod _ ->
+  match call.func.func with
+  | FunId (Regular _) | TraitMethod _ ->
       eval_transparent_function_call_symbolic config call
-  | A.FunId (A.Assumed fid) ->
-      eval_assumed_function_call_symbolic config fid call
+  | FunId (Assumed fid) -> eval_assumed_function_call_symbolic config fid call
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_transparent_function_call_concrete (config : C.config)
     (fid : A.FunDeclId.id) (call : A.call) : st_cm_fun =
-  let generics = call.A.generics in
+  let generics = call.func.generics in
   let args = call.A.args in
   let dest = call.A.dest in
   (* Sanity check: we don't fully handle the const generic vars environment
@@ -1195,29 +1193,29 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
      to a trait clause but directly to the method provided in the trait declaration.
   *)
   let func, generics, def, inst_sg =
-    match call.func with
-    | A.FunId (A.Regular fid) ->
+    match call.func.func with
+    | FunId (Regular fid) ->
         let def = C.ctx_lookup_fun_decl ctx fid in
         let tr_self = T.UnknownTrait __FUNCTION__ in
         let inst_sg =
-          instantiate_fun_sig ctx call.generics tr_self def.A.signature
+          instantiate_fun_sig ctx call.func.generics tr_self def.A.signature
         in
-        (call.func, call.generics, def, inst_sg)
-    | A.FunId (A.Assumed _) ->
+        (call.func.func, call.func.generics, def, inst_sg)
+    | FunId (Assumed _) ->
         (* Unreachable: must be a transparent function *)
         raise (Failure "Unreachable")
-    | A.TraitMethod (trait_ref, method_name, _) -> (
+    | TraitMethod (trait_ref, method_name, _) -> (
         log#ldebug
           (lazy
             ("trait method call:\n- call: " ^ call_to_string ctx call
            ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
-            ^ egeneric_args_to_string ctx call.generics
+            ^ egeneric_args_to_string ctx call.func.generics
             ^ "\n- trait and method generics:\n"
             ^ egeneric_args_to_string ctx
-                (Option.get call.trait_and_method_generic_args)));
+                (Option.get call.func.trait_and_method_generic_args)));
         (* When instantiating, we need to group the generics for the trait ref
            and the method *)
-        let generics = Option.get call.trait_and_method_generic_args in
+        let generics = Option.get call.func.trait_and_method_generic_args in
         (* Lookup the trait method signature - there are several possibilities
            depending on whethere we call a top-level trait method impl or the
            method from a local clause *)
@@ -1251,7 +1249,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                    which implements the method. In order to do this properly,
                    we also need to update the generics.
                 *)
-                let func = A.FunId (A.Regular id) in
+                let func = E.FunId (Regular id) in
                 (func, generics, method_def, inst_sg)
             | None ->
                 (* If not found, lookup the methods provided by the trait *declaration*
@@ -1287,7 +1285,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                 *)
                 let all_generics =
                   TypesUtils.merge_generic_args
-                    trait_ref.trait_decl_ref.decl_generics call.generics
+                    trait_ref.trait_decl_ref.decl_generics call.func.generics
                 in
                 log#ldebug
                   (lazy
@@ -1304,7 +1302,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                   instantiate_fun_sig ctx all_generics tr_self
                     method_def.A.signature
                 in
-                (call.func, call.generics, method_def, inst_sg))
+                (call.func.func, call.func.generics, method_def, inst_sg))
         | _ ->
             (* We are using a local clause - we lookup the trait decl *)
             let trait_decl =
@@ -1333,7 +1331,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             let inst_sg =
               instantiate_fun_sig ctx generics tr_self method_def.A.signature
             in
-            (call.func, call.generics, method_def, inst_sg))
+            (call.func.func, call.func.generics, method_def, inst_sg))
   in
   (* Sanity check *)
   assert (List.length call.args = List.length def.A.signature.inputs);
@@ -1357,6 +1355,18 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (generics : T.egeneric_args) (args : E.operand list) (dest : E.place) :
     st_cm_fun =
  fun cf ctx ->
+  log#ldebug
+    (lazy
+      ("eval_function_call_symbolic_from_inst_sig:\n- fid: "
+      ^ fun_id_or_trait_method_ref_to_string ctx fid
+      ^ "\n- inst_sg:\n"
+      ^ inst_fun_sig_to_string ctx inst_sg
+      ^ "\n- call.generics:\n"
+      ^ egeneric_args_to_string ctx generics
+      ^ "\n- args:\n"
+      ^ String.concat ", " (List.map (operand_to_string ctx) args)
+      ^ "\n- dest:\n" ^ place_to_string ctx dest));
+
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
   let ret_spc = mk_fresh_symbolic_value V.FunCallRet ret_sv_ty in
@@ -1487,7 +1497,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
 and eval_assumed_function_call_symbolic (config : C.config)
     (fid : A.assumed_fun_id) (call : A.call) : st_cm_fun =
  fun cf ctx ->
-  let generics = call.generics in
+  let generics = call.func.generics in
   let args = call.args in
   let dest = call.dest in
   (* Sanity check: make sure the type parameters don't contain regions -
@@ -1503,7 +1513,7 @@ and eval_assumed_function_call_symbolic (config : C.config)
        See {!eval_box_free}
   *)
   match fid with
-  | A.BoxFree ->
+  | BoxFree ->
       (* Degenerate case: box_free - note that this is not really a function
        * call: no need to call a "synthesize_..." function *)
       eval_box_free config generics args dest (cf Unit) ctx
@@ -1514,7 +1524,7 @@ and eval_assumed_function_call_symbolic (config : C.config)
        * instantiated signatures, and delegate the work to an auxiliary function *)
       let inst_sig =
         match fid with
-        | A.BoxFree ->
+        | BoxFree ->
             (* should have been treated above *)
             raise (Failure "Unreachable")
         | _ ->
@@ -1525,7 +1535,7 @@ and eval_assumed_function_call_symbolic (config : C.config)
       in
 
       (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config (A.FunId (A.Assumed fid))
+      eval_function_call_symbolic_from_inst_sig config (FunId (Assumed fid))
         inst_sig generics args dest cf ctx
 
 (** Evaluate a statement seen as a function body *)

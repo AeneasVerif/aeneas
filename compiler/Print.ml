@@ -359,6 +359,18 @@ module Values = struct
     ^ "}" ^ "{regions="
     ^ T.RegionId.Set.to_string None abs.regions
     ^ "}" ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
+
+  let inst_fun_sig_to_string (fmt : value_formatter) (sg : LlbcAst.inst_fun_sig)
+      : string =
+    (* TODO: print the trait type constraints? *)
+    let ty_fmt = value_to_rtype_formatter fmt in
+    let ty_to_string = PT.ty_to_string ty_fmt in
+
+    let inputs =
+      "(" ^ String.concat ", " (List.map ty_to_string sg.inputs) ^ ")"
+    in
+    let output = ty_to_string sg.output in
+    inputs ^ " -> " ^ output
 end
 
 module PV = Values (* local module *)
@@ -754,6 +766,17 @@ module EvalCtxLlbcAst = struct
   let fun_sig_to_string (ctx : C.eval_ctx) (x : A.fun_sig) : string =
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.fun_sig_to_string fmt "" "  " x
+
+  let inst_fun_sig_to_string (ctx : C.eval_ctx) (x : LlbcAst.inst_fun_sig) :
+      string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    let fmt = PC.ast_to_value_formatter fmt in
+    PV.inst_fun_sig_to_string fmt x
+
+  let fun_id_or_trait_method_ref_to_string (ctx : C.eval_ctx)
+      (x : E.fun_id_or_trait_method_ref) : string =
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
+    PE.fun_id_or_trait_method_ref_to_string fmt x "..."
 
   let statement_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (e : A.statement) : string =

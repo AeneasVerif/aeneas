@@ -271,7 +271,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
       match cv.value with
       | E.CLiteral lit ->
           cf (literal_to_typed_value (TypesUtils.ty_as_literal cv.ty) lit) ctx
-      | E.TraitConst (trait_ref, generics, const_name) -> (
+      | E.CTraitConst (trait_ref, generics, const_name) -> (
           assert (generics = TypesUtils.mk_empty_generic_args);
           match trait_ref.trait_id with
           | T.TraitImpl _ ->
@@ -329,7 +329,8 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
                      None,
                      value_as_symbolic v.value,
                      SymbolicAst.ConstGenericValue vid,
-                     e ))))
+                     e )))
+      | E.CFnPtr _ -> raise (Failure "TODO"))
   | E.Copy p ->
       (* Access the value *)
       let access = Read in
@@ -426,7 +427,7 @@ let eval_unary_op_concrete (config : C.config) (unop : E.unop) (op : E.operand)
         match mk_scalar sv.int_ty i with
         | Error _ -> cf (Error EPanic)
         | Ok sv -> cf (Ok { v with V.value = V.Literal (PV.Scalar sv) }))
-    | E.Cast (src_ty, tgt_ty), V.Literal (PV.Scalar sv) -> (
+    | E.Cast (E.CastInteger (src_ty, tgt_ty)), V.Literal (PV.Scalar sv) -> (
         assert (src_ty = sv.int_ty);
         let i = sv.PV.value in
         match mk_scalar tgt_ty i with
@@ -452,7 +453,7 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
       match (unop, v.V.ty) with
       | E.Not, (T.Literal Bool as lty) -> lty
       | E.Neg, (T.Literal (Integer _) as lty) -> lty
-      | E.Cast (_, tgt_ty), _ -> T.Literal (Integer tgt_ty)
+      | E.Cast (E.CastInteger (_, tgt_ty)), _ -> T.Literal (Integer tgt_ty)
       | _ -> raise (Failure "Invalid input for unop")
     in
     let res_sv =

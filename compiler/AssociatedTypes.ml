@@ -157,7 +157,8 @@ let ctx_add_norm_trait_types_from_preds (ctx : C.eval_ctx)
 let rec trait_instance_id_is_local_clause (id : 'r T.trait_instance_id) : bool =
   match id with
   | T.Self | Clause _ -> true
-  | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ -> false
+  | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ | FnPointer _ ->
+      false
   | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
       trait_instance_id_is_local_clause id
 
@@ -187,6 +188,10 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
   | Ref (r, ty, rkind) ->
       let ty = ctx_normalize_ty ctx ty in
       T.Ref (r, ty, rkind)
+  | Arrow (inputs, output) ->
+      let inputs = List.map (ctx_normalize_ty ctx) inputs in
+      let output = ctx_normalize_ty ctx output in
+      Arrow (inputs, output)
   | TraitType (trait_ref, generics, type_name) -> (
       log#ldebug
         (lazy
@@ -401,6 +406,11 @@ and ctx_normalize_trait_instance_id :
       assert (trait_instance_id_is_local_clause trait_ref.trait_id);
       assert (trait_ref.generics = TypesUtils.mk_empty_generic_args);
       (trait_ref.trait_id, None)
+  | FnPointer ty ->
+      let ty = ctx_normalize_ty ctx ty in
+      (* TODO: we might want to return the ref to the function pointer,
+         in order to later normalize a call to this function pointer *)
+      (FnPointer ty, None)
   | UnknownTrait _ ->
       (* This is actually an error case *)
       (id, None)
