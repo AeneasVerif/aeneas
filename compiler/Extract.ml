@@ -3674,18 +3674,13 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let use_forall =
     is_opaque_coq && def.signature.generics <> empty_generic_params
   in
-  (* Print the qualifier ("assume", etc.).
-
-     if `wrap_opaque_in_sig`: we generate a record of assumed funcions.
-     TODO: this is obsolete.
-  *)
-  (if not (kind = Assumed || kind = Declared) then
-     let qualif = ctx.fmt.fun_decl_kind_to_qualif kind in
-     match qualif with
-     | Some qualif ->
-         F.pp_print_string fmt qualif;
-         F.pp_print_space fmt ()
-     | None -> ());
+  (* Print the qualifier ("assume", etc.). *)
+  let qualif = ctx.fmt.fun_decl_kind_to_qualif kind in
+  (match qualif with
+  | Some qualif ->
+      F.pp_print_string fmt qualif;
+      F.pp_print_space fmt ()
+  | None -> ());
   F.pp_print_string fmt def_name;
   F.pp_print_space fmt ();
   if use_forall then (
