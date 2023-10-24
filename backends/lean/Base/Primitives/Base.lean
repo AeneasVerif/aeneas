@@ -120,8 +120,8 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
 -- MISC --
 ----------
 
-@[simp] def mem.replace (a : Type) (x : a) (_ : a) : a := x
-@[simp] def mem.replace_back (a : Type) (_ : a) (y : a) : a := y
+@[simp] def core.mem.replace (a : Type) (x : a) (_ : a) : Result a := ret x
+@[simp] def core.mem.replace_back (a : Type) (_ : a) (y : a) : Result a := ret y
 
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.
  Use with `simp [ aeneas ]` -/

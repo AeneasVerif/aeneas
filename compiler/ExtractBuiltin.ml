@@ -211,15 +211,15 @@ let builtin_funs () :
           rg = None;
           extract_name =
             (match !backend with
-            | FStar | Coq | HOL4 -> "mem_replace_fwd"
-            | Lean -> "mem.replace");
+            | FStar | Coq | HOL4 -> "core_mem_replace_fwd"
+            | Lean -> "core.mem.replace");
         };
         {
           rg = rg0;
           extract_name =
             (match !backend with
-            | FStar | Coq | HOL4 -> "mem_replace_back"
-            | Lean -> "mem.replace_back");
+            | FStar | Coq | HOL4 -> "core_mem_replace_back"
+            | Lean -> "core.mem.replace_back");
         };
       ] );
     ( [ "alloc"; "vec"; "Vec"; "new" ],
