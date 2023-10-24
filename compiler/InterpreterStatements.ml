@@ -1108,6 +1108,13 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
     match call.func.func with
     | FunId (Regular fid) ->
         let def = C.ctx_lookup_fun_decl ctx fid in
+        log#ldebug
+          (lazy
+            ("fun call:\n- call: " ^ call_to_string ctx call
+           ^ "\n- call.generics:\n"
+            ^ egeneric_args_to_string ctx call.func.generics
+            ^ "\n- def.signature:\n"
+            ^ fun_sig_to_string ctx def.A.signature));
         let tr_self = T.UnknownTrait __FUNCTION__ in
         let inst_sg =
           instantiate_fun_sig ctx call.func.generics tr_self def.A.signature
