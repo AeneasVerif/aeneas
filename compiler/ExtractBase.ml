@@ -640,6 +640,19 @@ type extraction_ctx = {
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
+  types_filter_type_args_map : bool list TypeDeclId.Map.t;
+      (** The map to filter the type arguments for the builtin type
+          definitions.
+
+          We need this for type `Vec`, for instance, which takes a useless
+          (in the context of the type translation) type argument for the
+          allocator which is used, and which we want to remove.
+
+          TODO: it would be cleaner to filter those types in a micro-pass,
+          rather than at code generation time.
+        *)
+  funs_filter_type_args_map : bool list FunDeclId.Map.t;
+      (** Same as {!types_filter_type_args_map}, but for functions *)
 }
 
 (** Debugging function, used when communicating name collisions to the user,

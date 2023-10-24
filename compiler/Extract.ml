@@ -1175,6 +1175,26 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
               (* TODO: for now, only the opaque *functions* are extracted in the
                  opaque module. The opaque *types* are assumed. *)
               F.pp_print_string fmt (ctx_get_type type_id ctx);
+              (* We might need to filter the type arguments, if the type
+                 is builtin (for instance, we filter the global allocator type
+                 argument for `Vec`). *)
+              let generics =
+                match type_id with
+                | AdtId id -> (
+                    match
+                      TypeDeclId.Map.find_opt id ctx.types_filter_type_args_map
+                    with
+                    | None -> generics
+                    | Some filter ->
+                        let types = List.combine filter generics.types in
+                        let types =
+                          List.filter_map
+                            (fun (b, ty) -> if b then Some ty else None)
+                            types
+                        in
+                        { generics with types })
+                | _ -> generics
+              in
               extract_generic_args ctx fmt no_params_tys generics;
               if print_paren then F.pp_print_string fmt ")"
           | HOL4 ->
@@ -1335,6 +1355,17 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   let open ExtractBuiltin in
   let sname = name_to_simple_name def.name in
   let info = SimpleNameMap.find_opt sname (builtin_types_map ()) in
+  (* Register the filtering information, if there is *)
+  let ctx =
+    match info with
+    | Some { keep_params = Some keep; _ } ->
+        {
+          ctx with
+          types_filter_type_args_map =
+            TypeDeclId.Map.add def.def_id keep ctx.types_filter_type_args_map;
+        }
+    | _ -> ctx
+  in
   (* Compute and register the type def name *)
   let def_name =
     match info with
@@ -2361,7 +2392,19 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       in
       (* Use the builtin names if necessary *)
       match builtin with
-      | Some (_filter, info) ->
+      | Some (filter_info, info) ->
+          (* Register the filtering information, if there is *)
+          let ctx =
+            match filter_info with
+            | Some keep ->
+                {
+                  ctx with
+                  funs_filter_type_args_map =
+                    FunDeclId.Map.add def.fwd.f.def_id keep
+                      ctx.funs_filter_type_args_map;
+                }
+            | _ -> ctx
+          in
           let backs = List.map (fun f -> f.f) def.backs in
           let funs = if def.keep_fwd then def.fwd.f :: backs else backs in
           List.fold_left
@@ -2734,7 +2777,27 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
 
       (* Sanity check: HOL4 doesn't support const generics *)
       assert (generics.const_generics = [] || !backend <> HOL4);
-      (* Print the generics *)
+      (* Print the generics.
+
+         We might need to filter some of the type arguments, if the type
+         is builtin (for instance, we filter the global allocator type
+         argument for `Vec::new`).
+      *)
+      let generics =
+        match fun_id with
+        | FromLlbc (FunId (Regular id), _, _) -> (
+            match FunDeclId.Map.find_opt id ctx.funs_filter_type_args_map with
+            | None -> generics
+            | Some filter ->
+                let types = List.combine filter generics.types in
+                let types =
+                  List.filter_map
+                    (fun (b, ty) -> if b then Some ty else None)
+                    types
+                in
+                { generics with types })
+        | _ -> generics
+      in
       extract_generic_args ctx fmt TypeDeclId.Set.empty generics;
       (* Print the arguments *)
       List.iter

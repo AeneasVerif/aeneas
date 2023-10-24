@@ -203,9 +203,8 @@ type builtin_fun_info = {
 let builtin_funs () :
     (string list * bool list option * builtin_fun_info list) list =
   let rg0 = Some Types.RegionGroupId.zero in
-  (* TODO: fix the names below *)
   [
-    ( [ "core::mem::replace" ],
+    ( [ "core"; "mem"; "replace" ],
       None,
       [
         {
@@ -223,7 +222,7 @@ let builtin_funs () :
             | Lean -> "mem.replace_back");
         };
       ] );
-    ( [ "alloc::vec::Vec::new" ],
+    ( [ "alloc"; "vec"; "Vec"; "new" ],
       Some [ true; false ],
       [
         {
@@ -241,7 +240,7 @@ let builtin_funs () :
             | Lean -> "Vec.new_back");
         };
       ] );
-    ( [ "alloc::vec::Vec::push" ],
+    ( [ "alloc"; "vec"; "Vec"; "push" ],
       Some [ true; false ],
       [
         (* The forward function shouldn't be used *)
@@ -260,7 +259,7 @@ let builtin_funs () :
             | Lean -> "Vec.push");
         };
       ] );
-    ( [ "alloc::vec::Vec::insert" ],
+    ( [ "alloc"; "vec"; "Vec"; "insert" ],
       Some [ true; false ],
       [
         (* The forward function shouldn't be used *)
@@ -279,7 +278,7 @@ let builtin_funs () :
             | Lean -> "Vec.insert");
         };
       ] );
-    ( [ "alloc::vec::Vec::len" ],
+    ( [ "alloc"; "vec"; "Vec"; "len" ],
       Some [ true; false ],
       [
         {
@@ -290,7 +289,7 @@ let builtin_funs () :
             | Lean -> "Vec.len");
         };
       ] );
-    ( [ "alloc::vec::Vec::index" ],
+    ( [ "alloc"; "vec"; "Vec"; "index" ],
       Some [ true; false ],
       [
         {
@@ -309,7 +308,7 @@ let builtin_funs () :
             | Lean -> "Vec.index_shared_back");
         };
       ] );
-    ( [ "alloc::vec::Vec::index_mut" ],
+    ( [ "alloc"; "vec"; "Vec"; "index_mut" ],
       Some [ true; false ],
       [
         {
