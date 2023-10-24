@@ -58,6 +58,24 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let can_diverge = ref false in
     let is_rec = ref false in
 
+    (* We have some specialized knowledge of some library functions; we don't
+       have any more custom treatment than this, and these functions can be modeled
+       suitably in Primitives.fst, rather than special-casing for them all the
+       way. *)
+    let module M = struct type opaque_info = { fallible: bool; stateful: bool } end in
+    let open M in
+    let opaque_info (f: fun_decl) =
+      match f.name with
+      | [ Ident "core"; Ident "num"; Ident "u32"; _; Ident "wrapping_add" ]
+      | [ Ident "core"; Ident "num"; Ident "u32"; _; Ident "rotate_left" ] ->
+          { fallible = false; stateful = false }
+      | _ ->
+          (* Opaque function: we consider they fail by default *)
+          { fallible = true; stateful = true }
+    in
+
+    (* JP: Why not use a reduce visitor here with a tuple of the values to be
+       computed? *)
     let visit_fun (f : fun_decl) : unit =
       let obj =
         object (self)
@@ -108,9 +126,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       assert ((not f.is_global_decl_body) || not !stateful);
       match f.body with
       | None ->
-          (* Opaque function: we consider they fail by default *)
-          obj#may_fail true;
-          stateful := (not f.is_global_decl_body) && use_state
+          let info = opaque_info f in
+          obj#may_fail info.fallible;
+          stateful := (not f.is_global_decl_body) && use_state && info.stateful
       | Some body -> obj#visit_statement () body.body
     in
     List.iter visit_fun d;

@@ -3,7 +3,6 @@
    the formatter everywhere...
 *)
 
-open Utils
 open Pure
 open PureUtils
 open TranslateCore
@@ -61,6 +60,11 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
     | Le -> "le"
     | Ge -> "ge"
     | Gt -> "gt"
+    | BitXor -> "xor"
+    | BitAnd -> "and"
+    | BitOr -> "or"
+    | Shl -> "lsl"
+    | Shr -> "asr" (* NOTE: make sure arithmetic shift right is implemented, i.e. OCaml's asr operator, not lsr *)
     | _ -> raise (Failure "Unreachable")
   in
   (* Remark: the Lean case is actually not used *)
@@ -445,14 +449,13 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
       F.pp_print_string fmt binop;
       F.pp_print_space fmt ();
       extract_expr false arg1
-  | _, (Lt | Le | Ge | Gt | Div | Rem | Add | Sub | Mul) ->
+  | _ ->
       let binop = named_binop_name binop int_ty in
       F.pp_print_string fmt binop;
       F.pp_print_space fmt ();
       extract_expr true arg0;
       F.pp_print_space fmt ();
-      extract_expr true arg1
-  | _, (BitXor | BitAnd | BitOr | Shl | Shr) -> raise Unimplemented);
+      extract_expr true arg1);
   if inside then F.pp_print_string fmt ")"
 
 let type_decl_kind_to_qualif (kind : decl_kind)
