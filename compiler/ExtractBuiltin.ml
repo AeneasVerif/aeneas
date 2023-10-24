@@ -29,6 +29,7 @@ module SimpleNameOrd = struct
 end
 
 module SimpleNameMap = Collections.MakeMap (SimpleNameOrd)
+module SimpleNameSet = Collections.MakeSet (SimpleNameOrd)
 
 (** Small utility to memoize some computations *)
 let mk_memoized (f : unit -> 'a) : unit -> 'a =
@@ -373,6 +374,13 @@ let mk_builtin_funs_map () =
        (builtin_funs ()))
 
 let builtin_funs_map = mk_memoized mk_builtin_funs_map
+
+let builtin_non_fallible_funs =
+  [ "alloc::boxed::Box::deref"; "alloc::boxed::Box::deref_mut" ]
+
+let builtin_non_fallible_funs_set =
+  SimpleNameSet.of_list
+    (List.map string_to_simple_name builtin_non_fallible_funs)
 
 type builtin_trait_decl_info = {
   rust_name : string;

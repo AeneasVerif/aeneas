@@ -1544,20 +1544,22 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             | Fun (FromLlbc (FunId (Regular fid), _lp_id, rg_id)) -> (
                 (* Lookup the function name *)
                 let def = FunDeclId.Map.find fid ctx.fun_ctx.fun_decls in
-                match (Names.name_to_string def.name, rg_id) with
-                | "alloc::box::Boxed::deref", None ->
+                match
+                  (Names.name_no_disambiguators_to_string def.name, rg_id)
+                with
+                | "alloc::boxed::Box::deref", None ->
                     (* [Box::deref] forward is the identity *)
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
-                | "alloc::box::Boxed::deref", Some _ ->
+                | "alloc::boxed::Box::deref", Some _ ->
                     (* [Box::deref] backward is [()] (doesn't give back anything) *)
                     assert (args = []);
                     mk_unit_rvalue
-                | "alloc::box::Boxed::deref_mut", None ->
+                | "alloc::boxed::Box::deref_mut", None ->
                     (* [Box::deref_mut] forward is the identity *)
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
-                | "alloc::box::Boxed::deref_mut", Some _ ->
+                | "alloc::boxed::Box::deref_mut", Some _ ->
                     (* [Box::deref_mut] back is almost the identity:
                      * let box_deref_mut (x_init : t) (x_back : t) : t = x_back
                      * *)
