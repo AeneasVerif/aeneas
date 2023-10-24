@@ -139,9 +139,9 @@ def test_list1 : Result Unit :=
 
 /- [no_nested_borrows::test_box1]: forward function -/
 def test_box1 : Result Unit :=
-  let b := (I32.ofInt 1)
+  let b := 1#i32
   let x := b
-  if not (x = (I32.ofInt 1))
+  if not (x = 1#i32)
   then Result.fail Error.panic
   else Result.ret ()
 
@@ -316,7 +316,7 @@ divergent def list_rev_aux
 /- [no_nested_borrows::list_rev]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 def list_rev (T : Type) (l : List T) : Result (List T) :=
-  let li := mem.replace (List T) l List.Nil
+  let li := core.mem.replace (List T) l List.Nil
   list_rev_aux T li List.Nil
 
 /- [no_nested_borrows::test_list_functions]: forward function -/
@@ -478,10 +478,10 @@ def test_weird_borrows1 : Result Unit :=
 /- [no_nested_borrows::test_mem_replace]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 def test_mem_replace (px : U32) : Result U32 :=
-  let y := mem.replace U32 px (U32.ofInt 1)
-  if not (y = (U32.ofInt 0))
+  let y := core.mem.replace U32 px 1#u32
+  if not (y = 0#u32)
   then Result.fail Error.panic
-  else Result.ret (U32.ofInt 2)
+  else Result.ret 2#u32
 
 /- [no_nested_borrows::test_shared_borrow_bool1]: forward function -/
 def test_shared_borrow_bool1 (b : Bool) : Result U32 :=

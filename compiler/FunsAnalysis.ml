@@ -57,21 +57,16 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let stateful = ref false in
     let can_diverge = ref false in
     let is_rec = ref false in
+    let is_builtin_non_fallible_group = ref false in
 
     (* We have some specialized knowledge of some library functions; we don't
        have any more custom treatment than this, and these functions can be modeled
        suitably in Primitives.fst, rather than special-casing for them all the
        way. *)
-    let module M = struct type opaque_info = { fallible: bool; stateful: bool } end in
-    let open M in
-    let opaque_info (f: fun_decl) =
-      match f.name with
-      | [ Ident "core"; Ident "num"; Ident "u32"; _; Ident "wrapping_add" ]
-      | [ Ident "core"; Ident "num"; Ident "u32"; _; Ident "rotate_left" ] ->
-          { fallible = false; stateful = false }
-      | _ ->
-          (* Opaque function: we consider they fail by default *)
-          { fallible = true; stateful = true }
+    let is_builtin_non_fallible (f : fun_decl) : bool =
+      let open ExtractBuiltin in
+      let name = name_to_simple_name f.name in
+      SimpleNameSet.mem name builtin_non_fallible_funs_set
     in
 
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
@@ -124,11 +119,16 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       in
       (* Sanity check: global bodies don't contain stateful calls *)
       assert ((not f.is_global_decl_body) || not !stateful);
+      let is_builtin_non_fallible = is_builtin_non_fallible f in
+      is_builtin_non_fallible_group :=
+        !is_builtin_non_fallible_group || is_builtin_non_fallible;
       match f.body with
       | None ->
-          let info = opaque_info f in
-          obj#may_fail info.fallible;
-          stateful := (not f.is_global_decl_body) && use_state && info.stateful
+          obj#may_fail (not is_builtin_non_fallible);
+          stateful :=
+            (not f.is_global_decl_body)
+            && use_state
+            && not is_builtin_non_fallible
       | Some body -> obj#visit_statement () body.body
     in
     List.iter visit_fun d;
@@ -136,12 +136,16 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
      * groups containing globals contain exactly one declaration *)
     let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
     assert ((not is_global_decl_body) || List.length d = 1);
+    assert ((not !is_builtin_non_fallible_group) || List.length d = 1);
     (* We ignore on purpose functions that cannot fail and consider they *can*
      * fail: the result of the analysis is not used yet to adjust the translation
      * so that the functions which syntactically can't fail don't use an error monad.
-     * However, we do keep the result of the analysis for global bodies.
+     * However, we do keep the result of the analysis for global bodies and for
+     * builtin functions which are marked as non-fallible.
      * *)
-    can_fail := (not is_global_decl_body) || !can_fail;
+    can_fail :=
+      ((not is_global_decl_body) && not !is_builtin_non_fallible_group)
+      || !can_fail;
     {
       can_fail = !can_fail;
       stateful = !stateful;

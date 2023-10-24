@@ -376,7 +376,39 @@ let mk_builtin_funs_map () =
 let builtin_funs_map = mk_memoized mk_builtin_funs_map
 
 let builtin_non_fallible_funs =
-  [ "alloc::boxed::Box::deref"; "alloc::boxed::Box::deref_mut" ]
+  let int_names =
+    [
+      "usize";
+      "u8";
+      "u16";
+      "u32";
+      "u64";
+      "u128";
+      "isize";
+      "i8";
+      "i16";
+      "i32";
+      "i64";
+      "i128";
+    ]
+  in
+  let int_ops =
+    [ "wrapping_add"; "wrapping_sub"; "rotate_left"; "rotate_right" ]
+  in
+  let int_funs =
+    List.map
+      (fun int_name ->
+        List.map (fun op -> "core::num::" ^ int_name ^ "::" ^ op) int_ops)
+      int_names
+  in
+  let int_funs = List.concat int_funs in
+  [
+    "alloc::boxed::Box::deref";
+    "alloc::boxed::Box::deref_mut";
+    "core::mem::replace";
+    "core::mem::take";
+  ]
+  @ int_funs
 
 let builtin_non_fallible_funs_set =
   SimpleNameSet.of_list

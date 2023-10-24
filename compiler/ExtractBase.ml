@@ -22,8 +22,8 @@ type region_group_info = {
        *)
 }
 
-module StringSet = Collections.MakeSet (Collections.OrderedString)
-module StringMap = Collections.MakeMap (Collections.OrderedString)
+module StringSet = Collections.StringSet
+module StringMap = Collections.StringMap
 
 type name = Names.name
 type type_name = Names.type_name
