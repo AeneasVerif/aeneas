@@ -1272,23 +1272,6 @@ let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
         ctx.fun_name_info;
   }
 
-let ctx_add_trait_decl (d : trait_decl) (ctx : extraction_ctx) : extraction_ctx
-    =
-  let is_opaque = false in
-  let name = ctx.fmt.trait_decl_name d in
-  ctx_add is_opaque (TraitDeclId d.def_id) name ctx
-
-let ctx_add_trait_impl (d : trait_impl) (ctx : extraction_ctx) : extraction_ctx
-    =
-  (* We need to lookup the trait decl that is implemented by the trait impl *)
-  let decl =
-    Pure.TraitDeclId.Map.find d.impl_trait.trait_decl_id ctx.trans_trait_decls
-  in
-  (* Compute the name *)
-  let is_opaque = false in
-  let name = ctx.fmt.trait_impl_name decl d in
-  ctx_add is_opaque (TraitImplId d.def_id) name ctx
-
 type names_map_init = {
   keywords : string list;
   assumed_adts : (assumed_ty * string) list;

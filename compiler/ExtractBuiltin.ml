@@ -517,3 +517,37 @@ let mk_builtin_trait_decls_map () =
        (builtin_trait_decls_info ()))
 
 let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map
+
+(* TODO: generalize this.
+
+   For now, the key is:
+   - name of the impl (ex.: "alloc.boxed.Boxed")
+   - name of the implemented trait (ex.: "core.ops.deref.Deref"
+*)
+type simple_name_pair = simple_name * simple_name [@@deriving show, ord]
+
+module SimpleNamePairOrd = struct
+  type t = simple_name_pair
+
+  let compare = compare_simple_name_pair
+  let to_string = show_simple_name_pair
+  let pp_t = pp_simple_name_pair
+  let show_t = show_simple_name_pair
+end
+
+module SimpleNamePairMap = Collections.MakeMap (SimpleNamePairOrd)
+
+let builtin_trait_impls_info () : ((string list * string list) * string) list =
+  [
+    (* core::ops::Deref<alloc::boxed::Box<T>> *)
+    ( ([ "alloc"; "boxed"; "Box" ], [ "core"; "ops"; "deref"; "Deref" ]),
+      "alloc.boxed.Box.coreOpsDerefInst" );
+    (* core::ops::DerefMut<alloc::boxed::Box<T>> *)
+    ( ([ "alloc"; "boxed"; "Box" ], [ "core"; "ops"; "deref"; "DerefMut" ]),
+      "alloc.boxed.Box.coreOpsDerefMutInst" );
+  ]
+
+let mk_builtin_trait_impls_map () =
+  SimpleNamePairMap.of_list (builtin_trait_impls_info ())
+
+let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map

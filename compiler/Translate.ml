@@ -764,8 +764,23 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
 (** Export a trait implementation. *)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
+  (* Lookup the definition *)
   let trait_impl = T.TraitImplId.Map.find trait_impl_id ctx.trans_trait_impls in
-  Extract.extract_trait_impl ctx fmt trait_impl
+  let trait_decl =
+    Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
+      ctx.trans_trait_decls
+  in
+  (* Check if the trait implementation is builtin *)
+  let builtin_info =
+    let open ExtractBuiltin in
+    let type_sname = name_to_simple_name trait_impl.name in
+    let trait_sname = name_to_simple_name trait_decl.name in
+    SimpleNamePairMap.find_opt (type_sname, trait_sname)
+      (builtin_trait_impls_map ())
+  in
+  match builtin_info with
+  | None -> Extract.extract_trait_impl ctx fmt trait_impl
+  | Some _ -> ()
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control

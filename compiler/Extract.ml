@@ -4320,7 +4320,15 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
   let builtin_info =
     SimpleNameMap.find_opt sname (builtin_trait_decls_map ())
   in
-  let ctx = ctx_add_trait_decl trait_decl ctx in
+  let ctx =
+    let trait_name =
+      match builtin_info with
+      | None -> ctx.fmt.trait_decl_name trait_decl
+      | Some info -> info.extract_name
+    in
+    let is_opaque = false in
+    ctx_add is_opaque (TraitDeclId trait_decl.def_id) trait_name ctx
+  in
   (* Parent clauses *)
   let ctx =
     extract_trait_decl_register_parent_clause_names ctx trait_decl builtin_info
@@ -4338,11 +4346,31 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
+  let trait_decl =
+    TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
+      ctx.trans_trait_decls
+  in
+  (* Check if the trait implementation is builtin *)
+  let builtin_info =
+    let open ExtractBuiltin in
+    let type_sname = name_to_simple_name trait_impl.name in
+    let trait_sname = name_to_simple_name trait_decl.name in
+    SimpleNamePairMap.find_opt (type_sname, trait_sname)
+      (builtin_trait_impls_map ())
+  in
+
   (* For now we do not support overriding provided methods *)
   assert (trait_impl.provided_methods = []);
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
      the name of the implementation itself *)
-  ctx_add_trait_impl trait_impl ctx
+  (* Compute the name *)
+  let name =
+    match builtin_info with
+    | None -> ctx.fmt.trait_impl_name trait_decl trait_impl
+    | Some name -> name
+  in
+  let is_opaque = false in
+  ctx_add is_opaque (TraitImplId trait_impl.def_id) name ctx
 
 (** Small helper.
 
