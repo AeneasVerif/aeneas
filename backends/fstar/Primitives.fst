@@ -314,7 +314,7 @@ type range (a : Type0) = {
 }
 
 (*** Array *)
-type array (a : Type0) (n : usize) = s:list a{length s = n}
+type array (a : Type0) (n : usize) = s:Seq.seq a{Seq.length s == n}
 
 // We tried putting the normalize_term condition as a refinement on the list
 // but it didn't work. It works with the requires clause.
@@ -324,18 +324,18 @@ let mk_array (a : Type0) (n : usize)
   (requires (normalize_term(FStar.List.Tot.length l) = n))
   (ensures (fun _ -> True)) =
   normalize_term_spec (FStar.List.Tot.length l);
-  l
+  Seq.seq_of_list l
 
 let array_index_shared (a : Type0) (n : usize) (x : array a n) (i : usize) : result a =
-  if i < length x then Return (index x i)
+  if i < Seq.length x then Return (Seq.index x i)
   else Fail Failure
 
 let array_index_mut_fwd (a : Type0) (n : usize) (x : array a n) (i : usize) : result a =
-  if i < length x then Return (index x i)
+  if i < Seq.length x then Return (Seq.index x i)
   else Fail Failure
 
 let array_index_mut_back (a : Type0) (n : usize) (x : array a n) (i : usize) (nx : a) : result (array a n) =
-  if i < length x then Return (list_update x i nx)
+  if i < Seq.length x then Return (Seq.upd x i nx)
   else Fail Failure
 
 (*** Slice *)
@@ -357,10 +357,10 @@ let slice_index_mut_back (a : Type0) (x : slice a) (i : usize) (nx : a) : result
 
 (*** Subslices *)
 
-let array_to_slice_shared (a : Type0) (n : usize) (x : array a n) : result (slice a) = Return x
-let array_to_slice_mut_fwd (a : Type0) (n : usize) (x : array a n) : result (slice a) = Return x
+let array_to_slice_shared (a : Type0) (n : usize) (x : array a n) : result (slice a) = Return (Seq.seq_to_list x)
+let array_to_slice_mut_fwd (a : Type0) (n : usize) (x : array a n) : result (slice a) = Return (Seq.seq_to_list x)
 let array_to_slice_mut_back (a : Type0) (n : usize) (x : array a n) (s : slice a) : result (array a n) =
-  if length s = n then Return s
+  if length s = n then Return (Seq.seq_of_list s)
   else Fail Failure
 
 // TODO: finish the definitions below (there lacks [List.drop] and [List.take] in the standard library *)
