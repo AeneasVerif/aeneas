@@ -12,18 +12,22 @@ def hash_key (k : Usize) : Result Usize :=
 
 /- [hashmap::HashMap::{0}::allocate_slots]: loop 0: forward function -/
 divergent def HashMap.allocate_slots_loop
-  (T : Type) (slots : Vec (List T)) (n : Usize) : Result (Vec (List T)) :=
-  if n > (Usize.ofInt 0)
+  (T : Type) (slots : alloc.vec.Vec (List T)) (n : Usize) :
+  Result (alloc.vec.Vec (List T))
+  :=
+  if n > 0#usize
   then
     do
-      let slots0 ← Vec.push (List T) slots List.Nil
-      let n0 ← n - (Usize.ofInt 1)
+      let slots0 ← alloc.vec.Vec.push (List T) slots List.Nil
+      let n0 ← n - 1#usize
       HashMap.allocate_slots_loop T slots0 n0
   else Result.ret slots
 
 /- [hashmap::HashMap::{0}::allocate_slots]: forward function -/
 def HashMap.allocate_slots
-  (T : Type) (slots : Vec (List T)) (n : Usize) : Result (Vec (List T)) :=
+  (T : Type) (slots : alloc.vec.Vec (List T)) (n : Usize) :
+  Result (alloc.vec.Vec (List T))
+  :=
   HashMap.allocate_slots_loop T slots n
 
 /- [hashmap::HashMap::{0}::new_with_capacity]: forward function -/
@@ -33,13 +37,13 @@ def HashMap.new_with_capacity
   Result (HashMap T)
   :=
   do
-    let v := Vec.new (List T)
+    let v := alloc.vec.Vec.new (List T)
     let slots ← HashMap.allocate_slots T v capacity
     let i ← capacity * max_load_dividend
     let i0 ← i / max_load_divisor
     Result.ret
       {
-        num_entries := (Usize.ofInt 0),
+        num_entries := 0#usize,
         max_load_factor := (max_load_dividend, max_load_divisor),
         max_load := i0,
         slots := slots
@@ -47,18 +51,23 @@ def HashMap.new_with_capacity
 
 /- [hashmap::HashMap::{0}::new]: forward function -/
 def HashMap.new (T : Type) : Result (HashMap T) :=
-  HashMap.new_with_capacity T (Usize.ofInt 32) (Usize.ofInt 4) (Usize.ofInt 5)
+  HashMap.new_with_capacity T 32#usize 4#usize 5#usize
 
 /- [hashmap::HashMap::{0}::clear]: loop 0: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 divergent def HashMap.clear_loop
-  (T : Type) (slots : Vec (List T)) (i : Usize) : Result (Vec (List T)) :=
-  let i0 := Vec.len (List T) slots
+  (T : Type) (slots : alloc.vec.Vec (List T)) (i : Usize) :
+  Result (alloc.vec.Vec (List T))
+  :=
+  let i0 := alloc.vec.Vec.len (List T) slots
   if i < i0
   then
     do
-      let i1 ← i + (Usize.ofInt 1)
-      let slots0 ← Vec.index_mut_back (List T) slots i List.Nil
+      let i1 ← i + 1#usize
+      let slots0 ←
+        alloc.vec.Vec.index_mut_back (List T) Usize
+          (core.slice.index.usize.coresliceindexSliceIndexInst (List T)) slots
+          i List.Nil
       HashMap.clear_loop T slots0 i1
   else Result.ret slots
 
@@ -66,8 +75,8 @@ divergent def HashMap.clear_loop
    (there is a single backward function, and the forward function returns ()) -/
 def HashMap.clear (T : Type) (self : HashMap T) : Result (HashMap T) :=
   do
-    let v ← HashMap.clear_loop T self.slots (Usize.ofInt 0)
-    Result.ret { self with num_entries := (Usize.ofInt 0), slots := v }
+    let v ← HashMap.clear_loop T self.slots 0#usize
+    Result.ret { self with num_entries := 0#usize, slots := v }
 
 /- [hashmap::HashMap::{0}::len]: forward function -/
 def HashMap.len (T : Type) (self : HashMap T) : Result Usize :=
@@ -115,21 +124,30 @@ def HashMap.insert_no_resize
   :=
   do
     let hash ← hash_key key
-    let i := Vec.len (List T) self.slots
+    let i := alloc.vec.Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index_mut (List T) self.slots hash_mod
+    let l ←
+      alloc.vec.Vec.index_mut (List T) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+        self.slots hash_mod
     let inserted ← HashMap.insert_in_list T key value l
     if inserted
     then
       do
-        let i0 ← self.num_entries + (Usize.ofInt 1)
+        let i0 ← self.num_entries + 1#usize
         let l0 ← HashMap.insert_in_list_back T key value l
-        let v ← Vec.index_mut_back (List T) self.slots hash_mod l0
+        let v ←
+          alloc.vec.Vec.index_mut_back (List T) Usize
+            (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+            self.slots hash_mod l0
         Result.ret { self with num_entries := i0, slots := v }
     else
       do
         let l0 ← HashMap.insert_in_list_back T key value l
-        let v ← Vec.index_mut_back (List T) self.slots hash_mod l0
+        let v ←
+          alloc.vec.Vec.index_mut_back (List T) Usize
+            (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+            self.slots hash_mod l0
         Result.ret { self with slots := v }
 
 /- [hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
@@ -152,27 +170,35 @@ def HashMap.move_elements_from_list
 /- [hashmap::HashMap::{0}::move_elements]: loop 0: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 divergent def HashMap.move_elements_loop
-  (T : Type) (ntable : HashMap T) (slots : Vec (List T)) (i : Usize) :
-  Result ((HashMap T) × (Vec (List T)))
+  (T : Type) (ntable : HashMap T) (slots : alloc.vec.Vec (List T)) (i : Usize)
+  :
+  Result ((HashMap T) × (alloc.vec.Vec (List T)))
   :=
-  let i0 := Vec.len (List T) slots
+  let i0 := alloc.vec.Vec.len (List T) slots
   if i < i0
   then
     do
-      let l ← Vec.index_mut (List T) slots i
-      let ls := mem.replace (List T) l List.Nil
+      let l ←
+        alloc.vec.Vec.index_mut (List T) Usize
+          (core.slice.index.usize.coresliceindexSliceIndexInst (List T)) slots
+          i
+      let ls := core.mem.replace (List T) l List.Nil
       let ntable0 ← HashMap.move_elements_from_list T ntable ls
-      let i1 ← i + (Usize.ofInt 1)
-      let l0 := mem.replace_back (List T) l List.Nil
-      let slots0 ← Vec.index_mut_back (List T) slots i l0
+      let i1 ← i + 1#usize
+      let l0 := core.mem.replace_back (List T) l List.Nil
+      let slots0 ←
+        alloc.vec.Vec.index_mut_back (List T) Usize
+          (core.slice.index.usize.coresliceindexSliceIndexInst (List T)) slots
+          i l0
       HashMap.move_elements_loop T ntable0 slots0 i1
   else Result.ret (ntable, slots)
 
 /- [hashmap::HashMap::{0}::move_elements]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 def HashMap.move_elements
-  (T : Type) (ntable : HashMap T) (slots : Vec (List T)) (i : Usize) :
-  Result ((HashMap T) × (Vec (List T)))
+  (T : Type) (ntable : HashMap T) (slots : alloc.vec.Vec (List T)) (i : Usize)
+  :
+  Result ((HashMap T) × (alloc.vec.Vec (List T)))
   :=
   HashMap.move_elements_loop T ntable slots i
 
@@ -181,17 +207,16 @@ def HashMap.move_elements
 def HashMap.try_resize (T : Type) (self : HashMap T) : Result (HashMap T) :=
   do
     let max_usize ← Scalar.cast .Usize core_u32_max
-    let capacity := Vec.len (List T) self.slots
-    let n1 ← max_usize / (Usize.ofInt 2)
+    let capacity := alloc.vec.Vec.len (List T) self.slots
+    let n1 ← max_usize / 2#usize
     let (i, i0) := self.max_load_factor
     let i1 ← n1 / i
     if capacity <= i1
     then
       do
-        let i2 ← capacity * (Usize.ofInt 2)
+        let i2 ← capacity * 2#usize
         let ntable ← HashMap.new_with_capacity T i2 i i0
-        let (ntable0, _) ←
-          HashMap.move_elements T ntable self.slots (Usize.ofInt 0)
+        let (ntable0, _) ← HashMap.move_elements T ntable self.slots 0#usize
         Result.ret
           {
             ntable0
@@ -233,9 +258,12 @@ def HashMap.contains_key
   (T : Type) (self : HashMap T) (key : Usize) : Result Bool :=
   do
     let hash ← hash_key key
-    let i := Vec.len (List T) self.slots
+    let i := alloc.vec.Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index_shared (List T) self.slots hash_mod
+    let l ←
+      alloc.vec.Vec.index (List T) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+        self.slots hash_mod
     HashMap.contains_key_in_list T key l
 
 /- [hashmap::HashMap::{0}::get_in_list]: loop 0: forward function -/
@@ -256,9 +284,12 @@ def HashMap.get_in_list (T : Type) (key : Usize) (ls : List T) : Result T :=
 def HashMap.get (T : Type) (self : HashMap T) (key : Usize) : Result T :=
   do
     let hash ← hash_key key
-    let i := Vec.len (List T) self.slots
+    let i := alloc.vec.Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index_shared (List T) self.slots hash_mod
+    let l ←
+      alloc.vec.Vec.index (List T) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+        self.slots hash_mod
     HashMap.get_in_list T key l
 
 /- [hashmap::HashMap::{0}::get_mut_in_list]: loop 0: forward function -/
@@ -298,9 +329,12 @@ def HashMap.get_mut_in_list_back
 def HashMap.get_mut (T : Type) (self : HashMap T) (key : Usize) : Result T :=
   do
     let hash ← hash_key key
-    let i := Vec.len (List T) self.slots
+    let i := alloc.vec.Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index_mut (List T) self.slots hash_mod
+    let l ←
+      alloc.vec.Vec.index_mut (List T) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+        self.slots hash_mod
     HashMap.get_mut_in_list T l key
 
 /- [hashmap::HashMap::{0}::get_mut]: backward function 0 -/
@@ -310,11 +344,17 @@ def HashMap.get_mut_back
   :=
   do
     let hash ← hash_key key
-    let i := Vec.len (List T) self.slots
+    let i := alloc.vec.Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index_mut (List T) self.slots hash_mod
+    let l ←
+      alloc.vec.Vec.index_mut (List T) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+        self.slots hash_mod
     let l0 ← HashMap.get_mut_in_list_back T l key ret0
-    let v ← Vec.index_mut_back (List T) self.slots hash_mod l0
+    let v ←
+      alloc.vec.Vec.index_mut_back (List T) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+        self.slots hash_mod l0
     Result.ret { self with slots := v }
 
 /- [hashmap::HashMap::{0}::remove_from_list]: loop 0: forward function -/
@@ -324,12 +364,12 @@ divergent def HashMap.remove_from_list_loop
   | List.Cons ckey t tl =>
     if ckey = key
     then
-      let mv_ls := mem.replace (List T) (List.Cons ckey t tl) List.Nil
+      let mv_ls := core.mem.replace (List T) (List.Cons ckey t tl) List.Nil
       match mv_ls with
-      | List.Cons i cvalue tl0 => Result.ret (Option.some cvalue)
+      | List.Cons i cvalue tl0 => Result.ret (some cvalue)
       | List.Nil => Result.fail Error.panic
     else HashMap.remove_from_list_loop T key tl
-  | List.Nil => Result.ret Option.none
+  | List.Nil => Result.ret none
 
 /- [hashmap::HashMap::{0}::remove_from_list]: forward function -/
 def HashMap.remove_from_list
@@ -343,7 +383,7 @@ divergent def HashMap.remove_from_list_loop_back
   | List.Cons ckey t tl =>
     if ckey = key
     then
-      let mv_ls := mem.replace (List T) (List.Cons ckey t tl) List.Nil
+      let mv_ls := core.mem.replace (List T) (List.Cons ckey t tl) List.Nil
       match mv_ls with
       | List.Cons i cvalue tl0 => Result.ret tl0
       | List.Nil => Result.fail Error.panic
@@ -363,84 +403,91 @@ def HashMap.remove
   (T : Type) (self : HashMap T) (key : Usize) : Result (Option T) :=
   do
     let hash ← hash_key key
-    let i := Vec.len (List T) self.slots
+    let i := alloc.vec.Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index_mut (List T) self.slots hash_mod
+    let l ←
+      alloc.vec.Vec.index_mut (List T) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+        self.slots hash_mod
     let x ← HashMap.remove_from_list T key l
     match x with
-    | Option.none => Result.ret Option.none
-    | Option.some x0 =>
-      do
-        let _ ← self.num_entries - (Usize.ofInt 1)
-        Result.ret (Option.some x0)
+    | none => Result.ret none
+    | some x0 => do
+                   let _ ← self.num_entries - 1#usize
+                   Result.ret (some x0)
 
 /- [hashmap::HashMap::{0}::remove]: backward function 0 -/
 def HashMap.remove_back
   (T : Type) (self : HashMap T) (key : Usize) : Result (HashMap T) :=
   do
     let hash ← hash_key key
-    let i := Vec.len (List T) self.slots
+    let i := alloc.vec.Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index_mut (List T) self.slots hash_mod
+    let l ←
+      alloc.vec.Vec.index_mut (List T) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+        self.slots hash_mod
     let x ← HashMap.remove_from_list T key l
     match x with
-    | Option.none =>
+    | none =>
       do
         let l0 ← HashMap.remove_from_list_back T key l
-        let v ← Vec.index_mut_back (List T) self.slots hash_mod l0
+        let v ←
+          alloc.vec.Vec.index_mut_back (List T) Usize
+            (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+            self.slots hash_mod l0
         Result.ret { self with slots := v }
-    | Option.some x0 =>
+    | some x0 =>
       do
-        let i0 ← self.num_entries - (Usize.ofInt 1)
+        let i0 ← self.num_entries - 1#usize
         let l0 ← HashMap.remove_from_list_back T key l
-        let v ← Vec.index_mut_back (List T) self.slots hash_mod l0
+        let v ←
+          alloc.vec.Vec.index_mut_back (List T) Usize
+            (core.slice.index.usize.coresliceindexSliceIndexInst (List T))
+            self.slots hash_mod l0
         Result.ret { self with num_entries := i0, slots := v }
 
 /- [hashmap::test1]: forward function -/
 def test1 : Result Unit :=
   do
     let hm ← HashMap.new U64
-    let hm0 ← HashMap.insert U64 hm (Usize.ofInt 0) (U64.ofInt 42)
-    let hm1 ← HashMap.insert U64 hm0 (Usize.ofInt 128) (U64.ofInt 18)
-    let hm2 ← HashMap.insert U64 hm1 (Usize.ofInt 1024) (U64.ofInt 138)
-    let hm3 ← HashMap.insert U64 hm2 (Usize.ofInt 1056) (U64.ofInt 256)
-    let i ← HashMap.get U64 hm3 (Usize.ofInt 128)
-    if not (i = (U64.ofInt 18))
+    let hm0 ← HashMap.insert U64 hm 0#usize 42#u64
+    let hm1 ← HashMap.insert U64 hm0 128#usize 18#u64
+    let hm2 ← HashMap.insert U64 hm1 1024#usize 138#u64
+    let hm3 ← HashMap.insert U64 hm2 1056#usize 256#u64
+    let i ← HashMap.get U64 hm3 128#usize
+    if not (i = 18#u64)
     then Result.fail Error.panic
     else
       do
-        let hm4 ←
-          HashMap.get_mut_back U64 hm3 (Usize.ofInt 1024) (U64.ofInt 56)
-        let i0 ← HashMap.get U64 hm4 (Usize.ofInt 1024)
-        if not (i0 = (U64.ofInt 56))
+        let hm4 ← HashMap.get_mut_back U64 hm3 1024#usize 56#u64
+        let i0 ← HashMap.get U64 hm4 1024#usize
+        if not (i0 = 56#u64)
         then Result.fail Error.panic
         else
           do
-            let x ← HashMap.remove U64 hm4 (Usize.ofInt 1024)
+            let x ← HashMap.remove U64 hm4 1024#usize
             match x with
-            | Option.none => Result.fail Error.panic
-            | Option.some x0 =>
-              if not (x0 = (U64.ofInt 56))
+            | none => Result.fail Error.panic
+            | some x0 =>
+              if not (x0 = 56#u64)
               then Result.fail Error.panic
               else
                 do
-                  let hm5 ← HashMap.remove_back U64 hm4 (Usize.ofInt 1024)
-                  let i1 ← HashMap.get U64 hm5 (Usize.ofInt 0)
-                  if not (i1 = (U64.ofInt 42))
+                  let hm5 ← HashMap.remove_back U64 hm4 1024#usize
+                  let i1 ← HashMap.get U64 hm5 0#usize
+                  if not (i1 = 42#u64)
                   then Result.fail Error.panic
                   else
                     do
-                      let i2 ← HashMap.get U64 hm5 (Usize.ofInt 128)
-                      if not (i2 = (U64.ofInt 18))
+                      let i2 ← HashMap.get U64 hm5 128#usize
+                      if not (i2 = 18#u64)
                       then Result.fail Error.panic
                       else
                         do
-                          let i3 ← HashMap.get U64 hm5 (Usize.ofInt 1056)
-                          if not (i3 = (U64.ofInt 256))
+                          let i3 ← HashMap.get U64 hm5 1056#usize
+                          if not (i3 = 256#u64)
                           then Result.fail Error.panic
                           else Result.ret ()
-
-/- Unit test for [hashmap::test1] -/
-#assert (test1 == .ret ())
 
 end hashmap
