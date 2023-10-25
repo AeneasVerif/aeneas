@@ -1076,6 +1076,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       functions_with_decreases_clause = rec_functions;
       types_filter_type_args_map = Pure.TypeDeclId.Map.empty;
       funs_filter_type_args_map = Pure.FunDeclId.Map.empty;
+      trait_impls_filter_type_args_map = Pure.TraitImplId.Map.empty;
     }
   in
 

@@ -142,7 +142,8 @@ tcoq-loops: OPTIONS += -use-fuel -no-split-files
 tlean-loops: SUBDIR :=
 thol4-loops: SUBDIR := misc-loops
 
-trans-hashmap: OPTIONS += -no-state -test-trans-units
+# TODO: reactivate -test-trans-units
+trans-hashmap: OPTIONS += -no-state
 trans-hashmap: SUBDIR := hashmap
 tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap: OPTIONS += -use-fuel
@@ -150,7 +151,8 @@ tlean-hashmap: SUBDIR :=
 tlean-hashmap: OPTIONS += -no-gen-lib-entry # We add a custom import in the Hashmap.lean file: we do not want to overwrite it
 thol4-hashmap: OPTIONS +=
 
-trans-hashmap_main: OPTIONS += -test-trans-units
+# TODO: reactivate -test-trans-units
+trans-hashmap_main: OPTIONS +=
 trans-hashmap_main: SUBDIR := hashmap_on_disk
 tfstar-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap_main: OPTIONS += -use-fuel

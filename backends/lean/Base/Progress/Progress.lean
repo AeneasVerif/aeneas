@@ -383,6 +383,7 @@ namespace Test
   -- #eval showStoredPSpec
   -- #eval showStoredPSpecClass
   -- #eval showStoredPSpecExprClass
+  open alloc.vec
 
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)
@@ -408,7 +409,7 @@ namespace Test
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    ∃ nv, v.index_mut_back α i x = ret nv ∧
+    ∃ nv, v.update_usize α i x = ret nv ∧
     nv.val = v.val.update i.val x := by
     progress
     simp [*]

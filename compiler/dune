@@ -24,6 +24,7 @@
   Extract
   ExtractBase
   ExtractBuiltin
+  ExtractTypes
   FunsAnalysis
   Identifiers
   InterpreterBorrowsCore

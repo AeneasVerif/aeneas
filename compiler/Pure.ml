@@ -24,8 +24,6 @@ module TraitClauseId = T.TraitClauseId
 module LoopId =
 IdGen ()
 
-type loop_id = LoopId.id [@@deriving show, ord]
-
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
 module SynthPhaseId =
@@ -47,6 +45,8 @@ type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
 type trait_item_name = T.trait_item_name [@@deriving show, ord]
 type global_decl_id = T.global_decl_id [@@deriving show, ord]
 type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
+type loop_id = LoopId.id [@@deriving show, ord]
+type region_group_id = T.region_group_id [@@deriving show, ord]
 type mutability = Mut | Const [@@deriving show, ord]
 
 (** The assumed types for the pure AST.

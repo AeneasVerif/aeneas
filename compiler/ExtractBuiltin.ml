@@ -122,7 +122,7 @@ let builtin_types () : builtin_type_info list =
       extract_name =
         (match !backend with
         | Lean -> "alloc.alloc.Global"
-        | Coq | FStar | HOL4 -> "alloc_global");
+        | Coq | FStar | HOL4 -> "alloc_alloc_Global");
       keep_params = None;
       body_info = None;
     };
@@ -130,7 +130,9 @@ let builtin_types () : builtin_type_info list =
     {
       rust_name = [ "alloc"; "vec"; "Vec" ];
       extract_name =
-        (match !backend with Lean -> "Vec" | Coq | FStar | HOL4 -> "vec");
+        (match !backend with
+        | Lean -> "alloc.vec.Vec"
+        | Coq | FStar | HOL4 -> "alloc_vec_Vec");
       keep_params = Some [ true; false ];
       body_info = None;
     };
@@ -170,15 +172,17 @@ let builtin_types () : builtin_type_info list =
     {
       rust_name = [ "core"; "ops"; "range"; "Range" ];
       extract_name =
-        (match !backend with Lean -> "Range" | Coq | FStar | HOL4 -> "range");
+        (match !backend with
+        | Lean -> "core.ops.range.Range"
+        | Coq | FStar | HOL4 -> "core_ops_range_Range");
       keep_params = None;
       body_info =
         Some
           (Struct
              ( (match !backend with
-               | Lean -> "Range.mk"
-               | Coq | HOL4 -> "mk_range"
-               | FStar -> "Mkrange"),
+               | Lean -> "core.ops.range.Range.mk"
+               | Coq | HOL4 -> "mk_core_ops_range_Range"
+               | FStar -> "Mkcore_ops_range_Range"),
                [ "start"; "end_" ] ));
     };
   ]
@@ -204,340 +208,118 @@ type builtin_fun_info = {
 let builtin_funs () :
     (string list * bool list option * builtin_fun_info list) list =
   let rg0 = Some Types.RegionGroupId.zero in
+  (* Small utility *)
+  let mk_fun (name : string list) (extract_name : string list option)
+      (filter : bool list option) (with_back : bool) (back_no_suffix : bool) :
+      string list * bool list option * builtin_fun_info list =
+    let extract_name =
+      match extract_name with None -> name | Some name -> name
+    in
+    let fwd_name =
+      match !backend with
+      | FStar | Coq | HOL4 -> String.concat "_" extract_name
+      | Lean -> String.concat "." extract_name
+    in
+    let fwd_suffix = if with_back && back_no_suffix then "_fwd" else "" in
+    let fwd = [ { rg = None; extract_name = fwd_name ^ fwd_suffix } ] in
+    let back_suffix = if with_back && back_no_suffix then "" else "_back" in
+    let back =
+      if with_back then [ { rg = rg0; extract_name = fwd_name ^ back_suffix } ]
+      else []
+    in
+    (name, filter, fwd @ back)
+  in
   [
-    ( [ "core"; "mem"; "replace" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_mem_replace_fwd"
-            | Lean -> "core.mem.replace");
-        };
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_mem_replace_back"
-            | Lean -> "core.mem.replace_back");
-        };
-      ] );
-    ( [ "alloc"; "vec"; "Vec"; "new" ],
-      Some [ true; false ],
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_new"
-            | Lean -> "Vec.new");
-        };
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_new_back"
-            | Lean -> "Vec.new_back");
-        };
-      ] );
-    ( [ "alloc"; "vec"; "Vec"; "push" ],
-      Some [ true; false ],
-      [
-        (* The forward function shouldn't be used *)
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_push_fwd"
-            | Lean -> "Vec.push_fwd");
-        };
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_push_back"
-            | Lean -> "Vec.push");
-        };
-      ] );
-    ( [ "alloc"; "vec"; "Vec"; "insert" ],
-      Some [ true; false ],
-      [
-        (* The forward function shouldn't be used *)
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_insert_fwd"
-            | Lean -> "Vec.insert_fwd");
-        };
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_insert_back"
-            | Lean -> "Vec.insert");
-        };
-      ] );
-    ( [ "alloc"; "vec"; "Vec"; "len" ],
-      Some [ true; false ],
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_len"
-            | Lean -> "Vec.len");
-        };
-      ] );
-    ( [ "alloc"; "vec"; "Vec"; "index" ],
-      Some [ true; false ],
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_index_fwd"
-            | Lean -> "Vec.index_shared");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_index_back"
-            | Lean -> "Vec.index_shared_back");
-        };
-      ] );
-    ( [ "alloc"; "vec"; "Vec"; "index_mut" ],
-      Some [ true; false ],
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_index_mut_fwd"
-            | Lean -> "Vec.index_mut");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "vec_index_mut_back"
-            | Lean -> "Vec.index_mut_back");
-        };
-      ] );
-    ( [ "alloc"; "boxed"; "Box"; "deref" ],
-      Some [ true; false ],
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "alloc_boxed_Box_deref"
-            | Lean -> "alloc.boxed.Box.deref");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "alloc_boxed_Box_deref_back"
-            | Lean -> "alloc.boxed.Box.deref_back");
-        };
-      ] );
-    ( [ "alloc"; "boxed"; "Box"; "deref_mut" ],
-      Some [ true; false ],
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "alloc_boxed_Box_deref_mut"
-            | Lean -> "alloc.boxed.Box.deref_mut");
-        };
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "alloc_boxed_box_deref_mut_back"
-            | Lean -> "alloc.boxed.Box.deref_mut_back");
-        };
-      ] );
+    mk_fun [ "core"; "mem"; "replace" ] None None true false;
+    mk_fun [ "alloc"; "vec"; "Vec"; "new" ] None None false false;
+    mk_fun
+      [ "alloc"; "vec"; "Vec"; "push" ]
+      None
+      (Some [ true; false ])
+      true true;
+    mk_fun
+      [ "alloc"; "vec"; "Vec"; "insert" ]
+      None
+      (Some [ true; false ])
+      true true;
+    mk_fun
+      [ "alloc"; "vec"; "Vec"; "len" ]
+      None
+      (Some [ true; false ])
+      true false;
+    mk_fun
+      [ "alloc"; "vec"; "Vec"; "index" ]
+      None
+      (Some [ true; true; false ])
+      true false;
+    mk_fun
+      [ "alloc"; "vec"; "Vec"; "index_mut" ]
+      None
+      (Some [ true; true; false ])
+      true false;
+    mk_fun
+      [ "alloc"; "boxed"; "Box"; "deref" ]
+      None
+      (Some [ true; false ])
+      true false;
+    mk_fun
+      [ "alloc"; "boxed"; "Box"; "deref_mut" ]
+      None
+      (Some [ true; false ])
+      true false;
     (* TODO: fix the same like "[T]" below *)
-    ( [ "core"; "slice"; "index"; "[T]"; "index" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Slice_index"
-            | Lean -> "core.slice.index.Slice.index");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Slice_index_back"
-            | Lean -> "core.slice.index.Slice.index_back");
-        };
-      ] );
-    ( [ "core"; "slice"; "index"; "[T]"; "index_mut" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Slice_index_mut"
-            | Lean -> "core.slice.index.Slice.index_mut");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Slice_index_mut_back"
-            | Lean -> "core.slice.index.Slice.index_mut_back");
-        };
-      ] );
-    ( [ "core"; "array"; "[T; N]"; "index" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_array_Array_index"
-            | Lean -> "core.array.Array.index");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_array_Array_index_back"
-            | Lean -> "core.array.Array.index_back");
-        };
-      ] );
-    ( [ "core"; "array"; "[T; N]"; "index_mut" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_array_Array_index_mut"
-            | Lean -> "core.array.Array.index_mut");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_array_Array_index_mut_back"
-            | Lean -> "core.array.Array.index_mut_back");
-        };
-      ] );
-    ( [ "core"; "slice"; "index"; "Range"; "get" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_get"
-            | Lean -> "core.slice.index.Range.get");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_back"
-            | Lean -> "core.slice.index.Range.get_back");
-        };
-      ] );
-    ( [ "core"; "slice"; "index"; "Range"; "get_mut" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_mut"
-            | Lean -> "core.slice.index.Range.get_mut");
-        };
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_mut_back"
-            | Lean -> "core.slice.index.Range.get_mut_back");
-        };
-      ] );
-    ( [ "core"; "slice"; "index"; "Range"; "index" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_index"
-            | Lean -> "core.slice.index.Range.index");
-        };
-        (* The backward function shouldn't be used *)
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_index_back"
-            | Lean -> "core.slice.index.Range.index_back");
-        };
-      ] );
-    ( [ "core"; "slice"; "index"; "Range"; "index_mut" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_index_mut"
-            | Lean -> "core.slice.index.Range.index_mut");
-        };
-        {
-          rg = rg0;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_index_mut_back"
-            | Lean -> "core.slice.index.Range.index_mut_back");
-        };
-      ] );
-    ( [ "core"; "slice"; "index"; "Range"; "get_unchecked" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_unchecked"
-            | Lean -> "core.slice.index.Range.get_unchecked");
-        };
-      ] );
-    ( [ "core"; "slice"; "index"; "Range"; "get_unchecked_mut" ],
-      None,
-      [
-        {
-          rg = None;
-          extract_name =
-            (match !backend with
-            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_unchecked_mut"
-            | Lean -> "core.slice.index.Range.get_unchecked_mut");
-        };
-      ] );
+    mk_fun
+      [ "core"; "slice"; "index"; "[T]"; "index" ]
+      (Some [ "core"; "slice"; "index"; "Slice"; "index" ])
+      None true false;
+    mk_fun
+      [ "core"; "slice"; "index"; "[T]"; "index_mut" ]
+      (Some [ "core"; "slice"; "index"; "Slice"; "index_mut" ])
+      None true false;
+    mk_fun
+      [ "core"; "array"; "[T; N]"; "index" ]
+      (Some [ "core"; "array"; "Array"; "index" ])
+      None true false;
+    mk_fun
+      [ "core"; "array"; "[T; N]"; "index_mut" ]
+      (Some [ "core"; "array"; "Array"; "index_mut" ])
+      None true false;
+    mk_fun [ "core"; "slice"; "index"; "Range"; "get" ] None None true false;
+    mk_fun [ "core"; "slice"; "index"; "Range"; "get_mut" ] None None true false;
+    mk_fun [ "core"; "slice"; "index"; "Range"; "index" ] None None true false;
+    mk_fun
+      [ "core"; "slice"; "index"; "Range"; "index_mut" ]
+      None None true false;
+    mk_fun
+      [ "core"; "slice"; "index"; "Range"; "get_unchecked" ]
+      None None false false;
+    mk_fun
+      [ "core"; "slice"; "index"; "Range"; "get_unchecked_mut" ]
+      None None false false;
+    mk_fun
+      [ "core"; "slice"; "index"; "usize"; "get" ]
+      (Some [ "core"; "slice"; "index"; "Usize"; "get" ])
+      None true false;
+    mk_fun
+      [ "core"; "slice"; "index"; "usize"; "get_mut" ]
+      (Some [ "core"; "slice"; "index"; "Usize"; "get_mut" ])
+      None true false;
+    mk_fun
+      [ "core"; "slice"; "index"; "usize"; "get_unchecked" ]
+      (Some [ "core"; "slice"; "index"; "Usize"; "get_unchecked" ])
+      None false false;
+    mk_fun
+      [ "core"; "slice"; "index"; "usize"; "get_unchecked_mut" ]
+      (Some [ "core"; "slice"; "index"; "Usize"; "get_unchecked_mut" ])
+      None false false;
+    mk_fun
+      [ "core"; "slice"; "index"; "usize"; "index" ]
+      (Some [ "core"; "slice"; "index"; "Usize"; "index" ])
+      None true false;
+    mk_fun
+      [ "core"; "slice"; "index"; "usize"; "index_mut" ]
+      (Some [ "core"; "slice"; "index"; "Usize"; "index_mut" ])
+      None true false;
   ]
 
 let mk_builtin_funs_map () =
@@ -576,6 +358,8 @@ let builtin_non_fallible_funs =
   in
   let int_funs = List.concat int_funs in
   [
+    "alloc::vec::Vec::new";
+    "alloc::vec::Vec::len";
     "alloc::boxed::Box::deref";
     "alloc::boxed::Box::deref_mut";
     "core::mem::replace";
@@ -847,37 +631,68 @@ end
 
 module SimpleNamePairMap = Collections.MakeMap (SimpleNamePairOrd)
 
-let builtin_trait_impls_info () : ((string list * string list) * string) list =
+let builtin_trait_impls_info () :
+    ((string list * string list) * (bool list option * string)) list =
+  let fmt ?(filter : bool list option = None) (name : string) :
+      bool list option * string =
+    let name =
+      match !backend with
+      | Lean -> name
+      | FStar | Coq | HOL4 ->
+          let name = String.split_on_char '.' name in
+          String.concat "_" name
+    in
+    (filter, name)
+  in
   (* TODO: fix the names like "[T]" below *)
   [
     (* core::ops::Deref<alloc::boxed::Box<T>> *)
     ( ([ "alloc"; "boxed"; "Box" ], [ "core"; "ops"; "deref"; "Deref" ]),
-      "alloc.boxed.Box.coreOpsDerefInst" );
+      fmt "alloc.boxed.Box.coreOpsDerefInst" );
     (* core::ops::DerefMut<alloc::boxed::Box<T>> *)
     ( ([ "alloc"; "boxed"; "Box" ], [ "core"; "ops"; "deref"; "DerefMut" ]),
-      "alloc.boxed.Box.coreOpsDerefMutInst" );
+      fmt "alloc.boxed.Box.coreOpsDerefMutInst" );
     (* core::ops::index::Index<[T], I> *)
     ( ([ "core"; "slice"; "index"; "[T]" ], [ "core"; "ops"; "index"; "Index" ]),
-      "core.slice.index.Slice.coreopsindexIndexInst" );
+      fmt "core.slice.index.Slice.coreopsindexIndexInst" );
     (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
     ( ( [ "core"; "slice"; "index"; "private_slice_index"; "Range" ],
         [ "core"; "slice"; "index"; "private_slice_index"; "Sealed" ] ),
-      "core.slice.index.private_slice_index.Range.coresliceindexprivate_slice_indexSealedInst"
+      fmt
+        "core.slice.index.private_slice_index.Range.coresliceindexprivate_slice_indexSealedInst"
     );
     (* core::slice::index::SliceIndex<Range<usize>, [T]> *)
     ( ( [ "core"; "slice"; "index"; "Range" ],
         [ "core"; "slice"; "index"; "SliceIndex" ] ),
-      "core.slice.index.Range.coresliceindexSliceIndexInst" );
+      fmt "core.slice.index.Range.coresliceindexSliceIndexInst" );
     (* core::ops::index::IndexMut<[T], I> *)
     ( ( [ "core"; "slice"; "index"; "[T]" ],
         [ "core"; "ops"; "index"; "IndexMut" ] ),
-      "core.slice.index.Slice.coreopsindexIndexMutInst" );
+      fmt "core.slice.index.Slice.coreopsindexIndexMutInst" );
     (* core::ops::index::Index<[T; N], I> *)
     ( ([ "core"; "array"; "[T; N]" ], [ "core"; "ops"; "index"; "Index" ]),
-      "core.array.Array.coreopsindexIndexInst" );
+      fmt "core.array.Array.coreopsindexIndexInst" );
     (* core::ops::index::IndexMut<[T; N], I> *)
     ( ([ "core"; "array"; "[T; N]" ], [ "core"; "ops"; "index"; "IndexMut" ]),
-      "core.array.Array.coreopsindexIndexMutInst" );
+      fmt "core.array.Array.coreopsindexIndexMutInst" );
+    (* core::slice::index::private_slice_index::Sealed<usize> *)
+    ( ( [ "core"; "slice"; "index"; "private_slice_index"; "usize" ],
+        [ "core"; "slice"; "index"; "private_slice_index"; "Sealed" ] ),
+      fmt
+        "core.slice.index.private_slice_index.usize.coresliceindexprivate_slice_indexSealedInst"
+    );
+    (* core::slice::index::SliceIndex<usize, [T]> *)
+    ( ( [ "core"; "slice"; "index"; "usize" ],
+        [ "core"; "slice"; "index"; "SliceIndex" ] ),
+      fmt "core.slice.index.usize.coresliceindexSliceIndexInst" );
+    (* core::ops::index::Index<Vec<T>, T> *)
+    ( ([ "alloc"; "vec"; "Vec" ], [ "core"; "ops"; "index"; "Index" ]),
+      let filter = Some [ true; true; false ] in
+      fmt ~filter "alloc.vec.Vec.coreopsindexIndexInst" );
+    (* core::ops::index::IndexMut<Vec<T>, T> *)
+    ( ([ "alloc"; "vec"; "Vec" ], [ "core"; "ops"; "index"; "IndexMut" ]),
+      let filter = Some [ true; true; false ] in
+      fmt ~filter "alloc.vec.Vec.coreopsindexIndexMutInst" );
   ]
 
 let mk_builtin_trait_impls_map () =

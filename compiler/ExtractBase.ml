@@ -653,6 +653,8 @@ type extraction_ctx = {
         *)
   funs_filter_type_args_map : bool list FunDeclId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for functions *)
+  trait_impls_filter_type_args_map : bool list TraitImplId.Map.t;
+      (** Same as {!types_filter_type_args_map}, but for trait implementations *)
 }
 
 (** Debugging function, used when communicating name collisions to the user,
