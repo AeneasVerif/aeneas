@@ -171,6 +171,8 @@ type 'r norm_ctx = {
   convert_ety : T.ety -> 'r T.ty;
   convert_etrait_ref : T.etrait_ref -> 'r T.trait_ref;
   ty_to_string : 'r T.ty -> string;
+  generic_params_to_string : T.generic_params -> string;
+  generic_args_to_string : 'r T.generic_args -> string;
   trait_ref_to_string : 'r T.trait_ref -> string;
   trait_instance_id_to_string : 'r T.trait_instance_id -> string;
   pp_r : Format.formatter -> 'r -> unit;
@@ -188,6 +190,9 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
   | Ref (r, ty, rkind) ->
       let ty = ctx_normalize_ty ctx ty in
       T.Ref (r, ty, rkind)
+  | RawPtr (ty, rkind) ->
+      let ty = ctx_normalize_ty ctx ty in
+      RawPtr (ty, rkind)
   | Arrow (inputs, output) ->
       let inputs = List.map (ctx_normalize_ty ctx) inputs in
       let output = ctx_normalize_ty ctx output in
@@ -195,14 +200,18 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
   | TraitType (trait_ref, generics, type_name) -> (
       log#ldebug
         (lazy
-          ("ctx_normalize_ty: trait type: " ^ ctx.ty_to_string ty
+          ("ctx_normalize_ty:\n- trait type: " ^ ctx.ty_to_string ty
          ^ "\n- trait_ref: "
           ^ ctx.trait_ref_to_string trait_ref
           ^ "\n- raw trait ref:\n"
-          ^ T.show_trait_ref ctx.pp_r trait_ref));
+          ^ T.show_trait_ref ctx.pp_r trait_ref
+          ^ "\n- generics:\n"
+          ^ ctx.generic_args_to_string generics));
       (* Normalize and attempt to project the type from the trait ref *)
       let trait_ref = ctx_normalize_trait_ref ctx trait_ref in
       let generics = ctx_normalize_generic_args ctx generics in
+      (*  For now, we don't support higher order types *)
+      assert (generics = TypesUtils.mk_empty_generic_args);
       let ty : 'r T.ty =
         match trait_ref.trait_id with
         | T.TraitRef
@@ -216,13 +225,13 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
             let trait_impl = C.ctx_lookup_trait_impl ctx.ctx impl_id in
             (* Lookup the type *)
             let ty = snd (List.assoc type_name trait_impl.types) in
-            (* Annoying: convert etype to an stype - TODO: hwo to avoid that? *)
+            (* Annoying: convert etype to an stype - TODO: how to avoid that? *)
             let ty : T.sty = TypesUtils.ety_no_regions_to_gr_ty ty in
             (* Substitute *)
             let tr_self = T.UnknownTrait __FUNCTION__ in
             let subst =
               Subst.make_subst_from_generics_no_regions trait_impl.generics
-                generics tr_self
+                trait_ref.generics tr_self
             in
             let ty = Subst.ty_substitute subst ty in
             (* Reconvert *)
@@ -230,7 +239,14 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
             (* Normalize *)
             ctx_normalize_ty ctx ty
         | T.TraitImpl impl_id ->
-            (* This happens. This doesn't come from the substituations
+            log#ldebug
+              (lazy
+                ("ctx_normalize_ty (trait impl):\n- trait type: "
+               ^ ctx.ty_to_string ty ^ "\n- trait_ref: "
+                ^ ctx.trait_ref_to_string trait_ref
+                ^ "\n- raw trait ref:\n"
+                ^ T.show_trait_ref ctx.pp_r trait_ref));
+            (* This happens. This doesn't come from the substitutions
                performed by Aeneas (the [TraitImpl] would be wrapped in a
                [TraitRef] but from non-normalized traits translated from
                the Rustc AST.
@@ -240,13 +256,13 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
             let trait_impl = C.ctx_lookup_trait_impl ctx.ctx impl_id in
             (* Lookup the type *)
             let ty = snd (List.assoc type_name trait_impl.types) in
-            (* Annoying: convert etype to an stype - TODO: hwo to avoid that? *)
+            (* Annoying: convert etype to an stype - TODO: how to avoid that? *)
             let ty : T.sty = TypesUtils.ety_no_regions_to_gr_ty ty in
             (* Substitute *)
             let tr_self = T.UnknownTrait __FUNCTION__ in
             let subst =
               Subst.make_subst_from_generics_no_regions trait_impl.generics
-                generics tr_self
+                trait_ref.generics tr_self
             in
             let ty = Subst.ty_substitute subst ty in
             (* Reconvert *)
@@ -465,6 +481,9 @@ let ctx_normalize_trait_type_constraint (ctx : 'r norm_ctx)
   let ty = ctx_normalize_ty ctx ty in
   { T.trait_ref; generics; type_name; ty }
 
+let generic_params_to_string ctx x =
+  "<" ^ String.concat ", " (fst (PA.generic_params_to_strings ctx x)) ^ ">"
+
 let mk_snorm_ctx (ctx : C.eval_ctx) : T.RegionVarId.id T.region norm_ctx =
   let get_ty_repr x = C.STraitTypeRefMap.find_opt x ctx.norm_trait_stypes in
   {
@@ -473,6 +492,8 @@ let mk_snorm_ctx (ctx : C.eval_ctx) : T.RegionVarId.id T.region norm_ctx =
     convert_ety = TypesUtils.ety_no_regions_to_sty;
     convert_etrait_ref = TypesUtils.etrait_ref_no_regions_to_gr_trait_ref;
     ty_to_string = PA.sty_to_string ctx;
+    generic_params_to_string = generic_params_to_string ctx;
+    generic_args_to_string = PA.sgeneric_args_to_string ctx;
     trait_ref_to_string = PA.strait_ref_to_string ctx;
     trait_instance_id_to_string = PA.strait_instance_id_to_string ctx;
     pp_r = T.pp_region T.pp_region_var_id;
@@ -486,6 +507,8 @@ let mk_rnorm_ctx (ctx : C.eval_ctx) : T.RegionId.id T.region norm_ctx =
     convert_ety = TypesUtils.ety_no_regions_to_rty;
     convert_etrait_ref = TypesUtils.etrait_ref_no_regions_to_gr_trait_ref;
     ty_to_string = PA.rty_to_string ctx;
+    generic_params_to_string = generic_params_to_string ctx;
+    generic_args_to_string = PA.rgeneric_args_to_string ctx;
     trait_ref_to_string = PA.rtrait_ref_to_string ctx;
     trait_instance_id_to_string = PA.rtrait_instance_id_to_string ctx;
     pp_r = T.pp_region T.pp_region_id;
@@ -499,6 +522,8 @@ let mk_enorm_ctx (ctx : C.eval_ctx) : T.erased_region norm_ctx =
     convert_ety = (fun x -> x);
     convert_etrait_ref = (fun x -> x);
     ty_to_string = PA.ety_to_string ctx;
+    generic_params_to_string = generic_params_to_string ctx;
+    generic_args_to_string = PA.egeneric_args_to_string ctx;
     trait_ref_to_string = PA.etrait_ref_to_string ctx;
     trait_instance_id_to_string = PA.etrait_instance_id_to_string ctx;
     pp_r = T.pp_erased_region;

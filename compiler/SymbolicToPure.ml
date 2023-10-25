@@ -534,12 +534,6 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
       (* Eliminate boxes and simplify tuples *)
       match type_id with
       | AdtId _ | T.Assumed (T.Array | T.Slice | T.Str) ->
-          (* No general parametricity for now *)
-          assert (
-            not
-              (List.exists
-                 (TypesUtils.ty_has_borrows type_infos)
-                 generics.types));
           let type_id = translate_type_id type_id in
           Adt (type_id, t_generics)
       | Tuple ->
@@ -614,15 +608,24 @@ let rec translate_back_ty (type_infos : TA.type_infos)
   | T.Adt (type_id, generics) -> (
       match type_id with
       | T.AdtId _ | Assumed (T.Array | T.Slice | T.Str) ->
-          (* Don't accept ADTs (which are not tuples) with borrows for now *)
-          assert (not (TypesUtils.ty_has_borrows type_infos ty));
           let type_id = translate_type_id type_id in
           if inside_mut then
             (* We do not want to filter anything, so we translate the generics
                as "forward" types *)
             let generics = translate_fwd_generic_args type_infos generics in
             Some (Adt (type_id, generics))
-          else None
+          else
+            (* If not inside a mutable reference: check if at least one
+               of the generics contains a mutable reference (i.e., is not
+               translated to `None`. If yes, keep the whole type, and
+               translate all the generics as "forward" types (the backward
+               function will extract the proper information from the ADT value)
+            *)
+            let types = List.filter_map translate generics.types in
+            if types <> [] then
+              let generics = translate_fwd_generic_args type_infos generics in
+              Some (Adt (type_id, generics))
+            else None
       | Assumed T.Box -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows type_infos ty));
