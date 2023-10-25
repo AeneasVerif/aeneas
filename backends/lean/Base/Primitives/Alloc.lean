@@ -1,6 +1,6 @@
 import Lean
 import Base.Primitives.Base
-import Base.Primitives.CoreOpsDeref
+import Base.Primitives.CoreOps
 
 open Primitives
 open Result

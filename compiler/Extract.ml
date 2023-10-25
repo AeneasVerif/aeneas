@@ -234,26 +234,20 @@ let assumed_adts () : (assumed_ty * string) list =
         (Array, "Array");
         (Slice, "Slice");
         (Str, "Str");
+        (RawPtr Mut, "MutRawPtr");
+        (RawPtr Const, "ConstRawPtr");
       ]
-  | Coq | FStar ->
+  | Coq | FStar | HOL4 ->
       [
         (State, "state");
         (Result, "result");
         (Error, "error");
-        (Fuel, "nat");
+        (Fuel, if !backend = HOL4 then "num" else "nat");
         (Array, "array");
         (Slice, "slice");
         (Str, "str");
-      ]
-  | HOL4 ->
-      [
-        (State, "state");
-        (Result, "result");
-        (Error, "error");
-        (Fuel, "num");
-        (Array, "array");
-        (Slice, "slice");
-        (Str, "str");
+        (RawPtr Mut, "mut_raw_ptr");
+        (RawPtr Const, "const_raw_ptr");
       ]
 
 let assumed_struct_constructors () : (assumed_ty * string) list =
@@ -1378,7 +1372,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   let def_name =
     match info with
     | None -> ctx.fmt.type_name def.name
-    | Some info -> String.concat "." info.rust_name
+    | Some info -> info.extract_name
   in
   let ctx = ctx_add (TypeId (AdtId def.def_id)) def_name ctx in
   (* Compute and register:
@@ -4281,16 +4275,9 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
             string * (RegionGroupId.id option * string) list =
           let compute_fun_name (f : fun_decl) : RegionGroupId.id option * string
               =
-            (* We do something special: we use the base name but remove everything
-               but the crate (because [get_name] removes it) and the last ident.
-               This allows us to reuse the [ctx_compute_fun_decl] function.
-            *)
-            let basename : name =
-              match (f.basename : name) with
-              | Ident crate :: name ->
-                  Ident crate :: [ Collections.List.last name ]
-              | _ -> raise (Failure "Unexpected")
-            in
+            (* We do something special to reuse the [ctx_compute_fun_decl]
+               function. TODO: make it cleaner. *)
+            let basename : name = [ Ident item_name ] in
             let f = { f with basename } in
             let trans = A.FunDeclId.Map.find f.def_id ctx.trans_funs in
             let name = ctx_compute_fun_name trans f ctx in
@@ -4503,6 +4490,17 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   extract_generic_params ctx fmt TypeDeclId.Set.empty generics type_params
     cg_params trait_clauses;
 
+  (* Add the parent clauses as local clauses, so that we can refer to them *)
+  let ctx =
+    List.fold_left
+      (fun ctx clause ->
+        let item_name =
+          ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
+        in
+        ctx_add (LocalTraitClauseId clause.clause_id) item_name ctx)
+      ctx decl.generics.trait_clauses
+  in
+
   F.pp_print_space fmt ();
   (match !backend with
   | Lean -> F.pp_print_string fmt "where"
@@ -4522,6 +4520,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
       in
       let ty () =
+        F.pp_print_space fmt ();
         extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
       in
       extract_trait_decl_item ctx fmt item_name ty)

@@ -6,7 +6,7 @@ import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 import Base.IList
 import Base.Primitives.Scalar
-import Base.Primitives.Array
+import Base.Primitives.ArraySlice
 import Base.Arith
 import Base.Progress.Base
 

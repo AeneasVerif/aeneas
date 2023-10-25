@@ -390,10 +390,10 @@ type gen_config = {
     [filter_assumed]: if [true], do not consider as opaque the external definitions
     that we will map to definitions from the standard library.
  *)
-let crate_has_opaque_decls (ctx : gen_ctx) (filter_assumed : bool) : bool * bool
-    =
+let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_assumed : bool) :
+    bool * bool =
   let types, funs =
-    LlbcAstUtils.crate_get_opaque_decls ctx.crate filter_assumed
+    LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_assumed
   in
   log#ldebug
     (lazy
@@ -1257,7 +1257,9 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
 
      (* Check if there are opaque types and functions - in which case we need
       * to split *)
-     let has_opaque_types, has_opaque_funs = crate_has_opaque_decls ctx true in
+     let has_opaque_types, has_opaque_funs =
+       crate_has_opaque_non_builtin_decls ctx true
+     in
      let has_opaque_types = has_opaque_types || !Config.use_state in
 
      (* Extract the types *)

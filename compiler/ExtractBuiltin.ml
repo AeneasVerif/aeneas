@@ -121,7 +121,7 @@ let builtin_types () : builtin_type_info list =
       rust_name = [ "alloc"; "alloc"; "Global" ];
       extract_name =
         (match !backend with
-        | Lean -> "AllocGlobal"
+        | Lean -> "alloc.alloc.Global"
         | Coq | FStar | HOL4 -> "alloc_global");
       keep_params = None;
       body_info = None;
@@ -335,7 +335,7 @@ let builtin_funs () :
           rg = None;
           extract_name =
             (match !backend with
-            | FStar | Coq | HOL4 -> "alloc_boxed_box_deref"
+            | FStar | Coq | HOL4 -> "alloc_boxed_Box_deref"
             | Lean -> "alloc.boxed.Box.deref");
         };
         (* The backward function shouldn't be used *)
@@ -343,7 +343,7 @@ let builtin_funs () :
           rg = rg0;
           extract_name =
             (match !backend with
-            | FStar | Coq | HOL4 -> "alloc_boxed_box_deref_back"
+            | FStar | Coq | HOL4 -> "alloc_boxed_Box_deref_back"
             | Lean -> "alloc.boxed.Box.deref_back");
         };
       ] );
@@ -354,7 +354,7 @@ let builtin_funs () :
           rg = None;
           extract_name =
             (match !backend with
-            | FStar | Coq | HOL4 -> "alloc_boxed_box_deref_mut"
+            | FStar | Coq | HOL4 -> "alloc_boxed_Box_deref_mut"
             | Lean -> "alloc.boxed.Box.deref_mut");
         };
         {
@@ -363,6 +363,179 @@ let builtin_funs () :
             (match !backend with
             | FStar | Coq | HOL4 -> "alloc_boxed_box_deref_mut_back"
             | Lean -> "alloc.boxed.Box.deref_mut_back");
+        };
+      ] );
+    (* TODO: fix the same like "[T]" below *)
+    ( [ "core"; "slice"; "index"; "[T]"; "index" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Slice_index"
+            | Lean -> "core.slice.index.Slice.index");
+        };
+        (* The backward function shouldn't be used *)
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Slice_index_back"
+            | Lean -> "core.slice.index.Slice.index_back");
+        };
+      ] );
+    ( [ "core"; "slice"; "index"; "[T]"; "index_mut" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Slice_index_mut"
+            | Lean -> "core.slice.index.Slice.index_mut");
+        };
+        (* The backward function shouldn't be used *)
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Slice_index_mut_back"
+            | Lean -> "core.slice.index.Slice.index_mut_back");
+        };
+      ] );
+    ( [ "core"; "array"; "[T; N]"; "index" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_array_Array_index"
+            | Lean -> "core.array.Array.index");
+        };
+        (* The backward function shouldn't be used *)
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_array_Array_index_back"
+            | Lean -> "core.array.Array.index_back");
+        };
+      ] );
+    ( [ "core"; "array"; "[T; N]"; "index_mut" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_array_Array_index_mut"
+            | Lean -> "core.array.Array.index_mut");
+        };
+        (* The backward function shouldn't be used *)
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_array_Array_index_mut_back"
+            | Lean -> "core.array.Array.index_mut_back");
+        };
+      ] );
+    ( [ "core"; "slice"; "index"; "Range"; "get" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_get"
+            | Lean -> "core.slice.index.Range.get");
+        };
+        (* The backward function shouldn't be used *)
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_back"
+            | Lean -> "core.slice.index.Range.get_back");
+        };
+      ] );
+    ( [ "core"; "slice"; "index"; "Range"; "get_mut" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_mut"
+            | Lean -> "core.slice.index.Range.get_mut");
+        };
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_mut_back"
+            | Lean -> "core.slice.index.Range.get_mut_back");
+        };
+      ] );
+    ( [ "core"; "slice"; "index"; "Range"; "index" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_index"
+            | Lean -> "core.slice.index.Range.index");
+        };
+        (* The backward function shouldn't be used *)
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_index_back"
+            | Lean -> "core.slice.index.Range.index_back");
+        };
+      ] );
+    ( [ "core"; "slice"; "index"; "Range"; "index_mut" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_index_mut"
+            | Lean -> "core.slice.index.Range.index_mut");
+        };
+        {
+          rg = rg0;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_index_mut_back"
+            | Lean -> "core.slice.index.Range.index_mut_back");
+        };
+      ] );
+    ( [ "core"; "slice"; "index"; "Range"; "get_unchecked" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_unchecked"
+            | Lean -> "core.slice.index.Range.get_unchecked");
+        };
+      ] );
+    ( [ "core"; "slice"; "index"; "Range"; "get_unchecked_mut" ],
+      None,
+      [
+        {
+          rg = None;
+          extract_name =
+            (match !backend with
+            | FStar | Coq | HOL4 -> "core_slice_index_Range_get_unchecked_mut"
+            | Lean -> "core.slice.index.Range.get_unchecked_mut");
         };
       ] );
   ]
@@ -528,7 +701,7 @@ let builtin_trait_decls_info () =
         [
           (match !backend with
           | Coq | FStar | HOL4 -> "index_inst"
-          | Lean -> "IndexInst");
+          | Lean -> "indexInst");
         ];
       consts = [];
       types = [];
@@ -543,6 +716,104 @@ let builtin_trait_decls_info () =
               ( rg0,
                 match !backend with
                 | Coq | FStar | HOL4 -> "core_ops_index_IndexMut_mut_back"
+                | Lean -> "index_mut_back" );
+            ] );
+        ];
+    };
+    {
+      (* Sealed *)
+      rust_name = "core::slice::index::private_slice_index::Sealed";
+      extract_name =
+        (match !backend with
+        | Coq | FStar | HOL4 -> "core_slice_index_sealed"
+        | Lean -> "core.slice.index.private_slice_index.Sealed");
+      parent_clauses = [];
+      consts = [];
+      types = [];
+      funs = [];
+    };
+    {
+      (* SliceIndex *)
+      rust_name = "core::slice::index::SliceIndex";
+      extract_name =
+        (match !backend with
+        | Coq | FStar | HOL4 -> "core_SliceIndex"
+        | Lean -> "core.slice.index.SliceIndex");
+      parent_clauses =
+        [
+          (match !backend with
+          | Coq | FStar | HOL4 -> "sealed_inst"
+          | Lean -> "sealedInst");
+        ];
+      consts = [];
+      types =
+        [
+          ( "Output",
+            ( (match !backend with
+              | Coq | FStar | HOL4 -> "core_SliceIndex_Output"
+              | Lean -> "Output"),
+              [] ) );
+        ];
+      funs =
+        [
+          ( "get",
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_get"
+                | Lean -> "get" );
+              (* The backward function shouldn't be used *)
+              ( rg0,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_get_back"
+                | Lean -> "get_back" );
+            ] );
+          ( "get_mut",
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_get_mut"
+                | Lean -> "get_mut" );
+              ( rg0,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_get_mut_back"
+                | Lean -> "get_mut_back" );
+            ] );
+          ( "get_unchecked",
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_get_unchecked"
+                | Lean -> "get_unchecked" );
+            ] );
+          ( "get_unchecked_mut",
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_get_unchecked_mut"
+                | Lean -> "get_unchecked_mut" );
+            ] );
+          ( "index",
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_index"
+                | Lean -> "index" );
+              (* The backward function shouldn't be used *)
+              ( rg0,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_index_back"
+                | Lean -> "index_back" );
+            ] );
+          ( "index_mut",
+            [
+              ( None,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_index_mut"
+                | Lean -> "index_mut" );
+              ( rg0,
+                match !backend with
+                | Coq | FStar | HOL4 -> "core_SliceIndex_index_mut_back"
                 | Lean -> "index_mut_back" );
             ] );
         ];
@@ -577,6 +848,7 @@ end
 module SimpleNamePairMap = Collections.MakeMap (SimpleNamePairOrd)
 
 let builtin_trait_impls_info () : ((string list * string list) * string) list =
+  (* TODO: fix the names like "[T]" below *)
   [
     (* core::ops::Deref<alloc::boxed::Box<T>> *)
     ( ([ "alloc"; "boxed"; "Box" ], [ "core"; "ops"; "deref"; "Deref" ]),
@@ -584,6 +856,28 @@ let builtin_trait_impls_info () : ((string list * string list) * string) list =
     (* core::ops::DerefMut<alloc::boxed::Box<T>> *)
     ( ([ "alloc"; "boxed"; "Box" ], [ "core"; "ops"; "deref"; "DerefMut" ]),
       "alloc.boxed.Box.coreOpsDerefMutInst" );
+    (* core::ops::index::Index<[T], I> *)
+    ( ([ "core"; "slice"; "index"; "[T]" ], [ "core"; "ops"; "index"; "Index" ]),
+      "core.slice.index.Slice.coreopsindexIndexInst" );
+    (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
+    ( ( [ "core"; "slice"; "index"; "private_slice_index"; "Range" ],
+        [ "core"; "slice"; "index"; "private_slice_index"; "Sealed" ] ),
+      "core.slice.index.private_slice_index.Range.coresliceindexprivate_slice_indexSealedInst"
+    );
+    (* core::slice::index::SliceIndex<Range<usize>, [T]> *)
+    ( ( [ "core"; "slice"; "index"; "Range" ],
+        [ "core"; "slice"; "index"; "SliceIndex" ] ),
+      "core.slice.index.Range.coresliceindexSliceIndexInst" );
+    (* core::ops::index::IndexMut<[T], I> *)
+    ( ( [ "core"; "slice"; "index"; "[T]" ],
+        [ "core"; "ops"; "index"; "IndexMut" ] ),
+      "core.slice.index.Slice.coreopsindexIndexMutInst" );
+    (* core::ops::index::Index<[T; N], I> *)
+    ( ([ "core"; "array"; "[T; N]" ], [ "core"; "ops"; "index"; "Index" ]),
+      "core.array.Array.coreopsindexIndexInst" );
+    (* core::ops::index::IndexMut<[T; N], I> *)
+    ( ([ "core"; "array"; "[T; N]" ], [ "core"; "ops"; "index"; "IndexMut" ]),
+      "core.array.Array.coreopsindexIndexMutInst" );
   ]
 
 let mk_builtin_trait_impls_map () =

@@ -127,4 +127,11 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
  Use with `simp [ aeneas ]` -/
 register_simp_attr aeneas
 
+-- We don't really use raw pointers for now
+structure MutRawPtr (T : Type) where
+  v : T
+
+structure ConstRawPtr (T : Type) where
+  v : T
+
 end Primitives
