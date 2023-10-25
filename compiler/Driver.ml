@@ -214,14 +214,6 @@ let () =
       log#linfo (lazy ("Imported: " ^ filename));
       log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
 
-      (* Print a warning if the crate contains loops (loops are experimental for now) *)
-      let has_loops =
-        A.FunDeclId.Map.exists
-          (fun _ -> Aeneas.LlbcAstUtils.fun_decl_has_loops)
-          m.functions
-      in
-      if has_loops then log#lwarning (lazy "Support for loops is experimental");
-
       (* We don't support mutually recursive definitions with decreases clauses in Lean *)
       if
         !backend = Lean && !extract_decreases_clauses
