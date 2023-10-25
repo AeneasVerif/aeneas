@@ -85,7 +85,9 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             match ls with
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
             | _ -> raise (Failure "Ill-formed borrow expansion"))
-        | T.TypeVar _ | T.Literal Char | Never | T.TraitType _ | T.Arrow _ ->
+        | T.TypeVar _
+        | T.Literal Char
+        | Never | T.TraitType _ | T.Arrow _ | T.RawPtr _ ->
             raise (Failure "Ill-formed symbolic expansion")
       in
       Some (Expansion (place, sv, expansion))

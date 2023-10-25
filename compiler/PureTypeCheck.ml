@@ -46,7 +46,7 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           if variant_id = fuel_zero_id then []
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
           else raise (Failure "Unreachable: improper variant id for fuel type")
-      | Array | Slice | Str ->
+      | Array | Slice | Str | RawPtr _ ->
           (* Array: when not symbolic values (for instance, because of aggregates),
              the array expressions are introduced as struct updates *)
           raise (Failure "Attempting to access the fields of an opaque type"))

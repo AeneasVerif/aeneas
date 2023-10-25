@@ -660,6 +660,30 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.ctx_to_stype_formatter fmt in
     PT.sty_to_string fmt t
 
+  let generic_params_to_strings (ctx : C.eval_ctx) (x : T.generic_params) :
+      string list * string list =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_stype_formatter fmt in
+    PT.generic_params_to_strings fmt x
+
+  let egeneric_args_to_string (ctx : C.eval_ctx) (x : T.egeneric_args) : string
+      =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_etype_formatter fmt in
+    PT.egeneric_args_to_string fmt x
+
+  let rgeneric_args_to_string (ctx : C.eval_ctx) (x : T.rgeneric_args) : string
+      =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_rtype_formatter fmt in
+    PT.rgeneric_args_to_string fmt x
+
+  let sgeneric_args_to_string (ctx : C.eval_ctx) (x : T.sgeneric_args) : string
+      =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_stype_formatter fmt in
+    PT.sgeneric_args_to_string fmt x
+
   let etrait_ref_to_string (ctx : C.eval_ctx) (x : T.etrait_ref) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let fmt = PC.ctx_to_etype_formatter fmt in
@@ -692,12 +716,6 @@ module EvalCtxLlbcAst = struct
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let fmt = PC.ctx_to_stype_formatter fmt in
     PT.strait_instance_id_to_string fmt x
-
-  let egeneric_args_to_string (ctx : C.eval_ctx) (x : T.egeneric_args) : string
-      =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_etype_formatter fmt in
-    PT.egeneric_args_to_string fmt x
 
   let borrow_content_to_string (ctx : C.eval_ctx) (bc : V.borrow_content) :
       string =

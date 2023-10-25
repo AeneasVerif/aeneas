@@ -421,6 +421,11 @@ let rec translate_sty (ty : T.sty) : ty =
   | Literal ty -> Literal ty
   | Never -> raise (Failure "Unreachable")
   | Ref (_, rty, _) -> translate rty
+  | RawPtr (ty, rkind) ->
+      let mut = match rkind with Mut -> Mut | Shared -> Const in
+      let ty = translate ty in
+      let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
+      Adt (Assumed (RawPtr mut), generics)
   | TraitType (trait_ref, generics, type_name) ->
       let trait_ref = translate_strait_ref trait_ref in
       let generics = translate_sgeneric_args generics in
@@ -560,6 +565,11 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
   | Never -> raise (Failure "Unreachable")
   | Literal lty -> Literal lty
   | Ref (_, rty, _) -> translate rty
+  | RawPtr (ty, rkind) ->
+      let mut = match rkind with Mut -> Mut | Shared -> Const in
+      let ty = translate ty in
+      let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
+      Adt (Assumed (RawPtr mut), generics)
   | TraitType (trait_ref, generics, type_name) ->
       let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
       let generics = translate_fwd_generic_args type_infos generics in
@@ -646,6 +656,9 @@ let rec translate_back_ty (type_infos : TA.type_infos)
           if keep_region r then
             translate_back_ty type_infos keep_region inside_mut rty
           else None)
+  | RawPtr _ ->
+      (* TODO: not sure what to do here *)
+      None
   | TraitType (trait_ref, generics, type_name) ->
       assert (generics.regions = []);
       (* Translate the trait ref and the generics as "forward" generics -

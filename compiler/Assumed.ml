@@ -85,6 +85,7 @@ module Sig = struct
       { regions_outlive = []; types_outlive = []; trait_type_constraints = [] }
     in
     {
+      is_unsafe = false;
       generics;
       preds;
       parent_params_info = None;

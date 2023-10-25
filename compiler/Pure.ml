@@ -47,6 +47,7 @@ type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
 type trait_item_name = T.trait_item_name [@@deriving show, ord]
 type global_decl_id = T.global_decl_id [@@deriving show, ord]
 type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
+type mutability = Mut | Const [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -64,7 +65,22 @@ type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
         this state is opaque to Aeneas (the user can define it, or leave it as
         assumed)
   *)
-type assumed_ty = State | Result | Error | Fuel | Array | Slice | Str
+type assumed_ty =
+  | State
+  | Result
+  | Error
+  | Fuel
+  | Array
+  | Slice
+  | Str
+  | RawPtr of mutability
+      (** The bool
+          Raw pointers don't make sense in the pure world, but we don't know
+          how to translate them yet and we have to handle some functions which
+          use raw pointers in their signature (for instance some trait declarations
+          for the slices). For now, we use a dedicated type to "mark" the raw pointers,
+          and make sure that those functions are actually not used in the translation.
+       *)
 [@@deriving show, ord]
 
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather

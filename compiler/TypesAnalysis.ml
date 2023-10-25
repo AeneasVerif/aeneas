@@ -168,6 +168,9 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
         in
         (* Continue exploring *)
         analyze expl_info ty_info rty
+    | RawPtr (rty, _) ->
+        (* TODO: not sure what to do here *)
+        analyze expl_info ty_info rty
     | Adt ((Tuple | Assumed (Box | Slice | Array | Str)), generics) ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left

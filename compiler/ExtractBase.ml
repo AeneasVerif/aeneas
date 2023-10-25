@@ -758,7 +758,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             if variant_id = fuel_zero_id then "@fuel::0"
             else if variant_id = fuel_succ_id then "@fuel::Succ"
             else raise (Failure "Unreachable")
-        | Assumed (State | Array | Slice | Str) ->
+        | Assumed (State | Array | Slice | Str | RawPtr _) ->
             raise
               (Failure
                  ("Unreachable: variant id ("
@@ -777,7 +777,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let field_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed (State | Result | Error | Fuel | Array | Slice | Str) ->
+        | Assumed
+            (State | Result | Error | Fuel | Array | Slice | Str | RawPtr _) ->
             (* We can't directly have access to the fields of those types *)
             raise (Failure "Unreachable")
         | AdtId id -> (

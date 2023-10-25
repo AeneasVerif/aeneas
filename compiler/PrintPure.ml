@@ -198,6 +198,8 @@ let assumed_ty_to_string (aty : assumed_ty) : string =
   | Array -> "Array"
   | Slice -> "Slice"
   | Str -> "Str"
+  | RawPtr Mut -> "MutRawPtr"
+  | RawPtr Const -> "ConstRawPtr"
 
 let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
@@ -385,7 +387,7 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
   | Assumed aty -> (
       (* Assumed type *)
       match aty with
-      | State | Array | Slice | Str ->
+      | State | Array | Slice | Str | RawPtr _ ->
           (* Those types are opaque: we can't get there *)
           raise (Failure "Unreachable")
       | Result ->
@@ -423,7 +425,7 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
       | State | Fuel | Array | Slice | Str ->
           (* Opaque types: we can't get there *)
           raise (Failure "Unreachable")
-      | Result | Error ->
+      | Result | Error | RawPtr _ ->
           (* Enumerations: we can't get there *)
           raise (Failure "Unreachable"))
 
@@ -463,7 +465,7 @@ let adt_g_value_to_string (fmt : value_formatter)
   | Adt (Assumed aty, _) -> (
       (* Assumed type *)
       match aty with
-      | State ->
+      | State | RawPtr _ ->
           (* This type is opaque: we can't get there *)
           raise (Failure "Unreachable")
       | Result ->

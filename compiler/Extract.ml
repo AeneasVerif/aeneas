@@ -64,7 +64,9 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
     | BitAnd -> "and"
     | BitOr -> "or"
     | Shl -> "lsl"
-    | Shr -> "asr" (* NOTE: make sure arithmetic shift right is implemented, i.e. OCaml's asr operator, not lsr *)
+    | Shr ->
+        "asr"
+        (* NOTE: make sure arithmetic shift right is implemented, i.e. OCaml's asr operator, not lsr *)
     | _ -> raise (Failure "Unreachable")
   in
   (* Remark: the Lean case is actually not used *)
@@ -798,6 +800,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             | Assumed Slice -> "s"
             | Assumed Str -> "s"
             | Assumed State -> ConstStrings.state_basename
+            | Assumed (RawPtr _) -> "p"
             | AdtId adt_id ->
                 let def = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
                 (* Derive the var name from the last ident of the type name
