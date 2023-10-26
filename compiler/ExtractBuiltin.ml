@@ -149,7 +149,10 @@ let builtin_types () : builtin_type_info list =
           let fields =
             List.map
               (fun (rname, name) ->
-                (rname, backend_choice (extract_name ^ name) name))
+                ( rname,
+                  match !backend with
+                  | FStar | Lean -> name
+                  | Coq | HOL4 -> extract_name ^ "_" ^ name ))
               fields
           in
           let constructor = mk_struct_constructor extract_name in

@@ -1332,22 +1332,20 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
   let rg_suff =
     (* TODO: make all the backends match what is done for Lean *)
     match rg with
-    | None -> (
-        match !Config.backend with
-        | FStar | Coq | HOL4 -> "_fwd"
-        | Lean ->
-            (* In order to avoid name conflicts:
-             * - if the forward is eliminated, we add the suffix "_fwd" (it won't be used)
-             * - otherwise, no suffix (because the backward functions will have a suffix)
-             *)
-            if num_backs = 1 && not keep_fwd then "_fwd" else "")
+    | None ->
+        if
+          (* In order to avoid name conflicts:
+           * - if the forward is eliminated, we add the suffix "_fwd" (it won't be used)
+           * - otherwise, no suffix (because the backward functions will have a suffix)
+           *)
+          num_backs = 1 && not keep_fwd
+        then "_fwd"
+        else ""
     | Some rg ->
         assert (num_region_groups > 0 && num_backs > 0);
         if num_backs = 1 then
           (* Exactly one backward function *)
-          match !Config.backend with
-          | FStar | Coq | HOL4 -> if not keep_fwd then "_fwd_back" else "_back"
-          | Lean -> if not keep_fwd then "" else "_back"
+          if not keep_fwd then "" else "_back"
         else if
           (* Several region groups/backward functions:
              - if all the regions in the group have names, we use those names
