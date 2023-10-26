@@ -520,23 +520,6 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
   let names_set = StringSet.add name nm.names_set in
   { id_to_name; name_to_id; names_set }
 
-let names_map_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
-    (name : string) (nm : names_map) : names_map =
-  names_map_add id_to_string (TypeId (Assumed id)) name nm
-
-let names_map_add_assumed_struct (id_to_string : id -> string) (id : assumed_ty)
-    (name : string) (nm : names_map) : names_map =
-  names_map_add id_to_string (StructId (Assumed id)) name nm
-
-let names_map_add_assumed_variant (id_to_string : id -> string)
-    (id : assumed_ty) (variant_id : VariantId.id) (name : string)
-    (nm : names_map) : names_map =
-  names_map_add id_to_string (VariantId (Assumed id, variant_id)) name nm
-
-let names_map_add_function (id_to_string : id -> string) (fid : fun_id)
-    (name : string) (nm : names_map) : names_map =
-  names_map_add id_to_string (FunId fid) name nm
-
 (** The unsafe names map stores mappings from identifiers to names which might
     collide. For some backends and some names, it might be acceptable to have
     collisions. For instance, in Lean, different records can have fields with
@@ -546,6 +529,8 @@ let names_map_add_function (id_to_string : id -> string) (fid : fun_id)
     This map complements the {!names_map}, which checks for collisions.
   *)
 type unsafe_names_map = { id_to_name : string IdMap.t }
+
+let empty_unsafe_names_map = { id_to_name = IdMap.empty }
 
 let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
     unsafe_names_map =
@@ -585,16 +570,7 @@ let basename_to_unique (names_set : StringSet.t)
 
 type fun_name_info = { keep_fwd : bool; num_backs : int }
 
-(** Extraction context.
-
-    Note that the extraction context contains information coming from the
-    LLBC AST (not only the pure AST). This is useful for naming, for instance:
-    we use the region information to generate the names of the backward
-    functions, etc.
- *)
-type extraction_ctx = {
-  crate : A.crate;
-  trans_ctx : trans_ctx;
+type names_maps = {
   names_map : names_map;
       (** The map for id to names, where we forbid name collisions
           (ex.: we always forbid function name collisions). *)
@@ -610,6 +586,19 @@ type extraction_ctx = {
           the name "u32", and another field of the same record refers to "u32"
           (for instance in its type).
        *)
+}
+
+(** Extraction context.
+
+    Note that the extraction context contains information coming from the
+    LLBC AST (not only the pure AST). This is useful for naming, for instance:
+    we use the region information to generate the names of the backward
+    functions, etc.
+ *)
+type extraction_ctx = {
+  crate : A.crate;
+  trans_ctx : trans_ctx;
+  names_maps : names_maps;
   fmt : formatter;
   indent_incr : int;
       (** The indent increment we insert whenever we need to indent more *)
@@ -836,12 +825,15 @@ let allow_collisions (id : id) : bool =
   | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
   | TraitMethodId _ ->
       !Config.record_fields_short_names
+  | FunId (Pure _ | FromLlbc (FunId (Assumed _), _, _)) ->
+      (* We map several assumed functions to the same id *)
+      true
   | _ -> false
 
-let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
-  (* The id_to_string function to print nice debugging messages if there are
-   * collisions *)
-  let id_to_string (id : id) : string = id_to_string id ctx in
+(** The [id_to_string] function to print nice debugging messages if there are
+    collisions *)
+let names_maps_add (id_to_string : id -> string) (id : id) (name : string)
+    (nm : names_maps) : names_maps =
   (* We do not use the same name map if we allow/disallow collisions.
      We notably use it for field names: some backends like Lean can use the
      type information to disambiguate field projections.
@@ -856,59 +848,90 @@ let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   *)
   if allow_collisions id then (
     (* Check with the ids which are considered to be strict on collisions *)
-    names_map_check_collision id_to_string id name ctx.strict_names_map;
+    names_map_check_collision id_to_string id name nm.strict_names_map;
     {
-      ctx with
-      unsafe_names_map = unsafe_names_map_add id name ctx.unsafe_names_map;
+      nm with
+      unsafe_names_map = unsafe_names_map_add id name nm.unsafe_names_map;
     })
   else
     (* Remark: if we are strict on collisions:
        - we add the id to the strict collisions map
        - we check that the id doesn't collide with the unsafe map
+       TODO: we might not check that:
+       - a user defined function doesn't collide with an assumed function
+       - two trait decl items don't collide with each other
     *)
     let strict_names_map =
       if strict_collisions id then
-        names_map_add id_to_string id name ctx.strict_names_map
-      else ctx.strict_names_map
+        names_map_add id_to_string id name nm.strict_names_map
+      else nm.strict_names_map
     in
-    let names_map = names_map_add id_to_string id name ctx.names_map in
-    { ctx with strict_names_map; names_map }
+    let names_map = names_map_add id_to_string id name nm.names_map in
+    { nm with strict_names_map; names_map }
 
-let ctx_get (id : id) (ctx : extraction_ctx) : string =
+let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
+  let id_to_string (id : id) : string = id_to_string id ctx in
+  let names_maps = names_maps_add id_to_string id name ctx.names_maps in
+  { ctx with names_maps }
+
+(** The [id_to_string] function to print nice debugging messages if there are
+    collisions *)
+let names_maps_get (id_to_string : id -> string) (id : id) (nm : names_maps) :
+    string =
   (* We do not use the same name map if we allow/disallow collisions *)
   let map_to_string (m : string IdMap.t) : string =
     "[\n"
     ^ String.concat ","
         (List.map
-           (fun (id, n) -> "\n  " ^ id_to_string id ctx ^ " -> " ^ n)
+           (fun (id, n) -> "\n  " ^ id_to_string id ^ " -> " ^ n)
            (IdMap.bindings m))
     ^ "\n]"
   in
   if allow_collisions id then (
-    let m = ctx.unsafe_names_map.id_to_name in
+    let m = nm.unsafe_names_map.id_to_name in
     match IdMap.find_opt id m with
     | Some s -> s
     | None ->
         let err =
-          "Could not find: " ^ id_to_string id ctx ^ "\nNames map:\n"
+          "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
           ^ map_to_string m
         in
         log#serror err;
         if !Config.extract_fail_hard then raise (Failure err)
-        else
-          "(%%%ERROR: unknown identifier\": " ^ id_to_string id ctx ^ "\"%%%)")
+        else "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
-    let m = ctx.names_map.id_to_name in
+    let m = nm.names_map.id_to_name in
     match IdMap.find_opt id m with
     | Some s -> s
     | None ->
         let err =
-          "Could not find: " ^ id_to_string id ctx ^ "\nNames map:\n"
+          "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
           ^ map_to_string m
         in
         log#serror err;
         if !Config.extract_fail_hard then raise (Failure err)
-        else "(ERROR: \"" ^ id_to_string id ctx ^ "\")"
+        else "(ERROR: \"" ^ id_to_string id ^ "\")"
+
+let ctx_get (id : id) (ctx : extraction_ctx) : string =
+  let id_to_string (id : id) : string = id_to_string id ctx in
+  names_maps_get id_to_string id ctx.names_maps
+
+let names_maps_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
+    (name : string) (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (TypeId (Assumed id)) name nm
+
+let names_maps_add_assumed_struct (id_to_string : id -> string)
+    (id : assumed_ty) (name : string) (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (StructId (Assumed id)) name nm
+
+let names_maps_add_assumed_variant (id_to_string : id -> string)
+    (id : assumed_ty) (variant_id : VariantId.id) (name : string)
+    (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (VariantId (Assumed id, variant_id)) name nm
+
+let names_maps_add_function (id_to_string : id -> string) (fid : fun_id)
+    (name : string) (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (FunId fid) name nm
 
 let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
   ctx_get (GlobalId id) ctx
@@ -999,9 +1022,12 @@ let ctx_get_termination_measure (def_id : A.FunDeclId.id)
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
-  let name = ctx.fmt.type_var_basename ctx.names_map.names_set basename in
   let name =
-    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index name
+    ctx.fmt.type_var_basename ctx.names_maps.names_map.names_set basename
+  in
+  let name =
+    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
+      name
   in
   let ctx = ctx_add (TypeVarId id) name ctx in
   (ctx, name)
@@ -1010,10 +1036,12 @@ let ctx_add_type_var (basename : string) (id : TypeVarId.id)
 let ctx_add_const_generic_var (basename : string) (id : ConstGenericVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name =
-    ctx.fmt.const_generic_var_basename ctx.names_map.names_set basename
+    ctx.fmt.const_generic_var_basename ctx.names_maps.names_map.names_set
+      basename
   in
   let name =
-    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index name
+    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
+      name
   in
   let ctx = ctx_add (ConstGenericVarId id) name ctx in
   (ctx, name)
@@ -1029,7 +1057,8 @@ let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
 let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
     extraction_ctx * string =
   let name =
-    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
+      basename
   in
   let ctx = ctx_add (VarId id) name ctx in
   (ctx, name)
@@ -1038,7 +1067,8 @@ let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
 let ctx_add_trait_self_clause (ctx : extraction_ctx) : extraction_ctx * string =
   let basename = ctx.fmt.trait_self_clause_basename in
   let name =
-    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
+      basename
   in
   let ctx = ctx_add TraitSelfClauseId name ctx in
   (ctx, name)
@@ -1047,7 +1077,8 @@ let ctx_add_trait_self_clause (ctx : extraction_ctx) : extraction_ctx * string =
 let ctx_add_local_trait_clause (basename : string) (id : TraitClauseId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name =
-    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
+      basename
   in
   let ctx = ctx_add (LocalTraitClauseId id) name ctx in
   (ctx, name)
@@ -1057,7 +1088,9 @@ let ctx_add_vars (vars : var list) (ctx : extraction_ctx) :
     extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (v : var) ->
-      let name = ctx.fmt.var_basename ctx.names_map.names_set v.basename v.ty in
+      let name =
+        ctx.fmt.var_basename ctx.names_maps.names_map.names_set v.basename v.ty
+      in
       ctx_add_var name v.id ctx)
     ctx vars
 
@@ -1078,7 +1111,9 @@ let ctx_add_local_trait_clauses (clauses : trait_clause list)
     (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (c : trait_clause) ->
-      let basename = ctx.fmt.trait_clause_basename ctx.names_map.names_set c in
+      let basename =
+        ctx.fmt.trait_clause_basename ctx.names_maps.names_map.names_set c
+      in
       ctx_add_local_trait_clause basename c.clause_id ctx)
     ctx clauses
 
@@ -1189,9 +1224,10 @@ type names_map_init = {
   assumed_pure_functions : (pure_assumed_fun_id * string) list;
 }
 
-(** Initialize a names map with a proper set of keywords/names coming from the
+(** Initialize names maps with a proper set of keywords/names coming from the
     target language/prover. *)
-let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
+let initialize_names_maps (fmt : formatter) (init : names_map_init) : names_maps
+    =
   let int_names = List.map fmt.int_name T.all_int_types in
   let keywords =
     List.concat
@@ -1207,7 +1243,10 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
    * Also note that we don't need this mapping for keywords: we insert keywords only
    * to check collisions. *)
   let id_to_name = IdMap.empty in
-  let nm = { id_to_name; name_to_id; names_set } in
+  let names_map = { id_to_name; name_to_id; names_set } in
+  let unsafe_names_map = empty_unsafe_names_map in
+  let strict_names_map = empty_names_map in
+  let nm = { names_map; unsafe_names_map; strict_names_map } in
   (* For debugging - we are creating bindings for assumed types and functions, so
    * it is ok if we simply use the "show" function (those aren't simply identified
    * by numbers) *)
@@ -1221,19 +1260,19 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
   let nm =
     List.fold_left
       (fun nm (type_id, name) ->
-        names_map_add_assumed_type id_to_string type_id name nm)
+        names_maps_add_assumed_type id_to_string type_id name nm)
       nm init.assumed_adts
   in
   let nm =
     List.fold_left
       (fun nm (type_id, name) ->
-        names_map_add_assumed_struct id_to_string type_id name nm)
+        names_maps_add_assumed_struct id_to_string type_id name nm)
       nm init.assumed_structs
   in
   let nm =
     List.fold_left
       (fun nm (type_id, variant_id, name) ->
-        names_map_add_assumed_variant id_to_string type_id variant_id name nm)
+        names_maps_add_assumed_variant id_to_string type_id variant_id name nm)
       nm init.assumed_variants
   in
   let assumed_functions =
@@ -1245,7 +1284,7 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
   in
   let nm =
     List.fold_left
-      (fun nm (fid, name) -> names_map_add_function id_to_string fid name nm)
+      (fun nm (fid, name) -> names_maps_add_function id_to_string fid name nm)
       nm assumed_functions
   in
   (* Return *)

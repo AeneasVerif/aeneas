@@ -300,30 +300,30 @@ let assumed_llbc_functions () :
   match !backend with
   | FStar | Coq | HOL4 ->
       [
-        (ArrayIndexShared, None, "array_index_shared");
-        (ArrayIndexMut, None, "array_index_mut_fwd");
-        (ArrayIndexMut, rg0, "array_index_mut_back");
-        (ArrayToSliceShared, None, "array_to_slice_shared");
-        (ArrayToSliceMut, None, "array_to_slice_mut_fwd");
-        (ArrayToSliceMut, rg0, "array_to_slice_mut_back");
+        (ArrayIndexShared, None, "array_index_usize");
+        (ArrayIndexMut, None, "array_index_usize");
+        (ArrayIndexMut, rg0, "array_update_usize");
+        (ArrayToSliceShared, None, "array_to_slice");
+        (ArrayToSliceMut, None, "array_to_slice");
+        (ArrayToSliceMut, rg0, "array_from_slice");
         (ArrayRepeat, None, "array_repeat");
-        (SliceIndexShared, None, "slice_index_shared");
-        (SliceIndexMut, None, "slice_index_mut_fwd");
-        (SliceIndexMut, rg0, "slice_index_mut_back");
+        (SliceIndexShared, None, "slice_index_usize");
+        (SliceIndexMut, None, "slice_index_usize");
+        (SliceIndexMut, rg0, "slice_update_usize");
         (SliceLen, None, "slice_len");
       ]
   | Lean ->
       [
-        (ArrayIndexShared, None, "Array.index_shared");
-        (ArrayIndexMut, None, "Array.index_mut");
-        (ArrayIndexMut, rg0, "Array.index_mut_back");
-        (ArrayToSliceShared, None, "Array.to_slice_shared");
-        (ArrayToSliceMut, None, "Array.to_slice_mut");
-        (ArrayToSliceMut, rg0, "Array.to_slice_mut_back");
+        (ArrayIndexShared, None, "Array.index_usize");
+        (ArrayIndexMut, None, "Array.index_usize");
+        (ArrayIndexMut, rg0, "Array.update_usize");
+        (ArrayToSliceShared, None, "Array.to_slice");
+        (ArrayToSliceMut, None, "Array.to_slice");
+        (ArrayToSliceMut, rg0, "Array.from_slice");
         (ArrayRepeat, None, "Array.repeat");
-        (SliceIndexShared, None, "Slice.index_shared");
-        (SliceIndexMut, None, "Slice.index_mut");
-        (SliceIndexMut, rg0, "Slice.index_mut_back");
+        (SliceIndexShared, None, "Slice.index_usize");
+        (SliceIndexMut, None, "Slice.index_usize");
+        (SliceIndexMut, rg0, "Slice.update_usize");
         (SliceLen, None, "Slice.len");
       ]
 
@@ -941,11 +941,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     extract_binop;
   }
 
-let mk_formatter_and_names_map (ctx : trans_ctx) (crate_name : string)
-    (variant_concatenate_type_name : bool) : formatter * names_map =
+let mk_formatter_and_names_maps (ctx : trans_ctx) (crate_name : string)
+    (variant_concatenate_type_name : bool) : formatter * names_maps =
   let fmt = mk_formatter ctx crate_name variant_concatenate_type_name in
-  let names_map = initialize_names_map fmt (names_map_init ()) in
-  (fmt, names_map)
+  let names_maps = initialize_names_maps fmt (names_map_init ()) in
+  (fmt, names_maps)
 
 let is_single_opaque_fun_decl_group (dg : Pure.fun_decl list) : bool =
   match dg with [ d ] -> d.body = None | _ -> false
@@ -1507,8 +1507,8 @@ let extract_type_decl_variant (ctx : extraction_ctx) (fmt : F.formatter)
           | Some field_name ->
               let var_id = VarId.of_int (FieldId.to_int fid) in
               let field_name =
-                ctx.fmt.var_basename ctx.names_map.names_set (Some field_name)
-                  f.field_ty
+                ctx.fmt.var_basename ctx.names_maps.names_map.names_set
+                  (Some field_name) f.field_ty
               in
               let ctx, field_name = ctx_add_var field_name var_id ctx in
               F.pp_print_string fmt (field_name ^ " :");

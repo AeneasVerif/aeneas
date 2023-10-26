@@ -990,22 +990,9 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   in
   (* Initialize the names map (we insert the names of the "primitives"
      declarations, and insert the names of the local declarations later) *)
-  let mk_formatter_and_names_map = Extract.mk_formatter_and_names_map in
-  let fmt, names_map =
-    mk_formatter_and_names_map trans_ctx crate.name
+  let fmt, names_maps =
+    Extract.mk_formatter_and_names_maps trans_ctx crate.name
       variant_concatenate_type_name
-  in
-  let strict_names_map =
-    let open ExtractBase in
-    let ids =
-      List.filter
-        (fun (id, _) -> strict_collisions id)
-        (IdMap.bindings names_map.id_to_name)
-    in
-    List.fold_left
-      (* id_to_string: we shouldn't need to use it *)
-        (fun m (id, n) -> names_map_add show_id id n m)
-      empty_names_map ids
   in
 
   (* We need to compute which functions are recursive, in order to know
@@ -1060,9 +1047,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
     {
       ExtractBase.crate;
       trans_ctx;
-      names_map;
-      unsafe_names_map = { id_to_name = ExtractBase.IdMap.empty };
-      strict_names_map;
+      names_maps;
       fmt;
       indent_incr = 2;
       use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;

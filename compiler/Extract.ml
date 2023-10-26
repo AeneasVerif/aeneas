@@ -241,7 +241,7 @@ let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
       ctx
   | PatVar (v, _) ->
       let vname =
-        ctx.fmt.var_basename ctx.names_map.names_set v.basename v.ty
+        ctx.fmt.var_basename ctx.names_maps.names_map.names_set v.basename v.ty
       in
       let ctx, vname = ctx_add_var vname v.id ctx in
       F.pp_print_string fmt vname;
