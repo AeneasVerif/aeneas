@@ -655,13 +655,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   in
   let struct_constructor (basename : name) : string =
     let tname = type_name basename in
-    let prefix =
-      match !backend with FStar -> "Mk" | Coq | HOL4 -> "mk" | Lean -> ""
-    in
-    let suffix =
-      match !backend with FStar | Coq | HOL4 -> "" | Lean -> ".mk"
-    in
-    prefix ^ tname ^ suffix
+    ExtractBuiltin.mk_struct_constructor tname
   in
   let get_fun_name fname =
     let fname = get_name fname in
@@ -1414,8 +1408,13 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
               let field_names =
                 FieldId.mapi
-                  (fun fid (_, name) -> (fid, name))
-                  (List.combine fields field_names)
+                  (fun fid (field : field) ->
+                    let rust_name = Option.get field.field_name in
+                    let name =
+                      snd (List.find (fun (n, _) -> n = rust_name) field_names)
+                    in
+                    (fid, name))
+                  fields
               in
               (field_names, cons_name)
           | Some info ->

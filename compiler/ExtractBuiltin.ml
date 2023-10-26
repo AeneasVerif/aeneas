@@ -97,7 +97,7 @@ type builtin_enum_variant_info = {
 [@@deriving show]
 
 type builtin_type_body_info =
-  | Struct of string * string list
+  | Struct of string * (string * string) list
     (* The constructor name and the map for the field names *)
   | Enum of builtin_enum_variant_info list
 (* For every variant, a map for the field names *)
@@ -116,6 +116,19 @@ type builtin_type_info = {
 }
 [@@deriving show]
 
+type type_variant_kind =
+  | KOpaque
+  | KStruct of (string * string) list
+  (* TODO: handle the tuple case *)
+  | KEnum (* TODO *)
+
+let mk_struct_constructor (type_name : string) : string =
+  let prefix =
+    match !backend with FStar -> "Mk" | Coq | HOL4 -> "mk" | Lean -> ""
+  in
+  let suffix = match !backend with FStar | Coq | HOL4 -> "" | Lean -> ".mk" in
+  prefix ^ type_name ^ suffix
+
 (** The assumed types.
 
     The optional list of booleans is filtering information for the type
@@ -123,28 +136,44 @@ type builtin_type_info = {
     a type parameter for the allocator to use, which we want to filter.
  *)
 let builtin_types () : builtin_type_info list =
+  let mk_type (rust_name : string list) ?(keep_params : bool list option = None)
+      ?(kind : type_variant_kind = KOpaque) () : builtin_type_info =
+    let extract_name =
+      let sep = backend_choice "_" "." in
+      String.concat sep rust_name
+    in
+    let body_info : builtin_type_body_info option =
+      match kind with
+      | KOpaque -> None
+      | KStruct fields ->
+          let fields =
+            List.map
+              (fun (rname, name) ->
+                (rname, backend_choice (extract_name ^ name) name))
+              fields
+          in
+          let constructor = mk_struct_constructor extract_name in
+          Some (Struct (constructor, fields))
+      | KEnum -> raise (Failure "TODO")
+    in
+    { rust_name; extract_name; keep_params; body_info }
+  in
+
   [
     (* Alloc *)
-    {
-      rust_name = [ "alloc"; "alloc"; "Global" ];
-      extract_name =
-        (match !backend with
-        | Lean -> "alloc.alloc.Global"
-        | Coq | FStar | HOL4 -> "alloc_alloc_Global");
-      keep_params = None;
-      body_info = None;
-    };
+    mk_type [ "alloc"; "alloc"; "Global" ] ();
     (* Vec *)
-    {
-      rust_name = [ "alloc"; "vec"; "Vec" ];
-      extract_name =
-        (match !backend with
-        | Lean -> "alloc.vec.Vec"
-        | Coq | FStar | HOL4 -> "alloc_vec_Vec");
-      keep_params = Some [ true; false ];
-      body_info = None;
-    };
-    (* Option *)
+    mk_type [ "alloc"; "vec"; "Vec" ] ~keep_params:(Some [ true; false ]) ();
+    (* Range *)
+    mk_type
+      [ "core"; "ops"; "range"; "Range" ]
+      ~kind:(KStruct [ ("start", "start"); ("end", "end_") ])
+      ();
+    (* Option
+
+       This one is more custom because we use the standard "option" type from
+       the target backend.
+    *)
     {
       rust_name = [ "core"; "option"; "Option" ];
       extract_name =
@@ -175,23 +204,6 @@ let builtin_types () : builtin_type_info list =
                  fields = None;
                };
              ]);
-    };
-    (* Range *)
-    {
-      rust_name = [ "core"; "ops"; "range"; "Range" ];
-      extract_name =
-        (match !backend with
-        | Lean -> "core.ops.range.Range"
-        | Coq | FStar | HOL4 -> "core_ops_range_Range");
-      keep_params = None;
-      body_info =
-        Some
-          (Struct
-             ( (match !backend with
-               | Lean -> "core.ops.range.Range.mk"
-               | Coq | HOL4 -> "mk_core_ops_range_Range"
-               | FStar -> "Mkcore_ops_range_Range"),
-               [ "start"; "end_" ] ));
     };
   ]
 
