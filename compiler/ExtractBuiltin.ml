@@ -381,6 +381,7 @@ let builtin_fun_effects =
   let int_funs = List.concat int_funs in
   let no_fail_no_state_funs =
     [
+      (* TODO: redundancy with the funs information below *)
       "alloc::vec::Vec::new";
       "alloc::vec::Vec::len";
       "alloc::boxed::Box::deref";
@@ -395,7 +396,15 @@ let builtin_fun_effects =
       (fun n -> (n, { can_fail = false; stateful = false }))
       no_fail_no_state_funs
   in
-  let no_state_funs = [ "alloc::vec::Vec::push" ] in
+  let no_state_funs =
+    [
+      (* TODO: redundancy with the funs information below *)
+      "alloc::vec::Vec::push";
+      "alloc::vec::Vec::index";
+      "alloc::vec::Vec::index_mut";
+      "alloc::vec::Vec::index_mut_back";
+    ]
+  in
   let no_state_funs =
     List.map (fun n -> (n, { can_fail = true; stateful = false })) no_state_funs
   in

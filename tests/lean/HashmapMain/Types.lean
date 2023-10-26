@@ -15,7 +15,7 @@ structure hashmap.HashMap (T : Type) where
   num_entries : Usize
   max_load_factor : (Usize × Usize)
   max_load : Usize
-  slots : Vec (hashmap.List T)
+  slots : alloc.vec.Vec (hashmap.List T)
 
 /- The state type used in the state-error monad -/
 axiom State : Type

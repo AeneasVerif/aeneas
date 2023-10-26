@@ -76,6 +76,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
         object (self)
           inherit [_] iter_statement as super
           method may_fail b = can_fail := !can_fail || b
+          method maybe_stateful b = stateful := !stateful || b
 
           method! visit_Assert env a =
             self#may_fail true;
@@ -126,14 +127,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       | None ->
           let info_can_fail, info_stateful =
             match builtin_info with
-            | None -> (true, false)
+            | None -> (true, use_state)
             | Some { can_fail; stateful } -> (can_fail, stateful)
           in
           obj#may_fail info_can_fail;
-          stateful :=
-            (not f.is_global_decl_body)
-            && use_state
-            && not (has_builtin_info && not info_stateful)
+          obj#maybe_stateful
+            (if f.is_global_decl_body then false
+             else if not use_state then false
+             else info_stateful)
       | Some body -> obj#visit_statement () body.body
     in
     List.iter visit_fun d;

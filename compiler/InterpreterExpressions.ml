@@ -144,7 +144,8 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
       (match v.V.ty with
       | T.Adt (T.Assumed T.Box, _) ->
           raise (Failure "Can't copy an assumed value other than Option")
-      | T.Adt (T.AdtId _, _) -> assert allow_adt_copy
+      | T.Adt (T.AdtId _, _) as ty ->
+          assert (allow_adt_copy || ty_is_primitively_copyable ty)
       | T.Adt (T.Tuple, _) -> () (* Ok *)
       | T.Adt
           ( T.Assumed (Slice | T.Array),
