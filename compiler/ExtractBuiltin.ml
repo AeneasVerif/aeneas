@@ -528,12 +528,18 @@ module SimpleNamePairMap = Collections.MakeMap (SimpleNamePairOrd)
 
 let builtin_trait_impls_info () :
     ((string list * string list) * (bool list option * string)) list =
-  let fmt (type_name : string list) (trait_name : string list)
-      ?(filter : bool list option = None) () :
+  let fmt (type_name : string list)
+      ?(extract_type_name : string list option = None)
+      (trait_name : string list) ?(filter : bool list option = None) () :
       (string list * string list) * (bool list option * string) =
     let name =
       let trait_name = String.concat "" trait_name ^ "Inst" in
       let sep = backend_choice "_" "." in
+      let type_name =
+        match extract_type_name with
+        | Some type_name -> type_name
+        | None -> type_name
+      in
       String.concat sep type_name ^ sep ^ trait_name
     in
     ((type_name, trait_name), (filter, name))
@@ -547,7 +553,14 @@ let builtin_trait_impls_info () :
     (* core::ops::index::Index<[T], I> *)
     fmt
       [ "core"; "slice"; "index"; "[T]" ]
+      ~extract_type_name:(Some [ "core"; "slice"; "index"; "Slice" ])
       [ "core"; "ops"; "index"; "Index" ]
+      ();
+    (* core::ops::index::IndexMut<[T], I> *)
+    fmt
+      [ "core"; "slice"; "index"; "[T]" ]
+      ~extract_type_name:(Some [ "core"; "slice"; "index"; "Slice" ])
+      [ "core"; "ops"; "index"; "IndexMut" ]
       ();
     (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
     fmt
@@ -559,15 +572,18 @@ let builtin_trait_impls_info () :
       [ "core"; "slice"; "index"; "Range" ]
       [ "core"; "slice"; "index"; "SliceIndex" ]
       ();
-    (* core::ops::index::IndexMut<[T], I> *)
+    (* core::ops::index::Index<[T; N], I> *)
     fmt
-      [ "core"; "slice"; "index"; "[T]" ]
+      [ "core"; "array"; "[T; N]" ]
+      ~extract_type_name:(Some [ "core"; "array"; "Array" ])
+      [ "core"; "ops"; "index"; "Index" ]
+      ();
+    (* core::ops::index::IndexMut<[T; N], I> *)
+    fmt
+      [ "core"; "array"; "[T; N]" ]
+      ~extract_type_name:(Some [ "core"; "array"; "Array" ])
       [ "core"; "ops"; "index"; "IndexMut" ]
       ();
-    (* core::ops::index::Index<[T; N], I> *)
-    fmt [ "core"; "array"; "[T; N]" ] [ "core"; "ops"; "index"; "Index" ] ();
-    (* core::ops::index::IndexMut<[T; N], I> *)
-    fmt [ "core"; "array"; "[T; N]" ] [ "core"; "ops"; "index"; "IndexMut" ] ();
     (* core::slice::index::private_slice_index::Sealed<usize> *)
     fmt
       [ "core"; "slice"; "index"; "private_slice_index"; "usize" ]
