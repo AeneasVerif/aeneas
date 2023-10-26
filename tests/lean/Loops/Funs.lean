@@ -11,13 +11,13 @@ divergent def sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
   if i < max
   then do
          let s0 ← s + i
-         let i0 ← i + (U32.ofInt 1)
+         let i0 ← i + 1#u32
          sum_loop max i0 s0
-  else s * (U32.ofInt 2)
+  else s * 2#u32
 
 /- [loops::sum]: forward function -/
 def sum (max : U32) : Result U32 :=
-  sum_loop max (U32.ofInt 0) (U32.ofInt 0)
+  sum_loop max 0#u32 0#u32
 
 /- [loops::sum_with_mut_borrows]: loop 0: forward function -/
 divergent def sum_with_mut_borrows_loop
@@ -26,13 +26,13 @@ divergent def sum_with_mut_borrows_loop
   then
     do
       let ms0 ← ms + mi
-      let mi0 ← mi + (U32.ofInt 1)
+      let mi0 ← mi + 1#u32
       sum_with_mut_borrows_loop max mi0 ms0
-  else ms * (U32.ofInt 2)
+  else ms * 2#u32
 
 /- [loops::sum_with_mut_borrows]: forward function -/
 def sum_with_mut_borrows (max : U32) : Result U32 :=
-  sum_with_mut_borrows_loop max (U32.ofInt 0) (U32.ofInt 0)
+  sum_with_mut_borrows_loop max 0#u32 0#u32
 
 /- [loops::sum_with_shared_borrows]: loop 0: forward function -/
 divergent def sum_with_shared_borrows_loop
@@ -40,31 +40,34 @@ divergent def sum_with_shared_borrows_loop
   if i < max
   then
     do
-      let i0 ← i + (U32.ofInt 1)
+      let i0 ← i + 1#u32
       let s0 ← s + i0
       sum_with_shared_borrows_loop max i0 s0
-  else s * (U32.ofInt 2)
+  else s * 2#u32
 
 /- [loops::sum_with_shared_borrows]: forward function -/
 def sum_with_shared_borrows (max : U32) : Result U32 :=
-  sum_with_shared_borrows_loop max (U32.ofInt 0) (U32.ofInt 0)
+  sum_with_shared_borrows_loop max 0#u32 0#u32
 
 /- [loops::clear]: loop 0: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
-divergent def clear_loop (v : Vec U32) (i : Usize) : Result (Vec U32) :=
-  let i0 := Vec.len U32 v
+divergent def clear_loop
+  (v : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
+  let i0 := alloc.vec.Vec.len U32 v
   if i < i0
   then
     do
-      let i1 ← i + (Usize.ofInt 1)
-      let v0 ← Vec.index_mut_back U32 v i (U32.ofInt 0)
+      let i1 ← i + 1#usize
+      let v0 ←
+        alloc.vec.Vec.index_mut_back U32 Usize
+          (core.slice.index.usize.coresliceindexSliceIndexInst U32) v i 0#u32
       clear_loop v0 i1
   else Result.ret v
 
 /- [loops::clear]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
-def clear (v : Vec U32) : Result (Vec U32) :=
-  clear_loop v (Usize.ofInt 0)
+def clear (v : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
+  clear_loop v 0#usize
 
 /- [loops::list_mem]: loop 0: forward function -/
 divergent def list_mem_loop (x : U32) (ls : List U32) : Result Bool :=
@@ -83,10 +86,10 @@ divergent def list_nth_mut_loop_loop
   (T : Type) (ls : List T) (i : U32) : Result T :=
   match ls with
   | List.Cons x tl =>
-    if i = (U32.ofInt 0)
+    if i = 0#u32
     then Result.ret x
     else do
-           let i0 ← i - (U32.ofInt 1)
+           let i0 ← i - 1#u32
            list_nth_mut_loop_loop T tl i0
   | List.Nil => Result.fail Error.panic
 
@@ -99,11 +102,11 @@ divergent def list_nth_mut_loop_loop_back
   (T : Type) (ls : List T) (i : U32) (ret0 : T) : Result (List T) :=
   match ls with
   | List.Cons x tl =>
-    if i = (U32.ofInt 0)
+    if i = 0#u32
     then Result.ret (List.Cons ret0 tl)
     else
       do
-        let i0 ← i - (U32.ofInt 1)
+        let i0 ← i - 1#u32
         let tl0 ← list_nth_mut_loop_loop_back T tl i0 ret0
         Result.ret (List.Cons x tl0)
   | List.Nil => Result.fail Error.panic
@@ -118,10 +121,10 @@ divergent def list_nth_shared_loop_loop
   (T : Type) (ls : List T) (i : U32) : Result T :=
   match ls with
   | List.Cons x tl =>
-    if i = (U32.ofInt 0)
+    if i = 0#u32
     then Result.ret x
     else do
-           let i0 ← i - (U32.ofInt 1)
+           let i0 ← i - 1#u32
            list_nth_shared_loop_loop T tl i0
   | List.Nil => Result.fail Error.panic
 
@@ -138,9 +141,13 @@ divergent def get_elem_mut_loop (x : Usize) (ls : List Usize) : Result Usize :=
   | List.Nil => Result.fail Error.panic
 
 /- [loops::get_elem_mut]: forward function -/
-def get_elem_mut (slots : Vec (List Usize)) (x : Usize) : Result Usize :=
+def get_elem_mut
+  (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-    let l ← Vec.index_mut (List Usize) slots (Usize.ofInt 0)
+    let l ←
+      alloc.vec.Vec.index_mut (List Usize) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List Usize))
+        slots 0#usize
     get_elem_mut_loop x l
 
 /- [loops::get_elem_mut]: loop 0: backward function 0 -/
@@ -158,13 +165,18 @@ divergent def get_elem_mut_loop_back
 
 /- [loops::get_elem_mut]: backward function 0 -/
 def get_elem_mut_back
-  (slots : Vec (List Usize)) (x : Usize) (ret0 : Usize) :
-  Result (Vec (List Usize))
+  (slots : alloc.vec.Vec (List Usize)) (x : Usize) (ret0 : Usize) :
+  Result (alloc.vec.Vec (List Usize))
   :=
   do
-    let l ← Vec.index_mut (List Usize) slots (Usize.ofInt 0)
+    let l ←
+      alloc.vec.Vec.index_mut (List Usize) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List Usize))
+        slots 0#usize
     let l0 ← get_elem_mut_loop_back x l ret0
-    Vec.index_mut_back (List Usize) slots (Usize.ofInt 0) l0
+    alloc.vec.Vec.index_mut_back (List Usize) Usize
+      (core.slice.index.usize.coresliceindexSliceIndexInst (List Usize)) slots
+      0#usize l0
 
 /- [loops::get_elem_shared]: loop 0: forward function -/
 divergent def get_elem_shared_loop
@@ -176,9 +188,13 @@ divergent def get_elem_shared_loop
   | List.Nil => Result.fail Error.panic
 
 /- [loops::get_elem_shared]: forward function -/
-def get_elem_shared (slots : Vec (List Usize)) (x : Usize) : Result Usize :=
+def get_elem_shared
+  (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-    let l ← Vec.index_shared (List Usize) slots (Usize.ofInt 0)
+    let l ←
+      alloc.vec.Vec.index (List Usize) Usize
+        (core.slice.index.usize.coresliceindexSliceIndexInst (List Usize))
+        slots 0#usize
     get_elem_shared_loop x l
 
 /- [loops::id_mut]: forward function -/
@@ -198,10 +214,10 @@ divergent def list_nth_mut_loop_with_id_loop
   (T : Type) (i : U32) (ls : List T) : Result T :=
   match ls with
   | List.Cons x tl =>
-    if i = (U32.ofInt 0)
+    if i = 0#u32
     then Result.ret x
     else do
-           let i0 ← i - (U32.ofInt 1)
+           let i0 ← i - 1#u32
            list_nth_mut_loop_with_id_loop T i0 tl
   | List.Nil => Result.fail Error.panic
 
@@ -216,11 +232,11 @@ divergent def list_nth_mut_loop_with_id_loop_back
   (T : Type) (i : U32) (ls : List T) (ret0 : T) : Result (List T) :=
   match ls with
   | List.Cons x tl =>
-    if i = (U32.ofInt 0)
+    if i = 0#u32
     then Result.ret (List.Cons ret0 tl)
     else
       do
-        let i0 ← i - (U32.ofInt 1)
+        let i0 ← i - 1#u32
         let tl0 ← list_nth_mut_loop_with_id_loop_back T i0 tl ret0
         Result.ret (List.Cons x tl0)
   | List.Nil => Result.fail Error.panic
@@ -238,12 +254,11 @@ divergent def list_nth_shared_loop_with_id_loop
   (T : Type) (i : U32) (ls : List T) : Result T :=
   match ls with
   | List.Cons x tl =>
-    if i = (U32.ofInt 0)
+    if i = 0#u32
     then Result.ret x
-    else
-      do
-        let i0 ← i - (U32.ofInt 1)
-        list_nth_shared_loop_with_id_loop T i0 tl
+    else do
+           let i0 ← i - 1#u32
+           list_nth_shared_loop_with_id_loop T i0 tl
   | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_loop_with_id]: forward function -/
@@ -260,12 +275,11 @@ divergent def list_nth_mut_loop_pair_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (x0, x1)
-      else
-        do
-          let i0 ← i - (U32.ofInt 1)
-          list_nth_mut_loop_pair_loop T tl0 tl1 i0
+      else do
+             let i0 ← i - 1#u32
+             list_nth_mut_loop_pair_loop T tl0 tl1 i0
     | List.Nil => Result.fail Error.panic
   | List.Nil => Result.fail Error.panic
 
@@ -283,11 +297,11 @@ divergent def list_nth_mut_loop_pair_loop_back'a
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (List.Cons ret0 tl0)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           let tl00 ← list_nth_mut_loop_pair_loop_back'a T tl0 tl1 i0 ret0
           Result.ret (List.Cons x0 tl00)
     | List.Nil => Result.fail Error.panic
@@ -309,11 +323,11 @@ divergent def list_nth_mut_loop_pair_loop_back'b
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (List.Cons ret0 tl1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           let tl10 ← list_nth_mut_loop_pair_loop_back'b T tl0 tl1 i0 ret0
           Result.ret (List.Cons x1 tl10)
     | List.Nil => Result.fail Error.panic
@@ -333,12 +347,11 @@ divergent def list_nth_shared_loop_pair_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (x0, x1)
-      else
-        do
-          let i0 ← i - (U32.ofInt 1)
-          list_nth_shared_loop_pair_loop T tl0 tl1 i0
+      else do
+             let i0 ← i - 1#u32
+             list_nth_shared_loop_pair_loop T tl0 tl1 i0
     | List.Nil => Result.fail Error.panic
   | List.Nil => Result.fail Error.panic
 
@@ -354,11 +367,11 @@ divergent def list_nth_mut_loop_pair_merge_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (x0, x1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           list_nth_mut_loop_pair_merge_loop T tl0 tl1 i0
     | List.Nil => Result.fail Error.panic
   | List.Nil => Result.fail Error.panic
@@ -377,12 +390,12 @@ divergent def list_nth_mut_loop_pair_merge_loop_back
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then let (t, t0) := ret0
            Result.ret (List.Cons t tl0, List.Cons t0 tl1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           let (tl00, tl10) ←
             list_nth_mut_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
           Result.ret (List.Cons x0 tl00, List.Cons x1 tl10)
@@ -403,11 +416,11 @@ divergent def list_nth_shared_loop_pair_merge_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (x0, x1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           list_nth_shared_loop_pair_merge_loop T tl0 tl1 i0
     | List.Nil => Result.fail Error.panic
   | List.Nil => Result.fail Error.panic
@@ -424,11 +437,11 @@ divergent def list_nth_mut_shared_loop_pair_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (x0, x1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           list_nth_mut_shared_loop_pair_loop T tl0 tl1 i0
     | List.Nil => Result.fail Error.panic
   | List.Nil => Result.fail Error.panic
@@ -447,11 +460,11 @@ divergent def list_nth_mut_shared_loop_pair_loop_back
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (List.Cons ret0 tl0)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           let tl00 ←
             list_nth_mut_shared_loop_pair_loop_back T tl0 tl1 i0 ret0
           Result.ret (List.Cons x0 tl00)
@@ -472,11 +485,11 @@ divergent def list_nth_mut_shared_loop_pair_merge_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (x0, x1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           list_nth_mut_shared_loop_pair_merge_loop T tl0 tl1 i0
     | List.Nil => Result.fail Error.panic
   | List.Nil => Result.fail Error.panic
@@ -495,11 +508,11 @@ divergent def list_nth_mut_shared_loop_pair_merge_loop_back
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (List.Cons ret0 tl0)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           let tl00 ←
             list_nth_mut_shared_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
           Result.ret (List.Cons x0 tl00)
@@ -520,11 +533,11 @@ divergent def list_nth_shared_mut_loop_pair_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (x0, x1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           list_nth_shared_mut_loop_pair_loop T tl0 tl1 i0
     | List.Nil => Result.fail Error.panic
   | List.Nil => Result.fail Error.panic
@@ -543,11 +556,11 @@ divergent def list_nth_shared_mut_loop_pair_loop_back
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (List.Cons ret0 tl1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           let tl10 ←
             list_nth_shared_mut_loop_pair_loop_back T tl0 tl1 i0 ret0
           Result.ret (List.Cons x1 tl10)
@@ -568,11 +581,11 @@ divergent def list_nth_shared_mut_loop_pair_merge_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (x0, x1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           list_nth_shared_mut_loop_pair_merge_loop T tl0 tl1 i0
     | List.Nil => Result.fail Error.panic
   | List.Nil => Result.fail Error.panic
@@ -591,11 +604,11 @@ divergent def list_nth_shared_mut_loop_pair_merge_loop_back
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = (U32.ofInt 0)
+      if i = 0#u32
       then Result.ret (List.Cons ret0 tl1)
       else
         do
-          let i0 ← i - (U32.ofInt 1)
+          let i0 ← i - 1#u32
           let tl10 ←
             list_nth_shared_mut_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
           Result.ret (List.Cons x1 tl10)

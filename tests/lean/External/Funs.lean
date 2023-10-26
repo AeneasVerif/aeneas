@@ -30,14 +30,14 @@ def swap_back
 def test_new_non_zero_u32
   (x : U32) (st : State) : Result (State × core.num.nonzero.NonZeroU32) :=
   do
-    let (st0, opt) ← core.num.nonzero.NonZeroU32.new x st
-    core.option.Option.unwrap core.num.nonzero.NonZeroU32 opt st0
+    let (st0, o) ← core.num.nonzero.NonZeroU32.new x st
+    core.option.Option.unwrap core.num.nonzero.NonZeroU32 o st0
 
 /- [external::test_vec]: forward function -/
 def test_vec : Result Unit :=
   do
-    let v := Vec.new U32
-    let _ ← Vec.push U32 v (U32.ofInt 0)
+    let v := alloc.vec.Vec.new U32
+    let _ ← alloc.vec.Vec.push U32 v 0#u32
     Result.ret ()
 
 /- Unit test for [external::test_vec] -/
@@ -75,14 +75,14 @@ def test_custom_swap_back
   (x : U32) (y : U32) (st : State) (st0 : State) :
   Result (State × (U32 × U32))
   :=
-  custom_swap_back U32 x y st (U32.ofInt 1) st0
+  custom_swap_back U32 x y st 1#u32 st0
 
 /- [external::test_swap_non_zero]: forward function -/
 def test_swap_non_zero (x : U32) (st : State) : Result (State × U32) :=
   do
-    let (st0, _) ← swap U32 x (U32.ofInt 0) st
-    let (st1, (x0, _)) ← swap_back U32 x (U32.ofInt 0) st st0
-    if x0 = (U32.ofInt 0)
+    let (st0, _) ← swap U32 x 0#u32 st
+    let (st1, (x0, _)) ← swap_back U32 x 0#u32 st st0
+    if x0 = 0#u32
     then Result.fail Error.panic
     else Result.ret (st1, x0)
 
