@@ -44,6 +44,14 @@ let mk_memoized (f : unit -> 'a) : unit -> 'a =
   in
   g
 
+(** Switch between two values depending on the target backend.
+
+    We often compute the same value (typically: a name) if the target
+    is F*, Coq or HOL4, and a different value if the target is Lean.
+ *)
+let backend_choice (fstar_coq_hol4 : 'a) (lean : 'a) : 'a =
+  match !backend with Coq | FStar | HOL4 -> fstar_coq_hol4 | Lean -> lean
+
 let builtin_globals : (string * string) list =
   [
     (* Min *)
@@ -215,16 +223,16 @@ let builtin_funs () :
     let extract_name =
       match extract_name with None -> name | Some name -> name
     in
-    let fwd_name =
+    let basename =
       match !backend with
       | FStar | Coq | HOL4 -> String.concat "_" extract_name
       | Lean -> String.concat "." extract_name
     in
     let fwd_suffix = if with_back && back_no_suffix then "_fwd" else "" in
-    let fwd = [ { rg = None; extract_name = fwd_name ^ fwd_suffix } ] in
+    let fwd = [ { rg = None; extract_name = basename ^ fwd_suffix } ] in
     let back_suffix = if with_back && back_no_suffix then "" else "_back" in
     let back =
-      if with_back then [ { rg = rg0; extract_name = fwd_name ^ back_suffix } ]
+      if with_back then [ { rg = rg0; extract_name = basename ^ back_suffix } ]
       else []
     in
     (name, filter, fwd @ back)
@@ -381,227 +389,102 @@ type builtin_trait_decl_info = {
           - a Rust name
           - an extraction name
           - a list of clauses *)
-  funs : (string * (Types.RegionGroupId.id option * string) list) list;
+  methods : (string * builtin_fun_info list) list;
 }
 [@@deriving show]
 
 let builtin_trait_decls_info () =
   let rg0 = Some Types.RegionGroupId.zero in
+  let mk_trait (rust_name : string list) ?(extract_name : string option = None)
+      ?(parent_clauses : string list = []) ?(types : string list = [])
+      ?(methods : (string * bool) list = []) () : builtin_trait_decl_info =
+    let extract_name =
+      match extract_name with
+      | Some n -> n
+      | None -> (
+          match !backend with
+          | Coq | FStar | HOL4 -> String.concat "_" rust_name
+          | Lean -> String.concat "." rust_name)
+    in
+    let consts = [] in
+    let types =
+      let mk_type item_name =
+        let type_name =
+          match !backend with
+          | Coq | FStar | HOL4 -> extract_name ^ "_" ^ item_name
+          | Lean -> item_name
+        in
+        let clauses = [] in
+        (item_name, (type_name, clauses))
+      in
+      List.map mk_type types
+    in
+    let methods =
+      let mk_method (item_name, with_back) =
+        (* TODO: factor out with builtin_funs_info *)
+        let basename =
+          match !backend with
+          | Coq | FStar | HOL4 -> extract_name ^ "_" ^ item_name
+          | Lean -> item_name
+        in
+        let back_no_suffix = false in
+        let fwd_suffix = if with_back && back_no_suffix then "_fwd" else "" in
+        let fwd = [ { rg = None; extract_name = basename ^ fwd_suffix } ] in
+        let back_suffix = if with_back && back_no_suffix then "" else "_back" in
+        let back =
+          if with_back then
+            [ { rg = rg0; extract_name = basename ^ back_suffix } ]
+          else []
+        in
+        (item_name, fwd @ back)
+      in
+      List.map mk_method methods
+    in
+    let rust_name = String.concat "::" rust_name in
+    { rust_name; extract_name; parent_clauses; consts; types; methods }
+  in
   [
-    {
-      (* Deref *)
-      rust_name = "core::ops::deref::Deref";
-      extract_name =
-        (match !backend with
-        | Coq | FStar | HOL4 -> "core_ops_deref_Deref"
-        | Lean -> "core.ops.deref.Deref");
-      parent_clauses = [];
-      consts = [];
-      types =
+    (* Deref *)
+    mk_trait
+      [ "core"; "ops"; "deref"; "Deref" ]
+      ~types:[ "Target" ]
+      ~methods:[ ("deref", true) ]
+      ();
+    (* DerefMut *)
+    mk_trait
+      [ "core"; "ops"; "deref"; "DerefMut" ]
+      ~parent_clauses:[ backend_choice "deref_inst" "derefInst" ]
+      ~methods:[ ("deref_mut", true) ]
+      ();
+    (* Index *)
+    mk_trait
+      [ "core"; "ops"; "index"; "Index" ]
+      ~types:[ "Output" ]
+      ~methods:[ ("index", true) ]
+      ();
+    (* IndexMut *)
+    mk_trait
+      [ "core"; "ops"; "index"; "IndexMut" ]
+      ~parent_clauses:[ backend_choice "index_inst" "indexInst" ]
+      ~methods:[ ("index_mut", true) ]
+      ();
+    (* Sealed *)
+    mk_trait [ "core"; "slice"; "index"; "private_slice_index"; "Sealed" ] ();
+    (* SliceIndex *)
+    mk_trait
+      [ "core"; "slice"; "index"; "SliceIndex" ]
+      ~parent_clauses:[ backend_choice "sealed_inst" "sealedInst" ]
+      ~types:[ "Output" ]
+      ~methods:
         [
-          ( "Target",
-            ( (match !backend with
-              | Coq | FStar | HOL4 -> "core_ops_deref_Deref_Target"
-              | Lean -> "Target"),
-              [] ) );
-        ];
-      funs =
-        [
-          ( "deref",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_ops_deref_Deref_deref"
-                | Lean -> "deref" );
-            ] );
-        ];
-    };
-    {
-      (* DerefMut *)
-      rust_name = "core::ops::deref::DerefMut";
-      extract_name =
-        (match !backend with
-        | Coq | FStar | HOL4 -> "core_ops_deref_DerefMut"
-        | Lean -> "core.ops.deref.DerefMut");
-      parent_clauses =
-        [
-          (match !backend with
-          | Coq | FStar | HOL4 -> "deref_inst"
-          | Lean -> "derefInst");
-        ];
-      consts = [];
-      types = [];
-      funs =
-        [
-          ( "deref_mut",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_ops_deref_DerefMut_deref_mut"
-                | Lean -> "deref_mut" );
-              ( rg0,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_ops_deref_DerefMut_deref_mut_back"
-                | Lean -> "deref_mut_back" );
-            ] );
-        ];
-    };
-    {
-      (* Index *)
-      rust_name = "core::ops::index::Index";
-      extract_name =
-        (match !backend with
-        | Coq | FStar | HOL4 -> "core_ops_index_Index"
-        | Lean -> "core.ops.index.Index");
-      parent_clauses = [];
-      consts = [];
-      types =
-        [
-          ( "Output",
-            ( (match !backend with
-              | Coq | FStar | HOL4 -> "core_ops_index_Index_Output"
-              | Lean -> "Output"),
-              [] ) );
-        ];
-      funs =
-        [
-          ( "index",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_ops_index_Index_index"
-                | Lean -> "index" );
-            ] );
-        ];
-    };
-    {
-      (* IndexMut *)
-      rust_name = "core::ops::index::IndexMut";
-      extract_name =
-        (match !backend with
-        | Coq | FStar | HOL4 -> "core_ops_index_IndexMut"
-        | Lean -> "core.ops.index.IndexMut");
-      parent_clauses =
-        [
-          (match !backend with
-          | Coq | FStar | HOL4 -> "index_inst"
-          | Lean -> "indexInst");
-        ];
-      consts = [];
-      types = [];
-      funs =
-        [
-          ( "index_mut",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_ops_index_IndexMut_mut"
-                | Lean -> "index_mut" );
-              ( rg0,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_ops_index_IndexMut_mut_back"
-                | Lean -> "index_mut_back" );
-            ] );
-        ];
-    };
-    {
-      (* Sealed *)
-      rust_name = "core::slice::index::private_slice_index::Sealed";
-      extract_name =
-        (match !backend with
-        | Coq | FStar | HOL4 -> "core_slice_index_sealed"
-        | Lean -> "core.slice.index.private_slice_index.Sealed");
-      parent_clauses = [];
-      consts = [];
-      types = [];
-      funs = [];
-    };
-    {
-      (* SliceIndex *)
-      rust_name = "core::slice::index::SliceIndex";
-      extract_name =
-        (match !backend with
-        | Coq | FStar | HOL4 -> "core_SliceIndex"
-        | Lean -> "core.slice.index.SliceIndex");
-      parent_clauses =
-        [
-          (match !backend with
-          | Coq | FStar | HOL4 -> "sealed_inst"
-          | Lean -> "sealedInst");
-        ];
-      consts = [];
-      types =
-        [
-          ( "Output",
-            ( (match !backend with
-              | Coq | FStar | HOL4 -> "core_SliceIndex_Output"
-              | Lean -> "Output"),
-              [] ) );
-        ];
-      funs =
-        [
-          ( "get",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_get"
-                | Lean -> "get" );
-              (* The backward function shouldn't be used *)
-              ( rg0,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_get_back"
-                | Lean -> "get_back" );
-            ] );
-          ( "get_mut",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_get_mut"
-                | Lean -> "get_mut" );
-              ( rg0,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_get_mut_back"
-                | Lean -> "get_mut_back" );
-            ] );
-          ( "get_unchecked",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_get_unchecked"
-                | Lean -> "get_unchecked" );
-            ] );
-          ( "get_unchecked_mut",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_get_unchecked_mut"
-                | Lean -> "get_unchecked_mut" );
-            ] );
-          ( "index",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_index"
-                | Lean -> "index" );
-              (* The backward function shouldn't be used *)
-              ( rg0,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_index_back"
-                | Lean -> "index_back" );
-            ] );
-          ( "index_mut",
-            [
-              ( None,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_index_mut"
-                | Lean -> "index_mut" );
-              ( rg0,
-                match !backend with
-                | Coq | FStar | HOL4 -> "core_SliceIndex_index_mut_back"
-                | Lean -> "index_mut_back" );
-            ] );
-        ];
-    };
+          ("get", true);
+          ("get_mut", true);
+          ("get_unchecked", false);
+          ("get_unchecked_mut", false);
+          ("index", true);
+          ("index_mut", true);
+        ]
+      ();
   ]
 
 let mk_builtin_trait_decls_map () =
@@ -633,66 +516,66 @@ module SimpleNamePairMap = Collections.MakeMap (SimpleNamePairOrd)
 
 let builtin_trait_impls_info () :
     ((string list * string list) * (bool list option * string)) list =
-  let fmt ?(filter : bool list option = None) (name : string) :
-      bool list option * string =
+  let fmt (type_name : string list) (trait_name : string list)
+      ?(filter : bool list option = None) () :
+      (string list * string list) * (bool list option * string) =
     let name =
-      match !backend with
-      | Lean -> name
-      | FStar | Coq | HOL4 ->
-          let name = String.split_on_char '.' name in
-          String.concat "_" name
+      let trait_name = String.concat "" trait_name ^ "Inst" in
+      let sep = backend_choice "_" "." in
+      String.concat sep type_name ^ sep ^ trait_name
     in
-    (filter, name)
+    ((type_name, trait_name), (filter, name))
   in
   (* TODO: fix the names like "[T]" below *)
   [
     (* core::ops::Deref<alloc::boxed::Box<T>> *)
-    ( ([ "alloc"; "boxed"; "Box" ], [ "core"; "ops"; "deref"; "Deref" ]),
-      fmt "alloc.boxed.Box.coreOpsDerefInst" );
+    fmt [ "alloc"; "boxed"; "Box" ] [ "core"; "ops"; "deref"; "Deref" ] ();
     (* core::ops::DerefMut<alloc::boxed::Box<T>> *)
-    ( ([ "alloc"; "boxed"; "Box" ], [ "core"; "ops"; "deref"; "DerefMut" ]),
-      fmt "alloc.boxed.Box.coreOpsDerefMutInst" );
+    fmt [ "alloc"; "boxed"; "Box" ] [ "core"; "ops"; "deref"; "DerefMut" ] ();
     (* core::ops::index::Index<[T], I> *)
-    ( ([ "core"; "slice"; "index"; "[T]" ], [ "core"; "ops"; "index"; "Index" ]),
-      fmt "core.slice.index.Slice.coreopsindexIndexInst" );
+    fmt
+      [ "core"; "slice"; "index"; "[T]" ]
+      [ "core"; "ops"; "index"; "Index" ]
+      ();
     (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
-    ( ( [ "core"; "slice"; "index"; "private_slice_index"; "Range" ],
-        [ "core"; "slice"; "index"; "private_slice_index"; "Sealed" ] ),
-      fmt
-        "core.slice.index.private_slice_index.Range.coresliceindexprivate_slice_indexSealedInst"
-    );
+    fmt
+      [ "core"; "slice"; "index"; "private_slice_index"; "Range" ]
+      [ "core"; "slice"; "index"; "private_slice_index"; "Sealed" ]
+      ();
     (* core::slice::index::SliceIndex<Range<usize>, [T]> *)
-    ( ( [ "core"; "slice"; "index"; "Range" ],
-        [ "core"; "slice"; "index"; "SliceIndex" ] ),
-      fmt "core.slice.index.Range.coresliceindexSliceIndexInst" );
+    fmt
+      [ "core"; "slice"; "index"; "Range" ]
+      [ "core"; "slice"; "index"; "SliceIndex" ]
+      ();
     (* core::ops::index::IndexMut<[T], I> *)
-    ( ( [ "core"; "slice"; "index"; "[T]" ],
-        [ "core"; "ops"; "index"; "IndexMut" ] ),
-      fmt "core.slice.index.Slice.coreopsindexIndexMutInst" );
+    fmt
+      [ "core"; "slice"; "index"; "[T]" ]
+      [ "core"; "ops"; "index"; "IndexMut" ]
+      ();
     (* core::ops::index::Index<[T; N], I> *)
-    ( ([ "core"; "array"; "[T; N]" ], [ "core"; "ops"; "index"; "Index" ]),
-      fmt "core.array.Array.coreopsindexIndexInst" );
+    fmt [ "core"; "array"; "[T; N]" ] [ "core"; "ops"; "index"; "Index" ] ();
     (* core::ops::index::IndexMut<[T; N], I> *)
-    ( ([ "core"; "array"; "[T; N]" ], [ "core"; "ops"; "index"; "IndexMut" ]),
-      fmt "core.array.Array.coreopsindexIndexMutInst" );
+    fmt [ "core"; "array"; "[T; N]" ] [ "core"; "ops"; "index"; "IndexMut" ] ();
     (* core::slice::index::private_slice_index::Sealed<usize> *)
-    ( ( [ "core"; "slice"; "index"; "private_slice_index"; "usize" ],
-        [ "core"; "slice"; "index"; "private_slice_index"; "Sealed" ] ),
-      fmt
-        "core.slice.index.private_slice_index.usize.coresliceindexprivate_slice_indexSealedInst"
-    );
+    fmt
+      [ "core"; "slice"; "index"; "private_slice_index"; "usize" ]
+      [ "core"; "slice"; "index"; "private_slice_index"; "Sealed" ]
+      ();
     (* core::slice::index::SliceIndex<usize, [T]> *)
-    ( ( [ "core"; "slice"; "index"; "usize" ],
-        [ "core"; "slice"; "index"; "SliceIndex" ] ),
-      fmt "core.slice.index.usize.coresliceindexSliceIndexInst" );
+    fmt
+      [ "core"; "slice"; "index"; "usize" ]
+      [ "core"; "slice"; "index"; "SliceIndex" ]
+      ();
     (* core::ops::index::Index<Vec<T>, T> *)
-    ( ([ "alloc"; "vec"; "Vec" ], [ "core"; "ops"; "index"; "Index" ]),
-      let filter = Some [ true; true; false ] in
-      fmt ~filter "alloc.vec.Vec.coreopsindexIndexInst" );
+    fmt [ "alloc"; "vec"; "Vec" ]
+      [ "core"; "ops"; "index"; "Index" ]
+      ~filter:(Some [ true; true; false ])
+      ();
     (* core::ops::index::IndexMut<Vec<T>, T> *)
-    ( ([ "alloc"; "vec"; "Vec" ], [ "core"; "ops"; "index"; "IndexMut" ]),
-      let filter = Some [ true; true; false ] in
-      fmt ~filter "alloc.vec.Vec.coreopsindexIndexMutInst" );
+    fmt [ "alloc"; "vec"; "Vec" ]
+      [ "core"; "ops"; "index"; "IndexMut" ]
+      ~filter:(Some [ true; true; false ])
+      ();
   ]
 
 let mk_builtin_trait_impls_map () =

@@ -1969,17 +1969,34 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         in
         List.map (fun (name, id) -> compute_item_names name id) required_methods
     | Some info ->
-        let funs_map = StringMap.of_list info.funs in
+        let funs_map = StringMap.of_list info.methods in
         List.map
           (fun (item_name, fun_id) ->
+            let open ExtractBuiltin in
             let info = StringMap.find item_name funs_map in
             let trans_funs = get_funs_for_id fun_id in
-            let rg_with_name_list =
-              List.map
-                (fun (trans_fun : fun_decl) ->
-                  List.find (fun (rg, _) -> rg = trans_fun.back_id) info)
-                trans_funs
+            let find (trans_fun : fun_decl) =
+              let info =
+                List.find_opt
+                  (fun (info : builtin_fun_info) -> info.rg = trans_fun.back_id)
+                  info
+              in
+              match info with
+              | Some info -> (info.rg, info.extract_name)
+              | None ->
+                  let err =
+                    "Ill-formed builtin information for trait decl \""
+                    ^ Names.name_to_string trait_decl.name
+                    ^ "\", method \"" ^ item_name
+                    ^ "\": could not find name for region "
+                    ^ Print.option_to_string Pure.show_region_group_id
+                        trans_fun.back_id
+                  in
+                  log#serror err;
+                  if !Config.extract_fail_hard then raise (Failure err)
+                  else (trans_fun.back_id, "%ERROR_BUILTIN_NAME_NOT_FOUND%")
             in
+            let rg_with_name_list = List.map find trans_funs in
             (item_name, rg_with_name_list))
           required_methods
   in
