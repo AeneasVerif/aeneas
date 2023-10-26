@@ -350,7 +350,9 @@ let mk_builtin_funs_map () =
 
 let builtin_funs_map = mk_memoized mk_builtin_funs_map
 
-let builtin_non_fallible_funs =
+type effect_info = { can_fail : bool; stateful : bool }
+
+let builtin_fun_effects =
   let int_names =
     [
       "usize";
@@ -377,19 +379,31 @@ let builtin_non_fallible_funs =
       int_names
   in
   let int_funs = List.concat int_funs in
-  [
-    "alloc::vec::Vec::new";
-    "alloc::vec::Vec::len";
-    "alloc::boxed::Box::deref";
-    "alloc::boxed::Box::deref_mut";
-    "core::mem::replace";
-    "core::mem::take";
-  ]
-  @ int_funs
+  let no_fail_no_state_funs =
+    [
+      "alloc::vec::Vec::new";
+      "alloc::vec::Vec::len";
+      "alloc::boxed::Box::deref";
+      "alloc::boxed::Box::deref_mut";
+      "core::mem::replace";
+      "core::mem::take";
+    ]
+    @ int_funs
+  in
+  let no_fail_no_state_funs =
+    List.map
+      (fun n -> (n, { can_fail = false; stateful = false }))
+      no_fail_no_state_funs
+  in
+  let no_state_funs = [ "alloc::vec::Vec::push" ] in
+  let no_state_funs =
+    List.map (fun n -> (n, { can_fail = true; stateful = false })) no_state_funs
+  in
+  no_fail_no_state_funs @ no_state_funs
 
-let builtin_non_fallible_funs_set =
-  SimpleNameSet.of_list
-    (List.map string_to_simple_name builtin_non_fallible_funs)
+let builtin_fun_effects_map =
+  SimpleNameMap.of_list
+    (List.map (fun (n, x) -> (string_to_simple_name n, x)) builtin_fun_effects)
 
 type builtin_trait_decl_info = {
   rust_name : string;
