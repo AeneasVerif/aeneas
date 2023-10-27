@@ -501,6 +501,15 @@ let names_map_check_collision (id_to_string : id -> string) (id : id)
       (* There is a clash: print a nice debugging message for the user *)
       report_name_collision id_to_string clash id name
 
+(** Insert bindings in a names map without checking for collisions *)
+let names_map_add_unchecked (id : id) (name : string) (nm : names_map) :
+    names_map =
+  (* Insert *)
+  let id_to_name = IdMap.add id name nm.id_to_name in
+  let name_to_id = StringMap.add name id nm.name_to_id in
+  let names_set = StringSet.add name nm.names_set in
+  { id_to_name; name_to_id; names_set }
+
 let names_map_add (id_to_string : id -> string) (id : id) (name : string)
     (nm : names_map) : names_map =
   (* Check if there is a clash *)
@@ -515,10 +524,7 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
     (* If we fail hard on errors, raise an exception *)
     if !Config.extract_fail_hard then raise (Failure err));
   (* Insert *)
-  let id_to_name = IdMap.add id name nm.id_to_name in
-  let name_to_id = StringMap.add name id nm.name_to_id in
-  let names_set = StringSet.add name nm.names_set in
-  { id_to_name; name_to_id; names_set }
+  names_map_add_unchecked id name nm
 
 (** The unsafe names map stores mappings from identifiers to names which might
     collide. For some backends and some names, it might be acceptable to have
@@ -1235,10 +1241,8 @@ let initialize_names_maps (fmt : formatter) (init : names_map_init) : names_maps
         [ fmt.bool_name; fmt.char_name; fmt.str_name ]; int_names; init.keywords;
       ]
   in
-  let names_set = StringSet.of_list keywords in
-  let name_to_id =
-    StringMap.of_list (List.map (fun x -> (x, UnknownId)) keywords)
-  in
+  let names_set = StringSet.empty in
+  let name_to_id = StringMap.empty in
   (* We fist initialize [id_to_name] as empty, because the id of a keyword is [UnknownId].
    * Also note that we don't need this mapping for keywords: we insert keywords only
    * to check collisions. *)
@@ -1246,11 +1250,21 @@ let initialize_names_maps (fmt : formatter) (init : names_map_init) : names_maps
   let names_map = { id_to_name; name_to_id; names_set } in
   let unsafe_names_map = empty_unsafe_names_map in
   let strict_names_map = empty_names_map in
-  let nm = { names_map; unsafe_names_map; strict_names_map } in
   (* For debugging - we are creating bindings for assumed types and functions, so
    * it is ok if we simply use the "show" function (those aren't simply identified
    * by numbers) *)
   let id_to_string = show_id in
+  (* Add the keywords as strict collisions *)
+  let strict_names_map =
+    List.fold_left
+      (fun nm name ->
+        (* There is duplication in the keywords so we don't check the collisions
+           while registering them (what is important is that there are no collisions
+           between keywords and user-defined identifiers) *)
+        names_map_add_unchecked UnknownId name nm)
+      strict_names_map keywords
+  in
+  let nm = { names_map; unsafe_names_map; strict_names_map } in
   (* Then we add:
    * - the assumed types
    * - the assumed struct constructors

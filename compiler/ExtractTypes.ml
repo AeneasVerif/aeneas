@@ -110,7 +110,6 @@ let keywords () =
           "let";
           "list";
           "match";
-          "not";
           "open";
           "rec";
           "scalar_cast";
