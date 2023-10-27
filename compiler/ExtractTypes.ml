@@ -622,10 +622,17 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | FStar | Lean | HOL4 -> name
     | Coq -> capitalize_first_letter name
   in
+  let get_type_name_no_suffix name =
+    match !backend with
+    | FStar | Coq | HOL4 -> String.concat "_" (get_type_name name)
+    | Lean -> String.concat "." (get_type_name name)
+  in
   let type_name name =
     match !backend with
-    | FStar | Coq | HOL4 -> type_name_to_snake_case name ^ "_t"
-    | Lean -> String.concat "." (get_type_name name)
+    | FStar ->
+        StringUtils.lowercase_first_letter (get_type_name_no_suffix name ^ "_t")
+    | Coq | HOL4 -> get_type_name_no_suffix name ^ "_t"
+    | Lean -> get_type_name_no_suffix name
   in
   let field_name (def_name : name) (field_id : FieldId.id)
       (field_name : string option) : string =
@@ -641,15 +648,18 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
         "_" ^ field_name_s
       else field_name_s
     else
-      let def_name = type_name_to_snake_case def_name ^ "_" in
-      def_name ^ field_name_s
+      let def_name = get_type_name_no_suffix def_name ^ "_" ^ field_name_s in
+      match !backend with
+      | Lean | HOL4 -> def_name
+      | Coq | FStar -> StringUtils.lowercase_first_letter def_name
   in
   let variant_name (def_name : name) (variant : string) : string =
     match !backend with
     | FStar | Coq | HOL4 ->
         let variant = to_camel_case variant in
         if variant_concatenate_type_name then
-          type_name_to_camel_case def_name ^ variant
+          StringUtils.capitalize_first_letter
+            (get_type_name_no_suffix def_name ^ "_" ^ variant)
         else variant
     | Lean -> variant
   in
@@ -660,7 +670,10 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   let get_fun_name fname =
     let fname = get_name fname in
     (* TODO: don't convert to snake case for Coq, HOL4, F* *)
-    flatten_name fname
+    let fname = flatten_name fname in
+    match !backend with
+    | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter fname
+    | Lean -> fname
   in
   let global_name (name : global_name) : string =
     (* Converting to snake case also lowercases the letters (in Rust, global
@@ -688,9 +701,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
        with the trait decl name *)
     let trait_decl =
       let name = trait_decl.name in
-      match !backend with
-      | FStar | Coq | HOL4 -> type_name_to_snake_case name ^ "_inst"
-      | Lean -> String.concat "" (get_type_name name) ^ "Inst"
+      get_type_name_no_suffix name ^ "Inst"
     in
     flatten_name (get_type_name trait_impl.name @ [ trait_decl ])
   in

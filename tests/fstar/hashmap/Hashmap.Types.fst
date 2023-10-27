@@ -7,15 +7,15 @@ open Primitives
 
 (** [hashmap::List] *)
 type list_t (t : Type0) =
-| ListCons : usize -> t -> list_t t -> list_t t
-| ListNil : list_t t
+| List_Cons : usize -> t -> list_t t -> list_t t
+| List_Nil : list_t t
 
 (** [hashmap::HashMap] *)
-type hash_map_t (t : Type0) =
+type hashMap_t (t : Type0) =
 {
-  hash_map_num_entries : usize;
-  hash_map_max_load_factor : (usize & usize);
-  hash_map_max_load : usize;
-  hash_map_slots : vec (list_t t);
+  num_entries : usize;
+  max_load_factor : (usize & usize);
+  max_load : usize;
+  slots : alloc_vec_Vec (list_t t);
 }
 

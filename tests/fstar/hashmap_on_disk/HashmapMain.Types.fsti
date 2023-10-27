@@ -6,17 +6,17 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap_main::hashmap::List] *)
-type hashmap_list_t (t : Type0) =
-| HashmapListCons : usize -> t -> hashmap_list_t t -> hashmap_list_t t
-| HashmapListNil : hashmap_list_t t
+type hashmap_List_t (t : Type0) =
+| Hashmap_List_Cons : usize -> t -> hashmap_List_t t -> hashmap_List_t t
+| Hashmap_List_Nil : hashmap_List_t t
 
 (** [hashmap_main::hashmap::HashMap] *)
-type hashmap_hash_map_t (t : Type0) =
+type hashmap_HashMap_t (t : Type0) =
 {
-  hashmap_hash_map_num_entries : usize;
-  hashmap_hash_map_max_load_factor : (usize & usize);
-  hashmap_hash_map_max_load : usize;
-  hashmap_hash_map_slots : vec (hashmap_list_t t);
+  num_entries : usize;
+  max_load_factor : (usize & usize);
+  max_load : usize;
+  slots : alloc_vec_Vec (hashmap_List_t t);
 }
 
 (** The state type used in the state-error monad *)
