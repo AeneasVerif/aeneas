@@ -6,5 +6,5 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [array::AB] *)
-type ab_t = | ABA : ab_t | ABB : ab_t
+type aB_t = | AB_A : aB_t | AB_B : aB_t
 

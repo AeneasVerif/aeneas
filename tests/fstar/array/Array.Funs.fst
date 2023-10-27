@@ -277,12 +277,12 @@ let deref_array_mut_borrow_back (x : array u32 2) : result (array u32 2) =
   let* _ = array_index_usize u32 2 x 0 in Return x
 
 (** [array::take_array_t]: forward function *)
-let take_array_t (a : array ab_t 2) : result unit =
+let take_array_t (a : array aB_t 2) : result unit =
   Return ()
 
 (** [array::non_copyable_array]: forward function *)
 let non_copyable_array : result unit =
-  let* _ = take_array_t (mk_array ab_t 2 [ ABA; ABB ]) in Return ()
+  let* _ = take_array_t (mk_array aB_t 2 [ AB_A; AB_B ]) in Return ()
 
 (** [array::sum]: loop 0: forward function *)
 let rec sum_loop

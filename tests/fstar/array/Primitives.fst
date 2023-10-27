@@ -707,5 +707,7 @@ let alloc_vec_Vec_coreopsindexIndexMutInst (t idx : Type0)
 let alloc_vec_Vec_index_mut_back_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) :
   Lemma (
     alloc_vec_Vec_index_mut_back a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i x ==
-      alloc_vec_Vec_update_usize v i x) =
+      alloc_vec_Vec_update_usize v i x)
+  [SMTPat (alloc_vec_Vec_index_mut_back a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i x)]
+  =
   admit()
