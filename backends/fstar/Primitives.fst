@@ -55,8 +55,8 @@ type string = string
 let is_zero (n: nat) : bool = n = 0
 let decrease (n: nat{n > 0}) : nat = n - 1
 
-let std_mem_replace (a : Type0) (x : a) (y : a) : a = x
-let std_mem_replace_back (a : Type0) (x : a) (y : a) : a = y
+let core_mem_replace (a : Type0) (x : a) (y : a) : a = x
+let core_mem_replace_back (a : Type0) (x : a) (y : a) : a = y
 
 // We don't really use raw pointers for now
 type mut_raw_ptr (t : Type0) = { v : t }
@@ -426,6 +426,13 @@ type alloc_vec_Vec (a : Type0) = v:list a{length v <= usize_max}
 let alloc_vec_Vec_new (a  : Type0) : alloc_vec_Vec a = assert_norm(length #a [] == 0); []
 let alloc_vec_Vec_len (a : Type0) (v : alloc_vec_Vec a) : usize = length v
 
+// Helper
+let alloc_vec_Vec_index_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : result a =
+  if i < length v then Return (index v i) else Fail Failure
+// Helper
+let alloc_vec_Vec_update_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : result (alloc_vec_Vec a) =
+  if i < length v then Return (list_update v i x) else Fail Failure
+
 // The **forward** function shouldn't be used
 let alloc_vec_Vec_push_fwd (a  : Type0) (v : alloc_vec_Vec a) (x : a) : unit = ()
 let alloc_vec_Vec_push (a  : Type0) (v : alloc_vec_Vec a) (x : a) :
@@ -694,3 +701,13 @@ let alloc_vec_Vec_coreopsindexIndexMutInst (t idx : Type0)
   index_mut = alloc_vec_Vec_index_mut t idx inst;
   index_mut_back = alloc_vec_Vec_index_mut_back t idx inst;
 }
+
+(*** Theorems *)
+
+let alloc_vec_Vec_index_mut_back_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) :
+  Lemma (
+    alloc_vec_Vec_index_mut_back a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i x ==
+      alloc_vec_Vec_update_usize v i x)
+  [SMTPat (alloc_vec_Vec_index_mut_back a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i x)]
+  =
+  admit()

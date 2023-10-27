@@ -7,25 +7,25 @@ open Primitives
 
 (** [polonius_list::List] *)
 type list_t (t : Type0) =
-| ListCons : t -> list_t t -> list_t t
-| ListNil : list_t t
+| List_Cons : t -> list_t t -> list_t t
+| List_Nil : list_t t
 
 (** [polonius_list::get_list_at_x]: forward function *)
-let rec get_list_at_x_fwd (ls : list_t u32) (x : u32) : result (list_t u32) =
+let rec get_list_at_x (ls : list_t u32) (x : u32) : result (list_t u32) =
   begin match ls with
-  | ListCons hd tl ->
-    if hd = x then Return (ListCons hd tl) else get_list_at_x_fwd tl x
-  | ListNil -> Return ListNil
+  | List_Cons hd tl ->
+    if hd = x then Return (List_Cons hd tl) else get_list_at_x tl x
+  | List_Nil -> Return List_Nil
   end
 
 (** [polonius_list::get_list_at_x]: backward function 0 *)
 let rec get_list_at_x_back
   (ls : list_t u32) (x : u32) (ret : list_t u32) : result (list_t u32) =
   begin match ls with
-  | ListCons hd tl ->
+  | List_Cons hd tl ->
     if hd = x
     then Return ret
-    else let* tl0 = get_list_at_x_back tl x ret in Return (ListCons hd tl0)
-  | ListNil -> Return ret
+    else let* tl0 = get_list_at_x_back tl x ret in Return (List_Cons hd tl0)
+  | List_Nil -> Return ret
   end
 

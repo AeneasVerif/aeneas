@@ -22,7 +22,8 @@ let sum_with_shared_borrows_loop_decreases (max : u32) (i : u32) (s : u32) :
   admit ()
 
 (** [loops::clear]: decreases clause *)
-unfold let clear_loop_decreases (v : vec u32) (i : usize) : nat = admit ()
+unfold
+let clear_loop_decreases (v : alloc_vec_Vec u32) (i : usize) : nat = admit ()
 
 (** [loops::list_mem]: decreases clause *)
 unfold let list_mem_loop_decreases (x : u32) (ls : list_t u32) : nat = admit ()

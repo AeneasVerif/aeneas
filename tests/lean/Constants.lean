@@ -56,11 +56,11 @@ def p3_c : Pair U32 U32 := eval_global p3_body (by simp)
 
 /- [constants::Wrap] -/
 structure Wrap (T : Type) where
-  val : T
+  value : T
 
 /- [constants::Wrap::{0}::new]: forward function -/
-def Wrap.new (T : Type) (val : T) : Result (Wrap T) :=
-  Result.ret { val := val }
+def Wrap.new (T : Type) (value : T) : Result (Wrap T) :=
+  Result.ret { value := value }
 
 /- [constants::Y] -/
 def y_body : Result (Wrap I32) := Wrap.new I32 2#i32
@@ -68,7 +68,7 @@ def y_c : Wrap I32 := eval_global y_body (by simp)
 
 /- [constants::unwrap_y]: forward function -/
 def unwrap_y : Result I32 :=
-  Result.ret y_c.val
+  Result.ret y_c.value
 
 /- [constants::YVAL] -/
 def yval_body : Result I32 := unwrap_y
