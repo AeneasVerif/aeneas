@@ -10,27 +10,27 @@ Module Hashmap_Types.
 
 (** [hashmap::List] *)
 Inductive List_t (T : Type) :=
-| ListCons : usize -> T -> List_t T -> List_t T
-| ListNil : List_t T
+| List_Cons : usize -> T -> List_t T -> List_t T
+| List_Nil : List_t T
 .
 
-Arguments ListCons {T} _ _ _.
-Arguments ListNil {T}.
+Arguments List_Cons {T} _ _ _.
+Arguments List_Nil {T}.
 
 (** [hashmap::HashMap] *)
-Record Hash_map_t (T : Type) :=
-mkHash_map_t {
-  Hash_map_num_entries : usize;
-  Hash_map_max_load_factor : (usize * usize);
-  Hash_map_max_load : usize;
-  Hash_map_slots : vec (List_t T);
+Record HashMap_t (T : Type) :=
+mkHashMap_t {
+  hashMap_num_entries : usize;
+  hashMap_max_load_factor : (usize * usize);
+  hashMap_max_load : usize;
+  hashMap_slots : alloc_vec_Vec (List_t T);
 }
 .
 
-Arguments mkHash_map_t {T} _ _ _ _.
-Arguments Hash_map_num_entries {T}.
-Arguments Hash_map_max_load_factor {T}.
-Arguments Hash_map_max_load {T}.
-Arguments Hash_map_slots {T}.
+Arguments mkHashMap_t {T} _ _ _ _.
+Arguments hashMap_num_entries {T}.
+Arguments hashMap_max_load_factor {T}.
+Arguments hashMap_max_load {T}.
+Arguments hashMap_slots {T}.
 
 End Hashmap_Types .

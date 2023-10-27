@@ -11,98 +11,101 @@ Import Hashmap_Types.
 Module Hashmap_Funs.
 
 (** [hashmap::hash_key]: forward function *)
-Definition hash_key_fwd (k : usize) : result usize :=
+Definition hash_key (k : usize) : result usize :=
   Return k.
 
 (** [hashmap::HashMap::{0}::allocate_slots]: loop 0: forward function *)
-Fixpoint hash_map_allocate_slots_loop_fwd
-  (T : Type) (n : nat) (slots : vec (List_t T)) (n0 : usize) :
-  result (vec (List_t T))
+Fixpoint hashMap_allocate_slots_loop
+  (T : Type) (n : nat) (slots : alloc_vec_Vec (List_t T)) (n0 : usize) :
+  result (alloc_vec_Vec (List_t T))
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
     if n0 s> 0%usize
     then (
-      slots0 <- vec_push_back (List_t T) slots ListNil;
+      slots0 <- alloc_vec_Vec_push (List_t T) slots List_Nil;
       n2 <- usize_sub n0 1%usize;
-      hash_map_allocate_slots_loop_fwd T n1 slots0 n2)
+      hashMap_allocate_slots_loop T n1 slots0 n2)
     else Return slots
   end
 .
 
 (** [hashmap::HashMap::{0}::allocate_slots]: forward function *)
-Definition hash_map_allocate_slots_fwd
-  (T : Type) (n : nat) (slots : vec (List_t T)) (n0 : usize) :
-  result (vec (List_t T))
+Definition hashMap_allocate_slots
+  (T : Type) (n : nat) (slots : alloc_vec_Vec (List_t T)) (n0 : usize) :
+  result (alloc_vec_Vec (List_t T))
   :=
-  hash_map_allocate_slots_loop_fwd T n slots n0
+  hashMap_allocate_slots_loop T n slots n0
 .
 
 (** [hashmap::HashMap::{0}::new_with_capacity]: forward function *)
-Definition hash_map_new_with_capacity_fwd
+Definition hashMap_new_with_capacity
   (T : Type) (n : nat) (capacity : usize) (max_load_dividend : usize)
   (max_load_divisor : usize) :
-  result (Hash_map_t T)
+  result (HashMap_t T)
   :=
-  let v := vec_new (List_t T) in
-  slots <- hash_map_allocate_slots_fwd T n v capacity;
+  let v := alloc_vec_Vec_new (List_t T) in
+  slots <- hashMap_allocate_slots T n v capacity;
   i <- usize_mul capacity max_load_dividend;
   i0 <- usize_div i max_load_divisor;
   Return
     {|
-      Hash_map_num_entries := 0%usize;
-      Hash_map_max_load_factor := (max_load_dividend, max_load_divisor);
-      Hash_map_max_load := i0;
-      Hash_map_slots := slots
+      hashMap_num_entries := 0%usize;
+      hashMap_max_load_factor := (max_load_dividend, max_load_divisor);
+      hashMap_max_load := i0;
+      hashMap_slots := slots
     |}
 .
 
 (** [hashmap::HashMap::{0}::new]: forward function *)
-Definition hash_map_new_fwd (T : Type) (n : nat) : result (Hash_map_t T) :=
-  hash_map_new_with_capacity_fwd T n 32%usize 4%usize 5%usize
+Definition hashMap_new (T : Type) (n : nat) : result (HashMap_t T) :=
+  hashMap_new_with_capacity T n 32%usize 4%usize 5%usize
 .
 
 (** [hashmap::HashMap::{0}::clear]: loop 0: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Fixpoint hash_map_clear_loop_fwd_back
-  (T : Type) (n : nat) (slots : vec (List_t T)) (i : usize) :
-  result (vec (List_t T))
+Fixpoint hashMap_clear_loop
+  (T : Type) (n : nat) (slots : alloc_vec_Vec (List_t T)) (i : usize) :
+  result (alloc_vec_Vec (List_t T))
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    let i0 := vec_len (List_t T) slots in
+    let i0 := alloc_vec_Vec_len (List_t T) slots in
     if i s< i0
     then (
       i1 <- usize_add i 1%usize;
-      slots0 <- vec_index_mut_back (List_t T) slots i ListNil;
-      hash_map_clear_loop_fwd_back T n0 slots0 i1)
+      slots0 <-
+        alloc_vec_Vec_index_mut_back (List_t T) usize
+          (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+          slots i List_Nil;
+      hashMap_clear_loop T n0 slots0 i1)
     else Return slots
   end
 .
 
 (** [hashmap::HashMap::{0}::clear]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Definition hash_map_clear_fwd_back
-  (T : Type) (n : nat) (self : Hash_map_t T) : result (Hash_map_t T) :=
-  v <- hash_map_clear_loop_fwd_back T n self.(Hash_map_slots) 0%usize;
+Definition hashMap_clear
+  (T : Type) (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
+  v <- hashMap_clear_loop T n self.(hashMap_slots) 0%usize;
   Return
     {|
-      Hash_map_num_entries := 0%usize;
-      Hash_map_max_load_factor := self.(Hash_map_max_load_factor);
-      Hash_map_max_load := self.(Hash_map_max_load);
-      Hash_map_slots := v
+      hashMap_num_entries := 0%usize;
+      hashMap_max_load_factor := self.(hashMap_max_load_factor);
+      hashMap_max_load := self.(hashMap_max_load);
+      hashMap_slots := v
     |}
 .
 
 (** [hashmap::HashMap::{0}::len]: forward function *)
-Definition hash_map_len_fwd (T : Type) (self : Hash_map_t T) : result usize :=
-  Return self.(Hash_map_num_entries)
+Definition hashMap_len (T : Type) (self : HashMap_t T) : result usize :=
+  Return self.(hashMap_num_entries)
 .
 
 (** [hashmap::HashMap::{0}::insert_in_list]: loop 0: forward function *)
-Fixpoint hash_map_insert_in_list_loop_fwd
+Fixpoint hashMap_insert_in_list_loop
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result bool
   :=
@@ -110,25 +113,25 @@ Fixpoint hash_map_insert_in_list_loop_fwd
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey cvalue tl =>
+    | List_Cons ckey cvalue tl =>
       if ckey s= key
       then Return false
-      else hash_map_insert_in_list_loop_fwd T n0 key value tl
-    | ListNil => Return true
+      else hashMap_insert_in_list_loop T n0 key value tl
+    | List_Nil => Return true
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::insert_in_list]: forward function *)
-Definition hash_map_insert_in_list_fwd
+Definition hashMap_insert_in_list
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result bool
   :=
-  hash_map_insert_in_list_loop_fwd T n key value ls
+  hashMap_insert_in_list_loop T n key value ls
 .
 
 (** [hashmap::HashMap::{0}::insert_in_list]: loop 0: backward function 0 *)
-Fixpoint hash_map_insert_in_list_loop_back
+Fixpoint hashMap_insert_in_list_loop_back
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result (List_t T)
   :=
@@ -136,255 +139,275 @@ Fixpoint hash_map_insert_in_list_loop_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey cvalue tl =>
+    | List_Cons ckey cvalue tl =>
       if ckey s= key
-      then Return (ListCons ckey value tl)
+      then Return (List_Cons ckey value tl)
       else (
-        tl0 <- hash_map_insert_in_list_loop_back T n0 key value tl;
-        Return (ListCons ckey cvalue tl0))
-    | ListNil => let l := ListNil in Return (ListCons key value l)
+        tl0 <- hashMap_insert_in_list_loop_back T n0 key value tl;
+        Return (List_Cons ckey cvalue tl0))
+    | List_Nil => let l := List_Nil in Return (List_Cons key value l)
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::insert_in_list]: backward function 0 *)
-Definition hash_map_insert_in_list_back
+Definition hashMap_insert_in_list_back
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result (List_t T)
   :=
-  hash_map_insert_in_list_loop_back T n key value ls
+  hashMap_insert_in_list_loop_back T n key value ls
 .
 
 (** [hashmap::HashMap::{0}::insert_no_resize]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Definition hash_map_insert_no_resize_fwd_back
-  (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) (value : T) :
-  result (Hash_map_t T)
+Definition hashMap_insert_no_resize
+  (T : Type) (n : nat) (self : HashMap_t T) (key : usize) (value : T) :
+  result (HashMap_t T)
   :=
-  hash <- hash_key_fwd key;
-  let i := vec_len (List_t T) self.(Hash_map_slots) in
+  hash <- hash_key key;
+  let i := alloc_vec_Vec_len (List_t T) self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
-  l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
-  inserted <- hash_map_insert_in_list_fwd T n key value l;
+  l <-
+    alloc_vec_Vec_index_mut (List_t T) usize
+      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+      self.(hashMap_slots) hash_mod;
+  inserted <- hashMap_insert_in_list T n key value l;
   if inserted
   then (
-    i0 <- usize_add self.(Hash_map_num_entries) 1%usize;
-    l0 <- hash_map_insert_in_list_back T n key value l;
-    v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+    i0 <- usize_add self.(hashMap_num_entries) 1%usize;
+    l0 <- hashMap_insert_in_list_back T n key value l;
+    v <-
+      alloc_vec_Vec_index_mut_back (List_t T) usize
+        (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+        self.(hashMap_slots) hash_mod l0;
     Return
       {|
-        Hash_map_num_entries := i0;
-        Hash_map_max_load_factor := self.(Hash_map_max_load_factor);
-        Hash_map_max_load := self.(Hash_map_max_load);
-        Hash_map_slots := v
+        hashMap_num_entries := i0;
+        hashMap_max_load_factor := self.(hashMap_max_load_factor);
+        hashMap_max_load := self.(hashMap_max_load);
+        hashMap_slots := v
       |})
   else (
-    l0 <- hash_map_insert_in_list_back T n key value l;
-    v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+    l0 <- hashMap_insert_in_list_back T n key value l;
+    v <-
+      alloc_vec_Vec_index_mut_back (List_t T) usize
+        (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+        self.(hashMap_slots) hash_mod l0;
     Return
       {|
-        Hash_map_num_entries := self.(Hash_map_num_entries);
-        Hash_map_max_load_factor := self.(Hash_map_max_load_factor);
-        Hash_map_max_load := self.(Hash_map_max_load);
-        Hash_map_slots := v
+        hashMap_num_entries := self.(hashMap_num_entries);
+        hashMap_max_load_factor := self.(hashMap_max_load_factor);
+        hashMap_max_load := self.(hashMap_max_load);
+        hashMap_slots := v
       |})
 .
 
 (** [hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Fixpoint hash_map_move_elements_from_list_loop_fwd_back
-  (T : Type) (n : nat) (ntable : Hash_map_t T) (ls : List_t T) :
-  result (Hash_map_t T)
+Fixpoint hashMap_move_elements_from_list_loop
+  (T : Type) (n : nat) (ntable : HashMap_t T) (ls : List_t T) :
+  result (HashMap_t T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons k v tl =>
-      ntable0 <- hash_map_insert_no_resize_fwd_back T n0 ntable k v;
-      hash_map_move_elements_from_list_loop_fwd_back T n0 ntable0 tl
-    | ListNil => Return ntable
+    | List_Cons k v tl =>
+      ntable0 <- hashMap_insert_no_resize T n0 ntable k v;
+      hashMap_move_elements_from_list_loop T n0 ntable0 tl
+    | List_Nil => Return ntable
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::move_elements_from_list]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Definition hash_map_move_elements_from_list_fwd_back
-  (T : Type) (n : nat) (ntable : Hash_map_t T) (ls : List_t T) :
-  result (Hash_map_t T)
+Definition hashMap_move_elements_from_list
+  (T : Type) (n : nat) (ntable : HashMap_t T) (ls : List_t T) :
+  result (HashMap_t T)
   :=
-  hash_map_move_elements_from_list_loop_fwd_back T n ntable ls
+  hashMap_move_elements_from_list_loop T n ntable ls
 .
 
 (** [hashmap::HashMap::{0}::move_elements]: loop 0: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Fixpoint hash_map_move_elements_loop_fwd_back
-  (T : Type) (n : nat) (ntable : Hash_map_t T) (slots : vec (List_t T))
-  (i : usize) :
-  result ((Hash_map_t T) * (vec (List_t T)))
+Fixpoint hashMap_move_elements_loop
+  (T : Type) (n : nat) (ntable : HashMap_t T)
+  (slots : alloc_vec_Vec (List_t T)) (i : usize) :
+  result ((HashMap_t T) * (alloc_vec_Vec (List_t T)))
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    let i0 := vec_len (List_t T) slots in
+    let i0 := alloc_vec_Vec_len (List_t T) slots in
     if i s< i0
     then (
-      l <- vec_index_mut_fwd (List_t T) slots i;
-      let ls := mem_replace_fwd (List_t T) l ListNil in
-      ntable0 <- hash_map_move_elements_from_list_fwd_back T n0 ntable ls;
+      l <-
+        alloc_vec_Vec_index_mut (List_t T) usize
+          (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+          slots i;
+      let ls := core_mem_replace (List_t T) l List_Nil in
+      ntable0 <- hashMap_move_elements_from_list T n0 ntable ls;
       i1 <- usize_add i 1%usize;
-      let l0 := mem_replace_back (List_t T) l ListNil in
-      slots0 <- vec_index_mut_back (List_t T) slots i l0;
-      hash_map_move_elements_loop_fwd_back T n0 ntable0 slots0 i1)
+      let l0 := core_mem_replace_back (List_t T) l List_Nil in
+      slots0 <-
+        alloc_vec_Vec_index_mut_back (List_t T) usize
+          (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+          slots i l0;
+      hashMap_move_elements_loop T n0 ntable0 slots0 i1)
     else Return (ntable, slots)
   end
 .
 
 (** [hashmap::HashMap::{0}::move_elements]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Definition hash_map_move_elements_fwd_back
-  (T : Type) (n : nat) (ntable : Hash_map_t T) (slots : vec (List_t T))
-  (i : usize) :
-  result ((Hash_map_t T) * (vec (List_t T)))
+Definition hashMap_move_elements
+  (T : Type) (n : nat) (ntable : HashMap_t T)
+  (slots : alloc_vec_Vec (List_t T)) (i : usize) :
+  result ((HashMap_t T) * (alloc_vec_Vec (List_t T)))
   :=
-  hash_map_move_elements_loop_fwd_back T n ntable slots i
+  hashMap_move_elements_loop T n ntable slots i
 .
 
 (** [hashmap::HashMap::{0}::try_resize]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Definition hash_map_try_resize_fwd_back
-  (T : Type) (n : nat) (self : Hash_map_t T) : result (Hash_map_t T) :=
+Definition hashMap_try_resize
+  (T : Type) (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
   max_usize <- scalar_cast U32 Usize core_u32_max;
-  let capacity := vec_len (List_t T) self.(Hash_map_slots) in
+  let capacity := alloc_vec_Vec_len (List_t T) self.(hashMap_slots) in
   n1 <- usize_div max_usize 2%usize;
-  let (i, i0) := self.(Hash_map_max_load_factor) in
+  let (i, i0) := self.(hashMap_max_load_factor) in
   i1 <- usize_div n1 i;
   if capacity s<= i1
   then (
     i2 <- usize_mul capacity 2%usize;
-    ntable <- hash_map_new_with_capacity_fwd T n i2 i i0;
-    p <-
-      hash_map_move_elements_fwd_back T n ntable self.(Hash_map_slots) 0%usize;
+    ntable <- hashMap_new_with_capacity T n i2 i i0;
+    p <- hashMap_move_elements T n ntable self.(hashMap_slots) 0%usize;
     let (ntable0, _) := p in
     Return
       {|
-        Hash_map_num_entries := self.(Hash_map_num_entries);
-        Hash_map_max_load_factor := (i, i0);
-        Hash_map_max_load := ntable0.(Hash_map_max_load);
-        Hash_map_slots := ntable0.(Hash_map_slots)
+        hashMap_num_entries := self.(hashMap_num_entries);
+        hashMap_max_load_factor := (i, i0);
+        hashMap_max_load := ntable0.(hashMap_max_load);
+        hashMap_slots := ntable0.(hashMap_slots)
       |})
   else
     Return
       {|
-        Hash_map_num_entries := self.(Hash_map_num_entries);
-        Hash_map_max_load_factor := (i, i0);
-        Hash_map_max_load := self.(Hash_map_max_load);
-        Hash_map_slots := self.(Hash_map_slots)
+        hashMap_num_entries := self.(hashMap_num_entries);
+        hashMap_max_load_factor := (i, i0);
+        hashMap_max_load := self.(hashMap_max_load);
+        hashMap_slots := self.(hashMap_slots)
       |}
 .
 
 (** [hashmap::HashMap::{0}::insert]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-Definition hash_map_insert_fwd_back
-  (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) (value : T) :
-  result (Hash_map_t T)
+Definition hashMap_insert
+  (T : Type) (n : nat) (self : HashMap_t T) (key : usize) (value : T) :
+  result (HashMap_t T)
   :=
-  self0 <- hash_map_insert_no_resize_fwd_back T n self key value;
-  i <- hash_map_len_fwd T self0;
-  if i s> self0.(Hash_map_max_load)
-  then hash_map_try_resize_fwd_back T n self0
+  self0 <- hashMap_insert_no_resize T n self key value;
+  i <- hashMap_len T self0;
+  if i s> self0.(hashMap_max_load)
+  then hashMap_try_resize T n self0
   else Return self0
 .
 
 (** [hashmap::HashMap::{0}::contains_key_in_list]: loop 0: forward function *)
-Fixpoint hash_map_contains_key_in_list_loop_fwd
+Fixpoint hashMap_contains_key_in_list_loop
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result bool :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey t tl =>
+    | List_Cons ckey t tl =>
       if ckey s= key
       then Return true
-      else hash_map_contains_key_in_list_loop_fwd T n0 key tl
-    | ListNil => Return false
+      else hashMap_contains_key_in_list_loop T n0 key tl
+    | List_Nil => Return false
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::contains_key_in_list]: forward function *)
-Definition hash_map_contains_key_in_list_fwd
+Definition hashMap_contains_key_in_list
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result bool :=
-  hash_map_contains_key_in_list_loop_fwd T n key ls
+  hashMap_contains_key_in_list_loop T n key ls
 .
 
 (** [hashmap::HashMap::{0}::contains_key]: forward function *)
-Definition hash_map_contains_key_fwd
-  (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) : result bool :=
-  hash <- hash_key_fwd key;
-  let i := vec_len (List_t T) self.(Hash_map_slots) in
+Definition hashMap_contains_key
+  (T : Type) (n : nat) (self : HashMap_t T) (key : usize) : result bool :=
+  hash <- hash_key key;
+  let i := alloc_vec_Vec_len (List_t T) self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
-  l <- vec_index_fwd (List_t T) self.(Hash_map_slots) hash_mod;
-  hash_map_contains_key_in_list_fwd T n key l
+  l <-
+    alloc_vec_Vec_index (List_t T) usize
+      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+      self.(hashMap_slots) hash_mod;
+  hashMap_contains_key_in_list T n key l
 .
 
 (** [hashmap::HashMap::{0}::get_in_list]: loop 0: forward function *)
-Fixpoint hash_map_get_in_list_loop_fwd
+Fixpoint hashMap_get_in_list_loop
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result T :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey cvalue tl =>
+    | List_Cons ckey cvalue tl =>
       if ckey s= key
       then Return cvalue
-      else hash_map_get_in_list_loop_fwd T n0 key tl
-    | ListNil => Fail_ Failure
+      else hashMap_get_in_list_loop T n0 key tl
+    | List_Nil => Fail_ Failure
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::get_in_list]: forward function *)
-Definition hash_map_get_in_list_fwd
+Definition hashMap_get_in_list
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result T :=
-  hash_map_get_in_list_loop_fwd T n key ls
+  hashMap_get_in_list_loop T n key ls
 .
 
 (** [hashmap::HashMap::{0}::get]: forward function *)
-Definition hash_map_get_fwd
-  (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) : result T :=
-  hash <- hash_key_fwd key;
-  let i := vec_len (List_t T) self.(Hash_map_slots) in
+Definition hashMap_get
+  (T : Type) (n : nat) (self : HashMap_t T) (key : usize) : result T :=
+  hash <- hash_key key;
+  let i := alloc_vec_Vec_len (List_t T) self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
-  l <- vec_index_fwd (List_t T) self.(Hash_map_slots) hash_mod;
-  hash_map_get_in_list_fwd T n key l
+  l <-
+    alloc_vec_Vec_index (List_t T) usize
+      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+      self.(hashMap_slots) hash_mod;
+  hashMap_get_in_list T n key l
 .
 
 (** [hashmap::HashMap::{0}::get_mut_in_list]: loop 0: forward function *)
-Fixpoint hash_map_get_mut_in_list_loop_fwd
+Fixpoint hashMap_get_mut_in_list_loop
   (T : Type) (n : nat) (ls : List_t T) (key : usize) : result T :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey cvalue tl =>
+    | List_Cons ckey cvalue tl =>
       if ckey s= key
       then Return cvalue
-      else hash_map_get_mut_in_list_loop_fwd T n0 tl key
-    | ListNil => Fail_ Failure
+      else hashMap_get_mut_in_list_loop T n0 tl key
+    | List_Nil => Fail_ Failure
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::get_mut_in_list]: forward function *)
-Definition hash_map_get_mut_in_list_fwd
+Definition hashMap_get_mut_in_list
   (T : Type) (n : nat) (ls : List_t T) (key : usize) : result T :=
-  hash_map_get_mut_in_list_loop_fwd T n ls key
+  hashMap_get_mut_in_list_loop T n ls key
 .
 
 (** [hashmap::HashMap::{0}::get_mut_in_list]: loop 0: backward function 0 *)
-Fixpoint hash_map_get_mut_in_list_loop_back
+Fixpoint hashMap_get_mut_in_list_loop_back
   (T : Type) (n : nat) (ls : List_t T) (key : usize) (ret : T) :
   result (List_t T)
   :=
@@ -392,196 +415,219 @@ Fixpoint hash_map_get_mut_in_list_loop_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey cvalue tl =>
+    | List_Cons ckey cvalue tl =>
       if ckey s= key
-      then Return (ListCons ckey ret tl)
+      then Return (List_Cons ckey ret tl)
       else (
-        tl0 <- hash_map_get_mut_in_list_loop_back T n0 tl key ret;
-        Return (ListCons ckey cvalue tl0))
-    | ListNil => Fail_ Failure
+        tl0 <- hashMap_get_mut_in_list_loop_back T n0 tl key ret;
+        Return (List_Cons ckey cvalue tl0))
+    | List_Nil => Fail_ Failure
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::get_mut_in_list]: backward function 0 *)
-Definition hash_map_get_mut_in_list_back
+Definition hashMap_get_mut_in_list_back
   (T : Type) (n : nat) (ls : List_t T) (key : usize) (ret : T) :
   result (List_t T)
   :=
-  hash_map_get_mut_in_list_loop_back T n ls key ret
+  hashMap_get_mut_in_list_loop_back T n ls key ret
 .
 
 (** [hashmap::HashMap::{0}::get_mut]: forward function *)
-Definition hash_map_get_mut_fwd
-  (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) : result T :=
-  hash <- hash_key_fwd key;
-  let i := vec_len (List_t T) self.(Hash_map_slots) in
+Definition hashMap_get_mut
+  (T : Type) (n : nat) (self : HashMap_t T) (key : usize) : result T :=
+  hash <- hash_key key;
+  let i := alloc_vec_Vec_len (List_t T) self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
-  l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
-  hash_map_get_mut_in_list_fwd T n l key
+  l <-
+    alloc_vec_Vec_index_mut (List_t T) usize
+      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+      self.(hashMap_slots) hash_mod;
+  hashMap_get_mut_in_list T n l key
 .
 
 (** [hashmap::HashMap::{0}::get_mut]: backward function 0 *)
-Definition hash_map_get_mut_back
-  (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) (ret : T) :
-  result (Hash_map_t T)
+Definition hashMap_get_mut_back
+  (T : Type) (n : nat) (self : HashMap_t T) (key : usize) (ret : T) :
+  result (HashMap_t T)
   :=
-  hash <- hash_key_fwd key;
-  let i := vec_len (List_t T) self.(Hash_map_slots) in
+  hash <- hash_key key;
+  let i := alloc_vec_Vec_len (List_t T) self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
-  l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
-  l0 <- hash_map_get_mut_in_list_back T n l key ret;
-  v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+  l <-
+    alloc_vec_Vec_index_mut (List_t T) usize
+      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+      self.(hashMap_slots) hash_mod;
+  l0 <- hashMap_get_mut_in_list_back T n l key ret;
+  v <-
+    alloc_vec_Vec_index_mut_back (List_t T) usize
+      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+      self.(hashMap_slots) hash_mod l0;
   Return
     {|
-      Hash_map_num_entries := self.(Hash_map_num_entries);
-      Hash_map_max_load_factor := self.(Hash_map_max_load_factor);
-      Hash_map_max_load := self.(Hash_map_max_load);
-      Hash_map_slots := v
+      hashMap_num_entries := self.(hashMap_num_entries);
+      hashMap_max_load_factor := self.(hashMap_max_load_factor);
+      hashMap_max_load := self.(hashMap_max_load);
+      hashMap_slots := v
     |}
 .
 
 (** [hashmap::HashMap::{0}::remove_from_list]: loop 0: forward function *)
-Fixpoint hash_map_remove_from_list_loop_fwd
+Fixpoint hashMap_remove_from_list_loop
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result (option T) :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey t tl =>
+    | List_Cons ckey t tl =>
       if ckey s= key
       then
-        let mv_ls := mem_replace_fwd (List_t T) (ListCons ckey t tl) ListNil in
+        let mv_ls := core_mem_replace (List_t T) (List_Cons ckey t tl) List_Nil
+          in
         match mv_ls with
-        | ListCons i cvalue tl0 => Return (Some cvalue)
-        | ListNil => Fail_ Failure
+        | List_Cons i cvalue tl0 => Return (Some cvalue)
+        | List_Nil => Fail_ Failure
         end
-      else hash_map_remove_from_list_loop_fwd T n0 key tl
-    | ListNil => Return None
+      else hashMap_remove_from_list_loop T n0 key tl
+    | List_Nil => Return None
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::remove_from_list]: forward function *)
-Definition hash_map_remove_from_list_fwd
+Definition hashMap_remove_from_list
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result (option T) :=
-  hash_map_remove_from_list_loop_fwd T n key ls
+  hashMap_remove_from_list_loop T n key ls
 .
 
 (** [hashmap::HashMap::{0}::remove_from_list]: loop 0: backward function 1 *)
-Fixpoint hash_map_remove_from_list_loop_back
+Fixpoint hashMap_remove_from_list_loop_back
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result (List_t T) :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey t tl =>
+    | List_Cons ckey t tl =>
       if ckey s= key
       then
-        let mv_ls := mem_replace_fwd (List_t T) (ListCons ckey t tl) ListNil in
+        let mv_ls := core_mem_replace (List_t T) (List_Cons ckey t tl) List_Nil
+          in
         match mv_ls with
-        | ListCons i cvalue tl0 => Return tl0
-        | ListNil => Fail_ Failure
+        | List_Cons i cvalue tl0 => Return tl0
+        | List_Nil => Fail_ Failure
         end
       else (
-        tl0 <- hash_map_remove_from_list_loop_back T n0 key tl;
-        Return (ListCons ckey t tl0))
-    | ListNil => Return ListNil
+        tl0 <- hashMap_remove_from_list_loop_back T n0 key tl;
+        Return (List_Cons ckey t tl0))
+    | List_Nil => Return List_Nil
     end
   end
 .
 
 (** [hashmap::HashMap::{0}::remove_from_list]: backward function 1 *)
-Definition hash_map_remove_from_list_back
+Definition hashMap_remove_from_list_back
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result (List_t T) :=
-  hash_map_remove_from_list_loop_back T n key ls
+  hashMap_remove_from_list_loop_back T n key ls
 .
 
 (** [hashmap::HashMap::{0}::remove]: forward function *)
-Definition hash_map_remove_fwd
-  (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) :
+Definition hashMap_remove
+  (T : Type) (n : nat) (self : HashMap_t T) (key : usize) :
   result (option T)
   :=
-  hash <- hash_key_fwd key;
-  let i := vec_len (List_t T) self.(Hash_map_slots) in
+  hash <- hash_key key;
+  let i := alloc_vec_Vec_len (List_t T) self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
-  l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
-  x <- hash_map_remove_from_list_fwd T n key l;
+  l <-
+    alloc_vec_Vec_index_mut (List_t T) usize
+      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+      self.(hashMap_slots) hash_mod;
+  x <- hashMap_remove_from_list T n key l;
   match x with
   | None => Return None
   | Some x0 =>
-    _ <- usize_sub self.(Hash_map_num_entries) 1%usize; Return (Some x0)
+    _ <- usize_sub self.(hashMap_num_entries) 1%usize; Return (Some x0)
   end
 .
 
 (** [hashmap::HashMap::{0}::remove]: backward function 0 *)
-Definition hash_map_remove_back
-  (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) :
-  result (Hash_map_t T)
+Definition hashMap_remove_back
+  (T : Type) (n : nat) (self : HashMap_t T) (key : usize) :
+  result (HashMap_t T)
   :=
-  hash <- hash_key_fwd key;
-  let i := vec_len (List_t T) self.(Hash_map_slots) in
+  hash <- hash_key key;
+  let i := alloc_vec_Vec_len (List_t T) self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
-  l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
-  x <- hash_map_remove_from_list_fwd T n key l;
+  l <-
+    alloc_vec_Vec_index_mut (List_t T) usize
+      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+      self.(hashMap_slots) hash_mod;
+  x <- hashMap_remove_from_list T n key l;
   match x with
   | None =>
-    l0 <- hash_map_remove_from_list_back T n key l;
-    v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+    l0 <- hashMap_remove_from_list_back T n key l;
+    v <-
+      alloc_vec_Vec_index_mut_back (List_t T) usize
+        (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+        self.(hashMap_slots) hash_mod l0;
     Return
       {|
-        Hash_map_num_entries := self.(Hash_map_num_entries);
-        Hash_map_max_load_factor := self.(Hash_map_max_load_factor);
-        Hash_map_max_load := self.(Hash_map_max_load);
-        Hash_map_slots := v
+        hashMap_num_entries := self.(hashMap_num_entries);
+        hashMap_max_load_factor := self.(hashMap_max_load_factor);
+        hashMap_max_load := self.(hashMap_max_load);
+        hashMap_slots := v
       |}
   | Some x0 =>
-    i0 <- usize_sub self.(Hash_map_num_entries) 1%usize;
-    l0 <- hash_map_remove_from_list_back T n key l;
-    v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+    i0 <- usize_sub self.(hashMap_num_entries) 1%usize;
+    l0 <- hashMap_remove_from_list_back T n key l;
+    v <-
+      alloc_vec_Vec_index_mut_back (List_t T) usize
+        (core_slice_index_usize_coresliceindexSliceIndexInst (List_t T))
+        self.(hashMap_slots) hash_mod l0;
     Return
       {|
-        Hash_map_num_entries := i0;
-        Hash_map_max_load_factor := self.(Hash_map_max_load_factor);
-        Hash_map_max_load := self.(Hash_map_max_load);
-        Hash_map_slots := v
+        hashMap_num_entries := i0;
+        hashMap_max_load_factor := self.(hashMap_max_load_factor);
+        hashMap_max_load := self.(hashMap_max_load);
+        hashMap_slots := v
       |}
   end
 .
 
 (** [hashmap::test1]: forward function *)
-Definition test1_fwd (n : nat) : result unit :=
-  hm <- hash_map_new_fwd u64 n;
-  hm0 <- hash_map_insert_fwd_back u64 n hm 0%usize 42%u64;
-  hm1 <- hash_map_insert_fwd_back u64 n hm0 128%usize 18%u64;
-  hm2 <- hash_map_insert_fwd_back u64 n hm1 1024%usize 138%u64;
-  hm3 <- hash_map_insert_fwd_back u64 n hm2 1056%usize 256%u64;
-  i <- hash_map_get_fwd u64 n hm3 128%usize;
+Definition test1 (n : nat) : result unit :=
+  hm <- hashMap_new u64 n;
+  hm0 <- hashMap_insert u64 n hm 0%usize 42%u64;
+  hm1 <- hashMap_insert u64 n hm0 128%usize 18%u64;
+  hm2 <- hashMap_insert u64 n hm1 1024%usize 138%u64;
+  hm3 <- hashMap_insert u64 n hm2 1056%usize 256%u64;
+  i <- hashMap_get u64 n hm3 128%usize;
   if negb (i s= 18%u64)
   then Fail_ Failure
   else (
-    hm4 <- hash_map_get_mut_back u64 n hm3 1024%usize 56%u64;
-    i0 <- hash_map_get_fwd u64 n hm4 1024%usize;
+    hm4 <- hashMap_get_mut_back u64 n hm3 1024%usize 56%u64;
+    i0 <- hashMap_get u64 n hm4 1024%usize;
     if negb (i0 s= 56%u64)
     then Fail_ Failure
     else (
-      x <- hash_map_remove_fwd u64 n hm4 1024%usize;
+      x <- hashMap_remove u64 n hm4 1024%usize;
       match x with
       | None => Fail_ Failure
       | Some x0 =>
         if negb (x0 s= 56%u64)
         then Fail_ Failure
         else (
-          hm5 <- hash_map_remove_back u64 n hm4 1024%usize;
-          i1 <- hash_map_get_fwd u64 n hm5 0%usize;
+          hm5 <- hashMap_remove_back u64 n hm4 1024%usize;
+          i1 <- hashMap_get u64 n hm5 0%usize;
           if negb (i1 s= 42%u64)
           then Fail_ Failure
           else (
-            i2 <- hash_map_get_fwd u64 n hm5 128%usize;
+            i2 <- hashMap_get u64 n hm5 128%usize;
             if negb (i2 s= 18%u64)
             then Fail_ Failure
             else (
-              i3 <- hash_map_get_fwd u64 n hm5 1056%usize;
+              i3 <- hashMap_get u64 n hm5 1056%usize;
               if negb (i3 s= 256%u64) then Fail_ Failure else Return tt)))
       end))
 .

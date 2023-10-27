@@ -499,7 +499,7 @@ Qed.
 Axiom mk_array : forall (T : Type) (n : usize) (l : list T), array T n.
 
 (* For initialization *)
-Axiom array_repeat : forall {T : Type} (n : usize) (x : T), array T n.
+Axiom array_repeat : forall (T : Type) (n : usize) (x : T), array T n.
 
 Axiom array_index_usize : forall (T : Type) (n : usize) (x : array T n) (i : usize), result T.
 Axiom array_update_usize : forall (T : Type) (n : usize) (x : array T n) (i : usize) (nx : T), result (array T n).
