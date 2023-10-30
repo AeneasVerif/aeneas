@@ -3092,21 +3092,19 @@ let translate_fun_signatures (decls_ctx : C.decls_ctx)
 let translate_trait_decl (type_infos : TA.type_infos)
     (trait_decl : A.trait_decl) : trait_decl =
   let {
-    A.def_id;
+    def_id;
     name;
     generics;
     preds;
-    all_trait_clauses;
     consts;
     types;
     required_methods;
     provided_methods;
-  } =
+  } : A.trait_decl =
     trait_decl
   in
   let generics = translate_generic_params generics in
   let preds = translate_predicates preds in
-  let all_trait_clauses = List.map translate_trait_clause all_trait_clauses in
   let consts =
     List.map
       (fun (name, (ty, id)) -> (name, (translate_fwd_ty type_infos ty, id)))
@@ -3125,7 +3123,6 @@ let translate_trait_decl (type_infos : TA.type_infos)
     name;
     generics;
     preds;
-    all_trait_clauses;
     consts;
     types;
     required_methods;
