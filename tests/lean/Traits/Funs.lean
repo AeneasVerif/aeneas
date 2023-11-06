@@ -31,8 +31,8 @@ def test_bool_trait_bool (x : Bool) : Result Bool :=
 /- [traits::Option::{1}::get_bool]: forward function -/
 def Option.get_bool (T : Type) (self : Option T) : Result Bool :=
   match self with
-  | Option.none => Result.ret false
-  | Option.some t => Result.ret true
+  | none => Result.ret false
+  | some t => Result.ret true
 
 /- Trait implementation: [traits::Option::{1}] -/
 def Option.BoolTraitInst (T : Type) : BoolTrait (Option T) := {
@@ -105,7 +105,7 @@ def h2 (T : Type) (inst : ToU64 T) (x : Wrapper T) : Result U64 :=
 
 /- [traits::u64::{5}::to_type]: forward function -/
 def u64.to_type (self : U64) : Result Bool :=
-  Result.ret (self > (U64.ofInt 0))
+  Result.ret (self > 0#u64)
 
 /- Trait implementation: [traits::u64::{5}] -/
 def u64.ToTypeInst : ToType U64 Bool := {
@@ -129,7 +129,7 @@ def h4
 /- [traits::TestType::{6}::test::TestType1::{0}::test]: forward function -/
 def TestType.test.TestType1.test
   (self : TestType.test.TestType1) : Result Bool :=
-  Result.ret (self._0 > (U64.ofInt 1))
+  Result.ret (self._0 > 1#u64)
 
 /- Trait implementation: [traits::TestType::{6}::test::TestType1::{0}] -/
 def TestType.test.TestType1.TestTypetestTestTraitInst : TestType.test.TestTrait
@@ -142,8 +142,8 @@ def TestType.test
   (T : Type) (inst : ToU64 T) (self : TestType T) (x : T) : Result Bool :=
   do
     let x0 ← inst.to_u64 x
-    if x0 > (U64.ofInt 0)
-    then TestType.test.TestType1.test { _0 := (U64.ofInt 0) }
+    if x0 > 0#u64
+    then TestType.test.TestType1.test { _0 := 0#u64 }
     else Result.ret false
 
 /- [traits::BoolWrapper::{7}::to_type]: forward function -/
@@ -158,21 +158,21 @@ def BoolWrapper.ToTypeInst (T : Type) (inst : ToType Bool T) : ToType
 }
 
 /- [traits::WithConstTy::LEN2] -/
-def with_const_ty_len2_body : Result Usize := Result.ret (Usize.ofInt 32)
+def with_const_ty_len2_body : Result Usize := Result.ret 32#usize
 def with_const_ty_len2_c : Usize :=
   eval_global with_const_ty_len2_body (by simp)
 
 /- [traits::Bool::{8}::LEN1] -/
-def bool_len1_body : Result Usize := Result.ret (Usize.ofInt 12)
+def bool_len1_body : Result Usize := Result.ret 12#usize
 def bool_len1_c : Usize := eval_global bool_len1_body (by simp)
 
 /- [traits::Bool::{8}::f]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
-def Bool.f (i : U64) (a : Array U8 (Usize.ofInt 32)) : Result U64 :=
+def Bool.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
   Result.ret i
 
 /- Trait implementation: [traits::Bool::{8}] -/
-def Bool.WithConstTyInst : WithConstTy Bool (Usize.ofInt 32) := {
+def Bool.WithConstTyInst : WithConstTy Bool 32#usize := {
   LEN1 := bool_len1_c
   LEN2 := with_const_ty_len2_c
   V := U8
@@ -207,9 +207,7 @@ def test_where1 (T : Type) (_x : T) : Result Unit :=
 
 /- [traits::test_where2]: forward function -/
 def test_where2
-  (T : Type) (inst : WithConstTy T (Usize.ofInt 32)) (_x : U32) :
-  Result Unit
-  :=
+  (T : Type) (inst : WithConstTy T 32#usize) (_x : U32) : Result Unit :=
   Result.ret ()
 
 /- [traits::test_child_trait1]: forward function -/
@@ -228,5 +226,16 @@ def order1
   Result Unit
   :=
   Result.ret ()
+
+/- [traits::map_option]: forward function -/
+def map_option
+  (T F : Type) (inst : core.ops.function.Fn F T) (x : Option T) (f0 : F) :
+  Result (Option T)
+  :=
+  match x with
+  | none => Result.ret none
+  | some x0 => do
+                 let t ← inst.call f0 x0
+                 Result.ret (some t)
 
 end traits

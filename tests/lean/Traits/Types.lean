@@ -27,7 +27,7 @@ structure OfType (Self : Type) where
 
 /- Trait declaration: [traits::OfTypeBis] -/
 structure OfTypeBis (Self T : Type) where
-  parent_clause_0 :ToType T Self
+  parent_clause_0 : ToType T Self
   of_type : T → Result Self
 
 /- [traits::TestType] -/
@@ -69,8 +69,8 @@ structure ParentTrait1 (Self : Type) where
 
 /- Trait declaration: [traits::ChildTrait] -/
 structure ChildTrait (Self : Type) where
-  parent_clause_0 :ParentTrait0 Self
-  parent_clause_1 :ParentTrait1 Self
+  parent_clause_0 : ParentTrait0 Self
+  parent_clause_1 : ParentTrait1 Self
 
 /- Trait declaration: [traits::Iterator] -/
 structure Iterator (Self : Type) where
@@ -82,5 +82,45 @@ structure IntoIterator (Self : Type) where
   IntoIter : Type
   IntoIter_clause_0 : Iterator IntoIter
   into_iter : Self → Result IntoIter
+
+/- Trait declaration: [traits::FromResidual] -/
+structure FromResidual (Self T : Type) where
+
+/- Trait declaration: [traits::Try] -/
+structure Try (Self : Type) where
+  parent_clause_0 : FromResidual Self Residual
+  Residual : Type
+
+/- Trait declaration: [traits::CFnOnce] -/
+structure CFnOnce (Self Args : Type) where
+  Output : Type
+  call_once : Self → Args → Result Output
+
+/- Trait declaration: [traits::CFnMut] -/
+structure CFnMut (Self Args : Type) where
+  parent_clause_0 : CFnOnce Self Args
+  call_mut : Self → Args → Result parent_clause_0.Output
+  call_mut_back : Self → Args → parent_clause_0.Output → Result Self
+
+/- Trait declaration: [traits::CFn] -/
+structure CFn (Self Args : Type) where
+  parent_clause_0 : CFnMut Self Args
+  call_mut : Self → Args → Result parent_clause_0.parent_clause_0.Output
+
+/- Trait declaration: [core::ops::function::FnOnce] -/
+structure core.ops.function.FnOnce (Self Args : Type) where
+  Output : Type
+  call_once : Self → Args → Result Output
+
+/- Trait declaration: [core::ops::function::FnMut] -/
+structure core.ops.function.FnMut (Self Args : Type) where
+  parent_clause_0 : core.ops.function.FnOnce Self Args
+  call_mut : Self → Args → Result parent_clause_0.Output
+  call_mut_back : Self → Args → parent_clause_0.Output → Result Self
+
+/- Trait declaration: [core::ops::function::Fn] -/
+structure core.ops.function.Fn (Self Args : Type) where
+  parent_clause_0 : core.ops.function.FnMut Self Args
+  call : Self → Args → Result parent_clause_0.parent_clause_0.Output
 
 end traits
