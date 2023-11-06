@@ -700,7 +700,9 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
        with the trait decl name *)
     let trait_decl =
       let name = trait_decl.name in
-      get_type_name_no_suffix name ^ "Inst"
+      let name = get_type_name_no_suffix name ^ "Inst" in
+      (* Remove the occurrences of '.' *)
+      String.concat "" (String.split_on_char '.' name)
     in
     flatten_name (get_type_name trait_impl.name @ [ trait_decl ])
   in
