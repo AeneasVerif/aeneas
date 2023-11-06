@@ -1242,29 +1242,24 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
   | TraitType (trait_ref, generics, type_name) -> (
       if !parameterize_trait_types then raise (Failure "Unimplemented")
       else
-        (* There may be a special treatment depending on the instance id *)
+        let type_name =
+          ctx_get_trait_type trait_ref.trait_decl_ref.trait_decl_id type_name
+            ctx
+        in
+        (* There may be a special treatment depending on the instance id.
+           See the comments for {!extract_trait_instance_id_with_dot}.
+           TODO: there should be a cleaner way to do. The annoying thing
+           here is that if we project directly over the self clause, then
+           we have to be careful (we may not have to print the "Self.").
+           Otherwise, we can directly call {!extract_trait_ref}.
+        *)
         match trait_ref.trait_id with
         | Self ->
-            (* There are two situations:
-               - we are extracting a declared item (typically a function signature)
-                 for a trait declaration. We directly refer to the item (we extract
-                 trait declarations as structures, so we can refer to their fields)
-               - we are extracting a provided method for a trait declaration. We
-                 refer to the item in the self trait clause (see {!SelfTraitClauseId}).
-
-               Remark: we can't get there for trait *implementations* because then the
-               types should have been normalized.
-            *)
-            let trait_decl_id = Option.get ctx.trait_decl_id in
-            let item_name = ctx_get_trait_type trait_decl_id type_name ctx in
             assert (generics = empty_generic_args);
-            if ctx.is_provided_method then
-              (* Provided method: use the trait self clause *)
-              let self_clause = ctx_get_trait_self_clause ctx in
-              F.pp_print_string fmt (self_clause ^ "." ^ item_name)
-            else
-              (* Declaration: directly refer to the item *)
-              F.pp_print_string fmt item_name
+            assert (trait_ref.generics = empty_generic_args);
+            extract_trait_instance_id_with_dot ctx fmt no_params_tys false
+              trait_ref.trait_id;
+            F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
             assert (!backend <> HOL4);
@@ -1272,12 +1267,8 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
             if use_brackets then F.pp_print_string fmt "(";
             extract_trait_ref ctx fmt no_params_tys false trait_ref;
             extract_generic_args ctx fmt no_params_tys generics;
-            let name =
-              ctx_get_trait_type trait_ref.trait_decl_ref.trait_decl_id
-                type_name ctx
-            in
             if use_brackets then F.pp_print_string fmt ")";
-            F.pp_print_string fmt ("." ^ name))
+            F.pp_print_string fmt ("." ^ type_name))
 
 and extract_trait_ref (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_ref) : unit =
@@ -1338,12 +1329,48 @@ and extract_generic_args (ctx : extraction_ctx) (fmt : F.formatter)
       (extract_trait_ref ctx fmt no_params_tys true)
       trait_refs)
 
+(** We sometimes need to ignore references to `Self` when generating the
+    code, espcially when we project associated items. For this reason we
+    have a special function for the cases where we project from an instance
+    id (e.g., `<Self as Foo>::foo` - note that in the extracted code, the
+    projections are often written with a dot '.').
+ *)
+and extract_trait_instance_id_with_dot (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
+    (id : trait_instance_id) : unit =
+  match id with
+  | Self ->
+      (* There are two situations:
+         - we are extracting a declared item and need to refer to another
+           item (for instance, we are extracting a method signature and
+           need to refer to an associated type).
+           We directly refer to the other item (we extract trait declarations
+           as structures, so we can refer to their fields)
+         - we are extracting a provided method for a trait declaration. We
+           refer to the item in the self trait clause (see {!SelfTraitClauseId}).
+
+         Remark: we can't get there for trait *implementations* because then the
+         types should have been normalized.
+      *)
+      if ctx.is_provided_method then
+        (* Provided method: use the trait self clause *)
+        let self_clause = ctx_get_trait_self_clause ctx in
+        F.pp_print_string fmt (self_clause ^ ".")
+      else
+        (* Declaration: nothing to print, we will directly refer to
+           the item. *)
+        ()
+  | _ ->
+      (* Other cases *)
+      extract_trait_instance_id ctx fmt no_params_tys inside id;
+      F.pp_print_string fmt "."
+
 and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
     : unit =
   match id with
   | Self ->
-      (* This has specific treatment depending on the item we're extracting
+      (* This has a specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
       if !Config.extract_fail_hard then
         raise (Failure "Unexpected occurrence of `Self`")
@@ -1357,13 +1384,13 @@ and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
   | ParentClause (inst_id, decl_id, clause_id) ->
       (* Use the trait decl id to lookup the name *)
       let name = ctx_get_trait_parent_clause decl_id clause_id ctx in
-      extract_trait_instance_id ctx fmt no_params_tys true inst_id;
-      F.pp_print_string fmt ("." ^ name)
+      extract_trait_instance_id_with_dot ctx fmt no_params_tys true inst_id;
+      F.pp_print_string fmt name
   | ItemClause (inst_id, decl_id, item_name, clause_id) ->
       (* Use the trait decl id to lookup the name *)
       let name = ctx_get_trait_item_clause decl_id item_name clause_id ctx in
-      extract_trait_instance_id ctx fmt no_params_tys true inst_id;
-      F.pp_print_string fmt ("." ^ name)
+      extract_trait_instance_id_with_dot ctx fmt no_params_tys true inst_id;
+      F.pp_print_string fmt name
   | TraitRef trait_ref ->
       extract_trait_ref ctx fmt no_params_tys inside trait_ref
   | UnknownTrait _ ->
