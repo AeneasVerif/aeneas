@@ -1239,42 +1239,45 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       extract_rec false ret_ty;
       if inside then F.pp_print_string fmt ")"
-  | TraitType (trait_ref, generics, type_name) ->
+  | TraitType (trait_ref, generics, type_name) -> (
       if !parameterize_trait_types then raise (Failure "Unimplemented")
-      else if trait_ref.trait_id <> Self then (
-        (* HOL4 doesn't have 1st class types *)
-        assert (!backend <> HOL4);
-        let use_brackets = generics <> empty_generic_args in
-        if use_brackets then F.pp_print_string fmt "(";
-        extract_trait_ref ctx fmt no_params_tys false trait_ref;
-        extract_generic_args ctx fmt no_params_tys generics;
-        let name =
-          ctx_get_trait_type trait_ref.trait_decl_ref.trait_decl_id type_name
-            ctx
-        in
-        if use_brackets then F.pp_print_string fmt ")";
-        F.pp_print_string fmt ("." ^ name))
       else
-        (* There are two situations:
-           - we are extracting a declared item (typically a function signature)
-             for a trait declaration. We directly refer to the item (we extract
-             trait declarations as structures, so we can refer to their fields)
-           - we are extracting a provided method for a trait declaration. We
-             refer to the item in the self trait clause (see {!SelfTraitClauseId}).
+        (* There may be a special treatment depending on the instance id *)
+        match trait_ref.trait_id with
+        | Self ->
+            (* There are two situations:
+               - we are extracting a declared item (typically a function signature)
+                 for a trait declaration. We directly refer to the item (we extract
+                 trait declarations as structures, so we can refer to their fields)
+               - we are extracting a provided method for a trait declaration. We
+                 refer to the item in the self trait clause (see {!SelfTraitClauseId}).
 
-           Remark: we can't get there for trait *implementations* because then the
-           types should have been normalized.
-        *)
-        let trait_decl_id = Option.get ctx.trait_decl_id in
-        let item_name = ctx_get_trait_type trait_decl_id type_name ctx in
-        assert (generics = empty_generic_args);
-        if ctx.is_provided_method then
-          (* Provided method: use the trait self clause *)
-          let self_clause = ctx_get_trait_self_clause ctx in
-          F.pp_print_string fmt (self_clause ^ "." ^ item_name)
-        else
-          (* Declaration: directly refer to the item *)
-          F.pp_print_string fmt item_name
+               Remark: we can't get there for trait *implementations* because then the
+               types should have been normalized.
+            *)
+            let trait_decl_id = Option.get ctx.trait_decl_id in
+            let item_name = ctx_get_trait_type trait_decl_id type_name ctx in
+            assert (generics = empty_generic_args);
+            if ctx.is_provided_method then
+              (* Provided method: use the trait self clause *)
+              let self_clause = ctx_get_trait_self_clause ctx in
+              F.pp_print_string fmt (self_clause ^ "." ^ item_name)
+            else
+              (* Declaration: directly refer to the item *)
+              F.pp_print_string fmt item_name
+        | _ ->
+            (* HOL4 doesn't have 1st class types *)
+            assert (!backend <> HOL4);
+            let use_brackets = generics <> empty_generic_args in
+            if use_brackets then F.pp_print_string fmt "(";
+            extract_trait_ref ctx fmt no_params_tys false trait_ref;
+            extract_generic_args ctx fmt no_params_tys generics;
+            let name =
+              ctx_get_trait_type trait_ref.trait_decl_ref.trait_decl_id
+                type_name ctx
+            in
+            if use_brackets then F.pp_print_string fmt ")";
+            F.pp_print_string fmt ("." ^ name))
 
 and extract_trait_ref (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_ref) : unit =
@@ -1342,7 +1345,9 @@ and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
   | Self ->
       (* This has specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
-      raise (Failure "Unexpected")
+      if !Config.extract_fail_hard then
+        raise (Failure "Unexpected occurrence of `Self`")
+      else F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
   | TraitImpl id ->
       let name = ctx_get_trait_impl id ctx in
       F.pp_print_string fmt name

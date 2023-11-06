@@ -3096,6 +3096,7 @@ let translate_trait_decl (type_infos : TA.type_infos)
     name;
     generics;
     preds;
+    parent_clauses;
     consts;
     types;
     required_methods;
@@ -3105,6 +3106,7 @@ let translate_trait_decl (type_infos : TA.type_infos)
   in
   let generics = translate_generic_params generics in
   let preds = translate_predicates preds in
+  let parent_clauses = List.map translate_trait_clause parent_clauses in
   let consts =
     List.map
       (fun (name, (ty, id)) -> (name, (translate_fwd_ty type_infos ty, id)))
@@ -3123,6 +3125,7 @@ let translate_trait_decl (type_infos : TA.type_infos)
     name;
     generics;
     preds;
+    parent_clauses;
     consts;
     types;
     required_methods;

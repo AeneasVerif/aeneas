@@ -1808,7 +1808,6 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
     extraction_ctx =
-  let generics = trait_decl.generics in
   (* Compute the clause names *)
   let clause_names =
     match builtin_info with
@@ -1822,11 +1821,11 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
               else ctx.fmt.trait_decl_name trait_decl ^ name
             in
             (c.clause_id, name))
-          generics.trait_clauses
+          trait_decl.parent_clauses
     | Some info ->
         List.map
           (fun (c, name) -> (c.clause_id, name))
-          (List.combine generics.trait_clauses info.parent_clauses)
+          (List.combine trait_decl.parent_clauses info.parent_clauses)
   in
   (* Register the names *)
   List.fold_left
@@ -2113,12 +2112,15 @@ let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
   extract_trait_item ctx fmt item_name assign ty
 
 (** Small helper - TODO: move *)
-let generic_params_drop_prefix (g1 : generic_params) (g2 : generic_params) :
-    generic_params =
+let generic_params_drop_prefix ~(drop_trait_clauses : bool)
+    (g1 : generic_params) (g2 : generic_params) : generic_params =
   let open Collections.List in
   let types = drop (length g1.types) g2.types in
   let const_generics = drop (length g1.const_generics) g2.const_generics in
-  let trait_clauses = drop (length g1.trait_clauses) g2.trait_clauses in
+  let trait_clauses =
+    if drop_trait_clauses then drop (length g1.trait_clauses) g2.trait_clauses
+    else g2.trait_clauses
+  in
   { types; const_generics; trait_clauses }
 
 (** Small helper.
@@ -2139,7 +2141,9 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
       (* We need to add the generics specific to the method, by removing those
          which actually apply to the trait decl *)
       let generics =
-        generic_params_drop_prefix decl.generics f.signature.generics
+        let drop_trait_clauses = false in
+        generic_params_drop_prefix ~drop_trait_clauses decl.generics
+          f.signature.generics
       in
       let ctx, type_params, cg_params, trait_clauses =
         ctx_add_generic_params generics ctx
@@ -2189,8 +2193,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
   F.pp_print_string fmt decl_name;
   (* Print the generics *)
-  (* We ignore the trait clauses, which we extract as *fields* *)
-  let generics = { decl.generics with trait_clauses = [] } in
+  let generics = decl.generics in
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
@@ -2198,17 +2201,6 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   in
   extract_generic_params ctx fmt TypeDeclId.Set.empty generics type_params
     cg_params trait_clauses;
-
-  (* Add the parent clauses as local clauses, so that we can refer to them *)
-  let ctx =
-    List.fold_left
-      (fun ctx clause ->
-        let item_name =
-          ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
-        in
-        ctx_add (LocalTraitClauseId clause.clause_id) item_name ctx)
-      ctx decl.generics.trait_clauses
-  in
 
   F.pp_print_space fmt ();
   (match !backend with
@@ -2233,7 +2225,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
       in
       extract_trait_decl_item ctx fmt item_name ty)
-    decl.generics.trait_clauses;
+    decl.parent_clauses;
 
   (* The constants *)
   List.iter
@@ -2330,7 +2322,8 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
          are specific to the method, and call it will all the generics
          (trait impl + method generics) *)
       let f_generics =
-        generic_params_drop_prefix
+        let drop_trait_clauses = true in
+        generic_params_drop_prefix ~drop_trait_clauses
           { impl.generics with types = impl_types }
           f_generics
       in
