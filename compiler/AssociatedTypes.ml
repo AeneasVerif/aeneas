@@ -168,8 +168,8 @@ let rec trait_instance_id_is_local_clause (id : 'r T.trait_instance_id) : bool =
 type 'r norm_ctx = {
   ctx : C.eval_ctx;
   get_ty_repr : 'r C.trait_type_ref -> 'r T.ty option;
-  convert_ety : T.ety -> 'r T.ty;
-  convert_etrait_ref : T.etrait_ref -> 'r T.trait_ref;
+  convert_ety : T.ety -> 'r T.ty; (* TODO: remove? *)
+  convert_etrait_ref : T.etrait_ref -> 'r T.trait_ref; (* TODO: remove? *)
   ty_to_string : 'r T.ty -> string;
   generic_params_to_string : T.generic_params -> string;
   generic_args_to_string : 'r T.generic_args -> string;
@@ -178,9 +178,100 @@ type 'r norm_ctx = {
   pp_r : Format.formatter -> 'r -> unit;
 }
 
-(** Normalize a type by simplyfying the references to trait associated types
+(** Small utility to lookup trait impls, together with a substitution.
+
+    Remark: one reason we have those small helpers is that all functions are
+    parameterized by a type variable 'r. The OCaml type inferencer and type
+    checker are however not very good at generating precise error messages in
+    this context: if in the body of the function we have an overly constrained
+    usage of 'r (for instance, the type inferencer deduces 'r should be
+    [T.erased_region]), it will not be able to pinpoint the location which
+    introduced the constraints and we just get a type-checking error for the
+    whole function. The fact that we have mutually recursive functions makes it
+    worse (the type-checker sometimes indicates a well-typed function as not
+    well-typed, because it calls a not well-typed function...).
+    By isolating the places where such errors typically happen in small helpers
+    (i.e., the places where we convert between different types of regions by
+    performing substitutions), we make maintenance a lot easier.
+ *)
+let ctx_lookup_trait_impl :
+      'r.
+      'r norm_ctx ->
+      T.TraitImplId.id ->
+      'r T.generic_args ->
+      A.trait_impl * (T.region_var_id T.region, 'r) Subst.subst =
+ fun ctx impl_id generics ->
+  (* Lookup the implementation *)
+  let trait_impl = C.ctx_lookup_trait_impl ctx.ctx impl_id in
+  (* The substitution *)
+  let tr_self = T.UnknownTrait __FUNCTION__ in
+  let subst =
+    Subst.make_subst_from_generics_no_regions trait_impl.generics generics
+      tr_self
+  in
+  (* Return *)
+  (trait_impl, subst)
+
+let ctx_lookup_trait_impl_ty :
+      'r.
+      'r norm_ctx -> T.TraitImplId.id -> 'r T.generic_args -> string -> 'r T.ty
+    =
+ fun ctx impl_id generics type_name ->
+  (* Lookup the implementation *)
+  let trait_impl, subst = ctx_lookup_trait_impl ctx impl_id generics in
+  (* Lookup the type *)
+  let ty = snd (List.assoc type_name trait_impl.types) in
+  (* Annoying: convert etype to an stype - TODO: how to avoid that? *)
+  let ty : T.sty = TypesUtils.ety_no_regions_to_gr_ty ty in
+  (* Substitute *)
+  Subst.ty_substitute subst ty
+
+let ctx_lookup_trait_impl_parent_clause :
+      'r.
+      'r norm_ctx ->
+      T.TraitImplId.id ->
+      'r T.generic_args ->
+      T.TraitClauseId.id ->
+      'r T.trait_ref =
+ fun ctx impl_id generics clause_id ->
+  (* Lookup the implementation *)
+  let trait_impl, subst = ctx_lookup_trait_impl ctx impl_id generics in
+  (* Lookup the clause *)
+  let clause = T.TraitClauseId.nth trait_impl.parent_trait_refs clause_id in
+  (* Sanity check: the clause necessarily refers to an impl *)
+  let _ = TypesUtils.trait_instance_id_as_trait_impl clause.trait_id in
+  (* Substitute *)
+  Subst.trait_ref_substitute subst clause
+
+let ctx_lookup_trait_impl_item_clause :
+      'r.
+      'r norm_ctx ->
+      T.TraitImplId.id ->
+      'r T.generic_args ->
+      string ->
+      T.TraitClauseId.id ->
+      'r T.trait_ref =
+ fun ctx impl_id generics item_name clause_id ->
+  (* Lookup the implementation *)
+  let trait_impl, subst = ctx_lookup_trait_impl ctx impl_id generics in
+  (* Lookup the item then its clause *)
+  let item = List.assoc item_name trait_impl.types in
+  let clause = T.TraitClauseId.nth (fst item) clause_id in
+  (* Sanity check: the clause necessarily refers to an impl *)
+  let _ = TypesUtils.trait_instance_id_as_trait_impl clause.trait_id in
+  (* Annoying: convert etype to an stype - TODO: how to avoid that? *)
+  let clause : T.strait_ref =
+    TypesUtils.etrait_ref_no_regions_to_gr_trait_ref clause
+  in
+  (* Substitute *)
+  Subst.trait_ref_substitute subst clause
+
+(** Normalize a type by simplifying the references to trait associated types
     and choosing a representative when there are equalities between types
-    enforced by local clauses (i.e., `where Trait1::T = Trait2::U`. *)
+    enforced by local clauses (i.e., `where Trait1::T = Trait2::U`.
+
+    See the comments for {!ctx_normalize_trait_instance_id}.
+  *)
 let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
  fun ctx ty ->
   log#ldebug (lazy ("ctx_normalize_ty: " ^ ctx.ty_to_string ty));
@@ -221,21 +312,10 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
               (lazy
                 ("ctx_normalize_ty: trait type: trait ref: "
                ^ ctx.ty_to_string ty));
-            (* Lookup the implementation *)
-            let trait_impl = C.ctx_lookup_trait_impl ctx.ctx impl_id in
             (* Lookup the type *)
-            let ty = snd (List.assoc type_name trait_impl.types) in
-            (* Annoying: convert etype to an stype - TODO: how to avoid that? *)
-            let ty : T.sty = TypesUtils.ety_no_regions_to_gr_ty ty in
-            (* Substitute *)
-            let tr_self = T.UnknownTrait __FUNCTION__ in
-            let subst =
-              Subst.make_subst_from_generics_no_regions trait_impl.generics
-                trait_ref.generics tr_self
+            let ty =
+              ctx_lookup_trait_impl_ty ctx impl_id trait_ref.generics type_name
             in
-            let ty = Subst.ty_substitute subst ty in
-            (* Reconvert *)
-            let ty : 'r T.ty = ctx.convert_ety (Subst.erase_regions ty) in
             (* Normalize *)
             ctx_normalize_ty ctx ty
         | T.TraitImpl impl_id ->
@@ -252,21 +332,10 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
                the Rustc AST.
                TODO: factor out with the branch above.
             *)
-            (* Lookup the implementation *)
-            let trait_impl = C.ctx_lookup_trait_impl ctx.ctx impl_id in
             (* Lookup the type *)
-            let ty = snd (List.assoc type_name trait_impl.types) in
-            (* Annoying: convert etype to an stype - TODO: how to avoid that? *)
-            let ty : T.sty = TypesUtils.ety_no_regions_to_gr_ty ty in
-            (* Substitute *)
-            let tr_self = T.UnknownTrait __FUNCTION__ in
-            let subst =
-              Subst.make_subst_from_generics_no_regions trait_impl.generics
-                trait_ref.generics tr_self
+            let ty =
+              ctx_lookup_trait_impl_ty ctx impl_id trait_ref.generics type_name
             in
-            let ty = Subst.ty_substitute subst ty in
-            (* Reconvert *)
-            let ty : 'r T.ty = ctx.convert_ety (Subst.erase_regions ty) in
             (* Normalize *)
             ctx_normalize_ty ctx ty
         | _ ->
@@ -286,7 +355,8 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
       match ctx.get_ty_repr tr with None -> ty | Some ty -> ty)
 
 (** This returns the normalized trait instance id together with an optional
-    reference to a trait **implementation**.
+    reference to a trait **implementation** (the `trait_ref` we return has
+    necessarily for instance id a [TraitImpl]).
 
     We need this in particular to simplify the trait instance ids after we
     performed a substitution.
@@ -305,7 +375,10 @@ let rec ctx_normalize_ty : 'r. 'r norm_ctx -> 'r T.ty -> 'r T.ty =
       fn f<T : Trait>(...) -> T::S;
 
       ...
-      let x = f<Foo>[TraitImpl](...); // T::S ~~> TraitImpl::S ~~> usize
+      let x = f<Foo>[TraitImpl](...);
+      (* The return type of the call to f is:
+         T::S ~~> TraitImpl::S ~~> usize
+       *)
     ]}
 
     Several remarks:
@@ -359,17 +432,17 @@ and ctx_normalize_trait_instance_id :
                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
                               those are the parent clauses
              ]}
-
-             We can find the parent clauses in the [trait_decl_ref] field, which
-             tells us which specific instantiation of [Trait1] is implemented
-             by [Impl1].
           *)
+          (* Lookup the clause *)
+          let impl_id =
+            TypesUtils.trait_instance_id_as_trait_impl impl.trait_id
+          in
           let clause =
-            T.TraitClauseId.nth impl.trait_decl_ref.decl_generics.trait_refs
+            ctx_lookup_trait_impl_parent_clause ctx impl_id impl.generics
               clause_id
           in
-          (* Sanity check: the clause necessarily refers to an impl *)
-          let _ = TypesUtils.trait_instance_id_as_trait_impl clause.trait_id in
+          (* Normalize the clause *)
+          let clause = ctx_normalize_trait_ref ctx clause in
           (TraitRef clause, Some clause))
   | ItemClause (inst_id, decl_id, item_name, clause_id) -> (
       let inst_id, impl = ctx_normalize_trait_instance_id ctx inst_id in
@@ -391,20 +464,16 @@ and ctx_normalize_trait_instance_id :
                }
              ]}
           *)
-          (* The referenced instance should be an impl *)
+          (* Lookup the impl *)
           let impl_id =
             TypesUtils.trait_instance_id_as_trait_impl impl.trait_id
           in
-          let trait_impl = C.ctx_lookup_trait_impl ctx.ctx impl_id in
-          (* Lookup the clause *)
-          let item = List.assoc item_name trait_impl.types in
-          let clause = T.TraitClauseId.nth (fst item) clause_id in
-          (* Sanity check: the clause necessarily refers to an impl *)
-          let _ = TypesUtils.trait_instance_id_as_trait_impl clause.trait_id in
-          (* We need to convert the clause type -
-             TODO: we have too many problems with those conversions, we should
-             merge the types. *)
-          let clause = ctx.convert_etrait_ref clause in
+          let clause =
+            ctx_lookup_trait_impl_item_clause ctx impl_id impl.generics
+              item_name clause_id
+          in
+          (* Normalize the clause *)
+          let clause = ctx_normalize_trait_ref ctx clause in
           (TraitRef clause, Some clause))
   | TraitRef { T.trait_id = T.TraitImpl trait_id; generics; trait_decl_ref } ->
       (* We can't simplify the id *yet* : we will simplify it when projecting.

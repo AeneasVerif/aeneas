@@ -71,6 +71,9 @@ let erase_regions_subst : ('r, T.erased_region) subst =
 (** Convert an {!T.rty} to an {!T.ety} by erasing the region variables *)
 let erase_regions (ty : 'r T.ty) : T.ety = ty_substitute erase_regions_subst ty
 
+let trait_ref_erase_regions (tr : 'r T.trait_ref) : T.etrait_ref =
+  trait_ref_substitute erase_regions_subst tr
+
 (** Generate fresh regions for region variables.
 
     Return the list of new regions and appropriate substitutions from the
