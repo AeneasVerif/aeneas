@@ -72,6 +72,10 @@ structure ChildTrait (Self : Type) where
   parent_clause_0 : ParentTrait0 Self
   parent_clause_1 : ParentTrait1 Self
 
+/- Trait declaration: [traits::ChildTrait1] -/
+structure ChildTrait1 (Self : Type) where
+  parent_clause_0 : ParentTrait1 Self
+
 /- Trait declaration: [traits::Iterator] -/
 structure Iterator (Self : Type) where
   Item : Type

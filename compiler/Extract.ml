@@ -2416,7 +2416,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
    * Extract the items
    *)
 
-  (* The parent clauses - we retrieve those from the impl_ref *)
+  (* The parent clauses *)
   let trait_decl_id = impl.impl_trait.trait_decl_id in
   TraitClauseId.iteri
     (fun clause_id trait_ref ->
@@ -2426,7 +2426,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
       in
       extract_trait_impl_item ctx fmt item_name ty)
-    impl.impl_trait.decl_generics.trait_refs;
+    impl.parent_trait_refs;
 
   (* The constants *)
   List.iter

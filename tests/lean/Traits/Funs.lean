@@ -227,6 +227,15 @@ def order1
   :=
   Result.ret ()
 
+/- Trait implementation: [traits::usize::{9}] -/
+def usize.ParentTrait1Inst : ParentTrait1 Usize := {
+}
+
+/- Trait implementation: [traits::usize::{10}] -/
+def usize.ChildTrait1Inst : ChildTrait1 Usize := {
+  parent_clause_0 := usize.ParentTrait1Inst
+}
+
 /- [traits::map_option]: forward function -/
 def map_option
   (T F : Type) (inst : core.ops.function.Fn F T) (x : Option T) (f0 : F) :
