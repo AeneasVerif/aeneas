@@ -60,6 +60,18 @@ def div_test1 (x : U32) : Result U32 :=
 def rem_test (x : U32) (y : U32) : Result U32 :=
   x % y
 
+/- [no_nested_borrows::mul_test]: forward function -/
+def mul_test (x : U32) (y : U32) : Result U32 :=
+  x * y
+
+/- [no_nested_borrows::CONST0] -/
+def const0_body : Result Usize := 1#usize + 1#usize
+def const0_c : Usize := eval_global const0_body (by simp)
+
+/- [no_nested_borrows::CONST1] -/
+def const1_body : Result Usize := 2#usize * 2#usize
+def const1_c : Usize := eval_global const1_body (by simp)
+
 /- [no_nested_borrows::cast_test]: forward function -/
 def cast_test (x : U32) : Result I32 :=
   Scalar.cast .I32 x

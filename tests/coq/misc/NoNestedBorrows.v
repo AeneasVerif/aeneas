@@ -71,6 +71,18 @@ Definition div_test1 (x : u32) : result u32 :=
 Definition rem_test (x : u32) (y : u32) : result u32 :=
   u32_rem x y.
 
+(** [no_nested_borrows::mul_test]: forward function *)
+Definition mul_test (x : u32) (y : u32) : result u32 :=
+  u32_mul x y.
+
+(** [no_nested_borrows::CONST0] *)
+Definition const0_body : result usize := usize_add 1%usize 1%usize.
+Definition const0_c : usize := const0_body%global.
+
+(** [no_nested_borrows::CONST1] *)
+Definition const1_body : result usize := usize_mul 2%usize 2%usize.
+Definition const1_c : usize := const1_body%global.
+
 (** [no_nested_borrows::cast_test]: forward function *)
 Definition cast_test (x : u32) : result i32 :=
   scalar_cast U32 I32 x.

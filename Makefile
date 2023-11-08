@@ -143,6 +143,10 @@ thol4-traits: OPTIONS +=
 thol4-array:
 	echo "Ignoring the array test for HOL4"
 
+# TODO: activate the traits for all the backends
+thol4-traits:
+	echo "Ignoring the traits test for HOL4"
+
 trans-loops: OPTIONS += -no-state
 trans-loops: SUBDIR := misc
 tfstar-loops: OPTIONS += -decreases-clauses -template-clauses

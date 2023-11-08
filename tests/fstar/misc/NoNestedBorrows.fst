@@ -54,6 +54,18 @@ let div_test1 (x : u32) : result u32 =
 let rem_test (x : u32) (y : u32) : result u32 =
   u32_rem x y
 
+(** [no_nested_borrows::mul_test]: forward function *)
+let mul_test (x : u32) (y : u32) : result u32 =
+  u32_mul x y
+
+(** [no_nested_borrows::CONST0] *)
+let const0_body : result usize = usize_add 1 1
+let const0_c : usize = eval_global const0_body
+
+(** [no_nested_borrows::CONST1] *)
+let const1_body : result usize = usize_mul 2 2
+let const1_c : usize = eval_global const1_body
+
 (** [no_nested_borrows::cast_test]: forward function *)
 let cast_test (x : u32) : result i32 =
   scalar_cast U32 I32 x
