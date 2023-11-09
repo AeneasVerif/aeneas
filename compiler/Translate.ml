@@ -751,14 +751,17 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
 
 (** Export a trait declaration. *)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
-    (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) : unit =
+    (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
+    (extract_extra_info : bool) : unit =
   let trait_decl = T.TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls in
   (* Check if the trait declaration is builtin, in which case we ignore it *)
   let open ExtractBuiltin in
   let sname = name_to_simple_name trait_decl.name in
-  if SimpleNameMap.find_opt sname (builtin_trait_decls_map ()) = None then
+  if SimpleNameMap.find_opt sname (builtin_trait_decls_map ()) = None then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
-    Extract.extract_trait_decl ctx fmt trait_decl
+    if extract_decl then Extract.extract_trait_decl ctx fmt trait_decl;
+    if extract_extra_info then
+      Extract.extract_trait_decl_extra_info ctx fmt trait_decl)
   else ()
 
 (** Export a trait implementation. *)
@@ -796,7 +799,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_functions_group = export_functions_group fmt config ctx in
   let export_global = export_global fmt config ctx in
   let export_types_group = export_types_group fmt config ctx in
-  let export_trait_decl = export_trait_decl fmt config ctx in
+  let export_trait_decl_group id =
+    export_trait_decl fmt config ctx id true false
+  in
+  let export_trait_decl_group_extra_info id =
+    export_trait_decl fmt config ctx id false true
+  in
   let export_trait_impl = export_trait_impl fmt config ctx in
 
   let export_state_type () : unit =
@@ -833,8 +841,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         export_functions_group pure_funs
     | Global id -> export_global id
     | TraitDecl id ->
-        if config.extract_trait_decls && config.extract_transparent then
-          export_trait_decl id
+        (* TODO: update to extract groups *)
+        if config.extract_trait_decls && config.extract_transparent then (
+          export_trait_decl_group id;
+          export_trait_decl_group_extra_info id)
     | TraitImpl id ->
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl id

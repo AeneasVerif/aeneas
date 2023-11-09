@@ -246,6 +246,7 @@ type formatter = {
        *)
   trait_decl_name : trait_decl -> string;
   trait_impl_name : trait_decl -> trait_impl -> string;
+  trait_decl_constructor : trait_decl -> string;
   trait_parent_clause_name : trait_decl -> trait_clause -> string;
   trait_const_name : trait_decl -> string -> string;
   trait_type_name : trait_decl -> string -> string;
@@ -388,6 +389,7 @@ type id =
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
   | LocalTraitClauseId of TraitClauseId.id
+  | TraitDeclConstructorId of TraitDeclId.id
   | TraitMethodId of TraitDeclId.id * string * T.RegionGroupId.id option
       (** Something peculiar with trait methods: because we have to take into
           account forward/backward functions, we may need to generate fields
@@ -801,6 +803,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TraitImplId id -> "trait_impl_id: " ^ TraitImplId.to_string id
   | LocalTraitClauseId id ->
       "local_trait_clause_id: " ^ TraitClauseId.to_string id
+  | TraitDeclConstructorId id ->
+      "trait_decl_constructor: " ^ trait_decl_id_to_string id
   | TraitParentClauseId (id, clause_id) ->
       "trait_parent_clause_id: " ^ trait_decl_id_to_string id ^ ", clause_id: "
       ^ TraitClauseId.to_string clause_id
@@ -958,6 +962,10 @@ let ctx_get_local_type (id : TypeDeclId.id) (ctx : extraction_ctx) : string =
 
 let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
   ctx_get_type (Assumed id) ctx
+
+let ctx_get_trait_constructor (id : trait_decl_id) (ctx : extraction_ctx) :
+    string =
+  ctx_get (TraitDeclConstructorId id) ctx
 
 let ctx_get_trait_self_clause (ctx : extraction_ctx) : string =
   ctx_get TraitSelfClauseId ctx

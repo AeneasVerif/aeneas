@@ -697,6 +697,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | Coq | HOL4 | Lean -> name
   in
 
+  let trait_decl_constructor (trait_decl : trait_decl) : string =
+    let name = trait_decl_name trait_decl in
+    ExtractBuiltin.mk_struct_constructor name
+  in
+
   let trait_parent_clause_name (trait_decl : trait_decl) (clause : trait_clause)
       : string =
     (* TODO: improve - it would be better to not use indices *)
@@ -937,6 +942,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     decreases_proof_name;
     trait_decl_name;
     trait_impl_name;
+    trait_decl_constructor;
     trait_parent_clause_name;
     trait_const_name;
     trait_type_name;
@@ -1254,6 +1260,9 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
           ctx_get_trait_type trait_ref.trait_decl_ref.trait_decl_id type_name
             ctx
         in
+        let add_brackets (s : string) =
+          if !backend = Coq then "(" ^ s ^ ")" else s
+        in
         (* There may be a special treatment depending on the instance id.
            See the comments for {!extract_trait_instance_id_with_dot}.
            TODO: there should be a cleaner way to do. The annoying thing
@@ -1276,7 +1285,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
             extract_trait_ref ctx fmt no_params_tys false trait_ref;
             extract_generic_args ctx fmt no_params_tys generics;
             if use_brackets then F.pp_print_string fmt ")";
-            F.pp_print_string fmt ("." ^ type_name))
+            F.pp_print_string fmt ("." ^ add_brackets type_name))
 
 and extract_trait_ref (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_ref) : unit =
@@ -1376,6 +1385,7 @@ and extract_trait_instance_id_with_dot (ctx : extraction_ctx)
 and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
     : unit =
+  let add_brackets (s : string) = if !backend = Coq then "(" ^ s ^ ")" else s in
   match id with
   | Self ->
       (* This has a specific treatment depending on the item we're extracting
@@ -1393,12 +1403,12 @@ and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
       (* Use the trait decl id to lookup the name *)
       let name = ctx_get_trait_parent_clause decl_id clause_id ctx in
       extract_trait_instance_id_with_dot ctx fmt no_params_tys true inst_id;
-      F.pp_print_string fmt name
+      F.pp_print_string fmt (add_brackets name)
   | ItemClause (inst_id, decl_id, item_name, clause_id) ->
       (* Use the trait decl id to lookup the name *)
       let name = ctx_get_trait_item_clause decl_id item_name clause_id ctx in
       extract_trait_instance_id_with_dot ctx fmt no_params_tys true inst_id;
-      F.pp_print_string fmt name
+      F.pp_print_string fmt (add_brackets name)
   | TraitRef trait_ref ->
       extract_trait_ref ctx fmt no_params_tys inside trait_ref
   | UnknownTrait _ ->
@@ -2156,49 +2166,59 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_type_decl_gen ctx fmt type_decl_group kind def extract_body
     | HOL4 -> extract_type_decl_hol4_opaque ctx fmt def
 
+(** Generate a [Argument] instruction in Coq to allow omitting implicit
+    arguments for variants, fields, etc..
+
+    For instance, provided we have this definition:
+    {[
+      Inductive result A :=
+      | Return : A -> result A
+      | Fail_ : error -> result A.
+    ]}
+
+    We may want to generate those instructions:
+    {[
+      Arguments Return {_} a.
+      Arguments Fail_ {_}.
+    ]}
+ *)
+let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
+    (cons_name : string) (num_implicit_params : int) : unit =
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Open a box *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  F.pp_print_break fmt 0 0;
+  F.pp_print_string fmt "Arguments";
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt cons_name;
+  (* Print the type/const params and the trait clauses (`{T}`) *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "{";
+  Collections.List.iter_times num_implicit_params (fun () ->
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "_");
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "}.";
+
+  (* Close the box *)
+  F.pp_close_box fmt ()
+
 (** Auxiliary function.
 
-    Generate [Arguments] instructions in Coq.
+    Generate [Arguments] instructions in Coq for type definitions.
  *)
 let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   assert (!backend = Coq);
-  (* Generating the [Arguments] instructions is useful only if there are type parameters *)
-  if decl.generics.types = [] && decl.generics.const_generics = [] then ()
+  (* Generating the [Arguments] instructions is useful only if there are parameters *)
+  let num_params =
+    List.length decl.generics.types
+    + List.length decl.generics.const_generics
+    + List.length decl.generics.trait_clauses
+  in
+  if num_params = 0 then ()
   else
-    (* Add the type params - note that we need those bindings only for the
-     * body translation (they are not top-level) *)
-    let _ctx_body, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params decl.generics ctx
-    in
-    (* Auxiliary function to extract an [Arguments Cons {T} _ _.] instruction *)
-    let extract_arguments_info (cons_name : string) (fields : 'a list) : unit =
-      (* Add a break before *)
-      F.pp_print_break fmt 0 0;
-      (* Open a box *)
-      F.pp_open_hovbox fmt ctx.indent_incr;
-      F.pp_print_break fmt 0 0;
-      F.pp_print_string fmt "Arguments";
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt cons_name;
-      (* Print the type/const params and the trait clauses (`{T}`) *)
-      List.iter
-        (fun (var : string) ->
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt ("{" ^ var ^ "}"))
-        (List.concat [ type_params; cg_params; trait_clauses ]);
-      (* Print the fields (`_`) *)
-      List.iter
-        (fun _ ->
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "_")
-        fields;
-      F.pp_print_string fmt ".";
-
-      (* Close the box *)
-      F.pp_close_box fmt ()
-    in
-
     (* Generate the [Arguments] instruction *)
     match decl.kind with
     | Opaque -> ()
@@ -2206,23 +2226,23 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
         let adt_id = AdtId decl.def_id in
         (* Generate the instruction for the record constructor *)
         let cons_name = ctx_get_struct adt_id ctx in
-        extract_arguments_info cons_name fields;
+        extract_coq_arguments_instruction ctx fmt cons_name num_params;
         (* Generate the instruction for the record projectors, if there are *)
         let is_rec = decl_is_from_rec_group kind in
         if not is_rec then
           FieldId.iteri
             (fun fid _ ->
               let cons_name = ctx_get_field adt_id fid ctx in
-              extract_arguments_info cons_name [])
+              extract_coq_arguments_instruction ctx fmt cons_name num_params)
             fields;
         (* Add breaks to insert new lines between definitions *)
         F.pp_print_break fmt 0 0
     | Enum variants ->
         (* Generate the instructions *)
         VariantId.iteri
-          (fun vid (v : variant) ->
+          (fun vid (_ : variant) ->
             let cons_name = ctx_get_variant (AdtId decl.def_id) vid ctx in
-            extract_arguments_info cons_name v.fields)
+            extract_coq_arguments_instruction ctx fmt cons_name num_params)
           variants;
         (* Add breaks to insert new lines between definitions *)
         F.pp_print_break fmt 0 0

@@ -320,8 +320,11 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
             ctx_get_trait_const trait_ref.trait_decl_ref.trait_decl_id
               const_name ctx
           in
+          let add_brackets (s : string) =
+            if !backend = Coq then "(" ^ s ^ ")" else s
+          in
           if use_brackets then F.pp_print_string fmt ")";
-          F.pp_print_string fmt ("." ^ name))
+          F.pp_print_string fmt ("." ^ add_brackets name))
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)
@@ -430,7 +433,10 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
               ctx_get_trait_method trait_ref.trait_decl_ref.trait_decl_id
                 method_name rg_id ctx
             in
-            F.pp_print_string fmt ("." ^ fun_name))
+            let add_brackets (s : string) =
+              if !backend = Coq then "(" ^ s ^ ")" else s
+            in
+            F.pp_print_string fmt ("." ^ add_brackets fun_name))
           else
             (* Provided method: we see it as a regular function call, and use
                the function name *)
@@ -2021,12 +2027,15 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     SimpleNameMap.find_opt sname (builtin_trait_decls_map ())
   in
   let ctx =
-    let trait_name =
+    let trait_name, trait_constructor =
       match builtin_info with
-      | None -> ctx.fmt.trait_decl_name trait_decl
-      | Some info -> info.extract_name
+      | None ->
+          ( ctx.fmt.trait_decl_name trait_decl,
+            ctx.fmt.trait_decl_constructor trait_decl )
+      | Some info -> (info.extract_name, info.constructor)
     in
-    ctx_add (TraitDeclId trait_decl.def_id) trait_name ctx
+    let ctx = ctx_add (TraitDeclId trait_decl.def_id) trait_name ctx in
+    ctx_add (TraitDeclConstructorId trait_decl.def_id) trait_constructor ctx
   in
   (* Parent clauses *)
   let ctx =
@@ -2108,7 +2117,7 @@ let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
 
 let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
     (item_name : string) (ty : unit -> unit) : unit =
-  let assign = match !Config.backend with Lean -> ":=" | _ -> "=" in
+  let assign = match !Config.backend with Lean | Coq -> ":=" | _ -> "=" in
   extract_trait_item ctx fmt item_name assign ty
 
 (** Small helper - TODO: move *)
@@ -2215,86 +2224,172 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     cg_params trait_clauses;
 
   F.pp_print_space fmt ();
-  (match !backend with
-  | Lean -> F.pp_print_string fmt "where"
-  | FStar -> if not is_empty then F.pp_print_string fmt "= {"
-  | _ -> F.pp_print_string fmt "{");
-  if !backend = FStar && is_empty then F.pp_print_string fmt "= unit";
+  if is_empty && !backend = FStar then (
+    F.pp_print_string fmt "= unit";
+    (* Outer box *)
+    F.pp_close_box fmt ())
+  else if is_empty && !backend = Coq then (
+    (* Coq is not very good at infering constructors *)
+    let cons = ctx_get_trait_constructor decl.def_id ctx in
+    F.pp_print_string fmt (":= " ^ cons ^ "{}.");
+    (* Outer box *)
+    F.pp_close_box fmt ())
+  else (
+    (match !backend with
+    | Lean -> F.pp_print_string fmt "where"
+    | FStar -> F.pp_print_string fmt "= {"
+    | Coq ->
+        let cons = ctx_get_trait_constructor decl.def_id ctx in
+        F.pp_print_string fmt (":= " ^ cons ^ " {")
+    | _ -> F.pp_print_string fmt "{");
 
-  (* Close the box for the name + generics *)
-  F.pp_close_box fmt ();
+    (* Close the box for the name + generics *)
+    F.pp_close_box fmt ();
 
-  (*
-   * Extract the items
-   *)
+    (*
+     * Extract the items
+     *)
 
-  (* The constants *)
-  List.iter
-    (fun (name, (ty, _)) ->
-      let item_name = ctx_get_trait_const decl.def_id name ctx in
-      let ty () =
-        let inside = false in
+    (* The constants *)
+    List.iter
+      (fun (name, (ty, _)) ->
+        let item_name = ctx_get_trait_const decl.def_id name ctx in
+        let ty () =
+          let inside = false in
+          F.pp_print_space fmt ();
+          extract_ty ctx fmt TypeDeclId.Set.empty inside ty
+        in
+        extract_trait_decl_item ctx fmt item_name ty)
+      decl.consts;
+
+    (* The types *)
+    List.iter
+      (fun (name, (clauses, _)) ->
+        (* Extract the type *)
+        let item_name = ctx_get_trait_type decl.def_id name ctx in
+        let ty () =
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt (type_keyword ())
+        in
+        extract_trait_decl_item ctx fmt item_name ty;
+        (* Extract the clauses *)
+        List.iter
+          (fun clause ->
+            let item_name =
+              ctx_get_trait_item_clause decl.def_id name clause.clause_id ctx
+            in
+            let ty () =
+              F.pp_print_space fmt ();
+              extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+            in
+            extract_trait_decl_item ctx fmt item_name ty)
+          clauses)
+      decl.types;
+
+    (* The parent clauses - note that the parent clauses may refer to the types
+       and const generics: for this reason we extract them *after* *)
+    List.iter
+      (fun clause ->
+        let item_name =
+          ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
+        in
+        let ty () =
+          F.pp_print_space fmt ();
+          extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+        in
+        extract_trait_decl_item ctx fmt item_name ty)
+      decl.parent_clauses;
+
+    (* The required methods *)
+    List.iter
+      (fun (name, id) -> extract_trait_decl_method_items ctx fmt decl name id)
+      decl.required_methods;
+
+    (* Close the outer boxes for the definition *)
+    if !Config.backend <> Lean then F.pp_close_box fmt ();
+    (* Close the brackets *)
+    match !Config.backend with
+    | Lean -> ()
+    | Coq ->
         F.pp_print_space fmt ();
-        extract_ty ctx fmt TypeDeclId.Set.empty inside ty
-      in
-      extract_trait_decl_item ctx fmt item_name ty)
-    decl.consts;
-
-  (* The types *)
-  List.iter
-    (fun (name, (clauses, _)) ->
-      (* Extract the type *)
-      let item_name = ctx_get_trait_type decl.def_id name ctx in
-      let ty () =
+        F.pp_print_string fmt "}."
+    | _ ->
         F.pp_print_space fmt ();
-        F.pp_print_string fmt (type_keyword ())
-      in
-      extract_trait_decl_item ctx fmt item_name ty;
-      (* Extract the clauses *)
-      List.iter
-        (fun clause ->
-          let item_name =
-            ctx_get_trait_item_clause decl.def_id name clause.clause_id ctx
-          in
-          let ty () =
-            F.pp_print_space fmt ();
-            extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
-          in
-          extract_trait_decl_item ctx fmt item_name ty)
-        clauses)
-    decl.types;
-
-  (* The parent clauses - note that the parent clauses may refer to the types
-     and const generics: for this reason we extract them *after* *)
-  List.iter
-    (fun clause ->
-      let item_name =
-        ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
-      in
-      let ty () =
-        F.pp_print_space fmt ();
-        extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
-      in
-      extract_trait_decl_item ctx fmt item_name ty)
-    decl.parent_clauses;
-
-  (* The required methods *)
-  List.iter
-    (fun (name, id) -> extract_trait_decl_method_items ctx fmt decl name id)
-    decl.required_methods;
-
-  (* Close the outer boxes for the definition *)
-  if !Config.backend <> Lean then F.pp_close_box fmt ();
-  (* Close the brackets *)
-  (match !Config.backend with
-  | Lean -> ()
-  | _ ->
-      if (not (!backend = FStar)) || not is_empty then (
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "}"));
+        F.pp_print_string fmt "}");
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
+
+(** Generate the [Arguments] instructions for the trait declarationsin Coq, so
+    that we don't have to provide the implicit arguments when projecting the fields. *)
+let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
+    (decl : trait_decl) : unit =
+  (* Generating the [Arguments] instructions is useful only if there are parameters *)
+  let num_params =
+    List.length decl.generics.types
+    + List.length decl.generics.const_generics
+    + List.length decl.generics.trait_clauses
+  in
+  if num_params > 0 then (
+    (* The constructor *)
+    let cons_name = ctx_get_trait_constructor decl.def_id ctx in
+    extract_coq_arguments_instruction ctx fmt cons_name num_params;
+    (* The constants *)
+    List.iter
+      (fun (name, _) ->
+        let item_name = ctx_get_trait_const decl.def_id name ctx in
+        extract_coq_arguments_instruction ctx fmt item_name num_params)
+      decl.consts;
+    (* The types *)
+    List.iter
+      (fun (name, (clauses, _)) ->
+        (* The type *)
+        let item_name = ctx_get_trait_type decl.def_id name ctx in
+        extract_coq_arguments_instruction ctx fmt item_name num_params;
+        (* The type clauses *)
+        List.iter
+          (fun clause ->
+            let item_name =
+              ctx_get_trait_item_clause decl.def_id name clause.clause_id ctx
+            in
+            extract_coq_arguments_instruction ctx fmt item_name num_params)
+          clauses)
+      decl.types;
+    (* The parent clauses *)
+    List.iter
+      (fun clause ->
+        let item_name =
+          ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
+        in
+        extract_coq_arguments_instruction ctx fmt item_name num_params)
+      decl.parent_clauses;
+    (* The required methods *)
+    List.iter
+      (fun (item_name, id) ->
+        (* Lookup the definition *)
+        let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+        (* Extract the items *)
+        let funs =
+          if trans.keep_fwd then trans.fwd :: trans.backs else trans.backs
+        in
+        let extract_for_method (f : fun_and_loops) =
+          let f = f.f in
+          let item_name =
+            ctx_get_trait_method decl.def_id item_name f.back_id ctx
+          in
+          extract_coq_arguments_instruction ctx fmt item_name num_params
+        in
+        List.iter extract_for_method funs)
+      decl.required_methods;
+    (* Add a space *)
+    F.pp_print_space fmt ())
+
+(** See {!extract_trait_decl_coq_arguments} *)
+let extract_trait_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
+    (trait_decl : trait_decl) : unit =
+  match !backend with
+  | Coq -> extract_trait_decl_coq_arguments ctx fmt trait_decl
+  | _ -> ()
 
 (** Small helper.
 
@@ -2425,76 +2520,92 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   let is_empty = trait_impl_is_empty { impl with provided_methods = [] } in
 
   F.pp_print_space fmt ();
-  if !Config.backend = Lean then F.pp_print_string fmt ":= {"
-  else if !Config.backend = FStar && is_empty then F.pp_print_string fmt "= ()"
-  else F.pp_print_string fmt "= {";
+  if is_empty && !Config.backend = FStar then (
+    F.pp_print_string fmt "= ()";
+    (* Outer box *)
+    F.pp_close_box fmt ())
+  else if is_empty && !Config.backend = Coq then (
+    (* Coq is not very good at infering constructors *)
+    let cons = ctx_get_trait_constructor impl.impl_trait.trait_decl_id ctx in
+    F.pp_print_string fmt (":= " ^ cons ^ ".");
+    (* Outer box *)
+    F.pp_close_box fmt ())
+  else (
+    if !Config.backend = Lean then F.pp_print_string fmt ":= {"
+    else if !Config.backend = Coq then F.pp_print_string fmt ":= {|"
+    else F.pp_print_string fmt "= {";
 
-  (* Close the box for the name + generics *)
-  F.pp_close_box fmt ();
+    (* Close the box for the name + generics *)
+    F.pp_close_box fmt ();
 
-  (*
-   * Extract the items
-   *)
-  let trait_decl_id = impl.impl_trait.trait_decl_id in
+    (*
+     * Extract the items
+     *)
+    let trait_decl_id = impl.impl_trait.trait_decl_id in
 
-  (* The constants *)
-  List.iter
-    (fun (name, (_, id)) ->
-      let item_name = ctx_get_trait_const trait_decl_id name ctx in
-      let ty () =
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt (ctx_get_global id ctx)
-      in
+    (* The constants *)
+    List.iter
+      (fun (name, (_, id)) ->
+        let item_name = ctx_get_trait_const trait_decl_id name ctx in
+        let ty () =
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt (ctx_get_global id ctx)
+        in
 
-      extract_trait_impl_item ctx fmt item_name ty)
-    impl.consts;
+        extract_trait_impl_item ctx fmt item_name ty)
+      impl.consts;
 
-  (* The types *)
-  List.iter
-    (fun (name, (trait_refs, ty)) ->
-      (* Extract the type *)
-      let item_name = ctx_get_trait_type trait_decl_id name ctx in
-      let ty () =
-        F.pp_print_space fmt ();
-        extract_ty ctx fmt TypeDeclId.Set.empty false ty
-      in
-      extract_trait_impl_item ctx fmt item_name ty;
-      (* Extract the clauses *)
-      TraitClauseId.iteri
-        (fun clause_id trait_ref ->
-          let item_name =
-            ctx_get_trait_item_clause trait_decl_id name clause_id ctx
-          in
-          let ty () =
-            F.pp_print_space fmt ();
-            extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
-          in
-          extract_trait_impl_item ctx fmt item_name ty)
-        trait_refs)
-    impl.types;
+    (* The types *)
+    List.iter
+      (fun (name, (trait_refs, ty)) ->
+        (* Extract the type *)
+        let item_name = ctx_get_trait_type trait_decl_id name ctx in
+        let ty () =
+          F.pp_print_space fmt ();
+          extract_ty ctx fmt TypeDeclId.Set.empty false ty
+        in
+        extract_trait_impl_item ctx fmt item_name ty;
+        (* Extract the clauses *)
+        TraitClauseId.iteri
+          (fun clause_id trait_ref ->
+            let item_name =
+              ctx_get_trait_item_clause trait_decl_id name clause_id ctx
+            in
+            let ty () =
+              F.pp_print_space fmt ();
+              extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
+            in
+            extract_trait_impl_item ctx fmt item_name ty)
+          trait_refs)
+      impl.types;
 
-  (* The parent clauses *)
-  TraitClauseId.iteri
-    (fun clause_id trait_ref ->
-      let item_name = ctx_get_trait_parent_clause trait_decl_id clause_id ctx in
-      let ty () =
-        F.pp_print_space fmt ();
-        extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
-      in
-      extract_trait_impl_item ctx fmt item_name ty)
-    impl.parent_trait_refs;
+    (* The parent clauses *)
+    TraitClauseId.iteri
+      (fun clause_id trait_ref ->
+        let item_name =
+          ctx_get_trait_parent_clause trait_decl_id clause_id ctx
+        in
+        let ty () =
+          F.pp_print_space fmt ();
+          extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
+        in
+        extract_trait_impl_item ctx fmt item_name ty)
+      impl.parent_trait_refs;
 
-  (* The required methods *)
-  List.iter
-    (fun (name, id) ->
-      extract_trait_impl_method_items ctx fmt impl name id all_generics)
-    impl.required_methods;
+    (* The required methods *)
+    List.iter
+      (fun (name, id) ->
+        extract_trait_impl_method_items ctx fmt impl name id all_generics)
+      impl.required_methods;
 
-  (* Close the outer boxes for the definition, as well as the brackets *)
-  F.pp_close_box fmt ();
-  if (not (!backend = FStar)) || not is_empty then (
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt "}");
+    (* Close the outer boxes for the definition, as well as the brackets *)
+    F.pp_close_box fmt ();
+    if !backend = Coq then (
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "|}.")
+    else if (not (!backend = FStar)) || not is_empty then (
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "}"));
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0

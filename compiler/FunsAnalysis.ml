@@ -104,9 +104,10 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                 (* None of the assumed functions can diverge nor are considered stateful *)
                 can_fail := !can_fail || Assumed.assumed_fun_can_fail id
             | TraitMethod _ ->
-                (* We consider trait functions can fail, diverge, and are not stateful *)
-                can_fail := true;
-                can_diverge := true);
+                (* We consider trait functions can fail, but can not diverge and are not stateful.
+                   TODO: this may cause issues if we use use a fuel parameter.
+                *)
+                can_fail := true);
             super#visit_Call env call
 
           method! visit_Panic env =

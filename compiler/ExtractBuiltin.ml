@@ -420,6 +420,7 @@ let builtin_fun_effects_map =
 type builtin_trait_decl_info = {
   rust_name : string;
   extract_name : string;
+  constructor : string;
   parent_clauses : string list;
   consts : (string * string) list;
   types : (string * (string * string list)) list;
@@ -444,6 +445,7 @@ let builtin_trait_decls_info () =
           | Coq | FStar | HOL4 -> String.concat "_" rust_name
           | Lean -> String.concat "." rust_name)
     in
+    let constructor = mk_struct_constructor extract_name in
     let consts = [] in
     let types =
       let mk_type item_name =
@@ -479,7 +481,15 @@ let builtin_trait_decls_info () =
       List.map mk_method methods
     in
     let rust_name = String.concat "::" rust_name in
-    { rust_name; extract_name; parent_clauses; consts; types; methods }
+    {
+      rust_name;
+      extract_name;
+      constructor;
+      parent_clauses;
+      consts;
+      types;
+      methods;
+    }
   in
   [
     (* Deref *)
