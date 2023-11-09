@@ -247,4 +247,29 @@ def map_option
                  let t ← inst.call f0 x0
                  Result.ret (some t)
 
+/- Trait implementation: [traits::u32::{11}] -/
+def u32.WithTargetInst : WithTarget U32 := {
+  Target := U32
+}
+
+/- Trait implementation: [traits::u32::{12}] -/
+def u32.ParentTrait2Inst : ParentTrait2 U32 := {
+  U := U32
+  U_clause_0 := u32.WithTargetInst
+}
+
+/- [traits::u32::{13}::convert]: forward function -/
+def u32.convert (x : U32) : Result U32 :=
+  Result.ret x
+
+/- Trait implementation: [traits::u32::{13}] -/
+def u32.ChildTrait2Inst : ChildTrait2 U32 := {
+  parent_clause_0 := u32.ParentTrait2Inst
+  convert := u32.convert
+}
+
+/- [traits::incr_u32]: forward function -/
+def incr_u32 (x : U32) : Result U32 :=
+  x + 1#u32
+
 end traits

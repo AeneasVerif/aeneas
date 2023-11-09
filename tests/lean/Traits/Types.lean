@@ -127,4 +127,18 @@ structure core.ops.function.Fn (Self Args : Type) where
   parent_clause_0 : core.ops.function.FnMut Self Args
   call : Self → Args → Result parent_clause_0.parent_clause_0.Output
 
+/- Trait declaration: [traits::WithTarget] -/
+structure WithTarget (Self : Type) where
+  Target : Type
+
+/- Trait declaration: [traits::ParentTrait2] -/
+structure ParentTrait2 (Self : Type) where
+  U : Type
+  U_clause_0 : WithTarget U
+
+/- Trait declaration: [traits::ChildTrait2] -/
+structure ChildTrait2 (Self : Type) where
+  parent_clause_0 : ParentTrait2 Self
+  convert : parent_clause_0.U → Result parent_clause_0.U_clause_0.Target
+
 end traits
