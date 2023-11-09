@@ -1,0 +1,19 @@
+on:
+  push:
+    branches-ignore: [ '_**' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  nix:
+    #runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, nix]
+    steps:
+      #- uses: cachix/install-nix-action@v22
+      - uses: actions/checkout@v4
+      - run: nix build -L .#aeneas
+      - run: nix build -L .#checks.x86_64-linux.aeneas-tests
+      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-fstar
+      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-coq
+      #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-lean
+      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
