@@ -608,19 +608,6 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | Lean -> String.concat "." name
   in
   let get_type_name = get_name in
-  let type_name_to_camel_case name =
-    let name = get_type_name name in
-    let name = List.map to_camel_case name in
-    String.concat "" name
-  in
-  let type_name_to_snake_case name =
-    let name = get_type_name name in
-    let name = List.map to_snake_case name in
-    let name = String.concat "_" name in
-    match !backend with
-    | FStar | Lean | HOL4 -> name
-    | Coq -> capitalize_first_letter name
-  in
   let get_type_name_no_suffix name =
     match !backend with
     | FStar | Coq | HOL4 -> String.concat "_" (get_type_name name)
@@ -704,7 +691,10 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
       (* Remove the occurrences of '.' *)
       String.concat "" (String.split_on_char '.' name)
     in
-    flatten_name (get_type_name trait_impl.name @ [ trait_decl ])
+    let name = flatten_name (get_type_name trait_impl.name @ [ trait_decl ]) in
+    match !backend with
+    | FStar -> StringUtils.lowercase_first_letter name
+    | Coq | HOL4 | Lean -> name
   in
 
   let trait_parent_clause_name (trait_decl : trait_decl) (clause : trait_clause)
@@ -715,12 +705,28 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     else trait_decl_name trait_decl ^ "_" ^ clause
   in
   let trait_type_name (trait_decl : trait_decl) (item : string) : string =
-    if !Config.record_fields_short_names then item
-    else trait_decl_name trait_decl ^ "_" ^ item
+    let name =
+      if !Config.record_fields_short_names then item
+      else trait_decl_name trait_decl ^ "_" ^ item
+    in
+    (* Constants are usually all capital letters.
+       Some backends do not support field names starting with a capital letter,
+       and it may be weird to lowercase everything (especially as it may lead
+       to more name collisions): we add a prefix when necessary.
+       For instance, it gives: "U" -> "tU"
+       Note that for some backends we prepend the type name (because those backends
+       can't disambiguate fields coming from different ADTs if they have the same
+       names), and thus don't need to add a prefix starting with a lowercase.
+    *)
+    match !backend with FStar -> "t" ^ name | Coq | Lean | HOL4 -> name
   in
   let trait_const_name (trait_decl : trait_decl) (item : string) : string =
-    if !Config.record_fields_short_names then item
-    else trait_decl_name trait_decl ^ "_" ^ item
+    let name =
+      if !Config.record_fields_short_names then item
+      else trait_decl_name trait_decl ^ "_" ^ item
+    in
+    (* See [trait_type_name] *)
+    match !backend with FStar -> "c" ^ name | Coq | Lean | HOL4 -> name
   in
   let trait_method_name (trait_decl : trait_decl) (item : string) : string =
     if !Config.record_fields_short_names then item
@@ -1832,18 +1838,24 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
  *)
 let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
-    ?(use_forall_use_sep = true) ?(as_implicits : bool = false)
-    ?(space : bool ref option = None) ?(trait_decl : trait_decl option = None)
-    (generics : generic_params) (type_params : string list)
-    (cg_params : string list) (trait_clauses : string list) : unit =
+    ?(use_forall_use_sep = true) ?(use_arrows = false)
+    ?(as_implicits : bool = false) ?(space : bool ref option = None)
+    ?(trait_decl : trait_decl option = None) (generics : generic_params)
+    (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
   assert (cg_params = [] || !backend <> HOL4);
   let left_bracket (implicit : bool) =
-    if implicit then F.pp_print_string fmt "{" else F.pp_print_string fmt "("
+    if implicit && !backend <> FStar then F.pp_print_string fmt "{"
+    else F.pp_print_string fmt "("
   in
   let right_bracket (implicit : bool) =
-    if implicit then F.pp_print_string fmt "}" else F.pp_print_string fmt ")"
+    if implicit && !backend <> FStar then F.pp_print_string fmt "}"
+    else F.pp_print_string fmt ")"
+  in
+  let print_implicit_symbol (implicit : bool) =
+    if implicit && !backend = FStar then F.pp_print_string fmt "#" else ()
   in
   let insert_req_space () =
     match space with
@@ -1871,6 +1883,7 @@ let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
           left_bracket as_implicits;
           List.iter
             (fun s ->
+              print_implicit_symbol as_implicits;
               F.pp_print_string fmt s;
               F.pp_print_space fmt ())
             type_params;
@@ -1878,7 +1891,10 @@ let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           F.pp_print_string fmt (type_keyword ());
           (* ) *)
-          right_bracket as_implicits);
+          right_bracket as_implicits;
+          if use_arrows then (
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "->"));
         (* Print the const generic parameters *)
         List.iter
           (fun (var : const_generic_var) ->
@@ -1886,13 +1902,17 @@ let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
             (* ( *)
             left_bracket as_implicits;
             let n = ctx_get_const_generic_var var.index ctx in
+            print_implicit_symbol as_implicits;
             F.pp_print_string fmt n;
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
             F.pp_print_space fmt ();
             extract_literal_type ctx fmt var.ty;
             (* ) *)
-            right_bracket as_implicits)
+            right_bracket as_implicits;
+            if use_arrows then (
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt "->"))
           const_generics);
       (* Print the trait clauses *)
       List.iter
@@ -1901,13 +1921,17 @@ let extract_generic_params (ctx : extraction_ctx) (fmt : F.formatter)
           (* ( *)
           left_bracket as_implicits;
           let n = ctx_get_local_trait_clause clause.clause_id ctx in
+          print_implicit_symbol as_implicits;
           F.pp_print_string fmt n;
           F.pp_print_space fmt ();
           F.pp_print_string fmt ":";
           F.pp_print_space fmt ();
           extract_trait_clause_type ctx fmt no_params_tys clause;
           (* ) *)
-          right_bracket as_implicits)
+          right_bracket as_implicits;
+          if use_arrows then (
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "->"))
         trait_clauses
     in
     (* If we extract the generics for a provided method for a trait declaration

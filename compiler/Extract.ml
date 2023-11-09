@@ -2148,10 +2148,16 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
       let ctx, type_params, cg_params, trait_clauses =
         ctx_add_generic_params generics ctx
       in
-      let use_forall = generics <> empty_generic_params in
+      let backend_uses_forall =
+        match !backend with Coq | Lean -> true | FStar | HOL4 -> false
+      in
+      let generics_not_empty = generics <> empty_generic_params in
+      let use_forall = generics_not_empty && backend_uses_forall in
+      let use_arrows = generics_not_empty && not backend_uses_forall in
       let use_forall_use_sep = false in
       extract_generic_params ctx fmt TypeDeclId.Set.empty ~use_forall
-        ~use_forall_use_sep generics type_params cg_params trait_clauses;
+        ~use_forall_use_sep ~use_arrows generics type_params cg_params
+        trait_clauses;
       if use_forall then F.pp_print_string fmt ",";
       (* Extract the inputs and output *)
       F.pp_print_space fmt ();
@@ -2189,6 +2195,12 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let qualif =
     Option.get (ctx.fmt.type_decl_kind_to_qualif SingleNonRec (Some Struct))
   in
+  (* When checking if the trait declaration is empty: we ignore the provided
+     methods, because for now they are extracted separately *)
+  let is_empty = trait_decl_is_empty { decl with provided_methods = [] } in
+  if !backend = FStar && not is_empty then (
+    F.pp_print_string fmt "noeq";
+    F.pp_print_space fmt ());
   F.pp_print_string fmt qualif;
   F.pp_print_space fmt ();
   F.pp_print_string fmt decl_name;
@@ -2205,7 +2217,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
   (match !backend with
   | Lean -> F.pp_print_string fmt "where"
+  | FStar -> if not is_empty then F.pp_print_string fmt "= {"
   | _ -> F.pp_print_string fmt "{");
+  if !backend = FStar && is_empty then F.pp_print_string fmt "= unit";
 
   (* Close the box for the name + generics *)
   F.pp_close_box fmt ();
@@ -2268,15 +2282,15 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (fun (name, id) -> extract_trait_decl_method_items ctx fmt decl name id)
     decl.required_methods;
 
+  (* Close the outer boxes for the definition *)
+  if !Config.backend <> Lean then F.pp_close_box fmt ();
   (* Close the brackets *)
   (match !Config.backend with
   | Lean -> ()
   | _ ->
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt "}");
-
-  (* Close the outer boxes for the definition *)
-  if !Config.backend <> Lean then F.pp_close_box fmt ();
+      if (not (!backend = FStar)) || not is_empty then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "}"));
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
@@ -2405,8 +2419,13 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
   extract_trait_decl_ref ctx fmt TypeDeclId.Set.empty false impl.impl_trait;
 
+  (* When checking if the trait impl is empty: we ignore the provided
+     methods, because for now they are extracted separately *)
+  let is_empty = trait_impl_is_empty { impl with provided_methods = [] } in
+
   F.pp_print_space fmt ();
   if !Config.backend = Lean then F.pp_print_string fmt ":= {"
+  else if !Config.backend = FStar && is_empty then F.pp_print_string fmt "= ()"
   else F.pp_print_string fmt "= {";
 
   (* Close the box for the name + generics *)
@@ -2472,8 +2491,9 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
   (* Close the outer boxes for the definition, as well as the brackets *)
   F.pp_close_box fmt ();
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "}";
+  if (not (!backend = FStar)) || not is_empty then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "}");
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0

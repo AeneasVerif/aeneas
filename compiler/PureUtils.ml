@@ -642,3 +642,38 @@ let trait_decl_get_method (trait_decl : trait_decl) (method_name : string) :
         List.find (fun (s, _) -> s = method_name) trait_decl.provided_methods
       in
       { is_provided = true; id = Option.get id }
+
+let trait_decl_is_empty (trait_decl : trait_decl) : bool =
+  let {
+    def_id = _;
+    name = _;
+    generics = _;
+    preds = _;
+    parent_clauses;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  } =
+    trait_decl
+  in
+  parent_clauses = [] && consts = [] && types = [] && required_methods = []
+  && provided_methods = []
+
+let trait_impl_is_empty (trait_impl : trait_impl) : bool =
+  let {
+    def_id = _;
+    name = _;
+    impl_trait = _;
+    generics = _;
+    preds = _;
+    parent_trait_refs;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  } =
+    trait_impl
+  in
+  parent_trait_refs = [] && consts = [] && types = [] && required_methods = []
+  && provided_methods = []
