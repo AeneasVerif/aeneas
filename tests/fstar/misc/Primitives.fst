@@ -427,7 +427,7 @@ let alloc_vec_Vec_new (a  : Type0) : alloc_vec_Vec a = assert_norm(length #a [] 
 let alloc_vec_Vec_len (a : Type0) (v : alloc_vec_Vec a) : usize = length v
 
 // Helper
-let alloc_vec_Vec_index_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : result a =
+let alloc_vec_Vec_index_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) : result a =
   if i < length v then Return (index v i) else Fail Failure
 // Helper
 let alloc_vec_Vec_update_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : result (alloc_vec_Vec a) =
@@ -703,6 +703,22 @@ let alloc_vec_Vec_coreopsindexIndexMutInst (t idx : Type0)
 }
 
 (*** Theorems *)
+
+let alloc_vec_Vec_index_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) :
+  Lemma (
+    alloc_vec_Vec_index a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i ==
+      alloc_vec_Vec_index_usize v i)
+  [SMTPat (alloc_vec_Vec_index a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i)]
+  =
+  admit()
+
+let alloc_vec_Vec_index_mut_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) :
+  Lemma (
+    alloc_vec_Vec_index_mut a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i ==
+      alloc_vec_Vec_index_usize v i)
+  [SMTPat (alloc_vec_Vec_index_mut a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i)]
+  =
+  admit()
 
 let alloc_vec_Vec_index_mut_back_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) :
   Lemma (

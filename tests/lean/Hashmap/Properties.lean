@@ -157,7 +157,7 @@ instance : Inhabited (List α) where
 def slots_s_inv (s : Core.List (List α)) : Prop :=
   ∀ (i : Int), 0 ≤ i → i < s.len → slot_t_inv s.len i (s.index i)
 
-def slots_t_inv (s : Vec (List α)) : Prop :=
+def slots_t_inv (s : alloc.vec.Vec (List α)) : Prop :=
   slots_s_inv s.v
 
 @[simp]
@@ -302,13 +302,14 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
    | none => nhm.len_s = hm.len_s + 1
    | some _ => nhm.len_s = hm.len_s) := by
   rw [insert_no_resize]
-  simp only [hash_key, bind_tc_ret] -- TODO: annoying
-  have _ : (Vec.len (List α) hm.slots).val ≠ 0 := by
+  -- Simplify. Note that this also simplifies some function calls, like array index
+  simp [hash_key, bind_tc_ret]
+  have _ : (alloc.vec.Vec.len (List α) hm.slots).val ≠ 0 := by
    intro
    simp_all [inv]
   progress as ⟨ hash_mod, hhm ⟩
   have _ : 0 ≤ hash_mod.val := by scalar_tac
-  have _ : hash_mod.val < Vec.length hm.slots := by
+  have _ : hash_mod.val < alloc.vec.Vec.length hm.slots := by
     have : 0 < hm.slots.val.len := by
       simp [inv] at hinv
       simp [hinv]
@@ -374,7 +375,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       -- TODO: we want to automate this
       simp
       apply Int.emod_nonneg k.val hvnz
-    have _ : k_hash_mod < Vec.length hm.slots := by
+    have _ : k_hash_mod < alloc.vec.Vec.length hm.slots := by
       -- TODO: we want to automate this
       simp
       have h := Int.emod_lt_of_pos k.val hvpos

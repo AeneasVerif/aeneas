@@ -409,7 +409,7 @@ namespace Test
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    ∃ nv, v.update_usize α i x = ret nv ∧
+    ∃ nv, v.update_usize i x = ret nv ∧
     nv.val = v.val.update i.val x := by
     progress
     simp [*]
