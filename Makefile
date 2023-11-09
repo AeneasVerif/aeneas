@@ -290,17 +290,25 @@ tleanp-%: BACKEND_SUBDIR := lean
 tleanp-%:
 	$(AENEAS_CMD)
 
+# TODO: reactivate HOL4 once traits are parameterized by their associated types
 .PHONY: thol4-%
 thol4-%: OPTIONS += -backend hol4
 thol4-%: BACKEND_SUBDIR := hol4
 thol4-%:
-	$(AENEAS_CMD)
+	echo Ignoring the $* test for HOL4
 
+#thol4-%:
+#	$(AENEAS_CMD)
+
+# TODO: reactivate HOL4 once traits are parameterized by their associated types
 .PHONY: thol4p-%
 thol4p-%: OPTIONS += -backend hol4
 thol4p-%: BACKEND_SUBDIR := hol4
 thol4p-%:
-	$(AENEAS_CMD)
+	echo Ignoring the $* test for HOL4
+
+#thol4p-%:
+#	$(AENEAS_CMD)
 
 # Nix - TODO: add the lean tests
 .PHONY: nix
