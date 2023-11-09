@@ -124,7 +124,7 @@ let always_deconstruct_adts_with_matches = ref false
 (** Controls whether we need to use a state to model the external world
     (I/O, for instance).
  *)
-let use_state = ref true
+let use_state = ref false
 
 (** Controls whether we use fuel to control termination.
  *)
@@ -160,7 +160,7 @@ let backward_no_state_update = ref false
     files for the types, clauses and functions, or if we group them in
     one file.
  *)
-let split_files = ref true
+let split_files = ref false
 
 (** Generate the library entry point, if the crate is split between different files.
 

@@ -115,7 +115,7 @@ AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/$(BA
 
 # Add specific options to some tests
 test-no_nested_borrows test-paper: \
-	OPTIONS += -test-trans-units -no-split-files -no-state
+	OPTIONS += -test-trans-units
 test-no_nested_borrows test-paper: SUBDIR := misc
 tfstar-no_nested_borrows tfstar-paper:
 tlean-no_nested_borrows: SUBDIR :=
@@ -123,7 +123,7 @@ tlean-paper: SUBDIR :=
 thol4-no_nested_borrows: SUBDIR := misc-no_nested_borrows
 thol4-paper: SUBDIR := misc-paper
 
-test-array: OPTIONS += -no-state
+test-array: OPTIONS +=
 test-array: SUBDIR := array
 tfstar-array: OPTIONS += -decreases-clauses -template-clauses
 tcoq-array: OPTIONS += -use-fuel
@@ -131,7 +131,7 @@ tlean-array: SUBDIR :=
 tlean-array: OPTIONS +=
 thol4-array: OPTIONS +=
 
-test-traits: OPTIONS += -no-state
+test-traits: OPTIONS +=
 test-traits: SUBDIR := traits
 tfstar-traits: OPTIONS += -decreases-clauses -template-clauses
 tcoq-traits: OPTIONS += -use-fuel
@@ -147,15 +147,15 @@ thol4-array:
 thol4-traits:
 	echo "Ignoring the traits test for HOL4"
 
-test-loops: OPTIONS += -no-state
+test-loops: OPTIONS +=
 test-loops: SUBDIR := misc
-tfstar-loops: OPTIONS += -decreases-clauses -template-clauses
-tcoq-loops: OPTIONS += -use-fuel -no-split-files
+tfstar-loops: OPTIONS += -decreases-clauses -template-clauses -split-files
+tcoq-loops: OPTIONS += -use-fuel
 tlean-loops: SUBDIR :=
 thol4-loops: SUBDIR := misc-loops
 
 # TODO: reactivate -test-trans-units
-test-hashmap: OPTIONS += -no-state
+test-hashmap: OPTIONS += -split-files
 test-hashmap: SUBDIR := hashmap
 tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap: OPTIONS += -use-fuel
@@ -164,14 +164,14 @@ tlean-hashmap: OPTIONS += -no-gen-lib-entry # We add a custom import in the Hash
 thol4-hashmap: OPTIONS +=
 
 # TODO: reactivate -test-trans-units
-test-hashmap_main: OPTIONS +=
+test-hashmap_main: OPTIONS += -state -split-files
 test-hashmap_main: SUBDIR := hashmap_on_disk
 tfstar-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap_main: OPTIONS += -use-fuel
 tlean-hashmap_main: SUBDIR :=
 thol4-hashmap_main: OPTIONS +=
 
-testp-polonius_list: OPTIONS += -test-trans-units -no-split-files -no-state
+testp-polonius_list: OPTIONS += -test-trans-units
 testp-polonius_list: SUBDIR := misc
 tfstarp-polonius_list: OPTIONS +=
 tcoqp-polonius_list: OPTIONS +=
@@ -180,7 +180,7 @@ tleanp-polonius_list: OPTIONS +=
 thol4p-polonius_list: SUBDIR := misc-polonius_list
 thol4p-polonius_list: OPTIONS +=
 
-test-constants: OPTIONS += -test-trans-units -no-split-files -no-state
+test-constants: OPTIONS += -test-trans-units
 test-constants: SUBDIR := misc
 tfstar-constants: OPTIONS +=
 tcoq-constants: OPTIONS +=
@@ -189,7 +189,7 @@ tlean-constants: OPTIONS +=
 thol4-constants: SUBDIR := misc-constants
 thol4-constants: OPTIONS +=
 
-test-external: OPTIONS += -test-trans-units
+test-external: OPTIONS += -test-trans-units -state -split-files
 test-external: SUBDIR := misc
 tfstar-external: OPTIONS +=
 tcoq-external: OPTIONS +=
@@ -199,7 +199,7 @@ thol4-external: SUBDIR := misc-external
 thol4-external: OPTIONS +=
 
 BETREE_FSTAR_OPTIONS = -decreases-clauses -template-clauses
-testp-betree_main: OPTIONS += -backward-no-state-update -test-trans-units
+testp-betree_main: OPTIONS += -backward-no-state-update -test-trans-units -state -split-files
 testp-betree_main: SUBDIR:=betree
 tfstarp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
 tcoqp-betree_main: OPTIONS += -use-fuel
@@ -211,7 +211,7 @@ thol4-betree_main: OPTIONS +=
 # This generates very ugly code, but is good to test the translation.
 .PHONY: ctest-testp-betree_main
 ctest-testp-betree_main: testp-betree_main
-ctest-testp-betree_main: OPTIONS += -backend fstar -test-trans-units
+ctest-testp-betree_main: OPTIONS += -backend fstar -test-trans-units -state -split-files
 ctest-testp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
 ctest-testp-betree_main: BACKEND_SUBDIR := "fstar"
 ctest-testp-betree_main: SUBDIR:=betree_back_stateful

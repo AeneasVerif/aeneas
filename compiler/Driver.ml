@@ -93,9 +93,9 @@ let () =
         Arg.Set extract_decreases_clauses,
         " Use decreases clauses/termination measures for the recursive \
          definitions" );
-      ( "-no-state",
-        Arg.Clear use_state,
-        " Do not use state-error monads, simply use error monads" );
+      ( "-state",
+        Arg.Set use_state,
+        " Use a *state*-error monads, instead of an error monads" );
       ( "-use-fuel",
         Arg.Set use_fuel,
         " Use a fuel parameter to control divergence" );
@@ -106,10 +106,10 @@ let () =
         Arg.Set extract_template_decreases_clauses,
         " Generate templates for the required decreases clauses/termination \
          measures, in a dedicated file. Implies -decreases-clauses" );
-      ( "-no-split-files",
-        Arg.Clear split_files,
-        " Do not split the definitions between different files for types, \
-         functions, etc." );
+      ( "-split-files",
+        Arg.Set split_files,
+        " Split the definitions between different files for types, functions, \
+         etc." );
       ( "-no-check-inv",
         Arg.Clear check_invariants,
         " Deactivate the invariant sanity checks performed at every evaluation \
