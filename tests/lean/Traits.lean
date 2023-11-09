@@ -322,51 +322,8 @@ structure FromResidual (Self T : Type) where
 
 /- Trait declaration: [traits::Try] -/
 structure Try (Self : Type) where
-  parent_clause_0 : FromResidual Self Residual
   Residual : Type
-
-/- Trait declaration: [traits::CFnOnce] -/
-structure CFnOnce (Self Args : Type) where
-  Output : Type
-  call_once : Self → Args → Result Output
-
-/- Trait declaration: [traits::CFnMut] -/
-structure CFnMut (Self Args : Type) where
-  parent_clause_0 : CFnOnce Self Args
-  call_mut : Self → Args → Result parent_clause_0.Output
-  call_mut_back : Self → Args → parent_clause_0.Output → Result Self
-
-/- Trait declaration: [traits::CFn] -/
-structure CFn (Self Args : Type) where
-  parent_clause_0 : CFnMut Self Args
-  call_mut : Self → Args → Result parent_clause_0.parent_clause_0.Output
-
-/- Trait declaration: [core::ops::function::FnOnce] -/
-structure core.ops.function.FnOnce (Self Args : Type) where
-  Output : Type
-  call_once : Self → Args → Result Output
-
-/- Trait declaration: [core::ops::function::FnMut] -/
-structure core.ops.function.FnMut (Self Args : Type) where
-  parent_clause_0 : core.ops.function.FnOnce Self Args
-  call_mut : Self → Args → Result parent_clause_0.Output
-  call_mut_back : Self → Args → parent_clause_0.Output → Result Self
-
-/- Trait declaration: [core::ops::function::Fn] -/
-structure core.ops.function.Fn (Self Args : Type) where
-  parent_clause_0 : core.ops.function.FnMut Self Args
-  call : Self → Args → Result parent_clause_0.parent_clause_0.Output
-
-/- [traits::map_option]: forward function -/
-def map_option
-  (T F : Type) (inst : core.ops.function.Fn F T) (x : Option T) (f0 : F) :
-  Result (Option T)
-  :=
-  match x with
-  | none => Result.ret none
-  | some x0 => do
-                 let t ← inst.call f0 x0
-                 Result.ret (some t)
+  parent_clause_0 : FromResidual Self Residual
 
 /- Trait declaration: [traits::WithTarget] -/
 structure WithTarget (Self : Type) where
@@ -406,5 +363,21 @@ def u32.ChildTrait2Inst : ChildTrait2 U32 := {
 /- [traits::incr_u32]: forward function -/
 def incr_u32 (x : U32) : Result U32 :=
   x + 1#u32
+
+/- Trait declaration: [traits::CFnOnce] -/
+structure CFnOnce (Self Args : Type) where
+  Output : Type
+  call_once : Self → Args → Result Output
+
+/- Trait declaration: [traits::CFnMut] -/
+structure CFnMut (Self Args : Type) where
+  parent_clause_0 : CFnOnce Self Args
+  call_mut : Self → Args → Result parent_clause_0.Output
+  call_mut_back : Self → Args → parent_clause_0.Output → Result Self
+
+/- Trait declaration: [traits::CFn] -/
+structure CFn (Self Args : Type) where
+  parent_clause_0 : CFnMut Self Args
+  call_mut : Self → Args → Result parent_clause_0.parent_clause_0.Output
 
 end traits

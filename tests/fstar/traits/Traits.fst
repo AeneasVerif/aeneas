@@ -308,58 +308,9 @@ type fromResidual_t (self t : Type0) = unit
 
 (** Trait declaration: [traits::Try] *)
 noeq type try_t (self : Type0) = {
-  parent_clause_0 : fromResidual_t self tResidual;
   tResidual : Type0;
+  parent_clause_0 : fromResidual_t self tResidual;
 }
-
-(** Trait declaration: [traits::CFnOnce] *)
-noeq type cFnOnce_t (self args : Type0) = {
-  tOutput : Type0;
-  call_once : self -> args -> result tOutput;
-}
-
-(** Trait declaration: [traits::CFnMut] *)
-noeq type cFnMut_t (self args : Type0) = {
-  parent_clause_0 : cFnOnce_t self args;
-  call_mut : self -> args -> result parent_clause_0.tOutput;
-  call_mut_back : self -> args -> parent_clause_0.tOutput -> result self;
-}
-
-(** Trait declaration: [traits::CFn] *)
-noeq type cFn_t (self args : Type0) = {
-  parent_clause_0 : cFnMut_t self args;
-  call_mut : self -> args -> result parent_clause_0.parent_clause_0.tOutput;
-}
-
-(** Trait declaration: [core::ops::function::FnOnce] *)
-noeq type core_ops_function_FnOnce_t (self args : Type0) = {
-  tOutput : Type0;
-  call_once : self -> args -> result tOutput;
-}
-
-(** Trait declaration: [core::ops::function::FnMut] *)
-noeq type core_ops_function_FnMut_t (self args : Type0) = {
-  parent_clause_0 : core_ops_function_FnOnce_t self args;
-  call_mut : self -> args -> result parent_clause_0.tOutput;
-  call_mut_back : self -> args -> parent_clause_0.tOutput -> result self;
-}
-
-(** Trait declaration: [core::ops::function::Fn] *)
-noeq type core_ops_function_Fn_t (self args : Type0) = {
-  parent_clause_0 : core_ops_function_FnMut_t self args;
-  call : self -> args -> result parent_clause_0.parent_clause_0.tOutput;
-}
-
-(** [traits::map_option]: forward function *)
-let map_option
-  (t f0 : Type0) (inst : core_ops_function_Fn_t f0 t) (x : option t) 
-  (f1 : f0) :
-  result (option t)
-  =
-  begin match x with
-  | None -> Return None
-  | Some x0 -> let* x1 = inst.call f1 x0 in Return (Some x1)
-  end
 
 (** Trait declaration: [traits::WithTarget] *)
 noeq type withTarget_t (self : Type0) = { tTarget : Type0; }
@@ -398,4 +349,23 @@ let u32_ChildTrait2Inst : childTrait2_t u32 = {
 (** [traits::incr_u32]: forward function *)
 let incr_u32 (x : u32) : result u32 =
   u32_add x 1
+
+(** Trait declaration: [traits::CFnOnce] *)
+noeq type cFnOnce_t (self args : Type0) = {
+  tOutput : Type0;
+  call_once : self -> args -> result tOutput;
+}
+
+(** Trait declaration: [traits::CFnMut] *)
+noeq type cFnMut_t (self args : Type0) = {
+  parent_clause_0 : cFnOnce_t self args;
+  call_mut : self -> args -> result parent_clause_0.tOutput;
+  call_mut_back : self -> args -> parent_clause_0.tOutput -> result self;
+}
+
+(** Trait declaration: [traits::CFn] *)
+noeq type cFn_t (self args : Type0) = {
+  parent_clause_0 : cFnMut_t self args;
+  call_mut : self -> args -> result parent_clause_0.parent_clause_0.tOutput;
+}
 
