@@ -2228,19 +2228,6 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    * Extract the items
    *)
 
-  (* The parent clauses *)
-  List.iter
-    (fun clause ->
-      let item_name =
-        ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
-      in
-      let ty () =
-        F.pp_print_space fmt ();
-        extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
-      in
-      extract_trait_decl_item ctx fmt item_name ty)
-    decl.parent_clauses;
-
   (* The constants *)
   List.iter
     (fun (name, (ty, _)) ->
@@ -2276,6 +2263,20 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
           extract_trait_decl_item ctx fmt item_name ty)
         clauses)
     decl.types;
+
+  (* The parent clauses - note that the parent clauses may refer to the types
+     and const generics: for this reason we extract them *after* *)
+  List.iter
+    (fun clause ->
+      let item_name =
+        ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
+      in
+      let ty () =
+        F.pp_print_space fmt ();
+        extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+      in
+      extract_trait_decl_item ctx fmt item_name ty)
+    decl.parent_clauses;
 
   (* The required methods *)
   List.iter
@@ -2434,18 +2435,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (*
    * Extract the items
    *)
-
-  (* The parent clauses *)
   let trait_decl_id = impl.impl_trait.trait_decl_id in
-  TraitClauseId.iteri
-    (fun clause_id trait_ref ->
-      let item_name = ctx_get_trait_parent_clause trait_decl_id clause_id ctx in
-      let ty () =
-        F.pp_print_space fmt ();
-        extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
-      in
-      extract_trait_impl_item ctx fmt item_name ty)
-    impl.parent_trait_refs;
 
   (* The constants *)
   List.iter
@@ -2482,6 +2472,17 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           extract_trait_impl_item ctx fmt item_name ty)
         trait_refs)
     impl.types;
+
+  (* The parent clauses *)
+  TraitClauseId.iteri
+    (fun clause_id trait_ref ->
+      let item_name = ctx_get_trait_parent_clause trait_decl_id clause_id ctx in
+      let ty () =
+        F.pp_print_space fmt ();
+        extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref
+      in
+      extract_trait_impl_item ctx fmt item_name ty)
+    impl.parent_trait_refs;
 
   (* The required methods *)
   List.iter
