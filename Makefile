@@ -125,7 +125,7 @@ thol4-paper: SUBDIR := misc-paper
 
 test-array: OPTIONS +=
 test-array: SUBDIR := array
-tfstar-array: OPTIONS += -decreases-clauses -template-clauses
+tfstar-array: OPTIONS += -decreases-clauses -template-clauses -split-files
 tcoq-array: OPTIONS += -use-fuel
 tlean-array: SUBDIR :=
 tlean-array: OPTIONS +=
