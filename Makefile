@@ -27,7 +27,7 @@ CHARON_TESTS_POLONIUS_DIR ?= $(CHARON_HOME)/tests-polonius
 
 # The path to the Aeneas executable to run the tests - we need the ability to
 # change this path for the Nix package.
-AENEAS_EXE ?= bin/aeneas.exe
+AENEAS_EXE ?= bin/aeneas
 
 # The user can specify additional translation options for Aeneas.
 # By default we do:
@@ -71,9 +71,12 @@ build-lib:
 .PHONY: build-bin-dir
 build-bin-dir: build-driver build-lib
 	mkdir -p bin
-	cp -f compiler/_build/default/driver.exe bin/aeneas.exe
+	cp -f compiler/_build/default/driver.exe bin/aeneas
 	cp -f compiler/_build/default/driver.exe bin/aeneas.cmxs
-	cp -rf backends bin
+	mkdir -p bin/backends/fstar
+	mkdir -p bin/backends/coq
+	cp -rf backends/fstar/*.fst* bin/backends/fstar/
+	cp -rf backends/coq/*.v bin/backends/coq/
 
 .PHONY: doc
 doc:
