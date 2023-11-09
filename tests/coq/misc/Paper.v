@@ -55,8 +55,8 @@ Inductive List_t (T : Type) :=
 | List_Nil : List_t T
 .
 
-Arguments List_Cons {T} _ _.
-Arguments List_Nil {T}.
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
 
 (** [paper::list_nth_mut]: forward function *)
 Fixpoint list_nth_mut (T : Type) (l : List_t T) (i : u32) : result T :=

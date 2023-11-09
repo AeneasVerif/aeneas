@@ -35,9 +35,9 @@ Definition mk_pair0 (x : u32) (y : u32) : result (u32 * u32) :=
 (** [constants::Pair] *)
 Record Pair_t (T1 T2 : Type) := mkPair_t { pair_x : T1; pair_y : T2; }.
 
-Arguments mkPair_t {T1} {T2} _ _.
-Arguments pair_x {T1} {T2}.
-Arguments pair_y {T1} {T2}.
+Arguments mkPair_t { _ _ }.
+Arguments pair_x { _ _ }.
+Arguments pair_y { _ _ }.
 
 (** [constants::mk_pair1]: forward function *)
 Definition mk_pair1 (x : u32) (y : u32) : result (Pair_t u32 u32) :=
@@ -65,8 +65,8 @@ Definition p3_c : Pair_t u32 u32 := p3_body%global.
 (** [constants::Wrap] *)
 Record Wrap_t (T : Type) := mkWrap_t { wrap_value : T; }.
 
-Arguments mkWrap_t {T} _.
-Arguments wrap_value {T}.
+Arguments mkWrap_t { _ }.
+Arguments wrap_value { _ }.
 
 (** [constants::Wrap::{0}::new]: forward function *)
 Definition wrap_new (T : Type) (value : T) : result (Wrap_t T) :=

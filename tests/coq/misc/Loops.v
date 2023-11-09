@@ -96,8 +96,8 @@ Inductive List_t (T : Type) :=
 | List_Nil : List_t T
 .
 
-Arguments List_Cons {T} _ _.
-Arguments List_Nil {T}.
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
 
 (** [loops::list_mem]: loop 0: forward function *)
 Fixpoint list_mem_loop (n : nat) (x : u32) (ls : List_t u32) : result bool :=

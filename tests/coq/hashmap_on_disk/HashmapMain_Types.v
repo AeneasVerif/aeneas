@@ -14,8 +14,8 @@ Inductive hashmap_List_t (T : Type) :=
 | Hashmap_List_Nil : hashmap_List_t T
 .
 
-Arguments Hashmap_List_Cons {T} _ _ _.
-Arguments Hashmap_List_Nil {T}.
+Arguments Hashmap_List_Cons { _ }.
+Arguments Hashmap_List_Nil { _ }.
 
 (** [hashmap_main::hashmap::HashMap] *)
 Record hashmap_HashMap_t (T : Type) :=
@@ -27,11 +27,11 @@ mkhashmap_HashMap_t {
 }
 .
 
-Arguments mkhashmap_HashMap_t {T} _ _ _ _.
-Arguments hashmap_HashMap_num_entries {T}.
-Arguments hashmap_HashMap_max_load_factor {T}.
-Arguments hashmap_HashMap_max_load {T}.
-Arguments hashmap_HashMap_slots {T}.
+Arguments mkhashmap_HashMap_t { _ }.
+Arguments hashmap_HashMap_num_entries { _ }.
+Arguments hashmap_HashMap_max_load_factor { _ }.
+Arguments hashmap_HashMap_max_load { _ }.
+Arguments hashmap_HashMap_slots { _ }.
 
 (** The state type used in the state-error monad *)
 Axiom state : Type.

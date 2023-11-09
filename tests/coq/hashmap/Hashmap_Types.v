@@ -14,8 +14,8 @@ Inductive List_t (T : Type) :=
 | List_Nil : List_t T
 .
 
-Arguments List_Cons {T} _ _ _.
-Arguments List_Nil {T}.
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
 
 (** [hashmap::HashMap] *)
 Record HashMap_t (T : Type) :=
@@ -27,10 +27,10 @@ mkHashMap_t {
 }
 .
 
-Arguments mkHashMap_t {T} _ _ _ _.
-Arguments hashMap_num_entries {T}.
-Arguments hashMap_max_load_factor {T}.
-Arguments hashMap_max_load {T}.
-Arguments hashMap_slots {T}.
+Arguments mkHashMap_t { _ }.
+Arguments hashMap_num_entries { _ }.
+Arguments hashMap_max_load_factor { _ }.
+Arguments hashMap_max_load { _ }.
+Arguments hashMap_slots { _ }.
 
 End Hashmap_Types .

@@ -14,8 +14,8 @@ Inductive betree_List_t (T : Type) :=
 | Betree_List_Nil : betree_List_t T
 .
 
-Arguments Betree_List_Cons {T} _ _.
-Arguments Betree_List_Nil {T}.
+Arguments Betree_List_Cons { _ }.
+Arguments Betree_List_Nil { _ }.
 
 (** [betree_main::betree::UpsertFunState] *)
 Inductive betree_UpsertFunState_t :=

@@ -14,8 +14,8 @@ Inductive List_t (T : Type) :=
 | List_Nil : List_t T
 .
 
-Arguments List_Cons {T} _ _.
-Arguments List_Nil {T}.
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
 
 (** [polonius_list::get_list_at_x]: forward function *)
 Fixpoint get_list_at_x (ls : List_t u32) (x : u32) : result (List_t u32) :=

@@ -11,9 +11,9 @@ Module NoNestedBorrows.
 (** [no_nested_borrows::Pair] *)
 Record Pair_t (T1 T2 : Type) := mkPair_t { pair_x : T1; pair_y : T2; }.
 
-Arguments mkPair_t {T1} {T2} _ _.
-Arguments pair_x {T1} {T2}.
-Arguments pair_y {T1} {T2}.
+Arguments mkPair_t { _ _ }.
+Arguments pair_x { _ _ }.
+Arguments pair_y { _ _ }.
 
 (** [no_nested_borrows::List] *)
 Inductive List_t (T : Type) :=
@@ -21,13 +21,13 @@ Inductive List_t (T : Type) :=
 | List_Nil : List_t T
 .
 
-Arguments List_Cons {T} _ _.
-Arguments List_Nil {T}.
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
 
 (** [no_nested_borrows::One] *)
 Inductive One_t (T1 : Type) := | One_One : T1 -> One_t T1.
 
-Arguments One_One {T1} _.
+Arguments One_One { _ }.
 
 (** [no_nested_borrows::EmptyEnum] *)
 Inductive EmptyEnum_t := | EmptyEnum_Empty : EmptyEnum_t.
@@ -44,8 +44,8 @@ Inductive Sum_t (T1 T2 : Type) :=
 | Sum_Right : T2 -> Sum_t T1 T2
 .
 
-Arguments Sum_Left {T1} {T2} _.
-Arguments Sum_Right {T1} {T2} _.
+Arguments Sum_Left { _ _ }.
+Arguments Sum_Right { _ _ }.
 
 (** [no_nested_borrows::neg_test]: forward function *)
 Definition neg_test (x : i32) : result i32 :=
@@ -258,11 +258,11 @@ with NodeElem_t (T : Type) :=
 | NodeElem_Nil : NodeElem_t T
 .
 
-Arguments Tree_Leaf {T} _.
-Arguments Tree_Node {T} _ _ _.
+Arguments Tree_Leaf { _ }.
+Arguments Tree_Node { _ }.
 
-Arguments NodeElem_Cons {T} _ _.
-Arguments NodeElem_Nil {T}.
+Arguments NodeElem_Cons { _ }.
+Arguments NodeElem_Nil { _ }.
 
 (** [no_nested_borrows::list_length]: forward function *)
 Fixpoint list_length (T : Type) (l : List_t T) : result u32 :=
@@ -425,8 +425,8 @@ mkStructWithTuple_t {
 }
 .
 
-Arguments mkStructWithTuple_t {T1} {T2} _.
-Arguments structWithTuple_p {T1} {T2}.
+Arguments mkStructWithTuple_t { _ _ }.
+Arguments structWithTuple_p { _ _ }.
 
 (** [no_nested_borrows::new_tuple1]: forward function *)
 Definition new_tuple1 : result (StructWithTuple_t u32 u32) :=
@@ -450,8 +450,8 @@ mkStructWithPair_t {
 }
 .
 
-Arguments mkStructWithPair_t {T1} {T2} _.
-Arguments structWithPair_p {T1} {T2}.
+Arguments mkStructWithPair_t { _ _ }.
+Arguments structWithPair_p { _ _ }.
 
 (** [no_nested_borrows::new_pair1]: forward function *)
 Definition new_pair1 : result (StructWithPair_t u32 u32) :=
