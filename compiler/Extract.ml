@@ -472,7 +472,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       | Error (types, err) ->
           extract_generic_args ctx fmt TypeDeclId.Set.empty
             { generics with types };
-          if !Config.extract_fail_hard then raise (Failure err)
+          if !Config.fail_hard then raise (Failure err)
           else
             F.pp_print_string fmt
               "(\"ERROR: ill-formed builtin: invalid number of filtering \
@@ -1992,7 +1992,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
                         trans_fun.back_id
                   in
                   log#serror err;
-                  if !Config.extract_fail_hard then raise (Failure err)
+                  if !Config.fail_hard then raise (Failure err)
                   else (trans_fun.back_id, "%ERROR_BUILTIN_NAME_NOT_FOUND%")
             in
             let rg_with_name_list = List.map find trans_funs in

@@ -41,7 +41,7 @@ let _ =
   pure_utils_log#set_level EL.Info;
   symbolic_to_pure_log#set_level EL.Info;
   pure_micro_passes_log#set_level EL.Info;
-  pure_to_extract_log#set_level EL.Info;
+  extract_log#set_level EL.Info;
   translate_log#set_level EL.Info;
   scc_log#set_level EL.Info;
   reorder_decls_log#set_level EL.Info
@@ -65,6 +65,9 @@ let () =
 
   (* Read the command line arguments *)
   let dest_dir = ref "" in
+
+  (* Print the imported llbc *)
+  let print_llbc = ref false in
 
   let spec =
     [
@@ -118,6 +121,8 @@ let () =
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
+      ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
+      ("-k", Arg.Clear fail_hard, " Do not fail hard in case of error");
     ]
   in
 
@@ -131,6 +136,7 @@ let () =
   in
 
   if !extract_template_decreases_clauses then extract_decreases_clauses := true;
+  if !print_llbc then main_log#set_level EL.Debug;
 
   (* Sanity check (now that the arguments are parsed!): -template-clauses ==> decrease-clauses *)
   assert (!extract_decreases_clauses || not !extract_template_decreases_clauses);

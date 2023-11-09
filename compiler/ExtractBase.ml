@@ -8,7 +8,7 @@ module F = Format
 open ExtractBuiltin
 
 (** The local logger *)
-let log = L.pure_to_extract_log
+let log = L.extract_log
 
 type region_group_info = {
   id : RegionGroupId.id;
@@ -488,7 +488,7 @@ let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
   in
   log#serror err;
   (* If we fail hard on errors, raise an exception *)
-  if !Config.extract_fail_hard then raise (Failure err)
+  if !Config.fail_hard then raise (Failure err)
 
 let names_map_get_id_from_name (name : string) (nm : names_map) : id option =
   StringMap.find_opt name nm.name_to_id
@@ -522,7 +522,7 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
     in
     log#serror err;
     (* If we fail hard on errors, raise an exception *)
-    if !Config.extract_fail_hard then raise (Failure err));
+    if !Config.fail_hard then raise (Failure err));
   (* Insert *)
   names_map_add_unchecked id name nm
 
@@ -691,7 +691,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             | FunId (Assumed aid) -> A.show_assumed_fun_id aid
             | TraitMethod (trait_ref, method_name, _) ->
                 (* Shouldn't happen *)
-                if !Config.extract_fail_hard then raise (Failure "Unexpected")
+                if !Config.fail_hard then raise (Failure "Unexpected")
                 else
                   "Trait method: decl: "
                   ^ TraitDeclId.to_string trait_ref.trait_decl_ref.trait_decl_id
@@ -903,7 +903,7 @@ let names_maps_get (id_to_string : id -> string) (id : id) (nm : names_maps) :
           ^ map_to_string m
         in
         log#serror err;
-        if !Config.extract_fail_hard then raise (Failure err)
+        if !Config.fail_hard then raise (Failure err)
         else "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
     let m = nm.names_map.id_to_name in
@@ -915,7 +915,7 @@ let names_maps_get (id_to_string : id -> string) (id : id) (nm : names_maps) :
           ^ map_to_string m
         in
         log#serror err;
-        if !Config.extract_fail_hard then raise (Failure err)
+        if !Config.fail_hard then raise (Failure err)
         else "(ERROR: \"" ^ id_to_string id ^ "\")"
 
 let ctx_get (id : id) (ctx : extraction_ctx) : string =

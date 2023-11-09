@@ -451,7 +451,7 @@ and ctx_normalize_trait_instance_id :
       | None ->
           (* This is actually a local clause *)
           assert (trait_instance_id_is_local_clause inst_id);
-          (ParentClause (inst_id, decl_id, clause_id), None)
+          (ItemClause (inst_id, decl_id, item_name, clause_id), None)
       | Some impl ->
           (* We figure out the item clause by doing the following:
              {[

@@ -1374,7 +1374,7 @@ and extract_trait_instance_id (ctx : extraction_ctx) (fmt : F.formatter)
   | Self ->
       (* This has a specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
-      if !Config.extract_fail_hard then
+      if !Config.fail_hard then
         raise (Failure "Unexpected occurrence of `Self`")
       else F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
   | TraitImpl id ->
