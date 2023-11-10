@@ -9,6 +9,7 @@ module V = Values
 module E = Expressions
 module C = Contexts
 module Subst = Substitute
+module Assoc = AssociatedTypes
 module L = Logging
 open TypesUtils
 module Inv = Invariants
@@ -204,7 +205,7 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
   apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
     expansion ctx
 
-(** Compute the expansion of a non-assumed (i.e.: not [Option], [Box], etc.)
+(** Compute the expansion of a non-assumed (i.e.: not [Box], etc.)
     adt value.
 
     The function might return a list of values if the symbolic value to expand
@@ -214,18 +215,15 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_non_assumed_adt_value (expand_enumerations : bool)
-    (kind : V.sv_kind) (def_id : T.TypeDeclId.id)
-    (regions : T.RegionId.id T.region list) (types : T.rty list)
-    (cgs : T.const_generic list) (ctx : C.eval_ctx) : V.symbolic_expansion list
-    =
+    (kind : V.sv_kind) (def_id : T.TypeDeclId.id) (generics : T.rgeneric_args)
+    (ctx : C.eval_ctx) : V.symbolic_expansion list =
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
   let def = C.ctx_lookup_type_decl ctx def_id in
-  assert (List.length regions = List.length def.T.region_params);
+  assert (List.length generics.regions = List.length def.T.generics.regions);
   (* Retrieve, for every variant, the list of its instantiated field types *)
   let variants_fields_types =
-    Subst.type_decl_get_instantiated_variants_fields_rtypes def regions types
-      cgs
+    Assoc.type_decl_get_inst_norm_variants_fields_rtypes ctx def generics
   in
   (* Check if there is strictly more than one variant *)
   if List.length variants_fields_types > 1 && not expand_enumerations then
@@ -242,17 +240,6 @@ let compute_expanded_symbolic_non_assumed_adt_value (expand_enumerations : bool)
   in
   (* Initialize all the expanded values of all the variants *)
   List.map initialize variants_fields_types
-
-(** Compute the expansion of an Option value.
- *)
-let compute_expanded_symbolic_option_value (expand_enumerations : bool)
-    (kind : V.sv_kind) (ty : T.rty) : V.symbolic_expansion list =
-  assert expand_enumerations;
-  let some_se =
-    V.SeAdt (Some T.option_some_id, [ mk_fresh_symbolic_value kind ty ])
-  in
-  let none_se = V.SeAdt (Some T.option_none_id, []) in
-  [ none_se; some_se ]
 
 let compute_expanded_symbolic_tuple_value (kind : V.sv_kind)
     (field_types : T.rty list) : V.symbolic_expansion =
@@ -280,17 +267,14 @@ let compute_expanded_symbolic_box_value (kind : V.sv_kind) (boxed_ty : T.rty) :
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
-    (kind : V.sv_kind) (adt_id : T.type_id)
-    (regions : T.RegionId.id T.region list) (types : T.rty list)
-    (cgs : T.const_generic list) (ctx : C.eval_ctx) : V.symbolic_expansion list
-    =
-  match (adt_id, regions, types) with
+    (kind : V.sv_kind) (adt_id : T.type_id) (generics : T.rgeneric_args)
+    (ctx : C.eval_ctx) : V.symbolic_expansion list =
+  match (adt_id, generics.regions, generics.types) with
   | T.AdtId def_id, _, _ ->
       compute_expanded_symbolic_non_assumed_adt_value expand_enumerations kind
-        def_id regions types cgs ctx
-  | T.Tuple, [], _ -> [ compute_expanded_symbolic_tuple_value kind types ]
-  | T.Assumed T.Option, [], [ ty ] ->
-      compute_expanded_symbolic_option_value expand_enumerations kind ty
+        def_id generics ctx
+  | T.Tuple, [], _ ->
+      [ compute_expanded_symbolic_tuple_value kind generics.types ]
   | T.Assumed T.Box, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value kind boxed_ty ]
   | _ ->
@@ -543,12 +527,12 @@ let expand_symbolic_value_no_branching (config : C.config)
    fun cf ctx ->
     match rty with
     (* ADTs *)
-    | T.Adt (adt_id, regions, types, cgs) ->
+    | T.Adt (adt_id, generics) ->
         (* Compute the expanded value *)
         let allow_branching = false in
         let seel =
           compute_expanded_symbolic_adt_value allow_branching sv.sv_kind adt_id
-            regions types cgs ctx
+            generics ctx
         in
         (* There should be exacly one branch *)
         let see = Collections.List.to_cons_nil seel in
@@ -600,12 +584,12 @@ let expand_symbolic_adt (config : C.config) (sv : V.symbolic_value)
   (* Execute *)
   match rty with
   (* ADTs *)
-  | T.Adt (adt_id, regions, types, cgs) ->
+  | T.Adt (adt_id, generics) ->
       let allow_branching = true in
       (* Compute the expanded value *)
       let seel =
         compute_expanded_symbolic_adt_value allow_branching sv.sv_kind adt_id
-          regions types cgs ctx
+          generics ctx
       in
       (* Apply *)
       let seel = List.map (fun see -> (Some see, cf_branches)) seel in
@@ -679,7 +663,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
           ^ symbolic_value_to_string ctx sv));
       let cc : cm_fun =
         match sv.V.sv_ty with
-        | T.Adt (AdtId def_id, _, _, _) ->
+        | T.Adt (AdtId def_id, _) ->
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
@@ -704,16 +688,17 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
                      [config]): "
                    ^ Print.name_to_string def.name))
             else expand_symbolic_value_no_branching config sv None
-        | T.Adt ((Tuple | Assumed Box), _, _, _) | T.Ref (_, _, _) ->
+        | T.Adt ((Tuple | Assumed Box), _) | T.Ref (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config sv None
-        | T.Adt (Assumed (Vec | Option | Array | Slice | Str | Range), _, _, _)
-          ->
+        | T.Adt (Assumed (Array | Slice | Str), _) ->
             (* We can't expand those *)
             raise
               (Failure
                  "Attempted to greedily expand an ADT which can't be expanded ")
-        | T.TypeVar _ | T.Literal _ | Never -> raise (Failure "Unreachable")
+        | T.TypeVar _ | T.Literal _ | Never | T.TraitType _ | T.Arrow _
+        | T.RawPtr _ ->
+            raise (Failure "Unreachable")
       in
       (* Compose and continue *)
       comp cc expand cf ctx

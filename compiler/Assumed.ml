@@ -63,200 +63,52 @@ module Sig = struct
 
   let empty_const_generic_params : T.const_generic_var list = []
 
+  let mk_generic_args regions types const_generics : T.sgeneric_args =
+    { regions; types; const_generics; trait_refs = [] }
+
+  let mk_generic_params regions types const_generics : T.generic_params =
+    { regions; types; const_generics; trait_clauses = [] }
+
   let mk_ref_ty (r : T.RegionVarId.id T.region) (ty : T.sty) (is_mut : bool) :
       T.sty =
     let ref_kind = if is_mut then T.Mut else T.Shared in
     mk_ref_ty r ty ref_kind
 
   let mk_array_ty (ty : T.sty) (cg : T.const_generic) : T.sty =
-    Adt (Assumed Array, [], [ ty ], [ cg ])
+    Adt (Assumed Array, mk_generic_args [] [ ty ] [ cg ])
 
-  let mk_slice_ty (ty : T.sty) : T.sty = Adt (Assumed Slice, [], [ ty ], [])
-  let range_ty : T.sty = Adt (Assumed Range, [], [ usize_ty ], [])
+  let mk_slice_ty (ty : T.sty) : T.sty =
+    Adt (Assumed Slice, mk_generic_args [] [ ty ] [])
 
-  (** [fn<T>(&'a mut T, T) -> T] *)
-  let mem_replace_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] (* <'a> *) in
-    let regions_hierarchy = [ region_group_0 ] (* [{<'a>}] *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
-    let inputs =
-      [ mk_ref_ty rvar_0 tvar_0 true (* &'a mut T *); tvar_0 (* T *) ]
+  let mk_sig generics regions_hierarchy inputs output : A.fun_sig =
+    let preds : T.predicates =
+      { regions_outlive = []; types_outlive = []; trait_type_constraints = [] }
     in
-    let output = tvar_0 (* T *) in
     {
-      region_params;
-      num_early_bound_regions = 0;
+      is_unsafe = false;
+      generics;
+      preds;
+      parent_params_info = None;
       regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
       inputs;
       output;
     }
 
   (** [fn<T>(T) -> Box<T>] *)
   let box_new_sig : A.fun_sig =
-    {
-      region_params = [];
-      num_early_bound_regions = 0;
-      regions_hierarchy = [];
-      type_params = [ type_param_0 ] (* <T> *);
-      const_generic_params = empty_const_generic_params;
-      inputs = [ tvar_0 (* T *) ];
-      output = mk_box_ty tvar_0 (* Box<T> *);
-    }
+    let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
+    let regions_hierarchy = [] in
+    let inputs = [ tvar_0 (* T *) ] in
+    let output = mk_box_ty tvar_0 (* Box<T> *) in
+    mk_sig generics regions_hierarchy inputs output
 
   (** [fn<T>(Box<T>) -> ()] *)
   let box_free_sig : A.fun_sig =
-    {
-      region_params = [];
-      num_early_bound_regions = 0;
-      regions_hierarchy = [];
-      type_params = [ type_param_0 ] (* <T> *);
-      const_generic_params = empty_const_generic_params;
-      inputs = [ mk_box_ty tvar_0 (* Box<T> *) ];
-      output = mk_unit_ty (* () *);
-    }
-
-  (** Helper for [Box::deref_shared] and [Box::deref_mut].
-      Returns:
-      [fn<'a, T>(&'a (mut) Box<T>) -> &'a (mut) T]
-  *)
-  let box_deref_gen_sig (is_mut : bool) : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
-    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params = [ type_param_0 ] (* <T> *);
-      const_generic_params = empty_const_generic_params;
-      inputs =
-        [ mk_ref_ty rvar_0 (mk_box_ty tvar_0) is_mut (* &'a (mut) Box<T> *) ];
-      output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *);
-    }
-
-  (** [fn<'a, T>(&'a Box<T>) -> &'a T] *)
-  let box_deref_shared_sig = box_deref_gen_sig false
-
-  (** [fn<'a, T>(&'a mut Box<T>) -> &'a mut T] *)
-  let box_deref_mut_sig = box_deref_gen_sig true
-
-  (** [fn<T>() -> Vec<T>] *)
-  let vec_new_sig : A.fun_sig =
-    let region_params = [] in
+    let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
     let regions_hierarchy = [] in
-    let type_params = [ type_param_0 ] (* <T> *) in
-    let inputs = [] in
-    let output = mk_vec_ty tvar_0 (* Vec<T> *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
-
-  (** [fn<T>(&'a mut Vec<T>, T)] *)
-  let vec_push_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
-    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
-    let inputs =
-      [
-        mk_ref_ty rvar_0 (mk_vec_ty tvar_0) true (* &'a mut Vec<T> *);
-        tvar_0 (* T *);
-      ]
-    in
+    let inputs = [ mk_box_ty tvar_0 (* Box<T> *) ] in
     let output = mk_unit_ty (* () *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
-
-  (** [fn<T>(&'a mut Vec<T>, usize, T)] *)
-  let vec_insert_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
-    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
-    let inputs =
-      [
-        mk_ref_ty rvar_0 (mk_vec_ty tvar_0) true (* &'a mut Vec<T> *);
-        mk_usize_ty (* usize *);
-        tvar_0 (* T *);
-      ]
-    in
-    let output = mk_unit_ty (* () *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
-
-  (** [fn<T>(&'a Vec<T>) -> usize] *)
-  let vec_len_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
-    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
-    let inputs =
-      [ mk_ref_ty rvar_0 (mk_vec_ty tvar_0) false (* &'a Vec<T> *) ]
-    in
-    let output = mk_usize_ty (* usize *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
-
-  (** Helper:
-      [fn<T>(&'a (mut) Vec<T>, usize) -> &'a (mut) T]
-   *)
-  let vec_index_gen_sig (is_mut : bool) : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
-    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
-    let inputs =
-      [
-        mk_ref_ty rvar_0 (mk_vec_ty tvar_0) is_mut (* &'a (mut) Vec<T> *);
-        mk_usize_ty (* usize *);
-      ]
-    in
-    let output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
-
-  (** [fn<T>(&'a Vec<T>, usize) -> &'a T] *)
-  let vec_index_shared_sig : A.fun_sig = vec_index_gen_sig false
-
-  (** [fn<T>(&'a mut Vec<T>, usize) -> &'a mut T] *)
-  let vec_index_mut_sig : A.fun_sig = vec_index_gen_sig true
+    mk_sig generics regions_hierarchy inputs output
 
   (** Array/slice functions *)
 
@@ -275,10 +127,10 @@ module Sig = struct
   let mk_array_slice_borrow_sig (cgs : T.const_generic_var list)
       (input_ty : T.TypeVarId.id -> T.sty) (index_ty : T.sty option)
       (output_ty : T.TypeVarId.id -> T.sty) (is_mut : bool) : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] cgs (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs =
       [
         mk_ref_ty rvar_0
@@ -294,15 +146,7 @@ module Sig = struct
         (output_ty type_param_0.index)
         is_mut (* &'a (mut) output_ty<T> *)
     in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = cgs;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 
   let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : A.fun_sig =
     (* Array<T, N> *)
@@ -328,50 +172,53 @@ module Sig = struct
     let cgs = [ cg_param_0 ] in
     mk_array_slice_borrow_sig cgs input_ty None output_ty is_mut
 
-  let mk_array_slice_subslice_sig (is_array : bool) (is_mut : bool) : A.fun_sig
-      =
-    (* Array<T, N> *)
-    let input_ty id =
-      if is_array then mk_array_ty (T.TypeVar id) cgvar_0
-      else mk_slice_ty (T.TypeVar id)
+  let array_repeat_sig =
+    let generics =
+      (* <T, N> *)
+      mk_generic_params [] [ type_param_0 ] [ cg_param_0 ]
     in
-    (* Range *)
-    let index_ty = range_ty in
-    (* Slice<T> *)
-    let output_ty id = mk_slice_ty (T.TypeVar id) in
-    let cgs = if is_array then [ cg_param_0 ] else [] in
-    mk_array_slice_borrow_sig cgs input_ty (Some index_ty) output_ty is_mut
-
-  let array_subslice_sig (is_mut : bool) =
-    mk_array_slice_subslice_sig true is_mut
-
-  let slice_subslice_sig (is_mut : bool) =
-    mk_array_slice_subslice_sig false is_mut
+    let regions_hierarchy = [] (* <> *) in
+    let inputs = [ tvar_0 (* T *) ] in
+    let output =
+      (* [T; N] *)
+      mk_array_ty tvar_0 cgvar_0
+    in
+    mk_sig generics regions_hierarchy inputs output
 
   (** Helper:
       [fn<T>(&'a [T]) -> usize]
    *)
   let slice_len_sig : A.fun_sig =
-    (* The signature fields *)
-    let region_params = [ region_param_0 ] in
+    let generics =
+      mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
+    in
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
-    let type_params = [ type_param_0 ] (* <T> *) in
     let inputs =
       [ mk_ref_ty rvar_0 (mk_slice_ty tvar_0) false (* &'a [T] *) ]
     in
     let output = mk_usize_ty (* usize *) in
-    {
-      region_params;
-      num_early_bound_regions = 0;
-      regions_hierarchy;
-      type_params;
-      const_generic_params = empty_const_generic_params;
-      inputs;
-      output;
-    }
+    mk_sig generics regions_hierarchy inputs output
 end
 
-type assumed_info = A.assumed_fun_id * A.fun_sig * bool * name
+type raw_assumed_fun_info =
+  A.assumed_fun_id * A.fun_sig * bool * name * bool list option
+
+type assumed_fun_info = {
+  fun_id : A.assumed_fun_id;
+  fun_sig : A.fun_sig;
+  can_fail : bool;
+  name : name;
+  keep_types : bool list option;
+      (** We may want to filter some type arguments.
+
+          For instance, all the `Vec` functions (and the `Vec` type itself) take
+          an `Allocator` type as argument, that we ignore.
+       *)
+}
+
+let mk_assumed_fun_info (raw : raw_assumed_fun_info) : assumed_fun_info =
+  let fun_id, fun_sig, can_fail, name, keep_types = raw in
+  { fun_id; fun_sig; can_fail; name; keep_types }
 
 (** The list of assumed functions and all their information:
     - their signature
@@ -384,94 +231,72 @@ type assumed_info = A.assumed_fun_id * A.fun_sig * bool * name
     a [usize], we have to make sure that vectors are bounded by the max usize.
     As a consequence, [Vec::push] is monadic.
  *)
-let assumed_infos : assumed_info list =
-  let deref_pre = [ "core"; "ops"; "deref" ] in
-  let vec_pre = [ "alloc"; "vec"; "Vec" ] in
-  let index_pre = [ "core"; "ops"; "index" ] in
+let raw_assumed_fun_infos : raw_assumed_fun_info list =
   [
-    (A.Replace, Sig.mem_replace_sig, false, to_name [ "core"; "mem"; "replace" ]);
-    (BoxNew, Sig.box_new_sig, false, to_name [ "alloc"; "boxed"; "Box"; "new" ]);
+    ( BoxNew,
+      Sig.box_new_sig,
+      false,
+      to_name [ "alloc"; "boxed"; "Box"; "new" ],
+      Some [ true; false ] );
+    (* BoxFree shouldn't be used *)
     ( BoxFree,
       Sig.box_free_sig,
       false,
-      to_name [ "alloc"; "boxed"; "Box"; "free" ] );
-    ( BoxDeref,
-      Sig.box_deref_shared_sig,
-      false,
-      to_name (deref_pre @ [ "Deref"; "deref" ]) );
-    ( BoxDerefMut,
-      Sig.box_deref_mut_sig,
-      false,
-      to_name (deref_pre @ [ "DerefMut"; "deref_mut" ]) );
-    (VecNew, Sig.vec_new_sig, false, to_name (vec_pre @ [ "new" ]));
-    (VecPush, Sig.vec_push_sig, true, to_name (vec_pre @ [ "push" ]));
-    (VecInsert, Sig.vec_insert_sig, true, to_name (vec_pre @ [ "insert" ]));
-    (VecLen, Sig.vec_len_sig, false, to_name (vec_pre @ [ "len" ]));
-    ( VecIndex,
-      Sig.vec_index_shared_sig,
-      true,
-      to_name (index_pre @ [ "Index"; "index" ]) );
-    ( VecIndexMut,
-      Sig.vec_index_mut_sig,
-      true,
-      to_name (index_pre @ [ "IndexMut"; "index_mut" ]) );
+      to_name [ "alloc"; "boxed"; "Box"; "free" ],
+      Some [ true; false ] );
     (* Array Index *)
     ( ArrayIndexShared,
       Sig.array_index_sig false,
       true,
-      to_name [ "@ArrayIndexShared" ] );
-    (ArrayIndexMut, Sig.array_index_sig true, true, to_name [ "@ArrayIndexMut" ]);
+      to_name [ "@ArrayIndexShared" ],
+      None );
+    ( ArrayIndexMut,
+      Sig.array_index_sig true,
+      true,
+      to_name [ "@ArrayIndexMut" ],
+      None );
     (* Array to slice*)
     ( ArrayToSliceShared,
       Sig.array_to_slice_sig false,
       true,
-      to_name [ "@ArrayToSliceShared" ] );
+      to_name [ "@ArrayToSliceShared" ],
+      None );
     ( ArrayToSliceMut,
       Sig.array_to_slice_sig true,
       true,
-      to_name [ "@ArrayToSliceMut" ] );
-    (* Array Subslice *)
-    ( ArraySubsliceShared,
-      Sig.array_subslice_sig false,
-      true,
-      to_name [ "@ArraySubsliceShared" ] );
-    ( ArraySubsliceMut,
-      Sig.array_subslice_sig true,
-      true,
-      to_name [ "@ArraySubsliceMut" ] );
+      to_name [ "@ArrayToSliceMut" ],
+      None );
+    (* Array Repeat *)
+    (ArrayRepeat, Sig.array_repeat_sig, false, to_name [ "@ArrayRepeat" ], None);
     (* Slice Index *)
     ( SliceIndexShared,
       Sig.slice_index_sig false,
       true,
-      to_name [ "@SliceIndexShared" ] );
-    (SliceIndexMut, Sig.slice_index_sig true, true, to_name [ "@SliceIndexMut" ]);
-    (* Slice Subslice *)
-    ( SliceSubsliceShared,
-      Sig.slice_subslice_sig false,
+      to_name [ "@SliceIndexShared" ],
+      None );
+    ( SliceIndexMut,
+      Sig.slice_index_sig true,
       true,
-      to_name [ "@SliceSubsliceShared" ] );
-    ( SliceSubsliceMut,
-      Sig.slice_subslice_sig true,
-      true,
-      to_name [ "@SliceSubsliceMut" ] );
-    (SliceLen, Sig.slice_len_sig, false, to_name [ "@SliceLen" ]);
+      to_name [ "@SliceIndexMut" ],
+      None );
+    (SliceLen, Sig.slice_len_sig, false, to_name [ "@SliceLen" ], None);
   ]
 
-let get_assumed_info (id : A.assumed_fun_id) : assumed_info =
-  match List.find_opt (fun (id', _, _, _) -> id = id') assumed_infos with
+let assumed_fun_infos : assumed_fun_info list =
+  List.map mk_assumed_fun_info raw_assumed_fun_infos
+
+let get_assumed_fun_info (id : A.assumed_fun_id) : assumed_fun_info =
+  match List.find_opt (fun x -> id = x.fun_id) assumed_fun_infos with
   | Some info -> info
   | None ->
       raise
-        (Failure ("get_assumed_info: not found: " ^ A.show_assumed_fun_id id))
+        (Failure ("get_assumed_fun_info: not found: " ^ A.show_assumed_fun_id id))
 
-let get_assumed_sig (id : A.assumed_fun_id) : A.fun_sig =
-  let _, sg, _, _ = get_assumed_info id in
-  sg
+let get_assumed_fun_sig (id : A.assumed_fun_id) : A.fun_sig =
+  (get_assumed_fun_info id).fun_sig
 
-let get_assumed_name (id : A.assumed_fun_id) : fun_name =
-  let _, _, _, name = get_assumed_info id in
-  name
+let get_assumed_fun_name (id : A.assumed_fun_id) : fun_name =
+  (get_assumed_fun_info id).name
 
-let assumed_can_fail (id : A.assumed_fun_id) : bool =
-  let _, _, b, _ = get_assumed_info id in
-  b
+let assumed_fun_can_fail (id : A.assumed_fun_id) : bool =
+  (get_assumed_fun_info id).can_fail

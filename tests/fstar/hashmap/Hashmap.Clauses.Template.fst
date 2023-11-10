@@ -8,55 +8,55 @@ open Hashmap.Types
 
 (** [hashmap::HashMap::{0}::allocate_slots]: decreases clause *)
 unfold
-let hash_map_allocate_slots_loop_decreases (t : Type0) (slots : vec (list_t t))
-  (n : usize) : nat =
+let hashMap_allocate_slots_loop_decreases (t : Type0)
+  (slots : alloc_vec_Vec (list_t t)) (n : usize) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::clear]: decreases clause *)
 unfold
-let hash_map_clear_loop_decreases (t : Type0) (slots : vec (list_t t))
+let hashMap_clear_loop_decreases (t : Type0) (slots : alloc_vec_Vec (list_t t))
   (i : usize) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::insert_in_list]: decreases clause *)
 unfold
-let hash_map_insert_in_list_loop_decreases (t : Type0) (key : usize)
-  (value : t) (ls : list_t t) : nat =
+let hashMap_insert_in_list_loop_decreases (t : Type0) (key : usize) (value : t)
+  (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::move_elements_from_list]: decreases clause *)
 unfold
-let hash_map_move_elements_from_list_loop_decreases (t : Type0)
-  (ntable : hash_map_t t) (ls : list_t t) : nat =
+let hashMap_move_elements_from_list_loop_decreases (t : Type0)
+  (ntable : hashMap_t t) (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::move_elements]: decreases clause *)
 unfold
-let hash_map_move_elements_loop_decreases (t : Type0) (ntable : hash_map_t t)
-  (slots : vec (list_t t)) (i : usize) : nat =
+let hashMap_move_elements_loop_decreases (t : Type0) (ntable : hashMap_t t)
+  (slots : alloc_vec_Vec (list_t t)) (i : usize) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::contains_key_in_list]: decreases clause *)
 unfold
-let hash_map_contains_key_in_list_loop_decreases (t : Type0) (key : usize)
+let hashMap_contains_key_in_list_loop_decreases (t : Type0) (key : usize)
   (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::get_in_list]: decreases clause *)
 unfold
-let hash_map_get_in_list_loop_decreases (t : Type0) (key : usize)
+let hashMap_get_in_list_loop_decreases (t : Type0) (key : usize)
   (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::get_mut_in_list]: decreases clause *)
 unfold
-let hash_map_get_mut_in_list_loop_decreases (t : Type0) (ls : list_t t)
+let hashMap_get_mut_in_list_loop_decreases (t : Type0) (ls : list_t t)
   (key : usize) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::remove_from_list]: decreases clause *)
 unfold
-let hash_map_remove_from_list_loop_decreases (t : Type0) (key : usize)
+let hashMap_remove_from_list_loop_decreases (t : Type0) (key : usize)
   (ls : list_t t) : nat =
   admit ()
 

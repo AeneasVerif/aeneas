@@ -13,6 +13,9 @@ module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
 module FunDeclId = A.FunDeclId
 module GlobalDeclId = A.GlobalDeclId
+module TraitDeclId = T.TraitDeclId
+module TraitImplId = T.TraitImplId
+module TraitClauseId = T.TraitClauseId
 
 (** We redefine identifiers for loop: in {!Values}, the identifiers are global
     (they monotonically increase across functions) while in {!module:Pure} we want
@@ -20,8 +23,6 @@ module GlobalDeclId = A.GlobalDeclId
  *)
 module LoopId =
 IdGen ()
-
-type loop_id = LoopId.id [@@deriving show, ord]
 
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
@@ -37,6 +38,16 @@ module ConstGenericVarId = T.ConstGenericVarId
 type integer_type = T.integer_type [@@deriving show, ord]
 type const_generic_var = T.const_generic_var [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
+type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
+type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
+type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
+type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
+type trait_item_name = T.trait_item_name [@@deriving show, ord]
+type global_decl_id = T.global_decl_id [@@deriving show, ord]
+type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
+type loop_id = LoopId.id [@@deriving show, ord]
+type region_group_id = T.region_group_id [@@deriving show, ord]
+type mutability = Mut | Const [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -59,12 +70,17 @@ type assumed_ty =
   | Result
   | Error
   | Fuel
-  | Vec
-  | Option
   | Array
   | Slice
   | Str
-  | Range
+  | RawPtr of mutability
+      (** The bool
+          Raw pointers don't make sense in the pure world, but we don't know
+          how to translate them yet and we have to handle some functions which
+          use raw pointers in their signature (for instance some trait declarations
+          for the slices). For now, we use a dedicated type to "mark" the raw pointers,
+          and make sure that those functions are actually not used in the translation.
+       *)
 [@@deriving show, ord]
 
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather
@@ -176,6 +192,14 @@ class ['self] iter_ty_base =
     inherit! [_] T.iter_const_generic
     inherit! [_] PV.iter_literal_type
     method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
+    method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
+    method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> unit =
+      fun _ _ -> ()
+
+    method visit_trait_item_name : 'env -> trait_item_name -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
@@ -185,6 +209,18 @@ class ['self] map_ty_base =
     inherit! [_] T.map_const_generic
     inherit! [_] PV.map_literal_type
     method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id =
+      fun _ x -> x
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id =
+      fun _ x -> x
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> trait_clause_id =
+      fun _ x -> x
+
+    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
@@ -194,6 +230,18 @@ class virtual ['self] reduce_ty_base =
     inherit! [_] T.reduce_const_generic
     inherit! [_] PV.reduce_literal_type
     method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
@@ -205,10 +253,24 @@ class virtual ['self] mapreduce_ty_base =
 
     method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
       fun _ x -> (x, self#zero)
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_clause_id
+        : 'env -> trait_clause_id -> trait_clause_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_item_name
+        : 'env -> trait_item_name -> trait_item_name * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 type ty =
-  | Adt of type_id * ty list * const_generic list
+  | Adt of type_id * generic_args
       (** {!Adt} encodes ADTs and tuples and assumed types.
 
           TODO: what about the ended regions? (ADTs may be parameterized
@@ -219,8 +281,38 @@ type ty =
   | TypeVar of type_var_id
   | Literal of literal_type
   | Arrow of ty * ty
+  | TraitType of trait_ref * generic_args * string
+      (** The string is for the name of the associated type *)
+
+and trait_ref = {
+  trait_id : trait_instance_id;
+  generics : generic_args;
+  trait_decl_ref : trait_decl_ref;
+}
+
+and trait_decl_ref = {
+  trait_decl_id : trait_decl_id;
+  decl_generics : generic_args; (* The name: annoying field collisions... *)
+}
+
+and generic_args = {
+  types : ty list;
+  const_generics : const_generic list;
+  trait_refs : trait_ref list;
+}
+
+and trait_instance_id =
+  | Self
+  | TraitImpl of trait_impl_id
+  | Clause of trait_clause_id
+  | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
+  | ItemClause of
+      trait_instance_id * trait_decl_id * trait_item_name * trait_clause_id
+  | TraitRef of trait_ref
+  | UnknownTrait of string
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_ty";
@@ -264,12 +356,37 @@ type type_decl_kind = Struct of field list | Enum of variant list | Opaque
 
 type type_var = T.type_var [@@deriving show]
 
+type trait_clause = {
+  clause_id : trait_clause_id;
+  trait_id : trait_decl_id;
+  generics : generic_args;
+}
+[@@deriving show]
+
+type generic_params = {
+  types : type_var list;
+  const_generics : const_generic_var list;
+  trait_clauses : trait_clause list;
+}
+[@@deriving show]
+
+type trait_type_constraint = {
+  trait_ref : trait_ref;
+  generics : generic_args;
+  type_name : trait_item_name;
+  ty : ty;
+}
+[@@deriving show, ord]
+
+type predicates = { trait_type_constraints : trait_type_constraint list }
+[@@deriving show]
+
 type type_decl = {
   def_id : TypeDeclId.id;
   name : name;
-  type_params : type_var list;
-  const_generic_params : const_generic_var list;
+  generics : generic_params;
   kind : type_decl_kind;
+  preds : predicates;
 }
 [@@deriving show]
 
@@ -420,8 +537,15 @@ type pure_assumed_fun_id =
   | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
 [@@deriving show, ord]
 
+type fun_id_or_trait_method_ref =
+  | FunId of A.fun_id
+  | TraitMethod of trait_ref * string * fun_decl_id
+      (** The fun decl id is not really needed and here for convenience purposes *)
+[@@deriving show, ord]
+
 (** A function id for a non-assumed function *)
-type regular_fun_id = A.fun_id * LoopId.id option * T.RegionGroupId.id option
+type regular_fun_id =
+  fun_id_or_trait_method_ref * LoopId.id option * T.RegionGroupId.id option
 [@@deriving show, ord]
 
 (** A function identifier *)
@@ -457,23 +581,20 @@ type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
 
 type qualif_id =
   | FunOrOp of fun_or_op_id  (** A function or an operation *)
-  | Global of GlobalDeclId.id
+  | Global of global_decl_id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
+  | TraitConst of trait_ref * generic_args * string
+      (** A trait associated constant *)
 [@@deriving show]
 
-(** An instantiated qualified.
+(** An instantiated qualifier.
 
     Note that for now we have a clear separation between types and expressions,
-    which explains why we have the [type_params] field: a function or ADT
+    which explains why we have the [generics] field: a function or ADT
     constructor is always fully instantiated.
  *)
-type qualif = {
-  id : qualif_id;
-  type_args : ty list;
-  const_generic_args : const_generic list;
-}
-[@@deriving show]
+type qualif = { id : qualif_id; generics : generic_args } [@@deriving show]
 
 type field_id = FieldId.id [@@deriving show, ord]
 type var_id = VarId.id [@@deriving show, ord]
@@ -536,6 +657,7 @@ class virtual ['self] mapreduce_expression_base =
  *)
 type expression =
   | Var of var_id  (** a variable *)
+  | CVar of const_generic_var_id  (** a const generic var *)
   | Const of literal
   | App of texpression * texpression
       (** Application of a function to an argument.
@@ -787,11 +909,11 @@ type fun_sig_info = {
     - etc.
  *)
 type fun_sig = {
-  type_params : type_var list;
-  const_generic_params : const_generic_var list;
+  generics : generic_params;
       (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  preds : predicates;
   inputs : ty list;
-      (** The input types.
+      (** The types of the inputs.
 
           Note that those input types take into account the [fuel] parameter,
           if the function uses fuel for termination, and the [state] parameter,
@@ -861,8 +983,11 @@ type fun_body = {
 }
 [@@deriving show]
 
+type fun_kind = A.fun_kind [@@deriving show]
+
 type fun_decl = {
   def_id : FunDeclId.id;
+  kind : fun_kind;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
           of loops appearing in the original Rust functions, unless some loops are
@@ -880,5 +1005,32 @@ type fun_decl = {
   signature : fun_sig;
   is_global_decl_body : bool;
   body : fun_body option;
+}
+[@@deriving show]
+
+type trait_decl = {
+  def_id : trait_decl_id;
+  name : name;
+  generics : generic_params;
+  preds : predicates;
+  parent_clauses : trait_clause list;
+  consts : (trait_item_name * (ty * global_decl_id option)) list;
+  types : (trait_item_name * (trait_clause list * ty option)) list;
+  required_methods : (trait_item_name * fun_decl_id) list;
+  provided_methods : (trait_item_name * fun_decl_id option) list;
+}
+[@@deriving show]
+
+type trait_impl = {
+  def_id : trait_impl_id;
+  name : name;
+  impl_trait : trait_decl_ref;
+  generics : generic_params;
+  preds : predicates;
+  parent_trait_refs : trait_ref list;
+  consts : (trait_item_name * (ty * global_decl_id)) list;
+  types : (trait_item_name * (trait_ref list * ty)) list;
+  required_methods : (trait_item_name * fun_decl_id) list;
+  provided_methods : (trait_item_name * fun_decl_id) list;
 }
 [@@deriving show]

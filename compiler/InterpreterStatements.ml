@@ -10,13 +10,13 @@ open TypesUtils
 open ValuesUtils
 module Inv = Invariants
 module S = SynthesizeSymbolic
-open Utils
 open Cps
 open InterpreterUtils
 open InterpreterProjectors
 open InterpreterExpansion
 open InterpreterPaths
 open InterpreterExpressions
+module PCtx = Print.EvalCtxLlbcAst
 
 (** The local logger *)
 let log = L.statements_log
@@ -232,9 +232,7 @@ let set_discriminant (config : C.config) (p : E.place)
   let update_value cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match (v.V.ty, v.V.value) with
-    | ( T.Adt
-          (((T.AdtId _ | T.Assumed T.Option) as type_id), regions, types, cgs),
-        V.Adt av ) -> (
+    | T.Adt ((T.AdtId _ as type_id), generics), V.Adt av -> (
         (* There are two situations:
            - either the discriminant is already the proper one (in which case we
              don't do anything)
@@ -251,28 +249,17 @@ let set_discriminant (config : C.config) (p : E.place)
               let bottom_v =
                 match type_id with
                 | T.AdtId def_id ->
-                    compute_expanded_bottom_adt_value
-                      ctx.type_context.type_decls def_id (Some variant_id)
-                      regions types cgs
-                | T.Assumed T.Option ->
-                    assert (regions = []);
-                    compute_expanded_bottom_option_value variant_id
-                      (Collections.List.to_cons_nil types)
+                    compute_expanded_bottom_adt_value ctx def_id
+                      (Some variant_id) generics
                 | _ -> raise (Failure "Unreachable")
               in
               assign_to_place config bottom_v p (cf Unit) ctx)
-    | ( T.Adt
-          (((T.AdtId _ | T.Assumed T.Option) as type_id), regions, types, cgs),
-        V.Bottom ) ->
+    | T.Adt ((T.AdtId _ as type_id), generics), V.Bottom ->
         let bottom_v =
           match type_id with
           | T.AdtId def_id ->
-              compute_expanded_bottom_adt_value ctx.type_context.type_decls
-                def_id (Some variant_id) regions types cgs
-          | T.Assumed T.Option ->
-              assert (regions = []);
-              compute_expanded_bottom_option_value variant_id
-                (Collections.List.to_cons_nil types)
+              compute_expanded_bottom_adt_value ctx def_id (Some variant_id)
+                generics
           | _ -> raise (Failure "Unreachable")
         in
         assign_to_place config bottom_v p (cf Unit) ctx
@@ -301,24 +288,34 @@ let ctx_push_frame (ctx : C.eval_ctx) : C.eval_ctx =
 let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
 
 (** Small helper: compute the type of the return value for a specific
-    instantiation of a non-local function.
+    instantiation of an assumed function.
  *)
-let get_non_local_function_return_type (fid : A.assumed_fun_id)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (const_generic_params : T.const_generic list) : T.ety =
+let get_assumed_function_return_type (ctx : C.eval_ctx) (fid : A.assumed_fun_id)
+    (generics : T.egeneric_args) : T.ety =
+  assert (generics.trait_refs = []);
   (* [Box::free] has a special treatment *)
-  match (fid, region_params, type_params, const_generic_params) with
-  | A.BoxFree, [], [ _ ], [] -> mk_unit_ty
+  match fid with
+  | BoxFree ->
+      assert (generics.regions = []);
+      assert (List.length generics.types = 1);
+      assert (generics.const_generics = []);
+      mk_unit_ty
   | _ ->
       (* Retrieve the function's signature *)
-      let sg = Assumed.get_assumed_sig fid in
+      let sg = Assumed.get_assumed_fun_sig fid in
       (* Instantiate the return type  *)
-      let tsubst = Subst.make_type_subst_from_vars sg.type_params type_params in
-      let cgsubst =
-        Subst.make_const_generic_subst_from_vars sg.const_generic_params
-          const_generic_params
+      (* There shouldn't be any reference to Self *)
+      let tr_self : T.erased_region T.trait_instance_id =
+        T.UnknownTrait __FUNCTION__
       in
-      Subst.erase_regions_substitute_types tsubst cgsubst sg.output
+      let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
+        Subst.make_esubst_from_generics sg.generics generics tr_self
+      in
+      let ty =
+        Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
+          sg.output
+      in
+      Assoc.ctx_normalize_ety ctx ty
 
 let move_return_value (config : C.config) (pop_return_value : bool)
     (cf : V.typed_value option -> m_fun) : m_fun =
@@ -418,19 +415,14 @@ let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
   in
   comp cf_pop cf_assign
 
-(** Auxiliary function - see {!eval_non_local_function_call} *)
-let eval_replace_concrete (_config : C.config)
-    (_region_params : T.erased_region list) (_type_params : T.ety list)
-    (_cg_params : T.const_generic list) : cm_fun =
- fun _cf _ctx -> raise Unimplemented
-
-(** Auxiliary function - see {!eval_non_local_function_call} *)
-let eval_box_new_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (cg_params : T.const_generic list) : cm_fun =
+(** Auxiliary function - see {!eval_assumed_function_call} *)
+let eval_box_new_concrete (config : C.config) (generics : T.egeneric_args) :
+    cm_fun =
  fun cf ctx ->
   (* Check and retrieve the arguments *)
-  match (region_params, type_params, cg_params, ctx.env) with
+  match
+    (generics.regions, generics.types, generics.const_generics, ctx.env)
+  with
   | ( [],
       [ boxed_ty ],
       [],
@@ -448,7 +440,8 @@ let eval_box_new_concrete (config : C.config)
       (* Create the new box *)
       let cf_create cf (moved_input_value : V.typed_value) : m_fun =
         (* Create the box value *)
-        let box_ty = T.Adt (T.Assumed T.Box, [], [ boxed_ty ], []) in
+        let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
+        let box_ty = T.Adt (T.Assumed T.Box, generics) in
         let box_v =
           V.Adt { variant_id = None; field_values = [ moved_input_value ] }
         in
@@ -466,71 +459,7 @@ let eval_box_new_concrete (config : C.config)
       comp cf_move cf_create cf ctx
   | _ -> raise (Failure "Inconsistent state")
 
-(** Auxiliary function which factorizes code to evaluate [std::Deref::deref]
-    and [std::DerefMut::deref_mut] - see {!eval_non_local_function_call} *)
-let eval_box_deref_mut_or_shared_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (cg_params : T.const_generic list) (is_mut : bool) : cm_fun =
- fun cf ctx ->
-  (* Check the arguments *)
-  match (region_params, type_params, cg_params, ctx.env) with
-  | ( [],
-      [ boxed_ty ],
-      [],
-      Var (VarBinder input_var, input_value)
-      :: Var (_ret_var, _)
-      :: C.Frame :: _ ) ->
-      (* Required type checking. We must have:
-         - input_value.ty = & (mut) Box<ty>
-         - boxed_ty = ty
-         for some ty
-      *)
-      (let _, input_ty, ref_kind = ty_get_ref input_value.V.ty in
-       assert (match ref_kind with T.Shared -> not is_mut | T.Mut -> is_mut);
-       let input_ty = ty_get_box input_ty in
-       assert (input_ty = boxed_ty));
-
-      (* Borrow the boxed value *)
-      let p =
-        { E.var_id = input_var.C.index; projection = [ E.Deref; E.DerefBox ] }
-      in
-      let borrow_kind = if is_mut then E.Mut else E.Shared in
-      let rv = E.Ref (p, borrow_kind) in
-      let cf_borrow = eval_rvalue_not_global config rv in
-
-      (* Move the borrow to its destination *)
-      let cf_move cf res : m_fun =
-        match res with
-        | Error EPanic ->
-            (* We can't get there by borrowing a value *)
-            raise (Failure "Unreachable")
-        | Ok borrowed_value ->
-            (* Move and continue *)
-            let destp = mk_place_from_var_id E.VarId.zero in
-            assign_to_place config borrowed_value destp cf
-      in
-
-      (* Compose and apply *)
-      comp cf_borrow cf_move cf ctx
-  | _ -> raise (Failure "Inconsistent state")
-
-(** Auxiliary function - see {!eval_non_local_function_call} *)
-let eval_box_deref_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (cg_params : T.const_generic list) : cm_fun =
-  let is_mut = false in
-  eval_box_deref_mut_or_shared_concrete config region_params type_params
-    cg_params is_mut
-
-(** Auxiliary function - see {!eval_non_local_function_call} *)
-let eval_box_deref_mut_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (cg_params : T.const_generic list) : cm_fun =
-  let is_mut = true in
-  eval_box_deref_mut_or_shared_concrete config region_params type_params
-    cg_params is_mut
-
-(** Auxiliary function - see {!eval_non_local_function_call}.
+(** Auxiliary function - see {!eval_assumed_function_call}.
 
     [Box::free] is not handled the same way as the other assumed functions:
     - in the regular case, whenever we need to evaluate an assumed function,
@@ -549,11 +478,10 @@ let eval_box_deref_mut_concrete (config : C.config)
     It thus updates the box value (by calling {!drop_value}) and updates
     the destination (by setting it to [()]).
 *)
-let eval_box_free (config : C.config) (region_params : T.erased_region list)
-    (type_params : T.ety list) (cg_params : T.const_generic list)
+let eval_box_free (config : C.config) (generics : T.egeneric_args)
     (args : E.operand list) (dest : E.place) : cm_fun =
  fun cf ctx ->
-  match (region_params, type_params, cg_params, args) with
+  match (generics.regions, generics.types, generics.const_generics, args) with
   | [], [ boxed_ty ], [], [ E.Move input_box_place ] ->
       (* Required type checking *)
       let input_box = InterpreterPaths.read_place Write input_box_place ctx in
@@ -570,26 +498,24 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
       cc cf ctx
   | _ -> raise (Failure "Inconsistent state")
 
-(** Auxiliary function - see {!eval_non_local_function_call} *)
-let eval_vec_function_concrete (_config : C.config) (_fid : A.assumed_fun_id)
-    (_region_params : T.erased_region list) (_type_params : T.ety list)
-    (_cg_params : T.const_generic list) : cm_fun =
- fun _cf _ctx -> raise Unimplemented
-
 (** Evaluate a non-local function call in concrete mode *)
-let eval_non_local_function_call_concrete (config : C.config)
-    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (cg_params : T.const_generic list)
-    (args : E.operand list) (dest : E.place) : cm_fun =
+let eval_assumed_function_call_concrete (config : C.config)
+    (fid : A.assumed_fun_id) (call : A.call) : cm_fun =
+  let generics = call.func.generics in
+  let args = call.args in
+  let dest = call.dest in
+  (* Sanity check: we don't fully handle the const generic vars environment
+     in concrete mode yet *)
+  assert (generics.const_generics = []);
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
      - the function is box_free
      See {!eval_box_free}
   *)
   match fid with
-  | A.BoxFree ->
+  | BoxFree ->
       (* Degenerate case: box_free *)
-      eval_box_free config region_params type_params cg_params args dest
+      eval_box_free config generics args dest
   | _ ->
       (* "Normal" case: not box_free *)
       (* Evaluate the operands *)
@@ -604,16 +530,14 @@ let eval_non_local_function_call_concrete (config : C.config)
        * but it made it less clear where the computed values came from,
        * so we reversed the modifications. *)
       let cf_eval_call cf (args_vl : V.typed_value list) : m_fun =
+       fun ctx ->
         (* Push the stack frame: we initialize the frame with the return variable,
            and one variable per input argument *)
         let cc = push_frame in
 
         (* Create and push the return variable *)
         let ret_vid = E.VarId.zero in
-        let ret_ty =
-          get_non_local_function_return_type fid region_params type_params
-            cg_params
-        in
+        let ret_ty = get_assumed_function_return_type ctx fid generics in
         let ret_var = mk_var ret_vid (Some "@return") ret_ty in
         let cc = comp cc (push_uninitialized_var ret_var) in
 
@@ -630,24 +554,12 @@ let eval_non_local_function_call_concrete (config : C.config)
          * access to a body. *)
         let cf_eval_body : cm_fun =
           match fid with
-          | A.Replace ->
-              eval_replace_concrete config region_params type_params cg_params
-          | BoxNew ->
-              eval_box_new_concrete config region_params type_params cg_params
-          | BoxDeref ->
-              eval_box_deref_concrete config region_params type_params cg_params
-          | BoxDerefMut ->
-              eval_box_deref_mut_concrete config region_params type_params
-                cg_params
+          | BoxNew -> eval_box_new_concrete config generics
           | BoxFree ->
               (* Should have been treated above *) raise (Failure "Unreachable")
-          | VecNew | VecPush | VecInsert | VecLen | VecIndex | VecIndexMut ->
-              eval_vec_function_concrete config fid region_params type_params
-                cg_params
           | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
-          | ArrayToSliceMut | ArraySubsliceShared | ArraySubsliceMut
-          | SliceIndexShared | SliceIndexMut | SliceSubsliceShared
-          | SliceSubsliceMut | SliceLen ->
+          | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
+          | SliceLen ->
               raise (Failure "Unimplemented")
         in
 
@@ -657,49 +569,10 @@ let eval_non_local_function_call_concrete (config : C.config)
         let cc = comp cc (pop_frame_assign config dest) in
 
         (* Continue *)
-        cc cf
+        cc cf ctx
       in
       (* Compose and apply *)
       comp cf_eval_ops cf_eval_call
-
-let instantiate_fun_sig (type_params : T.ety list)
-    (cg_params : T.const_generic list) (sg : A.fun_sig) : A.inst_fun_sig =
-  (* Generate fresh abstraction ids and create a substitution from region
-   * group ids to abstraction ids *)
-  let rg_abs_ids_bindings =
-    List.map
-      (fun rg ->
-        let abs_id = C.fresh_abstraction_id () in
-        (rg.T.id, abs_id))
-      sg.regions_hierarchy
-  in
-  let asubst_map : V.AbstractionId.id T.RegionGroupId.Map.t =
-    List.fold_left
-      (fun mp (rg_id, abs_id) -> T.RegionGroupId.Map.add rg_id abs_id mp)
-      T.RegionGroupId.Map.empty rg_abs_ids_bindings
-  in
-  let asubst (rg_id : T.RegionGroupId.id) : V.AbstractionId.id =
-    T.RegionGroupId.Map.find rg_id asubst_map
-  in
-  (* Generate fresh regions and their substitutions *)
-  let _, rsubst, _ = Subst.fresh_regions_with_substs sg.region_params in
-  (* Generate the type substitution
-   * Note that we need the substitution to map the type variables to
-   * {!rty} types (not {!ety}). In order to do that, we convert the
-   * type parameters to types with regions. This is possible only
-   * if those types don't contain any regions.
-   * This is a current limitation of the analysis: there is still some
-   * work to do to properly handle full type parametrization.
-   * *)
-  let rtype_params = List.map ety_no_regions_to_rty type_params in
-  let tsubst = Subst.make_type_subst_from_vars sg.type_params rtype_params in
-  let cgsubst =
-    Subst.make_const_generic_subst_from_vars sg.const_generic_params cg_params
-  in
-  (* Substitute the signature *)
-  let inst_sig = Subst.substitute_signature asubst rsubst tsubst cgsubst sg in
-  (* Return *)
-  inst_sig
 
 (** Helper
  
@@ -836,7 +709,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
                   match rvalue with
                   | E.Global _ -> raise (Failure "Unreachable")
                   | E.Use _
-                  | E.Ref (_, (E.Shared | E.Mut | E.TwoPhaseMut | E.Shallow))
+                  | E.RvRef (_, (E.Shared | E.Mut | E.TwoPhaseMut | E.Shallow))
                   | E.UnaryOp _ | E.BinaryOp _ | E.Discriminant _
                   | E.Aggregate _ ->
                       let rp = rvalue_get_place rvalue in
@@ -893,7 +766,15 @@ and eval_global (config : C.config) (dest : E.place) (gid : LA.GlobalDeclId.id)
   match config.mode with
   | ConcreteMode ->
       (* Treat the evaluation of the global as a call to the global body (without arguments) *)
-      (eval_local_function_call_concrete config global.body_id [] [] [] [] dest)
+      let func =
+        {
+          E.func = FunId (Regular global.body_id);
+          generics = TypesUtils.mk_empty_generic_args;
+          trait_and_method_generic_args = None;
+        }
+      in
+      let call = { A.func; args = []; dest } in
+      (eval_transparent_function_call_concrete config global.body_id call)
         cf ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
@@ -1037,128 +918,374 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
-  (* There are two cases:
+  (* There are several cases:
      - this is a local function, in which case we execute its body
-     - this is a non-local function, in which case there is a special treatment
+     - this is an assumed function, in which case there is a special treatment
+     - this is a trait method
   *)
-  match call.func with
-  | A.Regular fid ->
-      eval_local_function_call config fid call.region_args call.type_args
-        call.const_generic_args call.args call.dest
-  | A.Assumed fid ->
-      eval_non_local_function_call config fid call.region_args call.type_args
-        call.const_generic_args call.args call.dest
+  match config.mode with
+  | C.ConcreteMode -> eval_function_call_concrete config call
+  | C.SymbolicMode -> eval_function_call_symbolic config call
+
+and eval_function_call_concrete (config : C.config) (call : A.call) : st_cm_fun
+    =
+ fun cf ctx ->
+  match call.func.func with
+  | FunId (Regular fid) ->
+      eval_transparent_function_call_concrete config fid call cf ctx
+  | FunId (Assumed fid) ->
+      (* Continue - note that we do as if the function call has been successful,
+       * by giving {!Unit} to the continuation, because we place us in the case
+       * where we haven't panicked. Of course, the translation needs to take the
+       * panic case into account... *)
+      eval_assumed_function_call_concrete config fid call (cf Unit) ctx
+  | TraitMethod _ -> raise (Failure "Unimplemented")
+
+and eval_function_call_symbolic (config : C.config) (call : A.call) : st_cm_fun
+    =
+  match call.func.func with
+  | FunId (Regular _) | TraitMethod _ ->
+      eval_transparent_function_call_symbolic config call
+  | FunId (Assumed fid) -> eval_assumed_function_call_symbolic config fid call
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
-and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
-    (_region_args : T.erased_region list) (type_args : T.ety list)
-    (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
-    st_cm_fun =
- fun cf ctx ->
-  (* Retrieve the (correctly instantiated) body *)
-  let def = C.ctx_lookup_fun_decl ctx fid in
-  (* We can evaluate the function call only if it is not opaque *)
-  let body =
-    match def.body with
-    | None ->
-        raise
-          (Failure
-             ("Can't evaluate a call to an opaque function: "
-             ^ Print.name_to_string def.name))
-    | Some body -> body
-  in
-  let tsubst =
-    Subst.make_type_subst_from_vars def.A.signature.type_params type_args
-  in
-  let cgsubst =
-    Subst.make_const_generic_subst_from_vars
-      def.A.signature.const_generic_params cg_args
-  in
-  let locals, body_st = Subst.fun_body_substitute_in_body tsubst cgsubst body in
+and eval_transparent_function_call_concrete (config : C.config)
+    (fid : A.FunDeclId.id) (call : A.call) : st_cm_fun =
+  let generics = call.func.generics in
+  let args = call.A.args in
+  let dest = call.A.dest in
+  (* Sanity check: we don't fully handle the const generic vars environment
+     in concrete mode yet *)
+  assert (generics.const_generics = []);
+  fun cf ctx ->
+    (* Retrieve the (correctly instantiated) body *)
+    let def = C.ctx_lookup_fun_decl ctx fid in
+    (* We can evaluate the function call only if it is not opaque *)
+    let body =
+      match def.body with
+      | None ->
+          raise
+            (Failure
+               ("Can't evaluate a call to an opaque function: "
+               ^ Print.name_to_string def.name))
+      | Some body -> body
+    in
+    (* TODO: we need to normalize the types if we want to correctly support traits *)
+    assert (generics.trait_refs = []);
+    (* There shouldn't be any reference to Self *)
+    let tr_self = T.UnknownTrait __FUNCTION__ in
+    let subst =
+      Subst.make_esubst_from_generics def.A.signature.generics generics tr_self
+    in
+    let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
-  (* Evaluate the input operands *)
-  assert (List.length args = body.A.arg_count);
-  let cc = eval_operands config args in
+    (* Evaluate the input operands *)
+    assert (List.length args = body.A.arg_count);
+    let cc = eval_operands config args in
 
-  (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
-   * of the operands evaluation from above to the functions afterwards, while
-   * ignoring it in this function *)
-  let cc = comp_transmit cc push_frame in
+    (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
+     * of the operands evaluation from above to the functions afterwards, while
+     * ignoring it in this function *)
+    let cc = comp_transmit cc push_frame in
 
-  (* Compute the initial values for the local variables *)
-  (* 1. Push the return value *)
-  let ret_var, locals =
-    match locals with
-    | ret_ty :: locals -> (ret_ty, locals)
-    | _ -> raise (Failure "Unreachable")
-  in
-  let input_locals, locals =
-    Collections.List.split_at locals body.A.arg_count
-  in
+    (* Compute the initial values for the local variables *)
+    (* 1. Push the return value *)
+    let ret_var, locals =
+      match locals with
+      | ret_ty :: locals -> (ret_ty, locals)
+      | _ -> raise (Failure "Unreachable")
+    in
+    let input_locals, locals =
+      Collections.List.split_at locals body.A.arg_count
+    in
 
-  let cc = comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty)) in
+    let cc = comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty)) in
 
-  (* 2. Push the input values *)
-  let cf_push_inputs cf args =
-    let inputs = List.combine input_locals args in
-    (* Note that this function checks that the variables and their values
-     * have the same type (this is important) *)
-    push_vars inputs cf
-  in
-  let cc = comp cc cf_push_inputs in
+    (* 2. Push the input values *)
+    let cf_push_inputs cf args =
+      let inputs = List.combine input_locals args in
+      (* Note that this function checks that the variables and their values
+       * have the same type (this is important) *)
+      push_vars inputs cf
+    in
+    let cc = comp cc cf_push_inputs in
 
-  (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
-  let cc = comp cc (push_uninitialized_vars locals) in
+    (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
+    let cc = comp cc (push_uninitialized_vars locals) in
 
-  (* Execute the function body *)
-  let cc = comp cc (eval_function_body config body_st) in
+    (* Execute the function body *)
+    let cc = comp cc (eval_function_body config body_st) in
 
-  (* Pop the stack frame and move the return value to its destination *)
-  let cf_finish cf res =
-    match res with
-    | Panic -> cf Panic
-    | Return ->
-        (* Pop the stack frame, retrieve the return value, move it to
-         * its destination and continue *)
-        pop_frame_assign config dest (cf Unit)
-    | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
-    | EndContinue _ ->
-        raise (Failure "Unreachable")
-  in
-  let cc = comp cc cf_finish in
+    (* Pop the stack frame and move the return value to its destination *)
+    let cf_finish cf res =
+      match res with
+      | Panic -> cf Panic
+      | Return ->
+          (* Pop the stack frame, retrieve the return value, move it to
+           * its destination and continue *)
+          pop_frame_assign config dest (cf Unit)
+      | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
+      | EndContinue _ ->
+          raise (Failure "Unreachable")
+    in
+    let cc = comp cc cf_finish in
 
-  (* Continue *)
-  cc cf ctx
+    (* Continue *)
+    cc cf ctx
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
-and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
-    (region_args : T.erased_region list) (type_args : T.ety list)
-    (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
-    st_cm_fun =
+and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
+    : st_cm_fun =
  fun cf ctx ->
-  (* Retrieve the (correctly instantiated) signature *)
-  let def = C.ctx_lookup_fun_decl ctx fid in
-  let sg = def.A.signature in
-  (* Instantiate the signature and introduce fresh abstraction and region ids
-   * while doing so *)
-  let inst_sg = instantiate_fun_sig type_args cg_args sg in
+  (* Instantiate the signature and introduce fresh abstractions and region ids while doing so.
+
+     We perform some manipulations when instantiating the signature.
+
+     # Trait impl calls
+     ==================
+     In particular, we have a special treatment of trait method calls when
+     the trait ref is a known impl.
+
+     For instance:
+     {[
+       trait HasValue {
+         fn has_value(&self) -> bool;
+       }
+
+       impl<T> HasValue for Option<T> {
+         fn has_value(&self) {
+           match self {
+             None => false,
+             Some(_) => true,
+           }
+         }
+       }
+
+       fn option_has_value<T>(x: &Option<T>) -> bool {
+         x.has_value()
+       }
+     ]}
+
+     The generated code looks like this:
+     {[
+       structure HasValue (Self : Type) = {
+         has_value : Self -> result bool
+       }
+
+       let OptionHasValueImpl.has_value (Self : Type) (self : Self) : result bool =
+         match self with
+         | None => false
+         | Some _ => true
+
+       let OptionHasValueInstance (T : Type) : HasValue (Option T) = {
+         has_value = OptionHasValueInstance.has_value
+       }
+     ]}
+
+     In [option_has_value], we don't want to refer to the [has_value] method
+     of the instance of [HasValue] for [Option<T>]. We want to refer directly
+     to the function which implements [has_value] for [Option<T>].
+     That is, instead of generating this:
+     {[
+       let option_has_value (T : Type) (x : Option T) : result bool =
+         (OptionHasValueInstance T).has_value x
+     ]}
+
+     We want to generate this:
+     {[
+       let option_has_value (T : Type) (x : Option T) : result bool =
+         OptionHasValueImpl.has_value T x
+     ]}
+
+     # Provided trait methods
+     ========================
+     Calls to provided trait methods also have a special treatment because
+     for now we forbid overriding provided trait methods in the trait implementations,
+     which means that whenever we call a provided trait method, we do not refer
+     to a trait clause but directly to the method provided in the trait declaration.
+  *)
+  let func, generics, def, inst_sg =
+    match call.func.func with
+    | FunId (Regular fid) ->
+        let def = C.ctx_lookup_fun_decl ctx fid in
+        log#ldebug
+          (lazy
+            ("fun call:\n- call: " ^ call_to_string ctx call
+           ^ "\n- call.generics:\n"
+            ^ egeneric_args_to_string ctx call.func.generics
+            ^ "\n- def.signature:\n"
+            ^ fun_sig_to_string ctx def.A.signature));
+        let tr_self = T.UnknownTrait __FUNCTION__ in
+        let inst_sg =
+          instantiate_fun_sig ctx call.func.generics tr_self def.A.signature
+        in
+        (call.func.func, call.func.generics, def, inst_sg)
+    | FunId (Assumed _) ->
+        (* Unreachable: must be a transparent function *)
+        raise (Failure "Unreachable")
+    | TraitMethod (trait_ref, method_name, _) -> (
+        log#ldebug
+          (lazy
+            ("trait method call:\n- call: " ^ call_to_string ctx call
+           ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
+            ^ egeneric_args_to_string ctx call.func.generics
+            ^ "\n- trait and method generics:\n"
+            ^ egeneric_args_to_string ctx
+                (Option.get call.func.trait_and_method_generic_args)));
+        (* When instantiating, we need to group the generics for the trait ref
+           and the method *)
+        let generics = Option.get call.func.trait_and_method_generic_args in
+        (* Lookup the trait method signature - there are several possibilities
+           depending on whethere we call a top-level trait method impl or the
+           method from a local clause *)
+        match trait_ref.trait_id with
+        | TraitImpl impl_id -> (
+            (* Lookup the trait impl *)
+            let trait_impl = C.ctx_lookup_trait_impl ctx impl_id in
+            log#ldebug
+              (lazy ("trait impl: " ^ trait_impl_to_string ctx trait_impl));
+            (* First look in the required methods *)
+            let method_id =
+              List.find_opt
+                (fun (s, _) -> s = method_name)
+                trait_impl.required_methods
+            in
+            match method_id with
+            | Some (_, id) ->
+                (* This is a required method *)
+                let method_def = C.ctx_lookup_fun_decl ctx id in
+                (* Instantiate *)
+                let tr_self =
+                  T.TraitRef (etrait_ref_no_regions_to_gr_trait_ref trait_ref)
+                in
+                let inst_sg =
+                  instantiate_fun_sig ctx generics tr_self
+                    method_def.A.signature
+                in
+                (* Also update the function identifier: we want to forget
+                   the fact that we called a trait method, and treat it as
+                   a regular function call to the top-level function
+                   which implements the method. In order to do this properly,
+                   we also need to update the generics.
+                *)
+                let func = E.FunId (Regular id) in
+                (func, generics, method_def, inst_sg)
+            | None ->
+                (* If not found, lookup the methods provided by the trait *declaration*
+                   (remember: for now, we forbid overriding provided methods) *)
+                assert (trait_impl.provided_methods = []);
+                let trait_decl =
+                  C.ctx_lookup_trait_decl ctx
+                    trait_ref.trait_decl_ref.trait_decl_id
+                in
+                let _, method_id =
+                  List.find
+                    (fun (s, _) -> s = method_name)
+                    trait_decl.provided_methods
+                in
+                let method_id = Option.get method_id in
+                let method_def = C.ctx_lookup_fun_decl ctx method_id in
+                (* For the instantiation we have to do something peculiar
+                   because the method was defined for the trait declaration.
+                   We have to group:
+                   - the parameters given to the trait decl reference
+                   - the parameters given to the method itself
+                   For instance:
+                   {[
+                     trait Foo<T> {
+                       fn f<U>(...) { ... }
+                     }
+
+                     fn g<G>(x : G) where Clause0: Foo<G, bool>
+                     {
+                       x.f::<u32>(...) // The arguments to f are: <G, bool, u32>
+                     }
+                   ]}
+                *)
+                let all_generics =
+                  TypesUtils.merge_generic_args
+                    trait_ref.trait_decl_ref.decl_generics call.func.generics
+                in
+                log#ldebug
+                  (lazy
+                    ("provided method call:" ^ "\n- method name: " ^ method_name
+                   ^ "\n- all_generics:\n"
+                    ^ egeneric_args_to_string ctx all_generics
+                    ^ "\n- parent params info: "
+                    ^ Print.option_to_string A.show_params_info
+                        method_def.signature.parent_params_info));
+                let tr_self =
+                  T.TraitRef (etrait_ref_no_regions_to_gr_trait_ref trait_ref)
+                in
+                let inst_sg =
+                  instantiate_fun_sig ctx all_generics tr_self
+                    method_def.A.signature
+                in
+                (call.func.func, call.func.generics, method_def, inst_sg))
+        | _ ->
+            (* We are using a local clause - we lookup the trait decl *)
+            let trait_decl =
+              C.ctx_lookup_trait_decl ctx trait_ref.trait_decl_ref.trait_decl_id
+            in
+            (* Lookup the method decl in the required *and* the provided methods *)
+            let _, method_id =
+              let provided =
+                List.filter_map
+                  (fun (id, f) ->
+                    match f with None -> None | Some f -> Some (id, f))
+                  trait_decl.provided_methods
+              in
+              List.find
+                (fun (s, _) -> s = method_name)
+                (List.append trait_decl.required_methods provided)
+            in
+            let method_def = C.ctx_lookup_fun_decl ctx method_id in
+            log#ldebug (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
+            (* Instantiate *)
+            let tr_self = T.TraitRef trait_ref in
+            let tr_self =
+              TypesUtils.etrait_instance_id_no_regions_to_gr_trait_instance_id
+                tr_self
+            in
+            let inst_sg =
+              instantiate_fun_sig ctx generics tr_self method_def.A.signature
+            in
+            (call.func.func, call.func.generics, method_def, inst_sg))
+  in
   (* Sanity check *)
-  assert (List.length args = List.length def.A.signature.inputs);
+  assert (List.length call.args = List.length def.A.signature.inputs);
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config (A.Regular fid) inst_sg
-    region_args type_args cg_args args dest cf ctx
+  eval_function_call_symbolic_from_inst_sig config func inst_sg generics
+    call.args call.dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
     This allows us to factorize the evaluation of local and non-local function
     calls in symbolic mode: only their signatures matter.
+
+    The [self_trait_ref] trait ref refers to [Self]. We use it when calling
+    a provided trait method, because those methods have a special treatment:
+    we dot not group them with the required trait methods, and forbid (for now)
+    overriding them. We treat them as regular method, which take an additional
+    trait ref as input.
  *)
 and eval_function_call_symbolic_from_inst_sig (config : C.config)
-    (fid : A.fun_id) (inst_sg : A.inst_fun_sig)
-    (_region_args : T.erased_region list) (type_args : T.ety list)
-    (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
+    (fid : A.fun_id_or_trait_method_ref) (inst_sg : A.inst_fun_sig)
+    (generics : T.egeneric_args) (args : E.operand list) (dest : E.place) :
     st_cm_fun =
  fun cf ctx ->
+  log#ldebug
+    (lazy
+      ("eval_function_call_symbolic_from_inst_sig:\n- fid: "
+      ^ fun_id_or_trait_method_ref_to_string ctx fid
+      ^ "\n- inst_sg:\n"
+      ^ inst_fun_sig_to_string ctx inst_sg
+      ^ "\n- call.generics:\n"
+      ^ egeneric_args_to_string ctx generics
+      ^ "\n- args:\n"
+      ^ String.concat ", " (List.map (operand_to_string ctx) args)
+      ^ "\n- dest:\n" ^ place_to_string ctx dest));
+
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
   let ret_spc = mk_fresh_symbolic_value V.FunCallRet ret_sv_ty in
@@ -1224,8 +1351,8 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     let expr = cf ctx in
 
     (* Synthesize the symbolic AST *)
-    S.synthesize_regular_function_call fid call_id ctx abs_ids type_args cg_args
-      args args_places ret_spc dest_place expr
+    S.synthesize_regular_function_call fid call_id ctx abs_ids generics args
+      args_places ret_spc dest_place expr
   in
   let cc = comp cc cf_call in
 
@@ -1286,17 +1413,18 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   cc (cf Unit) ctx
 
 (** Evaluate a non-local function call in symbolic mode *)
-and eval_non_local_function_call_symbolic (config : C.config)
-    (fid : A.assumed_fun_id) (region_args : T.erased_region list)
-    (type_args : T.ety list) (cg_args : T.const_generic list)
-    (args : E.operand list) (dest : E.place) : st_cm_fun =
+and eval_assumed_function_call_symbolic (config : C.config)
+    (fid : A.assumed_fun_id) (call : A.call) : st_cm_fun =
  fun cf ctx ->
+  let generics = call.func.generics in
+  let args = call.args in
+  let dest = call.dest in
   (* Sanity check: make sure the type parameters don't contain regions -
    * this is a current limitation of our synthesis *)
   assert (
     List.for_all
       (fun ty -> not (ty_has_borrows ctx.type_context.type_infos ty))
-      type_args);
+      generics.types);
 
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
@@ -1304,10 +1432,10 @@ and eval_non_local_function_call_symbolic (config : C.config)
        See {!eval_box_free}
   *)
   match fid with
-  | A.BoxFree ->
+  | BoxFree ->
       (* Degenerate case: box_free - note that this is not really a function
        * call: no need to call a "synthesize_..." function *)
-      eval_box_free config region_args type_args cg_args args dest (cf Unit) ctx
+      eval_box_free config generics args dest (cf Unit) ctx
   | _ ->
       (* "Normal" case: not box_free *)
       (* In symbolic mode, the behaviour of a function call is completely defined
@@ -1315,59 +1443,19 @@ and eval_non_local_function_call_symbolic (config : C.config)
        * instantiated signatures, and delegate the work to an auxiliary function *)
       let inst_sig =
         match fid with
-        | A.BoxFree ->
+        | BoxFree ->
             (* should have been treated above *)
             raise (Failure "Unreachable")
         | _ ->
-            instantiate_fun_sig type_args cg_args (Assumed.get_assumed_sig fid)
+            (* There shouldn't be any reference to Self *)
+            let tr_self = T.UnknownTrait __FUNCTION__ in
+            instantiate_fun_sig ctx generics tr_self
+              (Assumed.get_assumed_fun_sig fid)
       in
 
       (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config (A.Assumed fid) inst_sig
-        region_args type_args cg_args args dest cf ctx
-
-(** Evaluate a non-local (i.e, assumed) function call such as [Box::deref]
-    (auxiliary helper for [eval_statement]) *)
-and eval_non_local_function_call (config : C.config) (fid : A.assumed_fun_id)
-    (region_args : T.erased_region list) (type_args : T.ety list)
-    (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
-    st_cm_fun =
- fun cf ctx ->
-  (* Debug *)
-  log#ldebug
-    (lazy
-      (let type_args =
-         "[" ^ String.concat ", " (List.map (ety_to_string ctx) type_args) ^ "]"
-       in
-       let args =
-         "[" ^ String.concat ", " (List.map (operand_to_string ctx) args) ^ "]"
-       in
-       let dest = place_to_string ctx dest in
-       "eval_non_local_function_call:\n- fid:" ^ A.show_assumed_fun_id fid
-       ^ "\n- type_args: " ^ type_args ^ "\n- args: " ^ args ^ "\n- dest: "
-       ^ dest));
-
-  match config.mode with
-  | C.ConcreteMode ->
-      eval_non_local_function_call_concrete config fid region_args type_args
-        cg_args args dest (cf Unit) ctx
-  | C.SymbolicMode ->
-      eval_non_local_function_call_symbolic config fid region_args type_args
-        cg_args args dest cf ctx
-
-(** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
-    [eval_statement]) *)
-and eval_local_function_call (config : C.config) (fid : A.FunDeclId.id)
-    (region_args : T.erased_region list) (type_args : T.ety list)
-    (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
-    st_cm_fun =
-  match config.mode with
-  | ConcreteMode ->
-      eval_local_function_call_concrete config fid region_args type_args cg_args
-        args dest
-  | SymbolicMode ->
-      eval_local_function_call_symbolic config fid region_args type_args cg_args
-        args dest
+      eval_function_call_symbolic_from_inst_sig config (FunId (Assumed fid))
+        inst_sig generics args dest cf ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =

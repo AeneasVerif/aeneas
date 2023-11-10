@@ -9,29 +9,29 @@ Local Open Scope Primitives_scope.
 Module HashmapMain_Types.
 
 (** [hashmap_main::hashmap::List] *)
-Inductive Hashmap_list_t (T : Type) :=
-| HashmapListCons : usize -> T -> Hashmap_list_t T -> Hashmap_list_t T
-| HashmapListNil : Hashmap_list_t T
+Inductive hashmap_List_t (T : Type) :=
+| Hashmap_List_Cons : usize -> T -> hashmap_List_t T -> hashmap_List_t T
+| Hashmap_List_Nil : hashmap_List_t T
 .
 
-Arguments HashmapListCons {T} _ _ _.
-Arguments HashmapListNil {T}.
+Arguments Hashmap_List_Cons { _ }.
+Arguments Hashmap_List_Nil { _ }.
 
 (** [hashmap_main::hashmap::HashMap] *)
-Record Hashmap_hash_map_t (T : Type) :=
-mkHashmap_hash_map_t {
-  Hashmap_hash_map_num_entries : usize;
-  Hashmap_hash_map_max_load_factor : (usize * usize);
-  Hashmap_hash_map_max_load : usize;
-  Hashmap_hash_map_slots : vec (Hashmap_list_t T);
+Record hashmap_HashMap_t (T : Type) :=
+mkhashmap_HashMap_t {
+  hashmap_HashMap_num_entries : usize;
+  hashmap_HashMap_max_load_factor : (usize * usize);
+  hashmap_HashMap_max_load : usize;
+  hashmap_HashMap_slots : alloc_vec_Vec (hashmap_List_t T);
 }
 .
 
-Arguments mkHashmap_hash_map_t {T} _ _ _ _.
-Arguments Hashmap_hash_map_num_entries {T}.
-Arguments Hashmap_hash_map_max_load_factor {T}.
-Arguments Hashmap_hash_map_max_load {T}.
-Arguments Hashmap_hash_map_slots {T}.
+Arguments mkhashmap_HashMap_t { _ }.
+Arguments hashmap_HashMap_num_entries { _ }.
+Arguments hashmap_HashMap_max_load_factor { _ }.
+Arguments hashmap_HashMap_max_load { _ }.
+Arguments hashmap_HashMap_slots { _ }.
 
 (** The state type used in the state-error monad *)
 Axiom state : Type.

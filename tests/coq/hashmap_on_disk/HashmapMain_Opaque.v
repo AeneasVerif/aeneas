@@ -11,13 +11,13 @@ Import HashmapMain_Types.
 Module HashmapMain_Opaque.
 
 (** [hashmap_main::hashmap_utils::deserialize]: forward function *)
-Axiom hashmap_utils_deserialize_fwd
-  : state -> result (state * (Hashmap_hash_map_t u64))
+Axiom hashmap_utils_deserialize
+  : state -> result (state * (hashmap_HashMap_t u64))
 .
 
 (** [hashmap_main::hashmap_utils::serialize]: forward function *)
-Axiom hashmap_utils_serialize_fwd
-  : Hashmap_hash_map_t u64 -> state -> result (state * unit)
+Axiom hashmap_utils_serialize
+  : hashmap_HashMap_t u64 -> state -> result (state * unit)
 .
 
 End HashmapMain_Opaque .

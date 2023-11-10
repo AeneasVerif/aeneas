@@ -5,9 +5,9 @@ open Primitives
 
 namespace array
 
-/- [array::T] -/
-inductive T :=
-| A : T
-| B : T
+/- [array::AB] -/
+inductive AB :=
+| A : AB
+| B : AB
 
 end array

@@ -124,7 +124,7 @@ let always_deconstruct_adts_with_matches = ref false
 (** Controls whether we need to use a state to model the external world
     (I/O, for instance).
  *)
-let use_state = ref true
+let use_state = ref false
 
 (** Controls whether we use fuel to control termination.
  *)
@@ -160,7 +160,7 @@ let backward_no_state_update = ref false
     files for the types, clauses and functions, or if we group them in
     one file.
  *)
-let split_files = ref true
+let split_files = ref false
 
 (** Generate the library entry point, if the crate is split between different files.
 
@@ -306,13 +306,6 @@ let filter_useless_monadic_calls = ref true
  *)
 let filter_useless_functions = ref true
 
-(** Obsolete. TODO: remove.
-
-    For Lean we used to parameterize the entire development by a section variable
-    called opaque_defs, of type OpaqueDefs.
-  *)
-let wrap_opaque_in_sig = ref false
-
 (** Use short names for the record fields.
 
     Some backends can't disambiguate records when their field names have collisions.
@@ -323,3 +316,23 @@ let wrap_opaque_in_sig = ref false
     information), we use short names (i.e., the original field names).
  *)
 let record_fields_short_names = ref false
+
+(** Parameterize the traits with their associated types, so as not to use
+    types as first class objects.
+
+    This is useful for some backends with limited expressiveness like HOL4,
+    and to account for type constraints (like [fn f<T : Foo>(...) where T::bar = usize]).
+ *)
+let parameterize_trait_types = ref false
+
+(** For sanity check: type check the generated pure code (activates checks in
+    several places).
+
+    TODO: deactivated for now because we need to implement the normalization of
+    trait associated types in the pure code.
+ *)
+let type_check_pure_code = ref false
+
+(** Shall we fail hard if we encounter an issue, or should we attempt to go
+    as far as possible while leaving "holes" in the generated code? *)
+let fail_hard = ref true

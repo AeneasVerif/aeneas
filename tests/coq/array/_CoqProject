@@ -3,6 +3,5 @@
 -arg -w
 -arg all
 
-Array_Funs.v
 Primitives.v
-Array_Types.v
+Array.v

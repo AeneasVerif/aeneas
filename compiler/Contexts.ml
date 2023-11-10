@@ -5,6 +5,7 @@ open LlbcAst
 module V = Values
 open ValuesUtils
 open Identifiers
+module L = Logging
 
 (** The [Id] module for dummy variables.
 
@@ -16,6 +17,9 @@ module DummyVarId =
 IdGen ()
 
 type dummy_var_id = DummyVarId.id [@@deriving show, ord]
+
+(** The local logger *)
+let log = L.contexts_log
 
 (** Some global counters.
 
@@ -40,6 +44,7 @@ type dummy_var_id = DummyVarId.id [@@deriving show, ord]
     fn f x : fun_type =
       let id = fresh_id () in
       ...
+      fun () -> ...
    
     let g = f x in   // <-- the fresh identifier gets generated here
     let x1 = g () in // <-- no fresh generation here
@@ -250,26 +255,126 @@ type type_context = {
 }
 [@@deriving show]
 
-type fun_context = { fun_decls : fun_decl FunDeclId.Map.t } [@@deriving show]
+type fun_context = {
+  fun_decls : fun_decl FunDeclId.Map.t;
+  fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
+}
+[@@deriving show]
 
 type global_context = { global_decls : global_decl GlobalDeclId.Map.t }
 [@@deriving show]
+
+type trait_decls_context = { trait_decls : trait_decl TraitDeclId.Map.t }
+[@@deriving show]
+
+type trait_impls_context = { trait_impls : trait_impl TraitImplId.Map.t }
+[@@deriving show]
+
+type decls_ctx = {
+  type_ctx : type_context;
+  fun_ctx : fun_context;
+  global_ctx : global_context;
+  trait_decls_ctx : trait_decls_context;
+  trait_impls_ctx : trait_impls_context;
+}
+[@@deriving show]
+
+(** A reference to a trait associated type *)
+type 'r trait_type_ref = { trait_ref : 'r trait_ref; type_name : string }
+[@@deriving show, ord]
+
+type etrait_type_ref = erased_region trait_type_ref [@@deriving show, ord]
+
+type rtrait_type_ref = Types.RegionId.id Types.region trait_type_ref
+[@@deriving show, ord]
+
+type strait_type_ref = Types.RegionVarId.id Types.region trait_type_ref
+[@@deriving show, ord]
+
+(* TODO: correctly use the functors so as not to have a duplication below *)
+module ETraitTypeRefOrd = struct
+  type t = etrait_type_ref
+
+  let compare = compare_etrait_type_ref
+  let to_string = show_etrait_type_ref
+  let pp_t = pp_etrait_type_ref
+  let show_t = show_etrait_type_ref
+end
+
+module RTraitTypeRefOrd = struct
+  type t = rtrait_type_ref
+
+  let compare = compare_rtrait_type_ref
+  let to_string = show_rtrait_type_ref
+  let pp_t = pp_rtrait_type_ref
+  let show_t = show_rtrait_type_ref
+end
+
+module STraitTypeRefOrd = struct
+  type t = strait_type_ref
+
+  let compare = compare_strait_type_ref
+  let to_string = show_strait_type_ref
+  let pp_t = pp_strait_type_ref
+  let show_t = show_strait_type_ref
+end
+
+module ETraitTypeRefMap = Collections.MakeMap (ETraitTypeRefOrd)
+module RTraitTypeRefMap = Collections.MakeMap (RTraitTypeRefOrd)
+module STraitTypeRefMap = Collections.MakeMap (STraitTypeRefOrd)
 
 (** Evaluation context *)
 type eval_ctx = {
   type_context : type_context;
   fun_context : fun_context;
   global_context : global_context;
+  trait_decls_context : trait_decls_context;
+  trait_impls_context : trait_impls_context;
   region_groups : RegionGroupId.id list;
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
+  const_generic_vars_map : typed_value Types.ConstGenericVarId.Map.t;
+      (** The map from const generic vars to their values. Those values
+          can be symbolic values or concrete values (in the latter case:
+          if we run in interpreter mode) *)
+  norm_trait_etypes : ety ETraitTypeRefMap.t;
+      (** The normalized trait types (a map from trait types to their representatives).
+          Note that this doesn't support account higher-order types. *)
+  norm_trait_rtypes : rty RTraitTypeRefMap.t;
+      (** We need this because we manipulate two kinds of types.
+          Note that we actually forbid regions from appearing both in the trait
+          references and in the constraints given to the associated types,
+          meaning that we don't have to worry about mismatches due to changes
+          in region ids.
+
+          TODO: how not to duplicate?
+       *)
+  norm_trait_stypes : sty STraitTypeRefMap.t;
+      (** We sometimes need to normalize types in non-instantiated signatures.
+
+          Note that we either need to use the etypes/rtypes maps, or the stypes map.
+          This means that we either compute the maps for etypes and rtypes, or compute
+          the one for stypes (we don't always compute and carry all the maps).
+       *)
   env : env;
   ended_regions : RegionId.Set.t;
 }
 [@@deriving show]
 
+let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) : type_var option
+    =
+  if TypeVarId.to_int vid < List.length ctx.type_vars then
+    Some (TypeVarId.nth ctx.type_vars vid)
+  else None
+
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
+
+let lookup_const_generic_var_opt (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
+    const_generic_var option =
+  if ConstGenericVarId.to_int vid < List.length ctx.const_generic_vars then
+    Some (ConstGenericVarId.nth ctx.const_generic_vars vid)
+  else None
 
 let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
     const_generic_var =
@@ -304,6 +409,12 @@ let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) :
     global_decl =
   GlobalDeclId.Map.find gid ctx.global_context.global_decls
 
+let ctx_lookup_trait_decl (ctx : eval_ctx) (id : TraitDeclId.id) : trait_decl =
+  TraitDeclId.Map.find id ctx.trait_decls_context.trait_decls
+
+let ctx_lookup_trait_impl (ctx : eval_ctx) (id : TraitImplId.id) : trait_impl =
+  TraitImplId.Map.find id ctx.trait_impls_context.trait_impls
+
 (** Retrieve a variable's value in the current frame *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
   snd (env_lookup_var env vid)
@@ -311,6 +422,11 @@ let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
 (** Retrieve a variable's value in an evaluation context *)
 let ctx_lookup_var_value (ctx : eval_ctx) (vid : VarId.id) : typed_value =
   env_lookup_var_value ctx.env vid
+
+(** Retrieve a const generic value in an evaluation context *)
+let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
+    : typed_value =
+  Types.ConstGenericVarId.Map.find vid ctx.const_generic_vars_map
 
 (** Update a variable's value in the current frame.
 
@@ -361,6 +477,15 @@ let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
 *)
 let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
     =
+  log#ldebug
+    (lazy
+      ("push_vars:\n"
+      ^ String.concat "\n"
+          (List.map
+             (fun (var, value) ->
+               (* We can unfortunately not use Print because it depends on Contexts... *)
+               show_var var ^ " -> " ^ V.show_typed_value value)
+             vars)));
   assert (
     List.for_all
       (fun (var, (value : typed_value)) -> var.var_ty = value.ty)

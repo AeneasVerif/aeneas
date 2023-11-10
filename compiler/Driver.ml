@@ -17,11 +17,15 @@ let log = main_log
 let _ =
   (* Set up the logging - for now we use default values - TODO: use the
    * command-line arguments *)
-  (* By setting a level for the main_logger_handler, we filter everything *)
+  (* By setting a level for the main_logger_handler, we filter everything.
+     To have a good trace: one should switch between Info and Debug.
+  *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
   main_log#set_level EL.Info;
   llbc_of_json_logger#set_level EL.Info;
   pre_passes_log#set_level EL.Info;
+  associated_types_log#set_level EL.Info;
+  contexts_log#set_level EL.Info;
   interpreter_log#set_level EL.Info;
   statements_log#set_level EL.Info;
   loops_match_ctxs_log#set_level EL.Info;
@@ -37,7 +41,7 @@ let _ =
   pure_utils_log#set_level EL.Info;
   symbolic_to_pure_log#set_level EL.Info;
   pure_micro_passes_log#set_level EL.Info;
-  pure_to_extract_log#set_level EL.Info;
+  extract_log#set_level EL.Info;
   translate_log#set_level EL.Info;
   scc_log#set_level EL.Info;
   reorder_decls_log#set_level EL.Info
@@ -61,6 +65,9 @@ let () =
 
   (* Read the command line arguments *)
   let dest_dir = ref "" in
+
+  (* Print the imported llbc *)
+  let print_llbc = ref false in
 
   let spec =
     [
@@ -86,9 +93,9 @@ let () =
         Arg.Set extract_decreases_clauses,
         " Use decreases clauses/termination measures for the recursive \
          definitions" );
-      ( "-no-state",
-        Arg.Clear use_state,
-        " Do not use state-error monads, simply use error monads" );
+      ( "-state",
+        Arg.Set use_state,
+        " Use a *state*-error monads, instead of an error monads" );
       ( "-use-fuel",
         Arg.Set use_fuel,
         " Use a fuel parameter to control divergence" );
@@ -99,10 +106,10 @@ let () =
         Arg.Set extract_template_decreases_clauses,
         " Generate templates for the required decreases clauses/termination \
          measures, in a dedicated file. Implies -decreases-clauses" );
-      ( "-no-split-files",
-        Arg.Clear split_files,
-        " Do not split the definitions between different files for types, \
-         functions, etc." );
+      ( "-split-files",
+        Arg.Set split_files,
+        " Split the definitions between different files for types, functions, \
+         etc." );
       ( "-no-check-inv",
         Arg.Clear check_invariants,
         " Deactivate the invariant sanity checks performed at every evaluation \
@@ -114,6 +121,8 @@ let () =
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
+      ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
+      ("-k", Arg.Clear fail_hard, " Do not fail hard in case of error");
     ]
   in
 
@@ -127,6 +136,7 @@ let () =
   in
 
   if !extract_template_decreases_clauses then extract_decreases_clauses := true;
+  if !print_llbc then main_log#set_level EL.Debug;
 
   (* Sanity check (now that the arguments are parsed!): -template-clauses ==> decrease-clauses *)
   assert (!extract_decreases_clauses || not !extract_template_decreases_clauses);
@@ -158,14 +168,14 @@ let () =
     | FStar ->
         (* Some patterns are not supported *)
         decompose_monadic_let_bindings := false;
-        decompose_nested_let_patterns := false
+        decompose_nested_let_patterns := false;
+        (* F* can disambiguate the field names *)
+        record_fields_short_names := true
     | Coq ->
         (* Some patterns are not supported *)
         decompose_monadic_let_bindings := true;
         decompose_nested_let_patterns := true
     | Lean ->
-        (* The Lean backend is experimental: print a warning *)
-        log#lwarning (lazy "The Lean backend is experimental");
         (* We don't support fuel for the Lean backend *)
         if !use_fuel then (
           log#error "The Lean backend doesn't support the -use-fuel option";
@@ -211,28 +221,6 @@ let () =
       (* Logging *)
       log#linfo (lazy ("Imported: " ^ filename));
       log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
-
-      (* Print a warning if the crate contains loops (loops are experimental for now) *)
-      let has_loops =
-        A.FunDeclId.Map.exists
-          (fun _ -> Aeneas.LlbcAstUtils.fun_decl_has_loops)
-          m.functions
-      in
-      if has_loops then log#lwarning (lazy "Support for loops is experimental");
-
-      (* If we target Lean, we request the crates to be split into several files
-         whenever there are opaque functions *)
-      if
-        !backend = Lean
-        && A.FunDeclId.Map.exists
-             (fun _ (d : A.fun_decl) -> d.body = None)
-             m.functions
-        && not !split_files
-      then (
-        log#error
-          "For Lean, we request the -split-file option whenever using opaque \
-           functions";
-        fail ());
 
       (* We don't support mutually recursive definitions with decreases clauses in Lean *)
       if

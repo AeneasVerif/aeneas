@@ -29,7 +29,7 @@ type mplace = {
 [@@deriving show]
 
 type call_id =
-  | Fun of A.fun_id * V.FunCallId.id
+  | Fun of A.fun_id_or_trait_method_ref * V.FunCallId.id
       (** A "regular" function (i.e., a function which is not a primitive operation) *)
   | Unop of E.unop
   | Binop of E.binop
@@ -43,10 +43,7 @@ type call = {
           borrows (we need to perform lookups).
        *)
   abstractions : V.AbstractionId.id list;
-  (* TODO: rename to "...args" *)
-  type_params : T.ety list;
-  (* TODO: rename to "...args" *)
-  const_generic_params : T.const_generic list;
+  generics : T.egeneric_args;
   args : V.typed_value list;
   args_places : mplace option list;  (** Meta information *)
   dest : V.symbolic_value;
@@ -78,6 +75,9 @@ class ['self] iter_expression_base =
     method visit_abs : 'env -> V.abs -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> V.loop_id -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
+
+    method visit_const_generic_var_id : 'env -> T.const_generic_var_id -> unit =
+      fun _ _ -> ()
 
     method visit_symbolic_value_id : 'env -> V.symbolic_value_id -> unit =
       fun _ _ -> ()
@@ -120,6 +120,9 @@ class ['self] iter_expression_base =
 
     method visit_symbolic_expansion : 'env -> V.symbolic_expansion -> unit =
       fun _ _ -> ()
+
+    method visit_etrait_ref : 'env -> T.etrait_ref -> unit = fun _ _ -> ()
+    method visit_egeneric_args : 'env -> T.egeneric_args -> unit = fun _ _ -> ()
   end
 
 (** **Rem.:** here, {!expression} is not at all equivalent to the expressions
@@ -171,14 +174,15 @@ type expression =
       * expression
       (** We introduce a new symbolic value, equal to some other value.
 
-        This is used for instance when reorganizing the environment to compute
-        fixed points: we duplicate some shared symbolic values to destructure
-        the shared values, in order to make the environment a bit more general
-        (while losing precision of course).
+          This is used for instance when reorganizing the environment to compute
+          fixed points: we duplicate some shared symbolic values to destructure
+          the shared values, in order to make the environment a bit more general
+          (while losing precision of course). We also use it to introduce symbolic
+          values when evaluating constant generics, or trait constants.
 
-        The context is the evaluation context from before introducing the new
-        value. It has the same purpose as for the {!Return} case.
-      *)
+          The context is the evaluation context from before introducing the new
+          value. It has the same purpose as for the {!Return} case.
+       *)
   | ForwardEnd of
       Contexts.eval_ctx
       * V.typed_value symbolic_value_id_map option
@@ -253,6 +257,11 @@ and value_aggregate =
   | SingleValue of V.typed_value  (** Regular case *)
   | Array of V.typed_value list
       (** This is used when introducing array aggregates *)
+  | ConstGenericValue of T.const_generic_var_id
+      (** This is used when evaluating a const generic value: in the interpreter,
+          we introduce a fresh symbolic value. *)
+  | TraitConstValue of T.etrait_ref * T.egeneric_args * string
+      (** A trait constant value *)
 [@@deriving
   show,
     visitors

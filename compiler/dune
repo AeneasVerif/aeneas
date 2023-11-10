@@ -12,6 +12,7 @@
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
  (libraries charon core_unix unionFind ocamlgraph)
  (modules
+  AssociatedTypes
   Assumed
   Collections
   Config
@@ -22,6 +23,8 @@
   ExpressionsUtils
   Extract
   ExtractBase
+  ExtractBuiltin
+  ExtractTypes
   FunsAnalysis
   Identifiers
   InterpreterBorrowsCore
@@ -90,4 +93,4 @@
    -g
    ;-dsource
    -warn-error
-   -5-8-9-11-14-33-20-21-26-27-39)))
+   -5@8-9-11-14-33-20-21-26-27-39)))

@@ -9,51 +9,70 @@ module E = Expressions
 module A = LlbcAst
 module C = Contexts
 
-(** Substitute types variables and regions in a type. *)
-let ty_substitute (rsubst : 'r1 -> 'r2) (tsubst : T.TypeVarId.id -> 'r2 T.ty)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (ty : 'r1 T.ty) :
-    'r2 T.ty =
-  let open T in
-  let visitor =
-    object
-      inherit [_] map_ty
-      method visit_'r _ r = rsubst r
-      method! visit_TypeVar _ id = tsubst id
+type ('r1, 'r2) subst = {
+  r_subst : 'r1 -> 'r2;
+  ty_subst : T.TypeVarId.id -> 'r2 T.ty;
+  cg_subst : T.ConstGenericVarId.id -> T.const_generic;
+      (** Substitution from *local* trait clause to trait instance *)
+  tr_subst : T.TraitClauseId.id -> 'r2 T.trait_instance_id;
+      (** Substitution for the [Self] trait instance *)
+  tr_self : 'r2 T.trait_instance_id;
+}
 
-      method! visit_type_var_id _ _ =
-        (* We should never get here because we reimplemented [visit_TypeVar] *)
-        raise (Failure "Unexpected")
+let ty_substitute_visitor (subst : ('r1, 'r2) subst) =
+  object
+    inherit [_] T.map_ty
+    method visit_'r _ r = subst.r_subst r
+    method! visit_TypeVar _ id = subst.ty_subst id
 
-      method! visit_ConstGenericVar _ id = cgsubst id
+    method! visit_type_var_id _ _ =
+      (* We should never get here because we reimplemented [visit_TypeVar] *)
+      raise (Failure "Unexpected")
 
-      method! visit_const_generic_var_id _ _ =
-        (* We should never get here because we reimplemented [visit_Var] *)
-        raise (Failure "Unexpected")
-    end
-  in
+    method! visit_ConstGenericVar _ id = subst.cg_subst id
 
+    method! visit_const_generic_var_id _ _ =
+      (* We should never get here because we reimplemented [visit_Var] *)
+      raise (Failure "Unexpected")
+
+    method! visit_Clause _ id = subst.tr_subst id
+    method! visit_Self _ = subst.tr_self
+  end
+
+(** Substitute types variables and regions in a type.
+
+    **IMPORTANT**: this doesn't normalize the types.
+ *)
+let ty_substitute (subst : ('r1, 'r2) subst) (ty : 'r1 T.ty) : 'r2 T.ty =
+  let visitor = ty_substitute_visitor subst in
   visitor#visit_ty () ty
 
-let rty_substitute (rsubst : T.RegionId.id -> T.RegionId.id)
-    (tsubst : T.TypeVarId.id -> T.rty)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (ty : T.rty) : T.rty =
-  let rsubst r =
-    match r with T.Static -> T.Static | T.Var rid -> T.Var (rsubst rid)
-  in
-  ty_substitute rsubst tsubst cgsubst ty
+(** **IMPORTANT**: this doesn't normalize the types. *)
+let trait_ref_substitute (subst : ('r1, 'r2) subst) (tr : 'r1 T.trait_ref) :
+    'r2 T.trait_ref =
+  let visitor = ty_substitute_visitor subst in
+  visitor#visit_trait_ref () tr
 
-let ety_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (ty : T.ety) : T.ety =
-  let rsubst r = r in
-  ty_substitute rsubst tsubst cgsubst ty
+(** **IMPORTANT**: this doesn't normalize the types. *)
+let generic_args_substitute (subst : ('r1, 'r2) subst) (g : 'r1 T.generic_args)
+    : 'r2 T.generic_args =
+  let visitor = ty_substitute_visitor subst in
+  visitor#visit_generic_args () g
+
+let erase_regions_subst : ('r, T.erased_region) subst =
+  {
+    r_subst = (fun _ -> T.Erased);
+    ty_subst = (fun vid -> T.TypeVar vid);
+    cg_subst = (fun id -> T.ConstGenericVar id);
+    tr_subst = (fun id -> T.Clause id);
+    tr_self = T.Self;
+  }
 
 (** Convert an {!T.rty} to an {!T.ety} by erasing the region variables *)
-let erase_regions (ty : T.rty) : T.ety =
-  ty_substitute
-    (fun _ -> T.Erased)
-    (fun vid -> T.TypeVar vid)
-    (fun id -> T.ConstGenericVar id)
-    ty
+let erase_regions (ty : 'r T.ty) : T.ety = ty_substitute erase_regions_subst ty
+
+let trait_ref_erase_regions (tr : 'r T.trait_ref) : T.etrait_ref =
+  trait_ref_substitute erase_regions_subst tr
 
 (** Generate fresh regions for region variables.
 
@@ -78,18 +97,20 @@ let fresh_regions_with_substs (region_vars : T.region_var list) :
   (* Generate the substitution from region var id to region *)
   let rid_subst id = T.RegionVarId.Map.find id rid_map in
   (* Generate the substitution from region to region *)
-  let rsubst r =
+  let r_subst r =
     match r with T.Static -> T.Static | T.Var id -> T.Var (rid_subst id)
   in
   (* Return *)
-  (fresh_region_ids, rid_subst, rsubst)
+  (fresh_region_ids, rid_subst, r_subst)
 
-(** Erase the regions in a type and substitute the type variables *)
-let erase_regions_substitute_types (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic)
-    (ty : 'r T.region T.ty) : T.ety =
-  let rsubst (_ : 'r T.region) : T.erased_region = T.Erased in
-  ty_substitute rsubst tsubst cgsubst ty
+(** Erase the regions in a type and perform a substitution *)
+let erase_regions_substitute_types (ty_subst : T.TypeVarId.id -> T.ety)
+    (cg_subst : T.ConstGenericVarId.id -> T.const_generic)
+    (tr_subst : T.TraitClauseId.id -> T.etrait_instance_id)
+    (tr_self : T.etrait_instance_id) (ty : 'r T.ty) : T.ety =
+  let r_subst (_ : 'r) : T.erased_region = T.Erased in
+  let subst = { r_subst; ty_subst; cg_subst; tr_subst; tr_self } in
+  ty_substitute subst ty
 
 (** Create a region substitution from a list of region variable ids and a list of
     regions (with which to substitute the region variable ids *)
@@ -146,16 +167,81 @@ let make_const_generic_subst_from_vars (vars : T.const_generic_var list)
     (List.map (fun (x : T.const_generic_var) -> x.T.index) vars)
     cgs
 
-(** Instantiate the type variables in an ADT definition, and return, for
-    every variant, the list of the types of its fields *)
-let type_decl_get_instantiated_variants_fields_rtypes (def : T.type_decl)
-    (regions : T.RegionId.id T.region list) (types : T.rty list)
-    (cgs : T.const_generic list) : (T.VariantId.id option * T.rty list) list =
-  let r_subst = make_region_subst_from_vars def.T.region_params regions in
-  let ty_subst = make_type_subst_from_vars def.T.type_params types in
-  let cg_subst =
-    make_const_generic_subst_from_vars def.T.const_generic_params cgs
+(** Create a trait substitution from a list of trait clause ids and a list of
+    trait refs *)
+let make_trait_subst (clause_ids : T.TraitClauseId.id list)
+    (trs : 'r T.trait_ref list) : T.TraitClauseId.id -> 'r T.trait_instance_id =
+  let ls = List.combine clause_ids trs in
+  let mp =
+    List.fold_left
+      (fun mp (k, v) -> T.TraitClauseId.Map.add k (T.TraitRef v) mp)
+      T.TraitClauseId.Map.empty ls
   in
+  fun id -> T.TraitClauseId.Map.find id mp
+
+let make_trait_subst_from_clauses (clauses : T.trait_clause list)
+    (trs : 'r T.trait_ref list) : T.TraitClauseId.id -> 'r T.trait_instance_id =
+  make_trait_subst
+    (List.map (fun (x : T.trait_clause) -> x.T.clause_id) clauses)
+    trs
+
+let make_subst_from_generics (params : T.generic_params)
+    (args : 'r T.region T.generic_args)
+    (tr_self : 'r T.region T.trait_instance_id) :
+    (T.region_var_id T.region, 'r T.region) subst =
+  let r_subst = make_region_subst_from_vars params.T.regions args.T.regions in
+  let ty_subst = make_type_subst_from_vars params.T.types args.T.types in
+  let cg_subst =
+    make_const_generic_subst_from_vars params.T.const_generics
+      args.T.const_generics
+  in
+  let tr_subst =
+    make_trait_subst_from_clauses params.T.trait_clauses args.T.trait_refs
+  in
+  { r_subst; ty_subst; cg_subst; tr_subst; tr_self }
+
+let make_subst_from_generics_no_regions :
+      'r.
+      T.generic_params ->
+      'r T.generic_args ->
+      'r T.trait_instance_id ->
+      (T.region_var_id T.region, 'r) subst =
+ fun params args tr_self ->
+  let r_subst _ = raise (Failure "Unexpected region") in
+  let ty_subst = make_type_subst_from_vars params.T.types args.T.types in
+  let cg_subst =
+    make_const_generic_subst_from_vars params.T.const_generics
+      args.T.const_generics
+  in
+  let tr_subst =
+    make_trait_subst_from_clauses params.T.trait_clauses args.T.trait_refs
+  in
+  { r_subst; ty_subst; cg_subst; tr_subst; tr_self }
+
+let make_esubst_from_generics (params : T.generic_params)
+    (generics : T.egeneric_args) (tr_self : T.etrait_instance_id) =
+  let r_subst _ = T.Erased in
+  let ty_subst = make_type_subst_from_vars params.types generics.T.types in
+  let cg_subst =
+    make_const_generic_subst_from_vars params.const_generics
+      generics.T.const_generics
+  in
+  let tr_subst =
+    make_trait_subst_from_clauses params.trait_clauses generics.T.trait_refs
+  in
+  { r_subst; ty_subst; cg_subst; tr_subst; tr_self }
+
+(** Instantiate the type variables in an ADT definition, and return, for
+    every variant, the list of the types of its fields.
+
+    **IMPORTANT**: this function doesn't normalize the types, you may want to
+    use the [AssociatedTypes] equivalent instead.
+*)
+let type_decl_get_instantiated_variants_fields_rtypes (def : T.type_decl)
+    (generics : T.rgeneric_args) : (T.VariantId.id option * T.rty list) list =
+  (* There shouldn't be any reference to Self *)
+  let tr_self = T.UnknownTrait __FUNCTION__ in
+  let subst = make_subst_from_generics def.T.generics generics tr_self in
   let (variants_fields : (T.VariantId.id option * T.field list) list) =
     match def.T.kind with
     | T.Enum variants ->
@@ -171,191 +257,220 @@ let type_decl_get_instantiated_variants_fields_rtypes (def : T.type_decl)
   in
   List.map
     (fun (id, fields) ->
-      ( id,
-        List.map
-          (fun f -> ty_substitute r_subst ty_subst cg_subst f.T.field_ty)
-          fields ))
+      (id, List.map (fun f -> ty_substitute subst f.T.field_ty) fields))
     variants_fields
 
 (** Instantiate the type variables in an ADT definition, and return the list
-    of types of the fields for the chosen variant *)
+    of types of the fields for the chosen variant.
+
+    **IMPORTANT**: this function doesn't normalize the types, you may want to
+    use the [AssociatedTypes] equivalent instead.
+*)
 let type_decl_get_instantiated_field_rtypes (def : T.type_decl)
-    (opt_variant_id : T.VariantId.id option)
-    (regions : T.RegionId.id T.region list) (types : T.rty list)
-    (cgs : T.const_generic list) : T.rty list =
-  let r_subst = make_region_subst_from_vars def.T.region_params regions in
-  let ty_subst = make_type_subst_from_vars def.T.type_params types in
-  let cg_subst =
-    make_const_generic_subst_from_vars def.T.const_generic_params cgs
-  in
+    (opt_variant_id : T.VariantId.id option) (generics : T.rgeneric_args) :
+    T.rty list =
+  (* For now, check that there are no clauses - otherwise we might need
+     to normalize the types *)
+  assert (def.generics.trait_clauses = []);
+  (* There shouldn't be any reference to Self *)
+  let tr_self = T.UnknownTrait __FUNCTION__ in
+  let subst = make_subst_from_generics def.T.generics generics tr_self in
   let fields = TU.type_decl_get_fields def opt_variant_id in
-  List.map
-    (fun f -> ty_substitute r_subst ty_subst cg_subst f.T.field_ty)
-    fields
+  List.map (fun f -> ty_substitute subst f.T.field_ty) fields
 
 (** Return the types of the properly instantiated ADT's variant, provided a
-    context *)
+    context.
+
+    **IMPORTANT**: this function doesn't normalize the types, you may want to
+    use the [AssociatedTypes] equivalent instead.
+*)
 let ctx_adt_get_instantiated_field_rtypes (ctx : C.eval_ctx)
     (def_id : T.TypeDeclId.id) (opt_variant_id : T.VariantId.id option)
-    (regions : T.RegionId.id T.region list) (types : T.rty list)
-    (cgs : T.const_generic list) : T.rty list =
+    (generics : T.rgeneric_args) : T.rty list =
   let def = C.ctx_lookup_type_decl ctx def_id in
-  type_decl_get_instantiated_field_rtypes def opt_variant_id regions types cgs
+  type_decl_get_instantiated_field_rtypes def opt_variant_id generics
 
 (** Return the types of the properly instantiated ADT value (note that
-    here, ADT is understood in its broad meaning: ADT, assumed value or tuple) *)
+    here, ADT is understood in its broad meaning: ADT, assumed value or tuple).
+
+    **IMPORTANT**: this function doesn't normalize the types, you may want to
+    use the [AssociatedTypes] equivalent instead.
+ *)
 let ctx_adt_value_get_instantiated_field_rtypes (ctx : C.eval_ctx)
-    (adt : V.adt_value) (id : T.type_id)
-    (region_params : T.RegionId.id T.region list) (type_params : T.rty list)
-    (cg_params : T.const_generic list) : T.rty list =
+    (adt : V.adt_value) (id : T.type_id) (generics : T.rgeneric_args) :
+    T.rty list =
   match id with
   | T.AdtId id ->
       (* Retrieve the types of the fields *)
-      ctx_adt_get_instantiated_field_rtypes ctx id adt.V.variant_id
-        region_params type_params cg_params
+      ctx_adt_get_instantiated_field_rtypes ctx id adt.V.variant_id generics
   | T.Tuple ->
-      assert (List.length region_params = 0);
-      type_params
+      assert (generics.regions = []);
+      generics.types
   | T.Assumed aty -> (
       match aty with
-      | T.Box | T.Vec ->
-          assert (List.length region_params = 0);
-          assert (List.length type_params = 1);
-          assert (List.length cg_params = 0);
-          type_params
-      | T.Option ->
-          assert (List.length region_params = 0);
-          assert (List.length type_params = 1);
-          assert (List.length cg_params = 0);
-          if adt.V.variant_id = Some T.option_some_id then type_params
-          else if adt.V.variant_id = Some T.option_none_id then []
-          else raise (Failure "Unreachable")
-      | T.Range ->
-          assert (List.length region_params = 0);
-          assert (List.length type_params = 1);
-          assert (List.length cg_params = 0);
-          type_params
+      | T.Box ->
+          assert (generics.regions = []);
+          assert (List.length generics.types = 1);
+          assert (generics.const_generics = []);
+          generics.types
       | T.Array | T.Slice | T.Str ->
           (* Those types don't have fields *)
           raise (Failure "Unreachable"))
 
 (** Instantiate the type variables in an ADT definition, and return the list
-    of types of the fields for the chosen variant *)
+    of types of the fields for the chosen variant.
+
+    **IMPORTANT**: this function doesn't normalize the types, you may want to
+    use the [AssociatedTypes] equivalent instead.
+*)
 let type_decl_get_instantiated_field_etypes (def : T.type_decl)
-    (opt_variant_id : T.VariantId.id option) (types : T.ety list)
-    (cgs : T.const_generic list) : T.ety list =
-  let ty_subst = make_type_subst_from_vars def.T.type_params types in
-  let cg_subst =
-    make_const_generic_subst_from_vars def.T.const_generic_params cgs
+    (opt_variant_id : T.VariantId.id option) (generics : T.egeneric_args) :
+    T.ety list =
+  (* For now, check that there are no clauses - otherwise we might need
+     to normalize the types *)
+  assert (def.generics.trait_clauses = []);
+  (* There shouldn't be any reference to Self *)
+  let tr_self : T.erased_region T.trait_instance_id =
+    T.UnknownTrait __FUNCTION__
+  in
+  let { r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
+    make_esubst_from_generics def.T.generics generics tr_self
   in
   let fields = TU.type_decl_get_fields def opt_variant_id in
   List.map
-    (fun f -> erase_regions_substitute_types ty_subst cg_subst f.T.field_ty)
+    (fun (f : T.field) ->
+      erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
+        f.T.field_ty)
     fields
 
 (** Return the types of the properly instantiated ADT's variant, provided a
-    context *)
+    context.
+
+    **IMPORTANT**: this function doesn't normalize the types, you may want to
+    use the [AssociatedTypes] equivalent instead.
+ *)
 let ctx_adt_get_instantiated_field_etypes (ctx : C.eval_ctx)
     (def_id : T.TypeDeclId.id) (opt_variant_id : T.VariantId.id option)
-    (types : T.ety list) (cgs : T.const_generic list) : T.ety list =
+    (generics : T.egeneric_args) : T.ety list =
   let def = C.ctx_lookup_type_decl ctx def_id in
-  type_decl_get_instantiated_field_etypes def opt_variant_id types cgs
+  type_decl_get_instantiated_field_etypes def opt_variant_id generics
 
-let statement_substitute_visitor (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) =
+let statement_substitute_visitor
+    (subst : (T.erased_region, T.erased_region) subst) =
+  (* Keep in synch with [ty_substitute_visitor] *)
   object
     inherit [_] A.map_statement
-    method! visit_ety _ ty = ety_substitute tsubst cgsubst ty
-    method! visit_ConstGenericVar _ id = cgsubst id
+    method! visit_'r _ r = subst.r_subst r
+    method! visit_TypeVar _ id = subst.ty_subst id
+
+    method! visit_type_var_id _ _ =
+      (* We should never get here because we reimplemented [visit_TypeVar] *)
+      raise (Failure "Unexpected")
+
+    method! visit_ConstGenericVar _ id = subst.cg_subst id
 
     method! visit_const_generic_var_id _ _ =
       (* We should never get here because we reimplemented [visit_Var] *)
       raise (Failure "Unexpected")
+
+    method! visit_Clause _ id = subst.tr_subst id
+    method! visit_Self _ = subst.tr_self
   end
 
 (** Apply a type substitution to a place *)
-let place_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (p : E.place) :
-    E.place =
+let place_substitute (subst : (T.erased_region, T.erased_region) subst)
+    (p : E.place) : E.place =
   (* There is in fact nothing to do *)
-  (statement_substitute_visitor tsubst cgsubst)#visit_place () p
+  (statement_substitute_visitor subst)#visit_place () p
 
 (** Apply a type substitution to an operand *)
-let operand_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (op : E.operand) :
-    E.operand =
-  (statement_substitute_visitor tsubst cgsubst)#visit_operand () op
+let operand_substitute (subst : (T.erased_region, T.erased_region) subst)
+    (op : E.operand) : E.operand =
+  (statement_substitute_visitor subst)#visit_operand () op
 
 (** Apply a type substitution to an rvalue *)
-let rvalue_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (rv : E.rvalue) :
-    E.rvalue =
-  (statement_substitute_visitor tsubst cgsubst)#visit_rvalue () rv
+let rvalue_substitute (subst : (T.erased_region, T.erased_region) subst)
+    (rv : E.rvalue) : E.rvalue =
+  (statement_substitute_visitor subst)#visit_rvalue () rv
 
 (** Apply a type substitution to an assertion *)
-let assertion_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (a : A.assertion) :
-    A.assertion =
-  (statement_substitute_visitor tsubst cgsubst)#visit_assertion () a
+let assertion_substitute (subst : (T.erased_region, T.erased_region) subst)
+    (a : A.assertion) : A.assertion =
+  (statement_substitute_visitor subst)#visit_assertion () a
 
 (** Apply a type substitution to a call *)
-let call_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (call : A.call) :
-    A.call =
-  (statement_substitute_visitor tsubst cgsubst)#visit_call () call
+let call_substitute (subst : (T.erased_region, T.erased_region) subst)
+    (call : A.call) : A.call =
+  (statement_substitute_visitor subst)#visit_call () call
 
 (** Apply a type substitution to a statement *)
-let statement_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (st : A.statement) :
-    A.statement =
-  (statement_substitute_visitor tsubst cgsubst)#visit_statement () st
+let statement_substitute (subst : (T.erased_region, T.erased_region) subst)
+    (st : A.statement) : A.statement =
+  (statement_substitute_visitor subst)#visit_statement () st
 
 (** Apply a type substitution to a function body. Return the local variables
     and the body. *)
-let fun_body_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (body : A.fun_body) :
+let fun_body_substitute_in_body
+    (subst : (T.erased_region, T.erased_region) subst) (body : A.fun_body) :
     A.var list * A.statement =
-  let rsubst r = r in
   let locals =
     List.map
-      (fun (v : A.var) ->
-        { v with A.var_ty = ty_substitute rsubst tsubst cgsubst v.A.var_ty })
+      (fun (v : A.var) -> { v with A.var_ty = ty_substitute subst v.A.var_ty })
       body.A.locals
   in
-  let body = statement_substitute tsubst cgsubst body.body in
+  let body = statement_substitute subst body.body in
   (locals, body)
 
-(** Substitute a function signature *)
+let trait_type_constraint_substitute (subst : ('r1, 'r2) subst)
+    (ttc : 'r1 T.trait_type_constraint) : 'r2 T.trait_type_constraint =
+  let { T.trait_ref; generics; type_name; ty } = ttc in
+  let visitor = ty_substitute_visitor subst in
+  let trait_ref = visitor#visit_trait_ref () trait_ref in
+  let generics = visitor#visit_generic_args () generics in
+  let ty = visitor#visit_ty () ty in
+  { T.trait_ref; generics; type_name; ty }
+
+(** Substitute a function signature.
+
+    **IMPORTANT:** this function doesn't normalize the types.
+ *)
 let substitute_signature (asubst : T.RegionGroupId.id -> V.AbstractionId.id)
-    (rsubst : T.RegionVarId.id -> T.RegionId.id)
-    (tsubst : T.TypeVarId.id -> T.rty)
-    (cgsubst : T.ConstGenericVarId.id -> T.const_generic) (sg : A.fun_sig) :
-    A.inst_fun_sig =
-  let rsubst' (r : T.RegionVarId.id T.region) : T.RegionId.id T.region =
-    match r with T.Static -> T.Static | T.Var rid -> T.Var (rsubst rid)
+    (r_subst : T.RegionVarId.id -> T.RegionId.id)
+    (ty_subst : T.TypeVarId.id -> T.rty)
+    (cg_subst : T.ConstGenericVarId.id -> T.const_generic)
+    (tr_subst : T.TraitClauseId.id -> T.rtrait_instance_id)
+    (tr_self : T.rtrait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
+  let r_subst' (r : T.RegionVarId.id T.region) : T.RegionId.id T.region =
+    match r with T.Static -> T.Static | T.Var rid -> T.Var (r_subst rid)
   in
-  let inputs = List.map (ty_substitute rsubst' tsubst cgsubst) sg.A.inputs in
-  let output = ty_substitute rsubst' tsubst cgsubst sg.A.output in
+  let subst = { r_subst = r_subst'; ty_subst; cg_subst; tr_subst; tr_self } in
+  let inputs = List.map (ty_substitute subst) sg.A.inputs in
+  let output = ty_substitute subst sg.A.output in
   let subst_region_group (rg : T.region_var_group) : A.abs_region_group =
     let id = asubst rg.id in
-    let regions = List.map rsubst rg.regions in
+    let regions = List.map r_subst rg.regions in
     let parents = List.map asubst rg.parents in
     { id; regions; parents }
   in
   let regions_hierarchy = List.map subst_region_group sg.A.regions_hierarchy in
-  { A.regions_hierarchy; inputs; output }
+  let trait_type_constraints =
+    List.map
+      (trait_type_constraint_substitute subst)
+      sg.preds.trait_type_constraints
+  in
+  { A.inputs; output; regions_hierarchy; trait_type_constraints }
 
-(** Substitute type variable identifiers in a type *)
-let ty_substitute_ids (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
-    (cgsubst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id) (ty : 'r T.ty)
+(** Substitute variable identifiers in a type *)
+let ty_substitute_ids (ty_subst : T.TypeVarId.id -> T.TypeVarId.id)
+    (cg_subst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id) (ty : 'r T.ty)
     : 'r T.ty =
   let open T in
   let visitor =
     object
       inherit [_] map_ty
       method visit_'r _ r = r
-      method! visit_type_var_id _ id = tsubst id
-      method! visit_const_generic_var_id _ id = cgsubst id
+      method! visit_type_var_id _ id = ty_subst id
+      method! visit_const_generic_var_id _ id = cg_subst id
     end
   in
 
@@ -371,10 +486,10 @@ let ty_substitute_ids (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
    [visit_'r] if we define a class which visits objects of types [ety] and [rty]
    while inheriting a class which visit [ty]...
 *)
-let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
+let subst_ids_visitor (r_subst : T.RegionId.id -> T.RegionId.id)
     (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
-    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
-    (cgsubst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
+    (ty_subst : T.TypeVarId.id -> T.TypeVarId.id)
+    (cg_subst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
     (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
     (bsubst : V.BorrowId.id -> V.BorrowId.id)
     (asubst : V.AbstractionId.id -> V.AbstractionId.id) =
@@ -383,10 +498,10 @@ let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
       inherit [_] T.map_ty
 
       method visit_'r _ r =
-        match r with T.Static -> T.Static | T.Var rid -> T.Var (rsubst rid)
+        match r with T.Static -> T.Static | T.Var rid -> T.Var (r_subst rid)
 
-      method! visit_type_var_id _ id = tsubst id
-      method! visit_const_generic_var_id _ id = cgsubst id
+      method! visit_type_var_id _ id = ty_subst id
+      method! visit_const_generic_var_id _ id = cg_subst id
     end
   in
 
@@ -395,7 +510,7 @@ let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
       inherit [_] C.map_env
       method! visit_borrow_id _ bid = bsubst bid
       method! visit_loan_id _ bid = bsubst bid
-      method! visit_ety _ ty = ty_substitute_ids tsubst cgsubst ty
+      method! visit_ety _ ty = ty_substitute_ids ty_subst cg_subst ty
       method! visit_rty env ty = subst_rty#visit_ty env ty
       method! visit_symbolic_value_id _ id = ssubst id
 
@@ -405,7 +520,7 @@ let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
       (** We *do* visit meta-values *)
       method! visit_mvalue env v = self#visit_typed_value env v
 
-      method! visit_region_id _ id = rsubst id
+      method! visit_region_id _ id = r_subst id
       method! visit_region_var_id _ id = rvsubst id
       method! visit_abstraction_id _ id = asubst id
     end
@@ -425,20 +540,20 @@ let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
     method visit_env (env : C.env) : C.env = visitor#visit_env () env
   end
 
-let typed_value_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
+let typed_value_subst_ids (r_subst : T.RegionId.id -> T.RegionId.id)
     (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
-    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
-    (cgsubst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
+    (ty_subst : T.TypeVarId.id -> T.TypeVarId.id)
+    (cg_subst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
     (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
     (bsubst : V.BorrowId.id -> V.BorrowId.id) (v : V.typed_value) :
     V.typed_value =
   let asubst _ = raise (Failure "Unreachable") in
-  (subst_ids_visitor rsubst rvsubst tsubst cgsubst ssubst bsubst asubst)
+  (subst_ids_visitor r_subst rvsubst ty_subst cg_subst ssubst bsubst asubst)
     #visit_typed_value v
 
-let typed_value_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
+let typed_value_subst_rids (r_subst : T.RegionId.id -> T.RegionId.id)
     (v : V.typed_value) : V.typed_value =
-  typed_value_subst_ids rsubst
+  typed_value_subst_ids r_subst
     (fun x -> x)
     (fun x -> x)
     (fun x -> x)
@@ -446,41 +561,41 @@ let typed_value_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
     (fun x -> x)
     v
 
-let typed_avalue_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
+let typed_avalue_subst_ids (r_subst : T.RegionId.id -> T.RegionId.id)
     (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
-    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
-    (cgsubst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
+    (ty_subst : T.TypeVarId.id -> T.TypeVarId.id)
+    (cg_subst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
     (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
     (bsubst : V.BorrowId.id -> V.BorrowId.id) (v : V.typed_avalue) :
     V.typed_avalue =
   let asubst _ = raise (Failure "Unreachable") in
-  (subst_ids_visitor rsubst rvsubst tsubst cgsubst ssubst bsubst asubst)
+  (subst_ids_visitor r_subst rvsubst ty_subst cg_subst ssubst bsubst asubst)
     #visit_typed_avalue v
 
-let abs_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
+let abs_subst_ids (r_subst : T.RegionId.id -> T.RegionId.id)
     (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
-    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
-    (cgsubst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
+    (ty_subst : T.TypeVarId.id -> T.TypeVarId.id)
+    (cg_subst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
     (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
     (bsubst : V.BorrowId.id -> V.BorrowId.id)
     (asubst : V.AbstractionId.id -> V.AbstractionId.id) (x : V.abs) : V.abs =
-  (subst_ids_visitor rsubst rvsubst tsubst cgsubst ssubst bsubst asubst)
+  (subst_ids_visitor r_subst rvsubst ty_subst cg_subst ssubst bsubst asubst)
     #visit_abs x
 
-let env_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
+let env_subst_ids (r_subst : T.RegionId.id -> T.RegionId.id)
     (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
-    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
-    (cgsubst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
+    (ty_subst : T.TypeVarId.id -> T.TypeVarId.id)
+    (cg_subst : T.ConstGenericVarId.id -> T.ConstGenericVarId.id)
     (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
     (bsubst : V.BorrowId.id -> V.BorrowId.id)
     (asubst : V.AbstractionId.id -> V.AbstractionId.id) (x : C.env) : C.env =
-  (subst_ids_visitor rsubst rvsubst tsubst cgsubst ssubst bsubst asubst)
+  (subst_ids_visitor r_subst rvsubst ty_subst cg_subst ssubst bsubst asubst)
     #visit_env x
 
-let typed_avalue_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
+let typed_avalue_subst_rids (r_subst : T.RegionId.id -> T.RegionId.id)
     (x : V.typed_avalue) : V.typed_avalue =
   let asubst _ = raise (Failure "Unreachable") in
-  (subst_ids_visitor rsubst
+  (subst_ids_visitor r_subst
      (fun x -> x)
      (fun x -> x)
      (fun x -> x)
@@ -490,9 +605,9 @@ let typed_avalue_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
     #visit_typed_avalue
     x
 
-let env_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id) (x : C.env) : C.env
-    =
-  (subst_ids_visitor rsubst
+let env_subst_rids (r_subst : T.RegionId.id -> T.RegionId.id) (x : C.env) :
+    C.env =
+  (subst_ids_visitor r_subst
      (fun x -> x)
      (fun x -> x)
      (fun x -> x)

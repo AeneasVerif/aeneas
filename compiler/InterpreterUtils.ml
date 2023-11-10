@@ -10,6 +10,11 @@ open TypesUtils
 module PA = Print.EvalCtxLlbcAst
 open Cps
 
+(* TODO: we should probably rename the file to ContextsUtils *)
+
+(** The local logger *)
+let log = L.interpreter_log
+
 (** Some utilities *)
 
 (** Auxiliary function - call a function which requires a continuation,
@@ -38,6 +43,20 @@ let typed_value_to_string = PA.typed_value_to_string
 let typed_avalue_to_string = PA.typed_avalue_to_string
 let place_to_string = PA.place_to_string
 let operand_to_string = PA.operand_to_string
+let egeneric_args_to_string = PA.egeneric_args_to_string
+let rtrait_instance_id_to_string = PA.rtrait_instance_id_to_string
+let fun_sig_to_string = PA.fun_sig_to_string
+let inst_fun_sig_to_string = PA.inst_fun_sig_to_string
+
+let fun_id_or_trait_method_ref_to_string =
+  PA.fun_id_or_trait_method_ref_to_string
+
+let fun_decl_to_string = PA.fun_decl_to_string
+let call_to_string = PA.call_to_string
+
+let trait_impl_to_string ctx =
+  PA.trait_impl_to_string { ctx with type_vars = []; const_generic_vars = [] }
+
 let statement_to_string ctx = PA.statement_to_string ctx "" "  "
 let statement_to_string_with_tab ctx = PA.statement_to_string ctx "  " "  "
 let env_elem_to_string ctx = PA.env_elem_to_string ctx "" "  "
@@ -255,7 +274,8 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
               raise Found
             else ()
         | V.SynthInput | V.SynthInputGivenBack | V.FunCallGivenBack
-        | V.SynthRetGivenBack | V.Global | V.LoopGivenBack | V.Aggregate ->
+        | V.SynthRetGivenBack | V.Global | V.LoopGivenBack | V.Aggregate
+        | V.ConstGeneric | V.TraitConst ->
             ()
     end
   in
@@ -272,7 +292,7 @@ let rvalue_get_place (rv : E.rvalue) : E.place option =
   match rv with
   | Use (Copy p | Move p) -> Some p
   | Use (Constant _) -> None
-  | Ref (p, _) -> Some p
+  | RvRef (p, _) -> Some p
   | UnaryOp _ | BinaryOp _ | Global _ | Discriminant _ | Aggregate _ -> None
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
@@ -403,3 +423,103 @@ let compute_contexts_ids (ctxl : C.eval_ctx list) : ids_sets * ids_to_values =
 (** Compute the sets of ids found in a context. *)
 let compute_context_ids (ctx : C.eval_ctx) : ids_sets * ids_to_values =
   compute_contexts_ids [ ctx ]
+
+(** **WARNING**: this function doesn't compute the normalized types
+    (for the trait type aliases). This should be computed afterwards.
+ *)
+let initialize_eval_context (ctx : C.decls_ctx)
+    (region_groups : T.RegionGroupId.id list) (type_vars : T.type_var list)
+    (const_generic_vars : T.const_generic_var list) : C.eval_ctx =
+  C.reset_global_counters ();
+  let const_generic_vars_map =
+    T.ConstGenericVarId.Map.of_list
+      (List.map
+         (fun (cg : T.const_generic_var) ->
+           let ty = TypesUtils.ety_no_regions_to_rty (T.Literal cg.ty) in
+           let cv = mk_fresh_symbolic_typed_value V.ConstGeneric ty in
+           (cg.index, cv))
+         const_generic_vars)
+  in
+  {
+    C.type_context = ctx.type_ctx;
+    C.fun_context = ctx.fun_ctx;
+    C.global_context = ctx.global_ctx;
+    C.trait_decls_context = ctx.trait_decls_ctx;
+    C.trait_impls_context = ctx.trait_impls_ctx;
+    C.region_groups;
+    C.type_vars;
+    C.const_generic_vars;
+    C.const_generic_vars_map;
+    C.norm_trait_etypes = C.ETraitTypeRefMap.empty (* Empty for now *);
+    C.norm_trait_rtypes = C.RTraitTypeRefMap.empty (* Empty for now *);
+    C.norm_trait_stypes = C.STraitTypeRefMap.empty (* Empty for now *);
+    C.env = [ C.Frame ];
+    C.ended_regions = T.RegionId.Set.empty;
+  }
+
+(** Instantiate a function signature, introducing **fresh** abstraction ids and
+    region ids. This is mostly used in preparation of function calls (when
+    evaluating in symbolic mode).
+
+    Note: there are no region parameters, because they should be erased.
+ *)
+let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.egeneric_args)
+    (tr_self : T.rtrait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
+  log#ldebug
+    (lazy
+      ("instantiate_fun_sig:" ^ "\n- generics: "
+      ^ egeneric_args_to_string ctx generics
+      ^ "\n- tr_self: "
+      ^ rtrait_instance_id_to_string ctx tr_self
+      ^ "\n- sg: " ^ fun_sig_to_string ctx sg));
+  (* Generate fresh abstraction ids and create a substitution from region
+   * group ids to abstraction ids *)
+  let rg_abs_ids_bindings =
+    List.map
+      (fun rg ->
+        let abs_id = C.fresh_abstraction_id () in
+        (rg.T.id, abs_id))
+      sg.regions_hierarchy
+  in
+  let asubst_map : V.AbstractionId.id T.RegionGroupId.Map.t =
+    List.fold_left
+      (fun mp (rg_id, abs_id) -> T.RegionGroupId.Map.add rg_id abs_id mp)
+      T.RegionGroupId.Map.empty rg_abs_ids_bindings
+  in
+  let asubst (rg_id : T.RegionGroupId.id) : V.AbstractionId.id =
+    T.RegionGroupId.Map.find rg_id asubst_map
+  in
+  (* Generate fresh regions and their substitutions *)
+  let _, rsubst, _ = Subst.fresh_regions_with_substs sg.generics.regions in
+  (* Generate the type substitution
+   * Note that we need the substitution to map the type variables to
+   * {!rty} types (not {!ety}). In order to do that, we convert the
+   * type parameters to types with regions. This is possible only
+   * if those types don't contain any regions.
+   * This is a current limitation of the analysis: there is still some
+   * work to do to properly handle full type parametrization.
+   * *)
+  let rtype_params = List.map ety_no_regions_to_rty generics.types in
+  let tsubst = Subst.make_type_subst_from_vars sg.generics.types rtype_params in
+  let cgsubst =
+    Subst.make_const_generic_subst_from_vars sg.generics.const_generics
+      generics.const_generics
+  in
+  (* TODO: something annoying with the trait ref subst: we need to use region
+     types, but the arguments use erased regions. For now we use the fact
+     that no regions should appear inside. In the future: we should merge
+     ety and rty. *)
+  let trait_refs =
+    List.map TypesUtils.etrait_ref_no_regions_to_gr_trait_ref
+      generics.trait_refs
+  in
+  let tr_subst =
+    Subst.make_trait_subst_from_clauses sg.generics.trait_clauses trait_refs
+  in
+  (* Substitute the signature *)
+  let inst_sig =
+    AssociatedTypes.ctx_subst_norm_signature ctx asubst rsubst tsubst cgsubst
+      tr_subst tr_self sg
+  in
+  (* Return *)
+  inst_sig

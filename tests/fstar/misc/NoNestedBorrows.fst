@@ -6,95 +6,107 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [no_nested_borrows::Pair] *)
-type pair_t (t1 t2 : Type0) = { pair_x : t1; pair_y : t2; }
+type pair_t (t1 t2 : Type0) = { x : t1; y : t2; }
 
 (** [no_nested_borrows::List] *)
 type list_t (t : Type0) =
-| ListCons : t -> list_t t -> list_t t
-| ListNil : list_t t
+| List_Cons : t -> list_t t -> list_t t
+| List_Nil : list_t t
 
 (** [no_nested_borrows::One] *)
-type one_t (t1 : Type0) = | OneOne : t1 -> one_t t1
+type one_t (t1 : Type0) = | One_One : t1 -> one_t t1
 
 (** [no_nested_borrows::EmptyEnum] *)
-type empty_enum_t = | EmptyEnumEmpty : empty_enum_t
+type emptyEnum_t = | EmptyEnum_Empty : emptyEnum_t
 
 (** [no_nested_borrows::Enum] *)
-type enum_t = | EnumVariant1 : enum_t | EnumVariant2 : enum_t
+type enum_t = | Enum_Variant1 : enum_t | Enum_Variant2 : enum_t
 
 (** [no_nested_borrows::EmptyStruct] *)
-type empty_struct_t = unit
+type emptyStruct_t = unit
 
 (** [no_nested_borrows::Sum] *)
 type sum_t (t1 t2 : Type0) =
-| SumLeft : t1 -> sum_t t1 t2
-| SumRight : t2 -> sum_t t1 t2
+| Sum_Left : t1 -> sum_t t1 t2
+| Sum_Right : t2 -> sum_t t1 t2
 
 (** [no_nested_borrows::neg_test]: forward function *)
-let neg_test_fwd (x : i32) : result i32 =
+let neg_test (x : i32) : result i32 =
   i32_neg x
 
 (** [no_nested_borrows::add_test]: forward function *)
-let add_test_fwd (x : u32) (y : u32) : result u32 =
+let add_test (x : u32) (y : u32) : result u32 =
   u32_add x y
 
 (** [no_nested_borrows::subs_test]: forward function *)
-let subs_test_fwd (x : u32) (y : u32) : result u32 =
+let subs_test (x : u32) (y : u32) : result u32 =
   u32_sub x y
 
 (** [no_nested_borrows::div_test]: forward function *)
-let div_test_fwd (x : u32) (y : u32) : result u32 =
+let div_test (x : u32) (y : u32) : result u32 =
   u32_div x y
 
 (** [no_nested_borrows::div_test1]: forward function *)
-let div_test1_fwd (x : u32) : result u32 =
+let div_test1 (x : u32) : result u32 =
   u32_div x 2
 
 (** [no_nested_borrows::rem_test]: forward function *)
-let rem_test_fwd (x : u32) (y : u32) : result u32 =
+let rem_test (x : u32) (y : u32) : result u32 =
   u32_rem x y
 
+(** [no_nested_borrows::mul_test]: forward function *)
+let mul_test (x : u32) (y : u32) : result u32 =
+  u32_mul x y
+
+(** [no_nested_borrows::CONST0] *)
+let const0_body : result usize = usize_add 1 1
+let const0_c : usize = eval_global const0_body
+
+(** [no_nested_borrows::CONST1] *)
+let const1_body : result usize = usize_mul 2 2
+let const1_c : usize = eval_global const1_body
+
 (** [no_nested_borrows::cast_test]: forward function *)
-let cast_test_fwd (x : u32) : result i32 =
+let cast_test (x : u32) : result i32 =
   scalar_cast U32 I32 x
 
 (** [no_nested_borrows::test2]: forward function *)
-let test2_fwd : result unit =
+let test2 : result unit =
   let* _ = u32_add 23 44 in Return ()
 
 (** Unit test for [no_nested_borrows::test2] *)
-let _ = assert_norm (test2_fwd = Return ())
+let _ = assert_norm (test2 = Return ())
 
 (** [no_nested_borrows::get_max]: forward function *)
-let get_max_fwd (x : u32) (y : u32) : result u32 =
+let get_max (x : u32) (y : u32) : result u32 =
   if x >= y then Return x else Return y
 
 (** [no_nested_borrows::test3]: forward function *)
-let test3_fwd : result unit =
-  let* x = get_max_fwd 4 3 in
-  let* y = get_max_fwd 10 11 in
+let test3 : result unit =
+  let* x = get_max 4 3 in
+  let* y = get_max 10 11 in
   let* z = u32_add x y in
   if not (z = 15) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test3] *)
-let _ = assert_norm (test3_fwd = Return ())
+let _ = assert_norm (test3 = Return ())
 
 (** [no_nested_borrows::test_neg1]: forward function *)
-let test_neg1_fwd : result unit =
+let test_neg1 : result unit =
   let* y = i32_neg 3 in if not (y = -3) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_neg1] *)
-let _ = assert_norm (test_neg1_fwd = Return ())
+let _ = assert_norm (test_neg1 = Return ())
 
 (** [no_nested_borrows::refs_test1]: forward function *)
-let refs_test1_fwd : result unit =
+let refs_test1 : result unit =
   if not (1 = 1) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::refs_test1] *)
-let _ = assert_norm (refs_test1_fwd = Return ())
+let _ = assert_norm (refs_test1 = Return ())
 
 (** [no_nested_borrows::refs_test2]: forward function *)
-let refs_test2_fwd : result unit =
+let refs_test2 : result unit =
   if not (2 = 2)
   then Fail Failure
   else
@@ -106,76 +118,76 @@ let refs_test2_fwd : result unit =
       else if not (2 = 2) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::refs_test2] *)
-let _ = assert_norm (refs_test2_fwd = Return ())
+let _ = assert_norm (refs_test2 = Return ())
 
 (** [no_nested_borrows::test_list1]: forward function *)
-let test_list1_fwd : result unit =
+let test_list1 : result unit =
   Return ()
 
 (** Unit test for [no_nested_borrows::test_list1] *)
-let _ = assert_norm (test_list1_fwd = Return ())
+let _ = assert_norm (test_list1 = Return ())
 
 (** [no_nested_borrows::test_box1]: forward function *)
-let test_box1_fwd : result unit =
+let test_box1 : result unit =
   let b = 1 in let x = b in if not (x = 1) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_box1] *)
-let _ = assert_norm (test_box1_fwd = Return ())
+let _ = assert_norm (test_box1 = Return ())
 
 (** [no_nested_borrows::copy_int]: forward function *)
-let copy_int_fwd (x : i32) : result i32 =
+let copy_int (x : i32) : result i32 =
   Return x
 
 (** [no_nested_borrows::test_unreachable]: forward function *)
-let test_unreachable_fwd (b : bool) : result unit =
+let test_unreachable (b : bool) : result unit =
   if b then Fail Failure else Return ()
 
 (** [no_nested_borrows::test_panic]: forward function *)
-let test_panic_fwd (b : bool) : result unit =
+let test_panic (b : bool) : result unit =
   if b then Fail Failure else Return ()
 
 (** [no_nested_borrows::test_copy_int]: forward function *)
-let test_copy_int_fwd : result unit =
-  let* y = copy_int_fwd 0 in if not (0 = y) then Fail Failure else Return ()
+let test_copy_int : result unit =
+  let* y = copy_int 0 in if not (0 = y) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_copy_int] *)
-let _ = assert_norm (test_copy_int_fwd = Return ())
+let _ = assert_norm (test_copy_int = Return ())
 
 (** [no_nested_borrows::is_cons]: forward function *)
-let is_cons_fwd (t : Type0) (l : list_t t) : result bool =
+let is_cons (t : Type0) (l : list_t t) : result bool =
   begin match l with
-  | ListCons x l0 -> Return true
-  | ListNil -> Return false
+  | List_Cons x l0 -> Return true
+  | List_Nil -> Return false
   end
 
 (** [no_nested_borrows::test_is_cons]: forward function *)
-let test_is_cons_fwd : result unit =
-  let l = ListNil in
-  let* b = is_cons_fwd i32 (ListCons 0 l) in
+let test_is_cons : result unit =
+  let l = List_Nil in
+  let* b = is_cons i32 (List_Cons 0 l) in
   if not b then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_is_cons] *)
-let _ = assert_norm (test_is_cons_fwd = Return ())
+let _ = assert_norm (test_is_cons = Return ())
 
 (** [no_nested_borrows::split_list]: forward function *)
-let split_list_fwd (t : Type0) (l : list_t t) : result (t & (list_t t)) =
+let split_list (t : Type0) (l : list_t t) : result (t & (list_t t)) =
   begin match l with
-  | ListCons hd tl -> Return (hd, tl)
-  | ListNil -> Fail Failure
+  | List_Cons hd tl -> Return (hd, tl)
+  | List_Nil -> Fail Failure
   end
 
 (** [no_nested_borrows::test_split_list]: forward function *)
-let test_split_list_fwd : result unit =
-  let l = ListNil in
-  let* p = split_list_fwd i32 (ListCons 0 l) in
+let test_split_list : result unit =
+  let l = List_Nil in
+  let* p = split_list i32 (List_Cons 0 l) in
   let (hd, _) = p in
   if not (hd = 0) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_split_list] *)
-let _ = assert_norm (test_split_list_fwd = Return ())
+let _ = assert_norm (test_split_list = Return ())
 
 (** [no_nested_borrows::choose]: forward function *)
-let choose_fwd (t : Type0) (b : bool) (x : t) (y : t) : result t =
+let choose (t : Type0) (b : bool) (x : t) (y : t) : result t =
   if b then Return x else Return y
 
 (** [no_nested_borrows::choose]: backward function 0 *)
@@ -184,8 +196,8 @@ let choose_back
   if b then Return (ret, y) else Return (x, ret)
 
 (** [no_nested_borrows::choose_test]: forward function *)
-let choose_test_fwd : result unit =
-  let* z = choose_fwd i32 true 0 0 in
+let choose_test : result unit =
+  let* z = choose i32 true 0 0 in
   let* z0 = i32_add z 1 in
   if not (z0 = 1)
   then Fail Failure
@@ -196,115 +208,112 @@ let choose_test_fwd : result unit =
     else if not (y = 0) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::choose_test] *)
-let _ = assert_norm (choose_test_fwd = Return ())
+let _ = assert_norm (choose_test = Return ())
 
 (** [no_nested_borrows::test_char]: forward function *)
-let test_char_fwd : result char =
+let test_char : result char =
   Return 'a'
 
 (** [no_nested_borrows::Tree] *)
 type tree_t (t : Type0) =
-| TreeLeaf : t -> tree_t t
-| TreeNode : t -> node_elem_t t -> tree_t t -> tree_t t
+| Tree_Leaf : t -> tree_t t
+| Tree_Node : t -> nodeElem_t t -> tree_t t -> tree_t t
 
 (** [no_nested_borrows::NodeElem] *)
-and node_elem_t (t : Type0) =
-| NodeElemCons : tree_t t -> node_elem_t t -> node_elem_t t
-| NodeElemNil : node_elem_t t
+and nodeElem_t (t : Type0) =
+| NodeElem_Cons : tree_t t -> nodeElem_t t -> nodeElem_t t
+| NodeElem_Nil : nodeElem_t t
 
 (** [no_nested_borrows::list_length]: forward function *)
-let rec list_length_fwd (t : Type0) (l : list_t t) : result u32 =
+let rec list_length (t : Type0) (l : list_t t) : result u32 =
   begin match l with
-  | ListCons x l1 -> let* i = list_length_fwd t l1 in u32_add 1 i
-  | ListNil -> Return 0
+  | List_Cons x l1 -> let* i = list_length t l1 in u32_add 1 i
+  | List_Nil -> Return 0
   end
 
 (** [no_nested_borrows::list_nth_shared]: forward function *)
-let rec list_nth_shared_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
+let rec list_nth_shared (t : Type0) (l : list_t t) (i : u32) : result t =
   begin match l with
-  | ListCons x tl ->
+  | List_Cons x tl ->
     if i = 0
     then Return x
-    else let* i0 = u32_sub i 1 in list_nth_shared_fwd t tl i0
-  | ListNil -> Fail Failure
+    else let* i0 = u32_sub i 1 in list_nth_shared t tl i0
+  | List_Nil -> Fail Failure
   end
 
 (** [no_nested_borrows::list_nth_mut]: forward function *)
-let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
+let rec list_nth_mut (t : Type0) (l : list_t t) (i : u32) : result t =
   begin match l with
-  | ListCons x tl ->
-    if i = 0
-    then Return x
-    else let* i0 = u32_sub i 1 in list_nth_mut_fwd t tl i0
-  | ListNil -> Fail Failure
+  | List_Cons x tl ->
+    if i = 0 then Return x else let* i0 = u32_sub i 1 in list_nth_mut t tl i0
+  | List_Nil -> Fail Failure
   end
 
 (** [no_nested_borrows::list_nth_mut]: backward function 0 *)
 let rec list_nth_mut_back
   (t : Type0) (l : list_t t) (i : u32) (ret : t) : result (list_t t) =
   begin match l with
-  | ListCons x tl ->
+  | List_Cons x tl ->
     if i = 0
-    then Return (ListCons ret tl)
+    then Return (List_Cons ret tl)
     else
       let* i0 = u32_sub i 1 in
       let* tl0 = list_nth_mut_back t tl i0 ret in
-      Return (ListCons x tl0)
-  | ListNil -> Fail Failure
+      Return (List_Cons x tl0)
+  | List_Nil -> Fail Failure
   end
 
 (** [no_nested_borrows::list_rev_aux]: forward function *)
-let rec list_rev_aux_fwd
+let rec list_rev_aux
   (t : Type0) (li : list_t t) (lo : list_t t) : result (list_t t) =
   begin match li with
-  | ListCons hd tl -> list_rev_aux_fwd t tl (ListCons hd lo)
-  | ListNil -> Return lo
+  | List_Cons hd tl -> list_rev_aux t tl (List_Cons hd lo)
+  | List_Nil -> Return lo
   end
 
 (** [no_nested_borrows::list_rev]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-let list_rev_fwd_back (t : Type0) (l : list_t t) : result (list_t t) =
-  let li = mem_replace_fwd (list_t t) l ListNil in
-  list_rev_aux_fwd t li ListNil
+let list_rev (t : Type0) (l : list_t t) : result (list_t t) =
+  let li = core_mem_replace (list_t t) l List_Nil in list_rev_aux t li List_Nil
 
 (** [no_nested_borrows::test_list_functions]: forward function *)
-let test_list_functions_fwd : result unit =
-  let l = ListNil in
-  let l0 = ListCons 2 l in
-  let l1 = ListCons 1 l0 in
-  let* i = list_length_fwd i32 (ListCons 0 l1) in
+let test_list_functions : result unit =
+  let l = List_Nil in
+  let l0 = List_Cons 2 l in
+  let l1 = List_Cons 1 l0 in
+  let* i = list_length i32 (List_Cons 0 l1) in
   if not (i = 3)
   then Fail Failure
   else
-    let* i0 = list_nth_shared_fwd i32 (ListCons 0 l1) 0 in
+    let* i0 = list_nth_shared i32 (List_Cons 0 l1) 0 in
     if not (i0 = 0)
     then Fail Failure
     else
-      let* i1 = list_nth_shared_fwd i32 (ListCons 0 l1) 1 in
+      let* i1 = list_nth_shared i32 (List_Cons 0 l1) 1 in
       if not (i1 = 1)
       then Fail Failure
       else
-        let* i2 = list_nth_shared_fwd i32 (ListCons 0 l1) 2 in
+        let* i2 = list_nth_shared i32 (List_Cons 0 l1) 2 in
         if not (i2 = 2)
         then Fail Failure
         else
-          let* ls = list_nth_mut_back i32 (ListCons 0 l1) 1 3 in
-          let* i3 = list_nth_shared_fwd i32 ls 0 in
+          let* ls = list_nth_mut_back i32 (List_Cons 0 l1) 1 3 in
+          let* i3 = list_nth_shared i32 ls 0 in
           if not (i3 = 0)
           then Fail Failure
           else
-            let* i4 = list_nth_shared_fwd i32 ls 1 in
+            let* i4 = list_nth_shared i32 ls 1 in
             if not (i4 = 3)
             then Fail Failure
             else
-              let* i5 = list_nth_shared_fwd i32 ls 2 in
+              let* i5 = list_nth_shared i32 ls 2 in
               if not (i5 = 2) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_list_functions] *)
-let _ = assert_norm (test_list_functions_fwd = Return ())
+let _ = assert_norm (test_list_functions = Return ())
 
 (** [no_nested_borrows::id_mut_pair1]: forward function *)
-let id_mut_pair1_fwd (t1 t2 : Type0) (x : t1) (y : t2) : result (t1 & t2) =
+let id_mut_pair1 (t1 t2 : Type0) (x : t1) (y : t2) : result (t1 & t2) =
   Return (x, y)
 
 (** [no_nested_borrows::id_mut_pair1]: backward function 0 *)
@@ -313,7 +322,7 @@ let id_mut_pair1_back
   let (x0, x1) = ret in Return (x0, x1)
 
 (** [no_nested_borrows::id_mut_pair2]: forward function *)
-let id_mut_pair2_fwd (t1 t2 : Type0) (p : (t1 & t2)) : result (t1 & t2) =
+let id_mut_pair2 (t1 t2 : Type0) (p : (t1 & t2)) : result (t1 & t2) =
   let (x, x0) = p in Return (x, x0)
 
 (** [no_nested_borrows::id_mut_pair2]: backward function 0 *)
@@ -322,7 +331,7 @@ let id_mut_pair2_back
   let (x, x0) = ret in Return (x, x0)
 
 (** [no_nested_borrows::id_mut_pair3]: forward function *)
-let id_mut_pair3_fwd (t1 t2 : Type0) (x : t1) (y : t2) : result (t1 & t2) =
+let id_mut_pair3 (t1 t2 : Type0) (x : t1) (y : t2) : result (t1 & t2) =
   Return (x, y)
 
 (** [no_nested_borrows::id_mut_pair3]: backward function 0 *)
@@ -336,7 +345,7 @@ let id_mut_pair3_back'b
   Return ret
 
 (** [no_nested_borrows::id_mut_pair4]: forward function *)
-let id_mut_pair4_fwd (t1 t2 : Type0) (p : (t1 & t2)) : result (t1 & t2) =
+let id_mut_pair4 (t1 t2 : Type0) (p : (t1 & t2)) : result (t1 & t2) =
   let (x, x0) = p in Return (x, x0)
 
 (** [no_nested_borrows::id_mut_pair4]: backward function 0 *)
@@ -350,81 +359,76 @@ let id_mut_pair4_back'b
   Return ret
 
 (** [no_nested_borrows::StructWithTuple] *)
-type struct_with_tuple_t (t1 t2 : Type0) = { struct_with_tuple_p : (t1 & t2); }
+type structWithTuple_t (t1 t2 : Type0) = { p : (t1 & t2); }
 
 (** [no_nested_borrows::new_tuple1]: forward function *)
-let new_tuple1_fwd : result (struct_with_tuple_t u32 u32) =
-  Return { struct_with_tuple_p = (1, 2) }
+let new_tuple1 : result (structWithTuple_t u32 u32) =
+  Return { p = (1, 2) }
 
 (** [no_nested_borrows::new_tuple2]: forward function *)
-let new_tuple2_fwd : result (struct_with_tuple_t i16 i16) =
-  Return { struct_with_tuple_p = (1, 2) }
+let new_tuple2 : result (structWithTuple_t i16 i16) =
+  Return { p = (1, 2) }
 
 (** [no_nested_borrows::new_tuple3]: forward function *)
-let new_tuple3_fwd : result (struct_with_tuple_t u64 i64) =
-  Return { struct_with_tuple_p = (1, 2) }
+let new_tuple3 : result (structWithTuple_t u64 i64) =
+  Return { p = (1, 2) }
 
 (** [no_nested_borrows::StructWithPair] *)
-type struct_with_pair_t (t1 t2 : Type0) =
-{
-  struct_with_pair_p : pair_t t1 t2;
-}
+type structWithPair_t (t1 t2 : Type0) = { p : pair_t t1 t2; }
 
 (** [no_nested_borrows::new_pair1]: forward function *)
-let new_pair1_fwd : result (struct_with_pair_t u32 u32) =
-  Return { struct_with_pair_p = { pair_x = 1; pair_y = 2 } }
+let new_pair1 : result (structWithPair_t u32 u32) =
+  Return { p = { x = 1; y = 2 } }
 
 (** [no_nested_borrows::test_constants]: forward function *)
-let test_constants_fwd : result unit =
-  let* swt = new_tuple1_fwd in
-  let (i, _) = swt.struct_with_tuple_p in
+let test_constants : result unit =
+  let* swt = new_tuple1 in
+  let (i, _) = swt.p in
   if not (i = 1)
   then Fail Failure
   else
-    let* swt0 = new_tuple2_fwd in
-    let (i0, _) = swt0.struct_with_tuple_p in
+    let* swt0 = new_tuple2 in
+    let (i0, _) = swt0.p in
     if not (i0 = 1)
     then Fail Failure
     else
-      let* swt1 = new_tuple3_fwd in
-      let (i1, _) = swt1.struct_with_tuple_p in
+      let* swt1 = new_tuple3 in
+      let (i1, _) = swt1.p in
       if not (i1 = 1)
       then Fail Failure
       else
-        let* swp = new_pair1_fwd in
-        if not (swp.struct_with_pair_p.pair_x = 1)
-        then Fail Failure
-        else Return ()
+        let* swp = new_pair1 in
+        if not (swp.p.x = 1) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_constants] *)
-let _ = assert_norm (test_constants_fwd = Return ())
+let _ = assert_norm (test_constants = Return ())
 
 (** [no_nested_borrows::test_weird_borrows1]: forward function *)
-let test_weird_borrows1_fwd : result unit =
+let test_weird_borrows1 : result unit =
   Return ()
 
 (** Unit test for [no_nested_borrows::test_weird_borrows1] *)
-let _ = assert_norm (test_weird_borrows1_fwd = Return ())
+let _ = assert_norm (test_weird_borrows1 = Return ())
 
 (** [no_nested_borrows::test_mem_replace]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
-let test_mem_replace_fwd_back (px : u32) : result u32 =
-  let y = mem_replace_fwd u32 px 1 in
+let test_mem_replace (px : u32) : result u32 =
+  let y = core_mem_replace u32 px 1 in
   if not (y = 0) then Fail Failure else Return 2
 
 (** [no_nested_borrows::test_shared_borrow_bool1]: forward function *)
-let test_shared_borrow_bool1_fwd (b : bool) : result u32 =
+let test_shared_borrow_bool1 (b : bool) : result u32 =
   if b then Return 0 else Return 1
 
 (** [no_nested_borrows::test_shared_borrow_bool2]: forward function *)
-let test_shared_borrow_bool2_fwd : result u32 =
+let test_shared_borrow_bool2 : result u32 =
   Return 0
 
 (** [no_nested_borrows::test_shared_borrow_enum1]: forward function *)
-let test_shared_borrow_enum1_fwd (l : list_t u32) : result u32 =
-  begin match l with | ListCons i l0 -> Return 1 | ListNil -> Return 0 end
+let test_shared_borrow_enum1 (l : list_t u32) : result u32 =
+  begin match l with | List_Cons i l0 -> Return 1 | List_Nil -> Return 0 end
 
 (** [no_nested_borrows::test_shared_borrow_enum2]: forward function *)
-let test_shared_borrow_enum2_fwd : result u32 =
+let test_shared_borrow_enum2 : result u32 =
   Return 0
 

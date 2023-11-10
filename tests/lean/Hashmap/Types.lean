@@ -15,6 +15,6 @@ structure HashMap (T : Type) where
   num_entries : Usize
   max_load_factor : (Usize × Usize)
   max_load : Usize
-  slots : Vec (List T)
+  slots : alloc.vec.Vec (List T)
 
 end hashmap

@@ -7,10 +7,10 @@ include HashmapMain.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap_main::hashmap_utils::deserialize]: forward function *)
-val hashmap_utils_deserialize_fwd
-  : state -> result (state & (hashmap_hash_map_t u64))
+val hashmap_utils_deserialize
+  : state -> result (state & (hashmap_HashMap_t u64))
 
 (** [hashmap_main::hashmap_utils::serialize]: forward function *)
-val hashmap_utils_serialize_fwd
-  : hashmap_hash_map_t u64 -> state -> result (state & unit)
+val hashmap_utils_serialize
+  : hashmap_HashMap_t u64 -> state -> result (state & unit)
 

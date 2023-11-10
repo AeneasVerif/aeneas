@@ -8,11 +8,12 @@ open Array.Types
 
 (** [array::sum]: decreases clause *)
 unfold
-let sum_loop_decreases (s : slice u32) (sum : u32) (i : usize) : nat = admit ()
+let sum_loop_decreases (s : slice u32) (sum0 : u32) (i : usize) : nat =
+  admit ()
 
 (** [array::sum2]: decreases clause *)
 unfold
-let sum2_loop_decreases (s : slice u32) (s2 : slice u32) (sum : u32)
+let sum2_loop_decreases (s : slice u32) (s2 : slice u32) (sum0 : u32)
   (i : usize) : nat =
   admit ()
 

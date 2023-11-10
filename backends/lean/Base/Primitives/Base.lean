@@ -120,11 +120,18 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
 -- MISC --
 ----------
 
-@[simp] def mem.replace (a : Type) (x : a) (_ : a) : a := x
-@[simp] def mem.replace_back (a : Type) (_ : a) (y : a) : a := y
+@[simp] def core.mem.replace (a : Type) (x : a) (_ : a) : a := x
+@[simp] def core.mem.replace_back (a : Type) (_ : a) (y : a) : a := y
 
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.
  Use with `simp [ aeneas ]` -/
 register_simp_attr aeneas
+
+-- We don't really use raw pointers for now
+structure MutRawPtr (T : Type) where
+  v : T
+
+structure ConstRawPtr (T : Type) where
+  v : T
 
 end Primitives

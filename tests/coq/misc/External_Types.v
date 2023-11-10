@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module External_Types.
 
 (** [core::num::nonzero::NonZeroU32] *)
-Axiom Core_num_nonzero_non_zero_u32_t : Type.
+Axiom core_num_nonzero_NonZeroU32_t : Type.
 
 (** The state type used in the state-error monad *)
 Axiom state : Type.

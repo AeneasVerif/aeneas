@@ -7,6 +7,6 @@ open Primitives
 
 (** [loops::List] *)
 type list_t (t : Type0) =
-| ListCons : t -> list_t t -> list_t t
-| ListNil : list_t t
+| List_Cons : t -> list_t t -> list_t t
+| List_Nil : list_t t
 

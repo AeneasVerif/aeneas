@@ -57,12 +57,26 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let stateful = ref false in
     let can_diverge = ref false in
     let is_rec = ref false in
+    let group_has_builtin_info = ref false in
 
+    (* We have some specialized knowledge of some library functions; we don't
+       have any more custom treatment than this, and these functions can be modeled
+       suitably in Primitives.fst, rather than special-casing for them all the
+       way. *)
+    let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
+      let open ExtractBuiltin in
+      let name = name_to_simple_name f.name in
+      SimpleNameMap.find_opt name builtin_fun_effects_map
+    in
+
+    (* JP: Why not use a reduce visitor here with a tuple of the values to be
+       computed? *)
     let visit_fun (f : fun_decl) : unit =
       let obj =
         object (self)
           inherit [_] iter_statement as super
           method may_fail b = can_fail := !can_fail || b
+          method maybe_stateful b = stateful := !stateful || b
 
           method! visit_Assert env a =
             self#may_fail true;
@@ -70,14 +84,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
           method! visit_rvalue _env rv =
             match rv with
-            | Use _ | Ref _ | Global _ | Discriminant _ | Aggregate _ -> ()
+            | Use _ | RvRef _ | Global _ | Discriminant _ | Aggregate _ -> ()
             | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := EU.binop_can_fail bop || !can_fail
 
           method! visit_Call env call =
-            (match call.func with
-            | Regular id ->
+            (match call.func.func with
+            | FunId (Regular id) ->
                 if FunDeclId.Set.mem id fun_ids then (
                   can_diverge := true;
                   is_rec := true)
@@ -86,9 +100,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                   self#may_fail info.can_fail;
                   stateful := !stateful || info.stateful;
                   can_diverge := !can_diverge || info.can_diverge
-            | Assumed id ->
+            | FunId (Assumed id) ->
                 (* None of the assumed functions can diverge nor are considered stateful *)
-                can_fail := !can_fail || Assumed.assumed_can_fail id);
+                can_fail := !can_fail || Assumed.assumed_fun_can_fail id
+            | TraitMethod _ ->
+                (* We consider trait functions can fail, but can not diverge and are not stateful.
+                   TODO: this may cause issues if we use use a fuel parameter.
+                *)
+                can_fail := true);
             super#visit_Call env call
 
           method! visit_Panic env =
@@ -102,11 +121,21 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       in
       (* Sanity check: global bodies don't contain stateful calls *)
       assert ((not f.is_global_decl_body) || not !stateful);
+      let builtin_info = get_builtin_info f in
+      let has_builtin_info = builtin_info <> None in
+      group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
       match f.body with
       | None ->
-          (* Opaque function: we consider they fail by default *)
-          obj#may_fail true;
-          stateful := (not f.is_global_decl_body) && use_state
+          let info_can_fail, info_stateful =
+            match builtin_info with
+            | None -> (true, use_state)
+            | Some { can_fail; stateful } -> (can_fail, stateful)
+          in
+          obj#may_fail info_can_fail;
+          obj#maybe_stateful
+            (if f.is_global_decl_body then false
+             else if not use_state then false
+             else info_stateful)
       | Some body -> obj#visit_statement () body.body
     in
     List.iter visit_fun d;
@@ -114,12 +143,17 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
      * groups containing globals contain exactly one declaration *)
     let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
     assert ((not is_global_decl_body) || List.length d = 1);
+    assert ((not !group_has_builtin_info) || List.length d = 1);
     (* We ignore on purpose functions that cannot fail and consider they *can*
      * fail: the result of the analysis is not used yet to adjust the translation
      * so that the functions which syntactically can't fail don't use an error monad.
-     * However, we do keep the result of the analysis for global bodies.
+     * However, we do keep the result of the analysis for global bodies and for
+     * builtin functions which are marked as non-fallible.
      * *)
-    can_fail := (not is_global_decl_body) || !can_fail;
+    can_fail :=
+      if is_global_decl_body then !can_fail
+      else if !group_has_builtin_info then !can_fail
+      else true;
     {
       can_fail = !can_fail;
       stateful = !stateful;
@@ -141,7 +175,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
   let rec analyze_decl_groups (decls : declaration_group list) : unit =
     match decls with
     | [] -> ()
-    | Type _ :: decls' -> analyze_decl_groups decls'
+    | (Type _ | TraitDecl _ | TraitImpl _) :: decls' ->
+        analyze_decl_groups decls'
     | Fun decl :: decls' ->
         analyze_fun_decl_group decl;
         analyze_decl_groups decls'

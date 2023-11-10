@@ -7,7 +7,7 @@ include External.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::mem::swap]: forward function *)
-val core_mem_swap_fwd (t : Type0) : t -> t -> state -> result (state & unit)
+val core_mem_swap (t : Type0) : t -> t -> state -> result (state & unit)
 
 (** [core::mem::swap]: backward function 0 *)
 val core_mem_swap_back0
@@ -18,10 +18,10 @@ val core_mem_swap_back1
   (t : Type0) : t -> t -> state -> state -> result (state & t)
 
 (** [core::num::nonzero::NonZeroU32::{14}::new]: forward function *)
-val core_num_nonzero_non_zero_u32_new_fwd
-  : u32 -> state -> result (state & (option core_num_nonzero_non_zero_u32_t))
+val core_num_nonzero_NonZeroU32_new
+  : u32 -> state -> result (state & (option core_num_nonzero_NonZeroU32_t))
 
 (** [core::option::Option::{0}::unwrap]: forward function *)
-val core_option_option_unwrap_fwd
+val core_option_Option_unwrap
   (t : Type0) : option t -> state -> result (state & t)
 
