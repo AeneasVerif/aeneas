@@ -22,17 +22,13 @@ jobs:
   lean: # Lean isn't supported by Nix, so we need to add extra steps
     runs-on: [ubuntu-latest]
     steps:
-      #- run: wget -q https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh && bash install_debian.sh ; rm -f install_debian.sh && source ~/.profile
       # Install curl
       - run: sudo apt update && sudo apt install curl
-      # Install Elan (https://leanprover-community.github.io/install/linux.html)
-      # We updated the script to make it run in non-interactive mode
-      #- run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh
+      # Install Elan (https://leanprover-community.github.io/install/linux.html) and Lean in
+      # non-interactive mode:
       - run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | bash -s -- -y
-      #- run: sudo apt-get update && sudo apt-get install make
       # Checkout the repo and download it to the runner
       - name: Checkout
         uses: actions/checkout@v4
       # Verify
       - run: cd tests/lean && make
-      #- run: cd tests/lean && lake build
