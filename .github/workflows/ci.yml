@@ -27,6 +27,7 @@ jobs:
       # Install Elan (https://leanprover-community.github.io/install/linux.html) and Lean in
       # non-interactive mode:
       - run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | bash -s -- -y
+      - run: source ~/.profile
       # Checkout the repo and download it to the runner
       - name: Checkout
         uses: actions/checkout@v4
