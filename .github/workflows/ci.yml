@@ -15,8 +15,10 @@ jobs:
       - run: nix build -L .#checks.x86_64-linux.aeneas-tests
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-fstar
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-coq
+      # HOL4 can be reactivated
+      #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
+      # Lean doesn't work with Nix
       #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-lean
-      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
   lean: # Lean isn't supported by Nix, so we need to add extra steps
     runs-on: [ubuntu-latest]
     steps:
