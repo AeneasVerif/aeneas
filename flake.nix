@@ -92,11 +92,28 @@
             cp ${aeneas}/bin/aeneas_driver aeneas.exe
             export AENEAS_EXE=./aeneas.exe
 
-            # Run the tests
+            # Copy the tests
+            mkdir tests-copy
+            cp -r tests tests-copy
+
+            # TODO: remove the test files to make sure we regenerate exactly
+            # the files which are checked out (we have to be careful about
+            # files like lakefile.lean, and the user hand-written files)
+
+            # Run the tests - remark: we could remove the file
             make tests -j $NIX_BUILD_CORES
+
+            # Check that there are no differences between the generated tests
+            # and the original tests
+            if [[ $(diff -rq tests tests-copy) ]]; then
+              echo "Ok: the regenerated test files are the same as the checked out files"
+            else
+              echo "Error: the regenerated test files differ from the checked out files"
+              exit 1
+            fi
           '';
           # Tests don't generate anything new as the generated files are
-          # versionned, but the installation phase still needs to prodocue
+          # versionned, but the installation phase still needs to produce
           # something, otherwise Nix will consider the build has failed.
           installPhase = "touch $out";
         };
