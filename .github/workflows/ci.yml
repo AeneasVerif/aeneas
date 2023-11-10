@@ -15,11 +15,10 @@ jobs:
       - run: nix build -L .#checks.x86_64-linux.aeneas-tests
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-fstar
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-coq
-      # HOL4 can be reactivated, but it is very slow
-      #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
+      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
       # Lean doesn't work with Nix
       #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-lean
-  lean: # Lean isn't supported by Nix, so we need to add extra steps
+  lean: # Lean isn't supported by Nix, so we put it in a different job
     runs-on: [ubuntu-latest]
     steps:
       # Install curl
@@ -30,5 +29,6 @@ jobs:
       # Checkout the repo and download it to the runner
       - name: Checkout
         uses: actions/checkout@v4
-      # Verify
+      # Verify - note that we need to update the environment with `source` so
+      # that the lake binary is in the path.
       - run: source ~/.profile && cd tests/lean && make
