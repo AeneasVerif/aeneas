@@ -28,7 +28,7 @@ jobs:
       - run: sudo apt update && sudo apt install curl
       # Install Elan (https://leanprover-community.github.io/install/linux.html)
       #- run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh
-      - run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | bash -s -y
+      - run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | bash -s -- -y
       #- run: sudo apt-get update && sudo apt-get install make
       # Verify
       - run: cd tests/lean && make
