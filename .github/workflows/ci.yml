@@ -17,8 +17,12 @@ jobs:
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-coq
       #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-lean
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
-      # Lean isn't supported by Nix, so we need to add extra steps
+  lean: # Lean isn't supported by Nix, so we need to add extra steps
+    runs-on: [self-hosted, linux]
+    steps:
       # Install Elan (https://leanprover-community.github.io/install/linux.html)
       - run: curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh
+      # We need make
+      - run: sudo apt-get update && sudo apt-get install make
       # Verify
       - run: cd tests/lean && make
