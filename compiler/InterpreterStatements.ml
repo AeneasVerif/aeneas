@@ -232,7 +232,7 @@ let set_discriminant (config : C.config) (p : E.place)
   let update_value cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match (v.V.ty, v.V.value) with
-    | T.TAdt ((T.AdtId _ as type_id), generics), V.VAdt av -> (
+    | T.TAdt ((T.TAdtId _ as type_id), generics), V.VAdt av -> (
         (* There are two situations:
            - either the discriminant is already the proper one (in which case we
              don't do anything)
@@ -248,16 +248,16 @@ let set_discriminant (config : C.config) (p : E.place)
               (* Replace the value *)
               let bottom_v =
                 match type_id with
-                | T.AdtId def_id ->
+                | T.TAdtId def_id ->
                     compute_expanded_bottom_adt_value ctx def_id
                       (Some variant_id) generics
                 | _ -> raise (Failure "Unreachable")
               in
               assign_to_place config bottom_v p (cf Unit) ctx)
-    | T.TAdt ((T.AdtId _ as type_id), generics), V.Bottom ->
+    | T.TAdt ((T.TAdtId _ as type_id), generics), V.Bottom ->
         let bottom_v =
           match type_id with
-          | T.AdtId def_id ->
+          | T.TAdtId def_id ->
               compute_expanded_bottom_adt_value ctx def_id (Some variant_id)
                 generics
           | _ -> raise (Failure "Unreachable")

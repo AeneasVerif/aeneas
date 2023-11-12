@@ -107,10 +107,10 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
   assert (ty_is_rty ty1 && ty_is_rty ty2);
   (* Normalize the associated types *)
   match (ty1, ty2) with
-  | T.TLiteral lit1, T.TLiteral lit2 ->
+  | TLiteral lit1, TLiteral lit2 ->
       assert (lit1 = lit2);
       default
-  | T.TAdt (id1, generics1), T.TAdt (id2, generics2) ->
+  | TAdt (id1, generics1), TAdt (id2, generics2) ->
       assert (id1 = id2);
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
@@ -146,7 +146,7 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
       in
       (* Combine *)
       combine params_b tys_b
-  | T.Ref (r1, ty1, kind1), T.Ref (r2, ty2, kind2) ->
+  | TRef (r1, ty1, kind1), TRef (r2, ty2, kind2) ->
       (* Sanity check *)
       assert (kind1 = kind2);
       (* Explanation for the case where we check if projections intersect:
@@ -155,10 +155,10 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
       let regions_b = compare_regions r1 r2 in
       let tys_b = compare ty1 ty2 in
       combine regions_b tys_b
-  | T.TypeVar id1, T.TypeVar id2 ->
+  | TVar id1, TVar id2 ->
       assert (id1 = id2);
       default
-  | T.TraitType _, T.TraitType _ ->
+  | TTraitType _, TTraitType _ ->
       (* The types should have been normalized. If after normalization we
          get trait types, we can consider them as variables *)
       assert (ty1 = ty2);

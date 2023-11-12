@@ -226,69 +226,69 @@ let assumed_adts () : (assumed_ty * string) list =
   match !backend with
   | Lean ->
       [
-        (State, "State");
-        (Result, "Result");
-        (Error, "Error");
-        (Fuel, "Nat");
-        (Array, "Array");
-        (Slice, "Slice");
-        (Str, "Str");
-        (RawPtr Mut, "MutRawPtr");
-        (RawPtr Const, "ConstRawPtr");
+        (TState, "State");
+        (TResult, "Result");
+        (TError, "Error");
+        (TFuel, "Nat");
+        (TArray, "Array");
+        (TSlice, "Slice");
+        (TStr, "Str");
+        (TRawPtr Mut, "MutRawPtr");
+        (TRawPtr Const, "ConstRawPtr");
       ]
   | Coq | FStar | HOL4 ->
       [
-        (State, "state");
-        (Result, "result");
-        (Error, "error");
-        (Fuel, if !backend = HOL4 then "num" else "nat");
-        (Array, "array");
-        (Slice, "slice");
-        (Str, "str");
-        (RawPtr Mut, "mut_raw_ptr");
-        (RawPtr Const, "const_raw_ptr");
+        (TState, "state");
+        (TResult, "result");
+        (TError, "error");
+        (TFuel, if !backend = HOL4 then "num" else "nat");
+        (TArray, "array");
+        (TSlice, "slice");
+        (TStr, "str");
+        (TRawPtr Mut, "mut_raw_ptr");
+        (TRawPtr Const, "const_raw_ptr");
       ]
 
 let assumed_struct_constructors () : (assumed_ty * string) list =
   match !backend with
-  | Lean -> [ (Array, "Array.make") ]
-  | Coq -> [ (Array, "mk_array") ]
-  | FStar -> [ (Array, "mk_array") ]
-  | HOL4 -> [ (Array, "mk_array") ]
+  | Lean -> [ (TArray, "Array.make") ]
+  | Coq -> [ (TArray, "mk_array") ]
+  | FStar -> [ (TArray, "mk_array") ]
+  | HOL4 -> [ (TArray, "mk_array") ]
 
 let assumed_variants () : (assumed_ty * VariantId.id * string) list =
   match !backend with
   | FStar ->
       [
-        (Result, result_return_id, "Return");
-        (Result, result_fail_id, "Fail");
-        (Error, error_failure_id, "Failure");
-        (Error, error_out_of_fuel_id, "OutOfFuel");
+        (TResult, result_return_id, "Return");
+        (TResult, result_fail_id, "Fail");
+        (TError, error_failure_id, "Failure");
+        (TError, error_out_of_fuel_id, "OutOfFuel");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]
   | Coq ->
       [
-        (Result, result_return_id, "Return");
-        (Result, result_fail_id, "Fail_");
-        (Error, error_failure_id, "Failure");
-        (Error, error_out_of_fuel_id, "OutOfFuel");
-        (Fuel, fuel_zero_id, "O");
-        (Fuel, fuel_succ_id, "S");
+        (TResult, result_return_id, "Return");
+        (TResult, result_fail_id, "Fail_");
+        (TError, error_failure_id, "Failure");
+        (TError, error_out_of_fuel_id, "OutOfFuel");
+        (TFuel, fuel_zero_id, "O");
+        (TFuel, fuel_succ_id, "S");
       ]
   | Lean ->
       [
-        (Result, result_return_id, "ret");
-        (Result, result_fail_id, "fail");
-        (Error, error_failure_id, "panic");
+        (TResult, result_return_id, "ret");
+        (TResult, result_fail_id, "fail");
+        (TError, error_failure_id, "panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]
   | HOL4 ->
       [
-        (Result, result_return_id, "Return");
-        (Result, result_fail_id, "Fail");
-        (Error, error_failure_id, "Failure");
+        (TResult, result_return_id, "Return");
+        (TResult, result_fail_id, "Fail");
+        (TError, error_failure_id, "Failure");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]
@@ -801,18 +801,18 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
         match ty with
         | TAdt (type_id, generics) -> (
             match type_id with
-            | Tuple ->
+            | TTuple ->
                 (* The "pair" case is frequent enough to have its special treatment *)
                 if List.length generics.types = 2 then "p" else "t"
-            | TAssumed Result -> "r"
-            | TAssumed Error -> ConstStrings.error_basename
-            | TAssumed Fuel -> ConstStrings.fuel_basename
-            | TAssumed Array -> "a"
-            | TAssumed Slice -> "s"
-            | TAssumed Str -> "s"
-            | TAssumed State -> ConstStrings.state_basename
-            | TAssumed (RawPtr _) -> "p"
-            | AdtId adt_id ->
+            | TAssumed TResult -> "r"
+            | TAssumed TError -> ConstStrings.error_basename
+            | TAssumed TFuel -> ConstStrings.fuel_basename
+            | TAssumed TArray -> "a"
+            | TAssumed TSlice -> "s"
+            | TAssumed TStr -> "s"
+            | TAssumed TState -> ConstStrings.state_basename
+            | TAssumed (TRawPtr _) -> "p"
+            | TAdtId adt_id ->
                 let def = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
                 (* Derive the var name from the last ident of the type name
                  * Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
@@ -821,15 +821,15 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
                  * be an ident *)
                 let cl = List.nth def.name (List.length def.name - 1) in
                 name_from_type_ident (Names.as_ident cl))
-        | TypeVar _ -> (
+        | TVar _ -> (
             (* TODO: use "t" also for F* *)
             match !backend with
             | FStar -> "x" (* lacking inspiration here... *)
             | Coq | Lean | HOL4 -> "t" (* lacking inspiration here... *))
         | TLiteral lty -> (
             match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
-        | Arrow _ -> "f"
-        | TraitType (_, _, name) -> name_from_type_ident name)
+        | TArrow _ -> "f"
+        | TTraitType (_, _, name) -> name_from_type_ident name)
   in
   let type_var_basename (_varset : StringSet.t) (basename : string) : string =
     (* Rust type variables are snake-case and start with a capital letter *)
@@ -1161,7 +1161,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
   | TAdt (type_id, generics) -> (
       let has_params = generics <> empty_generic_args in
       match type_id with
-      | Tuple ->
+      | TTuple ->
           (* This is a bit annoying, but in F*/Coq/HOL4 [()] is not the unit type:
            * we have to write [unit]... *)
           if generics.types = [] then F.pp_print_string fmt (unit_name ())
@@ -1181,7 +1181,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                 F.pp_print_space fmt ())
               (extract_rec true) generics.types;
             F.pp_print_string fmt ")")
-      | AdtId _ | TAssumed _ -> (
+      | TAdtId _ | TAssumed _ -> (
           (* HOL4 behaves differently. Where in Coq/FStar/Lean we would write:
              `tree a b`
 
@@ -1200,7 +1200,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                  argument for `Vec`). *)
               let generics =
                 match type_id with
-                | AdtId id -> (
+                | TAdtId id -> (
                     match
                       TypeDeclId.Map.find_opt id ctx.types_filter_type_args_map
                     with
@@ -1223,7 +1223,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
               assert (const_generics = []);
               let print_tys =
                 match type_id with
-                | AdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
+                | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
                 | TAssumed _ -> true
                 | _ -> raise (Failure "Unreachable")
               in
@@ -1243,9 +1243,9 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                 Collections.List.iter_link (F.pp_print_space fmt)
                   (extract_trait_ref ctx fmt no_params_tys true)
                   trait_refs)))
-  | TypeVar vid -> F.pp_print_string fmt (ctx_get_type_var vid ctx)
+  | TVar vid -> F.pp_print_string fmt (ctx_get_type_var vid ctx)
   | TLiteral lty -> extract_literal_type ctx fmt lty
-  | Arrow (arg_ty, ret_ty) ->
+  | TArrow (arg_ty, ret_ty) ->
       if inside then F.pp_print_string fmt "(";
       extract_rec false arg_ty;
       F.pp_print_space fmt ();
@@ -1253,7 +1253,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       extract_rec false ret_ty;
       if inside then F.pp_print_string fmt ")"
-  | TraitType (trait_ref, generics, type_name) -> (
+  | TTraitType (trait_ref, generics, type_name) -> (
       if !parameterize_trait_types then raise (Failure "Unimplemented")
       else
         let type_name =
@@ -1445,7 +1445,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     | None -> ctx.fmt.type_name def.name
     | Some info -> info.extract_name
   in
-  let ctx = ctx_add (TypeId (AdtId def.def_id)) def_name ctx in
+  let ctx = ctx_add (TypeId (TAdtId def.def_id)) def_name ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -1487,11 +1487,11 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
         let ctx =
           List.fold_left
             (fun ctx (fid, name) ->
-              ctx_add (FieldId (AdtId def.def_id, fid)) name ctx)
+              ctx_add (FieldId (TAdtId def.def_id, fid)) name ctx)
             ctx field_names
         in
         (* Add the constructor name *)
-        ctx_add (StructId (AdtId def.def_id)) cons_name ctx
+        ctx_add (StructId (TAdtId def.def_id)) cons_name ctx
     | Enum variants ->
         let variant_names =
           match info with
@@ -1527,7 +1527,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
         in
         List.fold_left
           (fun ctx (vid, vname) ->
-            ctx_add (VariantId (AdtId def.def_id, vid)) vname ctx)
+            ctx_add (VariantId (TAdtId def.def_id, vid)) vname ctx)
           ctx variant_names
     | Opaque ->
         (* Nothing to do *)
@@ -1730,7 +1730,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       (* If Coq: print the constructor name *)
       (* TODO: remove superfluous test not is_rec below *)
       if !backend = Coq && not is_rec then (
-        F.pp_print_string fmt (ctx_get_struct (AdtId def.def_id) ctx);
+        F.pp_print_string fmt (ctx_get_struct (TAdtId def.def_id) ctx);
         F.pp_print_string fmt " ");
       (match !backend with
       | Lean -> ()
@@ -1744,7 +1744,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       | Lean -> F.pp_open_vbox fmt 0);
       (* Print the fields *)
       let print_field (field_id : FieldId.id) (f : field) : unit =
-        let field_name = ctx_get_field (AdtId def.def_id) field_id ctx in
+        let field_name = ctx_get_field (TAdtId def.def_id) field_id ctx in
         (* Open a box for the field *)
         F.pp_open_box fmt ctx.indent_incr;
         F.pp_print_string fmt field_name;
@@ -1779,7 +1779,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
          i.e., instead of generating `inductive Foo := | MkFoo ...` like in Coq
          we generate `inductive Foo := | mk ... *)
       let cons_name =
-        if !backend = Lean then "mk" else ctx_get_struct (AdtId def.def_id) ctx
+        if !backend = Lean then "mk" else ctx_get_struct (TAdtId def.def_id) ctx
       in
       let def_name = ctx_get_local_type def.def_id ctx in
       extract_type_decl_variant ctx fmt type_decl_group def_name type_params
@@ -2223,7 +2223,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     match decl.kind with
     | Opaque -> ()
     | Struct fields ->
-        let adt_id = AdtId decl.def_id in
+        let adt_id = TAdtId decl.def_id in
         (* Generate the instruction for the record constructor *)
         let cons_name = ctx_get_struct adt_id ctx in
         extract_coq_arguments_instruction ctx fmt cons_name num_params;
@@ -2241,7 +2241,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
         (* Generate the instructions *)
         VariantId.iteri
           (fun vid (_ : variant) ->
-            let cons_name = ctx_get_variant (AdtId decl.def_id) vid ctx in
+            let cons_name = ctx_get_variant (TAdtId decl.def_id) vid ctx in
             extract_coq_arguments_instruction ctx fmt cons_name num_params)
           variants;
         (* Add breaks to insert new lines between definitions *)
@@ -2270,7 +2270,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
         let ctx, record_var = ctx_add_var "x" (VarId.of_int 0) ctx in
         let ctx, field_var = ctx_add_var "x" (VarId.of_int 1) ctx in
         let def_name = ctx_get_local_type decl.def_id ctx in
-        let cons_name = ctx_get_struct (AdtId decl.def_id) ctx in
+        let cons_name = ctx_get_struct (TAdtId decl.def_id) ctx in
         let extract_field_proj (field_id : FieldId.id) (_ : field) : unit =
           F.pp_print_space fmt ();
           (* Outer box for the projector definition *)
@@ -2281,7 +2281,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           F.pp_open_hovbox fmt ctx.indent_incr;
           F.pp_print_string fmt "Definition";
           F.pp_print_space fmt ();
-          let field_name = ctx_get_field (AdtId decl.def_id) field_id ctx in
+          let field_name = ctx_get_field (TAdtId decl.def_id) field_id ctx in
           F.pp_print_string fmt field_name;
           (* Print the generics *)
           let as_implicits = true in
@@ -2364,7 +2364,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           let ctx, record_var = ctx_add_var "x" (VarId.of_int 0) ctx in
           F.pp_print_string fmt "Notation";
           F.pp_print_space fmt ();
-          let field_name = ctx_get_field (AdtId decl.def_id) field_id ctx in
+          let field_name = ctx_get_field (TAdtId decl.def_id) field_id ctx in
           F.pp_print_string fmt ("\"" ^ record_var ^ " .(" ^ field_name ^ ")\"");
           F.pp_print_space fmt ();
           F.pp_print_string fmt ":=";
@@ -2421,7 +2421,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
    * one line *)
   F.pp_open_hvbox fmt 0;
   (* Retrieve the name *)
-  let state_name = ctx_get_assumed_type State ctx in
+  let state_name = ctx_get_assumed_type TState ctx in
   (* The syntax for Lean and Coq is almost identical. *)
   let print_axiom () =
     let axiom =

@@ -80,14 +80,14 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
                 ls
             in
             ExpandAdt exp
-        | T.Ref (_, _, _) -> (
+        | T.TRef (_, _, _) -> (
             (* Reference expansion: there should be one branch *)
             match ls with
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
             | _ -> raise (Failure "Ill-formed borrow expansion"))
-        | T.TypeVar _
+        | T.TVar _
         | T.TLiteral TChar
-        | Never | T.TraitType _ | T.Arrow _ | T.RawPtr _ ->
+        | TNever | T.TTraitType _ | T.TArrow _ | T.TRawPtr _ ->
             raise (Failure "Ill-formed symbolic expansion")
       in
       Some (Expansion (place, sv, expansion))

@@ -144,9 +144,9 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
       (match v.V.ty with
       | T.TAdt (T.TAssumed T.TBox, _) ->
           raise (Failure "Can't copy an assumed value other than Option")
-      | T.TAdt (T.AdtId _, _) as ty ->
+      | T.TAdt (T.TAdtId _, _) as ty ->
           assert (allow_adt_copy || ty_is_primitively_copyable ty)
-      | T.TAdt (T.Tuple, _) -> () (* Ok *)
+      | T.TAdt (T.TTuple, _) -> () (* Ok *)
       | T.TAdt
           ( T.TAssumed (TSlice | T.TArray),
             {
@@ -670,7 +670,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
           | E.TwoPhaseMut -> T.Mut
           | _ -> raise (Failure "Unreachable")
         in
-        let rv_ty = T.Ref (T.RErased, v.ty, ref_kind) in
+        let rv_ty = T.TRef (T.RErased, v.ty, ref_kind) in
         let bc =
           match bkind with
           | E.Shared | E.Shallow ->
@@ -698,7 +698,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
        fun ctx ->
         (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
         let bid = C.fresh_borrow_id () in
-        let rv_ty = T.Ref (T.RErased, v.ty, Mut) in
+        let rv_ty = T.TRef (T.RErased, v.ty, Mut) in
         let rv : V.typed_value =
           { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty }
         in
@@ -725,15 +725,15 @@ let eval_rvalue_aggregate (config : C.config)
     match aggregate_kind with
     | E.AggregatedAdt (type_id, opt_variant_id, generics) -> (
         match type_id with
-        | Tuple ->
+        | TTuple ->
             let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
             let v = V.VAdt { variant_id = None; field_values = values } in
             let generics = TypesUtils.mk_generic_args [] tys [] [] in
-            let ty = T.TAdt (T.Tuple, generics) in
+            let ty = T.TAdt (T.TTuple, generics) in
             let aggregated : V.typed_value = { V.value = v; ty } in
             (* Call the continuation *)
             cf aggregated ctx
-        | AdtId def_id ->
+        | TAdtId def_id ->
             (* Sanity checks *)
             let type_decl = C.ctx_lookup_type_decl ctx def_id in
             assert (
@@ -750,7 +750,7 @@ let eval_rvalue_aggregate (config : C.config)
             let av : V.adt_value =
               { V.variant_id = opt_variant_id; V.field_values = values }
             in
-            let aty = T.TAdt (T.AdtId def_id, generics) in
+            let aty = T.TAdt (T.TAdtId def_id, generics) in
             let aggregated : V.typed_value = { V.value = VAdt av; ty = aty } in
             (* Call the continuation *)
             cf aggregated ctx

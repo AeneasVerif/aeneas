@@ -71,7 +71,7 @@ let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
   let generics =
     let { T.regions; types; const_generics; trait_clauses } = sg.generics in
     let regions = List.map (fun _ -> T.RErased) regions in
-    let types = List.map (fun (v : T.type_var) -> T.TypeVar v.T.index) types in
+    let types = List.map (fun (v : T.type_var) -> T.TVar v.T.index) types in
     let const_generics =
       List.map
         (fun (v : T.const_generic_var) -> T.CGVar v.T.index)

@@ -23,7 +23,7 @@ let st_substitute_visitor (subst : subst) =
   object
     inherit [_] A.map_statement
     method! visit_region _ r = subst.r_subst r
-    method! visit_TypeVar _ id = subst.ty_subst id
+    method! visit_TVar _ id = subst.ty_subst id
 
     method! visit_type_var_id _ _ =
       (* We should never get here because we reimplemented [visit_TypeVar] *)
@@ -67,7 +67,7 @@ let generic_args_substitute (subst : subst) (g : T.generic_args) :
 let erase_regions_subst : subst =
   {
     r_subst = (fun _ -> T.RErased);
-    ty_subst = (fun vid -> T.TypeVar vid);
+    ty_subst = (fun vid -> T.TVar vid);
     cg_subst = (fun id -> T.CGVar id);
     tr_subst = (fun id -> T.Clause id);
     tr_self = T.Self;
@@ -288,10 +288,10 @@ let ctx_adt_value_get_instantiated_field_types (ctx : C.eval_ctx)
     (adt : V.adt_value) (id : T.type_id) (generics : T.generic_args) : T.ty list
     =
   match id with
-  | T.AdtId id ->
+  | T.TAdtId id ->
       (* Retrieve the types of the fields *)
       ctx_adt_get_instantiated_field_types ctx id adt.V.variant_id generics
-  | T.Tuple ->
+  | T.TTuple ->
       assert (generics.regions = []);
       generics.types
   | T.TAssumed aty -> (

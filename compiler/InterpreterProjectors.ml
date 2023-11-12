@@ -43,7 +43,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
         in
         List.concat proj_fields
     | V.Bottom, _ -> raise (Failure "Unreachable")
-    | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
+    | V.Borrow bc, TRef (r, ref_ty, kind) ->
         (* Retrieve the bid of the borrow and the asb of the projected borrowed value *)
         let bid, asb =
           (* Not in the set: dive *)
@@ -121,7 +121,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
           in
           V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
       | V.Bottom, _ -> raise (Failure "Unreachable")
-      | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
+      | V.Borrow bc, TRef (r, ref_ty, kind) ->
           if
             (* Check if the region is in the set of projected regions (note that
              * we never project over static regions) *)
@@ -277,7 +277,7 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
             field_values
         in
         (V.AAdt { V.variant_id; field_values }, original_sv_ty)
-    | SeMutRef (bid, spc), T.Ref (r, ref_ty, T.Mut) ->
+    | SeMutRef (bid, spc), TRef (r, ref_ty, T.Mut) ->
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
@@ -295,7 +295,7 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
             if region_in_set r ancestors_regions then Some bid else None
           in
           (V.ALoan (V.AIgnoredMutLoan (opt_bid, child_av)), ref_ty)
-    | SeSharedRef (bids, spc), T.Ref (r, ref_ty, T.Shared) ->
+    | SeSharedRef (bids, spc), TRef (r, ref_ty, T.Shared) ->
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)

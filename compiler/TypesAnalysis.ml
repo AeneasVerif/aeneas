@@ -121,8 +121,8 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
   let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
       (ty : ty) : partial_type_info =
     match ty with
-    | TLiteral _ | Never | TraitType _ -> ty_info
-    | TypeVar var_id -> (
+    | TLiteral _ | TNever | TTraitType _ -> ty_info
+    | TVar var_id -> (
         (* Update the information for the proper parameter, if necessary *)
         match ty_info.param_infos with
         | None -> ty_info
@@ -144,7 +144,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
             in
             let param_infos = Some param_infos in
             { ty_info with param_infos })
-    | Ref (r, rty, rkind) ->
+    | TRef (r, rty, rkind) ->
         (* Update the type info *)
         let contains_static = r_is_static r in
         let contains_borrow = true in
@@ -168,15 +168,15 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         in
         (* Continue exploring *)
         analyze expl_info ty_info rty
-    | RawPtr (rty, _) ->
+    | TRawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
         analyze expl_info ty_info rty
-    | TAdt ((Tuple | TAssumed (TBox | TSlice | TArray | TStr)), generics) ->
+    | TAdt ((TTuple | TAssumed (TBox | TSlice | TArray | TStr)), generics) ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze expl_info ty_info ty)
           ty_info generics.types
-    | TAdt (AdtId adt_id, generics) ->
+    | TAdt (TAdtId adt_id, generics) ->
         (* Lookup the information for this type definition *)
         let adt_info = TypeDeclId.Map.find adt_id infos in
         (* Update the type info with the information from the adt *)
@@ -233,7 +233,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         in
         (* Return *)
         ty_info
-    | Arrow (inputs, output) ->
+    | TArrow (inputs, output) ->
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left

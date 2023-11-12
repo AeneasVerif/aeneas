@@ -419,7 +419,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (match (tv.V.value, tv.V.ty) with
         | V.VLiteral cv, T.TLiteral ty -> check_literal_type cv ty
         (* ADT case *)
-        | V.VAdt av, T.TAdt (T.AdtId def_id, generics) ->
+        | V.VAdt av, T.TAdt (T.TAdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = C.ctx_lookup_type_decl ctx def_id in
@@ -445,7 +445,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               (fun ((v, ty) : V.typed_value * T.ty) -> assert (v.V.ty = ty))
               fields_with_types
         (* Tuple case *)
-        | V.VAdt av, T.TAdt (T.Tuple, generics) ->
+        | V.VAdt av, T.TAdt (T.TTuple, generics) ->
             assert (generics.regions = []);
             assert (generics.const_generics = []);
             assert (av.V.variant_id = None);
@@ -486,7 +486,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | (T.TSlice | T.TStr), _, _, _, _ -> raise (Failure "Unexpected")
             | _ -> raise (Failure "Erroneous type"))
         | V.Bottom, _ -> (* Nothing to check *) ()
-        | V.Borrow bc, T.Ref (_, ref_ty, rkind) -> (
+        | V.Borrow bc, T.TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | V.SharedBorrow bid, T.Shared | V.ReservedMutBorrow bid, T.Mut -> (
                 (* Lookup the borrowed value to check it has the proper type *)
@@ -533,7 +533,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (* Check the current pair (value, type) *)
         (match (atv.V.value, atv.V.ty) with
         (* ADT case *)
-        | V.AAdt av, T.TAdt (T.AdtId def_id, generics) ->
+        | V.AAdt av, T.TAdt (T.TAdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = C.ctx_lookup_type_decl ctx def_id in
@@ -562,7 +562,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               (fun ((v, ty) : V.typed_avalue * T.ty) -> assert (v.V.ty = ty))
               fields_with_types
         (* Tuple case *)
-        | V.AAdt av, T.TAdt (T.Tuple, generics) ->
+        | V.AAdt av, T.TAdt (T.TTuple, generics) ->
             assert (generics.regions = []);
             assert (generics.const_generics = []);
             assert (av.V.variant_id = None);
@@ -589,7 +589,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 assert (boxed_value.V.ty = boxed_ty)
             | _ -> raise (Failure "Erroneous type"))
         | V.ABottom, _ -> (* Nothing to check *) ()
-        | V.ABorrow bc, T.Ref (_, ref_ty, rkind) -> (
+        | V.ABorrow bc, T.TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | V.AMutBorrow (_, av), T.Mut ->
                 (* Check that the child value has the proper type *)

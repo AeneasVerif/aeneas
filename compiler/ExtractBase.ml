@@ -672,11 +672,11 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   (* TODO: factorize the pretty-printing with what is in PrintPure *)
   let get_type_name (id : type_id) : string =
     match id with
-    | AdtId id ->
+    | TAdtId id ->
         let def = TypeDeclId.Map.find id type_decls in
         Print.name_to_string def.name
     | TAssumed aty -> show_assumed_ty aty
-    | Tuple -> raise (Failure "Unreachable")
+    | TTuple -> raise (Failure "Unreachable")
   in
   match id with
   | GlobalId gid ->
@@ -744,26 +744,26 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | VariantId (id, variant_id) ->
       let variant_name =
         match id with
-        | Tuple -> raise (Failure "Unreachable")
-        | TAssumed Result ->
+        | TTuple -> raise (Failure "Unreachable")
+        | TAssumed TResult ->
             if variant_id = result_return_id then "@result::Return"
             else if variant_id = result_fail_id then "@result::Fail"
             else raise (Failure "Unreachable")
-        | TAssumed Error ->
+        | TAssumed TError ->
             if variant_id = error_failure_id then "@error::Failure"
             else if variant_id = error_out_of_fuel_id then "@error::OutOfFuel"
             else raise (Failure "Unreachable")
-        | TAssumed Fuel ->
+        | TAssumed TFuel ->
             if variant_id = fuel_zero_id then "@fuel::0"
             else if variant_id = fuel_succ_id then "@fuel::Succ"
             else raise (Failure "Unreachable")
-        | TAssumed (State | Array | Slice | Str | RawPtr _) ->
+        | TAssumed (TState | TArray | TSlice | TStr | TRawPtr _) ->
             raise
               (Failure
                  ("Unreachable: variant id ("
                  ^ VariantId.to_string variant_id
                  ^ ") for " ^ show_type_id id))
-        | AdtId id -> (
+        | TAdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
             | Struct _ | Opaque -> raise (Failure "Unreachable")
@@ -775,12 +775,13 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | FieldId (id, field_id) ->
       let field_name =
         match id with
-        | Tuple -> raise (Failure "Unreachable")
+        | TTuple -> raise (Failure "Unreachable")
         | TAssumed
-            (State | Result | Error | Fuel | Array | Slice | Str | RawPtr _) ->
+            ( TState | TResult | TError | TFuel | TArray | TSlice | TStr
+            | TRawPtr _ ) ->
             (* We can't directly have access to the fields of those types *)
             raise (Failure "Unreachable")
-        | AdtId id -> (
+        | TAdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
             | Enum _ | Opaque -> raise (Failure "Unreachable")
@@ -954,11 +955,11 @@ let ctx_get_local_function (id : A.FunDeclId.id) (lp : LoopId.id option)
   ctx_get_function (FromLlbc (FunId (FRegular id), lp, rg)) ctx
 
 let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
-  assert (id <> Tuple);
+  assert (id <> TTuple);
   ctx_get (TypeId id) ctx
 
 let ctx_get_local_type (id : TypeDeclId.id) (ctx : extraction_ctx) : string =
-  ctx_get_type (AdtId id) ctx
+  ctx_get_type (TAdtId id) ctx
 
 let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
   ctx_get_type (TAssumed id) ctx

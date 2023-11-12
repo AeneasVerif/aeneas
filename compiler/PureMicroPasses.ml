@@ -582,7 +582,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             match app.e with
             | Qualif
                 {
-                  id = AdtCons { adt_id = AdtId adt_id; variant_id = None };
+                  id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
                   generics = _;
                 } ->
                 (* Lookup the def *)
@@ -606,7 +606,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     (!Config.backend <> Lean && !Config.backend <> Coq)
                     || not is_rec
                   then
-                    let struct_id = AdtId adt_id in
+                    let struct_id = TAdtId adt_id in
                     let init = None in
                     let updates =
                       FieldId.mapi
@@ -1085,7 +1085,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             match app.e with
             | Qualif
                 {
-                  id = AdtCons { adt_id = AdtId adt_id; variant_id = None };
+                  id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
                   generics;
                 } ->
                 (* This is a struct *)
@@ -1114,7 +1114,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                         | ( Qualif
                               {
                                 id =
-                                  Proj { adt_id = AdtId proj_adt_id; field_id };
+                                  Proj { adt_id = TAdtId proj_adt_id; field_id };
                                 generics = proj_generics;
                               },
                             Var v ) ->
@@ -1157,13 +1157,13 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   match (proj.e, x.e) with
                   | ( Qualif
                         {
-                          id = Proj { adt_id = AdtId proj_adt_id; field_id };
+                          id = Proj { adt_id = TAdtId proj_adt_id; field_id };
                           generics = _;
                         },
                       Var v ) ->
                       (* We check that this is the proper ADT, and the proper field *)
                       if
-                        AdtId proj_adt_id = struct_id
+                        TAdtId proj_adt_id = struct_id
                         && field_id = fid && x.ty = adt_ty
                       then Some v
                       else None

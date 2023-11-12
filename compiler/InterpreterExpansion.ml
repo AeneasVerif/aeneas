@@ -272,10 +272,10 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
     (kind : V.sv_kind) (adt_id : T.type_id) (generics : T.generic_args)
     (ctx : C.eval_ctx) : V.symbolic_expansion list =
   match (adt_id, generics.regions, generics.types) with
-  | T.AdtId def_id, _, _ ->
+  | T.TAdtId def_id, _, _ ->
       compute_expanded_symbolic_non_assumed_adt_value expand_enumerations kind
         def_id generics ctx
-  | T.Tuple, [], _ ->
+  | T.TTuple, [], _ ->
       [ compute_expanded_symbolic_tuple_value kind generics.types ]
   | T.TAssumed T.TBox, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value kind boxed_ty ]
@@ -306,7 +306,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
       V.abstract_shared_borrows option =
     if same_symbolic_id sv original_sv then
       match proj_ty with
-      | T.Ref (r, ref_ty, T.Shared) ->
+      | T.TRef (r, ref_ty, T.Shared) ->
           (* Projector over the shared value *)
           let shared_asb = V.AsbProjReborrows (sv, ref_ty) in
           (* Check if the region is in the set of projected regions *)
@@ -548,7 +548,7 @@ let expand_symbolic_value_no_branching (config : C.config)
         S.synthesize_symbolic_expansion_no_branching original_sv
           original_sv_place see expr
     (* Borrows *)
-    | T.Ref (region, ref_ty, rkind) ->
+    | T.TRef (region, ref_ty, rkind) ->
         expand_symbolic_value_borrow config original_sv original_sv_place region
           ref_ty rkind cf ctx
     | _ ->
@@ -665,7 +665,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
           ^ symbolic_value_to_string ctx sv));
       let cc : cm_fun =
         match sv.V.sv_ty with
-        | T.TAdt (AdtId def_id, _) ->
+        | T.TAdt (TAdtId def_id, _) ->
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
@@ -690,7 +690,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
                      [config]): "
                    ^ Print.name_to_string def.name))
             else expand_symbolic_value_no_branching config sv None
-        | T.TAdt ((Tuple | TAssumed TBox), _) | T.Ref (_, _, _) ->
+        | T.TAdt ((TTuple | TAssumed TBox), _) | T.TRef (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config sv None
         | T.TAdt (TAssumed (TArray | TSlice | TStr), _) ->
@@ -698,8 +698,8 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
             raise
               (Failure
                  "Attempted to greedily expand an ADT which can't be expanded ")
-        | T.TypeVar _ | T.TLiteral _ | Never | T.TraitType _ | T.Arrow _
-        | T.RawPtr _ ->
+        | T.TVar _ | T.TLiteral _ | TNever | T.TTraitType _ | T.TArrow _
+        | T.TRawPtr _ ->
             raise (Failure "Unreachable")
       in
       (* Compose and continue *)

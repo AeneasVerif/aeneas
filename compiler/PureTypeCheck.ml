@@ -12,41 +12,41 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
     (type_id : type_id) (variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   match type_id with
-  | Tuple ->
+  | TTuple ->
       (* Tuple *)
       assert (generics.const_generics = []);
       assert (generics.trait_refs = []);
       assert (variant_id = None);
       generics.types
-  | AdtId def_id ->
+  | TAdtId def_id ->
       (* "Regular" ADT *)
       let def = TypeDeclId.Map.find def_id type_decls in
       type_decl_get_instantiated_fields_types def variant_id generics
   | TAssumed aty -> (
       (* Assumed type *)
       match aty with
-      | State ->
+      | TState ->
           (* This type is opaque *)
           raise (Failure "Unreachable: opaque type")
-      | Result ->
+      | TResult ->
           let ty = Collections.List.to_cons_nil generics.types in
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
           else
             raise (Failure "Unreachable: improper variant id for result type")
-      | Error ->
+      | TError ->
           assert (generics = empty_generic_args);
           let variant_id = Option.get variant_id in
           assert (
             variant_id = error_failure_id || variant_id = error_out_of_fuel_id);
           []
-      | Fuel ->
+      | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then []
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
           else raise (Failure "Unreachable: improper variant id for fuel type")
-      | Array | Slice | Str | RawPtr _ ->
+      | TArray | TSlice | TStr | TRawPtr _ ->
           (* Array: when not symbolic values (for instance, because of aggregates),
              the array expressions are introduced as struct updates *)
           raise (Failure "Attempting to access the fields of an opaque type"))
@@ -208,7 +208,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       assert (adt_id = supd.struct_id);
       (* The id can only be: a custom type decl or an array *)
       match adt_id with
-      | AdtId _ ->
+      | TAdtId _ ->
           let variant_id = None in
           let expected_field_tys =
             get_adt_field_types ctx.type_decls adt_id variant_id adt_generics
@@ -219,7 +219,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
               assert (expected_field_ty = fe.ty);
               check_texpression ctx fe)
             supd.updates
-      | TAssumed Array ->
+      | TAssumed TArray ->
           let expected_field_ty =
             Collections.List.to_cons_nil adt_generics.types
           in

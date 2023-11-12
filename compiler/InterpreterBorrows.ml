@@ -1889,7 +1889,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
         match bc with
         | SharedBorrow bid ->
             assert (ty_no_regions ref_ty);
-            let ty = T.Ref (T.RVar r_id, ref_ty, kind) in
+            let ty = T.TRef (T.RVar r_id, ref_ty, kind) in
             let value = V.ABorrow (V.ASharedBorrow bid) in
             ([ { V.value; ty } ], v)
         | MutBorrow (bid, bv) ->
@@ -1897,7 +1897,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             (* We don't support nested borrows for now *)
             assert (not (value_has_borrows ctx bv.V.value));
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
-            let ty = T.Ref (T.RVar r_id, ref_ty, kind) in
+            let ty = T.TRef (T.RVar r_id, ref_ty, kind) in
             let ignored = mk_aignored ref_ty in
             let av = V.ABorrow (V.AMutBorrow (bid, ignored)) in
             let av = { V.value = av; ty } in

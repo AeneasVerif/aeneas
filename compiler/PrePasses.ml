@@ -108,7 +108,7 @@ let remove_useless_cf_merges (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
     | Assign (_, rv) -> (
         match rv with
         | Use _ | RvRef _ -> not must_end_with_exit
-        | Aggregate (AggregatedAdt (Tuple, _, _), []) -> not must_end_with_exit
+        | Aggregate (AggregatedAdt (TTuple, _, _), []) -> not must_end_with_exit
         | _ -> false)
     | FakeRead _ | Drop _ | Nop -> not must_end_with_exit
     | Panic | Return -> true

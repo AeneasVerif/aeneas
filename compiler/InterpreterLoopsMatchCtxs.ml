@@ -172,20 +172,20 @@ let rec match_types (match_distinct_types : T.ty -> T.ty -> T.ty)
       in
       let generics = { T.regions; types; const_generics; trait_refs } in
       TAdt (id, generics)
-  | TypeVar vid0, TypeVar vid1 ->
+  | TVar vid0, TVar vid1 ->
       assert (vid0 = vid1);
       let vid = vid0 in
-      TypeVar vid
+      TVar vid
   | TLiteral lty0, TLiteral lty1 ->
       assert (lty0 = lty1);
       ty0
-  | Never, Never -> ty0
-  | Ref (r0, ty0, k0), Ref (r1, ty1, k1) ->
+  | TNever, TNever -> ty0
+  | TRef (r0, ty0, k0), TRef (r1, ty1, k1) ->
       let r = match_regions r0 r1 in
       let ty = match_rec ty0 ty1 in
       assert (k0 = k1);
       let k = k0 in
-      Ref (r, ty, k)
+      TRef (r, ty, k)
   | _ -> match_distinct_types ty0 ty1
 
 module MakeMatcher (M : PrimMatcher) : Matcher = struct

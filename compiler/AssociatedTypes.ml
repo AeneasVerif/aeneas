@@ -55,7 +55,7 @@ let compute_norm_trait_types_from_preds
        that it would be enough to only visit the field [ty] of the trait type
        constraint, but for safety we visit all the fields *)
     assert (TU.trait_type_constraint_no_regions c);
-    let trait_ty = T.TraitType (c.trait_ref, c.generics, c.type_name) in
+    let trait_ty = T.TTraitType (c.trait_ref, c.generics, c.type_name) in
     let trait_ty_ref = get_ref trait_ty in
     let ty_ref = get_ref c.ty in
     let new_repr = UF.get ty_ref in
@@ -76,7 +76,7 @@ let compute_norm_trait_types_from_preds
     List.filter_map
       (fun (k, v) ->
         match k with
-        | T.TraitType (trait_ref, generics, type_name) ->
+        | T.TTraitType (trait_ref, generics, type_name) ->
             assert (generics = TypesUtils.mk_empty_generic_args);
             Some ({ C.trait_ref; type_name }, v)
         | _ -> None)
@@ -182,18 +182,18 @@ let rec ctx_normalize_ty (ctx : norm_ctx) (ty : T.ty) : T.ty =
   log#ldebug (lazy ("ctx_normalize_ty: " ^ ty_to_string ctx ty));
   match ty with
   | T.TAdt (id, generics) -> TAdt (id, ctx_normalize_generic_args ctx generics)
-  | TypeVar _ | TLiteral _ | Never -> ty
-  | Ref (r, ty, rkind) ->
+  | TVar _ | TLiteral _ | TNever -> ty
+  | TRef (r, ty, rkind) ->
       let ty = ctx_normalize_ty ctx ty in
-      T.Ref (r, ty, rkind)
-  | RawPtr (ty, rkind) ->
+      T.TRef (r, ty, rkind)
+  | TRawPtr (ty, rkind) ->
       let ty = ctx_normalize_ty ctx ty in
-      RawPtr (ty, rkind)
-  | Arrow (inputs, output) ->
+      TRawPtr (ty, rkind)
+  | TArrow (inputs, output) ->
       let inputs = List.map (ctx_normalize_ty ctx) inputs in
       let output = ctx_normalize_ty ctx output in
-      Arrow (inputs, output)
-  | TraitType (trait_ref, generics, type_name) -> (
+      TArrow (inputs, output)
+  | TTraitType (trait_ref, generics, type_name) -> (
       log#ldebug
         (lazy
           ("ctx_normalize_ty:\n- trait type: " ^ ty_to_string ctx ty
@@ -250,7 +250,7 @@ let rec ctx_normalize_ty (ctx : norm_ctx) (ty : T.ty) : T.ty =
                 ^ "\n- raw trait ref:\n" ^ T.show_trait_ref trait_ref));
             (* We can't project *)
             assert (trait_instance_id_is_local_clause trait_ref.trait_id);
-            T.TraitType (trait_ref, generics, type_name)
+            T.TTraitType (trait_ref, generics, type_name)
       in
       let tr : C.trait_type_ref = { C.trait_ref; type_name } in
       (* Lookup the representative, if there is *)

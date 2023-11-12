@@ -191,20 +191,20 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
 
 let assumed_ty_to_string (aty : assumed_ty) : string =
   match aty with
-  | State -> "State"
-  | Result -> "Result"
-  | Error -> "Error"
-  | Fuel -> "Fuel"
-  | Array -> "Array"
-  | Slice -> "Slice"
-  | Str -> "Str"
-  | RawPtr Mut -> "MutRawPtr"
-  | RawPtr Const -> "ConstRawPtr"
+  | TState -> "State"
+  | TResult -> "Result"
+  | TError -> "Error"
+  | TFuel -> "Fuel"
+  | TArray -> "Array"
+  | TSlice -> "Slice"
+  | TStr -> "Str"
+  | TRawPtr Mut -> "MutRawPtr"
+  | TRawPtr Const -> "ConstRawPtr"
 
 let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
-  | AdtId id -> fmt.type_decl_id_to_string id
-  | Tuple -> ""
+  | TAdtId id -> fmt.type_decl_id_to_string id
+  | TTuple -> ""
   | TAssumed aty -> assumed_ty_to_string aty
 
 (* TODO: duplicates  Charon.PrintTypes.const_generic_to_string *)
@@ -219,24 +219,24 @@ let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
   match ty with
   | TAdt (id, generics) -> (
       match id with
-      | Tuple ->
+      | TTuple ->
           let generics = generic_args_to_strings fmt false generics in
           "(" ^ String.concat " * " generics ^ ")"
-      | AdtId _ | TAssumed _ ->
+      | TAdtId _ | TAssumed _ ->
           let generics = generic_args_to_strings fmt true generics in
           let generics_s =
             if generics = [] then "" else " " ^ String.concat " " generics
           in
           let ty_s = type_id_to_string fmt id ^ generics_s in
           if generics <> [] && inside then "(" ^ ty_s ^ ")" else ty_s)
-  | TypeVar tv -> fmt.type_var_id_to_string tv
+  | TVar tv -> fmt.type_var_id_to_string tv
   | TLiteral lty -> literal_type_to_string lty
-  | Arrow (arg_ty, ret_ty) ->
+  | TArrow (arg_ty, ret_ty) ->
       let ty =
         ty_to_string fmt true arg_ty ^ " -> " ^ ty_to_string fmt false ret_ty
       in
       if inside then "(" ^ ty ^ ")" else ty
-  | TraitType (trait_ref, generics, type_name) ->
+  | TTraitType (trait_ref, generics, type_name) ->
       let trait_ref = trait_ref_to_string fmt false trait_ref in
       let s =
         if generics = empty_generic_args then trait_ref ^ "::" ^ type_name
@@ -378,8 +378,8 @@ let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
 let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
     (variant_id : VariantId.id option) : string =
   match adt_id with
-  | Tuple -> "Tuple"
-  | AdtId def_id -> (
+  | TTuple -> "Tuple"
+  | TAdtId def_id -> (
       (* "Regular" ADT *)
       match variant_id with
       | Some vid -> fmt.adt_variant_to_string def_id vid
@@ -387,21 +387,21 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
   | TAssumed aty -> (
       (* Assumed type *)
       match aty with
-      | State | Array | Slice | Str | RawPtr _ ->
+      | TState | TArray | TSlice | TStr | TRawPtr _ ->
           (* Those types are opaque: we can't get there *)
           raise (Failure "Unreachable")
-      | Result ->
+      | TResult ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then "@Result::Return"
           else if variant_id = result_fail_id then "@Result::Fail"
           else
             raise (Failure "Unreachable: improper variant id for result type")
-      | Error ->
+      | TError ->
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
           else raise (Failure "Unreachable: improper variant id for error type")
-      | Fuel ->
+      | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then "@Fuel::Zero"
           else if variant_id = fuel_succ_id then "@Fuel::Succ"
@@ -410,10 +410,10 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
 let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
     (field_id : FieldId.id) : string =
   match adt_id with
-  | Tuple ->
+  | TTuple ->
       raise (Failure "Unreachable")
       (* Tuples don't use the opaque field id for the field indices, but [int] *)
-  | AdtId def_id -> (
+  | TAdtId def_id -> (
       (* "Regular" ADT *)
       let fields = fmt.adt_field_names def_id None in
       match fields with
@@ -422,10 +422,10 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
   | TAssumed aty -> (
       (* Assumed type *)
       match aty with
-      | State | Fuel | Array | Slice | Str ->
+      | TState | TFuel | TArray | TSlice | TStr ->
           (* Opaque types: we can't get there *)
           raise (Failure "Unreachable")
-      | Result | Error | RawPtr _ ->
+      | TResult | TError | TRawPtr _ ->
           (* Enumerations: we can't get there *)
           raise (Failure "Unreachable"))
 
@@ -437,10 +437,10 @@ let adt_g_value_to_string (fmt : value_formatter)
     (field_values : 'v list) (ty : ty) : string =
   let field_values = List.map value_to_string field_values in
   match ty with
-  | TAdt (Tuple, _) ->
+  | TAdt (TTuple, _) ->
       (* Tuple *)
       "(" ^ String.concat ", " field_values ^ ")"
-  | TAdt (AdtId def_id, _) ->
+  | TAdt (TAdtId def_id, _) ->
       (* "Regular" ADT *)
       let adt_ident =
         match variant_id with
@@ -465,10 +465,10 @@ let adt_g_value_to_string (fmt : value_formatter)
   | TAdt (TAssumed aty, _) -> (
       (* Assumed type *)
       match aty with
-      | State | RawPtr _ ->
+      | TState | TRawPtr _ ->
           (* This type is opaque: we can't get there *)
           raise (Failure "Unreachable")
-      | Result ->
+      | TResult ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then
             match field_values with
@@ -480,13 +480,13 @@ let adt_g_value_to_string (fmt : value_formatter)
             | _ -> raise (Failure "Result::Fail takes exactly one value")
           else
             raise (Failure "Unreachable: improper variant id for result type")
-      | Error ->
+      | TError ->
           assert (field_values = []);
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
           else raise (Failure "Unreachable: improper variant id for error type")
-      | Fuel ->
+      | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then (
             assert (field_values = []);
@@ -496,7 +496,7 @@ let adt_g_value_to_string (fmt : value_formatter)
             | [ v ] -> "@Fuel::Succ " ^ v
             | _ -> raise (Failure "@Fuel::Succ takes exactly one value")
           else raise (Failure "Unreachable: improper variant id for fuel type")
-      | Array | Slice | Str ->
+      | TArray | TSlice | TStr ->
           assert (variant_id = None);
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
@@ -650,7 +650,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
       let indent2 = indent1 ^ indent_incr in
       (* The id should be a custom type decl id or an array *)
       match supd.struct_id with
-      | AdtId aid ->
+      | TAdtId aid ->
           let field_names = Option.get (fmt.adt_field_names aid None) in
           let fields =
             List.map
@@ -664,7 +664,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
           in
           let bl = if fields = [] then "" else "\n" ^ indent in
           "{" ^ s ^ String.concat "" fields ^ bl ^ "}"
-      | TAssumed Array ->
+      | TAssumed TArray ->
           let fields =
             List.map
               (fun (_, fe) ->

@@ -41,7 +41,7 @@ module Sig = struct
   let rvar_0 : T.region = T.RVar rvar_id_0
   let rg_id_0 = T.RegionGroupId.of_int 0
   let tvar_id_0 = T.TypeVarId.of_int 0
-  let tvar_0 : T.ty = T.TypeVar tvar_id_0
+  let tvar_0 : T.ty = T.TVar tvar_id_0
   let cgvar_id_0 = T.ConstGenericVarId.of_int 0
   let cgvar_0 : T.const_generic = T.CGVar cgvar_id_0
 
@@ -150,13 +150,13 @@ module Sig = struct
   let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : A.fun_sig =
     (* Array<T, N> *)
     let input_ty id =
-      if is_array then mk_array_ty (T.TypeVar id) cgvar_0
-      else mk_slice_ty (T.TypeVar id)
+      if is_array then mk_array_ty (T.TVar id) cgvar_0
+      else mk_slice_ty (T.TVar id)
     in
     (* usize *)
     let index_ty = usize_ty in
     (* T *)
-    let output_ty id = T.TypeVar id in
+    let output_ty id = T.TVar id in
     let cgs = if is_array then [ cg_param_0 ] else [] in
     mk_array_slice_borrow_sig cgs input_ty (Some index_ty) output_ty is_mut
 
@@ -165,9 +165,9 @@ module Sig = struct
 
   let array_to_slice_sig (is_mut : bool) : A.fun_sig =
     (* Array<T, N> *)
-    let input_ty id = mk_array_ty (T.TypeVar id) cgvar_0 in
+    let input_ty id = mk_array_ty (T.TVar id) cgvar_0 in
     (* Slice<T> *)
-    let output_ty id = mk_slice_ty (T.TypeVar id) in
+    let output_ty id = mk_slice_ty (T.TVar id) in
     let cgs = [ cg_param_0 ] in
     mk_array_slice_borrow_sig cgs input_ty None output_ty is_mut
 

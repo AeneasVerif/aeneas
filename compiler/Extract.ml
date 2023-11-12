@@ -124,7 +124,7 @@ let extract_adt_g_value
     (inside : bool) (variant_id : VariantId.id option) (field_values : 'v list)
     (ty : ty) : extraction_ctx =
   match ty with
-  | TAdt (Tuple, generics) ->
+  | TAdt (TTuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
       assert (List.length generics.types = List.length field_values);
@@ -871,7 +871,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
      thus extracted to unit. We need to check that by looking up the definition *)
   let extract_as_unit =
     match (!backend, supd.struct_id) with
-    | HOL4, AdtId adt_id ->
+    | HOL4, TAdtId adt_id ->
         let d = TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls in
         d.kind = Struct []
     | _ -> false
@@ -885,7 +885,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
        - this is an array
     *)
     match supd.struct_id with
-    | AdtId _ ->
+    | TAdtId _ ->
         F.pp_open_hvbox fmt 0;
         F.pp_open_hvbox fmt ctx.indent_incr;
         (* Inner/outer brackets: there are several syntaxes for the field updates.
@@ -966,7 +966,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         if need_paren then F.pp_print_string fmt ")";
         print_bracket false orb;
         F.pp_close_box fmt ()
-    | TAssumed Array ->
+    | TAssumed TArray ->
         (* Open the boxes *)
         F.pp_open_hvbox fmt ctx.indent_incr;
         let need_paren = inside in
@@ -974,7 +974,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         (* Open the box for `Array.replicate T N [` *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the array constructor *)
-        let cs = ctx_get_struct (TAssumed Array) ctx in
+        let cs = ctx_get_struct (TAssumed TArray) ctx in
         F.pp_print_string fmt cs;
         (* Print the parameters *)
         let _, generics = ty_as_adt e_ty in
@@ -2662,7 +2662,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "=";
         F.pp_print_space fmt ();
-        let success = ctx_get_variant (TAssumed Result) result_return_id ctx in
+        let success = ctx_get_variant (TAssumed TResult) result_return_id ctx in
         F.pp_print_string fmt (success ^ " ())")
     | Coq ->
         F.pp_print_string fmt "Check";
@@ -2691,7 +2691,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
-        let success = ctx_get_variant (TAssumed Result) result_return_id ctx in
+        let success = ctx_get_variant (TAssumed TResult) result_return_id ctx in
         F.pp_print_string fmt ("." ^ success ^ " ())")
     | HOL4 ->
         F.pp_print_string fmt "val _ = assert_return (";

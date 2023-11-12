@@ -73,10 +73,10 @@ module Values = struct
           List.map (typed_value_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.TAdt (T.Tuple, _) ->
+        | T.TAdt (T.TTuple, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.TAdt (T.AdtId def_id, _) ->
+        | T.TAdt (T.TAdtId def_id, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -177,10 +177,10 @@ module Values = struct
           List.map (typed_avalue_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.TAdt (T.Tuple, _) ->
+        | T.TAdt (T.TTuple, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.TAdt (T.AdtId def_id, _) ->
+        | T.TAdt (T.TAdtId def_id, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with

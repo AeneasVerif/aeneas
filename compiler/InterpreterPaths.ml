@@ -101,7 +101,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
           T.TAdt (type_id, _) ) -> (
           (* Check consistency *)
           (match (proj_kind, type_id) with
-          | ProjAdt (def_id, opt_variant_id), T.AdtId def_id' ->
+          | ProjAdt (def_id, opt_variant_id), T.TAdtId def_id' ->
               assert (def_id = def_id');
               assert (opt_variant_id = adt.variant_id)
           | _ -> raise (Failure "Unreachable"));
@@ -118,7 +118,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               let updated = { v with value = nadt } in
               Ok (ctx, { res with updated }))
       (* Tuples *)
-      | Field (ProjTuple arity, field_id), V.VAdt adt, T.TAdt (T.Tuple, _) -> (
+      | Field (ProjTuple arity, field_id), V.VAdt adt, T.TAdt (T.TTuple, _) -> (
           assert (arity = List.length adt.field_values);
           let fv = T.FieldId.nth adt.field_values field_id in
           (* Project *)
@@ -372,7 +372,7 @@ let compute_expanded_bottom_adt_value (ctx : C.eval_ctx)
   (* Initialize the expanded value *)
   let fields = List.map mk_bottom field_types in
   let av = V.VAdt { variant_id = opt_variant_id; field_values = fields } in
-  let ty = T.TAdt (T.AdtId def_id, generics) in
+  let ty = T.TAdt (TAdtId def_id, generics) in
   { V.value = av; V.ty }
 
 let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
@@ -381,7 +381,7 @@ let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
   let fields = List.map mk_bottom field_types in
   let v = V.VAdt { variant_id = None; field_values = fields } in
   let generics = TypesUtils.mk_generic_args [] field_types [] [] in
-  let ty = T.TAdt (T.Tuple, generics) in
+  let ty = T.TAdt (TTuple, generics) in
   { V.value = v; V.ty }
 
 (** Auxiliary helper to expand {!V.Bottom} values.
@@ -433,13 +433,13 @@ let expand_bottom_value_from_projection (access : access_kind) (p : E.place)
     match (pe, ty) with
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
-        T.TAdt (T.AdtId def_id', generics) ) ->
+        T.TAdt (TAdtId def_id', generics) ) ->
         assert (def_id = def_id');
         compute_expanded_bottom_adt_value ctx def_id opt_variant_id generics
     (* Tuples *)
     | ( Field (ProjTuple arity, _),
         T.TAdt
-          ( T.Tuple,
+          ( TTuple,
             { T.regions = []; types; const_generics = []; trait_refs = [] } ) )
       ->
         assert (arity = List.length types);

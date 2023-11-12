@@ -68,14 +68,14 @@ type mutability = Mut | Const [@@deriving show, ord]
     TODO: add a prefix "T"
   *)
 type assumed_ty =
-  | State
-  | Result
-  | Error
-  | Fuel
-  | Array
-  | Slice
-  | Str
-  | RawPtr of mutability
+  | TState
+  | TResult
+  | TError
+  | TFuel
+  | TArray
+  | TSlice
+  | TStr
+  | TRawPtr of mutability
       (** The bool
           Raw pointers don't make sense in the pure world, but we don't know
           how to translate them yet and we have to handle some functions which
@@ -146,7 +146,7 @@ class virtual ['self] mapreduce_type_id_base =
       fun _ x -> (x, self#zero)
   end
 
-type type_id = AdtId of type_decl_id | Tuple | TAssumed of assumed_ty
+type type_id = TAdtId of type_decl_id | TTuple | TAssumed of assumed_ty
 [@@deriving
   show,
     ord,
@@ -276,10 +276,10 @@ type ty =
           be able to only give back part of the ADT. We need a way to encode
           such "partial" ADTs.
        *)
-  | TypeVar of type_var_id
+  | TVar of type_var_id
   | TLiteral of literal_type
-  | Arrow of ty * ty
-  | TraitType of trait_ref * generic_args * string
+  | TArrow of ty * ty
+  | TTraitType of trait_ref * generic_args * string
       (** The string is for the name of the associated type *)
 
 and trait_ref = {

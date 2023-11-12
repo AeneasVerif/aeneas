@@ -397,8 +397,8 @@ let rec translate_sty (ty : T.ty) : ty =
   | T.TAdt (type_id, generics) -> (
       let generics = translate_sgeneric_args generics in
       match type_id with
-      | T.AdtId adt_id -> TAdt (AdtId adt_id, generics)
-      | T.Tuple ->
+      | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
+      | T.TTuple ->
           assert (generics.const_generics = []);
           mk_simpl_tuple_ty generics.types
       | T.TAssumed aty -> (
@@ -412,23 +412,23 @@ let rec translate_sty (ty : T.ty) : ty =
                     (Failure
                        "Box/vec/option type with incorrect number of arguments")
               )
-          | T.TArray -> TAdt (TAssumed Array, generics)
-          | T.TSlice -> TAdt (TAssumed Slice, generics)
-          | T.TStr -> TAdt (TAssumed Str, generics)))
-  | TypeVar vid -> TypeVar vid
+          | T.TArray -> TAdt (TAssumed TArray, generics)
+          | T.TSlice -> TAdt (TAssumed TSlice, generics)
+          | T.TStr -> TAdt (TAssumed TStr, generics)))
+  | TVar vid -> TVar vid
   | TLiteral ty -> TLiteral ty
-  | Never -> raise (Failure "Unreachable")
-  | Ref (_, rty, _) -> translate rty
-  | RawPtr (ty, rkind) ->
+  | TNever -> raise (Failure "Unreachable")
+  | TRef (_, rty, _) -> translate rty
+  | TRawPtr (ty, rkind) ->
       let mut = match rkind with Mut -> Mut | Shared -> Const in
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
-      TAdt (TAssumed (RawPtr mut), generics)
-  | TraitType (trait_ref, generics, type_name) ->
+      TAdt (TAssumed (TRawPtr mut), generics)
+  | TTraitType (trait_ref, generics, type_name) ->
       let trait_ref = translate_strait_ref trait_ref in
       let generics = translate_sgeneric_args generics in
-      TraitType (trait_ref, generics, type_name)
-  | Arrow _ -> raise (Failure "TODO")
+      TTraitType (trait_ref, generics, type_name)
+  | TArrow _ -> raise (Failure "TODO")
 
 and translate_sgeneric_args (generics : T.generic_args) : generic_args =
   translate_generic_args translate_sty generics
@@ -506,20 +506,20 @@ let translate_type_decl (def : T.type_decl) : type_decl =
 
 let translate_type_id (id : T.type_id) : type_id =
   match id with
-  | AdtId adt_id -> AdtId adt_id
-  | T.TAssumed aty ->
+  | TAdtId adt_id -> TAdtId adt_id
+  | TAssumed aty ->
       let aty =
         match aty with
-        | T.TArray -> Array
-        | T.TSlice -> Slice
-        | T.TStr -> Str
+        | T.TArray -> TArray
+        | T.TSlice -> TSlice
+        | T.TStr -> TStr
         | T.TBox ->
             (* Boxes have to be eliminated: this type id shouldn't
                be translated *)
             raise (Failure "Unreachable")
       in
       TAssumed aty
-  | T.Tuple -> Tuple
+  | TTuple -> TTuple
 
 (** Translate a type, seen as an input/output of a forward function
     (preserve all borrows, etc.).
@@ -536,14 +536,14 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : T.ty) : ty =
       let t_generics = translate_fwd_generic_args type_infos generics in
       (* Eliminate boxes and simplify tuples *)
       match type_id with
-      | AdtId _ | T.TAssumed (T.TArray | T.TSlice | T.TStr) ->
+      | TAdtId _ | TAssumed (TArray | TSlice | TStr) ->
           let type_id = translate_type_id type_id in
           TAdt (type_id, t_generics)
-      | Tuple ->
+      | TTuple ->
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
              identity *)
           mk_simpl_tuple_ty t_generics.types
-      | T.TAssumed T.TBox -> (
+      | TAssumed TBox -> (
           (* We eliminate boxes *)
           (* No general parametricity for now *)
           assert (
@@ -558,20 +558,20 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : T.ty) : ty =
                 (Failure
                    "Unreachable: box/vec/option receives exactly one type \
                     parameter")))
-  | TypeVar vid -> TypeVar vid
-  | Never -> raise (Failure "Unreachable")
+  | TVar vid -> TVar vid
+  | TNever -> raise (Failure "Unreachable")
   | TLiteral lty -> TLiteral lty
-  | Ref (_, rty, _) -> translate rty
-  | RawPtr (ty, rkind) ->
+  | TRef (_, rty, _) -> translate rty
+  | TRawPtr (ty, rkind) ->
       let mut = match rkind with Mut -> Mut | Shared -> Const in
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
-      TAdt (TAssumed (RawPtr mut), generics)
-  | TraitType (trait_ref, generics, type_name) ->
+      TAdt (TAssumed (TRawPtr mut), generics)
+  | TTraitType (trait_ref, generics, type_name) ->
       let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
       let generics = translate_fwd_generic_args type_infos generics in
-      TraitType (trait_ref, generics, type_name)
-  | Arrow _ -> raise (Failure "TODO")
+      TTraitType (trait_ref, generics, type_name)
+  | TArrow _ -> raise (Failure "TODO")
 
 and translate_fwd_generic_args (type_infos : TA.type_infos)
     (generics : T.generic_args) : generic_args =
@@ -611,7 +611,7 @@ let rec translate_back_ty (type_infos : TA.type_infos)
   match ty with
   | T.TAdt (type_id, generics) -> (
       match type_id with
-      | T.AdtId _ | TAssumed (T.TArray | T.TSlice | T.TStr) ->
+      | TAdtId _ | TAssumed (TArray | TSlice | TStr) ->
           let type_id = translate_type_id type_id in
           if inside_mut then
             (* We do not want to filter anything, so we translate the generics
@@ -630,7 +630,7 @@ let rec translate_back_ty (type_infos : TA.type_infos)
               let generics = translate_fwd_generic_args type_infos generics in
               Some (TAdt (type_id, generics))
             else None
-      | TAssumed T.TBox -> (
+      | TAssumed TBox -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows type_infos ty));
           (* Eliminate the box *)
@@ -640,7 +640,7 @@ let rec translate_back_ty (type_infos : TA.type_infos)
               raise
                 (Failure "Unreachable: boxes receive exactly one type parameter")
           )
-      | T.Tuple -> (
+      | TTuple -> (
           (* Tuples can contain borrows (which we eliminate) *)
           let tys_t = List.filter_map translate generics.types in
           match tys_t with
@@ -649,10 +649,10 @@ let rec translate_back_ty (type_infos : TA.type_infos)
               (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
                * is the identity *)
               Some (mk_simpl_tuple_ty tys_t)))
-  | TypeVar vid -> wrap (TypeVar vid)
-  | Never -> raise (Failure "Unreachable")
+  | TVar vid -> wrap (TVar vid)
+  | TNever -> raise (Failure "Unreachable")
   | TLiteral lty -> wrap (TLiteral lty)
-  | Ref (r, rty, rkind) -> (
+  | TRef (r, rty, rkind) -> (
       match rkind with
       | T.Shared ->
           (* Ignore shared references, unless we are below a mutable borrow *)
@@ -663,17 +663,17 @@ let rec translate_back_ty (type_infos : TA.type_infos)
           if keep_region r then
             translate_back_ty type_infos keep_region inside_mut rty
           else None)
-  | RawPtr _ ->
+  | TRawPtr _ ->
       (* TODO: not sure what to do here *)
       None
-  | TraitType (trait_ref, generics, type_name) ->
+  | TTraitType (trait_ref, generics, type_name) ->
       assert (generics.regions = []);
       (* Translate the trait ref and the generics as "forward" generics -
          we do not want to filter any type *)
       let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
       let generics = translate_fwd_generic_args type_infos generics in
-      Some (TraitType (trait_ref, generics, type_name))
-  | Arrow _ -> raise (Failure "TODO")
+      Some (TTraitType (trait_ref, generics, type_name))
+  | TArrow _ -> raise (Failure "TODO")
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
@@ -1155,7 +1155,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         let field_values = List.map translate av.field_values in
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
-        | T.TAdt (T.Tuple, _) ->
+        | TAdt (TTuple, _) ->
             assert (variant_id = None);
             mk_simpl_tuple_texpression field_values
         | _ ->
@@ -1233,10 +1233,10 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* For now, only tuples can contain borrows *)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | T.AdtId _ | T.TAssumed (T.TBox | T.TArray | T.TSlice | T.TStr) ->
+        | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
             assert (field_values = []);
             None
-        | T.Tuple ->
+        | TTuple ->
             (* Return *)
             if field_values = [] then None
             else
@@ -1378,10 +1378,10 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
          * vector value upon visiting the "abstraction borrow" node *)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | T.AdtId _ | T.TAssumed (T.TBox | T.TArray | T.TSlice | T.TStr) ->
+        | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
             assert (field_values = []);
             (ctx, None)
-        | T.Tuple ->
+        | TTuple ->
             (* Return *)
             let variant_id = adt_v.variant_id in
             assert (variant_id = None);
@@ -2386,7 +2386,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
   let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
   let branch = translate_expression branch ctx in
   match type_id with
-  | T.AdtId adt_id ->
+  | TAdtId adt_id ->
       (* Detect if this is an enumeration or not *)
       let tdef = bs_ctx_lookup_llbc_type_decl adt_id ctx in
       let is_enum = TypesUtils.type_decl_is_enum tdef in
@@ -2433,14 +2433,14 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
             let field_proj = gen_field_proj fid var in
             mk_let monadic (mk_typed_pattern_from_var var None) field_proj e)
           id_var_pairs branch
-  | T.Tuple ->
+  | TTuple ->
       let vars = List.map (fun x -> mk_typed_pattern_from_var x None) vars in
       let monadic = false in
       mk_let monadic
         (mk_simpl_tuple_pattern vars)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
-  | T.TAssumed T.TBox ->
+  | TAssumed TBox ->
       (* There should be exactly one variable *)
       let var =
         match vars with [ v ] -> v | _ -> raise (Failure "Unreachable")
@@ -2452,7 +2452,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
         (mk_typed_pattern_from_var var None)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
-  | T.TAssumed (T.TArray | T.TSlice | T.TStr) ->
+  | TAssumed (TArray | TSlice | TStr) ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
@@ -2484,7 +2484,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let values = List.map (typed_value_to_texpression ctx ectx) values in
         let values = FieldId.mapi (fun fid v -> (fid, v)) values in
         let su : struct_update =
-          { struct_id = TAssumed Array; init = None; updates = values }
+          { struct_id = TAssumed TArray; init = None; updates = values }
         in
         { e = StructUpdate su; ty = var.ty }
     | VaCGValue cg_id -> { e = CVar cg_id; ty = var.ty }
@@ -2735,9 +2735,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
        call to the loop forward function) *)
     let generics =
       let { types; const_generics; trait_clauses } = ctx.sg.generics in
-      let types =
-        List.map (fun (ty : T.type_var) -> TypeVar ty.T.index) types
-      in
+      let types = List.map (fun (ty : T.type_var) -> TVar ty.T.index) types in
       let const_generics =
         List.map
           (fun (cg : T.const_generic_var) -> T.CGVar cg.T.index)
