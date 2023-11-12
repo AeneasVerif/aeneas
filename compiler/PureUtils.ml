@@ -111,7 +111,7 @@ let ty_substitute (subst : subst) (ty : ty) : ty =
     object
       inherit [_] map_ty
       method! visit_TypeVar _ var_id = subst.ty_subst var_id
-      method! visit_ConstGenericVar _ var_id = subst.cg_subst var_id
+      method! visit_CGVar _ var_id = subst.cg_subst var_id
       method! visit_Clause _ id = subst.tr_subst id
       method! visit_Self _ = subst.tr_self
     end

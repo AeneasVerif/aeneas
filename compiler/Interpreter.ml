@@ -74,7 +74,7 @@ let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
     let types = List.map (fun (v : T.type_var) -> T.TypeVar v.T.index) types in
     let const_generics =
       List.map
-        (fun (v : T.const_generic_var) -> T.ConstGenericVar v.T.index)
+        (fun (v : T.const_generic_var) -> T.CGVar v.T.index)
         const_generics
     in
     (* Annoying that we have to generate this substitution here *)

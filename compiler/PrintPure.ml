@@ -211,9 +211,9 @@ let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
 let const_generic_to_string (fmt : type_formatter) (cg : T.const_generic) :
     string =
   match cg with
-  | ConstGenericGlobal id -> fmt.global_decl_id_to_string id
-  | ConstGenericVar id -> fmt.const_generic_var_id_to_string id
-  | ConstGenericValue lit -> literal_to_string lit
+  | CGGlobal id -> fmt.global_decl_id_to_string id
+  | CGVar id -> fmt.const_generic_var_id_to_string id
+  | CGValue lit -> literal_to_string lit
 
 let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
   match ty with

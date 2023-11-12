@@ -1119,11 +1119,11 @@ let extract_arrow (fmt : F.formatter) () : unit =
 let extract_const_generic (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (cg : const_generic) : unit =
   match cg with
-  | ConstGenericGlobal id ->
+  | CGGlobal id ->
       let s = ctx_get_global id ctx in
       F.pp_print_string fmt s
-  | ConstGenericValue v -> ctx.fmt.extract_literal fmt inside v
-  | ConstGenericVar id ->
+  | CGValue v -> ctx.fmt.extract_literal fmt inside v
+  | CGVar id ->
       let s = ctx_get_const_generic_var id ctx in
       F.pp_print_string fmt s
 

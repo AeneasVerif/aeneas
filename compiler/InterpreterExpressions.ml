@@ -329,7 +329,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
                    ( ctx0,
                      None,
                      value_as_symbolic v.value,
-                     SymbolicAst.VaConstGenericValue vid,
+                     SymbolicAst.VaCGValue vid,
                      e )))
       | E.CFnPtr _ -> raise (Failure "TODO"))
   | E.Copy p ->
