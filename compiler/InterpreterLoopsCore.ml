@@ -343,24 +343,24 @@ let ctx_split_fixed_new (fixed_ids : ids_sets) (ctx : C.eval_ctx) :
      though) in the target context *)
   let is_fresh (ee : C.env_elem) : bool =
     match ee with
-    | C.Var (VarBinder _, _) | C.Frame -> false
-    | C.Var (DummyBinder bv, _) -> is_fresh_did bv
-    | C.Abs abs -> is_fresh_abs_id abs.abs_id
+    | C.EBinding (BVar _, _) | C.EFrame -> false
+    | C.EBinding (BDummy bv, _) -> is_fresh_did bv
+    | C.EAbs abs -> is_fresh_abs_id abs.abs_id
   in
   let new_eel, filt_env = List.partition is_fresh ctx.env in
-  let is_abs ee = match ee with C.Abs _ -> true | _ -> false in
+  let is_abs ee = match ee with C.EAbs _ -> true | _ -> false in
   let new_absl, new_dummyl = List.partition is_abs new_eel in
   let new_absl =
     List.map
       (fun ee ->
-        match ee with C.Abs abs -> abs | _ -> raise (Failure "Unreachable"))
+        match ee with C.EAbs abs -> abs | _ -> raise (Failure "Unreachable"))
       new_absl
   in
   let new_dummyl =
     List.map
       (fun ee ->
         match ee with
-        | C.Var (DummyBinder _, v) -> v
+        | C.EBinding (BDummy _, v) -> v
         | _ -> raise (Failure "Unreachable"))
       new_dummyl
   in

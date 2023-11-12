@@ -205,7 +205,7 @@ let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
   | AdtId id -> fmt.type_decl_id_to_string id
   | Tuple -> ""
-  | Assumed aty -> assumed_ty_to_string aty
+  | TAssumed aty -> assumed_ty_to_string aty
 
 (* TODO: duplicates  Charon.PrintTypes.const_generic_to_string *)
 let const_generic_to_string (fmt : type_formatter) (cg : T.const_generic) :
@@ -217,12 +217,12 @@ let const_generic_to_string (fmt : type_formatter) (cg : T.const_generic) :
 
 let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
   match ty with
-  | Adt (id, generics) -> (
+  | TAdt (id, generics) -> (
       match id with
       | Tuple ->
           let generics = generic_args_to_strings fmt false generics in
           "(" ^ String.concat " * " generics ^ ")"
-      | AdtId _ | Assumed _ ->
+      | AdtId _ | TAssumed _ ->
           let generics = generic_args_to_strings fmt true generics in
           let generics_s =
             if generics = [] then "" else " " ^ String.concat " " generics
@@ -230,7 +230,7 @@ let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
           let ty_s = type_id_to_string fmt id ^ generics_s in
           if generics <> [] && inside then "(" ^ ty_s ^ ")" else ty_s)
   | TypeVar tv -> fmt.type_var_id_to_string tv
-  | Literal lty -> literal_type_to_string lty
+  | TLiteral lty -> literal_type_to_string lty
   | Arrow (arg_ty, ret_ty) ->
       let ty =
         ty_to_string fmt true arg_ty ^ " -> " ^ ty_to_string fmt false ret_ty
@@ -384,7 +384,7 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
       match variant_id with
       | Some vid -> fmt.adt_variant_to_string def_id vid
       | None -> fmt.type_decl_id_to_string def_id)
-  | Assumed aty -> (
+  | TAssumed aty -> (
       (* Assumed type *)
       match aty with
       | State | Array | Slice | Str | RawPtr _ ->
@@ -419,7 +419,7 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
       match fields with
       | None -> FieldId.to_string field_id
       | Some fields -> FieldId.nth fields field_id)
-  | Assumed aty -> (
+  | TAssumed aty -> (
       (* Assumed type *)
       match aty with
       | State | Fuel | Array | Slice | Str ->
@@ -437,10 +437,10 @@ let adt_g_value_to_string (fmt : value_formatter)
     (field_values : 'v list) (ty : ty) : string =
   let field_values = List.map value_to_string field_values in
   match ty with
-  | Adt (Tuple, _) ->
+  | TAdt (Tuple, _) ->
       (* Tuple *)
       "(" ^ String.concat ", " field_values ^ ")"
-  | Adt (AdtId def_id, _) ->
+  | TAdt (AdtId def_id, _) ->
       (* "Regular" ADT *)
       let adt_ident =
         match variant_id with
@@ -462,7 +462,7 @@ let adt_g_value_to_string (fmt : value_formatter)
             let field_values = String.concat " " field_values in
             adt_ident ^ " { " ^ field_values ^ " }"
       else adt_ident
-  | Adt (Assumed aty, _) -> (
+  | TAdt (TAssumed aty, _) -> (
       (* Assumed type *)
       match aty with
       | State | RawPtr _ ->
@@ -585,8 +585,8 @@ let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   | FromLlbc (fid, lp_id, rg_id) ->
       let f =
         match fid with
-        | FunId (Regular fid) -> fmt.fun_decl_id_to_string fid
-        | FunId (Assumed fid) -> llbc_assumed_fun_id_to_string fid
+        | FunId (FRegular fid) -> fmt.fun_decl_id_to_string fid
+        | FunId (FAssumed fid) -> llbc_assumed_fun_id_to_string fid
         | TraitMethod (trait_ref, method_name, _) ->
             let fmt = ast_to_type_formatter fmt in
             trait_ref_to_string fmt true trait_ref ^ "." ^ method_name
@@ -664,7 +664,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
           in
           let bl = if fields = [] then "" else "\n" ^ indent in
           "{" ^ s ^ String.concat "" fields ^ bl ^ "}"
-      | Assumed Array ->
+      | TAssumed Array ->
           let fields =
             List.map
               (fun (_, fe) ->

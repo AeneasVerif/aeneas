@@ -55,12 +55,15 @@ val write_place :
  *)
 val compute_expanded_bottom_tuple_value : T.ety list -> V.typed_value
 
-(** Compute an expanded ADT ⊥ value *)
+(** Compute an expanded ADT ⊥ value.
+
+    The types in the generics should use erased regions.
+  *)
 val compute_expanded_bottom_adt_value :
   C.eval_ctx ->
   T.TypeDeclId.id ->
   T.VariantId.id option ->
-  T.egeneric_args ->
+  T.generic_args ->
   V.typed_value
 
 (** Drop (end) outer loans at a given place, which should be seen as an l-value

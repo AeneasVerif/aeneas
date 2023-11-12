@@ -211,11 +211,12 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
     The function might return a list of values if the symbolic value to expand
     is an enumeration.
     
+    [generics]: mustn't contain erased regions.
     [expand_enumerations] controls the expansion of enumerations: if false, it
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_non_assumed_adt_value (expand_enumerations : bool)
-    (kind : V.sv_kind) (def_id : T.TypeDeclId.id) (generics : T.rgeneric_args)
+    (kind : V.sv_kind) (def_id : T.TypeDeclId.id) (generics : T.generic_args)
     (ctx : C.eval_ctx) : V.symbolic_expansion list =
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
@@ -263,11 +264,12 @@ let compute_expanded_symbolic_box_value (kind : V.sv_kind) (boxed_ty : T.rty) :
     The function might return a list of values if the symbolic value to expand
     is an enumeration.
 
+    [generics]: the regions shouldn't have been erased.
     [expand_enumerations] controls the expansion of enumerations: if [false], it
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
-    (kind : V.sv_kind) (adt_id : T.type_id) (generics : T.rgeneric_args)
+    (kind : V.sv_kind) (adt_id : T.type_id) (generics : T.generic_args)
     (ctx : C.eval_ctx) : V.symbolic_expansion list =
   match (adt_id, generics.regions, generics.types) with
   | T.AdtId def_id, _, _ ->
@@ -275,7 +277,7 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
         def_id generics ctx
   | T.Tuple, [], _ ->
       [ compute_expanded_symbolic_tuple_value kind generics.types ]
-  | T.Assumed T.Box, [], [ boxed_ty ] ->
+  | T.TAssumed T.TBox, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value kind boxed_ty ]
   | _ ->
       raise
@@ -330,10 +332,10 @@ let expand_symbolic_value_shared_borrow (config : C.config)
           V.Borrow (V.SharedBorrow bid)
         else super#visit_Symbolic env sv
 
-      method! visit_Abs proj_regions abs =
+      method! visit_EAbs proj_regions abs =
         assert (Option.is_none proj_regions);
         let proj_regions = Some abs.V.regions in
-        super#visit_Abs proj_regions abs
+        super#visit_EAbs proj_regions abs
 
       method! visit_AProjSharedBorrow proj_regions asb =
         let expand_asb (asb : V.abstract_shared_borrow) :
@@ -398,9 +400,9 @@ let expand_symbolic_value_shared_borrow (config : C.config)
 (** TODO: simplify and merge with the other expansion function *)
 let expand_symbolic_value_borrow (config : C.config)
     (original_sv : V.symbolic_value) (original_sv_place : SA.mplace option)
-    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind) :
-    cm_fun =
+    (region : T.region) (ref_ty : T.rty) (rkind : T.ref_kind) : cm_fun =
  fun cf ctx ->
+  assert (region <> T.RErased);
   (* Check that we are allowed to expand the reference *)
   assert (not (region_in_set region ctx.ended_regions));
   (* Match on the reference kind *)
@@ -500,10 +502,10 @@ let expand_symbolic_bool (config : C.config) (sv : V.symbolic_value)
   let original_sv = sv in
   let original_sv_place = sv_place in
   let rty = original_sv.V.sv_ty in
-  assert (rty = T.Literal PV.Bool);
+  assert (rty = T.TLiteral PV.TBool);
   (* Expand the symbolic value to true or false and continue execution *)
-  let see_true = V.SeLiteral (PV.Bool true) in
-  let see_false = V.SeLiteral (PV.Bool false) in
+  let see_true = V.SeLiteral (PV.VBool true) in
+  let see_false = V.SeLiteral (PV.VBool false) in
   let seel = [ (Some see_true, cf_true); (Some see_false, cf_false) ] in
   (* Apply the symbolic expansion (this also outputs the updated symbolic AST) *)
   apply_branching_symbolic_expansions_non_borrow config original_sv
@@ -527,7 +529,7 @@ let expand_symbolic_value_no_branching (config : C.config)
    fun cf ctx ->
     match rty with
     (* ADTs *)
-    | T.Adt (adt_id, generics) ->
+    | T.TAdt (adt_id, generics) ->
         (* Compute the expanded value *)
         let allow_branching = false in
         let seel =
@@ -584,7 +586,7 @@ let expand_symbolic_adt (config : C.config) (sv : V.symbolic_value)
   (* Execute *)
   match rty with
   (* ADTs *)
-  | T.Adt (adt_id, generics) ->
+  | T.TAdt (adt_id, generics) ->
       let allow_branching = true in
       (* Compute the expanded value *)
       let seel =
@@ -604,7 +606,7 @@ let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
     (tgts : (V.scalar_value * st_cm_fun) list) (otherwise : st_cm_fun)
     (cf_after_join : st_m_fun) : m_fun =
   (* Sanity check *)
-  assert (sv.V.sv_ty = T.Literal (PV.Integer int_type));
+  assert (sv.V.sv_ty = T.TLiteral (PV.TInteger int_type));
   (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is
@@ -615,7 +617,7 @@ let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
    * (optional expansion, statement to execute)
    *)
   let seel =
-    List.map (fun (v, cf) -> (Some (V.SeLiteral (PV.Scalar v)), cf)) tgts
+    List.map (fun (v, cf) -> (Some (V.SeLiteral (PV.VScalar v)), cf)) tgts
   in
   let seel = List.append seel [ (None, otherwise) ] in
   (* Then expand and evaluate - this generates the proper symbolic AST *)
@@ -663,7 +665,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
           ^ symbolic_value_to_string ctx sv));
       let cc : cm_fun =
         match sv.V.sv_ty with
-        | T.Adt (AdtId def_id, _) ->
+        | T.TAdt (AdtId def_id, _) ->
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
@@ -688,15 +690,15 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
                      [config]): "
                    ^ Print.name_to_string def.name))
             else expand_symbolic_value_no_branching config sv None
-        | T.Adt ((Tuple | Assumed Box), _) | T.Ref (_, _, _) ->
+        | T.TAdt ((Tuple | TAssumed TBox), _) | T.Ref (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config sv None
-        | T.Adt (Assumed (Array | Slice | Str), _) ->
+        | T.TAdt (TAssumed (TArray | TSlice | TStr), _) ->
             (* We can't expand those *)
             raise
               (Failure
                  "Attempted to greedily expand an ADT which can't be expanded ")
-        | T.TypeVar _ | T.Literal _ | Never | T.TraitType _ | T.Arrow _
+        | T.TypeVar _ | T.TLiteral _ | Never | T.TraitType _ | T.Arrow _
         | T.RawPtr _ ->
             raise (Failure "Unreachable")
       in

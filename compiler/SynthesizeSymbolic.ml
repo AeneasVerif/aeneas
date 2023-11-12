@@ -32,16 +32,16 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
       (* Match on the symbolic value type to know which can of expansion happened *)
       let expansion =
         match sv.V.sv_ty with
-        | T.Literal PV.Bool -> (
+        | T.TLiteral PV.TBool -> (
             (* Boolean expansion: there should be two branches *)
             match ls with
             | [
-             (Some (V.SeLiteral (PV.Bool true)), true_exp);
-             (Some (V.SeLiteral (PV.Bool false)), false_exp);
+             (Some (V.SeLiteral (PV.VBool true)), true_exp);
+             (Some (V.SeLiteral (PV.VBool false)), false_exp);
             ] ->
                 ExpandBool (true_exp, false_exp)
             | _ -> raise (Failure "Ill-formed boolean expansion"))
-        | T.Literal (PV.Integer int_ty) ->
+        | T.TLiteral (PV.TInteger int_ty) ->
             (* Switch over an integer: split between the "regular" branches
                and the "otherwise" branch (which should be the last branch) *)
             let branches, otherwise = C.List.pop_last ls in
@@ -50,7 +50,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             let get_scalar (see : V.symbolic_expansion option) : V.scalar_value
                 =
               match see with
-              | Some (V.SeLiteral (PV.Scalar cv)) ->
+              | Some (V.SeLiteral (PV.VScalar cv)) ->
                   assert (cv.PV.int_ty = int_ty);
                   cv
               | _ -> raise (Failure "Unreachable")
@@ -64,7 +64,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             assert (otherwise_see = None);
             (* Return *)
             ExpandInt (int_ty, branches, otherwise)
-        | T.Adt (_, _) ->
+        | T.TAdt (_, _) ->
             (* Branching: it is necessarily an enumeration expansion *)
             let get_variant (see : V.symbolic_expansion option) :
                 T.VariantId.id option * V.symbolic_value list =
@@ -86,7 +86,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
             | _ -> raise (Failure "Ill-formed borrow expansion"))
         | T.TypeVar _
-        | T.Literal Char
+        | T.TLiteral TChar
         | Never | T.TraitType _ | T.Arrow _ | T.RawPtr _ ->
             raise (Failure "Ill-formed symbolic expansion")
       in
@@ -99,7 +99,7 @@ let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
   synthesize_symbolic_expansion sv place [ Some see ] el
 
 let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
-    (abstractions : V.AbstractionId.id list) (generics : T.egeneric_args)
+    (abstractions : V.AbstractionId.id list) (generics : T.generic_args)
     (args : V.typed_value list) (args_places : mplace option list)
     (dest : V.symbolic_value) (dest_place : mplace option)
     (e : expression option) : expression option =
@@ -126,7 +126,7 @@ let synthesize_global_eval (gid : A.GlobalDeclId.id) (dest : V.symbolic_value)
 
 let synthesize_regular_function_call (fun_id : A.fun_id_or_trait_method_ref)
     (call_id : V.FunCallId.id) (ctx : Contexts.eval_ctx)
-    (abstractions : V.AbstractionId.id list) (generics : T.egeneric_args)
+    (abstractions : V.AbstractionId.id list) (generics : T.generic_args)
     (args : V.typed_value list) (args_places : mplace option list)
     (dest : V.symbolic_value) (dest_place : mplace option)
     (e : expression option) : expression option =
@@ -171,7 +171,7 @@ let synthesize_loop (loop_id : V.LoopId.id)
     (input_svalues : V.symbolic_value list)
     (fresh_svalues : V.SymbolicValueId.Set.t)
     (rg_to_given_back_tys :
-      (T.RegionId.Set.t * T.rty list) T.RegionGroupId.Map.t)
+      (T.RegionId.Set.t * T.ty list) T.RegionGroupId.Map.t)
     (end_expr : expression option) (loop_expr : expression option) :
     expression option =
   match (end_expr, loop_expr) with

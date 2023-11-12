@@ -97,8 +97,8 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
       (* Match on the projection element and the value *)
       match (pe, v.V.value, v.V.ty) with
       | ( Field ((ProjAdt (_, _) as proj_kind), field_id),
-          V.Adt adt,
-          T.Adt (type_id, _) ) -> (
+          V.VAdt adt,
+          T.TAdt (type_id, _) ) -> (
           (* Check consistency *)
           (match (proj_kind, type_id) with
           | ProjAdt (def_id, opt_variant_id), T.AdtId def_id' ->
@@ -114,11 +114,11 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               let nvalues =
                 T.FieldId.update_nth adt.field_values field_id res.updated
               in
-              let nadt = V.Adt { adt with V.field_values = nvalues } in
+              let nadt = V.VAdt { adt with V.field_values = nvalues } in
               let updated = { v with value = nadt } in
               Ok (ctx, { res with updated }))
       (* Tuples *)
-      | Field (ProjTuple arity, field_id), V.Adt adt, T.Adt (T.Tuple, _) -> (
+      | Field (ProjTuple arity, field_id), V.VAdt adt, T.TAdt (T.Tuple, _) -> (
           assert (arity = List.length adt.field_values);
           let fv = T.FieldId.nth adt.field_values field_id in
           (* Project *)
@@ -129,7 +129,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               let nvalues =
                 T.FieldId.update_nth adt.field_values field_id res.updated
               in
-              let ntuple = V.Adt { adt with field_values = nvalues } in
+              let ntuple = V.VAdt { adt with field_values = nvalues } in
               let updated = { v with value = ntuple } in
               Ok (ctx, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
@@ -142,8 +142,8 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
           Error (FailSymbolic (1 + List.length p', sp))
       (* Box dereferencement *)
       | ( DerefBox,
-          Adt { variant_id = None; field_values = [ bv ] },
-          T.Adt (T.Assumed T.Box, _) ) -> (
+          VAdt { variant_id = None; field_values = [ bv ] },
+          T.TAdt (T.TAssumed T.TBox, _) ) -> (
           (* We allow moving outside of boxes. In practice, this kind of
            * manipulations should happen only inside unsafe code, so
            * it shouldn't happen due to user code, and we leverage it
@@ -156,7 +156,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                 {
                   v with
                   value =
-                    V.Adt { variant_id = None; field_values = [ res.updated ] };
+                    V.VAdt { variant_id = None; field_values = [ res.updated ] };
                 }
               in
               Ok (ctx, { res with updated = nv }))
@@ -248,7 +248,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                     in
                     Ok (ctx, { res with updated = nv })
               else Error (FailSharedLoan bids))
-      | (_, (V.Literal _ | V.Adt _ | V.Bottom | V.Borrow _), _) as r ->
+      | (_, (V.VLiteral _ | V.VAdt _ | V.Bottom | V.Borrow _), _) as r ->
           let pe, v, ty = r in
           let pe = "- pe: " ^ E.show_projection_elem pe in
           let v = "- v:\n" ^ V.show_value v in
@@ -357,7 +357,8 @@ let write_place (access : access_kind) (p : E.place) (nv : V.typed_value)
 
 let compute_expanded_bottom_adt_value (ctx : C.eval_ctx)
     (def_id : T.TypeDeclId.id) (opt_variant_id : T.VariantId.id option)
-    (generics : T.egeneric_args) : V.typed_value =
+    (generics : T.generic_args) : V.typed_value =
+  assert (TypesUtils.generic_args_only_erased_regions generics);
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
@@ -370,17 +371,17 @@ let compute_expanded_bottom_adt_value (ctx : C.eval_ctx)
   in
   (* Initialize the expanded value *)
   let fields = List.map mk_bottom field_types in
-  let av = V.Adt { variant_id = opt_variant_id; field_values = fields } in
-  let ty = T.Adt (T.AdtId def_id, generics) in
+  let av = V.VAdt { variant_id = opt_variant_id; field_values = fields } in
+  let ty = T.TAdt (T.AdtId def_id, generics) in
   { V.value = av; V.ty }
 
 let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
     V.typed_value =
   (* Generate the field values *)
   let fields = List.map mk_bottom field_types in
-  let v = V.Adt { variant_id = None; field_values = fields } in
+  let v = V.VAdt { variant_id = None; field_values = fields } in
   let generics = TypesUtils.mk_generic_args [] field_types [] [] in
-  let ty = T.Adt (T.Tuple, generics) in
+  let ty = T.TAdt (T.Tuple, generics) in
   { V.value = v; V.ty }
 
 (** Auxiliary helper to expand {!V.Bottom} values.
@@ -432,12 +433,12 @@ let expand_bottom_value_from_projection (access : access_kind) (p : E.place)
     match (pe, ty) with
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
-        T.Adt (T.AdtId def_id', generics) ) ->
+        T.TAdt (T.AdtId def_id', generics) ) ->
         assert (def_id = def_id');
         compute_expanded_bottom_adt_value ctx def_id opt_variant_id generics
     (* Tuples *)
     | ( Field (ProjTuple arity, _),
-        T.Adt
+        T.TAdt
           ( T.Tuple,
             { T.regions = []; types; const_generics = []; trait_refs = [] } ) )
       ->

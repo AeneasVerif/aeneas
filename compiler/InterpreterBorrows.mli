@@ -137,7 +137,6 @@ val convert_value_to_abstractions :
     Rem.: it may be more idiomatic to have a functor, but this seems a bit
     heavyweight, though.
   *)
-
 type merge_duplicates_funcs = {
   merge_amut_borrows :
     V.borrow_id ->

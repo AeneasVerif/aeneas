@@ -3,7 +3,7 @@
 open Pure
 open TranslateCore
 module C = Contexts
-module RegionVarId = T.RegionVarId
+module RegionId = T.RegionId
 module F = Format
 open ExtractBuiltin
 
@@ -675,7 +675,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
     | AdtId id ->
         let def = TypeDeclId.Map.find id type_decls in
         Print.name_to_string def.name
-    | Assumed aty -> show_assumed_ty aty
+    | TAssumed aty -> show_assumed_ty aty
     | Tuple -> raise (Failure "Unreachable")
   in
   match id with
@@ -687,10 +687,10 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       | FromLlbc (fid, lp_id, rg_id) ->
           let fun_name =
             match fid with
-            | FunId (Regular fid) ->
+            | FunId (FRegular fid) ->
                 Print.fun_name_to_string
                   (A.FunDeclId.Map.find fid fun_decls).name
-            | FunId (Assumed aid) -> A.show_assumed_fun_id aid
+            | FunId (FAssumed aid) -> A.show_assumed_fun_id aid
             | TraitMethod (trait_ref, method_name, _) ->
                 (* Shouldn't happen *)
                 if !Config.fail_hard then raise (Failure "Unexpected")
@@ -716,9 +716,9 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | DecreasesProofId (fid, lid) ->
       let fun_name =
         match fid with
-        | Regular fid ->
+        | FRegular fid ->
             Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
-        | Assumed aid -> A.show_assumed_fun_id aid
+        | FAssumed aid -> A.show_assumed_fun_id aid
       in
       let loop =
         match lid with
@@ -729,9 +729,9 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TerminationMeasureId (fid, lid) ->
       let fun_name =
         match fid with
-        | Regular fid ->
+        | FRegular fid ->
             Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
-        | Assumed aid -> A.show_assumed_fun_id aid
+        | FAssumed aid -> A.show_assumed_fun_id aid
       in
       let loop =
         match lid with
@@ -745,19 +745,19 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let variant_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed Result ->
+        | TAssumed Result ->
             if variant_id = result_return_id then "@result::Return"
             else if variant_id = result_fail_id then "@result::Fail"
             else raise (Failure "Unreachable")
-        | Assumed Error ->
+        | TAssumed Error ->
             if variant_id = error_failure_id then "@error::Failure"
             else if variant_id = error_out_of_fuel_id then "@error::OutOfFuel"
             else raise (Failure "Unreachable")
-        | Assumed Fuel ->
+        | TAssumed Fuel ->
             if variant_id = fuel_zero_id then "@fuel::0"
             else if variant_id = fuel_succ_id then "@fuel::Succ"
             else raise (Failure "Unreachable")
-        | Assumed (State | Array | Slice | Str | RawPtr _) ->
+        | TAssumed (State | Array | Slice | Str | RawPtr _) ->
             raise
               (Failure
                  ("Unreachable: variant id ("
@@ -776,7 +776,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let field_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed
+        | TAssumed
             (State | Result | Error | Fuel | Array | Slice | Str | RawPtr _) ->
             (* We can't directly have access to the fields of those types *)
             raise (Failure "Unreachable")
@@ -835,7 +835,7 @@ let allow_collisions (id : id) : bool =
   | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
   | TraitMethodId _ ->
       !Config.record_fields_short_names
-  | FunId (Pure _ | FromLlbc (FunId (Assumed _), _, _)) ->
+  | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _, _)) ->
       (* We map several assumed functions to the same id *)
       true
   | _ -> false
@@ -928,16 +928,16 @@ let ctx_get (id : id) (ctx : extraction_ctx) : string =
 
 let names_maps_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
     (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (TypeId (Assumed id)) name nm
+  names_maps_add id_to_string (TypeId (TAssumed id)) name nm
 
 let names_maps_add_assumed_struct (id_to_string : id -> string)
     (id : assumed_ty) (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (StructId (Assumed id)) name nm
+  names_maps_add id_to_string (StructId (TAssumed id)) name nm
 
 let names_maps_add_assumed_variant (id_to_string : id -> string)
     (id : assumed_ty) (variant_id : VariantId.id) (name : string)
     (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (VariantId (Assumed id, variant_id)) name nm
+  names_maps_add id_to_string (VariantId (TAssumed id, variant_id)) name nm
 
 let names_maps_add_function (id_to_string : id -> string) (fid : fun_id)
     (name : string) (nm : names_maps) : names_maps =
@@ -951,7 +951,7 @@ let ctx_get_function (id : fun_id) (ctx : extraction_ctx) : string =
 
 let ctx_get_local_function (id : A.FunDeclId.id) (lp : LoopId.id option)
     (rg : RegionGroupId.id option) (ctx : extraction_ctx) : string =
-  ctx_get_function (FromLlbc (FunId (Regular id), lp, rg)) ctx
+  ctx_get_function (FromLlbc (FunId (FRegular id), lp, rg)) ctx
 
 let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> Tuple);
@@ -961,7 +961,7 @@ let ctx_get_local_type (id : TypeDeclId.id) (ctx : extraction_ctx) : string =
   ctx_get_type (AdtId id) ctx
 
 let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
-  ctx_get_type (Assumed id) ctx
+  ctx_get_type (TAssumed id) ctx
 
 let ctx_get_trait_constructor (id : trait_decl_id) (ctx : extraction_ctx) :
     string =
@@ -1027,11 +1027,11 @@ let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
 
 let ctx_get_decreases_proof (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
-  ctx_get (DecreasesProofId (Regular def_id, loop_id)) ctx
+  ctx_get (DecreasesProofId (FRegular def_id, loop_id)) ctx
 
 let ctx_get_termination_measure (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
-  ctx_get (TerminationMeasureId (Regular def_id, loop_id)) ctx
+  ctx_get (TerminationMeasureId (FRegular def_id, loop_id)) ctx
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
@@ -1150,7 +1150,7 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     ctx.fmt.decreases_proof_name def.def_id def.basename def.num_loops
       def.loop_id
   in
-  ctx_add (DecreasesProofId (Regular def.def_id, def.loop_id)) name ctx
+  ctx_add (DecreasesProofId (FRegular def.def_id, def.loop_id)) name ctx
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
@@ -1158,7 +1158,7 @@ let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     ctx.fmt.termination_measure_name def.def_id def.basename def.num_loops
       def.loop_id
   in
-  ctx_add (TerminationMeasureId (Regular def.def_id, def.loop_id)) name ctx
+  ctx_add (TerminationMeasureId (FRegular def.def_id, def.loop_id)) name ctx
 
 let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
@@ -1176,7 +1176,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   | None ->
       (* Not the case: "standard" registration *)
       let name = ctx.fmt.global_name def.name in
-      let body = FunId (FromLlbc (FunId (Regular def.body_id), None, None)) in
+      let body = FunId (FromLlbc (FunId (FRegular def.body_id), None, None)) in
       let ctx = ctx_add decl (name ^ "_c") ctx in
       let ctx = ctx_add body (name ^ "_body") ctx in
       ctx
@@ -1197,7 +1197,7 @@ let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
         let rg = T.RegionGroupId.nth sg.regions_hierarchy rg_id in
         let region_names =
           List.map
-            (fun rid -> (T.RegionVarId.nth sg.generics.regions rid).name)
+            (fun rid -> (T.RegionId.nth sg.generics.regions rid).name)
             rg.regions
         in
         Some { id = rg_id; region_names }
@@ -1218,7 +1218,7 @@ let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
   let num_backs = List.length backs in
   (* Add the function name *)
   let def_name = ctx_compute_fun_name trans_group def ctx in
-  let fun_id = (Pure.FunId (Regular def_id), def.loop_id, def.back_id) in
+  let fun_id = (Pure.FunId (FRegular def_id), def.loop_id, def.back_id) in
   let ctx = ctx_add (FunId (FromLlbc fun_id)) def_name ctx in
   (* Add the name info *)
   {
@@ -1300,7 +1300,7 @@ let initialize_names_maps (fmt : formatter) (init : names_map_init) : names_maps
   let assumed_functions =
     List.map
       (fun (fid, rg, name) ->
-        (FromLlbc (Pure.FunId (Assumed fid), None, rg), name))
+        (FromLlbc (Pure.FunId (FAssumed fid), None, rg), name))
       init.assumed_llbc_functions
     @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
   in

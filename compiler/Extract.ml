@@ -51,7 +51,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             (fun ctx (f : fun_decl) ->
               let open ExtractBuiltin in
               let fun_id =
-                (Pure.FunId (Regular f.def_id), f.loop_id, f.back_id)
+                (Pure.FunId (FRegular f.def_id), f.loop_id, f.back_id)
               in
               let fun_info =
                 List.find_opt
@@ -124,7 +124,7 @@ let extract_adt_g_value
     (inside : bool) (variant_id : VariantId.id option) (field_values : 'v list)
     (ty : ty) : extraction_ctx =
   match ty with
-  | Adt (Tuple, generics) ->
+  | TAdt (Tuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
       assert (List.length generics.types = List.length field_values);
@@ -146,7 +146,7 @@ let extract_adt_g_value
         in
         F.pp_print_string fmt ")";
         ctx)
-  | Adt (adt_id, _) ->
+  | TAdt (adt_id, _) ->
       (* "Regular" ADT *)
 
       (* If we are generating a pattern for a let-binding and we target Lean,
@@ -178,7 +178,7 @@ let extract_adt_g_value
           | Some vid -> (
               (* In the case of Lean, we might have to add the type name as a prefix *)
               match (!backend, adt_id) with
-              | Lean, Assumed _ ->
+              | Lean, TAssumed _ ->
                   ctx_get_type adt_id ctx ^ "." ^ ctx_get_variant adt_id vid ctx
               | _ -> ctx_get_variant adt_id vid ctx)
           | None -> ctx_get_struct adt_id ctx
@@ -441,7 +441,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
             (* Provided method: we see it as a regular function call, and use
                the function name *)
             let fun_id =
-              FromLlbc (FunId (Regular method_id.id), lp_id, rg_id)
+              FromLlbc (FunId (FRegular method_id.id), lp_id, rg_id)
             in
             let fun_name = ctx_get_function fun_id ctx in
             F.pp_print_string fmt fun_name;
@@ -467,7 +467,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       *)
       let types =
         match fun_id with
-        | FromLlbc (FunId (Regular id), _, _) ->
+        | FromLlbc (FunId (FRegular id), _, _) ->
             fun_builtin_filter_types id generics.types ctx
         | _ -> Result.Ok generics.types
       in
@@ -506,7 +506,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (adt_cons : adt_cons_id) (generics : generic_args) (args : texpression list)
     : unit =
-  let e_ty = Adt (adt_cons.adt_id, generics) in
+  let e_ty = TAdt (adt_cons.adt_id, generics) in
   let is_single_pat = false in
   let _ =
     extract_adt_g_value
@@ -966,7 +966,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         if need_paren then F.pp_print_string fmt ")";
         print_bracket false orb;
         F.pp_close_box fmt ()
-    | Assumed Array ->
+    | TAssumed Array ->
         (* Open the boxes *)
         F.pp_open_hvbox fmt ctx.indent_incr;
         let need_paren = inside in
@@ -974,7 +974,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         (* Open the box for `Array.replicate T N [` *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the array constructor *)
-        let cs = ctx_get_struct (Assumed Array) ctx in
+        let cs = ctx_get_struct (TAssumed Array) ctx in
         F.pp_print_string fmt cs;
         (* Print the parameters *)
         let _, generics = ty_as_adt e_ty in
@@ -1286,7 +1286,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   let { keep_fwd; num_backs } =
     PureUtils.RegularFunIdMap.find
-      (Pure.FunId (Regular def.def_id), def.loop_id, def.back_id)
+      (Pure.FunId (FRegular def.def_id), def.loop_id, def.back_id)
       ctx.fun_name_info
   in
   let comment_pre = "[" ^ Print.fun_name_to_string def.basename ^ "]: " in
@@ -1772,7 +1772,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let decl_name = ctx_get_global global.def_id ctx in
   let body_name =
     ctx_get_function
-      (FromLlbc (Pure.FunId (Regular global.body_id), None, None))
+      (FromLlbc (Pure.FunId (FRegular global.body_id), None, None))
       ctx
   in
 
@@ -2662,7 +2662,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "=";
         F.pp_print_space fmt ();
-        let success = ctx_get_variant (Assumed Result) result_return_id ctx in
+        let success = ctx_get_variant (TAssumed Result) result_return_id ctx in
         F.pp_print_string fmt (success ^ " ())")
     | Coq ->
         F.pp_print_string fmt "Check";
@@ -2691,7 +2691,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
-        let success = ctx_get_variant (Assumed Result) result_return_id ctx in
+        let success = ctx_get_variant (TAssumed Result) result_return_id ctx in
         F.pp_print_string fmt ("." ^ success ^ " ())")
     | HOL4 ->
         F.pp_print_string fmt "val _ = assert_return (";

@@ -138,13 +138,13 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_Var _ binder v =
+      method! visit_EBinding _ binder v =
         let inside_abs = false in
-        super#visit_Var inside_abs binder v
+        super#visit_EBinding inside_abs binder v
 
-      method! visit_Abs _ abs =
+      method! visit_EAbs _ abs =
         let inside_abs = true in
-        super#visit_Abs inside_abs abs
+        super#visit_EAbs inside_abs abs
 
       method! visit_loan_content inside_abs lc =
         (* Register the loan *)
@@ -380,8 +380,8 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
 
 let check_literal_type (cv : V.literal) (ty : PV.literal_type) : unit =
   match (cv, ty) with
-  | PV.Scalar sv, PV.Integer int_ty -> assert (sv.int_ty = int_ty)
-  | PV.Bool _, PV.Bool | PV.Char _, PV.Char -> ()
+  | PV.VScalar sv, PV.TInteger int_ty -> assert (sv.int_ty = int_ty)
+  | PV.VBool _, PV.TBool | PV.VChar _, PV.TChar -> ()
   | _ -> raise (Failure "Erroneous typing")
 
 let check_typing_invariant (ctx : C.eval_ctx) : unit =
@@ -389,10 +389,10 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
    * of the shape [& (mut) T] where they should have type [T]...
    * This messes a bit the type invariant checks when checking the
    * children. In order to isolate the problem (for future modifications)
-   * we introduce function, so that we can easily spot all the involved
+   * we introduce this function, so that we can easily spot all the involved
    * places.
    * *)
-  let aloan_get_expected_child_type (ty : 'r T.ty) : 'r T.ty =
+  let aloan_get_expected_child_type (ty : T.ty) : T.ty =
     let _, ty, _ = ty_get_ref ty in
     ty
   in
@@ -402,12 +402,24 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
       inherit [_] C.iter_eval_ctx as super
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
+      method! visit_EBinding info binder v =
+        (* We also check that the regions are erased *)
+        assert (ty_is_ety v.ty);
+        super#visit_EBinding info binder v
+
+      method! visit_symbolic_value inside_abs v =
+        (* Check that the types have regions *)
+        assert (ty_is_rty v.sv_ty);
+        super#visit_symbolic_value inside_abs v
+
       method! visit_typed_value info tv =
+        (* Check that the types have erased regions *)
+        assert (ty_is_ety tv.ty);
         (* Check the current pair (value, type) *)
         (match (tv.V.value, tv.V.ty) with
-        | V.Literal cv, T.Literal ty -> check_literal_type cv ty
+        | V.VLiteral cv, T.TLiteral ty -> check_literal_type cv ty
         (* ADT case *)
-        | V.Adt av, T.Adt (T.AdtId def_id, generics) ->
+        | V.VAdt av, T.TAdt (T.AdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = C.ctx_lookup_type_decl ctx def_id in
@@ -430,10 +442,10 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               List.combine av.V.field_values field_types
             in
             List.iter
-              (fun ((v, ty) : V.typed_value * T.ety) -> assert (v.V.ty = ty))
+              (fun ((v, ty) : V.typed_value * T.ty) -> assert (v.V.ty = ty))
               fields_with_types
         (* Tuple case *)
-        | V.Adt av, T.Adt (T.Tuple, generics) ->
+        | V.VAdt av, T.TAdt (T.Tuple, generics) ->
             assert (generics.regions = []);
             assert (generics.const_generics = []);
             assert (av.V.variant_id = None);
@@ -443,10 +455,10 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               List.combine av.V.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : V.typed_value * T.ety) -> assert (v.V.ty = ty))
+              (fun ((v, ty) : V.typed_value * T.ty) -> assert (v.V.ty = ty))
               fields_with_types
         (* Assumed type case *)
-        | V.Adt av, T.Adt (T.Assumed aty_id, generics) -> (
+        | V.VAdt av, T.TAdt (T.TAssumed aty_id, generics) -> (
             assert (av.V.variant_id = None);
             match
               ( aty_id,
@@ -456,9 +468,9 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 generics.const_generics )
             with
             (* Box *)
-            | T.Box, [ inner_value ], [], [ inner_ty ], [] ->
+            | T.TBox, [ inner_value ], [], [ inner_ty ], [] ->
                 assert (inner_value.V.ty = inner_ty)
-            | T.Array, inner_values, _, [ inner_ty ], [ cg ] ->
+            | T.TArray, inner_values, _, [ inner_ty ], [ cg ] ->
                 (* *)
                 assert (
                   List.for_all
@@ -471,7 +483,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                     .value
                 in
                 assert (Z.of_int (List.length inner_values) = len)
-            | (T.Slice | T.Str), _, _, _, _ -> raise (Failure "Unexpected")
+            | (T.TSlice | T.TStr), _, _, _, _ -> raise (Failure "Unexpected")
             | _ -> raise (Failure "Erroneous type"))
         | V.Bottom, _ -> (* Nothing to check *) ()
         | V.Borrow bc, T.Ref (_, ref_ty, rkind) -> (
@@ -516,10 +528,12 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
        * so the cost of maintenance should be pretty low.
        * *)
       method! visit_typed_avalue info atv =
+        (* Check that the types have regions *)
+        assert (ty_is_rty atv.ty);
         (* Check the current pair (value, type) *)
         (match (atv.V.value, atv.V.ty) with
         (* ADT case *)
-        | V.AAdt av, T.Adt (T.AdtId def_id, generics) ->
+        | V.AAdt av, T.TAdt (T.AdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = C.ctx_lookup_type_decl ctx def_id in
@@ -545,10 +559,10 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               List.combine av.V.field_values field_types
             in
             List.iter
-              (fun ((v, ty) : V.typed_avalue * T.rty) -> assert (v.V.ty = ty))
+              (fun ((v, ty) : V.typed_avalue * T.ty) -> assert (v.V.ty = ty))
               fields_with_types
         (* Tuple case *)
-        | V.AAdt av, T.Adt (T.Tuple, generics) ->
+        | V.AAdt av, T.TAdt (T.Tuple, generics) ->
             assert (generics.regions = []);
             assert (generics.const_generics = []);
             assert (av.V.variant_id = None);
@@ -558,10 +572,10 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               List.combine av.V.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : V.typed_avalue * T.rty) -> assert (v.V.ty = ty))
+              (fun ((v, ty) : V.typed_avalue * T.ty) -> assert (v.V.ty = ty))
               fields_with_types
         (* Assumed type case *)
-        | V.AAdt av, T.Adt (T.Assumed aty_id, generics) -> (
+        | V.AAdt av, T.TAdt (T.TAssumed aty_id, generics) -> (
             assert (av.V.variant_id = None);
             match
               ( aty_id,
@@ -571,7 +585,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 generics.const_generics )
             with
             (* Box *)
-            | T.Box, [ boxed_value ], [], [ boxed_ty ], [] ->
+            | T.TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
                 assert (boxed_value.V.ty = boxed_ty)
             | _ -> raise (Failure "Erroneous type"))
         | V.ABottom, _ -> (* Nothing to check *) ()
@@ -663,7 +677,8 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 ("Erroneous typing:" ^ "\n- raw value: "
                ^ V.show_typed_avalue atv ^ "\n- value: "
                 ^ typed_avalue_to_string ctx atv
-                ^ "\n- type: " ^ rty_to_string ctx atv.V.ty));
+                ^ "\n- type: "
+                ^ PA.ty_to_string ctx atv.V.ty));
             raise (Failure "Erroneous typing"));
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_avalue info atv
@@ -674,7 +689,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
 type proj_borrows_info = {
   abs_id : V.AbstractionId.id;
   regions : T.RegionId.Set.t;
-  proj_ty : T.rty;
+  proj_ty : T.rty;  (** The regions shouldn't be erased *)
   as_shared_value : bool;  (** True if the value is below a shared borrow *)
 }
 [@@deriving show]
@@ -686,7 +701,7 @@ type proj_loans_info = {
 [@@deriving show]
 
 type sv_info = {
-  ty : T.rty;
+  ty : T.rty;  (** The regions shouldn't be erased *)
   env_count : int;
   aproj_borrows : proj_borrows_info list;
   aproj_loans : proj_loans_info list;

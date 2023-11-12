@@ -43,7 +43,7 @@ type call = {
           borrows (we need to perform lookups).
        *)
   abstractions : V.AbstractionId.id list;
-  generics : T.egeneric_args;
+  generics : T.generic_args;
   args : V.typed_value list;
   args_places : mplace option list;  (** Meta information *)
   dest : V.symbolic_value;
@@ -65,30 +65,22 @@ type global_decl_id = A.GlobalDeclId.id [@@deriving show]
 type 'a symbolic_value_id_map = 'a V.SymbolicValueId.Map.t [@@deriving show]
 type 'a region_group_id_map = 'a T.RegionGroupId.Map.t [@@deriving show]
 
-(** Ancestor for {!expression} iter visitor *)
+(** Ancestor for {!expression} iter visitor.
+
+    We could make it inherit the visitor for {!eval_ctx}, but in all the uses
+    of this visitor we don't need to explore {!eval_ctx}, so we make it inherit
+    the abstraction visitors instead.
+ *)
 class ['self] iter_expression_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.iter
+    inherit [_] V.iter_abs
     method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
-    method visit_typed_value : 'env -> V.typed_value -> unit = fun _ _ -> ()
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
-    method visit_abs : 'env -> V.abs -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> V.loop_id -> unit = fun _ _ -> ()
-    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
-
-    method visit_const_generic_var_id : 'env -> T.const_generic_var_id -> unit =
-      fun _ _ -> ()
-
-    method visit_symbolic_value_id : 'env -> V.symbolic_value_id -> unit =
-      fun _ _ -> ()
-
-    method visit_symbolic_value : 'env -> V.symbolic_value -> unit =
-      fun _ _ -> ()
 
     method visit_region_group_id : 'env -> T.RegionGroupId.id -> unit =
       fun _ _ -> ()
 
-    method visit_global_decl_id : 'env -> global_decl_id -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
 
@@ -115,14 +107,8 @@ class ['self] iter_expression_base =
       fun env s ->
         V.SymbolicValueId.Set.iter (self#visit_symbolic_value_id env) s
 
-    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
-    method visit_scalar_value : 'env -> V.scalar_value -> unit = fun _ _ -> ()
-
     method visit_symbolic_expansion : 'env -> V.symbolic_expansion -> unit =
       fun _ _ -> ()
-
-    method visit_etrait_ref : 'env -> T.etrait_ref -> unit = fun _ _ -> ()
-    method visit_egeneric_args : 'env -> T.egeneric_args -> unit = fun _ _ -> ()
   end
 
 (** **Rem.:** here, {!expression} is not at all equivalent to the expressions
@@ -224,7 +210,7 @@ and loop = {
   fresh_svalues : V.symbolic_value_id_set;
       (** The symbolic values introduced by the loop fixed-point *)
   rg_to_given_back_tys :
-    ((T.RegionId.Set.t * T.rty list) T.RegionGroupId.Map.t[@opaque]);
+    ((T.RegionId.Set.t * T.ty list) T.RegionGroupId.Map.t[@opaque]);
       (** The map from region group ids to the types of the values given back
           by the corresponding loop abstractions.
        *)
@@ -254,13 +240,13 @@ and expansion =
 (* Remark: this type doesn't have to be mutually recursive with the other
    types, but it makes it easy to generate the visitors *)
 and value_aggregate =
-  | SingleValue of V.typed_value  (** Regular case *)
-  | Array of V.typed_value list
+  | VaSingleValue of V.typed_value  (** Regular case *)
+  | VaArray of V.typed_value list
       (** This is used when introducing array aggregates *)
-  | ConstGenericValue of T.const_generic_var_id
+  | VaConstGenericValue of T.const_generic_var_id
       (** This is used when evaluating a const generic value: in the interpreter,
           we introduce a fresh symbolic value. *)
-  | TraitConstValue of T.etrait_ref * T.egeneric_args * string
+  | VaTraitConstValue of T.trait_ref * T.generic_args * string
       (** A trait constant value *)
 [@@deriving
   show,

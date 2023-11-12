@@ -16,7 +16,7 @@ open InterpreterBorrowsCore
     [regions]
     [ancestor_regions]
     [see]
-    [original_sv_ty]
+    [original_sv_ty]: shouldn't have erased regions
 *)
 val apply_proj_loans_on_symbolic_expansion :
   T.RegionId.Set.t ->
@@ -121,8 +121,8 @@ val apply_proj_borrows :
     - [regions]: the regions to project
     - [ancestors_regions]
     - [v]: the value on which to apply the projection
-    - [ty]: the type (with regions) to use for the projection
-
+    - [ty]: the type (with regions) to use for the projection (shouldn't have
+      erased regions)
  *)
 val apply_proj_borrows_on_input_value :
   C.config ->

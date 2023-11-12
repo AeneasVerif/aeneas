@@ -31,8 +31,6 @@ let get_cf_ctx_no_synth (f : cm_fun) (ctx : C.eval_ctx) : C.eval_ctx =
 
 let eval_ctx_to_string_no_filter = Print.Contexts.eval_ctx_to_string_no_filter
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
-let ety_to_string = PA.ety_to_string
-let rty_to_string = PA.rty_to_string
 let symbolic_value_to_string = PA.symbolic_value_to_string
 let borrow_content_to_string = PA.borrow_content_to_string
 let loan_content_to_string = PA.loan_content_to_string
@@ -43,8 +41,6 @@ let typed_value_to_string = PA.typed_value_to_string
 let typed_avalue_to_string = PA.typed_avalue_to_string
 let place_to_string = PA.place_to_string
 let operand_to_string = PA.operand_to_string
-let egeneric_args_to_string = PA.egeneric_args_to_string
-let rtrait_instance_id_to_string = PA.rtrait_instance_id_to_string
 let fun_sig_to_string = PA.fun_sig_to_string
 let inst_fun_sig_to_string = PA.inst_fun_sig_to_string
 
@@ -66,8 +62,7 @@ let abs_to_string ctx = PA.abs_to_string ctx "" "  "
 let same_symbolic_id (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) : bool =
   sv0.V.sv_id = sv1.V.sv_id
 
-let mk_var (index : E.VarId.id) (name : string option) (var_ty : T.ety) : A.var
-    =
+let mk_var (index : E.VarId.id) (name : string option) (var_ty : T.ty) : A.var =
   { A.index; name; var_ty }
 
 (** Small helper - TODO: move *)
@@ -75,25 +70,32 @@ let mk_place_from_var_id (var_id : E.VarId.id) : E.place =
   { var_id; projection = [] }
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value (sv_kind : V.sv_kind) (ty : T.rty) :
-    V.symbolic_value =
+let mk_fresh_symbolic_value (sv_kind : V.sv_kind) (ty : T.ty) : V.symbolic_value
+    =
+  (* Sanity check *)
+  assert (ty_is_rty ty);
   let sv_id = C.fresh_symbolic_value_id () in
   let svalue = { V.sv_kind; V.sv_id; V.sv_ty = ty } in
   svalue
 
+let mk_fresh_symbolic_value_from_no_regions_ty (sv_kind : V.sv_kind) (ty : T.ty)
+    : V.symbolic_value =
+  assert (ty_no_regions ty);
+  mk_fresh_symbolic_value sv_kind ty
+
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_typed_value (sv_kind : V.sv_kind) (rty : T.rty) :
+let mk_fresh_symbolic_typed_value (sv_kind : V.sv_kind) (rty : T.ty) :
     V.typed_value =
+  assert (ty_is_rty rty);
   let ty = Subst.erase_regions rty in
   (* Generate the fresh a symbolic value *)
   let value = mk_fresh_symbolic_value sv_kind rty in
   let value = V.Symbolic value in
   { V.value; V.ty }
 
-(** Create a fresh symbolic value *)
-let mk_fresh_symbolic_typed_value_from_ety (sv_kind : V.sv_kind) (ety : T.ety) :
-    V.typed_value =
-  let ty = TypesUtils.ety_no_regions_to_rty ety in
+let mk_fresh_symbolic_typed_value_from_no_regions_ty (sv_kind : V.sv_kind)
+    (ty : T.ty) : V.typed_value =
+  assert (ty_no_regions ty);
   mk_fresh_symbolic_typed_value sv_kind ty
 
 (** Create a typed value from a symbolic value. *)
@@ -122,7 +124,8 @@ let mk_aproj_loans_value_from_symbolic_value (regions : T.RegionId.Set.t)
 
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (proj_regions : T.RegionId.Set.t)
-    (svalue : V.symbolic_value) (proj_ty : T.rty) : V.aproj =
+    (svalue : V.symbolic_value) (proj_ty : T.ty) : V.aproj =
+  assert (ty_is_rty proj_ty);
   if ty_has_regions_in_set proj_regions proj_ty then
     V.AProjBorrows (svalue, proj_ty)
   else V.AIgnoredProjBorrows
@@ -193,7 +196,7 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 
 (** Utility exception *)
-exception FoundAProjBorrows of V.symbolic_value * T.rty
+exception FoundAProjBorrows of V.symbolic_value * T.ty
 
 let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     bool =
@@ -235,7 +238,7 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
 *)
 let symbolic_value_has_ended_regions (ended_regions : T.RegionId.Set.t)
     (s : V.symbolic_value) : bool =
-  let regions = rty_regions s.V.sv_ty in
+  let regions = ty_regions s.V.sv_ty in
   not (T.RegionId.Set.disjoint regions ended_regions)
 
 (** Check if a {!type:V.value} contains [⊥].
@@ -435,7 +438,7 @@ let initialize_eval_context (ctx : C.decls_ctx)
     T.ConstGenericVarId.Map.of_list
       (List.map
          (fun (cg : T.const_generic_var) ->
-           let ty = TypesUtils.ety_no_regions_to_rty (T.Literal cg.ty) in
+           let ty = T.TLiteral cg.ty in
            let cv = mk_fresh_symbolic_typed_value V.ConstGeneric ty in
            (cg.index, cv))
          const_generic_vars)
@@ -450,28 +453,27 @@ let initialize_eval_context (ctx : C.decls_ctx)
     C.type_vars;
     C.const_generic_vars;
     C.const_generic_vars_map;
-    C.norm_trait_etypes = C.ETraitTypeRefMap.empty (* Empty for now *);
-    C.norm_trait_rtypes = C.RTraitTypeRefMap.empty (* Empty for now *);
-    C.norm_trait_stypes = C.STraitTypeRefMap.empty (* Empty for now *);
-    C.env = [ C.Frame ];
+    C.norm_trait_types = C.TraitTypeRefMap.empty (* Empty for now *);
+    C.env = [ C.EFrame ];
     C.ended_regions = T.RegionId.Set.empty;
   }
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and
     region ids. This is mostly used in preparation of function calls (when
     evaluating in symbolic mode).
-
-    Note: there are no region parameters, because they should be erased.
  *)
-let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.egeneric_args)
-    (tr_self : T.rtrait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
+let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.generic_args)
+    (tr_self : T.trait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
   log#ldebug
     (lazy
       ("instantiate_fun_sig:" ^ "\n- generics: "
-      ^ egeneric_args_to_string ctx generics
+      ^ PA.generic_args_to_string ctx generics
       ^ "\n- tr_self: "
-      ^ rtrait_instance_id_to_string ctx tr_self
+      ^ PA.trait_instance_id_to_string ctx tr_self
       ^ "\n- sg: " ^ fun_sig_to_string ctx sg));
+  (* Erase the regions in the generics we use for the instantiation *)
+  let generics = Subst.generic_args_erase_regions generics in
+  let tr_self = Subst.trait_instance_id_erase_regions tr_self in
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let rg_abs_ids_bindings =
@@ -492,29 +494,20 @@ let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.egeneric_args)
   (* Generate fresh regions and their substitutions *)
   let _, rsubst, _ = Subst.fresh_regions_with_substs sg.generics.regions in
   (* Generate the type substitution
-   * Note that we need the substitution to map the type variables to
-   * {!rty} types (not {!ety}). In order to do that, we convert the
-   * type parameters to types with regions. This is possible only
-   * if those types don't contain any regions.
-   * This is a current limitation of the analysis: there is still some
-   * work to do to properly handle full type parametrization.
-   * *)
-  let rtype_params = List.map ety_no_regions_to_rty generics.types in
-  let tsubst = Subst.make_type_subst_from_vars sg.generics.types rtype_params in
+     Note that for now we don't support instantiating the type parameters with
+     types containing regions. *)
+  assert (List.for_all TypesUtils.ty_no_regions generics.types);
+  assert (TypesUtils.trait_instance_id_no_regions tr_self);
+  let tsubst =
+    Subst.make_type_subst_from_vars sg.generics.types generics.types
+  in
   let cgsubst =
     Subst.make_const_generic_subst_from_vars sg.generics.const_generics
       generics.const_generics
   in
-  (* TODO: something annoying with the trait ref subst: we need to use region
-     types, but the arguments use erased regions. For now we use the fact
-     that no regions should appear inside. In the future: we should merge
-     ety and rty. *)
-  let trait_refs =
-    List.map TypesUtils.etrait_ref_no_regions_to_gr_trait_ref
-      generics.trait_refs
-  in
   let tr_subst =
-    Subst.make_trait_subst_from_clauses sg.generics.trait_clauses trait_refs
+    Subst.make_trait_subst_from_clauses sg.generics.trait_clauses
+      generics.trait_refs
   in
   (* Substitute the signature *)
   let inst_sig =

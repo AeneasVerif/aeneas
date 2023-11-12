@@ -64,14 +64,14 @@ let dest_arrow_ty (ty : ty) : ty * ty =
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
-  | PV.Scalar sv -> Integer sv.PV.int_ty
-  | Bool _ -> Bool
-  | Char _ -> Char
+  | PV.VScalar sv -> TInteger sv.PV.int_ty
+  | VBool _ -> TBool
+  | VChar _ -> TChar
 
 let var_get_id (v : var) : VarId.id = v.id
 
 let mk_typed_pattern_from_literal (cv : literal) : typed_pattern =
-  let ty = Literal (compute_literal_type cv) in
+  let ty = TLiteral (compute_literal_type cv) in
   { value = PatConstant cv; ty }
 
 let mk_let (monadic : bool) (lv : typed_pattern) (re : texpression)
@@ -232,7 +232,7 @@ let is_const (e : texpression) : bool =
 
 let ty_as_adt (ty : ty) : type_id * generic_args =
   match ty with
-  | Adt (id, generics) -> (id, generics)
+  | TAdt (id, generics) -> (id, generics)
   | _ -> raise (Failure "Unreachable")
 
 (** Remove the external occurrences of {!Meta} *)
@@ -340,7 +340,7 @@ let opt_destruct_function_call (e : texpression) :
 
 let opt_destruct_result (ty : ty) : ty option =
   match ty with
-  | Adt (Assumed Result, generics) ->
+  | TAdt (TAssumed Result, generics) ->
       assert (generics.const_generics = []);
       assert (generics.trait_refs = []);
       Some (Collections.List.to_cons_nil generics.types)
@@ -350,7 +350,7 @@ let destruct_result (ty : ty) : ty = Option.get (opt_destruct_result ty)
 
 let opt_destruct_tuple (ty : ty) : ty list option =
   match ty with
-  | Adt (Tuple, generics) ->
+  | TAdt (Tuple, generics) ->
       assert (generics.const_generics = []);
       assert (generics.trait_refs = []);
       Some generics.types
@@ -408,7 +408,7 @@ let iter_switch_body_branches (f : texpression -> unit) (sb : switch_body) :
 let mk_switch (scrut : texpression) (sb : switch_body) : texpression =
   (* Sanity check: the scrutinee has the proper type *)
   (match sb with
-  | If (_, _) -> assert (scrut.ty = Literal Bool)
+  | If (_, _) -> assert (scrut.ty = TLiteral TBool)
   | Match branches ->
       List.iter
         (fun (b : match_branch) -> assert (b.pat.ty = scrut.ty))
@@ -427,10 +427,10 @@ let mk_switch (scrut : texpression) (sb : switch_body) : texpression =
 let mk_simpl_tuple_ty (tys : ty list) : ty =
   match tys with
   | [ ty ] -> ty
-  | _ -> Adt (Tuple, mk_generic_args_from_types tys)
+  | _ -> TAdt (Tuple, mk_generic_args_from_types tys)
 
-let mk_bool_ty : ty = Literal Bool
-let mk_unit_ty : ty = Adt (Tuple, empty_generic_args)
+let mk_bool_ty : ty = TLiteral TBool
+let mk_unit_ty : ty = TAdt (Tuple, empty_generic_args)
 
 let mk_unit_rvalue : texpression =
   let id = AdtCons { adt_id = Tuple; variant_id = None } in
@@ -474,7 +474,7 @@ let mk_simpl_tuple_pattern (vl : typed_pattern list) : typed_pattern =
   | [ v ] -> v
   | _ ->
       let tys = List.map (fun (v : typed_pattern) -> v.ty) vl in
-      let ty = Adt (Tuple, mk_generic_args_from_types tys) in
+      let ty = TAdt (Tuple, mk_generic_args_from_types tys) in
       let value = PatAdt { variant_id = None; field_values = vl } in
       { value; ty }
 
@@ -485,7 +485,7 @@ let mk_simpl_tuple_texpression (vl : texpression list) : texpression =
   | _ ->
       (* Compute the types of the fields, and the type of the tuple constructor *)
       let tys = List.map (fun (v : texpression) -> v.ty) vl in
-      let ty = Adt (Tuple, mk_generic_args_from_types tys) in
+      let ty = TAdt (Tuple, mk_generic_args_from_types tys) in
       let ty = mk_arrows tys ty in
       (* Construct the tuple constructor qualifier *)
       let id = AdtCons { adt_id = Tuple; variant_id = None } in
@@ -501,40 +501,40 @@ let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
 
 let ty_as_integer (t : ty) : T.integer_type =
   match t with
-  | Literal (Integer int_ty) -> int_ty
+  | TLiteral (TInteger int_ty) -> int_ty
   | _ -> raise (Failure "Unreachable")
 
 let ty_as_literal (t : ty) : T.literal_type =
-  match t with Literal ty -> ty | _ -> raise (Failure "Unreachable")
+  match t with TLiteral ty -> ty | _ -> raise (Failure "Unreachable")
 
-let mk_state_ty : ty = Adt (Assumed State, empty_generic_args)
+let mk_state_ty : ty = TAdt (TAssumed State, empty_generic_args)
 
 let mk_result_ty (ty : ty) : ty =
-  Adt (Assumed Result, mk_generic_args_from_types [ ty ])
+  TAdt (TAssumed Result, mk_generic_args_from_types [ ty ])
 
-let mk_error_ty : ty = Adt (Assumed Error, empty_generic_args)
-let mk_fuel_ty : ty = Adt (Assumed Fuel, empty_generic_args)
+let mk_error_ty : ty = TAdt (TAssumed Error, empty_generic_args)
+let mk_fuel_ty : ty = TAdt (TAssumed Fuel, empty_generic_args)
 
 let mk_error (error : VariantId.id) : texpression =
   let ty = mk_error_ty in
-  let id = AdtCons { adt_id = Assumed Error; variant_id = Some error } in
+  let id = AdtCons { adt_id = TAssumed Error; variant_id = Some error } in
   let qualif = { id; generics = empty_generic_args } in
   let e = Qualif qualif in
   { e; ty }
 
 let unwrap_result_ty (ty : ty) : ty =
   match ty with
-  | Adt
-      (Assumed Result, { types = [ ty ]; const_generics = []; trait_refs = [] })
+  | TAdt
+      (TAssumed Result, { types = [ ty ]; const_generics = []; trait_refs = [] })
     ->
       ty
   | _ -> raise (Failure "not a result type")
 
 let mk_result_fail_texpression (error : texpression) (ty : ty) : texpression =
   let type_args = [ ty ] in
-  let ty = Adt (Assumed Result, mk_generic_args_from_types type_args) in
+  let ty = TAdt (TAssumed Result, mk_generic_args_from_types type_args) in
   let id =
-    AdtCons { adt_id = Assumed Result; variant_id = Some result_fail_id }
+    AdtCons { adt_id = TAssumed Result; variant_id = Some result_fail_id }
   in
   let qualif = { id; generics = mk_generic_args_from_types type_args } in
   let cons_e = Qualif qualif in
@@ -549,9 +549,9 @@ let mk_result_fail_texpression_with_error_id (error : VariantId.id) (ty : ty) :
 
 let mk_result_return_texpression (v : texpression) : texpression =
   let type_args = [ v.ty ] in
-  let ty = Adt (Assumed Result, mk_generic_args_from_types type_args) in
+  let ty = TAdt (TAssumed Result, mk_generic_args_from_types type_args) in
   let id =
-    AdtCons { adt_id = Assumed Result; variant_id = Some result_return_id }
+    AdtCons { adt_id = TAssumed Result; variant_id = Some result_return_id }
   in
   let qualif = { id; generics = mk_generic_args_from_types type_args } in
   let cons_e = Qualif qualif in
@@ -562,7 +562,7 @@ let mk_result_return_texpression (v : texpression) : texpression =
 (** Create a [Fail err] pattern which captures the error *)
 let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : typed_pattern =
   let error_pat : typed_pattern = { value = error_pat; ty = mk_error_ty } in
-  let ty = Adt (Assumed Result, mk_generic_args_from_types [ ty ]) in
+  let ty = TAdt (TAssumed Result, mk_generic_args_from_types [ ty ]) in
   let value =
     PatAdt { variant_id = Some result_fail_id; field_values = [ error_pat ] }
   in
@@ -574,7 +574,7 @@ let mk_result_fail_pattern_ignore_error (ty : ty) : typed_pattern =
   mk_result_fail_pattern error_pat ty
 
 let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
-  let ty = Adt (Assumed Result, mk_generic_args_from_types [ v.ty ]) in
+  let ty = TAdt (TAssumed Result, mk_generic_args_from_types [ v.ty ]) in
   let value =
     PatAdt { variant_id = Some result_return_id; field_values = [ v ] }
   in

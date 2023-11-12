@@ -791,7 +791,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
                     let id0 =
                       match id0 with
                       | FunId fun_id -> fun_id
-                      | TraitMethod (_, _, fun_decl_id) -> Regular fun_decl_id
+                      | TraitMethod (_, _, fun_decl_id) -> FRegular fun_decl_id
                     in
                     LlbcAstUtils.lookup_fun_sig id0 ctx.fun_ctx.fun_decls
                   in
@@ -1527,7 +1527,7 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
              * could have: [box_new f x])
              * *)
             match fun_id with
-            | Fun (FromLlbc (FunId (Assumed aid), _lp_id, rg_id)) -> (
+            | Fun (FromLlbc (FunId (FAssumed aid), _lp_id, rg_id)) -> (
                 match (aid, rg_id) with
                 | BoxNew, _ ->
                     assert (rg_id = None);
@@ -1541,7 +1541,7 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     | ArrayRepeat | SliceLen ),
                     _ ) ->
                     super#visit_texpression env e)
-            | Fun (FromLlbc (FunId (Regular fid), _lp_id, rg_id)) -> (
+            | Fun (FromLlbc (FunId (FRegular fid), _lp_id, rg_id)) -> (
                 (* Lookup the function name *)
                 let def = FunDeclId.Map.find fid ctx.fun_ctx.fun_decls in
                 match
@@ -2050,7 +2050,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
     let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
     assert (Option.is_some decl.loop_id);
 
-    let fun_id = (E.Regular decl.def_id, decl.loop_id) in
+    let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
 
     let set_used vid =
       used := List.map (fun (vid', b) -> (vid', b || vid = vid')) !used
@@ -2134,7 +2134,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
   (* We then apply the filtering to all the function definitions at once *)
   let filter_in_one (decl : fun_decl) : fun_decl =
     (* Filter the function signature *)
-    let fun_id = (E.Regular decl.def_id, decl.loop_id) in
+    let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
     let decl =
       match FunLoopIdMap.find_opt fun_id !used_map with
       | None -> (* Nothing to filter *) decl

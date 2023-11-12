@@ -37,11 +37,11 @@ module A = LlbcAst
 module Sig = struct
   (** A few utilities *)
 
-  let rvar_id_0 = T.RegionVarId.of_int 0
-  let rvar_0 : T.RegionVarId.id T.region = T.Var rvar_id_0
+  let rvar_id_0 = T.RegionId.of_int 0
+  let rvar_0 : T.region = T.RVar rvar_id_0
   let rg_id_0 = T.RegionGroupId.of_int 0
   let tvar_id_0 = T.TypeVarId.of_int 0
-  let tvar_0 : T.sty = T.TypeVar tvar_id_0
+  let tvar_0 : T.ty = T.TypeVar tvar_id_0
   let cgvar_id_0 = T.ConstGenericVarId.of_int 0
   let cgvar_0 : T.const_generic = T.ConstGenericVar cgvar_id_0
 
@@ -49,36 +49,35 @@ module Sig = struct
   let region_param_0 : T.region_var = { T.index = rvar_id_0; name = Some "'a" }
 
   (** Region group: [{ parent={}; regions:{'a of id 0} }] *)
-  let region_group_0 : T.region_var_group =
+  let region_group_0 : T.region_group =
     { T.id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
 
   (** Type parameter [T] of id 0 *)
   let type_param_0 : T.type_var = { T.index = tvar_id_0; name = "T" }
 
-  let usize_ty : T.sty = T.Literal (Integer Usize)
+  let usize_ty : T.ty = T.TLiteral (TInteger Usize)
 
   (** Const generic parameter [const N : usize] of id 0 *)
   let cg_param_0 : T.const_generic_var =
-    { T.index = cgvar_id_0; name = "N"; ty = Integer Usize }
+    { T.index = cgvar_id_0; name = "N"; ty = TInteger Usize }
 
   let empty_const_generic_params : T.const_generic_var list = []
 
-  let mk_generic_args regions types const_generics : T.sgeneric_args =
+  let mk_generic_args regions types const_generics : T.generic_args =
     { regions; types; const_generics; trait_refs = [] }
 
   let mk_generic_params regions types const_generics : T.generic_params =
     { regions; types; const_generics; trait_clauses = [] }
 
-  let mk_ref_ty (r : T.RegionVarId.id T.region) (ty : T.sty) (is_mut : bool) :
-      T.sty =
+  let mk_ref_ty (r : T.region) (ty : T.ty) (is_mut : bool) : T.ty =
     let ref_kind = if is_mut then T.Mut else T.Shared in
     mk_ref_ty r ty ref_kind
 
-  let mk_array_ty (ty : T.sty) (cg : T.const_generic) : T.sty =
-    Adt (Assumed Array, mk_generic_args [] [ ty ] [ cg ])
+  let mk_array_ty (ty : T.ty) (cg : T.const_generic) : T.ty =
+    TAdt (TAssumed TArray, mk_generic_args [] [ ty ] [ cg ])
 
-  let mk_slice_ty (ty : T.sty) : T.sty =
-    Adt (Assumed Slice, mk_generic_args [] [ ty ] [])
+  let mk_slice_ty (ty : T.ty) : T.ty =
+    TAdt (TAssumed TSlice, mk_generic_args [] [ ty ] [])
 
   let mk_sig generics regions_hierarchy inputs output : A.fun_sig =
     let preds : T.predicates =
@@ -125,8 +124,8 @@ module Sig = struct
       borrow.
    *)
   let mk_array_slice_borrow_sig (cgs : T.const_generic_var list)
-      (input_ty : T.TypeVarId.id -> T.sty) (index_ty : T.sty option)
-      (output_ty : T.TypeVarId.id -> T.sty) (is_mut : bool) : A.fun_sig =
+      (input_ty : T.TypeVarId.id -> T.ty) (index_ty : T.ty option)
+      (output_ty : T.TypeVarId.id -> T.ty) (is_mut : bool) : A.fun_sig =
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] cgs (* <'a, T> *)
     in

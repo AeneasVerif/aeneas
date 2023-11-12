@@ -105,13 +105,13 @@ let literal_to_typed_value (ty : PV.literal_type) (cv : V.literal) :
       ^ Print.PrimitiveValues.literal_to_string cv));
   match (ty, cv) with
   (* Scalar, boolean... *)
-  | PV.Bool, Bool v -> { V.value = V.Literal (Bool v); ty = T.Literal ty }
-  | Char, Char v -> { V.value = V.Literal (Char v); ty = T.Literal ty }
-  | Integer int_ty, PV.Scalar v ->
+  | PV.TBool, VBool v -> { V.value = V.VLiteral (VBool v); ty = T.TLiteral ty }
+  | TChar, VChar v -> { V.value = V.VLiteral (VChar v); ty = T.TLiteral ty }
+  | TInteger int_ty, PV.VScalar v ->
       (* Check the type and the ranges *)
       assert (int_ty = v.int_ty);
       assert (check_scalar_value_in_range v);
-      { V.value = V.Literal (PV.Scalar v); ty = T.Literal ty }
+      { V.value = V.VLiteral (PV.VScalar v); ty = T.TLiteral ty }
   (* Remaining cases (invalid) *)
   | _, _ -> raise (Failure "Improperly typed constant value")
 
@@ -138,17 +138,17 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
    * the fact that we have exhaustive matches below makes very obvious the cases
    * in which we need to fail *)
   match v.V.value with
-  | V.Literal _ -> (ctx, v)
-  | V.Adt av ->
+  | V.VLiteral _ -> (ctx, v)
+  | V.VAdt av ->
       (* Sanity check *)
       (match v.V.ty with
-      | T.Adt (T.Assumed T.Box, _) ->
+      | T.TAdt (T.TAssumed T.TBox, _) ->
           raise (Failure "Can't copy an assumed value other than Option")
-      | T.Adt (T.AdtId _, _) as ty ->
+      | T.TAdt (T.AdtId _, _) as ty ->
           assert (allow_adt_copy || ty_is_primitively_copyable ty)
-      | T.Adt (T.Tuple, _) -> () (* Ok *)
-      | T.Adt
-          ( T.Assumed (Slice | T.Array),
+      | T.TAdt (T.Tuple, _) -> () (* Ok *)
+      | T.TAdt
+          ( T.TAssumed (TSlice | T.TArray),
             {
               regions = [];
               types = [ ty ];
@@ -162,7 +162,7 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
           (copy_value allow_adt_copy config)
           ctx av.field_values
       in
-      (ctx, { v with V.value = V.Adt { av with field_values = fields } })
+      (ctx, { v with V.value = V.VAdt { av with field_values = fields } })
   | V.Bottom -> raise (Failure "Can't copy ⊥")
   | V.Borrow bc -> (
       (* We can only copy shared borrows *)
@@ -292,7 +292,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
                 List.find (fun (name, _) -> name = const_name) trait_decl.consts
               in
               (* Introduce a fresh symbolic value *)
-              let v = mk_fresh_symbolic_typed_value_from_ety V.TraitConst ty in
+              let v = mk_fresh_symbolic_typed_value V.TraitConst ty in
               (* Continue the evaluation *)
               let e = cf v ctx in
               (* We have to wrap the generated expression *)
@@ -304,7 +304,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
                        ( ctx0,
                          None,
                          value_as_symbolic v.value,
-                         SymbolicAst.TraitConstValue
+                         SymbolicAst.VaTraitConstValue
                            (trait_ref, generics, const_name),
                          e ))))
       | E.CVar vid -> (
@@ -329,7 +329,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
                    ( ctx0,
                      None,
                      value_as_symbolic v.value,
-                     SymbolicAst.ConstGenericValue vid,
+                     SymbolicAst.VaConstGenericValue vid,
                      e )))
       | E.CFnPtr _ -> raise (Failure "TODO"))
   | E.Copy p ->
@@ -421,21 +421,21 @@ let eval_unary_op_concrete (config : C.config) (unop : E.unop) (op : E.operand)
   (* Apply the unop *)
   let apply cf (v : V.typed_value) : m_fun =
     match (unop, v.V.value) with
-    | E.Not, V.Literal (Bool b) ->
-        cf (Ok { v with V.value = V.Literal (Bool (not b)) })
-    | E.Neg, V.Literal (PV.Scalar sv) -> (
+    | E.Not, V.VLiteral (VBool b) ->
+        cf (Ok { v with V.value = V.VLiteral (VBool (not b)) })
+    | E.Neg, V.VLiteral (PV.VScalar sv) -> (
         let i = Z.neg sv.PV.value in
         match mk_scalar sv.int_ty i with
         | Error _ -> cf (Error EPanic)
-        | Ok sv -> cf (Ok { v with V.value = V.Literal (PV.Scalar sv) }))
-    | E.Cast (E.CastInteger (src_ty, tgt_ty)), V.Literal (PV.Scalar sv) -> (
+        | Ok sv -> cf (Ok { v with V.value = V.VLiteral (PV.VScalar sv) }))
+    | E.Cast (E.CastInteger (src_ty, tgt_ty)), V.VLiteral (PV.VScalar sv) -> (
         assert (src_ty = sv.int_ty);
         let i = sv.PV.value in
         match mk_scalar tgt_ty i with
         | Error _ -> cf (Error EPanic)
         | Ok sv ->
-            let ty = T.Literal (Integer tgt_ty) in
-            let value = V.Literal (PV.Scalar sv) in
+            let ty = T.TLiteral (TInteger tgt_ty) in
+            let value = V.VLiteral (PV.VScalar sv) in
             cf (Ok { V.ty; value }))
     | _ -> raise (Failure "Invalid input for unop")
   in
@@ -452,9 +452,9 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
     let res_sv_id = C.fresh_symbolic_value_id () in
     let res_sv_ty =
       match (unop, v.V.ty) with
-      | E.Not, (T.Literal Bool as lty) -> lty
-      | E.Neg, (T.Literal (Integer _) as lty) -> lty
-      | E.Cast (E.CastInteger (_, tgt_ty)), _ -> T.Literal (Integer tgt_ty)
+      | E.Not, (T.TLiteral TBool as lty) -> lty
+      | E.Neg, (T.TLiteral (TInteger _) as lty) -> lty
+      | E.Cast (E.CastInteger (_, tgt_ty)), _ -> T.TLiteral (TInteger tgt_ty)
       | _ -> raise (Failure "Invalid input for unop")
     in
     let res_sv =
@@ -489,11 +489,11 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
     (* Equality/inequality check is primitive only for a subset of types *)
     assert (ty_is_primitively_copyable v1.ty);
     let b = v1 = v2 in
-    Ok { V.value = V.Literal (Bool b); ty = T.Literal Bool })
+    Ok { V.value = V.VLiteral (VBool b); ty = T.TLiteral TBool })
   else
     (* For the non-equality operations, the input values are necessarily scalars *)
     match (v1.V.value, v2.V.value) with
-    | V.Literal (PV.Scalar sv1), V.Literal (PV.Scalar sv2) -> (
+    | V.VLiteral (PV.VScalar sv1), V.VLiteral (PV.VScalar sv2) -> (
         (* There are binops which require the two operands to have the same
            type, and binops for which it is not the case.
            There are also binops which return booleans, and binops which
@@ -514,7 +514,7 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
                   raise (Failure "Unreachable")
             in
             Ok
-              ({ V.value = V.Literal (Bool b); ty = T.Literal Bool }
+              ({ V.value = V.VLiteral (VBool b); ty = T.TLiteral TBool }
                 : V.typed_value)
         | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd | E.BitOr
           -> (
@@ -543,8 +543,8 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
             | Ok sv ->
                 Ok
                   {
-                    V.value = V.Literal (PV.Scalar sv);
-                    ty = T.Literal (Integer sv1.int_ty);
+                    V.value = V.VLiteral (PV.VScalar sv);
+                    ty = T.TLiteral (TInteger sv1.int_ty);
                   })
         | E.Shl | E.Shr -> raise Unimplemented
         | E.Ne | E.Eq -> raise (Failure "Unreachable"))
@@ -580,19 +580,19 @@ let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
         assert (v1.ty = v2.ty);
         (* Equality/inequality check is primitive only for a subset of types *)
         assert (ty_is_primitively_copyable v1.ty);
-        T.Literal Bool)
+        T.TLiteral TBool)
       else
         (* Other operations: input types are integers *)
         match (v1.V.ty, v2.V.ty) with
-        | T.Literal (Integer int_ty1), T.Literal (Integer int_ty2) -> (
+        | T.TLiteral (TInteger int_ty1), T.TLiteral (TInteger int_ty2) -> (
             match binop with
             | E.Lt | E.Le | E.Ge | E.Gt ->
                 assert (int_ty1 = int_ty2);
-                T.Literal Bool
+                T.TLiteral TBool
             | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
             | E.BitOr ->
                 assert (int_ty1 = int_ty2);
-                T.Literal (Integer int_ty1)
+                T.TLiteral (TInteger int_ty1)
             | E.Shl | E.Shr -> raise Unimplemented
             | E.Ne | E.Eq -> raise (Failure "Unreachable"))
         | _ -> raise (Failure "Invalid inputs for binop")
@@ -670,7 +670,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
           | E.TwoPhaseMut -> T.Mut
           | _ -> raise (Failure "Unreachable")
         in
-        let rv_ty = T.Ref (T.Erased, v.ty, ref_kind) in
+        let rv_ty = T.Ref (T.RErased, v.ty, ref_kind) in
         let bc =
           match bkind with
           | E.Shared | E.Shallow ->
@@ -698,7 +698,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
        fun ctx ->
         (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
         let bid = C.fresh_borrow_id () in
-        let rv_ty = T.Ref (T.Erased, v.ty, Mut) in
+        let rv_ty = T.Ref (T.RErased, v.ty, Mut) in
         let rv : V.typed_value =
           { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty }
         in
@@ -727,9 +727,9 @@ let eval_rvalue_aggregate (config : C.config)
         match type_id with
         | Tuple ->
             let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
-            let v = V.Adt { variant_id = None; field_values = values } in
+            let v = V.VAdt { variant_id = None; field_values = values } in
             let generics = TypesUtils.mk_generic_args [] tys [] [] in
-            let ty = T.Adt (T.Tuple, generics) in
+            let ty = T.TAdt (T.Tuple, generics) in
             let aggregated : V.typed_value = { V.value = v; ty } in
             (* Call the continuation *)
             cf aggregated ctx
@@ -750,11 +750,11 @@ let eval_rvalue_aggregate (config : C.config)
             let av : V.adt_value =
               { V.variant_id = opt_variant_id; V.field_values = values }
             in
-            let aty = T.Adt (T.AdtId def_id, generics) in
-            let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
+            let aty = T.TAdt (T.AdtId def_id, generics) in
+            let aggregated : V.typed_value = { V.value = VAdt av; ty = aty } in
             (* Call the continuation *)
             cf aggregated ctx
-        | Assumed _ -> raise (Failure "Unreachable"))
+        | TAssumed _ -> raise (Failure "Unreachable"))
     | E.AggregatedArray (ety, cg) -> (
         (* Sanity check: all the values have the proper type *)
         assert (List.for_all (fun (v : V.typed_value) -> v.V.ty = ety) values);
@@ -762,22 +762,20 @@ let eval_rvalue_aggregate (config : C.config)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
         assert (len = Z.of_int (List.length values));
         let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
-        let ty = T.Adt (T.Assumed T.Array, generics) in
+        let ty = T.TAdt (T.TAssumed T.TArray, generics) in
         (* In order to generate a better AST, we introduce a symbolic
            value equal to the array. The reason is that otherwise, the
            array we introduce here might be duplicated in the generated
            code: by introducing a symbolic value we introduce a let-binding
            in the generated code. *)
-        let saggregated =
-          mk_fresh_symbolic_typed_value_from_ety V.Aggregate ty
-        in
+        let saggregated = mk_fresh_symbolic_typed_value V.Aggregate ty in
         (* Call the continuation *)
         match cf saggregated ctx with
         | None -> None
         | Some e ->
             (* Introduce the symbolic value in the AST *)
             let sv = ValuesUtils.value_as_symbolic saggregated.value in
-            Some (SymbolicAst.IntroSymbolic (ctx, None, sv, Array values, e)))
+            Some (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)))
   in
   (* Compose and apply *)
   comp eval_ops compute cf

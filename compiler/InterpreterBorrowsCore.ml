@@ -88,24 +88,29 @@ let add_borrow_or_abs_id_to_chain (msg : string) (id : borrow_or_abs_id)
 (** Helper function.
   
     This function allows to define in a generic way a comparison of **region types**.
-    See [projections_interesect] for instance.
-    
+    See [projections_intersect] for instance.
+
+    Important: the regions in the types mustn't be erased.
+
     [default]: default boolean to return, when comparing types with no regions
     [combine]: how to combine booleans
     [compare_regions]: how to compare regions
 
     TODO: is there a way of deriving such a comparison?
+    TODO: rename
  *)
 let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
-    (compare_regions : T.RegionId.id T.region -> T.RegionId.id T.region -> bool)
-    (ty1 : T.rty) (ty2 : T.rty) : bool =
+    (compare_regions : T.region -> T.region -> bool) (ty1 : T.rty) (ty2 : T.rty)
+    : bool =
   let compare = compare_rtys default combine compare_regions in
+  (* Sanity check - TODO: don't do this at every recursive call *)
+  assert (ty_is_rty ty1 && ty_is_rty ty2);
   (* Normalize the associated types *)
   match (ty1, ty2) with
-  | T.Literal lit1, T.Literal lit2 ->
+  | T.TLiteral lit1, T.TLiteral lit2 ->
       assert (lit1 = lit2);
       default
-  | T.Adt (id1, generics1), T.Adt (id2, generics2) ->
+  | T.TAdt (id1, generics1), T.TAdt (id2, generics2) ->
       assert (id1 = id2);
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
@@ -161,8 +166,8 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
   | _ ->
       log#lerror
         (lazy
-          ("compare_rtys: unexpected inputs:" ^ "\n- ty1: " ^ T.show_rty ty1
-         ^ "\n- ty2: " ^ T.show_rty ty2));
+          ("compare_rtys: unexpected inputs:" ^ "\n- ty1: " ^ T.show_ty ty1
+         ^ "\n- ty2: " ^ T.show_ty ty2));
       raise (Failure "Unreachable")
 
 (** Check if two different projections intersect. This is necessary when
@@ -183,6 +188,9 @@ let projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.Set.t) (ty2 : T.rty)
 
 (** Check if the first projection contains the second projection.
     We use this function when checking invariants.
+
+    The regions in the types shouldn't be erased (this function will raise an exception
+    otherwise).
 *)
 let projection_contains (ty1 : T.rty) (rset1 : T.RegionId.Set.t) (ty2 : T.rty)
     (rset2 : T.RegionId.Set.t) : bool =
@@ -264,21 +272,21 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
         | V.AIgnoredSharedLoan _ ->
             super#visit_aloan_content env lc
 
-      method! visit_Var env bv v =
+      method! visit_EBinding env bv v =
         assert (Option.is_none !abs_or_var);
         abs_or_var :=
           Some
             (match bv with
-            | VarBinder b -> VarId b.C.index
-            | DummyBinder id -> DummyVarId id);
-        super#visit_Var env bv v;
+            | BVar b -> VarId b.C.index
+            | BDummy id -> DummyVarId id);
+        super#visit_EBinding env bv v;
         abs_or_var := None
 
-      method! visit_Abs env abs =
+      method! visit_EAbs env abs =
         assert (Option.is_none !abs_or_var);
         if ek.enter_abs then (
           abs_or_var := Some (AbsId abs.V.abs_id);
-          super#visit_Abs env abs;
+          super#visit_EAbs env abs;
           abs_or_var := None)
         else ()
     end
@@ -921,6 +929,8 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
     
     Note that for sanity, this function checks that we update *at least* one
     projector of loans.
+
+    [proj_ty]: shouldn't contain erased regions.
         
     [subst]: takes as parameters the abstraction in which we perform the
     substitution and the list of given back values at the projector of
@@ -932,6 +942,8 @@ let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
     (proj_ty : T.rty) (sv : V.symbolic_value)
     (subst : V.abs -> (V.msymbolic_value * V.aproj) list -> V.aproj)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  (* *)
+  assert (ty_is_rty proj_ty);
   (* Small helpers for sanity checks *)
   let updated = ref false in
   let update abs local_given_back : V.aproj =

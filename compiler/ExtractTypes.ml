@@ -799,19 +799,19 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | None -> (
         (* No basename: we use the first letter of the type *)
         match ty with
-        | Adt (type_id, generics) -> (
+        | TAdt (type_id, generics) -> (
             match type_id with
             | Tuple ->
                 (* The "pair" case is frequent enough to have its special treatment *)
                 if List.length generics.types = 2 then "p" else "t"
-            | Assumed Result -> "r"
-            | Assumed Error -> ConstStrings.error_basename
-            | Assumed Fuel -> ConstStrings.fuel_basename
-            | Assumed Array -> "a"
-            | Assumed Slice -> "s"
-            | Assumed Str -> "s"
-            | Assumed State -> ConstStrings.state_basename
-            | Assumed (RawPtr _) -> "p"
+            | TAssumed Result -> "r"
+            | TAssumed Error -> ConstStrings.error_basename
+            | TAssumed Fuel -> ConstStrings.fuel_basename
+            | TAssumed Array -> "a"
+            | TAssumed Slice -> "s"
+            | TAssumed Str -> "s"
+            | TAssumed State -> ConstStrings.state_basename
+            | TAssumed (RawPtr _) -> "p"
             | AdtId adt_id ->
                 let def = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
                 (* Derive the var name from the last ident of the type name
@@ -826,8 +826,8 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             match !backend with
             | FStar -> "x" (* lacking inspiration here... *)
             | Coq | Lean | HOL4 -> "t" (* lacking inspiration here... *))
-        | Literal lty -> (
-            match lty with Bool -> "b" | Char -> "c" | Integer _ -> "i")
+        | TLiteral lty -> (
+            match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
         | Arrow _ -> "f"
         | TraitType (_, _, name) -> name_from_type_ident name)
   in
@@ -864,7 +864,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   let extract_literal (fmt : F.formatter) (inside : bool) (cv : literal) : unit
       =
     match cv with
-    | Scalar sv -> (
+    | VScalar sv -> (
         match !backend with
         | FStar -> F.pp_print_string fmt (Z.to_string sv.PV.value)
         | Coq | HOL4 | Lean ->
@@ -895,14 +895,14 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             | HOL4 -> ()
             | _ -> raise (Failure "Unreachable"));
             if print_brackets then F.pp_print_string fmt ")")
-    | Bool b ->
+    | VBool b ->
         let b =
           match !backend with
           | HOL4 -> if b then "T" else "F"
           | Coq | FStar | Lean -> if b then "true" else "false"
         in
         F.pp_print_string fmt b
-    | Char c -> (
+    | VChar c -> (
         match !backend with
         | HOL4 ->
             (* [#"a"] is a notation for [CHR 97] (97 is the ASCII code for 'a') *)
@@ -1130,9 +1130,9 @@ let extract_const_generic (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_literal_type (ctx : extraction_ctx) (fmt : F.formatter)
     (ty : literal_type) : unit =
   match ty with
-  | Bool -> F.pp_print_string fmt ctx.fmt.bool_name
-  | Char -> F.pp_print_string fmt ctx.fmt.char_name
-  | Integer int_ty -> F.pp_print_string fmt (ctx.fmt.int_name int_ty)
+  | TBool -> F.pp_print_string fmt ctx.fmt.bool_name
+  | TChar -> F.pp_print_string fmt ctx.fmt.char_name
+  | TInteger int_ty -> F.pp_print_string fmt (ctx.fmt.int_name int_ty)
 
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
@@ -1158,7 +1158,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (ty : ty) : unit =
   let extract_rec = extract_ty ctx fmt no_params_tys in
   match ty with
-  | Adt (type_id, generics) -> (
+  | TAdt (type_id, generics) -> (
       let has_params = generics <> empty_generic_args in
       match type_id with
       | Tuple ->
@@ -1181,7 +1181,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                 F.pp_print_space fmt ())
               (extract_rec true) generics.types;
             F.pp_print_string fmt ")")
-      | AdtId _ | Assumed _ -> (
+      | AdtId _ | TAssumed _ -> (
           (* HOL4 behaves differently. Where in Coq/FStar/Lean we would write:
              `tree a b`
 
@@ -1224,7 +1224,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
               let print_tys =
                 match type_id with
                 | AdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
-                | Assumed _ -> true
+                | TAssumed _ -> true
                 | _ -> raise (Failure "Unreachable")
               in
               if types <> [] && print_tys then (
@@ -1244,7 +1244,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                   (extract_trait_ref ctx fmt no_params_tys true)
                   trait_refs)))
   | TypeVar vid -> F.pp_print_string fmt (ctx_get_type_var vid ctx)
-  | Literal lty -> extract_literal_type ctx fmt lty
+  | TLiteral lty -> extract_literal_type ctx fmt lty
   | Arrow (arg_ty, ret_ty) ->
       if inside then F.pp_print_string fmt "(";
       extract_rec false arg_ty;

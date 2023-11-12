@@ -4,14 +4,14 @@ include Charon.LlbcAstUtils
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     fun_sig =
   match fun_id with
-  | Regular id -> (FunDeclId.Map.find id fun_decls).signature
-  | Assumed aid -> Assumed.get_assumed_fun_sig aid
+  | FRegular id -> (FunDeclId.Map.find id fun_decls).signature
+  | FAssumed aid -> Assumed.get_assumed_fun_sig aid
 
 let lookup_fun_name (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     Names.fun_name =
   match fun_id with
-  | Regular id -> (FunDeclId.Map.find id fun_decls).name
-  | Assumed aid -> Assumed.get_assumed_fun_name aid
+  | FRegular id -> (FunDeclId.Map.find id fun_decls).name
+  | FAssumed aid -> Assumed.get_assumed_fun_name aid
 
 (** Return the opaque declarations found in the crate, which are also *not builtin*.
 

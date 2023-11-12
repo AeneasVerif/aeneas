@@ -85,7 +85,7 @@ let prepare_ashared_loans (loop_id : V.LoopId.id option) : cm_fun =
   *)
   let absl =
     List.filter_map
-      (function C.Var _ | C.Frame -> None | C.Abs abs -> Some abs)
+      (function C.EBinding _ | C.EFrame -> None | C.EAbs abs -> Some abs)
       ctx.env
   in
   let absl_ids, absl_id_maps = compute_absl_ids absl in
@@ -107,7 +107,6 @@ let prepare_ashared_loans (loop_id : V.LoopId.id option) : cm_fun =
     (* Substitute the symbolic values and the region *)
     Subst.typed_value_subst_ids
       (fun r -> if T.RegionId.Set.mem r rids then nrid else r)
-      (fun x -> x)
       (fun x -> x)
       (fun x -> x)
       (fun id ->
@@ -163,14 +162,15 @@ let prepare_ashared_loans (loop_id : V.LoopId.id option) : cm_fun =
     assert (T.RegionId.Set.is_empty abs.ancestors_regions);
 
     (* Introduce the new abstraction for the shared values *)
-    let rty = ety_no_regions_to_rty sv.V.ty in
+    assert (ty_no_regions sv.V.ty);
+    let rty = sv.V.ty in
 
     (* Create the shared loan child *)
     let child_rty = rty in
     let child_av = mk_aignored child_rty in
 
     (* Create the shared loan *)
-    let loan_rty = T.Ref (T.Var nrid, rty, T.Shared) in
+    let loan_rty = T.Ref (T.RVar nrid, rty, T.Shared) in
     let loan_value =
       V.ALoan (V.ASharedLoan (V.BorrowId.Set.singleton nlid, nsv, child_av))
     in
@@ -304,7 +304,7 @@ let prepare_ashared_loans (loop_id : V.LoopId.id option) : cm_fun =
   in
 
   (* Add the abstractions *)
-  let fresh_absl = List.map (fun abs -> C.Abs abs) !fresh_absl in
+  let fresh_absl = List.map (fun abs -> C.EAbs abs) !fresh_absl in
   let env = List.append fresh_absl env in
   let ctx = { ctx with env } in
 
@@ -322,7 +322,7 @@ let prepare_ashared_loans (loop_id : V.LoopId.id option) : cm_fun =
              let sv =
                V.SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values
              in
-             SymbolicAst.IntroSymbolic (ctx, None, sv, SingleValue v, e))
+             SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
            e !sid_subst)
 
 let prepare_ashared_loans_no_synth (loop_id : V.LoopId.id) (ctx : C.eval_ctx) :
@@ -865,8 +865,8 @@ let compute_fp_ctx_symbolic_values (ctx : C.eval_ctx) (fp_ctx : C.eval_ctx) :
       List.filter
         (fun (ee : C.env_elem) ->
           match ee with
-          | C.Var _ | C.Frame -> false
-          | Abs abs -> V.AbstractionId.Set.mem abs.abs_id old_ids.aids)
+          | C.EBinding _ | C.EFrame -> false
+          | EAbs abs -> V.AbstractionId.Set.mem abs.abs_id old_ids.aids)
         ctx.env
     in
 

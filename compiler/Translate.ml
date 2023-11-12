@@ -61,7 +61,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
 
   (* Initialize the context *)
   let forward_sig =
-    RegularFunIdNotLoopMap.find (E.Regular def_id, None) fun_sigs
+    RegularFunIdNotLoopMap.find (E.FRegular def_id, None) fun_sigs
   in
   let sv_to_var = V.SymbolicValueId.Map.empty in
   let var_counter = Pure.VarId.generator_zero in
@@ -188,7 +188,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   in
 
   (* Translate the backward functions *)
-  let translate_backward (rg : T.region_var_group) : Pure.fun_decl =
+  let translate_backward (rg : T.region_group) : Pure.fun_decl =
     (* For the backward inputs/outputs initialization: we use the fact that
      * there are no nested borrows for now, and so that the region groups
      * can't have parents *)
@@ -200,7 +200,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
         (* Initialize the context - note that the ret_ty is not really
          * useful as we don't translate a body *)
         let backward_sg =
-          RegularFunIdNotLoopMap.find (Regular def_id, Some back_id) fun_sigs
+          RegularFunIdNotLoopMap.find (FRegular def_id, Some back_id) fun_sigs
         in
         let ctx = { ctx with bid = Some back_id; sg = backward_sg.sg } in
 
@@ -211,7 +211,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
            variables required by the backward function.
         *)
         let backward_sg =
-          RegularFunIdNotLoopMap.find (Regular def_id, Some back_id) fun_sigs
+          RegularFunIdNotLoopMap.find (FRegular def_id, Some back_id) fun_sigs
         in
         (* We need to ignore the forward inputs, and the state input (if there is) *)
         let backward_inputs =
@@ -298,7 +298,7 @@ let translate_crate_to_pure (crate : A.crate) :
   let assumed_sigs =
     List.map
       (fun (info : Assumed.assumed_fun_info) ->
-        ( E.Assumed info.fun_id,
+        ( E.FAssumed info.fun_id,
           List.map (fun _ -> None) info.fun_sig.inputs,
           info.fun_sig ))
       Assumed.assumed_fun_infos
@@ -314,7 +314,7 @@ let translate_crate_to_pure (crate : A.crate) :
                 (fun (v : A.var) -> v.name)
                 (LlbcAstUtils.fun_body_get_input_vars body)
         in
-        (E.Regular fdef.def_id, input_names, fdef.signature))
+        (E.FRegular fdef.def_id, input_names, fdef.signature))
       (A.FunDeclId.Map.values crate.functions)
   in
   let sigs = List.append assumed_sigs local_sigs in

@@ -77,9 +77,8 @@ let partial_type_info_to_type_decl_info (info : partial_type_info) :
 let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
   info.borrows_info
 
-let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
-    (infos : type_infos) (ty_info : partial_type_info) (ty : 'r ty) :
-    partial_type_info =
+let analyze_full_ty (updated : bool ref) (infos : type_infos)
+    (ty_info : partial_type_info) (ty : ty) : partial_type_info =
   (* Small utility *)
   let check_update_bool (original : bool) (nv : bool) : bool =
     if nv && not original then (
@@ -87,6 +86,7 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
       nv)
     else original
   in
+  let r_is_static (r : region) : bool = r = RStatic in
 
   (* Update a partial_type_info, while registering if we actually performed an update *)
   let update_ty_info (ty_info : partial_type_info)
@@ -119,9 +119,9 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
 
   (* The recursive function which explores the type *)
   let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
-      (ty : 'r ty) : partial_type_info =
+      (ty : ty) : partial_type_info =
     match ty with
-    | Literal _ | Never | TraitType _ -> ty_info
+    | TLiteral _ | Never | TraitType _ -> ty_info
     | TypeVar var_id -> (
         (* Update the information for the proper parameter, if necessary *)
         match ty_info.param_infos with
@@ -171,12 +171,12 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
     | RawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
         analyze expl_info ty_info rty
-    | Adt ((Tuple | Assumed (Box | Slice | Array | Str)), generics) ->
+    | TAdt ((Tuple | TAssumed (TBox | TSlice | TArray | TStr)), generics) ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze expl_info ty_info ty)
           ty_info generics.types
-    | Adt (AdtId adt_id, generics) ->
+    | TAdt (AdtId adt_id, generics) ->
         (* Lookup the information for this type definition *)
         let adt_info = TypeDeclId.Map.find adt_id infos in
         (* Update the type info with the information from the adt *)
@@ -255,7 +255,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
   if type_decl_is_opaque def then infos
   else
     (* Retrieve all the types of all the fields of all the variants *)
-    let fields_tys : sty list =
+    let fields_tys : ty list =
       match def.kind with
       | Struct fields -> List.map (fun f -> f.field_ty) fields
       | Enum variants ->
@@ -266,13 +266,12 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
       | Opaque -> raise (Failure "unreachable")
     in
     (* Explore the types and accumulate information *)
-    let r_is_static r = r = Static in
     let type_decl_info = TypeDeclId.Map.find def.def_id infos in
     let type_decl_info = type_decl_info_to_partial_type_info type_decl_info in
     let type_decl_info =
       List.fold_left
         (fun type_decl_info ty ->
-          analyze_full_ty r_is_static updated infos type_decl_info ty)
+          analyze_full_ty updated infos type_decl_info ty)
         type_decl_info fields_tys
     in
     let type_decl_info = partial_type_info_to_type_decl_info type_decl_info in
@@ -324,12 +323,11 @@ let analyze_type_declarations (type_decls : type_decl TypeDeclId.Map.t)
 (** Analyze a type to check whether it contains borrows, etc., provided
     we have already analyzed the type definitions in the context.
  *)
-let analyze_ty (infos : type_infos) (ty : 'r ty) : ty_info =
+let analyze_ty (infos : type_infos) (ty : ty) : ty_info =
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
-  let r_is_static _ = false in
   let ty_info = initialize_g_type_info None in
-  let ty_info = analyze_full_ty r_is_static updated infos ty_info ty in
+  let ty_info = analyze_full_ty updated infos ty_info ty in
   (* Convert the ty_info *)
   partial_type_info_to_ty_info ty_info

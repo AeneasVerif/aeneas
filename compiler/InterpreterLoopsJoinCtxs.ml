@@ -163,14 +163,14 @@ let collapse_ctx (loop_id : V.LoopId.id)
       (List.map
          (fun ee ->
            match ee with
-           | C.Abs _ | C.Frame | C.Var (VarBinder _, _) -> [ ee ]
-           | C.Var (DummyBinder id, v) ->
+           | C.EAbs _ | C.EFrame | C.EBinding (BVar _, _) -> [ ee ]
+           | C.EBinding (BDummy id, v) ->
                if is_fresh_did id then
                  let absl =
                    convert_value_to_abstractions abs_kind can_end
                      destructure_shared_values ctx0 v
                  in
-                 List.map (fun abs -> C.Abs abs) absl
+                 List.map (fun abs -> C.EAbs abs) absl
                else [ ee ])
          ctx0.env)
   in
@@ -436,14 +436,14 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (* Sanity check: there are no values/abstractions which should be in the prefix *)
     let check_valid (ee : C.env_elem) : unit =
       match ee with
-      | C.Var (C.VarBinder _, _) ->
+      | C.EBinding (C.BVar _, _) ->
           (* Variables are necessarily in the prefix *)
           raise (Failure "Unreachable")
-      | Var (C.DummyBinder did, _) ->
+      | EBinding (C.BDummy did, _) ->
           assert (not (C.DummyVarId.Set.mem did fixed_ids.dids))
-      | Abs abs ->
+      | EAbs abs ->
           assert (not (V.AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
-      | Frame ->
+      | EFrame ->
           (* This should have been eliminated *)
           raise (Failure "Unreachable")
     in
@@ -451,7 +451,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     List.iter check_valid env1;
     (* Concatenate the suffixes and append the abstractions introduced while
        joining the prefixes *)
-    let absl = List.map (fun abs -> C.Abs abs) (List.rev !nabs) in
+    let absl = List.map (fun abs -> C.EAbs abs) (List.rev !nabs) in
     List.concat [ env0; env1; absl ]
   in
 
@@ -466,12 +466,12 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   (* Rem.: this function raises exceptions *)
   let rec join_prefixes (env0 : C.env) (env1 : C.env) : C.env =
     match (env0, env1) with
-    | ( (C.Var (C.DummyBinder b0, v0) as var0) :: env0',
-        (C.Var (C.DummyBinder b1, v1) as var1) :: env1' ) ->
+    | ( (C.EBinding (C.BDummy b0, v0) as var0) :: env0',
+        (C.EBinding (C.BDummy b1, v1) as var1) :: env1' ) ->
         (* Debug *)
         log#ldebug
           (lazy
-            ("join_prefixes: DummyBinders:\n\n- fixed_ids:\n" ^ "\n"
+            ("join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
             ^ env_elem_to_string ctx var0
             ^ "\n\n- value1:\n"
@@ -486,17 +486,17 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
           assert (b0 = b1);
           let b = b0 in
           let v = M.match_typed_values ctx v0 v1 in
-          let var = C.Var (C.DummyBinder b, v) in
+          let var = C.EBinding (C.BDummy b, v) in
           (* Continue *)
           var :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)
           join_suffixes env0 env1
-    | ( (C.Var (C.VarBinder b0, v0) as var0) :: env0',
-        (C.Var (C.VarBinder b1, v1) as var1) :: env1' ) ->
+    | ( (C.EBinding (C.BVar b0, v0) as var0) :: env0',
+        (C.EBinding (C.BVar b1, v1) as var1) :: env1' ) ->
         (* Debug *)
         log#ldebug
           (lazy
-            ("join_prefixes: VarBinders:\n\n- fixed_ids:\n" ^ "\n"
+            ("join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
             ^ env_elem_to_string ctx var0
             ^ "\n\n- value1:\n"
@@ -509,10 +509,10 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         (* Match the values *)
         let b = b0 in
         let v = M.match_typed_values ctx v0 v1 in
-        let var = C.Var (C.VarBinder b, v) in
+        let var = C.EBinding (C.BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
-    | (C.Abs abs0 as abs) :: env0', C.Abs abs1 :: env1' ->
+    | (C.EAbs abs0 as abs) :: env0', C.EAbs abs1 :: env1' ->
         (* Debug *)
         log#ldebug
           (lazy
@@ -537,7 +537,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (* Remove the frame delimiter (the first element of an environment is a frame delimiter) *)
     let env0, env1 =
       match (env0, env1) with
-      | C.Frame :: env0, C.Frame :: env1 -> (env0, env1)
+      | C.EFrame :: env0, C.EFrame :: env1 -> (env0, env1)
       | _ -> raise (Failure "Unreachable")
     in
 
@@ -546,7 +546,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         ("- env0:\n" ^ C.show_env env0 ^ "\n\n- env1:\n" ^ C.show_env env1
        ^ "\n\n"));
 
-    let env = List.rev (C.Frame :: join_prefixes env0 env1) in
+    let env = List.rev (C.EFrame :: join_prefixes env0 env1) in
 
     (* Construct the joined context - of course, the type, fun, etc. contexts
      * should be the same in the two contexts *)
@@ -560,9 +560,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       type_vars;
       const_generic_vars;
       const_generic_vars_map;
-      norm_trait_etypes;
-      norm_trait_rtypes;
-      norm_trait_stypes;
+      norm_trait_types;
       env = _;
       ended_regions = ended_regions0;
     } =
@@ -578,9 +576,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       type_vars = _;
       const_generic_vars = _;
       const_generic_vars_map = _;
-      norm_trait_etypes = _;
-      norm_trait_rtypes = _;
-      norm_trait_stypes = _;
+      norm_trait_types = _;
       env = _;
       ended_regions = ended_regions1;
     } =
@@ -598,9 +594,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         type_vars;
         const_generic_vars;
         const_generic_vars_map;
-        norm_trait_etypes;
-        norm_trait_rtypes;
-        norm_trait_stypes;
+        norm_trait_types;
         env;
         ended_regions;
       }
@@ -651,7 +645,6 @@ let refresh_abs (old_abs : V.AbstractionId.Set.t) (ctx : C.eval_ctx) :
   in
   let env =
     Subst.env_subst_ids
-      (fun x -> x)
       (fun x -> x)
       (fun x -> x)
       (fun x -> x)

@@ -301,8 +301,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               if nv.V.ty <> expected_ty then (
                 log#serror
                   ("give_back_value: improper type:\n- expected: "
-                 ^ ety_to_string ctx ty ^ "\n- received: "
-                 ^ ety_to_string ctx nv.V.ty);
+                 ^ PA.ty_to_string ctx ty ^ "\n- received: "
+                  ^ PA.ty_to_string ctx nv.V.ty);
                 raise (Failure "Value given back doesn't have the proper type"));
               (* Replace *)
               set_replaced ();
@@ -426,12 +426,12 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
 
-      method! visit_Abs opt_abs abs =
+      method! visit_EAbs opt_abs abs =
         (* We remember in which abstraction we are before diving -
          * this is necessary for projecting values: we need to know
          * over which regions to project *)
         assert (Option.is_none opt_abs);
-        super#visit_Abs (Some abs) abs
+        super#visit_EAbs (Some abs) abs
     end
   in
 
@@ -447,7 +447,7 @@ let give_back_symbolic_value (_config : C.config)
     (proj_regions : T.RegionId.Set.t) (proj_ty : T.rty) (sv : V.symbolic_value)
     (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Sanity checks *)
-  assert (sv.sv_id <> nsv.sv_id);
+  assert (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty);
   (match nsv.sv_kind with
   | V.SynthInputGivenBack | SynthRetGivenBack | FunCallGivenBack | LoopGivenBack
     ->
@@ -554,8 +554,8 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
               if nv.V.ty <> expected_ty then (
                 log#serror
                   ("give_back_avalue_to_same_abstraction: improper type:\n\
-                    - expected: " ^ rty_to_string ctx ty ^ "\n- received: "
-                 ^ rty_to_string ctx nv.V.ty);
+                    - expected: " ^ PA.ty_to_string ctx ty ^ "\n- received: "
+                  ^ PA.ty_to_string ctx nv.V.ty);
                 raise (Failure "Value given back doesn't have the proper type"));
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
@@ -1734,14 +1734,14 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
   and list_values (v : V.typed_value) : V.typed_avalue list * V.typed_value =
     let ty = v.V.ty in
     match v.V.value with
-    | Literal _ -> ([], v)
-    | Adt adt ->
+    | VLiteral _ -> ([], v)
+    | VAdt adt ->
         let avll, field_values =
           List.split (List.map list_values adt.field_values)
         in
         let avl = List.concat avll in
         let adt = { adt with V.field_values } in
-        (avl, { v with V.value = Adt adt })
+        (avl, { v with V.value = VAdt adt })
     | Bottom -> raise (Failure "Unreachable")
     | Borrow _ ->
         (* We don't support nested borrows for now *)
@@ -1750,9 +1750,9 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
         match lc with
         | SharedLoan (bids, sv) ->
             let avl, sv = list_values sv in
-            if destructure_shared_values then
+            if destructure_shared_values then (
               (* Rem.: the shared value can't contain loans nor borrows *)
-              let rty = ety_no_regions_to_rty ty in
+              assert (ty_no_regions ty);
               let av : V.typed_avalue =
                 assert (not (value_has_loans_or_borrows ctx sv.V.value));
                 (* We introduce fresh ids for the symbolic values *)
@@ -1771,12 +1771,12 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
                 let sv = mk_value_with_fresh_sids sv in
                 (* Create the new avalue *)
                 let value =
-                  V.ALoan (V.ASharedLoan (bids, sv, mk_aignored rty))
+                  V.ALoan (V.ASharedLoan (bids, sv, mk_aignored ty))
                 in
-                { V.value; ty = rty }
+                { V.value; ty }
               in
               let avl = List.append [ av ] avl in
-              (avl, sv)
+              (avl, sv))
             else (avl, { v with V.value = V.Loan (V.SharedLoan (bids, sv)) })
         | MutLoan _ -> raise (Failure "Unreachable"))
     | Symbolic _ ->
@@ -1842,12 +1842,12 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
 
     let ty = v.V.ty in
     match v.V.value with
-    | V.Literal _ -> ([], v)
+    | V.VLiteral _ -> ([], v)
     | V.Bottom ->
         (* Can happen: we *do* convert dummy values to abstractions, and dummy
            values can contain bottoms *)
         ([], v)
-    | V.Adt adt ->
+    | V.VAdt adt ->
         (* Two cases, depending on whether we have to group all the borrows/loans
            inside one abstraction or not *)
         let avl, field_values =
@@ -1879,16 +1879,17 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             ([], field_values)
         in
         let adt = { adt with field_values } in
-        (avl, { v with V.value = V.Adt adt })
+        (avl, { v with V.value = V.VAdt adt })
     | V.Borrow bc -> (
         let _, ref_ty, kind = ty_as_ref ty in
+        assert (ty_no_regions ref_ty);
         (* Sanity check *)
         assert allow_borrows;
         (* Convert the borrow content *)
         match bc with
         | SharedBorrow bid ->
-            let ref_ty = ety_no_regions_to_rty ref_ty in
-            let ty = T.Ref (T.Var r_id, ref_ty, kind) in
+            assert (ty_no_regions ref_ty);
+            let ty = T.Ref (T.RVar r_id, ref_ty, kind) in
             let value = V.ABorrow (V.ASharedBorrow bid) in
             ([ { V.value; ty } ], v)
         | MutBorrow (bid, bv) ->
@@ -1896,8 +1897,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             (* We don't support nested borrows for now *)
             assert (not (value_has_borrows ctx bv.V.value));
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
-            let ref_ty = ety_no_regions_to_rty ref_ty in
-            let ty = T.Ref (T.Var r_id, ref_ty, kind) in
+            let ty = T.Ref (T.RVar r_id, ref_ty, kind) in
             let ignored = mk_aignored ref_ty in
             let av = V.ABorrow (V.AMutBorrow (bid, ignored)) in
             let av = { V.value = av; ty } in
@@ -1917,8 +1917,8 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             assert (not (value_has_borrows ctx sv.V.value));
             (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
             (* For avalues, a loan has the borrow type *)
-            let ty = ety_no_regions_to_rty ty in
-            let ty = mk_ref_ty (T.Var r_id) ty T.Shared in
+            assert (ty_no_regions ty);
+            let ty = mk_ref_ty (T.RVar r_id) ty T.Shared in
             let ignored = mk_aignored ty in
             (* Rem.: the shared value might contain loans *)
             let avl, sv = to_avalues false true true r_id sv in
@@ -1935,8 +1935,8 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
         | V.MutLoan bid ->
             (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
             (* For avalues, a loan has the borrow type *)
-            let ty = ety_no_regions_to_rty ty in
-            let ty = mk_ref_ty (T.Var r_id) ty T.Mut in
+            assert (ty_no_regions ty);
+            let ty = mk_ref_ty (T.RVar r_id) ty T.Mut in
             let ignored = mk_aignored ty in
             let av = V.ALoan (V.AMutLoan (bid, ignored)) in
             let av = { V.value = av; ty } in

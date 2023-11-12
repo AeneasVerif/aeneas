@@ -64,6 +64,8 @@ type mutability = Mut | Const [@@deriving show, ord]
       - [State]: the type of the state, when using state-error monads. Note that
         this state is opaque to Aeneas (the user can define it, or leave it as
         assumed)
+
+    TODO: add a prefix "T"
   *)
 type assumed_ty =
   | State
@@ -144,7 +146,7 @@ class virtual ['self] mapreduce_type_id_base =
       fun _ x -> (x, self#zero)
   end
 
-type type_id = AdtId of type_decl_id | Tuple | Assumed of assumed_ty
+type type_id = AdtId of type_decl_id | Tuple | TAssumed of assumed_ty
 [@@deriving
   show,
     ord,
@@ -190,7 +192,6 @@ class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] iter_type_id
     inherit! [_] T.iter_const_generic
-    inherit! [_] PV.iter_literal_type
     method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
     method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
     method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
@@ -207,7 +208,6 @@ class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] map_type_id
     inherit! [_] T.map_const_generic
-    inherit! [_] PV.map_literal_type
     method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
 
     method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id =
@@ -228,7 +228,6 @@ class virtual ['self] reduce_ty_base =
   object (self : 'self)
     inherit [_] reduce_type_id
     inherit! [_] T.reduce_const_generic
-    inherit! [_] PV.reduce_literal_type
     method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
 
     method visit_trait_decl_id : 'env -> trait_decl_id -> 'a =
@@ -249,7 +248,6 @@ class virtual ['self] mapreduce_ty_base =
   object (self : 'self)
     inherit [_] mapreduce_type_id
     inherit! [_] T.mapreduce_const_generic
-    inherit! [_] PV.mapreduce_literal_type
 
     method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
       fun _ x -> (x, self#zero)
@@ -270,7 +268,7 @@ class virtual ['self] mapreduce_ty_base =
   end
 
 type ty =
-  | Adt of type_id * generic_args
+  | TAdt of type_id * generic_args
       (** {!Adt} encodes ADTs and tuples and assumed types.
 
           TODO: what about the ended regions? (ADTs may be parameterized
@@ -279,7 +277,7 @@ type ty =
           such "partial" ADTs.
        *)
   | TypeVar of type_var_id
-  | Literal of literal_type
+  | TLiteral of literal_type
   | Arrow of ty * ty
   | TraitType of trait_ref * generic_args * string
       (** The string is for the name of the associated type *)

@@ -91,7 +91,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
           method! visit_Call env call =
             (match call.func.func with
-            | FunId (Regular id) ->
+            | FunId (FRegular id) ->
                 if FunDeclId.Set.mem id fun_ids then (
                   can_diverge := true;
                   is_rec := true)
@@ -100,7 +100,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                   self#may_fail info.can_fail;
                   stateful := !stateful || info.stateful;
                   can_diverge := !can_diverge || info.can_diverge
-            | FunId (Assumed id) ->
+            | FunId (FAssumed id) ->
                 (* None of the assumed functions can diverge nor are considered stateful *)
                 can_fail := !can_fail || Assumed.assumed_fun_can_fail id
             | TraitMethod _ ->

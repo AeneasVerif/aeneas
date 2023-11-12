@@ -22,7 +22,7 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
       (* "Regular" ADT *)
       let def = TypeDeclId.Map.find def_id type_decls in
       type_decl_get_instantiated_fields_types def variant_id generics
-  | Assumed aty -> (
+  | TAssumed aty -> (
       (* Assumed type *)
       match aty with
       | State ->
@@ -63,8 +63,8 @@ type tc_ctx = {
 
 let check_literal (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
-  | Integer int_ty, PV.Scalar sv -> assert (int_ty = sv.PV.int_ty)
-  | Bool, Bool _ | Char, Char _ -> ()
+  | TInteger int_ty, PV.VScalar sv -> assert (int_ty = sv.PV.int_ty)
+  | TBool, VBool _ | TChar, VChar _ -> ()
   | _ -> raise (Failure "Inconsistent type")
 
 let rec check_typed_pattern (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
@@ -156,7 +156,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
           let field_tys, adt_ty = destruct_arrows e.ty in
           assert (expected_field_tys = field_tys);
           match adt_ty with
-          | Adt (type_id, generics) ->
+          | TAdt (type_id, generics) ->
               assert (type_id = id.adt_id);
               assert (generics = qualif.generics)
           | _ -> raise (Failure "Unreachable")))
@@ -174,7 +174,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       check_texpression ctx scrut;
       match switch_body with
       | If (e_then, e_else) ->
-          assert (scrut.ty = Literal Bool);
+          assert (scrut.ty = TLiteral TBool);
           assert (e_then.ty = e.ty);
           assert (e_else.ty = e.ty);
           check_texpression ctx e_then;
@@ -219,7 +219,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
               assert (expected_field_ty = fe.ty);
               check_texpression ctx fe)
             supd.updates
-      | Assumed Array ->
+      | TAssumed Array ->
           let expected_field_ty =
             Collections.List.to_cons_nil adt_generics.types
           in

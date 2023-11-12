@@ -12,20 +12,21 @@ open InterpreterBorrowsCore
 (** The local logger *)
 let log = L.projectors_log
 
+(** [ty] shouldn't contain erased regions *)
 let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
     (regions : T.RegionId.Set.t) (v : V.typed_value) (ty : T.rty) :
     V.abstract_shared_borrows =
-  (* Sanity check - TODO: move this elsewhere (here we perform the check at every
+  (* Sanity check - TODO: move those elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
-  assert (ety = v.V.ty);
+  assert (ty_is_rty ty && ety = v.V.ty);
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then []
   else
     match (v.V.value, ty) with
-    | V.Literal _, T.Literal _ -> []
-    | V.Adt adt, T.Adt (id, generics) ->
+    | V.VLiteral _, T.TLiteral _ -> []
+    | V.VAdt adt, T.TAdt (id, generics) ->
         (* Retrieve the types of the fields *)
         let field_types =
           Assoc.ctx_adt_value_get_inst_norm_field_rtypes ctx adt id generics
@@ -97,14 +98,14 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
-  assert (ety = v.V.ty);
+  assert (ty_is_rty ty && ety = v.V.ty);
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then { V.value = V.AIgnored; ty }
   else
     let value : V.avalue =
       match (v.V.value, ty) with
-      | V.Literal _, T.Literal _ -> V.AIgnored
-      | V.Adt adt, T.Adt (id, generics) ->
+      | V.VLiteral _, T.TLiteral _ -> V.AIgnored
+      | V.VAdt adt, T.TAdt (id, generics) ->
           (* Retrieve the types of the fields *)
           let field_types =
             Assoc.ctx_adt_value_get_inst_norm_field_rtypes ctx adt id generics
@@ -208,10 +209,10 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
             let rset2 = regions in
             log#ldebug
               (lazy
-                ("projections_intersect:" ^ "\n- ty1: " ^ rty_to_string ctx ty1
-               ^ "\n- rset1: "
+                ("projections_intersect:" ^ "\n- ty1: "
+               ^ PA.ty_to_string ctx ty1 ^ "\n- rset1: "
                 ^ T.RegionId.Set.to_string None rset1
-                ^ "\n- ty2: " ^ rty_to_string ctx ty2 ^ "\n- rset2: "
+                ^ "\n- ty2: " ^ PA.ty_to_string ctx ty2 ^ "\n- rset2: "
                 ^ T.RegionId.Set.to_string None rset2
                 ^ "\n"));
             assert (not (projections_intersect ty1 rset1 ty2 rset2)));
@@ -221,7 +222,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
             (lazy
               ("apply_proj_borrows: unexpected inputs:\n- input value: "
               ^ typed_value_to_string ctx v
-              ^ "\n- proj rty: " ^ rty_to_string ctx ty));
+              ^ "\n- proj rty: " ^ PA.ty_to_string ctx ty));
           raise (Failure "Unreachable")
     in
     { V.value; V.ty }
@@ -231,12 +232,12 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
   let ty = Subst.erase_regions sv.V.sv_ty in
   let value =
     match see with
-    | SeLiteral cv -> V.Literal cv
+    | SeLiteral cv -> V.VLiteral cv
     | SeAdt (variant_id, field_values) ->
         let field_values =
           List.map mk_typed_value_from_symbolic_value field_values
         in
-        V.Adt { V.variant_id; V.field_values }
+        V.VAdt { V.variant_id; V.field_values }
     | SeMutRef (_, _) | SeSharedRef (_, _) ->
         raise (Failure "Unexpected symbolic reference expansion")
   in
@@ -265,10 +266,10 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
    * contain regions which we will project *)
   assert (ty_has_regions_in_set regions original_sv_ty);
   (* Match *)
-  let (value, ty) : V.avalue * T.rty =
+  let (value, ty) : V.avalue * T.ty =
     match (see, original_sv_ty) with
-    | SeLiteral _, T.Literal _ -> (V.AIgnored, original_sv_ty)
-    | SeAdt (variant_id, field_values), T.Adt (_id, _generics) ->
+    | SeLiteral _, T.TLiteral _ -> (V.AIgnored, original_sv_ty)
+    | SeAdt (variant_id, field_values), T.TAdt (_id, _generics) ->
         (* Project over the field values *)
         let field_values =
           List.map
@@ -493,9 +494,11 @@ let prepare_reborrows (config : C.config) (allow_reborrows : bool) :
   in
   (fresh_reborrow, apply_registered_reborrows)
 
+(** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (config : C.config) (ctx : C.eval_ctx)
     (regions : T.RegionId.Set.t) (ancestors_regions : T.RegionId.Set.t)
     (v : V.typed_value) (ty : T.rty) : C.eval_ctx * V.typed_avalue =
+  assert (ty_is_rty ty);
   let check_symbolic_no_ended = true in
   let allow_reborrows = true in
   (* Prepare the reborrows *)

@@ -46,7 +46,7 @@ let normalize_inst_fun_sig (ctx : C.eval_ctx) (sg : A.inst_fun_sig) :
   let { A.regions_hierarchy = _; trait_type_constraints = _; inputs; output } =
     sg
   in
-  let norm = AssociatedTypes.ctx_normalize_rty ctx in
+  let norm = AssociatedTypes.ctx_normalize_ty ctx in
   let inputs = List.map norm inputs in
   let output = norm output in
   { sg with A.inputs; output }
@@ -70,7 +70,7 @@ let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
   in
   let generics =
     let { T.regions; types; const_generics; trait_clauses } = sg.generics in
-    let regions = List.map (fun _ -> T.Erased) regions in
+    let regions = List.map (fun _ -> T.RErased) regions in
     let types = List.map (fun (v : T.type_var) -> T.TypeVar v.T.index) types in
     let const_generics =
       List.map
@@ -110,9 +110,8 @@ let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
        ]}
     *)
     (* We will need to update the trait refs map while we perform the instantiations *)
-    let mk_tr_subst
-        (tr_map : T.erased_region T.trait_instance_id T.TraitClauseId.Map.t)
-        clause_id : T.erased_region T.trait_instance_id =
+    let mk_tr_subst (tr_map : T.trait_instance_id T.TraitClauseId.Map.t)
+        clause_id : T.trait_instance_id =
       match T.TraitClauseId.Map.find_opt clause_id tr_map with
       | Some tr -> tr
       | None -> raise (Failure "Local trait clause not found")
@@ -185,7 +184,7 @@ let initialize_symbolic_context_for_fun (ctx : C.decls_ctx) (fdef : A.fun_decl)
   let sg = fdef.signature in
   (* Create the context *)
   let region_groups =
-    List.map (fun (g : T.region_var_group) -> g.id) sg.regions_hierarchy
+    List.map (fun (g : T.region_group) -> g.id) sg.regions_hierarchy
   in
   let ctx =
     initialize_eval_context ctx region_groups sg.generics.types

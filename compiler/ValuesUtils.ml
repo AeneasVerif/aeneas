@@ -9,13 +9,27 @@ include PrimitiveValuesUtils
 exception FoundSymbolicValue of symbolic_value
 
 let mk_unit_value : typed_value =
-  { value = Adt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
+  { value = VAdt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
-let mk_typed_value (ty : ety) (value : value) : typed_value = { value; ty }
-let mk_typed_avalue (ty : rty) (value : avalue) : typed_avalue = { value; ty }
-let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
-let mk_abottom (ty : rty) : typed_avalue = { value = ABottom; ty }
-let mk_aignored (ty : rty) : typed_avalue = { value = AIgnored; ty }
+let mk_typed_value (ty : ty) (value : value) : typed_value =
+  assert (ty_is_ety ty);
+  { value; ty }
+
+let mk_typed_avalue (ty : ty) (value : avalue) : typed_avalue =
+  assert (ty_is_rty ty);
+  { value; ty }
+
+let mk_bottom (ty : ty) : typed_value =
+  assert (ty_is_ety ty);
+  { value = Bottom; ty }
+
+let mk_abottom (ty : ty) : typed_avalue =
+  assert (ty_is_rty ty);
+  { value = ABottom; ty }
+
+let mk_aignored (ty : ty) : typed_avalue =
+  assert (ty_is_rty ty);
+  { value = AIgnored; ty }
 
 let value_as_symbolic (v : value) : symbolic_value =
   match v with Symbolic v -> v | _ -> raise (Failure "Unexpected")
@@ -23,7 +37,7 @@ let value_as_symbolic (v : value) : symbolic_value =
 (** Box a value *)
 let mk_box_value (v : typed_value) : typed_value =
   let box_ty = mk_box_ty v.ty in
-  let box_v = Adt { variant_id = None; field_values = [ v ] } in
+  let box_v = VAdt { variant_id = None; field_values = [ v ] } in
   mk_typed_value box_ty box_v
 
 let is_bottom (v : value) : bool = match v with Bottom -> true | _ -> false
@@ -46,7 +60,7 @@ let is_unit (v : typed_value) : bool =
   ty_is_unit v.ty
   &&
   match v.value with
-  | Adt av -> av.variant_id = None && av.field_values = []
+  | VAdt av -> av.variant_id = None && av.field_values = []
   | _ -> false
 
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value -

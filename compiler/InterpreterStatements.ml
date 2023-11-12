@@ -149,7 +149,7 @@ let eval_assertion_concrete (config : C.config) (assertion : A.assertion) :
   let eval_assert cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match v.value with
-    | Literal (Bool b) ->
+    | VLiteral (VBool b) ->
         (* Branch *)
         if b = assertion.expected then cf Unit ctx else cf Panic ctx
     | _ ->
@@ -172,26 +172,26 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
   (* Evaluate the assertion *)
   let eval_assert cf (v : V.typed_value) : m_fun =
    fun ctx ->
-    assert (v.ty = T.Literal PV.Bool);
+    assert (v.ty = T.TLiteral PV.TBool);
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
      * know the concrete value of the boolean we test, we use this value
      * even if we are in symbolic mode. Note that this case should be
      * extremely rare... *)
     match v.value with
-    | Literal (Bool _) ->
+    | VLiteral (VBool _) ->
         (* Delegate to the concrete evaluation function *)
         eval_assertion_concrete config assertion cf ctx
     | Symbolic sv ->
         assert (config.mode = C.SymbolicMode);
-        assert (sv.V.sv_ty = T.Literal PV.Bool);
+        assert (sv.V.sv_ty = T.TLiteral PV.TBool);
         (* We continue the execution as if the test had succeeded, and thus
          * perform the symbolic expansion: sv ~~> true.
          * We will of course synthesize an assertion in the generated code
          * (see below). *)
         let ctx =
           apply_symbolic_expansion_non_borrow config sv
-            (V.SeLiteral (PV.Bool true)) ctx
+            (V.SeLiteral (PV.VBool true)) ctx
         in
         (* Continue *)
         let expr = cf Unit ctx in
@@ -232,7 +232,7 @@ let set_discriminant (config : C.config) (p : E.place)
   let update_value cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match (v.V.ty, v.V.value) with
-    | T.Adt ((T.AdtId _ as type_id), generics), V.Adt av -> (
+    | T.TAdt ((T.AdtId _ as type_id), generics), V.VAdt av -> (
         (* There are two situations:
            - either the discriminant is already the proper one (in which case we
              don't do anything)
@@ -254,7 +254,7 @@ let set_discriminant (config : C.config) (p : E.place)
                 | _ -> raise (Failure "Unreachable")
               in
               assign_to_place config bottom_v p (cf Unit) ctx)
-    | T.Adt ((T.AdtId _ as type_id), generics), V.Bottom ->
+    | T.TAdt ((T.AdtId _ as type_id), generics), V.Bottom ->
         let bottom_v =
           match type_id with
           | T.AdtId def_id ->
@@ -273,8 +273,8 @@ let set_discriminant (config : C.config) (p : E.place)
          * setting a discriminant should only be used to initialize a value,
          * or reset an already initialized value, really. *)
         raise (Failure "Unexpected value")
-    | _, (V.Adt _ | V.Bottom) -> raise (Failure "Inconsistent state")
-    | _, (V.Literal _ | V.Borrow _ | V.Loan _) ->
+    | _, (V.VAdt _ | V.Bottom) -> raise (Failure "Inconsistent state")
+    | _, (V.VLiteral _ | V.Borrow _ | V.Loan _) ->
         raise (Failure "Unexpected value")
   in
   (* Compose and apply *)
@@ -282,7 +282,7 @@ let set_discriminant (config : C.config) (p : E.place)
 
 (** Push a frame delimiter in the context's environment *)
 let ctx_push_frame (ctx : C.eval_ctx) : C.eval_ctx =
-  { ctx with env = Frame :: ctx.env }
+  { ctx with env = EFrame :: ctx.env }
 
 (** Push a frame delimiter in the context's environment *)
 let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
@@ -291,7 +291,7 @@ let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
     instantiation of an assumed function.
  *)
 let get_assumed_function_return_type (ctx : C.eval_ctx) (fid : A.assumed_fun_id)
-    (generics : T.egeneric_args) : T.ety =
+    (generics : T.generic_args) : T.ety =
   assert (generics.trait_refs = []);
   (* [Box::free] has a special treatment *)
   match fid with
@@ -305,17 +305,16 @@ let get_assumed_function_return_type (ctx : C.eval_ctx) (fid : A.assumed_fun_id)
       let sg = Assumed.get_assumed_fun_sig fid in
       (* Instantiate the return type  *)
       (* There shouldn't be any reference to Self *)
-      let tr_self : T.erased_region T.trait_instance_id =
-        T.UnknownTrait __FUNCTION__
-      in
+      let tr_self : T.trait_instance_id = T.UnknownTrait __FUNCTION__ in
+      let generics = Subst.generic_args_erase_regions generics in
       let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
-        Subst.make_esubst_from_generics sg.generics generics tr_self
+        Subst.make_subst_from_generics sg.generics generics tr_self
       in
       let ty =
         Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
           sg.output
       in
-      Assoc.ctx_normalize_ety ctx ty
+      Assoc.ctx_normalize_erase_ty ctx ty
 
 let move_return_value (config : C.config) (pop_return_value : bool)
     (cf : V.typed_value option -> m_fun) : m_fun =
@@ -337,12 +336,12 @@ let pop_frame (config : C.config) (pop_return_value : bool)
   let rec list_locals env =
     match env with
     | [] -> raise (Failure "Inconsistent environment")
-    | C.Abs _ :: env -> list_locals env
-    | C.Var (DummyBinder _, _) :: env -> list_locals env
-    | C.Var (VarBinder var, _) :: env ->
+    | C.EAbs _ :: env -> list_locals env
+    | C.EBinding (BDummy _, _) :: env -> list_locals env
+    | C.EBinding (BVar var, _) :: env ->
         let locals = list_locals env in
         if var.index <> ret_vid then var.index :: locals else locals
-    | C.Frame :: _ -> []
+    | C.EFrame :: _ -> []
   in
   let locals : E.VarId.id list = list_locals ctx.env in
   (* Debug *)
@@ -392,11 +391,11 @@ let pop_frame (config : C.config) (pop_return_value : bool)
   let rec pop env =
     match env with
     | [] -> raise (Failure "Inconsistent environment")
-    | C.Abs abs :: env -> C.Abs abs :: pop env
-    | C.Var (_, v) :: env ->
+    | C.EAbs abs :: env -> C.EAbs abs :: pop env
+    | C.EBinding (_, v) :: env ->
         let vid = C.fresh_dummy_var_id () in
-        C.Var (C.DummyBinder vid, v) :: pop env
-    | C.Frame :: env -> (* Stop here *) env
+        C.EBinding (C.BDummy vid, v) :: pop env
+    | C.EFrame :: env -> (* Stop here *) env
   in
   let cf_pop cf (ret_value : V.typed_value option) : m_fun =
    fun ctx ->
@@ -416,7 +415,7 @@ let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
   comp cf_pop cf_assign
 
 (** Auxiliary function - see {!eval_assumed_function_call} *)
-let eval_box_new_concrete (config : C.config) (generics : T.egeneric_args) :
+let eval_box_new_concrete (config : C.config) (generics : T.generic_args) :
     cm_fun =
  fun cf ctx ->
   (* Check and retrieve the arguments *)
@@ -426,9 +425,9 @@ let eval_box_new_concrete (config : C.config) (generics : T.egeneric_args) :
   | ( [],
       [ boxed_ty ],
       [],
-      Var (VarBinder input_var, input_value)
-      :: Var (_ret_var, _)
-      :: C.Frame :: _ ) ->
+      EBinding (BVar input_var, input_value)
+      :: EBinding (_ret_var, _)
+      :: C.EFrame :: _ ) ->
       (* Required type checking *)
       assert (input_value.V.ty = boxed_ty);
 
@@ -441,9 +440,9 @@ let eval_box_new_concrete (config : C.config) (generics : T.egeneric_args) :
       let cf_create cf (moved_input_value : V.typed_value) : m_fun =
         (* Create the box value *)
         let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
-        let box_ty = T.Adt (T.Assumed T.Box, generics) in
+        let box_ty = T.TAdt (T.TAssumed T.TBox, generics) in
         let box_v =
-          V.Adt { variant_id = None; field_values = [ moved_input_value ] }
+          V.VAdt { variant_id = None; field_values = [ moved_input_value ] }
         in
         let box_v = mk_typed_value box_ty box_v in
 
@@ -478,7 +477,7 @@ let eval_box_new_concrete (config : C.config) (generics : T.egeneric_args) :
     It thus updates the box value (by calling {!drop_value}) and updates
     the destination (by setting it to [()]).
 *)
-let eval_box_free (config : C.config) (generics : T.egeneric_args)
+let eval_box_free (config : C.config) (generics : T.generic_args)
     (args : E.operand list) (dest : E.place) : cm_fun =
  fun cf ctx ->
   match (generics.regions, generics.types, generics.const_generics, args) with
@@ -657,7 +656,7 @@ let create_push_abstractions_from_abs_region_groups
     (* Add the avalues to the abstraction *)
     let abs = { abs with avalues } in
     (* Insert the abstraction in the context *)
-    let ctx = { ctx with env = Abs abs :: ctx.env } in
+    let ctx = { ctx with env = EAbs abs :: ctx.env } in
     (* Return *)
     ctx
   in
@@ -768,7 +767,7 @@ and eval_global (config : C.config) (dest : E.place) (gid : LA.GlobalDeclId.id)
       (* Treat the evaluation of the global as a call to the global body (without arguments) *)
       let func =
         {
-          E.func = FunId (Regular global.body_id);
+          E.func = FunId (FRegular global.body_id);
           generics = TypesUtils.mk_empty_generic_args;
           trait_and_method_generic_args = None;
         }
@@ -779,9 +778,8 @@ and eval_global (config : C.config) (dest : E.place) (gid : LA.GlobalDeclId.id)
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      let sval =
-        mk_fresh_symbolic_value V.Global (ety_no_regions_to_rty global.ty)
-      in
+      assert (ty_no_regions global.ty);
+      let sval = mk_fresh_symbolic_value V.Global global.ty in
       let cc =
         assign_to_place config (mk_typed_value_from_symbolic_value sval) dest
       in
@@ -810,7 +808,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
         let cf_if (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
          fun ctx ->
           match op_v.value with
-          | V.Literal (PV.Bool b) ->
+          | V.VLiteral (PV.VBool b) ->
               (* Evaluate the if and the branch body *)
               let cf_branch cf : m_fun =
                 (* Branch *)
@@ -838,7 +836,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
         let cf_switch (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
          fun ctx ->
           match op_v.value with
-          | V.Literal (PV.Scalar sv) ->
+          | V.VLiteral (PV.VScalar sv) ->
               (* Evaluate the branch *)
               let cf_eval_branch cf =
                 (* Sanity check *)
@@ -893,7 +891,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
           let p_v = value_strip_shared_loans p_v in
           (* Match *)
           match p_v.value with
-          | V.Adt adt -> (
+          | V.VAdt adt -> (
               (* Evaluate the discriminant *)
               let dv = Option.get adt.variant_id in
               (* Find the branch, evaluate and continue *)
@@ -931,9 +929,9 @@ and eval_function_call_concrete (config : C.config) (call : A.call) : st_cm_fun
     =
  fun cf ctx ->
   match call.func.func with
-  | FunId (Regular fid) ->
+  | FunId (FRegular fid) ->
       eval_transparent_function_call_concrete config fid call cf ctx
-  | FunId (Assumed fid) ->
+  | FunId (FAssumed fid) ->
       (* Continue - note that we do as if the function call has been successful,
        * by giving {!Unit} to the continuation, because we place us in the case
        * where we haven't panicked. Of course, the translation needs to take the
@@ -944,9 +942,9 @@ and eval_function_call_concrete (config : C.config) (call : A.call) : st_cm_fun
 and eval_function_call_symbolic (config : C.config) (call : A.call) : st_cm_fun
     =
   match call.func.func with
-  | FunId (Regular _) | TraitMethod _ ->
+  | FunId (FRegular _) | TraitMethod _ ->
       eval_transparent_function_call_symbolic config call
-  | FunId (Assumed fid) -> eval_assumed_function_call_symbolic config fid call
+  | FunId (FAssumed fid) -> eval_assumed_function_call_symbolic config fid call
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_transparent_function_call_concrete (config : C.config)
@@ -975,7 +973,7 @@ and eval_transparent_function_call_concrete (config : C.config)
     (* There shouldn't be any reference to Self *)
     let tr_self = T.UnknownTrait __FUNCTION__ in
     let subst =
-      Subst.make_esubst_from_generics def.A.signature.generics generics tr_self
+      Subst.make_subst_from_generics def.A.signature.generics generics tr_self
     in
     let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
@@ -1106,13 +1104,13 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
   *)
   let func, generics, def, inst_sg =
     match call.func.func with
-    | FunId (Regular fid) ->
+    | FunId (FRegular fid) ->
         let def = C.ctx_lookup_fun_decl ctx fid in
         log#ldebug
           (lazy
             ("fun call:\n- call: " ^ call_to_string ctx call
            ^ "\n- call.generics:\n"
-            ^ egeneric_args_to_string ctx call.func.generics
+            ^ PA.generic_args_to_string ctx call.func.generics
             ^ "\n- def.signature:\n"
             ^ fun_sig_to_string ctx def.A.signature));
         let tr_self = T.UnknownTrait __FUNCTION__ in
@@ -1120,7 +1118,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
           instantiate_fun_sig ctx call.func.generics tr_self def.A.signature
         in
         (call.func.func, call.func.generics, def, inst_sg)
-    | FunId (Assumed _) ->
+    | FunId (FAssumed _) ->
         (* Unreachable: must be a transparent function *)
         raise (Failure "Unreachable")
     | TraitMethod (trait_ref, method_name, _) -> (
@@ -1128,9 +1126,9 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
           (lazy
             ("trait method call:\n- call: " ^ call_to_string ctx call
            ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
-            ^ egeneric_args_to_string ctx call.func.generics
+            ^ PA.generic_args_to_string ctx call.func.generics
             ^ "\n- trait and method generics:\n"
-            ^ egeneric_args_to_string ctx
+            ^ PA.generic_args_to_string ctx
                 (Option.get call.func.trait_and_method_generic_args)));
         (* When instantiating, we need to group the generics for the trait ref
            and the method *)
@@ -1155,9 +1153,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                 (* This is a required method *)
                 let method_def = C.ctx_lookup_fun_decl ctx id in
                 (* Instantiate *)
-                let tr_self =
-                  T.TraitRef (etrait_ref_no_regions_to_gr_trait_ref trait_ref)
-                in
+                let tr_self = T.TraitRef trait_ref in
                 let inst_sg =
                   instantiate_fun_sig ctx generics tr_self
                     method_def.A.signature
@@ -1168,7 +1164,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                    which implements the method. In order to do this properly,
                    we also need to update the generics.
                 *)
-                let func = E.FunId (Regular id) in
+                let func = E.FunId (FRegular id) in
                 (func, generics, method_def, inst_sg)
             | None ->
                 (* If not found, lookup the methods provided by the trait *declaration*
@@ -1210,13 +1206,11 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                   (lazy
                     ("provided method call:" ^ "\n- method name: " ^ method_name
                    ^ "\n- all_generics:\n"
-                    ^ egeneric_args_to_string ctx all_generics
+                    ^ PA.generic_args_to_string ctx all_generics
                     ^ "\n- parent params info: "
                     ^ Print.option_to_string A.show_params_info
                         method_def.signature.parent_params_info));
-                let tr_self =
-                  T.TraitRef (etrait_ref_no_regions_to_gr_trait_ref trait_ref)
-                in
+                let tr_self = T.TraitRef trait_ref in
                 let inst_sg =
                   instantiate_fun_sig ctx all_generics tr_self
                     method_def.A.signature
@@ -1243,10 +1237,6 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             log#ldebug (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
             (* Instantiate *)
             let tr_self = T.TraitRef trait_ref in
-            let tr_self =
-              TypesUtils.etrait_instance_id_no_regions_to_gr_trait_instance_id
-                tr_self
-            in
             let inst_sg =
               instantiate_fun_sig ctx generics tr_self method_def.A.signature
             in
@@ -1271,7 +1261,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
  *)
 and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (fid : A.fun_id_or_trait_method_ref) (inst_sg : A.inst_fun_sig)
-    (generics : T.egeneric_args) (args : E.operand list) (dest : E.place) :
+    (generics : T.generic_args) (args : E.operand list) (dest : E.place) :
     st_cm_fun =
  fun cf ctx ->
   log#ldebug
@@ -1281,7 +1271,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
       ^ "\n- inst_sg:\n"
       ^ inst_fun_sig_to_string ctx inst_sg
       ^ "\n- call.generics:\n"
-      ^ egeneric_args_to_string ctx generics
+      ^ PA.generic_args_to_string ctx generics
       ^ "\n- args:\n"
       ^ String.concat ", " (List.map (operand_to_string ctx) args)
       ^ "\n- dest:\n" ^ place_to_string ctx dest));
@@ -1454,7 +1444,7 @@ and eval_assumed_function_call_symbolic (config : C.config)
       in
 
       (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config (FunId (Assumed fid))
+      eval_function_call_symbolic_from_inst_sig config (FunId (FAssumed fid))
         inst_sig generics args dest cf ctx
 
 (** Evaluate a statement seen as a function body *)
