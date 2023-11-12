@@ -73,10 +73,10 @@ module Values = struct
           List.map (typed_value_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.TAdt (T.TTuple, _) ->
+        | TAdt (TTuple, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.TAdt (T.TAdtId def_id, _) ->
+        | TAdt (TAdtId def_id, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -98,7 +98,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.TAdt (T.TAssumed aty, _) -> (
+        | TAdt (TAssumed aty, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
             | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
@@ -108,28 +108,29 @@ module Values = struct
             | _ ->
                 raise (Failure ("Inconsistent value: " ^ V.show_typed_value v)))
         | _ -> raise (Failure "Inconsistent typed value"))
-    | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
-    | Borrow bc -> borrow_content_to_string fmt bc
-    | Loan lc -> loan_content_to_string fmt lc
-    | Symbolic s -> symbolic_value_to_string ty_fmt s
+    | VBottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
+    | VBorrow bc -> borrow_content_to_string fmt bc
+    | VLoan lc -> loan_content_to_string fmt lc
+    | VSymbolic s -> symbolic_value_to_string ty_fmt s
 
   and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
       string =
     match bc with
-    | SharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
-    | MutBorrow (bid, tv) ->
+    | VSharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | VMutBorrow (bid, tv) ->
         "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_value_to_string fmt tv
         ^ ")"
-    | ReservedMutBorrow bid -> "⌊reserved_mut@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | VReservedMutBorrow bid ->
+        "⌊reserved_mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
   and loan_content_to_string (fmt : value_formatter) (lc : V.loan_content) :
       string =
     match lc with
-    | SharedLoan (loans, v) ->
+    | VSharedLoan (loans, v) ->
         let loans = V.BorrowId.Set.to_string None loans in
         "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
-    | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | VMutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
   let abstract_shared_borrow_to_string (fmt : value_formatter)
       (abs : V.abstract_shared_borrow) : string =

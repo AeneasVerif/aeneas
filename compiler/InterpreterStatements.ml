@@ -43,7 +43,7 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
     let dummy_id = C.fresh_dummy_var_id () in
     let ctx = C.ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
-    let nv = { v with value = V.Bottom } in
+    let nv = { v with value = VBottom } in
     let ctx = write_place access p nv ctx in
     log#ldebug
       (lazy
@@ -172,7 +172,7 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
   (* Evaluate the assertion *)
   let eval_assert cf (v : V.typed_value) : m_fun =
    fun ctx ->
-    assert (v.ty = T.TLiteral PV.TBool);
+    assert (v.ty = TLiteral TBool);
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
      * know the concrete value of the boolean we test, we use this value
@@ -182,16 +182,16 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
     | VLiteral (VBool _) ->
         (* Delegate to the concrete evaluation function *)
         eval_assertion_concrete config assertion cf ctx
-    | Symbolic sv ->
-        assert (config.mode = C.SymbolicMode);
-        assert (sv.V.sv_ty = T.TLiteral PV.TBool);
+    | VSymbolic sv ->
+        assert (config.mode = SymbolicMode);
+        assert (sv.sv_ty = TLiteral TBool);
         (* We continue the execution as if the test had succeeded, and thus
          * perform the symbolic expansion: sv ~~> true.
          * We will of course synthesize an assertion in the generated code
          * (see below). *)
         let ctx =
-          apply_symbolic_expansion_non_borrow config sv
-            (V.SeLiteral (PV.VBool true)) ctx
+          apply_symbolic_expansion_non_borrow config sv (SeLiteral (VBool true))
+            ctx
         in
         (* Continue *)
         let expr = cf Unit ctx in
@@ -231,8 +231,8 @@ let set_discriminant (config : C.config) (p : E.place)
   (* Update the value *)
   let update_value cf (v : V.typed_value) : m_fun =
    fun ctx ->
-    match (v.V.ty, v.V.value) with
-    | T.TAdt ((T.TAdtId _ as type_id), generics), V.VAdt av -> (
+    match (v.ty, v.value) with
+    | TAdt ((TAdtId _ as type_id), generics), VAdt av -> (
         (* There are two situations:
            - either the discriminant is already the proper one (in which case we
              don't do anything)
@@ -248,22 +248,22 @@ let set_discriminant (config : C.config) (p : E.place)
               (* Replace the value *)
               let bottom_v =
                 match type_id with
-                | T.TAdtId def_id ->
+                | TAdtId def_id ->
                     compute_expanded_bottom_adt_value ctx def_id
                       (Some variant_id) generics
                 | _ -> raise (Failure "Unreachable")
               in
               assign_to_place config bottom_v p (cf Unit) ctx)
-    | T.TAdt ((T.TAdtId _ as type_id), generics), V.Bottom ->
+    | TAdt ((TAdtId _ as type_id), generics), VBottom ->
         let bottom_v =
           match type_id with
-          | T.TAdtId def_id ->
+          | TAdtId def_id ->
               compute_expanded_bottom_adt_value ctx def_id (Some variant_id)
                 generics
           | _ -> raise (Failure "Unreachable")
         in
         assign_to_place config bottom_v p (cf Unit) ctx
-    | _, V.Symbolic _ ->
+    | _, VSymbolic _ ->
         assert (config.mode = SymbolicMode);
         (* This is a bit annoying: in theory we should expand the symbolic value
          * then set the discriminant, because in the case the discriminant is
@@ -273,8 +273,8 @@ let set_discriminant (config : C.config) (p : E.place)
          * setting a discriminant should only be used to initialize a value,
          * or reset an already initialized value, really. *)
         raise (Failure "Unexpected value")
-    | _, (V.VAdt _ | V.Bottom) -> raise (Failure "Inconsistent state")
-    | _, (V.VLiteral _ | V.Borrow _ | V.Loan _) ->
+    | _, (VAdt _ | VBottom) -> raise (Failure "Inconsistent state")
+    | _, (VLiteral _ | VBorrow _ | VLoan _) ->
         raise (Failure "Unexpected value")
   in
   (* Compose and apply *)
@@ -817,7 +817,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
               in
               (* Compose the continuations *)
               cf_branch cf ctx
-          | V.Symbolic sv ->
+          | VSymbolic sv ->
               (* Expand the symbolic boolean, and continue by evaluating
                * the branches *)
               let cf_true : st_cm_fun = eval_statement config st1 in
@@ -848,7 +848,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
               in
               (* Compose *)
               cf_eval_branch cf ctx
-          | V.Symbolic sv ->
+          | VSymbolic sv ->
               (* Expand the symbolic value and continue by evaluating the
                * proper branches *)
               let stgts =
@@ -891,14 +891,14 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
           let p_v = value_strip_shared_loans p_v in
           (* Match *)
           match p_v.value with
-          | V.VAdt adt -> (
+          | VAdt adt -> (
               (* Evaluate the discriminant *)
               let dv = Option.get adt.variant_id in
               (* Find the branch, evaluate and continue *)
               match List.find_opt (fun (svl, _) -> List.mem dv svl) stgts with
               | None -> eval_statement config otherwise cf ctx
               | Some (_, tgt) -> eval_statement config tgt cf ctx)
-          | V.Symbolic sv ->
+          | VSymbolic sv ->
               (* Expand the symbolic value - may lead to branching *)
               let cf_expand =
                 expand_symbolic_adt config sv (Some (S.mk_mplace p ctx))

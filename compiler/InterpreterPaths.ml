@@ -95,13 +95,13 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
       Ok (ctx, { read = v; updated = nv })
   | pe :: p' -> (
       (* Match on the projection element and the value *)
-      match (pe, v.V.value, v.V.ty) with
+      match (pe, v.value, v.ty) with
       | ( Field ((ProjAdt (_, _) as proj_kind), field_id),
-          V.VAdt adt,
-          T.TAdt (type_id, _) ) -> (
+          VAdt adt,
+          TAdt (type_id, _) ) -> (
           (* Check consistency *)
           (match (proj_kind, type_id) with
-          | ProjAdt (def_id, opt_variant_id), T.TAdtId def_id' ->
+          | ProjAdt (def_id, opt_variant_id), TAdtId def_id' ->
               assert (def_id = def_id');
               assert (opt_variant_id = adt.variant_id)
           | _ -> raise (Failure "Unreachable"));
@@ -114,11 +114,11 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               let nvalues =
                 T.FieldId.update_nth adt.field_values field_id res.updated
               in
-              let nadt = V.VAdt { adt with V.field_values = nvalues } in
+              let nadt = V.VAdt { adt with field_values = nvalues } in
               let updated = { v with value = nadt } in
               Ok (ctx, { res with updated }))
       (* Tuples *)
-      | Field (ProjTuple arity, field_id), V.VAdt adt, T.TAdt (T.TTuple, _) -> (
+      | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> (
           assert (arity = List.length adt.field_values);
           let fv = T.FieldId.nth adt.field_values field_id in
           (* Project *)
@@ -134,16 +134,16 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               Ok (ctx, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *))
-      | Field ((ProjAdt (_, _) | ProjTuple _), _), V.Bottom, _ ->
+      | Field ((ProjAdt (_, _) | ProjTuple _), _), VBottom, _ ->
           Error (FailBottom (1 + List.length p', pe, v.ty))
       (* Symbolic value: needs to be expanded *)
-      | _, Symbolic sp, _ ->
+      | _, VSymbolic sp, _ ->
           (* Expand the symbolic value *)
           Error (FailSymbolic (1 + List.length p', sp))
       (* Box dereferencement *)
       | ( DerefBox,
           VAdt { variant_id = None; field_values = [ bv ] },
-          T.TAdt (T.TAssumed T.TBox, _) ) -> (
+          TAdt (TAssumed TBox, _) ) -> (
           (* We allow moving outside of boxes. In practice, this kind of
            * manipulations should happen only inside unsafe code, so
            * it shouldn't happen due to user code, and we leverage it
@@ -156,20 +156,20 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                 {
                   v with
                   value =
-                    V.VAdt { variant_id = None; field_values = [ res.updated ] };
+                    VAdt { variant_id = None; field_values = [ res.updated ] };
                 }
               in
               Ok (ctx, { res with updated = nv }))
       (* Borrows *)
-      | Deref, V.Borrow bc, _ -> (
+      | Deref, VBorrow bc, _ -> (
           match bc with
-          | V.SharedBorrow bid ->
+          | VSharedBorrow bid ->
               (* Lookup the loan content, and explore from there *)
               if access.lookup_shared_borrows then
                 match lookup_loan ek bid ctx with
-                | _, Concrete (V.MutLoan _) ->
+                | _, Concrete (VMutLoan _) ->
                     raise (Failure "Expected a shared loan")
-                | _, Concrete (V.SharedLoan (bids, sv)) -> (
+                | _, Concrete (VSharedLoan (bids, sv)) -> (
                     (* Explore the shared value *)
                     match access_projection access ctx update p' sv with
                     | Error err -> Error err
@@ -178,23 +178,23 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                            by {!access_projection} *)
                         let ctx =
                           update_loan ek bid
-                            (V.SharedLoan (bids, res.updated))
+                            (VSharedLoan (bids, res.updated))
                             ctx
                         in
                         (* Return - note that we don't need to update the borrow itself *)
                         Ok (ctx, { res with updated = v }))
                 | ( _,
                     Abstract
-                      ( V.AMutLoan (_, _)
-                      | V.AEndedMutLoan
+                      ( AMutLoan (_, _)
+                      | AEndedMutLoan
                           { given_back = _; child = _; given_back_meta = _ }
-                      | V.AEndedSharedLoan (_, _)
-                      | V.AIgnoredMutLoan (_, _)
-                      | V.AEndedIgnoredMutLoan
+                      | AEndedSharedLoan (_, _)
+                      | AIgnoredMutLoan (_, _)
+                      | AEndedIgnoredMutLoan
                           { given_back = _; child = _; given_back_meta = _ }
-                      | V.AIgnoredSharedLoan _ ) ) ->
+                      | AIgnoredSharedLoan _ ) ) ->
                     raise (Failure "Expected a shared (abstraction) loan")
-                | _, Abstract (V.ASharedLoan (bids, sv, _av)) -> (
+                | _, Abstract (ASharedLoan (bids, sv, _av)) -> (
                     (* Explore the shared value *)
                     match access_projection access ctx update p' sv with
                     | Error err -> Error err
@@ -202,37 +202,34 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                         (* Relookup the child avalue *)
                         let av =
                           match lookup_loan ek bid ctx with
-                          | _, Abstract (V.ASharedLoan (_, _, av)) -> av
+                          | _, Abstract (ASharedLoan (_, _, av)) -> av
                           | _ -> raise (Failure "Unexpected")
                         in
                         (* Update the shared loan with the new value returned
                              by {!access_projection} *)
                         let ctx =
                           update_aloan ek bid
-                            (V.ASharedLoan (bids, res.updated, av))
+                            (ASharedLoan (bids, res.updated, av))
                             ctx
                         in
                         (* Return - note that we don't need to update the borrow itself *)
                         Ok (ctx, { res with updated = v }))
               else Error (FailBorrow bc)
-          | V.ReservedMutBorrow bid -> Error (FailReservedMutBorrow bid)
-          | V.MutBorrow (bid, bv) ->
+          | VReservedMutBorrow bid -> Error (FailReservedMutBorrow bid)
+          | VMutBorrow (bid, bv) ->
               if access.enter_mut_borrows then
                 match access_projection access ctx update p' bv with
                 | Error err -> Error err
                 | Ok (ctx, res) ->
                     let nv =
-                      {
-                        v with
-                        value = V.Borrow (V.MutBorrow (bid, res.updated));
-                      }
+                      { v with value = VBorrow (VMutBorrow (bid, res.updated)) }
                     in
                     Ok (ctx, { res with updated = nv })
               else Error (FailBorrow bc))
-      | _, V.Loan lc, _ -> (
+      | _, VLoan lc, _ -> (
           match lc with
-          | V.MutLoan bid -> Error (FailMutLoan bid)
-          | V.SharedLoan (bids, sv) ->
+          | VMutLoan bid -> Error (FailMutLoan bid)
+          | VSharedLoan (bids, sv) ->
               (* If we can enter shared loan, we ignore the loan. Pay attention
                  to the fact that we need to reexplore the *whole* place (i.e,
                  we mustn't ignore the current projection element *)
@@ -241,14 +238,11 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                 | Error err -> Error err
                 | Ok (ctx, res) ->
                     let nv =
-                      {
-                        v with
-                        value = V.Loan (V.SharedLoan (bids, res.updated));
-                      }
+                      { v with value = VLoan (VSharedLoan (bids, res.updated)) }
                     in
                     Ok (ctx, { res with updated = nv })
               else Error (FailSharedLoan bids))
-      | (_, (V.VLiteral _ | V.VAdt _ | V.Bottom | V.Borrow _), _) as r ->
+      | (_, (VLiteral _ | VAdt _ | VBottom | VBorrow _), _) as r ->
           let pe, v, ty = r in
           let pe = "- pe: " ^ E.show_projection_elem pe in
           let v = "- v:\n" ^ V.show_value v in
@@ -531,24 +525,24 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
 
       method! visit_borrow_content env bc =
         match bc with
-        | V.SharedBorrow _ | V.MutBorrow (_, _) ->
+        | VSharedBorrow _ | VMutBorrow (_, _) ->
             (* Nothing special to do *) super#visit_borrow_content env bc
-        | V.ReservedMutBorrow bid ->
+        | VReservedMutBorrow bid ->
             (* We need to activate reserved borrows *)
             let cc = promote_reserved_mut_borrow config bid in
             raise (UpdateCtx cc)
 
       method! visit_loan_content env lc =
         match lc with
-        | V.SharedLoan (bids, v) -> (
+        | VSharedLoan (bids, v) -> (
             (* End the loans if we need a modification access, otherwise dive into
                the shared value *)
             match access with
-            | Read -> super#visit_SharedLoan env bids v
+            | Read -> super#visit_VSharedLoan env bids v
             | Write | Move ->
                 let cc = end_borrows config bids in
                 raise (UpdateCtx cc))
-        | V.MutLoan bid ->
+        | VMutLoan bid ->
             (* We always need to end mutable borrows *)
             let cc = end_borrow config bid in
             raise (UpdateCtx cc)
@@ -596,8 +590,8 @@ let drop_outer_loans_at_lplace (config : C.config) (p : E.place) : cm_fun =
         (* There are: end them then retry *)
         let cc =
           match c with
-          | LoanContent (V.SharedLoan (bids, _)) -> end_borrows config bids
-          | LoanContent (V.MutLoan bid) -> end_borrow config bid
+          | LoanContent (VSharedLoan (bids, _)) -> end_borrows config bids
+          | LoanContent (VMutLoan bid) -> end_borrow config bid
           | BorrowContent _ -> raise (Failure "Unreachable")
         in
         (* Retry *)

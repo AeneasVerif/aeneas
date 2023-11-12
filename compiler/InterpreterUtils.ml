@@ -90,7 +90,7 @@ let mk_fresh_symbolic_typed_value (sv_kind : V.sv_kind) (rty : T.ty) :
   let ty = Subst.erase_regions rty in
   (* Generate the fresh a symbolic value *)
   let value = mk_fresh_symbolic_value sv_kind rty in
-  let value = V.Symbolic value in
+  let value = V.VSymbolic value in
   { V.value; V.ty }
 
 let mk_fresh_symbolic_typed_value_from_no_regions_ty (sv_kind : V.sv_kind)
@@ -101,7 +101,7 @@ let mk_fresh_symbolic_typed_value_from_no_regions_ty (sv_kind : V.sv_kind)
 (** Create a typed value from a symbolic value. *)
 let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
     V.typed_value =
-  let av = V.Symbolic svalue in
+  let av = V.VSymbolic svalue in
   let av : V.typed_value =
     { V.value = av; V.ty = Subst.erase_regions svalue.V.sv_ty }
   in
@@ -204,7 +204,7 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_Symbolic _ sv =
+      method! visit_VSymbolic _ sv =
         if sv.V.sv_id = sv_id then raise Found else ()
 
       method! visit_aproj env aproj =
@@ -251,7 +251,7 @@ let bottom_in_value (ended_regions : T.RegionId.Set.t) (v : V.typed_value) :
   let obj =
     object
       inherit [_] V.iter_typed_value
-      method! visit_Bottom _ = raise Found
+      method! visit_VBottom _ = raise Found
 
       method! visit_symbolic_value _ s =
         if symbolic_value_has_ended_regions ended_regions s then raise Found

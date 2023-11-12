@@ -150,8 +150,8 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
         (* Register the loan *)
         let _ =
           match lc with
-          | V.SharedLoan (bids, _) -> register_shared_loan inside_abs bids
-          | V.MutLoan bid -> register_mut_loan inside_abs bid
+          | VSharedLoan (bids, _) -> register_shared_loan inside_abs bids
+          | VMutLoan bid -> register_mut_loan inside_abs bid
         in
         (* Continue exploring *)
         super#visit_loan_content inside_abs lc
@@ -159,14 +159,14 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
       method! visit_aloan_content inside_abs lc =
         let _ =
           match lc with
-          | V.AMutLoan (bid, _) -> register_mut_loan inside_abs bid
-          | V.ASharedLoan (bids, _, _) -> register_shared_loan inside_abs bids
-          | V.AIgnoredMutLoan (Some bid, _) -> register_ignored_loan T.Mut bid
-          | V.AIgnoredMutLoan (None, _)
-          | V.AIgnoredSharedLoan _
-          | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
-          | V.AEndedSharedLoan (_, _)
-          | V.AEndedIgnoredMutLoan
+          | AMutLoan (bid, _) -> register_mut_loan inside_abs bid
+          | ASharedLoan (bids, _, _) -> register_shared_loan inside_abs bids
+          | AIgnoredMutLoan (Some bid, _) -> register_ignored_loan T.Mut bid
+          | AIgnoredMutLoan (None, _)
+          | AIgnoredSharedLoan _
+          | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+          | AEndedSharedLoan (_, _)
+          | AEndedIgnoredMutLoan
               { given_back = _; child = _; given_back_meta = _ } ->
               (* Do nothing *)
               ()
@@ -244,9 +244,9 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
         (* Register the loan *)
         let _ =
           match bc with
-          | V.SharedBorrow bid -> register_borrow Shared bid
-          | V.MutBorrow (bid, _) -> register_borrow Mut bid
-          | V.ReservedMutBorrow bid -> register_borrow Reserved bid
+          | VSharedBorrow bid -> register_borrow Shared bid
+          | VMutBorrow (bid, _) -> register_borrow Mut bid
+          | VReservedMutBorrow bid -> register_borrow Reserved bid
         in
         (* Continue exploring *)
         super#visit_borrow_content env bc
@@ -254,12 +254,12 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
       method! visit_aborrow_content env bc =
         let _ =
           match bc with
-          | V.AMutBorrow (bid, _) -> register_borrow Mut bid
-          | V.ASharedBorrow bid -> register_borrow Shared bid
-          | V.AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow Mut bid
-          | V.AIgnoredMutBorrow (None, _)
-          | V.AEndedMutBorrow _ | V.AEndedIgnoredMutBorrow _
-          | V.AEndedSharedBorrow | V.AProjSharedBorrow _ ->
+          | AMutBorrow (bid, _) -> register_borrow Mut bid
+          | ASharedBorrow bid -> register_borrow Shared bid
+          | AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow Mut bid
+          | AIgnoredMutBorrow (None, _)
+          | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedSharedBorrow
+          | AProjSharedBorrow _ ->
               (* Do nothing *)
               ()
         in
@@ -305,7 +305,7 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_Bottom info =
+      method! visit_VBottom info =
         (* No ⊥ inside borrowed values *)
         assert (Config.allow_bottom_below_borrow || not info.outer_borrow)
 
@@ -317,8 +317,8 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
         (* Update the info *)
         let info =
           match lc with
-          | V.SharedLoan (_, _) -> set_outer_shared info
-          | V.MutLoan _ ->
+          | VSharedLoan (_, _) -> set_outer_shared info
+          | VMutLoan _ ->
               (* No mutable loan inside a shared loan *)
               assert (not info.outer_shared);
               set_outer_mut info
@@ -330,11 +330,11 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
         (* Update the info *)
         let info =
           match bc with
-          | V.SharedBorrow _ -> set_outer_shared info
-          | V.ReservedMutBorrow _ ->
+          | VSharedBorrow _ -> set_outer_shared info
+          | VReservedMutBorrow _ ->
               assert (not info.outer_borrow);
               set_outer_shared info
-          | V.MutBorrow (_, _) -> set_outer_mut info
+          | VMutBorrow (_, _) -> set_outer_mut info
         in
         (* Continue exploring *)
         super#visit_borrow_content info bc
@@ -343,17 +343,16 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
         (* Update the info *)
         let info =
           match lc with
-          | V.AMutLoan (_, _) -> set_outer_mut info
-          | V.ASharedLoan (_, _, _) -> set_outer_shared info
-          | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
-            ->
+          | AMutLoan (_, _) -> set_outer_mut info
+          | ASharedLoan (_, _, _) -> set_outer_shared info
+          | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ } ->
               set_outer_mut info
-          | V.AEndedSharedLoan (_, _) -> set_outer_shared info
-          | V.AIgnoredMutLoan (_, _) -> set_outer_mut info
-          | V.AEndedIgnoredMutLoan
+          | AEndedSharedLoan (_, _) -> set_outer_shared info
+          | AIgnoredMutLoan (_, _) -> set_outer_mut info
+          | AEndedIgnoredMutLoan
               { given_back = _; child = _; given_back_meta = _ } ->
               set_outer_mut info
-          | V.AIgnoredSharedLoan _ -> set_outer_shared info
+          | AIgnoredSharedLoan _ -> set_outer_shared info
         in
         (* Continue exploring *)
         super#visit_aloan_content info lc
@@ -362,12 +361,12 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
         (* Update the info *)
         let info =
           match bc with
-          | V.AMutBorrow (_, _) -> set_outer_mut info
-          | V.ASharedBorrow _ | V.AEndedSharedBorrow -> set_outer_shared info
-          | V.AIgnoredMutBorrow _ | V.AEndedMutBorrow _
-          | V.AEndedIgnoredMutBorrow _ ->
+          | AMutBorrow (_, _) -> set_outer_mut info
+          | ASharedBorrow _ | AEndedSharedBorrow -> set_outer_shared info
+          | AIgnoredMutBorrow _ | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _
+            ->
               set_outer_mut info
-          | V.AProjSharedBorrow _ -> set_outer_shared info
+          | AProjSharedBorrow _ -> set_outer_shared info
         in
         (* Continue exploring *)
         super#visit_aborrow_content info bc
@@ -416,10 +415,10 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (* Check that the types have erased regions *)
         assert (ty_is_ety tv.ty);
         (* Check the current pair (value, type) *)
-        (match (tv.V.value, tv.V.ty) with
-        | V.VLiteral cv, T.TLiteral ty -> check_literal_type cv ty
+        (match (tv.value, tv.ty) with
+        | VLiteral cv, TLiteral ty -> check_literal_type cv ty
         (* ADT case *)
-        | V.VAdt av, T.TAdt (T.TAdtId def_id, generics) ->
+        | VAdt av, TAdt (TAdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = C.ctx_lookup_type_decl ctx def_id in
@@ -428,53 +427,51 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               List.length generics.regions = List.length def.generics.regions);
             assert (List.length generics.types = List.length def.generics.types);
             (* Check that the variant id is consistent *)
-            (match (av.V.variant_id, def.T.kind) with
-            | Some variant_id, T.Enum variants ->
+            (match (av.variant_id, def.kind) with
+            | Some variant_id, Enum variants ->
                 assert (T.VariantId.to_int variant_id < List.length variants)
-            | None, T.Struct _ -> ()
+            | None, Struct _ -> ()
             | _ -> raise (Failure "Erroneous typing"));
             (* Check that the field types are correct *)
             let field_types =
-              Assoc.type_decl_get_inst_norm_field_etypes ctx def av.V.variant_id
+              Assoc.type_decl_get_inst_norm_field_etypes ctx def av.variant_id
                 generics
             in
-            let fields_with_types =
-              List.combine av.V.field_values field_types
-            in
+            let fields_with_types = List.combine av.field_values field_types in
             List.iter
-              (fun ((v, ty) : V.typed_value * T.ty) -> assert (v.V.ty = ty))
+              (fun ((v, ty) : V.typed_value * T.ty) -> assert (v.ty = ty))
               fields_with_types
         (* Tuple case *)
-        | V.VAdt av, T.TAdt (T.TTuple, generics) ->
+        | VAdt av, TAdt (TTuple, generics) ->
             assert (generics.regions = []);
             assert (generics.const_generics = []);
-            assert (av.V.variant_id = None);
+            assert (av.variant_id = None);
             (* Check that the fields have the proper values - and check that there
              * are as many fields as field types at the same time *)
             let fields_with_types =
-              List.combine av.V.field_values generics.types
+              List.combine av.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : V.typed_value * T.ty) -> assert (v.V.ty = ty))
+              (fun ((v, ty) : V.typed_value * T.ty) -> assert (v.ty = ty))
               fields_with_types
         (* Assumed type case *)
-        | V.VAdt av, T.TAdt (T.TAssumed aty_id, generics) -> (
-            assert (av.V.variant_id = None);
+        | VAdt av, TAdt (TAssumed aty_id, generics) -> (
+            assert (av.variant_id = None);
             match
               ( aty_id,
-                av.V.field_values,
+                av.field_values,
                 generics.regions,
                 generics.types,
                 generics.const_generics )
             with
             (* Box *)
-            | T.TBox, [ inner_value ], [], [ inner_ty ], [] ->
-                assert (inner_value.V.ty = inner_ty)
-            | T.TArray, inner_values, _, [ inner_ty ], [ cg ] ->
+            | TBox, [ inner_value ], [], [ inner_ty ], [] ->
+                assert (inner_value.ty = inner_ty)
+            | TArray, inner_values, _, [ inner_ty ], [ cg ] ->
                 (* *)
                 assert (
                   List.for_all
-                    (fun (v : V.typed_value) -> v.V.ty = inner_ty)
+                    (fun (v : V.typed_value) -> v.ty = inner_ty)
                     inner_values);
                 (* The length is necessarily concrete *)
                 let len =
@@ -483,37 +480,37 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                     .value
                 in
                 assert (Z.of_int (List.length inner_values) = len)
-            | (T.TSlice | T.TStr), _, _, _, _ -> raise (Failure "Unexpected")
+            | (TSlice | TStr), _, _, _, _ -> raise (Failure "Unexpected")
             | _ -> raise (Failure "Erroneous type"))
-        | V.Bottom, _ -> (* Nothing to check *) ()
-        | V.Borrow bc, T.TRef (_, ref_ty, rkind) -> (
+        | VBottom, _ -> (* Nothing to check *) ()
+        | VBorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
-            | V.SharedBorrow bid, T.Shared | V.ReservedMutBorrow bid, T.Mut -> (
+            | VSharedBorrow bid, Shared | VReservedMutBorrow bid, Mut -> (
                 (* Lookup the borrowed value to check it has the proper type *)
                 let _, glc = lookup_loan ek_all bid ctx in
                 match glc with
-                | Concrete (V.SharedLoan (_, sv))
-                | Abstract (V.ASharedLoan (_, sv, _)) ->
-                    assert (sv.V.ty = ref_ty)
+                | Concrete (VSharedLoan (_, sv))
+                | Abstract (ASharedLoan (_, sv, _)) ->
+                    assert (sv.ty = ref_ty)
                 | _ -> raise (Failure "Inconsistent context"))
-            | V.MutBorrow (_, bv), T.Mut ->
+            | VMutBorrow (_, bv), Mut ->
                 assert (
                   (* Check that the borrowed value has the proper type *)
-                  bv.V.ty = ref_ty)
+                  bv.ty = ref_ty)
             | _ -> raise (Failure "Erroneous typing"))
-        | V.Loan lc, ty -> (
+        | VLoan lc, ty -> (
             match lc with
-            | V.SharedLoan (_, sv) -> assert (sv.V.ty = ty)
-            | V.MutLoan bid -> (
+            | VSharedLoan (_, sv) -> assert (sv.ty = ty)
+            | VMutLoan bid -> (
                 (* Lookup the borrowed value to check it has the proper type *)
                 let glc = lookup_borrow ek_all bid ctx in
                 match glc with
-                | Concrete (V.MutBorrow (_, bv)) -> assert (bv.V.ty = ty)
-                | Abstract (V.AMutBorrow (_, sv)) ->
-                    assert (Subst.erase_regions sv.V.ty = ty)
+                | Concrete (VMutBorrow (_, bv)) -> assert (bv.ty = ty)
+                | Abstract (AMutBorrow (_, sv)) ->
+                    assert (Subst.erase_regions sv.ty = ty)
                 | _ -> raise (Failure "Inconsistent context")))
-        | V.Symbolic sv, ty ->
-            let ty' = Subst.erase_regions sv.V.sv_ty in
+        | VSymbolic sv, ty ->
+            let ty' = Subst.erase_regions sv.sv_ty in
             assert (ty' = ty)
         | _ -> raise (Failure "Erroneous typing"));
         (* Continue exploring to inspect the subterms *)
@@ -531,9 +528,9 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (* Check that the types have regions *)
         assert (ty_is_rty atv.ty);
         (* Check the current pair (value, type) *)
-        (match (atv.V.value, atv.V.ty) with
+        (match (atv.value, atv.ty) with
         (* ADT case *)
-        | V.AAdt av, T.TAdt (T.TAdtId def_id, generics) ->
+        | AAdt av, TAdt (TAdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = C.ctx_lookup_type_decl ctx def_id in
@@ -545,132 +542,126 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               List.length generics.const_generics
               = List.length def.generics.const_generics);
             (* Check that the variant id is consistent *)
-            (match (av.V.variant_id, def.T.kind) with
-            | Some variant_id, T.Enum variants ->
+            (match (av.variant_id, def.kind) with
+            | Some variant_id, Enum variants ->
                 assert (T.VariantId.to_int variant_id < List.length variants)
-            | None, T.Struct _ -> ()
+            | None, Struct _ -> ()
             | _ -> raise (Failure "Erroneous typing"));
             (* Check that the field types are correct *)
             let field_types =
-              Assoc.type_decl_get_inst_norm_field_rtypes ctx def av.V.variant_id
+              Assoc.type_decl_get_inst_norm_field_rtypes ctx def av.variant_id
                 generics
             in
-            let fields_with_types =
-              List.combine av.V.field_values field_types
-            in
+            let fields_with_types = List.combine av.field_values field_types in
             List.iter
-              (fun ((v, ty) : V.typed_avalue * T.ty) -> assert (v.V.ty = ty))
+              (fun ((v, ty) : V.typed_avalue * T.ty) -> assert (v.ty = ty))
               fields_with_types
         (* Tuple case *)
-        | V.AAdt av, T.TAdt (T.TTuple, generics) ->
+        | AAdt av, TAdt (TTuple, generics) ->
             assert (generics.regions = []);
             assert (generics.const_generics = []);
-            assert (av.V.variant_id = None);
+            assert (av.variant_id = None);
             (* Check that the fields have the proper values - and check that there
              * are as many fields as field types at the same time *)
             let fields_with_types =
-              List.combine av.V.field_values generics.types
+              List.combine av.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : V.typed_avalue * T.ty) -> assert (v.V.ty = ty))
+              (fun ((v, ty) : V.typed_avalue * T.ty) -> assert (v.ty = ty))
               fields_with_types
         (* Assumed type case *)
-        | V.AAdt av, T.TAdt (T.TAssumed aty_id, generics) -> (
-            assert (av.V.variant_id = None);
+        | AAdt av, TAdt (TAssumed aty_id, generics) -> (
+            assert (av.variant_id = None);
             match
               ( aty_id,
-                av.V.field_values,
+                av.field_values,
                 generics.regions,
                 generics.types,
                 generics.const_generics )
             with
             (* Box *)
-            | T.TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
-                assert (boxed_value.V.ty = boxed_ty)
+            | TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
+                assert (boxed_value.ty = boxed_ty)
             | _ -> raise (Failure "Erroneous type"))
-        | V.ABottom, _ -> (* Nothing to check *) ()
-        | V.ABorrow bc, T.TRef (_, ref_ty, rkind) -> (
+        | ABottom, _ -> (* Nothing to check *) ()
+        | ABorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
-            | V.AMutBorrow (_, av), T.Mut ->
+            | AMutBorrow (_, av), Mut ->
                 (* Check that the child value has the proper type *)
-                assert (av.V.ty = ref_ty)
-            | V.ASharedBorrow bid, T.Shared -> (
+                assert (av.ty = ref_ty)
+            | ASharedBorrow bid, Shared -> (
                 (* Lookup the borrowed value to check it has the proper type *)
                 let _, glc = lookup_loan ek_all bid ctx in
                 match glc with
-                | Concrete (V.SharedLoan (_, sv))
-                | Abstract (V.ASharedLoan (_, sv, _)) ->
-                    assert (sv.V.ty = Subst.erase_regions ref_ty)
+                | Concrete (VSharedLoan (_, sv))
+                | Abstract (ASharedLoan (_, sv, _)) ->
+                    assert (sv.ty = Subst.erase_regions ref_ty)
                 | _ -> raise (Failure "Inconsistent context"))
-            | V.AIgnoredMutBorrow (_opt_bid, av), T.Mut ->
-                assert (av.V.ty = ref_ty)
-            | ( V.AEndedIgnoredMutBorrow
-                  { given_back; child; given_back_meta = _ },
-                T.Mut ) ->
-                assert (given_back.V.ty = ref_ty);
-                assert (child.V.ty = ref_ty)
-            | V.AProjSharedBorrow _, T.Shared -> ()
+            | AIgnoredMutBorrow (_opt_bid, av), Mut -> assert (av.ty = ref_ty)
+            | ( AEndedIgnoredMutBorrow { given_back; child; given_back_meta = _ },
+                Mut ) ->
+                assert (given_back.ty = ref_ty);
+                assert (child.ty = ref_ty)
+            | AProjSharedBorrow _, Shared -> ()
             | _ -> raise (Failure "Inconsistent context"))
-        | V.ALoan lc, aty -> (
+        | ALoan lc, aty -> (
             match lc with
-            | V.AMutLoan (bid, child_av) | V.AIgnoredMutLoan (Some bid, child_av)
+            | AMutLoan (bid, child_av) | AIgnoredMutLoan (Some bid, child_av)
               -> (
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                assert (child_av.V.ty = borrowed_aty);
+                assert (child_av.ty = borrowed_aty);
                 (* Lookup the borrowed value to check it has the proper type *)
                 let glc = lookup_borrow ek_all bid ctx in
                 match glc with
-                | Concrete (V.MutBorrow (_, bv)) ->
-                    assert (bv.V.ty = Subst.erase_regions borrowed_aty)
-                | Abstract (V.AMutBorrow (_, sv)) ->
+                | Concrete (VMutBorrow (_, bv)) ->
+                    assert (bv.ty = Subst.erase_regions borrowed_aty)
+                | Abstract (AMutBorrow (_, sv)) ->
                     assert (
-                      Subst.erase_regions sv.V.ty
+                      Subst.erase_regions sv.ty
                       = Subst.erase_regions borrowed_aty)
                 | _ -> raise (Failure "Inconsistent context"))
-            | V.AIgnoredMutLoan (None, child_av) ->
+            | AIgnoredMutLoan (None, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                assert (child_av.V.ty = borrowed_aty)
-            | V.ASharedLoan (_, sv, child_av) | V.AEndedSharedLoan (sv, child_av)
-              ->
+                assert (child_av.ty = borrowed_aty)
+            | ASharedLoan (_, sv, child_av) | AEndedSharedLoan (sv, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                assert (sv.V.ty = Subst.erase_regions borrowed_aty);
+                assert (sv.ty = Subst.erase_regions borrowed_aty);
                 (* TODO: the type of aloans doesn't make sense, see above *)
-                assert (child_av.V.ty = borrowed_aty)
-            | V.AEndedMutLoan { given_back; child; given_back_meta = _ }
-            | V.AEndedIgnoredMutLoan { given_back; child; given_back_meta = _ }
-              ->
+                assert (child_av.ty = borrowed_aty)
+            | AEndedMutLoan { given_back; child; given_back_meta = _ }
+            | AEndedIgnoredMutLoan { given_back; child; given_back_meta = _ } ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                assert (given_back.V.ty = borrowed_aty);
-                assert (child.V.ty = borrowed_aty)
-            | V.AIgnoredSharedLoan child_av ->
-                assert (child_av.V.ty = aloan_get_expected_child_type aty))
-        | V.ASymbolic aproj, ty -> (
+                assert (given_back.ty = borrowed_aty);
+                assert (child.ty = borrowed_aty)
+            | AIgnoredSharedLoan child_av ->
+                assert (child_av.ty = aloan_get_expected_child_type aty))
+        | ASymbolic aproj, ty -> (
             let ty1 = Subst.erase_regions ty in
             match aproj with
-            | V.AProjLoans (sv, _) ->
-                let ty2 = Subst.erase_regions sv.V.sv_ty in
+            | AProjLoans (sv, _) ->
+                let ty2 = Subst.erase_regions sv.sv_ty in
                 assert (ty1 = ty2);
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
-                assert (ty_has_regions_in_set abs.regions sv.V.sv_ty)
-            | V.AProjBorrows (sv, proj_ty) ->
-                let ty2 = Subst.erase_regions sv.V.sv_ty in
+                assert (ty_has_regions_in_set abs.regions sv.sv_ty)
+            | AProjBorrows (sv, proj_ty) ->
+                let ty2 = Subst.erase_regions sv.sv_ty in
                 assert (ty1 = ty2);
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
                 assert (ty_has_regions_in_set abs.regions proj_ty)
-            | V.AEndedProjLoans (_msv, given_back_ls) ->
+            | AEndedProjLoans (_msv, given_back_ls) ->
                 List.iter
                   (fun (_, proj) ->
                     match proj with
                     | V.AProjBorrows (_sv, ty') -> assert (ty' = ty)
-                    | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows -> ()
+                    | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
                     | _ -> raise (Failure "Unexpected"))
                   given_back_ls
-            | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows -> ())
-        | V.AIgnored, _ -> ()
+            | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
+        | AIgnored, _ -> ()
         | _ ->
             log#lerror
               (lazy
@@ -757,7 +748,7 @@ let check_symbolic_values (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
-      method! visit_Symbolic _ sv = add_env_sv sv
+      method! visit_VSymbolic _ sv = add_env_sv sv
 
       method! visit_abstract_shared_borrow abs asb =
         let abs = Option.get abs in

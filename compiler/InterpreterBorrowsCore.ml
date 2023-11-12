@@ -222,15 +222,15 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
 
       method! visit_borrow_content env bc =
         match bc with
-        | V.SharedBorrow bid ->
+        | V.VSharedBorrow bid ->
             (* Nothing specific to do *)
-            super#visit_SharedBorrow env bid
-        | V.ReservedMutBorrow bid ->
+            super#visit_VSharedBorrow env bid
+        | V.VReservedMutBorrow bid ->
             (* Nothing specific to do *)
-            super#visit_ReservedMutBorrow env bid
-        | V.MutBorrow (bid, mv) ->
+            super#visit_VReservedMutBorrow env bid
+        | V.VMutBorrow (bid, mv) ->
             (* Control the dive *)
-            if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+            if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
             else ()
 
       (** We reimplement {!visit_Loan} (rather than the more precise functions
@@ -240,17 +240,17 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
       *)
       method! visit_loan_content env lc =
         match lc with
-        | V.SharedLoan (bids, sv) ->
+        | V.VSharedLoan (bids, sv) ->
             (* Check if this is the loan we are looking for, and control the dive *)
             if V.BorrowId.Set.mem l bids then
               raise (FoundGLoanContent (Concrete lc))
             else if ek.enter_shared_loans then
-              super#visit_SharedLoan env bids sv
+              super#visit_VSharedLoan env bids sv
             else ()
-        | V.MutLoan bid ->
+        | V.VMutLoan bid ->
             (* Check if this is the loan we are looking for *)
             if bid = l then raise (FoundGLoanContent (Concrete lc))
-            else super#visit_MutLoan env bid
+            else super#visit_VMutLoan env bid
 
       (** Note that we don't control diving inside the abstractions: if we
           allow to dive inside abstractions, we allow to go anywhere
@@ -335,28 +335,28 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
 
       method! visit_borrow_content env bc =
         match bc with
-        | V.SharedBorrow _ | V.ReservedMutBorrow _ ->
+        | VSharedBorrow _ | VReservedMutBorrow _ ->
             (* Nothing specific to do *)
             super#visit_borrow_content env bc
-        | V.MutBorrow (bid, mv) ->
+        | VMutBorrow (bid, mv) ->
             (* Control the dive into mutable borrows *)
-            if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
-            else V.MutBorrow (bid, mv)
+            if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
+            else VMutBorrow (bid, mv)
 
       (** We reimplement {!visit_loan_content} (rather than one of the sub-
           functions) on purpose: exhaustive matches are good for maintenance *)
       method! visit_loan_content env lc =
         match lc with
-        | V.SharedLoan (bids, sv) ->
+        | VSharedLoan (bids, sv) ->
             (* Shared loan: check if this is the loan we are looking for, and
                control the dive. *)
             if V.BorrowId.Set.mem l bids then update ()
             else if ek.enter_shared_loans then
-              super#visit_SharedLoan env bids sv
-            else V.SharedLoan (bids, sv)
-        | V.MutLoan bid ->
+              super#visit_VSharedLoan env bids sv
+            else VSharedLoan (bids, sv)
+        | VMutLoan bid ->
             (* Mut loan: checks if this is the loan we are looking for *)
-            if bid = l then update () else super#visit_MutLoan env bid
+            if bid = l then update () else super#visit_VMutLoan env bid
 
       (** Note that once inside the abstractions, we don't control diving
           (there are no use cases requiring finer control).
@@ -432,42 +432,42 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
 
       method! visit_borrow_content env bc =
         match bc with
-        | V.MutBorrow (bid, mv) ->
+        | VMutBorrow (bid, mv) ->
             (* Check the borrow id and control the dive *)
             if bid = l then raise (FoundGBorrowContent (Concrete bc))
-            else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+            else if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
             else ()
-        | V.SharedBorrow bid ->
+        | VSharedBorrow bid ->
             (* Check the borrow id *)
             if bid = l then raise (FoundGBorrowContent (Concrete bc)) else ()
-        | V.ReservedMutBorrow bid ->
+        | VReservedMutBorrow bid ->
             (* Check the borrow id *)
             if bid = l then raise (FoundGBorrowContent (Concrete bc)) else ()
 
       method! visit_loan_content env lc =
         match lc with
-        | V.MutLoan bid ->
-            (* Nothing special to do *) super#visit_MutLoan env bid
-        | V.SharedLoan (bids, sv) ->
+        | VMutLoan bid ->
+            (* Nothing special to do *) super#visit_VMutLoan env bid
+        | VSharedLoan (bids, sv) ->
             (* Control the dive *)
-            if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
+            if ek.enter_shared_loans then super#visit_VSharedLoan env bids sv
             else ()
 
       method! visit_aborrow_content env bc =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | AMutBorrow (bid, av) ->
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_AMutBorrow env bid av
-        | V.ASharedBorrow bid ->
+        | ASharedBorrow bid ->
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env bid
-        | V.AIgnoredMutBorrow (_, _)
-        | V.AEndedMutBorrow _
-        | V.AEndedIgnoredMutBorrow
+        | AIgnoredMutBorrow (_, _)
+        | AEndedMutBorrow _
+        | AEndedIgnoredMutBorrow
             { given_back = _; child = _; given_back_meta = _ }
-        | V.AEndedSharedBorrow ->
+        | AEndedSharedBorrow ->
             super#visit_aborrow_content env bc
-        | V.AProjSharedBorrow asb ->
+        | AProjSharedBorrow asb ->
             if borrow_in_asb l asb then
               raise (FoundGBorrowContent (Abstract bc))
             else ()
@@ -516,27 +516,28 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
 
       method! visit_borrow_content env bc =
         match bc with
-        | V.MutBorrow (bid, mv) ->
+        | VMutBorrow (bid, mv) ->
             (* Check the id and control dive *)
             if bid = l then update ()
-            else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
-            else V.MutBorrow (bid, mv)
-        | V.SharedBorrow bid ->
+            else if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
+            else VMutBorrow (bid, mv)
+        | VSharedBorrow bid ->
             (* Check the id *)
-            if bid = l then update () else super#visit_SharedBorrow env bid
-        | V.ReservedMutBorrow bid ->
+            if bid = l then update () else super#visit_VSharedBorrow env bid
+        | VReservedMutBorrow bid ->
             (* Check the id *)
-            if bid = l then update () else super#visit_ReservedMutBorrow env bid
+            if bid = l then update ()
+            else super#visit_VReservedMutBorrow env bid
 
       method! visit_loan_content env lc =
         match lc with
-        | V.SharedLoan (bids, sv) ->
+        | VSharedLoan (bids, sv) ->
             (* Control the dive *)
-            if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
-            else V.SharedLoan (bids, sv)
-        | V.MutLoan bid ->
+            if ek.enter_shared_loans then super#visit_VSharedLoan env bids sv
+            else VSharedLoan (bids, sv)
+        | VMutLoan bid ->
             (* Nothing specific to do *)
-            super#visit_MutLoan env bid
+            super#visit_VMutLoan env bid
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs
@@ -1192,18 +1193,18 @@ let get_first_non_ignored_aloan_in_abstraction (abs : V.abs) :
       (** We may need to visit loan contents because of shared values *)
       method! visit_loan_content _ lc =
         match lc with
-        | V.MutLoan _ ->
+        | VMutLoan _ ->
             (* The mut loan linked to the mutable borrow present in a shared
              * value in an abstraction should be in an AProjBorrows *)
             raise (Failure "Unreachable")
-        | V.SharedLoan (bids, _) -> raise (FoundBorrowIds (Borrows bids))
+        | VSharedLoan (bids, _) -> raise (FoundBorrowIds (Borrows bids))
 
       method! visit_aproj env sproj =
         (match sproj with
-        | V.AProjBorrows (_, _)
-        | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
+        | AProjBorrows (_, _)
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows ->
             ()
-        | V.AProjLoans (sv, _) -> raise (ValuesUtils.FoundSymbolicValue sv));
+        | AProjLoans (sv, _) -> raise (ValuesUtils.FoundSymbolicValue sv));
         super#visit_aproj env sproj
     end
   in
@@ -1225,7 +1226,7 @@ let lookup_shared_value_opt (ctx : C.eval_ctx) (bid : V.BorrowId.id) :
   | None -> None
   | Some (_, lc) -> (
       match lc with
-      | Concrete (SharedLoan (_, sv)) | Abstract (ASharedLoan (_, sv, _)) ->
+      | Concrete (VSharedLoan (_, sv)) | Abstract (ASharedLoan (_, sv, _)) ->
           Some sv
       | _ -> None)
 

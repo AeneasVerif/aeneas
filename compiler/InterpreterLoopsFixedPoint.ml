@@ -227,17 +227,17 @@ let prepare_ashared_loans (loop_id : V.LoopId.id option) : cm_fun =
       object
         inherit [_] V.iter_typed_avalue as super
 
-        method! visit_SharedLoan env lids sv =
+        method! visit_VSharedLoan env lids sv =
           collect_shared_value lids sv;
 
           (* Continue the exploration *)
-          super#visit_SharedLoan env lids sv
+          super#visit_VSharedLoan env lids sv
 
-        method! visit_ASharedLoan env lids sv _ =
+        method! visit_ASharedLoan env lids sv av =
           collect_shared_value lids sv;
 
           (* Continue the exploration *)
-          super#visit_SharedLoan env lids sv
+          super#visit_ASharedLoan env lids sv av
 
         (** Check that there are no symbolic values with *borrows* inside the
             abstraction - shouldn't happen if the symbolic values are greedily
@@ -743,8 +743,8 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
     let open InterpreterBorrowsCore in
     let lookup_shared_loan lid ctx : V.typed_value =
       match snd (lookup_loan ek_all lid ctx) with
-      | Concrete (V.SharedLoan (_, v)) -> v
-      | Abstract (V.ASharedLoan (_, v, _)) -> v
+      | Concrete (VSharedLoan (_, v)) -> v
+      | Abstract (ASharedLoan (_, v, _)) -> v
       | _ -> raise (Failure "Unreachable")
     in
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
@@ -927,12 +927,12 @@ let compute_fp_ctx_symbolic_values (ctx : C.eval_ctx) (fp_ctx : C.eval_ctx) :
         inherit [_] C.iter_env
 
         (** We lookup the shared values *)
-        method! visit_SharedBorrow env bid =
+        method! visit_VSharedBorrow env bid =
           let open InterpreterBorrowsCore in
           let v =
             match snd (lookup_loan ek_all bid fp_ctx) with
-            | Concrete (V.SharedLoan (_, v)) -> v
-            | Abstract (V.ASharedLoan (_, v, _)) -> v
+            | Concrete (VSharedLoan (_, v)) -> v
+            | Abstract (ASharedLoan (_, v, _)) -> v
             | _ -> raise (Failure "Unreachable")
           in
           self#visit_typed_value env v

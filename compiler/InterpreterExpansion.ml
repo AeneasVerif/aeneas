@@ -183,9 +183,9 @@ let replace_symbolic_values (at_most_once : bool)
     object
       inherit [_] C.map_eval_ctx as super
 
-      method! visit_Symbolic env spc =
+      method! visit_VSymbolic env spc =
         if same_symbolic_id spc original_sv then replace ()
-        else super#visit_Symbolic env spc
+        else super#visit_VSymbolic env spc
     end
   in
   (* Apply the substitution *)
@@ -326,11 +326,11 @@ let expand_symbolic_value_shared_borrow (config : C.config)
     object (self)
       inherit [_] C.map_eval_ctx as super
 
-      method! visit_Symbolic env sv =
+      method! visit_VSymbolic env sv =
         if same_symbolic_id sv original_sv then
           let bid = fresh_borrow () in
-          V.Borrow (V.SharedBorrow bid)
-        else super#visit_Symbolic env sv
+          VBorrow (VSharedBorrow bid)
+        else super#visit_VSymbolic env sv
 
       method! visit_EAbs proj_regions abs =
         assert (Option.is_none proj_regions);
@@ -639,7 +639,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
     object
       inherit [_] C.iter_eval_ctx
 
-      method! visit_Symbolic _ sv =
+      method! visit_VSymbolic _ sv =
         if ty_has_borrows ctx.type_context.type_infos sv.V.sv_ty then
           raise (FoundSymbolicValue sv)
         else ()
@@ -664,22 +664,22 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
           ("greedy_expand_symbolics_with_borrows: about to expand: "
           ^ symbolic_value_to_string ctx sv));
       let cc : cm_fun =
-        match sv.V.sv_ty with
-        | T.TAdt (TAdtId def_id, _) ->
+        match sv.sv_ty with
+        | TAdt (TAdtId def_id, _) ->
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
             let def = C.ctx_lookup_type_decl ctx def_id in
             (match def.kind with
-            | T.Struct _ | T.Enum ([] | [ _ ]) -> ()
-            | T.Enum (_ :: _) ->
+            | Struct _ | Enum ([] | [ _ ]) -> ()
+            | Enum (_ :: _) ->
                 raise
                   (Failure
                      ("Attempted to greedily expand a symbolic enumeration \
                        with > 1 variants (option \
                        [greedy_expand_symbolics_with_borrows] of [config]): "
                      ^ Print.name_to_string def.name))
-            | T.Opaque ->
+            | Opaque ->
                 raise (Failure "Attempted to greedily expand an opaque type"));
             (* Also, we need to check if the definition is recursive *)
             if C.ctx_type_decl_is_rec ctx def_id then
@@ -690,16 +690,15 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
                      [config]): "
                    ^ Print.name_to_string def.name))
             else expand_symbolic_value_no_branching config sv None
-        | T.TAdt ((TTuple | TAssumed TBox), _) | T.TRef (_, _, _) ->
+        | TAdt ((TTuple | TAssumed TBox), _) | TRef (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config sv None
-        | T.TAdt (TAssumed (TArray | TSlice | TStr), _) ->
+        | TAdt (TAssumed (TArray | TSlice | TStr), _) ->
             (* We can't expand those *)
             raise
               (Failure
                  "Attempted to greedily expand an ADT which can't be expanded ")
-        | T.TVar _ | T.TLiteral _ | TNever | T.TTraitType _ | T.TArrow _
-        | T.TRawPtr _ ->
+        | TVar _ | TLiteral _ | TNever | TTraitType _ | TArrow _ | TRawPtr _ ->
             raise (Failure "Unreachable")
       in
       (* Compose and continue *)

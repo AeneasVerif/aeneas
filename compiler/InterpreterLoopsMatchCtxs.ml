@@ -212,66 +212,66 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           assert (not (value_has_borrows ctx v1.V.value));
           (* Merge *)
           M.match_distinct_adts ty av0 av1)
-    | Bottom, Bottom -> v0
-    | Borrow bc0, Borrow bc1 ->
+    | VBottom, VBottom -> v0
+    | VBorrow bc0, VBorrow bc1 ->
         let bc =
           match (bc0, bc1) with
-          | SharedBorrow bid0, SharedBorrow bid1 ->
+          | VSharedBorrow bid0, VSharedBorrow bid1 ->
               let bid = M.match_shared_borrows match_rec ty bid0 bid1 in
-              V.SharedBorrow bid
-          | MutBorrow (bid0, bv0), MutBorrow (bid1, bv1) ->
+              V.VSharedBorrow bid
+          | VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1) ->
               let bv = match_rec bv0 bv1 in
               assert (not (value_has_borrows ctx bv.V.value));
               let bid, bv = M.match_mut_borrows ty bid0 bv0 bid1 bv1 bv in
-              V.MutBorrow (bid, bv)
-          | ReservedMutBorrow _, _
-          | _, ReservedMutBorrow _
-          | SharedBorrow _, MutBorrow _
-          | MutBorrow _, SharedBorrow _ ->
+              VMutBorrow (bid, bv)
+          | VReservedMutBorrow _, _
+          | _, VReservedMutBorrow _
+          | VSharedBorrow _, VMutBorrow _
+          | VMutBorrow _, VSharedBorrow _ ->
               (* If we get here, either there is a typing inconsistency, or we are
                  trying to match a reserved borrow, which shouldn't happen because
                  reserved borrow should be eliminated very quickly - they are introduced
                  just before function calls which activate them *)
               raise (Failure "Unexpected")
         in
-        { V.value = V.Borrow bc; ty }
-    | Loan lc0, Loan lc1 ->
+        { V.value = VBorrow bc; ty }
+    | VLoan lc0, VLoan lc1 ->
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         let lc =
           match (lc0, lc1) with
-          | SharedLoan (ids0, sv0), SharedLoan (ids1, sv1) ->
+          | VSharedLoan (ids0, sv0), VSharedLoan (ids1, sv1) ->
               let sv = match_rec sv0 sv1 in
               assert (not (value_has_borrows ctx sv.V.value));
               let ids, sv = M.match_shared_loans ty ids0 ids1 sv in
-              V.SharedLoan (ids, sv)
-          | MutLoan id0, MutLoan id1 ->
+              V.VSharedLoan (ids, sv)
+          | VMutLoan id0, VMutLoan id1 ->
               let id = M.match_mut_loans ty id0 id1 in
-              V.MutLoan id
-          | SharedLoan _, MutLoan _ | MutLoan _, SharedLoan _ ->
+              VMutLoan id
+          | VSharedLoan _, VMutLoan _ | VMutLoan _, VSharedLoan _ ->
               raise (Failure "Unreachable")
         in
-        { V.value = Loan lc; ty = v1.V.ty }
-    | Symbolic sv0, Symbolic sv1 ->
+        { V.value = VLoan lc; ty = v1.V.ty }
+    | VSymbolic sv0, VSymbolic sv1 ->
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
         assert (not (value_has_borrows ctx v0.V.value));
         assert (not (value_has_borrows ctx v1.V.value));
         (* Match *)
         let sv = M.match_symbolic_values sv0 sv1 in
-        { v1 with V.value = V.Symbolic sv }
-    | Loan lc, _ -> (
+        { v1 with V.value = VSymbolic sv }
+    | VLoan lc, _ -> (
         match lc with
-        | SharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInLeft ids))
-        | MutLoan id -> raise (ValueMatchFailure (LoanInLeft id)))
-    | _, Loan lc -> (
+        | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInLeft ids))
+        | VMutLoan id -> raise (ValueMatchFailure (LoanInLeft id)))
+    | _, VLoan lc -> (
         match lc with
-        | SharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInRight ids))
-        | MutLoan id -> raise (ValueMatchFailure (LoanInRight id)))
-    | Symbolic sv, _ -> M.match_symbolic_with_other true sv v1
-    | _, Symbolic sv -> M.match_symbolic_with_other false sv v0
-    | Bottom, _ -> M.match_bottom_with_other true v1
-    | _, Bottom -> M.match_bottom_with_other false v0
+        | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInRight ids))
+        | VMutLoan id -> raise (ValueMatchFailure (LoanInRight id)))
+    | VSymbolic sv, _ -> M.match_symbolic_with_other true sv v1
+    | _, VSymbolic sv -> M.match_symbolic_with_other false sv v0
+    | VBottom, _ -> M.match_bottom_with_other true v1
+    | _, VBottom -> M.match_bottom_with_other false v0
     | _ ->
         log#ldebug
           (lazy
@@ -414,10 +414,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Check if there are loans: we request to end them *)
     let check_loans (left : bool) (fields : V.typed_value list) : unit =
       match InterpreterBorrowsCore.get_first_loan_in_values fields with
-      | Some (V.SharedLoan (ids, _)) ->
+      | Some (VSharedLoan (ids, _)) ->
           if left then raise (ValueMatchFailure (LoansInLeft ids))
           else raise (ValueMatchFailure (LoansInRight ids))
-      | Some (V.MutLoan id) ->
+      | Some (VMutLoan id) ->
           if left then raise (ValueMatchFailure (LoanInLeft id))
           else raise (ValueMatchFailure (LoanInRight id))
       | None -> ()
@@ -688,10 +688,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let value_is_left = not left in
     (match InterpreterBorrowsCore.get_first_loan_in_value v with
     | None -> ()
-    | Some (SharedLoan (ids, _)) ->
+    | Some (VSharedLoan (ids, _)) ->
         if value_is_left then raise (ValueMatchFailure (LoansInLeft ids))
         else raise (ValueMatchFailure (LoansInRight ids))
-    | Some (MutLoan id) ->
+    | Some (VMutLoan id) ->
         if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
         else raise (ValueMatchFailure (LoanInRight id)));
     (* Return a fresh symbolic value *)
@@ -711,10 +711,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     | Some (BorrowContent _) -> raise (Failure "Unreachable")
     | Some (LoanContent lc) -> (
         match lc with
-        | V.SharedLoan (ids, _) ->
+        | VSharedLoan (ids, _) ->
             if value_is_left then raise (ValueMatchFailure (LoansInLeft ids))
             else raise (ValueMatchFailure (LoansInRight ids))
-        | V.MutLoan id ->
+        | VMutLoan id ->
             if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
@@ -1366,8 +1366,8 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
       let open InterpreterBorrowsCore in
       let lookup_shared_loan lid ctx : V.typed_value =
         match snd (lookup_loan ek_all lid ctx) with
-        | Concrete (V.SharedLoan (_, v)) -> v
-        | Abstract (V.ASharedLoan (_, v, _)) -> v
+        | Concrete (VSharedLoan (_, v)) -> v
+        | Abstract (ASharedLoan (_, v, _)) -> v
         | _ -> raise (Failure "Unreachable")
       in
       let lookup_in_src id = lookup_shared_loan id src_ctx in

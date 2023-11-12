@@ -21,7 +21,7 @@ let mk_typed_avalue (ty : ty) (value : avalue) : typed_avalue =
 
 let mk_bottom (ty : ty) : typed_value =
   assert (ty_is_ety ty);
-  { value = Bottom; ty }
+  { value = VBottom; ty }
 
 let mk_abottom (ty : ty) : typed_avalue =
   assert (ty_is_rty ty);
@@ -32,7 +32,7 @@ let mk_aignored (ty : ty) : typed_avalue =
   { value = AIgnored; ty }
 
 let value_as_symbolic (v : value) : symbolic_value =
-  match v with Symbolic v -> v | _ -> raise (Failure "Unexpected")
+  match v with VSymbolic v -> v | _ -> raise (Failure "Unexpected")
 
 (** Box a value *)
 let mk_box_value (v : typed_value) : typed_value =
@@ -40,20 +40,20 @@ let mk_box_value (v : typed_value) : typed_value =
   let box_v = VAdt { variant_id = None; field_values = [ v ] } in
   mk_typed_value box_ty box_v
 
-let is_bottom (v : value) : bool = match v with Bottom -> true | _ -> false
+let is_bottom (v : value) : bool = match v with VBottom -> true | _ -> false
 
 let is_aignored (v : avalue) : bool =
   match v with AIgnored -> true | _ -> false
 
 let is_symbolic (v : value) : bool =
-  match v with Symbolic _ -> true | _ -> false
+  match v with VSymbolic _ -> true | _ -> false
 
 let as_symbolic (v : value) : symbolic_value =
-  match v with Symbolic s -> s | _ -> raise (Failure "Unexpected")
+  match v with VSymbolic s -> s | _ -> raise (Failure "Unexpected")
 
 let as_mut_borrow (v : typed_value) : BorrowId.id * typed_value =
   match v.value with
-  | Borrow (MutBorrow (bid, bv)) -> (bid, bv)
+  | VBorrow (VMutBorrow (bid, bv)) -> (bid, bv)
   | _ -> raise (Failure "Unexpected")
 
 let is_unit (v : typed_value) : bool =
@@ -86,7 +86,7 @@ let reserved_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
-      method! visit_ReservedMutBorrow _env _ = raise Found
+      method! visit_VReservedMutBorrow _env _ = raise Found
     end
   in
   (* We use exceptions *)
@@ -151,7 +151,7 @@ let find_first_primitively_copyable_sv_with_borrows (type_infos : TA.type_infos)
     object
       inherit [_] iter_typed_value
 
-      method! visit_Symbolic _ sv =
+      method! visit_VSymbolic _ sv =
         let ty = sv.sv_ty in
         if ty_is_primitively_copyable ty && ty_has_borrows type_infos ty then
           raise (FoundSymbolicValue sv)
@@ -171,7 +171,7 @@ let find_first_primitively_copyable_sv_with_borrows (type_infos : TA.type_infos)
  *)
 let rec value_strip_shared_loans (v : typed_value) : typed_value =
   match v.value with
-  | Loan (SharedLoan (_, v')) -> value_strip_shared_loans v'
+  | VLoan (VSharedLoan (_, v')) -> value_strip_shared_loans v'
   | _ -> v
 
 (** Check if a symbolic value has borrows *)
@@ -251,7 +251,7 @@ let value_remove_shared_loans (v : typed_value) : typed_value =
 
       method! visit_typed_value env v =
         match v.value with
-        | Loan (SharedLoan (_, sv)) -> self#visit_typed_value env sv
+        | VLoan (VSharedLoan (_, sv)) -> self#visit_typed_value env sv
         | _ -> super#visit_typed_value env v
     end
   in

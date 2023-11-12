@@ -115,10 +115,10 @@ type symbolic_value = {
 and value =
   | VLiteral of literal  (** Non-symbolic primitive value *)
   | VAdt of adt_value  (** Enumerations and structures *)
-  | Bottom  (** No value (uninitialized or moved value) *)
-  | Borrow of borrow_content  (** A borrowed value *)
-  | Loan of loan_content  (** A loaned value *)
-  | Symbolic of symbolic_value
+  | VBottom  (** No value (uninitialized or moved value) *)
+  | VBorrow of borrow_content  (** A borrowed value *)
+  | VLoan of loan_content  (** A loaned value *)
+  | VSymbolic of symbolic_value
       (** Borrow projector over a symbolic value.
       
           Note that contrary to the abstraction-values case, symbolic values
@@ -132,9 +132,9 @@ and adt_value = {
 }
 
 and borrow_content =
-  | SharedBorrow of borrow_id  (** A shared borrow. *)
-  | MutBorrow of borrow_id * typed_value  (** A mutably borrowed value. *)
-  | ReservedMutBorrow of borrow_id
+  | VSharedBorrow of borrow_id  (** A shared borrow. *)
+  | VMutBorrow of borrow_id * typed_value  (** A mutably borrowed value. *)
+  | VReservedMutBorrow of borrow_id
       (** A reserved mut borrow.
 
           This is used to model {{: https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html} two-phase borrows}.
@@ -172,8 +172,8 @@ and borrow_content =
        *)
 
 and loan_content =
-  | SharedLoan of loan_id_set * typed_value
-  | MutLoan of loan_id
+  | VSharedLoan of loan_id_set * typed_value
+  | VMutLoan of loan_id
 
 (** "Regular" typed value (we map variables to typed values) *)
 and typed_value = { value : value; ty : ty }

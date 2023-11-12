@@ -1149,7 +1149,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
   (* Translate the value *)
   let value =
     match v.value with
-    | V.VLiteral cv -> { e = Const cv; ty }
+    | VLiteral cv -> { e = Const cv; ty }
     | VAdt av -> (
         let variant_id = av.variant_id in
         let field_values = List.map translate av.field_values in
@@ -1173,27 +1173,27 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
             mk_apps cons field_values)
-    | Bottom -> raise (Failure "Unreachable")
-    | Loan lc -> (
+    | VBottom -> raise (Failure "Unreachable")
+    | VLoan lc -> (
         match lc with
-        | SharedLoan (_, v) -> translate v
-        | MutLoan _ -> raise (Failure "Unreachable"))
-    | Borrow bc -> (
+        | VSharedLoan (_, v) -> translate v
+        | VMutLoan _ -> raise (Failure "Unreachable"))
+    | VBorrow bc -> (
         match bc with
-        | V.SharedBorrow bid ->
+        | VSharedBorrow bid ->
             (* Lookup the shared value in the context, and continue *)
             let sv = InterpreterBorrowsCore.lookup_shared_value ectx bid in
             translate sv
-        | V.ReservedMutBorrow bid ->
+        | VReservedMutBorrow bid ->
             (* Same as for shared borrows. However, note that we use reserved borrows
              * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
             let sv = InterpreterBorrowsCore.lookup_shared_value ectx bid in
             translate sv
-        | V.MutBorrow (_, v) ->
+        | VMutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
             translate v)
-    | Symbolic sv -> symbolic_value_to_texpression ctx sv
+    | VSymbolic sv -> symbolic_value_to_texpression ctx sv
   in
   (* Debugging *)
   log#ldebug

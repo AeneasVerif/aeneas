@@ -137,18 +137,18 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
    * we reverted the changes: the result was less clear actually. In particular,
    * the fact that we have exhaustive matches below makes very obvious the cases
    * in which we need to fail *)
-  match v.V.value with
-  | V.VLiteral _ -> (ctx, v)
-  | V.VAdt av ->
+  match v.value with
+  | VLiteral _ -> (ctx, v)
+  | VAdt av ->
       (* Sanity check *)
-      (match v.V.ty with
-      | T.TAdt (T.TAssumed T.TBox, _) ->
+      (match v.ty with
+      | TAdt (TAssumed TBox, _) ->
           raise (Failure "Can't copy an assumed value other than Option")
-      | T.TAdt (T.TAdtId _, _) as ty ->
+      | TAdt (TAdtId _, _) as ty ->
           assert (allow_adt_copy || ty_is_primitively_copyable ty)
-      | T.TAdt (T.TTuple, _) -> () (* Ok *)
-      | T.TAdt
-          ( T.TAssumed (TSlice | T.TArray),
+      | TAdt (TTuple, _) -> () (* Ok *)
+      | TAdt
+          ( TAssumed (TSlice | TArray),
             {
               regions = [];
               types = [ ty ];
@@ -162,33 +162,33 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
           (copy_value allow_adt_copy config)
           ctx av.field_values
       in
-      (ctx, { v with V.value = V.VAdt { av with field_values = fields } })
-  | V.Bottom -> raise (Failure "Can't copy ⊥")
-  | V.Borrow bc -> (
+      (ctx, { v with value = VAdt { av with field_values = fields } })
+  | VBottom -> raise (Failure "Can't copy ⊥")
+  | VBorrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
-      | SharedBorrow bid ->
+      | VSharedBorrow bid ->
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
           let bid' = C.fresh_borrow_id () in
           let ctx = InterpreterBorrows.reborrow_shared bid bid' ctx in
-          (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
-      | MutBorrow (_, _) -> raise (Failure "Can't copy a mutable borrow")
-      | V.ReservedMutBorrow _ ->
+          (ctx, { v with value = VBorrow (VSharedBorrow bid') })
+      | VMutBorrow (_, _) -> raise (Failure "Can't copy a mutable borrow")
+      | VReservedMutBorrow _ ->
           raise (Failure "Can't copy a reserved mut borrow"))
-  | V.Loan lc -> (
+  | VLoan lc -> (
       (* We can only copy shared loans *)
       match lc with
-      | V.MutLoan _ -> raise (Failure "Can't copy a mutable loan")
-      | V.SharedLoan (_, sv) ->
+      | VMutLoan _ -> raise (Failure "Can't copy a mutable loan")
+      | VSharedLoan (_, sv) ->
           (* We don't copy the shared loan: only the shared value inside *)
           copy_value allow_adt_copy config ctx sv)
-  | V.Symbolic sp ->
+  | VSymbolic sp ->
       (* We can copy only if the type is "primitively" copyable.
        * Note that in the general case, copy is a trait: copying values
        * thus requires calling the proper function. Here, we copy values
        * for very simple types such as integers, shared borrows, etc. *)
-      assert (ty_is_primitively_copyable (Subst.erase_regions sp.V.sv_ty));
+      assert (ty_is_primitively_copyable (Subst.erase_regions sp.sv_ty));
       (* If the type is copyable, we simply return the current value. Side
        * remark: what is important to look at when copying symbolic values
        * is symbolic expansion. The important subcase is the expansion of shared
@@ -239,16 +239,16 @@ let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
   let prepare : cm_fun =
    fun cf ctx ->
     match op with
-    | E.Constant _ ->
+    | Constant _ ->
         (* No need to reorganize the context *)
         cf ctx
-    | E.Copy p ->
+    | Copy p ->
         (* Access the value *)
         let access = Read in
         (* Expand the symbolic values, if necessary *)
         let expand_prim_copy = true in
         access_rplace_reorganize config expand_prim_copy access p cf ctx
-    | E.Move p ->
+    | Move p ->
         (* Access the value *)
         let access = Move in
         let expand_prim_copy = false in
@@ -268,11 +268,11 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
-  | E.Constant cv -> (
+  | Constant cv -> (
       match cv.value with
-      | E.CLiteral lit ->
+      | CLiteral lit ->
           cf (literal_to_typed_value (TypesUtils.ty_as_literal cv.ty) lit) ctx
-      | E.CTraitConst (trait_ref, generics, const_name) -> (
+      | CTraitConst (trait_ref, generics, const_name) -> (
           assert (generics = TypesUtils.mk_empty_generic_args);
           match trait_ref.trait_id with
           | T.TraitImpl _ ->
@@ -307,7 +307,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
                          SymbolicAst.VaTraitConstValue
                            (trait_ref, generics, const_name),
                          e ))))
-      | E.CVar vid -> (
+      | CVar vid -> (
           let ctx0 = ctx in
           (* Lookup the const generic value *)
           let cv = C.ctx_lookup_const_generic_value ctx vid in
@@ -331,8 +331,8 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
                      value_as_symbolic v.value,
                      SymbolicAst.VaCGValue vid,
                      e )))
-      | E.CFnPtr _ -> raise (Failure "TODO"))
-  | E.Copy p ->
+      | CFnPtr _ -> raise (Failure "TODO"))
+  | Copy p ->
       (* Access the value *)
       let access = Read in
       let cc = read_place access p in
@@ -353,7 +353,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
       in
       (* Compose and apply *)
       comp cc copy cf ctx
-  | E.Move p ->
+  | Move p ->
       (* Access the value *)
       let access = Move in
       let cc = read_place access p in
@@ -362,7 +362,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
        fun ctx ->
         (* Check that there are no bottoms in the value we are about to move *)
         assert (not (bottom_in_value ctx.ended_regions v));
-        let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
+        let bottom : V.typed_value = { V.value = VBottom; ty = v.ty } in
         let ctx = write_place access p bottom ctx in
         cf v ctx
       in
@@ -622,18 +622,18 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
   match bkind with
-  | E.Shared | E.TwoPhaseMut | E.Shallow ->
+  | Shared | TwoPhaseMut | Shallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we
          forbid them.
       *)
-      assert (bkind <> E.Shallow);
+      assert (bkind <> Shallow);
 
       (* Access the value *)
       let access =
         match bkind with
-        | E.Shared | E.Shallow -> Read
-        | E.TwoPhaseMut -> Write
+        | Shared | Shallow -> Read
+        | TwoPhaseMut -> Write
         | _ -> raise (Failure "Unreachable")
       in
 
@@ -648,17 +648,17 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         let bid = C.fresh_borrow_id () in
         (* Compute the loan value, with which to replace the value at place p *)
         let nv =
-          match v.V.value with
-          | V.Loan (V.SharedLoan (bids, sv)) ->
+          match v.value with
+          | VLoan (VSharedLoan (bids, sv)) ->
               (* Shared loan: insert the new borrow id *)
               let bids1 = V.BorrowId.Set.add bid bids in
-              { v with V.value = V.Loan (V.SharedLoan (bids1, sv)) }
+              { v with value = VLoan (VSharedLoan (bids1, sv)) }
           | _ ->
               (* Not a shared loan: add a wrapper *)
               let v' =
-                V.Loan (V.SharedLoan (V.BorrowId.Set.singleton bid, v))
+                V.VLoan (VSharedLoan (V.BorrowId.Set.singleton bid, v))
               in
-              { v with V.value = v' }
+              { v with value = v' }
         in
         (* Update the borrowed value in the context *)
         let ctx = write_place access p nv ctx in
@@ -666,27 +666,27 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
          * Note that the reference is *mutable* if we do a two-phase borrow *)
         let ref_kind =
           match bkind with
-          | E.Shared | E.Shallow -> T.Shared
-          | E.TwoPhaseMut -> T.Mut
+          | Shared | Shallow -> T.Shared
+          | TwoPhaseMut -> T.Mut
           | _ -> raise (Failure "Unreachable")
         in
         let rv_ty = T.TRef (T.RErased, v.ty, ref_kind) in
         let bc =
           match bkind with
-          | E.Shared | E.Shallow ->
+          | Shared | Shallow ->
               (* See the remark at the beginning of the match branch: we
                  handle shallow borrows like shared borrows *)
-              V.SharedBorrow bid
-          | E.TwoPhaseMut -> V.ReservedMutBorrow bid
+              V.VSharedBorrow bid
+          | TwoPhaseMut -> VReservedMutBorrow bid
           | _ -> raise (Failure "Unreachable")
         in
-        let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
+        let rv : V.typed_value = { value = VBorrow bc; ty = rv_ty } in
         (* Continue *)
         cf rv ctx
       in
       (* Compose and apply *)
       comp prepare eval cf ctx
-  | E.Mut ->
+  | Mut ->
       (* Access the value *)
       let access = Write in
       let expand_prim_copy = false in
@@ -698,12 +698,12 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
        fun ctx ->
         (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
         let bid = C.fresh_borrow_id () in
-        let rv_ty = T.TRef (T.RErased, v.ty, Mut) in
+        let rv_ty = T.TRef (RErased, v.ty, Mut) in
         let rv : V.typed_value =
-          { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty }
+          { V.value = VBorrow (VMutBorrow (bid, v)); ty = rv_ty }
         in
         (* Compute the value with which to replace the value at place p *)
-        let nv = { v with V.value = V.Loan (V.MutLoan bid) } in
+        let nv = { v with value = VLoan (VMutLoan bid) } in
         (* Update the value in the context *)
         let ctx = write_place access p nv ctx in
         (* Continue *)
@@ -723,7 +723,7 @@ let eval_rvalue_aggregate (config : C.config)
    fun ctx ->
     (* Match on the aggregate kind *)
     match aggregate_kind with
-    | E.AggregatedAdt (type_id, opt_variant_id, generics) -> (
+    | AggregatedAdt (type_id, opt_variant_id, generics) -> (
         match type_id with
         | TTuple ->
             let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
@@ -755,7 +755,7 @@ let eval_rvalue_aggregate (config : C.config)
             (* Call the continuation *)
             cf aggregated ctx
         | TAssumed _ -> raise (Failure "Unreachable"))
-    | E.AggregatedArray (ety, cg) -> (
+    | AggregatedArray (ety, cg) -> (
         (* Sanity check: all the values have the proper type *)
         assert (List.for_all (fun (v : V.typed_value) -> v.V.ty = ety) values);
         (* Sanity check: the number of values is consistent with the length *)
