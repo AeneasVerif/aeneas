@@ -23,6 +23,7 @@ let _ =
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
   main_log#set_level EL.Info;
   llbc_of_json_logger#set_level EL.Info;
+  regions_hierarchy_log#set_level EL.Info;
   pre_passes_log#set_level EL.Info;
   associated_types_log#set_level EL.Info;
   contexts_log#set_level EL.Info;

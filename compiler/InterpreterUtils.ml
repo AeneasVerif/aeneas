@@ -463,7 +463,8 @@ let initialize_eval_context (ctx : C.decls_ctx)
     evaluating in symbolic mode).
  *)
 let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.generic_args)
-    (tr_self : T.trait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
+    (tr_self : T.trait_instance_id) (sg : A.fun_sig)
+    (regions_hierarchy : T.region_groups) : A.inst_fun_sig =
   log#ldebug
     (lazy
       ("instantiate_fun_sig:" ^ "\n- generics: "
@@ -474,11 +475,6 @@ let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.generic_args)
   (* Erase the regions in the generics we use for the instantiation *)
   let generics = Subst.generic_args_erase_regions generics in
   let tr_self = Subst.trait_instance_id_erase_regions tr_self in
-  (* Compute the regions hierarchy *)
-  let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig
-      ctx.type_context.type_decls sg
-  in
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let rg_abs_ids_bindings =

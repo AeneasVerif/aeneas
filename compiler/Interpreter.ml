@@ -65,7 +65,8 @@ let normalize_inst_fun_sig (ctx : C.eval_ctx) (sg : A.inst_fun_sig) :
     normalize because a trait clause was instantiated with a specific trait ref).
  *)
 let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
-    (kind : A.fun_kind) : C.eval_ctx * A.inst_fun_sig =
+    (regions_hierarchy : T.region_groups) (kind : A.fun_kind) :
+    C.eval_ctx * A.inst_fun_sig =
   let tr_self =
     match kind with
     | RegularKind | TraitMethodImpl _ -> T.UnknownTrait __FUNCTION__
@@ -147,7 +148,7 @@ let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
     in
     { T.regions; types; const_generics; trait_refs }
   in
-  let inst_sg = instantiate_fun_sig ctx generics tr_self sg in
+  let inst_sg = instantiate_fun_sig ctx generics tr_self sg regions_hierarchy in
   (* Compute the normalization maps *)
   let ctx =
     AssociatedTypes.ctx_add_norm_trait_types_from_preds ctx
@@ -200,7 +201,7 @@ let initialize_symbolic_context_for_fun (ctx : C.decls_ctx) (fdef : A.fun_decl)
      at the same time the normalization map for the associated types.
   *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig ctx fdef.signature fdef.kind
+    symbolic_instantiate_fun_sig ctx fdef.signature regions_hierarchy fdef.kind
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -275,8 +276,11 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
+  let regions_hierarchy =
+    FunIdMap.find (FRegular fdef.def_id) ctx.fun_context.regions_hierarchies
+  in
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig ctx fdef.signature fdef.kind
+    symbolic_instantiate_fun_sig ctx fdef.signature regions_hierarchy fdef.kind
   in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
@@ -287,9 +291,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * will end - this will allow us to, first, mark the other return
    * regions as non-endable, and, second, end those parent regions in
    * proper order. *)
-  let regions_hierarchy =
-    FunIdMap.find (FRegular fdef.def_id) ctx.fun_context.regions_hierarchies
-  in
   let parent_rgs = list_ancestor_region_groups regions_hierarchy back_id in
   let parent_input_abs_ids =
     T.RegionGroupId.mapi

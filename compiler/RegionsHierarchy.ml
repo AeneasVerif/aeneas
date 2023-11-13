@@ -25,6 +25,7 @@
     be grouped together).
  *)
 
+open Names
 open Types
 open TypesUtils
 open Expressions
@@ -34,8 +35,12 @@ open Assumed
 open SCC
 module Subst = Substitute
 
+(** The local logger *)
+let log = Logging.regions_hierarchy_log
+
 let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
-    (sg : fun_sig) : region_groups =
+    (fun_name : name) (sg : fun_sig) : region_groups =
+  log#ldebug (lazy (__FUNCTION__ ^ ": " ^ name_to_string fun_name));
   (* Create the dependency graph.
 
      An edge from 'short to 'long means that 'long outlives 'short (that is
@@ -229,15 +234,18 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
     (fun_decls : fun_decl FunDeclId.Map.t) : region_groups FunIdMap.t =
   let regular =
     List.map
-      (fun (fid, d) -> (FRegular fid, d.signature))
+      (fun ((fid, d) : FunDeclId.id * fun_decl) ->
+        (FRegular fid, (d.name, d.signature)))
       (FunDeclId.Map.bindings fun_decls)
   in
   let assumed =
     List.map
-      (fun (info : assumed_fun_info) -> (FAssumed info.fun_id, info.fun_sig))
+      (fun (info : assumed_fun_info) ->
+        (FAssumed info.fun_id, (info.name, info.fun_sig)))
       assumed_fun_infos
   in
   FunIdMap.of_list
     (List.map
-       (fun (fid, sg) -> (fid, compute_regions_hierarchy_for_sig type_decls sg))
+       (fun (fid, (name, sg)) ->
+         (fid, compute_regions_hierarchy_for_sig type_decls name sg))
        (regular @ assumed))

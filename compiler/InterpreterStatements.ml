@@ -1114,8 +1114,13 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             ^ "\n- def.signature:\n"
             ^ fun_sig_to_string ctx def.A.signature));
         let tr_self = T.UnknownTrait __FUNCTION__ in
+        let regions_hierarchy =
+          LlbcAstUtils.FunIdMap.find (FRegular fid)
+            ctx.fun_context.regions_hierarchies
+        in
         let inst_sg =
           instantiate_fun_sig ctx call.func.generics tr_self def.A.signature
+            regions_hierarchy
         in
         (call.func.func, call.func.generics, def, inst_sg)
     | FunId (FAssumed _) ->
@@ -1154,9 +1159,14 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                 let method_def = C.ctx_lookup_fun_decl ctx id in
                 (* Instantiate *)
                 let tr_self = T.TraitRef trait_ref in
+                let fid : A.fun_id = FRegular id in
+                let regions_hierarchy =
+                  LlbcAstUtils.FunIdMap.find fid
+                    ctx.fun_context.regions_hierarchies
+                in
                 let inst_sg =
                   instantiate_fun_sig ctx generics tr_self
-                    method_def.A.signature
+                    method_def.A.signature regions_hierarchy
                 in
                 (* Also update the function identifier: we want to forget
                    the fact that we called a trait method, and treat it as
@@ -1164,7 +1174,7 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                    which implements the method. In order to do this properly,
                    we also need to update the generics.
                 *)
-                let func = E.FunId (FRegular id) in
+                let func = E.FunId fid in
                 (func, generics, method_def, inst_sg)
             | None ->
                 (* If not found, lookup the methods provided by the trait *declaration*
@@ -1210,10 +1220,14 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
                     ^ "\n- parent params info: "
                     ^ Print.option_to_string A.show_params_info
                         method_def.signature.parent_params_info));
+                let regions_hierarchy =
+                  LlbcAstUtils.FunIdMap.find (FRegular method_id)
+                    ctx.fun_context.regions_hierarchies
+                in
                 let tr_self = T.TraitRef trait_ref in
                 let inst_sg =
                   instantiate_fun_sig ctx all_generics tr_self
-                    method_def.A.signature
+                    method_def.A.signature regions_hierarchy
                 in
                 (call.func.func, call.func.generics, method_def, inst_sg))
         | _ ->
@@ -1236,9 +1250,14 @@ and eval_transparent_function_call_symbolic (config : C.config) (call : A.call)
             let method_def = C.ctx_lookup_fun_decl ctx method_id in
             log#ldebug (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
             (* Instantiate *)
+            let regions_hierarchy =
+              LlbcAstUtils.FunIdMap.find (FRegular method_id)
+                ctx.fun_context.regions_hierarchies
+            in
             let tr_self = T.TraitRef trait_ref in
             let inst_sg =
               instantiate_fun_sig ctx generics tr_self method_def.A.signature
+                regions_hierarchy
             in
             (call.func.func, call.func.generics, method_def, inst_sg))
   in
@@ -1437,10 +1456,15 @@ and eval_assumed_function_call_symbolic (config : C.config)
             (* Should have been treated above *)
             raise (Failure "Unreachable")
         | _ ->
+            let regions_hierarchy =
+              LlbcAstUtils.FunIdMap.find (FAssumed fid)
+                ctx.fun_context.regions_hierarchies
+            in
             (* There shouldn't be any reference to Self *)
             let tr_self = T.UnknownTrait __FUNCTION__ in
             instantiate_fun_sig ctx generics tr_self
               (Assumed.get_assumed_fun_sig fid)
+              regions_hierarchy
       in
 
       (* Evaluate the function call *)

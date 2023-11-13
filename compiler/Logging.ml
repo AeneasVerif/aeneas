@@ -6,6 +6,9 @@ include Charon.Logging
 (** Logger for PrePasses *)
 let pre_passes_log = L.get_logger "MainLogger.PrePasses"
 
+(** Logger for RegionsHierarchy *)
+let regions_hierarchy_log = L.get_logger "MainLogger.RegionsHierarchy"
+
 (** Logger for Translate *)
 let translate_log = L.get_logger "MainLogger.Translate"
 
