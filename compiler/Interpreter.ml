@@ -31,6 +31,7 @@ let compute_contexts (m : A.crate) : C.decls_ctx =
   in
   let regions_hierarchies =
     RegionsHierarchy.compute_regions_hierarchies type_decls fun_decls
+      global_decls trait_decls trait_impls
   in
   let fun_ctx = { C.fun_decls; fun_infos; regions_hierarchies } in
   let global_ctx = { C.global_decls } in

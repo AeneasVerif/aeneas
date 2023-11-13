@@ -39,8 +39,31 @@ module Subst = Substitute
 let log = Logging.regions_hierarchy_log
 
 let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
-    (fun_name : name) (sg : fun_sig) : region_groups =
+    (fun_decls : fun_decl FunDeclId.Map.t)
+    (global_decls : global_decl GlobalDeclId.Map.t)
+    (trait_decls : trait_decl TraitDeclId.Map.t)
+    (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : name)
+    (sg : fun_sig) : region_groups =
   log#ldebug (lazy (__FUNCTION__ ^ ": " ^ name_to_string fun_name));
+  (* Initialize a normalization context (we may need to normalize some
+     associated types) *)
+  let norm_ctx : AssociatedTypes.norm_ctx =
+    let norm_trait_types =
+      AssociatedTypes.compute_norm_trait_types_from_preds
+        sg.preds.trait_type_constraints
+    in
+    {
+      norm_trait_types;
+      type_decls;
+      fun_decls;
+      global_decls;
+      trait_decls;
+      trait_impls;
+      type_vars = sg.generics.types;
+      const_generic_vars = sg.generics.const_generics;
+    }
+  in
+
   (* Create the dependency graph.
 
      An edge from 'short to 'long means that 'long outlives 'short (that is
@@ -139,7 +162,13 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
     List.iter (explore_ty outer) types
   in
 
-  List.iter (explore_ty []) (sg.output :: sg.inputs);
+  (* Normalize the types then explore *)
+  let tys =
+    List.map
+      (AssociatedTypes.norm_ctx_normalize_ty norm_ctx)
+      (sg.output :: sg.inputs)
+  in
+  List.iter (explore_ty []) tys;
 
   (* Compute the ordered SCCs *)
   let module Scc = SCC.Make (RegionOrderedType) in
@@ -231,7 +260,10 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
     (SccId.Map.bindings sccs.sccs)
 
 let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
-    (fun_decls : fun_decl FunDeclId.Map.t) : region_groups FunIdMap.t =
+    (fun_decls : fun_decl FunDeclId.Map.t)
+    (global_decls : global_decl GlobalDeclId.Map.t)
+    (trait_decls : trait_decl TraitDeclId.Map.t)
+    (trait_impls : trait_impl TraitImplId.Map.t) : region_groups FunIdMap.t =
   let regular =
     List.map
       (fun ((fid, d) : FunDeclId.id * fun_decl) ->
@@ -247,5 +279,7 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
   FunIdMap.of_list
     (List.map
        (fun (fid, (name, sg)) ->
-         (fid, compute_regions_hierarchy_for_sig type_decls name sg))
+         ( fid,
+           compute_regions_hierarchy_for_sig type_decls fun_decls global_decls
+             trait_decls trait_impls name sg ))
        (regular @ assumed))

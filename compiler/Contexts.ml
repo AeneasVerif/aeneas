@@ -254,18 +254,14 @@ type eval_ctx = {
 
 let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) : type_var option
     =
-  if TypeVarId.to_int vid < List.length ctx.type_vars then
-    Some (TypeVarId.nth ctx.type_vars vid)
-  else None
+  TypeVarId.nth_opt ctx.type_vars vid
 
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
 
 let lookup_const_generic_var_opt (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
     const_generic_var option =
-  if ConstGenericVarId.to_int vid < List.length ctx.const_generic_vars then
-    Some (ConstGenericVarId.nth ctx.const_generic_vars vid)
-  else None
+  ConstGenericVarId.nth_opt ctx.const_generic_vars vid
 
 let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
     const_generic_var =
