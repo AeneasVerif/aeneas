@@ -1,4 +1,3 @@
-open Graph
 open Collections
 open SCC
 open Pure
@@ -99,99 +98,9 @@ let group_reorder_fun_decls (decls : fun_decl list) :
       decls
   in
 
-  (*
-   * Create the dependency graph
-   *)
-  (* Convert the ids to vertices (i.e., injectively map ids to integers, and create
-     vertices labeled with those integers).
-
-     Rem.: [Graph.create] is *imperative*: it generates a new vertex every time
-     it is called (!!).
-  *)
-  let module Graph = Pack.Digraph in
-  let id_to_vertex : Graph.V.t FunIdMap.t =
-    let cnt = ref 0 in
-    FunIdMap.of_list
-      (List.map
-         (fun id ->
-           let lbl = !cnt in
-           cnt := !cnt + 1;
-           (* We create a vertex *)
-           let v = Graph.V.create lbl in
-           (id, v))
-         idl)
-  in
-  let vertex_to_id : fun_id IntMap.t =
-    IntMap.of_list
-      (List.map
-         (fun (fid, v) -> (Graph.V.label v, fid))
-         (FunIdMap.bindings id_to_vertex))
-  in
-
-  let to_v id = FunIdMap.find id id_to_vertex in
-  let to_id v = IntMap.find (Graph.V.label v) vertex_to_id in
-
-  let g = Graph.create () in
-
-  (* Add the edges, first from the vertices to themselves, then between vertices *)
-  List.iter
-    (fun (fun_id, deps) ->
-      let v = to_v fun_id in
-      Graph.add_edge g v v;
-      FunIdSet.iter (fun dep_id -> Graph.add_edge g v (to_v dep_id)) deps)
-    deps;
-
-  (* Compute the SCCs *)
-  let module Comp = Components.Make (Graph) in
-  let sccs = Comp.scc_list g in
-
-  (* Convert the vertices to ids *)
-  let sccs = List.map (List.map to_id) sccs in
-
-  log#ldebug
-    (lazy
-      ("group_reorder_fun_decls: SCCs:\n"
-      ^ Print.list_to_string (Print.list_to_string FunIdOrderedType.show_t) sccs
-      ));
-
-  (* Sanity check *)
-  let _ =
-    (* Check that the SCCs are pairwise disjoint *)
-    assert (FunIdSet.pairwise_disjoint (List.map FunIdSet.of_list sccs));
-    (* Check that all the ids are in the sccs *)
-    let scc_ids = FunIdSet.of_list (List.concat sccs) in
-
-    log#ldebug
-      (lazy
-        ("group_reorder_fun_decls: sanity check:" ^ "\n- ids    : "
-       ^ FunIdSet.show ids ^ "\n- scc_ids: " ^ FunIdSet.show scc_ids));
-
-    assert (FunIdSet.equal scc_ids ids)
-  in
-
-  log#ldebug
-    (lazy
-      ("group_reorder_fun_decls: reordered SCCs:\n"
-      ^ Print.list_to_string (Print.list_to_string FunIdOrderedType.show_t) sccs
-      ));
-
-  (* Reorder *)
-  let module Reorder = SCC.Make (FunIdOrderedType) in
-  let id_deps =
-    FunIdMap.of_list
-      (List.map (fun (fid, deps) -> (fid, FunIdSet.elements deps)) deps)
-  in
-  let sccs = Reorder.reorder_sccs id_deps idl sccs in
-
-  (* Sanity check *)
-  let _ =
-    (* Check that the SCCs are pairwise disjoint *)
-    let sccs = List.map snd (SccId.Map.bindings sccs.sccs) in
-    assert (FunIdSet.pairwise_disjoint (List.map FunIdSet.of_list sccs));
-    (* Check that all the ids are in the sccs *)
-    let scc_ids = FunIdSet.of_list (List.concat sccs) in
-    assert (FunIdSet.equal scc_ids ids)
-  in
+  (* Compute the ordered SCCs *)
+  let module Scc = SCC.Make (FunIdOrderedType) in
+  let sccs = Scc.compute deps in
 
   (* Group the declarations *)
   let deps = FunIdMap.of_list deps in

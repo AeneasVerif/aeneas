@@ -79,7 +79,7 @@ module Sig = struct
   let mk_slice_ty (ty : T.ty) : T.ty =
     TAdt (TAssumed TSlice, mk_generic_args [] [ ty ] [])
 
-  let mk_sig generics regions_hierarchy inputs output : A.fun_sig =
+  let mk_sig generics inputs output : A.fun_sig =
     let preds : T.predicates =
       { regions_outlive = []; types_outlive = []; trait_type_constraints = [] }
     in
@@ -88,7 +88,6 @@ module Sig = struct
       generics;
       preds;
       parent_params_info = None;
-      regions_hierarchy;
       inputs;
       output;
     }
@@ -96,18 +95,16 @@ module Sig = struct
   (** [fn<T>(T) -> Box<T>] *)
   let box_new_sig : A.fun_sig =
     let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
-    let regions_hierarchy = [] in
     let inputs = [ tvar_0 (* T *) ] in
     let output = mk_box_ty tvar_0 (* Box<T> *) in
-    mk_sig generics regions_hierarchy inputs output
+    mk_sig generics inputs output
 
   (** [fn<T>(Box<T>) -> ()] *)
   let box_free_sig : A.fun_sig =
     let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
-    let regions_hierarchy = [] in
     let inputs = [ mk_box_ty tvar_0 (* Box<T> *) ] in
     let output = mk_unit_ty (* () *) in
-    mk_sig generics regions_hierarchy inputs output
+    mk_sig generics inputs output
 
   (** Array/slice functions *)
 
@@ -129,7 +126,6 @@ module Sig = struct
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] cgs (* <'a, T> *)
     in
-    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
     let inputs =
       [
         mk_ref_ty rvar_0
@@ -145,7 +141,7 @@ module Sig = struct
         (output_ty type_param_0.index)
         is_mut (* &'a (mut) output_ty<T> *)
     in
-    mk_sig generics regions_hierarchy inputs output
+    mk_sig generics inputs output
 
   let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : A.fun_sig =
     (* Array<T, N> *)
@@ -176,13 +172,12 @@ module Sig = struct
       (* <T, N> *)
       mk_generic_params [] [ type_param_0 ] [ cg_param_0 ]
     in
-    let regions_hierarchy = [] (* <> *) in
     let inputs = [ tvar_0 (* T *) ] in
     let output =
       (* [T; N] *)
       mk_array_ty tvar_0 cgvar_0
     in
-    mk_sig generics regions_hierarchy inputs output
+    mk_sig generics inputs output
 
   (** Helper:
       [fn<T>(&'a [T]) -> usize]
@@ -191,12 +186,11 @@ module Sig = struct
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
     in
-    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
     let inputs =
       [ mk_ref_ty rvar_0 (mk_slice_ty tvar_0) false (* &'a [T] *) ]
     in
     let output = mk_usize_ty (* usize *) in
-    mk_sig generics regions_hierarchy inputs output
+    mk_sig generics inputs output
 end
 
 type raw_assumed_fun_info =

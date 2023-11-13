@@ -1188,14 +1188,18 @@ let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
   let def_id = def.def_id in
   let llbc_def = A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_ctx.fun_decls in
   let sg = llbc_def.signature in
-  let num_rgs = List.length sg.regions_hierarchy in
+  let regions_hierarchy =
+    LlbcAstUtils.FunIdMap.find (FRegular def_id)
+      ctx.trans_ctx.fun_ctx.regions_hierarchies
+  in
+  let num_rgs = List.length regions_hierarchy in
   let { keep_fwd; fwd = _; backs } = trans_group in
   let num_backs = List.length backs in
   let rg_info =
     match def.back_id with
     | None -> None
     | Some rg_id ->
-        let rg = T.RegionGroupId.nth sg.regions_hierarchy rg_id in
+        let rg = T.RegionGroupId.nth regions_hierarchy rg_id in
         let region_names =
           List.map
             (fun rid -> (T.RegionId.nth sg.generics.regions rid).name)

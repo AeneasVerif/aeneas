@@ -64,6 +64,10 @@ let generic_args_substitute (subst : subst) (g : T.generic_args) :
   let visitor = st_substitute_visitor subst in
   visitor#visit_generic_args () g
 
+let predicates_substitute (subst : subst) (p : T.predicates) : T.predicates =
+  let visitor = st_substitute_visitor subst in
+  visitor#visit_predicates () p
+
 let erase_regions_subst : subst =
   {
     r_subst = (fun _ -> T.RErased);
@@ -351,7 +355,8 @@ let trait_type_constraint_substitute (subst : subst)
   let ty = visitor#visit_ty () ty in
   { T.trait_ref; generics; type_name; ty }
 
-(** Substitute a function signature.
+(** Substitute a function signature, together with the regions hierarchy
+    associated to that signature.
 
     **IMPORTANT:** this function doesn't normalize the types.
  *)
@@ -360,7 +365,8 @@ let substitute_signature (asubst : T.RegionGroupId.id -> V.AbstractionId.id)
     (ty_subst : T.TypeVarId.id -> T.ty)
     (cg_subst : T.ConstGenericVarId.id -> T.const_generic)
     (tr_subst : T.TraitClauseId.id -> T.trait_instance_id)
-    (tr_self : T.trait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
+    (tr_self : T.trait_instance_id) (sg : A.fun_sig)
+    (regions_hierarchy : T.region_groups) : A.inst_fun_sig =
   let r_subst' (r : T.region) : T.region =
     match r with
     | T.RStatic | T.RErased -> r
@@ -375,7 +381,7 @@ let substitute_signature (asubst : T.RegionGroupId.id -> V.AbstractionId.id)
     let parents = List.map asubst rg.parents in
     ({ id; regions; parents } : A.abs_region_group)
   in
-  let regions_hierarchy = List.map subst_region_group sg.A.regions_hierarchy in
+  let regions_hierarchy = List.map subst_region_group regions_hierarchy in
   let trait_type_constraints =
     List.map
       (trait_type_constraint_substitute subst)

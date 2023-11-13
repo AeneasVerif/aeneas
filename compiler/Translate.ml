@@ -91,6 +91,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       SymbolicToPure.llbc_fun_decls = trans_ctx.fun_ctx.fun_decls;
       fun_sigs;
       fun_infos = trans_ctx.fun_ctx.fun_infos;
+      regions_hierarchies = trans_ctx.fun_ctx.regions_hierarchies;
     }
   in
   let global_context =
@@ -263,9 +264,11 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
         (* Translate *)
         SymbolicToPure.translate_fun_decl ctx (Some symbolic)
   in
-  let pure_backwards =
-    List.map translate_backward fdef.signature.regions_hierarchy
+  let regions_hierarchy =
+    LlbcAstUtils.FunIdMap.find (FRegular fdef.def_id)
+      fun_context.regions_hierarchies
   in
+  let pure_backwards = List.map translate_backward regions_hierarchy in
 
   (* Return *)
   (pure_forward, pure_backwards)

@@ -786,18 +786,19 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
                 if rg_id0 = rg_id1 then true
                 else
                   (* We need to use the regions hierarchy *)
-                  (* First, lookup the signature of the LLBC function *)
-                  let sg =
+                  let regions_hierarchy =
                     let id0 =
                       match id0 with
                       | FunId fun_id -> fun_id
                       | TraitMethod (_, _, fun_decl_id) -> FRegular fun_decl_id
                     in
-                    LlbcAstUtils.lookup_fun_sig id0 ctx.fun_ctx.fun_decls
+                    LlbcAstUtils.FunIdMap.find id0
+                      ctx.fun_ctx.regions_hierarchies
                   in
                   (* Compute the set of ancestors of the function in call1 *)
                   let call1_ancestors =
-                    LlbcAstUtils.list_ancestor_region_groups sg rg_id1
+                    LlbcAstUtils.list_ancestor_region_groups regions_hierarchy
+                      rg_id1
                   in
                   (* Check if the function used in call0 is inside *)
                   T.RegionGroupId.Set.mem rg_id0 call1_ancestors

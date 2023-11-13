@@ -29,7 +29,10 @@ let compute_contexts (m : A.crate) : C.decls_ctx =
   let fun_infos =
     FunsAnalysis.analyze_module m fun_decls global_decls !Config.use_state
   in
-  let fun_ctx = { C.fun_decls; fun_infos } in
+  let regions_hierarchies =
+    RegionsHierarchy.compute_regions_hierarchies type_decls fun_decls
+  in
+  let fun_ctx = { C.fun_decls; fun_infos; regions_hierarchies } in
   let global_ctx = { C.global_decls } in
   let trait_decls_ctx = { C.trait_decls } in
   let trait_impls_ctx = { C.trait_impls } in
@@ -124,8 +127,8 @@ let symbolic_instantiate_fun_sig (ctx : C.eval_ctx) (sg : A.fun_sig)
       List.fold_left_map
         (fun tr_map (c : T.trait_clause) ->
           let subst = mk_subst tr_map in
-          let { T.trait_id = trait_decl_id; generics; _ } = c in
-          let generics = Subst.generic_args_substitute subst generics in
+          let { T.trait_id = trait_decl_id; clause_generics; _ } = c in
+          let generics = Subst.generic_args_substitute subst clause_generics in
           let trait_decl_ref = { T.trait_decl_id; decl_generics = generics } in
           (* Note that because we directly refer to the clause, we give it
              empty generics *)
@@ -183,8 +186,11 @@ let initialize_symbolic_context_for_fun (ctx : C.decls_ctx) (fdef : A.fun_decl)
    * *)
   let sg = fdef.signature in
   (* Create the context *)
+  let regions_hierarchy =
+    FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
+  in
   let region_groups =
-    List.map (fun (g : T.region_group) -> g.id) sg.regions_hierarchy
+    List.map (fun (g : T.region_group) -> g.id) regions_hierarchy
   in
   let ctx =
     initialize_eval_context ctx region_groups sg.generics.types
@@ -269,7 +275,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
-  let sg = fdef.signature in
   let _, ret_inst_sg =
     symbolic_instantiate_fun_sig ctx fdef.signature fdef.kind
   in
@@ -282,7 +287,10 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * will end - this will allow us to, first, mark the other return
    * regions as non-endable, and, second, end those parent regions in
    * proper order. *)
-  let parent_rgs = list_ancestor_region_groups sg back_id in
+  let regions_hierarchy =
+    FunIdMap.find (FRegular fdef.def_id) ctx.fun_context.regions_hierarchies
+  in
+  let parent_rgs = list_ancestor_region_groups regions_hierarchy back_id in
   let parent_input_abs_ids =
     T.RegionGroupId.mapi
       (fun rg_id rg ->
@@ -455,6 +463,10 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : C.decls_ctx)
   (* Create the evaluation context *)
   let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
 
+  let regions_hierarchy =
+    FunIdMap.find (FRegular fdef.def_id) ctx.fun_context.regions_hierarchies
+  in
+
   (* Create the continuation to finish the evaluation *)
   let config = C.mk_config C.SymbolicMode in
   let cf_finish res ctx =
@@ -511,7 +523,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : C.decls_ctx)
           let back_el =
             T.RegionGroupId.mapi
               (fun gid _ -> (gid, finish_back_eval gid))
-              fdef.signature.regions_hierarchy
+              regions_hierarchy
           in
           let back_el = T.RegionGroupId.Map.of_list back_el in
           (* Put everything together *)
@@ -555,7 +567,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : C.decls_ctx)
           let back_el =
             T.RegionGroupId.mapi
               (fun gid _ -> (gid, finish_back_eval gid))
-              fdef.signature.regions_hierarchy
+              regions_hierarchy
           in
           let back_el = T.RegionGroupId.Map.of_list back_el in
           (* Put everything together *)

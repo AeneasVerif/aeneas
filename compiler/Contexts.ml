@@ -2,6 +2,7 @@ open Types
 open Expressions
 open Values
 open LlbcAst
+open LlbcAstUtils
 module V = Values
 open ValuesUtils
 open Identifiers
@@ -190,6 +191,7 @@ type type_context = {
 type fun_context = {
   fun_decls : fun_decl FunDeclId.Map.t;
   fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
+  regions_hierarchies : T.region_groups FunIdMap.t;
 }
 [@@deriving show]
 

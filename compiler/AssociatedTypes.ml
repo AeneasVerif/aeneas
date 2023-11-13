@@ -521,10 +521,11 @@ let ctx_subst_norm_signature (ctx : C.eval_ctx)
     (ty_subst : T.TypeVarId.id -> T.ty)
     (cg_subst : T.ConstGenericVarId.id -> T.const_generic)
     (tr_subst : T.TraitClauseId.id -> T.trait_instance_id)
-    (tr_self : T.trait_instance_id) (sg : A.fun_sig) : A.inst_fun_sig =
+    (tr_self : T.trait_instance_id) (sg : A.fun_sig)
+    (regions_hierarchy : T.region_groups) : A.inst_fun_sig =
   let sg =
     Subst.substitute_signature asubst r_subst ty_subst cg_subst tr_subst tr_self
-      sg
+      sg regions_hierarchy
   in
   let { A.regions_hierarchy; inputs; output; trait_type_constraints } = sg in
   let inputs = List.map (ctx_normalize_ty ctx) inputs in

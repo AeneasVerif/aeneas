@@ -474,6 +474,11 @@ let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.generic_args)
   (* Erase the regions in the generics we use for the instantiation *)
   let generics = Subst.generic_args_erase_regions generics in
   let tr_self = Subst.trait_instance_id_erase_regions tr_self in
+  (* Compute the regions hierarchy *)
+  let regions_hierarchy =
+    RegionsHierarchy.compute_regions_hierarchy_for_sig
+      ctx.type_context.type_decls sg
+  in
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let rg_abs_ids_bindings =
@@ -481,7 +486,7 @@ let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.generic_args)
       (fun rg ->
         let abs_id = C.fresh_abstraction_id () in
         (rg.T.id, abs_id))
-      sg.regions_hierarchy
+      regions_hierarchy
   in
   let asubst_map : V.AbstractionId.id T.RegionGroupId.Map.t =
     List.fold_left
@@ -512,7 +517,7 @@ let instantiate_fun_sig (ctx : C.eval_ctx) (generics : T.generic_args)
   (* Substitute the signature *)
   let inst_sig =
     AssociatedTypes.ctx_subst_norm_signature ctx asubst rsubst tsubst cgsubst
-      tr_subst tr_self sg
+      tr_subst tr_self sg regions_hierarchy
   in
   (* Return *)
   inst_sig

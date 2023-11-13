@@ -1434,7 +1434,7 @@ and eval_assumed_function_call_symbolic (config : C.config)
       let inst_sig =
         match fid with
         | BoxFree ->
-            (* should have been treated above *)
+            (* Should have been treated above *)
             raise (Failure "Unreachable")
         | _ ->
             (* There shouldn't be any reference to Self *)

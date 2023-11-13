@@ -1,5 +1,18 @@
 open LlbcAst
 include Charon.LlbcAstUtils
+open Collections
+
+module FunIdOrderedType : OrderedType with type t = fun_id = struct
+  type t = fun_id
+
+  let compare = compare_fun_id
+  let to_string = show_fun_id
+  let pp_t = pp_fun_id
+  let show_t = show_fun_id
+end
+
+module FunIdMap = Collections.MakeMap (FunIdOrderedType)
+module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     fun_sig =

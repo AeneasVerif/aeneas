@@ -57,6 +57,7 @@
   Pure
   PureTypeCheck
   PureUtils
+  RegionsHierarchy
   ReorderDecls
   SCC
   Scalars

@@ -47,6 +47,7 @@ type fun_context = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdNotLoopMap.t;  (** *)
   fun_infos : FA.fun_info A.FunDeclId.Map.t;
+  regions_hierarchies : T.region_groups FunIdMap.t;
 }
 [@@deriving show]
 
@@ -441,8 +442,8 @@ and translate_strait_instance_id (id : T.trait_instance_id) : trait_instance_id
   translate_trait_instance_id translate_sty id
 
 let translate_trait_clause (clause : T.trait_clause) : trait_clause =
-  let { T.clause_id; meta = _; trait_id; generics } = clause in
-  let generics = translate_sgeneric_args generics in
+  let { T.clause_id; meta = _; trait_id; clause_generics } = clause in
+  let generics = translate_sgeneric_args clause_generics in
   { clause_id; trait_id; generics }
 
 let translate_strait_type_constraint (ttc : T.trait_type_constraint) :
@@ -848,11 +849,14 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   let fun_infos = decls_ctx.fun_ctx.fun_infos in
   let type_infos = decls_ctx.type_ctx.type_infos in
   (* Retrieve the list of parent backward functions *)
+  let regions_hierarchy =
+    FunIdMap.find fun_id decls_ctx.fun_ctx.regions_hierarchies
+  in
   let gid, parents =
     match bid with
     | None -> (None, T.RegionGroupId.Set.empty)
     | Some bid ->
-        let parents = list_ancestor_region_groups sg bid in
+        let parents = list_ancestor_region_groups regions_hierarchy bid in
         (Some bid, parents)
   in
   (* Is the function stateful, and can it fail? *)
@@ -865,7 +869,7 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   (* Create the context *)
   let ctx =
     let region_groups =
-      List.map (fun (g : T.region_group) -> g.id) sg.regions_hierarchy
+      List.map (fun (g : T.region_group) -> g.id) regions_hierarchy
     in
     let ctx =
       InterpreterUtils.initialize_eval_context decls_ctx region_groups
@@ -898,7 +902,7 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   assert (T.RegionGroupId.Set.is_empty parents);
   (* Small helper to translate types for backward functions *)
   let translate_back_ty_for_gid (gid : T.RegionGroupId.id) : T.ty -> ty option =
-    let rg = T.RegionGroupId.nth sg.regions_hierarchy gid in
+    let rg = T.RegionGroupId.nth regions_hierarchy gid in
     let regions = T.RegionId.Set.of_list rg.regions in
     let keep_region r =
       match r with
@@ -2924,6 +2928,9 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let basename = def.name in
   (* Retrieve the signature *)
   let signature = ctx.sg in
+  let regions_hierarchy =
+    FunIdMap.find (FRegular def_id) ctx.fun_context.regions_hierarchies
+  in
   (* Translate the body, if there is *)
   let body =
     match body with
@@ -2965,7 +2972,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
           | None -> []
           | Some back_id ->
               let parents_ids =
-                list_ordered_ancestor_region_groups def.signature back_id
+                list_ordered_ancestor_region_groups regions_hierarchy back_id
               in
               let backward_ids = List.append parents_ids [ back_id ] in
               List.concat
@@ -3069,6 +3076,10 @@ let translate_fun_signatures (decls_ctx : C.decls_ctx)
   let translate_one (fun_id : A.fun_id) (input_names : string option list)
       (sg : A.fun_sig) : (regular_fun_id_not_loop * fun_sig_named_outputs) list
       =
+    (* Retrieve the regions hierarchy *)
+    let regions_hierarchy =
+      FunIdMap.find fun_id decls_ctx.fun_ctx.regions_hierarchies
+    in
     (* The forward function *)
     let fwd_sg = translate_fun_sig decls_ctx fun_id sg input_names None in
     let fwd_id = (fun_id, None) in
@@ -3081,7 +3092,7 @@ let translate_fun_signatures (decls_ctx : C.decls_ctx)
           in
           let id = (fun_id, Some rg.id) in
           (id, tsg))
-        sg.regions_hierarchy
+        regions_hierarchy
     in
     (* Return *)
     (fwd_id, fwd_sg) :: back_sgs
