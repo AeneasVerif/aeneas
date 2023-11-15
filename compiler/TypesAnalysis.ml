@@ -163,7 +163,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         let expl_info =
           {
             under_borrow = true;
-            under_mut_borrow = expl_info.under_mut_borrow || rkind = Mut;
+            under_mut_borrow = expl_info.under_mut_borrow || rkind = RMut;
           }
         in
         (* Continue exploring *)

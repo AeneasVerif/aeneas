@@ -1,15 +1,8 @@
-module T = Types
-module PV = PrimitiveValues
-module V = Values
-module E = Expressions
-module C = Contexts
-module Subst = Substitute
-module L = Logging
-module Inv = Invariants
-module S = SynthesizeSymbolic
-module SA = SymbolicAst
+open PrimitiveValues
+open Values
+open Contexts
 open Cps
-open InterpreterBorrows
+module SA = SymbolicAst
 
 type proj_kind = LoanProj | BorrowProj
 
@@ -20,15 +13,11 @@ type proj_kind = LoanProj | BorrowProj
     This function does *not* update the synthesis.
 *)
 val apply_symbolic_expansion_non_borrow :
-  C.config ->
-  V.symbolic_value ->
-  V.symbolic_expansion ->
-  C.eval_ctx ->
-  C.eval_ctx
+  config -> symbolic_value -> symbolic_expansion -> eval_ctx -> eval_ctx
 
 (** Expand a symhbolic value, without branching *)
 val expand_symbolic_value_no_branching :
-  C.config -> V.symbolic_value -> SA.mplace option -> cm_fun
+  config -> symbolic_value -> SA.mplace option -> cm_fun
 
 (** Expand a symbolic enumeration (leads to branching if the enumeration has
     more than one variant).
@@ -44,12 +33,7 @@ val expand_symbolic_value_no_branching :
       then call it).
  *)
 val expand_symbolic_adt :
-  C.config ->
-  V.symbolic_value ->
-  SA.mplace option ->
-  st_cm_fun ->
-  st_m_fun ->
-  m_fun
+  config -> symbolic_value -> SA.mplace option -> st_cm_fun -> st_m_fun -> m_fun
 
 (** Expand a symbolic boolean.
 
@@ -58,8 +42,8 @@ val expand_symbolic_adt :
     parameter (here, there are exactly two branches).
  *)
 val expand_symbolic_bool :
-  C.config ->
-  V.symbolic_value ->
+  config ->
+  symbolic_value ->
   SA.mplace option ->
   st_cm_fun ->
   st_cm_fun ->
@@ -86,16 +70,16 @@ val expand_symbolic_bool :
     switch. The continuation is thus for the execution *after* the switch.
  *)
 val expand_symbolic_int :
-  C.config ->
-  V.symbolic_value ->
+  config ->
+  symbolic_value ->
   SA.mplace option ->
-  T.integer_type ->
-  (V.scalar_value * st_cm_fun) list ->
+  integer_type ->
+  (scalar_value * st_cm_fun) list ->
   st_cm_fun ->
   st_m_fun ->
   m_fun
 
 (** If this mode is activated through the [config], greedily expand the symbolic
-    values which need to be expanded. See {!type:C.config} for more information.
+    values which need to be expanded. See {!type:config} for more information.
  *)
-val greedy_expand_symbolic_values : C.config -> cm_fun
+val greedy_expand_symbolic_values : config -> cm_fun

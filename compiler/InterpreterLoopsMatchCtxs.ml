@@ -4,35 +4,29 @@
     to check if two contexts are equivalent (modulo conversion).
  *)
 
-module T = Types
-module PV = PrimitiveValues
-module V = Values
-module E = Expressions
-module C = Contexts
-module Subst = Substitute
-module A = LlbcAst
-module L = Logging
+open Types
+open Values
+open Contexts
 open TypesUtils
 open ValuesUtils
-module Inv = Invariants
-module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
 open InterpreterBorrows
 open InterpreterLoopsCore
+module S = SynthesizeSymbolic
 
 (** The local logger *)
-let log = L.loops_match_ctxs_log
+let log = Logging.loops_match_ctxs_log
 
 let compute_abs_borrows_loans_maps (no_duplicates : bool)
-    (explore : V.abs -> bool) (env : C.env) : abs_borrows_loans_maps =
+    (explore : abs -> bool) (env : env) : abs_borrows_loans_maps =
   let abs_ids = ref [] in
-  let abs_to_borrows = ref V.AbstractionId.Map.empty in
-  let abs_to_loans = ref V.AbstractionId.Map.empty in
-  let abs_to_borrows_loans = ref V.AbstractionId.Map.empty in
-  let borrow_to_abs = ref V.BorrowId.Map.empty in
-  let loan_to_abs = ref V.BorrowId.Map.empty in
-  let borrow_loan_to_abs = ref V.BorrowId.Map.empty in
+  let abs_to_borrows = ref AbstractionId.Map.empty in
+  let abs_to_loans = ref AbstractionId.Map.empty in
+  let abs_to_borrows_loans = ref AbstractionId.Map.empty in
+  let borrow_to_abs = ref BorrowId.Map.empty in
+  let loan_to_abs = ref BorrowId.Map.empty in
+  let borrow_loan_to_abs = ref BorrowId.Map.empty in
 
   let module R (Id0 : Identifiers.Id) (Id1 : Identifiers.Id) = struct
     (*
@@ -65,8 +59,8 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
                 Some (Id1.Set.add id1 ids))
           !map
   end in
-  let module RAbsBorrow = R (V.AbstractionId) (V.BorrowId) in
-  let module RBorrowAbs = R (V.BorrowId) (V.AbstractionId) in
+  let module RAbsBorrow = R (AbstractionId) (BorrowId) in
+  let module RBorrowAbs = R (BorrowId) (AbstractionId) in
   let register_borrow_id abs_id bid =
     RAbsBorrow.register_mapping false no_duplicates abs_to_borrows abs_id bid;
     RAbsBorrow.register_mapping false false abs_to_borrows_loans abs_id bid;
@@ -85,7 +79,7 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
 
   let explore_abs =
     object (self : 'self)
-      inherit [_] V.iter_typed_avalue as super
+      inherit [_] iter_typed_avalue as super
 
       (** Make sure we don't register the ignored ids *)
       method! visit_aloan_content abs_id lc =
@@ -119,14 +113,14 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
     end
   in
 
-  C.env_iter_abs
+  env_iter_abs
     (fun abs ->
       let abs_id = abs.abs_id in
       if explore abs then (
         abs_to_borrows :=
-          V.AbstractionId.Map.add abs_id V.BorrowId.Set.empty !abs_to_borrows;
+          AbstractionId.Map.add abs_id BorrowId.Set.empty !abs_to_borrows;
         abs_to_loans :=
-          V.AbstractionId.Map.add abs_id V.BorrowId.Set.empty !abs_to_loans;
+          AbstractionId.Map.add abs_id BorrowId.Set.empty !abs_to_loans;
         abs_ids := abs.abs_id :: !abs_ids;
         List.iter (explore_abs#visit_typed_avalue abs.abs_id) abs.avalues)
       else ())
@@ -148,9 +142,8 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
 
     TODO: probably don't need to take [match_regions] as input anymore.
  *)
-let rec match_types (match_distinct_types : T.ty -> T.ty -> T.ty)
-    (match_regions : T.region -> T.region -> T.region) (ty0 : T.ty) (ty1 : T.ty)
-    : T.ty =
+let rec match_types (match_distinct_types : ty -> ty -> ty)
+    (match_regions : region -> region -> region) (ty0 : ty) (ty1 : ty) : ty =
   let match_rec = match_types match_distinct_types match_regions in
   match (ty0, ty1) with
   | TAdt (id0, generics0), TAdt (id1, generics1) ->
@@ -170,7 +163,7 @@ let rec match_types (match_distinct_types : T.ty -> T.ty -> T.ty)
           (fun (ty0, ty1) -> match_rec ty0 ty1)
           (List.combine generics0.types generics1.types)
       in
-      let generics = { T.regions; types; const_generics; trait_refs } in
+      let generics = { regions; types; const_generics; trait_refs } in
       TAdt (id, generics)
   | TVar vid0, TVar vid1 ->
       assert (vid0 = vid1);
@@ -189,27 +182,27 @@ let rec match_types (match_distinct_types : T.ty -> T.ty -> T.ty)
   | _ -> match_distinct_types ty0 ty1
 
 module MakeMatcher (M : PrimMatcher) : Matcher = struct
-  let rec match_typed_values (ctx : C.eval_ctx) (v0 : V.typed_value)
-      (v1 : V.typed_value) : V.typed_value =
+  let rec match_typed_values (ctx : eval_ctx) (v0 : typed_value)
+      (v1 : typed_value) : typed_value =
     let match_rec = match_typed_values ctx in
-    let ty = M.match_etys v0.V.ty v1.V.ty in
-    match (v0.V.value, v1.V.value) with
-    | V.VLiteral lv0, V.VLiteral lv1 ->
+    let ty = M.match_etys v0.ty v1.ty in
+    match (v0.value, v1.value) with
+    | VLiteral lv0, VLiteral lv1 ->
         if lv0 = lv1 then v1 else M.match_distinct_literals ty lv0 lv1
-    | V.VAdt av0, V.VAdt av1 ->
+    | VAdt av0, VAdt av1 ->
         if av0.variant_id = av1.variant_id then
           let fields = List.combine av0.field_values av1.field_values in
           let field_values =
             List.map (fun (f0, f1) -> match_rec f0 f1) fields
           in
-          let value : V.value =
-            V.VAdt { variant_id = av0.variant_id; field_values }
+          let value : value =
+            VAdt { variant_id = av0.variant_id; field_values }
           in
-          { V.value; ty = v1.V.ty }
+          { value; ty = v1.ty }
         else (
           (* For now, we don't merge ADTs which contain borrows *)
-          assert (not (value_has_borrows ctx v0.V.value));
-          assert (not (value_has_borrows ctx v1.V.value));
+          assert (not (value_has_borrows ctx v0.value));
+          assert (not (value_has_borrows ctx v1.value));
           (* Merge *)
           M.match_distinct_adts ty av0 av1)
     | VBottom, VBottom -> v0
@@ -218,10 +211,10 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           match (bc0, bc1) with
           | VSharedBorrow bid0, VSharedBorrow bid1 ->
               let bid = M.match_shared_borrows match_rec ty bid0 bid1 in
-              V.VSharedBorrow bid
+              VSharedBorrow bid
           | VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1) ->
               let bv = match_rec bv0 bv1 in
-              assert (not (value_has_borrows ctx bv.V.value));
+              assert (not (value_has_borrows ctx bv.value));
               let bid, bv = M.match_mut_borrows ty bid0 bv0 bid1 bv1 bv in
               VMutBorrow (bid, bv)
           | VReservedMutBorrow _, _
@@ -234,7 +227,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                  just before function calls which activate them *)
               raise (Failure "Unexpected")
         in
-        { V.value = VBorrow bc; ty }
+        { value = VBorrow bc; ty }
     | VLoan lc0, VLoan lc1 ->
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
@@ -242,24 +235,24 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           match (lc0, lc1) with
           | VSharedLoan (ids0, sv0), VSharedLoan (ids1, sv1) ->
               let sv = match_rec sv0 sv1 in
-              assert (not (value_has_borrows ctx sv.V.value));
+              assert (not (value_has_borrows ctx sv.value));
               let ids, sv = M.match_shared_loans ty ids0 ids1 sv in
-              V.VSharedLoan (ids, sv)
+              VSharedLoan (ids, sv)
           | VMutLoan id0, VMutLoan id1 ->
               let id = M.match_mut_loans ty id0 id1 in
               VMutLoan id
           | VSharedLoan _, VMutLoan _ | VMutLoan _, VSharedLoan _ ->
               raise (Failure "Unreachable")
         in
-        { V.value = VLoan lc; ty = v1.V.ty }
+        { value = VLoan lc; ty = v1.ty }
     | VSymbolic sv0, VSymbolic sv1 ->
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
-        assert (not (value_has_borrows ctx v0.V.value));
-        assert (not (value_has_borrows ctx v1.V.value));
+        assert (not (value_has_borrows ctx v0.value));
+        assert (not (value_has_borrows ctx v1.value));
         (* Match *)
         let sv = M.match_symbolic_values sv0 sv1 in
-        { v1 with V.value = VSymbolic sv }
+        { v1 with value = VSymbolic sv }
     | VLoan lc, _ -> (
         match lc with
         | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInLeft ids))
@@ -281,8 +274,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             ^ typed_value_to_string ctx v1));
         raise (Failure "Unexpected match case")
 
-  and match_typed_avalues (ctx : C.eval_ctx) (v0 : V.typed_avalue)
-      (v1 : V.typed_avalue) : V.typed_avalue =
+  and match_typed_avalues (ctx : eval_ctx) (v0 : typed_avalue)
+      (v1 : typed_avalue) : typed_avalue =
     log#ldebug
       (lazy
         ("match_typed_avalues:\n- value0: "
@@ -292,20 +285,20 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
 
     let match_rec = match_typed_values ctx in
     let match_arec = match_typed_avalues ctx in
-    let ty = M.match_rtys v0.V.ty v1.V.ty in
-    match (v0.V.value, v1.V.value) with
-    | V.AAdt av0, V.AAdt av1 ->
+    let ty = M.match_rtys v0.ty v1.ty in
+    match (v0.value, v1.value) with
+    | AAdt av0, AAdt av1 ->
         if av0.variant_id = av1.variant_id then
           let fields = List.combine av0.field_values av1.field_values in
           let field_values =
             List.map (fun (f0, f1) -> match_arec f0 f1) fields
           in
-          let value : V.avalue =
-            V.AAdt { variant_id = av0.variant_id; field_values }
+          let value : avalue =
+            AAdt { variant_id = av0.variant_id; field_values }
           in
-          { V.value; ty }
+          { value; ty }
         else (* Merge *)
-          M.match_distinct_aadts v0.V.ty av0 v1.V.ty av1 ty
+          M.match_distinct_aadts v0.ty av0 v1.ty av1 ty
     | ABottom, ABottom -> mk_abottom ty
     | AIgnored, AIgnored -> mk_aignored ty
     | ABorrow bc0, ABorrow bc1 -> (
@@ -313,7 +306,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         match (bc0, bc1) with
         | ASharedBorrow bid0, ASharedBorrow bid1 ->
             log#ldebug (lazy "match_typed_avalues: shared borrows");
-            M.match_ashared_borrows v0.V.ty bid0 v1.V.ty bid1 ty
+            M.match_ashared_borrows v0.ty bid0 v1.ty bid1 ty
         | AMutBorrow (bid0, av0), AMutBorrow (bid1, av1) ->
             log#ldebug (lazy "match_typed_avalues: mut borrows");
             log#ldebug
@@ -322,7 +315,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let av = match_arec av0 av1 in
             log#ldebug
               (lazy "match_typed_avalues: mut borrows: matched children values");
-            M.match_amut_borrows v0.V.ty bid0 av0 v1.V.ty bid1 av1 ty av
+            M.match_amut_borrows v0.ty bid0 av0 v1.ty bid1 av1 ty av
         | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
             (* The abstractions are destructured: we shouldn't get there *)
             raise (Failure "Unexpected")
@@ -355,9 +348,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             log#ldebug (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
-            assert (not (value_has_borrows ctx sv.V.value));
-            M.match_ashared_loans v0.V.ty ids0 sv0 av0 v1.V.ty ids1 sv1 av1 ty
-              sv av
+            assert (not (value_has_borrows ctx sv.value));
+            M.match_ashared_loans v0.ty ids0 sv0 av0 v1.ty ids1 sv1 av1 ty sv av
         | AMutLoan (id0, av0), AMutLoan (id1, av1) ->
             log#ldebug (lazy "match_typed_avalues: mut loans");
             log#ldebug
@@ -365,7 +357,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let av = match_arec av0 av1 in
             log#ldebug
               (lazy "match_typed_avalues: mut loans: matched children values");
-            M.match_amut_loans v0.V.ty id0 av0 v1.V.ty id1 av1 ty av
+            M.match_amut_loans v0.ty id0 av0 v1.ty id1 av1 ty av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
         | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
             (* Those should have been filtered when destructuring the abstractions -
@@ -381,9 +373,9 @@ end
 
 module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   (** Small utility *)
-  let push_abs (abs : V.abs) : unit = S.nabs := abs :: !S.nabs
+  let push_abs (abs : abs) : unit = S.nabs := abs :: !S.nabs
 
-  let push_absl (absl : V.abs list) : unit = List.iter push_abs absl
+  let push_absl (absl : abs list) : unit = List.iter push_abs absl
 
   let match_etys ty0 ty1 =
     assert (ty0 = ty1);
@@ -395,24 +387,24 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     assert (ty0 = ty1);
     ty0
 
-  let match_distinct_literals (ty : T.ety) (_ : V.literal) (_ : V.literal) :
-      V.typed_value =
-    mk_fresh_symbolic_typed_value_from_no_regions_ty V.LoopJoin ty
+  let match_distinct_literals (ty : ety) (_ : literal) (_ : literal) :
+      typed_value =
+    mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin ty
 
-  let match_distinct_adts (ty : T.ety) (adt0 : V.adt_value) (adt1 : V.adt_value)
-      : V.typed_value =
+  let match_distinct_adts (ty : ety) (adt0 : adt_value) (adt1 : adt_value) :
+      typed_value =
     (* Check that the ADTs don't contain borrows - this is redundant with checks
        performed by the caller, but we prefer to be safe with regards to future
        updates
     *)
-    let check_no_borrows (v : V.typed_value) =
-      assert (not (value_has_borrows S.ctx v.V.value))
+    let check_no_borrows (v : typed_value) =
+      assert (not (value_has_borrows S.ctx v.value))
     in
     List.iter check_no_borrows adt0.field_values;
     List.iter check_no_borrows adt1.field_values;
 
     (* Check if there are loans: we request to end them *)
-    let check_loans (left : bool) (fields : V.typed_value list) : unit =
+    let check_loans (left : bool) (fields : typed_value list) : unit =
       match InterpreterBorrowsCore.get_first_loan_in_values fields with
       | Some (VSharedLoan (ids, _)) ->
           if left then raise (ValueMatchFailure (LoansInLeft ids))
@@ -426,10 +418,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     check_loans false adt1.field_values;
 
     (* No borrows, no loans: we can introduce a symbolic value *)
-    mk_fresh_symbolic_typed_value_from_no_regions_ty V.LoopJoin ty
+    mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin ty
 
-  let match_shared_borrows _ (ty : T.ety) (bid0 : V.borrow_id)
-      (bid1 : V.borrow_id) : V.borrow_id =
+  let match_shared_borrows _ (ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) :
+      borrow_id =
     if bid0 = bid1 then bid0
     else
       (* We replace bid0 and bid1 with a fresh borrow id, and introduce
@@ -438,42 +430,42 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            { SB bid0, SB bid1, SL {bid2} }
          ]}
       *)
-      let rid = C.fresh_region_id () in
-      let bid2 = C.fresh_borrow_id () in
+      let rid = fresh_region_id () in
+      let bid2 = fresh_borrow_id () in
 
       (* Generate a fresh symbolic value for the shared value *)
       let _, bv_ty, kind = ty_as_ref ty in
       let sv =
-        mk_fresh_symbolic_typed_value_from_no_regions_ty V.LoopJoin bv_ty
+        mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin bv_ty
       in
 
-      let borrow_ty = mk_ref_ty (T.RVar rid) bv_ty kind in
+      let borrow_ty = mk_ref_ty (RVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
-      let mk_aborrow (bid : V.borrow_id) : V.typed_avalue =
-        let value = V.ABorrow (V.ASharedBorrow bid) in
-        { V.value; ty = borrow_ty }
+      let mk_aborrow (bid : borrow_id) : typed_avalue =
+        let value = ABorrow (ASharedBorrow bid) in
+        { value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow bid0; mk_aborrow bid1 ] in
 
       let loan =
-        V.ASharedLoan (V.BorrowId.Set.singleton bid2, sv, mk_aignored bv_ty)
+        ASharedLoan (BorrowId.Set.singleton bid2, sv, mk_aignored bv_ty)
       in
       (* Note that an aloan has a borrow type *)
-      let loan = { V.value = V.ALoan loan; ty = borrow_ty } in
+      let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
 
       let avalues = List.append borrows [ loan ] in
 
       (* Generate the abstraction *)
       let abs =
         {
-          V.abs_id = C.fresh_abstraction_id ();
-          kind = V.Loop (S.loop_id, None, LoopSynthInput);
+          abs_id = fresh_abstraction_id ();
+          kind = Loop (S.loop_id, None, LoopSynthInput);
           can_end = true;
-          parents = V.AbstractionId.Set.empty;
+          parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions = T.RegionId.Set.singleton rid;
-          ancestors_regions = T.RegionId.Set.empty;
+          regions = RegionId.Set.singleton rid;
+          ancestors_regions = RegionId.Set.empty;
           avalues;
         }
       in
@@ -482,9 +474,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Return the new borrow *)
       bid2
 
-  let match_mut_borrows (ty : T.ety) (bid0 : V.borrow_id) (bv0 : V.typed_value)
-      (bid1 : V.borrow_id) (bv1 : V.typed_value) (bv : V.typed_value) :
-      V.borrow_id * V.typed_value =
+  let match_mut_borrows (ty : ety) (bid0 : borrow_id) (bv0 : typed_value)
+      (bid1 : borrow_id) (bv1 : typed_value) (bv : typed_value) :
+      borrow_id * typed_value =
     if bid0 = bid1 then (
       (* If the merged value is not the same as the original value, we introduce
          an abstraction:
@@ -533,29 +525,29 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          do so, we won't introduce reborrows like above: the forward loop function
          will update [v], while the backward loop function will return nothing.
       *)
-      assert (not (value_has_borrows S.ctx bv.V.value));
+      assert (not (value_has_borrows S.ctx bv.value));
 
       if bv0 = bv1 then (
         assert (bv0 = bv);
         (bid0, bv))
       else
-        let rid = C.fresh_region_id () in
-        let nbid = C.fresh_borrow_id () in
+        let rid = fresh_region_id () in
+        let nbid = fresh_borrow_id () in
 
-        let kind = T.Mut in
-        let bv_ty = bv.V.ty in
+        let kind = RMut in
+        let bv_ty = bv.ty in
         assert (ty_no_regions bv_ty);
-        let borrow_ty = mk_ref_ty (T.RVar rid) bv_ty kind in
+        let borrow_ty = mk_ref_ty (RVar rid) bv_ty kind in
 
         let borrow_av =
           let ty = borrow_ty in
-          let value = V.ABorrow (V.AMutBorrow (bid0, mk_aignored bv_ty)) in
+          let value = ABorrow (AMutBorrow (bid0, mk_aignored bv_ty)) in
           mk_typed_avalue ty value
         in
 
         let loan_av =
           let ty = borrow_ty in
-          let value = V.ALoan (V.AMutLoan (nbid, mk_aignored bv_ty)) in
+          let value = ALoan (AMutLoan (nbid, mk_aignored bv_ty)) in
           mk_typed_avalue ty value
         in
 
@@ -564,13 +556,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         (* Generate the abstraction *)
         let abs =
           {
-            V.abs_id = C.fresh_abstraction_id ();
-            kind = V.Loop (S.loop_id, None, LoopSynthInput);
+            abs_id = fresh_abstraction_id ();
+            kind = Loop (S.loop_id, None, LoopSynthInput);
             can_end = true;
-            parents = V.AbstractionId.Set.empty;
+            parents = AbstractionId.Set.empty;
             original_parents = [];
-            regions = T.RegionId.Set.singleton rid;
-            ancestors_regions = T.RegionId.Set.empty;
+            regions = RegionId.Set.singleton rid;
+            ancestors_regions = RegionId.Set.empty;
             avalues;
           }
         in
@@ -585,42 +577,42 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            { MB bid0, MB bid1, ML bid2 }
          ]}
       *)
-      let rid = C.fresh_region_id () in
-      let bid2 = C.fresh_borrow_id () in
+      let rid = fresh_region_id () in
+      let bid2 = fresh_borrow_id () in
 
       (* Generate a fresh symbolic value for the borrowed value *)
       let _, bv_ty, kind = ty_as_ref ty in
       let sv =
-        mk_fresh_symbolic_typed_value_from_no_regions_ty V.LoopJoin bv_ty
+        mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin bv_ty
       in
 
-      let borrow_ty = mk_ref_ty (T.RVar rid) bv_ty kind in
+      let borrow_ty = mk_ref_ty (RVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
-      let mk_aborrow (bid : V.borrow_id) (bv : V.typed_value) : V.typed_avalue =
-        let bv_ty = bv.V.ty in
+      let mk_aborrow (bid : borrow_id) (bv : typed_value) : typed_avalue =
+        let bv_ty = bv.ty in
         assert (ty_no_regions bv_ty);
-        let value = V.ABorrow (V.AMutBorrow (bid, mk_aignored bv_ty)) in
-        { V.value; ty = borrow_ty }
+        let value = ABorrow (AMutBorrow (bid, mk_aignored bv_ty)) in
+        { value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow bid0 bv0; mk_aborrow bid1 bv1 ] in
 
-      let loan = V.AMutLoan (bid2, mk_aignored bv_ty) in
+      let loan = AMutLoan (bid2, mk_aignored bv_ty) in
       (* Note that an aloan has a borrow type *)
-      let loan = { V.value = V.ALoan loan; ty = borrow_ty } in
+      let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
 
       let avalues = List.append borrows [ loan ] in
 
       (* Generate the abstraction *)
       let abs =
         {
-          V.abs_id = C.fresh_abstraction_id ();
-          kind = V.Loop (S.loop_id, None, LoopSynthInput);
+          abs_id = fresh_abstraction_id ();
+          kind = Loop (S.loop_id, None, LoopSynthInput);
           can_end = true;
-          parents = V.AbstractionId.Set.empty;
+          parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions = T.RegionId.Set.singleton rid;
-          ancestors_regions = T.RegionId.Set.empty;
+          regions = RegionId.Set.singleton rid;
+          ancestors_regions = RegionId.Set.empty;
           avalues;
         }
       in
@@ -629,20 +621,19 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Return the new borrow *)
       (bid2, sv)
 
-  let match_shared_loans (_ : T.ety) (ids0 : V.loan_id_set)
-      (ids1 : V.loan_id_set) (sv : V.typed_value) :
-      V.loan_id_set * V.typed_value =
+  let match_shared_loans (_ : ety) (ids0 : loan_id_set) (ids1 : loan_id_set)
+      (sv : typed_value) : loan_id_set * typed_value =
     (* Check if the ids are the same - Rem.: we forbid the sets of loans
        to be different. However, if we dive inside data-structures (by
        using a shared borrow) the shared values might themselves contain
        shared loans, which need to be matched. For this reason, we destructure
        the shared values (see {!destructure_abs}).
     *)
-    let extra_ids_left = V.BorrowId.Set.diff ids0 ids1 in
-    let extra_ids_right = V.BorrowId.Set.diff ids1 ids0 in
-    if not (V.BorrowId.Set.is_empty extra_ids_left) then
+    let extra_ids_left = BorrowId.Set.diff ids0 ids1 in
+    let extra_ids_right = BorrowId.Set.diff ids1 ids0 in
+    if not (BorrowId.Set.is_empty extra_ids_left) then
       raise (ValueMatchFailure (LoansInLeft extra_ids_left));
-    if not (V.BorrowId.Set.is_empty extra_ids_right) then
+    if not (BorrowId.Set.is_empty extra_ids_right) then
       raise (ValueMatchFailure (LoansInRight extra_ids_right));
 
     (* This should always be true if we get here *)
@@ -652,16 +643,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Return *)
     (ids, sv)
 
-  let match_mut_loans (_ : T.ety) (id0 : V.loan_id) (id1 : V.loan_id) :
-      V.loan_id =
+  let match_mut_loans (_ : ety) (id0 : loan_id) (id1 : loan_id) : loan_id =
     if id0 = id1 then id0
     else
       (* We forbid this case for now: if we get there, we force to end
          both borrows *)
       raise (ValueMatchFailure (LoanInLeft id0))
 
-  let match_symbolic_values (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) :
-      V.symbolic_value =
+  let match_symbolic_values (sv0 : symbolic_value) (sv1 : symbolic_value) :
+      symbolic_value =
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
     if id0 = id1 then (
@@ -674,17 +664,17 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          borrows *)
       assert (not (ty_has_borrows S.ctx.type_context.type_infos sv0.sv_ty));
       (* We simply introduce a fresh symbolic value *)
-      mk_fresh_symbolic_value V.LoopJoin sv0.sv_ty)
+      mk_fresh_symbolic_value LoopJoin sv0.sv_ty)
 
-  let match_symbolic_with_other (left : bool) (sv : V.symbolic_value)
-      (v : V.typed_value) : V.typed_value =
+  let match_symbolic_with_other (left : bool) (sv : symbolic_value)
+      (v : typed_value) : typed_value =
     (* Check that:
        - there are no borrows in the symbolic value
        - there are no borrows in the "regular" value
        If there are loans in the regular value, raise an exception.
     *)
     assert (not (ty_has_borrows S.ctx.type_context.type_infos sv.sv_ty));
-    assert (not (value_has_borrows S.ctx v.V.value));
+    assert (not (value_has_borrows S.ctx v.value));
     let value_is_left = not left in
     (match InterpreterBorrowsCore.get_first_loan_in_value v with
     | None -> ()
@@ -695,10 +685,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
         else raise (ValueMatchFailure (LoanInRight id)));
     (* Return a fresh symbolic value *)
-    mk_fresh_symbolic_typed_value V.LoopJoin sv.sv_ty
+    mk_fresh_symbolic_typed_value LoopJoin sv.sv_ty
 
-  let match_bottom_with_other (left : bool) (v : V.typed_value) : V.typed_value
-      =
+  let match_bottom_with_other (left : bool) (v : typed_value) : typed_value =
     (* If there are outer loans in the non-bottom value, raise an exception.
        Otherwise, convert it to an abstraction and return [Bottom].
     *)
@@ -719,7 +708,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
         (* Convert the value to an abstraction *)
-        let abs_kind = V.Loop (S.loop_id, None, LoopSynthInput) in
+        let abs_kind : abs_kind = Loop (S.loop_id, None, LoopSynthInput) in
         let can_end = true in
         let destructure_shared_values = true in
         let absl =
@@ -728,7 +717,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         in
         push_absl absl;
         (* Return [Bottom] *)
-        mk_bottom v.V.ty
+        mk_bottom v.ty
 
   (* As explained in comments: we don't use the join matcher to join avalues,
      only concrete values *)
@@ -785,12 +774,12 @@ struct
         (match_el msg m (Id.Set.elements ks0) (Id.Set.elements ks1))
   end
 
-  module GetSetRid = MkGetSetM (T.RegionId)
+  module GetSetRid = MkGetSetM (RegionId)
 
   let match_rid = GetSetRid.match_e "match_rid: " S.rid_map
   let match_rids = GetSetRid.match_es "match_rids: " S.rid_map
 
-  module GetSetBid = MkGetSetM (V.BorrowId)
+  module GetSetBid = MkGetSetM (BorrowId)
 
   let match_blid msg = GetSetBid.match_e msg S.blid_map
   let match_blidl msg = GetSetBid.match_el msg S.blid_map
@@ -820,8 +809,8 @@ struct
     if S.check_equiv then match_blids "match_loan_ids: "
     else GetSetBid.match_es "match_loan_ids: " S.loan_id_map
 
-  module GetSetSid = MkGetSetM (V.SymbolicValueId)
-  module GetSetAid = MkGetSetM (V.AbstractionId)
+  module GetSetSid = MkGetSetM (SymbolicValueId)
+  module GetSetAid = MkGetSetM (AbstractionId)
 
   let match_aid = GetSetAid.match_e "match_aid: " S.aid_map
   let match_aidl = GetSetAid.match_el "match_aidl: " S.aid_map
@@ -835,7 +824,7 @@ struct
     let match_distinct_types _ _ = raise (Distinct "match_rtys") in
     let match_regions r0 r1 =
       match (r0, r1) with
-      | T.RStatic, T.RStatic -> r1
+      | RStatic, RStatic -> r1
       | RVar rid0, RVar rid1 ->
           let rid = match_rid rid0 rid1 in
           RVar rid
@@ -843,21 +832,21 @@ struct
     in
     match_types match_distinct_types match_regions ty0 ty1
 
-  let match_distinct_literals (ty : T.ety) (_ : V.literal) (_ : V.literal) :
-      V.typed_value =
-    mk_fresh_symbolic_typed_value_from_no_regions_ty V.LoopJoin ty
+  let match_distinct_literals (ty : ety) (_ : literal) (_ : literal) :
+      typed_value =
+    mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin ty
 
-  let match_distinct_adts (_ty : T.ety) (_adt0 : V.adt_value)
-      (_adt1 : V.adt_value) : V.typed_value =
+  let match_distinct_adts (_ty : ety) (_adt0 : adt_value) (_adt1 : adt_value) :
+      typed_value =
     raise (Distinct "match_distinct_adts")
 
   let match_shared_borrows
-      (match_typed_values : V.typed_value -> V.typed_value -> V.typed_value)
-      (_ty : T.ety) (bid0 : V.borrow_id) (bid1 : V.borrow_id) : V.borrow_id =
+      (match_typed_values : typed_value -> typed_value -> typed_value)
+      (_ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher: match_shared_borrows: " ^ "bid0: "
-       ^ V.BorrowId.to_string bid0 ^ ", bid1: " ^ V.BorrowId.to_string bid1));
+       ^ BorrowId.to_string bid0 ^ ", bid1: " ^ BorrowId.to_string bid1));
 
     let bid = match_borrow_id bid0 bid1 in
     (* If we don't check for equivalence (i.e., we apply a fixed-point),
@@ -881,33 +870,31 @@ struct
     in
     bid
 
-  let match_mut_borrows (_ty : T.ety) (bid0 : V.borrow_id)
-      (_bv0 : V.typed_value) (bid1 : V.borrow_id) (_bv1 : V.typed_value)
-      (bv : V.typed_value) : V.borrow_id * V.typed_value =
+  let match_mut_borrows (_ty : ety) (bid0 : borrow_id) (_bv0 : typed_value)
+      (bid1 : borrow_id) (_bv1 : typed_value) (bv : typed_value) :
+      borrow_id * typed_value =
     let bid = match_borrow_id bid0 bid1 in
     (bid, bv)
 
-  let match_shared_loans (_ : T.ety) (ids0 : V.loan_id_set)
-      (ids1 : V.loan_id_set) (sv : V.typed_value) :
-      V.loan_id_set * V.typed_value =
+  let match_shared_loans (_ : ety) (ids0 : loan_id_set) (ids1 : loan_id_set)
+      (sv : typed_value) : loan_id_set * typed_value =
     let ids = match_loan_ids ids0 ids1 in
     (ids, sv)
 
-  let match_mut_loans (_ : T.ety) (bid0 : V.loan_id) (bid1 : V.loan_id) :
-      V.loan_id =
+  let match_mut_loans (_ : ety) (bid0 : loan_id) (bid1 : loan_id) : loan_id =
     match_loan_id bid0 bid1
 
-  let match_symbolic_values (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) :
-      V.symbolic_value =
+  let match_symbolic_values (sv0 : symbolic_value) (sv1 : symbolic_value) :
+      symbolic_value =
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
 
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher: match_symbolic_values: " ^ "sv0: "
-        ^ V.SymbolicValueId.to_string id0
+        ^ SymbolicValueId.to_string id0
         ^ ", sv1: "
-        ^ V.SymbolicValueId.to_string id1));
+        ^ SymbolicValueId.to_string id1));
 
     (* If we don't check for equivalence, we also update the map from sids
        to values *)
@@ -916,81 +903,80 @@ struct
       let sv_id =
         GetSetSid.match_e "match_symbolic_values: ids: " S.sid_map id0 id1
       in
-      let sv_ty = match_rtys sv0.V.sv_ty sv1.V.sv_ty in
+      let sv_ty = match_rtys sv0.sv_ty sv1.sv_ty in
       let sv_kind =
-        if sv0.V.sv_kind = sv1.V.sv_kind then sv0.V.sv_kind
+        if sv0.sv_kind = sv1.sv_kind then sv0.sv_kind
         else raise (Distinct "match_symbolic_values: sv_kind")
       in
-      let sv = { V.sv_id; sv_ty; sv_kind } in
+      let sv = { sv_id; sv_ty; sv_kind } in
       sv
     else (
       (* Check: fixed values are fixed *)
-      assert (id0 = id1 || not (V.SymbolicValueId.InjSubst.mem id0 !S.sid_map));
+      assert (id0 = id1 || not (SymbolicValueId.InjSubst.mem id0 !S.sid_map));
 
       (* Update the symbolic value mapping *)
       let sv1 = mk_typed_value_from_symbolic_value sv1 in
 
       (* Update the symbolic value mapping *)
       S.sid_to_value_map :=
-        V.SymbolicValueId.Map.add_strict id0 sv1 !S.sid_to_value_map;
+        SymbolicValueId.Map.add_strict id0 sv1 !S.sid_to_value_map;
 
       (* Return - the returned value is not used: we can return  whatever
          we want *)
       sv0)
 
-  let match_symbolic_with_other (left : bool) (sv : V.symbolic_value)
-      (v : V.typed_value) : V.typed_value =
+  let match_symbolic_with_other (left : bool) (sv : symbolic_value)
+      (v : typed_value) : typed_value =
     if S.check_equiv then raise (Distinct "match_symbolic_with_other")
     else (
       assert left;
       let id = sv.sv_id in
       (* Check: fixed values are fixed *)
-      assert (not (V.SymbolicValueId.InjSubst.mem id !S.sid_map));
+      assert (not (SymbolicValueId.InjSubst.mem id !S.sid_map));
       (* Update the binding for the target symbolic value *)
       S.sid_to_value_map :=
-        V.SymbolicValueId.Map.add_strict id v !S.sid_to_value_map;
+        SymbolicValueId.Map.add_strict id v !S.sid_to_value_map;
       (* Return - the returned value is not used, so we can return whatever we want *)
       v)
 
-  let match_bottom_with_other (left : bool) (v : V.typed_value) : V.typed_value
-      =
+  let match_bottom_with_other (left : bool) (v : typed_value) : typed_value =
     (* It can happen that some variables get initialized in some branches
        and not in some others, which causes problems when matching. *)
     (* TODO: the returned value is not used, while it should: in generality it
        should be ok to match a fixed-point with the environment we get at
        a continue, where the fixed point contains some bottom values. *)
-    if left && not (value_has_loans_or_borrows S.ctx v.V.value) then
-      mk_bottom v.V.ty
+    if left && not (value_has_loans_or_borrows S.ctx v.value) then
+      mk_bottom v.ty
     else raise (Distinct "match_bottom_with_other")
 
   let match_distinct_aadts _ _ _ _ _ = raise (Distinct "match_distinct_adts")
 
   let match_ashared_borrows _ty0 bid0 _ty1 bid1 ty =
     let bid = match_borrow_id bid0 bid1 in
-    let value = V.ABorrow (V.ASharedBorrow bid) in
-    { V.value; ty }
+    let value = ABorrow (ASharedBorrow bid) in
+    { value; ty }
 
   let match_amut_borrows _ty0 bid0 _av0 _ty1 bid1 _av1 ty av =
     let bid = match_borrow_id bid0 bid1 in
-    let value = V.ABorrow (V.AMutBorrow (bid, av)) in
-    { V.value; ty }
+    let value = ABorrow (AMutBorrow (bid, av)) in
+    { value; ty }
 
   let match_ashared_loans _ty0 ids0 _v0 _av0 _ty1 ids1 _v1 _av1 ty v av =
     let bids = match_loan_ids ids0 ids1 in
-    let value = V.ALoan (V.ASharedLoan (bids, v, av)) in
-    { V.value; ty }
+    let value = ALoan (ASharedLoan (bids, v, av)) in
+    { value; ty }
 
   let match_amut_loans _ty0 id0 _av0 _ty1 id1 _av1 ty av =
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher:match_amut_loans:" ^ "\n- id0: "
-       ^ V.BorrowId.to_string id0 ^ "\n- id1: " ^ V.BorrowId.to_string id1
-       ^ "\n- ty: " ^ PA.ty_to_string S.ctx ty ^ "\n- av: "
+       ^ BorrowId.to_string id0 ^ "\n- id1: " ^ BorrowId.to_string id1
+       ^ "\n- ty: " ^ ty_to_string S.ctx ty ^ "\n- av: "
         ^ typed_avalue_to_string S.ctx av));
 
     let id = match_loan_id id0 id1 in
-    let value = V.ALoan (V.AMutLoan (id, av)) in
-    { V.value; ty }
+    let value = ALoan (AMutLoan (id, av)) in
+    { value; ty }
 
   let match_avalues v0 v1 =
     log#ldebug
@@ -1003,9 +989,9 @@ struct
 end
 
 let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
-    (lookup_shared_value_in_ctx0 : V.BorrowId.id -> V.typed_value)
-    (lookup_shared_value_in_ctx1 : V.BorrowId.id -> V.typed_value)
-    (ctx0 : C.eval_ctx) (ctx1 : C.eval_ctx) : ids_maps option =
+    (lookup_shared_value_in_ctx0 : BorrowId.id -> typed_value)
+    (lookup_shared_value_in_ctx1 : BorrowId.id -> typed_value) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) : ids_maps option =
   log#ldebug
     (lazy
       ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
@@ -1022,35 +1008,35 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
         (Id.InjSubst.of_list (List.map (fun x -> (x, x)) (Id.Set.elements ids)))
   end in
   let rid_map =
-    let module IdMap = IdMap (T.RegionId) in
+    let module IdMap = IdMap (RegionId) in
     IdMap.mk_map_ref fixed_ids.rids
   in
   let blid_map =
-    let module IdMap = IdMap (V.BorrowId) in
+    let module IdMap = IdMap (BorrowId) in
     IdMap.mk_map_ref fixed_ids.blids
   in
   let borrow_id_map =
-    let module IdMap = IdMap (V.BorrowId) in
+    let module IdMap = IdMap (BorrowId) in
     IdMap.mk_map_ref fixed_ids.borrow_ids
   in
   let loan_id_map =
-    let module IdMap = IdMap (V.BorrowId) in
+    let module IdMap = IdMap (BorrowId) in
     IdMap.mk_map_ref fixed_ids.loan_ids
   in
   let aid_map =
-    let module IdMap = IdMap (V.AbstractionId) in
+    let module IdMap = IdMap (AbstractionId) in
     IdMap.mk_map_ref fixed_ids.aids
   in
   let sid_map =
-    let module IdMap = IdMap (V.SymbolicValueId) in
+    let module IdMap = IdMap (SymbolicValueId) in
     IdMap.mk_map_ref fixed_ids.sids
   in
   (* In case we don't try to check equivalence but want to compute a mapping
      from a source context to a target context, we use a map from symbolic
      value ids to values (rather than to ids).
   *)
-  let sid_to_value_map : V.typed_value V.SymbolicValueId.Map.t ref =
-    ref V.SymbolicValueId.Map.empty
+  let sid_to_value_map : typed_value SymbolicValueId.Map.t ref =
+    ref SymbolicValueId.Map.empty
   in
 
   let module S : MatchCheckEquivState = struct
@@ -1074,12 +1060,12 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
   (* Small utility: check that ids are fixed/mapped to themselves *)
   let ids_are_fixed (ids : ids_sets) : bool =
     let { aids; blids = _; borrow_ids; loan_ids; dids; rids; sids } = ids in
-    V.AbstractionId.Set.subset aids fixed_ids.aids
-    && V.BorrowId.Set.subset borrow_ids fixed_ids.borrow_ids
-    && V.BorrowId.Set.subset loan_ids fixed_ids.loan_ids
-    && C.DummyVarId.Set.subset dids fixed_ids.dids
-    && T.RegionId.Set.subset rids fixed_ids.rids
-    && V.SymbolicValueId.Set.subset sids fixed_ids.sids
+    AbstractionId.Set.subset aids fixed_ids.aids
+    && BorrowId.Set.subset borrow_ids fixed_ids.borrow_ids
+    && BorrowId.Set.subset loan_ids fixed_ids.loan_ids
+    && DummyVarId.Set.subset dids fixed_ids.dids
+    && RegionId.Set.subset rids fixed_ids.rids
+    && SymbolicValueId.Set.subset sids fixed_ids.sids
   in
 
   (* We need to pick a context for some functions like [match_typed_values]:
@@ -1091,9 +1077,9 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
   let ctx = ctx0 in
 
   (* Rem.: this function raises exceptions of type [Distinct] *)
-  let match_abstractions (abs0 : V.abs) (abs1 : V.abs) : unit =
+  let match_abstractions (abs0 : abs) (abs1 : abs) : unit =
     let {
-      V.abs_id = abs_id0;
+      abs_id = abs_id0;
       kind = kind0;
       can_end = can_end0;
       parents = parents0;
@@ -1106,7 +1092,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
     in
 
     let {
-      V.abs_id = abs_id1;
+      abs_id = abs_id1;
       kind = kind1;
       can_end = can_end1;
       parents = parents1;
@@ -1137,18 +1123,18 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
   in
 
   (* Rem.: this function raises exceptions of type [Distinct] *)
-  let rec match_envs (env0 : C.env) (env1 : C.env) : unit =
+  let rec match_envs (env0 : env) (env1 : env) : unit =
     log#ldebug
       (lazy
         ("match_ctxs: match_envs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
        ^ "\n\n- rid_map: "
-        ^ T.RegionId.InjSubst.show_t !rid_map
+        ^ RegionId.InjSubst.show_t !rid_map
         ^ "\n- blid_map: "
-        ^ V.BorrowId.InjSubst.show_t !blid_map
+        ^ BorrowId.InjSubst.show_t !blid_map
         ^ "\n- sid_map: "
-        ^ V.SymbolicValueId.InjSubst.show_t !sid_map
+        ^ SymbolicValueId.InjSubst.show_t !sid_map
         ^ "\n- aid_map: "
-        ^ V.AbstractionId.InjSubst.show_t !aid_map
+        ^ AbstractionId.InjSubst.show_t !aid_map
         ^ "\n\n- ctx0:\n"
         ^ eval_ctx_to_string_no_filter { ctx0 with env = List.rev env0 }
         ^ "\n\n- ctx1:\n"
@@ -1156,11 +1142,10 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
         ^ "\n\n"));
 
     match (env0, env1) with
-    | ( C.EBinding (C.BDummy b0, v0) :: env0',
-        C.EBinding (C.BDummy b1, v1) :: env1' ) ->
+    | EBinding (BDummy b0, v0) :: env0', EBinding (BDummy b1, v1) :: env1' ->
         (* Sanity check: if the dummy value is an old value, the bindings must
            be the same and their values equal (and the borrows/loans/symbolic *)
-        if C.DummyVarId.Set.mem b0 fixed_ids.dids then (
+        if DummyVarId.Set.mem b0 fixed_ids.dids then (
           (* Fixed values: the values must be equal *)
           assert (b0 = b1);
           assert (v0 = v1);
@@ -1171,17 +1156,16 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
            are the identity actually) *)
         let _ = M.match_typed_values ctx v0 v1 in
         match_envs env0' env1'
-    | C.EBinding (C.BVar b0, v0) :: env0', C.EBinding (C.BVar b1, v1) :: env1'
-      ->
+    | EBinding (BVar b0, v0) :: env0', EBinding (BVar b1, v1) :: env1' ->
         assert (b0 = b1);
         (* Match the values *)
         let _ = M.match_typed_values ctx v0 v1 in
         (* Continue *)
         match_envs env0' env1'
-    | C.EAbs abs0 :: env0', C.EAbs abs1 :: env1' ->
+    | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
         log#ldebug (lazy "match_ctxs: match_envs: matching abs");
         (* Same as for the dummy values: there are two cases *)
-        if V.AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
+        if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
           log#ldebug (lazy "match_ctxs: match_envs: matching abs: fixed abs");
           (* Still in the prefix: the abstractions must be the same *)
           assert (abs0 = abs1);
@@ -1214,7 +1198,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
     let env1 = List.rev ctx1.env in
     let env0, env1 =
       match (env0, env1) with
-      | C.EFrame :: env0, C.EFrame :: env1 -> (env0, env1)
+      | EFrame :: env0, EFrame :: env1 -> (env0, env1)
       | _ -> raise (Failure "Unreachable")
     in
 
@@ -1235,18 +1219,18 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
     log#ldebug (lazy ("match_ctxs: distinct: " ^ msg));
     None
 
-let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
-    (ctx1 : C.eval_ctx) : bool =
+let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) : bool =
   let check_equivalent = true in
   let lookup_shared_value _ = raise (Failure "Unreachable") in
   Option.is_some
     (match_ctxs check_equivalent fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
-let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
+let match_ctx_with_target (config : config) (loop_id : LoopId.id)
     (is_loop_entry : bool) (fp_bl_maps : borrow_loan_corresp)
-    (fp_input_svalues : V.SymbolicValueId.id list) (fixed_ids : ids_sets)
-    (src_ctx : C.eval_ctx) : st_cm_fun =
+    (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
+    (src_ctx : eval_ctx) : st_cm_fun =
  fun cf tgt_ctx ->
   (* Debug *)
   log#ldebug
@@ -1277,7 +1261,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
         ^ env_to_string tgt_ctx filt_tgt_env));
 
     (* Remove the abstractions *)
-    let filter (ee : C.env_elem) : bool =
+    let filter (ee : env_elem) : bool =
       match ee with EBinding _ -> true | EAbs _ | EFrame -> false
     in
     let filt_src_env = List.filter filter filt_src_env in
@@ -1307,11 +1291,11 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
         List.iter
           (fun (var0, var1) ->
             match (var0, var1) with
-            | C.EBinding (C.BDummy b0, v0), C.EBinding (C.BDummy b1, v1) ->
+            | EBinding (BDummy b0, v0), EBinding (BDummy b1, v1) ->
                 assert (b0 = b1);
                 let _ = M.match_typed_values ctx v0 v1 in
                 ()
-            | C.EBinding (C.BVar b0, v0), C.EBinding (C.BVar b1, v1) ->
+            | EBinding (BVar b0, v0), EBinding (BVar b1, v1) ->
                 assert (b0 = b1);
                 let _ = M.match_typed_values ctx v0 v1 in
                 ()
@@ -1364,7 +1348,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
       let check_equiv = false in
       let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
       let open InterpreterBorrowsCore in
-      let lookup_shared_loan lid ctx : V.typed_value =
+      let lookup_shared_loan lid ctx : typed_value =
         match snd (lookup_loan ek_all lid ctx) with
         | Concrete (VSharedLoan (_, v)) -> v
         | Abstract (ASharedLoan (_, v, _)) -> v
@@ -1378,10 +1362,10 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
            filt_src_ctx filt_tgt_ctx)
     in
     let tgt_to_src_borrow_map =
-      V.BorrowId.Map.of_list
+      BorrowId.Map.of_list
         (List.map
            (fun (x, y) -> (y, x))
-           (V.BorrowId.InjSubst.bindings src_to_tgt_maps.borrow_id_map))
+           (BorrowId.InjSubst.bindings src_to_tgt_maps.borrow_id_map))
     in
 
     (* Debug *)
@@ -1395,7 +1379,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
         ^ eval_ctx_to_string_no_filter filt_src_ctx
         ^ "\n\n- new_absl:\n"
         ^ eval_ctx_to_string
-            { src_ctx with C.env = List.map (fun abs -> C.EAbs abs) new_absl }
+            { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }
         ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
         ^ show_borrow_loan_corresp fp_bl_maps
         ^ "\n\n- src_to_tgt_maps: "
@@ -1452,26 +1436,26 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     (* First, compute the set of borrows which appear in the fresh abstractions
        of the fixed-point: we want to introduce fresh ids only for those. *)
     let new_absl_ids, _ = compute_absl_ids new_absl in
-    let src_fresh_borrows_map = ref V.BorrowId.Map.empty in
+    let src_fresh_borrows_map = ref BorrowId.Map.empty in
     let visit_tgt =
       object
-        inherit [_] C.map_eval_ctx
+        inherit [_] map_eval_ctx
 
         method! visit_borrow_id _ id =
           (* Map the borrow, if it needs to be mapped *)
           if
             (* We map the borrows for which we computed a mapping *)
-            V.BorrowId.InjSubst.Set.mem id
-              (V.BorrowId.InjSubst.elements src_to_tgt_maps.borrow_id_map)
+            BorrowId.InjSubst.Set.mem id
+              (BorrowId.InjSubst.elements src_to_tgt_maps.borrow_id_map)
             (* And which have corresponding loans in the fresh fixed-point abstractions *)
-            && V.BorrowId.Set.mem
-                 (V.BorrowId.Map.find id tgt_to_src_borrow_map)
+            && BorrowId.Set.mem
+                 (BorrowId.Map.find id tgt_to_src_borrow_map)
                  new_absl_ids.loan_ids
           then (
-            let src_id = V.BorrowId.Map.find id tgt_to_src_borrow_map in
-            let nid = C.fresh_borrow_id () in
+            let src_id = BorrowId.Map.find id tgt_to_src_borrow_map in
+            let nid = fresh_borrow_id () in
             src_fresh_borrows_map :=
-              V.BorrowId.Map.add src_id nid !src_fresh_borrows_map;
+              BorrowId.Map.add src_id nid !src_fresh_borrows_map;
             nid)
           else id
       end
@@ -1482,7 +1466,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
       (lazy
         ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
           src_fresh_borrows_map:\n"
-        ^ V.BorrowId.Map.show V.BorrowId.to_string !src_fresh_borrows_map
+        ^ BorrowId.Map.show BorrowId.to_string !src_fresh_borrows_map
         ^ "\n"));
 
     (* Rem.: we don't update the symbolic values. It is not necessary
@@ -1507,48 +1491,44 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
          abs@2 { MB l5, ML l6 }
        ]}
     *)
-    let region_id_map = ref T.RegionId.Map.empty in
+    let region_id_map = ref RegionId.Map.empty in
     let get_rid rid =
-      match T.RegionId.Map.find_opt rid !region_id_map with
+      match RegionId.Map.find_opt rid !region_id_map with
       | Some rid -> rid
       | None ->
-          let nid = C.fresh_region_id () in
-          region_id_map := T.RegionId.Map.add rid nid !region_id_map;
+          let nid = fresh_region_id () in
+          region_id_map := RegionId.Map.add rid nid !region_id_map;
           nid
     in
     let visit_src =
       object
-        inherit [_] C.map_eval_ctx as super
+        inherit [_] map_eval_ctx as super
 
         method! visit_borrow_id _ bid =
           log#ldebug
             (lazy
               ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
-                visit_borrow_id: " ^ V.BorrowId.to_string bid ^ "\n"));
+                visit_borrow_id: " ^ BorrowId.to_string bid ^ "\n"));
 
           (* Lookup the id of the loan corresponding to this borrow *)
           let src_lid =
-            V.BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
+            BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
           in
 
           log#ldebug
             (lazy
               ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
-                src_lid: "
-              ^ V.BorrowId.to_string src_lid
-              ^ "\n"));
+                src_lid: " ^ BorrowId.to_string src_lid ^ "\n"));
 
           (* Lookup the tgt borrow id to which this borrow was mapped *)
           let tgt_bid =
-            V.BorrowId.InjSubst.find src_lid src_to_tgt_maps.borrow_id_map
+            BorrowId.InjSubst.find src_lid src_to_tgt_maps.borrow_id_map
           in
 
           log#ldebug
             (lazy
               ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
-                tgt_bid: "
-              ^ V.BorrowId.to_string tgt_bid
-              ^ "\n"));
+                tgt_bid: " ^ BorrowId.to_string tgt_bid ^ "\n"));
 
           tgt_bid
 
@@ -1556,39 +1536,39 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
           log#ldebug
             (lazy
               ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
-                visit_loan_id: " ^ V.BorrowId.to_string id ^ "\n"));
+                visit_loan_id: " ^ BorrowId.to_string id ^ "\n"));
           (* Map the borrow - rem.: we mapped the borrows *in the values*,
              meaning we know how to map the *corresponding loans in the
              abstractions* *)
-          match V.BorrowId.Map.find_opt id !src_fresh_borrows_map with
+          match BorrowId.Map.find_opt id !src_fresh_borrows_map with
           | None ->
               (* No mapping: this means that the borrow was mapped when
                  we matched values (it doesn't come from a fresh abstraction)
                  and because of this, it should actually be mapped to itself *)
               assert (
-                V.BorrowId.InjSubst.find id src_to_tgt_maps.borrow_id_map = id);
+                BorrowId.InjSubst.find id src_to_tgt_maps.borrow_id_map = id);
               id
           | Some id -> id
 
-        method! visit_symbolic_value_id _ _ = C.fresh_symbolic_value_id ()
-        method! visit_abstraction_id _ _ = C.fresh_abstraction_id ()
+        method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
+        method! visit_abstraction_id _ _ = fresh_abstraction_id ()
         method! visit_region_id _ id = get_rid id
 
         (** We also need to change the abstraction kind *)
         method! visit_abs env abs =
           match abs.kind with
-          | V.Loop (loop_id', rg_id, kind) ->
+          | Loop (loop_id', rg_id, kind) ->
               assert (loop_id' = loop_id);
-              assert (kind = V.LoopSynthInput);
+              assert (kind = LoopSynthInput);
               let can_end = false in
-              let kind = V.Loop (loop_id, rg_id, V.LoopCall) in
+              let kind : abs_kind = Loop (loop_id, rg_id, LoopCall) in
               let abs = { abs with kind; can_end } in
               super#visit_abs env abs
           | _ -> super#visit_abs env abs
       end
     in
     let new_absl = List.map (visit_src#visit_abs ()) new_absl in
-    let new_absl = List.map (fun abs -> C.EAbs abs) new_absl in
+    let new_absl = List.map (fun abs -> EAbs abs) new_absl in
 
     (* Add the abstractions from the target context to the source context *)
     let nenv = List.append new_absl tgt_ctx.env in
@@ -1605,19 +1585,17 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
 
     (* End all the borrows which appear in the *new* abstractions *)
     let new_borrows =
-      V.BorrowId.Set.of_list
-        (List.map snd (V.BorrowId.Map.bindings !src_fresh_borrows_map))
+      BorrowId.Set.of_list
+        (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
     in
     let cc = InterpreterBorrows.end_borrows config new_borrows in
 
     (* Compute the loop input values *)
     let input_values =
-      V.SymbolicValueId.Map.of_list
+      SymbolicValueId.Map.of_list
         (List.map
            (fun sid ->
-             ( sid,
-               V.SymbolicValueId.Map.find sid src_to_tgt_maps.sid_to_value_map
-             ))
+             (sid, SymbolicValueId.Map.find sid src_to_tgt_maps.sid_to_value_map))
            fp_input_svalues)
     in
 

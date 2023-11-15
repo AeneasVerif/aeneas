@@ -5,7 +5,6 @@ module E = Expressions
 module C = Contexts
 module Subst = Substitute
 module A = LlbcAst
-module L = Logging
 open ValuesUtils
 module Inv = Invariants
 module S = SynthesizeSymbolic
@@ -16,7 +15,7 @@ open InterpreterLoopsMatchCtxs
 open InterpreterLoopsFixedPoint
 
 (** The local logger *)
-let log = L.loops_log
+let log = Logging.loops_log
 
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =

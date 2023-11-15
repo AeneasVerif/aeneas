@@ -1,6 +1,4 @@
 open Identifiers
-open Names
-module PV = PrimitiveValues
 module T = Types
 module V = Values
 module E = Expressions
@@ -35,6 +33,7 @@ IdGen ()
 
 module ConstGenericVarId = T.ConstGenericVarId
 
+type llbc_name = T.name [@@deriving show, ord]
 type integer_type = T.integer_type [@@deriving show, ord]
 type const_generic_var = T.const_generic_var [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
@@ -381,7 +380,13 @@ type predicates = { trait_type_constraints : trait_type_constraint list }
 
 type type_decl = {
   def_id : TypeDeclId.id;
-  name : name;
+  llbc_name : llbc_name;
+      (** The original name coming from the LLBC declaration *)
+  name : string;
+      (** We use the name only for printing purposes (for debugging):
+          the name used at extraction time will be derived from the
+          llbc_name.
+       *)
   generics : generic_params;
   kind : type_decl_kind;
   preds : predicates;
@@ -994,11 +999,11 @@ type fun_decl = {
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
   back_id : T.RegionGroupId.id option;
-  basename : fun_name;
-      (** The "base" name of the function.
-
-          The base name is the original name of the Rust function. We add suffixes
-          (to identify the forward/backward functions) later.
+  llbc_name : llbc_name;  (** The original LLBC name. *)
+  name : string;
+      (** We use the name only for printing purposes (for debugging):
+          the name used at extraction time will be derived from the
+          llbc_name.
        *)
   signature : fun_sig;
   is_global_decl_body : bool;
@@ -1008,7 +1013,8 @@ type fun_decl = {
 
 type trait_decl = {
   def_id : trait_decl_id;
-  name : name;
+  llbc_name : llbc_name;
+  name : string;
   generics : generic_params;
   preds : predicates;
   parent_clauses : trait_clause list;
@@ -1021,7 +1027,8 @@ type trait_decl = {
 
 type trait_impl = {
   def_id : trait_impl_id;
-  name : name;
+  llbc_name : llbc_name;
+  name : string;
   impl_trait : trait_decl_ref;
   generics : generic_params;
   preds : predicates;

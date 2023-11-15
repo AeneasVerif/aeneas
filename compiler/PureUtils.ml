@@ -15,11 +15,11 @@ end
 module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
 
 (** We use this type as a key for lookups *)
-type regular_fun_id_not_loop = A.fun_id * T.RegionGroupId.id option
+type regular_fun_id_not_loop = LlbcAst.fun_id * RegionGroupId.id option
 [@@deriving show, ord]
 
 (** We use this type as a key for lookups *)
-type fun_loop_id = A.FunDeclId.id * LoopId.id option [@@deriving show, ord]
+type fun_loop_id = FunDeclId.id * LoopId.id option [@@deriving show, ord]
 
 module RegularFunIdNotLoopOrderedType = struct
   type t = regular_fun_id_not_loop
@@ -64,7 +64,7 @@ let dest_arrow_ty (ty : ty) : ty * ty =
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
-  | PV.VScalar sv -> TInteger sv.PV.int_ty
+  | VScalar sv -> TInteger sv.int_ty
   | VBool _ -> TBool
   | VChar _ -> TChar
 
@@ -647,6 +647,7 @@ let trait_decl_is_empty (trait_decl : trait_decl) : bool =
   let {
     def_id = _;
     name = _;
+    llbc_name = _;
     generics = _;
     preds = _;
     parent_clauses;
@@ -664,6 +665,7 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
   let {
     def_id = _;
     name = _;
+    llbc_name = _;
     impl_trait = _;
     generics = _;
     preds = _;

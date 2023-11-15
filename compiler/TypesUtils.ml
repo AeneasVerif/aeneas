@@ -1,7 +1,6 @@
 open Types
 open Utils
 include Charon.TypesUtils
-module TA = TypesAnalysis
 
 (** Retuns true if the type contains borrows.
 
@@ -9,9 +8,9 @@ module TA = TypesAnalysis
     we erase the lists of regions (by replacing them with [[]] when using {!Types.ety},
     and when a type uses 'static this region doesn't appear in the region parameters.
  *)
-let ty_has_borrows (infos : TA.type_infos) (ty : ty) : bool =
-  let info = TA.analyze_ty infos ty in
-  info.TA.contains_borrow
+let ty_has_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
+  let info = TypesAnalysis.analyze_ty infos ty in
+  info.TypesAnalysis.contains_borrow
 
 (** Retuns true if the type contains nested borrows.
 
@@ -19,14 +18,15 @@ let ty_has_borrows (infos : TA.type_infos) (ty : ty) : bool =
     we erase the lists of regions (by replacing them with [[]] when using {!Types.ety},
     and when a type uses 'static this region doesn't appear in the region parameters.
  *)
-let ty_has_nested_borrows (infos : TA.type_infos) (ty : ty) : bool =
-  let info = TA.analyze_ty infos ty in
-  info.TA.contains_nested_borrows
+let ty_has_nested_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
+  let info = TypesAnalysis.analyze_ty infos ty in
+  info.TypesAnalysis.contains_nested_borrows
 
 (** Retuns true if the type contains a borrow under a mutable borrow *)
-let ty_has_borrow_under_mut (infos : TA.type_infos) (ty : ty) : bool =
-  let info = TA.analyze_ty infos ty in
-  info.TA.contains_borrow_under_mut
+let ty_has_borrow_under_mut (infos : TypesAnalysis.type_infos) (ty : ty) : bool
+    =
+  let info = TypesAnalysis.analyze_ty infos ty in
+  info.TypesAnalysis.contains_borrow_under_mut
 
 (** Small helper *)
 let raise_if_erased_ty_visitor =

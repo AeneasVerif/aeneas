@@ -1,14 +1,13 @@
 (** Define base utilities for the extraction *)
 
+open Contexts
 open Pure
 open TranslateCore
-module C = Contexts
-module RegionId = T.RegionId
 module F = Format
 open ExtractBuiltin
 
 (** The local logger *)
-let log = L.extract_log
+let log = Logging.extract_log
 
 type region_group_info = {
   id : RegionGroupId.id;
@@ -24,11 +23,6 @@ type region_group_info = {
 
 module StringSet = Collections.StringSet
 module StringMap = Collections.StringMap
-
-type name = Names.name
-type type_name = Names.type_name
-type global_name = Names.global_name
-type fun_name = Names.fun_name
 
 (** Characterizes a declaration.
 
@@ -151,7 +145,7 @@ type formatter = {
 
           Remark: can return [None] for some backends like HOL4.
        *)
-  field_name : name -> FieldId.id -> string option -> string;
+  field_name : llbc_name -> FieldId.id -> string option -> string;
       (** Inputs:
           - type name
           - field id
@@ -163,12 +157,12 @@ type formatter = {
           access then causes trouble because not all provers accept syntax like
           [x.3] where [x] is a tuple.
        *)
-  variant_name : name -> string -> string;
+  variant_name : llbc_name -> string -> string;
       (** Inputs:
           - type name
           - variant name
        *)
-  struct_constructor : name -> string;
+  struct_constructor : llbc_name -> string;
       (** Structure constructors are used when constructing structure values.
 
           For instance, in F*:
@@ -179,13 +173,13 @@ type formatter = {
 
           Inputs:
           - type name
-       *)
-  type_name : type_name -> string;
+      *)
+  type_name : llbc_name -> string;
       (** Provided a basename, compute a type name. *)
-  global_name : global_name -> string;
+  global_name : llbc_name -> string;
       (** Provided a basename, compute a global name. *)
   fun_name :
-    fun_name ->
+    llbc_name ->
     int ->
     LoopId.id option ->
     int ->
@@ -213,7 +207,7 @@ type formatter = {
           TODO: use the fun id for the assumed functions.
        *)
   termination_measure_name :
-    A.FunDeclId.id -> fun_name -> int -> LoopId.id option -> string;
+    A.FunDeclId.id -> llbc_name -> int -> LoopId.id option -> string;
       (** Generates the name of the termination measure used to prove/reason about
           termination. The generated code uses this clause where needed,
           but its body must be defined by the user.
@@ -225,11 +219,11 @@ type formatter = {
             function is an assumed function or a local function
           - function basename
           - the number of loops in the parent function. This is used for
-            the same purpose as in {!field:fun_name}.
+            the same purpose as in {!field:llbc_name}.
           - loop identifier, if this is for a loop
        *)
   decreases_proof_name :
-    A.FunDeclId.id -> fun_name -> int -> LoopId.id option -> string;
+    A.FunDeclId.id -> llbc_name -> int -> LoopId.id option -> string;
       (** Generates the name of the proof used to prove/reason about
           termination. The generated code uses this clause where needed,
           but its body must be defined by the user.
@@ -241,7 +235,7 @@ type formatter = {
             function is an assumed function or a local function
           - function basename
           - the number of loops in the parent function. This is used for
-            the same purpose as in {!field:fun_name}.
+            the same purpose as in {!field:llbc_name}.
           - loop identifier, if this is for a loop
        *)
   trait_decl_name : trait_decl -> string;
@@ -654,72 +648,47 @@ type extraction_ctx = {
       (** Same as {!types_filter_type_args_map}, but for trait implementations *)
 }
 
+let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =
+  TranslateCore.trans_ctx_to_pure_fmt_env ctx.trans_ctx
+
+let name_to_string (ctx : extraction_ctx) =
+  PrintPure.name_to_string (extraction_ctx_to_fmt_env ctx)
+
+let trait_decl_id_to_string (ctx : extraction_ctx) =
+  PrintPure.trait_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
+
+let type_id_to_string (ctx : extraction_ctx) =
+  PrintPure.type_id_to_string (extraction_ctx_to_fmt_env ctx)
+
+let global_decl_id_to_string (ctx : extraction_ctx) =
+  PrintPure.global_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
+
+let llbc_fun_id_to_string (ctx : extraction_ctx) =
+  PrintPure.llbc_fun_id_to_string (extraction_ctx_to_fmt_env ctx)
+
+let fun_id_to_string (ctx : extraction_ctx) =
+  PrintPure.regular_fun_id_to_string (extraction_ctx_to_fmt_env ctx)
+
+let adt_variant_to_string (ctx : extraction_ctx) =
+  PrintPure.adt_variant_to_string (extraction_ctx_to_fmt_env ctx)
+
+let adt_field_to_string (ctx : extraction_ctx) =
+  PrintPure.adt_field_to_string (extraction_ctx_to_fmt_env ctx)
+
 (** Debugging function, used when communicating name collisions to the user,
     and also to print ids for internal debugging (in case of lookup miss for
     instance).
  *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
-  let global_decls = ctx.trans_ctx.global_ctx.global_decls in
-  let fun_decls = ctx.trans_ctx.fun_ctx.fun_decls in
-  let type_decls = ctx.trans_ctx.type_ctx.type_decls in
-  let trait_decls = ctx.trans_ctx.trait_decls_ctx.trait_decls in
   let trait_decl_id_to_string (id : A.TraitDeclId.id) : string =
-    let trait_name =
-      Print.fun_name_to_string (A.TraitDeclId.Map.find id trait_decls).name
-    in
+    let trait_name = trait_decl_id_to_string ctx id in
     "trait_decl: " ^ trait_name ^ " (id: " ^ A.TraitDeclId.to_string id ^ ")"
   in
-  (* TODO: factorize the pretty-printing with what is in PrintPure *)
-  let get_type_name (id : type_id) : string =
-    match id with
-    | TAdtId id ->
-        let def = TypeDeclId.Map.find id type_decls in
-        Print.name_to_string def.name
-    | TAssumed aty -> show_assumed_ty aty
-    | TTuple -> raise (Failure "Unreachable")
-  in
   match id with
-  | GlobalId gid ->
-      let name = (A.GlobalDeclId.Map.find gid global_decls).name in
-      "global name: " ^ Print.global_name_to_string name
-  | FunId fid -> (
-      match fid with
-      | FromLlbc (fid, lp_id, rg_id) ->
-          let fun_name =
-            match fid with
-            | FunId (FRegular fid) ->
-                Print.fun_name_to_string
-                  (A.FunDeclId.Map.find fid fun_decls).name
-            | FunId (FAssumed aid) -> A.show_assumed_fun_id aid
-            | TraitMethod (trait_ref, method_name, _) ->
-                (* Shouldn't happen *)
-                if !Config.fail_hard then raise (Failure "Unexpected")
-                else
-                  "Trait method: decl: "
-                  ^ TraitDeclId.to_string trait_ref.trait_decl_ref.trait_decl_id
-                  ^ ", method_name: " ^ method_name
-          in
-
-          let lp_kind =
-            match lp_id with
-            | None -> ""
-            | Some lp_id -> "loop " ^ LoopId.to_string lp_id ^ ", "
-          in
-
-          let fwd_back_kind =
-            match rg_id with
-            | None -> "forward"
-            | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
-          in
-          "fun name (" ^ lp_kind ^ fwd_back_kind ^ "): " ^ fun_name
-      | Pure fid -> PrintPure.pure_assumed_fun_id_to_string fid)
+  | GlobalId gid -> global_decl_id_to_string ctx gid
+  | FunId fid -> fun_id_to_string ctx fid
   | DecreasesProofId (fid, lid) ->
-      let fun_name =
-        match fid with
-        | FRegular fid ->
-            Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
-        | FAssumed aid -> A.show_assumed_fun_id aid
-      in
+      let fun_name = llbc_fun_id_to_string ctx fid in
       let loop =
         match lid with
         | None -> ""
@@ -727,73 +696,20 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       in
       "decreases proof for function: " ^ fun_name ^ loop
   | TerminationMeasureId (fid, lid) ->
-      let fun_name =
-        match fid with
-        | FRegular fid ->
-            Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
-        | FAssumed aid -> A.show_assumed_fun_id aid
-      in
+      let fun_name = llbc_fun_id_to_string ctx fid in
       let loop =
         match lid with
         | None -> ""
         | Some lid -> ", loop: " ^ LoopId.to_string lid
       in
       "termination measure for function: " ^ fun_name ^ loop
-  | TypeId id -> "type name: " ^ get_type_name id
-  | StructId id -> "struct constructor of: " ^ get_type_name id
+  | TypeId id -> "type name: " ^ type_id_to_string ctx id
+  | StructId id -> "struct constructor of: " ^ type_id_to_string ctx id
   | VariantId (id, variant_id) ->
-      let variant_name =
-        match id with
-        | TTuple -> raise (Failure "Unreachable")
-        | TAssumed TResult ->
-            if variant_id = result_return_id then "@result::Return"
-            else if variant_id = result_fail_id then "@result::Fail"
-            else raise (Failure "Unreachable")
-        | TAssumed TError ->
-            if variant_id = error_failure_id then "@error::Failure"
-            else if variant_id = error_out_of_fuel_id then "@error::OutOfFuel"
-            else raise (Failure "Unreachable")
-        | TAssumed TFuel ->
-            if variant_id = fuel_zero_id then "@fuel::0"
-            else if variant_id = fuel_succ_id then "@fuel::Succ"
-            else raise (Failure "Unreachable")
-        | TAssumed (TState | TArray | TSlice | TStr | TRawPtr _) ->
-            raise
-              (Failure
-                 ("Unreachable: variant id ("
-                 ^ VariantId.to_string variant_id
-                 ^ ") for " ^ show_type_id id))
-        | TAdtId id -> (
-            let def = TypeDeclId.Map.find id type_decls in
-            match def.kind with
-            | Struct _ | Opaque -> raise (Failure "Unreachable")
-            | Enum variants ->
-                let variant = VariantId.nth variants variant_id in
-                Print.name_to_string def.name ^ "::" ^ variant.variant_name)
-      in
+      let variant_name = adt_variant_to_string ctx id (Some variant_id) in
       "variant name: " ^ variant_name
   | FieldId (id, field_id) ->
-      let field_name =
-        match id with
-        | TTuple -> raise (Failure "Unreachable")
-        | TAssumed
-            ( TState | TResult | TError | TFuel | TArray | TSlice | TStr
-            | TRawPtr _ ) ->
-            (* We can't directly have access to the fields of those types *)
-            raise (Failure "Unreachable")
-        | TAdtId id -> (
-            let def = TypeDeclId.Map.find id type_decls in
-            match def.kind with
-            | Enum _ | Opaque -> raise (Failure "Unreachable")
-            | Struct fields ->
-                let field = FieldId.nth fields field_id in
-                let field_name =
-                  match field.field_name with
-                  | None -> FieldId.to_string field_id
-                  | Some name -> name
-                in
-                Print.name_to_string def.name ^ "." ^ field_name)
-      in
+      let field_name = adt_field_to_string ctx id field_id in
       "field name: " ^ field_name
   | UnknownId -> "keyword"
   | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
@@ -1148,7 +1064,7 @@ let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name =
-    ctx.fmt.decreases_proof_name def.def_id def.basename def.num_loops
+    ctx.fmt.decreases_proof_name def.def_id def.llbc_name def.num_loops
       def.loop_id
   in
   ctx_add (DecreasesProofId (FRegular def.def_id, def.loop_id)) name ctx
@@ -1156,7 +1072,7 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name =
-    ctx.fmt.termination_measure_name def.def_id def.basename def.num_loops
+    ctx.fmt.termination_measure_name def.def_id def.llbc_name def.num_loops
       def.loop_id
   in
   ctx_add (TerminationMeasureId (FRegular def.def_id, def.loop_id)) name ctx
@@ -1177,7 +1093,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   | None ->
       (* Not the case: "standard" registration *)
       let name = ctx.fmt.global_name def.name in
-      let body = FunId (FromLlbc (FunId (FRegular def.body_id), None, None)) in
+      let body = FunId (FromLlbc (FunId (FRegular def.body), None, None)) in
       let ctx = ctx_add decl (name ^ "_c") ctx in
       let ctx = ctx_add body (name ^ "_body") ctx in
       ctx
@@ -1208,7 +1124,7 @@ let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
         Some { id = rg_id; region_names }
   in
   (* Add the function name *)
-  ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
+  ctx.fmt.fun_name def.llbc_name def.num_loops def.loop_id num_rgs rg_info
     (keep_fwd, num_backs)
 
 (* TODO: move to Extract *)
@@ -1318,7 +1234,7 @@ let initialize_names_maps (fmt : formatter) (init : names_map_init) : names_maps
   nm
 
 let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
-  fmt.type_name def.name
+  fmt.type_name def.llbc_name
 
 (** Helper function: generate a suffix for a function name, i.e., generates
     a suffix like "_loop", "loop1", etc. to append to a function name.

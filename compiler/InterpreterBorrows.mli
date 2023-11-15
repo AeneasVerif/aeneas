@@ -1,49 +1,44 @@
-module T = Types
-module V = Values
-module C = Contexts
-module Subst = Substitute
-module L = Logging
-module S = SynthesizeSymbolic
+open Types
+open Values
+open Contexts
 open Cps
-open InterpreterProjectors
 
 (** When copying values, we duplicate the shared borrows. This is tantamount to
     reborrowing the shared value. The [reborrow_shared original_id new_bid ctx]
     applies this change to an environment [ctx] by inserting a new borrow id in
     the set of borrows tracked by a shared value, referenced by the
     [original_bid] argument.  *)
-val reborrow_shared : V.BorrowId.id -> V.BorrowId.id -> C.eval_ctx -> C.eval_ctx
+val reborrow_shared : BorrowId.id -> BorrowId.id -> eval_ctx -> eval_ctx
 
 (** End a borrow identified by its id, while preserving the invariants.
 
     If the borrow is inside another borrow/an abstraction or contains loans,
     [end_borrow] will end those borrows/abstractions/loans first.
   *)
-val end_borrow : C.config -> V.BorrowId.id -> cm_fun
+val end_borrow : config -> BorrowId.id -> cm_fun
 
 (** End a set of borrows identified by their ids, while preserving the invariants. *)
-val end_borrows : C.config -> V.BorrowId.Set.t -> cm_fun
+val end_borrows : config -> BorrowId.Set.t -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
-val end_abstraction : C.config -> V.AbstractionId.id -> cm_fun
+val end_abstraction : config -> AbstractionId.id -> cm_fun
 
 (** End a set of abstractions while preserving the invariants. *)
-val end_abstractions : C.config -> V.AbstractionId.Set.t -> cm_fun
+val end_abstractions : config -> AbstractionId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
-val end_borrow_no_synth : C.config -> V.BorrowId.id -> C.eval_ctx -> C.eval_ctx
+val end_borrow_no_synth : config -> BorrowId.id -> eval_ctx -> eval_ctx
 
 (** End a set of borrows and return the resulting environment, ignoring synthesis *)
-val end_borrows_no_synth :
-  C.config -> V.BorrowId.Set.t -> C.eval_ctx -> C.eval_ctx
+val end_borrows_no_synth : config -> BorrowId.Set.t -> eval_ctx -> eval_ctx
 
 (** End an abstraction and return the resulting environment, ignoring synthesis *)
 val end_abstraction_no_synth :
-  C.config -> V.AbstractionId.id -> C.eval_ctx -> C.eval_ctx
+  config -> AbstractionId.id -> eval_ctx -> eval_ctx
 
 (** End a set of abstractions and return the resulting environment, ignoring synthesis *)
 val end_abstractions_no_synth :
-  C.config -> V.AbstractionId.Set.t -> C.eval_ctx -> C.eval_ctx
+  config -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
 
 (** Promote a reserved mut borrow to a mut borrow, while preserving the invariants.
 
@@ -54,7 +49,7 @@ val end_abstractions_no_synth :
     the corresponding shared loan with a mutable loan (after having ended the
     other shared borrows which point to this loan).
  *)
-val promote_reserved_mut_borrow : C.config -> V.BorrowId.id -> cm_fun
+val promote_reserved_mut_borrow : config -> BorrowId.id -> cm_fun
 
 (** Transform an abstraction to an abstraction where the values are not
     structured.
@@ -96,7 +91,7 @@ val promote_reserved_mut_borrow : C.config -> V.BorrowId.id -> cm_fun
     - [ctx]
     - [abs]
  *)
-val destructure_abs : V.abs_kind -> bool -> bool -> C.eval_ctx -> V.abs -> V.abs
+val destructure_abs : abs_kind -> bool -> bool -> eval_ctx -> abs -> abs
 
 (** Return [true] if the values in an abstraction are destructured.
 
@@ -104,7 +99,7 @@ val destructure_abs : V.abs_kind -> bool -> bool -> C.eval_ctx -> V.abs -> V.abs
 
     The input boolean is [destructure_shared_value]. See {!destructure_abs}.
  *)
-val abs_is_destructured : bool -> C.eval_ctx -> V.abs -> bool
+val abs_is_destructured : bool -> eval_ctx -> abs -> bool
 
 (** Turn a value into a abstractions.
 
@@ -130,7 +125,7 @@ val abs_is_destructured : bool -> C.eval_ctx -> V.abs -> bool
     - [v]
  *)
 val convert_value_to_abstractions :
-  V.abs_kind -> bool -> bool -> C.eval_ctx -> V.typed_value -> V.abs list
+  abs_kind -> bool -> bool -> eval_ctx -> typed_value -> abs list
 
 (** See {!merge_into_abstraction}.
 
@@ -139,12 +134,7 @@ val convert_value_to_abstractions :
   *)
 type merge_duplicates_funcs = {
   merge_amut_borrows :
-    V.borrow_id ->
-    T.rty ->
-    V.typed_avalue ->
-    T.rty ->
-    V.typed_avalue ->
-    V.typed_avalue;
+    borrow_id -> rty -> typed_avalue -> rty -> typed_avalue -> typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -154,19 +144,14 @@ type merge_duplicates_funcs = {
 
           The children should be [AIgnored].
        *)
-  merge_ashared_borrows : V.borrow_id -> T.rty -> T.rty -> V.typed_avalue;
+  merge_ashared_borrows : borrow_id -> rty -> rty -> typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
           - [ty1]
        *)
   merge_amut_loans :
-    V.loan_id ->
-    T.rty ->
-    V.typed_avalue ->
-    T.rty ->
-    V.typed_avalue ->
-    V.typed_avalue;
+    loan_id -> rty -> typed_avalue -> rty -> typed_avalue -> typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -177,14 +162,14 @@ type merge_duplicates_funcs = {
           The children should be [AIgnored].
        *)
   merge_ashared_loans :
-    V.loan_id_set ->
-    T.rty ->
-    V.typed_value ->
-    V.typed_avalue ->
-    T.rty ->
-    V.typed_value ->
-    V.typed_avalue ->
-    V.typed_avalue;
+    loan_id_set ->
+    rty ->
+    typed_value ->
+    typed_avalue ->
+    rty ->
+    typed_value ->
+    typed_avalue ->
+    typed_avalue;
       (** Parameters:
           - [ids]
           - [ty0]
@@ -247,10 +232,10 @@ type merge_duplicates_funcs = {
     results from the merge.
  *)
 val merge_into_abstraction :
-  V.abs_kind ->
+  abs_kind ->
   bool ->
   merge_duplicates_funcs option ->
-  C.eval_ctx ->
-  V.AbstractionId.id ->
-  V.AbstractionId.id ->
-  C.eval_ctx * V.AbstractionId.id
+  eval_ctx ->
+  AbstractionId.id ->
+  AbstractionId.id ->
+  eval_ctx * AbstractionId.id

@@ -3,7 +3,6 @@ open Expressions
 open Values
 open LlbcAst
 open LlbcAstUtils
-module V = Values
 open ValuesUtils
 open Identifiers
 module L = Logging
@@ -191,7 +190,7 @@ type type_context = {
 type fun_context = {
   fun_decls : fun_decl FunDeclId.Map.t;
   fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
-  regions_hierarchies : T.region_groups FunIdMap.t;
+  regions_hierarchies : region_groups FunIdMap.t;
 }
 [@@deriving show]
 
@@ -371,7 +370,7 @@ let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
           (List.map
              (fun (var, value) ->
                (* We can unfortunately not use Print because it depends on Contexts... *)
-               show_var var ^ " -> " ^ V.show_typed_value value)
+               show_var var ^ " -> " ^ show_typed_value value)
              vars)));
   assert (
     List.for_all
@@ -433,7 +432,7 @@ let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom (erase_regions v.var_ty))) vars in
   ctx_push_vars ctx vars
 
-let env_find_abs (env : env) (pred : V.abs -> bool) : V.abs option =
+let env_find_abs (env : env) (pred : abs -> bool) : abs option =
   let rec lookup env =
     match env with
     | [] -> None
@@ -443,16 +442,15 @@ let env_find_abs (env : env) (pred : V.abs -> bool) : V.abs option =
   in
   lookup env
 
-let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
+let env_lookup_abs (env : env) (abs_id : AbstractionId.id) : abs =
   Option.get (env_find_abs env (fun abs -> abs.abs_id = abs_id))
 
 (** Remove an abstraction from the context, as well as all the references to
     this abstraction (for instance, remove the abs id from all the parent sets
     of all the other abstractions).
  *)
-let env_remove_abs (env : env) (abs_id : V.AbstractionId.id) :
-    env * V.abs option =
-  let rec remove (env : env) : env * V.abs option =
+let env_remove_abs (env : env) (abs_id : AbstractionId.id) : env * abs option =
+  let rec remove (env : env) : env * abs option =
     match env with
     | [] -> raise (Failure "Unreachable")
     | EFrame :: _ -> (env, None)
@@ -464,8 +462,8 @@ let env_remove_abs (env : env) (abs_id : V.AbstractionId.id) :
         else
           let env, abs_opt = remove env in
           (* Update the parents set *)
-          let parents = V.AbstractionId.Set.remove abs_id abs.parents in
-          (EAbs { abs with V.parents } :: env, abs_opt)
+          let parents = AbstractionId.Set.remove abs_id abs.parents in
+          (EAbs { abs with parents } :: env, abs_opt)
   in
   remove env
 
@@ -476,9 +474,9 @@ let env_remove_abs (env : env) (abs_id : V.AbstractionId.id) :
     we also substitute the abstraction id wherever it is used (i.e., in the
     parent sets of the other abstractions).
  *)
-let env_subst_abs (env : env) (abs_id : V.AbstractionId.id) (nabs : V.abs) :
-    env * V.abs option =
-  let rec update (env : env) : env * V.abs option =
+let env_subst_abs (env : env) (abs_id : AbstractionId.id) (nabs : abs) :
+    env * abs option =
+  let rec update (env : env) : env * abs option =
     match env with
     | [] -> raise (Failure "Unreachable")
     | EFrame :: _ -> (* We're done *) (env, None)
@@ -492,34 +490,34 @@ let env_subst_abs (env : env) (abs_id : V.AbstractionId.id) (nabs : V.abs) :
           (* Update the parents set *)
           let parents = abs.parents in
           let parents =
-            if V.AbstractionId.Set.mem abs_id parents then
-              let parents = V.AbstractionId.Set.remove abs_id parents in
-              V.AbstractionId.Set.add nabs.abs_id parents
+            if AbstractionId.Set.mem abs_id parents then
+              let parents = AbstractionId.Set.remove abs_id parents in
+              AbstractionId.Set.add nabs.abs_id parents
             else parents
           in
-          (EAbs { abs with V.parents } :: env, opt_abs)
+          (EAbs { abs with parents } :: env, opt_abs)
   in
   update env
 
-let ctx_lookup_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) : V.abs =
+let ctx_lookup_abs (ctx : eval_ctx) (abs_id : AbstractionId.id) : abs =
   env_lookup_abs ctx.env abs_id
 
-let ctx_find_abs (ctx : eval_ctx) (p : V.abs -> bool) : V.abs option =
+let ctx_find_abs (ctx : eval_ctx) (p : abs -> bool) : abs option =
   env_find_abs ctx.env p
 
 (** See the comments for {!env_remove_abs} *)
-let ctx_remove_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) :
-    eval_ctx * V.abs option =
+let ctx_remove_abs (ctx : eval_ctx) (abs_id : AbstractionId.id) :
+    eval_ctx * abs option =
   let env, abs = env_remove_abs ctx.env abs_id in
   ({ ctx with env }, abs)
 
 (** See the comments for {!env_subst_abs} *)
-let ctx_subst_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) (nabs : V.abs)
-    : eval_ctx * V.abs option =
+let ctx_subst_abs (ctx : eval_ctx) (abs_id : AbstractionId.id) (nabs : abs) :
+    eval_ctx * abs option =
   let env, abs_opt = env_subst_abs ctx.env abs_id nabs in
   ({ ctx with env }, abs_opt)
 
-let ctx_set_abs_can_end (ctx : eval_ctx) (abs_id : V.AbstractionId.id)
+let ctx_set_abs_can_end (ctx : eval_ctx) (abs_id : AbstractionId.id)
     (can_end : bool) : eval_ctx =
   let abs = ctx_lookup_abs ctx abs_id in
   let abs = { abs with can_end } in
@@ -580,19 +578,19 @@ class ['self] map_eval_ctx =
         { ctx with env }
   end
 
-let env_iter_abs (f : V.abs -> unit) (env : env) : unit =
+let env_iter_abs (f : abs -> unit) (env : env) : unit =
   List.iter
     (fun (ee : env_elem) ->
       match ee with EBinding _ | EFrame -> () | EAbs abs -> f abs)
     env
 
-let env_map_abs (f : V.abs -> V.abs) (env : env) : env =
+let env_map_abs (f : abs -> abs) (env : env) : env =
   List.map
     (fun (ee : env_elem) ->
       match ee with EBinding _ | EFrame -> ee | EAbs abs -> EAbs (f abs))
     env
 
-let env_filter_abs (f : V.abs -> bool) (env : env) : env =
+let env_filter_abs (f : abs -> bool) (env : env) : env =
   List.filter
     (fun (ee : env_elem) ->
       match ee with EBinding _ | EFrame -> true | EAbs abs -> f abs)

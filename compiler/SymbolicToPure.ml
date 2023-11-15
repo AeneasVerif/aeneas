@@ -2,18 +2,19 @@ open Utils
 open LlbcAstUtils
 open Pure
 open PureUtils
+open PrimitiveValues
+module T = Types
 module Id = Identifiers
 module C = Contexts
 module A = LlbcAst
 module S = SymbolicAst
 module TA = TypesAnalysis
-module L = Logging
 module PP = PrintPure
 module FA = FunsAnalysis
 module IU = InterpreterUtils
 
 (** The local logger *)
-let log = L.symbolic_to_pure_log
+let log = Logging.symbolic_to_pure_log
 
 type type_context = {
   llbc_type_decls : T.type_decl TypeDeclId.Map.t;
@@ -208,113 +209,92 @@ type bs_ctx = {
 [@@deriving show]
 
 (* TODO: move *)
-let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.Ast.ast_formatter =
-  Print.Ast.decls_and_fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
-    ctx.fun_context.llbc_fun_decls ctx.global_context.llbc_global_decls
-    ctx.trait_decls_ctx ctx.trait_impls_ctx ctx.fun_decl
-
-let bs_ctx_to_ctx_formatter (ctx : bs_ctx) : Print.Contexts.ctx_formatter =
-  let region_id_to_string = Print.Types.region_id_to_string in
-  let type_var_id_to_string = Print.Types.type_var_id_to_string in
-  let var_id_to_string = Print.Expressions.var_id_to_string in
-  let ast_fmt = bs_ctx_to_ast_formatter ctx in
+let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fun_decls = ctx.fun_context.llbc_fun_decls in
+  let global_decls = ctx.global_context.llbc_global_decls in
+  let trait_decls = ctx.trait_decls_ctx in
+  let trait_impls = ctx.trait_impls_ctx in
+  let generics = ctx.fun_decl.signature.generics in
+  let preds = ctx.fun_decl.signature.preds in
   {
-    Print.Values.region_id_to_string;
-    type_var_id_to_string;
-    type_decl_id_to_string = ast_fmt.type_decl_id_to_string;
-    const_generic_var_id_to_string = ast_fmt.const_generic_var_id_to_string;
-    global_decl_id_to_string = ast_fmt.global_decl_id_to_string;
-    adt_variant_to_string = ast_fmt.adt_variant_to_string;
-    var_id_to_string;
-    adt_field_names = ast_fmt.adt_field_names;
-    trait_decl_id_to_string = ast_fmt.trait_decl_id_to_string;
-    trait_impl_id_to_string = ast_fmt.trait_impl_id_to_string;
-    trait_clause_id_to_string = ast_fmt.trait_clause_id_to_string;
+    type_decls;
+    fun_decls;
+    global_decls;
+    trait_decls;
+    trait_impls;
+    generics;
+    preds;
+    locals = [];
   }
 
-let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
-  let generics = ctx.fun_decl.signature.generics in
+let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
-  PrintPure.mk_ast_formatter type_decls fun_decls global_decls
-    ctx.trait_decls_ctx ctx.trait_impls_ctx generics.types
-    generics.const_generics
+  let trait_decls = ctx.trait_decls_ctx in
+  let trait_impls = ctx.trait_impls_ctx in
+  let generics = ctx.sg.generics in
+  {
+    type_decls;
+    fun_decls;
+    global_decls;
+    trait_decls;
+    trait_impls;
+    generics;
+    locals = [];
+  }
 
 let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
-  let fmt = bs_ctx_to_ctx_formatter ctx in
-  let fmt = Print.PC.ctx_to_type_formatter fmt in
-  Print.PT.generic_args_to_string fmt args
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Types.generic_args_to_string env args
+
+let name_to_string (ctx : bs_ctx) =
+  Print.Types.name_to_string (bs_ctx_to_fmt_env ctx)
 
 let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
-  let fmt = bs_ctx_to_ctx_formatter ctx in
-  let fmt = Print.PC.ctx_to_type_formatter fmt in
-  Print.PV.symbolic_value_to_string fmt sv
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Values.symbolic_value_to_string env sv
 
 let typed_value_to_string (ctx : bs_ctx) (v : V.typed_value) : string =
-  let fmt = bs_ctx_to_ctx_formatter ctx in
-  Print.PV.typed_value_to_string fmt v
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Values.typed_value_to_string env v
 
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
-  let fmt = bs_ctx_to_pp_ast_formatter ctx in
-  let fmt = PrintPure.ast_to_type_formatter fmt in
-  PrintPure.ty_to_string fmt false ty
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.ty_to_string env false ty
 
 let ty_to_string (ctx : bs_ctx) (ty : T.ty) : string =
-  let fmt = bs_ctx_to_ctx_formatter ctx in
-  let fmt = Print.PC.ctx_to_type_formatter fmt in
-  Print.PT.ty_to_string fmt ty
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Types.ty_to_string env ty
 
 let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
-  let type_decls = ctx.type_context.llbc_type_decls in
-  let global_decls = ctx.global_context.llbc_global_decls in
-  let fmt =
-    PrintPure.mk_type_formatter type_decls global_decls ctx.trait_decls_ctx
-      ctx.trait_impls_ctx def.generics.types def.generics.const_generics
-  in
-  PrintPure.type_decl_to_string fmt def
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.type_decl_to_string env def
 
 let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
-  let fmt = bs_ctx_to_pp_ast_formatter ctx in
-  PrintPure.texpression_to_string fmt false "" "  " e
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.texpression_to_string env false "" "  " e
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
-  let type_params = sg.generics.types in
-  let cg_params = sg.generics.const_generics in
-  let type_decls = ctx.type_context.llbc_type_decls in
-  let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let global_decls = ctx.global_context.llbc_global_decls in
-  let fmt =
-    PrintPure.mk_ast_formatter type_decls fun_decls global_decls
-      ctx.trait_decls_ctx ctx.trait_impls_ctx type_params cg_params
-  in
-  PrintPure.fun_sig_to_string fmt sg
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.fun_sig_to_string env sg
 
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
-  let generics = def.signature.generics in
-  let type_params = generics.types in
-  let cg_params = generics.const_generics in
-  let type_decls = ctx.type_context.llbc_type_decls in
-  let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let global_decls = ctx.global_context.llbc_global_decls in
-  let fmt =
-    PrintPure.mk_ast_formatter type_decls fun_decls global_decls
-      ctx.trait_decls_ctx ctx.trait_impls_ctx type_params cg_params
-  in
-  PrintPure.fun_decl_to_string fmt def
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.fun_decl_to_string env def
 
 let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
-  let fmt = bs_ctx_to_pp_ast_formatter ctx in
-  PrintPure.typed_pattern_to_string fmt p
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.typed_pattern_to_string env p
 
 (* TODO: move *)
 let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
-  let fmt = bs_ctx_to_ast_formatter ctx in
-  let fmt = Print.Contexts.ast_to_value_formatter fmt in
+  let env = bs_ctx_to_fmt_env ctx in
   let verbose = false in
   let indent = "" in
   let indent_incr = "  " in
-  Print.Values.abs_to_string fmt verbose indent indent_incr abs
+  Print.Values.abs_to_string env verbose indent indent_incr abs
 
 let get_instantiated_fun_sig (fun_id : A.fun_id)
     (back_id : T.RegionGroupId.id option) (generics : generic_args)
@@ -421,7 +401,7 @@ let rec translate_sty (ty : T.ty) : ty =
   | TNever -> raise (Failure "Unreachable")
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
-      let mut = match rkind with Mut -> Mut | Shared -> Const in
+      let mut = match rkind with RMut -> Mut | RShared -> Const in
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
@@ -481,21 +461,24 @@ let translate_variant (v : T.variant) : variant =
 let translate_variants (vl : T.variant list) : variant list =
   List.map translate_variant vl
 
-(** Translate a type def kind to IM *)
+(** Translate a type def kind from LLBC *)
 let translate_type_decl_kind (kind : T.type_decl_kind) : type_decl_kind =
   match kind with
   | T.Struct fields -> Struct (translate_fields fields)
   | T.Enum variants -> Enum (translate_variants variants)
   | T.Opaque -> Opaque
 
-(** Translate a type definition from IM 
+(** Translate a type definition from LLBC
 
-    TODO: this is not symbolic to pure but IM to pure. Still, I don't see the
-    point of moving this definition for now.
+    Remark: this is not symbolic to pure but LLBC to pure. Still,
+    I don't see the point of moving this definition for now.
  *)
-let translate_type_decl (def : T.type_decl) : type_decl =
+let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
+    type_decl =
+  let env = Print.Contexts.decls_ctx_to_fmt_env ctx in
   let def_id = def.T.def_id in
-  let name = def.name in
+  let llbc_name = def.name in
+  let name = Print.Types.name_to_string env def.name in
   let { T.regions; types; const_generics; trait_clauses } = def.generics in
   (* Can't translate types with regions for now *)
   assert (regions = []);
@@ -503,7 +486,7 @@ let translate_type_decl (def : T.type_decl) : type_decl =
   let generics = { types; const_generics; trait_clauses } in
   let kind = translate_type_decl_kind def.T.kind in
   let preds = translate_predicates def.preds in
-  { def_id; name; generics; kind; preds }
+  { def_id; llbc_name; name; generics; kind; preds }
 
 let translate_type_id (id : T.type_id) : type_id =
   match id with
@@ -564,7 +547,7 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : T.ty) : ty =
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
-      let mut = match rkind with Mut -> Mut | Shared -> Const in
+      let mut = match rkind with RMut -> Mut | RShared -> Const in
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
@@ -655,10 +638,10 @@ let rec translate_back_ty (type_infos : TA.type_infos)
   | TLiteral lty -> wrap (TLiteral lty)
   | TRef (r, rty, rkind) -> (
       match rkind with
-      | T.Shared ->
+      | RShared ->
           (* Ignore shared references, unless we are below a mutable borrow *)
           if inside_mut then translate rty else None
-      | T.Mut ->
+      | RMut ->
           (* Dive in, remembering the fact that we are inside a mutable borrow *)
           let inside_mut = true in
           if keep_region r then
@@ -1034,7 +1017,7 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
       effect_info;
     }
   in
-  let preds = translate_predicates sg.A.preds in
+  let preds = translate_predicates sg.preds in
   let sg = { generics; preds; inputs; output; doutputs; info } in
   { sg; output_names }
 
@@ -1795,7 +1778,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   log#ldebug
     (lazy
       ("translate_end_abstraction_synth_input:" ^ "\n- function: "
-      ^ Print.name_to_string ctx.fun_decl.name
+      ^ name_to_string ctx ctx.fun_decl.name
       ^ "\n- rg_id: "
       ^ T.RegionGroupId.to_string rg_id
       ^ "\n- loop_id: "
@@ -2109,7 +2092,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       (* Actually the same case as [SynthInput] *)
       translate_end_abstraction_synth_input ectx abs e ctx rg_id
   | V.LoopCall ->
-      let fun_id = E.FRegular ctx.fun_decl.A.def_id in
+      let fun_id = E.FRegular ctx.fun_decl.def_id in
       let effect_info =
         get_fun_effect_info ctx.fun_context.fun_infos (FunId fun_id)
           (Some vloop_id) (Some rg_id)
@@ -2336,7 +2319,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
         (* We don't need to update the context: we don't introduce any
            * new values/variables *)
         let branch = translate_expression branch_e ctx in
-        let pat = mk_typed_pattern_from_literal (PV.VScalar v) in
+        let pat = mk_typed_pattern_from_literal (VScalar v) in
         { pat; branch }
       in
       let branches = List.map translate_branch branches in
@@ -2569,7 +2552,7 @@ and translate_forward_end (ectx : C.eval_ctx)
       let org_args = args in
 
       (* Lookup the effect info for the loop function *)
-      let fid = E.FRegular ctx.fun_decl.A.def_id in
+      let fid = E.FRegular ctx.fun_decl.def_id in
       let effect_info =
         get_fun_effect_info ctx.fun_context.fun_infos (FunId fid) None ctx.bid
       in
@@ -2918,14 +2901,15 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   log#ldebug
     (lazy
       ("SymbolicToPure.translate_fun_decl: "
-      ^ Print.fun_name_to_string def.A.name
+      ^ name_to_string ctx def.name
       ^ " ("
       ^ Print.option_to_string T.RegionGroupId.to_string bid
       ^ ")\n"));
 
   (* Translate the declaration *)
-  let def_id = def.A.def_id in
-  let basename = def.name in
+  let def_id = def.def_id in
+  let llbc_name = def.name in
+  let name = name_to_string ctx llbc_name in
   (* Retrieve the signature *)
   let signature = ctx.sg in
   let regions_hierarchy =
@@ -2999,7 +2983,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         log#ldebug
           (lazy
             ("SymbolicToPure.translate_fun_decl: "
-            ^ Print.fun_name_to_string def.A.name
+            ^ name_to_string ctx def.name
             ^ " ("
             ^ Print.option_to_string T.RegionGroupId.to_string bid
             ^ ")" ^ "\n- forward_inputs: "
@@ -3030,14 +3014,15 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let loop_id = None in
 
   (* Assemble the declaration *)
-  let def =
+  let def : fun_decl =
     {
       def_id;
       kind = def.kind;
       num_loops;
       loop_id;
       back_id = bid;
-      basename;
+      llbc_name;
+      name;
       signature;
       is_global_decl_body = def.is_global_decl_body;
       body;
@@ -3051,8 +3036,9 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   (* return *)
   def
 
-let translate_type_decls (type_decls : T.type_decl list) : type_decl list =
-  List.map translate_type_decl type_decls
+let translate_type_decls (ctx : Contexts.decls_ctx)
+    (type_decls : T.type_decl list) : type_decl list =
+  List.map (translate_type_decl ctx) type_decls
 
 (** Translates function signatures.
 
@@ -3105,11 +3091,11 @@ let translate_fun_signatures (decls_ctx : C.decls_ctx)
     (fun m (id, sg) -> RegularFunIdNotLoopMap.add id sg m)
     RegularFunIdNotLoopMap.empty translated
 
-let translate_trait_decl (type_infos : TA.type_infos)
-    (trait_decl : A.trait_decl) : trait_decl =
+let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
+    : trait_decl =
   let {
     def_id;
-    name;
+    name = llbc_name;
     generics;
     preds;
     parent_clauses;
@@ -3119,6 +3105,12 @@ let translate_trait_decl (type_infos : TA.type_infos)
     provided_methods;
   } : A.trait_decl =
     trait_decl
+  in
+  let type_infos = ctx.type_ctx.type_infos in
+  let name =
+    Print.Types.name_to_string
+      (Print.Contexts.decls_ctx_to_fmt_env ctx)
+      llbc_name
   in
   let generics = translate_generic_params generics in
   let preds = translate_predicates preds in
@@ -3138,6 +3130,7 @@ let translate_trait_decl (type_infos : TA.type_infos)
   in
   {
     def_id;
+    llbc_name;
     name;
     generics;
     preds;
@@ -3148,11 +3141,11 @@ let translate_trait_decl (type_infos : TA.type_infos)
     provided_methods;
   }
 
-let translate_trait_impl (type_infos : TA.type_infos)
-    (trait_impl : A.trait_impl) : trait_impl =
+let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
+    : trait_impl =
   let {
     A.def_id;
-    name;
+    name = llbc_name;
     impl_trait;
     generics;
     preds;
@@ -3164,8 +3157,14 @@ let translate_trait_impl (type_infos : TA.type_infos)
   } =
     trait_impl
   in
+  let type_infos = ctx.type_ctx.type_infos in
   let impl_trait =
     translate_trait_decl_ref (translate_fwd_ty type_infos) impl_trait
+  in
+  let name =
+    Print.Types.name_to_string
+      (Print.Contexts.decls_ctx_to_fmt_env ctx)
+      llbc_name
   in
   let generics = translate_generic_params generics in
   let preds = translate_predicates preds in
@@ -3185,6 +3184,7 @@ let translate_trait_impl (type_infos : TA.type_infos)
   in
   {
     def_id;
+    llbc_name;
     name;
     impl_trait;
     generics;

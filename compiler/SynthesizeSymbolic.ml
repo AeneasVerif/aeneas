@@ -1,57 +1,52 @@
-module C = Collections
-module T = Types
-module PV = PrimitiveValues
-module V = Values
-module E = Expressions
-module A = LlbcAst
+open Types
+open TypesUtils
+open PrimitiveValues
+open Expressions
+open Values
 open SymbolicAst
 
-let mk_mplace (p : E.place) (ctx : Contexts.eval_ctx) : mplace =
+let mk_mplace (p : place) (ctx : Contexts.eval_ctx) : mplace =
   let bv = Contexts.ctx_lookup_var_binder ctx p.var_id in
   { bv; projection = p.projection }
 
-let mk_opt_mplace (p : E.place option) (ctx : Contexts.eval_ctx) : mplace option
-    =
+let mk_opt_mplace (p : place option) (ctx : Contexts.eval_ctx) : mplace option =
   Option.map (fun p -> mk_mplace p ctx) p
 
-let mk_opt_place_from_op (op : E.operand) (ctx : Contexts.eval_ctx) :
+let mk_opt_place_from_op (op : operand) (ctx : Contexts.eval_ctx) :
     mplace option =
-  match op with
-  | E.Copy p | E.Move p -> Some (mk_mplace p ctx)
-  | E.Constant _ -> None
+  match op with Copy p | Move p -> Some (mk_mplace p ctx) | Constant _ -> None
 
 let mk_meta (m : meta) (e : expression) : expression = Meta (m, e)
 
-let synthesize_symbolic_expansion (sv : V.symbolic_value)
-    (place : mplace option) (seel : V.symbolic_expansion option list)
-    (el : expression list option) : expression option =
+let synthesize_symbolic_expansion (sv : symbolic_value) (place : mplace option)
+    (seel : symbolic_expansion option list) (el : expression list option) :
+    expression option =
   match el with
   | None -> None
   | Some el ->
       let ls = List.combine seel el in
       (* Match on the symbolic value type to know which can of expansion happened *)
       let expansion =
-        match sv.V.sv_ty with
-        | T.TLiteral PV.TBool -> (
+        match sv.sv_ty with
+        | TLiteral TBool -> (
             (* Boolean expansion: there should be two branches *)
             match ls with
             | [
-             (Some (V.SeLiteral (PV.VBool true)), true_exp);
-             (Some (V.SeLiteral (PV.VBool false)), false_exp);
+             (Some (SeLiteral (VBool true)), true_exp);
+             (Some (SeLiteral (VBool false)), false_exp);
             ] ->
                 ExpandBool (true_exp, false_exp)
             | _ -> raise (Failure "Ill-formed boolean expansion"))
-        | T.TLiteral (PV.TInteger int_ty) ->
+        | TLiteral (TInteger int_ty) ->
             (* Switch over an integer: split between the "regular" branches
                and the "otherwise" branch (which should be the last branch) *)
-            let branches, otherwise = C.List.pop_last ls in
+            let branches, otherwise = Collections.List.pop_last ls in
             (* For all the regular branches, the symbolic value should have
              * been expanded to a constant *)
-            let get_scalar (see : V.symbolic_expansion option) : V.scalar_value
-                =
+            let get_scalar (see : symbolic_expansion option) : scalar_value =
               match see with
-              | Some (V.SeLiteral (PV.VScalar cv)) ->
-                  assert (cv.PV.int_ty = int_ty);
+              | Some (SeLiteral (VScalar cv)) ->
+                  assert (cv.int_ty = int_ty);
                   cv
               | _ -> raise (Failure "Unreachable")
             in
@@ -64,12 +59,12 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             assert (otherwise_see = None);
             (* Return *)
             ExpandInt (int_ty, branches, otherwise)
-        | T.TAdt (_, _) ->
+        | TAdt (_, _) ->
             (* Branching: it is necessarily an enumeration expansion *)
-            let get_variant (see : V.symbolic_expansion option) :
-                T.VariantId.id option * V.symbolic_value list =
+            let get_variant (see : symbolic_expansion option) :
+                VariantId.id option * symbolic_value list =
               match see with
-              | Some (V.SeAdt (vid, fields)) -> (vid, fields)
+              | Some (SeAdt (vid, fields)) -> (vid, fields)
               | _ -> raise (Failure "Ill-formed branching ADT expansion")
             in
             let exp =
@@ -80,29 +75,28 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
                 ls
             in
             ExpandAdt exp
-        | T.TRef (_, _, _) -> (
+        | TRef (_, _, _) -> (
             (* Reference expansion: there should be one branch *)
             match ls with
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
             | _ -> raise (Failure "Ill-formed borrow expansion"))
-        | T.TVar _
-        | T.TLiteral TChar
-        | TNever | T.TTraitType _ | T.TArrow _ | T.TRawPtr _ ->
+        | TVar _ | TLiteral TChar | TNever | TTraitType _ | TArrow _ | TRawPtr _
+          ->
             raise (Failure "Ill-formed symbolic expansion")
       in
       Some (Expansion (place, sv, expansion))
 
-let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
-    (place : mplace option) (see : V.symbolic_expansion) (e : expression option)
-    : expression option =
+let synthesize_symbolic_expansion_no_branching (sv : symbolic_value)
+    (place : mplace option) (see : symbolic_expansion) (e : expression option) :
+    expression option =
   let el = Option.map (fun e -> [ e ]) e in
   synthesize_symbolic_expansion sv place [ Some see ] el
 
 let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
-    (abstractions : V.AbstractionId.id list) (generics : T.generic_args)
-    (args : V.typed_value list) (args_places : mplace option list)
-    (dest : V.symbolic_value) (dest_place : mplace option)
-    (e : expression option) : expression option =
+    (abstractions : AbstractionId.id list) (generics : generic_args)
+    (args : typed_value list) (args_places : mplace option list)
+    (dest : symbolic_value) (dest_place : mplace option) (e : expression option)
+    : expression option =
   Option.map
     (fun e ->
       let call =
@@ -120,58 +114,56 @@ let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
       FunCall (call, e))
     e
 
-let synthesize_global_eval (gid : A.GlobalDeclId.id) (dest : V.symbolic_value)
+let synthesize_global_eval (gid : GlobalDeclId.id) (dest : symbolic_value)
     (e : expression option) : expression option =
   Option.map (fun e -> EvalGlobal (gid, dest, e)) e
 
-let synthesize_regular_function_call (fun_id : A.fun_id_or_trait_method_ref)
-    (call_id : V.FunCallId.id) (ctx : Contexts.eval_ctx)
-    (abstractions : V.AbstractionId.id list) (generics : T.generic_args)
-    (args : V.typed_value list) (args_places : mplace option list)
-    (dest : V.symbolic_value) (dest_place : mplace option)
-    (e : expression option) : expression option =
+let synthesize_regular_function_call (fun_id : fun_id_or_trait_method_ref)
+    (call_id : FunCallId.id) (ctx : Contexts.eval_ctx)
+    (abstractions : AbstractionId.id list) (generics : generic_args)
+    (args : typed_value list) (args_places : mplace option list)
+    (dest : symbolic_value) (dest_place : mplace option) (e : expression option)
+    : expression option =
   synthesize_function_call
     (Fun (fun_id, call_id))
     ctx abstractions generics args args_places dest dest_place e
 
-let synthesize_unary_op (ctx : Contexts.eval_ctx) (unop : E.unop)
-    (arg : V.typed_value) (arg_place : mplace option) (dest : V.symbolic_value)
+let synthesize_unary_op (ctx : Contexts.eval_ctx) (unop : unop)
+    (arg : typed_value) (arg_place : mplace option) (dest : symbolic_value)
     (dest_place : mplace option) (e : expression option) : expression option =
-  let generics = TypesUtils.mk_empty_generic_args in
+  let generics = empty_generic_args in
   synthesize_function_call (Unop unop) ctx [] generics [ arg ] [ arg_place ]
     dest dest_place e
 
-let synthesize_binary_op (ctx : Contexts.eval_ctx) (binop : E.binop)
-    (arg0 : V.typed_value) (arg0_place : mplace option) (arg1 : V.typed_value)
-    (arg1_place : mplace option) (dest : V.symbolic_value)
+let synthesize_binary_op (ctx : Contexts.eval_ctx) (binop : binop)
+    (arg0 : typed_value) (arg0_place : mplace option) (arg1 : typed_value)
+    (arg1_place : mplace option) (dest : symbolic_value)
     (dest_place : mplace option) (e : expression option) : expression option =
-  let generics = TypesUtils.mk_empty_generic_args in
+  let generics = empty_generic_args in
   synthesize_function_call (Binop binop) ctx [] generics [ arg0; arg1 ]
     [ arg0_place; arg1_place ] dest dest_place e
 
-let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : V.abs)
+let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs)
     (e : expression option) : expression option =
   Option.map (fun e -> EndAbstraction (ctx, abs, e)) e
 
 let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)
-    (rvalue : V.typed_value) (rplace : mplace option) (e : expression option) :
+    (rvalue : typed_value) (rplace : mplace option) (e : expression option) :
     expression option =
   Option.map (fun e -> Meta (Assignment (ctx, lplace, rvalue, rplace), e)) e
 
-let synthesize_assertion (ctx : Contexts.eval_ctx) (v : V.typed_value)
+let synthesize_assertion (ctx : Contexts.eval_ctx) (v : typed_value)
     (e : expression option) =
   Option.map (fun e -> Assertion (ctx, v, e)) e
 
 let synthesize_forward_end (ctx : Contexts.eval_ctx)
-    (loop_input_values : V.typed_value V.SymbolicValueId.Map.t option)
-    (e : expression) (el : expression T.RegionGroupId.Map.t) =
+    (loop_input_values : typed_value SymbolicValueId.Map.t option)
+    (e : expression) (el : expression RegionGroupId.Map.t) =
   Some (ForwardEnd (ctx, loop_input_values, e, el))
 
-let synthesize_loop (loop_id : V.LoopId.id)
-    (input_svalues : V.symbolic_value list)
-    (fresh_svalues : V.SymbolicValueId.Set.t)
-    (rg_to_given_back_tys :
-      (T.RegionId.Set.t * T.ty list) T.RegionGroupId.Map.t)
+let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
+    (fresh_svalues : SymbolicValueId.Set.t)
+    (rg_to_given_back_tys : (RegionId.Set.t * ty list) RegionGroupId.Map.t)
     (end_expr : expression option) (loop_expr : expression option) :
     expression option =
   match (end_expr, loop_expr) with

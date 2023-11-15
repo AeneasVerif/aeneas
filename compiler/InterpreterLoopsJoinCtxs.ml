@@ -1,23 +1,15 @@
-module T = Types
-module PV = PrimitiveValues
-module V = Values
-module E = Expressions
-module C = Contexts
-module Subst = Substitute
-module A = LlbcAst
-module L = Logging
+open Types
+open Values
+open Contexts
 open TypesUtils
 open ValuesUtils
-module Inv = Invariants
-module S = SynthesizeSymbolic
-module UF = UnionFind
 open InterpreterUtils
 open InterpreterBorrows
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 
 (** The local logger *)
-let log = L.loops_join_ctxs_log
+let log = Logging.loops_join_ctxs_log
 
 (** Reorder the loans and borrows in the fresh abstractions.
 
@@ -26,17 +18,17 @@ let log = L.loops_join_ctxs_log
     called typically after we merge abstractions together (see {!collapse_ctx}
     for instance).
  *)
-let reorder_loans_borrows_in_fresh_abs (old_abs_ids : V.AbstractionId.Set.t)
-    (ctx : C.eval_ctx) : C.eval_ctx =
-  let reorder_in_fresh_abs (abs : V.abs) : V.abs =
+let reorder_loans_borrows_in_fresh_abs (old_abs_ids : AbstractionId.Set.t)
+    (ctx : eval_ctx) : eval_ctx =
+  let reorder_in_fresh_abs (abs : abs) : abs =
     (* Split between the loans and borrows *)
-    let is_borrow (av : V.typed_avalue) : bool =
-      match av.V.value with
+    let is_borrow (av : typed_avalue) : bool =
+      match av.value with
       | ABorrow _ -> true
       | ALoan _ -> false
       | _ -> raise (Failure "Unexpected")
     in
-    let aborrows, aloans = List.partition is_borrow abs.V.avalues in
+    let aborrows, aloans = List.partition is_borrow abs.avalues in
 
     (* Reoder the borrows, and the loans.
 
@@ -44,38 +36,38 @@ let reorder_loans_borrows_in_fresh_abs (old_abs_ids : V.AbstractionId.Set.t)
        and the borrows to find fixed points is simply to sort them by increasing
        order of id (taking the smallest id of a set of ids, in case of sets).
     *)
-    let get_borrow_id (av : V.typed_avalue) : V.BorrowId.id =
-      match av.V.value with
-      | V.ABorrow (V.AMutBorrow (bid, _) | V.ASharedBorrow bid) -> bid
+    let get_borrow_id (av : typed_avalue) : BorrowId.id =
+      match av.value with
+      | ABorrow (AMutBorrow (bid, _) | ASharedBorrow bid) -> bid
       | _ -> raise (Failure "Unexpected")
     in
-    let get_loan_id (av : V.typed_avalue) : V.BorrowId.id =
-      match av.V.value with
-      | V.ALoan (V.AMutLoan (lid, _)) -> lid
-      | V.ALoan (V.ASharedLoan (lids, _, _)) -> V.BorrowId.Set.min_elt lids
+    let get_loan_id (av : typed_avalue) : BorrowId.id =
+      match av.value with
+      | ALoan (AMutLoan (lid, _)) -> lid
+      | ALoan (ASharedLoan (lids, _, _)) -> BorrowId.Set.min_elt lids
       | _ -> raise (Failure "Unexpected")
     in
     (* We use ordered maps to reorder the borrows and loans *)
-    let reorder (get_bid : V.typed_avalue -> V.BorrowId.id)
-        (values : V.typed_avalue list) : V.typed_avalue list =
+    let reorder (get_bid : typed_avalue -> BorrowId.id)
+        (values : typed_avalue list) : typed_avalue list =
       List.map snd
-        (V.BorrowId.Map.bindings
-           (V.BorrowId.Map.of_list (List.map (fun v -> (get_bid v, v)) values)))
+        (BorrowId.Map.bindings
+           (BorrowId.Map.of_list (List.map (fun v -> (get_bid v, v)) values)))
     in
     let aborrows = reorder get_borrow_id aborrows in
     let aloans = reorder get_loan_id aloans in
     let avalues = List.append aborrows aloans in
-    { abs with V.avalues }
+    { abs with avalues }
   in
 
-  let reorder_in_abs (abs : V.abs) =
-    if V.AbstractionId.Set.mem abs.abs_id old_abs_ids then abs
+  let reorder_in_abs (abs : abs) =
+    if AbstractionId.Set.mem abs.abs_id old_abs_ids then abs
     else reorder_in_fresh_abs abs
   in
 
-  let env = C.env_map_abs reorder_in_abs ctx.env in
+  let env = env_map_abs reorder_in_abs ctx.env in
 
-  { ctx with C.env }
+  { ctx with env }
 
 (** Collapse an environment.
 
@@ -136,23 +128,23 @@ let reorder_loans_borrows_in_fresh_abs (old_abs_ids : V.AbstractionId.Set.t)
     This can happen when merging environments (note that such environments are not well-formed -
     they become well formed again after collapsing).
  *)
-let collapse_ctx (loop_id : V.LoopId.id)
+let collapse_ctx (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs option) (old_ids : ids_sets)
-    (ctx0 : C.eval_ctx) : C.eval_ctx =
+    (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
   log#ldebug
     (lazy
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n\n"));
 
-  let abs_kind = V.Loop (loop_id, None, LoopSynthInput) in
+  let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
   let destructure_shared_values = true in
-  let is_fresh_abs_id (id : V.AbstractionId.id) : bool =
-    not (V.AbstractionId.Set.mem id old_ids.aids)
+  let is_fresh_abs_id (id : AbstractionId.id) : bool =
+    not (AbstractionId.Set.mem id old_ids.aids)
   in
-  let is_fresh_did (id : C.DummyVarId.id) : bool =
-    not (C.DummyVarId.Set.mem id old_ids.dids)
+  let is_fresh_did (id : DummyVarId.id) : bool =
+    not (DummyVarId.Set.mem id old_ids.dids)
   in
   (* Convert the dummy values to abstractions (note that when we convert
      values to abstractions, the resulting abstraction should be destructured) *)
@@ -163,18 +155,18 @@ let collapse_ctx (loop_id : V.LoopId.id)
       (List.map
          (fun ee ->
            match ee with
-           | C.EAbs _ | C.EFrame | C.EBinding (BVar _, _) -> [ ee ]
-           | C.EBinding (BDummy id, v) ->
+           | EAbs _ | EFrame | EBinding (BVar _, _) -> [ ee ]
+           | EBinding (BDummy id, v) ->
                if is_fresh_did id then
                  let absl =
                    convert_value_to_abstractions abs_kind can_end
                      destructure_shared_values ctx0 v
                  in
-                 List.map (fun abs -> C.EAbs abs) absl
+                 List.map (fun abs -> EAbs abs) absl
                else [ ee ])
          ctx0.env)
   in
-  let ctx = { ctx0 with C.env } in
+  let ctx = { ctx0 with env } in
   log#ldebug
     (lazy
       ("collapse_ctx: after converting values to abstractions:\n"
@@ -188,7 +180,7 @@ let collapse_ctx (loop_id : V.LoopId.id)
       ));
 
   (* Explore all the *new* abstractions, and compute various maps *)
-  let explore (abs : V.abs) = is_fresh_abs_id abs.abs_id in
+  let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
   let ids_maps =
     compute_abs_borrows_loans_maps (merge_funs = None) explore env
   in
@@ -211,8 +203,9 @@ let collapse_ctx (loop_id : V.LoopId.id)
   in
 
   (* Merge the abstractions together *)
-  let merged_abs : V.AbstractionId.id UF.elem V.AbstractionId.Map.t =
-    V.AbstractionId.Map.of_list (List.map (fun id -> (id, UF.make id)) abs_ids)
+  let merged_abs : AbstractionId.id UnionFind.elem AbstractionId.Map.t =
+    AbstractionId.Map.of_list
+      (List.map (fun id -> (id, UnionFind.make id)) abs_ids)
   in
 
   let ctx = ref ctx in
@@ -226,26 +219,26 @@ let collapse_ctx (loop_id : V.LoopId.id)
   *)
   List.iter
     (fun abs_id0 ->
-      let bids = V.AbstractionId.Map.find abs_id0 abs_to_borrows in
-      let bids = V.BorrowId.Set.elements bids in
+      let bids = AbstractionId.Map.find abs_id0 abs_to_borrows in
+      let bids = BorrowId.Set.elements bids in
       List.iter
         (fun bid ->
-          match V.BorrowId.Map.find_opt bid loan_to_abs with
+          match BorrowId.Map.find_opt bid loan_to_abs with
           | None -> (* Nothing to do *) ()
           | Some abs_ids1 ->
-              V.AbstractionId.Set.iter
+              AbstractionId.Set.iter
                 (fun abs_id1 ->
                   (* We need to merge - unless we have already merged *)
                   (* First, find the representatives for the two abstractions (the
                      representative is the abstraction into which we merged) *)
                   let abs_ref0 =
-                    UF.find (V.AbstractionId.Map.find abs_id0 merged_abs)
+                    UnionFind.find (AbstractionId.Map.find abs_id0 merged_abs)
                   in
-                  let abs_id0 = UF.get abs_ref0 in
+                  let abs_id0 = UnionFind.get abs_ref0 in
                   let abs_ref1 =
-                    UF.find (V.AbstractionId.Map.find abs_id1 merged_abs)
+                    UnionFind.find (AbstractionId.Map.find abs_id1 merged_abs)
                   in
-                  let abs_id1 = UF.get abs_ref1 in
+                  let abs_id1 = UnionFind.get abs_ref1 in
                   (* If the two ids are the same, it means the abstractions were already merged *)
                   if abs_id0 = abs_id1 then ()
                   else (
@@ -255,9 +248,9 @@ let collapse_ctx (loop_id : V.LoopId.id)
                     log#ldebug
                       (lazy
                         ("collapse_ctx: merging abstraction "
-                        ^ V.AbstractionId.to_string abs_id1
+                        ^ AbstractionId.to_string abs_id1
                         ^ " into "
-                        ^ V.AbstractionId.to_string abs_id0
+                        ^ AbstractionId.to_string abs_id0
                         ^ ":\n\n" ^ eval_ctx_to_string !ctx));
 
                     (* Update the environment - pay attention to the order: we
@@ -269,8 +262,8 @@ let collapse_ctx (loop_id : V.LoopId.id)
                     ctx := nctx;
 
                     (* Update the union find *)
-                    let abs_ref_merged = UF.union abs_ref0 abs_ref1 in
-                    UF.set abs_ref_merged abs_id))
+                    let abs_ref_merged = UnionFind.union abs_ref0 abs_ref1 in
+                    UnionFind.set abs_ref_merged abs_id))
                 abs_ids1)
         bids)
     abs_ids;
@@ -292,8 +285,8 @@ let collapse_ctx (loop_id : V.LoopId.id)
   (* Return the new context *)
   ctx
 
-let mk_collapse_ctx_merge_duplicate_funs (loop_id : V.LoopId.id)
-    (ctx : C.eval_ctx) : merge_duplicates_funcs =
+let mk_collapse_ctx_merge_duplicate_funs (loop_id : LoopId.id) (ctx : eval_ctx)
+    : merge_duplicates_funcs =
   (* Rem.: the merge functions raise exceptions (that we catch). *)
   let module S : MatchJoinState = struct
     let ctx = ctx
@@ -314,8 +307,8 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : V.LoopId.id)
   *)
   let merge_amut_borrows id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
-    assert (is_aignored child0.V.value);
-    assert (is_aignored child1.V.value);
+    assert (is_aignored child0.value);
+    assert (is_aignored child1.value);
 
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
@@ -324,8 +317,8 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : V.LoopId.id)
     *)
     let ty = ty0 in
     let child = child0 in
-    let value = V.ABorrow (V.AMutBorrow (id, child)) in
-    { V.value; ty }
+    let value = ABorrow (AMutBorrow (id, child)) in
+    { value; ty }
   in
 
   let merge_ashared_borrows id ty0 ty1 =
@@ -339,37 +332,37 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : V.LoopId.id)
 
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
-    let value = V.ABorrow (V.ASharedBorrow id) in
-    { V.value; ty }
+    let value = ABorrow (ASharedBorrow id) in
+    { value; ty }
   in
 
   let merge_amut_loans id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
-    assert (is_aignored child0.V.value);
-    assert (is_aignored child1.V.value);
+    assert (is_aignored child0.value);
+    assert (is_aignored child1.value);
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let child = child0 in
-    let value = V.ALoan (V.AMutLoan (id, child)) in
-    { V.value; ty }
+    let value = ALoan (AMutLoan (id, child)) in
+    { value; ty }
   in
-  let merge_ashared_loans ids ty0 (sv0 : V.typed_value) child0 _ty1
-      (sv1 : V.typed_value) child1 =
+  let merge_ashared_loans ids ty0 (sv0 : typed_value) child0 _ty1
+      (sv1 : typed_value) child1 =
     (* Sanity checks *)
-    assert (is_aignored child0.V.value);
-    assert (is_aignored child1.V.value);
+    assert (is_aignored child0.value);
+    assert (is_aignored child1.value);
     (* Same remarks as for [merge_amut_borrows].
 
        This time we need to also merge the shared values. We rely on the
        join matcher [JM] to do so.
     *)
-    assert (not (value_has_loans_or_borrows ctx sv0.V.value));
-    assert (not (value_has_loans_or_borrows ctx sv1.V.value));
+    assert (not (value_has_loans_or_borrows ctx sv0.value));
+    assert (not (value_has_loans_or_borrows ctx sv1.value));
     let ty = ty0 in
     let child = child0 in
     let sv = M.match_typed_values ctx sv0 sv1 in
-    let value = V.ALoan (V.ASharedLoan (ids, sv, child)) in
-    { V.value; ty }
+    let value = ALoan (ASharedLoan (ids, sv, child)) in
+    { value; ty }
   in
   {
     merge_amut_borrows;
@@ -378,9 +371,9 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : V.LoopId.id)
     merge_ashared_loans;
   }
 
-let merge_into_abstraction (loop_id : V.LoopId.id) (abs_kind : V.abs_kind)
-    (can_end : bool) (ctx : C.eval_ctx) (aid0 : V.AbstractionId.id)
-    (aid1 : V.AbstractionId.id) : C.eval_ctx * V.AbstractionId.id =
+let merge_into_abstraction (loop_id : LoopId.id) (abs_kind : abs_kind)
+    (can_end : bool) (ctx : eval_ctx) (aid0 : AbstractionId.id)
+    (aid1 : AbstractionId.id) : eval_ctx * AbstractionId.id =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs loop_id ctx in
   merge_into_abstraction abs_kind can_end (Some merge_funs) ctx aid0 aid1
 
@@ -391,14 +384,14 @@ let merge_into_abstraction (loop_id : V.LoopId.id) (abs_kind : V.abs_kind)
     We do this because when we join environments, we may introduce duplicated
     loans and borrows. See the explanations for {!join_ctxs}.
  *)
-let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+let collapse_ctx_with_merge (loop_id : LoopId.id) (old_ids : ids_sets)
+    (ctx : eval_ctx) : eval_ctx =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs loop_id ctx in
   try collapse_ctx loop_id (Some merge_funs) old_ids ctx
   with ValueMatchFailure _ -> raise (Failure "Unexpected")
 
-let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
-    (ctx1 : C.eval_ctx) : ctx_or_update =
+let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) : ctx_or_update =
   (* Debug *)
   log#ldebug
     (lazy
@@ -422,7 +415,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   let nabs = ref [] in
 
   (* Explore the environments. *)
-  let join_suffixes (env0 : C.env) (env1 : C.env) : C.env =
+  let join_suffixes (env0 : env) (env1 : env) : env =
     (* Debug *)
     log#ldebug
       (lazy
@@ -434,15 +427,15 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         ^ "\n\n"));
 
     (* Sanity check: there are no values/abstractions which should be in the prefix *)
-    let check_valid (ee : C.env_elem) : unit =
+    let check_valid (ee : env_elem) : unit =
       match ee with
-      | C.EBinding (C.BVar _, _) ->
+      | EBinding (BVar _, _) ->
           (* Variables are necessarily in the prefix *)
           raise (Failure "Unreachable")
-      | EBinding (C.BDummy did, _) ->
-          assert (not (C.DummyVarId.Set.mem did fixed_ids.dids))
+      | EBinding (BDummy did, _) ->
+          assert (not (DummyVarId.Set.mem did fixed_ids.dids))
       | EAbs abs ->
-          assert (not (V.AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
+          assert (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
       | EFrame ->
           (* This should have been eliminated *)
           raise (Failure "Unreachable")
@@ -451,7 +444,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     List.iter check_valid env1;
     (* Concatenate the suffixes and append the abstractions introduced while
        joining the prefixes *)
-    let absl = List.map (fun abs -> C.EAbs abs) (List.rev !nabs) in
+    let absl = List.map (fun abs -> EAbs abs) (List.rev !nabs) in
     List.concat [ env0; env1; absl ]
   in
 
@@ -464,10 +457,10 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
   (* Rem.: this function raises exceptions *)
-  let rec join_prefixes (env0 : C.env) (env1 : C.env) : C.env =
+  let rec join_prefixes (env0 : env) (env1 : env) : env =
     match (env0, env1) with
-    | ( (C.EBinding (C.BDummy b0, v0) as var0) :: env0',
-        (C.EBinding (C.BDummy b1, v1) as var1) :: env1' ) ->
+    | ( (EBinding (BDummy b0, v0) as var0) :: env0',
+        (EBinding (BDummy b1, v1) as var1) :: env1' ) ->
         (* Debug *)
         log#ldebug
           (lazy
@@ -481,18 +474,18 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         (* Two cases: the dummy value is an old value, in which case the bindings
            must be the same and we must join their values. Otherwise, it means we
            are not in the prefix anymore *)
-        if C.DummyVarId.Set.mem b0 fixed_ids.dids then (
+        if DummyVarId.Set.mem b0 fixed_ids.dids then (
           (* Still in the prefix: match the values *)
           assert (b0 = b1);
           let b = b0 in
           let v = M.match_typed_values ctx v0 v1 in
-          let var = C.EBinding (C.BDummy b, v) in
+          let var = EBinding (BDummy b, v) in
           (* Continue *)
           var :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)
           join_suffixes env0 env1
-    | ( (C.EBinding (C.BVar b0, v0) as var0) :: env0',
-        (C.EBinding (C.BVar b1, v1) as var1) :: env1' ) ->
+    | ( (EBinding (BVar b0, v0) as var0) :: env0',
+        (EBinding (BVar b1, v1) as var1) :: env1' ) ->
         (* Debug *)
         log#ldebug
           (lazy
@@ -509,10 +502,10 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         (* Match the values *)
         let b = b0 in
         let v = M.match_typed_values ctx v0 v1 in
-        let var = C.EBinding (C.BVar b, v) in
+        let var = EBinding (BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
-    | (C.EAbs abs0 as abs) :: env0', C.EAbs abs1 :: env1' ->
+    | (EAbs abs0 as abs) :: env0', EAbs abs1 :: env1' ->
         (* Debug *)
         log#ldebug
           (lazy
@@ -521,7 +514,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
            ^ "\n\n- abs1:\n" ^ abs_to_string ctx abs1 ^ "\n\n"));
 
         (* Same as for the dummy values: there are two cases *)
-        if V.AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
+        if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
           (* Still in the prefix: the abstractions must be the same *)
           assert (abs0 = abs1);
           (* Continue *)
@@ -537,21 +530,20 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (* Remove the frame delimiter (the first element of an environment is a frame delimiter) *)
     let env0, env1 =
       match (env0, env1) with
-      | C.EFrame :: env0, C.EFrame :: env1 -> (env0, env1)
+      | EFrame :: env0, EFrame :: env1 -> (env0, env1)
       | _ -> raise (Failure "Unreachable")
     in
 
     log#ldebug
       (lazy
-        ("- env0:\n" ^ C.show_env env0 ^ "\n\n- env1:\n" ^ C.show_env env1
-       ^ "\n\n"));
+        ("- env0:\n" ^ show_env env0 ^ "\n\n- env1:\n" ^ show_env env1 ^ "\n\n"));
 
-    let env = List.rev (C.EFrame :: join_prefixes env0 env1) in
+    let env = List.rev (EFrame :: join_prefixes env0 env1) in
 
     (* Construct the joined context - of course, the type, fun, etc. contexts
      * should be the same in the two contexts *)
     let {
-      C.type_context;
+      type_context;
       fun_context;
       global_context;
       trait_decls_context;
@@ -567,7 +559,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       ctx0
     in
     let {
-      C.type_context = _;
+      type_context = _;
       fun_context = _;
       global_context = _;
       trait_decls_context = _;
@@ -582,10 +574,10 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     } =
       ctx1
     in
-    let ended_regions = T.RegionId.Set.union ended_regions0 ended_regions1 in
+    let ended_regions = RegionId.Set.union ended_regions0 ended_regions1 in
     Ok
       {
-        C.type_context;
+        type_context;
         fun_context;
         global_context;
         trait_decls_context;
@@ -601,16 +593,16 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   with ValueMatchFailure e -> Error e
 
 (** Destructure all the new abstractions *)
-let destructure_new_abs (loop_id : V.LoopId.id)
-    (old_abs_ids : V.AbstractionId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
-  let abs_kind = V.Loop (loop_id, None, V.LoopSynthInput) in
+let destructure_new_abs (loop_id : LoopId.id)
+    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+  let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
   let destructure_shared_values = true in
-  let is_fresh_abs_id (id : V.AbstractionId.id) : bool =
-    not (V.AbstractionId.Set.mem id old_abs_ids)
+  let is_fresh_abs_id (id : AbstractionId.id) : bool =
+    not (AbstractionId.Set.mem id old_abs_ids)
   in
   let env =
-    C.env_map_abs
+    env_map_abs
       (fun abs ->
         if is_fresh_abs_id abs.abs_id then
           let abs =
@@ -628,23 +620,22 @@ let destructure_new_abs (loop_id : V.LoopId.id)
     abstractions in contexts which are later joined: we have to make sure two
     contexts we join don't have non-fixed abstractions with the same ids.
   *)
-let refresh_abs (old_abs : V.AbstractionId.Set.t) (ctx : C.eval_ctx) :
-    C.eval_ctx =
+let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let ids, _ = compute_context_ids ctx in
-  let abs_to_refresh = V.AbstractionId.Set.diff ids.aids old_abs in
+  let abs_to_refresh = AbstractionId.Set.diff ids.aids old_abs in
   let aids_subst =
     List.map
-      (fun id -> (id, C.fresh_abstraction_id ()))
-      (V.AbstractionId.Set.elements abs_to_refresh)
+      (fun id -> (id, fresh_abstraction_id ()))
+      (AbstractionId.Set.elements abs_to_refresh)
   in
-  let aids_subst = V.AbstractionId.Map.of_list aids_subst in
+  let aids_subst = AbstractionId.Map.of_list aids_subst in
   let subst id =
-    match V.AbstractionId.Map.find_opt id aids_subst with
+    match AbstractionId.Map.find_opt id aids_subst with
     | None -> id
     | Some id -> id
   in
   let env =
-    Subst.env_subst_ids
+    Substitute.env_subst_ids
       (fun x -> x)
       (fun x -> x)
       (fun x -> x)
@@ -652,11 +643,11 @@ let refresh_abs (old_abs : V.AbstractionId.Set.t) (ctx : C.eval_ctx) :
       (fun x -> x)
       subst ctx.env
   in
-  { ctx with C.env }
+  { ctx with env }
 
-let loop_join_origin_with_continue_ctxs (config : C.config)
-    (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (old_ctx : C.eval_ctx)
-    (ctxl : C.eval_ctx list) : (C.eval_ctx * C.eval_ctx list) * C.eval_ctx =
+let loop_join_origin_with_continue_ctxs (config : config) (loop_id : LoopId.id)
+    (fixed_ids : ids_sets) (old_ctx : eval_ctx) (ctxl : eval_ctx list) :
+    (eval_ctx * eval_ctx list) * eval_ctx =
   (* # Join with the new contexts, one by one
 
      For every context, we repeteadly attempt to join it with the current
@@ -666,7 +657,7 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
      in the one we are trying to add to the join.
   *)
   let joined_ctx = ref old_ctx in
-  let rec join_one_aux (ctx : C.eval_ctx) : C.eval_ctx =
+  let rec join_one_aux (ctx : eval_ctx) : eval_ctx =
     match join_ctxs loop_id fixed_ids !joined_ctx ctx with
     | Ok nctx ->
         joined_ctx := nctx;
@@ -683,7 +674,7 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
         in
         join_one_aux ctx
   in
-  let join_one (ctx : C.eval_ctx) : C.eval_ctx =
+  let join_one (ctx : eval_ctx) : eval_ctx =
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: initial ctx:\n"

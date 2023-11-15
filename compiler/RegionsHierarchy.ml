@@ -25,7 +25,6 @@
     be grouped together).
  *)
 
-open Names
 open Types
 open TypesUtils
 open Expressions
@@ -42,9 +41,9 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
     (fun_decls : fun_decl FunDeclId.Map.t)
     (global_decls : global_decl GlobalDeclId.Map.t)
     (trait_decls : trait_decl TraitDeclId.Map.t)
-    (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : name)
+    (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : string)
     (sg : fun_sig) : region_groups =
-  log#ldebug (lazy (__FUNCTION__ ^ ": " ^ name_to_string fun_name));
+  log#ldebug (lazy (__FUNCTION__ ^ ": " ^ fun_name));
   (* Initialize a normalization context (we may need to normalize some
      associated types) *)
   let norm_ctx : AssociatedTypes.norm_ctx =
@@ -264,10 +263,23 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
     (global_decls : global_decl GlobalDeclId.Map.t)
     (trait_decls : trait_decl TraitDeclId.Map.t)
     (trait_impls : trait_impl TraitImplId.Map.t) : region_groups FunIdMap.t =
+  let open Print in
+  let env : fmt_env =
+    {
+      type_decls;
+      fun_decls;
+      global_decls;
+      trait_decls;
+      trait_impls;
+      generics = empty_generic_params;
+      preds = empty_predicates;
+      locals = [];
+    }
+  in
   let regular =
     List.map
       (fun ((fid, d) : FunDeclId.id * fun_decl) ->
-        (FRegular fid, (d.name, d.signature)))
+        (FRegular fid, (Types.name_to_string env d.name, d.signature)))
       (FunDeclId.Map.bindings fun_decls)
   in
   let assumed =

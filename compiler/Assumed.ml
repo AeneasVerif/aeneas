@@ -29,58 +29,57 @@
     ]}
  *)
 
-open Names
+open Types
 open TypesUtils
-module T = Types
-module A = LlbcAst
+open LlbcAst
 
 module Sig = struct
   (** A few utilities *)
 
-  let rvar_id_0 = T.RegionId.of_int 0
-  let rvar_0 : T.region = T.RVar rvar_id_0
-  let rg_id_0 = T.RegionGroupId.of_int 0
-  let tvar_id_0 = T.TypeVarId.of_int 0
-  let tvar_0 : T.ty = T.TVar tvar_id_0
-  let cgvar_id_0 = T.ConstGenericVarId.of_int 0
-  let cgvar_0 : T.const_generic = T.CGVar cgvar_id_0
+  let rvar_id_0 = RegionId.of_int 0
+  let rvar_0 : region = RVar rvar_id_0
+  let rg_id_0 = RegionGroupId.of_int 0
+  let tvar_id_0 = TypeVarId.of_int 0
+  let tvar_0 : ty = TVar tvar_id_0
+  let cgvar_id_0 = ConstGenericVarId.of_int 0
+  let cgvar_0 : const_generic = CGVar cgvar_id_0
 
   (** Region 'a of id 0 *)
-  let region_param_0 : T.region_var = { T.index = rvar_id_0; name = Some "'a" }
+  let region_param_0 : region_var = { index = rvar_id_0; name = Some "'a" }
 
   (** Region group: [{ parent={}; regions:{'a of id 0} }] *)
-  let region_group_0 : T.region_group =
-    { T.id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
+  let region_group_0 : region_group =
+    { id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
 
   (** Type parameter [T] of id 0 *)
-  let type_param_0 : T.type_var = { T.index = tvar_id_0; name = "T" }
+  let type_param_0 : type_var = { index = tvar_id_0; name = "T" }
 
-  let usize_ty : T.ty = T.TLiteral (TInteger Usize)
+  let usize_ty : ty = TLiteral (TInteger Usize)
 
   (** Const generic parameter [const N : usize] of id 0 *)
-  let cg_param_0 : T.const_generic_var =
-    { T.index = cgvar_id_0; name = "N"; ty = TInteger Usize }
+  let cg_param_0 : const_generic_var =
+    { index = cgvar_id_0; name = "N"; ty = TInteger Usize }
 
-  let empty_const_generic_params : T.const_generic_var list = []
+  let empty_const_generic_params : const_generic_var list = []
 
-  let mk_generic_args regions types const_generics : T.generic_args =
+  let mk_generic_args regions types const_generics : generic_args =
     { regions; types; const_generics; trait_refs = [] }
 
-  let mk_generic_params regions types const_generics : T.generic_params =
+  let mk_generic_params regions types const_generics : generic_params =
     { regions; types; const_generics; trait_clauses = [] }
 
-  let mk_ref_ty (r : T.region) (ty : T.ty) (is_mut : bool) : T.ty =
-    let ref_kind = if is_mut then T.Mut else T.Shared in
+  let mk_ref_ty (r : region) (ty : ty) (is_mut : bool) : ty =
+    let ref_kind = if is_mut then RMut else RShared in
     mk_ref_ty r ty ref_kind
 
-  let mk_array_ty (ty : T.ty) (cg : T.const_generic) : T.ty =
+  let mk_array_ty (ty : ty) (cg : const_generic) : ty =
     TAdt (TAssumed TArray, mk_generic_args [] [ ty ] [ cg ])
 
-  let mk_slice_ty (ty : T.ty) : T.ty =
+  let mk_slice_ty (ty : ty) : ty =
     TAdt (TAssumed TSlice, mk_generic_args [] [ ty ] [])
 
-  let mk_sig generics inputs output : A.fun_sig =
-    let preds : T.predicates =
+  let mk_sig generics inputs output : fun_sig =
+    let preds : predicates =
       { regions_outlive = []; types_outlive = []; trait_type_constraints = [] }
     in
     {
@@ -93,14 +92,14 @@ module Sig = struct
     }
 
   (** [fn<T>(T) -> Box<T>] *)
-  let box_new_sig : A.fun_sig =
+  let box_new_sig : fun_sig =
     let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
     let inputs = [ tvar_0 (* T *) ] in
     let output = mk_box_ty tvar_0 (* Box<T> *) in
     mk_sig generics inputs output
 
   (** [fn<T>(Box<T>) -> ()] *)
-  let box_free_sig : A.fun_sig =
+  let box_free_sig : fun_sig =
     let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
     let inputs = [ mk_box_ty tvar_0 (* Box<T> *) ] in
     let output = mk_unit_ty (* () *) in
@@ -120,9 +119,9 @@ module Sig = struct
       The [mut_borrow] boolean controls whether we use a shared or a mutable
       borrow.
    *)
-  let mk_array_slice_borrow_sig (cgs : T.const_generic_var list)
-      (input_ty : T.TypeVarId.id -> T.ty) (index_ty : T.ty option)
-      (output_ty : T.TypeVarId.id -> T.ty) (is_mut : bool) : A.fun_sig =
+  let mk_array_slice_borrow_sig (cgs : const_generic_var list)
+      (input_ty : TypeVarId.id -> ty) (index_ty : ty option)
+      (output_ty : TypeVarId.id -> ty) (is_mut : bool) : fun_sig =
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] cgs (* <'a, T> *)
     in
@@ -143,27 +142,26 @@ module Sig = struct
     in
     mk_sig generics inputs output
 
-  let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : A.fun_sig =
+  let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : fun_sig =
     (* Array<T, N> *)
     let input_ty id =
-      if is_array then mk_array_ty (T.TVar id) cgvar_0
-      else mk_slice_ty (T.TVar id)
+      if is_array then mk_array_ty (TVar id) cgvar_0 else mk_slice_ty (TVar id)
     in
     (* usize *)
     let index_ty = usize_ty in
     (* T *)
-    let output_ty id = T.TVar id in
+    let output_ty id = TVar id in
     let cgs = if is_array then [ cg_param_0 ] else [] in
     mk_array_slice_borrow_sig cgs input_ty (Some index_ty) output_ty is_mut
 
   let array_index_sig (is_mut : bool) = mk_array_slice_index_sig true is_mut
   let slice_index_sig (is_mut : bool) = mk_array_slice_index_sig false is_mut
 
-  let array_to_slice_sig (is_mut : bool) : A.fun_sig =
+  let array_to_slice_sig (is_mut : bool) : fun_sig =
     (* Array<T, N> *)
-    let input_ty id = mk_array_ty (T.TVar id) cgvar_0 in
+    let input_ty id = mk_array_ty (TVar id) cgvar_0 in
     (* Slice<T> *)
-    let output_ty id = mk_slice_ty (T.TVar id) in
+    let output_ty id = mk_slice_ty (TVar id) in
     let cgs = [ cg_param_0 ] in
     mk_array_slice_borrow_sig cgs input_ty None output_ty is_mut
 
@@ -182,7 +180,7 @@ module Sig = struct
   (** Helper:
       [fn<T>(&'a [T]) -> usize]
    *)
-  let slice_len_sig : A.fun_sig =
+  let slice_len_sig : fun_sig =
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
     in
@@ -194,13 +192,13 @@ module Sig = struct
 end
 
 type raw_assumed_fun_info =
-  A.assumed_fun_id * A.fun_sig * bool * name * bool list option
+  assumed_fun_id * fun_sig * bool * string * bool list option
 
 type assumed_fun_info = {
-  fun_id : A.assumed_fun_id;
-  fun_sig : A.fun_sig;
+  fun_id : assumed_fun_id;
+  fun_sig : fun_sig;
   can_fail : bool;
-  name : name;
+  name : string;
   keep_types : bool list option;
       (** We may want to filter some type arguments.
 
@@ -226,70 +224,63 @@ let mk_assumed_fun_info (raw : raw_assumed_fun_info) : assumed_fun_info =
  *)
 let raw_assumed_fun_infos : raw_assumed_fun_info list =
   [
+    (* TODO: the names are not correct ("Box" should be an impl elem for instance)
+       but it's not important) *)
     ( BoxNew,
       Sig.box_new_sig,
       false,
-      to_name [ "alloc"; "boxed"; "Box"; "new" ],
+      "alloc::boxed::Box::new",
       Some [ true; false ] );
     (* BoxFree shouldn't be used *)
     ( BoxFree,
       Sig.box_free_sig,
       false,
-      to_name [ "alloc"; "boxed"; "Box"; "free" ],
+      "alloc::boxed::Box::free",
       Some [ true; false ] );
     (* Array Index *)
     ( ArrayIndexShared,
       Sig.array_index_sig false,
       true,
-      to_name [ "@ArrayIndexShared" ],
+      "@ArrayIndexShared",
       None );
-    ( ArrayIndexMut,
-      Sig.array_index_sig true,
-      true,
-      to_name [ "@ArrayIndexMut" ],
-      None );
+    (ArrayIndexMut, Sig.array_index_sig true, true, "@ArrayIndexMut", None);
     (* Array to slice*)
     ( ArrayToSliceShared,
       Sig.array_to_slice_sig false,
       true,
-      to_name [ "@ArrayToSliceShared" ],
+      "@ArrayToSliceShared",
       None );
     ( ArrayToSliceMut,
       Sig.array_to_slice_sig true,
       true,
-      to_name [ "@ArrayToSliceMut" ],
+      "@ArrayToSliceMut",
       None );
     (* Array Repeat *)
-    (ArrayRepeat, Sig.array_repeat_sig, false, to_name [ "@ArrayRepeat" ], None);
+    (ArrayRepeat, Sig.array_repeat_sig, false, "@ArrayRepeat", None);
     (* Slice Index *)
     ( SliceIndexShared,
       Sig.slice_index_sig false,
       true,
-      to_name [ "@SliceIndexShared" ],
+      "@SliceIndexShared",
       None );
-    ( SliceIndexMut,
-      Sig.slice_index_sig true,
-      true,
-      to_name [ "@SliceIndexMut" ],
-      None );
-    (SliceLen, Sig.slice_len_sig, false, to_name [ "@SliceLen" ], None);
+    (SliceIndexMut, Sig.slice_index_sig true, true, "@SliceIndexMut", None);
   ]
 
 let assumed_fun_infos : assumed_fun_info list =
   List.map mk_assumed_fun_info raw_assumed_fun_infos
 
-let get_assumed_fun_info (id : A.assumed_fun_id) : assumed_fun_info =
+let get_assumed_fun_info (id : assumed_fun_id) : assumed_fun_info =
   match List.find_opt (fun x -> id = x.fun_id) assumed_fun_infos with
   | Some info -> info
   | None ->
       raise
-        (Failure ("get_assumed_fun_info: not found: " ^ A.show_assumed_fun_id id))
+        (Failure ("get_assumed_fun_info: not found: " ^ show_assumed_fun_id id))
 
-let get_assumed_fun_sig (id : A.assumed_fun_id) : A.fun_sig =
+let get_assumed_fun_sig (id : assumed_fun_id) : fun_sig =
   (get_assumed_fun_info id).fun_sig
 
-let get_assumed_fun_name (id : A.assumed_fun_id) : fun_name =
+let get_assumed_fun_name (id : assumed_fun_id) : string =
   (get_assumed_fun_info id).name
 
-let assumed_fun_can_fail (id : A.assumed_fun_id) : bool =
+let assumed_fun_can_fail (id : assumed_fun_id) : bool =
   (get_assumed_fun_info id).can_fail

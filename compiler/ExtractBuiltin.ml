@@ -4,14 +4,21 @@
     TODO: there misses trait **implementations**
  *)
 
-open Names
 open Config
+open Types
 
 type simple_name = string list [@@deriving show, ord]
 
+(* TODO: update *)
 let name_to_simple_name (s : name) : simple_name =
-  (* We simply ignore the disambiguators *)
-  List.filter_map (function Ident id -> Some id | Disambiguator _ -> None) s
+  (* We simply ignore the disambiguators - TODO: update *)
+  List.map
+    (function
+      | PeIdent (id, _) -> id
+      | PeImpl i ->
+          (* TODO *)
+          show_impl_elem i)
+    s
 
 (** Small helper which cuts a string at the occurrences of "::" *)
 let string_to_simple_name (s : string) : simple_name =

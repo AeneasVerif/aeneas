@@ -1,6 +1,5 @@
 open Identifiers
 open Types
-module PrimitiveValues = PrimitiveValues
 
 (* TODO(SH): I often write "abstract" (value, borrow content, etc.) while I should
  * write "abstraction" (because those values are not abstract, they simply are

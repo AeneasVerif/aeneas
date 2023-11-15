@@ -2,7 +2,6 @@ open Utils
 open TypesUtils
 open Types
 open Values
-module TA = TypesAnalysis
 include PrimitiveValuesUtils
 
 (** Utility exception *)
@@ -144,8 +143,9 @@ let outer_loans_in_value (v : typed_value) : bool =
     false
   with Found -> true
 
-let find_first_primitively_copyable_sv_with_borrows (type_infos : TA.type_infos)
-    (v : typed_value) : symbolic_value option =
+let find_first_primitively_copyable_sv_with_borrows
+    (type_infos : TypesAnalysis.type_infos) (v : typed_value) :
+    symbolic_value option =
   (* The visitor *)
   let obj =
     object
@@ -175,8 +175,8 @@ let rec value_strip_shared_loans (v : typed_value) : typed_value =
   | _ -> v
 
 (** Check if a symbolic value has borrows *)
-let symbolic_value_has_borrows (infos : TA.type_infos) (sv : symbolic_value) :
-    bool =
+let symbolic_value_has_borrows (infos : TypesAnalysis.type_infos)
+    (sv : symbolic_value) : bool =
   ty_has_borrows infos sv.sv_ty
 
 (** Check if a value has borrows in **a general sense**.
@@ -185,7 +185,7 @@ let symbolic_value_has_borrows (infos : TA.type_infos) (sv : symbolic_value) :
     - there are concrete borrows
     - there are symbolic values which may contain borrows
  *)
-let value_has_borrows (infos : TA.type_infos) (v : value) : bool =
+let value_has_borrows (infos : TypesAnalysis.type_infos) (v : value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
@@ -226,7 +226,8 @@ let value_has_loans (v : value) : bool =
     - there are symbolic values which may contain borrows (symbolic values
       can't contain loans).
  *)
-let value_has_loans_or_borrows (infos : TA.type_infos) (v : value) : bool =
+let value_has_loans_or_borrows (infos : TypesAnalysis.type_infos) (v : value) :
+    bool =
   let obj =
     object
       inherit [_] iter_typed_value

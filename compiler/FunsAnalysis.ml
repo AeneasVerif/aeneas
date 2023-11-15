@@ -175,15 +175,15 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
   let rec analyze_decl_groups (decls : declaration_group list) : unit =
     match decls with
     | [] -> ()
-    | (Type _ | TraitDecl _ | TraitImpl _) :: decls' ->
+    | (TypeGroup _ | TraitDeclGroup _ | TraitImplGroup _) :: decls' ->
         analyze_decl_groups decls'
-    | Fun decl :: decls' ->
+    | FunGroup decl :: decls' ->
         analyze_fun_decl_group decl;
         analyze_decl_groups decls'
-    | Global id :: decls' ->
+    | GlobalGroup id :: decls' ->
         (* Analyze a global by analyzing its body function *)
         let global = GlobalDeclId.Map.find id globals_map in
-        analyze_fun_decl_group (NonRec global.body_id);
+        analyze_fun_decl_group (NonRec global.body);
         analyze_decl_groups decls'
   in
 

@@ -63,7 +63,7 @@ type tc_ctx = {
 
 let check_literal (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
-  | TInteger int_ty, PV.VScalar sv -> assert (int_ty = sv.PV.int_ty)
+  | TInteger int_ty, VScalar sv -> assert (int_ty = sv.int_ty)
   | TBool, VBool _ | TChar, VChar _ -> ()
   | _ -> raise (Failure "Inconsistent type")
 
