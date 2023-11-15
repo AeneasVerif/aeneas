@@ -12,10 +12,9 @@ open Values
 open LlbcAst
 open Contexts
 module Subst = Substitute
-module L = Logging
 
 (** The local logger *)
-let log = L.associated_types_log
+let log = Logging.associated_types_log
 
 let trait_type_ref_substitute (subst : Subst.subst) (r : trait_type_ref) :
     trait_type_ref =

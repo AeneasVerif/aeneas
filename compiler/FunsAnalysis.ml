@@ -8,7 +8,7 @@
  *)
 
 open LlbcAst
-module EU = ExpressionsUtils
+open ExpressionsUtils
 
 (** Various information about a function.
 
@@ -85,9 +85,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
           method! visit_rvalue _env rv =
             match rv with
             | Use _ | RvRef _ | Global _ | Discriminant _ | Aggregate _ -> ()
-            | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
+            | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
-                can_fail := EU.binop_can_fail bop || !can_fail
+                can_fail := binop_can_fail bop || !can_fail
 
           method! visit_Call env call =
             (match call.func.func with
