@@ -632,7 +632,12 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             "Tuple"
             ^ String.concat ""
                 (List.map (ty_to_simple_name generics) args.types)
-        | TAssumed id -> Types.show_assumed_ty id)
+        | TAssumed id -> (
+            match id with
+            | Types.TBox -> "Box"
+            | Types.TArray -> "Array"
+            | Types.TSlice -> "Slice"
+            | Types.TStr -> "Str"))
     | TVar vid ->
         (* Use the variable name *)
         (List.find (fun (v : type_var) -> v.index = vid) generics.types).name
