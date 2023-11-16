@@ -1546,38 +1546,53 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     | ArrayRepeat ),
                     _ ) ->
                     super#visit_texpression env e)
-            | Fun (FromLlbc (FunId (FRegular fid), _lp_id, rg_id)) ->
-                failwith "TODO"
-                (*
+            | Fun (FromLlbc (FunId (FRegular fid), _lp_id, rg_id)) -> (
+                (* TODO: use a more general matching mechanism *)
                 (* Lookup the function name *)
                 let def = FunDeclId.Map.find fid ctx.fun_ctx.fun_decls in
-                match
-                  (Names.name_no_disambiguators_to_string def.name, rg_id)
-                with
-                | "alloc::boxed::Box::deref", None ->
-                    (* [Box::deref] forward is the identity *)
-                    let arg, args = Collections.List.pop args in
-                    mk_apps arg args
-                | "alloc::boxed::Box::deref", Some _ ->
-                    (* [Box::deref] backward is [()] (doesn't give back anything) *)
-                    assert (args = []);
-                    mk_unit_rvalue
-                | "alloc::boxed::Box::deref_mut", None ->
-                    (* [Box::deref_mut] forward is the identity *)
-                    let arg, args = Collections.List.pop args in
-                    mk_apps arg args
-                | "alloc::boxed::Box::deref_mut", Some _ ->
-                    (* [Box::deref_mut] back is almost the identity:
-                     * let box_deref_mut (x_init : t) (x_back : t) : t = x_back
-                     * *)
-                    let arg, args =
-                      match args with
-                      | _ :: given_back :: args -> (given_back, args)
-                      | _ -> raise (Failure "Unreachable")
-                    in
-                    mk_apps arg args
-                | _ -> super#visit_texpression env e
-                       *)
+                (* We first need to check if the name is "alloc::boxed::Box::_" *)
+                match def.name with
+                | [
+                 PeIdent ("alloc", _);
+                 PeIdent ("boxed", _);
+                 PeImpl impl;
+                 PeIdent (fname, _);
+                ] -> (
+                    match impl.ty with
+                    | TAdt
+                        ( TAssumed TBox,
+                          {
+                            regions = [];
+                            types = [ TVar _ ];
+                            const_generics = [];
+                            trait_refs = [];
+                          } ) -> (
+                        match (fname, rg_id) with
+                        | "deref", None ->
+                            (* [Box::deref] forward is the identity *)
+                            let arg, args = Collections.List.pop args in
+                            mk_apps arg args
+                        | "deref", Some _ ->
+                            (* [Box::deref] backward is [()] (doesn't give back anything) *)
+                            assert (args = []);
+                            mk_unit_rvalue
+                        | "deref_mut", None ->
+                            (* [Box::deref_mut] forward is the identity *)
+                            let arg, args = Collections.List.pop args in
+                            mk_apps arg args
+                        | "deref_mut", Some _ ->
+                            (* [Box::deref_mut] back is almost the identity:
+                             * let box_deref_mut (x_init : t) (x_back : t) : t = x_back
+                             * *)
+                            let arg, args =
+                              match args with
+                              | _ :: given_back :: args -> (given_back, args)
+                              | _ -> raise (Failure "Unreachable")
+                            in
+                            mk_apps arg args
+                        | _ -> super#visit_texpression env e)
+                    | _ -> super#visit_texpression env e)
+                | _ -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end
