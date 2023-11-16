@@ -164,7 +164,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
   let analyze_fun_decl_group (d : fun_declaration_group) : unit =
     (* Retrieve the function declarations *)
-    let funs = match d with NonRec id -> [ id ] | Rec ids -> ids in
+    let funs = match d with NonRecGroup id -> [ id ] | RecGroup ids -> ids in
     let funs = List.map (fun id -> FunDeclId.Map.find id funs_map) funs in
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.Set.of_list fun_ids in
@@ -183,7 +183,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     | GlobalGroup id :: decls' ->
         (* Analyze a global by analyzing its body function *)
         let global = GlobalDeclId.Map.find id globals_map in
-        analyze_fun_decl_group (NonRec global.body);
+        analyze_fun_decl_group (NonRecGroup global.body);
         analyze_decl_groups decls'
   in
 

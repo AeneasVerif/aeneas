@@ -3036,9 +3036,9 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   (* return *)
   def
 
-let translate_type_decls (ctx : Contexts.decls_ctx)
-    (type_decls : T.type_decl list) : type_decl list =
-  List.map (translate_type_decl ctx) type_decls
+let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
+  List.map (translate_type_decl ctx)
+    (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 
 (** Translates function signatures.
 

@@ -309,7 +309,6 @@ let assumed_llbc_functions () :
         (SliceIndexShared, None, "slice_index_usize");
         (SliceIndexMut, None, "slice_index_usize");
         (SliceIndexMut, rg0, "slice_update_usize");
-        (SliceLen, None, "slice_len");
       ]
   | Lean ->
       [
@@ -323,7 +322,6 @@ let assumed_llbc_functions () :
         (SliceIndexShared, None, "Slice.index_usize");
         (SliceIndexMut, None, "Slice.index_usize");
         (SliceIndexMut, rg0, "Slice.update_usize");
-        (SliceLen, None, "Slice.len");
       ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
@@ -538,6 +536,11 @@ let type_keyword () =
   | Coq | Lean -> "Type"
   | HOL4 -> raise (Failure "Unexpected")
 
+let name_last_elem_as_ident (n : llbc_name) : string =
+  match Collections.List.last n with
+  | PeIdent (s, _) -> s
+  | PeImpl _ -> raise (Failure "Unexpected")
+
 (**
    [ctx]: we use the context to lookup type definitions, to retrieve type names.
    This is used to compute variable names, when they have no basenames: in this
@@ -579,34 +582,90 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   let int_name = int_name in
 
   (* Prepare a name.
-   * The first id elem is always the crate: if it is the local crate,
-   * we remove it.
-   * We also remove all the disambiguators, then convert everything to strings.
-   * **Rmk:** because we remove the disambiguators, there may be name collisions
-   * (which is ok, because we check for name collisions and fail if there is any).
-   *)
-  let get_name (name : name) : string list =
+     The first id elem is always the crate: if it is the local crate,
+     we remove it. We ignore disambiguators (there may be collisions, but we
+     check if there are).
+  *)
+  let rec name_to_simple_name (name : llbc_name) : string list =
     (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
-    let name = Names.filter_disambiguators name in
     match name with
-    | Ident crate :: name ->
-        let name = if crate = crate_name then name else Ident crate :: name in
+    | (PeIdent (crate, _) as id) :: name ->
+        let name = if crate = crate_name then name else id :: name in
+        let open Types in
         let name =
           List.map
             (function
-              | Names.Ident s -> s
-              | Disambiguator d -> Names.Disambiguator.to_string d)
+              | PeIdent (s, _) -> s
+              | PeImpl impl -> impl_elem_to_simple_name impl)
             name
         in
         name
     | _ ->
-        raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
+        raise
+          (Failure
+             ("Unexpected name shape: " ^ TranslateCore.name_to_string ctx name))
+  and impl_elem_to_simple_name (impl : Types.impl_elem) : string =
+    (* We do something simple for now.
+       TODO: we might want to do something different for impl elements which are
+       actually trait implementations, in order to prevent name collisions (it
+       is possible to define several times the same trait for the same type,
+       but with different instantiations of the type, or different trait
+       requirements *)
+    ty_to_simple_name impl.generics impl.ty
+  and ty_to_simple_name (generics : Types.generic_params) (ty : Types.ty) :
+      string =
+    (* We do something simple for now.
+       TODO: find a more principled way of converting types to names.
+       In particular, we might want to do something different for impl elements which are
+       actually trait implementations, in order to prevent name collisions (it
+       is possible to define several times the same trait for the same type,
+       but with different instantiations of the type, or different trait
+       requirements *)
+    match ty with
+    | TAdt (id, args) -> (
+        match id with
+        | TAdtId id ->
+            let def = TypeDeclId.Map.find id ctx.type_ctx.type_decls in
+            name_last_elem_as_ident def.name
+        | TTuple ->
+            (* TODO *)
+            "Tuple"
+            ^ String.concat ""
+                (List.map (ty_to_simple_name generics) args.types)
+        | TAssumed id -> Types.show_assumed_ty id)
+    | TVar vid ->
+        (* Use the variable name *)
+        (List.find (fun (v : type_var) -> v.index = vid) generics.types).name
+    | TLiteral lty ->
+        StringUtils.capitalize_first_letter
+          (Print.Types.literal_type_to_string lty)
+    | TNever -> raise (Failure "Unreachable")
+    | TRef (_, rty, rk) -> (
+        let rty = ty_to_simple_name generics rty in
+        match rk with
+        | RMut -> "MutBorrow" ^ rty
+        | RShared -> "SharedBorrow" ^ rty)
+    | TRawPtr (rty, rk) -> (
+        let rty = ty_to_simple_name generics rty in
+        match rk with RMut -> "MutPtr" ^ rty | RShared -> "ConstPtr" ^ rty)
+    | TTraitType (tr, _, name) ->
+        (* TODO: this is way too simple *)
+        let trait_decl =
+          TraitDeclId.Map.find tr.trait_decl_ref.trait_decl_id
+            ctx.trait_decls_ctx.trait_decls
+        in
+        name_last_elem_as_ident trait_decl.name ^ name
+    | TArrow (inputs, output) ->
+        "Arrow"
+        ^ String.concat ""
+            (List.map (ty_to_simple_name generics) (inputs @ [ output ]))
   in
   let flatten_name (name : string list) : string =
     match !backend with
     | FStar | Coq | HOL4 -> String.concat "_" name
     | Lean -> String.concat "." name
   in
+  let get_name name : string list = name_to_simple_name name in
   let get_type_name = get_name in
   let get_type_name_no_suffix name =
     match !backend with
@@ -620,7 +679,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | Coq | HOL4 -> get_type_name_no_suffix name ^ "_t"
     | Lean -> get_type_name_no_suffix name
   in
-  let field_name (def_name : name) (field_id : FieldId.id)
+  let field_name (def_name : llbc_name) (field_id : FieldId.id)
       (field_name : string option) : string =
     let field_name_s =
       match field_name with
@@ -639,7 +698,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
       | Lean | HOL4 -> def_name
       | Coq | FStar -> StringUtils.lowercase_first_letter def_name
   in
-  let variant_name (def_name : name) (variant : string) : string =
+  let variant_name (def_name : llbc_name) (variant : string) : string =
     match !backend with
     | FStar | Coq | HOL4 ->
         let variant = to_camel_case variant in
@@ -649,7 +708,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
         else variant
     | Lean -> variant
   in
-  let struct_constructor (basename : name) : string =
+  let struct_constructor (basename : llbc_name) : string =
     let tname = type_name basename in
     ExtractBuiltin.mk_struct_constructor tname
   in
@@ -661,15 +720,15 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter fname
     | Lean -> fname
   in
-  let global_name (name : global_name) : string =
+  let global_name (name : llbc_name) : string =
     (* Converting to snake case also lowercases the letters (in Rust, global
      * names are written in capital letters). *)
     let parts = List.map to_snake_case (get_name name) in
     String.concat "_" parts
   in
-  let fun_name (fname : fun_name) (num_loops : int) (loop_id : LoopId.id option)
-      (num_rgs : int) (rg : region_group_info option) (filter_info : bool * int)
-      : string =
+  let fun_name (fname : llbc_name) (num_loops : int)
+      (loop_id : LoopId.id option) (num_rgs : int)
+      (rg : region_group_info option) (filter_info : bool * int) : string =
     let fname = get_fun_name fname in
     (* Compute the suffix *)
     let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
@@ -678,7 +737,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   in
 
   let trait_decl_name (trait_decl : trait_decl) : string =
-    type_name trait_decl.name
+    type_name trait_decl.llbc_name
   in
 
   let trait_impl_name (trait_decl : trait_decl) (trait_impl : trait_impl) :
@@ -686,12 +745,14 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     (* TODO: provisional: we concatenate the trait impl name (which is its type)
        with the trait decl name *)
     let trait_decl =
-      let name = trait_decl.name in
+      let name = trait_decl.llbc_name in
       let name = get_type_name_no_suffix name ^ "Inst" in
       (* Remove the occurrences of '.' *)
       String.concat "" (String.split_on_char '.' name)
     in
-    let name = flatten_name (get_type_name trait_impl.name @ [ trait_decl ]) in
+    let name =
+      flatten_name (get_type_name trait_impl.llbc_name @ [ trait_decl ])
+    in
     match !backend with
     | FStar -> StringUtils.lowercase_first_letter name
     | Coq | HOL4 | Lean -> name
@@ -745,7 +806,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     ^ TraitClauseId.to_string clause.clause_id
   in
 
-  let termination_measure_name (_fid : A.FunDeclId.id) (fname : fun_name)
+  let termination_measure_name (_fid : A.FunDeclId.id) (fname : llbc_name)
       (num_loops : int) (loop_id : LoopId.id option) : string =
     let fname = get_fun_name fname in
     let lp_suffix = default_fun_loop_suffix num_loops loop_id in
@@ -760,7 +821,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fname ^ lp_suffix ^ suffix
   in
 
-  let decreases_proof_name (_fid : A.FunDeclId.id) (fname : fun_name)
+  let decreases_proof_name (_fid : A.FunDeclId.id) (fname : llbc_name)
       (num_loops : int) (loop_id : LoopId.id option) : string =
     let fname = get_fun_name fname in
     let lp_suffix = default_fun_loop_suffix num_loops loop_id in
@@ -815,12 +876,12 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             | TAdtId adt_id ->
                 let def = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
                 (* Derive the var name from the last ident of the type name
-                 * Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
-                 *)
+                   Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
+                *)
                 (* The name shouldn't be empty, and its last element should
                  * be an ident *)
-                let cl = List.nth def.name (List.length def.name - 1) in
-                name_from_type_ident (Names.as_ident cl))
+                let cl = Collections.List.last def.name in
+                name_from_type_ident (TypesUtils.as_ident cl))
         | TVar _ -> (
             (* TODO: use "t" also for F* *)
             match !backend with
@@ -866,31 +927,31 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     match cv with
     | VScalar sv -> (
         match !backend with
-        | FStar -> F.pp_print_string fmt (Z.to_string sv.PV.value)
+        | FStar -> F.pp_print_string fmt (Z.to_string sv.value)
         | Coq | HOL4 | Lean ->
             let print_brackets = inside && !backend = HOL4 in
             if print_brackets then F.pp_print_string fmt "(";
             (match !backend with
             | Coq | Lean -> ()
             | HOL4 ->
-                F.pp_print_string fmt ("int_to_" ^ int_name sv.PV.int_ty);
+                F.pp_print_string fmt ("int_to_" ^ int_name sv.int_ty);
                 F.pp_print_space fmt ()
             | _ -> raise (Failure "Unreachable"));
             (* We need to add parentheses if the value is negative *)
-            if sv.PV.value >= Z.of_int 0 then
-              F.pp_print_string fmt (Z.to_string sv.PV.value)
+            if sv.value >= Z.of_int 0 then
+              F.pp_print_string fmt (Z.to_string sv.value)
             else if !backend = Lean then
               (* TODO: parsing issues with Lean because there are ambiguous
                  interpretations between int values and nat values *)
               F.pp_print_string fmt
-                ("(-(" ^ Z.to_string (Z.neg sv.PV.value) ^ ":Int))")
-            else F.pp_print_string fmt ("(" ^ Z.to_string sv.PV.value ^ ")");
+                ("(-(" ^ Z.to_string (Z.neg sv.value) ^ ":Int))")
+            else F.pp_print_string fmt ("(" ^ Z.to_string sv.value ^ ")");
             (match !backend with
             | Coq ->
-                let iname = int_name sv.PV.int_ty in
+                let iname = int_name sv.int_ty in
                 F.pp_print_string fmt ("%" ^ iname)
             | Lean ->
-                let iname = String.lowercase_ascii (int_name sv.PV.int_ty) in
+                let iname = String.lowercase_ascii (int_name sv.int_ty) in
                 F.pp_print_string fmt ("#" ^ iname)
             | HOL4 -> ()
             | _ -> raise (Failure "Unreachable"));
@@ -1426,7 +1487,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
   (* Lookup the builtin information, if there is *)
   let open ExtractBuiltin in
-  let sname = name_to_simple_name def.name in
+  let sname = name_to_simple_name def.llbc_name in
   let info = SimpleNameMap.find_opt sname (builtin_types_map ()) in
   (* Register the filtering information, if there is *)
   let ctx =
@@ -1442,7 +1503,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   (* Compute and register the type def name *)
   let def_name =
     match info with
-    | None -> ctx.fmt.type_name def.name
+    | None -> ctx.fmt.type_name def.llbc_name
     | Some info -> info.extract_name
   in
   let ctx = ctx_add (TypeId (TAdtId def.def_id)) def_name ctx in
@@ -1460,10 +1521,10 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
               let field_names =
                 FieldId.mapi
                   (fun fid (field : field) ->
-                    (fid, ctx.fmt.field_name def.name fid field.field_name))
+                    (fid, ctx.fmt.field_name def.llbc_name fid field.field_name))
                   fields
               in
-              let cons_name = ctx.fmt.struct_constructor def.name in
+              let cons_name = ctx.fmt.struct_constructor def.llbc_name in
               (field_names, cons_name)
           | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
               let field_names =
@@ -1499,12 +1560,12 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
               VariantId.mapi
                 (fun variant_id (variant : variant) ->
                   let name =
-                    ctx.fmt.variant_name def.name variant.variant_name
+                    ctx.fmt.variant_name def.llbc_name variant.variant_name
                   in
                   (* Add the type name prefix for Lean *)
                   let name =
                     if !Config.backend = Lean then
-                      let type_name = ctx.fmt.type_name def.name in
+                      let type_name = ctx.fmt.type_name def.llbc_name in
                       type_name ^ "." ^ name
                     else name
                   in
@@ -1648,7 +1709,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   let print_variant _variant_id (v : variant) =
     (* We don't lookup the name, because it may have a prefix for the type
        id (in the case of Lean) *)
-    let cons_name = ctx.fmt.variant_name def.name v.variant_name in
+    let cons_name = ctx.fmt.variant_name def.llbc_name v.variant_name in
     let fields = v.fields in
     extract_type_decl_variant ctx fmt type_decl_group def_name type_params
       cg_params cons_name fields
@@ -2030,7 +2091,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
     F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt [ "[" ^ Print.name_to_string def.name ^ "]" ];
+  extract_comment fmt [ "[" ^ name_to_string ctx def.llbc_name ^ "]" ];
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important

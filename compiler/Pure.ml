@@ -14,6 +14,7 @@ module GlobalDeclId = A.GlobalDeclId
 module TraitDeclId = T.TraitDeclId
 module TraitImplId = T.TraitImplId
 module TraitClauseId = T.TraitClauseId
+module Disambiguator = T.Disambiguator
 
 (** We redefine identifiers for loop: in {!Values}, the identifiers are global
     (they monotonically increase across functions) while in {!module:Pure} we want

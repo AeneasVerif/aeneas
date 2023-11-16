@@ -1,15 +1,10 @@
 open Aeneas.LlbcOfJson
 open Aeneas.Logging
-module T = Aeneas.Types
-module A = Aeneas.LlbcAst
-module I = Aeneas.Interpreter
+open Aeneas.LlbcAst
+open Aeneas.Interpreter
 module EL = Easy_logging.Logging
-module TA = Aeneas.TypesAnalysis
-module Micro = Aeneas.PureMicroPasses
-module Print = Aeneas.Print
-module PrePasses = Aeneas.PrePasses
-module Translate = Aeneas.Translate
 open Aeneas.Config
+open Aeneas
 
 (** The local logger *)
 let log = main_log
@@ -227,7 +222,9 @@ let () =
       if
         !backend = Lean && !extract_decreases_clauses
         && List.exists
-             (function Aeneas.LlbcAst.Fun (Rec (_ :: _)) -> true | _ -> false)
+             (function
+               | Aeneas.LlbcAst.FunGroup (RecGroup (_ :: _)) -> true
+               | _ -> false)
              m.declarations
       then (
         log#error
@@ -237,15 +234,15 @@ let () =
         fail ());
 
       (* Apply the pre-passes *)
-      let m = PrePasses.apply_passes m in
+      let m = Aeneas.PrePasses.apply_passes m in
 
       (* Some options for the execution *)
 
       (* Test the unit functions with the concrete interpreter *)
-      if !test_unit_functions then I.Test.test_unit_functions m;
+      if !test_unit_functions then Test.test_unit_functions m;
 
       (* Translate the functions *)
-      Translate.translate_crate filename dest_dir m;
+      Aeneas.Translate.translate_crate filename dest_dir m;
 
       (* Print total elapsed time *)
       log#linfo

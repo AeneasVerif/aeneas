@@ -26,3 +26,6 @@ let trans_ctx_to_fmt_env (ctx : trans_ctx) : Print.fmt_env =
 
 let trans_ctx_to_pure_fmt_env (ctx : trans_ctx) : PrintPure.fmt_env =
   PrintPure.decls_ctx_to_fmt_env ctx
+
+let name_to_string (ctx : trans_ctx) =
+  Print.Types.name_to_string (trans_ctx_to_fmt_env ctx)

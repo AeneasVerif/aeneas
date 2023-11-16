@@ -283,7 +283,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
 let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     (infos : type_infos) (decl : A.type_declaration_group) : type_infos =
   (* Collect the identifiers used in the declaration group *)
-  let ids = match decl with NonRec id -> [ id ] | Rec ids -> ids in
+  let ids = match decl with NonRecGroup id -> [ id ] | RecGroup ids -> ids in
   (* Retrieve the type definitions *)
   let decl_defs = List.map (fun id -> TypeDeclId.Map.find id type_decls) ids in
   (* Initialize the type information for the current definitions *)

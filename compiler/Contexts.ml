@@ -525,7 +525,7 @@ let ctx_set_abs_can_end (ctx : eval_ctx) (abs_id : AbstractionId.id)
 
 let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
   let decl_group = TypeDeclId.Map.find id ctx.type_context.type_decls_groups in
-  match decl_group with Rec _ -> true | NonRec _ -> false
+  match decl_group with RecGroup _ -> true | NonRecGroup _ -> false
 
 (** Visitor to iterate over the values in the *current* frame *)
 class ['self] iter_frame =

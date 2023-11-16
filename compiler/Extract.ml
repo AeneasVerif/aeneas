@@ -27,7 +27,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       let builtin =
         let open ExtractBuiltin in
         let funs_map = builtin_funs_map () in
-        let sname = name_to_simple_name def.fwd.f.basename in
+        let sname = name_to_simple_name def.fwd.f.llbc_name in
         SimpleNameMap.find_opt sname funs_map
       in
       (* Use the builtin names if necessary *)
@@ -65,7 +65,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
                   raise
                     (Failure
                        ("Not found: "
-                       ^ Names.name_to_string f.basename
+                       ^ name_to_string ctx f.llbc_name
                        ^ ", "
                        ^ Print.option_to_string Pure.show_loop_id f.loop_id
                        ^ Print.option_to_string Pure.show_region_group_id
@@ -212,7 +212,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
         let decl = FunDeclId.Map.find id ctx.trans_funs in
         let err =
           "Ill-formed builtin information for function "
-          ^ Names.name_to_string decl.fwd.f.basename
+          ^ name_to_string ctx decl.fwd.f.llbc_name
           ^ ": "
           ^ string_of_int (List.length filter)
           ^ " filtering arguments provided for "
@@ -1137,7 +1137,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   extract_comment fmt
-    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: decreases clause" ];
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases clause" ];
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1199,7 +1199,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   extract_comment fmt
-    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: termination measure" ];
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: termination measure" ];
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1253,7 +1253,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
   extract_comment fmt
-    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: decreases_by tactic" ];
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases_by tactic" ];
   F.pp_print_space fmt ();
   F.pp_open_hvbox fmt 0;
   F.pp_print_string fmt "syntax \"";
@@ -1289,7 +1289,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
       (Pure.FunId (FRegular def.def_id), def.loop_id, def.back_id)
       ctx.fun_name_info
   in
-  let comment_pre = "[" ^ Print.fun_name_to_string def.basename ^ "]: " in
+  let comment_pre = "[" ^ name_to_string ctx def.llbc_name ^ "]: " in
   let comment =
     let loop_comment =
       match def.loop_id with
@@ -1766,13 +1766,13 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
-  extract_comment fmt [ "[" ^ Print.global_name_to_string global.name ^ "]" ];
+  extract_comment fmt [ "[" ^ name_to_string ctx global.name ^ "]" ];
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global global.def_id ctx in
   let body_name =
     ctx_get_function
-      (FromLlbc (Pure.FunId (FRegular global.body_id), None, None))
+      (FromLlbc (Pure.FunId (FRegular global.body), None, None))
       ctx
   in
 
@@ -1958,8 +1958,10 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
               =
             (* We do something special to reuse the [ctx_compute_fun_decl]
                function. TODO: make it cleaner. *)
-            let basename : name = [ Ident item_name ] in
-            let f = { f with basename } in
+            let llbc_name : Types.name =
+              [ Types.PeIdent (item_name, Disambiguator.zero) ]
+            in
+            let f = { f with llbc_name } in
             let trans = A.FunDeclId.Map.find f.def_id ctx.trans_funs in
             let name = ctx_compute_fun_name trans f ctx in
             (* Add a prefix if necessary *)
@@ -1991,7 +1993,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
               | None ->
                   let err =
                     "Ill-formed builtin information for trait decl \""
-                    ^ Names.name_to_string trait_decl.name
+                    ^ name_to_string ctx trait_decl.llbc_name
                     ^ "\", method \"" ^ item_name
                     ^ "\": could not find name for region "
                     ^ Print.option_to_string Pure.show_region_group_id
@@ -2022,7 +2024,7 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     (trait_decl : trait_decl) : extraction_ctx =
   (* Lookup the information if this is a builtin trait *)
   let open ExtractBuiltin in
-  let sname = name_to_simple_name trait_decl.name in
+  let sname = name_to_simple_name trait_decl.llbc_name in
   let builtin_info =
     SimpleNameMap.find_opt sname (builtin_trait_decls_map ())
   in
@@ -2059,8 +2061,8 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   (* Check if the trait implementation is builtin *)
   let builtin_info =
     let open ExtractBuiltin in
-    let type_sname = name_to_simple_name trait_impl.name in
-    let trait_sname = name_to_simple_name trait_decl.name in
+    let type_sname = name_to_simple_name trait_impl.llbc_name in
+    let trait_sname = name_to_simple_name trait_decl.llbc_name in
     SimpleNamePairMap.find_opt (type_sname, trait_sname)
       (builtin_trait_impls_map ())
   in
@@ -2185,7 +2187,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   extract_comment fmt
-    [ "Trait declaration: [" ^ Print.name_to_string decl.name ^ "]" ];
+    [ "Trait declaration: [" ^ name_to_string ctx decl.llbc_name ^ "]" ];
   F.pp_print_break fmt 0 0;
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.
@@ -2466,14 +2468,14 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
-  log#ldebug (lazy ("extract_trait_impl: " ^ Names.name_to_string impl.name));
+  log#ldebug (lazy ("extract_trait_impl: " ^ name_to_string ctx impl.llbc_name));
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl impl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   extract_comment fmt
-    [ "Trait implementation: [" ^ Print.name_to_string impl.name ^ "]" ];
+    [ "Trait implementation: [" ^ name_to_string ctx impl.llbc_name ^ "]" ];
   F.pp_print_break fmt 0 0;
 
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
@@ -2640,7 +2642,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_break fmt 0 0;
     (* Print a comment *)
     extract_comment fmt
-      [ "Unit test for [" ^ Print.fun_name_to_string def.basename ^ "]" ];
+      [ "Unit test for [" ^ name_to_string ctx def.llbc_name ^ "]" ];
     F.pp_print_space fmt ();
     (* Open a box for the test *)
     F.pp_open_hovbox fmt ctx.indent_incr;

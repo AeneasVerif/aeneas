@@ -3,10 +3,13 @@
 open Pure
 open PureUtils
 open TranslateCore
-module V = Values
 
 (** The local logger *)
-let log = L.pure_micro_passes_log
+let log = Logging.pure_micro_passes_log
+
+let fun_decl_to_string (ctx : trans_ctx) (def : Pure.fun_decl) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.fun_decl_to_string fmt def
 
 (** Small utility.
 
@@ -597,8 +600,8 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     match
                       TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls_groups
                     with
-                    | NonRec _ -> false
-                    | Rec _ -> true
+                    | NonRecGroup _ -> false
+                    | RecGroup _ -> true
                   in
                   (* Convert, if possible - note that for now for Lean and Coq
                      we don't support the structure syntax on recursive structures *)
@@ -1420,14 +1423,15 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
 
             let loop_body = { inputs; inputs_lvs; body = loop_body } in
 
-            let loop_def =
+            let loop_def : fun_decl =
               {
                 def_id = def.def_id;
                 kind = def.kind;
                 num_loops;
                 loop_id = Some loop.loop_id;
                 back_id = def.back_id;
-                basename = def.basename;
+                llbc_name = def.llbc_name;
+                name = def.name;
                 signature = loop_sig;
                 is_global_decl_body = def.is_global_decl_body;
                 body = Some loop_body;
@@ -1539,10 +1543,12 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     mk_unit_rvalue
                 | ( ( SliceIndexShared | SliceIndexMut | ArrayIndexShared
                     | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
-                    | ArrayRepeat | SliceLen ),
+                    | ArrayRepeat ),
                     _ ) ->
                     super#visit_texpression env e)
-            | Fun (FromLlbc (FunId (FRegular fid), _lp_id, rg_id)) -> (
+            | Fun (FromLlbc (FunId (FRegular fid), _lp_id, rg_id)) ->
+                failwith "TODO"
+                (*
                 (* Lookup the function name *)
                 let def = FunDeclId.Map.find fid ctx.fun_ctx.fun_decls in
                 match
@@ -1570,7 +1576,8 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                       | _ -> raise (Failure "Unreachable")
                     in
                     mk_apps arg args
-                | _ -> super#visit_texpression env e)
+                | _ -> super#visit_texpression env e
+                       *)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end
@@ -1918,9 +1925,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
   (* Debug *)
   log#ldebug
     (lazy
-      ("PureMicroPasses.apply_passes_to_def: "
-      ^ Print.fun_name_to_string def.basename
-      ^ " ("
+      ("PureMicroPasses.apply_passes_to_def: " ^ def.name ^ " ("
       ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
       ^ ")"));
 
