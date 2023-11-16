@@ -3,6 +3,9 @@ open LlbcAstUtils
 open Pure
 open PureUtils
 open PrimitiveValues
+open InterpreterUtils
+open FunsAnalysis
+open TypesAnalysis
 module T = Types
 module Id = Identifiers
 module C = Contexts
@@ -10,8 +13,6 @@ module A = LlbcAst
 module S = SymbolicAst
 module TA = TypesAnalysis
 module PP = PrintPure
-module FA = FunsAnalysis
-module IU = InterpreterUtils
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
@@ -24,7 +25,7 @@ type type_context = {
           This map is empty when we translate the types, then contains all
           the translated types when we translate the functions.
        *)
-  type_infos : TA.type_infos;
+  type_infos : type_infos;
   recursive_decls : T.TypeDeclId.Set.t;
 }
 [@@deriving show]
@@ -47,7 +48,7 @@ type fun_sig_named_outputs = {
 type fun_context = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdNotLoopMap.t;  (** *)
-  fun_infos : FA.fun_info A.FunDeclId.Map.t;
+  fun_infos : fun_info A.FunDeclId.Map.t;
   regions_hierarchies : T.region_groups FunIdMap.t;
 }
 [@@deriving show]
@@ -513,7 +514,7 @@ let translate_type_id (id : T.type_id) : type_id =
 
     TODO: factor out the various translation functions.
 *)
-let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : T.ty) : ty =
+let rec translate_fwd_ty (type_infos : type_infos) (ty : T.ty) : ty =
   let translate = translate_fwd_ty type_infos in
   match ty with
   | T.TAdt (type_id, generics) -> (
@@ -557,15 +558,15 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : T.ty) : ty =
       TTraitType (trait_ref, generics, type_name)
   | TArrow _ -> raise (Failure "TODO")
 
-and translate_fwd_generic_args (type_infos : TA.type_infos)
+and translate_fwd_generic_args (type_infos : type_infos)
     (generics : T.generic_args) : generic_args =
   translate_generic_args (translate_fwd_ty type_infos) generics
 
-and translate_fwd_trait_ref (type_infos : TA.type_infos) (tr : T.trait_ref) :
+and translate_fwd_trait_ref (type_infos : type_infos) (tr : T.trait_ref) :
     trait_ref =
   translate_trait_ref (translate_fwd_ty type_infos) tr
 
-and translate_fwd_trait_instance_id (type_infos : TA.type_infos)
+and translate_fwd_trait_instance_id (type_infos : type_infos)
     (id : T.trait_instance_id) : trait_instance_id =
   translate_trait_instance_id (translate_fwd_ty type_infos) id
 
@@ -586,7 +587,7 @@ let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
     
     [inside_mut]: are we inside a mutable borrow?
  *)
-let rec translate_back_ty (type_infos : TA.type_infos)
+let rec translate_back_ty (type_infos : type_infos)
     (keep_region : T.region -> bool) (inside_mut : bool) (ty : T.ty) : ty option
     =
   let translate = translate_back_ty type_infos keep_region inside_mut in
@@ -791,7 +792,7 @@ let mk_fuel_input_as_list (ctx : bs_ctx) (info : fun_effect_info) :
   if function_uses_fuel info then [ mk_fuel_texpression ctx.fuel ] else []
 
 (** Small utility. *)
-let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
+let get_fun_effect_info (fun_infos : fun_info A.FunDeclId.Map.t)
     (fun_id : A.fun_id_or_trait_method_ref) (lid : V.LoopId.id option)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
@@ -1783,8 +1784,8 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
       ^ T.RegionGroupId.to_string rg_id
       ^ "\n- loop_id: "
       ^ Print.option_to_string Pure.LoopId.to_string ctx.loop_id
-      ^ "\n- eval_ctx:\n" ^ IU.eval_ctx_to_string ectx ^ "\n- abs:\n"
-      ^ IU.abs_to_string ectx abs ^ "\n"));
+      ^ "\n- eval_ctx:\n" ^ eval_ctx_to_string ectx ^ "\n- abs:\n"
+      ^ abs_to_string ctx abs ^ "\n"));
 
   (* When we end an input abstraction, this input abstraction gets back
    * the borrows which it introduced in the context through the input
