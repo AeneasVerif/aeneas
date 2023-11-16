@@ -1,9 +1,9 @@
 (executable
- (name driver)
- (public_name aeneas_driver)
+ (name main)
+ (public_name aeneas_main)
  (package aeneas)
  (libraries aeneas)
- (modules Driver))
+ (modules Main))
 
 (library
  (name aeneas) ;; The name as used in the project
