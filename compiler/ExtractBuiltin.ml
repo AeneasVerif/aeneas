@@ -331,8 +331,6 @@ let builtin_fun_effects =
       (* TODO: redundancy with the funs information below *)
       "alloc::vec::{alloc::vec::Vec<@T>}::new";
       "alloc::vec::{alloc::vec::Vec<@T>}::len";
-      "alloc::boxed::{Box<@T>}::deref";
-      "alloc::boxed::{Box<@T>}::deref_mut";
       "core::mem::replace";
       "core::mem::take";
     ]

@@ -1250,6 +1250,7 @@ let filter_if_backward_with_no_outputs (def : fun_decl) : fun_decl option =
     !Config.filter_useless_functions
     && Option.is_some def.back_id
     && def.signature.output = mk_result_ty mk_unit_ty
+    || def.signature.output = mk_unit_ty
   then None
   else Some def
 
@@ -1508,8 +1509,8 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
       let body = Some { body with body = body_exp; inputs_lvs } in
       { def with body }
 
-(** Eliminate the box functions like [Box::new], [Box::deref], etc. Most of them
-    are translated to identity, and [Box::free] is translated to [()].
+(** Eliminate the box functions like [Box::new] (which is translated to the
+    identity) and [Box::free] (which is translated to [()]).
 
     Note that the box types have already been eliminated during the translation
     from symbolic to pure.
@@ -1518,7 +1519,7 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
     function calls, and when translating end abstractions. Here, we can do
     something simpler, in one micro-pass.
  *)
-let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
@@ -1546,53 +1547,6 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     | ArrayRepeat ),
                     _ ) ->
                     super#visit_texpression env e)
-            | Fun (FromLlbc (FunId (FRegular fid), _lp_id, rg_id)) -> (
-                (* TODO: use a more general matching mechanism *)
-                (* Lookup the function name *)
-                let def = FunDeclId.Map.find fid ctx.fun_ctx.fun_decls in
-                (* We first need to check if the name is "alloc::boxed::Box::_" *)
-                match def.name with
-                | [
-                 PeIdent ("alloc", _);
-                 PeIdent ("boxed", _);
-                 PeImpl impl;
-                 PeIdent (fname, _);
-                ] -> (
-                    match impl.ty with
-                    | TAdt
-                        ( TAssumed TBox,
-                          {
-                            regions = [];
-                            types = [ TVar _ ];
-                            const_generics = [];
-                            trait_refs = [];
-                          } ) -> (
-                        match (fname, rg_id) with
-                        | "deref", None ->
-                            (* [Box::deref] forward is the identity *)
-                            let arg, args = Collections.List.pop args in
-                            mk_apps arg args
-                        | "deref", Some _ ->
-                            (* [Box::deref] backward is [()] (doesn't give back anything) *)
-                            assert (args = []);
-                            mk_unit_rvalue
-                        | "deref_mut", None ->
-                            (* [Box::deref_mut] forward is the identity *)
-                            let arg, args = Collections.List.pop args in
-                            mk_apps arg args
-                        | "deref_mut", Some _ ->
-                            (* [Box::deref_mut] back is almost the identity:
-                             * let box_deref_mut (x_init : t) (x_back : t) : t = x_back
-                             * *)
-                            let arg, args =
-                              match args with
-                              | _ :: given_back :: args -> (given_back, args)
-                              | _ -> raise (Failure "Unreachable")
-                            in
-                            mk_apps arg args
-                        | _ -> super#visit_texpression env e)
-                    | _ -> super#visit_texpression env e)
-                | _ -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end
@@ -1966,11 +1920,17 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
    * Note that the calls to those functions should already have been removed,
    * when translating from symbolic to pure. Here, we remove the definitions
    * altogether, because they are now useless *)
-  let def = filter_if_backward_with_no_outputs def in
+  let name = def.name ^ PrintPure.fun_suffix def.loop_id def.back_id in
+  let opt_def = filter_if_backward_with_no_outputs def in
 
-  match def with
-  | None -> None
+  match opt_def with
+  | None ->
+      log#ldebug (lazy ("filtered (backward with no outputs): " ^ name ^ "\n"));
+      None
   | Some def ->
+      log#ldebug
+        (lazy ("not filtered (not backward with no outputs): " ^ name ^ "\n"));
+
       (* Extract the loop definitions by removing the {!Loop} node *)
       let def, loops = decompose_loops def in
 
