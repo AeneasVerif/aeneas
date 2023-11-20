@@ -42,7 +42,7 @@ module Sig = struct
   let tvar_id_0 = TypeVarId.of_int 0
   let tvar_0 : ty = TVar tvar_id_0
   let cgvar_id_0 = ConstGenericVarId.of_int 0
-  let cgvar_0 : const_generic = CGVar cgvar_id_0
+  let cgvar_0 : const_generic = CgVar cgvar_id_0
 
   (** Region 'a of id 0 *)
   let region_param_0 : region_var = { index = rvar_id_0; name = Some "'a" }

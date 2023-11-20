@@ -240,7 +240,7 @@ and value_aggregate =
   | VaSingleValue of typed_value  (** Regular case *)
   | VaArray of typed_value list
       (** This is used when introducing array aggregates *)
-  | VaCGValue of const_generic_var_id
+  | VaCgValue of const_generic_var_id
       (** This is used when evaluating a const generic value: in the interpreter,
           we introduce a fresh symbolic value. *)
   | VaTraitConstValue of trait_ref * generic_args * string

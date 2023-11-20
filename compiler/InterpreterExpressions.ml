@@ -321,7 +321,7 @@ let eval_operand_no_reorganize (config : config) (op : operand)
                    ( ctx0,
                      None,
                      value_as_symbolic v.value,
-                     SymbolicAst.VaCGValue vid,
+                     SymbolicAst.VaCgValue vid,
                      e )))
       | CFnPtr _ -> raise (Failure "TODO"))
   | Copy p ->

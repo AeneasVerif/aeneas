@@ -58,6 +58,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let can_diverge = ref false in
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
+    let name_matcher_ctx : Charon.NameMatcher.ctx =
+      {
+        type_decls = m.type_decls;
+        global_decls = m.global_decls;
+        trait_decls = m.trait_decls;
+      }
+    in
 
     (* We have some specialized knowledge of some library functions; we don't
        have any more custom treatment than this, and these functions can be modeled
@@ -65,8 +72,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
        way. *)
     let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
       let open ExtractBuiltin in
-      let name = name_to_simple_name f.name in
-      SimpleNameMap.find_opt name builtin_fun_effects_map
+      NameMatcherMap.find_opt name_matcher_ctx f.name builtin_fun_effects_map
     in
 
     (* JP: Why not use a reduce visitor here with a tuple of the values to be

@@ -586,84 +586,16 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
      we remove it. We ignore disambiguators (there may be collisions, but we
      check if there are).
   *)
-  let rec name_to_simple_name (name : llbc_name) : string list =
+  let name_to_simple_name (name : llbc_name) : string list =
     (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
     match name with
     | (PeIdent (crate, _) as id) :: name ->
         let name = if crate = crate_name then name else id :: name in
-        let open Types in
-        let name =
-          List.map
-            (function
-              | PeIdent (s, _) -> s
-              | PeImpl impl -> impl_elem_to_simple_name impl)
-            name
-        in
-        name
+        name_to_simple_name ctx name
     | _ ->
         raise
           (Failure
              ("Unexpected name shape: " ^ TranslateCore.name_to_string ctx name))
-  and impl_elem_to_simple_name (impl : Types.impl_elem) : string =
-    (* We do something simple for now.
-       TODO: we might want to do something different for impl elements which are
-       actually trait implementations, in order to prevent name collisions (it
-       is possible to define several times the same trait for the same type,
-       but with different instantiations of the type, or different trait
-       requirements *)
-    ty_to_simple_name impl.generics impl.ty
-  and ty_to_simple_name (generics : Types.generic_params) (ty : Types.ty) :
-      string =
-    (* We do something simple for now.
-       TODO: find a more principled way of converting types to names.
-       In particular, we might want to do something different for impl elements which are
-       actually trait implementations, in order to prevent name collisions (it
-       is possible to define several times the same trait for the same type,
-       but with different instantiations of the type, or different trait
-       requirements *)
-    match ty with
-    | TAdt (id, args) -> (
-        match id with
-        | TAdtId id ->
-            let def = TypeDeclId.Map.find id ctx.type_ctx.type_decls in
-            name_last_elem_as_ident def.name
-        | TTuple ->
-            (* TODO *)
-            "Tuple"
-            ^ String.concat ""
-                (List.map (ty_to_simple_name generics) args.types)
-        | TAssumed id -> (
-            match id with
-            | Types.TBox -> "Box"
-            | Types.TArray -> "Array"
-            | Types.TSlice -> "Slice"
-            | Types.TStr -> "Str"))
-    | TVar vid ->
-        (* Use the variable name *)
-        (List.find (fun (v : type_var) -> v.index = vid) generics.types).name
-    | TLiteral lty ->
-        StringUtils.capitalize_first_letter
-          (Print.Types.literal_type_to_string lty)
-    | TNever -> raise (Failure "Unreachable")
-    | TRef (_, rty, rk) -> (
-        let rty = ty_to_simple_name generics rty in
-        match rk with
-        | RMut -> "MutBorrow" ^ rty
-        | RShared -> "SharedBorrow" ^ rty)
-    | TRawPtr (rty, rk) -> (
-        let rty = ty_to_simple_name generics rty in
-        match rk with RMut -> "MutPtr" ^ rty | RShared -> "ConstPtr" ^ rty)
-    | TTraitType (tr, _, name) ->
-        (* TODO: this is way too simple *)
-        let trait_decl =
-          TraitDeclId.Map.find tr.trait_decl_ref.trait_decl_id
-            ctx.trait_decls_ctx.trait_decls
-        in
-        name_last_elem_as_ident trait_decl.name ^ name
-    | TArrow (inputs, output) ->
-        "Arrow"
-        ^ String.concat ""
-            (List.map (ty_to_simple_name generics) (inputs @ [ output ]))
   in
   let flatten_name (name : string list) : string =
     match !backend with
@@ -747,17 +679,22 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
 
   let trait_impl_name (trait_decl : trait_decl) (trait_impl : trait_impl) :
       string =
-    (* TODO: provisional: we concatenate the trait impl name (which is its type)
-       with the trait decl name *)
-    let trait_decl =
-      let name = trait_decl.llbc_name in
-      let name = get_type_name_no_suffix name ^ "Inst" in
-      (* Remove the occurrences of '.' *)
-      String.concat "" (String.split_on_char '.' name)
-    in
+    (* We derive the trait impl name from the implemented trait.
+       For instance, if this implementation is an instance of `trait::Trait`
+       for `<foo::Foo, u32>`, we generate the name: "trait.TraitFooFooU32Inst".
+       Importantly, it is to be noted that the name is independent of the place
+       where the instance has been defined (it is indepedent of the file, etc.).
+    *)
     let name =
-      flatten_name (get_type_name trait_impl.llbc_name @ [ trait_decl ])
+      (* We need to lookup the LLBC definitions, to have the original instantiation *)
+      let trait_impl =
+        TraitImplId.Map.find trait_impl.def_id ctx.trait_impls_ctx.trait_impls
+      in
+      let params = trait_impl.generics in
+      let args = trait_impl.impl_trait.decl_generics in
+      name_with_generics_to_simple_name ctx trait_decl.llbc_name params args
     in
+    let name = flatten_name name in
     match !backend with
     | FStar -> StringUtils.lowercase_first_letter name
     | Coq | HOL4 | Lean -> name
@@ -1185,11 +1122,11 @@ let extract_arrow (fmt : F.formatter) () : unit =
 let extract_const_generic (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (cg : const_generic) : unit =
   match cg with
-  | CGGlobal id ->
+  | CgGlobal id ->
       let s = ctx_get_global id ctx in
       F.pp_print_string fmt s
-  | CGValue v -> ctx.fmt.extract_literal fmt inside v
-  | CGVar id ->
+  | CgValue v -> ctx.fmt.extract_literal fmt inside v
+  | CgVar id ->
       let s = ctx_get_const_generic_var id ctx in
       F.pp_print_string fmt s
 
@@ -1492,8 +1429,9 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
   (* Lookup the builtin information, if there is *)
   let open ExtractBuiltin in
-  let sname = name_to_simple_name def.llbc_name in
-  let info = SimpleNameMap.find_opt sname (builtin_types_map ()) in
+  let info =
+    match_name_find_opt ctx.trans_ctx def.llbc_name (builtin_types_map ())
+  in
   (* Register the filtering information, if there is *)
   let ctx =
     match info with

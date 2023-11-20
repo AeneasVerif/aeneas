@@ -10,7 +10,7 @@
  (public_name aeneas) ;; The name as revealed to the projects importing this library
  (preprocess
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
- (libraries charon core_unix unionFind ocamlgraph)
+ (libraries charon core_unix unionFind ocamlgraph str)
  (modules
   AssociatedTypes
   Assumed
@@ -24,6 +24,7 @@
   Extract
   ExtractBase
   ExtractBuiltin
+  ExtractName
   ExtractTypes
   FunsAnalysis
   Identifiers

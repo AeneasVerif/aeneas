@@ -29,7 +29,7 @@ let st_substitute_visitor (subst : subst) =
       (* We should never get here because we reimplemented [visit_TypeVar] *)
       raise (Failure "Unexpected")
 
-    method! visit_CGVar _ id = subst.cg_subst id
+    method! visit_CgVar _ id = subst.cg_subst id
 
     method! visit_const_generic_var_id _ _ =
       (* We should never get here because we reimplemented [visit_Var] *)
@@ -71,7 +71,7 @@ let erase_regions_subst : subst =
   {
     r_subst = (fun _ -> RErased);
     ty_subst = (fun vid -> TVar vid);
-    cg_subst = (fun id -> CGVar id);
+    cg_subst = (fun id -> CgVar id);
     tr_subst = (fun id -> Clause id);
     tr_self = Self;
   }

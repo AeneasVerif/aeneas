@@ -27,8 +27,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       let builtin =
         let open ExtractBuiltin in
         let funs_map = builtin_funs_map () in
-        let sname = name_to_simple_name def.fwd.f.llbc_name in
-        SimpleNameMap.find_opt sname funs_map
+        match_name_find_opt ctx.trans_ctx def.fwd.f.llbc_name funs_map
       in
       (* Use the builtin names if necessary *)
       match builtin with
@@ -2024,9 +2023,9 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     (trait_decl : trait_decl) : extraction_ctx =
   (* Lookup the information if this is a builtin trait *)
   let open ExtractBuiltin in
-  let sname = name_to_simple_name trait_decl.llbc_name in
   let builtin_info =
-    SimpleNameMap.find_opt sname (builtin_trait_decls_map ())
+    match_name_find_opt ctx.trans_ctx trait_decl.llbc_name
+      (builtin_trait_decls_map ())
   in
   let ctx =
     let trait_name, trait_constructor =
@@ -2061,9 +2060,14 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   (* Check if the trait implementation is builtin *)
   let builtin_info =
     let open ExtractBuiltin in
-    let type_sname = name_to_simple_name trait_impl.llbc_name in
-    let trait_sname = name_to_simple_name trait_decl.llbc_name in
-    SimpleNamePairMap.find_opt (type_sname, trait_sname)
+    (* Lookup the original Rust impl to retrieve the original trait ref (we
+       use it to derive the name)*)
+    let trait_impl =
+      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
+    in
+    let decl_ref = trait_impl.impl_trait in
+    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.llbc_name
+      decl_ref.decl_generics
       (builtin_trait_impls_map ())
   in
   (* Register some builtin information (if necessary) *)

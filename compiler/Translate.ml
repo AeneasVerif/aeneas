@@ -477,8 +477,7 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     let types_map = builtin_types_map () in
     List.map
       (fun (def : Pure.type_decl) ->
-        let sname = name_to_simple_name def.llbc_name in
-        SimpleNameMap.find_opt sname types_map <> None)
+        match_name_find_opt ctx.trans_ctx def.llbc_name types_map <> None)
       defs
   in
 
@@ -545,9 +544,9 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   (* Check if it is a builtin global - if yes, we ignore it because we
      map the definition to one in the standard library *)
   let open ExtractBuiltin in
-  let sname = name_to_simple_name global.name in
   let extract =
-    extract && SimpleNameMap.find_opt sname builtin_globals_map = None
+    extract
+    && match_name_find_opt ctx.trans_ctx global.name builtin_globals_map = None
   in
   if extract then
     (* We don't wrap global declaration groups between calls to functions
@@ -661,8 +660,7 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     let funs_map = builtin_funs_map () in
     List.map
       (fun (trans : pure_fun_translation) ->
-        let sname = name_to_simple_name trans.fwd.f.llbc_name in
-        SimpleNameMap.find_opt sname funs_map <> None)
+        match_name_find_opt ctx.trans_ctx trans.fwd.f.llbc_name funs_map <> None)
       pure_ls
   in
 
@@ -755,8 +753,11 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
   let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls in
   (* Check if the trait declaration is builtin, in which case we ignore it *)
   let open ExtractBuiltin in
-  let sname = name_to_simple_name trait_decl.llbc_name in
-  if SimpleNameMap.find_opt sname (builtin_trait_decls_map ()) = None then (
+  if
+    match_name_find_opt ctx.trans_ctx trait_decl.llbc_name
+      (builtin_trait_decls_map ())
+    = None
+  then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
     if extract_decl then Extract.extract_trait_decl ctx fmt trait_decl;
     if extract_extra_info then
@@ -775,9 +776,11 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
   (* Check if the trait implementation is builtin *)
   let builtin_info =
     let open ExtractBuiltin in
-    let type_sname = name_to_simple_name trait_impl.llbc_name in
-    let trait_sname = name_to_simple_name trait_decl.llbc_name in
-    SimpleNamePairMap.find_opt (type_sname, trait_sname)
+    let trait_impl =
+      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
+    in
+    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.llbc_name
+      trait_impl.impl_trait.decl_generics
       (builtin_trait_impls_map ())
   in
   match builtin_info with

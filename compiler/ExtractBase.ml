@@ -1085,8 +1085,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   (* Check if the global corresponds to an assumed global that we should map
      to a custom definition in our standard library (for instance, happens
      with "core::num::usize::MAX") *)
-  let sname = name_to_simple_name def.name in
-  match SimpleNameMap.find_opt sname builtin_globals_map with
+  match match_name_find_opt ctx.trans_ctx def.name builtin_globals_map with
   | Some name ->
       (* Yes: register the custom binding *)
       ctx_add decl name ctx

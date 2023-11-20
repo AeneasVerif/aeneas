@@ -31,21 +31,26 @@ let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
 let crate_get_opaque_non_builtin_decls (k : crate) (filter_assumed : bool) :
     type_decl list * fun_decl list =
   let open ExtractBuiltin in
+  let ctx : Charon.NameMatcher.ctx =
+    {
+      type_decls = k.type_decls;
+      global_decls = k.global_decls;
+      trait_decls = k.trait_decls;
+    }
+  in
   let is_opaque_fun (d : fun_decl) : bool =
-    let sname = name_to_simple_name d.name in
     d.body = None
     (* Something to pay attention to: we must ignore trait method *declarations*
        (which don't have a body but must not be considered as opaque) *)
     && (match d.kind with TraitMethodDecl _ -> false | _ -> true)
     && ((not filter_assumed)
-       || (not (SimpleNameMap.mem sname builtin_globals_map))
-          && not (SimpleNameMap.mem sname (builtin_funs_map ())))
+       || (not (NameMatcherMap.mem ctx d.name builtin_globals_map))
+          && not (NameMatcherMap.mem ctx d.name (builtin_funs_map ())))
   in
   let is_opaque_type (d : type_decl) : bool =
-    let sname = name_to_simple_name d.name in
     d.kind = Opaque
     && ((not filter_assumed)
-       || not (SimpleNameMap.mem sname (builtin_types_map ())))
+       || not (NameMatcherMap.mem ctx d.name (builtin_types_map ())))
   in
   (* Note that by checking the function bodies we also the globals *)
   ( List.filter is_opaque_type (TypeDeclId.Map.values k.type_decls),

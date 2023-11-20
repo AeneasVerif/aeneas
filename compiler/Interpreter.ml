@@ -80,7 +80,7 @@ let symbolic_instantiate_fun_sig (ctx : eval_ctx) (sg : fun_sig)
     let regions = List.map (fun _ -> RErased) regions in
     let types = List.map (fun (v : type_var) -> TVar v.index) types in
     let const_generics =
-      List.map (fun (v : const_generic_var) -> CGVar v.index) const_generics
+      List.map (fun (v : const_generic_var) -> CgVar v.index) const_generics
     in
     (* Annoying that we have to generate this substitution here *)
     let r_subst _ = raise (Failure "Unexpected region") in

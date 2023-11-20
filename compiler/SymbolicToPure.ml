@@ -2475,7 +2475,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
           { struct_id = TAssumed TArray; init = None; updates = values }
         in
         { e = StructUpdate su; ty = var.ty }
-    | VaCGValue cg_id -> { e = CVar cg_id; ty = var.ty }
+    | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
     | VaTraitConstValue (trait_ref, generics, const_name) ->
         let type_infos = ctx.type_context.type_infos in
         let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
@@ -2726,7 +2726,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       let types = List.map (fun (ty : T.type_var) -> TVar ty.T.index) types in
       let const_generics =
         List.map
-          (fun (cg : T.const_generic_var) -> T.CGVar cg.T.index)
+          (fun (cg : T.const_generic_var) -> T.CgVar cg.T.index)
           const_generics
       in
       let trait_refs =
