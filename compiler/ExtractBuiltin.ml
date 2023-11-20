@@ -8,6 +8,8 @@ open Config
 open Charon.NameMatcher (* TODO: include? *)
 include ExtractName (* TODO: only open? *)
 
+let log = Logging.builtin_log
+
 (** Small utility to memoize some computations *)
 let mk_memoized (f : unit -> 'a) : unit -> 'a =
   let r = ref None in
@@ -492,9 +494,9 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
   in
   [
     (* core::ops::Deref<alloc::boxed::Box<T>> *)
-    fmt "core::ops::Deref<Box<@T>>" ();
-    (* core::ops::Deref<alloc::boxed::Box<T>> *)
-    fmt "core::ops::Deref<Box<@T>>" ();
+    fmt "core::ops::deref::Deref<Box<@T>>" ();
+    (* core::ops::DerefMut<alloc::boxed::Box<T>> *)
+    fmt "core::ops::deref::DerefMut<Box<@T>>" ();
     (* core::ops::index::Index<[T], I> *)
     fmt "core::ops::index::Index<[@T], @I>" ();
     (* core::ops::index::IndexMut<[T], I> *)

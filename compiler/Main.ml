@@ -38,6 +38,7 @@ let _ =
   symbolic_to_pure_log#set_level EL.Info;
   pure_micro_passes_log#set_level EL.Info;
   extract_log#set_level EL.Info;
+  builtin_log#set_level EL.Info;
   translate_log#set_level EL.Info;
   scc_log#set_level EL.Info;
   reorder_decls_log#set_level EL.Info
