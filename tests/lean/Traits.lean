@@ -170,7 +170,7 @@ def h3
 /- Trait declaration: [traits::OfTypeBis]
    Source: 'src/traits.rs', lines 109:0-109:36 -/
 structure OfTypeBis (Self T : Type) where
-  parent_clause_0 : ToType T Self
+  ToTypeTSelfInst : ToType T Self
   of_type : T → Result Self
 
 /- [traits::h4]: forward function
@@ -327,20 +327,22 @@ structure ParentTrait1 (Self : Type) where
 /- Trait declaration: [traits::ChildTrait]
    Source: 'src/traits.rs', lines 206:0-206:49 -/
 structure ChildTrait (Self : Type) where
-  parent_clause_0 : ParentTrait0 Self
-  parent_clause_1 : ParentTrait1 Self
+  ParentTrait0SelfInst : ParentTrait0 Self
+  ParentTrait1SelfInst : ParentTrait1 Self
 
 /- [traits::test_child_trait1]: forward function
    Source: 'src/traits.rs', lines 209:0-209:56 -/
 def test_child_trait1
   (T : Type) (inst : ChildTrait T) (x : T) : Result alloc.string.String :=
-  inst.parent_clause_0.get_name x
+  inst.ParentTrait0SelfInst.get_name x
 
 /- [traits::test_child_trait2]: forward function
    Source: 'src/traits.rs', lines 213:0-213:54 -/
 def test_child_trait2
-  (T : Type) (inst : ChildTrait T) (x : T) : Result inst.parent_clause_0.W :=
-  inst.parent_clause_0.get_w x
+  (T : Type) (inst : ChildTrait T) (x : T) :
+  Result inst.ParentTrait0SelfInst.W
+  :=
+  inst.ParentTrait0SelfInst.get_w x
 
 /- [traits::order1]: forward function
    Source: 'src/traits.rs', lines 219:0-219:59 -/
@@ -353,7 +355,7 @@ def order1
 /- Trait declaration: [traits::ChildTrait1]
    Source: 'src/traits.rs', lines 222:0-222:35 -/
 structure ChildTrait1 (Self : Type) where
-  parent_clause_0 : ParentTrait1 Self
+  ParentTrait1SelfInst : ParentTrait1 Self
 
 /- Trait implementation: [traits::{usize#9}]
    Source: 'src/traits.rs', lines 224:0-224:27 -/
@@ -363,7 +365,7 @@ def traits.ParentTrait1UsizeInst : ParentTrait1 Usize := {
 /- Trait implementation: [traits::{usize#10}]
    Source: 'src/traits.rs', lines 225:0-225:26 -/
 def traits.ChildTrait1UsizeInst : ChildTrait1 Usize := {
-  parent_clause_0 := traits.ParentTrait1UsizeInst
+  ParentTrait1SelfInst := traits.ParentTrait1UsizeInst
 }
 
 /- Trait declaration: [traits::Iterator]
@@ -387,7 +389,7 @@ structure FromResidual (Self T : Type) where
    Source: 'src/traits.rs', lines 246:0-246:48 -/
 structure Try (Self : Type) where
   Residual : Type
-  parent_clause_0 : FromResidual Self Residual
+  FromResidualSelftraitsTrySelfResidualInst : FromResidual Self Residual
 
 /- Trait declaration: [traits::WithTarget]
    Source: 'src/traits.rs', lines 252:0-252:20 -/
@@ -403,8 +405,9 @@ structure ParentTrait2 (Self : Type) where
 /- Trait declaration: [traits::ChildTrait2]
    Source: 'src/traits.rs', lines 260:0-260:35 -/
 structure ChildTrait2 (Self : Type) where
-  parent_clause_0 : ParentTrait2 Self
-  convert : parent_clause_0.U → Result parent_clause_0.U_clause_0.Target
+  ParentTrait2SelfInst : ParentTrait2 Self
+  convert : ParentTrait2SelfInst.U → Result
+    ParentTrait2SelfInst.U_clause_0.Target
 
 /- Trait implementation: [traits::{u32#11}]
    Source: 'src/traits.rs', lines 264:0-264:23 -/
@@ -427,7 +430,7 @@ def U32.convert (x : U32) : Result U32 :=
 /- Trait implementation: [traits::{u32#13}]
    Source: 'src/traits.rs', lines 272:0-272:24 -/
 def traits.ChildTrait2U32Inst : ChildTrait2 U32 := {
-  parent_clause_0 := traits.ParentTrait2U32Inst
+  ParentTrait2SelfInst := traits.ParentTrait2U32Inst
   convert := U32.convert
 }
 
@@ -440,15 +443,16 @@ structure CFnOnce (Self Args : Type) where
 /- Trait declaration: [traits::CFnMut]
    Source: 'src/traits.rs', lines 292:0-292:37 -/
 structure CFnMut (Self Args : Type) where
-  parent_clause_0 : CFnOnce Self Args
-  call_mut : Self → Args → Result parent_clause_0.Output
-  call_mut_back : Self → Args → parent_clause_0.Output → Result Self
+  CFnOnceSelfArgsInst : CFnOnce Self Args
+  call_mut : Self → Args → Result CFnOnceSelfArgsInst.Output
+  call_mut_back : Self → Args → CFnOnceSelfArgsInst.Output → Result Self
 
 /- Trait declaration: [traits::CFn]
    Source: 'src/traits.rs', lines 296:0-296:33 -/
 structure CFn (Self Args : Type) where
-  parent_clause_0 : CFnMut Self Args
-  call_mut : Self → Args → Result parent_clause_0.parent_clause_0.Output
+  CFnMutSelfArgsInst : CFnMut Self Args
+  call_mut : Self → Args → Result
+    CFnMutSelfArgsInst.CFnOnceSelfArgsInst.Output
 
 /- [traits::incr_u32]: forward function
    Source: 'src/traits.rs', lines 300:0-300:30 -/

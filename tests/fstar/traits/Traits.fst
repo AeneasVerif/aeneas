@@ -157,7 +157,7 @@ let h3
 (** Trait declaration: [traits::OfTypeBis]
     Source: 'src/traits.rs', lines 109:0-109:36 *)
 noeq type ofTypeBis_t (self t : Type0) = {
-  parent_clause_0 : toType_t t self;
+  toTypeTSelfInst : toType_t t self;
   of_type : t -> result self;
 }
 
@@ -311,23 +311,23 @@ type parentTrait1_t (self : Type0) = unit
 (** Trait declaration: [traits::ChildTrait]
     Source: 'src/traits.rs', lines 206:0-206:49 *)
 noeq type childTrait_t (self : Type0) = {
-  parent_clause_0 : parentTrait0_t self;
-  parent_clause_1 : parentTrait1_t self;
+  parentTrait0SelfInst : parentTrait0_t self;
+  parentTrait1SelfInst : parentTrait1_t self;
 }
 
 (** [traits::test_child_trait1]: forward function
     Source: 'src/traits.rs', lines 209:0-209:56 *)
 let test_child_trait1
   (t : Type0) (inst : childTrait_t t) (x : t) : result alloc_string_String_t =
-  inst.parent_clause_0.get_name x
+  inst.parentTrait0SelfInst.get_name x
 
 (** [traits::test_child_trait2]: forward function
     Source: 'src/traits.rs', lines 213:0-213:54 *)
 let test_child_trait2
   (t : Type0) (inst : childTrait_t t) (x : t) :
-  result inst.parent_clause_0.tW
+  result inst.parentTrait0SelfInst.tW
   =
-  inst.parent_clause_0.get_w x
+  inst.parentTrait0SelfInst.get_w x
 
 (** [traits::order1]: forward function
     Source: 'src/traits.rs', lines 219:0-219:59 *)
@@ -340,7 +340,7 @@ let order1
 (** Trait declaration: [traits::ChildTrait1]
     Source: 'src/traits.rs', lines 222:0-222:35 *)
 noeq type childTrait1_t (self : Type0) = {
-  parent_clause_0 : parentTrait1_t self;
+  parentTrait1SelfInst : parentTrait1_t self;
 }
 
 (** Trait implementation: [traits::{usize#9}]
@@ -350,7 +350,7 @@ let traits_ParentTrait1UsizeInst : parentTrait1_t usize = ()
 (** Trait implementation: [traits::{usize#10}]
     Source: 'src/traits.rs', lines 225:0-225:26 *)
 let traits_ChildTrait1UsizeInst : childTrait1_t usize = {
-  parent_clause_0 = traits_ParentTrait1UsizeInst;
+  parentTrait1SelfInst = traits_ParentTrait1UsizeInst;
 }
 
 (** Trait declaration: [traits::Iterator]
@@ -374,7 +374,7 @@ type fromResidual_t (self t : Type0) = unit
     Source: 'src/traits.rs', lines 246:0-246:48 *)
 noeq type try_t (self : Type0) = {
   tResidual : Type0;
-  parent_clause_0 : fromResidual_t self tResidual;
+  fromResidualSelftraitsTrySelfResidualInst : fromResidual_t self tResidual;
 }
 
 (** Trait declaration: [traits::WithTarget]
@@ -391,8 +391,9 @@ noeq type parentTrait2_t (self : Type0) = {
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'src/traits.rs', lines 260:0-260:35 *)
 noeq type childTrait2_t (self : Type0) = {
-  parent_clause_0 : parentTrait2_t self;
-  convert : parent_clause_0.tU -> result parent_clause_0.tU_clause_0.tTarget;
+  parentTrait2SelfInst : parentTrait2_t self;
+  convert : parentTrait2SelfInst.tU -> result
+    parentTrait2SelfInst.tU_clause_0.tTarget;
 }
 
 (** Trait implementation: [traits::{u32#11}]
@@ -414,7 +415,7 @@ let u32_convert (x : u32) : result u32 =
 (** Trait implementation: [traits::{u32#13}]
     Source: 'src/traits.rs', lines 272:0-272:24 *)
 let traits_ChildTrait2U32Inst : childTrait2_t u32 = {
-  parent_clause_0 = traits_ParentTrait2U32Inst;
+  parentTrait2SelfInst = traits_ParentTrait2U32Inst;
   convert = u32_convert;
 }
 
@@ -428,16 +429,17 @@ noeq type cFnOnce_t (self args : Type0) = {
 (** Trait declaration: [traits::CFnMut]
     Source: 'src/traits.rs', lines 292:0-292:37 *)
 noeq type cFnMut_t (self args : Type0) = {
-  parent_clause_0 : cFnOnce_t self args;
-  call_mut : self -> args -> result parent_clause_0.tOutput;
-  call_mut_back : self -> args -> parent_clause_0.tOutput -> result self;
+  cFnOnceSelfArgsInst : cFnOnce_t self args;
+  call_mut : self -> args -> result cFnOnceSelfArgsInst.tOutput;
+  call_mut_back : self -> args -> cFnOnceSelfArgsInst.tOutput -> result self;
 }
 
 (** Trait declaration: [traits::CFn]
     Source: 'src/traits.rs', lines 296:0-296:33 *)
 noeq type cFn_t (self args : Type0) = {
-  parent_clause_0 : cFnMut_t self args;
-  call_mut : self -> args -> result parent_clause_0.parent_clause_0.tOutput;
+  cFnMutSelfArgsInst : cFnMut_t self args;
+  call_mut : self -> args -> result
+    cFnMutSelfArgsInst.cFnOnceSelfArgsInst.tOutput;
 }
 
 (** [traits::incr_u32]: forward function
