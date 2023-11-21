@@ -151,8 +151,9 @@ Check (test_list1 )%return.
 
 (** [no_nested_borrows::test_box1]: forward function *)
 Definition test_box1 : result unit :=
-  let b := 1%i32 in
-  let x := b in
+  let b := 0%i32 in
+  b0 <- alloc_boxed_Box_deref_mut_back i32 b 1%i32;
+  x <- alloc_boxed_Box_deref i32 b0;
   if negb (x s= 1%i32) then Fail_ Failure else Return tt
 .
 

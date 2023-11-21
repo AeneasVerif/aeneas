@@ -16,7 +16,7 @@ Module HashmapMain_Funs.
 Definition hashmap_hash_key (k : usize) : result usize :=
   Return k.
 
-(** [hashmap_main::hashmap::HashMap::{0}::allocate_slots]: loop 0: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::allocate_slots]: loop 0: forward function *)
 Fixpoint hashmap_HashMap_allocate_slots_loop
   (T : Type) (n : nat) (slots : alloc_vec_Vec (hashmap_List_t T)) (n0 : usize)
   :
@@ -34,7 +34,7 @@ Fixpoint hashmap_HashMap_allocate_slots_loop
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::allocate_slots]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::allocate_slots]: forward function *)
 Definition hashmap_HashMap_allocate_slots
   (T : Type) (n : nat) (slots : alloc_vec_Vec (hashmap_List_t T)) (n0 : usize)
   :
@@ -43,7 +43,7 @@ Definition hashmap_HashMap_allocate_slots
   hashmap_HashMap_allocate_slots_loop T n slots n0
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::new_with_capacity]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::new_with_capacity]: forward function *)
 Definition hashmap_HashMap_new_with_capacity
   (T : Type) (n : nat) (capacity : usize) (max_load_dividend : usize)
   (max_load_divisor : usize) :
@@ -62,13 +62,13 @@ Definition hashmap_HashMap_new_with_capacity
     |}
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::new]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::new]: forward function *)
 Definition hashmap_HashMap_new
   (T : Type) (n : nat) : result (hashmap_HashMap_t T) :=
   hashmap_HashMap_new_with_capacity T n 32%usize 4%usize 5%usize
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::clear]: loop 0: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::clear]: loop 0: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Fixpoint hashmap_HashMap_clear_loop
   (T : Type) (n : nat) (slots : alloc_vec_Vec (hashmap_List_t T)) (i : usize) :
@@ -83,14 +83,14 @@ Fixpoint hashmap_HashMap_clear_loop
       i1 <- usize_add i 1%usize;
       slots0 <-
         alloc_vec_Vec_index_mut_back (hashmap_List_t T) usize
-          (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t
-          T)) slots i Hashmap_List_Nil;
+          (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T)) slots
+          i Hashmap_List_Nil;
       hashmap_HashMap_clear_loop T n0 slots0 i1)
     else Return slots
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::clear]: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::clear]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Definition hashmap_HashMap_clear
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) :
@@ -106,13 +106,13 @@ Definition hashmap_HashMap_clear
     |}
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::len]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::len]: forward function *)
 Definition hashmap_HashMap_len
   (T : Type) (self : hashmap_HashMap_t T) : result usize :=
   Return self.(hashmap_HashMap_num_entries)
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::insert_in_list]: loop 0: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]: loop 0: forward function *)
 Fixpoint hashmap_HashMap_insert_in_list_loop
   (T : Type) (n : nat) (key : usize) (value : T) (ls : hashmap_List_t T) :
   result bool
@@ -130,7 +130,7 @@ Fixpoint hashmap_HashMap_insert_in_list_loop
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::insert_in_list]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]: forward function *)
 Definition hashmap_HashMap_insert_in_list
   (T : Type) (n : nat) (key : usize) (value : T) (ls : hashmap_List_t T) :
   result bool
@@ -138,7 +138,7 @@ Definition hashmap_HashMap_insert_in_list
   hashmap_HashMap_insert_in_list_loop T n key value ls
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::insert_in_list]: loop 0: backward function 0 *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]: loop 0: backward function 0 *)
 Fixpoint hashmap_HashMap_insert_in_list_loop_back
   (T : Type) (n : nat) (key : usize) (value : T) (ls : hashmap_List_t T) :
   result (hashmap_List_t T)
@@ -159,7 +159,7 @@ Fixpoint hashmap_HashMap_insert_in_list_loop_back
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::insert_in_list]: backward function 0 *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]: backward function 0 *)
 Definition hashmap_HashMap_insert_in_list_back
   (T : Type) (n : nat) (key : usize) (value : T) (ls : hashmap_List_t T) :
   result (hashmap_List_t T)
@@ -167,7 +167,7 @@ Definition hashmap_HashMap_insert_in_list_back
   hashmap_HashMap_insert_in_list_loop_back T n key value ls
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::insert_no_resize]: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_no_resize]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Definition hashmap_HashMap_insert_no_resize
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) (value : T) :
@@ -178,7 +178,7 @@ Definition hashmap_HashMap_insert_no_resize
   hash_mod <- usize_rem hash i;
   l <-
     alloc_vec_Vec_index_mut (hashmap_List_t T) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t T))
+      (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
       self.(hashmap_HashMap_slots) hash_mod;
   inserted <- hashmap_HashMap_insert_in_list T n key value l;
   if inserted
@@ -187,8 +187,8 @@ Definition hashmap_HashMap_insert_no_resize
     l0 <- hashmap_HashMap_insert_in_list_back T n key value l;
     v <-
       alloc_vec_Vec_index_mut_back (hashmap_List_t T) usize
-        (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t
-        T)) self.(hashmap_HashMap_slots) hash_mod l0;
+        (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
+        self.(hashmap_HashMap_slots) hash_mod l0;
     Return
       {|
         hashmap_HashMap_num_entries := i0;
@@ -201,8 +201,8 @@ Definition hashmap_HashMap_insert_no_resize
     l0 <- hashmap_HashMap_insert_in_list_back T n key value l;
     v <-
       alloc_vec_Vec_index_mut_back (hashmap_List_t T) usize
-        (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t
-        T)) self.(hashmap_HashMap_slots) hash_mod l0;
+        (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
+        self.(hashmap_HashMap_slots) hash_mod l0;
     Return
       {|
         hashmap_HashMap_num_entries := self.(hashmap_HashMap_num_entries);
@@ -213,7 +213,7 @@ Definition hashmap_HashMap_insert_no_resize
       |})
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements_from_list]: loop 0: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Fixpoint hashmap_HashMap_move_elements_from_list_loop
   (T : Type) (n : nat) (ntable : hashmap_HashMap_t T) (ls : hashmap_List_t T) :
@@ -231,7 +231,7 @@ Fixpoint hashmap_HashMap_move_elements_from_list_loop
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::move_elements_from_list]: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements_from_list]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Definition hashmap_HashMap_move_elements_from_list
   (T : Type) (n : nat) (ntable : hashmap_HashMap_t T) (ls : hashmap_List_t T) :
@@ -240,7 +240,7 @@ Definition hashmap_HashMap_move_elements_from_list
   hashmap_HashMap_move_elements_from_list_loop T n ntable ls
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::move_elements]: loop 0: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements]: loop 0: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Fixpoint hashmap_HashMap_move_elements_loop
   (T : Type) (n : nat) (ntable : hashmap_HashMap_t T)
@@ -255,22 +255,22 @@ Fixpoint hashmap_HashMap_move_elements_loop
     then (
       l <-
         alloc_vec_Vec_index_mut (hashmap_List_t T) usize
-          (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t
-          T)) slots i;
+          (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T)) slots
+          i;
       let ls := core_mem_replace (hashmap_List_t T) l Hashmap_List_Nil in
       ntable0 <- hashmap_HashMap_move_elements_from_list T n0 ntable ls;
       i1 <- usize_add i 1%usize;
       let l0 := core_mem_replace_back (hashmap_List_t T) l Hashmap_List_Nil in
       slots0 <-
         alloc_vec_Vec_index_mut_back (hashmap_List_t T) usize
-          (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t
-          T)) slots i l0;
+          (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T)) slots
+          i l0;
       hashmap_HashMap_move_elements_loop T n0 ntable0 slots0 i1)
     else Return (ntable, slots)
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::move_elements]: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Definition hashmap_HashMap_move_elements
   (T : Type) (n : nat) (ntable : hashmap_HashMap_t T)
@@ -280,7 +280,7 @@ Definition hashmap_HashMap_move_elements
   hashmap_HashMap_move_elements_loop T n ntable slots i
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::try_resize]: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::try_resize]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Definition hashmap_HashMap_try_resize
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) :
@@ -317,7 +317,7 @@ Definition hashmap_HashMap_try_resize
       |}
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::insert]: merged forward/backward function
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert]: merged forward/backward function
     (there is a single backward function, and the forward function returns ()) *)
 Definition hashmap_HashMap_insert
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) (value : T) :
@@ -330,7 +330,7 @@ Definition hashmap_HashMap_insert
   else Return self0
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::contains_key_in_list]: loop 0: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key_in_list]: loop 0: forward function *)
 Fixpoint hashmap_HashMap_contains_key_in_list_loop
   (T : Type) (n : nat) (key : usize) (ls : hashmap_List_t T) : result bool :=
   match n with
@@ -346,13 +346,13 @@ Fixpoint hashmap_HashMap_contains_key_in_list_loop
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::contains_key_in_list]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key_in_list]: forward function *)
 Definition hashmap_HashMap_contains_key_in_list
   (T : Type) (n : nat) (key : usize) (ls : hashmap_List_t T) : result bool :=
   hashmap_HashMap_contains_key_in_list_loop T n key ls
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::contains_key]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key]: forward function *)
 Definition hashmap_HashMap_contains_key
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) :
   result bool
@@ -362,12 +362,12 @@ Definition hashmap_HashMap_contains_key
   hash_mod <- usize_rem hash i;
   l <-
     alloc_vec_Vec_index (hashmap_List_t T) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t T))
+      (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
       self.(hashmap_HashMap_slots) hash_mod;
   hashmap_HashMap_contains_key_in_list T n key l
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get_in_list]: loop 0: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_in_list]: loop 0: forward function *)
 Fixpoint hashmap_HashMap_get_in_list_loop
   (T : Type) (n : nat) (key : usize) (ls : hashmap_List_t T) : result T :=
   match n with
@@ -383,13 +383,13 @@ Fixpoint hashmap_HashMap_get_in_list_loop
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get_in_list]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_in_list]: forward function *)
 Definition hashmap_HashMap_get_in_list
   (T : Type) (n : nat) (key : usize) (ls : hashmap_List_t T) : result T :=
   hashmap_HashMap_get_in_list_loop T n key ls
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get]: forward function *)
 Definition hashmap_HashMap_get
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) : result T :=
   hash <- hashmap_hash_key key;
@@ -397,12 +397,12 @@ Definition hashmap_HashMap_get
   hash_mod <- usize_rem hash i;
   l <-
     alloc_vec_Vec_index (hashmap_List_t T) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t T))
+      (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
       self.(hashmap_HashMap_slots) hash_mod;
   hashmap_HashMap_get_in_list T n key l
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list]: loop 0: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]: loop 0: forward function *)
 Fixpoint hashmap_HashMap_get_mut_in_list_loop
   (T : Type) (n : nat) (ls : hashmap_List_t T) (key : usize) : result T :=
   match n with
@@ -418,13 +418,13 @@ Fixpoint hashmap_HashMap_get_mut_in_list_loop
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]: forward function *)
 Definition hashmap_HashMap_get_mut_in_list
   (T : Type) (n : nat) (ls : hashmap_List_t T) (key : usize) : result T :=
   hashmap_HashMap_get_mut_in_list_loop T n ls key
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list]: loop 0: backward function 0 *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]: loop 0: backward function 0 *)
 Fixpoint hashmap_HashMap_get_mut_in_list_loop_back
   (T : Type) (n : nat) (ls : hashmap_List_t T) (key : usize) (ret : T) :
   result (hashmap_List_t T)
@@ -444,7 +444,7 @@ Fixpoint hashmap_HashMap_get_mut_in_list_loop_back
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list]: backward function 0 *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]: backward function 0 *)
 Definition hashmap_HashMap_get_mut_in_list_back
   (T : Type) (n : nat) (ls : hashmap_List_t T) (key : usize) (ret : T) :
   result (hashmap_List_t T)
@@ -452,7 +452,7 @@ Definition hashmap_HashMap_get_mut_in_list_back
   hashmap_HashMap_get_mut_in_list_loop_back T n ls key ret
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get_mut]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]: forward function *)
 Definition hashmap_HashMap_get_mut
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) : result T :=
   hash <- hashmap_hash_key key;
@@ -460,12 +460,12 @@ Definition hashmap_HashMap_get_mut
   hash_mod <- usize_rem hash i;
   l <-
     alloc_vec_Vec_index_mut (hashmap_List_t T) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t T))
+      (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
       self.(hashmap_HashMap_slots) hash_mod;
   hashmap_HashMap_get_mut_in_list T n l key
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::get_mut]: backward function 0 *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]: backward function 0 *)
 Definition hashmap_HashMap_get_mut_back
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) (ret : T) :
   result (hashmap_HashMap_t T)
@@ -475,12 +475,12 @@ Definition hashmap_HashMap_get_mut_back
   hash_mod <- usize_rem hash i;
   l <-
     alloc_vec_Vec_index_mut (hashmap_List_t T) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t T))
+      (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
       self.(hashmap_HashMap_slots) hash_mod;
   l0 <- hashmap_HashMap_get_mut_in_list_back T n l key ret;
   v <-
     alloc_vec_Vec_index_mut_back (hashmap_List_t T) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t T))
+      (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
       self.(hashmap_HashMap_slots) hash_mod l0;
   Return
     {|
@@ -491,7 +491,7 @@ Definition hashmap_HashMap_get_mut_back
     |}
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::remove_from_list]: loop 0: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]: loop 0: forward function *)
 Fixpoint hashmap_HashMap_remove_from_list_loop
   (T : Type) (n : nat) (key : usize) (ls : hashmap_List_t T) :
   result (option T)
@@ -516,7 +516,7 @@ Fixpoint hashmap_HashMap_remove_from_list_loop
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::remove_from_list]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]: forward function *)
 Definition hashmap_HashMap_remove_from_list
   (T : Type) (n : nat) (key : usize) (ls : hashmap_List_t T) :
   result (option T)
@@ -524,7 +524,7 @@ Definition hashmap_HashMap_remove_from_list
   hashmap_HashMap_remove_from_list_loop T n key ls
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::remove_from_list]: loop 0: backward function 1 *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]: loop 0: backward function 1 *)
 Fixpoint hashmap_HashMap_remove_from_list_loop_back
   (T : Type) (n : nat) (key : usize) (ls : hashmap_List_t T) :
   result (hashmap_List_t T)
@@ -551,7 +551,7 @@ Fixpoint hashmap_HashMap_remove_from_list_loop_back
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::remove_from_list]: backward function 1 *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]: backward function 1 *)
 Definition hashmap_HashMap_remove_from_list_back
   (T : Type) (n : nat) (key : usize) (ls : hashmap_List_t T) :
   result (hashmap_List_t T)
@@ -559,7 +559,7 @@ Definition hashmap_HashMap_remove_from_list_back
   hashmap_HashMap_remove_from_list_loop_back T n key ls
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::remove]: forward function *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove]: forward function *)
 Definition hashmap_HashMap_remove
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) :
   result (option T)
@@ -569,7 +569,7 @@ Definition hashmap_HashMap_remove
   hash_mod <- usize_rem hash i;
   l <-
     alloc_vec_Vec_index_mut (hashmap_List_t T) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t T))
+      (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
       self.(hashmap_HashMap_slots) hash_mod;
   x <- hashmap_HashMap_remove_from_list T n key l;
   match x with
@@ -579,7 +579,7 @@ Definition hashmap_HashMap_remove
   end
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::remove]: backward function 0 *)
+(** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove]: backward function 0 *)
 Definition hashmap_HashMap_remove_back
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) :
   result (hashmap_HashMap_t T)
@@ -589,7 +589,7 @@ Definition hashmap_HashMap_remove_back
   hash_mod <- usize_rem hash i;
   l <-
     alloc_vec_Vec_index_mut (hashmap_List_t T) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t T))
+      (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
       self.(hashmap_HashMap_slots) hash_mod;
   x <- hashmap_HashMap_remove_from_list T n key l;
   match x with
@@ -597,8 +597,8 @@ Definition hashmap_HashMap_remove_back
     l0 <- hashmap_HashMap_remove_from_list_back T n key l;
     v <-
       alloc_vec_Vec_index_mut_back (hashmap_List_t T) usize
-        (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t
-        T)) self.(hashmap_HashMap_slots) hash_mod l0;
+        (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
+        self.(hashmap_HashMap_slots) hash_mod l0;
     Return
       {|
         hashmap_HashMap_num_entries := self.(hashmap_HashMap_num_entries);
@@ -612,8 +612,8 @@ Definition hashmap_HashMap_remove_back
     l0 <- hashmap_HashMap_remove_from_list_back T n key l;
     v <-
       alloc_vec_Vec_index_mut_back (hashmap_List_t T) usize
-        (core_slice_index_usize_coresliceindexSliceIndexInst (hashmap_List_t
-        T)) self.(hashmap_HashMap_slots) hash_mod l0;
+        (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t T))
+        self.(hashmap_HashMap_slots) hash_mod l0;
     Return
       {|
         hashmap_HashMap_num_entries := i0;

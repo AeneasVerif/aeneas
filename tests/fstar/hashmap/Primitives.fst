@@ -351,14 +351,14 @@ let alloc_boxed_Box_deref_mut (t : Type0) (x : t) : result t = Return x
 let alloc_boxed_Box_deref_mut_back (t : Type) (_ : t) (x : t) : result t = Return x
 
 // Trait instance
-let alloc_boxed_Box_coreOpsDerefInst (self : Type0) : core_ops_deref_Deref self = {
+let alloc_boxed_Box_coreopsDerefInst (self : Type0) : core_ops_deref_Deref self = {
   target = self;
   deref = alloc_boxed_Box_deref self;
 }
 
 // Trait instance
-let alloc_boxed_Box_coreOpsDerefMutInst (self : Type0) : core_ops_deref_DerefMut self = {
-  derefInst = alloc_boxed_Box_coreOpsDerefInst self;
+let alloc_boxed_Box_coreopsDerefMutInst (self : Type0) : core_ops_deref_DerefMut self = {
+  derefInst = alloc_boxed_Box_coreopsDerefInst self;
   deref_mut = alloc_boxed_Box_deref_mut self;
   deref_mut_back = alloc_boxed_Box_deref_mut_back self;
 }
@@ -483,23 +483,23 @@ let core_slice_index_Slice_index
   | Some x -> Return x
 
 // [core::slice::index::Range:::get]: forward function
-let core_slice_index_Range_get (t : Type0) (i : core_ops_range_Range usize) (s : slice t) :
+let core_slice_index_RangeUsize_get (t : Type0) (i : core_ops_range_Range usize) (s : slice t) :
   result (option (slice t)) =
   admit () // TODO
 
 // [core::slice::index::Range::get_mut]: forward function
-let core_slice_index_Range_get_mut
+let core_slice_index_RangeUsize_get_mut
   (t : Type0) : core_ops_range_Range usize → slice t → result (option (slice t)) =
   admit () // TODO
 
 // [core::slice::index::Range::get_mut]: backward function 0
-let core_slice_index_Range_get_mut_back
+let core_slice_index_RangeUsize_get_mut_back
   (t : Type0) :
   core_ops_range_Range usize → slice t → option (slice t) → result (slice t) =
   admit () // TODO
 
 // [core::slice::index::Range::get_unchecked]: forward function
-let core_slice_index_Range_get_unchecked
+let core_slice_index_RangeUsize_get_unchecked
   (t : Type0) :
   core_ops_range_Range usize → const_raw_ptr (slice t) → result (const_raw_ptr (slice t)) =
   // Don't know what the model should be - for now we always fail to make
@@ -507,7 +507,7 @@ let core_slice_index_Range_get_unchecked
   fun _ _ -> Fail Failure
 
 // [core::slice::index::Range::get_unchecked_mut]: forward function
-let core_slice_index_Range_get_unchecked_mut
+let core_slice_index_RangeUsize_get_unchecked_mut
   (t : Type0) :
   core_ops_range_Range usize → mut_raw_ptr (slice t) → result (mut_raw_ptr (slice t)) =
   // Don't know what the model should be - for now we always fail to make
@@ -515,17 +515,17 @@ let core_slice_index_Range_get_unchecked_mut
   fun _ _ -> Fail Failure
 
 // [core::slice::index::Range::index]: forward function
-let core_slice_index_Range_index
+let core_slice_index_RangeUsize_index
   (t : Type0) : core_ops_range_Range usize → slice t → result (slice t) =
   admit () // TODO
 
 // [core::slice::index::Range::index_mut]: forward function
-let core_slice_index_Range_index_mut
+let core_slice_index_RangeUsize_index_mut
   (t : Type0) : core_ops_range_Range usize → slice t → result (slice t) =
   admit () // TODO
 
 // [core::slice::index::Range::index_mut]: backward function 0
-let core_slice_index_Range_index_mut_back
+let core_slice_index_RangeUsize_index_mut_back
   (t : Type0) : core_ops_range_Range usize → slice t → slice t → result (slice t) =
   admit () // TODO
 
@@ -559,44 +559,44 @@ let core_array_Array_index_mut_back
   (a : array t n) (i : idx) (x : inst.indexInst.output) : result (array t n) =
   admit () // TODO
 
+// Trait implementation: [core::slice::index::private_slice_index::Range]
+let core_slice_index_private_slice_index_SealedRangeUsizeInst
+  : core_slice_index_private_slice_index_Sealed (core_ops_range_Range usize) = ()
+
+// Trait implementation: [core::slice::index::Range]
+let core_slice_index_SliceIndexRangeUsizeSliceTInst (t : Type0) :
+  core_slice_index_SliceIndex (core_ops_range_Range usize) (slice t) = {
+  sealedInst = core_slice_index_private_slice_index_SealedRangeUsizeInst;
+  output = slice t;
+  get = core_slice_index_RangeUsize_get t;
+  get_mut = core_slice_index_RangeUsize_get_mut t;
+  get_mut_back = core_slice_index_RangeUsize_get_mut_back t;
+  get_unchecked = core_slice_index_RangeUsize_get_unchecked t;
+  get_unchecked_mut = core_slice_index_RangeUsize_get_unchecked_mut t;
+  index = core_slice_index_RangeUsize_index t;
+  index_mut = core_slice_index_RangeUsize_index_mut t;
+  index_mut_back = core_slice_index_RangeUsize_index_mut_back t;
+}
+
 // Trait implementation: [core::slice::index::[T]]
-let core_slice_index_Slice_coreopsindexIndexInst (t idx : Type0)
+let core_ops_index_IndexSliceTIInst (t idx : Type0)
   (inst : core_slice_index_SliceIndex idx (slice t)) :
   core_ops_index_Index (slice t) idx = {
   output = inst.output;
   index = core_slice_index_Slice_index t idx inst;
 }
 
-// Trait implementation: [core::slice::index::private_slice_index::Range]
-let core_slice_index_private_slice_index_Range_coresliceindexprivate_slice_indexSealedInst
-  : core_slice_index_private_slice_index_Sealed (core_ops_range_Range usize) = ()
-
-// Trait implementation: [core::slice::index::Range]
-let core_slice_index_Range_coresliceindexSliceIndexInst (t : Type0) :
-  core_slice_index_SliceIndex (core_ops_range_Range usize) (slice t) = {
-  sealedInst = core_slice_index_private_slice_index_Range_coresliceindexprivate_slice_indexSealedInst;
-  output = slice t;
-  get = core_slice_index_Range_get t;
-  get_mut = core_slice_index_Range_get_mut t;
-  get_mut_back = core_slice_index_Range_get_mut_back t;
-  get_unchecked = core_slice_index_Range_get_unchecked t;
-  get_unchecked_mut = core_slice_index_Range_get_unchecked_mut t;
-  index = core_slice_index_Range_index t;
-  index_mut = core_slice_index_Range_index_mut t;
-  index_mut_back = core_slice_index_Range_index_mut_back t;
-}
-
 // Trait implementation: [core::slice::index::[T]]
-let core_slice_index_Slice_coreopsindexIndexMutInst (t idx : Type0)
+let core_ops_index_IndexMutSliceTIInst (t idx : Type0)
   (inst : core_slice_index_SliceIndex idx (slice t)) :
   core_ops_index_IndexMut (slice t) idx = {
-  indexInst = core_slice_index_Slice_coreopsindexIndexInst t idx inst;
+  indexInst = core_ops_index_IndexSliceTIInst t idx inst;
   index_mut = core_slice_index_Slice_index_mut t idx inst;
   index_mut_back = core_slice_index_Slice_index_mut_back t idx inst;
 }
 
 // Trait implementation: [core::array::[T; N]]
-let core_array_Array_coreopsindexIndexInst (t idx : Type0) (n : usize)
+let core_ops_index_IndexArrayInst (t idx : Type0) (n : usize)
   (inst : core_ops_index_Index (slice t) idx) :
   core_ops_index_Index (array t n) idx = {
   output = inst.output;
@@ -604,10 +604,10 @@ let core_array_Array_coreopsindexIndexInst (t idx : Type0) (n : usize)
 }
 
 // Trait implementation: [core::array::[T; N]]
-let core_array_Array_coreopsindexIndexMutInst (t idx : Type0) (n : usize)
+let core_ops_index_IndexMutArrayIInst (t idx : Type0) (n : usize)
   (inst : core_ops_index_IndexMut (slice t) idx) :
   core_ops_index_IndexMut (array t n) idx = {
-  indexInst = core_array_Array_coreopsindexIndexInst t idx n inst.indexInst;
+  indexInst = core_ops_index_IndexArrayInst t idx n inst.indexInst;
   index_mut = core_array_Array_index_mut t idx n inst;
   index_mut_back = core_array_Array_index_mut_back t idx n inst;
 }
@@ -651,13 +651,13 @@ let core_slice_index_usize_index_mut_back
   admit () // TODO
 
 // Trait implementation: [core::slice::index::private_slice_index::usize]
-let core_slice_index_private_slice_index_usize_coresliceindexprivate_slice_indexSealedInst
+let core_slice_index_private_slice_index_SealedUsizeInst
   : core_slice_index_private_slice_index_Sealed usize = ()
 
 // Trait implementation: [core::slice::index::usize]
-let core_slice_index_usize_coresliceindexSliceIndexInst (t : Type0) :
+let core_slice_index_SliceIndexUsizeSliceTInst (t : Type0) :
   core_slice_index_SliceIndex usize (slice t) = {
-  sealedInst = core_slice_index_private_slice_index_usize_coresliceindexprivate_slice_indexSealedInst;
+  sealedInst = core_slice_index_private_slice_index_SealedUsizeInst;
   output = t;
   get = core_slice_index_usize_get t;
   get_mut = core_slice_index_usize_get_mut t;
@@ -706,24 +706,24 @@ let alloc_vec_Vec_coreopsindexIndexMutInst (t idx : Type0)
 
 let alloc_vec_Vec_index_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) :
   Lemma (
-    alloc_vec_Vec_index a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i ==
+    alloc_vec_Vec_index a usize (core_slice_index_SliceIndexUsizeSliceTInst a) v i ==
       alloc_vec_Vec_index_usize v i)
-  [SMTPat (alloc_vec_Vec_index a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i)]
+  [SMTPat (alloc_vec_Vec_index a usize (core_slice_index_SliceIndexUsizeSliceTInst a) v i)]
   =
   admit()
 
 let alloc_vec_Vec_index_mut_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) :
   Lemma (
-    alloc_vec_Vec_index_mut a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i ==
+    alloc_vec_Vec_index_mut a usize (core_slice_index_SliceIndexUsizeSliceTInst a) v i ==
       alloc_vec_Vec_index_usize v i)
-  [SMTPat (alloc_vec_Vec_index_mut a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i)]
+  [SMTPat (alloc_vec_Vec_index_mut a usize (core_slice_index_SliceIndexUsizeSliceTInst a) v i)]
   =
   admit()
 
 let alloc_vec_Vec_index_mut_back_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) :
   Lemma (
-    alloc_vec_Vec_index_mut_back a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i x ==
+    alloc_vec_Vec_index_mut_back a usize (core_slice_index_SliceIndexUsizeSliceTInst a) v i x ==
       alloc_vec_Vec_update_usize v i x)
-  [SMTPat (alloc_vec_Vec_index_mut_back a usize (core_slice_index_usize_coresliceindexSliceIndexInst a) v i x)]
+  [SMTPat (alloc_vec_Vec_index_mut_back a usize (core_slice_index_SliceIndexUsizeSliceTInst a) v i x)]
   =
   admit()

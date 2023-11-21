@@ -75,14 +75,14 @@ let index_mut_slice_back
 let slice_subslice_shared_
   (x : slice u32) (y : usize) (z : usize) : result (slice u32) =
   core_slice_index_Slice_index u32 (core_ops_range_Range usize)
-    (core_slice_index_Range_coresliceindexSliceIndexInst u32) x
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
     { start = y; end_ = z }
 
 (** [array::slice_subslice_mut_]: forward function *)
 let slice_subslice_mut_
   (x : slice u32) (y : usize) (z : usize) : result (slice u32) =
   core_slice_index_Slice_index_mut u32 (core_ops_range_Range usize)
-    (core_slice_index_Range_coresliceindexSliceIndexInst u32) x
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
     { start = y; end_ = z }
 
 (** [array::slice_subslice_mut_]: backward function 0 *)
@@ -91,7 +91,7 @@ let slice_subslice_mut__back
   result (slice u32)
   =
   core_slice_index_Slice_index_mut_back u32 (core_ops_range_Range usize)
-    (core_slice_index_Range_coresliceindexSliceIndexInst u32) x
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
     { start = y; end_ = z } ret
 
 (** [array::array_to_slice_shared_]: forward function *)
@@ -111,16 +111,16 @@ let array_to_slice_mut__back
 let array_subslice_shared_
   (x : array u32 32) (y : usize) (z : usize) : result (slice u32) =
   core_array_Array_index u32 (core_ops_range_Range usize) 32
-    (core_slice_index_Slice_coreopsindexIndexInst u32 (core_ops_range_Range
-    usize) (core_slice_index_Range_coresliceindexSliceIndexInst u32)) x
+    (core_ops_index_IndexSliceTIInst u32 (core_ops_range_Range usize)
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
     { start = y; end_ = z }
 
 (** [array::array_subslice_mut_]: forward function *)
 let array_subslice_mut_
   (x : array u32 32) (y : usize) (z : usize) : result (slice u32) =
   core_array_Array_index_mut u32 (core_ops_range_Range usize) 32
-    (core_slice_index_Slice_coreopsindexIndexMutInst u32 (core_ops_range_Range
-    usize) (core_slice_index_Range_coresliceindexSliceIndexInst u32)) x
+    (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
     { start = y; end_ = z }
 
 (** [array::array_subslice_mut_]: backward function 0 *)
@@ -129,8 +129,8 @@ let array_subslice_mut__back
   result (array u32 32)
   =
   core_array_Array_index_mut_back u32 (core_ops_range_Range usize) 32
-    (core_slice_index_Slice_coreopsindexIndexMutInst u32 (core_ops_range_Range
-    usize) (core_slice_index_Range_coresliceindexSliceIndexInst u32)) x
+    (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
     { start = y; end_ = z } ret
 
 (** [array::index_slice_0]: forward function *)
@@ -251,16 +251,14 @@ let update_all : result unit =
 let range_all : result unit =
   let* s =
     core_array_Array_index_mut u32 (core_ops_range_Range usize) 4
-      (core_slice_index_Slice_coreopsindexIndexMutInst u32
-      (core_ops_range_Range usize)
-      (core_slice_index_Range_coresliceindexSliceIndexInst u32))
+      (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
+      (core_slice_index_SliceIndexRangeUsizeSliceTInst u32))
       (mk_array u32 4 [ 0; 0; 0; 0 ]) { start = 1; end_ = 3 } in
   let* s0 = update_mut_slice s in
   let* _ =
     core_array_Array_index_mut_back u32 (core_ops_range_Range usize) 4
-      (core_slice_index_Slice_coreopsindexIndexMutInst u32
-      (core_ops_range_Range usize)
-      (core_slice_index_Range_coresliceindexSliceIndexInst u32))
+      (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
+      (core_slice_index_SliceIndexRangeUsizeSliceTInst u32))
       (mk_array u32 4 [ 0; 0; 0; 0 ]) { start = 1; end_ = 3 } s0 in
   Return ()
 
@@ -342,8 +340,8 @@ let f2 (i : u32) : result unit =
 (** [array::f4]: forward function *)
 let f4 (x : array u32 32) (y : usize) (z : usize) : result (slice u32) =
   core_array_Array_index u32 (core_ops_range_Range usize) 32
-    (core_slice_index_Slice_coreopsindexIndexInst u32 (core_ops_range_Range
-    usize) (core_slice_index_Range_coresliceindexSliceIndexInst u32)) x
+    (core_ops_index_IndexSliceTIInst u32 (core_ops_range_Range usize)
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
     { start = y; end_ = z }
 
 (** [array::f3]: forward function *)

@@ -59,7 +59,7 @@ divergent def clear_loop
       let i1 ← i + 1#usize
       let v0 ←
         alloc.vec.Vec.index_mut_back U32 Usize
-          (core.slice.index.usize.coresliceindexSliceIndexInst U32) v i 0#u32
+          (core.slice.index.SliceIndexUsizeSliceTInst U32) v i 0#u32
       clear_loop v0 i1
   else Result.ret v
 
@@ -150,8 +150,7 @@ def get_elem_mut
   do
     let l ←
       alloc.vec.Vec.index_mut (List Usize) Usize
-        (core.slice.index.usize.coresliceindexSliceIndexInst (List Usize))
-        slots 0#usize
+        (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
     get_elem_mut_loop x l
 
 /- [loops::get_elem_mut]: loop 0: backward function 0 -/
@@ -175,12 +174,11 @@ def get_elem_mut_back
   do
     let l ←
       alloc.vec.Vec.index_mut (List Usize) Usize
-        (core.slice.index.usize.coresliceindexSliceIndexInst (List Usize))
-        slots 0#usize
+        (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
     let l0 ← get_elem_mut_loop_back x l ret0
     alloc.vec.Vec.index_mut_back (List Usize) Usize
-      (core.slice.index.usize.coresliceindexSliceIndexInst (List Usize)) slots
-      0#usize l0
+      (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
+      l0
 
 /- [loops::get_elem_shared]: loop 0: forward function -/
 divergent def get_elem_shared_loop
@@ -197,8 +195,7 @@ def get_elem_shared
   do
     let l ←
       alloc.vec.Vec.index (List Usize) Usize
-        (core.slice.index.usize.coresliceindexSliceIndexInst (List Usize))
-        slots 0#usize
+        (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
     get_elem_shared_loop x l
 
 /- [loops::id_mut]: forward function -/

@@ -58,7 +58,7 @@ def p3_c : Pair U32 U32 := eval_global p3_body (by simp)
 structure Wrap (T : Type) where
   value : T
 
-/- [constants::Wrap::{0}::new]: forward function -/
+/- [constants::{constants::Wrap<T>}::new]: forward function -/
 def Wrap.new (T : Type) (value : T) : Result (Wrap T) :=
   Result.ret { value := value }
 

@@ -17,11 +17,11 @@ axiom core.mem.swap_back0
 axiom core.mem.swap_back1
   (T : Type) : T → T → State → State → Result (State × T)
 
-/- [core::num::nonzero::NonZeroU32::{14}::new]: forward function -/
+/- [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]: forward function -/
 axiom core.num.nonzero.NonZeroU32.new
   : U32 → State → Result (State × (Option core.num.nonzero.NonZeroU32))
 
-/- [core::option::Option::{0}::unwrap]: forward function -/
+/- [core::option::{core::option::Option<T>}::unwrap]: forward function -/
 axiom core.option.Option.unwrap
   (T : Type) : Option T → State → Result (State × T)
 

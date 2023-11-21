@@ -129,7 +129,10 @@ let _ = assert_norm (test_list1 = Return ())
 
 (** [no_nested_borrows::test_box1]: forward function *)
 let test_box1 : result unit =
-  let b = 1 in let x = b in if not (x = 1) then Fail Failure else Return ()
+  let b = 0 in
+  let* b0 = alloc_boxed_Box_deref_mut_back i32 b 1 in
+  let* x = alloc_boxed_Box_deref i32 b0 in
+  if not (x = 1) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_box1] *)
 let _ = assert_norm (test_box1 = Return ())

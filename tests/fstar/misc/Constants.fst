@@ -55,7 +55,7 @@ let p3_c : pair_t u32 u32 = eval_global p3_body
 (** [constants::Wrap] *)
 type wrap_t (t : Type0) = { value : t; }
 
-(** [constants::Wrap::{0}::new]: forward function *)
+(** [constants::{constants::Wrap<T>}::new]: forward function *)
 let wrap_new (t : Type0) (value : t) : result (wrap_t t) =
   Return { value = value }
 

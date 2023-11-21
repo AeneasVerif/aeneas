@@ -101,7 +101,7 @@ Definition index_mut_slice_back
 Definition slice_subslice_shared_
   (x : slice u32) (y : usize) (z : usize) : result (slice u32) :=
   core_slice_index_Slice_index u32 (core_ops_range_Range usize)
-    (core_slice_index_Range_coresliceindexSliceIndexInst u32) x
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
     {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |}
 .
 
@@ -109,7 +109,7 @@ Definition slice_subslice_shared_
 Definition slice_subslice_mut_
   (x : slice u32) (y : usize) (z : usize) : result (slice u32) :=
   core_slice_index_Slice_index_mut u32 (core_ops_range_Range usize)
-    (core_slice_index_Range_coresliceindexSliceIndexInst u32) x
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
     {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |}
 .
 
@@ -119,7 +119,7 @@ Definition slice_subslice_mut__back
   result (slice u32)
   :=
   core_slice_index_Slice_index_mut_back u32 (core_ops_range_Range usize)
-    (core_slice_index_Range_coresliceindexSliceIndexInst u32) x
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
     {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |} ret
 .
 
@@ -144,8 +144,8 @@ Definition array_to_slice_mut__back
 Definition array_subslice_shared_
   (x : array u32 32%usize) (y : usize) (z : usize) : result (slice u32) :=
   core_array_Array_index u32 (core_ops_range_Range usize) 32%usize
-    (core_slice_index_Slice_coreopsindexIndexInst u32 (core_ops_range_Range
-    usize) (core_slice_index_Range_coresliceindexSliceIndexInst u32)) x
+    (core_ops_index_IndexSliceTIInst u32 (core_ops_range_Range usize)
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
     {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |}
 .
 
@@ -153,8 +153,8 @@ Definition array_subslice_shared_
 Definition array_subslice_mut_
   (x : array u32 32%usize) (y : usize) (z : usize) : result (slice u32) :=
   core_array_Array_index_mut u32 (core_ops_range_Range usize) 32%usize
-    (core_slice_index_Slice_coreopsindexIndexMutInst u32 (core_ops_range_Range
-    usize) (core_slice_index_Range_coresliceindexSliceIndexInst u32)) x
+    (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
     {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |}
 .
 
@@ -164,8 +164,8 @@ Definition array_subslice_mut__back
   result (array u32 32%usize)
   :=
   core_array_Array_index_mut_back u32 (core_ops_range_Range usize) 32%usize
-    (core_slice_index_Slice_coreopsindexIndexMutInst u32 (core_ops_range_Range
-    usize) (core_slice_index_Range_coresliceindexSliceIndexInst u32)) x
+    (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
     {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |} ret
 .
 
@@ -309,9 +309,8 @@ Definition update_all : result unit :=
 Definition range_all : result unit :=
   s <-
     core_array_Array_index_mut u32 (core_ops_range_Range usize) 4%usize
-      (core_slice_index_Slice_coreopsindexIndexMutInst u32
-      (core_ops_range_Range usize)
-      (core_slice_index_Range_coresliceindexSliceIndexInst u32))
+      (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
+      (core_slice_index_SliceIndexRangeUsizeSliceTInst u32))
       (mk_array u32 4%usize [ 0%u32; 0%u32; 0%u32; 0%u32 ])
       {|
         core_ops_range_Range_start := 1%usize;
@@ -320,9 +319,8 @@ Definition range_all : result unit :=
   s0 <- update_mut_slice s;
   _ <-
     core_array_Array_index_mut_back u32 (core_ops_range_Range usize) 4%usize
-      (core_slice_index_Slice_coreopsindexIndexMutInst u32
-      (core_ops_range_Range usize)
-      (core_slice_index_Range_coresliceindexSliceIndexInst u32))
+      (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
+      (core_slice_index_SliceIndexRangeUsizeSliceTInst u32))
       (mk_array u32 4%usize [ 0%u32; 0%u32; 0%u32; 0%u32 ])
       {|
         core_ops_range_Range_start := 1%usize;
@@ -430,8 +428,8 @@ Definition f2 (i : u32) : result unit :=
 Definition f4
   (x : array u32 32%usize) (y : usize) (z : usize) : result (slice u32) :=
   core_array_Array_index u32 (core_ops_range_Range usize) 32%usize
-    (core_slice_index_Slice_coreopsindexIndexInst u32 (core_ops_range_Range
-    usize) (core_slice_index_Range_coresliceindexSliceIndexInst u32)) x
+    (core_ops_index_IndexSliceTIInst u32 (core_ops_range_Range usize)
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
     {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |}
 .
 

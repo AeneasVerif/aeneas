@@ -91,14 +91,14 @@ def index_mut_slice_back
 def slice_subslice_shared_
   (x : Slice U32) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.slice.index.Slice.index U32 (core.ops.range.Range Usize)
-    (core.slice.index.Range.coresliceindexSliceIndexInst U32) x
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
     { start := y, end_ := z }
 
 /- [array::slice_subslice_mut_]: forward function -/
 def slice_subslice_mut_
   (x : Slice U32) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.slice.index.Slice.index_mut U32 (core.ops.range.Range Usize)
-    (core.slice.index.Range.coresliceindexSliceIndexInst U32) x
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
     { start := y, end_ := z }
 
 /- [array::slice_subslice_mut_]: backward function 0 -/
@@ -107,7 +107,7 @@ def slice_subslice_mut__back
   Result (Slice U32)
   :=
   core.slice.index.Slice.index_mut_back U32 (core.ops.range.Range Usize)
-    (core.slice.index.Range.coresliceindexSliceIndexInst U32) x
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
     { start := y, end_ := z } ret0
 
 /- [array::array_to_slice_shared_]: forward function -/
@@ -127,16 +127,16 @@ def array_to_slice_mut__back
 def array_subslice_shared_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.array.Array.index U32 (core.ops.range.Range Usize) 32#usize
-    (core.slice.index.Slice.coreopsindexIndexInst U32 (core.ops.range.Range
-    Usize) (core.slice.index.Range.coresliceindexSliceIndexInst U32)) x
+    (core.ops.index.IndexSliceTIInst U32 (core.ops.range.Range Usize)
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
     { start := y, end_ := z }
 
 /- [array::array_subslice_mut_]: forward function -/
 def array_subslice_mut_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.array.Array.index_mut U32 (core.ops.range.Range Usize) 32#usize
-    (core.slice.index.Slice.coreopsindexIndexMutInst U32 (core.ops.range.Range
-    Usize) (core.slice.index.Range.coresliceindexSliceIndexInst U32)) x
+    (core.ops.index.IndexMutSliceTIInst U32 (core.ops.range.Range Usize)
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
     { start := y, end_ := z }
 
 /- [array::array_subslice_mut_]: backward function 0 -/
@@ -145,8 +145,8 @@ def array_subslice_mut__back
   Result (Array U32 32#usize)
   :=
   core.array.Array.index_mut_back U32 (core.ops.range.Range Usize) 32#usize
-    (core.slice.index.Slice.coreopsindexIndexMutInst U32 (core.ops.range.Range
-    Usize) (core.slice.index.Range.coresliceindexSliceIndexInst U32)) x
+    (core.ops.index.IndexMutSliceTIInst U32 (core.ops.range.Range Usize)
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
     { start := y, end_ := z } ret0
 
 /- [array::index_slice_0]: forward function -/
@@ -288,17 +288,15 @@ def range_all : Result Unit :=
   do
     let s ←
       core.array.Array.index_mut U32 (core.ops.range.Range Usize) 4#usize
-        (core.slice.index.Slice.coreopsindexIndexMutInst U32
-        (core.ops.range.Range Usize)
-        (core.slice.index.Range.coresliceindexSliceIndexInst U32))
+        (core.ops.index.IndexMutSliceTIInst U32 (core.ops.range.Range Usize)
+        (core.slice.index.SliceIndexRangeUsizeSliceTInst U32))
         (Array.make U32 4#usize [ 0#u32, 0#u32, 0#u32, 0#u32 ])
         { start := 1#usize, end_ := 3#usize }
     let s0 ← update_mut_slice s
     let _ ←
       core.array.Array.index_mut_back U32 (core.ops.range.Range Usize) 4#usize
-        (core.slice.index.Slice.coreopsindexIndexMutInst U32
-        (core.ops.range.Range Usize)
-        (core.slice.index.Range.coresliceindexSliceIndexInst U32))
+        (core.ops.index.IndexMutSliceTIInst U32 (core.ops.range.Range Usize)
+        (core.slice.index.SliceIndexRangeUsizeSliceTInst U32))
         (Array.make U32 4#usize [ 0#u32, 0#u32, 0#u32, 0#u32 ])
         { start := 1#usize, end_ := 3#usize } s0
     Result.ret ()
@@ -392,8 +390,8 @@ def f2 (i : U32) : Result Unit :=
 /- [array::f4]: forward function -/
 def f4 (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.array.Array.index U32 (core.ops.range.Range Usize) 32#usize
-    (core.slice.index.Slice.coreopsindexIndexInst U32 (core.ops.range.Range
-    Usize) (core.slice.index.Range.coresliceindexSliceIndexInst U32)) x
+    (core.ops.index.IndexSliceTIInst U32 (core.ops.range.Range Usize)
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
     { start := y, end_ := z }
 
 /- [array::f3]: forward function -/

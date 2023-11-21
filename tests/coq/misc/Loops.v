@@ -77,7 +77,7 @@ Fixpoint clear_loop
       i1 <- usize_add i 1%usize;
       v0 <-
         alloc_vec_Vec_index_mut_back u32 usize
-          (core_slice_index_usize_coresliceindexSliceIndexInst u32) v i 0%u32;
+          (core_slice_index_SliceIndexUsizeSliceTInst u32) v i 0%u32;
       clear_loop n0 v0 i1)
     else Return v
   end
@@ -209,8 +209,7 @@ Definition get_elem_mut
   :=
   l <-
     alloc_vec_Vec_index_mut (List_t usize) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t usize))
-      slots 0%usize;
+      (core_slice_index_SliceIndexUsizeSliceTInst (List_t usize)) slots 0%usize;
   get_elem_mut_loop n x l
 .
 
@@ -240,12 +239,11 @@ Definition get_elem_mut_back
   :=
   l <-
     alloc_vec_Vec_index_mut (List_t usize) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t usize))
-      slots 0%usize;
+      (core_slice_index_SliceIndexUsizeSliceTInst (List_t usize)) slots 0%usize;
   l0 <- get_elem_mut_loop_back n x l ret;
   alloc_vec_Vec_index_mut_back (List_t usize) usize
-    (core_slice_index_usize_coresliceindexSliceIndexInst (List_t usize)) slots
-    0%usize l0
+    (core_slice_index_SliceIndexUsizeSliceTInst (List_t usize)) slots 0%usize
+    l0
 .
 
 (** [loops::get_elem_shared]: loop 0: forward function *)
@@ -269,8 +267,7 @@ Definition get_elem_shared
   :=
   l <-
     alloc_vec_Vec_index (List_t usize) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (List_t usize))
-      slots 0%usize;
+      (core_slice_index_SliceIndexUsizeSliceTInst (List_t usize)) slots 0%usize;
   get_elem_shared_loop n x l
 .
 

@@ -64,7 +64,7 @@ let rec clear_loop
     let* i1 = usize_add i 1 in
     let* v0 =
       alloc_vec_Vec_index_mut_back u32 usize
-        (core_slice_index_usize_coresliceindexSliceIndexInst u32) v i 0 in
+        (core_slice_index_SliceIndexUsizeSliceTInst u32) v i 0 in
     clear_loop v0 i1
   else Return v
 
@@ -157,8 +157,7 @@ let get_elem_mut
   (slots : alloc_vec_Vec (list_t usize)) (x : usize) : result usize =
   let* l =
     alloc_vec_Vec_index_mut (list_t usize) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (list_t usize))
-      slots 0 in
+      (core_slice_index_SliceIndexUsizeSliceTInst (list_t usize)) slots 0 in
   get_elem_mut_loop x l
 
 (** [loops::get_elem_mut]: loop 0: backward function 0 *)
@@ -181,12 +180,10 @@ let get_elem_mut_back
   =
   let* l =
     alloc_vec_Vec_index_mut (list_t usize) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (list_t usize))
-      slots 0 in
+      (core_slice_index_SliceIndexUsizeSliceTInst (list_t usize)) slots 0 in
   let* l0 = get_elem_mut_loop_back x l ret in
   alloc_vec_Vec_index_mut_back (list_t usize) usize
-    (core_slice_index_usize_coresliceindexSliceIndexInst (list_t usize)) slots
-    0 l0
+    (core_slice_index_SliceIndexUsizeSliceTInst (list_t usize)) slots 0 l0
 
 (** [loops::get_elem_shared]: loop 0: forward function *)
 let rec get_elem_shared_loop
@@ -203,8 +200,7 @@ let get_elem_shared
   (slots : alloc_vec_Vec (list_t usize)) (x : usize) : result usize =
   let* l =
     alloc_vec_Vec_index (list_t usize) usize
-      (core_slice_index_usize_coresliceindexSliceIndexInst (list_t usize))
-      slots 0 in
+      (core_slice_index_SliceIndexUsizeSliceTInst (list_t usize)) slots 0 in
   get_elem_shared_loop x l
 
 (** [loops::id_mut]: forward function *)

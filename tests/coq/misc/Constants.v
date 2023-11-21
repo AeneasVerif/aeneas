@@ -68,7 +68,7 @@ Record Wrap_t (T : Type) := mkWrap_t { wrap_value : T; }.
 Arguments mkWrap_t { _ }.
 Arguments wrap_value { _ }.
 
-(** [constants::Wrap::{0}::new]: forward function *)
+(** [constants::{constants::Wrap<T>}::new]: forward function *)
 Definition wrap_new (T : Type) (value : T) : result (Wrap_t T) :=
   Return {| wrap_value := value |}
 .

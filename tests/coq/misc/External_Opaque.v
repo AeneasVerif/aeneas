@@ -25,12 +25,12 @@ Axiom core_mem_swap_back1 :
   forall(T : Type), T -> T -> state -> state -> result (state * T)
 .
 
-(** [core::num::nonzero::NonZeroU32::{14}::new]: forward function *)
+(** [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]: forward function *)
 Axiom core_num_nonzero_NonZeroU32_new
   : u32 -> state -> result (state * (option core_num_nonzero_NonZeroU32_t))
 .
 
-(** [core::option::Option::{0}::unwrap]: forward function *)
+(** [core::option::{core::option::Option<T>}::unwrap]: forward function *)
 Axiom core_option_Option_unwrap :
   forall(T : Type), option T -> state -> result (state * T)
 .
