@@ -6,22 +6,27 @@ include External.Types
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [core::mem::swap]: forward function *)
+(** [core::mem::swap]: forward function
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 *)
 val core_mem_swap (t : Type0) : t -> t -> state -> result (state & unit)
 
-(** [core::mem::swap]: backward function 0 *)
+(** [core::mem::swap]: backward function 0
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 *)
 val core_mem_swap_back0
   (t : Type0) : t -> t -> state -> state -> result (state & t)
 
-(** [core::mem::swap]: backward function 1 *)
+(** [core::mem::swap]: backward function 1
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 *)
 val core_mem_swap_back1
   (t : Type0) : t -> t -> state -> state -> result (state & t)
 
-(** [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]: forward function *)
+(** [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]: forward function
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 79:16-79:57 *)
 val core_num_nonzero_NonZeroU32_new
   : u32 -> state -> result (state & (option core_num_nonzero_NonZeroU32_t))
 
-(** [core::option::{core::option::Option<T>}::unwrap]: forward function *)
+(** [core::option::{core::option::Option<T>}::unwrap]: forward function
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34 *)
 val core_option_Option_unwrap
   (t : Type0) : option t -> state -> result (state & t)
 

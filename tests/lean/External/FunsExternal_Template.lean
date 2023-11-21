@@ -6,22 +6,27 @@ import External.Types
 open Primitives
 open external
 
-/- [core::mem::swap]: forward function -/
+/- [core::mem::swap]: forward function
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 -/
 axiom core.mem.swap (T : Type) : T → T → State → Result (State × Unit)
 
-/- [core::mem::swap]: backward function 0 -/
+/- [core::mem::swap]: backward function 0
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 -/
 axiom core.mem.swap_back0
   (T : Type) : T → T → State → State → Result (State × T)
 
-/- [core::mem::swap]: backward function 1 -/
+/- [core::mem::swap]: backward function 1
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 -/
 axiom core.mem.swap_back1
   (T : Type) : T → T → State → State → Result (State × T)
 
-/- [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]: forward function -/
+/- [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]: forward function
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 79:16-79:57 -/
 axiom core.num.nonzero.NonZeroU32.new
   : U32 → State → Result (State × (Option core.num.nonzero.NonZeroU32))
 
-/- [core::option::{core::option::Option<T>}::unwrap]: forward function -/
+/- [core::option::{core::option::Option<T>}::unwrap]: forward function
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34 -/
 axiom core.option.Option.unwrap
   (T : Type) : Option T → State → Result (State × T)
 

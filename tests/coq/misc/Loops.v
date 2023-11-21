@@ -8,7 +8,8 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module Loops.
 
-(** [loops::sum]: loop 0: forward function *)
+(** [loops::sum]: loop 0: forward function
+    Source: 'src/loops.rs', lines 4:0-14:1 *)
 Fixpoint sum_loop (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
   | O => Fail_ OutOfFuel
@@ -19,12 +20,14 @@ Fixpoint sum_loop (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   end
 .
 
-(** [loops::sum]: forward function *)
+(** [loops::sum]: forward function
+    Source: 'src/loops.rs', lines 4:0-4:27 *)
 Definition sum (n : nat) (max : u32) : result u32 :=
   sum_loop n max 0%u32 0%u32
 .
 
-(** [loops::sum_with_mut_borrows]: loop 0: forward function *)
+(** [loops::sum_with_mut_borrows]: loop 0: forward function
+    Source: 'src/loops.rs', lines 19:0-31:1 *)
 Fixpoint sum_with_mut_borrows_loop
   (n : nat) (max : u32) (mi : u32) (ms : u32) : result u32 :=
   match n with
@@ -39,12 +42,14 @@ Fixpoint sum_with_mut_borrows_loop
   end
 .
 
-(** [loops::sum_with_mut_borrows]: forward function *)
+(** [loops::sum_with_mut_borrows]: forward function
+    Source: 'src/loops.rs', lines 19:0-19:44 *)
 Definition sum_with_mut_borrows (n : nat) (max : u32) : result u32 :=
   sum_with_mut_borrows_loop n max 0%u32 0%u32
 .
 
-(** [loops::sum_with_shared_borrows]: loop 0: forward function *)
+(** [loops::sum_with_shared_borrows]: loop 0: forward function
+    Source: 'src/loops.rs', lines 34:0-48:1 *)
 Fixpoint sum_with_shared_borrows_loop
   (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
@@ -59,13 +64,15 @@ Fixpoint sum_with_shared_borrows_loop
   end
 .
 
-(** [loops::sum_with_shared_borrows]: forward function *)
+(** [loops::sum_with_shared_borrows]: forward function
+    Source: 'src/loops.rs', lines 34:0-34:47 *)
 Definition sum_with_shared_borrows (n : nat) (max : u32) : result u32 :=
   sum_with_shared_borrows_loop n max 0%u32 0%u32
 .
 
 (** [loops::clear]: loop 0: merged forward/backward function
-    (there is a single backward function, and the forward function returns ()) *)
+    (there is a single backward function, and the forward function returns ())
+    Source: 'src/loops.rs', lines 52:0-58:1 *)
 Fixpoint clear_loop
   (n : nat) (v : alloc_vec_Vec u32) (i : usize) : result (alloc_vec_Vec u32) :=
   match n with
@@ -84,13 +91,15 @@ Fixpoint clear_loop
 .
 
 (** [loops::clear]: merged forward/backward function
-    (there is a single backward function, and the forward function returns ()) *)
+    (there is a single backward function, and the forward function returns ())
+    Source: 'src/loops.rs', lines 52:0-52:30 *)
 Definition clear
   (n : nat) (v : alloc_vec_Vec u32) : result (alloc_vec_Vec u32) :=
   clear_loop n v 0%usize
 .
 
-(** [loops::List] *)
+(** [loops::List]
+    Source: 'src/loops.rs', lines 60:0-60:16 *)
 Inductive List_t (T : Type) :=
 | List_Cons : T -> List_t T -> List_t T
 | List_Nil : List_t T
@@ -99,7 +108,8 @@ Inductive List_t (T : Type) :=
 Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
-(** [loops::list_mem]: loop 0: forward function *)
+(** [loops::list_mem]: loop 0: forward function
+    Source: 'src/loops.rs', lines 66:0-75:1 *)
 Fixpoint list_mem_loop (n : nat) (x : u32) (ls : List_t u32) : result bool :=
   match n with
   | O => Fail_ OutOfFuel
@@ -111,12 +121,14 @@ Fixpoint list_mem_loop (n : nat) (x : u32) (ls : List_t u32) : result bool :=
   end
 .
 
-(** [loops::list_mem]: forward function *)
+(** [loops::list_mem]: forward function
+    Source: 'src/loops.rs', lines 66:0-66:52 *)
 Definition list_mem (n : nat) (x : u32) (ls : List_t u32) : result bool :=
   list_mem_loop n x ls
 .
 
-(** [loops::list_nth_mut_loop]: loop 0: forward function *)
+(** [loops::list_nth_mut_loop]: loop 0: forward function
+    Source: 'src/loops.rs', lines 78:0-88:1 *)
 Fixpoint list_nth_mut_loop_loop
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
   match n with
@@ -132,13 +144,15 @@ Fixpoint list_nth_mut_loop_loop
   end
 .
 
-(** [loops::list_nth_mut_loop]: forward function *)
+(** [loops::list_nth_mut_loop]: forward function
+    Source: 'src/loops.rs', lines 78:0-78:71 *)
 Definition list_nth_mut_loop
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
   list_nth_mut_loop_loop T n ls i
 .
 
-(** [loops::list_nth_mut_loop]: loop 0: backward function 0 *)
+(** [loops::list_nth_mut_loop]: loop 0: backward function 0
+    Source: 'src/loops.rs', lines 78:0-88:1 *)
 Fixpoint list_nth_mut_loop_loop_back
   (T : Type) (n : nat) (ls : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -159,7 +173,8 @@ Fixpoint list_nth_mut_loop_loop_back
   end
 .
 
-(** [loops::list_nth_mut_loop]: backward function 0 *)
+(** [loops::list_nth_mut_loop]: backward function 0
+    Source: 'src/loops.rs', lines 78:0-78:71 *)
 Definition list_nth_mut_loop_back
   (T : Type) (n : nat) (ls : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -167,7 +182,8 @@ Definition list_nth_mut_loop_back
   list_nth_mut_loop_loop_back T n ls i ret
 .
 
-(** [loops::list_nth_shared_loop]: loop 0: forward function *)
+(** [loops::list_nth_shared_loop]: loop 0: forward function
+    Source: 'src/loops.rs', lines 91:0-101:1 *)
 Fixpoint list_nth_shared_loop_loop
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
   match n with
@@ -183,13 +199,15 @@ Fixpoint list_nth_shared_loop_loop
   end
 .
 
-(** [loops::list_nth_shared_loop]: forward function *)
+(** [loops::list_nth_shared_loop]: forward function
+    Source: 'src/loops.rs', lines 91:0-91:66 *)
 Definition list_nth_shared_loop
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
   list_nth_shared_loop_loop T n ls i
 .
 
-(** [loops::get_elem_mut]: loop 0: forward function *)
+(** [loops::get_elem_mut]: loop 0: forward function
+    Source: 'src/loops.rs', lines 103:0-117:1 *)
 Fixpoint get_elem_mut_loop
   (n : nat) (x : usize) (ls : List_t usize) : result usize :=
   match n with
@@ -202,7 +220,8 @@ Fixpoint get_elem_mut_loop
   end
 .
 
-(** [loops::get_elem_mut]: forward function *)
+(** [loops::get_elem_mut]: forward function
+    Source: 'src/loops.rs', lines 103:0-103:73 *)
 Definition get_elem_mut
   (n : nat) (slots : alloc_vec_Vec (List_t usize)) (x : usize) :
   result usize
@@ -213,7 +232,8 @@ Definition get_elem_mut
   get_elem_mut_loop n x l
 .
 
-(** [loops::get_elem_mut]: loop 0: backward function 0 *)
+(** [loops::get_elem_mut]: loop 0: backward function 0
+    Source: 'src/loops.rs', lines 103:0-117:1 *)
 Fixpoint get_elem_mut_loop_back
   (n : nat) (x : usize) (ls : List_t usize) (ret : usize) :
   result (List_t usize)
@@ -232,7 +252,8 @@ Fixpoint get_elem_mut_loop_back
   end
 .
 
-(** [loops::get_elem_mut]: backward function 0 *)
+(** [loops::get_elem_mut]: backward function 0
+    Source: 'src/loops.rs', lines 103:0-103:73 *)
 Definition get_elem_mut_back
   (n : nat) (slots : alloc_vec_Vec (List_t usize)) (x : usize) (ret : usize) :
   result (alloc_vec_Vec (List_t usize))
@@ -246,7 +267,8 @@ Definition get_elem_mut_back
     l0
 .
 
-(** [loops::get_elem_shared]: loop 0: forward function *)
+(** [loops::get_elem_shared]: loop 0: forward function
+    Source: 'src/loops.rs', lines 119:0-133:1 *)
 Fixpoint get_elem_shared_loop
   (n : nat) (x : usize) (ls : List_t usize) : result usize :=
   match n with
@@ -260,7 +282,8 @@ Fixpoint get_elem_shared_loop
   end
 .
 
-(** [loops::get_elem_shared]: forward function *)
+(** [loops::get_elem_shared]: forward function
+    Source: 'src/loops.rs', lines 119:0-119:68 *)
 Definition get_elem_shared
   (n : nat) (slots : alloc_vec_Vec (List_t usize)) (x : usize) :
   result usize
@@ -271,22 +294,26 @@ Definition get_elem_shared
   get_elem_shared_loop n x l
 .
 
-(** [loops::id_mut]: forward function *)
+(** [loops::id_mut]: forward function
+    Source: 'src/loops.rs', lines 135:0-135:50 *)
 Definition id_mut (T : Type) (ls : List_t T) : result (List_t T) :=
   Return ls.
 
-(** [loops::id_mut]: backward function 0 *)
+(** [loops::id_mut]: backward function 0
+    Source: 'src/loops.rs', lines 135:0-135:50 *)
 Definition id_mut_back
   (T : Type) (ls : List_t T) (ret : List_t T) : result (List_t T) :=
   Return ret
 .
 
-(** [loops::id_shared]: forward function *)
+(** [loops::id_shared]: forward function
+    Source: 'src/loops.rs', lines 139:0-139:45 *)
 Definition id_shared (T : Type) (ls : List_t T) : result (List_t T) :=
   Return ls
 .
 
-(** [loops::list_nth_mut_loop_with_id]: loop 0: forward function *)
+(** [loops::list_nth_mut_loop_with_id]: loop 0: forward function
+    Source: 'src/loops.rs', lines 144:0-155:1 *)
 Fixpoint list_nth_mut_loop_with_id_loop
   (T : Type) (n : nat) (i : u32) (ls : List_t T) : result T :=
   match n with
@@ -302,13 +329,15 @@ Fixpoint list_nth_mut_loop_with_id_loop
   end
 .
 
-(** [loops::list_nth_mut_loop_with_id]: forward function *)
+(** [loops::list_nth_mut_loop_with_id]: forward function
+    Source: 'src/loops.rs', lines 144:0-144:75 *)
 Definition list_nth_mut_loop_with_id
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
   ls0 <- id_mut T ls; list_nth_mut_loop_with_id_loop T n i ls0
 .
 
-(** [loops::list_nth_mut_loop_with_id]: loop 0: backward function 0 *)
+(** [loops::list_nth_mut_loop_with_id]: loop 0: backward function 0
+    Source: 'src/loops.rs', lines 144:0-155:1 *)
 Fixpoint list_nth_mut_loop_with_id_loop_back
   (T : Type) (n : nat) (i : u32) (ls : List_t T) (ret : T) :
   result (List_t T)
@@ -329,7 +358,8 @@ Fixpoint list_nth_mut_loop_with_id_loop_back
   end
 .
 
-(** [loops::list_nth_mut_loop_with_id]: backward function 0 *)
+(** [loops::list_nth_mut_loop_with_id]: backward function 0
+    Source: 'src/loops.rs', lines 144:0-144:75 *)
 Definition list_nth_mut_loop_with_id_back
   (T : Type) (n : nat) (ls : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -339,7 +369,8 @@ Definition list_nth_mut_loop_with_id_back
   id_mut_back T ls l
 .
 
-(** [loops::list_nth_shared_loop_with_id]: loop 0: forward function *)
+(** [loops::list_nth_shared_loop_with_id]: loop 0: forward function
+    Source: 'src/loops.rs', lines 158:0-169:1 *)
 Fixpoint list_nth_shared_loop_with_id_loop
   (T : Type) (n : nat) (i : u32) (ls : List_t T) : result T :=
   match n with
@@ -356,13 +387,15 @@ Fixpoint list_nth_shared_loop_with_id_loop
   end
 .
 
-(** [loops::list_nth_shared_loop_with_id]: forward function *)
+(** [loops::list_nth_shared_loop_with_id]: forward function
+    Source: 'src/loops.rs', lines 158:0-158:70 *)
 Definition list_nth_shared_loop_with_id
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
   ls0 <- id_shared T ls; list_nth_shared_loop_with_id_loop T n i ls0
 .
 
-(** [loops::list_nth_mut_loop_pair]: loop 0: forward function *)
+(** [loops::list_nth_mut_loop_pair]: loop 0: forward function
+    Source: 'src/loops.rs', lines 174:0-195:1 *)
 Fixpoint list_nth_mut_loop_pair_loop
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -385,7 +418,8 @@ Fixpoint list_nth_mut_loop_pair_loop
   end
 .
 
-(** [loops::list_nth_mut_loop_pair]: forward function *)
+(** [loops::list_nth_mut_loop_pair]: forward function
+    Source: 'src/loops.rs', lines 174:0-178:27 *)
 Definition list_nth_mut_loop_pair
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -393,7 +427,8 @@ Definition list_nth_mut_loop_pair
   list_nth_mut_loop_pair_loop T n ls0 ls1 i
 .
 
-(** [loops::list_nth_mut_loop_pair]: loop 0: backward function 0 *)
+(** [loops::list_nth_mut_loop_pair]: loop 0: backward function 0
+    Source: 'src/loops.rs', lines 174:0-195:1 *)
 Fixpoint list_nth_mut_loop_pair_loop_back'a
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -418,7 +453,8 @@ Fixpoint list_nth_mut_loop_pair_loop_back'a
   end
 .
 
-(** [loops::list_nth_mut_loop_pair]: backward function 0 *)
+(** [loops::list_nth_mut_loop_pair]: backward function 0
+    Source: 'src/loops.rs', lines 174:0-178:27 *)
 Definition list_nth_mut_loop_pair_back'a
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -426,7 +462,8 @@ Definition list_nth_mut_loop_pair_back'a
   list_nth_mut_loop_pair_loop_back'a T n ls0 ls1 i ret
 .
 
-(** [loops::list_nth_mut_loop_pair]: loop 0: backward function 1 *)
+(** [loops::list_nth_mut_loop_pair]: loop 0: backward function 1
+    Source: 'src/loops.rs', lines 174:0-195:1 *)
 Fixpoint list_nth_mut_loop_pair_loop_back'b
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -451,7 +488,8 @@ Fixpoint list_nth_mut_loop_pair_loop_back'b
   end
 .
 
-(** [loops::list_nth_mut_loop_pair]: backward function 1 *)
+(** [loops::list_nth_mut_loop_pair]: backward function 1
+    Source: 'src/loops.rs', lines 174:0-178:27 *)
 Definition list_nth_mut_loop_pair_back'b
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -459,7 +497,8 @@ Definition list_nth_mut_loop_pair_back'b
   list_nth_mut_loop_pair_loop_back'b T n ls0 ls1 i ret
 .
 
-(** [loops::list_nth_shared_loop_pair]: loop 0: forward function *)
+(** [loops::list_nth_shared_loop_pair]: loop 0: forward function
+    Source: 'src/loops.rs', lines 198:0-219:1 *)
 Fixpoint list_nth_shared_loop_pair_loop
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -482,7 +521,8 @@ Fixpoint list_nth_shared_loop_pair_loop
   end
 .
 
-(** [loops::list_nth_shared_loop_pair]: forward function *)
+(** [loops::list_nth_shared_loop_pair]: forward function
+    Source: 'src/loops.rs', lines 198:0-202:19 *)
 Definition list_nth_shared_loop_pair
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -490,7 +530,8 @@ Definition list_nth_shared_loop_pair
   list_nth_shared_loop_pair_loop T n ls0 ls1 i
 .
 
-(** [loops::list_nth_mut_loop_pair_merge]: loop 0: forward function *)
+(** [loops::list_nth_mut_loop_pair_merge]: loop 0: forward function
+    Source: 'src/loops.rs', lines 223:0-238:1 *)
 Fixpoint list_nth_mut_loop_pair_merge_loop
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -514,7 +555,8 @@ Fixpoint list_nth_mut_loop_pair_merge_loop
   end
 .
 
-(** [loops::list_nth_mut_loop_pair_merge]: forward function *)
+(** [loops::list_nth_mut_loop_pair_merge]: forward function
+    Source: 'src/loops.rs', lines 223:0-227:27 *)
 Definition list_nth_mut_loop_pair_merge
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -522,7 +564,8 @@ Definition list_nth_mut_loop_pair_merge
   list_nth_mut_loop_pair_merge_loop T n ls0 ls1 i
 .
 
-(** [loops::list_nth_mut_loop_pair_merge]: loop 0: backward function 0 *)
+(** [loops::list_nth_mut_loop_pair_merge]: loop 0: backward function 0
+    Source: 'src/loops.rs', lines 223:0-238:1 *)
 Fixpoint list_nth_mut_loop_pair_merge_loop_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32)
   (ret : (T * T)) :
@@ -549,7 +592,8 @@ Fixpoint list_nth_mut_loop_pair_merge_loop_back
   end
 .
 
-(** [loops::list_nth_mut_loop_pair_merge]: backward function 0 *)
+(** [loops::list_nth_mut_loop_pair_merge]: backward function 0
+    Source: 'src/loops.rs', lines 223:0-227:27 *)
 Definition list_nth_mut_loop_pair_merge_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32)
   (ret : (T * T)) :
@@ -558,7 +602,8 @@ Definition list_nth_mut_loop_pair_merge_back
   list_nth_mut_loop_pair_merge_loop_back T n ls0 ls1 i ret
 .
 
-(** [loops::list_nth_shared_loop_pair_merge]: loop 0: forward function *)
+(** [loops::list_nth_shared_loop_pair_merge]: loop 0: forward function
+    Source: 'src/loops.rs', lines 241:0-256:1 *)
 Fixpoint list_nth_shared_loop_pair_merge_loop
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -582,7 +627,8 @@ Fixpoint list_nth_shared_loop_pair_merge_loop
   end
 .
 
-(** [loops::list_nth_shared_loop_pair_merge]: forward function *)
+(** [loops::list_nth_shared_loop_pair_merge]: forward function
+    Source: 'src/loops.rs', lines 241:0-245:19 *)
 Definition list_nth_shared_loop_pair_merge
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -590,7 +636,8 @@ Definition list_nth_shared_loop_pair_merge
   list_nth_shared_loop_pair_merge_loop T n ls0 ls1 i
 .
 
-(** [loops::list_nth_mut_shared_loop_pair]: loop 0: forward function *)
+(** [loops::list_nth_mut_shared_loop_pair]: loop 0: forward function
+    Source: 'src/loops.rs', lines 259:0-274:1 *)
 Fixpoint list_nth_mut_shared_loop_pair_loop
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -614,7 +661,8 @@ Fixpoint list_nth_mut_shared_loop_pair_loop
   end
 .
 
-(** [loops::list_nth_mut_shared_loop_pair]: forward function *)
+(** [loops::list_nth_mut_shared_loop_pair]: forward function
+    Source: 'src/loops.rs', lines 259:0-263:23 *)
 Definition list_nth_mut_shared_loop_pair
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -622,7 +670,8 @@ Definition list_nth_mut_shared_loop_pair
   list_nth_mut_shared_loop_pair_loop T n ls0 ls1 i
 .
 
-(** [loops::list_nth_mut_shared_loop_pair]: loop 0: backward function 0 *)
+(** [loops::list_nth_mut_shared_loop_pair]: loop 0: backward function 0
+    Source: 'src/loops.rs', lines 259:0-274:1 *)
 Fixpoint list_nth_mut_shared_loop_pair_loop_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -647,7 +696,8 @@ Fixpoint list_nth_mut_shared_loop_pair_loop_back
   end
 .
 
-(** [loops::list_nth_mut_shared_loop_pair]: backward function 0 *)
+(** [loops::list_nth_mut_shared_loop_pair]: backward function 0
+    Source: 'src/loops.rs', lines 259:0-263:23 *)
 Definition list_nth_mut_shared_loop_pair_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -655,7 +705,8 @@ Definition list_nth_mut_shared_loop_pair_back
   list_nth_mut_shared_loop_pair_loop_back T n ls0 ls1 i ret
 .
 
-(** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0: forward function *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0: forward function
+    Source: 'src/loops.rs', lines 278:0-293:1 *)
 Fixpoint list_nth_mut_shared_loop_pair_merge_loop
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -679,7 +730,8 @@ Fixpoint list_nth_mut_shared_loop_pair_merge_loop
   end
 .
 
-(** [loops::list_nth_mut_shared_loop_pair_merge]: forward function *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: forward function
+    Source: 'src/loops.rs', lines 278:0-282:23 *)
 Definition list_nth_mut_shared_loop_pair_merge
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -687,7 +739,8 @@ Definition list_nth_mut_shared_loop_pair_merge
   list_nth_mut_shared_loop_pair_merge_loop T n ls0 ls1 i
 .
 
-(** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0: backward function 0 *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0: backward function 0
+    Source: 'src/loops.rs', lines 278:0-293:1 *)
 Fixpoint list_nth_mut_shared_loop_pair_merge_loop_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -713,7 +766,8 @@ Fixpoint list_nth_mut_shared_loop_pair_merge_loop_back
   end
 .
 
-(** [loops::list_nth_mut_shared_loop_pair_merge]: backward function 0 *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: backward function 0
+    Source: 'src/loops.rs', lines 278:0-282:23 *)
 Definition list_nth_mut_shared_loop_pair_merge_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -721,7 +775,8 @@ Definition list_nth_mut_shared_loop_pair_merge_back
   list_nth_mut_shared_loop_pair_merge_loop_back T n ls0 ls1 i ret
 .
 
-(** [loops::list_nth_shared_mut_loop_pair]: loop 0: forward function *)
+(** [loops::list_nth_shared_mut_loop_pair]: loop 0: forward function
+    Source: 'src/loops.rs', lines 297:0-312:1 *)
 Fixpoint list_nth_shared_mut_loop_pair_loop
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -745,7 +800,8 @@ Fixpoint list_nth_shared_mut_loop_pair_loop
   end
 .
 
-(** [loops::list_nth_shared_mut_loop_pair]: forward function *)
+(** [loops::list_nth_shared_mut_loop_pair]: forward function
+    Source: 'src/loops.rs', lines 297:0-301:23 *)
 Definition list_nth_shared_mut_loop_pair
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -753,7 +809,8 @@ Definition list_nth_shared_mut_loop_pair
   list_nth_shared_mut_loop_pair_loop T n ls0 ls1 i
 .
 
-(** [loops::list_nth_shared_mut_loop_pair]: loop 0: backward function 1 *)
+(** [loops::list_nth_shared_mut_loop_pair]: loop 0: backward function 1
+    Source: 'src/loops.rs', lines 297:0-312:1 *)
 Fixpoint list_nth_shared_mut_loop_pair_loop_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -778,7 +835,8 @@ Fixpoint list_nth_shared_mut_loop_pair_loop_back
   end
 .
 
-(** [loops::list_nth_shared_mut_loop_pair]: backward function 1 *)
+(** [loops::list_nth_shared_mut_loop_pair]: backward function 1
+    Source: 'src/loops.rs', lines 297:0-301:23 *)
 Definition list_nth_shared_mut_loop_pair_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -786,7 +844,8 @@ Definition list_nth_shared_mut_loop_pair_back
   list_nth_shared_mut_loop_pair_loop_back T n ls0 ls1 i ret
 .
 
-(** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0: forward function *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0: forward function
+    Source: 'src/loops.rs', lines 316:0-331:1 *)
 Fixpoint list_nth_shared_mut_loop_pair_merge_loop
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -810,7 +869,8 @@ Fixpoint list_nth_shared_mut_loop_pair_merge_loop
   end
 .
 
-(** [loops::list_nth_shared_mut_loop_pair_merge]: forward function *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: forward function
+    Source: 'src/loops.rs', lines 316:0-320:23 *)
 Definition list_nth_shared_mut_loop_pair_merge
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -818,7 +878,8 @@ Definition list_nth_shared_mut_loop_pair_merge
   list_nth_shared_mut_loop_pair_merge_loop T n ls0 ls1 i
 .
 
-(** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0: backward function 0 *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0: backward function 0
+    Source: 'src/loops.rs', lines 316:0-331:1 *)
 Fixpoint list_nth_shared_mut_loop_pair_merge_loop_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
@@ -844,7 +905,8 @@ Fixpoint list_nth_shared_mut_loop_pair_merge_loop_back
   end
 .
 
-(** [loops::list_nth_shared_mut_loop_pair_merge]: backward function 0 *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: backward function 0
+    Source: 'src/loops.rs', lines 316:0-320:23 *)
 Definition list_nth_shared_mut_loop_pair_merge_back
   (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)

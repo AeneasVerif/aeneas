@@ -7,14 +7,16 @@ include External.Opaque
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [external::swap]: forward function *)
+(** [external::swap]: forward function
+    Source: 'src/external.rs', lines 6:0-6:46 *)
 let swap (t : Type0) (x : t) (y : t) (st : state) : result (state & unit) =
   let* (st0, _) = core_mem_swap t x y st in
   let* (st1, _) = core_mem_swap_back0 t x y st st0 in
   let* (st2, _) = core_mem_swap_back1 t x y st st1 in
   Return (st2, ())
 
-(** [external::swap]: backward function 0 *)
+(** [external::swap]: backward function 0
+    Source: 'src/external.rs', lines 6:0-6:46 *)
 let swap_back
   (t : Type0) (x : t) (y : t) (st : state) (st0 : state) :
   result (state & (t & t))
@@ -24,13 +26,15 @@ let swap_back
   let* (_, y0) = core_mem_swap_back1 t x y st st2 in
   Return (st0, (x0, y0))
 
-(** [external::test_new_non_zero_u32]: forward function *)
+(** [external::test_new_non_zero_u32]: forward function
+    Source: 'src/external.rs', lines 11:0-11:60 *)
 let test_new_non_zero_u32
   (x : u32) (st : state) : result (state & core_num_nonzero_NonZeroU32_t) =
   let* (st0, o) = core_num_nonzero_NonZeroU32_new x st in
   core_option_Option_unwrap core_num_nonzero_NonZeroU32_t o st0
 
-(** [external::test_vec]: forward function *)
+(** [external::test_vec]: forward function
+    Source: 'src/external.rs', lines 17:0-17:17 *)
 let test_vec : result unit =
   let v = alloc_vec_Vec_new u32 in
   let* _ = alloc_vec_Vec_push u32 v 0 in
@@ -39,14 +43,16 @@ let test_vec : result unit =
 (** Unit test for [external::test_vec] *)
 let _ = assert_norm (test_vec = Return ())
 
-(** [external::custom_swap]: forward function *)
+(** [external::custom_swap]: forward function
+    Source: 'src/external.rs', lines 24:0-24:66 *)
 let custom_swap (t : Type0) (x : t) (y : t) (st : state) : result (state & t) =
   let* (st0, _) = core_mem_swap t x y st in
   let* (st1, x0) = core_mem_swap_back0 t x y st st0 in
   let* (st2, _) = core_mem_swap_back1 t x y st st1 in
   Return (st2, x0)
 
-(** [external::custom_swap]: backward function 0 *)
+(** [external::custom_swap]: backward function 0
+    Source: 'src/external.rs', lines 24:0-24:66 *)
 let custom_swap_back
   (t : Type0) (x : t) (y : t) (st : state) (ret : t) (st0 : state) :
   result (state & (t & t))
@@ -56,18 +62,21 @@ let custom_swap_back
   let* (_, y0) = core_mem_swap_back1 t x y st st2 in
   Return (st0, (ret, y0))
 
-(** [external::test_custom_swap]: forward function *)
+(** [external::test_custom_swap]: forward function
+    Source: 'src/external.rs', lines 29:0-29:59 *)
 let test_custom_swap (x : u32) (y : u32) (st : state) : result (state & unit) =
   let* (st0, _) = custom_swap u32 x y st in Return (st0, ())
 
-(** [external::test_custom_swap]: backward function 0 *)
+(** [external::test_custom_swap]: backward function 0
+    Source: 'src/external.rs', lines 29:0-29:59 *)
 let test_custom_swap_back
   (x : u32) (y : u32) (st : state) (st0 : state) :
   result (state & (u32 & u32))
   =
   custom_swap_back u32 x y st 1 st0
 
-(** [external::test_swap_non_zero]: forward function *)
+(** [external::test_swap_non_zero]: forward function
+    Source: 'src/external.rs', lines 35:0-35:44 *)
 let test_swap_non_zero (x : u32) (st : state) : result (state & u32) =
   let* (st0, _) = swap u32 x 0 st in
   let* (st1, (x0, _)) = swap_back u32 x 0 st st0 in

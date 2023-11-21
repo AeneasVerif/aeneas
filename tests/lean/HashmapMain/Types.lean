@@ -5,12 +5,14 @@ open Primitives
 
 namespace hashmap_main
 
-/- [hashmap_main::hashmap::List] -/
+/- [hashmap_main::hashmap::List]
+   Source: 'src/hashmap.rs', lines 19:0-19:16 -/
 inductive hashmap.List (T : Type) :=
 | Cons : Usize → T → hashmap.List T → hashmap.List T
 | Nil : hashmap.List T
 
-/- [hashmap_main::hashmap::HashMap] -/
+/- [hashmap_main::hashmap::HashMap]
+   Source: 'src/hashmap.rs', lines 35:0-35:21 -/
 structure hashmap.HashMap (T : Type) where
   num_entries : Usize
   max_load_factor : (Usize × Usize)

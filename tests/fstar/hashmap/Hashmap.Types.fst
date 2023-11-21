@@ -5,12 +5,14 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [hashmap::List] *)
+(** [hashmap::List]
+    Source: 'src/hashmap.rs', lines 19:0-19:16 *)
 type list_t (t : Type0) =
 | List_Cons : usize -> t -> list_t t -> list_t t
 | List_Nil : list_t t
 
-(** [hashmap::HashMap] *)
+(** [hashmap::HashMap]
+    Source: 'src/hashmap.rs', lines 35:0-35:21 *)
 type hashMap_t (t : Type0) =
 {
   num_entries : usize;

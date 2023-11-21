@@ -5,103 +5,122 @@ open Primitives
 
 namespace array
 
-/- [array::AB] -/
+/- [array::AB]
+   Source: 'src/array.rs', lines 3:0-3:11 -/
 inductive AB :=
 | A : AB
 | B : AB
 
 /- [array::incr]: merged forward/backward function
-   (there is a single backward function, and the forward function returns ()) -/
+   (there is a single backward function, and the forward function returns ())
+   Source: 'src/array.rs', lines 8:0-8:24 -/
 def incr (x : U32) : Result U32 :=
   x + 1#u32
 
-/- [array::array_to_shared_slice_]: forward function -/
+/- [array::array_to_shared_slice_]: forward function
+   Source: 'src/array.rs', lines 16:0-16:53 -/
 def array_to_shared_slice_
   (T : Type) (s : Array T 32#usize) : Result (Slice T) :=
   Array.to_slice T 32#usize s
 
-/- [array::array_to_mut_slice_]: forward function -/
+/- [array::array_to_mut_slice_]: forward function
+   Source: 'src/array.rs', lines 21:0-21:58 -/
 def array_to_mut_slice_ (T : Type) (s : Array T 32#usize) : Result (Slice T) :=
   Array.to_slice T 32#usize s
 
-/- [array::array_to_mut_slice_]: backward function 0 -/
+/- [array::array_to_mut_slice_]: backward function 0
+   Source: 'src/array.rs', lines 21:0-21:58 -/
 def array_to_mut_slice__back
   (T : Type) (s : Array T 32#usize) (ret0 : Slice T) :
   Result (Array T 32#usize)
   :=
   Array.from_slice T 32#usize s ret0
 
-/- [array::array_len]: forward function -/
+/- [array::array_len]: forward function
+   Source: 'src/array.rs', lines 25:0-25:40 -/
 def array_len (T : Type) (s : Array T 32#usize) : Result Usize :=
   do
     let s0 ← Array.to_slice T 32#usize s
     let i := Slice.len T s0
     Result.ret i
 
-/- [array::shared_array_len]: forward function -/
+/- [array::shared_array_len]: forward function
+   Source: 'src/array.rs', lines 29:0-29:48 -/
 def shared_array_len (T : Type) (s : Array T 32#usize) : Result Usize :=
   do
     let s0 ← Array.to_slice T 32#usize s
     let i := Slice.len T s0
     Result.ret i
 
-/- [array::shared_slice_len]: forward function -/
+/- [array::shared_slice_len]: forward function
+   Source: 'src/array.rs', lines 33:0-33:44 -/
 def shared_slice_len (T : Type) (s : Slice T) : Result Usize :=
   let i := Slice.len T s
   Result.ret i
 
-/- [array::index_array_shared]: forward function -/
+/- [array::index_array_shared]: forward function
+   Source: 'src/array.rs', lines 37:0-37:57 -/
 def index_array_shared
   (T : Type) (s : Array T 32#usize) (i : Usize) : Result T :=
   Array.index_usize T 32#usize s i
 
-/- [array::index_array_u32]: forward function -/
+/- [array::index_array_u32]: forward function
+   Source: 'src/array.rs', lines 44:0-44:53 -/
 def index_array_u32 (s : Array U32 32#usize) (i : Usize) : Result U32 :=
   Array.index_usize U32 32#usize s i
 
-/- [array::index_array_copy]: forward function -/
+/- [array::index_array_copy]: forward function
+   Source: 'src/array.rs', lines 48:0-48:45 -/
 def index_array_copy (x : Array U32 32#usize) : Result U32 :=
   Array.index_usize U32 32#usize x 0#usize
 
-/- [array::index_mut_array]: forward function -/
+/- [array::index_mut_array]: forward function
+   Source: 'src/array.rs', lines 52:0-52:62 -/
 def index_mut_array (T : Type) (s : Array T 32#usize) (i : Usize) : Result T :=
   Array.index_usize T 32#usize s i
 
-/- [array::index_mut_array]: backward function 0 -/
+/- [array::index_mut_array]: backward function 0
+   Source: 'src/array.rs', lines 52:0-52:62 -/
 def index_mut_array_back
   (T : Type) (s : Array T 32#usize) (i : Usize) (ret0 : T) :
   Result (Array T 32#usize)
   :=
   Array.update_usize T 32#usize s i ret0
 
-/- [array::index_slice]: forward function -/
+/- [array::index_slice]: forward function
+   Source: 'src/array.rs', lines 56:0-56:46 -/
 def index_slice (T : Type) (s : Slice T) (i : Usize) : Result T :=
   Slice.index_usize T s i
 
-/- [array::index_mut_slice]: forward function -/
+/- [array::index_mut_slice]: forward function
+   Source: 'src/array.rs', lines 60:0-60:58 -/
 def index_mut_slice (T : Type) (s : Slice T) (i : Usize) : Result T :=
   Slice.index_usize T s i
 
-/- [array::index_mut_slice]: backward function 0 -/
+/- [array::index_mut_slice]: backward function 0
+   Source: 'src/array.rs', lines 60:0-60:58 -/
 def index_mut_slice_back
   (T : Type) (s : Slice T) (i : Usize) (ret0 : T) : Result (Slice T) :=
   Slice.update_usize T s i ret0
 
-/- [array::slice_subslice_shared_]: forward function -/
+/- [array::slice_subslice_shared_]: forward function
+   Source: 'src/array.rs', lines 64:0-64:70 -/
 def slice_subslice_shared_
   (x : Slice U32) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.slice.index.Slice.index U32 (core.ops.range.Range Usize)
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
     { start := y, end_ := z }
 
-/- [array::slice_subslice_mut_]: forward function -/
+/- [array::slice_subslice_mut_]: forward function
+   Source: 'src/array.rs', lines 68:0-68:75 -/
 def slice_subslice_mut_
   (x : Slice U32) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.slice.index.Slice.index_mut U32 (core.ops.range.Range Usize)
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
     { start := y, end_ := z }
 
-/- [array::slice_subslice_mut_]: backward function 0 -/
+/- [array::slice_subslice_mut_]: backward function 0
+   Source: 'src/array.rs', lines 68:0-68:75 -/
 def slice_subslice_mut__back
   (x : Slice U32) (y : Usize) (z : Usize) (ret0 : Slice U32) :
   Result (Slice U32)
@@ -110,20 +129,24 @@ def slice_subslice_mut__back
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
     { start := y, end_ := z } ret0
 
-/- [array::array_to_slice_shared_]: forward function -/
+/- [array::array_to_slice_shared_]: forward function
+   Source: 'src/array.rs', lines 72:0-72:54 -/
 def array_to_slice_shared_ (x : Array U32 32#usize) : Result (Slice U32) :=
   Array.to_slice U32 32#usize x
 
-/- [array::array_to_slice_mut_]: forward function -/
+/- [array::array_to_slice_mut_]: forward function
+   Source: 'src/array.rs', lines 76:0-76:59 -/
 def array_to_slice_mut_ (x : Array U32 32#usize) : Result (Slice U32) :=
   Array.to_slice U32 32#usize x
 
-/- [array::array_to_slice_mut_]: backward function 0 -/
+/- [array::array_to_slice_mut_]: backward function 0
+   Source: 'src/array.rs', lines 76:0-76:59 -/
 def array_to_slice_mut__back
   (x : Array U32 32#usize) (ret0 : Slice U32) : Result (Array U32 32#usize) :=
   Array.from_slice U32 32#usize x ret0
 
-/- [array::array_subslice_shared_]: forward function -/
+/- [array::array_subslice_shared_]: forward function
+   Source: 'src/array.rs', lines 80:0-80:74 -/
 def array_subslice_shared_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.array.Array.index U32 (core.ops.range.Range Usize) 32#usize
@@ -131,7 +154,8 @@ def array_subslice_shared_
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
     { start := y, end_ := z }
 
-/- [array::array_subslice_mut_]: forward function -/
+/- [array::array_subslice_mut_]: forward function
+   Source: 'src/array.rs', lines 84:0-84:79 -/
 def array_subslice_mut_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.array.Array.index_mut U32 (core.ops.range.Range Usize) 32#usize
@@ -139,7 +163,8 @@ def array_subslice_mut_
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
     { start := y, end_ := z }
 
-/- [array::array_subslice_mut_]: backward function 0 -/
+/- [array::array_subslice_mut_]: backward function 0
+   Source: 'src/array.rs', lines 84:0-84:79 -/
 def array_subslice_mut__back
   (x : Array U32 32#usize) (y : Usize) (z : Usize) (ret0 : Slice U32) :
   Result (Array U32 32#usize)
@@ -149,15 +174,18 @@ def array_subslice_mut__back
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
     { start := y, end_ := z } ret0
 
-/- [array::index_slice_0]: forward function -/
+/- [array::index_slice_0]: forward function
+   Source: 'src/array.rs', lines 88:0-88:38 -/
 def index_slice_0 (T : Type) (s : Slice T) : Result T :=
   Slice.index_usize T s 0#usize
 
-/- [array::index_array_0]: forward function -/
+/- [array::index_array_0]: forward function
+   Source: 'src/array.rs', lines 92:0-92:42 -/
 def index_array_0 (T : Type) (s : Array T 32#usize) : Result T :=
   Array.index_usize T 32#usize s 0#usize
 
-/- [array::index_index_array]: forward function -/
+/- [array::index_index_array]: forward function
+   Source: 'src/array.rs', lines 103:0-103:71 -/
 def index_index_array
   (s : Array (Array U32 32#usize) 32#usize) (i : Usize) (j : Usize) :
   Result U32
@@ -166,7 +194,8 @@ def index_index_array
     let a ← Array.index_usize (Array U32 32#usize) 32#usize s i
     Array.index_usize U32 32#usize a j
 
-/- [array::update_update_array]: forward function -/
+/- [array::update_update_array]: forward function
+   Source: 'src/array.rs', lines 114:0-114:70 -/
 def update_update_array
   (s : Array (Array U32 32#usize) 32#usize) (i : Usize) (j : Usize) :
   Result Unit
@@ -177,28 +206,34 @@ def update_update_array
     let _ ← Array.update_usize (Array U32 32#usize) 32#usize s i a0
     Result.ret ()
 
-/- [array::array_local_deep_copy]: forward function -/
+/- [array::array_local_deep_copy]: forward function
+   Source: 'src/array.rs', lines 118:0-118:43 -/
 def array_local_deep_copy (x : Array U32 32#usize) : Result Unit :=
   Result.ret ()
 
-/- [array::take_array]: forward function -/
+/- [array::take_array]: forward function
+   Source: 'src/array.rs', lines 122:0-122:30 -/
 def take_array (a : Array U32 2#usize) : Result Unit :=
   Result.ret ()
 
-/- [array::take_array_borrow]: forward function -/
+/- [array::take_array_borrow]: forward function
+   Source: 'src/array.rs', lines 123:0-123:38 -/
 def take_array_borrow (a : Array U32 2#usize) : Result Unit :=
   Result.ret ()
 
-/- [array::take_slice]: forward function -/
+/- [array::take_slice]: forward function
+   Source: 'src/array.rs', lines 124:0-124:28 -/
 def take_slice (s : Slice U32) : Result Unit :=
   Result.ret ()
 
 /- [array::take_mut_slice]: merged forward/backward function
-   (there is a single backward function, and the forward function returns ()) -/
+   (there is a single backward function, and the forward function returns ())
+   Source: 'src/array.rs', lines 125:0-125:36 -/
 def take_mut_slice (s : Slice U32) : Result (Slice U32) :=
   Result.ret s
 
-/- [array::take_all]: forward function -/
+/- [array::take_all]: forward function
+   Source: 'src/array.rs', lines 127:0-127:17 -/
 def take_all : Result Unit :=
   do
     let _ ← take_array (Array.make U32 2#usize [ 0#u32, 0#u32 ])
@@ -213,29 +248,35 @@ def take_all : Result Unit :=
       Array.from_slice U32 2#usize (Array.make U32 2#usize [ 0#u32, 0#u32 ]) s1
     Result.ret ()
 
-/- [array::index_array]: forward function -/
+/- [array::index_array]: forward function
+   Source: 'src/array.rs', lines 141:0-141:38 -/
 def index_array (x : Array U32 2#usize) : Result U32 :=
   Array.index_usize U32 2#usize x 0#usize
 
-/- [array::index_array_borrow]: forward function -/
+/- [array::index_array_borrow]: forward function
+   Source: 'src/array.rs', lines 144:0-144:46 -/
 def index_array_borrow (x : Array U32 2#usize) : Result U32 :=
   Array.index_usize U32 2#usize x 0#usize
 
-/- [array::index_slice_u32_0]: forward function -/
+/- [array::index_slice_u32_0]: forward function
+   Source: 'src/array.rs', lines 148:0-148:42 -/
 def index_slice_u32_0 (x : Slice U32) : Result U32 :=
   Slice.index_usize U32 x 0#usize
 
-/- [array::index_mut_slice_u32_0]: forward function -/
+/- [array::index_mut_slice_u32_0]: forward function
+   Source: 'src/array.rs', lines 152:0-152:50 -/
 def index_mut_slice_u32_0 (x : Slice U32) : Result U32 :=
   Slice.index_usize U32 x 0#usize
 
-/- [array::index_mut_slice_u32_0]: backward function 0 -/
+/- [array::index_mut_slice_u32_0]: backward function 0
+   Source: 'src/array.rs', lines 152:0-152:50 -/
 def index_mut_slice_u32_0_back (x : Slice U32) : Result (Slice U32) :=
   do
     let _ ← Slice.index_usize U32 x 0#usize
     Result.ret x
 
-/- [array::index_all]: forward function -/
+/- [array::index_all]: forward function
+   Source: 'src/array.rs', lines 156:0-156:25 -/
 def index_all : Result U32 :=
   do
     let i ← index_array (Array.make U32 2#usize [ 0#u32, 0#u32 ])
@@ -256,24 +297,28 @@ def index_all : Result U32 :=
       Array.from_slice U32 2#usize (Array.make U32 2#usize [ 0#u32, 0#u32 ]) s1
     Result.ret i7
 
-/- [array::update_array]: forward function -/
+/- [array::update_array]: forward function
+   Source: 'src/array.rs', lines 170:0-170:36 -/
 def update_array (x : Array U32 2#usize) : Result Unit :=
   do
     let _ ← Array.update_usize U32 2#usize x 0#usize 1#u32
     Result.ret ()
 
 /- [array::update_array_mut_borrow]: merged forward/backward function
-   (there is a single backward function, and the forward function returns ()) -/
+   (there is a single backward function, and the forward function returns ())
+   Source: 'src/array.rs', lines 173:0-173:48 -/
 def update_array_mut_borrow
   (x : Array U32 2#usize) : Result (Array U32 2#usize) :=
   Array.update_usize U32 2#usize x 0#usize 1#u32
 
 /- [array::update_mut_slice]: merged forward/backward function
-   (there is a single backward function, and the forward function returns ()) -/
+   (there is a single backward function, and the forward function returns ())
+   Source: 'src/array.rs', lines 176:0-176:38 -/
 def update_mut_slice (x : Slice U32) : Result (Slice U32) :=
   Slice.update_usize U32 x 0#usize 1#u32
 
-/- [array::update_all]: forward function -/
+/- [array::update_all]: forward function
+   Source: 'src/array.rs', lines 180:0-180:19 -/
 def update_all : Result Unit :=
   do
     let _ ← update_array (Array.make U32 2#usize [ 0#u32, 0#u32 ])
@@ -283,7 +328,8 @@ def update_all : Result Unit :=
     let _ ← Array.from_slice U32 2#usize x s0
     Result.ret ()
 
-/- [array::range_all]: forward function -/
+/- [array::range_all]: forward function
+   Source: 'src/array.rs', lines 191:0-191:18 -/
 def range_all : Result Unit :=
   do
     let s ←
@@ -301,32 +347,38 @@ def range_all : Result Unit :=
         { start := 1#usize, end_ := 3#usize } s0
     Result.ret ()
 
-/- [array::deref_array_borrow]: forward function -/
+/- [array::deref_array_borrow]: forward function
+   Source: 'src/array.rs', lines 200:0-200:46 -/
 def deref_array_borrow (x : Array U32 2#usize) : Result U32 :=
   Array.index_usize U32 2#usize x 0#usize
 
-/- [array::deref_array_mut_borrow]: forward function -/
+/- [array::deref_array_mut_borrow]: forward function
+   Source: 'src/array.rs', lines 205:0-205:54 -/
 def deref_array_mut_borrow (x : Array U32 2#usize) : Result U32 :=
   Array.index_usize U32 2#usize x 0#usize
 
-/- [array::deref_array_mut_borrow]: backward function 0 -/
+/- [array::deref_array_mut_borrow]: backward function 0
+   Source: 'src/array.rs', lines 205:0-205:54 -/
 def deref_array_mut_borrow_back
   (x : Array U32 2#usize) : Result (Array U32 2#usize) :=
   do
     let _ ← Array.index_usize U32 2#usize x 0#usize
     Result.ret x
 
-/- [array::take_array_t]: forward function -/
+/- [array::take_array_t]: forward function
+   Source: 'src/array.rs', lines 213:0-213:31 -/
 def take_array_t (a : Array AB 2#usize) : Result Unit :=
   Result.ret ()
 
-/- [array::non_copyable_array]: forward function -/
+/- [array::non_copyable_array]: forward function
+   Source: 'src/array.rs', lines 215:0-215:27 -/
 def non_copyable_array : Result Unit :=
   do
     let _ ← take_array_t (Array.make AB 2#usize [ AB.A, AB.B ])
     Result.ret ()
 
-/- [array::sum]: loop 0: forward function -/
+/- [array::sum]: loop 0: forward function
+   Source: 'src/array.rs', lines 228:0-236:1 -/
 divergent def sum_loop (s : Slice U32) (sum0 : U32) (i : Usize) : Result U32 :=
   let i0 := Slice.len U32 s
   if i < i0
@@ -338,11 +390,13 @@ divergent def sum_loop (s : Slice U32) (sum0 : U32) (i : Usize) : Result U32 :=
       sum_loop s sum1 i2
   else Result.ret sum0
 
-/- [array::sum]: forward function -/
+/- [array::sum]: forward function
+   Source: 'src/array.rs', lines 228:0-228:28 -/
 def sum (s : Slice U32) : Result U32 :=
   sum_loop s 0#u32 0#usize
 
-/- [array::sum2]: loop 0: forward function -/
+/- [array::sum2]: loop 0: forward function
+   Source: 'src/array.rs', lines 238:0-247:1 -/
 divergent def sum2_loop
   (s : Slice U32) (s2 : Slice U32) (sum0 : U32) (i : Usize) : Result U32 :=
   let i0 := Slice.len U32 s
@@ -357,7 +411,8 @@ divergent def sum2_loop
       sum2_loop s s2 sum1 i4
   else Result.ret sum0
 
-/- [array::sum2]: forward function -/
+/- [array::sum2]: forward function
+   Source: 'src/array.rs', lines 238:0-238:41 -/
 def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
   let i := Slice.len U32 s
   let i0 := Slice.len U32 s2
@@ -365,7 +420,8 @@ def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
   then Result.fail Error.panic
   else sum2_loop s s2 0#u32 0#usize
 
-/- [array::f0]: forward function -/
+/- [array::f0]: forward function
+   Source: 'src/array.rs', lines 249:0-249:11 -/
 def f0 : Result Unit :=
   do
     let s ←
@@ -375,7 +431,8 @@ def f0 : Result Unit :=
       Array.from_slice U32 2#usize (Array.make U32 2#usize [ 1#u32, 2#u32 ]) s0
     Result.ret ()
 
-/- [array::f1]: forward function -/
+/- [array::f1]: forward function
+   Source: 'src/array.rs', lines 254:0-254:11 -/
 def f1 : Result Unit :=
   do
     let _ ←
@@ -383,18 +440,21 @@ def f1 : Result Unit :=
         0#usize 1#u32
     Result.ret ()
 
-/- [array::f2]: forward function -/
+/- [array::f2]: forward function
+   Source: 'src/array.rs', lines 259:0-259:17 -/
 def f2 (i : U32) : Result Unit :=
   Result.ret ()
 
-/- [array::f4]: forward function -/
+/- [array::f4]: forward function
+   Source: 'src/array.rs', lines 268:0-268:54 -/
 def f4 (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) :=
   core.array.Array.index U32 (core.ops.range.Range Usize) 32#usize
     (core.ops.index.IndexSliceTIInst U32 (core.ops.range.Range Usize)
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
     { start := y, end_ := z }
 
-/- [array::f3]: forward function -/
+/- [array::f3]: forward function
+   Source: 'src/array.rs', lines 261:0-261:18 -/
 def f3 : Result U32 :=
   do
     let i ←
@@ -407,15 +467,18 @@ def f3 : Result U32 :=
     let s0 ← f4 b 16#usize 18#usize
     sum2 s s0
 
-/- [array::SZ] -/
+/- [array::SZ]
+   Source: 'src/array.rs', lines 272:0-272:19 -/
 def sz_body : Result Usize := Result.ret 32#usize
 def sz_c : Usize := eval_global sz_body (by simp)
 
-/- [array::f5]: forward function -/
+/- [array::f5]: forward function
+   Source: 'src/array.rs', lines 275:0-275:31 -/
 def f5 (x : Array U32 32#usize) : Result U32 :=
   Array.index_usize U32 32#usize x 0#usize
 
-/- [array::ite]: forward function -/
+/- [array::ite]: forward function
+   Source: 'src/array.rs', lines 280:0-280:12 -/
 def ite : Result Unit :=
   do
     let s ←
