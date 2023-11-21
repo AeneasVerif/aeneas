@@ -1,5 +1,6 @@
 open Identifiers
 open Types
+include Charon.Values
 
 (* TODO(SH): I often write "abstract" (value, borrow content, etc.) while I should
  * write "abstraction" (because those values are not abstract, they simply are
@@ -11,9 +12,6 @@ module AbstractionId = IdGen ()
 module FunCallId = IdGen ()
 module LoopId = IdGen ()
 
-type big_int = PrimitiveValues.big_int [@@deriving show, ord]
-type scalar_value = PrimitiveValues.scalar_value [@@deriving show, ord]
-type literal = PrimitiveValues.literal [@@deriving show, ord]
 type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
 type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]

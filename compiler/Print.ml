@@ -10,7 +10,6 @@ open ValuesUtils
 open Expressions
 open LlbcAst
 open Contexts
-module PrimitiveValues = Charon.PrintPrimitiveValues
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
@@ -21,6 +20,8 @@ let bool_to_string (b : bool) : string = if b then "true" else "false"
 
 (** Pretty-printing for values *)
 module Values = struct
+  include Charon.PrintValues
+
   let symbolic_value_id_to_pretty_string (id : SymbolicValueId.id) : string =
     "s@" ^ SymbolicValueId.to_string id
 

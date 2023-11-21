@@ -2,7 +2,6 @@
  * are always maintained by evaluation contexts *)
 
 open Types
-open PrimitiveValues
 open Values
 open Contexts
 open Cps
@@ -465,7 +464,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
                     inner_values);
                 (* The length is necessarily concrete *)
                 let len =
-                  (PrimitiveValuesUtils.literal_as_scalar
+                  (ValuesUtils.literal_as_scalar
                      (TypesUtils.const_generic_as_literal cg))
                     .value
                 in

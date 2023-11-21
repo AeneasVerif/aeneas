@@ -2,16 +2,14 @@ open Utils
 open LlbcAstUtils
 open Pure
 open PureUtils
-open PrimitiveValues
 open InterpreterUtils
 open FunsAnalysis
 open TypesAnalysis
 module T = Types
-module Id = Identifiers
+module V = Values
 module C = Contexts
 module A = LlbcAst
 module S = SymbolicAst
-module TA = TypesAnalysis
 module PP = PrintPure
 
 (** The local logger *)

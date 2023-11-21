@@ -1,4 +1,3 @@
-open PrimitiveValues
 open Types
 open Values
 open LlbcAst
@@ -96,7 +95,7 @@ let literal_to_typed_value (ty : literal_type) (cv : literal) : typed_value =
   log#ldebug
     (lazy
       ("literal_to_typed_value:" ^ "\n- cv: "
-      ^ Print.PrimitiveValues.literal_to_string cv));
+      ^ Print.Values.literal_to_string cv));
   match (ty, cv) with
   (* Scalar, boolean... *)
   | TBool, VBool v -> { value = VLiteral (VBool v); ty = TLiteral ty }

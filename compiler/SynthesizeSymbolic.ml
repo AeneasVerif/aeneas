@@ -1,6 +1,5 @@
 open Types
 open TypesUtils
-open PrimitiveValues
 open Expressions
 open Values
 open SymbolicAst

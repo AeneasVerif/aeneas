@@ -4,7 +4,6 @@
  * using indices to identify the values for instance). *)
 
 open Types
-open PrimitiveValues
 open Values
 open Contexts
 open TypesUtils

@@ -1,6 +1,5 @@
 open Types
 open TypesUtils
-open PrimitiveValues
 open Values
 open ValuesUtils
 open Expressions

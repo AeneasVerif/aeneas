@@ -102,10 +102,10 @@ let adt_field_names (env : fmt_env) =
 let option_to_string = Print.option_to_string
 let type_var_to_string = Print.Types.type_var_to_string
 let const_generic_var_to_string = Print.Types.const_generic_var_to_string
-let integer_type_to_string = Print.PrimitiveValues.integer_type_to_string
-let literal_type_to_string = Print.PrimitiveValues.literal_type_to_string
-let scalar_value_to_string = Print.PrimitiveValues.scalar_value_to_string
-let literal_to_string = Print.PrimitiveValues.literal_to_string
+let integer_type_to_string = Print.Values.integer_type_to_string
+let literal_type_to_string = Print.Values.literal_type_to_string
+let scalar_value_to_string = Print.Values.scalar_value_to_string
+let literal_to_string = Print.Values.literal_to_string
 
 let assumed_ty_to_string (aty : assumed_ty) : string =
   match aty with

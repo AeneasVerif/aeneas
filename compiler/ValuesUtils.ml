@@ -2,7 +2,7 @@ open Utils
 open TypesUtils
 open Types
 open Values
-include PrimitiveValuesUtils
+include Charon.ValuesUtils
 
 (** Utility exception *)
 exception FoundSymbolicValue of symbolic_value
