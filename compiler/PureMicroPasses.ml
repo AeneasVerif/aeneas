@@ -1427,6 +1427,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
             let loop_def : fun_decl =
               {
                 def_id = def.def_id;
+                is_local = def.is_local;
                 kind = def.kind;
                 num_loops;
                 loop_id = Some loop.loop_id;

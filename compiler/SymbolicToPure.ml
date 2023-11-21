@@ -495,7 +495,8 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let generics = { types; const_generics; trait_clauses } in
   let kind = translate_type_decl_kind def.T.kind in
   let preds = translate_predicates def.preds in
-  { def_id; llbc_name; name; generics; kind; preds }
+  let is_local = def.is_local in
+  { def_id; is_local; llbc_name; name; generics; kind; preds }
 
 let translate_type_id (id : T.type_id) : type_id =
   match id with
@@ -3026,6 +3027,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let def : fun_decl =
     {
       def_id;
+      is_local = def.is_local;
       kind = def.kind;
       num_loops;
       loop_id;
@@ -3104,6 +3106,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     : trait_decl =
   let {
     def_id;
+    is_local;
     name = llbc_name;
     generics;
     preds;
@@ -3139,6 +3142,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   {
     def_id;
+    is_local;
     llbc_name;
     name;
     generics;
@@ -3154,6 +3158,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     : trait_impl =
   let {
     A.def_id;
+    is_local;
     name = llbc_name;
     impl_trait;
     generics;
@@ -3193,6 +3198,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   {
     def_id;
+    is_local;
     llbc_name;
     name;
     impl_trait;

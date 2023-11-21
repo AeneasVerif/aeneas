@@ -381,6 +381,7 @@ type predicates = { trait_type_constraints : trait_type_constraint list }
 
 type type_decl = {
   def_id : TypeDeclId.id;
+  is_local : bool;
   llbc_name : llbc_name;
       (** The original name coming from the LLBC declaration *)
   name : string;
@@ -991,6 +992,7 @@ type fun_kind = A.fun_kind [@@deriving show]
 
 type fun_decl = {
   def_id : FunDeclId.id;
+  is_local : bool;
   kind : fun_kind;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
@@ -1014,6 +1016,7 @@ type fun_decl = {
 
 type trait_decl = {
   def_id : trait_decl_id;
+  is_local : bool;
   llbc_name : llbc_name;
   name : string;
   generics : generic_params;
@@ -1028,6 +1031,7 @@ type trait_decl = {
 
 type trait_impl = {
   def_id : trait_impl_id;
+  is_local : bool;
   llbc_name : llbc_name;
   name : string;
   impl_trait : trait_decl_ref;
