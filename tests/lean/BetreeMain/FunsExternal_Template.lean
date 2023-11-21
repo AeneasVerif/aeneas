@@ -24,7 +24,7 @@ axiom betree_utils.load_leaf_node
 axiom betree_utils.store_leaf_node
   : U64 → betree.List (U64 × U64) → State → Result (State × Unit)
 
-/- [core::option::Option::{0}::unwrap]: forward function -/
+/- [core::option::{core::option::Option<T>}::unwrap]: forward function -/
 axiom core.option.Option.unwrap
   (T : Type) : Option T → State → Result (State × T)
 

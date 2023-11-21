@@ -114,7 +114,7 @@ let betree_List_split_at_decreases (t : Type0) (self : betree_List_t t)
 
 (** [betree_main::betree::List::{2}::partition_at_pivot]: decreases clause *)
 unfold
-let betree_List_partition_at_pivot_decreases (t : Type0)
+let betree_ListTupleU64T_partition_at_pivot_decreases (t : Type0)
   (self : betree_List_t (u64 & t)) (pivot : u64) : betree_List_t (u64 & t) =
   self
 

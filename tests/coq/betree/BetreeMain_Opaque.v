@@ -32,7 +32,7 @@ Axiom betree_utils_store_leaf_node
   : u64 -> betree_List_t (u64 * u64) -> state -> result (state * unit)
 .
 
-(** [core::option::Option::{0}::unwrap]: forward function *)
+(** [core::option::{core::option::Option<T>}::unwrap]: forward function *)
 Axiom core_option_Option_unwrap :
   forall(T : Type), option T -> state -> result (state * T)
 .

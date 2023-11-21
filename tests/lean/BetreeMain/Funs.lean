@@ -47,17 +47,17 @@ def betree.fresh_node_id (counter : U64) : Result U64 :=
 def betree.fresh_node_id_back (counter : U64) : Result U64 :=
   counter + 1#u64
 
-/- [betree_main::betree::NodeIdCounter::{0}::new]: forward function -/
+/- [betree_main::betree::{betree_main::betree::NodeIdCounter}::new]: forward function -/
 def betree.NodeIdCounter.new : Result betree.NodeIdCounter :=
   Result.ret { next_node_id := 0#u64 }
 
-/- [betree_main::betree::NodeIdCounter::{0}::fresh_id]: forward function -/
+/- [betree_main::betree::{betree_main::betree::NodeIdCounter}::fresh_id]: forward function -/
 def betree.NodeIdCounter.fresh_id (self : betree.NodeIdCounter) : Result U64 :=
   do
     let _ ← self.next_node_id + 1#u64
     Result.ret self.next_node_id
 
-/- [betree_main::betree::NodeIdCounter::{0}::fresh_id]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::NodeIdCounter}::fresh_id]: backward function 0 -/
 def betree.NodeIdCounter.fresh_id_back
   (self : betree.NodeIdCounter) : Result betree.NodeIdCounter :=
   do
@@ -85,7 +85,7 @@ def betree.upsert_update
       then prev0 - v
       else Result.ret 0#u64
 
-/- [betree_main::betree::List::{1}::len]: forward function -/
+/- [betree_main::betree::{betree_main::betree::List<T>#1}::len]: forward function -/
 divergent def betree.List.len (T : Type) (self : betree.List T) : Result U64 :=
   match self with
   | betree.List.Cons t tl => do
@@ -93,7 +93,7 @@ divergent def betree.List.len (T : Type) (self : betree.List T) : Result U64 :=
                                1#u64 + i
   | betree.List.Nil => Result.ret 0#u64
 
-/- [betree_main::betree::List::{1}::split_at]: forward function -/
+/- [betree_main::betree::{betree_main::betree::List<T>#1}::split_at]: forward function -/
 divergent def betree.List.split_at
   (T : Type) (self : betree.List T) (n : U64) :
   Result ((betree.List T) × (betree.List T))
@@ -111,7 +111,7 @@ divergent def betree.List.split_at
         Result.ret (betree.List.Cons hd l, ls1)
     | betree.List.Nil => Result.fail Error.panic
 
-/- [betree_main::betree::List::{1}::push_front]: merged forward/backward function
+/- [betree_main::betree::{betree_main::betree::List<T>#1}::push_front]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 def betree.List.push_front
   (T : Type) (self : betree.List T) (x : T) : Result (betree.List T) :=
@@ -119,14 +119,14 @@ def betree.List.push_front
   let l := tl
   Result.ret (betree.List.Cons x l)
 
-/- [betree_main::betree::List::{1}::pop_front]: forward function -/
+/- [betree_main::betree::{betree_main::betree::List<T>#1}::pop_front]: forward function -/
 def betree.List.pop_front (T : Type) (self : betree.List T) : Result T :=
   let ls := core.mem.replace (betree.List T) self betree.List.Nil
   match ls with
   | betree.List.Cons x tl => Result.ret x
   | betree.List.Nil => Result.fail Error.panic
 
-/- [betree_main::betree::List::{1}::pop_front]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::List<T>#1}::pop_front]: backward function 0 -/
 def betree.List.pop_front_back
   (T : Type) (self : betree.List T) : Result (betree.List T) :=
   let ls := core.mem.replace (betree.List T) self betree.List.Nil
@@ -134,22 +134,22 @@ def betree.List.pop_front_back
   | betree.List.Cons x tl => Result.ret tl
   | betree.List.Nil => Result.fail Error.panic
 
-/- [betree_main::betree::List::{1}::hd]: forward function -/
+/- [betree_main::betree::{betree_main::betree::List<T>#1}::hd]: forward function -/
 def betree.List.hd (T : Type) (self : betree.List T) : Result T :=
   match self with
   | betree.List.Cons hd l => Result.ret hd
   | betree.List.Nil => Result.fail Error.panic
 
-/- [betree_main::betree::List::{2}::head_has_key]: forward function -/
-def betree.List.head_has_key
+/- [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::head_has_key]: forward function -/
+def betree.ListTupleU64T.head_has_key
   (T : Type) (self : betree.List (U64 × T)) (key : U64) : Result Bool :=
   match self with
   | betree.List.Cons hd l => let (i, _) := hd
                              Result.ret (i = key)
   | betree.List.Nil => Result.ret false
 
-/- [betree_main::betree::List::{2}::partition_at_pivot]: forward function -/
-divergent def betree.List.partition_at_pivot
+/- [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::partition_at_pivot]: forward function -/
+divergent def betree.ListTupleU64T.partition_at_pivot
   (T : Type) (self : betree.List (U64 × T)) (pivot : U64) :
   Result ((betree.List (U64 × T)) × (betree.List (U64 × T)))
   :=
@@ -160,13 +160,13 @@ divergent def betree.List.partition_at_pivot
     then Result.ret (betree.List.Nil, betree.List.Cons (i, t) tl)
     else
       do
-        let p ← betree.List.partition_at_pivot T tl pivot
+        let p ← betree.ListTupleU64T.partition_at_pivot T tl pivot
         let (ls0, ls1) := p
         let l := ls0
         Result.ret (betree.List.Cons (i, t) l, ls1)
   | betree.List.Nil => Result.ret (betree.List.Nil, betree.List.Nil)
 
-/- [betree_main::betree::Leaf::{3}::split]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Leaf#3}::split]: forward function -/
 def betree.Leaf.split
   (self : betree.Leaf) (content : betree.List (U64 × U64))
   (params : betree.Params) (node_id_cnt : betree.NodeIdCounter) (st : State) :
@@ -186,7 +186,7 @@ def betree.Leaf.split
     let n0 := betree.Node.Leaf { id := id1, size := params.split_size }
     Result.ret (st1, betree.Internal.mk self.id pivot n n0)
 
-/- [betree_main::betree::Leaf::{3}::split]: backward function 2 -/
+/- [betree_main::betree::{betree_main::betree::Leaf#3}::split]: backward function 2 -/
 def betree.Leaf.split_back
   (self : betree.Leaf) (content : betree.List (U64 × U64))
   (params : betree.Params) (node_id_cnt : betree.NodeIdCounter) (st : State) :
@@ -203,7 +203,7 @@ def betree.Leaf.split_back
     let _ ← betree.store_leaf_node id1 content1 st0
     betree.NodeIdCounter.fresh_id_back node_id_cnt0
 
-/- [betree_main::betree::Node::{5}::lookup_first_message_for_key]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_first_message_for_key]: forward function -/
 divergent def betree.Node.lookup_first_message_for_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × betree.Message))
@@ -216,7 +216,7 @@ divergent def betree.Node.lookup_first_message_for_key
     else betree.Node.lookup_first_message_for_key key next_msgs
   | betree.List.Nil => Result.ret betree.List.Nil
 
-/- [betree_main::betree::Node::{5}::lookup_first_message_for_key]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_first_message_for_key]: backward function 0 -/
 divergent def betree.Node.lookup_first_message_for_key_back
   (key : U64) (msgs : betree.List (U64 × betree.Message))
   (ret0 : betree.List (U64 × betree.Message)) :
@@ -234,14 +234,14 @@ divergent def betree.Node.lookup_first_message_for_key_back
         Result.ret (betree.List.Cons (i, m) next_msgs0)
   | betree.List.Nil => Result.ret ret0
 
-/- [betree_main::betree::Node::{5}::apply_upserts]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply_upserts]: forward function -/
 divergent def betree.Node.apply_upserts
   (msgs : betree.List (U64 × betree.Message)) (prev : Option U64) (key : U64)
   (st : State) :
   Result (State × U64)
   :=
   do
-    let b ← betree.List.head_has_key betree.Message msgs key
+    let b ← betree.ListTupleU64T.head_has_key betree.Message msgs key
     if b
     then
       do
@@ -264,14 +264,14 @@ divergent def betree.Node.apply_upserts
             betree.Message.Insert v)
         Result.ret (st0, v)
 
-/- [betree_main::betree::Node::{5}::apply_upserts]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply_upserts]: backward function 0 -/
 divergent def betree.Node.apply_upserts_back
   (msgs : betree.List (U64 × betree.Message)) (prev : Option U64) (key : U64)
   (st : State) :
   Result (betree.List (U64 × betree.Message))
   :=
   do
-    let b ← betree.List.head_has_key betree.Message msgs key
+    let b ← betree.ListTupleU64T.head_has_key betree.Message msgs key
     if b
     then
       do
@@ -292,7 +292,7 @@ divergent def betree.Node.apply_upserts_back
         betree.List.push_front (U64 × betree.Message) msgs (key,
           betree.Message.Insert v)
 
-/- [betree_main::betree::Node::{5}::lookup_in_bindings]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]: forward function -/
 divergent def betree.Node.lookup_in_bindings
   (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
   match bindings with
@@ -306,7 +306,7 @@ divergent def betree.Node.lookup_in_bindings
       else betree.Node.lookup_in_bindings key tl
   | betree.List.Nil => Result.ret none
 
-/- [betree_main::betree::Internal::{4}::lookup_in_children]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Internal#4}::lookup_in_children]: forward function -/
 mutual divergent def betree.Internal.lookup_in_children
   (self : betree.Internal) (key : U64) (st : State) :
   Result (State × (Option U64))
@@ -316,7 +316,7 @@ mutual divergent def betree.Internal.lookup_in_children
   then betree.Node.lookup n key st
   else betree.Node.lookup n0 key st
 
-/- [betree_main::betree::Internal::{4}::lookup_in_children]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Internal#4}::lookup_in_children]: backward function 0 -/
 divergent def betree.Internal.lookup_in_children_back
   (self : betree.Internal) (key : U64) (st : State) : Result betree.Internal :=
   let ⟨ i, i0, n, n0 ⟩ := self
@@ -330,7 +330,7 @@ divergent def betree.Internal.lookup_in_children_back
       let n1 ← betree.Node.lookup_back n0 key st
       Result.ret (betree.Internal.mk i i0 n n1)
 
-/- [betree_main::betree::Node::{5}::lookup]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup]: forward function -/
 divergent def betree.Node.lookup
   (self : betree.Node) (key : U64) (st : State) :
   Result (State × (Option U64))
@@ -402,7 +402,7 @@ divergent def betree.Node.lookup
       let o ← betree.Node.lookup_in_bindings key bindings
       Result.ret (st0, o)
 
-/- [betree_main::betree::Node::{5}::lookup]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup]: backward function 0 -/
 divergent def betree.Node.lookup_back
   (self : betree.Node) (key : U64) (st : State) : Result betree.Node :=
   match self with
@@ -475,7 +475,7 @@ divergent def betree.Node.lookup_back
 
 end
 
-/- [betree_main::betree::Node::{5}::filter_messages_for_key]: merged forward/backward function
+/- [betree_main::betree::{betree_main::betree::Node#5}::filter_messages_for_key]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 divergent def betree.Node.filter_messages_for_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
@@ -494,7 +494,7 @@ divergent def betree.Node.filter_messages_for_key
     else Result.ret (betree.List.Cons (k, m) l)
   | betree.List.Nil => Result.ret betree.List.Nil
 
-/- [betree_main::betree::Node::{5}::lookup_first_message_after_key]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_first_message_after_key]: forward function -/
 divergent def betree.Node.lookup_first_message_after_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × betree.Message))
@@ -507,7 +507,7 @@ divergent def betree.Node.lookup_first_message_after_key
     else Result.ret (betree.List.Cons (k, m) next_msgs)
   | betree.List.Nil => Result.ret betree.List.Nil
 
-/- [betree_main::betree::Node::{5}::lookup_first_message_after_key]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_first_message_after_key]: backward function 0 -/
 divergent def betree.Node.lookup_first_message_after_key_back
   (key : U64) (msgs : betree.List (U64 × betree.Message))
   (ret0 : betree.List (U64 × betree.Message)) :
@@ -525,7 +525,7 @@ divergent def betree.Node.lookup_first_message_after_key_back
     else Result.ret ret0
   | betree.List.Nil => Result.ret ret0
 
-/- [betree_main::betree::Node::{5}::apply_to_internal]: merged forward/backward function
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply_to_internal]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 def betree.Node.apply_to_internal
   (msgs : betree.List (U64 × betree.Message)) (key : U64)
@@ -534,7 +534,7 @@ def betree.Node.apply_to_internal
   :=
   do
     let msgs0 ← betree.Node.lookup_first_message_for_key key msgs
-    let b ← betree.List.head_has_key betree.Message msgs0 key
+    let b ← betree.ListTupleU64T.head_has_key betree.Message msgs0 key
     if b
     then
       match new_msg with
@@ -591,7 +591,7 @@ def betree.Node.apply_to_internal
           betree.List.push_front (U64 × betree.Message) msgs0 (key, new_msg)
         betree.Node.lookup_first_message_for_key_back key msgs msgs1
 
-/- [betree_main::betree::Node::{5}::apply_messages_to_internal]: merged forward/backward function
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply_messages_to_internal]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 divergent def betree.Node.apply_messages_to_internal
   (msgs : betree.List (U64 × betree.Message))
@@ -606,7 +606,7 @@ divergent def betree.Node.apply_messages_to_internal
       betree.Node.apply_messages_to_internal msgs0 new_msgs_tl
   | betree.List.Nil => Result.ret msgs
 
-/- [betree_main::betree::Node::{5}::lookup_mut_in_bindings]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_mut_in_bindings]: forward function -/
 divergent def betree.Node.lookup_mut_in_bindings
   (key : U64) (bindings : betree.List (U64 × U64)) :
   Result (betree.List (U64 × U64))
@@ -619,7 +619,7 @@ divergent def betree.Node.lookup_mut_in_bindings
     else betree.Node.lookup_mut_in_bindings key tl
   | betree.List.Nil => Result.ret betree.List.Nil
 
-/- [betree_main::betree::Node::{5}::lookup_mut_in_bindings]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_mut_in_bindings]: backward function 0 -/
 divergent def betree.Node.lookup_mut_in_bindings_back
   (key : U64) (bindings : betree.List (U64 × U64))
   (ret0 : betree.List (U64 × U64)) :
@@ -636,7 +636,7 @@ divergent def betree.Node.lookup_mut_in_bindings_back
         Result.ret (betree.List.Cons (i, i0) tl0)
   | betree.List.Nil => Result.ret ret0
 
-/- [betree_main::betree::Node::{5}::apply_to_leaf]: merged forward/backward function
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply_to_leaf]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 def betree.Node.apply_to_leaf
   (bindings : betree.List (U64 × U64)) (key : U64) (new_msg : betree.Message)
@@ -645,7 +645,7 @@ def betree.Node.apply_to_leaf
   :=
   do
     let bindings0 ← betree.Node.lookup_mut_in_bindings key bindings
-    let b ← betree.List.head_has_key U64 bindings0 key
+    let b ← betree.ListTupleU64T.head_has_key U64 bindings0 key
     if b
     then
       do
@@ -685,7 +685,7 @@ def betree.Node.apply_to_leaf
             betree.List.push_front (U64 × U64) bindings0 (key, v)
           betree.Node.lookup_mut_in_bindings_back key bindings bindings1
 
-/- [betree_main::betree::Node::{5}::apply_messages_to_leaf]: merged forward/backward function
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply_messages_to_leaf]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 divergent def betree.Node.apply_messages_to_leaf
   (bindings : betree.List (U64 × U64))
@@ -700,7 +700,7 @@ divergent def betree.Node.apply_messages_to_leaf
       betree.Node.apply_messages_to_leaf bindings0 new_msgs_tl
   | betree.List.Nil => Result.ret bindings
 
-/- [betree_main::betree::Internal::{4}::flush]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Internal#4}::flush]: forward function -/
 mutual divergent def betree.Internal.flush
   (self : betree.Internal) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter)
@@ -709,7 +709,7 @@ mutual divergent def betree.Internal.flush
   :=
   do
     let ⟨ _, i, n, n0 ⟩ := self
-    let p ← betree.List.partition_at_pivot betree.Message content i
+    let p ← betree.ListTupleU64T.partition_at_pivot betree.Message content i
     let (msgs_left, msgs_right) := p
     let len_left ← betree.List.len (U64 × betree.Message) msgs_left
     if len_left >= params.min_flush_size
@@ -738,7 +738,7 @@ mutual divergent def betree.Internal.flush
           betree.Node.apply_messages_back n0 params node_id_cnt msgs_right st
         Result.ret (st0, msgs_left)
 
-/- [betree_main::betree::Internal::{4}::flush]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Internal#4}::flush]: backward function 0 -/
 divergent def betree.Internal.flush_back
   (self : betree.Internal) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter)
@@ -747,7 +747,7 @@ divergent def betree.Internal.flush_back
   :=
   do
     let ⟨ i, i0, n, n0 ⟩ := self
-    let p ← betree.List.partition_at_pivot betree.Message content i0
+    let p ← betree.ListTupleU64T.partition_at_pivot betree.Message content i0
     let (msgs_left, msgs_right) := p
     let len_left ← betree.List.len (U64 × betree.Message) msgs_left
     if len_left >= params.min_flush_size
@@ -772,7 +772,7 @@ divergent def betree.Internal.flush_back
           betree.Node.apply_messages_back n0 params node_id_cnt msgs_right st
         Result.ret (betree.Internal.mk i i0 n n1, node_id_cnt0)
 
-/- [betree_main::betree::Node::{5}::apply_messages]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply_messages]: forward function -/
 divergent def betree.Node.apply_messages
   (self : betree.Node) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter)
@@ -820,7 +820,7 @@ divergent def betree.Node.apply_messages
           let (st1, _) ← betree.store_leaf_node node.id content0 st0
           Result.ret (st1, ())
 
-/- [betree_main::betree::Node::{5}::apply_messages]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply_messages]: backward function 0 -/
 divergent def betree.Node.apply_messages_back
   (self : betree.Node) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter)
@@ -874,7 +874,7 @@ divergent def betree.Node.apply_messages_back
 
 end
 
-/- [betree_main::betree::Node::{5}::apply]: forward function -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply]: forward function -/
 def betree.Node.apply
   (self : betree.Node) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter) (key : U64) (new_msg : betree.Message)
@@ -891,7 +891,7 @@ def betree.Node.apply
         (key, new_msg) l) st
     Result.ret (st0, ())
 
-/- [betree_main::betree::Node::{5}::apply]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::Node#5}::apply]: backward function 0 -/
 def betree.Node.apply_back
   (self : betree.Node) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter) (key : U64) (new_msg : betree.Message)
@@ -902,7 +902,7 @@ def betree.Node.apply_back
   betree.Node.apply_messages_back self params node_id_cnt (betree.List.Cons
     (key, new_msg) l) st
 
-/- [betree_main::betree::BeTree::{6}::new]: forward function -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::new]: forward function -/
 def betree.BeTree.new
   (min_flush_size : U64) (split_size : U64) (st : State) :
   Result (State × betree.BeTree)
@@ -920,7 +920,7 @@ def betree.BeTree.new
         root := (betree.Node.Leaf { id := id, size := 0#u64 })
       })
 
-/- [betree_main::betree::BeTree::{6}::apply]: forward function -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::apply]: forward function -/
 def betree.BeTree.apply
   (self : betree.BeTree) (key : U64) (msg : betree.Message) (st : State) :
   Result (State × Unit)
@@ -932,7 +932,7 @@ def betree.BeTree.apply
       betree.Node.apply_back self.root self.params self.node_id_cnt key msg st
     Result.ret (st0, ())
 
-/- [betree_main::betree::BeTree::{6}::apply]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::apply]: backward function 0 -/
 def betree.BeTree.apply_back
   (self : betree.BeTree) (key : U64) (msg : betree.Message) (st : State) :
   Result betree.BeTree
@@ -942,7 +942,7 @@ def betree.BeTree.apply_back
       betree.Node.apply_back self.root self.params self.node_id_cnt key msg st
     Result.ret { self with node_id_cnt := nic, root := n }
 
-/- [betree_main::betree::BeTree::{6}::insert]: forward function -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::insert]: forward function -/
 def betree.BeTree.insert
   (self : betree.BeTree) (key : U64) (value : U64) (st : State) :
   Result (State × Unit)
@@ -954,14 +954,14 @@ def betree.BeTree.insert
       betree.BeTree.apply_back self key (betree.Message.Insert value) st
     Result.ret (st0, ())
 
-/- [betree_main::betree::BeTree::{6}::insert]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::insert]: backward function 0 -/
 def betree.BeTree.insert_back
   (self : betree.BeTree) (key : U64) (value : U64) (st : State) :
   Result betree.BeTree
   :=
   betree.BeTree.apply_back self key (betree.Message.Insert value) st
 
-/- [betree_main::betree::BeTree::{6}::delete]: forward function -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::delete]: forward function -/
 def betree.BeTree.delete
   (self : betree.BeTree) (key : U64) (st : State) : Result (State × Unit) :=
   do
@@ -969,12 +969,12 @@ def betree.BeTree.delete
     let _ ← betree.BeTree.apply_back self key betree.Message.Delete st
     Result.ret (st0, ())
 
-/- [betree_main::betree::BeTree::{6}::delete]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::delete]: backward function 0 -/
 def betree.BeTree.delete_back
   (self : betree.BeTree) (key : U64) (st : State) : Result betree.BeTree :=
   betree.BeTree.apply_back self key betree.Message.Delete st
 
-/- [betree_main::betree::BeTree::{6}::upsert]: forward function -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::upsert]: forward function -/
 def betree.BeTree.upsert
   (self : betree.BeTree) (key : U64) (upd : betree.UpsertFunState) (st : State)
   :
@@ -986,7 +986,7 @@ def betree.BeTree.upsert
     let _ ← betree.BeTree.apply_back self key (betree.Message.Upsert upd) st
     Result.ret (st0, ())
 
-/- [betree_main::betree::BeTree::{6}::upsert]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::upsert]: backward function 0 -/
 def betree.BeTree.upsert_back
   (self : betree.BeTree) (key : U64) (upd : betree.UpsertFunState) (st : State)
   :
@@ -994,14 +994,14 @@ def betree.BeTree.upsert_back
   :=
   betree.BeTree.apply_back self key (betree.Message.Upsert upd) st
 
-/- [betree_main::betree::BeTree::{6}::lookup]: forward function -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::lookup]: forward function -/
 def betree.BeTree.lookup
   (self : betree.BeTree) (key : U64) (st : State) :
   Result (State × (Option U64))
   :=
   betree.Node.lookup self.root key st
 
-/- [betree_main::betree::BeTree::{6}::lookup]: backward function 0 -/
+/- [betree_main::betree::{betree_main::betree::BeTree#6}::lookup]: backward function 0 -/
 def betree.BeTree.lookup_back
   (self : betree.BeTree) (key : U64) (st : State) : Result betree.BeTree :=
   do

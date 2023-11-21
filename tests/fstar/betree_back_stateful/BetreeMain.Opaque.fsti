@@ -24,7 +24,7 @@ val betree_utils_load_leaf_node
 val betree_utils_store_leaf_node
   : u64 -> betree_List_t (u64 & u64) -> state -> result (state & unit)
 
-(** [core::option::Option::{0}::unwrap]: forward function *)
+(** [core::option::{core::option::Option<T>}::unwrap]: forward function *)
 val core_option_Option_unwrap
   (t : Type0) : option t -> state -> result (state & t)
 
