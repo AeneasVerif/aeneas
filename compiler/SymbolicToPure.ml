@@ -269,7 +269,11 @@ let ty_to_string (ctx : bs_ctx) (ty : T.ty) : string =
   let env = bs_ctx_to_fmt_env ctx in
   Print.Types.ty_to_string env ty
 
-let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
+let type_decl_to_string (ctx : bs_ctx) (def : T.type_decl) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Types.type_decl_to_string env def
+
+let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.type_decl_to_string env def
 
@@ -476,6 +480,12 @@ let translate_type_decl_kind (kind : T.type_decl_kind) : type_decl_kind =
  *)
 let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
     type_decl =
+  log#ldebug
+    (lazy
+      (let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
+       "translate_type_decl:\n\n"
+       ^ Print.Types.type_decl_to_string ctx def
+       ^ "\n"));
   let env = Print.Contexts.decls_ctx_to_fmt_env ctx in
   let def_id = def.T.def_id in
   let llbc_name = def.name in
