@@ -35,7 +35,7 @@ end
  *)
 let pattern_to_extract_name (is_trait_impl : bool) (name : pattern) :
     string list =
-  let c = { tgt_kind = TkName } in
+  let c = { tgt = TkName } in
   let is_var (g : generic_arg) : bool =
     match g with
     | GExpr (EVar _) -> true
@@ -83,11 +83,13 @@ let pattern_to_trait_impl_extract_name = pattern_to_extract_name true
    names we derive from the patterns (for the builtin definitions) are
    consistent with the extraction names we derive from the Rust names *)
 let name_to_simple_name (ctx : ctx) (n : Types.name) : string list =
-  pattern_to_extract_name false (name_to_pattern ctx n)
+  let c : to_pat_config = { tgt = TkName } in
+  pattern_to_extract_name false (name_to_pattern ctx c n)
 
 let name_with_generics_to_simple_name (ctx : ctx) (n : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
-  pattern_to_extract_name true (name_with_generics_to_pattern ctx n p g)
+  let c : to_pat_config = { tgt = TkName } in
+  pattern_to_extract_name true (name_with_generics_to_pattern ctx c n p g)
 
 (*
   (* Prepare a name.

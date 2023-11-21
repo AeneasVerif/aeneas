@@ -151,11 +151,13 @@ def test_list1 : Result Unit :=
 
 /- [no_nested_borrows::test_box1]: forward function -/
 def test_box1 : Result Unit :=
-  let b := 1#i32
-  let x := b
-  if not (x = 1#i32)
-  then Result.fail Error.panic
-  else Result.ret ()
+  do
+    let b := 0#i32
+    let b0 ← alloc.boxed.Box.deref_mut_back I32 b 1#i32
+    let x ← alloc.boxed.Box.deref I32 b0
+    if not (x = 1#i32)
+    then Result.fail Error.panic
+    else Result.ret ()
 
 /- Unit test for [no_nested_borrows::test_box1] -/
 #assert (test_box1 == .ret ())
