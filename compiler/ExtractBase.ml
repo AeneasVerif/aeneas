@@ -1510,10 +1510,35 @@ let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
 
 let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
     (trait_decl : trait_decl) (clause : trait_clause) : string =
-  (* TODO: improve - it would be better to not use indices *)
-  let clause = "parent_clause_" ^ TraitClauseId.to_string clause.clause_id in
-  if !Config.record_fields_short_names then clause
-  else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ clause
+  (* We derive the name of the clause from the trait instance.
+     For instance, if the clause gives us an instance of `Foo<u32>`,
+     we generate a name along the lines of "fooU32Inst".
+  *)
+  (* We need to lookup the LLBC definitions, to have the original instantiation *)
+  let clause =
+    let trait_decl =
+      TraitDeclId.Map.find trait_decl.def_id ctx.crate.trait_decls
+    in
+    let clause =
+      List.find
+        (fun (c : Types.trait_clause) -> c.clause_id = clause.clause_id)
+        trait_decl.parent_clauses
+    in
+    let trait_id = clause.trait_id in
+    let impl_trait_decl = TraitDeclId.Map.find trait_id ctx.crate.trait_decls in
+    let params = trait_decl.generics in
+    let args = clause.clause_generics in
+    name_with_generics_to_simple_name ctx.trans_ctx impl_trait_decl.name params
+      args
+  in
+  let clause = String.concat "" clause in
+  let clause =
+    if !Config.record_fields_short_names then clause
+    else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ clause
+  in
+  match !backend with
+  | FStar -> StringUtils.lowercase_first_letter clause
+  | Coq | HOL4 | Lean -> clause
 
 let ctx_compute_trait_type_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (item : string) : string =
