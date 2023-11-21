@@ -1816,11 +1816,12 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
 let extract_comment_with_span (fmt : F.formatter) (sl : string list)
     (span : Meta.span) : unit =
   let file = match span.file with Virtual s | Local s -> s in
+  let loc_to_string (l : Meta.loc) : string =
+    string_of_int l.line ^ ":" ^ string_of_int l.col
+  in
   let span =
-    "Source: '" ^ file ^ "': lines "
-    ^ string_of_int span.beg_loc.line
-    ^ "-"
-    ^ string_of_int span.end_loc.line
+    "Source: '" ^ file ^ "', lines " ^ loc_to_string span.beg_loc ^ "-"
+    ^ loc_to_string span.end_loc
   in
   extract_comment fmt (sl @ [ span ])
 
