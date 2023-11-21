@@ -9,12 +9,12 @@ namespace traits
 structure BoolTrait (Self : Type) where
   get_bool : Self → Result Bool
 
-/- [traits::Bool::{0}::get_bool]: forward function -/
+/- [traits::{bool}::get_bool]: forward function -/
 def Bool.get_bool (self : Bool) : Result Bool :=
   Result.ret self
 
-/- Trait implementation: [traits::Bool::{0}] -/
-def Bool.BoolTraitInst : BoolTrait Bool := {
+/- Trait implementation: [traits::{bool}] -/
+def traits.BoolTraitBoolInst : BoolTrait Bool := {
   get_bool := Bool.get_bool
 }
 
@@ -28,17 +28,18 @@ def test_bool_trait_bool (x : Bool) : Result Bool :=
   do
     let b ← Bool.get_bool x
     if b
-    then BoolTrait.ret_true Bool.BoolTraitInst x
+    then BoolTrait.ret_true traits.BoolTraitBoolInst x
     else Result.ret false
 
-/- [traits::Option::{1}::get_bool]: forward function -/
+/- [traits::{core::option::Option<T>#1}::get_bool]: forward function -/
 def Option.get_bool (T : Type) (self : Option T) : Result Bool :=
   match self with
   | none => Result.ret false
   | some t => Result.ret true
 
-/- Trait implementation: [traits::Option::{1}] -/
-def Option.BoolTraitInst (T : Type) : BoolTrait (Option T) := {
+/- Trait implementation: [traits::{core::option::Option<T>#1}] -/
+def traits.BoolTraitcoreoptionOptionTInst (T : Type) : BoolTrait (Option T)
+  := {
   get_bool := Option.get_bool T
 }
 
@@ -47,7 +48,7 @@ def test_bool_trait_option (T : Type) (x : Option T) : Result Bool :=
   do
     let b ← Option.get_bool T x
     if b
-    then BoolTrait.ret_true (Option.BoolTraitInst T) x
+    then BoolTrait.ret_true (traits.BoolTraitcoreoptionOptionTInst T) x
     else Result.ret false
 
 /- [traits::test_bool_trait]: forward function -/
@@ -58,31 +59,31 @@ def test_bool_trait (T : Type) (inst : BoolTrait T) (x : T) : Result Bool :=
 structure ToU64 (Self : Type) where
   to_u64 : Self → Result U64
 
-/- [traits::u64::{2}::to_u64]: forward function -/
-def u64.to_u64 (self : U64) : Result U64 :=
+/- [traits::{u64#2}::to_u64]: forward function -/
+def U64.to_u64 (self : U64) : Result U64 :=
   Result.ret self
 
-/- Trait implementation: [traits::u64::{2}] -/
-def u64.ToU64Inst : ToU64 U64 := {
-  to_u64 := u64.to_u64
+/- Trait implementation: [traits::{u64#2}] -/
+def traits.ToU64U64Inst : ToU64 U64 := {
+  to_u64 := U64.to_u64
 }
 
-/- [traits::Tuple2::{3}::to_u64]: forward function -/
-def Tuple2.to_u64 (A : Type) (inst : ToU64 A) (self : (A × A)) : Result U64 :=
+/- [traits::{(A, A)#3}::to_u64]: forward function -/
+def Pair.to_u64 (A : Type) (inst : ToU64 A) (self : (A × A)) : Result U64 :=
   do
     let (t, t0) := self
     let i ← inst.to_u64 t
     let i0 ← inst.to_u64 t0
     i + i0
 
-/- Trait implementation: [traits::Tuple2::{3}] -/
-def Tuple2.ToU64Inst (A : Type) (inst : ToU64 A) : ToU64 (A × A) := {
-  to_u64 := Tuple2.to_u64 A inst
+/- Trait implementation: [traits::{(A, A)#3}] -/
+def traits.ToU64TupleAAInst (A : Type) (inst : ToU64 A) : ToU64 (A × A) := {
+  to_u64 := Pair.to_u64 A inst
 }
 
 /- [traits::f]: forward function -/
 def f (T : Type) (inst : ToU64 T) (x : (T × T)) : Result U64 :=
-  Tuple2.to_u64 T inst x
+  Pair.to_u64 T inst x
 
 /- [traits::g]: forward function -/
 def g (T : Type) (inst : ToU64 (T × T)) (x : (T × T)) : Result U64 :=
@@ -90,25 +91,26 @@ def g (T : Type) (inst : ToU64 (T × T)) (x : (T × T)) : Result U64 :=
 
 /- [traits::h0]: forward function -/
 def h0 (x : U64) : Result U64 :=
-  u64.to_u64 x
+  U64.to_u64 x
 
 /- [traits::Wrapper] -/
 structure Wrapper (T : Type) where
   x : T
 
-/- [traits::Wrapper::{4}::to_u64]: forward function -/
+/- [traits::{traits::Wrapper<T>#4}::to_u64]: forward function -/
 def Wrapper.to_u64
   (T : Type) (inst : ToU64 T) (self : Wrapper T) : Result U64 :=
   inst.to_u64 self.x
 
-/- Trait implementation: [traits::Wrapper::{4}] -/
-def Wrapper.ToU64Inst (T : Type) (inst : ToU64 T) : ToU64 (Wrapper T) := {
+/- Trait implementation: [traits::{traits::Wrapper<T>#4}] -/
+def traits.ToU64traitsWrapperTInst (T : Type) (inst : ToU64 T) : ToU64 (Wrapper
+  T) := {
   to_u64 := Wrapper.to_u64 T inst
 }
 
 /- [traits::h1]: forward function -/
 def h1 (x : Wrapper U64) : Result U64 :=
-  Wrapper.to_u64 U64 u64.ToU64Inst x
+  Wrapper.to_u64 U64 traits.ToU64U64Inst x
 
 /- [traits::h2]: forward function -/
 def h2 (T : Type) (inst : ToU64 T) (x : Wrapper T) : Result U64 :=
@@ -118,13 +120,13 @@ def h2 (T : Type) (inst : ToU64 T) (x : Wrapper T) : Result U64 :=
 structure ToType (Self T : Type) where
   to_type : Self → Result T
 
-/- [traits::u64::{5}::to_type]: forward function -/
-def u64.to_type (self : U64) : Result Bool :=
+/- [traits::{u64#5}::to_type]: forward function -/
+def U64.to_type (self : U64) : Result Bool :=
   Result.ret (self > 0#u64)
 
-/- Trait implementation: [traits::u64::{5}] -/
-def u64.ToTypeInst : ToType U64 Bool := {
-  to_type := u64.to_type
+/- Trait implementation: [traits::{u64#5}] -/
+def traits.ToTypeU64BoolInst : ToType U64 Bool := {
+  to_type := U64.to_type
 }
 
 /- Trait declaration: [traits::OfType] -/
@@ -154,26 +156,26 @@ def h4
 structure TestType (T : Type) where
   _0 : T
 
-/- [traits::TestType::{6}::test::TestType1] -/
+/- [traits::{traits::TestType<T>#6}::test::TestType1] -/
 structure TestType.test.TestType1 where
   _0 : U64
 
-/- Trait declaration: [traits::TestType::{6}::test::TestTrait] -/
+/- Trait declaration: [traits::{traits::TestType<T>#6}::test::TestTrait] -/
 structure TestType.test.TestTrait (Self : Type) where
   test : Self → Result Bool
 
-/- [traits::TestType::{6}::test::TestType1::{0}::test]: forward function -/
+/- [traits::{traits::TestType<T>#6}::test::{traits::{traits::TestType<T>#6}::test::TestType1}::test]: forward function -/
 def TestType.test.TestType1.test
   (self : TestType.test.TestType1) : Result Bool :=
   Result.ret (self._0 > 1#u64)
 
-/- Trait implementation: [traits::TestType::{6}::test::TestType1::{0}] -/
-def TestType.test.TestType1.TestTypetestTestTraitInst : TestType.test.TestTrait
-  TestType.test.TestType1 := {
+/- Trait implementation: [traits::{traits::TestType<T>#6}::test::{traits::{traits::TestType<T>#6}::test::TestType1}] -/
+def traits.TestType.test.TestTraittraitstraitsTestTypeTtestTestType1Inst :
+  TestType.test.TestTrait TestType.test.TestType1 := {
   test := TestType.test.TestType1.test
 }
 
-/- [traits::TestType::{6}::test]: forward function -/
+/- [traits::{traits::TestType<T>#6}::test]: forward function -/
 def TestType.test
   (T : Type) (inst : ToU64 T) (self : TestType T) (x : T) : Result Bool :=
   do
@@ -186,14 +188,14 @@ def TestType.test
 structure BoolWrapper where
   _0 : Bool
 
-/- [traits::BoolWrapper::{7}::to_type]: forward function -/
+/- [traits::{traits::BoolWrapper#7}::to_type]: forward function -/
 def BoolWrapper.to_type
   (T : Type) (inst : ToType Bool T) (self : BoolWrapper) : Result T :=
   inst.to_type self._0
 
-/- Trait implementation: [traits::BoolWrapper::{7}] -/
-def BoolWrapper.ToTypeInst (T : Type) (inst : ToType Bool T) : ToType
-  BoolWrapper T := {
+/- Trait implementation: [traits::{traits::BoolWrapper#7}] -/
+def traits.ToTypetraitsBoolWrapperTInst (T : Type) (inst : ToType Bool T) :
+  ToType BoolWrapper T := {
   to_type := BoolWrapper.to_type T inst
 }
 
@@ -211,22 +213,22 @@ structure WithConstTy (Self : Type) (LEN : Usize) where
   W_clause_0 : ToU64 W
   f : W → Array U8 LEN → Result W
 
-/- [traits::Bool::{8}::LEN1] -/
+/- [traits::{bool#8}::LEN1] -/
 def bool_len1_body : Result Usize := Result.ret 12#usize
 def bool_len1_c : Usize := eval_global bool_len1_body (by simp)
 
-/- [traits::Bool::{8}::f]: merged forward/backward function
+/- [traits::{bool#8}::f]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 def Bool.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
   Result.ret i
 
-/- Trait implementation: [traits::Bool::{8}] -/
-def Bool.WithConstTyInst : WithConstTy Bool 32#usize := {
+/- Trait implementation: [traits::{bool#8}] -/
+def traits.WithConstTyBool32Inst : WithConstTy Bool 32#usize := {
   LEN1 := bool_len1_c
   LEN2 := with_const_ty_len2_c
   V := U8
   W := U64
-  W_clause_0 := u64.ToU64Inst
+  W_clause_0 := traits.ToU64U64Inst
   f := Bool.f
 }
 
@@ -297,13 +299,13 @@ def order1
 structure ChildTrait1 (Self : Type) where
   parent_clause_0 : ParentTrait1 Self
 
-/- Trait implementation: [traits::usize::{9}] -/
-def usize.ParentTrait1Inst : ParentTrait1 Usize := {
+/- Trait implementation: [traits::{usize#9}] -/
+def traits.ParentTrait1UsizeInst : ParentTrait1 Usize := {
 }
 
-/- Trait implementation: [traits::usize::{10}] -/
-def usize.ChildTrait1Inst : ChildTrait1 Usize := {
-  parent_clause_0 := usize.ParentTrait1Inst
+/- Trait implementation: [traits::{usize#10}] -/
+def traits.ChildTrait1UsizeInst : ChildTrait1 Usize := {
+  parent_clause_0 := traits.ParentTrait1UsizeInst
 }
 
 /- Trait declaration: [traits::Iterator] -/
@@ -339,30 +341,26 @@ structure ChildTrait2 (Self : Type) where
   parent_clause_0 : ParentTrait2 Self
   convert : parent_clause_0.U → Result parent_clause_0.U_clause_0.Target
 
-/- Trait implementation: [traits::u32::{11}] -/
-def u32.WithTargetInst : WithTarget U32 := {
+/- Trait implementation: [traits::{u32#11}] -/
+def traits.WithTargetU32Inst : WithTarget U32 := {
   Target := U32
 }
 
-/- Trait implementation: [traits::u32::{12}] -/
-def u32.ParentTrait2Inst : ParentTrait2 U32 := {
+/- Trait implementation: [traits::{u32#12}] -/
+def traits.ParentTrait2U32Inst : ParentTrait2 U32 := {
   U := U32
-  U_clause_0 := u32.WithTargetInst
+  U_clause_0 := traits.WithTargetU32Inst
 }
 
-/- [traits::u32::{13}::convert]: forward function -/
-def u32.convert (x : U32) : Result U32 :=
+/- [traits::{u32#13}::convert]: forward function -/
+def U32.convert (x : U32) : Result U32 :=
   Result.ret x
 
-/- Trait implementation: [traits::u32::{13}] -/
-def u32.ChildTrait2Inst : ChildTrait2 U32 := {
-  parent_clause_0 := u32.ParentTrait2Inst
-  convert := u32.convert
+/- Trait implementation: [traits::{u32#13}] -/
+def traits.ChildTrait2U32Inst : ChildTrait2 U32 := {
+  parent_clause_0 := traits.ParentTrait2U32Inst
+  convert := U32.convert
 }
-
-/- [traits::incr_u32]: forward function -/
-def incr_u32 (x : U32) : Result U32 :=
-  x + 1#u32
 
 /- Trait declaration: [traits::CFnOnce] -/
 structure CFnOnce (Self Args : Type) where
@@ -379,5 +377,9 @@ structure CFnMut (Self Args : Type) where
 structure CFn (Self Args : Type) where
   parent_clause_0 : CFnMut Self Args
   call_mut : Self → Args → Result parent_clause_0.parent_clause_0.Output
+
+/- [traits::incr_u32]: forward function -/
+def incr_u32 (x : U32) : Result U32 :=
+  x + 1#u32
 
 end traits
