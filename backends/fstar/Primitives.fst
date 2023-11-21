@@ -483,23 +483,23 @@ let core_slice_index_Slice_index
   | Some x -> Return x
 
 // [core::slice::index::Range:::get]: forward function
-let core_slice_index_Range_get (t : Type0) (i : core_ops_range_Range usize) (s : slice t) :
+let core_slice_index_RangeUsize_get (t : Type0) (i : core_ops_range_Range usize) (s : slice t) :
   result (option (slice t)) =
   admit () // TODO
 
 // [core::slice::index::Range::get_mut]: forward function
-let core_slice_index_Range_get_mut
+let core_slice_index_RangeUsize_get_mut
   (t : Type0) : core_ops_range_Range usize → slice t → result (option (slice t)) =
   admit () // TODO
 
 // [core::slice::index::Range::get_mut]: backward function 0
-let core_slice_index_Range_get_mut_back
+let core_slice_index_RangeUsize_get_mut_back
   (t : Type0) :
   core_ops_range_Range usize → slice t → option (slice t) → result (slice t) =
   admit () // TODO
 
 // [core::slice::index::Range::get_unchecked]: forward function
-let core_slice_index_Range_get_unchecked
+let core_slice_index_RangeUsize_get_unchecked
   (t : Type0) :
   core_ops_range_Range usize → const_raw_ptr (slice t) → result (const_raw_ptr (slice t)) =
   // Don't know what the model should be - for now we always fail to make
@@ -507,7 +507,7 @@ let core_slice_index_Range_get_unchecked
   fun _ _ -> Fail Failure
 
 // [core::slice::index::Range::get_unchecked_mut]: forward function
-let core_slice_index_Range_get_unchecked_mut
+let core_slice_index_RangeUsize_get_unchecked_mut
   (t : Type0) :
   core_ops_range_Range usize → mut_raw_ptr (slice t) → result (mut_raw_ptr (slice t)) =
   // Don't know what the model should be - for now we always fail to make
@@ -515,17 +515,17 @@ let core_slice_index_Range_get_unchecked_mut
   fun _ _ -> Fail Failure
 
 // [core::slice::index::Range::index]: forward function
-let core_slice_index_Range_index
+let core_slice_index_RangeUsize_index
   (t : Type0) : core_ops_range_Range usize → slice t → result (slice t) =
   admit () // TODO
 
 // [core::slice::index::Range::index_mut]: forward function
-let core_slice_index_Range_index_mut
+let core_slice_index_RangeUsize_index_mut
   (t : Type0) : core_ops_range_Range usize → slice t → result (slice t) =
   admit () // TODO
 
 // [core::slice::index::Range::index_mut]: backward function 0
-let core_slice_index_Range_index_mut_back
+let core_slice_index_RangeUsize_index_mut_back
   (t : Type0) : core_ops_range_Range usize → slice t → slice t → result (slice t) =
   admit () // TODO
 
@@ -568,14 +568,14 @@ let core_slice_index_SliceIndexRangeUsizeSliceTInst (t : Type0) :
   core_slice_index_SliceIndex (core_ops_range_Range usize) (slice t) = {
   sealedInst = core_slice_index_private_slice_index_SealedRangeUsizeInst;
   output = slice t;
-  get = core_slice_index_Range_get t;
-  get_mut = core_slice_index_Range_get_mut t;
-  get_mut_back = core_slice_index_Range_get_mut_back t;
-  get_unchecked = core_slice_index_Range_get_unchecked t;
-  get_unchecked_mut = core_slice_index_Range_get_unchecked_mut t;
-  index = core_slice_index_Range_index t;
-  index_mut = core_slice_index_Range_index_mut t;
-  index_mut_back = core_slice_index_Range_index_mut_back t;
+  get = core_slice_index_RangeUsize_get t;
+  get_mut = core_slice_index_RangeUsize_get_mut t;
+  get_mut_back = core_slice_index_RangeUsize_get_mut_back t;
+  get_unchecked = core_slice_index_RangeUsize_get_unchecked t;
+  get_unchecked_mut = core_slice_index_RangeUsize_get_unchecked_mut t;
+  index = core_slice_index_RangeUsize_index t;
+  index_mut = core_slice_index_RangeUsize_index_mut t;
+  index_mut_back = core_slice_index_RangeUsize_index_mut_back t;
 }
 
 // Trait implementation: [core::slice::index::[T]]

@@ -278,18 +278,19 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info list) list
     mk_fun "core::array::{[@T; @C]}::index" None None true false;
     mk_fun "core::array::{[@T; @C]}::index_mut" None None true false;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get"
-      (Some "core::slice::index::Range::get") None true false;
+      (Some "core::slice::index::RangeUsize::get") None true false;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get_mut"
-      (Some "core::slice::index::Range::get_mut") None true false;
+      (Some "core::slice::index::RangeUsize::get_mut") None true false;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::index"
-      (Some "core::slice::index::Range::index") None true false;
+      (Some "core::slice::index::RangeUsize::index") None true false;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::index_mut"
-      (Some "core::slice::index::Range::index_mut") None true false;
+      (Some "core::slice::index::RangeUsize::index_mut") None true false;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get_unchecked"
-      (Some "core::slice::index::Range::get_unchecked") None false false;
+      (Some "core::slice::index::RangeUsize::get_unchecked") None false false;
     mk_fun
       "core::slice::index::{core::ops::range::Range<usize>}::get_unchecked_mut"
-      (Some "core::slice::index::Range::get_unchecked_mut") None false false;
+      (Some "core::slice::index::RangeUsize::get_unchecked_mut") None false
+      false;
     mk_fun "core::slice::index::{usize}::get" None None true false;
     mk_fun "core::slice::index::{usize}::get_mut" None None true false;
     mk_fun "core::slice::index::{usize}::get_unchecked" None None false false;

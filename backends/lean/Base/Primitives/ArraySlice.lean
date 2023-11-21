@@ -363,23 +363,23 @@ def core.slice.index.Slice.index
   | some x => ret x
 
 /- [core::slice::index::Range:::get]: forward function -/
-def core.slice.index.Range.get (T : Type) (i : Range Usize) (slice : Slice T) :
+def core.slice.index.RangeUsize.get (T : Type) (i : Range Usize) (slice : Slice T) :
   Result (Option (Slice T)) :=
   sorry -- TODO
 
 /- [core::slice::index::Range::get_mut]: forward function -/
-def core.slice.index.Range.get_mut
+def core.slice.index.RangeUsize.get_mut
   (T : Type) : Range Usize → Slice T → Result (Option (Slice T)) :=
   sorry -- TODO
 
 /- [core::slice::index::Range::get_mut]: backward function 0 -/
-def core.slice.index.Range.get_mut_back
+def core.slice.index.RangeUsize.get_mut_back
   (T : Type) :
   Range Usize → Slice T → Option (Slice T) → Result (Slice T) :=
   sorry -- TODO
 
 /- [core::slice::index::Range::get_unchecked]: forward function -/
-def core.slice.index.Range.get_unchecked
+def core.slice.index.RangeUsize.get_unchecked
   (T : Type) :
   Range Usize → ConstRawPtr (Slice T) → Result (ConstRawPtr (Slice T)) :=
   -- Don't know what the model should be - for now we always fail to make
@@ -387,7 +387,7 @@ def core.slice.index.Range.get_unchecked
   fun _ _ => fail panic
 
 /- [core::slice::index::Range::get_unchecked_mut]: forward function -/
-def core.slice.index.Range.get_unchecked_mut
+def core.slice.index.RangeUsize.get_unchecked_mut
   (T : Type) :
   Range Usize → MutRawPtr (Slice T) → Result (MutRawPtr (Slice T)) :=
   -- Don't know what the model should be - for now we always fail to make
@@ -395,17 +395,17 @@ def core.slice.index.Range.get_unchecked_mut
   fun _ _ => fail panic
 
 /- [core::slice::index::Range::index]: forward function -/
-def core.slice.index.Range.index
+def core.slice.index.RangeUsize.index
   (T : Type) : Range Usize → Slice T → Result (Slice T) :=
   sorry -- TODO
 
 /- [core::slice::index::Range::index_mut]: forward function -/
-def core.slice.index.Range.index_mut
+def core.slice.index.RangeUsize.index_mut
   (T : Type) : Range Usize → Slice T → Result (Slice T) :=
   sorry -- TODO
 
 /- [core::slice::index::Range::index_mut]: backward function 0 -/
-def core.slice.index.Range.index_mut_back
+def core.slice.index.RangeUsize.index_mut_back
   (T : Type) : Range Usize → Slice T → Slice T → Result (Slice T) :=
   sorry -- TODO
 
@@ -448,14 +448,14 @@ def core.slice.index.SliceIndexRangeUsizeSliceTInst (T : Type) :
   core.slice.index.SliceIndex (Range Usize) (Slice T) := {
   sealedInst := core.slice.index.private_slice_index.SealedRangeUsizeInst
   Output := Slice T
-  get := core.slice.index.Range.get T
-  get_mut := core.slice.index.Range.get_mut T
-  get_mut_back := core.slice.index.Range.get_mut_back T
-  get_unchecked := core.slice.index.Range.get_unchecked T
-  get_unchecked_mut := core.slice.index.Range.get_unchecked_mut T
-  index := core.slice.index.Range.index T
-  index_mut := core.slice.index.Range.index_mut T
-  index_mut_back := core.slice.index.Range.index_mut_back T
+  get := core.slice.index.RangeUsize.get T
+  get_mut := core.slice.index.RangeUsize.get_mut T
+  get_mut_back := core.slice.index.RangeUsize.get_mut_back T
+  get_unchecked := core.slice.index.RangeUsize.get_unchecked T
+  get_unchecked_mut := core.slice.index.RangeUsize.get_unchecked_mut T
+  index := core.slice.index.RangeUsize.index T
+  index_mut := core.slice.index.RangeUsize.index_mut T
+  index_mut_back := core.slice.index.RangeUsize.index_mut_back T
 }
 
 /- Trait implementation: [core::slice::index::[T]] -/
