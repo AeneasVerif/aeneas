@@ -453,13 +453,13 @@ let mk_dummy_pattern (ty : ty) : typed_pattern =
   let value = PatDummy in
   { value; ty }
 
-let mk_meta (m : meta) (e : texpression) : texpression =
+let mk_emeta (m : emeta) (e : texpression) : texpression =
   let ty = e.ty in
   let e = Meta (m, e) in
   { e; ty }
 
 let mk_mplace_texpression (mp : mplace) (e : texpression) : texpression =
-  mk_meta (MPlace mp) e
+  mk_emeta (MPlace mp) e
 
 let mk_opt_mplace_texpression (mp : mplace option) (e : texpression) :
     texpression =
@@ -649,6 +649,7 @@ let trait_decl_is_empty (trait_decl : trait_decl) : bool =
     is_local = _;
     name = _;
     llbc_name = _;
+    meta = _;
     generics = _;
     preds = _;
     parent_clauses;
@@ -668,6 +669,7 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
     is_local = _;
     name = _;
     llbc_name = _;
+    meta = _;
     impl_trait = _;
     generics = _;
     preds = _;

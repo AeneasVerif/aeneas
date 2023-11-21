@@ -48,6 +48,10 @@ type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
 type region_group_id = T.region_group_id [@@deriving show, ord]
 type mutability = Mut | Const [@@deriving show, ord]
+type loc = Meta.loc [@@deriving show, ord]
+type file_name = Meta.file_name [@@deriving show, ord]
+type span = Meta.span [@@deriving show, ord]
+type meta = Meta.meta [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -389,6 +393,7 @@ type type_decl = {
           the name used at extraction time will be derived from the
           llbc_name.
        *)
+  meta : meta;
   generics : generic_params;
   kind : type_decl_kind;
   preds : predicates;
@@ -717,7 +722,7 @@ type expression =
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Meta of (meta[@opaque]) * texpression  (** Meta-information *)
+  | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
 
 and switch_body = If of texpression * texpression | Match of match_branch list
 and match_branch = { pat : typed_pattern; branch : texpression }
@@ -736,6 +741,7 @@ and match_branch = { pat : typed_pattern; branch : texpression }
 and loop = {
   fun_end : texpression;
   loop_id : loop_id;
+  meta : meta; [@opaque]
   fuel0 : var_id;
   fuel : var_id;
   input_state : var_id option;
@@ -791,7 +797,7 @@ and texpression = { e : expression; ty : ty }
 and mvalue = (texpression[@opaque])
 
 (** Meta-information stored in the AST *)
-and meta =
+and emeta =
   | Assignment of mplace * mvalue * mplace option
       (** Information about an assignment which occured in LLBC.
           We use this to guide the heuristics which derive pretty names.
@@ -993,6 +999,7 @@ type fun_kind = A.fun_kind [@@deriving show]
 type fun_decl = {
   def_id : FunDeclId.id;
   is_local : bool;
+  meta : meta;
   kind : fun_kind;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
@@ -1019,6 +1026,7 @@ type trait_decl = {
   is_local : bool;
   llbc_name : llbc_name;
   name : string;
+  meta : meta;
   generics : generic_params;
   preds : predicates;
   parent_clauses : trait_clause list;
@@ -1034,6 +1042,7 @@ type trait_impl = {
   is_local : bool;
   llbc_name : llbc_name;
   name : string;
+  meta : meta;
   impl_trait : trait_decl_ref;
   generics : generic_params;
   preds : predicates;

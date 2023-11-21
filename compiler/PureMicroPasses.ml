@@ -391,7 +391,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Switch (scrut, body) -> update_switch_body scrut body ctx
       | Loop loop -> update_loop loop ctx
       | StructUpdate supd -> update_struct_update supd ctx
-      | Meta (meta, e) -> update_meta meta e ctx
+      | Meta (meta, e) -> update_emeta meta e ctx
     in
     (ctx, { e; ty })
   (* *)
@@ -449,6 +449,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let {
       fun_end;
       loop_id;
+      meta;
       fuel0;
       fuel;
       input_state;
@@ -467,6 +468,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       {
         fun_end;
         loop_id;
+        meta;
         fuel0;
         fuel;
         input_state;
@@ -490,7 +492,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let supd = { struct_id; init; updates } in
     (ctx, StructUpdate supd)
   (* *)
-  and update_meta (meta : meta) (e : texpression) (ctx : pn_ctx) :
+  and update_emeta (meta : emeta) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
     let ctx =
       match meta with
@@ -516,7 +518,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Tag _ -> ctx
     in
     let ctx, e = update_texpression e ctx in
-    let e = mk_meta meta e in
+    let e = mk_emeta meta e in
     (ctx, e.e)
   in
 
@@ -1428,6 +1430,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
               {
                 def_id = def.def_id;
                 is_local = def.is_local;
+                meta = loop.meta;
                 kind = def.kind;
                 num_loops;
                 loop_id = Some loop.loop_id;

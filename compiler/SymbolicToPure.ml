@@ -496,7 +496,8 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let kind = translate_type_decl_kind def.T.kind in
   let preds = translate_predicates def.preds in
   let is_local = def.is_local in
-  { def_id; is_local; llbc_name; name; generics; kind; preds }
+  let meta = def.meta in
+  { def_id; is_local; llbc_name; name; meta; generics; kind; preds }
 
 let translate_type_id (id : T.type_id) : type_id =
   match id with
@@ -1489,11 +1490,11 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
   (call_info.forward, abs_ancestors)
 
 (** Add meta-information to an expression *)
-let mk_meta_symbolic_assignments (vars : var list) (values : texpression list)
+let mk_emeta_symbolic_assignments (vars : var list) (values : texpression list)
     (e : texpression) : texpression =
   let var_values = List.combine vars values in
   List.fold_right
-    (fun (var, arg) e -> mk_meta (SymbolicAssignment (var_get_id var, arg)) e)
+    (fun (var, arg) e -> mk_emeta (SymbolicAssignment (var_get_id var, arg)) e)
     var_values e
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -1509,7 +1510,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
-  | Meta (meta, e) -> translate_meta meta e ctx
+  | Meta (meta, e) -> translate_emeta meta e ctx
   | ForwardEnd (ectx, loop_input_values, e, back_e) ->
       translate_forward_end ectx loop_input_values e back_e ctx
   | Loop loop -> translate_loop loop ctx
@@ -2206,7 +2207,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
                 var_values
             in
             let vars, values = List.split var_values in
-            mk_meta_symbolic_assignments vars values next_e
+            mk_emeta_symbolic_assignments vars values next_e
           else next_e
         in
 
@@ -2637,7 +2638,7 @@ and translate_forward_end (ectx : C.eval_ctx)
          We then remove all the meta information from the body *before* calling
          {!PureMicroPasses.decompose_loops}.
       *)
-      mk_meta_symbolic_assignments loop_info.input_vars org_args e
+      mk_emeta_symbolic_assignments loop_info.input_vars org_args e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
@@ -2795,6 +2796,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       {
         fun_end;
         loop_id;
+        meta = loop.meta;
         fuel0 = ctx.fuel0;
         fuel = ctx.fuel;
         input_state;
@@ -2810,7 +2812,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let ty = fun_end.ty in
   { e = loop; ty }
 
-and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
+and translate_emeta (meta : S.emeta) (e : S.expression) (ctx : bs_ctx) :
     texpression =
   let next_e = translate_expression e ctx in
   let meta =
@@ -3028,6 +3030,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     {
       def_id;
       is_local = def.is_local;
+      meta = def.meta;
       kind = def.kind;
       num_loops;
       loop_id;
@@ -3108,6 +3111,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     def_id;
     is_local;
     name = llbc_name;
+    meta;
     generics;
     preds;
     parent_clauses;
@@ -3145,6 +3149,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     is_local;
     llbc_name;
     name;
+    meta;
     generics;
     preds;
     parent_clauses;
@@ -3160,6 +3165,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     A.def_id;
     is_local;
     name = llbc_name;
+    meta;
     impl_trait;
     generics;
     preds;
@@ -3201,6 +3207,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     is_local;
     llbc_name;
     name;
+    meta;
     impl_trait;
     generics;
     preds;

@@ -739,7 +739,7 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
         (* Compose and apply *)
         comp cf_st1 cf_st2 cf ctx
     | Loop loop_body ->
-        InterpreterLoops.eval_loop config
+        InterpreterLoops.eval_loop config st.meta
           (eval_statement config loop_body)
           cf ctx
     | Switch switch -> eval_switch config switch cf ctx

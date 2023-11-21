@@ -15,7 +15,7 @@ let mk_opt_place_from_op (op : operand) (ctx : Contexts.eval_ctx) :
     mplace option =
   match op with Copy p | Move p -> Some (mk_mplace p ctx) | Constant _ -> None
 
-let mk_meta (m : meta) (e : expression) : expression = Meta (m, e)
+let mk_emeta (m : emeta) (e : expression) : expression = Meta (m, e)
 
 let synthesize_symbolic_expansion (sv : symbolic_value) (place : mplace option)
     (seel : symbolic_expansion option list) (el : expression list option) :
@@ -163,8 +163,8 @@ let synthesize_forward_end (ctx : Contexts.eval_ctx)
 let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
     (fresh_svalues : SymbolicValueId.Set.t)
     (rg_to_given_back_tys : (RegionId.Set.t * ty list) RegionGroupId.Map.t)
-    (end_expr : expression option) (loop_expr : expression option) :
-    expression option =
+    (end_expr : expression option) (loop_expr : expression option)
+    (meta : Meta.meta) : expression option =
   match (end_expr, loop_expr) with
   | None, None -> None
   | Some end_expr, Some loop_expr ->
@@ -177,5 +177,6 @@ let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
              rg_to_given_back_tys;
              end_expr;
              loop_expr;
+             meta;
            })
   | _ -> raise (Failure "Unreachable")

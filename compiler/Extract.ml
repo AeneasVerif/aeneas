@@ -1135,8 +1135,9 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt
-    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases clause" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases clause" ]
+    def.meta.span;
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1197,8 +1198,9 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt
-    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: termination measure" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: termination measure" ]
+    def.meta.span;
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1251,8 +1253,9 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   let def_name = ctx_get_decreases_proof def.def_id def.loop_id ctx in
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
-  extract_comment fmt
-    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases_by tactic" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases_by tactic" ]
+    def.meta.span;
   F.pp_print_space fmt ();
   F.pp_open_hvbox fmt 0;
   F.pp_print_string fmt "syntax \"";
@@ -1313,7 +1316,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     | [ s ] -> [ comment_pre ^ loop_comment ^ s ]
     | s :: sl -> (comment_pre ^ loop_comment ^ s) :: sl
   in
-  extract_comment fmt comment
+  extract_comment_with_span fmt comment def.meta.span
 
 (** Extract a function declaration.
 
@@ -1765,7 +1768,9 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
-  extract_comment fmt [ "[" ^ name_to_string ctx global.name ^ "]" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx global.name ^ "]" ]
+    global.meta.span;
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global global.def_id ctx in
@@ -2190,8 +2195,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt
-    [ "Trait declaration: [" ^ name_to_string ctx decl.llbc_name ^ "]" ];
+  extract_comment_with_span fmt
+    [ "Trait declaration: [" ^ name_to_string ctx decl.llbc_name ^ "]" ]
+    decl.meta.span;
   F.pp_print_break fmt 0 0;
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.
@@ -2478,8 +2484,9 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt
-    [ "Trait implementation: [" ^ name_to_string ctx impl.llbc_name ^ "]" ];
+  extract_comment_with_span fmt
+    [ "Trait implementation: [" ^ name_to_string ctx impl.llbc_name ^ "]" ]
+    impl.meta.span;
   F.pp_print_break fmt 0 0;
 
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on

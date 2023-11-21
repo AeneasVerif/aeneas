@@ -1813,6 +1813,17 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
   F.pp_print_string fmt rd;
   F.pp_close_box fmt ()
 
+let extract_comment_with_span (fmt : F.formatter) (sl : string list)
+    (span : Meta.span) : unit =
+  let file = match span.file with Virtual s | Local s -> s in
+  let span =
+    "Source: '" ^ file ^ "': lines "
+    ^ string_of_int span.beg_loc.line
+    ^ "-"
+    ^ string_of_int span.end_loc.line
+  in
+  extract_comment fmt (sl @ [ span ])
+
 let extract_trait_clause_type (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (clause : trait_clause) : unit =
   let trait_name = ctx_get_trait_decl clause.trait_id ctx in
@@ -2034,7 +2045,9 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
     F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt [ "[" ^ name_to_string ctx def.llbc_name ^ "]" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]" ]
+    def.meta.span;
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important

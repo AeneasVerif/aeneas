@@ -58,6 +58,7 @@
 
 open Contexts
 open Cps
+open Meta
 
 (** Evaluate a loop *)
-val eval_loop : config -> st_cm_fun -> st_cm_fun
+val eval_loop : config -> meta -> st_cm_fun -> st_cm_fun

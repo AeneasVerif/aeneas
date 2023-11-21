@@ -2,6 +2,7 @@ open Types
 open Values
 open Contexts
 open ValuesUtils
+open Meta
 module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
@@ -60,8 +61,8 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
   eval_loop_body reeval_loop_body ctx
 
 (** Evaluate a loop in symbolic mode *)
-let eval_loop_symbolic (config : config) (eval_loop_body : st_cm_fun) :
-    st_cm_fun =
+let eval_loop_symbolic (config : config) (meta : meta)
+    (eval_loop_body : st_cm_fun) : st_cm_fun =
  fun cf ctx ->
   (* Debug *)
   log#ldebug
@@ -205,9 +206,10 @@ let eval_loop_symbolic (config : config) (eval_loop_body : st_cm_fun) :
 
   (* Put together *)
   S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back end_expr
-    loop_expr
+    loop_expr meta
 
-let eval_loop (config : config) (eval_loop_body : st_cm_fun) : st_cm_fun =
+let eval_loop (config : config) (meta : meta) (eval_loop_body : st_cm_fun) :
+    st_cm_fun =
  fun cf ctx ->
   match config.mode with
   | ConcreteMode -> eval_loop_concrete eval_loop_body cf ctx
@@ -231,4 +233,4 @@ let eval_loop (config : config) (eval_loop_body : st_cm_fun) : st_cm_fun =
          *non-fixed* abstractions.
       *)
       let cc = prepare_ashared_loans None in
-      comp cc (eval_loop_symbolic config eval_loop_body) cf ctx
+      comp cc (eval_loop_symbolic config meta eval_loop_body) cf ctx

@@ -51,11 +51,10 @@ type call = {
 }
 [@@deriving show]
 
-(** Meta information, not necessary for synthesis but useful to guide it to
-    generate a pretty output.
+(** Meta information for expressions, not necessary for synthesis but useful to
+    guide it to generate a pretty output.
  *)
-
-type meta =
+type emeta =
   | Assignment of Contexts.eval_ctx * mplace * typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
 [@@deriving show]
@@ -82,7 +81,8 @@ class ['self] iter_expression_base =
       fun _ _ -> ()
 
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-    method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
+    method visit_emeta : 'env -> emeta -> unit = fun _ _ -> ()
+    method visit_meta : 'env -> Meta.meta -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map
         : 'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
@@ -200,7 +200,7 @@ type expression =
 
           The boolean is [is_continue].
        *)
-  | Meta of meta * expression  (** Meta information *)
+  | Meta of emeta * expression  (** Meta information *)
 
 and loop = {
   loop_id : loop_id;
@@ -215,6 +215,7 @@ and loop = {
   end_expr : expression;
       (** The end of the function (upon the moment it enters the loop) *)
   loop_expr : expression;  (** The symbolically executed loop body *)
+  meta : Meta.meta;  (** Information about where the origin of the loop body *)
 }
 
 and expansion =

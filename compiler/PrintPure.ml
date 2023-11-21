@@ -590,7 +590,7 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
           "[ " ^ String.concat ", " fields ^ " ]"
       | _ -> raise (Failure "Unexpected"))
   | Meta (meta, e) -> (
-      let meta_s = meta_to_string env meta in
+      let meta_s = emeta_to_string env meta in
       let e = texpression_to_string env inside indent indent_incr e in
       match meta with
       | Assignment _ | SymbolicAssignment _ | Tag _ ->
@@ -724,7 +724,7 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n"
   ^ indent ^ "}"
 
-and meta_to_string (env : fmt_env) (meta : meta) : string =
+and emeta_to_string (env : fmt_env) (meta : emeta) : string =
   let meta =
     match meta with
     | Assignment (lp, rv, rp) ->
