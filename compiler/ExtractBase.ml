@@ -2,9 +2,11 @@
 
 open Contexts
 open Pure
-open TranslateCore
+open StringUtils
+open Config
 module F = Format
 open ExtractBuiltin
+open TranslateCore
 
 (** The local logger *)
 let log = Logging.extract_log
@@ -108,225 +110,6 @@ let decl_is_not_last_from_group (kind : decl_kind) : bool =
   not (decl_is_last_from_group kind)
 
 type type_decl_kind = Enum | Struct [@@deriving show]
-
-(* TODO: this should be a module we give to a functor! *)
-
-(** A formatter's role is twofold:
-    1. Come up with name suggestions.
-    For instance, provided some information about a function (its basename,
-    information about the region group, etc.) it should come up with an
-    appropriate name for the forward/backward function.
-
-    It can of course apply many transformations, like changing to camel case/
-    snake case, adding prefixes/suffixes, etc.
-
-    2. Format some specific terms, like constants.
-
-    TODO: unclear that this is useful now that all the backends are so much
-    entangled in Extract.ml
- *)
-type formatter = {
-  bool_name : string;
-  char_name : string;
-  int_name : integer_type -> string;
-  str_name : string;
-  type_decl_kind_to_qualif :
-    decl_kind -> type_decl_kind option -> string option;
-      (** Compute the qualified for a type definition/declaration.
-
-          For instance: "type", "and", etc.
-
-          Remark: can return [None] for some backends like HOL4.
-       *)
-  fun_decl_kind_to_qualif : decl_kind -> string option;
-      (** Compute the qualified for a function definition/declaration.
-
-          For instance: "let", "let rec", "and", etc.
-
-          Remark: can return [None] for some backends like HOL4.
-       *)
-  field_name : llbc_name -> FieldId.id -> string option -> string;
-      (** Inputs:
-          - type name
-          - field id
-          - field name
-
-          Note that fields don't always have names, but we still need to
-          generate some names if we want to extract the structures to records...
-          We might want to extract such structures to tuples, later, but field
-          access then causes trouble because not all provers accept syntax like
-          [x.3] where [x] is a tuple.
-       *)
-  variant_name : llbc_name -> string -> string;
-      (** Inputs:
-          - type name
-          - variant name
-       *)
-  struct_constructor : llbc_name -> string;
-      (** Structure constructors are used when constructing structure values.
-
-          For instance, in F*:
-          {[
-            type pair = { x : nat; y : nat }
-            let p : pair = Mkpair 0 1
-          ]}
-
-          Inputs:
-          - type name
-      *)
-  type_name : llbc_name -> string;
-      (** Provided a basename, compute a type name. *)
-  global_name : llbc_name -> string;
-      (** Provided a basename, compute a global name. *)
-  fun_name :
-    llbc_name ->
-    int ->
-    LoopId.id option ->
-    int ->
-    region_group_info option ->
-    bool * int ->
-    string;
-      (** Compute the name of a regular (non-assumed) function.
-
-          Inputs:
-          - function basename (TODO: shouldn't appear for assumed functions?...)
-          - number of loops in the function (useful to check if we need to use
-            indices to derive unique names for the loops for instance - if there is
-            exactly one loop, we don't need to use indices)
-          - loop id (if pertinent)
-          - number of region groups
-          - region group information in case of a backward function
-            ([None] if forward function)
-          - pair:
-            - do we generate the forward function (it may have been filtered)?
-            - the number of *extracted backward functions* (same comment as for
-              the number of loops)
-              The number of extracted backward functions if not necessarily
-              equal to the number of region groups, because we may have
-              filtered some of them.
-          TODO: use the fun id for the assumed functions.
-       *)
-  termination_measure_name :
-    A.FunDeclId.id -> llbc_name -> int -> LoopId.id option -> string;
-      (** Generates the name of the termination measure used to prove/reason about
-          termination. The generated code uses this clause where needed,
-          but its body must be defined by the user.
-
-          F* and Lean only.
-
-          Inputs:
-          - function id: this is especially useful to identify whether the
-            function is an assumed function or a local function
-          - function basename
-          - the number of loops in the parent function. This is used for
-            the same purpose as in {!field:llbc_name}.
-          - loop identifier, if this is for a loop
-       *)
-  decreases_proof_name :
-    A.FunDeclId.id -> llbc_name -> int -> LoopId.id option -> string;
-      (** Generates the name of the proof used to prove/reason about
-          termination. The generated code uses this clause where needed,
-          but its body must be defined by the user.
-
-          Lean only.
-
-          Inputs:
-          - function id: this is especially useful to identify whether the
-            function is an assumed function or a local function
-          - function basename
-          - the number of loops in the parent function. This is used for
-            the same purpose as in {!field:llbc_name}.
-          - loop identifier, if this is for a loop
-       *)
-  trait_decl_name : trait_decl -> string;
-  trait_impl_name : trait_decl -> trait_impl -> string;
-  trait_decl_constructor : trait_decl -> string;
-  trait_parent_clause_name : trait_decl -> trait_clause -> string;
-  trait_const_name : trait_decl -> string -> string;
-  trait_type_name : trait_decl -> string -> string;
-  trait_method_name : trait_decl -> string -> string;
-  trait_type_clause_name : trait_decl -> string -> trait_clause -> string;
-  var_basename : StringSet.t -> string option -> ty -> string;
-      (** Generates a variable basename.
-
-          Inputs:
-          - the set of names used in the context so far
-          - the basename we got from the symbolic execution, if we have one
-          - the type of the variable (can be useful for heuristics, in order
-            not to always use "x" for instance, whenever naming anonymous
-            variables)
-
-          Note that once the formatter generated a basename, we add an index
-          if necessary to prevent name clashes: the burden of name clashes checks
-          is thus on the caller's side.
-       *)
-  type_var_basename : StringSet.t -> string -> string;
-      (** Generates a type variable basename. *)
-  const_generic_var_basename : StringSet.t -> string -> string;
-      (** Generates a const generic variable basename. *)
-  trait_self_clause_basename : string;
-  trait_clause_basename : StringSet.t -> trait_clause -> string;
-      (** Return a base name for a trait clause. We might add a suffix to prevent
-          collisions.
-
-          In the traduction we explicitely manipulate the trait clause instances,
-          that is we introduce one input variable for each trait clause.
-       *)
-  append_index : string -> int -> string;
-      (** Appends an index to a name - we use this to generate unique
-          names: when doing so, the role of the formatter is just to concatenate
-          indices to names, the responsability of finding a proper index is
-          delegated to helper functions.
-       *)
-  extract_literal : F.formatter -> bool -> literal -> unit;
-      (** Format a constant value.
-
-          Inputs:
-          - formatter
-          - [inside]: if [true], the value should be wrapped in parentheses
-            if it is made of an application (ex.: [U32 3])
-          - the constant value
-       *)
-  extract_unop :
-    (bool -> texpression -> unit) ->
-    F.formatter ->
-    bool ->
-    unop ->
-    texpression ->
-    unit;
-      (** Format a unary operation
-
-          Inputs:
-          - a formatter for expressions (called on the argument of the unop)
-          - extraction context (see below)
-          - formatter
-          - expression formatter
-          - [inside]
-          - unop
-          - argument
-       *)
-  extract_binop :
-    (bool -> texpression -> unit) ->
-    F.formatter ->
-    bool ->
-    E.binop ->
-    integer_type ->
-    texpression ->
-    texpression ->
-    unit;
-      (** Format a binary operation
-
-          Inputs:
-          - a formatter for expressions (called on the arguments of the binop)
-          - extraction context (see below)
-          - formatter
-          - expression formatter
-          - [inside]
-          - binop
-          - argument 0
-          - argument 1
-       *)
-}
 
 (** We use identifiers to look for name clashes *)
 type id =
@@ -590,6 +373,152 @@ type names_maps = {
        *)
 }
 
+(** Return [true] if we are strict on collisions for this id (i.e., we forbid
+    collisions even with the ids in the unsafe names map) *)
+let strict_collisions (id : id) : bool =
+  match id with UnknownId | TypeId _ -> true | _ -> false
+
+(** We might not check for collisions for some specific ids (ex.: field names) *)
+let allow_collisions (id : id) : bool =
+  match id with
+  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
+  | TraitMethodId _ ->
+      !Config.record_fields_short_names
+  | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _, _)) ->
+      (* We map several assumed functions to the same id *)
+      true
+  | _ -> false
+
+(** The [id_to_string] function to print nice debugging messages if there are
+    collisions *)
+let names_maps_add (id_to_string : id -> string) (id : id) (name : string)
+    (nm : names_maps) : names_maps =
+  (* We do not use the same name map if we allow/disallow collisions.
+     We notably use it for field names: some backends like Lean can use the
+     type information to disambiguate field projections.
+
+     Remark: we still need to check that those "unsafe" ids don't collide with
+     the ids that we mark as "strict on collision".
+
+     For instance, we don't allow naming a field "let". We enforce this by
+     not checking collision between ids for which we permit collisions (ex.:
+     between fields), but still checking collisions between those ids and the
+     others (ex.: fields and keywords).
+  *)
+  if allow_collisions id then (
+    (* Check with the ids which are considered to be strict on collisions *)
+    names_map_check_collision id_to_string id name nm.strict_names_map;
+    {
+      nm with
+      unsafe_names_map = unsafe_names_map_add id name nm.unsafe_names_map;
+    })
+  else
+    (* Remark: if we are strict on collisions:
+       - we add the id to the strict collisions map
+       - we check that the id doesn't collide with the unsafe map
+       TODO: we might not check that:
+       - a user defined function doesn't collide with an assumed function
+       - two trait decl items don't collide with each other
+    *)
+    let strict_names_map =
+      if strict_collisions id then
+        names_map_add id_to_string id name nm.strict_names_map
+      else nm.strict_names_map
+    in
+    let names_map = names_map_add id_to_string id name nm.names_map in
+    { nm with strict_names_map; names_map }
+
+(** The [id_to_string] function to print nice debugging messages if there are
+    collisions *)
+let names_maps_get (id_to_string : id -> string) (id : id) (nm : names_maps) :
+    string =
+  (* We do not use the same name map if we allow/disallow collisions *)
+  let map_to_string (m : string IdMap.t) : string =
+    "[\n"
+    ^ String.concat ","
+        (List.map
+           (fun (id, n) -> "\n  " ^ id_to_string id ^ " -> " ^ n)
+           (IdMap.bindings m))
+    ^ "\n]"
+  in
+  if allow_collisions id then (
+    let m = nm.unsafe_names_map.id_to_name in
+    match IdMap.find_opt id m with
+    | Some s -> s
+    | None ->
+        let err =
+          "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
+          ^ map_to_string m
+        in
+        log#serror err;
+        if !Config.fail_hard then raise (Failure err)
+        else "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
+  else
+    let m = nm.names_map.id_to_name in
+    match IdMap.find_opt id m with
+    | Some s -> s
+    | None ->
+        let err =
+          "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
+          ^ map_to_string m
+        in
+        log#serror err;
+        if !Config.fail_hard then raise (Failure err)
+        else "(ERROR: \"" ^ id_to_string id ^ "\")"
+
+type names_map_init = {
+  keywords : string list;
+  assumed_adts : (assumed_ty * string) list;
+  assumed_structs : (assumed_ty * string) list;
+  assumed_variants : (assumed_ty * VariantId.id * string) list;
+  assumed_llbc_functions :
+    (A.assumed_fun_id * RegionGroupId.id option * string) list;
+  assumed_pure_functions : (pure_assumed_fun_id * string) list;
+}
+
+let names_maps_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
+    (name : string) (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (TypeId (TAssumed id)) name nm
+
+let names_maps_add_assumed_struct (id_to_string : id -> string)
+    (id : assumed_ty) (name : string) (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (StructId (TAssumed id)) name nm
+
+let names_maps_add_assumed_variant (id_to_string : id -> string)
+    (id : assumed_ty) (variant_id : VariantId.id) (name : string)
+    (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (VariantId (TAssumed id, variant_id)) name nm
+
+let names_maps_add_function (id_to_string : id -> string) (fid : fun_id)
+    (name : string) (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (FunId fid) name nm
+
+let bool_name () = if !backend = Lean then "Bool" else "bool"
+let char_name () = if !backend = Lean then "Char" else "char"
+let str_name () = if !backend = Lean then "String" else "string"
+
+(** Small helper to compute the name of an int type *)
+let int_name (int_ty : integer_type) =
+  let isize, usize, i_format, u_format =
+    match !backend with
+    | FStar | Coq | HOL4 ->
+        ("isize", "usize", format_of_string "i%d", format_of_string "u%d")
+    | Lean -> ("Isize", "Usize", format_of_string "I%d", format_of_string "U%d")
+  in
+  match int_ty with
+  | Isize -> isize
+  | I8 -> Printf.sprintf i_format 8
+  | I16 -> Printf.sprintf i_format 16
+  | I32 -> Printf.sprintf i_format 32
+  | I64 -> Printf.sprintf i_format 64
+  | I128 -> Printf.sprintf i_format 128
+  | Usize -> usize
+  | U8 -> Printf.sprintf u_format 8
+  | U16 -> Printf.sprintf u_format 16
+  | U32 -> Printf.sprintf u_format 32
+  | U64 -> Printf.sprintf u_format 64
+  | U128 -> Printf.sprintf u_format 128
+
 (** Extraction context.
 
     Note that the extraction context contains information coming from the
@@ -601,7 +530,6 @@ type extraction_ctx = {
   crate : A.crate;
   trans_ctx : trans_ctx;
   names_maps : names_maps;
-  fmt : formatter;
   indent_incr : int;
       (** The indent increment we insert whenever we need to indent more *)
   use_dep_ite : bool;
@@ -741,124 +669,14 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       ^ ", method name (" ^ fwd_back_kind ^ "): " ^ fun_name
   | TraitSelfClauseId -> "trait_self_clause"
 
-(** Return [true] if we are strict on collisions for this id (i.e., we forbid
-    collisions even with the ids in the unsafe names map) *)
-let strict_collisions (id : id) : bool =
-  match id with UnknownId | TypeId _ -> true | _ -> false
-
-(** We might not check for collisions for some specific ids (ex.: field names) *)
-let allow_collisions (id : id) : bool =
-  match id with
-  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
-  | TraitMethodId _ ->
-      !Config.record_fields_short_names
-  | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _, _)) ->
-      (* We map several assumed functions to the same id *)
-      true
-  | _ -> false
-
-(** The [id_to_string] function to print nice debugging messages if there are
-    collisions *)
-let names_maps_add (id_to_string : id -> string) (id : id) (name : string)
-    (nm : names_maps) : names_maps =
-  (* We do not use the same name map if we allow/disallow collisions.
-     We notably use it for field names: some backends like Lean can use the
-     type information to disambiguate field projections.
-
-     Remark: we still need to check that those "unsafe" ids don't collide with
-     the ids that we mark as "strict on collision".
-
-     For instance, we don't allow naming a field "let". We enforce this by
-     not checking collision between ids for which we permit collisions (ex.:
-     between fields), but still checking collisions between those ids and the
-     others (ex.: fields and keywords).
-  *)
-  if allow_collisions id then (
-    (* Check with the ids which are considered to be strict on collisions *)
-    names_map_check_collision id_to_string id name nm.strict_names_map;
-    {
-      nm with
-      unsafe_names_map = unsafe_names_map_add id name nm.unsafe_names_map;
-    })
-  else
-    (* Remark: if we are strict on collisions:
-       - we add the id to the strict collisions map
-       - we check that the id doesn't collide with the unsafe map
-       TODO: we might not check that:
-       - a user defined function doesn't collide with an assumed function
-       - two trait decl items don't collide with each other
-    *)
-    let strict_names_map =
-      if strict_collisions id then
-        names_map_add id_to_string id name nm.strict_names_map
-      else nm.strict_names_map
-    in
-    let names_map = names_map_add id_to_string id name nm.names_map in
-    { nm with strict_names_map; names_map }
-
 let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   let id_to_string (id : id) : string = id_to_string id ctx in
   let names_maps = names_maps_add id_to_string id name ctx.names_maps in
   { ctx with names_maps }
 
-(** The [id_to_string] function to print nice debugging messages if there are
-    collisions *)
-let names_maps_get (id_to_string : id -> string) (id : id) (nm : names_maps) :
-    string =
-  (* We do not use the same name map if we allow/disallow collisions *)
-  let map_to_string (m : string IdMap.t) : string =
-    "[\n"
-    ^ String.concat ","
-        (List.map
-           (fun (id, n) -> "\n  " ^ id_to_string id ^ " -> " ^ n)
-           (IdMap.bindings m))
-    ^ "\n]"
-  in
-  if allow_collisions id then (
-    let m = nm.unsafe_names_map.id_to_name in
-    match IdMap.find_opt id m with
-    | Some s -> s
-    | None ->
-        let err =
-          "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
-          ^ map_to_string m
-        in
-        log#serror err;
-        if !Config.fail_hard then raise (Failure err)
-        else "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
-  else
-    let m = nm.names_map.id_to_name in
-    match IdMap.find_opt id m with
-    | Some s -> s
-    | None ->
-        let err =
-          "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
-          ^ map_to_string m
-        in
-        log#serror err;
-        if !Config.fail_hard then raise (Failure err)
-        else "(ERROR: \"" ^ id_to_string id ^ "\")"
-
 let ctx_get (id : id) (ctx : extraction_ctx) : string =
   let id_to_string (id : id) : string = id_to_string id ctx in
   names_maps_get id_to_string id ctx.names_maps
-
-let names_maps_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
-    (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (TypeId (TAssumed id)) name nm
-
-let names_maps_add_assumed_struct (id_to_string : id -> string)
-    (id : assumed_ty) (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (StructId (TAssumed id)) name nm
-
-let names_maps_add_assumed_variant (id_to_string : id -> string)
-    (id : assumed_ty) (variant_id : VariantId.id) (name : string)
-    (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (VariantId (TAssumed id, variant_id)) name nm
-
-let names_maps_add_function (id_to_string : id -> string) (fid : fun_id)
-    (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (FunId fid) name nm
 
 let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
   ctx_get (GlobalId id) ctx
@@ -950,224 +768,335 @@ let ctx_get_termination_measure (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
   ctx_get (TerminationMeasureId (FRegular def_id, loop_id)) ctx
 
-(** Generate a unique type variable name and add it to the context *)
-let ctx_add_type_var (basename : string) (id : TypeVarId.id)
-    (ctx : extraction_ctx) : extraction_ctx * string =
-  let name =
-    ctx.fmt.type_var_basename ctx.names_maps.names_map.names_set basename
+(** Small helper to compute the name of a unary operation *)
+let unop_name (unop : unop) : string =
+  match unop with
+  | Not -> (
+      match !backend with FStar | Lean -> "not" | Coq -> "negb" | HOL4 -> "~")
+  | Neg (int_ty : integer_type) -> (
+      match !backend with Lean -> "-" | _ -> int_name int_ty ^ "_neg")
+  | Cast _ ->
+      (* We never directly use the unop name in this case *)
+      raise (Failure "Unsupported")
+
+(** Small helper to compute the name of a binary operation (note that many
+    binary operations like "less than" are extracted to primitive operations,
+    like [<]).
+ *)
+let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
+  let binop =
+    match binop with
+    | Div -> "div"
+    | Rem -> "rem"
+    | Add -> "add"
+    | Sub -> "sub"
+    | Mul -> "mul"
+    | Lt -> "lt"
+    | Le -> "le"
+    | Ge -> "ge"
+    | Gt -> "gt"
+    | BitXor -> "xor"
+    | BitAnd -> "and"
+    | BitOr -> "or"
+    | Shl -> "lsl"
+    | Shr ->
+        "asr"
+        (* NOTE: make sure arithmetic shift right is implemented, i.e. OCaml's asr operator, not lsr *)
+    | _ -> raise (Failure "Unreachable")
   in
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
-      name
+  (* Remark: the Lean case is actually not used *)
+  match !backend with
+  | Lean -> int_name int_ty ^ "." ^ binop
+  | FStar | Coq | HOL4 -> int_name int_ty ^ "_" ^ binop
+
+(** A list of keywords/identifiers used by the backend and with which we
+    want to check collision.
+
+    Remark: this is useful mostly to look for collisions when generating
+    names for *variables*.
+ *)
+let keywords () =
+  let named_unops =
+    unop_name Not
+    :: List.map (fun it -> unop_name (Neg it)) T.all_signed_int_types
   in
-  let ctx = ctx_add (TypeVarId id) name ctx in
-  (ctx, name)
-
-(** Generate a unique const generic variable name and add it to the context *)
-let ctx_add_const_generic_var (basename : string) (id : ConstGenericVarId.id)
-    (ctx : extraction_ctx) : extraction_ctx * string =
-  let name =
-    ctx.fmt.const_generic_var_basename ctx.names_maps.names_map.names_set
-      basename
+  let named_binops = [ E.Div; Rem; Add; Sub; Mul ] in
+  let named_binops =
+    List.concat_map
+      (fun bn -> List.map (fun it -> named_binop_name bn it) T.all_int_types)
+      named_binops
   in
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
-      name
+  let misc =
+    match !backend with
+    | FStar ->
+        [
+          "assert";
+          "assert_norm";
+          "assume";
+          "else";
+          "fun";
+          "fn";
+          "FStar";
+          "FStar.Mul";
+          "if";
+          "in";
+          "include";
+          "int";
+          "let";
+          "list";
+          "match";
+          "open";
+          "rec";
+          "scalar_cast";
+          "then";
+          "type";
+          "Type0";
+          "Type";
+          "unit";
+          "val";
+          "with";
+        ]
+    | Coq ->
+        [
+          "assert";
+          "Arguments";
+          "Axiom";
+          "char_of_byte";
+          "Check";
+          "Declare";
+          "Definition";
+          "else";
+          "End";
+          "fun";
+          "Fixpoint";
+          "if";
+          "in";
+          "int";
+          "Inductive";
+          "Import";
+          "let";
+          "Lemma";
+          "match";
+          "Module";
+          "not";
+          "Notation";
+          "Proof";
+          "Qed";
+          "rec";
+          "Record";
+          "Require";
+          "Scope";
+          "Search";
+          "SearchPattern";
+          "Set";
+          "then";
+          (* [tt] is unit *)
+          "tt";
+          "type";
+          "Type";
+          "unit";
+          "with";
+        ]
+    | Lean ->
+        [
+          "by";
+          "class";
+          "decreasing_by";
+          "def";
+          "deriving";
+          "do";
+          "else";
+          "end";
+          "for";
+          "have";
+          "if";
+          "inductive";
+          "instance";
+          "import";
+          "let";
+          "macro";
+          "match";
+          "namespace";
+          "opaque";
+          "open";
+          "run_cmd";
+          "set_option";
+          "simp";
+          "structure";
+          "syntax";
+          "termination_by";
+          "then";
+          "Type";
+          "unsafe";
+          "where";
+          "with";
+          "opaque_defs";
+        ]
+    | HOL4 ->
+        [
+          "Axiom";
+          "case";
+          "Definition";
+          "else";
+          "End";
+          "fix";
+          "fix_exec";
+          "fn";
+          "fun";
+          "if";
+          "in";
+          "int";
+          "Inductive";
+          "let";
+          "of";
+          "Proof";
+          "QED";
+          "then";
+          "Theorem";
+        ]
   in
-  let ctx = ctx_add (ConstGenericVarId id) name ctx in
-  (ctx, name)
+  List.concat [ named_unops; named_binops; misc ]
 
-(** See {!ctx_add_type_var} *)
-let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
-  List.fold_left_map
-    (fun ctx (name, id) -> ctx_add_type_var name id ctx)
-    ctx vars
+let assumed_adts () : (assumed_ty * string) list =
+  match !backend with
+  | Lean ->
+      [
+        (TState, "State");
+        (TResult, "Result");
+        (TError, "Error");
+        (TFuel, "Nat");
+        (TArray, "Array");
+        (TSlice, "Slice");
+        (TStr, "Str");
+        (TRawPtr Mut, "MutRawPtr");
+        (TRawPtr Const, "ConstRawPtr");
+      ]
+  | Coq | FStar | HOL4 ->
+      [
+        (TState, "state");
+        (TResult, "result");
+        (TError, "error");
+        (TFuel, if !backend = HOL4 then "num" else "nat");
+        (TArray, "array");
+        (TSlice, "slice");
+        (TStr, "str");
+        (TRawPtr Mut, "mut_raw_ptr");
+        (TRawPtr Const, "const_raw_ptr");
+      ]
 
-(** Generate a unique variable name and add it to the context *)
-let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
-    extraction_ctx * string =
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
-      basename
-  in
-  let ctx = ctx_add (VarId id) name ctx in
-  (ctx, name)
+let assumed_struct_constructors () : (assumed_ty * string) list =
+  match !backend with
+  | Lean -> [ (TArray, "Array.make") ]
+  | Coq -> [ (TArray, "mk_array") ]
+  | FStar -> [ (TArray, "mk_array") ]
+  | HOL4 -> [ (TArray, "mk_array") ]
 
-(** Generate a unique variable name for the trait self clause and add it to the context *)
-let ctx_add_trait_self_clause (ctx : extraction_ctx) : extraction_ctx * string =
-  let basename = ctx.fmt.trait_self_clause_basename in
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
-      basename
-  in
-  let ctx = ctx_add TraitSelfClauseId name ctx in
-  (ctx, name)
+let assumed_variants () : (assumed_ty * VariantId.id * string) list =
+  match !backend with
+  | FStar ->
+      [
+        (TResult, result_return_id, "Return");
+        (TResult, result_fail_id, "Fail");
+        (TError, error_failure_id, "Failure");
+        (TError, error_out_of_fuel_id, "OutOfFuel");
+        (* No Fuel::Zero on purpose *)
+        (* No Fuel::Succ on purpose *)
+      ]
+  | Coq ->
+      [
+        (TResult, result_return_id, "Return");
+        (TResult, result_fail_id, "Fail_");
+        (TError, error_failure_id, "Failure");
+        (TError, error_out_of_fuel_id, "OutOfFuel");
+        (TFuel, fuel_zero_id, "O");
+        (TFuel, fuel_succ_id, "S");
+      ]
+  | Lean ->
+      [
+        (TResult, result_return_id, "ret");
+        (TResult, result_fail_id, "fail");
+        (TError, error_failure_id, "panic");
+        (* No Fuel::Zero on purpose *)
+        (* No Fuel::Succ on purpose *)
+      ]
+  | HOL4 ->
+      [
+        (TResult, result_return_id, "Return");
+        (TResult, result_fail_id, "Fail");
+        (TError, error_failure_id, "Failure");
+        (* No Fuel::Zero on purpose *)
+        (* No Fuel::Succ on purpose *)
+      ]
 
-(** Generate a unique trait clause name and add it to the context *)
-let ctx_add_local_trait_clause (basename : string) (id : TraitClauseId.id)
-    (ctx : extraction_ctx) : extraction_ctx * string =
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set ctx.fmt.append_index
-      basename
-  in
-  let ctx = ctx_add (LocalTraitClauseId id) name ctx in
-  (ctx, name)
+let assumed_llbc_functions () :
+    (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
+  let rg0 = Some T.RegionGroupId.zero in
+  match !backend with
+  | FStar | Coq | HOL4 ->
+      [
+        (ArrayIndexShared, None, "array_index_usize");
+        (ArrayIndexMut, None, "array_index_usize");
+        (ArrayIndexMut, rg0, "array_update_usize");
+        (ArrayToSliceShared, None, "array_to_slice");
+        (ArrayToSliceMut, None, "array_to_slice");
+        (ArrayToSliceMut, rg0, "array_from_slice");
+        (ArrayRepeat, None, "array_repeat");
+        (SliceIndexShared, None, "slice_index_usize");
+        (SliceIndexMut, None, "slice_index_usize");
+        (SliceIndexMut, rg0, "slice_update_usize");
+      ]
+  | Lean ->
+      [
+        (ArrayIndexShared, None, "Array.index_usize");
+        (ArrayIndexMut, None, "Array.index_usize");
+        (ArrayIndexMut, rg0, "Array.update_usize");
+        (ArrayToSliceShared, None, "Array.to_slice");
+        (ArrayToSliceMut, None, "Array.to_slice");
+        (ArrayToSliceMut, rg0, "Array.from_slice");
+        (ArrayRepeat, None, "Array.repeat");
+        (SliceIndexShared, None, "Slice.index_usize");
+        (SliceIndexMut, None, "Slice.index_usize");
+        (SliceIndexMut, rg0, "Slice.update_usize");
+      ]
 
-(** See {!ctx_add_var} *)
-let ctx_add_vars (vars : var list) (ctx : extraction_ctx) :
-    extraction_ctx * string list =
-  List.fold_left_map
-    (fun ctx (v : var) ->
-      let name =
-        ctx.fmt.var_basename ctx.names_maps.names_map.names_set v.basename v.ty
-      in
-      ctx_add_var name v.id ctx)
-    ctx vars
+let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
+  match !backend with
+  | FStar ->
+      [
+        (Return, "return");
+        (Fail, "fail");
+        (Assert, "massert");
+        (FuelDecrease, "decrease");
+        (FuelEqZero, "is_zero");
+      ]
+  | Coq ->
+      (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
+      [ (Return, "return_"); (Fail, "fail_"); (Assert, "massert") ]
+  | Lean ->
+      (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
+      [ (Return, "return"); (Fail, "fail_"); (Assert, "massert") ]
+  | HOL4 ->
+      (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
+      [ (Return, "return"); (Fail, "fail"); (Assert, "massert") ]
 
-let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :
-    extraction_ctx * string list =
-  List.fold_left_map
-    (fun ctx (var : type_var) -> ctx_add_type_var var.name var.index ctx)
-    ctx vars
-
-let ctx_add_const_generic_params (vars : const_generic_var list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
-  List.fold_left_map
-    (fun ctx (var : const_generic_var) ->
-      ctx_add_const_generic_var var.name var.index ctx)
-    ctx vars
-
-let ctx_add_local_trait_clauses (clauses : trait_clause list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
-  List.fold_left_map
-    (fun ctx (c : trait_clause) ->
-      let basename =
-        ctx.fmt.trait_clause_basename ctx.names_maps.names_map.names_set c
-      in
-      ctx_add_local_trait_clause basename c.clause_id ctx)
-    ctx clauses
-
-(** Returns the lists of names for:
-    - the type variables
-    - the const generic variables
-    - the trait clauses
-  *)
-let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
-    extraction_ctx * string list * string list * string list =
-  let { types; const_generics; trait_clauses } = generics in
-  let ctx, tys = ctx_add_type_params types ctx in
-  let ctx, cgs = ctx_add_const_generic_params const_generics ctx in
-  let ctx, tcs = ctx_add_local_trait_clauses trait_clauses ctx in
-  (ctx, tys, cgs, tcs)
-
-let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
-    extraction_ctx =
-  let name =
-    ctx.fmt.decreases_proof_name def.def_id def.llbc_name def.num_loops
-      def.loop_id
-  in
-  ctx_add (DecreasesProofId (FRegular def.def_id, def.loop_id)) name ctx
-
-let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
-    extraction_ctx =
-  let name =
-    ctx.fmt.termination_measure_name def.def_id def.llbc_name def.num_loops
-      def.loop_id
-  in
-  ctx_add (TerminationMeasureId (FRegular def.def_id, def.loop_id)) name ctx
-
-let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
-    extraction_ctx =
-  (* TODO: update once the body id can be an option *)
-  let decl = GlobalId def.def_id in
-
-  (* Check if the global corresponds to an assumed global that we should map
-     to a custom definition in our standard library (for instance, happens
-     with "core::num::usize::MAX") *)
-  match match_name_find_opt ctx.trans_ctx def.name builtin_globals_map with
-  | Some name ->
-      (* Yes: register the custom binding *)
-      ctx_add decl name ctx
-  | None ->
-      (* Not the case: "standard" registration *)
-      let name = ctx.fmt.global_name def.name in
-      let body = FunId (FromLlbc (FunId (FRegular def.body), None, None)) in
-      let ctx = ctx_add decl (name ^ "_c") ctx in
-      let ctx = ctx_add body (name ^ "_body") ctx in
-      ctx
-
-let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
-    (ctx : extraction_ctx) : string =
-  (* Lookup the LLBC def to compute the region group information *)
-  let def_id = def.def_id in
-  let llbc_def = A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_ctx.fun_decls in
-  let sg = llbc_def.signature in
-  let regions_hierarchy =
-    LlbcAstUtils.FunIdMap.find (FRegular def_id)
-      ctx.trans_ctx.fun_ctx.regions_hierarchies
-  in
-  let num_rgs = List.length regions_hierarchy in
-  let { keep_fwd; fwd = _; backs } = trans_group in
-  let num_backs = List.length backs in
-  let rg_info =
-    match def.back_id with
-    | None -> None
-    | Some rg_id ->
-        let rg = T.RegionGroupId.nth regions_hierarchy rg_id in
-        let region_names =
-          List.map
-            (fun rid -> (T.RegionId.nth sg.generics.regions rid).name)
-            rg.regions
-        in
-        Some { id = rg_id; region_names }
-  in
-  (* Add the function name *)
-  ctx.fmt.fun_name def.llbc_name def.num_loops def.loop_id num_rgs rg_info
-    (keep_fwd, num_backs)
-
-(* TODO: move to Extract *)
-let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
-    (ctx : extraction_ctx) : extraction_ctx =
-  (* Sanity check: the function should not be a global body - those are handled
-   * separately *)
-  assert (not def.is_global_decl_body);
-  (* Lookup the LLBC def to compute the region group information *)
-  let def_id = def.def_id in
-  let { keep_fwd; fwd = _; backs } = trans_group in
-  let num_backs = List.length backs in
-  (* Add the function name *)
-  let def_name = ctx_compute_fun_name trans_group def ctx in
-  let fun_id = (Pure.FunId (FRegular def_id), def.loop_id, def.back_id) in
-  let ctx = ctx_add (FunId (FromLlbc fun_id)) def_name ctx in
-  (* Add the name info *)
+let names_map_init () : names_map_init =
   {
-    ctx with
-    fun_name_info =
-      PureUtils.RegularFunIdMap.add fun_id { keep_fwd; num_backs }
-        ctx.fun_name_info;
+    keywords = keywords ();
+    assumed_adts = assumed_adts ();
+    assumed_structs = assumed_struct_constructors ();
+    assumed_variants = assumed_variants ();
+    assumed_llbc_functions = assumed_llbc_functions ();
+    assumed_pure_functions = assumed_pure_functions ();
   }
-
-type names_map_init = {
-  keywords : string list;
-  assumed_adts : (assumed_ty * string) list;
-  assumed_structs : (assumed_ty * string) list;
-  assumed_variants : (assumed_ty * VariantId.id * string) list;
-  assumed_llbc_functions :
-    (A.assumed_fun_id * RegionGroupId.id option * string) list;
-  assumed_pure_functions : (pure_assumed_fun_id * string) list;
-}
 
 (** Initialize names maps with a proper set of keywords/names coming from the
     target language/prover. *)
-let initialize_names_maps (fmt : formatter) (init : names_map_init) : names_maps
-    =
-  let int_names = List.map fmt.int_name T.all_int_types in
+let initialize_names_maps () : names_maps =
+  let init = names_map_init () in
+  let int_names = List.map int_name T.all_int_types in
   let keywords =
     List.concat
-      [
-        [ fmt.bool_name; fmt.char_name; fmt.str_name ]; int_names; init.keywords;
-      ]
+      [ [ bool_name (); char_name (); str_name () ]; int_names; init.keywords ]
   in
   let names_set = StringSet.empty in
   let name_to_id = StringMap.empty in
@@ -1232,8 +1161,223 @@ let initialize_names_maps (fmt : formatter) (init : names_map_init) : names_maps
   (* Return *)
   nm
 
-let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
-  fmt.type_name def.llbc_name
+(** Compute the qualified for a type definition/declaration.
+
+    For instance: "type", "and", etc.
+
+    Remark: can return [None] for some backends like HOL4.
+ *)
+let type_decl_kind_to_qualif (kind : decl_kind)
+    (type_kind : type_decl_kind option) : string option =
+  match !backend with
+  | FStar -> (
+      match kind with
+      | SingleNonRec -> Some "type"
+      | SingleRec -> Some "type"
+      | MutRecFirst -> Some "type"
+      | MutRecInner -> Some "and"
+      | MutRecLast -> Some "and"
+      | Assumed -> Some "assume type"
+      | Declared -> Some "val")
+  | Coq -> (
+      match (kind, type_kind) with
+      | SingleNonRec, Some Enum -> Some "Inductive"
+      | SingleNonRec, Some Struct -> Some "Record"
+      | (SingleRec | MutRecFirst), Some _ -> Some "Inductive"
+      | (MutRecInner | MutRecLast), Some _ ->
+          (* Coq doesn't support groups of mutually recursive definitions which mix
+           * records and inducties: we convert everything to records if this happens
+           *)
+          Some "with"
+      | (Assumed | Declared), None -> Some "Axiom"
+      | SingleNonRec, None ->
+          (* This is for traits *)
+          Some "Record"
+      | _ ->
+          raise
+            (Failure
+               ("Unexpected: (" ^ show_decl_kind kind ^ ", "
+               ^ Print.option_to_string show_type_decl_kind type_kind
+               ^ ")")))
+  | Lean -> (
+      match kind with
+      | SingleNonRec ->
+          if type_kind = Some Struct then Some "structure" else Some "inductive"
+      | SingleRec -> Some "inductive"
+      | MutRecFirst -> Some "inductive"
+      | MutRecInner -> Some "inductive"
+      | MutRecLast -> Some "inductive"
+      | Assumed -> Some "axiom"
+      | Declared -> Some "axiom")
+  | HOL4 -> None
+
+(** Compute the qualified for a function definition/declaration.
+
+    For instance: "let", "let rec", "and", etc.
+
+    Remark: can return [None] for some backends like HOL4.
+ *)
+let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
+  match !backend with
+  | FStar -> (
+      match kind with
+      | SingleNonRec -> Some "let"
+      | SingleRec -> Some "let rec"
+      | MutRecFirst -> Some "let rec"
+      | MutRecInner -> Some "and"
+      | MutRecLast -> Some "and"
+      | Assumed -> Some "assume val"
+      | Declared -> Some "val")
+  | Coq -> (
+      match kind with
+      | SingleNonRec -> Some "Definition"
+      | SingleRec -> Some "Fixpoint"
+      | MutRecFirst -> Some "Fixpoint"
+      | MutRecInner -> Some "with"
+      | MutRecLast -> Some "with"
+      | Assumed -> Some "Axiom"
+      | Declared -> Some "Axiom")
+  | Lean -> (
+      match kind with
+      | SingleNonRec -> Some "def"
+      | SingleRec -> Some "divergent def"
+      | MutRecFirst -> Some "mutual divergent def"
+      | MutRecInner -> Some "divergent def"
+      | MutRecLast -> Some "divergent def"
+      | Assumed -> Some "axiom"
+      | Declared -> Some "axiom")
+  | HOL4 -> None
+
+(** The type of types.
+
+    TODO: move inside the formatter?
+ *)
+let type_keyword () =
+  match !backend with
+  | FStar -> "Type0"
+  | Coq | Lean -> "Type"
+  | HOL4 -> raise (Failure "Unexpected")
+
+(** Helper *)
+let name_last_elem_as_ident (n : llbc_name) : string =
+  match Collections.List.last n with
+  | PeIdent (s, _) -> s
+  | PeImpl _ -> raise (Failure "Unexpected")
+
+(** Helper
+
+    Prepare a name.
+    The first id elem is always the crate: if it is the local crate,
+    we remove it. We ignore disambiguators (there may be collisions, but we
+    check if there are).
+ *)
+let ctx_compute_simple_name (ctx : extraction_ctx) (name : llbc_name) :
+    string list =
+  (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
+  match name with
+  | (PeIdent (crate, _) as id) :: name ->
+      let name = if crate = ctx.crate.name then name else id :: name in
+      name_to_simple_name ctx.trans_ctx name
+  | _ ->
+      raise
+        (Failure
+           ("Unexpected name shape: "
+           ^ TranslateCore.name_to_string ctx.trans_ctx name))
+
+(** Helper *)
+let ctx_compute_simple_type_name = ctx_compute_simple_name
+
+(** Helper *)
+let ctx_compute_type_name_no_suffix (ctx : extraction_ctx) (name : llbc_name) :
+    string =
+  flatten_name (ctx_compute_simple_type_name ctx name)
+
+(** Provided a basename, compute a type name. *)
+let ctx_compute_type_name (ctx : extraction_ctx) (name : llbc_name) =
+  let name = ctx_compute_type_name_no_suffix ctx name in
+  match !backend with
+  | FStar -> StringUtils.lowercase_first_letter (name ^ "_t")
+  | Coq | HOL4 -> name ^ "_t"
+  | Lean -> name
+
+(** Inputs:
+    - type name
+    - field id
+    - field name
+
+    Note that fields don't always have names, but we still need to
+    generate some names if we want to extract the structures to records...
+    We might want to extract such structures to tuples, later, but field
+    access then causes trouble because not all provers accept syntax like
+    [x.3] where [x] is a tuple.
+ *)
+let ctx_compute_field_name (ctx : extraction_ctx) (def_name : llbc_name)
+    (field_id : FieldId.id) (field_name : string option) : string =
+  let field_name_s =
+    match field_name with
+    | Some field_name -> field_name
+    | None ->
+        (* TODO: extract structs with no field names to tuples *)
+        FieldId.to_string field_id
+  in
+  if !Config.record_fields_short_names then
+    if field_name = None then (* TODO: this is a bit ugly *)
+      "_" ^ field_name_s
+    else field_name_s
+  else
+    let def_name =
+      ctx_compute_type_name_no_suffix ctx def_name ^ "_" ^ field_name_s
+    in
+    match !backend with
+    | Lean | HOL4 -> def_name
+    | Coq | FStar -> StringUtils.lowercase_first_letter def_name
+
+(** Inputs:
+    - type name
+    - variant name
+ *)
+let ctx_compute_variant_name (ctx : extraction_ctx) (def_name : llbc_name)
+    (variant : string) : string =
+  match !backend with
+  | FStar | Coq | HOL4 ->
+      let variant = to_camel_case variant in
+      if !variant_concatenate_type_name then
+        StringUtils.capitalize_first_letter
+          (ctx_compute_type_name_no_suffix ctx def_name ^ "_" ^ variant)
+      else variant
+  | Lean -> variant
+
+(** Structure constructors are used when constructing structure values.
+
+    For instance, in F*:
+    {[
+      type pair = { x : nat; y : nat }
+      let p : pair = Mkpair 0 1
+    ]}
+
+    Inputs:
+    - type name
+*)
+let ctx_compute_struct_constructor (ctx : extraction_ctx) (basename : llbc_name)
+    : string =
+  let tname = ctx_compute_type_name ctx basename in
+  ExtractBuiltin.mk_struct_constructor tname
+
+let ctx_compute_fun_name_no_suffix (ctx : extraction_ctx) (fname : llbc_name) :
+    string =
+  let fname = ctx_compute_simple_name ctx fname in
+  (* TODO: don't convert to snake case for Coq, HOL4, F* *)
+  let fname = flatten_name fname in
+  match !backend with
+  | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter fname
+  | Lean -> fname
+
+(** Provided a basename, compute the name of a global declaration. *)
+let ctx_compute_global_name (ctx : extraction_ctx) (name : llbc_name) : string =
+  (* Converting to snake case also lowercases the letters (in Rust, global
+   * names are written in capital letters). *)
+  let parts = List.map to_snake_case (ctx_compute_simple_name ctx name) in
+  String.concat "_" parts
 
 (** Helper function: generate a suffix for a function name, i.e., generates
     a suffix like "_loop", "loop1", etc. to append to a function name.
@@ -1301,3 +1445,474 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
           "_back" ^ RegionGroupId.to_string rg.id
   in
   lp_suff ^ rg_suff
+
+(** Compute the name of a regular (non-assumed) function.
+
+    Inputs:
+    - function basename (TODO: shouldn't appear for assumed functions?...)
+    - number of loops in the function (useful to check if we need to use
+      indices to derive unique names for the loops for instance - if there is
+      exactly one loop, we don't need to use indices)
+    - loop id (if pertinent)
+    - number of region groups
+    - region group information in case of a backward function
+      ([None] if forward function)
+    - pair:
+      - do we generate the forward function (it may have been filtered)?
+      - the number of *extracted backward functions* (same comment as for
+        the number of loops)
+        The number of extracted backward functions if not necessarily
+        equal to the number of region groups, because we may have
+        filtered some of them.
+    TODO: use the fun id for the assumed functions.
+ *)
+let ctx_compute_fun_name (ctx : extraction_ctx) (fname : llbc_name)
+    (num_loops : int) (loop_id : LoopId.id option) (num_rgs : int)
+    (rg : region_group_info option) (filter_info : bool * int) : string =
+  let fname = ctx_compute_fun_name_no_suffix ctx fname in
+  (* Compute the suffix *)
+  let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
+  (* Concatenate *)
+  fname ^ suffix
+
+let ctx_compute_trait_decl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
+    : string =
+  ctx_compute_type_name ctx trait_decl.llbc_name
+
+let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
+    (trait_impl : trait_impl) : string =
+  (* We derive the trait impl name from the implemented trait.
+     For instance, if this implementation is an instance of `trait::Trait`
+     for `<foo::Foo, u32>`, we generate the name: "trait.TraitFooFooU32Inst".
+     Importantly, it is to be noted that the name is independent of the place
+     where the instance has been defined (it is indepedent of the file, etc.).
+  *)
+  let name =
+    (* We need to lookup the LLBC definitions, to have the original instantiation *)
+    let trait_impl =
+      TraitImplId.Map.find trait_impl.def_id
+        ctx.trans_ctx.trait_impls_ctx.trait_impls
+    in
+    let params = trait_impl.generics in
+    let args = trait_impl.impl_trait.decl_generics in
+    name_with_generics_to_simple_name ctx.trans_ctx trait_decl.llbc_name params
+      args
+  in
+  let name = flatten_name name in
+  match !backend with
+  | FStar -> StringUtils.lowercase_first_letter name
+  | Coq | HOL4 | Lean -> name
+
+let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
+    (trait_decl : trait_decl) : string =
+  let name = ctx_compute_trait_decl_name ctx trait_decl in
+  ExtractBuiltin.mk_struct_constructor name
+
+let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
+    (trait_decl : trait_decl) (clause : trait_clause) : string =
+  (* TODO: improve - it would be better to not use indices *)
+  let clause = "parent_clause_" ^ TraitClauseId.to_string clause.clause_id in
+  if !Config.record_fields_short_names then clause
+  else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ clause
+
+let ctx_compute_trait_type_name (ctx : extraction_ctx) (trait_decl : trait_decl)
+    (item : string) : string =
+  let name =
+    if !Config.record_fields_short_names then item
+    else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ item
+  in
+  (* Constants are usually all capital letters.
+     Some backends do not support field names starting with a capital letter,
+     and it may be weird to lowercase everything (especially as it may lead
+     to more name collisions): we add a prefix when necessary.
+     For instance, it gives: "U" -> "tU"
+     Note that for some backends we prepend the type name (because those backends
+     can't disambiguate fields coming from different ADTs if they have the same
+     names), and thus don't need to add a prefix starting with a lowercase.
+  *)
+  match !backend with FStar -> "t" ^ name | Coq | Lean | HOL4 -> name
+
+let ctx_compute_trait_const_name (ctx : extraction_ctx)
+    (trait_decl : trait_decl) (item : string) : string =
+  let name =
+    if !Config.record_fields_short_names then item
+    else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ item
+  in
+  (* See [trait_type_name] *)
+  match !backend with FStar -> "c" ^ name | Coq | Lean | HOL4 -> name
+
+let ctx_compute_trait_method_name (ctx : extraction_ctx)
+    (trait_decl : trait_decl) (item : string) : string =
+  if !Config.record_fields_short_names then item
+  else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ item
+
+let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
+    (trait_decl : trait_decl) (item : string) (clause : trait_clause) : string =
+  (* TODO: improve - it would be better to not use indices *)
+  ctx_compute_trait_type_name ctx trait_decl item
+  ^ "_clause_"
+  ^ TraitClauseId.to_string clause.clause_id
+
+(** Generates the name of the termination measure used to prove/reason about
+    termination. The generated code uses this clause where needed,
+    but its body must be defined by the user.
+
+    F* and Lean only.
+
+    Inputs:
+    - function id: this is especially useful to identify whether the
+      function is an assumed function or a local function
+    - function basename
+    - the number of loops in the parent function. This is used for
+      the same purpose as in {!field:llbc_name}.
+    - loop identifier, if this is for a loop
+ *)
+let ctx_compute_termination_measure_name (ctx : extraction_ctx)
+    (_fid : A.FunDeclId.id) (fname : llbc_name) (num_loops : int)
+    (loop_id : LoopId.id option) : string =
+  let fname = ctx_compute_fun_name_no_suffix ctx fname in
+  let lp_suffix = default_fun_loop_suffix num_loops loop_id in
+  (* Compute the suffix *)
+  let suffix =
+    match !Config.backend with
+    | FStar -> "_decreases"
+    | Lean -> "_terminates"
+    | Coq | HOL4 -> raise (Failure "Unexpected")
+  in
+  (* Concatenate *)
+  fname ^ lp_suffix ^ suffix
+
+(** Generates the name of the proof used to prove/reason about
+    termination. The generated code uses this clause where needed,
+    but its body must be defined by the user.
+
+    Lean only.
+
+    Inputs:
+    - function id: this is especially useful to identify whether the
+      function is an assumed function or a local function
+    - function basename
+    - the number of loops in the parent function. This is used for
+      the same purpose as in {!field:llbc_name}.
+    - loop identifier, if this is for a loop
+ *)
+let ctx_compute_decreases_proof_name (ctx : extraction_ctx)
+    (_fid : A.FunDeclId.id) (fname : llbc_name) (num_loops : int)
+    (loop_id : LoopId.id option) : string =
+  let fname = ctx_compute_fun_name_no_suffix ctx fname in
+  let lp_suffix = default_fun_loop_suffix num_loops loop_id in
+  (* Compute the suffix *)
+  let suffix =
+    match !Config.backend with
+    | Lean -> "_decreases"
+    | FStar | Coq | HOL4 -> raise (Failure "Unexpected")
+  in
+  (* Concatenate *)
+  fname ^ lp_suffix ^ suffix
+
+(** Generates a variable basename.
+
+    Inputs:
+    - the set of names used in the context so far
+    - the basename we got from the symbolic execution, if we have one
+    - the type of the variable (can be useful for heuristics, in order
+      not to always use "x" for instance, whenever naming anonymous
+      variables)
+
+    Note that once the formatter generated a basename, we add an index
+    if necessary to prevent name clashes: the burden of name clashes checks
+    is thus on the caller's side.
+ *)
+let ctx_compute_var_basename (ctx : extraction_ctx) (basename : string option)
+    (ty : ty) : string =
+  (* Small helper to derive var names from ADT type names.
+
+     We do the following:
+     - convert the type name to snake case
+     - take the first letter of every "letter group"
+     Ex.: "HashMap" -> "hash_map" -> "hm"
+  *)
+  let name_from_type_ident (name : string) : string =
+    let cl = to_snake_case name in
+    let cl = String.split_on_char '_' cl in
+    let cl = List.filter (fun s -> String.length s > 0) cl in
+    assert (List.length cl > 0);
+    let cl = List.map (fun s -> s.[0]) cl in
+    StringUtils.string_of_chars cl
+  in
+  (* If there is a basename, we use it *)
+  match basename with
+  | Some basename ->
+      (* This should be a no-op *)
+      to_snake_case basename
+  | None -> (
+      (* No basename: we use the first letter of the type *)
+      match ty with
+      | TAdt (type_id, generics) -> (
+          match type_id with
+          | TTuple ->
+              (* The "pair" case is frequent enough to have its special treatment *)
+              if List.length generics.types = 2 then "p" else "t"
+          | TAssumed TResult -> "r"
+          | TAssumed TError -> ConstStrings.error_basename
+          | TAssumed TFuel -> ConstStrings.fuel_basename
+          | TAssumed TArray -> "a"
+          | TAssumed TSlice -> "s"
+          | TAssumed TStr -> "s"
+          | TAssumed TState -> ConstStrings.state_basename
+          | TAssumed (TRawPtr _) -> "p"
+          | TAdtId adt_id ->
+              let def =
+                TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+              in
+              (* Derive the var name from the last ident of the type name
+                 Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
+              *)
+              (* The name shouldn't be empty, and its last element should
+               * be an ident *)
+              let cl = Collections.List.last def.name in
+              name_from_type_ident (TypesUtils.as_ident cl))
+      | TVar _ -> (
+          (* TODO: use "t" also for F* *)
+          match !backend with
+          | FStar -> "x" (* lacking inspiration here... *)
+          | Coq | Lean | HOL4 -> "t" (* lacking inspiration here... *))
+      | TLiteral lty -> (
+          match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
+      | TArrow _ -> "f"
+      | TTraitType (_, _, name) -> name_from_type_ident name)
+
+(** Generates a type variable basename. *)
+let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :
+    string =
+  (* Rust type variables are snake-case and start with a capital letter *)
+  match !backend with
+  | FStar ->
+      (* This is *not* a no-op: this removes the capital letter *)
+      to_snake_case basename
+  | HOL4 ->
+      (* In HOL4, type variable names must start with "'" *)
+      "'" ^ to_snake_case basename
+  | Coq | Lean -> basename
+
+(** Generates a const generic variable basename. *)
+let ctx_compute_const_generic_var_basename (_ctx : extraction_ctx)
+    (basename : string) : string =
+  (* Rust type variables are snake-case and start with a capital letter *)
+  match !backend with
+  | FStar | HOL4 ->
+      (* This is *not* a no-op: this removes the capital letter *)
+      to_snake_case basename
+  | Coq | Lean -> basename
+
+(** Return a base name for a trait clause. We might add a suffix to prevent
+    collisions.
+
+    In the traduction we explicitely manipulate the trait clause instances,
+    that is we introduce one input variable for each trait clause.
+ *)
+let ctx_compute_trait_clause_basename (_ctx : extraction_ctx)
+    (_clause : trait_clause) : string =
+  (* TODO: actually use the clause to derive the name *)
+  "inst"
+
+let trait_self_clause_basename = "self_clause"
+
+(** Appends an index to a name - we use this to generate unique
+    names: when doing so, the role of the formatter is just to concatenate
+    indices to names, the responsability of finding a proper index is
+    delegated to helper functions.
+ *)
+let name_append_index (basename : string) (i : int) : string =
+  basename ^ string_of_int i
+
+(** Generate a unique type variable name and add it to the context *)
+let ctx_add_type_var (basename : string) (id : TypeVarId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let name = ctx_compute_type_var_basename ctx basename in
+  let name =
+    basename_to_unique ctx.names_maps.names_map.names_set name_append_index name
+  in
+  let ctx = ctx_add (TypeVarId id) name ctx in
+  (ctx, name)
+
+(** Generate a unique const generic variable name and add it to the context *)
+let ctx_add_const_generic_var (basename : string) (id : ConstGenericVarId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let name = ctx_compute_const_generic_var_basename ctx basename in
+  let name =
+    basename_to_unique ctx.names_maps.names_map.names_set name_append_index name
+  in
+  let ctx = ctx_add (ConstGenericVarId id) name ctx in
+  (ctx, name)
+
+(** See {!ctx_add_type_var} *)
+let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (name, id) -> ctx_add_type_var name id ctx)
+    ctx vars
+
+(** Generate a unique variable name and add it to the context *)
+let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
+    extraction_ctx * string =
+  let name =
+    basename_to_unique ctx.names_maps.names_map.names_set name_append_index
+      basename
+  in
+  let ctx = ctx_add (VarId id) name ctx in
+  (ctx, name)
+
+(** Generate a unique variable name for the trait self clause and add it to the context *)
+let ctx_add_trait_self_clause (ctx : extraction_ctx) : extraction_ctx * string =
+  let basename = trait_self_clause_basename in
+  let name =
+    basename_to_unique ctx.names_maps.names_map.names_set name_append_index
+      basename
+  in
+  let ctx = ctx_add TraitSelfClauseId name ctx in
+  (ctx, name)
+
+(** Generate a unique trait clause name and add it to the context *)
+let ctx_add_local_trait_clause (basename : string) (id : TraitClauseId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let name =
+    basename_to_unique ctx.names_maps.names_map.names_set name_append_index
+      basename
+  in
+  let ctx = ctx_add (LocalTraitClauseId id) name ctx in
+  (ctx, name)
+
+(** See {!ctx_add_var} *)
+let ctx_add_vars (vars : var list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (v : var) ->
+      let name = ctx_compute_var_basename ctx v.basename v.ty in
+      ctx_add_var name v.id ctx)
+    ctx vars
+
+let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (var : type_var) -> ctx_add_type_var var.name var.index ctx)
+    ctx vars
+
+let ctx_add_const_generic_params (vars : const_generic_var list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (var : const_generic_var) ->
+      ctx_add_const_generic_var var.name var.index ctx)
+    ctx vars
+
+let ctx_add_local_trait_clauses (clauses : trait_clause list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (c : trait_clause) ->
+      let basename = ctx_compute_trait_clause_basename ctx c in
+      ctx_add_local_trait_clause basename c.clause_id ctx)
+    ctx clauses
+
+(** Returns the lists of names for:
+    - the type variables
+    - the const generic variables
+    - the trait clauses
+  *)
+let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
+    extraction_ctx * string list * string list * string list =
+  let { types; const_generics; trait_clauses } = generics in
+  let ctx, tys = ctx_add_type_params types ctx in
+  let ctx, cgs = ctx_add_const_generic_params const_generics ctx in
+  let ctx, tcs = ctx_add_local_trait_clauses trait_clauses ctx in
+  (ctx, tys, cgs, tcs)
+
+let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let name =
+    ctx_compute_decreases_proof_name ctx def.def_id def.llbc_name def.num_loops
+      def.loop_id
+  in
+  ctx_add (DecreasesProofId (FRegular def.def_id, def.loop_id)) name ctx
+
+let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let name =
+    ctx_compute_termination_measure_name ctx def.def_id def.llbc_name
+      def.num_loops def.loop_id
+  in
+  ctx_add (TerminationMeasureId (FRegular def.def_id, def.loop_id)) name ctx
+
+let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  (* TODO: update once the body id can be an option *)
+  let decl = GlobalId def.def_id in
+
+  (* Check if the global corresponds to an assumed global that we should map
+     to a custom definition in our standard library (for instance, happens
+     with "core::num::usize::MAX") *)
+  match match_name_find_opt ctx.trans_ctx def.name builtin_globals_map with
+  | Some name ->
+      (* Yes: register the custom binding *)
+      ctx_add decl name ctx
+  | None ->
+      (* Not the case: "standard" registration *)
+      let name = ctx_compute_global_name ctx def.name in
+      let body = FunId (FromLlbc (FunId (FRegular def.body), None, None)) in
+      let ctx = ctx_add decl (name ^ "_c") ctx in
+      let ctx = ctx_add body (name ^ "_body") ctx in
+      ctx
+
+let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
+    (ctx : extraction_ctx) : string =
+  (* Lookup the LLBC def to compute the region group information *)
+  let def_id = def.def_id in
+  let llbc_def = A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_ctx.fun_decls in
+  let sg = llbc_def.signature in
+  let regions_hierarchy =
+    LlbcAstUtils.FunIdMap.find (FRegular def_id)
+      ctx.trans_ctx.fun_ctx.regions_hierarchies
+  in
+  let num_rgs = List.length regions_hierarchy in
+  let { keep_fwd; fwd = _; backs } = trans_group in
+  let num_backs = List.length backs in
+  let rg_info =
+    match def.back_id with
+    | None -> None
+    | Some rg_id ->
+        let rg = T.RegionGroupId.nth regions_hierarchy rg_id in
+        let region_names =
+          List.map
+            (fun rid -> (T.RegionId.nth sg.generics.regions rid).name)
+            rg.regions
+        in
+        Some { id = rg_id; region_names }
+  in
+  (* Add the function name *)
+  ctx_compute_fun_name ctx def.llbc_name def.num_loops def.loop_id num_rgs
+    rg_info (keep_fwd, num_backs)
+
+(* TODO: move to Extract *)
+let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
+    (ctx : extraction_ctx) : extraction_ctx =
+  (* Sanity check: the function should not be a global body - those are handled
+   * separately *)
+  assert (not def.is_global_decl_body);
+  (* Lookup the LLBC def to compute the region group information *)
+  let def_id = def.def_id in
+  let { keep_fwd; fwd = _; backs } = trans_group in
+  let num_backs = List.length backs in
+  (* Add the function name *)
+  let def_name = ctx_compute_fun_name trans_group def ctx in
+  let fun_id = (Pure.FunId (FRegular def_id), def.loop_id, def.back_id) in
+  let ctx = ctx_add (FunId (FromLlbc fun_id)) def_name ctx in
+  (* Add the name info *)
+  {
+    ctx with
+    fun_name_info =
+      PureUtils.RegularFunIdMap.add fun_id { keep_fwd; num_backs }
+        ctx.fun_name_info;
+  }
+
+let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
+    =
+  ctx_compute_type_name ctx def.llbc_name

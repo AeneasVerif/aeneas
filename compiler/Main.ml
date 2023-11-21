@@ -178,7 +178,10 @@ let () =
           log#error "The Lean backend doesn't support the -use-fuel option";
           fail ());
         (* Lean can disambiguate the field names *)
-        record_fields_short_names := true
+        record_fields_short_names := true;
+        (* We exploit the fact that the variant name should always be
+           prefixed with the type name to prevent collisions *)
+        variant_concatenate_type_name := false
     | HOL4 ->
         (* We don't support fuel for the HOL4 backend *)
         if !use_fuel then (

@@ -26,6 +26,11 @@ let mk_memoized (f : unit -> 'a) : unit -> 'a =
 let split_on_separator (s : string) : string list =
   Str.split (Str.regexp "\\(::\\|\\.\\)") s
 
+let flatten_name (name : string list) : string =
+  match !backend with
+  | FStar | Coq | HOL4 -> String.concat "_" name
+  | Lean -> String.concat "." name
+
 let () =
   assert (split_on_separator "x::y::z" = [ "x"; "y"; "z" ]);
   assert (split_on_separator "x.y.z" = [ "x"; "y"; "z" ])
@@ -124,10 +129,7 @@ let mk_struct_constructor (type_name : string) : string =
 let builtin_types () : builtin_type_info list =
   let mk_type (rust_name : string) ?(keep_params : bool list option = None)
       ?(kind : type_variant_kind = KOpaque) () : builtin_type_info =
-    let extract_name =
-      let sep = backend_choice "_" "." in
-      String.concat sep (split_on_separator rust_name)
-    in
+    let extract_name = flatten_name (split_on_separator rust_name) in
     let body_info : builtin_type_body_info option =
       match kind with
       | KOpaque -> None
@@ -231,11 +233,7 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info list) list
       | None -> pattern_to_fun_extract_name rust_name
       | Some name -> split_on_separator name
     in
-    let basename =
-      match !backend with
-      | FStar | Coq | HOL4 -> String.concat "_" extract_name
-      | Lean -> String.concat "." extract_name
-    in
+    let basename = flatten_name extract_name in
     let fwd_suffix = if with_back && back_no_suffix then "_fwd" else "" in
     let fwd = [ { rg = None; extract_name = basename ^ fwd_suffix } ] in
     let back_suffix = if with_back && back_no_suffix then "" else "_back" in
@@ -400,11 +398,9 @@ let builtin_trait_decls_info () =
     let extract_name =
       match extract_name with
       | Some n -> n
-      | None -> (
+      | None ->
           let rust_name = pattern_to_fun_extract_name rust_name in
-          match !backend with
-          | Coq | FStar | HOL4 -> String.concat "_" rust_name
-          | Lean -> String.concat "." rust_name)
+          flatten_name rust_name
     in
     let constructor = mk_struct_constructor extract_name in
     let consts = [] in
@@ -502,13 +498,12 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
       pattern * (bool list option * string) =
     let rust_name = parse_pattern rust_name in
     let name =
-      let sep = backend_choice "_" "." in
       let name =
         match extract_name with
         | None -> pattern_to_trait_impl_extract_name rust_name
         | Some name -> split_on_separator name
       in
-      String.concat sep name
+      flatten_name name
     in
     (rust_name, (filter, name))
   in

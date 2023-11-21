@@ -6,354 +6,88 @@
 open Pure
 open PureUtils
 open TranslateCore
-open ExtractBase
-open StringUtils
 open Config
-module F = Format
+include ExtractBase
 
-(** Small helper to compute the name of an int type *)
-let int_name (int_ty : integer_type) =
-  let isize, usize, i_format, u_format =
-    match !backend with
-    | FStar | Coq | HOL4 ->
-        ("isize", "usize", format_of_string "i%d", format_of_string "u%d")
-    | Lean -> ("Isize", "Usize", format_of_string "I%d", format_of_string "U%d")
-  in
-  match int_ty with
-  | Isize -> isize
-  | I8 -> Printf.sprintf i_format 8
-  | I16 -> Printf.sprintf i_format 16
-  | I32 -> Printf.sprintf i_format 32
-  | I64 -> Printf.sprintf i_format 64
-  | I128 -> Printf.sprintf i_format 128
-  | Usize -> usize
-  | U8 -> Printf.sprintf u_format 8
-  | U16 -> Printf.sprintf u_format 16
-  | U32 -> Printf.sprintf u_format 32
-  | U64 -> Printf.sprintf u_format 64
-  | U128 -> Printf.sprintf u_format 128
+(** Format a constant value.
 
-(** Small helper to compute the name of a unary operation *)
-let unop_name (unop : unop) : string =
-  match unop with
-  | Not -> (
-      match !backend with FStar | Lean -> "not" | Coq -> "negb" | HOL4 -> "~")
-  | Neg (int_ty : integer_type) -> (
-      match !backend with Lean -> "-" | _ -> int_name int_ty ^ "_neg")
-  | Cast _ ->
-      (* We never directly use the unop name in this case *)
-      raise (Failure "Unsupported")
-
-(** Small helper to compute the name of a binary operation (note that many
-    binary operations like "less than" are extracted to primitive operations,
-    like [<]).
+    Inputs:
+    - formatter
+    - [inside]: if [true], the value should be wrapped in parentheses
+      if it is made of an application (ex.: [U32 3])
+    - the constant value
  *)
-let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
-  let binop =
-    match binop with
-    | Div -> "div"
-    | Rem -> "rem"
-    | Add -> "add"
-    | Sub -> "sub"
-    | Mul -> "mul"
-    | Lt -> "lt"
-    | Le -> "le"
-    | Ge -> "ge"
-    | Gt -> "gt"
-    | BitXor -> "xor"
-    | BitAnd -> "and"
-    | BitOr -> "or"
-    | Shl -> "lsl"
-    | Shr ->
-        "asr"
-        (* NOTE: make sure arithmetic shift right is implemented, i.e. OCaml's asr operator, not lsr *)
-    | _ -> raise (Failure "Unreachable")
-  in
-  (* Remark: the Lean case is actually not used *)
-  match !backend with
-  | Lean -> int_name int_ty ^ "." ^ binop
-  | FStar | Coq | HOL4 -> int_name int_ty ^ "_" ^ binop
+let extract_literal (fmt : F.formatter) (inside : bool) (cv : literal) : unit =
+  match cv with
+  | VScalar sv -> (
+      match !backend with
+      | FStar -> F.pp_print_string fmt (Z.to_string sv.value)
+      | Coq | HOL4 | Lean ->
+          let print_brackets = inside && !backend = HOL4 in
+          if print_brackets then F.pp_print_string fmt "(";
+          (match !backend with
+          | Coq | Lean -> ()
+          | HOL4 ->
+              F.pp_print_string fmt ("int_to_" ^ int_name sv.int_ty);
+              F.pp_print_space fmt ()
+          | _ -> raise (Failure "Unreachable"));
+          (* We need to add parentheses if the value is negative *)
+          if sv.value >= Z.of_int 0 then
+            F.pp_print_string fmt (Z.to_string sv.value)
+          else if !backend = Lean then
+            (* TODO: parsing issues with Lean because there are ambiguous
+               interpretations between int values and nat values *)
+            F.pp_print_string fmt
+              ("(-(" ^ Z.to_string (Z.neg sv.value) ^ ":Int))")
+          else F.pp_print_string fmt ("(" ^ Z.to_string sv.value ^ ")");
+          (match !backend with
+          | Coq ->
+              let iname = int_name sv.int_ty in
+              F.pp_print_string fmt ("%" ^ iname)
+          | Lean ->
+              let iname = String.lowercase_ascii (int_name sv.int_ty) in
+              F.pp_print_string fmt ("#" ^ iname)
+          | HOL4 -> ()
+          | _ -> raise (Failure "Unreachable"));
+          if print_brackets then F.pp_print_string fmt ")")
+  | VBool b ->
+      let b =
+        match !backend with
+        | HOL4 -> if b then "T" else "F"
+        | Coq | FStar | Lean -> if b then "true" else "false"
+      in
+      F.pp_print_string fmt b
+  | VChar c -> (
+      match !backend with
+      | HOL4 ->
+          (* [#"a"] is a notation for [CHR 97] (97 is the ASCII code for 'a') *)
+          F.pp_print_string fmt ("#\"" ^ String.make 1 c ^ "\"")
+      | FStar | Lean -> F.pp_print_string fmt ("'" ^ String.make 1 c ^ "'")
+      | Coq ->
+          if inside then F.pp_print_string fmt "(";
+          F.pp_print_string fmt "char_of_byte";
+          F.pp_print_space fmt ();
+          (* Convert the the char to ascii *)
+          let c =
+            let i = Char.code c in
+            let x0 = i / 16 in
+            let x1 = i mod 16 in
+            "Coq.Init.Byte.x" ^ string_of_int x0 ^ string_of_int x1
+          in
+          F.pp_print_string fmt c;
+          if inside then F.pp_print_string fmt ")")
 
-(** A list of keywords/identifiers used by the backend and with which we
-    want to check collision.
+(** Format a unary operation
 
-    Remark: this is useful mostly to look for collisions when generating
-    names for *variables*.
+    Inputs:
+    - a formatter for expressions (called on the argument of the unop)
+    - extraction context (see below)
+    - formatter
+    - expression formatter
+    - [inside]
+    - unop
+    - argument
  *)
-let keywords () =
-  let named_unops =
-    unop_name Not
-    :: List.map (fun it -> unop_name (Neg it)) T.all_signed_int_types
-  in
-  let named_binops = [ E.Div; Rem; Add; Sub; Mul ] in
-  let named_binops =
-    List.concat_map
-      (fun bn -> List.map (fun it -> named_binop_name bn it) T.all_int_types)
-      named_binops
-  in
-  let misc =
-    match !backend with
-    | FStar ->
-        [
-          "assert";
-          "assert_norm";
-          "assume";
-          "else";
-          "fun";
-          "fn";
-          "FStar";
-          "FStar.Mul";
-          "if";
-          "in";
-          "include";
-          "int";
-          "let";
-          "list";
-          "match";
-          "open";
-          "rec";
-          "scalar_cast";
-          "then";
-          "type";
-          "Type0";
-          "Type";
-          "unit";
-          "val";
-          "with";
-        ]
-    | Coq ->
-        [
-          "assert";
-          "Arguments";
-          "Axiom";
-          "char_of_byte";
-          "Check";
-          "Declare";
-          "Definition";
-          "else";
-          "End";
-          "fun";
-          "Fixpoint";
-          "if";
-          "in";
-          "int";
-          "Inductive";
-          "Import";
-          "let";
-          "Lemma";
-          "match";
-          "Module";
-          "not";
-          "Notation";
-          "Proof";
-          "Qed";
-          "rec";
-          "Record";
-          "Require";
-          "Scope";
-          "Search";
-          "SearchPattern";
-          "Set";
-          "then";
-          (* [tt] is unit *)
-          "tt";
-          "type";
-          "Type";
-          "unit";
-          "with";
-        ]
-    | Lean ->
-        [
-          "by";
-          "class";
-          "decreasing_by";
-          "def";
-          "deriving";
-          "do";
-          "else";
-          "end";
-          "for";
-          "have";
-          "if";
-          "inductive";
-          "instance";
-          "import";
-          "let";
-          "macro";
-          "match";
-          "namespace";
-          "opaque";
-          "open";
-          "run_cmd";
-          "set_option";
-          "simp";
-          "structure";
-          "syntax";
-          "termination_by";
-          "then";
-          "Type";
-          "unsafe";
-          "where";
-          "with";
-          "opaque_defs";
-        ]
-    | HOL4 ->
-        [
-          "Axiom";
-          "case";
-          "Definition";
-          "else";
-          "End";
-          "fix";
-          "fix_exec";
-          "fn";
-          "fun";
-          "if";
-          "in";
-          "int";
-          "Inductive";
-          "let";
-          "of";
-          "Proof";
-          "QED";
-          "then";
-          "Theorem";
-        ]
-  in
-  List.concat [ named_unops; named_binops; misc ]
-
-let assumed_adts () : (assumed_ty * string) list =
-  match !backend with
-  | Lean ->
-      [
-        (TState, "State");
-        (TResult, "Result");
-        (TError, "Error");
-        (TFuel, "Nat");
-        (TArray, "Array");
-        (TSlice, "Slice");
-        (TStr, "Str");
-        (TRawPtr Mut, "MutRawPtr");
-        (TRawPtr Const, "ConstRawPtr");
-      ]
-  | Coq | FStar | HOL4 ->
-      [
-        (TState, "state");
-        (TResult, "result");
-        (TError, "error");
-        (TFuel, if !backend = HOL4 then "num" else "nat");
-        (TArray, "array");
-        (TSlice, "slice");
-        (TStr, "str");
-        (TRawPtr Mut, "mut_raw_ptr");
-        (TRawPtr Const, "const_raw_ptr");
-      ]
-
-let assumed_struct_constructors () : (assumed_ty * string) list =
-  match !backend with
-  | Lean -> [ (TArray, "Array.make") ]
-  | Coq -> [ (TArray, "mk_array") ]
-  | FStar -> [ (TArray, "mk_array") ]
-  | HOL4 -> [ (TArray, "mk_array") ]
-
-let assumed_variants () : (assumed_ty * VariantId.id * string) list =
-  match !backend with
-  | FStar ->
-      [
-        (TResult, result_return_id, "Return");
-        (TResult, result_fail_id, "Fail");
-        (TError, error_failure_id, "Failure");
-        (TError, error_out_of_fuel_id, "OutOfFuel");
-        (* No Fuel::Zero on purpose *)
-        (* No Fuel::Succ on purpose *)
-      ]
-  | Coq ->
-      [
-        (TResult, result_return_id, "Return");
-        (TResult, result_fail_id, "Fail_");
-        (TError, error_failure_id, "Failure");
-        (TError, error_out_of_fuel_id, "OutOfFuel");
-        (TFuel, fuel_zero_id, "O");
-        (TFuel, fuel_succ_id, "S");
-      ]
-  | Lean ->
-      [
-        (TResult, result_return_id, "ret");
-        (TResult, result_fail_id, "fail");
-        (TError, error_failure_id, "panic");
-        (* No Fuel::Zero on purpose *)
-        (* No Fuel::Succ on purpose *)
-      ]
-  | HOL4 ->
-      [
-        (TResult, result_return_id, "Return");
-        (TResult, result_fail_id, "Fail");
-        (TError, error_failure_id, "Failure");
-        (* No Fuel::Zero on purpose *)
-        (* No Fuel::Succ on purpose *)
-      ]
-
-let assumed_llbc_functions () :
-    (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
-  let rg0 = Some T.RegionGroupId.zero in
-  match !backend with
-  | FStar | Coq | HOL4 ->
-      [
-        (ArrayIndexShared, None, "array_index_usize");
-        (ArrayIndexMut, None, "array_index_usize");
-        (ArrayIndexMut, rg0, "array_update_usize");
-        (ArrayToSliceShared, None, "array_to_slice");
-        (ArrayToSliceMut, None, "array_to_slice");
-        (ArrayToSliceMut, rg0, "array_from_slice");
-        (ArrayRepeat, None, "array_repeat");
-        (SliceIndexShared, None, "slice_index_usize");
-        (SliceIndexMut, None, "slice_index_usize");
-        (SliceIndexMut, rg0, "slice_update_usize");
-      ]
-  | Lean ->
-      [
-        (ArrayIndexShared, None, "Array.index_usize");
-        (ArrayIndexMut, None, "Array.index_usize");
-        (ArrayIndexMut, rg0, "Array.update_usize");
-        (ArrayToSliceShared, None, "Array.to_slice");
-        (ArrayToSliceMut, None, "Array.to_slice");
-        (ArrayToSliceMut, rg0, "Array.from_slice");
-        (ArrayRepeat, None, "Array.repeat");
-        (SliceIndexShared, None, "Slice.index_usize");
-        (SliceIndexMut, None, "Slice.index_usize");
-        (SliceIndexMut, rg0, "Slice.update_usize");
-      ]
-
-let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
-  match !backend with
-  | FStar ->
-      [
-        (Return, "return");
-        (Fail, "fail");
-        (Assert, "massert");
-        (FuelDecrease, "decrease");
-        (FuelEqZero, "is_zero");
-      ]
-  | Coq ->
-      (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
-      [ (Return, "return_"); (Fail, "fail_"); (Assert, "massert") ]
-  | Lean ->
-      (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
-      [ (Return, "return"); (Fail, "fail_"); (Assert, "massert") ]
-  | HOL4 ->
-      (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
-      [ (Return, "return"); (Fail, "fail"); (Assert, "massert") ]
-
-let names_map_init () : names_map_init =
-  {
-    keywords = keywords ();
-    assumed_adts = assumed_adts ();
-    assumed_structs = assumed_struct_constructors ();
-    assumed_variants = assumed_variants ();
-    assumed_llbc_functions = assumed_llbc_functions ();
-    assumed_pure_functions = assumed_pure_functions ();
-  }
-
 let extract_unop (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpression) : unit
     =
@@ -409,7 +143,18 @@ let extract_unop (extract_expr : bool -> texpression -> unit)
           extract_expr true arg;
           if inside then F.pp_print_string fmt ")")
 
-(** [extract_expr] : the boolean argument is [inside] *)
+(** Format a binary operation
+
+    Inputs:
+    - a formatter for expressions (called on the arguments of the binop)
+    - extraction context (see below)
+    - formatter
+    - expression formatter
+    - [inside]
+    - binop
+    - argument 0
+    - argument 1
+ *)
 let extract_binop (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (binop : E.binop)
     (int_ty : integer_type) (arg0 : texpression) (arg1 : texpression) : unit =
@@ -450,523 +195,6 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
       F.pp_print_space fmt ();
       extract_expr true arg1);
   if inside then F.pp_print_string fmt ")"
-
-let type_decl_kind_to_qualif (kind : decl_kind)
-    (type_kind : type_decl_kind option) : string option =
-  match !backend with
-  | FStar -> (
-      match kind with
-      | SingleNonRec -> Some "type"
-      | SingleRec -> Some "type"
-      | MutRecFirst -> Some "type"
-      | MutRecInner -> Some "and"
-      | MutRecLast -> Some "and"
-      | Assumed -> Some "assume type"
-      | Declared -> Some "val")
-  | Coq -> (
-      match (kind, type_kind) with
-      | SingleNonRec, Some Enum -> Some "Inductive"
-      | SingleNonRec, Some Struct -> Some "Record"
-      | (SingleRec | MutRecFirst), Some _ -> Some "Inductive"
-      | (MutRecInner | MutRecLast), Some _ ->
-          (* Coq doesn't support groups of mutually recursive definitions which mix
-           * records and inducties: we convert everything to records if this happens
-           *)
-          Some "with"
-      | (Assumed | Declared), None -> Some "Axiom"
-      | SingleNonRec, None ->
-          (* This is for traits *)
-          Some "Record"
-      | _ ->
-          raise
-            (Failure
-               ("Unexpected: (" ^ show_decl_kind kind ^ ", "
-               ^ Print.option_to_string show_type_decl_kind type_kind
-               ^ ")")))
-  | Lean -> (
-      match kind with
-      | SingleNonRec ->
-          if type_kind = Some Struct then Some "structure" else Some "inductive"
-      | SingleRec -> Some "inductive"
-      | MutRecFirst -> Some "inductive"
-      | MutRecInner -> Some "inductive"
-      | MutRecLast -> Some "inductive"
-      | Assumed -> Some "axiom"
-      | Declared -> Some "axiom")
-  | HOL4 -> None
-
-let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
-  match !backend with
-  | FStar -> (
-      match kind with
-      | SingleNonRec -> Some "let"
-      | SingleRec -> Some "let rec"
-      | MutRecFirst -> Some "let rec"
-      | MutRecInner -> Some "and"
-      | MutRecLast -> Some "and"
-      | Assumed -> Some "assume val"
-      | Declared -> Some "val")
-  | Coq -> (
-      match kind with
-      | SingleNonRec -> Some "Definition"
-      | SingleRec -> Some "Fixpoint"
-      | MutRecFirst -> Some "Fixpoint"
-      | MutRecInner -> Some "with"
-      | MutRecLast -> Some "with"
-      | Assumed -> Some "Axiom"
-      | Declared -> Some "Axiom")
-  | Lean -> (
-      match kind with
-      | SingleNonRec -> Some "def"
-      | SingleRec -> Some "divergent def"
-      | MutRecFirst -> Some "mutual divergent def"
-      | MutRecInner -> Some "divergent def"
-      | MutRecLast -> Some "divergent def"
-      | Assumed -> Some "axiom"
-      | Declared -> Some "axiom")
-  | HOL4 -> None
-
-(** The type of types.
-
-    TODO: move inside the formatter?
- *)
-let type_keyword () =
-  match !backend with
-  | FStar -> "Type0"
-  | Coq | Lean -> "Type"
-  | HOL4 -> raise (Failure "Unexpected")
-
-let name_last_elem_as_ident (n : llbc_name) : string =
-  match Collections.List.last n with
-  | PeIdent (s, _) -> s
-  | PeImpl _ -> raise (Failure "Unexpected")
-
-(**
-   [ctx]: we use the context to lookup type definitions, to retrieve type names.
-   This is used to compute variable names, when they have no basenames: in this
-   case we use the first letter of the type name.
-
-   [variant_concatenate_type_name]: if true, add the type name as a prefix
-   to the variant names.
-   Ex.:
-   In Rust:
-     {[
-       enum List = {
-         Cons(u32, Box<List>),x
-         Nil,
-       }
-     ]}
-
-   F*, if option activated:
-     {[
-       type list =
-       | ListCons : u32 -> list -> list
-       | ListNil : list
-     ]}
-
-   F*, if option not activated:
-     {[
-       type list =
-       | Cons : u32 -> list -> list
-       | Nil : list
-     ]}
-
-   Rk.: this should be true by default, because in Rust all the variant names
-   are actively uniquely identifier by the type name [List::Cons(...)], while
-   in other languages it is not necessarily the case, and thus clashes can mess
-   up type checking. Note that some languages actually forbids the name clashes
-   (it is the case of F* ).
- *)
-let mk_formatter (ctx : trans_ctx) (crate_name : string)
-    (variant_concatenate_type_name : bool) : formatter =
-  let int_name = int_name in
-
-  (* Prepare a name.
-     The first id elem is always the crate: if it is the local crate,
-     we remove it. We ignore disambiguators (there may be collisions, but we
-     check if there are).
-  *)
-  let name_to_simple_name (name : llbc_name) : string list =
-    (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
-    match name with
-    | (PeIdent (crate, _) as id) :: name ->
-        let name = if crate = crate_name then name else id :: name in
-        name_to_simple_name ctx name
-    | _ ->
-        raise
-          (Failure
-             ("Unexpected name shape: " ^ TranslateCore.name_to_string ctx name))
-  in
-  let flatten_name (name : string list) : string =
-    match !backend with
-    | FStar | Coq | HOL4 -> String.concat "_" name
-    | Lean -> String.concat "." name
-  in
-  let get_name name : string list = name_to_simple_name name in
-  let get_type_name = get_name in
-  let get_type_name_no_suffix name =
-    match !backend with
-    | FStar | Coq | HOL4 -> String.concat "_" (get_type_name name)
-    | Lean -> String.concat "." (get_type_name name)
-  in
-  let type_name name =
-    match !backend with
-    | FStar ->
-        StringUtils.lowercase_first_letter (get_type_name_no_suffix name ^ "_t")
-    | Coq | HOL4 -> get_type_name_no_suffix name ^ "_t"
-    | Lean -> get_type_name_no_suffix name
-  in
-  let field_name (def_name : llbc_name) (field_id : FieldId.id)
-      (field_name : string option) : string =
-    let field_name_s =
-      match field_name with
-      | Some field_name -> field_name
-      | None ->
-          (* TODO: extract structs with no field names to tuples *)
-          FieldId.to_string field_id
-    in
-    if !Config.record_fields_short_names then
-      if field_name = None then (* TODO: this is a bit ugly *)
-        "_" ^ field_name_s
-      else field_name_s
-    else
-      let def_name = get_type_name_no_suffix def_name ^ "_" ^ field_name_s in
-      match !backend with
-      | Lean | HOL4 -> def_name
-      | Coq | FStar -> StringUtils.lowercase_first_letter def_name
-  in
-  let variant_name (def_name : llbc_name) (variant : string) : string =
-    match !backend with
-    | FStar | Coq | HOL4 ->
-        let variant = to_camel_case variant in
-        if variant_concatenate_type_name then
-          StringUtils.capitalize_first_letter
-            (get_type_name_no_suffix def_name ^ "_" ^ variant)
-        else variant
-    | Lean -> variant
-  in
-  let struct_constructor (basename : llbc_name) : string =
-    let tname = type_name basename in
-    ExtractBuiltin.mk_struct_constructor tname
-  in
-  let get_fun_name fname =
-    let fname = get_name fname in
-    (* TODO: don't convert to snake case for Coq, HOL4, F* *)
-    let fname = flatten_name fname in
-    match !backend with
-    | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter fname
-    | Lean -> fname
-  in
-  let global_name (name : llbc_name) : string =
-    (* Converting to snake case also lowercases the letters (in Rust, global
-     * names are written in capital letters). *)
-    let parts = List.map to_snake_case (get_name name) in
-    String.concat "_" parts
-  in
-  let fun_name (fname : llbc_name) (num_loops : int)
-      (loop_id : LoopId.id option) (num_rgs : int)
-      (rg : region_group_info option) (filter_info : bool * int) : string =
-    let fname = get_fun_name fname in
-    (* Compute the suffix *)
-    let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
-    (* Concatenate *)
-    fname ^ suffix
-  in
-
-  let trait_decl_name (trait_decl : trait_decl) : string =
-    type_name trait_decl.llbc_name
-  in
-
-  let trait_impl_name (trait_decl : trait_decl) (trait_impl : trait_impl) :
-      string =
-    (* We derive the trait impl name from the implemented trait.
-       For instance, if this implementation is an instance of `trait::Trait`
-       for `<foo::Foo, u32>`, we generate the name: "trait.TraitFooFooU32Inst".
-       Importantly, it is to be noted that the name is independent of the place
-       where the instance has been defined (it is indepedent of the file, etc.).
-    *)
-    let name =
-      (* We need to lookup the LLBC definitions, to have the original instantiation *)
-      let trait_impl =
-        TraitImplId.Map.find trait_impl.def_id ctx.trait_impls_ctx.trait_impls
-      in
-      let params = trait_impl.generics in
-      let args = trait_impl.impl_trait.decl_generics in
-      name_with_generics_to_simple_name ctx trait_decl.llbc_name params args
-    in
-    let name = flatten_name name in
-    match !backend with
-    | FStar -> StringUtils.lowercase_first_letter name
-    | Coq | HOL4 | Lean -> name
-  in
-
-  let trait_decl_constructor (trait_decl : trait_decl) : string =
-    let name = trait_decl_name trait_decl in
-    ExtractBuiltin.mk_struct_constructor name
-  in
-
-  let trait_parent_clause_name (trait_decl : trait_decl) (clause : trait_clause)
-      : string =
-    (* TODO: improve - it would be better to not use indices *)
-    let clause = "parent_clause_" ^ TraitClauseId.to_string clause.clause_id in
-    if !Config.record_fields_short_names then clause
-    else trait_decl_name trait_decl ^ "_" ^ clause
-  in
-  let trait_type_name (trait_decl : trait_decl) (item : string) : string =
-    let name =
-      if !Config.record_fields_short_names then item
-      else trait_decl_name trait_decl ^ "_" ^ item
-    in
-    (* Constants are usually all capital letters.
-       Some backends do not support field names starting with a capital letter,
-       and it may be weird to lowercase everything (especially as it may lead
-       to more name collisions): we add a prefix when necessary.
-       For instance, it gives: "U" -> "tU"
-       Note that for some backends we prepend the type name (because those backends
-       can't disambiguate fields coming from different ADTs if they have the same
-       names), and thus don't need to add a prefix starting with a lowercase.
-    *)
-    match !backend with FStar -> "t" ^ name | Coq | Lean | HOL4 -> name
-  in
-  let trait_const_name (trait_decl : trait_decl) (item : string) : string =
-    let name =
-      if !Config.record_fields_short_names then item
-      else trait_decl_name trait_decl ^ "_" ^ item
-    in
-    (* See [trait_type_name] *)
-    match !backend with FStar -> "c" ^ name | Coq | Lean | HOL4 -> name
-  in
-  let trait_method_name (trait_decl : trait_decl) (item : string) : string =
-    if !Config.record_fields_short_names then item
-    else trait_decl_name trait_decl ^ "_" ^ item
-  in
-  let trait_type_clause_name (trait_decl : trait_decl) (item : string)
-      (clause : trait_clause) : string =
-    (* TODO: improve - it would be better to not use indices *)
-    trait_type_name trait_decl item
-    ^ "_clause_"
-    ^ TraitClauseId.to_string clause.clause_id
-  in
-
-  let termination_measure_name (_fid : A.FunDeclId.id) (fname : llbc_name)
-      (num_loops : int) (loop_id : LoopId.id option) : string =
-    let fname = get_fun_name fname in
-    let lp_suffix = default_fun_loop_suffix num_loops loop_id in
-    (* Compute the suffix *)
-    let suffix =
-      match !Config.backend with
-      | FStar -> "_decreases"
-      | Lean -> "_terminates"
-      | Coq | HOL4 -> raise (Failure "Unexpected")
-    in
-    (* Concatenate *)
-    fname ^ lp_suffix ^ suffix
-  in
-
-  let decreases_proof_name (_fid : A.FunDeclId.id) (fname : llbc_name)
-      (num_loops : int) (loop_id : LoopId.id option) : string =
-    let fname = get_fun_name fname in
-    let lp_suffix = default_fun_loop_suffix num_loops loop_id in
-    (* Compute the suffix *)
-    let suffix =
-      match !Config.backend with
-      | Lean -> "_decreases"
-      | FStar | Coq | HOL4 -> raise (Failure "Unexpected")
-    in
-    (* Concatenate *)
-    fname ^ lp_suffix ^ suffix
-  in
-
-  let var_basename (_varset : StringSet.t) (basename : string option) (ty : ty)
-      : string =
-    (* Small helper to derive var names from ADT type names.
-
-       We do the following:
-       - convert the type name to snake case
-       - take the first letter of every "letter group"
-       Ex.: "HashMap" -> "hash_map" -> "hm"
-    *)
-    let name_from_type_ident (name : string) : string =
-      let cl = to_snake_case name in
-      let cl = String.split_on_char '_' cl in
-      let cl = List.filter (fun s -> String.length s > 0) cl in
-      assert (List.length cl > 0);
-      let cl = List.map (fun s -> s.[0]) cl in
-      StringUtils.string_of_chars cl
-    in
-    (* If there is a basename, we use it *)
-    match basename with
-    | Some basename ->
-        (* This should be a no-op *)
-        to_snake_case basename
-    | None -> (
-        (* No basename: we use the first letter of the type *)
-        match ty with
-        | TAdt (type_id, generics) -> (
-            match type_id with
-            | TTuple ->
-                (* The "pair" case is frequent enough to have its special treatment *)
-                if List.length generics.types = 2 then "p" else "t"
-            | TAssumed TResult -> "r"
-            | TAssumed TError -> ConstStrings.error_basename
-            | TAssumed TFuel -> ConstStrings.fuel_basename
-            | TAssumed TArray -> "a"
-            | TAssumed TSlice -> "s"
-            | TAssumed TStr -> "s"
-            | TAssumed TState -> ConstStrings.state_basename
-            | TAssumed (TRawPtr _) -> "p"
-            | TAdtId adt_id ->
-                let def = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
-                (* Derive the var name from the last ident of the type name
-                   Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
-                *)
-                (* The name shouldn't be empty, and its last element should
-                 * be an ident *)
-                let cl = Collections.List.last def.name in
-                name_from_type_ident (TypesUtils.as_ident cl))
-        | TVar _ -> (
-            (* TODO: use "t" also for F* *)
-            match !backend with
-            | FStar -> "x" (* lacking inspiration here... *)
-            | Coq | Lean | HOL4 -> "t" (* lacking inspiration here... *))
-        | TLiteral lty -> (
-            match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
-        | TArrow _ -> "f"
-        | TTraitType (_, _, name) -> name_from_type_ident name)
-  in
-  let type_var_basename (_varset : StringSet.t) (basename : string) : string =
-    (* Rust type variables are snake-case and start with a capital letter *)
-    match !backend with
-    | FStar ->
-        (* This is *not* a no-op: this removes the capital letter *)
-        to_snake_case basename
-    | HOL4 ->
-        (* In HOL4, type variable names must start with "'" *)
-        "'" ^ to_snake_case basename
-    | Coq | Lean -> basename
-  in
-  let const_generic_var_basename (_varset : StringSet.t) (basename : string) :
-      string =
-    (* Rust type variables are snake-case and start with a capital letter *)
-    match !backend with
-    | FStar | HOL4 ->
-        (* This is *not* a no-op: this removes the capital letter *)
-        to_snake_case basename
-    | Coq | Lean -> basename
-  in
-  let trait_clause_basename (_varset : StringSet.t) (_clause : trait_clause) :
-      string =
-    (* TODO: actually use the clause to derive the name *)
-    "inst"
-  in
-  let trait_self_clause_basename = "self_clause" in
-  let append_index (basename : string) (i : int) : string =
-    basename ^ string_of_int i
-  in
-
-  let extract_literal (fmt : F.formatter) (inside : bool) (cv : literal) : unit
-      =
-    match cv with
-    | VScalar sv -> (
-        match !backend with
-        | FStar -> F.pp_print_string fmt (Z.to_string sv.value)
-        | Coq | HOL4 | Lean ->
-            let print_brackets = inside && !backend = HOL4 in
-            if print_brackets then F.pp_print_string fmt "(";
-            (match !backend with
-            | Coq | Lean -> ()
-            | HOL4 ->
-                F.pp_print_string fmt ("int_to_" ^ int_name sv.int_ty);
-                F.pp_print_space fmt ()
-            | _ -> raise (Failure "Unreachable"));
-            (* We need to add parentheses if the value is negative *)
-            if sv.value >= Z.of_int 0 then
-              F.pp_print_string fmt (Z.to_string sv.value)
-            else if !backend = Lean then
-              (* TODO: parsing issues with Lean because there are ambiguous
-                 interpretations between int values and nat values *)
-              F.pp_print_string fmt
-                ("(-(" ^ Z.to_string (Z.neg sv.value) ^ ":Int))")
-            else F.pp_print_string fmt ("(" ^ Z.to_string sv.value ^ ")");
-            (match !backend with
-            | Coq ->
-                let iname = int_name sv.int_ty in
-                F.pp_print_string fmt ("%" ^ iname)
-            | Lean ->
-                let iname = String.lowercase_ascii (int_name sv.int_ty) in
-                F.pp_print_string fmt ("#" ^ iname)
-            | HOL4 -> ()
-            | _ -> raise (Failure "Unreachable"));
-            if print_brackets then F.pp_print_string fmt ")")
-    | VBool b ->
-        let b =
-          match !backend with
-          | HOL4 -> if b then "T" else "F"
-          | Coq | FStar | Lean -> if b then "true" else "false"
-        in
-        F.pp_print_string fmt b
-    | VChar c -> (
-        match !backend with
-        | HOL4 ->
-            (* [#"a"] is a notation for [CHR 97] (97 is the ASCII code for 'a') *)
-            F.pp_print_string fmt ("#\"" ^ String.make 1 c ^ "\"")
-        | FStar | Lean -> F.pp_print_string fmt ("'" ^ String.make 1 c ^ "'")
-        | Coq ->
-            if inside then F.pp_print_string fmt "(";
-            F.pp_print_string fmt "char_of_byte";
-            F.pp_print_space fmt ();
-            (* Convert the the char to ascii *)
-            let c =
-              let i = Char.code c in
-              let x0 = i / 16 in
-              let x1 = i mod 16 in
-              "Coq.Init.Byte.x" ^ string_of_int x0 ^ string_of_int x1
-            in
-            F.pp_print_string fmt c;
-            if inside then F.pp_print_string fmt ")")
-  in
-  let bool_name = if !backend = Lean then "Bool" else "bool" in
-  let char_name = if !backend = Lean then "Char" else "char" in
-  let str_name = if !backend = Lean then "String" else "string" in
-  {
-    bool_name;
-    char_name;
-    int_name;
-    str_name;
-    type_decl_kind_to_qualif;
-    fun_decl_kind_to_qualif;
-    field_name;
-    variant_name;
-    struct_constructor;
-    type_name;
-    global_name;
-    fun_name;
-    termination_measure_name;
-    decreases_proof_name;
-    trait_decl_name;
-    trait_impl_name;
-    trait_decl_constructor;
-    trait_parent_clause_name;
-    trait_const_name;
-    trait_type_name;
-    trait_method_name;
-    trait_type_clause_name;
-    var_basename;
-    type_var_basename;
-    const_generic_var_basename;
-    trait_self_clause_basename;
-    trait_clause_basename;
-    append_index;
-    extract_literal;
-    extract_unop;
-    extract_binop;
-  }
-
-let mk_formatter_and_names_maps (ctx : trans_ctx) (crate_name : string)
-    (variant_concatenate_type_name : bool) : formatter * names_maps =
-  let fmt = mk_formatter ctx crate_name variant_concatenate_type_name in
-  let names_maps = initialize_names_maps fmt (names_map_init ()) in
-  (fmt, names_maps)
 
 let is_single_opaque_fun_decl_group (dg : Pure.fun_decl list) : bool =
   match dg with [ d ] -> d.body = None | _ -> false
@@ -1125,17 +353,17 @@ let extract_const_generic (ctx : extraction_ctx) (fmt : F.formatter)
   | CgGlobal id ->
       let s = ctx_get_global id ctx in
       F.pp_print_string fmt s
-  | CgValue v -> ctx.fmt.extract_literal fmt inside v
+  | CgValue v -> extract_literal fmt inside v
   | CgVar id ->
       let s = ctx_get_const_generic_var id ctx in
       F.pp_print_string fmt s
 
-let extract_literal_type (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
     (ty : literal_type) : unit =
   match ty with
-  | TBool -> F.pp_print_string fmt ctx.fmt.bool_name
-  | TChar -> F.pp_print_string fmt ctx.fmt.char_name
-  | TInteger int_ty -> F.pp_print_string fmt (ctx.fmt.int_name int_ty)
+  | TBool -> F.pp_print_string fmt (bool_name ())
+  | TChar -> F.pp_print_string fmt (char_name ())
+  | TInteger int_ty -> F.pp_print_string fmt (int_name int_ty)
 
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
@@ -1446,7 +674,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   (* Compute and register the type def name *)
   let def_name =
     match info with
-    | None -> ctx.fmt.type_name def.llbc_name
+    | None -> ctx_compute_type_name ctx def.llbc_name
     | Some info -> info.extract_name
   in
   let ctx = ctx_add (TypeId (TAdtId def.def_id)) def_name ctx in
@@ -1464,10 +692,14 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
               let field_names =
                 FieldId.mapi
                   (fun fid (field : field) ->
-                    (fid, ctx.fmt.field_name def.llbc_name fid field.field_name))
+                    ( fid,
+                      ctx_compute_field_name ctx def.llbc_name fid
+                        field.field_name ))
                   fields
               in
-              let cons_name = ctx.fmt.struct_constructor def.llbc_name in
+              let cons_name =
+                ctx_compute_struct_constructor ctx def.llbc_name
+              in
               (field_names, cons_name)
           | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
               let field_names =
@@ -1503,12 +735,13 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
               VariantId.mapi
                 (fun variant_id (variant : variant) ->
                   let name =
-                    ctx.fmt.variant_name def.llbc_name variant.variant_name
+                    ctx_compute_variant_name ctx def.llbc_name
+                      variant.variant_name
                   in
                   (* Add the type name prefix for Lean *)
                   let name =
                     if !Config.backend = Lean then
-                      let type_name = ctx.fmt.type_name def.llbc_name in
+                      let type_name = ctx_compute_type_name ctx def.llbc_name in
                       type_name ^ "." ^ name
                     else name
                   in
@@ -1570,8 +803,7 @@ let extract_type_decl_variant (ctx : extraction_ctx) (fmt : F.formatter)
           | Some field_name ->
               let var_id = VarId.of_int (FieldId.to_int fid) in
               let field_name =
-                ctx.fmt.var_basename ctx.names_maps.names_map.names_set
-                  (Some field_name) f.field_ty
+                ctx_compute_var_basename ctx (Some field_name) f.field_ty
               in
               let ctx, field_name = ctx_add_var field_name var_id ctx in
               F.pp_print_string fmt (field_name ^ " :");
@@ -1652,7 +884,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   let print_variant _variant_id (v : variant) =
     (* We don't lookup the name, because it may have a prefix for the type
        id (in the case of Lean) *)
-    let cons_name = ctx.fmt.variant_name def.llbc_name v.variant_name in
+    let cons_name = ctx_compute_variant_name ctx def.llbc_name v.variant_name in
     let fields = v.fields in
     extract_type_decl_variant ctx fmt type_decl_group def_name type_params
       cg_params cons_name fields
@@ -2059,7 +1291,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS CONST_GEN_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let qualif = ctx.fmt.type_decl_kind_to_qualif kind type_kind in
+  let qualif = type_decl_kind_to_qualif kind type_kind in
   (match qualif with
   | Some qualif -> F.pp_print_string fmt (qualif ^ " " ^ def_name)
   | None -> F.pp_print_string fmt def_name);

@@ -6,7 +6,6 @@
 open Pure
 open PureUtils
 open TranslateCore
-open ExtractBase
 open Config
 include ExtractTypes
 
@@ -236,12 +235,10 @@ let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
     (is_let : bool) (inside : bool) (v : typed_pattern) : extraction_ctx =
   match v.value with
   | PatConstant cv ->
-      ctx.fmt.extract_literal fmt inside cv;
+      extract_literal fmt inside cv;
       ctx
   | PatVar (v, _) ->
-      let vname =
-        ctx.fmt.var_basename ctx.names_maps.names_map.names_set v.basename v.ty
-      in
+      let vname = ctx_compute_var_basename ctx v.basename v.ty in
       let ctx, vname = ctx_add_var vname v.id ctx in
       F.pp_print_string fmt vname;
       ctx
@@ -274,7 +271,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | CVar var_id ->
       let var_name = ctx_get_const_generic_var var_id ctx in
       F.pp_print_string fmt var_name
-  | Const cv -> ctx.fmt.extract_literal fmt inside cv
+  | Const cv -> extract_literal fmt inside cv
   | App _ ->
       let app, args = destruct_apps e in
       extract_App ctx fmt inside app args
@@ -354,10 +351,10 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
        * Note that the way we generate the translation, we shouldn't get the
        * case where we have no argument (all functions are fully instantiated,
        * and no AST transformation introduces partial calls). *)
-      ctx.fmt.extract_unop (extract_texpression ctx fmt) fmt inside unop arg
+      extract_unop (extract_texpression ctx fmt) fmt inside unop arg
   | Binop (binop, int_ty), [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
-      ctx.fmt.extract_binop
+      extract_binop
         (extract_texpression ctx fmt)
         fmt inside binop int_ty arg0 arg1
   | Fun fun_id, _ ->
@@ -1359,7 +1356,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     is_opaque_coq && def.signature.generics <> empty_generic_params
   in
   (* Print the qualifier ("assume", etc.). *)
-  let qualif = ctx.fmt.fun_decl_kind_to_qualif kind in
+  let qualif = fun_decl_kind_to_qualif kind in
   (match qualif with
   | Some qualif ->
       F.pp_print_string fmt qualif;
@@ -1655,7 +1652,7 @@ let extract_global_decl_body_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open "QUALIF NAME : TYPE =" box (depth=1) *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print "QUALIF NAME " *)
-  (match ctx.fmt.fun_decl_kind_to_qualif kind with
+  (match fun_decl_kind_to_qualif kind with
   | Some qualif ->
       F.pp_print_string fmt qualif;
       F.pp_print_space fmt ()
@@ -1824,11 +1821,11 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     | None ->
         List.map
           (fun (c : trait_clause) ->
-            let name = ctx.fmt.trait_parent_clause_name trait_decl c in
+            let name = ctx_compute_trait_parent_clause_name ctx trait_decl c in
             (* Add a prefix if necessary *)
             let name =
               if !Config.record_fields_short_names then name
-              else ctx.fmt.trait_decl_name trait_decl ^ name
+              else ctx_compute_trait_decl_name ctx trait_decl ^ name
             in
             (c.clause_id, name))
           trait_decl.parent_clauses
@@ -1855,11 +1852,11 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
     | None ->
         List.map
           (fun (item_name, _) ->
-            let name = ctx.fmt.trait_const_name trait_decl item_name in
+            let name = ctx_compute_trait_const_name ctx trait_decl item_name in
             (* Add a prefix if necessary *)
             let name =
               if !Config.record_fields_short_names then name
-              else ctx.fmt.trait_decl_name trait_decl ^ name
+              else ctx_compute_trait_decl_name ctx trait_decl ^ name
             in
             (item_name, name))
           consts
@@ -1887,19 +1884,21 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
     match builtin_info with
     | None ->
         let compute_type_name (item_name : string) : string =
-          let type_name = ctx.fmt.trait_type_name trait_decl item_name in
+          let type_name =
+            ctx_compute_trait_type_name ctx trait_decl item_name
+          in
           if !Config.record_fields_short_names then type_name
-          else ctx.fmt.trait_decl_name trait_decl ^ type_name
+          else ctx_compute_trait_decl_name ctx trait_decl ^ type_name
         in
         let compute_clause_name (item_name : string) (clause : trait_clause) :
             TraitClauseId.id * string =
           let name =
-            ctx.fmt.trait_type_clause_name trait_decl item_name clause
+            ctx_compute_trait_type_clause_name ctx trait_decl item_name clause
           in
           (* Add a prefix if necessary *)
           let name =
             if !Config.record_fields_short_names then name
-            else ctx.fmt.trait_decl_name trait_decl ^ name
+            else ctx_compute_trait_decl_name ctx trait_decl ^ name
           in
           (clause.clause_id, name)
         in
@@ -1971,7 +1970,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
             (* Add a prefix if necessary *)
             let name =
               if !Config.record_fields_short_names then name
-              else ctx.fmt.trait_decl_name trait_decl ^ "_" ^ name
+              else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ name
             in
             (f.back_id, name)
           in
@@ -2036,8 +2035,8 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     let trait_name, trait_constructor =
       match builtin_info with
       | None ->
-          ( ctx.fmt.trait_decl_name trait_decl,
-            ctx.fmt.trait_decl_constructor trait_decl )
+          ( ctx_compute_trait_decl_name ctx trait_decl,
+            ctx_compute_trait_decl_constructor ctx trait_decl )
       | Some info -> (info.extract_name, info.constructor)
     in
     let ctx = ctx_add (TraitDeclId trait_decl.def_id) trait_name ctx in
@@ -2101,7 +2100,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   (* Compute the name *)
   let name =
     match builtin_info with
-    | None -> ctx.fmt.trait_impl_name trait_decl trait_impl
+    | None -> ctx_compute_trait_impl_name ctx trait_decl trait_impl
     | Some name -> name
   in
   ctx_add (TraitImplId trait_impl.def_id) name ctx
@@ -2214,7 +2213,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   let qualif =
-    Option.get (ctx.fmt.type_decl_kind_to_qualif SingleNonRec (Some Struct))
+    Option.get (type_decl_kind_to_qualif SingleNonRec (Some Struct))
   in
   (* When checking if the trait declaration is empty: we ignore the provided
      methods, because for now they are extracted separately *)
@@ -2505,7 +2504,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* `let (....) : Trait ... =` *)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  (match ctx.fmt.fun_decl_kind_to_qualif SingleNonRec with
+  (match fun_decl_kind_to_qualif SingleNonRec with
   | Some qualif ->
       F.pp_print_string fmt qualif;
       F.pp_print_space fmt ()

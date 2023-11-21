@@ -993,20 +993,10 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     translate_crate_to_pure crate
   in
 
-  (* Initialize the extraction context - for now we extract only to F*.
-   * We initialize the names map by registering the keywords used in the
-   * language, as well as some primitive names ("u32", etc.) *)
-  let variant_concatenate_type_name =
-    (* For Lean, we exploit the fact that the variant name should always be
-       prefixed with the type name to prevent collisions *)
-    match !Config.backend with Coq | FStar | HOL4 -> true | Lean -> false
-  in
-  (* Initialize the names map (we insert the names of the "primitives"
-     declarations, and insert the names of the local declarations later) *)
-  let fmt, names_maps =
-    Extract.mk_formatter_and_names_maps trans_ctx crate.name
-      variant_concatenate_type_name
-  in
+  (* Initialize the names map by registering the keywords used in the
+     language, as well as some primitive names ("u32", etc.).
+     We insert the names of the local declarations later. *)
+  let names_maps = Extract.initialize_names_maps () in
 
   (* We need to compute which functions are recursive, in order to know
    * whether we should generate a decrease clause or not. *)
@@ -1061,7 +1051,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
       ExtractBase.crate;
       trans_ctx;
       names_maps;
-      fmt;
       indent_incr = 2;
       use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
       fun_name_info = PureUtils.RegularFunIdMap.empty;
