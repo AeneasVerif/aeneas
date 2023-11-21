@@ -1495,8 +1495,8 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     in
     let params = trait_impl.generics in
     let args = trait_impl.impl_trait.decl_generics in
-    name_with_generics_to_simple_name ctx.trans_ctx trait_decl.llbc_name params
-      args
+    trait_name_with_generics_to_simple_name ctx.trans_ctx trait_decl.llbc_name
+      params args
   in
   let name = flatten_name name in
   match !backend with
@@ -1516,6 +1516,21 @@ let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
   *)
   (* We need to lookup the LLBC definitions, to have the original instantiation *)
   let clause =
+    (* If the current trait decl and the trait decl referenced by the clause
+       are in the same namespace, we try to simplify the names. We do so by
+       removing the common prefixes in their names.
+
+       For instance, if we have:
+       {[
+         // This is file traits.rs
+         trait Parent {}
+
+         trait Child : Parent {}
+       ]}
+       For the parent clause of trait [Child] we would like to generate
+       the name: "ParentInst", rather than "traitParentInst".
+    *)
+    let prefix = Some trait_decl.llbc_name in
     let trait_decl =
       TraitDeclId.Map.find trait_decl.def_id ctx.crate.trait_decls
     in
@@ -1528,8 +1543,8 @@ let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
     let impl_trait_decl = TraitDeclId.Map.find trait_id ctx.crate.trait_decls in
     let params = trait_decl.generics in
     let args = clause.clause_generics in
-    name_with_generics_to_simple_name ctx.trans_ctx impl_trait_decl.name params
-      args
+    trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
+      impl_trait_decl.name params args
   in
   let clause = String.concat "" clause in
   let clause =

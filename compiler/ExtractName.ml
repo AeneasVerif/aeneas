@@ -82,14 +82,30 @@ let pattern_to_trait_impl_extract_name = pattern_to_extract_name true
 (* TODO: this is provisional. We just want to make sure that the extraction
    names we derive from the patterns (for the builtin definitions) are
    consistent with the extraction names we derive from the Rust names *)
-let name_to_simple_name (ctx : ctx) (n : Types.name) : string list =
+let name_to_simple_name (ctx : ctx) (is_trait_impl : bool) (n : Types.name) :
+    string list =
   let c : to_pat_config = { tgt = TkName } in
-  pattern_to_extract_name false (name_to_pattern ctx c n)
+  pattern_to_extract_name is_trait_impl (name_to_pattern ctx c n)
 
-let name_with_generics_to_simple_name (ctx : ctx) (n : Types.name)
+(** If the [prefix] is Some, we attempt to remove the common prefix
+    between [prefix] and [name] from [name] *)
+let name_with_generics_to_simple_name (ctx : ctx) (is_trait_impl : bool)
+    ?(prefix : Types.name option = None) (name : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
   let c : to_pat_config = { tgt = TkName } in
-  pattern_to_extract_name true (name_with_generics_to_pattern ctx c n p g)
+  let name = name_with_generics_to_pattern ctx c name p g in
+  let name =
+    match prefix with
+    | None -> name
+    | Some prefix ->
+        let prefix =
+          name_with_generics_to_pattern ctx c prefix
+            TypesUtils.empty_generic_params TypesUtils.empty_generic_args
+        in
+        let _, _, name = pattern_common_prefix prefix name in
+        name
+  in
+  pattern_to_extract_name is_trait_impl name
 
 (*
   (* Prepare a name.

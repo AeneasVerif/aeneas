@@ -65,9 +65,11 @@ let name_to_simple_name (ctx : trans_ctx) (n : Types.name) : string list =
       trait_decls = ctx.trait_decls_ctx.trait_decls;
     }
   in
-  name_to_simple_name mctx n
+  let is_trait_impl = false in
+  name_to_simple_name mctx is_trait_impl n
 
-let name_with_generics_to_simple_name (ctx : trans_ctx) (n : Types.name)
+let trait_name_with_generics_to_simple_name (ctx : trans_ctx)
+    ?(prefix : Types.name option = None) (n : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
   let mctx : Charon.NameMatcher.ctx =
     {
@@ -76,4 +78,5 @@ let name_with_generics_to_simple_name (ctx : trans_ctx) (n : Types.name)
       trait_decls = ctx.trait_decls_ctx.trait_decls;
     }
   in
-  name_with_generics_to_simple_name mctx n p g
+  let is_trait_impl = true in
+  name_with_generics_to_simple_name mctx is_trait_impl ~prefix n p g
