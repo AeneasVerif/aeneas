@@ -306,7 +306,7 @@ let mk_builtin_funs_map () =
          (builtin_funs ()))
   in
   log#ldebug
-    (lazy ("builtin_funs_map:\n" ^ NameMatcherMap.to_string (fun _ -> "") m));
+    (lazy ("builtin_funs_map:\n" ^ NameMatcherMap.to_string (fun _ -> "...") m));
   m
 
 let builtin_funs_map = mk_memoized mk_builtin_funs_map
@@ -563,7 +563,8 @@ let mk_builtin_trait_impls_map () =
   let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
   log#ldebug
     (lazy
-      ("builtin_trait_impls_map:\n" ^ NameMatcherMap.to_string (fun _ -> "") m));
+      ("builtin_trait_impls_map:\n"
+      ^ NameMatcherMap.to_string (fun _ -> "...") m));
   m
 
 let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map
