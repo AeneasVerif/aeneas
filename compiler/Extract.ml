@@ -1044,7 +1044,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.signature.generics ctx
+    ctx_add_generic_params def.llbc_name def.signature.llbc_generics
+      def.signature.generics ctx
   in
   (* Print the generics *)
   (* Open a box for the generics *)
@@ -1578,7 +1579,10 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   assert (def.signature.generics.const_generics = []);
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
-  let ctx, _, _, _ = ctx_add_generic_params def.signature.generics ctx in
+  let ctx, _, _, _ =
+    ctx_add_generic_params def.llbc_name def.signature.llbc_generics
+      def.signature.generics ctx
+  in
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0;
   (* Open a box for the whole definition *)
@@ -2164,8 +2168,14 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
         generic_params_drop_prefix ~drop_trait_clauses decl.generics
           f.signature.generics
       in
+      (* Note that we do not filter the LLBC generic parameters.
+         This is ok because:
+         - we only use them to find meaningful names for the trait clauses
+         - we only generate trait clauses for the clauses we find in the
+           pure generics *)
       let ctx, type_params, cg_params, trait_clauses =
-        ctx_add_generic_params generics ctx
+        ctx_add_generic_params f.llbc_name f.signature.llbc_generics generics
+          ctx
       in
       let backend_uses_forall =
         match !backend with Coq | Lean -> true | FStar | HOL4 -> false
@@ -2229,7 +2239,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params generics ctx
+    ctx_add_generic_params decl.llbc_name decl.llbc_generics generics ctx
   in
   extract_generic_params ctx fmt TypeDeclId.Set.empty generics type_params
     cg_params trait_clauses;
@@ -2448,8 +2458,17 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
           { impl.generics with types = impl_types }
           f_generics
       in
-      (* Register and print the quantified generics *)
-      let ctx, f_tys, f_cgs, f_tcs = ctx_add_generic_params f_generics ctx in
+      (* Register and print the quantified generics.
+
+         Note that we do not filter the LLBC generic parameters.
+         This is ok because:
+         - we only use them to find meaningful names for the trait clauses
+         - we only generate trait clauses for the clauses we find in the
+           pure generics *)
+      let ctx, f_tys, f_cgs, f_tcs =
+        ctx_add_generic_params f.llbc_name f.signature.llbc_generics f_generics
+          ctx
+      in
       let use_forall = f_generics <> empty_generic_params in
       extract_generic_params ctx fmt TypeDeclId.Set.empty ~use_forall f_generics
         f_tys f_cgs f_tcs;
@@ -2515,7 +2534,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params impl.generics ctx
+    ctx_add_generic_params impl.llbc_name impl.llbc_generics impl.generics ctx
   in
   let all_generics = (type_params, cg_params, trait_clauses) in
   extract_generic_params ctx fmt TypeDeclId.Set.empty impl.generics type_params

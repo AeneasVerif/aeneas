@@ -497,7 +497,17 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let preds = translate_predicates def.preds in
   let is_local = def.is_local in
   let meta = def.meta in
-  { def_id; is_local; llbc_name; name; meta; generics; kind; preds }
+  {
+    def_id;
+    is_local;
+    llbc_name;
+    name;
+    meta;
+    generics;
+    llbc_generics = def.generics;
+    kind;
+    preds;
+  }
 
 let translate_type_id (id : T.type_id) : type_id =
   match id with
@@ -1029,7 +1039,17 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
     }
   in
   let preds = translate_predicates sg.preds in
-  let sg = { generics; preds; inputs; output; doutputs; info } in
+  let sg =
+    {
+      generics;
+      llbc_generics = sg.generics;
+      preds;
+      inputs;
+      output;
+      doutputs;
+      info;
+    }
+  in
   { sg; output_names }
 
 let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * typed_pattern =
@@ -3112,9 +3132,9 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     is_local;
     name = llbc_name;
     meta;
-    generics;
+    generics = llbc_generics;
     preds;
-    parent_clauses;
+    parent_clauses = llbc_parent_clauses;
     consts;
     types;
     required_methods;
@@ -3128,9 +3148,9 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params generics in
+  let generics = translate_generic_params llbc_generics in
   let preds = translate_predicates preds in
-  let parent_clauses = List.map translate_trait_clause parent_clauses in
+  let parent_clauses = List.map translate_trait_clause llbc_parent_clauses in
   let consts =
     List.map
       (fun (name, (ty, id)) -> (name, (translate_fwd_ty type_infos ty, id)))
@@ -3151,8 +3171,10 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     name;
     meta;
     generics;
+    llbc_generics;
     preds;
     parent_clauses;
+    llbc_parent_clauses;
     consts;
     types;
     required_methods;
@@ -3166,8 +3188,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     is_local;
     name = llbc_name;
     meta;
-    impl_trait;
-    generics;
+    impl_trait = llbc_impl_trait;
+    generics = llbc_generics;
     preds;
     parent_trait_refs;
     consts;
@@ -3179,14 +3201,14 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   let type_infos = ctx.type_ctx.type_infos in
   let impl_trait =
-    translate_trait_decl_ref (translate_fwd_ty type_infos) impl_trait
+    translate_trait_decl_ref (translate_fwd_ty type_infos) llbc_impl_trait
   in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params generics in
+  let generics = translate_generic_params llbc_generics in
   let preds = translate_predicates preds in
   let parent_trait_refs = List.map translate_strait_ref parent_trait_refs in
   let consts =
@@ -3209,7 +3231,9 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     name;
     meta;
     impl_trait;
+    llbc_impl_trait;
     generics;
+    llbc_generics;
     preds;
     parent_trait_refs;
     consts;

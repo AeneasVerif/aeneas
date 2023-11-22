@@ -651,8 +651,10 @@ let trait_decl_is_empty (trait_decl : trait_decl) : bool =
     llbc_name = _;
     meta = _;
     generics = _;
+    llbc_generics = _;
     preds = _;
     parent_clauses;
+    llbc_parent_clauses = _;
     consts;
     types;
     required_methods;
@@ -671,7 +673,9 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
     llbc_name = _;
     meta = _;
     impl_trait = _;
+    llbc_impl_trait = _;
     generics = _;
+    llbc_generics = _;
     preds = _;
     parent_trait_refs;
     consts;

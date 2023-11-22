@@ -1488,13 +1488,8 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
      where the instance has been defined (it is indepedent of the file, etc.).
   *)
   let name =
-    (* We need to lookup the LLBC definitions, to have the original instantiation *)
-    let trait_impl =
-      TraitImplId.Map.find trait_impl.def_id
-        ctx.trans_ctx.trait_impls_ctx.trait_impls
-    in
-    let params = trait_impl.generics in
-    let args = trait_impl.impl_trait.decl_generics in
+    let params = trait_impl.llbc_generics in
+    let args = trait_impl.llbc_impl_trait.decl_generics in
     trait_name_with_generics_to_simple_name ctx.trans_ctx trait_decl.llbc_name
       params args
   in
@@ -1508,15 +1503,29 @@ let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
   let name = ctx_compute_trait_decl_name ctx trait_decl in
   ExtractBuiltin.mk_struct_constructor name
 
-let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (clause : trait_clause) : string =
+(** Helper to derive names for parent trait clauses and for variables
+    for trait instances.
+
+    We derive the name from the type of the clause (i.e., the trait ref
+    the clause implements).
+    For instance, if a trait clause is for the trait ref "Trait<Box<usize>",
+    we generate a name like "traitBoxUsizeInst". This is more meaningful
+    that giving it a generic name with an index (such as "parent_clause_1"
+    or "inst3").
+
+    Because we want to be precise when deriving the name, we use the
+    original LLBC types, that is the types from before the translation
+    to pure, which simplifies types like boxes and references.
+ *)
+let ctx_compute_trait_clause_name (ctx : extraction_ctx)
+    (current_def_name : Types.name) (params : Types.generic_params)
+    (clauses : Types.trait_clause list) (clause_id : trait_clause_id) : string =
   (* We derive the name of the clause from the trait instance.
      For instance, if the clause gives us an instance of `Foo<u32>`,
      we generate a name along the lines of "fooU32Inst".
   *)
-  (* We need to lookup the LLBC definitions, to have the original instantiation *)
   let clause =
-    (* If the current trait decl and the trait decl referenced by the clause
+    (* If the current def and the trait decl referenced by the clause
        are in the same namespace, we try to simplify the names. We do so by
        removing the common prefixes in their names.
 
@@ -1530,23 +1539,33 @@ let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
        For the parent clause of trait [Child] we would like to generate
        the name: "ParentInst", rather than "traitParentInst".
     *)
-    let prefix = Some trait_decl.llbc_name in
-    let trait_decl =
-      TraitDeclId.Map.find trait_decl.def_id ctx.crate.trait_decls
-    in
+    let prefix = Some current_def_name in
     let clause =
       List.find
-        (fun (c : Types.trait_clause) -> c.clause_id = clause.clause_id)
-        trait_decl.parent_clauses
+        (fun (c : Types.trait_clause) -> c.clause_id = clause_id)
+        clauses
     in
     let trait_id = clause.trait_id in
     let impl_trait_decl = TraitDeclId.Map.find trait_id ctx.crate.trait_decls in
-    let params = trait_decl.generics in
     let args = clause.clause_generics in
     trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
       impl_trait_decl.name params args
   in
-  let clause = String.concat "" clause in
+  String.concat "" clause
+
+let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
+    (trait_decl : trait_decl) (clause : trait_clause) : string =
+  (* We derive the name of the clause from the trait instance.
+     For instance, if the clause gives us an instance of `Foo<u32>`,
+     we generate a name along the lines of "fooU32Inst".
+  *)
+  (* We need to lookup the LLBC definitions, to have the original instantiation *)
+  let clause =
+    let current_def_name = trait_decl.llbc_name in
+    let params = trait_decl.llbc_generics in
+    ctx_compute_trait_clause_name ctx current_def_name params
+      trait_decl.llbc_parent_clauses clause.clause_id
+  in
   let clause =
     if !Config.record_fields_short_names then clause
     else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ clause
@@ -1751,10 +1770,18 @@ let ctx_compute_const_generic_var_basename (_ctx : extraction_ctx)
     In the traduction we explicitely manipulate the trait clause instances,
     that is we introduce one input variable for each trait clause.
  *)
-let ctx_compute_trait_clause_basename (_ctx : extraction_ctx)
-    (_clause : trait_clause) : string =
-  (* TODO: actually use the clause to derive the name *)
-  "inst"
+let ctx_compute_trait_clause_basename (ctx : extraction_ctx)
+    (current_def_name : Types.name) (params : Types.generic_params)
+    (clause_id : trait_clause_id) : string =
+  (* This is similar to {!ctx_compute_trait_parent_clause_name}: we
+     derive the name from the trait reference (i.e., from the type) *)
+  let clause =
+    ctx_compute_trait_clause_name ctx current_def_name params
+      params.trait_clauses clause_id
+  in
+  match !backend with
+  | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter clause
+  | Lean -> clause
 
 let trait_self_clause_basename = "self_clause"
 
@@ -1845,11 +1872,24 @@ let ctx_add_const_generic_params (vars : const_generic_var list)
       ctx_add_const_generic_var var.name var.index ctx)
     ctx vars
 
-let ctx_add_local_trait_clauses (clauses : trait_clause list)
+(** Returns the lists of names for:
+    - the type variables
+    - the const generic variables
+    - the trait clauses
+
+    For the [current_name_def] and the [llbc_generics]: we use them to derive
+    pretty names for the trait clauses. See {!ctx_compute_trait_clause_name}
+    for additional information.
+  *)
+let ctx_add_local_trait_clauses (current_def_name : Types.name)
+    (llbc_generics : Types.generic_params) (clauses : trait_clause list)
     (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (c : trait_clause) ->
-      let basename = ctx_compute_trait_clause_basename ctx c in
+      let basename =
+        ctx_compute_trait_clause_basename ctx current_def_name llbc_generics
+          c.clause_id
+      in
       ctx_add_local_trait_clause basename c.clause_id ctx)
     ctx clauses
 
@@ -1857,13 +1897,21 @@ let ctx_add_local_trait_clauses (clauses : trait_clause list)
     - the type variables
     - the const generic variables
     - the trait clauses
+
+    For the [current_name_def] and the [llbc_generics]: we use them to derive
+    pretty names for the trait clauses. See {!ctx_compute_trait_clause_name}
+    for additional information.
   *)
-let ctx_add_generic_params (generics : generic_params) (ctx : extraction_ctx) :
+let ctx_add_generic_params (current_def_name : Types.name)
+    (llbc_generics : Types.generic_params) (generics : generic_params)
+    (ctx : extraction_ctx) :
     extraction_ctx * string list * string list * string list =
   let { types; const_generics; trait_clauses } = generics in
   let ctx, tys = ctx_add_type_params types ctx in
   let ctx, cgs = ctx_add_const_generic_params const_generics ctx in
-  let ctx, tcs = ctx_add_local_trait_clauses trait_clauses ctx in
+  let ctx, tcs =
+    ctx_add_local_trait_clauses current_def_name llbc_generics trait_clauses ctx
+  in
   (ctx, tys, cgs, tcs)
 
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :

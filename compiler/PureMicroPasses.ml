@@ -1364,6 +1364,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
             let loop_sig =
               {
                 generics = fun_sig.generics;
+                llbc_generics = fun_sig.llbc_generics;
                 preds = fun_sig.preds;
                 inputs = inputs_tys;
                 output;
@@ -2127,7 +2128,8 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
           let num_filtered =
             List.length (List.filter (fun b -> not b) used_info)
           in
-          let { generics; preds; inputs; output; doutputs; info } =
+          let { generics; llbc_generics; preds; inputs; output; doutputs; info }
+              =
             decl.signature
           in
           let {
@@ -2155,7 +2157,9 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
               effect_info;
             }
           in
-          let signature = { generics; preds; inputs; output; doutputs; info } in
+          let signature =
+            { generics; llbc_generics; preds; inputs; output; doutputs; info }
+          in
 
           { decl with signature }
     in

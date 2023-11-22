@@ -2,6 +2,8 @@
 
 open Charon.NameMatcher
 
+let log = Logging.extract_log
+
 module NameMatcherMap = struct
   type 'a t = (pattern * 'a) list
 

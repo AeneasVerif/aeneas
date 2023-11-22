@@ -1272,7 +1272,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.generics ctx
+    ctx_add_generic_params def.llbc_name def.llbc_generics def.generics ctx
   in
   (* Add a break before *)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
@@ -1515,7 +1515,8 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
       if is_rec then
         (* Add the type params *)
         let ctx, type_params, cg_params, trait_clauses =
-          ctx_add_generic_params decl.generics ctx
+          ctx_add_generic_params decl.llbc_name decl.llbc_generics decl.generics
+            ctx
         in
         let ctx, record_var = ctx_add_var "x" (VarId.of_int 0) ctx in
         let ctx, field_var = ctx_add_var "x" (VarId.of_int 1) ctx in

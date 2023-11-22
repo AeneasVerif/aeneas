@@ -395,6 +395,12 @@ type type_decl = {
        *)
   meta : meta;
   generics : generic_params;
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
   kind : type_decl_kind;
   preds : predicates;
 }
@@ -922,6 +928,12 @@ type fun_sig_info = {
 type fun_sig = {
   generics : generic_params;
       (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
   preds : predicates;
   inputs : ty list;
       (** The types of the inputs.
@@ -1028,8 +1040,15 @@ type trait_decl = {
   name : string;
   meta : meta;
   generics : generic_params;
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
   preds : predicates;
   parent_clauses : trait_clause list;
+  llbc_parent_clauses : Types.trait_clause list;
   consts : (trait_item_name * (ty * global_decl_id option)) list;
   types : (trait_item_name * (trait_clause list * ty option)) list;
   required_methods : (trait_item_name * fun_decl_id) list;
@@ -1044,7 +1063,15 @@ type trait_impl = {
   name : string;
   meta : meta;
   impl_trait : trait_decl_ref;
+  llbc_impl_trait : Types.trait_decl_ref;
+      (** Same remark as for {llbc_generics}. *)
   generics : generic_params;
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
   preds : predicates;
   parent_trait_refs : trait_ref list;
   consts : (trait_item_name * (ty * global_decl_id)) list;
