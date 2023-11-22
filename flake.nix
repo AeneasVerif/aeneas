@@ -33,37 +33,22 @@
           };
           buildInputs = [ ocamlPackages.calendar ];
         };
-        ocamlgraph = ocamlPackages.buildDunePackage rec {
-          pname = "ocamlgraph";
-          version = "2.0.0";
-          src = pkgs.fetchurl {
-            url = "https://github.com/backtracking/ocamlgraph/releases/download/2.0.0/ocamlgraph-2.0.0.tbz";
-            sha256 = "20fe267797de5322088a4dfb52389b2ea051787952a8a4f6ed70fcb697482609";
-          };
-          buildInputs = [ ocamlPackages.stdlib-shims ocamlPackages.graphics ];
-        };
-        unionFind = ocamlPackages.buildDunePackage rec {
-          pname = "unionFind";
-          version = "20220122";
-          src = pkgs.fetchurl {
-            url = "https://gitlab.inria.fr/fpottier/unionFind/-/archive/20220122/archive.tar.gz";
-            sha512 = "c49dd3f9a6689f6a5efe39c26efe2c137f8812b4be6ee76c2cc20068cf86ad73c0ac97ec9a543245dddb63792ce8c1904576b3435bf419cc7837bc5e368eee6d";
-          };
-          buildInputs = [];
-        };
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
           duneVersion = "3";
           src = ./compiler;
-          buildInputs = [ easy_logging ocamlgraph unionFind charon.packages.${system}.charon-ml ]
-            ++ (with ocamlPackages; [
+          propagatedBuildInputs = [
+            easy_logging charon.packages.${system}.charon-ml
+            ] ++ (with ocamlPackages; [
               calendar
               core_unix
               ppx_deriving
               visitors
               yojson
               zarith
+              ocamlgraph
+              unionFind
             ]);
           afterBuild = ''
           echo charon.packages.${system}.tests
@@ -89,8 +74,8 @@
             export CHARON_TESTS_POLONIUS_DIR=${charon.checks.${system}.tests-polonius}
 
             # Copy the Aeneas executable, and update the path to it
-            cp ${aeneas}/bin/aeneas_driver aeneas.exe
-            export AENEAS_EXE=./aeneas.exe
+            cp ${aeneas}/bin/aeneas aeneas
+            export AENEAS_EXE=./aeneas
 
             # Copy the tests
             mkdir tests-copy

@@ -1,6 +1,6 @@
 (executable
  (name main)
- (public_name aeneas_main)
+ (public_name aeneas)
  (package aeneas)
  (libraries aeneas)
  (modules Main))
