@@ -1,6 +1,4 @@
 open Identifiers
-open Names
-module PV = PrimitiveValues
 module T = Types
 module V = Values
 module E = Expressions
@@ -16,6 +14,7 @@ module GlobalDeclId = A.GlobalDeclId
 module TraitDeclId = T.TraitDeclId
 module TraitImplId = T.TraitImplId
 module TraitClauseId = T.TraitClauseId
+module Disambiguator = T.Disambiguator
 
 (** We redefine identifiers for loop: in {!Values}, the identifiers are global
     (they monotonically increase across functions) while in {!module:Pure} we want
@@ -35,6 +34,7 @@ IdGen ()
 
 module ConstGenericVarId = T.ConstGenericVarId
 
+type llbc_name = T.name [@@deriving show, ord]
 type integer_type = T.integer_type [@@deriving show, ord]
 type const_generic_var = T.const_generic_var [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
@@ -48,6 +48,10 @@ type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
 type region_group_id = T.region_group_id [@@deriving show, ord]
 type mutability = Mut | Const [@@deriving show, ord]
+type loc = Meta.loc [@@deriving show, ord]
+type file_name = Meta.file_name [@@deriving show, ord]
+type span = Meta.span [@@deriving show, ord]
+type meta = Meta.meta [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -64,16 +68,18 @@ type mutability = Mut | Const [@@deriving show, ord]
       - [State]: the type of the state, when using state-error monads. Note that
         this state is opaque to Aeneas (the user can define it, or leave it as
         assumed)
+
+    TODO: add a prefix "T"
   *)
 type assumed_ty =
-  | State
-  | Result
-  | Error
-  | Fuel
-  | Array
-  | Slice
-  | Str
-  | RawPtr of mutability
+  | TState
+  | TResult
+  | TError
+  | TFuel
+  | TArray
+  | TSlice
+  | TStr
+  | TRawPtr of mutability
       (** The bool
           Raw pointers don't make sense in the pure world, but we don't know
           how to translate them yet and we have to handle some functions which
@@ -144,7 +150,7 @@ class virtual ['self] mapreduce_type_id_base =
       fun _ x -> (x, self#zero)
   end
 
-type type_id = AdtId of type_decl_id | Tuple | Assumed of assumed_ty
+type type_id = TAdtId of type_decl_id | TTuple | TAssumed of assumed_ty
 [@@deriving
   show,
     ord,
@@ -190,7 +196,6 @@ class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] iter_type_id
     inherit! [_] T.iter_const_generic
-    inherit! [_] PV.iter_literal_type
     method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
     method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
     method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
@@ -207,7 +212,6 @@ class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] map_type_id
     inherit! [_] T.map_const_generic
-    inherit! [_] PV.map_literal_type
     method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
 
     method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id =
@@ -228,7 +232,6 @@ class virtual ['self] reduce_ty_base =
   object (self : 'self)
     inherit [_] reduce_type_id
     inherit! [_] T.reduce_const_generic
-    inherit! [_] PV.reduce_literal_type
     method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
 
     method visit_trait_decl_id : 'env -> trait_decl_id -> 'a =
@@ -249,7 +252,6 @@ class virtual ['self] mapreduce_ty_base =
   object (self : 'self)
     inherit [_] mapreduce_type_id
     inherit! [_] T.mapreduce_const_generic
-    inherit! [_] PV.mapreduce_literal_type
 
     method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
       fun _ x -> (x, self#zero)
@@ -270,7 +272,7 @@ class virtual ['self] mapreduce_ty_base =
   end
 
 type ty =
-  | Adt of type_id * generic_args
+  | TAdt of type_id * generic_args
       (** {!Adt} encodes ADTs and tuples and assumed types.
 
           TODO: what about the ended regions? (ADTs may be parameterized
@@ -278,10 +280,10 @@ type ty =
           be able to only give back part of the ADT. We need a way to encode
           such "partial" ADTs.
        *)
-  | TypeVar of type_var_id
-  | Literal of literal_type
-  | Arrow of ty * ty
-  | TraitType of trait_ref * generic_args * string
+  | TVar of type_var_id
+  | TLiteral of literal_type
+  | TArrow of ty * ty
+  | TTraitType of trait_ref * generic_args * string
       (** The string is for the name of the associated type *)
 
 and trait_ref = {
@@ -383,8 +385,22 @@ type predicates = { trait_type_constraints : trait_type_constraint list }
 
 type type_decl = {
   def_id : TypeDeclId.id;
-  name : name;
+  is_local : bool;
+  llbc_name : llbc_name;
+      (** The original name coming from the LLBC declaration *)
+  name : string;
+      (** We use the name only for printing purposes (for debugging):
+          the name used at extraction time will be derived from the
+          llbc_name.
+       *)
+  meta : meta;
   generics : generic_params;
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
   kind : type_decl_kind;
   preds : predicates;
 }
@@ -712,7 +728,7 @@ type expression =
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Meta of (meta[@opaque]) * texpression  (** Meta-information *)
+  | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
 
 and switch_body = If of texpression * texpression | Match of match_branch list
 and match_branch = { pat : typed_pattern; branch : texpression }
@@ -731,6 +747,7 @@ and match_branch = { pat : typed_pattern; branch : texpression }
 and loop = {
   fun_end : texpression;
   loop_id : loop_id;
+  meta : meta; [@opaque]
   fuel0 : var_id;
   fuel : var_id;
   input_state : var_id option;
@@ -786,7 +803,7 @@ and texpression = { e : expression; ty : ty }
 and mvalue = (texpression[@opaque])
 
 (** Meta-information stored in the AST *)
-and meta =
+and emeta =
   | Assignment of mplace * mvalue * mplace option
       (** Information about an assignment which occured in LLBC.
           We use this to guide the heuristics which derive pretty names.
@@ -911,6 +928,12 @@ type fun_sig_info = {
 type fun_sig = {
   generics : generic_params;
       (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
   preds : predicates;
   inputs : ty list;
       (** The types of the inputs.
@@ -987,6 +1010,8 @@ type fun_kind = A.fun_kind [@@deriving show]
 
 type fun_decl = {
   def_id : FunDeclId.id;
+  is_local : bool;
+  meta : meta;
   kind : fun_kind;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
@@ -996,11 +1021,11 @@ type fun_decl = {
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
   back_id : T.RegionGroupId.id option;
-  basename : fun_name;
-      (** The "base" name of the function.
-
-          The base name is the original name of the Rust function. We add suffixes
-          (to identify the forward/backward functions) later.
+  llbc_name : llbc_name;  (** The original LLBC name. *)
+  name : string;
+      (** We use the name only for printing purposes (for debugging):
+          the name used at extraction time will be derived from the
+          llbc_name.
        *)
   signature : fun_sig;
   is_global_decl_body : bool;
@@ -1010,10 +1035,20 @@ type fun_decl = {
 
 type trait_decl = {
   def_id : trait_decl_id;
-  name : name;
+  is_local : bool;
+  llbc_name : llbc_name;
+  name : string;
+  meta : meta;
   generics : generic_params;
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
   preds : predicates;
   parent_clauses : trait_clause list;
+  llbc_parent_clauses : Types.trait_clause list;
   consts : (trait_item_name * (ty * global_decl_id option)) list;
   types : (trait_item_name * (trait_clause list * ty option)) list;
   required_methods : (trait_item_name * fun_decl_id) list;
@@ -1023,9 +1058,20 @@ type trait_decl = {
 
 type trait_impl = {
   def_id : trait_impl_id;
-  name : name;
+  is_local : bool;
+  llbc_name : llbc_name;
+  name : string;
+  meta : meta;
   impl_trait : trait_decl_ref;
+  llbc_impl_trait : Types.trait_decl_ref;
+      (** Same remark as for {llbc_generics}. *)
   generics : generic_params;
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
   preds : predicates;
   parent_trait_refs : trait_ref list;
   consts : (trait_item_name * (ty * global_decl_id)) list;

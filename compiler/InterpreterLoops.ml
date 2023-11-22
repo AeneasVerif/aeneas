@@ -1,13 +1,8 @@
-module T = Types
-module PV = PrimitiveValues
-module V = Values
-module E = Expressions
-module C = Contexts
-module Subst = Substitute
-module A = LlbcAst
-module L = Logging
+open Types
+open Values
+open Contexts
 open ValuesUtils
-module Inv = Invariants
+open Meta
 module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
@@ -16,14 +11,14 @@ open InterpreterLoopsMatchCtxs
 open InterpreterLoopsFixedPoint
 
 (** The local logger *)
-let log = L.loops_log
+let log = Logging.loops_log
 
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
  fun cf ctx ->
   (* We need a loop id for the [LoopReturn]. In practice it won't be used
      (it is useful only for the symbolic execution *)
-  let loop_id = C.fresh_loop_id () in
+  let loop_id = fresh_loop_id () in
   (* Continuation for after we evaluate the loop body: depending the result
      of doing one loop iteration:
      - redoes a loop iteration
@@ -66,15 +61,15 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
   eval_loop_body reeval_loop_body ctx
 
 (** Evaluate a loop in symbolic mode *)
-let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
-    st_cm_fun =
+let eval_loop_symbolic (config : config) (meta : meta)
+    (eval_loop_body : st_cm_fun) : st_cm_fun =
  fun cf ctx ->
   (* Debug *)
   log#ldebug
     (lazy ("eval_loop_symbolic:\nContext:\n" ^ eval_ctx_to_string ctx ^ "\n\n"));
 
   (* Generate a fresh loop id *)
-  let loop_id = C.fresh_loop_id () in
+  let loop_id = fresh_loop_id () in
 
   (* Compute the fixed point at the loop entrance *)
   let fp_ctx, fixed_ids, rg_to_abs =
@@ -89,7 +84,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
 
   (* Compute the loop input parameters *)
   let fresh_sids, input_svalues = compute_fp_ctx_symbolic_values ctx fp_ctx in
-  let fp_input_svalues = List.map (fun sv -> sv.V.sv_id) input_svalues in
+  let fp_input_svalues = List.map (fun sv -> sv.sv_id) input_svalues in
 
   (* Synthesize the end of the function - we simply match the context at the
      loop entry with the fixed point: in the synthesized code, the function
@@ -140,9 +135,9 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
       ^ "\n- fixed point:\n"
       ^ eval_ctx_to_string_no_filter fp_ctx
       ^ "\n- fixed_sids: "
-      ^ V.SymbolicValueId.Set.show fixed_ids.sids
+      ^ SymbolicValueId.Set.show fixed_ids.sids
       ^ "\n- fresh_sids: "
-      ^ V.SymbolicValueId.Set.show fresh_sids
+      ^ SymbolicValueId.Set.show fresh_sids
       ^ "\n- input_svalues: "
       ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
       ^ "\n\n"));
@@ -155,9 +150,9 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
      is important in {!SymbolicToPure}, where we expect the given back
      values to have a specific order.
   *)
-  let compute_abs_given_back_tys (abs : V.abs) : T.RegionId.Set.t * T.rty list =
-    let is_borrow (av : V.typed_avalue) : bool =
-      match av.V.value with
+  let compute_abs_given_back_tys (abs : abs) : RegionId.Set.t * rty list =
+    let is_borrow (av : typed_avalue) : bool =
+      match av.value with
       | ABorrow _ -> true
       | ALoan _ -> false
       | _ -> raise (Failure "Unreachable")
@@ -166,25 +161,25 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
 
     let borrows =
       List.filter_map
-        (fun av ->
-          match av.V.value with
-          | V.ABorrow (V.AMutBorrow (bid, child_av)) ->
-              assert (is_aignored child_av.V.value);
-              Some (bid, child_av.V.ty)
-          | V.ABorrow (V.ASharedBorrow _) -> None
+        (fun (av : typed_avalue) ->
+          match av.value with
+          | ABorrow (AMutBorrow (bid, child_av)) ->
+              assert (is_aignored child_av.value);
+              Some (bid, child_av.ty)
+          | ABorrow (ASharedBorrow _) -> None
           | _ -> raise (Failure "Unreachable"))
         borrows
     in
-    let borrows = ref (V.BorrowId.Map.of_list borrows) in
+    let borrows = ref (BorrowId.Map.of_list borrows) in
 
     let loan_ids =
       List.filter_map
-        (fun av ->
-          match av.V.value with
-          | V.ALoan (V.AMutLoan (bid, child_av)) ->
-              assert (is_aignored child_av.V.value);
+        (fun (av : typed_avalue) ->
+          match av.value with
+          | ALoan (AMutLoan (bid, child_av)) ->
+              assert (is_aignored child_av.value);
               Some bid
-          | V.ALoan (V.ASharedLoan _) -> None
+          | ALoan (ASharedLoan _) -> None
           | _ -> raise (Failure "Unreachable"))
         loans
     in
@@ -194,28 +189,29 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
       List.map
         (fun lid ->
           let bid =
-            V.BorrowId.InjSubst.find lid fp_bl_corresp.loan_to_borrow_id_map
+            BorrowId.InjSubst.find lid fp_bl_corresp.loan_to_borrow_id_map
           in
-          let ty = V.BorrowId.Map.find bid !borrows in
-          borrows := V.BorrowId.Map.remove bid !borrows;
+          let ty = BorrowId.Map.find bid !borrows in
+          borrows := BorrowId.Map.remove bid !borrows;
           ty)
         loan_ids
     in
-    assert (V.BorrowId.Map.is_empty !borrows);
+    assert (BorrowId.Map.is_empty !borrows);
 
     (abs.regions, given_back_tys)
   in
   let rg_to_given_back =
-    T.RegionGroupId.Map.map compute_abs_given_back_tys rg_to_abs
+    RegionGroupId.Map.map compute_abs_given_back_tys rg_to_abs
   in
 
   (* Put together *)
   S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back end_expr
-    loop_expr
+    loop_expr meta
 
-let eval_loop (config : C.config) (eval_loop_body : st_cm_fun) : st_cm_fun =
+let eval_loop (config : config) (meta : meta) (eval_loop_body : st_cm_fun) :
+    st_cm_fun =
  fun cf ctx ->
-  match config.C.mode with
+  match config.mode with
   | ConcreteMode -> eval_loop_concrete eval_loop_body cf ctx
   | SymbolicMode ->
       (* We want to make sure the loop will *not* manipulate shared avalues
@@ -237,4 +233,4 @@ let eval_loop (config : C.config) (eval_loop_body : st_cm_fun) : st_cm_fun =
          *non-fixed* abstractions.
       *)
       let cc = prepare_ashared_loans None in
-      comp cc (eval_loop_symbolic config eval_loop_body) cf ctx
+      comp cc (eval_loop_symbolic config meta eval_loop_body) cf ctx

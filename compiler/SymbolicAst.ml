@@ -3,10 +3,10 @@
     the symbolic execution: we later apply transformations to generate the
     pure AST that we export. *)
 
-module T = Types
-module V = Values
-module E = Expressions
-module A = LlbcAst
+open Types
+open Expressions
+open Values
+open LlbcAst
 
 (** "Meta"-place: a place stored as meta-data.
 
@@ -23,16 +23,16 @@ type mplace = {
           because the most important information in a place is the name of the
           variable!
        *)
-  projection : E.projection;
+  projection : projection;
       (** We store the projection because we can, but it is actually not that useful *)
 }
 [@@deriving show]
 
 type call_id =
-  | Fun of A.fun_id_or_trait_method_ref * V.FunCallId.id
+  | Fun of fun_id_or_trait_method_ref * FunCallId.id
       (** A "regular" function (i.e., a function which is not a primitive operation) *)
-  | Unop of E.unop
-  | Binop of E.binop
+  | Unop of unop
+  | Binop of binop
 [@@deriving show, ord]
 
 type call = {
@@ -42,60 +42,52 @@ type call = {
           evaluated). We need it to compute the translated values for shared
           borrows (we need to perform lookups).
        *)
-  abstractions : V.AbstractionId.id list;
-  generics : T.egeneric_args;
-  args : V.typed_value list;
+  abstractions : AbstractionId.id list;
+  generics : generic_args;
+  args : typed_value list;
   args_places : mplace option list;  (** Meta information *)
-  dest : V.symbolic_value;
+  dest : symbolic_value;
   dest_place : mplace option;  (** Meta information *)
 }
 [@@deriving show]
 
-(** Meta information, not necessary for synthesis but useful to guide it to
-    generate a pretty output.
+(** Meta information for expressions, not necessary for synthesis but useful to
+    guide it to generate a pretty output.
  *)
-
-type meta =
-  | Assignment of Contexts.eval_ctx * mplace * V.typed_value * mplace option
+type emeta =
+  | Assignment of Contexts.eval_ctx * mplace * typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
 [@@deriving show]
 
-type variant_id = T.VariantId.id [@@deriving show]
-type global_decl_id = A.GlobalDeclId.id [@@deriving show]
-type 'a symbolic_value_id_map = 'a V.SymbolicValueId.Map.t [@@deriving show]
-type 'a region_group_id_map = 'a T.RegionGroupId.Map.t [@@deriving show]
+type variant_id = VariantId.id [@@deriving show]
+type global_decl_id = GlobalDeclId.id [@@deriving show]
+type 'a symbolic_value_id_map = 'a SymbolicValueId.Map.t [@@deriving show]
+type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
 
-(** Ancestor for {!expression} iter visitor *)
+(** Ancestor for {!expression} iter visitor.
+
+    We could make it inherit the visitor for {!eval_ctx}, but in all the uses
+    of this visitor we don't need to explore {!eval_ctx}, so we make it inherit
+    the abstraction visitors instead.
+ *)
 class ['self] iter_expression_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.iter
+    inherit [_] iter_abs
     method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
-    method visit_typed_value : 'env -> V.typed_value -> unit = fun _ _ -> ()
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
-    method visit_abs : 'env -> V.abs -> unit = fun _ _ -> ()
-    method visit_loop_id : 'env -> V.loop_id -> unit = fun _ _ -> ()
-    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
+    method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
 
-    method visit_const_generic_var_id : 'env -> T.const_generic_var_id -> unit =
+    method visit_region_group_id : 'env -> RegionGroupId.id -> unit =
       fun _ _ -> ()
 
-    method visit_symbolic_value_id : 'env -> V.symbolic_value_id -> unit =
-      fun _ _ -> ()
-
-    method visit_symbolic_value : 'env -> V.symbolic_value -> unit =
-      fun _ _ -> ()
-
-    method visit_region_group_id : 'env -> T.RegionGroupId.id -> unit =
-      fun _ _ -> ()
-
-    method visit_global_decl_id : 'env -> global_decl_id -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-    method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
+    method visit_emeta : 'env -> emeta -> unit = fun _ _ -> ()
+    method visit_meta : 'env -> Meta.meta -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map
         : 'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
       fun f env m ->
-        T.RegionGroupId.Map.iter
+        RegionGroupId.Map.iter
           (fun id x ->
             self#visit_region_group_id env id;
             f env x)
@@ -104,25 +96,17 @@ class ['self] iter_expression_base =
     method visit_symbolic_value_id_map
         : 'a. ('env -> 'a -> unit) -> 'env -> 'a symbolic_value_id_map -> unit =
       fun f env m ->
-        V.SymbolicValueId.Map.iter
+        SymbolicValueId.Map.iter
           (fun id x ->
             self#visit_symbolic_value_id env id;
             f env x)
           m
 
-    method visit_symbolic_value_id_set : 'env -> V.symbolic_value_id_set -> unit
-        =
-      fun env s ->
-        V.SymbolicValueId.Set.iter (self#visit_symbolic_value_id env) s
+    method visit_symbolic_value_id_set : 'env -> symbolic_value_id_set -> unit =
+      fun env s -> SymbolicValueId.Set.iter (self#visit_symbolic_value_id env) s
 
-    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
-    method visit_scalar_value : 'env -> V.scalar_value -> unit = fun _ _ -> ()
-
-    method visit_symbolic_expansion : 'env -> V.symbolic_expansion -> unit =
+    method visit_symbolic_expansion : 'env -> symbolic_expansion -> unit =
       fun _ _ -> ()
-
-    method visit_etrait_ref : 'env -> T.etrait_ref -> unit = fun _ _ -> ()
-    method visit_egeneric_args : 'env -> T.egeneric_args -> unit = fun _ _ -> ()
   end
 
 (** **Rem.:** here, {!expression} is not at all equivalent to the expressions
@@ -130,7 +114,7 @@ class ['self] iter_expression_base =
     lambda-calculus expressions.
  *)
 type expression =
-  | Return of Contexts.eval_ctx * V.typed_value option
+  | Return of Contexts.eval_ctx * typed_value option
       (** There are two cases:
           - the AST is for a forward function: the typed value should contain
             the value which was in the return variable
@@ -142,22 +126,22 @@ type expression =
        *)
   | Panic
   | FunCall of call * expression
-  | EndAbstraction of Contexts.eval_ctx * V.abs * expression
+  | EndAbstraction of Contexts.eval_ctx * abs * expression
       (** The context is the evaluation context upon ending the abstraction,
           just after we removed the abstraction from the context.
 
           The context is the evaluation context from after evaluating the asserted
           value. It has the same purpose as for the {!Return} case.
        *)
-  | EvalGlobal of global_decl_id * V.symbolic_value * expression
+  | EvalGlobal of global_decl_id * symbolic_value * expression
       (** Evaluate a global to a fresh symbolic value *)
-  | Assertion of Contexts.eval_ctx * V.typed_value * expression
+  | Assertion of Contexts.eval_ctx * typed_value * expression
       (** An assertion.
 
           The context is the evaluation context from after evaluating the asserted
           value. It has the same purpose as for the {!Return} case.
        *)
-  | Expansion of mplace option * V.symbolic_value * expansion
+  | Expansion of mplace option * symbolic_value * expansion
       (** Expansion of a symbolic value.
     
           The place is "meta": it gives the path to the symbolic value (if available)
@@ -169,7 +153,7 @@ type expression =
   | IntroSymbolic of
       Contexts.eval_ctx
       * mplace option
-      * V.symbolic_value
+      * symbolic_value
       * value_aggregate
       * expression
       (** We introduce a new symbolic value, equal to some other value.
@@ -185,7 +169,7 @@ type expression =
        *)
   | ForwardEnd of
       Contexts.eval_ctx
-      * V.typed_value symbolic_value_id_map option
+      * typed_value symbolic_value_id_map option
       * expression
       * expression region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
@@ -207,7 +191,7 @@ type expression =
           comments for the {!Return} variant).
        *)
   | Loop of loop  (** Loop *)
-  | ReturnWithLoop of V.loop_id * bool
+  | ReturnWithLoop of loop_id * bool
       (** End the function with a call to a loop function.
 
           This encompasses the cases when we synthesize a function body
@@ -216,25 +200,26 @@ type expression =
 
           The boolean is [is_continue].
        *)
-  | Meta of meta * expression  (** Meta information *)
+  | Meta of emeta * expression  (** Meta information *)
 
 and loop = {
-  loop_id : V.loop_id;
-  input_svalues : V.symbolic_value list;  (** The input symbolic values *)
-  fresh_svalues : V.symbolic_value_id_set;
+  loop_id : loop_id;
+  input_svalues : symbolic_value list;  (** The input symbolic values *)
+  fresh_svalues : symbolic_value_id_set;
       (** The symbolic values introduced by the loop fixed-point *)
   rg_to_given_back_tys :
-    ((T.RegionId.Set.t * T.rty list) T.RegionGroupId.Map.t[@opaque]);
+    ((RegionId.Set.t * ty list) RegionGroupId.Map.t[@opaque]);
       (** The map from region group ids to the types of the values given back
           by the corresponding loop abstractions.
        *)
   end_expr : expression;
       (** The end of the function (upon the moment it enters the loop) *)
   loop_expr : expression;  (** The symbolically executed loop body *)
+  meta : Meta.meta;  (** Information about where the origin of the loop body *)
 }
 
 and expansion =
-  | ExpandNoBranch of V.symbolic_expansion * expression
+  | ExpandNoBranch of symbolic_expansion * expression
       (** A symbolic expansion which doesn't generate a branching.
           Includes:
           - concrete expansion
@@ -242,25 +227,24 @@ and expansion =
           *Doesn't* include:
           - expansion of ADTs with one variant
        *)
-  | ExpandAdt of (variant_id option * V.symbolic_value list * expression) list
+  | ExpandAdt of (variant_id option * symbolic_value list * expression) list
       (** ADT expansion *)
   | ExpandBool of expression * expression
       (** A boolean expansion (i.e, an [if ... then ... else ...]) *)
-  | ExpandInt of
-      T.integer_type * (V.scalar_value * expression) list * expression
+  | ExpandInt of integer_type * (scalar_value * expression) list * expression
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
 
 (* Remark: this type doesn't have to be mutually recursive with the other
    types, but it makes it easy to generate the visitors *)
 and value_aggregate =
-  | SingleValue of V.typed_value  (** Regular case *)
-  | Array of V.typed_value list
+  | VaSingleValue of typed_value  (** Regular case *)
+  | VaArray of typed_value list
       (** This is used when introducing array aggregates *)
-  | ConstGenericValue of T.const_generic_var_id
+  | VaCgValue of const_generic_var_id
       (** This is used when evaluating a const generic value: in the interpreter,
           we introduce a fresh symbolic value. *)
-  | TraitConstValue of T.etrait_ref * T.egeneric_args * string
+  | VaTraitConstValue of trait_ref * generic_args * string
       (** A trait constant value *)
 [@@deriving
   show,

@@ -6,105 +6,124 @@ open Loops.Types
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [loops::sum]: decreases clause *)
+(** [loops::sum]: decreases clause
+    Source: 'src/loops.rs', lines 4:0-14:1 *)
 unfold let sum_loop_decreases (max : u32) (i : u32) (s : u32) : nat = admit ()
 
-(** [loops::sum_with_mut_borrows]: decreases clause *)
+(** [loops::sum_with_mut_borrows]: decreases clause
+    Source: 'src/loops.rs', lines 19:0-31:1 *)
 unfold
 let sum_with_mut_borrows_loop_decreases (max : u32) (mi : u32) (ms : u32) : nat
   =
   admit ()
 
-(** [loops::sum_with_shared_borrows]: decreases clause *)
+(** [loops::sum_with_shared_borrows]: decreases clause
+    Source: 'src/loops.rs', lines 34:0-48:1 *)
 unfold
 let sum_with_shared_borrows_loop_decreases (max : u32) (i : u32) (s : u32) :
   nat =
   admit ()
 
-(** [loops::clear]: decreases clause *)
+(** [loops::clear]: decreases clause
+    Source: 'src/loops.rs', lines 52:0-58:1 *)
 unfold
 let clear_loop_decreases (v : alloc_vec_Vec u32) (i : usize) : nat = admit ()
 
-(** [loops::list_mem]: decreases clause *)
+(** [loops::list_mem]: decreases clause
+    Source: 'src/loops.rs', lines 66:0-75:1 *)
 unfold let list_mem_loop_decreases (x : u32) (ls : list_t u32) : nat = admit ()
 
-(** [loops::list_nth_mut_loop]: decreases clause *)
+(** [loops::list_nth_mut_loop]: decreases clause
+    Source: 'src/loops.rs', lines 78:0-88:1 *)
 unfold
 let list_nth_mut_loop_loop_decreases (t : Type0) (ls : list_t t) (i : u32) :
   nat =
   admit ()
 
-(** [loops::list_nth_shared_loop]: decreases clause *)
+(** [loops::list_nth_shared_loop]: decreases clause
+    Source: 'src/loops.rs', lines 91:0-101:1 *)
 unfold
 let list_nth_shared_loop_loop_decreases (t : Type0) (ls : list_t t) (i : u32) :
   nat =
   admit ()
 
-(** [loops::get_elem_mut]: decreases clause *)
+(** [loops::get_elem_mut]: decreases clause
+    Source: 'src/loops.rs', lines 103:0-117:1 *)
 unfold
 let get_elem_mut_loop_decreases (x : usize) (ls : list_t usize) : nat =
   admit ()
 
-(** [loops::get_elem_shared]: decreases clause *)
+(** [loops::get_elem_shared]: decreases clause
+    Source: 'src/loops.rs', lines 119:0-133:1 *)
 unfold
 let get_elem_shared_loop_decreases (x : usize) (ls : list_t usize) : nat =
   admit ()
 
-(** [loops::list_nth_mut_loop_with_id]: decreases clause *)
+(** [loops::list_nth_mut_loop_with_id]: decreases clause
+    Source: 'src/loops.rs', lines 144:0-155:1 *)
 unfold
 let list_nth_mut_loop_with_id_loop_decreases (t : Type0) (i : u32)
   (ls : list_t t) : nat =
   admit ()
 
-(** [loops::list_nth_shared_loop_with_id]: decreases clause *)
+(** [loops::list_nth_shared_loop_with_id]: decreases clause
+    Source: 'src/loops.rs', lines 158:0-169:1 *)
 unfold
 let list_nth_shared_loop_with_id_loop_decreases (t : Type0) (i : u32)
   (ls : list_t t) : nat =
   admit ()
 
-(** [loops::list_nth_mut_loop_pair]: decreases clause *)
+(** [loops::list_nth_mut_loop_pair]: decreases clause
+    Source: 'src/loops.rs', lines 174:0-195:1 *)
 unfold
 let list_nth_mut_loop_pair_loop_decreases (t : Type0) (ls0 : list_t t)
   (ls1 : list_t t) (i : u32) : nat =
   admit ()
 
-(** [loops::list_nth_shared_loop_pair]: decreases clause *)
+(** [loops::list_nth_shared_loop_pair]: decreases clause
+    Source: 'src/loops.rs', lines 198:0-219:1 *)
 unfold
 let list_nth_shared_loop_pair_loop_decreases (t : Type0) (ls0 : list_t t)
   (ls1 : list_t t) (i : u32) : nat =
   admit ()
 
-(** [loops::list_nth_mut_loop_pair_merge]: decreases clause *)
+(** [loops::list_nth_mut_loop_pair_merge]: decreases clause
+    Source: 'src/loops.rs', lines 223:0-238:1 *)
 unfold
 let list_nth_mut_loop_pair_merge_loop_decreases (t : Type0) (ls0 : list_t t)
   (ls1 : list_t t) (i : u32) : nat =
   admit ()
 
-(** [loops::list_nth_shared_loop_pair_merge]: decreases clause *)
+(** [loops::list_nth_shared_loop_pair_merge]: decreases clause
+    Source: 'src/loops.rs', lines 241:0-256:1 *)
 unfold
 let list_nth_shared_loop_pair_merge_loop_decreases (t : Type0) (ls0 : list_t t)
   (ls1 : list_t t) (i : u32) : nat =
   admit ()
 
-(** [loops::list_nth_mut_shared_loop_pair]: decreases clause *)
+(** [loops::list_nth_mut_shared_loop_pair]: decreases clause
+    Source: 'src/loops.rs', lines 259:0-274:1 *)
 unfold
 let list_nth_mut_shared_loop_pair_loop_decreases (t : Type0) (ls0 : list_t t)
   (ls1 : list_t t) (i : u32) : nat =
   admit ()
 
-(** [loops::list_nth_mut_shared_loop_pair_merge]: decreases clause *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: decreases clause
+    Source: 'src/loops.rs', lines 278:0-293:1 *)
 unfold
 let list_nth_mut_shared_loop_pair_merge_loop_decreases (t : Type0)
   (ls0 : list_t t) (ls1 : list_t t) (i : u32) : nat =
   admit ()
 
-(** [loops::list_nth_shared_mut_loop_pair]: decreases clause *)
+(** [loops::list_nth_shared_mut_loop_pair]: decreases clause
+    Source: 'src/loops.rs', lines 297:0-312:1 *)
 unfold
 let list_nth_shared_mut_loop_pair_loop_decreases (t : Type0) (ls0 : list_t t)
   (ls1 : list_t t) (i : u32) : nat =
   admit ()
 
-(** [loops::list_nth_shared_mut_loop_pair_merge]: decreases clause *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: decreases clause
+    Source: 'src/loops.rs', lines 316:0-331:1 *)
 unfold
 let list_nth_shared_mut_loop_pair_merge_loop_decreases (t : Type0)
   (ls0 : list_t t) (ls1 : list_t t) (i : u32) : nat =

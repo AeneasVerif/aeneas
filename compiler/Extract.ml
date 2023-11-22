@@ -6,7 +6,6 @@
 open Pure
 open PureUtils
 open TranslateCore
-open ExtractBase
 open Config
 include ExtractTypes
 
@@ -27,8 +26,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       let builtin =
         let open ExtractBuiltin in
         let funs_map = builtin_funs_map () in
-        let sname = name_to_simple_name def.fwd.f.basename in
-        SimpleNameMap.find_opt sname funs_map
+        match_name_find_opt ctx.trans_ctx def.fwd.f.llbc_name funs_map
       in
       (* Use the builtin names if necessary *)
       match builtin with
@@ -51,7 +49,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             (fun ctx (f : fun_decl) ->
               let open ExtractBuiltin in
               let fun_id =
-                (Pure.FunId (Regular f.def_id), f.loop_id, f.back_id)
+                (Pure.FunId (FRegular f.def_id), f.loop_id, f.back_id)
               in
               let fun_info =
                 List.find_opt
@@ -65,7 +63,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
                   raise
                     (Failure
                        ("Not found: "
-                       ^ Names.name_to_string f.basename
+                       ^ name_to_string ctx f.llbc_name
                        ^ ", "
                        ^ Print.option_to_string Pure.show_loop_id f.loop_id
                        ^ Print.option_to_string Pure.show_region_group_id
@@ -124,7 +122,7 @@ let extract_adt_g_value
     (inside : bool) (variant_id : VariantId.id option) (field_values : 'v list)
     (ty : ty) : extraction_ctx =
   match ty with
-  | Adt (Tuple, generics) ->
+  | TAdt (TTuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
       assert (List.length generics.types = List.length field_values);
@@ -146,7 +144,7 @@ let extract_adt_g_value
         in
         F.pp_print_string fmt ")";
         ctx)
-  | Adt (adt_id, _) ->
+  | TAdt (adt_id, _) ->
       (* "Regular" ADT *)
 
       (* If we are generating a pattern for a let-binding and we target Lean,
@@ -178,7 +176,7 @@ let extract_adt_g_value
           | Some vid -> (
               (* In the case of Lean, we might have to add the type name as a prefix *)
               match (!backend, adt_id) with
-              | Lean, Assumed _ ->
+              | Lean, TAssumed _ ->
                   ctx_get_type adt_id ctx ^ "." ^ ctx_get_variant adt_id vid ctx
               | _ -> ctx_get_variant adt_id vid ctx)
           | None -> ctx_get_struct adt_id ctx
@@ -212,7 +210,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
         let decl = FunDeclId.Map.find id ctx.trans_funs in
         let err =
           "Ill-formed builtin information for function "
-          ^ Names.name_to_string decl.fwd.f.basename
+          ^ name_to_string ctx decl.fwd.f.llbc_name
           ^ ": "
           ^ string_of_int (List.length filter)
           ^ " filtering arguments provided for "
@@ -237,12 +235,10 @@ let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
     (is_let : bool) (inside : bool) (v : typed_pattern) : extraction_ctx =
   match v.value with
   | PatConstant cv ->
-      ctx.fmt.extract_literal fmt inside cv;
+      extract_literal fmt inside cv;
       ctx
   | PatVar (v, _) ->
-      let vname =
-        ctx.fmt.var_basename ctx.names_maps.names_map.names_set v.basename v.ty
-      in
+      let vname = ctx_compute_var_basename ctx v.basename v.ty in
       let ctx, vname = ctx_add_var vname v.id ctx in
       F.pp_print_string fmt vname;
       ctx
@@ -275,7 +271,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | CVar var_id ->
       let var_name = ctx_get_const_generic_var var_id ctx in
       F.pp_print_string fmt var_name
-  | Const cv -> ctx.fmt.extract_literal fmt inside cv
+  | Const cv -> extract_literal fmt inside cv
   | App _ ->
       let app, args = destruct_apps e in
       extract_App ctx fmt inside app args
@@ -355,10 +351,10 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
        * Note that the way we generate the translation, we shouldn't get the
        * case where we have no argument (all functions are fully instantiated,
        * and no AST transformation introduces partial calls). *)
-      ctx.fmt.extract_unop (extract_texpression ctx fmt) fmt inside unop arg
+      extract_unop (extract_texpression ctx fmt) fmt inside unop arg
   | Binop (binop, int_ty), [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
-      ctx.fmt.extract_binop
+      extract_binop
         (extract_texpression ctx fmt)
         fmt inside binop int_ty arg0 arg1
   | Fun fun_id, _ ->
@@ -441,7 +437,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
             (* Provided method: we see it as a regular function call, and use
                the function name *)
             let fun_id =
-              FromLlbc (FunId (Regular method_id.id), lp_id, rg_id)
+              FromLlbc (FunId (FRegular method_id.id), lp_id, rg_id)
             in
             let fun_name = ctx_get_function fun_id ctx in
             F.pp_print_string fmt fun_name;
@@ -467,7 +463,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       *)
       let types =
         match fun_id with
-        | FromLlbc (FunId (Regular id), _, _) ->
+        | FromLlbc (FunId (FRegular id), _, _) ->
             fun_builtin_filter_types id generics.types ctx
         | _ -> Result.Ok generics.types
       in
@@ -506,7 +502,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (adt_cons : adt_cons_id) (generics : generic_args) (args : texpression list)
     : unit =
-  let e_ty = Adt (adt_cons.adt_id, generics) in
+  let e_ty = TAdt (adt_cons.adt_id, generics) in
   let is_single_pat = false in
   let _ =
     extract_adt_g_value
@@ -871,7 +867,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
      thus extracted to unit. We need to check that by looking up the definition *)
   let extract_as_unit =
     match (!backend, supd.struct_id) with
-    | HOL4, AdtId adt_id ->
+    | HOL4, TAdtId adt_id ->
         let d = TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls in
         d.kind = Struct []
     | _ -> false
@@ -885,7 +881,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
        - this is an array
     *)
     match supd.struct_id with
-    | AdtId _ ->
+    | TAdtId _ ->
         F.pp_open_hvbox fmt 0;
         F.pp_open_hvbox fmt ctx.indent_incr;
         (* Inner/outer brackets: there are several syntaxes for the field updates.
@@ -966,7 +962,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         if need_paren then F.pp_print_string fmt ")";
         print_bracket false orb;
         F.pp_close_box fmt ()
-    | Assumed Array ->
+    | TAssumed TArray ->
         (* Open the boxes *)
         F.pp_open_hvbox fmt ctx.indent_incr;
         let need_paren = inside in
@@ -974,7 +970,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         (* Open the box for `Array.replicate T N [` *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the array constructor *)
-        let cs = ctx_get_struct (Assumed Array) ctx in
+        let cs = ctx_get_struct (TAssumed TArray) ctx in
         F.pp_print_string fmt cs;
         (* Print the parameters *)
         let _, generics = ty_as_adt e_ty in
@@ -1048,7 +1044,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.signature.generics ctx
+    ctx_add_generic_params def.llbc_name def.signature.llbc_generics
+      def.signature.generics ctx
   in
   (* Print the generics *)
   (* Open a box for the generics *)
@@ -1136,8 +1133,9 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt
-    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: decreases clause" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases clause" ]
+    def.meta.span;
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1198,8 +1196,9 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt
-    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: termination measure" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: termination measure" ]
+    def.meta.span;
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1252,8 +1251,9 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   let def_name = ctx_get_decreases_proof def.def_id def.loop_id ctx in
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
-  extract_comment fmt
-    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: decreases_by tactic" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases_by tactic" ]
+    def.meta.span;
   F.pp_print_space fmt ();
   F.pp_open_hvbox fmt 0;
   F.pp_print_string fmt "syntax \"";
@@ -1286,10 +1286,10 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   let { keep_fwd; num_backs } =
     PureUtils.RegularFunIdMap.find
-      (Pure.FunId (Regular def.def_id), def.loop_id, def.back_id)
+      (Pure.FunId (FRegular def.def_id), def.loop_id, def.back_id)
       ctx.fun_name_info
   in
-  let comment_pre = "[" ^ Print.fun_name_to_string def.basename ^ "]: " in
+  let comment_pre = "[" ^ name_to_string ctx def.llbc_name ^ "]: " in
   let comment =
     let loop_comment =
       match def.loop_id with
@@ -1314,7 +1314,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     | [ s ] -> [ comment_pre ^ loop_comment ^ s ]
     | s :: sl -> (comment_pre ^ loop_comment ^ s) :: sl
   in
-  extract_comment fmt comment
+  extract_comment_with_span fmt comment def.meta.span
 
 (** Extract a function declaration.
 
@@ -1357,7 +1357,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     is_opaque_coq && def.signature.generics <> empty_generic_params
   in
   (* Print the qualifier ("assume", etc.). *)
-  let qualif = ctx.fmt.fun_decl_kind_to_qualif kind in
+  let qualif = fun_decl_kind_to_qualif kind in
   (match qualif with
   | Some qualif ->
       F.pp_print_string fmt qualif;
@@ -1579,7 +1579,10 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   assert (def.signature.generics.const_generics = []);
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
-  let ctx, _, _, _ = ctx_add_generic_params def.signature.generics ctx in
+  let ctx, _, _, _ =
+    ctx_add_generic_params def.llbc_name def.signature.llbc_generics
+      def.signature.generics ctx
+  in
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0;
   (* Open a box for the whole definition *)
@@ -1653,7 +1656,7 @@ let extract_global_decl_body_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open "QUALIF NAME : TYPE =" box (depth=1) *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print "QUALIF NAME " *)
-  (match ctx.fmt.fun_decl_kind_to_qualif kind with
+  (match fun_decl_kind_to_qualif kind with
   | Some qualif ->
       F.pp_print_string fmt qualif;
       F.pp_print_space fmt ()
@@ -1766,13 +1769,15 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
-  extract_comment fmt [ "[" ^ Print.global_name_to_string global.name ^ "]" ];
+  extract_comment_with_span fmt
+    [ "[" ^ name_to_string ctx global.name ^ "]" ]
+    global.meta.span;
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global global.def_id ctx in
   let body_name =
     ctx_get_function
-      (FromLlbc (Pure.FunId (Regular global.body_id), None, None))
+      (FromLlbc (Pure.FunId (FRegular global.body), None, None))
       ctx
   in
 
@@ -1820,11 +1825,11 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     | None ->
         List.map
           (fun (c : trait_clause) ->
-            let name = ctx.fmt.trait_parent_clause_name trait_decl c in
+            let name = ctx_compute_trait_parent_clause_name ctx trait_decl c in
             (* Add a prefix if necessary *)
             let name =
               if !Config.record_fields_short_names then name
-              else ctx.fmt.trait_decl_name trait_decl ^ name
+              else ctx_compute_trait_decl_name ctx trait_decl ^ name
             in
             (c.clause_id, name))
           trait_decl.parent_clauses
@@ -1851,11 +1856,11 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
     | None ->
         List.map
           (fun (item_name, _) ->
-            let name = ctx.fmt.trait_const_name trait_decl item_name in
+            let name = ctx_compute_trait_const_name ctx trait_decl item_name in
             (* Add a prefix if necessary *)
             let name =
               if !Config.record_fields_short_names then name
-              else ctx.fmt.trait_decl_name trait_decl ^ name
+              else ctx_compute_trait_decl_name ctx trait_decl ^ name
             in
             (item_name, name))
           consts
@@ -1883,19 +1888,21 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
     match builtin_info with
     | None ->
         let compute_type_name (item_name : string) : string =
-          let type_name = ctx.fmt.trait_type_name trait_decl item_name in
+          let type_name =
+            ctx_compute_trait_type_name ctx trait_decl item_name
+          in
           if !Config.record_fields_short_names then type_name
-          else ctx.fmt.trait_decl_name trait_decl ^ type_name
+          else ctx_compute_trait_decl_name ctx trait_decl ^ type_name
         in
         let compute_clause_name (item_name : string) (clause : trait_clause) :
             TraitClauseId.id * string =
           let name =
-            ctx.fmt.trait_type_clause_name trait_decl item_name clause
+            ctx_compute_trait_type_clause_name ctx trait_decl item_name clause
           in
           (* Add a prefix if necessary *)
           let name =
             if !Config.record_fields_short_names then name
-            else ctx.fmt.trait_decl_name trait_decl ^ name
+            else ctx_compute_trait_decl_name ctx trait_decl ^ name
           in
           (clause.clause_id, name)
         in
@@ -1958,14 +1965,16 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
               =
             (* We do something special to reuse the [ctx_compute_fun_decl]
                function. TODO: make it cleaner. *)
-            let basename : name = [ Ident item_name ] in
-            let f = { f with basename } in
+            let llbc_name : Types.name =
+              [ Types.PeIdent (item_name, Disambiguator.zero) ]
+            in
+            let f = { f with llbc_name } in
             let trans = A.FunDeclId.Map.find f.def_id ctx.trans_funs in
             let name = ctx_compute_fun_name trans f ctx in
             (* Add a prefix if necessary *)
             let name =
               if !Config.record_fields_short_names then name
-              else ctx.fmt.trait_decl_name trait_decl ^ "_" ^ name
+              else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ name
             in
             (f.back_id, name)
           in
@@ -1991,7 +2000,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
               | None ->
                   let err =
                     "Ill-formed builtin information for trait decl \""
-                    ^ Names.name_to_string trait_decl.name
+                    ^ name_to_string ctx trait_decl.llbc_name
                     ^ "\", method \"" ^ item_name
                     ^ "\": could not find name for region "
                     ^ Print.option_to_string Pure.show_region_group_id
@@ -2022,16 +2031,16 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     (trait_decl : trait_decl) : extraction_ctx =
   (* Lookup the information if this is a builtin trait *)
   let open ExtractBuiltin in
-  let sname = name_to_simple_name trait_decl.name in
   let builtin_info =
-    SimpleNameMap.find_opt sname (builtin_trait_decls_map ())
+    match_name_find_opt ctx.trans_ctx trait_decl.llbc_name
+      (builtin_trait_decls_map ())
   in
   let ctx =
     let trait_name, trait_constructor =
       match builtin_info with
       | None ->
-          ( ctx.fmt.trait_decl_name trait_decl,
-            ctx.fmt.trait_decl_constructor trait_decl )
+          ( ctx_compute_trait_decl_name ctx trait_decl,
+            ctx_compute_trait_decl_constructor ctx trait_decl )
       | Some info -> (info.extract_name, info.constructor)
     in
     let ctx = ctx_add (TraitDeclId trait_decl.def_id) trait_name ctx in
@@ -2059,9 +2068,14 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   (* Check if the trait implementation is builtin *)
   let builtin_info =
     let open ExtractBuiltin in
-    let type_sname = name_to_simple_name trait_impl.name in
-    let trait_sname = name_to_simple_name trait_decl.name in
-    SimpleNamePairMap.find_opt (type_sname, trait_sname)
+    (* Lookup the original Rust impl to retrieve the original trait ref (we
+       use it to derive the name)*)
+    let trait_impl =
+      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
+    in
+    let decl_ref = trait_impl.impl_trait in
+    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.llbc_name
+      decl_ref.decl_generics
       (builtin_trait_impls_map ())
   in
   (* Register some builtin information (if necessary) *)
@@ -2090,7 +2104,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   (* Compute the name *)
   let name =
     match builtin_info with
-    | None -> ctx.fmt.trait_impl_name trait_decl trait_impl
+    | None -> ctx_compute_trait_impl_name ctx trait_decl trait_impl
     | Some name -> name
   in
   ctx_add (TraitImplId trait_impl.def_id) name ctx
@@ -2154,8 +2168,14 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
         generic_params_drop_prefix ~drop_trait_clauses decl.generics
           f.signature.generics
       in
+      (* Note that we do not filter the LLBC generic parameters.
+         This is ok because:
+         - we only use them to find meaningful names for the trait clauses
+         - we only generate trait clauses for the clauses we find in the
+           pure generics *)
       let ctx, type_params, cg_params, trait_clauses =
-        ctx_add_generic_params generics ctx
+        ctx_add_generic_params f.llbc_name f.signature.llbc_generics generics
+          ctx
       in
       let backend_uses_forall =
         match !backend with Coq | Lean -> true | FStar | HOL4 -> false
@@ -2184,8 +2204,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt
-    [ "Trait declaration: [" ^ Print.name_to_string decl.name ^ "]" ];
+  extract_comment_with_span fmt
+    [ "Trait declaration: [" ^ name_to_string ctx decl.llbc_name ^ "]" ]
+    decl.meta.span;
   F.pp_print_break fmt 0 0;
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.
@@ -2202,7 +2223,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   let qualif =
-    Option.get (ctx.fmt.type_decl_kind_to_qualif SingleNonRec (Some Struct))
+    Option.get (type_decl_kind_to_qualif SingleNonRec (Some Struct))
   in
   (* When checking if the trait declaration is empty: we ignore the provided
      methods, because for now they are extracted separately *)
@@ -2218,7 +2239,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params generics ctx
+    ctx_add_generic_params decl.llbc_name decl.llbc_generics generics ctx
   in
   extract_generic_params ctx fmt TypeDeclId.Set.empty generics type_params
     cg_params trait_clauses;
@@ -2437,8 +2458,17 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
           { impl.generics with types = impl_types }
           f_generics
       in
-      (* Register and print the quantified generics *)
-      let ctx, f_tys, f_cgs, f_tcs = ctx_add_generic_params f_generics ctx in
+      (* Register and print the quantified generics.
+
+         Note that we do not filter the LLBC generic parameters.
+         This is ok because:
+         - we only use them to find meaningful names for the trait clauses
+         - we only generate trait clauses for the clauses we find in the
+           pure generics *)
+      let ctx, f_tys, f_cgs, f_tcs =
+        ctx_add_generic_params f.llbc_name f.signature.llbc_generics f_generics
+          ctx
+      in
       let use_forall = f_generics <> empty_generic_params in
       extract_generic_params ctx fmt TypeDeclId.Set.empty ~use_forall f_generics
         f_tys f_cgs f_tcs;
@@ -2466,14 +2496,15 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
-  log#ldebug (lazy ("extract_trait_impl: " ^ Names.name_to_string impl.name));
+  log#ldebug (lazy ("extract_trait_impl: " ^ name_to_string ctx impl.llbc_name));
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl impl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt
-    [ "Trait implementation: [" ^ Print.name_to_string impl.name ^ "]" ];
+  extract_comment_with_span fmt
+    [ "Trait implementation: [" ^ name_to_string ctx impl.llbc_name ^ "]" ]
+    impl.meta.span;
   F.pp_print_break fmt 0 0;
 
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
@@ -2492,7 +2523,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* `let (....) : Trait ... =` *)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  (match ctx.fmt.fun_decl_kind_to_qualif SingleNonRec with
+  (match fun_decl_kind_to_qualif SingleNonRec with
   | Some qualif ->
       F.pp_print_string fmt qualif;
       F.pp_print_space fmt ()
@@ -2503,7 +2534,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params impl.generics ctx
+    ctx_add_generic_params impl.llbc_name impl.llbc_generics impl.generics ctx
   in
   let all_generics = (type_params, cg_params, trait_clauses) in
   extract_generic_params ctx fmt TypeDeclId.Set.empty impl.generics type_params
@@ -2640,7 +2671,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_break fmt 0 0;
     (* Print a comment *)
     extract_comment fmt
-      [ "Unit test for [" ^ Print.fun_name_to_string def.basename ^ "]" ];
+      [ "Unit test for [" ^ name_to_string ctx def.llbc_name ^ "]" ];
     F.pp_print_space fmt ();
     (* Open a box for the test *)
     F.pp_open_hovbox fmt ctx.indent_incr;
@@ -2662,7 +2693,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "=";
         F.pp_print_space fmt ();
-        let success = ctx_get_variant (Assumed Result) result_return_id ctx in
+        let success = ctx_get_variant (TAssumed TResult) result_return_id ctx in
         F.pp_print_string fmt (success ^ " ())")
     | Coq ->
         F.pp_print_string fmt "Check";
@@ -2691,7 +2722,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
-        let success = ctx_get_variant (Assumed Result) result_return_id ctx in
+        let success = ctx_get_variant (TAssumed TResult) result_return_id ctx in
         F.pp_print_string fmt ("." ^ success ^ " ())")
     | HOL4 ->
         F.pp_print_string fmt "val _ = assert_return (";

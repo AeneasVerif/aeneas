@@ -8,7 +8,8 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module HashmapMain_Types.
 
-(** [hashmap_main::hashmap::List] *)
+(** [hashmap_main::hashmap::List]
+    Source: 'src/hashmap.rs', lines 19:0-19:16 *)
 Inductive hashmap_List_t (T : Type) :=
 | Hashmap_List_Cons : usize -> T -> hashmap_List_t T -> hashmap_List_t T
 | Hashmap_List_Nil : hashmap_List_t T
@@ -17,7 +18,8 @@ Inductive hashmap_List_t (T : Type) :=
 Arguments Hashmap_List_Cons { _ }.
 Arguments Hashmap_List_Nil { _ }.
 
-(** [hashmap_main::hashmap::HashMap] *)
+(** [hashmap_main::hashmap::HashMap]
+    Source: 'src/hashmap.rs', lines 35:0-35:21 *)
 Record hashmap_HashMap_t (T : Type) :=
 mkhashmap_HashMap_t {
   hashmap_HashMap_num_entries : usize;

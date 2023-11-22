@@ -1,13 +1,5 @@
-module T = Types
-module PV = PrimitiveValues
-module V = Values
-module E = Expressions
-module C = Contexts
-module Subst = Substitute
-module A = LlbcAst
-module L = Logging
-module Inv = Invariants
-module S = SynthesizeSymbolic
+open Values
+open Contexts
 open InterpreterUtils
 open InterpreterLoopsCore
 
@@ -24,13 +16,13 @@ open InterpreterLoopsCore
     - [aid1]
  *)
 val merge_into_abstraction :
-  V.loop_id ->
-  V.abs_kind ->
+  loop_id ->
+  abs_kind ->
   bool ->
-  C.eval_ctx ->
-  V.abstraction_id ->
-  V.abstraction_id ->
-  C.eval_ctx * V.abstraction_id
+  eval_ctx ->
+  abstraction_id ->
+  abstraction_id ->
+  eval_ctx * abstraction_id
 
 (** Join two contexts.
 
@@ -92,8 +84,7 @@ val merge_into_abstraction :
     - [ctx0]
     - [ctx1]
   *)
-val join_ctxs :
-  V.loop_id -> ids_sets -> C.eval_ctx -> C.eval_ctx -> ctx_or_update
+val join_ctxs : loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
 
 (** Join the context at the entry of the loop with the contexts upon reentry
     (upon reaching the [Continue] statement - the goal is to compute a fixed
@@ -112,9 +103,9 @@ val join_ctxs :
     - [ctxl]
  *)
 val loop_join_origin_with_continue_ctxs :
-  C.config ->
-  V.loop_id ->
+  config ->
+  loop_id ->
   ids_sets ->
-  C.eval_ctx ->
-  C.eval_ctx list ->
-  (C.eval_ctx * C.eval_ctx list) * C.eval_ctx
+  eval_ctx ->
+  eval_ctx list ->
+  (eval_ctx * eval_ctx list) * eval_ctx

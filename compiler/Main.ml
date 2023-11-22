@@ -1,15 +1,10 @@
 open Aeneas.LlbcOfJson
 open Aeneas.Logging
-module T = Aeneas.Types
-module A = Aeneas.LlbcAst
-module I = Aeneas.Interpreter
+open Aeneas.LlbcAst
+open Aeneas.Interpreter
 module EL = Easy_logging.Logging
-module TA = Aeneas.TypesAnalysis
-module Micro = Aeneas.PureMicroPasses
-module Print = Aeneas.Print
-module PrePasses = Aeneas.PrePasses
-module Translate = Aeneas.Translate
 open Aeneas.Config
+open Aeneas
 
 (** The local logger *)
 let log = main_log
@@ -23,6 +18,7 @@ let _ =
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
   main_log#set_level EL.Info;
   llbc_of_json_logger#set_level EL.Info;
+  regions_hierarchy_log#set_level EL.Info;
   pre_passes_log#set_level EL.Info;
   associated_types_log#set_level EL.Info;
   contexts_log#set_level EL.Info;
@@ -42,6 +38,7 @@ let _ =
   symbolic_to_pure_log#set_level EL.Info;
   pure_micro_passes_log#set_level EL.Info;
   extract_log#set_level EL.Info;
+  builtin_log#set_level EL.Info;
   translate_log#set_level EL.Info;
   scc_log#set_level EL.Info;
   reorder_decls_log#set_level EL.Info
@@ -181,7 +178,10 @@ let () =
           log#error "The Lean backend doesn't support the -use-fuel option";
           fail ());
         (* Lean can disambiguate the field names *)
-        record_fields_short_names := true
+        record_fields_short_names := true;
+        (* We exploit the fact that the variant name should always be
+           prefixed with the type name to prevent collisions *)
+        variant_concatenate_type_name := false
     | HOL4 ->
         (* We don't support fuel for the HOL4 backend *)
         if !use_fuel then (
@@ -226,7 +226,9 @@ let () =
       if
         !backend = Lean && !extract_decreases_clauses
         && List.exists
-             (function Aeneas.LlbcAst.Fun (Rec (_ :: _)) -> true | _ -> false)
+             (function
+               | Aeneas.LlbcAst.FunGroup (RecGroup (_ :: _)) -> true
+               | _ -> false)
              m.declarations
       then (
         log#error
@@ -236,15 +238,15 @@ let () =
         fail ());
 
       (* Apply the pre-passes *)
-      let m = PrePasses.apply_passes m in
+      let m = Aeneas.PrePasses.apply_passes m in
 
       (* Some options for the execution *)
 
       (* Test the unit functions with the concrete interpreter *)
-      if !test_unit_functions then I.Test.test_unit_functions m;
+      if !test_unit_functions then Test.test_unit_functions m;
 
       (* Translate the functions *)
-      Translate.translate_crate filename dest_dir m;
+      Aeneas.Translate.translate_crate filename dest_dir m;
 
       (* Print total elapsed time *)
       log#linfo

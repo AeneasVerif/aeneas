@@ -336,3 +336,30 @@ let type_check_pure_code = ref false
 (** Shall we fail hard if we encounter an issue, or should we attempt to go
     as far as possible while leaving "holes" in the generated code? *)
 let fail_hard = ref true
+
+(** if true, add the type name as a prefix
+    to the variant names.
+    Ex.:
+    In Rust:
+      {[
+        enum List = {
+          Cons(u32, Box<List>),x
+          Nil,
+        }
+      ]}
+
+    F*, if option activated:
+      {[
+        type list =
+        | ListCons : u32 -> list -> list
+        | ListNil : list
+      ]}
+
+    F*, if option not activated:
+      {[
+        type list =
+        | Cons : u32 -> list -> list
+        | Nil : list
+      ]}
+ *)
+let variant_concatenate_type_name = ref true

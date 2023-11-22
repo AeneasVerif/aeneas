@@ -16,16 +16,16 @@ def deref_mut (T : Type) (x : T) : Result T := ret x
 def deref_mut_back (T : Type) (_ : T) (x : T) : Result T := ret x
 
 /-- Trait instance -/
-def coreOpsDerefInst (Self : Type) :
+def coreopsDerefInst (Self : Type) :
   core.ops.deref.Deref Self := {
   Target := Self
   deref := deref Self
 }
 
 /-- Trait instance -/
-def coreOpsDerefMutInst (Self : Type) :
+def coreopsDerefMutInst (Self : Type) :
   core.ops.deref.DerefMut Self := {
-  derefInst := coreOpsDerefInst Self
+  derefInst := coreopsDerefInst Self
   deref_mut := deref_mut Self
   deref_mut_back := deref_mut_back Self
 }

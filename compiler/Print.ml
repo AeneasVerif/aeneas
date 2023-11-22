@@ -1,9 +1,15 @@
 include Charon.PrintUtils
 include Charon.PrintLlbcAst
-module V = Values
-module VU = ValuesUtils
-module C = Contexts
-module PrimitiveValues = Charon.PrintPrimitiveValues
+open Charon.PrintTypes
+open Charon.PrintExpressions
+open Charon.PrintLlbcAst.Ast
+open Types
+open TypesUtils
+open Values
+open ValuesUtils
+open Expressions
+open LlbcAst
+open Contexts
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
@@ -14,102 +20,44 @@ let bool_to_string (b : bool) : string = if b then "true" else "false"
 
 (** Pretty-printing for values *)
 module Values = struct
-  type value_formatter = {
-    rvar_to_string : T.RegionVarId.id -> string;
-    r_to_string : T.RegionId.id -> string;
-    type_var_id_to_string : T.TypeVarId.id -> string;
-    type_decl_id_to_string : T.TypeDeclId.id -> string;
-    const_generic_var_id_to_string : T.ConstGenericVarId.id -> string;
-    global_decl_id_to_string : T.GlobalDeclId.id -> string;
-    trait_decl_id_to_string : T.TraitDeclId.id -> string;
-    trait_impl_id_to_string : T.TraitImplId.id -> string;
-    trait_clause_id_to_string : T.TraitClauseId.id -> string;
-    adt_variant_to_string : T.TypeDeclId.id -> T.VariantId.id -> string;
-    var_id_to_string : E.VarId.id -> string;
-    adt_field_names :
-      T.TypeDeclId.id -> T.VariantId.id option -> string list option;
-  }
+  include Charon.PrintValues
 
-  let value_to_etype_formatter (fmt : value_formatter) : PT.etype_formatter =
-    {
-      PT.r_to_string = PT.erased_region_to_string;
-      PT.type_var_id_to_string = fmt.type_var_id_to_string;
-      PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
-      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
-      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
-      PT.trait_decl_id_to_string = fmt.trait_decl_id_to_string;
-      PT.trait_impl_id_to_string = fmt.trait_impl_id_to_string;
-      PT.trait_clause_id_to_string = fmt.trait_clause_id_to_string;
-    }
+  let symbolic_value_id_to_pretty_string (id : SymbolicValueId.id) : string =
+    "s@" ^ SymbolicValueId.to_string id
 
-  let value_to_rtype_formatter (fmt : value_formatter) : PT.rtype_formatter =
-    {
-      PT.r_to_string = PT.region_to_string fmt.r_to_string;
-      PT.type_var_id_to_string = fmt.type_var_id_to_string;
-      PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
-      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
-      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
-      PT.trait_decl_id_to_string = fmt.trait_decl_id_to_string;
-      PT.trait_impl_id_to_string = fmt.trait_impl_id_to_string;
-      PT.trait_clause_id_to_string = fmt.trait_clause_id_to_string;
-    }
+  let symbolic_value_to_string (env : fmt_env) (sv : symbolic_value) : string =
+    symbolic_value_id_to_pretty_string sv.sv_id
+    ^ " : " ^ ty_to_string env sv.sv_ty
 
-  let value_to_stype_formatter (fmt : value_formatter) : PT.stype_formatter =
-    {
-      PT.r_to_string = PT.region_to_string fmt.rvar_to_string;
-      PT.type_var_id_to_string = fmt.type_var_id_to_string;
-      PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
-      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
-      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
-      PT.trait_decl_id_to_string = fmt.trait_decl_id_to_string;
-      PT.trait_impl_id_to_string = fmt.trait_impl_id_to_string;
-      PT.trait_clause_id_to_string = fmt.trait_clause_id_to_string;
-    }
-
-  let var_id_to_string (id : E.VarId.id) : string =
-    "var@" ^ E.VarId.to_string id
-
-  let symbolic_value_id_to_string (id : V.SymbolicValueId.id) : string =
-    "s@" ^ V.SymbolicValueId.to_string id
-
-  let symbolic_value_to_string (fmt : PT.rtype_formatter)
-      (sv : V.symbolic_value) : string =
-    symbolic_value_id_to_string sv.sv_id ^ " : " ^ PT.rty_to_string fmt sv.sv_ty
-
-  let symbolic_value_proj_to_string (fmt : value_formatter)
-      (sv : V.symbolic_value) (rty : T.rty) : string =
-    symbolic_value_id_to_string sv.sv_id
-    ^ " : "
-    ^ PT.ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
-    ^ " <: "
-    ^ PT.ty_to_string (value_to_rtype_formatter fmt) rty
+  let symbolic_value_proj_to_string (env : fmt_env) (sv : symbolic_value)
+      (rty : ty) : string =
+    symbolic_value_id_to_pretty_string sv.sv_id
+    ^ " : " ^ ty_to_string env sv.sv_ty ^ " <: " ^ ty_to_string env rty
 
   (* TODO: it may be a good idea to try to factorize this function with
    * typed_avalue_to_string. At some point we had done it, because [typed_value]
    * and [typed_avalue] were instances of the same general type [g_typed_value],
    * but then we removed this general type because it proved to be a bad idea. *)
-  let rec typed_value_to_string (fmt : value_formatter) (v : V.typed_value) :
-      string =
-    let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
+  let rec typed_value_to_string (env : fmt_env) (v : typed_value) : string =
     match v.value with
-    | Literal cv -> PPV.literal_to_string cv
-    | Adt av -> (
+    | VLiteral cv -> literal_to_string cv
+    | VAdt av -> (
         let field_values =
-          List.map (typed_value_to_string fmt) av.field_values
+          List.map (typed_value_to_string env) av.field_values
         in
         match v.ty with
-        | T.Adt (T.Tuple, _) ->
+        | TAdt (TTuple, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.Adt (T.AdtId def_id, _) ->
+        | TAdt (TAdtId def_id, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
-              | Some vid -> fmt.adt_variant_to_string def_id vid
-              | None -> fmt.type_decl_id_to_string def_id
+              | Some vid -> adt_variant_to_string env def_id vid
+              | None -> type_decl_id_to_string env def_id
             in
             if List.length field_values > 0 then
-              match fmt.adt_field_names def_id av.V.variant_id with
+              match adt_field_names env def_id av.variant_id with
               | None ->
                   let field_values = String.concat ", " field_values in
                   adt_ident ^ " (" ^ field_values ^ ")"
@@ -123,97 +71,91 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.Adt (T.Assumed aty, _) -> (
+        | TAdt (TAssumed aty, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
-            | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
-            | Array, _ ->
+            | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
+            | TArray, _ ->
                 (* Happens when we aggregate values *)
                 "@Array[" ^ String.concat ", " field_values ^ "]"
-            | _ ->
-                raise (Failure ("Inconsistent value: " ^ V.show_typed_value v)))
+            | _ -> raise (Failure ("Inconsistent value: " ^ show_typed_value v))
+            )
         | _ -> raise (Failure "Inconsistent typed value"))
-    | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
-    | Borrow bc -> borrow_content_to_string fmt bc
-    | Loan lc -> loan_content_to_string fmt lc
-    | Symbolic s -> symbolic_value_to_string (value_to_rtype_formatter fmt) s
+    | VBottom -> "⊥ : " ^ ty_to_string env v.ty
+    | VBorrow bc -> borrow_content_to_string env bc
+    | VLoan lc -> loan_content_to_string env lc
+    | VSymbolic s -> symbolic_value_to_string env s
 
-  and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
-      string =
+  and borrow_content_to_string (env : fmt_env) (bc : borrow_content) : string =
     match bc with
-    | SharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
-    | MutBorrow (bid, tv) ->
-        "&mut@" ^ V.BorrowId.to_string bid ^ " ("
-        ^ typed_value_to_string fmt tv
+    | VSharedBorrow bid -> "⌊shared@" ^ BorrowId.to_string bid ^ "⌋"
+    | VMutBorrow (bid, tv) ->
+        "&mut@" ^ BorrowId.to_string bid ^ " ("
+        ^ typed_value_to_string env tv
         ^ ")"
-    | ReservedMutBorrow bid -> "⌊reserved_mut@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | VReservedMutBorrow bid -> "⌊reserved_mut@" ^ BorrowId.to_string bid ^ "⌋"
 
-  and loan_content_to_string (fmt : value_formatter) (lc : V.loan_content) :
-      string =
+  and loan_content_to_string (env : fmt_env) (lc : loan_content) : string =
     match lc with
-    | SharedLoan (loans, v) ->
-        let loans = V.BorrowId.Set.to_string None loans in
-        "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
-    | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | VSharedLoan (loans, v) ->
+        let loans = BorrowId.Set.to_string None loans in
+        "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string env v ^ ")"
+    | VMutLoan bid -> "⌊mut@" ^ BorrowId.to_string bid ^ "⌋"
 
-  let abstract_shared_borrow_to_string (fmt : value_formatter)
-      (abs : V.abstract_shared_borrow) : string =
+  let abstract_shared_borrow_to_string (env : fmt_env)
+      (abs : abstract_shared_borrow) : string =
     match abs with
-    | AsbBorrow bid -> V.BorrowId.to_string bid
+    | AsbBorrow bid -> BorrowId.to_string bid
     | AsbProjReborrows (sv, rty) ->
-        "{" ^ symbolic_value_proj_to_string fmt sv rty ^ "}"
+        "{" ^ symbolic_value_proj_to_string env sv rty ^ "}"
 
-  let abstract_shared_borrows_to_string (fmt : value_formatter)
-      (abs : V.abstract_shared_borrows) : string =
+  let abstract_shared_borrows_to_string (env : fmt_env)
+      (abs : abstract_shared_borrows) : string =
     "{"
-    ^ String.concat "," (List.map (abstract_shared_borrow_to_string fmt) abs)
+    ^ String.concat "," (List.map (abstract_shared_borrow_to_string env) abs)
     ^ "}"
 
-  let rec aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
+  let rec aproj_to_string (env : fmt_env) (pv : aproj) : string =
     match pv with
     | AProjLoans (sv, given_back) ->
         let given_back =
           if given_back = [] then ""
           else
             let given_back = List.map snd given_back in
-            let given_back = List.map (aproj_to_string fmt) given_back in
+            let given_back = List.map (aproj_to_string env) given_back in
             " (" ^ String.concat "," given_back ^ ") "
         in
-        "⌊"
-        ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
-        ^ given_back ^ "⌋"
+        "⌊" ^ symbolic_value_to_string env sv ^ given_back ^ "⌋"
     | AProjBorrows (sv, rty) ->
-        "(" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
+        "(" ^ symbolic_value_proj_to_string env sv rty ^ ")"
     | AEndedProjLoans (_, given_back) ->
         if given_back = [] then "_"
         else
           let given_back = List.map snd given_back in
-          let given_back = List.map (aproj_to_string fmt) given_back in
+          let given_back = List.map (aproj_to_string env) given_back in
           "ended_aproj_loans (" ^ String.concat "," given_back ^ ")"
     | AEndedProjBorrows _mv -> "_"
     | AIgnoredProjBorrows -> "_"
 
-  let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
-      string =
-    let ty_fmt : PT.rtype_formatter = value_to_rtype_formatter fmt in
+  let rec typed_avalue_to_string (env : fmt_env) (v : typed_avalue) : string =
     match v.value with
     | AAdt av -> (
         let field_values =
-          List.map (typed_avalue_to_string fmt) av.field_values
+          List.map (typed_avalue_to_string env) av.field_values
         in
         match v.ty with
-        | T.Adt (T.Tuple, _) ->
+        | TAdt (TTuple, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.Adt (T.AdtId def_id, _) ->
+        | TAdt (TAdtId def_id, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
-              | Some vid -> fmt.adt_variant_to_string def_id vid
-              | None -> fmt.type_decl_id_to_string def_id
+              | Some vid -> adt_variant_to_string env def_id vid
+              | None -> type_decl_id_to_string env def_id
             in
             if List.length field_values > 0 then
-              match fmt.adt_field_names def_id av.V.variant_id with
+              match adt_field_names env def_id av.variant_id with
               | None ->
                   let field_values = String.concat ", " field_values in
                   adt_ident ^ " (" ^ field_values ^ ")"
@@ -227,133 +169,130 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.Adt (T.Assumed aty, _) -> (
+        | TAdt (TAssumed aty, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
-            | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
+            | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
             | _ -> raise (Failure "Inconsistent value"))
         | _ -> raise (Failure "Inconsistent typed value"))
-    | ABottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
-    | ABorrow bc -> aborrow_content_to_string fmt bc
-    | ALoan lc -> aloan_content_to_string fmt lc
-    | ASymbolic s -> aproj_to_string fmt s
+    | ABottom -> "⊥ : " ^ ty_to_string env v.ty
+    | ABorrow bc -> aborrow_content_to_string env bc
+    | ALoan lc -> aloan_content_to_string env lc
+    | ASymbolic s -> aproj_to_string env s
     | AIgnored -> "_"
 
-  and aloan_content_to_string (fmt : value_formatter) (lc : V.aloan_content) :
-      string =
+  and aloan_content_to_string (env : fmt_env) (lc : aloan_content) : string =
     match lc with
     | AMutLoan (bid, av) ->
-        "⌊mut@" ^ V.BorrowId.to_string bid ^ ", "
-        ^ typed_avalue_to_string fmt av
+        "⌊mut@" ^ BorrowId.to_string bid ^ ", "
+        ^ typed_avalue_to_string env av
         ^ "⌋"
     | ASharedLoan (loans, v, av) ->
-        let loans = V.BorrowId.Set.to_string None loans in
+        let loans = BorrowId.Set.to_string None loans in
         "@shared_loan(" ^ loans ^ ", "
-        ^ typed_value_to_string fmt v
+        ^ typed_value_to_string env v
         ^ ", "
-        ^ typed_avalue_to_string fmt av
+        ^ typed_avalue_to_string env av
         ^ ")"
     | AEndedMutLoan ml ->
         "@ended_mut_loan{"
-        ^ typed_avalue_to_string fmt ml.child
+        ^ typed_avalue_to_string env ml.child
         ^ "; "
-        ^ typed_avalue_to_string fmt ml.given_back
+        ^ typed_avalue_to_string env ml.given_back
         ^ " }"
     | AEndedSharedLoan (v, av) ->
         "@ended_shared_loan("
-        ^ typed_value_to_string fmt v
+        ^ typed_value_to_string env v
         ^ ", "
-        ^ typed_avalue_to_string fmt av
+        ^ typed_avalue_to_string env av
         ^ ")"
     | AIgnoredMutLoan (opt_bid, av) ->
         "@ignored_mut_loan("
-        ^ option_to_string V.BorrowId.to_string opt_bid
+        ^ option_to_string BorrowId.to_string opt_bid
         ^ ", "
-        ^ typed_avalue_to_string fmt av
+        ^ typed_avalue_to_string env av
         ^ ")"
     | AEndedIgnoredMutLoan ml ->
         "@ended_ignored_mut_loan{ "
-        ^ typed_avalue_to_string fmt ml.child
+        ^ typed_avalue_to_string env ml.child
         ^ "; "
-        ^ typed_avalue_to_string fmt ml.given_back
+        ^ typed_avalue_to_string env ml.given_back
         ^ "}"
     | AIgnoredSharedLoan sl ->
-        "@ignored_shared_loan(" ^ typed_avalue_to_string fmt sl ^ ")"
+        "@ignored_shared_loan(" ^ typed_avalue_to_string env sl ^ ")"
 
-  and aborrow_content_to_string (fmt : value_formatter) (bc : V.aborrow_content)
-      : string =
+  and aborrow_content_to_string (env : fmt_env) (bc : aborrow_content) : string
+      =
     match bc with
     | AMutBorrow (bid, av) ->
-        "&mut@" ^ V.BorrowId.to_string bid ^ " ("
-        ^ typed_avalue_to_string fmt av
+        "&mut@" ^ BorrowId.to_string bid ^ " ("
+        ^ typed_avalue_to_string env av
         ^ ")"
-    | ASharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | ASharedBorrow bid -> "⌊shared@" ^ BorrowId.to_string bid ^ "⌋"
     | AIgnoredMutBorrow (opt_bid, av) ->
         "@ignored_mut_borrow("
-        ^ option_to_string V.BorrowId.to_string opt_bid
+        ^ option_to_string BorrowId.to_string opt_bid
         ^ ", "
-        ^ typed_avalue_to_string fmt av
+        ^ typed_avalue_to_string env av
         ^ ")"
     | AEndedMutBorrow (_mv, child) ->
-        "@ended_mut_borrow(" ^ typed_avalue_to_string fmt child ^ ")"
+        "@ended_mut_borrow(" ^ typed_avalue_to_string env child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
-        ^ typed_avalue_to_string fmt child
+        ^ typed_avalue_to_string env child
         ^ "; "
-        ^ typed_avalue_to_string fmt given_back
+        ^ typed_avalue_to_string env given_back
         ^ ")"
     | AEndedSharedBorrow -> "@ended_shared_borrow"
     | AProjSharedBorrow sb ->
         "@ignored_shared_borrow("
-        ^ abstract_shared_borrows_to_string fmt sb
+        ^ abstract_shared_borrows_to_string env sb
         ^ ")"
 
-  let loop_abs_kind_to_string (kind : V.loop_abs_kind) : string =
+  let loop_abs_kind_to_string (kind : loop_abs_kind) : string =
     match kind with
     | LoopSynthInput -> "LoopSynthInput"
     | LoopCall -> "LoopCall"
 
-  let abs_kind_to_string (kind : V.abs_kind) : string =
+  let abs_kind_to_string (kind : abs_kind) : string =
     match kind with
-    | V.FunCall (fid, rg_id) ->
-        "FunCall(fid:" ^ V.FunCallId.to_string fid ^ ", rg_id:"
-        ^ T.RegionGroupId.to_string rg_id
+    | FunCall (fid, rg_id) ->
+        "FunCall(fid:" ^ FunCallId.to_string fid ^ ", rg_id:"
+        ^ RegionGroupId.to_string rg_id
         ^ ")"
     | SynthInput rg_id ->
-        "SynthInput(rg_id:" ^ T.RegionGroupId.to_string rg_id ^ ")"
-    | SynthRet rg_id ->
-        "SynthRet(rg_id:" ^ T.RegionGroupId.to_string rg_id ^ ")"
+        "SynthInput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
+    | SynthRet rg_id -> "SynthRet(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
     | Loop (lp_id, rg_id, abs_kind) ->
-        "Loop(loop_id:" ^ V.LoopId.to_string lp_id ^ ", rg_id:"
-        ^ option_to_string T.RegionGroupId.to_string rg_id
+        "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ", rg_id:"
+        ^ option_to_string RegionGroupId.to_string rg_id
         ^ ", loop abs kind: "
         ^ loop_abs_kind_to_string abs_kind
         ^ ")"
     | Identity -> "Identity"
 
-  let abs_to_string (fmt : value_formatter) (verbose : bool) (indent : string)
-      (indent_incr : string) (abs : V.abs) : string =
+  let abs_to_string (env : fmt_env) (verbose : bool) (indent : string)
+      (indent_incr : string) (abs : abs) : string =
     let indent2 = indent ^ indent_incr in
     let avs =
-      List.map (fun av -> indent2 ^ typed_avalue_to_string fmt av) abs.avalues
+      List.map (fun av -> indent2 ^ typed_avalue_to_string env av) abs.avalues
     in
     let avs = String.concat ",\n" avs in
     let kind =
       if verbose then "[kind:" ^ abs_kind_to_string abs.kind ^ "]" else ""
     in
     indent ^ "abs@"
-    ^ V.AbstractionId.to_string abs.abs_id
+    ^ AbstractionId.to_string abs.abs_id
     ^ kind ^ "{parents="
-    ^ V.AbstractionId.Set.to_string None abs.parents
+    ^ AbstractionId.Set.to_string None abs.parents
     ^ "}" ^ "{regions="
-    ^ T.RegionId.Set.to_string None abs.regions
+    ^ RegionId.Set.to_string None abs.regions
     ^ "}" ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
 
-  let inst_fun_sig_to_string (fmt : value_formatter) (sg : LlbcAst.inst_fun_sig)
-      : string =
+  let inst_fun_sig_to_string (env : fmt_env) (sg : LlbcAst.inst_fun_sig) :
+      string =
     (* TODO: print the trait type constraints? *)
-    let ty_fmt = value_to_rtype_formatter fmt in
-    let ty_to_string = PT.ty_to_string ty_fmt in
+    let ty_to_string = ty_to_string env in
 
     let inputs =
       "(" ^ String.concat ", " (List.map ty_to_string sg.inputs) ^ ")"
@@ -362,71 +301,67 @@ module Values = struct
     inputs ^ " -> " ^ output
 end
 
-module PV = Values (* local module *)
-
 (** Pretty-printing for contexts *)
 module Contexts = struct
-  let var_binder_to_string (bv : C.var_binder) : string =
+  open Values
+
+  let var_binder_to_string (env : fmt_env) (bv : var_binder) : string =
     match bv.name with
-    | None -> PV.var_id_to_string bv.index
-    | Some name -> name ^ "^" ^ E.VarId.to_string bv.index
+    | None -> var_id_to_string env bv.index
+    | Some name -> name ^ "^" ^ VarId.to_string bv.index
 
-  let dummy_var_id_to_string (bid : C.DummyVarId.id) : string =
-    "_@" ^ C.DummyVarId.to_string bid
+  let dummy_var_id_to_string (bid : DummyVarId.id) : string =
+    "_@" ^ DummyVarId.to_string bid
 
-  let binder_to_string (bv : C.binder) : string =
+  let binder_to_string (env : fmt_env) (bv : binder) : string =
     match bv with
-    | VarBinder b -> var_binder_to_string b
-    | DummyBinder bid -> dummy_var_id_to_string bid
+    | BVar b -> var_binder_to_string env b
+    | BDummy bid -> dummy_var_id_to_string bid
 
-  let env_elem_to_string (fmt : PV.value_formatter) (verbose : bool)
+  let env_elem_to_string (env : fmt_env) (verbose : bool)
       (with_var_types : bool) (indent : string) (indent_incr : string)
-      (ev : C.env_elem) : string =
+      (ev : env_elem) : string =
     match ev with
-    | Var (var, tv) ->
-        let bv = binder_to_string var in
+    | EBinding (var, tv) ->
+        let bv = binder_to_string env var in
         let ty =
-          if with_var_types then
-            " : " ^ PT.ty_to_string (PV.value_to_etype_formatter fmt) tv.V.ty
-          else ""
+          if with_var_types then " : " ^ ty_to_string env tv.ty else ""
         in
-        indent ^ bv ^ ty ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
-    | Abs abs -> PV.abs_to_string fmt verbose indent indent_incr abs
-    | Frame -> raise (Failure "Can't print a Frame element")
+        indent ^ bv ^ ty ^ " -> " ^ typed_value_to_string env tv ^ " ;"
+    | EAbs abs -> abs_to_string env verbose indent indent_incr abs
+    | EFrame -> raise (Failure "Can't print a Frame element")
 
-  let opt_env_elem_to_string (fmt : PV.value_formatter) (verbose : bool)
+  let opt_env_elem_to_string (env : fmt_env) (verbose : bool)
       (with_var_types : bool) (indent : string) (indent_incr : string)
-      (ev : C.env_elem option) : string =
+      (ev : env_elem option) : string =
     match ev with
     | None -> indent ^ "..."
     | Some ev ->
-        env_elem_to_string fmt verbose with_var_types indent indent_incr ev
+        env_elem_to_string env verbose with_var_types indent indent_incr ev
 
   (** Filters "dummy" bindings from an environment, to gain space and clarity/
       See [env_to_string]. *)
-  let filter_env (env : C.env) : C.env_elem option list =
+  let filter_env (env : env) : env_elem option list =
     (* We filter:
      * - non-dummy bindings which point to ⊥
      * - dummy bindings which don't contain loans nor borrows
      * Note that the first case can sometimes be confusing: we may try to improve
      * it...
      *)
-    let filter_elem (ev : C.env_elem) : C.env_elem option =
+    let filter_elem (ev : env_elem) : env_elem option =
       match ev with
-      | Var (VarBinder _, tv) ->
+      | EBinding (BVar _, tv) ->
           (* Not a dummy binding: check if the value is ⊥ *)
-          if VU.is_bottom tv.value then None else Some ev
-      | Var (DummyBinder _, tv) ->
+          if is_bottom tv.value then None else Some ev
+      | EBinding (BDummy _, tv) ->
           (* Dummy binding: check if the value contains borrows or loans *)
-          if VU.borrows_in_value tv || VU.loans_in_value tv then Some ev
-          else None
+          if borrows_in_value tv || loans_in_value tv then Some ev else None
       | _ -> Some ev
     in
     let env = List.map filter_elem env in
     (* We collapse groups of filtered values - so that we can print one
      * single "..." for a whole group of filtered values *)
-    let rec group_filtered (env : C.env_elem option list) :
-        C.env_elem option list =
+    let rec group_filtered (env : env_elem option list) : env_elem option list =
       match env with
       | [] -> []
       | None :: None :: env -> group_filtered (None :: env)
@@ -439,8 +374,8 @@ module Contexts = struct
       "..." to gain space and clarity.
       [with_var_types]: if true, print the type of the variables
    *)
-  let env_to_string (filter : bool) (fmt : PV.value_formatter) (verbose : bool)
-      (with_var_types : bool) (env : C.env) : string =
+  let env_to_string (filter : bool) (fmt_env : fmt_env) (verbose : bool)
+      (with_var_types : bool) (env : env) : string =
     let env =
       if filter then filter_env env else List.map (fun ev -> Some ev) env
     in
@@ -448,138 +383,70 @@ module Contexts = struct
     ^ String.concat "\n"
         (List.map
            (fun ev ->
-             opt_env_elem_to_string fmt verbose with_var_types "  " "  " ev)
+             opt_env_elem_to_string fmt_env verbose with_var_types "  " "  " ev)
            env)
     ^ "\n}"
 
-  type ctx_formatter = PV.value_formatter
-
-  let ast_to_ctx_formatter (fmt : PA.ast_formatter) : ctx_formatter =
+  let decls_ctx_to_fmt_env (ctx : decls_ctx) : fmt_env =
+    let type_decls = ctx.type_ctx.type_decls in
+    let fun_decls = ctx.fun_ctx.fun_decls in
+    let global_decls = ctx.global_ctx.global_decls in
+    let trait_decls = ctx.trait_decls_ctx.trait_decls in
+    let trait_impls = ctx.trait_impls_ctx.trait_impls in
+    let generics = TypesUtils.empty_generic_params in
+    let preds = TypesUtils.empty_predicates in
     {
-      PV.rvar_to_string = fmt.rvar_to_string;
-      PV.r_to_string = fmt.r_to_string;
-      PV.type_var_id_to_string = fmt.type_var_id_to_string;
-      PV.type_decl_id_to_string = fmt.type_decl_id_to_string;
-      PV.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
-      PV.global_decl_id_to_string = fmt.global_decl_id_to_string;
-      PV.adt_variant_to_string = fmt.adt_variant_to_string;
-      PV.var_id_to_string = fmt.var_id_to_string;
-      PV.adt_field_names = fmt.adt_field_names;
-      PV.trait_decl_id_to_string = fmt.trait_decl_id_to_string;
-      PV.trait_impl_id_to_string = fmt.trait_impl_id_to_string;
-      PV.trait_clause_id_to_string = fmt.trait_clause_id_to_string;
+      type_decls;
+      fun_decls;
+      global_decls;
+      trait_decls;
+      trait_impls;
+      generics;
+      preds;
+      locals = [];
     }
 
-  let ast_to_value_formatter (fmt : PA.ast_formatter) : PV.value_formatter =
-    ast_to_ctx_formatter fmt
-
-  let ctx_to_etype_formatter (fmt : ctx_formatter) : PT.etype_formatter =
-    PV.value_to_etype_formatter fmt
-
-  let ctx_to_rtype_formatter (fmt : ctx_formatter) : PT.rtype_formatter =
-    PV.value_to_rtype_formatter fmt
-
-  let ctx_to_stype_formatter (fmt : ctx_formatter) : PT.stype_formatter =
-    PV.value_to_stype_formatter fmt
-
-  let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
-    let rvar_to_string r =
-      (* In theory we shouldn't use rvar_to_string, but it can happen
-         when printing definitions for instance... *)
-      T.RegionVarId.to_string r
+  let eval_ctx_to_fmt_env (ctx : eval_ctx) : fmt_env =
+    let type_decls = ctx.type_context.type_decls in
+    let fun_decls = ctx.fun_context.fun_decls in
+    let global_decls = ctx.global_context.global_decls in
+    let trait_decls = ctx.trait_decls_context.trait_decls in
+    let trait_impls = ctx.trait_impls_context.trait_impls in
+    (* Below: it is always safe to omit fields - if an id can't be found at
+       printing time, we print the id (in raw form) instead of the name it
+       designates. *)
+    let generics : generic_params =
+      {
+        types = ctx.type_vars;
+        (* The regions have been transformed to region groups *)
+        regions = [];
+        const_generics = ctx.const_generic_vars;
+        (* We don't need the trait clauses so we initialize them to empty *)
+        trait_clauses = [];
+      }
     in
-    let r_to_string r = PT.region_id_to_string r in
-
-    let type_var_id_to_string vid =
-      (* The context may be invalid *)
-      match C.lookup_type_var_opt ctx vid with
-      | None -> T.TypeVarId.to_string vid
-      | Some v -> v.name
+    (* We don't need the predicates so we initialize them to empty *)
+    let preds = empty_predicates in
+    (* For the locals: we retrieve the information from the environment.
+       Note that the locals don't need to be ordered based on their indices.
+    *)
+    let rec env_to_locals (env : env) : (VarId.id * string option) list =
+      match env with
+      | [] | EFrame :: _ -> []
+      | EAbs _ :: env -> env_to_locals env
+      | EBinding (BVar b, _) :: env -> (b.index, b.name) :: env_to_locals env
+      | EBinding (BDummy _, _) :: env -> env_to_locals env
     in
-    let const_generic_var_id_to_string vid =
-      match C.lookup_const_generic_var_opt ctx vid with
-      | None -> T.ConstGenericVarId.to_string vid
-      | Some v -> v.name
-    in
-    let type_decl_id_to_string def_id =
-      let def = C.ctx_lookup_type_decl ctx def_id in
-      name_to_string def.name
-    in
-    let global_decl_id_to_string def_id =
-      let def = C.ctx_lookup_global_decl ctx def_id in
-      name_to_string def.name
-    in
-    let trait_decl_id_to_string def_id =
-      let def = C.ctx_lookup_trait_decl ctx def_id in
-      name_to_string def.name
-    in
-    let trait_impl_id_to_string def_id =
-      let def = C.ctx_lookup_trait_impl ctx def_id in
-      name_to_string def.name
-    in
-    let trait_clause_id_to_string id = PT.trait_clause_id_to_pretty_string id in
-    let adt_variant_to_string =
-      PT.type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_decls
-    in
-    let var_id_to_string vid =
-      let bv = C.ctx_lookup_var_binder ctx vid in
-      var_binder_to_string bv
-    in
-    let adt_field_names =
-      PT.type_ctx_to_adt_field_names_fun ctx.type_context.type_decls
-    in
+    let locals = env_to_locals ctx.env in
     {
-      rvar_to_string;
-      r_to_string;
-      type_var_id_to_string;
-      type_decl_id_to_string;
-      const_generic_var_id_to_string;
-      global_decl_id_to_string;
-      adt_variant_to_string;
-      var_id_to_string;
-      adt_field_names;
-      trait_decl_id_to_string;
-      trait_impl_id_to_string;
-      trait_clause_id_to_string;
-    }
-
-  let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : PA.ast_formatter =
-    let ctx_fmt = eval_ctx_to_ctx_formatter ctx in
-    let adt_field_to_string =
-      PT.type_ctx_to_adt_field_to_string_fun ctx.type_context.type_decls
-    in
-    let fun_decl_id_to_string def_id =
-      let def = C.ctx_lookup_fun_decl ctx def_id in
-      fun_name_to_string def.name
-    in
-    let global_decl_id_to_string def_id =
-      let def = C.ctx_lookup_global_decl ctx def_id in
-      global_name_to_string def.name
-    in
-    let trait_decl_id_to_string def_id =
-      let def = C.ctx_lookup_trait_decl ctx def_id in
-      name_to_string def.name
-    in
-    let trait_impl_id_to_string def_id =
-      let def = C.ctx_lookup_trait_impl ctx def_id in
-      name_to_string def.name
-    in
-    let trait_clause_id_to_string id = PT.trait_clause_id_to_pretty_string id in
-    {
-      rvar_to_string = ctx_fmt.PV.rvar_to_string;
-      r_to_string = ctx_fmt.PV.r_to_string;
-      type_var_id_to_string = ctx_fmt.PV.type_var_id_to_string;
-      type_decl_id_to_string = ctx_fmt.PV.type_decl_id_to_string;
-      const_generic_var_id_to_string = ctx_fmt.PV.const_generic_var_id_to_string;
-      adt_variant_to_string = ctx_fmt.PV.adt_variant_to_string;
-      var_id_to_string = ctx_fmt.PV.var_id_to_string;
-      adt_field_names = ctx_fmt.PV.adt_field_names;
-      adt_field_to_string;
-      fun_decl_id_to_string;
-      global_decl_id_to_string;
-      trait_decl_id_to_string;
-      trait_impl_id_to_string;
-      trait_clause_id_to_string;
+      type_decls;
+      fun_decls;
+      global_decls;
+      trait_decls;
+      trait_impls;
+      generics;
+      preds;
+      locals;
     }
 
   (** Split an [env] at every occurrence of [Frame], eliminating those elements.
@@ -588,20 +455,21 @@ module Contexts = struct
           * frames: from the current frame to the first pushed (oldest frame)
           * values: from the first pushed (oldest) to the last pushed
        *)
-  let split_env_according_to_frames (env : C.env) : C.env list =
-    let rec split_aux (frames : C.env list) (curr_frame : C.env) (env : C.env) =
+  let split_env_according_to_frames (env : env) : env list =
+    let rec split_aux (frames : env list) (curr_frame : env) (env : env) =
       match env with
       | [] ->
           if List.length curr_frame > 0 then curr_frame :: frames else frames
-      | Frame :: env' -> split_aux (curr_frame :: frames) [] env'
+      | EFrame :: env' -> split_aux (curr_frame :: frames) [] env'
       | ev :: env' -> split_aux frames (ev :: curr_frame) env'
     in
     let frames = split_aux [] [] env in
     frames
 
-  let fmt_eval_ctx_to_string_gen (fmt : ctx_formatter) (verbose : bool)
-      (filter : bool) (with_var_types : bool) (ctx : C.eval_ctx) : string =
-    let ended_regions = T.RegionId.Set.to_string None ctx.ended_regions in
+  let eval_ctx_to_string_gen (verbose : bool) (filter : bool)
+      (with_var_types : bool) (ctx : eval_ctx) : string =
+    let fmt_env = eval_ctx_to_fmt_env ctx in
+    let ended_regions = RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
     let frames =
@@ -613,194 +481,139 @@ module Contexts = struct
           List.iter
             (fun ev ->
               match ev with
-              | C.Var (DummyBinder _, _) -> num_dummies := !num_abs + 1
-              | C.Var (VarBinder _, _) -> num_bindings := !num_bindings + 1
-              | C.Abs _ -> num_abs := !num_abs + 1
+              | EBinding (BDummy _, _) -> num_dummies := !num_abs + 1
+              | EBinding (BVar _, _) -> num_bindings := !num_bindings + 1
+              | EAbs _ -> num_abs := !num_abs + 1
               | _ -> raise (Failure "Unreachable"))
             f;
           "\n# Frame " ^ string_of_int i ^ ":" ^ "\n- locals: "
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string filter fmt verbose with_var_types f
+          ^ env_to_string filter fmt_env verbose with_var_types f
           ^ "\n")
         frames
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
     ^ " frame(s)\n" ^ String.concat "" frames
 
-  let eval_ctx_to_string_gen (verbose : bool) (filter : bool)
-      (with_var_types : bool) (ctx : C.eval_ctx) : string =
-    let fmt = eval_ctx_to_ctx_formatter ctx in
-    fmt_eval_ctx_to_string_gen fmt verbose filter with_var_types ctx
-
-  let eval_ctx_to_string (ctx : C.eval_ctx) : string =
+  let eval_ctx_to_string (ctx : eval_ctx) : string =
     eval_ctx_to_string_gen false true true ctx
 
-  let eval_ctx_to_string_no_filter (ctx : C.eval_ctx) : string =
+  let eval_ctx_to_string_no_filter (ctx : eval_ctx) : string =
     eval_ctx_to_string_gen false false true ctx
 end
 
-module PC = Contexts (* local module *)
-
 (** Pretty-printing for LLBC ASTs (functions based on an evaluation context) *)
-module EvalCtxLlbcAst = struct
-  let ety_to_string (ctx : C.eval_ctx) (t : T.ety) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_etype_formatter fmt in
-    PT.ety_to_string fmt t
+module EvalCtx = struct
+  open Values
+  open Contexts
 
-  let rty_to_string (ctx : C.eval_ctx) (t : T.rty) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_rtype_formatter fmt in
-    PT.rty_to_string fmt t
+  let name_to_string (ctx : eval_ctx) (n : name) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    name_to_string env n
 
-  let sty_to_string (ctx : C.eval_ctx) (t : T.sty) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_stype_formatter fmt in
-    PT.sty_to_string fmt t
+  let ty_to_string (ctx : eval_ctx) (t : ty) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    ty_to_string env t
 
-  let generic_params_to_strings (ctx : C.eval_ctx) (x : T.generic_params) :
+  let generic_params_to_strings (ctx : eval_ctx) (x : generic_params) :
       string list * string list =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_stype_formatter fmt in
-    PT.generic_params_to_strings fmt x
+    let env = eval_ctx_to_fmt_env ctx in
+    generic_params_to_strings env x
 
-  let egeneric_args_to_string (ctx : C.eval_ctx) (x : T.egeneric_args) : string
-      =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_etype_formatter fmt in
-    PT.egeneric_args_to_string fmt x
+  let generic_args_to_string (ctx : eval_ctx) (x : generic_args) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    generic_args_to_string env x
 
-  let rgeneric_args_to_string (ctx : C.eval_ctx) (x : T.rgeneric_args) : string
-      =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_rtype_formatter fmt in
-    PT.rgeneric_args_to_string fmt x
+  let trait_ref_to_string (ctx : eval_ctx) (x : trait_ref) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    trait_ref_to_string env x
 
-  let sgeneric_args_to_string (ctx : C.eval_ctx) (x : T.sgeneric_args) : string
-      =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_stype_formatter fmt in
-    PT.sgeneric_args_to_string fmt x
-
-  let etrait_ref_to_string (ctx : C.eval_ctx) (x : T.etrait_ref) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_etype_formatter fmt in
-    PT.etrait_ref_to_string fmt x
-
-  let rtrait_ref_to_string (ctx : C.eval_ctx) (x : T.rtrait_ref) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_rtype_formatter fmt in
-    PT.rtrait_ref_to_string fmt x
-
-  let strait_ref_to_string (ctx : C.eval_ctx) (x : T.strait_ref) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_stype_formatter fmt in
-    PT.strait_ref_to_string fmt x
-
-  let etrait_instance_id_to_string (ctx : C.eval_ctx) (x : T.etrait_instance_id)
-      : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_etype_formatter fmt in
-    PT.etrait_instance_id_to_string fmt x
-
-  let rtrait_instance_id_to_string (ctx : C.eval_ctx) (x : T.rtrait_instance_id)
-      : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_rtype_formatter fmt in
-    PT.rtrait_instance_id_to_string fmt x
-
-  let strait_instance_id_to_string (ctx : C.eval_ctx) (x : T.strait_instance_id)
-      : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_stype_formatter fmt in
-    PT.strait_instance_id_to_string fmt x
-
-  let borrow_content_to_string (ctx : C.eval_ctx) (bc : V.borrow_content) :
+  let trait_instance_id_to_string (ctx : eval_ctx) (x : trait_instance_id) :
       string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.borrow_content_to_string fmt bc
+    let env = eval_ctx_to_fmt_env ctx in
+    trait_instance_id_to_string env x
 
-  let loan_content_to_string (ctx : C.eval_ctx) (lc : V.loan_content) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.loan_content_to_string fmt lc
+  let borrow_content_to_string (ctx : eval_ctx) (bc : borrow_content) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    borrow_content_to_string env bc
 
-  let aborrow_content_to_string (ctx : C.eval_ctx) (bc : V.aborrow_content) :
-      string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.aborrow_content_to_string fmt bc
+  let loan_content_to_string (ctx : eval_ctx) (lc : loan_content) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    loan_content_to_string env lc
 
-  let aloan_content_to_string (ctx : C.eval_ctx) (lc : V.aloan_content) : string
+  let aborrow_content_to_string (ctx : eval_ctx) (bc : aborrow_content) : string
       =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.aloan_content_to_string fmt lc
+    let env = eval_ctx_to_fmt_env ctx in
+    aborrow_content_to_string env bc
 
-  let aproj_to_string (ctx : C.eval_ctx) (p : V.aproj) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.aproj_to_string fmt p
+  let aloan_content_to_string (ctx : eval_ctx) (lc : aloan_content) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    aloan_content_to_string env lc
 
-  let symbolic_value_to_string (ctx : C.eval_ctx) (sv : V.symbolic_value) :
+  let aproj_to_string (ctx : eval_ctx) (p : aproj) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    aproj_to_string env p
+
+  let symbolic_value_to_string (ctx : eval_ctx) (sv : symbolic_value) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    symbolic_value_to_string env sv
+
+  let typed_value_to_string (ctx : eval_ctx) (v : typed_value) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    typed_value_to_string env v
+
+  let typed_avalue_to_string (ctx : eval_ctx) (v : typed_avalue) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    typed_avalue_to_string env v
+
+  let place_to_string (ctx : eval_ctx) (op : place) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    place_to_string env op
+
+  let operand_to_string (ctx : eval_ctx) (op : operand) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    operand_to_string env op
+
+  let call_to_string (ctx : eval_ctx) (call : call) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    call_to_string env "" call
+
+  let fun_decl_to_string (ctx : eval_ctx) (f : fun_decl) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    fun_decl_to_string env "" "  " f
+
+  let fun_sig_to_string (ctx : eval_ctx) (x : fun_sig) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    fun_sig_to_string env "" "  " x
+
+  let inst_fun_sig_to_string (ctx : eval_ctx) (x : LlbcAst.inst_fun_sig) :
       string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let fmt = PC.ctx_to_rtype_formatter fmt in
-    PV.symbolic_value_to_string fmt sv
+    let env = eval_ctx_to_fmt_env ctx in
+    inst_fun_sig_to_string env x
 
-  let typed_value_to_string (ctx : C.eval_ctx) (v : V.typed_value) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.typed_value_to_string fmt v
+  let fun_id_or_trait_method_ref_to_string (ctx : eval_ctx)
+      (x : fun_id_or_trait_method_ref) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    fun_id_or_trait_method_ref_to_string env x "..."
 
-  let typed_avalue_to_string (ctx : C.eval_ctx) (v : V.typed_avalue) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.typed_avalue_to_string fmt v
+  let statement_to_string (ctx : eval_ctx) (indent : string)
+      (indent_incr : string) (e : statement) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    statement_to_string env indent indent_incr e
 
-  let place_to_string (ctx : C.eval_ctx) (op : E.place) : string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PE.place_to_string fmt op
+  let trait_impl_to_string (ctx : eval_ctx) (timpl : trait_impl) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    trait_impl_to_string env "  " "  " timpl
 
-  let operand_to_string (ctx : C.eval_ctx) (op : E.operand) : string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PE.operand_to_string fmt op
+  let env_elem_to_string (ctx : eval_ctx) (indent : string)
+      (indent_incr : string) (ev : env_elem) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    env_elem_to_string env false true indent indent_incr ev
 
-  let call_to_string (ctx : C.eval_ctx) (call : A.call) : string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PA.call_to_string fmt "" call
-
-  let fun_decl_to_string (ctx : C.eval_ctx) (f : A.fun_decl) : string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PA.fun_decl_to_string fmt "" "  " f
-
-  let fun_sig_to_string (ctx : C.eval_ctx) (x : A.fun_sig) : string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PA.fun_sig_to_string fmt "" "  " x
-
-  let inst_fun_sig_to_string (ctx : C.eval_ctx) (x : LlbcAst.inst_fun_sig) :
-      string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    let fmt = PC.ast_to_value_formatter fmt in
-    PV.inst_fun_sig_to_string fmt x
-
-  let fun_id_or_trait_method_ref_to_string (ctx : C.eval_ctx)
-      (x : E.fun_id_or_trait_method_ref) : string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PE.fun_id_or_trait_method_ref_to_string fmt x "..."
-
-  let statement_to_string (ctx : C.eval_ctx) (indent : string)
-      (indent_incr : string) (e : A.statement) : string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PA.statement_to_string fmt indent indent_incr e
-
-  let trait_impl_to_string (ctx : C.eval_ctx) (timpl : A.trait_impl) : string =
-    let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PA.trait_impl_to_string fmt "  " "  " timpl
-
-  let env_elem_to_string (ctx : C.eval_ctx) (indent : string)
-      (indent_incr : string) (ev : C.env_elem) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PC.env_elem_to_string fmt false true indent indent_incr ev
-
-  let abs_to_string (ctx : C.eval_ctx) (indent : string) (indent_incr : string)
-      (abs : V.abs) : string =
-    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.abs_to_string fmt false indent indent_incr abs
+  let abs_to_string (ctx : eval_ctx) (indent : string) (indent_incr : string)
+      (abs : abs) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    abs_to_string env false indent indent_incr abs
 end

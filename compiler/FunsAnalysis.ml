@@ -8,7 +8,7 @@
  *)
 
 open LlbcAst
-module EU = ExpressionsUtils
+open ExpressionsUtils
 
 (** Various information about a function.
 
@@ -58,6 +58,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let can_diverge = ref false in
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
+    let name_matcher_ctx : Charon.NameMatcher.ctx =
+      {
+        type_decls = m.type_decls;
+        global_decls = m.global_decls;
+        trait_decls = m.trait_decls;
+      }
+    in
 
     (* We have some specialized knowledge of some library functions; we don't
        have any more custom treatment than this, and these functions can be modeled
@@ -65,8 +72,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
        way. *)
     let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
       let open ExtractBuiltin in
-      let name = name_to_simple_name f.name in
-      SimpleNameMap.find_opt name builtin_fun_effects_map
+      NameMatcherMap.find_opt name_matcher_ctx f.name builtin_fun_effects_map
     in
 
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
@@ -85,13 +91,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
           method! visit_rvalue _env rv =
             match rv with
             | Use _ | RvRef _ | Global _ | Discriminant _ | Aggregate _ -> ()
-            | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
+            | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
-                can_fail := EU.binop_can_fail bop || !can_fail
+                can_fail := binop_can_fail bop || !can_fail
 
           method! visit_Call env call =
             (match call.func.func with
-            | FunId (Regular id) ->
+            | FunId (FRegular id) ->
                 if FunDeclId.Set.mem id fun_ids then (
                   can_diverge := true;
                   is_rec := true)
@@ -100,7 +106,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                   self#may_fail info.can_fail;
                   stateful := !stateful || info.stateful;
                   can_diverge := !can_diverge || info.can_diverge
-            | FunId (Assumed id) ->
+            | FunId (FAssumed id) ->
                 (* None of the assumed functions can diverge nor are considered stateful *)
                 can_fail := !can_fail || Assumed.assumed_fun_can_fail id
             | TraitMethod _ ->
@@ -164,7 +170,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
   let analyze_fun_decl_group (d : fun_declaration_group) : unit =
     (* Retrieve the function declarations *)
-    let funs = match d with NonRec id -> [ id ] | Rec ids -> ids in
+    let funs = match d with NonRecGroup id -> [ id ] | RecGroup ids -> ids in
     let funs = List.map (fun id -> FunDeclId.Map.find id funs_map) funs in
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.Set.of_list fun_ids in
@@ -175,15 +181,15 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
   let rec analyze_decl_groups (decls : declaration_group list) : unit =
     match decls with
     | [] -> ()
-    | (Type _ | TraitDecl _ | TraitImpl _) :: decls' ->
+    | (TypeGroup _ | TraitDeclGroup _ | TraitImplGroup _) :: decls' ->
         analyze_decl_groups decls'
-    | Fun decl :: decls' ->
+    | FunGroup decl :: decls' ->
         analyze_fun_decl_group decl;
         analyze_decl_groups decls'
-    | Global id :: decls' ->
+    | GlobalGroup id :: decls' ->
         (* Analyze a global by analyzing its body function *)
         let global = GlobalDeclId.Map.find id globals_map in
-        analyze_fun_decl_group (NonRec global.body_id);
+        analyze_fun_decl_group (NonRecGroup global.body);
         analyze_decl_groups decls'
   in
 

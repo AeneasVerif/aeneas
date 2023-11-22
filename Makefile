@@ -58,21 +58,21 @@ build-tests-verify: build tests verify
 
 # Build the project
 .PHONY: build
-build: build-driver build-lib build-bin-dir doc
+build: build-bin build-lib build-bin-dir doc
 
-.PHONY: build-driver
-build-driver:
-	cd compiler && dune build $(AENEAS_DRIVER)
+.PHONY: build-bin
+build-bin:
+	cd compiler && dune build
 
 .PHONY: build-lib
 build-lib:
 	cd compiler && dune build aeneas.cmxs
 
 .PHONY: build-bin-dir
-build-bin-dir: build-driver build-lib
+build-bin-dir: build-bin build-lib
 	mkdir -p bin
-	cp -f compiler/_build/default/driver.exe bin/aeneas
-	cp -f compiler/_build/default/driver.exe bin/aeneas.cmxs
+	cp -f compiler/_build/default/main.exe bin/aeneas
+	cp -f compiler/_build/default/main.exe bin/aeneas.cmxs
 	mkdir -p bin/backends/fstar
 	mkdir -p bin/backends/coq
 	cp -rf backends/fstar/*.fst* bin/backends/fstar/

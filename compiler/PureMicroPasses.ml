@@ -3,10 +3,13 @@
 open Pure
 open PureUtils
 open TranslateCore
-module V = Values
 
 (** The local logger *)
-let log = L.pure_micro_passes_log
+let log = Logging.pure_micro_passes_log
+
+let fun_decl_to_string (ctx : trans_ctx) (def : Pure.fun_decl) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.fun_decl_to_string fmt def
 
 (** Small utility.
 
@@ -388,7 +391,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Switch (scrut, body) -> update_switch_body scrut body ctx
       | Loop loop -> update_loop loop ctx
       | StructUpdate supd -> update_struct_update supd ctx
-      | Meta (meta, e) -> update_meta meta e ctx
+      | Meta (meta, e) -> update_emeta meta e ctx
     in
     (ctx, { e; ty })
   (* *)
@@ -446,6 +449,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let {
       fun_end;
       loop_id;
+      meta;
       fuel0;
       fuel;
       input_state;
@@ -464,6 +468,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       {
         fun_end;
         loop_id;
+        meta;
         fuel0;
         fuel;
         input_state;
@@ -487,7 +492,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let supd = { struct_id; init; updates } in
     (ctx, StructUpdate supd)
   (* *)
-  and update_meta (meta : meta) (e : texpression) (ctx : pn_ctx) :
+  and update_emeta (meta : emeta) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
     let ctx =
       match meta with
@@ -513,7 +518,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Tag _ -> ctx
     in
     let ctx, e = update_texpression e ctx in
-    let e = mk_meta meta e in
+    let e = mk_emeta meta e in
     (ctx, e.e)
   in
 
@@ -582,7 +587,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             match app.e with
             | Qualif
                 {
-                  id = AdtCons { adt_id = AdtId adt_id; variant_id = None };
+                  id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
                   generics = _;
                 } ->
                 (* Lookup the def *)
@@ -597,8 +602,8 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     match
                       TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls_groups
                     with
-                    | NonRec _ -> false
-                    | Rec _ -> true
+                    | NonRecGroup _ -> false
+                    | RecGroup _ -> true
                   in
                   (* Convert, if possible - note that for now for Lean and Coq
                      we don't support the structure syntax on recursive structures *)
@@ -606,7 +611,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     (!Config.backend <> Lean && !Config.backend <> Coq)
                     || not is_rec
                   then
-                    let struct_id = AdtId adt_id in
+                    let struct_id = TAdtId adt_id in
                     let init = None in
                     let updates =
                       FieldId.mapi
@@ -786,18 +791,19 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
                 if rg_id0 = rg_id1 then true
                 else
                   (* We need to use the regions hierarchy *)
-                  (* First, lookup the signature of the LLBC function *)
-                  let sg =
+                  let regions_hierarchy =
                     let id0 =
                       match id0 with
                       | FunId fun_id -> fun_id
-                      | TraitMethod (_, _, fun_decl_id) -> Regular fun_decl_id
+                      | TraitMethod (_, _, fun_decl_id) -> FRegular fun_decl_id
                     in
-                    LlbcAstUtils.lookup_fun_sig id0 ctx.fun_ctx.fun_decls
+                    LlbcAstUtils.FunIdMap.find id0
+                      ctx.fun_ctx.regions_hierarchies
                   in
                   (* Compute the set of ancestors of the function in call1 *)
                   let call1_ancestors =
-                    LlbcAstUtils.list_ancestor_region_groups sg rg_id1
+                    LlbcAstUtils.list_ancestor_region_groups regions_hierarchy
+                      rg_id1
                   in
                   (* Check if the function used in call0 is inside *)
                   T.RegionGroupId.Set.mem rg_id0 call1_ancestors
@@ -1085,7 +1091,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             match app.e with
             | Qualif
                 {
-                  id = AdtCons { adt_id = AdtId adt_id; variant_id = None };
+                  id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
                   generics;
                 } ->
                 (* This is a struct *)
@@ -1114,7 +1120,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                         | ( Qualif
                               {
                                 id =
-                                  Proj { adt_id = AdtId proj_adt_id; field_id };
+                                  Proj { adt_id = TAdtId proj_adt_id; field_id };
                                 generics = proj_generics;
                               },
                             Var v ) ->
@@ -1157,13 +1163,13 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   match (proj.e, x.e) with
                   | ( Qualif
                         {
-                          id = Proj { adt_id = AdtId proj_adt_id; field_id };
+                          id = Proj { adt_id = TAdtId proj_adt_id; field_id };
                           generics = _;
                         },
                       Var v ) ->
                       (* We check that this is the proper ADT, and the proper field *)
                       if
-                        AdtId proj_adt_id = struct_id
+                        TAdtId proj_adt_id = struct_id
                         && field_id = fid && x.ty = adt_ty
                       then Some v
                       else None
@@ -1246,6 +1252,7 @@ let filter_if_backward_with_no_outputs (def : fun_decl) : fun_decl option =
     !Config.filter_useless_functions
     && Option.is_some def.back_id
     && def.signature.output = mk_result_ty mk_unit_ty
+    || def.signature.output = mk_unit_ty
   then None
   else Some def
 
@@ -1357,6 +1364,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
             let loop_sig =
               {
                 generics = fun_sig.generics;
+                llbc_generics = fun_sig.llbc_generics;
                 preds = fun_sig.preds;
                 inputs = inputs_tys;
                 output;
@@ -1419,14 +1427,17 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
 
             let loop_body = { inputs; inputs_lvs; body = loop_body } in
 
-            let loop_def =
+            let loop_def : fun_decl =
               {
                 def_id = def.def_id;
+                is_local = def.is_local;
+                meta = loop.meta;
                 kind = def.kind;
                 num_loops;
                 loop_id = Some loop.loop_id;
                 back_id = def.back_id;
-                basename = def.basename;
+                llbc_name = def.llbc_name;
+                name = def.name;
                 signature = loop_sig;
                 is_global_decl_body = def.is_global_decl_body;
                 body = Some loop_body;
@@ -1503,8 +1514,8 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
       let body = Some { body with body = body_exp; inputs_lvs } in
       { def with body }
 
-(** Eliminate the box functions like [Box::new], [Box::deref], etc. Most of them
-    are translated to identity, and [Box::free] is translated to [()].
+(** Eliminate the box functions like [Box::new] (which is translated to the
+    identity) and [Box::free] (which is translated to [()]).
 
     Note that the box types have already been eliminated during the translation
     from symbolic to pure.
@@ -1513,7 +1524,7 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
     function calls, and when translating end abstractions. Here, we can do
     something simpler, in one micro-pass.
  *)
-let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
@@ -1527,7 +1538,7 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
              * could have: [box_new f x])
              * *)
             match fun_id with
-            | Fun (FromLlbc (FunId (Assumed aid), _lp_id, rg_id)) -> (
+            | Fun (FromLlbc (FunId (FAssumed aid), _lp_id, rg_id)) -> (
                 match (aid, rg_id) with
                 | BoxNew, _ ->
                     assert (rg_id = None);
@@ -1538,38 +1549,9 @@ let eliminate_box_functions (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     mk_unit_rvalue
                 | ( ( SliceIndexShared | SliceIndexMut | ArrayIndexShared
                     | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
-                    | ArrayRepeat | SliceLen ),
+                    | ArrayRepeat ),
                     _ ) ->
                     super#visit_texpression env e)
-            | Fun (FromLlbc (FunId (Regular fid), _lp_id, rg_id)) -> (
-                (* Lookup the function name *)
-                let def = FunDeclId.Map.find fid ctx.fun_ctx.fun_decls in
-                match
-                  (Names.name_no_disambiguators_to_string def.name, rg_id)
-                with
-                | "alloc::boxed::Box::deref", None ->
-                    (* [Box::deref] forward is the identity *)
-                    let arg, args = Collections.List.pop args in
-                    mk_apps arg args
-                | "alloc::boxed::Box::deref", Some _ ->
-                    (* [Box::deref] backward is [()] (doesn't give back anything) *)
-                    assert (args = []);
-                    mk_unit_rvalue
-                | "alloc::boxed::Box::deref_mut", None ->
-                    (* [Box::deref_mut] forward is the identity *)
-                    let arg, args = Collections.List.pop args in
-                    mk_apps arg args
-                | "alloc::boxed::Box::deref_mut", Some _ ->
-                    (* [Box::deref_mut] back is almost the identity:
-                     * let box_deref_mut (x_init : t) (x_back : t) : t = x_back
-                     * *)
-                    let arg, args =
-                      match args with
-                      | _ :: given_back :: args -> (given_back, args)
-                      | _ -> raise (Failure "Unreachable")
-                    in
-                    mk_apps arg args
-                | _ -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end
@@ -1917,9 +1899,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
   (* Debug *)
   log#ldebug
     (lazy
-      ("PureMicroPasses.apply_passes_to_def: "
-      ^ Print.fun_name_to_string def.basename
-      ^ " ("
+      ("PureMicroPasses.apply_passes_to_def: " ^ def.name ^ " ("
       ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
       ^ ")"));
 
@@ -1945,11 +1925,17 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
    * Note that the calls to those functions should already have been removed,
    * when translating from symbolic to pure. Here, we remove the definitions
    * altogether, because they are now useless *)
-  let def = filter_if_backward_with_no_outputs def in
+  let name = def.name ^ PrintPure.fun_suffix def.loop_id def.back_id in
+  let opt_def = filter_if_backward_with_no_outputs def in
 
-  match def with
-  | None -> None
+  match opt_def with
+  | None ->
+      log#ldebug (lazy ("filtered (backward with no outputs): " ^ name ^ "\n"));
+      None
   | Some def ->
+      log#ldebug
+        (lazy ("not filtered (not backward with no outputs): " ^ name ^ "\n"));
+
       (* Extract the loop definitions by removing the {!Loop} node *)
       let def, loops = decompose_loops def in
 
@@ -2050,7 +2036,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
     let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
     assert (Option.is_some decl.loop_id);
 
-    let fun_id = (E.Regular decl.def_id, decl.loop_id) in
+    let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
 
     let set_used vid =
       used := List.map (fun (vid', b) -> (vid', b || vid = vid')) !used
@@ -2134,7 +2120,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
   (* We then apply the filtering to all the function definitions at once *)
   let filter_in_one (decl : fun_decl) : fun_decl =
     (* Filter the function signature *)
-    let fun_id = (E.Regular decl.def_id, decl.loop_id) in
+    let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
     let decl =
       match FunLoopIdMap.find_opt fun_id !used_map with
       | None -> (* Nothing to filter *) decl
@@ -2142,7 +2128,8 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
           let num_filtered =
             List.length (List.filter (fun b -> not b) used_info)
           in
-          let { generics; preds; inputs; output; doutputs; info } =
+          let { generics; llbc_generics; preds; inputs; output; doutputs; info }
+              =
             decl.signature
           in
           let {
@@ -2170,7 +2157,9 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
               effect_info;
             }
           in
-          let signature = { generics; preds; inputs; output; doutputs; info } in
+          let signature =
+            { generics; llbc_generics; preds; inputs; output; doutputs; info }
+          in
 
           { decl with signature }
     in

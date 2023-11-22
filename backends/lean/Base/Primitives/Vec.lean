@@ -153,19 +153,19 @@ def Vec.coreopsindexIndexMutInst (T I : Type)
 
 @[simp]
 theorem Vec.index_slice_index {α : Type} (v : Vec α) (i : Usize) :
-  Vec.index α Usize (core.slice.index.usize.coresliceindexSliceIndexInst α) v i =
+  Vec.index α Usize (core.slice.index.SliceIndexUsizeSliceTInst α) v i =
   Vec.index_usize v i :=
   sorry
 
 @[simp]
 theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
-  Vec.index_mut α Usize (core.slice.index.usize.coresliceindexSliceIndexInst α) v i =
+  Vec.index_mut α Usize (core.slice.index.SliceIndexUsizeSliceTInst α) v i =
   Vec.index_usize v i :=
   sorry
 
 @[simp]
 theorem Vec.index_mut_back_slice_index {α : Type} (v : Vec α) (i : Usize) (x : α) :
-  Vec.index_mut_back α Usize (core.slice.index.usize.coresliceindexSliceIndexInst α) v i x =
+  Vec.index_mut_back α Usize (core.slice.index.SliceIndexUsizeSliceTInst α) v i x =
   Vec.update_usize v i x :=
   sorry
 

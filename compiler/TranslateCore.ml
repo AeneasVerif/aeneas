@@ -1,16 +1,12 @@
 (** Some utilities for the translation *)
 
-open InterpreterStatements
-module L = Logging
-module T = Types
-module A = LlbcAst
-module SA = SymbolicAst
-module FA = FunsAnalysis
+open Contexts
+open ExtractName
 
 (** The local logger *)
-let log = L.translate_log
+let log = Logging.translate_log
 
-type trans_ctx = C.decls_ctx [@@deriving show]
+type trans_ctx = decls_ctx [@@deriving show]
 type fun_and_loops = { f : Pure.fun_decl; loops : Pure.fun_decl list }
 type pure_fun_translation_no_loops = Pure.fun_decl * Pure.fun_decl list
 
@@ -26,53 +22,61 @@ type pure_fun_translation = {
   backs : fun_and_loops list;
 }
 
-let trans_ctx_to_type_formatter (ctx : trans_ctx)
-    (type_params : Pure.type_var list)
-    (const_generic_params : Pure.const_generic_var list) :
-    PrintPure.type_formatter =
-  let type_decls = ctx.type_ctx.type_decls in
-  let global_decls = ctx.global_ctx.global_decls in
-  let trait_decls = ctx.trait_decls_ctx.trait_decls in
-  let trait_impls = ctx.trait_impls_ctx.trait_impls in
-  PrintPure.mk_type_formatter type_decls global_decls trait_decls trait_impls
-    type_params const_generic_params
+let trans_ctx_to_fmt_env (ctx : trans_ctx) : Print.fmt_env =
+  Print.Contexts.decls_ctx_to_fmt_env ctx
 
-let type_decl_to_string (ctx : trans_ctx) (def : Pure.type_decl) : string =
-  let generics = def.generics in
-  let fmt =
-    trans_ctx_to_type_formatter ctx generics.types generics.const_generics
+let trans_ctx_to_pure_fmt_env (ctx : trans_ctx) : PrintPure.fmt_env =
+  PrintPure.decls_ctx_to_fmt_env ctx
+
+let name_to_string (ctx : trans_ctx) =
+  Print.Types.name_to_string (trans_ctx_to_fmt_env ctx)
+
+let match_name_find_opt (ctx : trans_ctx) (name : Types.name)
+    (m : 'a NameMatcherMap.t) : 'a option =
+  let open Charon.NameMatcher in
+  let open ExtractBuiltin in
+  let mctx : ctx =
+    {
+      type_decls = ctx.type_ctx.type_decls;
+      global_decls = ctx.global_ctx.global_decls;
+      trait_decls = ctx.trait_decls_ctx.trait_decls;
+    }
   in
-  PrintPure.type_decl_to_string fmt def
+  NameMatcherMap.find_opt mctx name m
 
-let type_id_to_string (ctx : trans_ctx) (id : Pure.TypeDeclId.id) : string =
-  Print.fun_name_to_string
-    (Pure.TypeDeclId.Map.find id ctx.type_ctx.type_decls).name
-
-let trans_ctx_to_ast_formatter (ctx : trans_ctx)
-    (type_params : Pure.type_var list)
-    (const_generic_params : Pure.const_generic_var list) :
-    PrintPure.ast_formatter =
-  let type_decls = ctx.type_ctx.type_decls in
-  let fun_decls = ctx.fun_ctx.fun_decls in
-  let global_decls = ctx.global_ctx.global_decls in
-  let trait_decls = ctx.trait_decls_ctx.trait_decls in
-  let trait_impls = ctx.trait_impls_ctx.trait_impls in
-  PrintPure.mk_ast_formatter type_decls fun_decls global_decls trait_decls
-    trait_impls type_params const_generic_params
-
-let fun_sig_to_string (ctx : trans_ctx) (sg : Pure.fun_sig) : string =
-  let generics = sg.generics in
-  let fmt =
-    trans_ctx_to_ast_formatter ctx generics.types generics.const_generics
+let match_name_with_generics_find_opt (ctx : trans_ctx) (name : Types.name)
+    (generics : Types.generic_args) (m : 'a NameMatcherMap.t) : 'a option =
+  let open Charon.NameMatcher in
+  let open ExtractBuiltin in
+  let mctx : ctx =
+    {
+      type_decls = ctx.type_ctx.type_decls;
+      global_decls = ctx.global_ctx.global_decls;
+      trait_decls = ctx.trait_decls_ctx.trait_decls;
+    }
   in
-  PrintPure.fun_sig_to_string fmt sg
+  NameMatcherMap.find_with_generics_opt mctx name generics m
 
-let fun_decl_to_string (ctx : trans_ctx) (def : Pure.fun_decl) : string =
-  let generics = def.signature.generics in
-  let fmt =
-    trans_ctx_to_ast_formatter ctx generics.types generics.const_generics
+let name_to_simple_name (ctx : trans_ctx) (n : Types.name) : string list =
+  let mctx : Charon.NameMatcher.ctx =
+    {
+      type_decls = ctx.type_ctx.type_decls;
+      global_decls = ctx.global_ctx.global_decls;
+      trait_decls = ctx.trait_decls_ctx.trait_decls;
+    }
   in
-  PrintPure.fun_decl_to_string fmt def
+  let is_trait_impl = false in
+  name_to_simple_name mctx is_trait_impl n
 
-let fun_decl_id_to_string (ctx : trans_ctx) (id : A.FunDeclId.id) : string =
-  Print.fun_name_to_string (A.FunDeclId.Map.find id ctx.fun_ctx.fun_decls).name
+let trait_name_with_generics_to_simple_name (ctx : trans_ctx)
+    ?(prefix : Types.name option = None) (n : Types.name)
+    (p : Types.generic_params) (g : Types.generic_args) : string list =
+  let mctx : Charon.NameMatcher.ctx =
+    {
+      type_decls = ctx.type_ctx.type_decls;
+      global_decls = ctx.global_ctx.global_decls;
+      trait_decls = ctx.trait_decls_ctx.trait_decls;
+    }
+  in
+  let is_trait_impl = true in
+  name_with_generics_to_simple_name mctx is_trait_impl ~prefix n p g

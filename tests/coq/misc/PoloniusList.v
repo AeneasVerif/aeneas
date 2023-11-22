@@ -8,7 +8,8 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module PoloniusList.
 
-(** [polonius_list::List] *)
+(** [polonius_list::List]
+    Source: 'src/polonius_list.rs', lines 3:0-3:16 *)
 Inductive List_t (T : Type) :=
 | List_Cons : T -> List_t T -> List_t T
 | List_Nil : List_t T
@@ -17,7 +18,8 @@ Inductive List_t (T : Type) :=
 Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
-(** [polonius_list::get_list_at_x]: forward function *)
+(** [polonius_list::get_list_at_x]: forward function
+    Source: 'src/polonius_list.rs', lines 13:0-13:76 *)
 Fixpoint get_list_at_x (ls : List_t u32) (x : u32) : result (List_t u32) :=
   match ls with
   | List_Cons hd tl =>
@@ -26,7 +28,8 @@ Fixpoint get_list_at_x (ls : List_t u32) (x : u32) : result (List_t u32) :=
   end
 .
 
-(** [polonius_list::get_list_at_x]: backward function 0 *)
+(** [polonius_list::get_list_at_x]: backward function 0
+    Source: 'src/polonius_list.rs', lines 13:0-13:76 *)
 Fixpoint get_list_at_x_back
   (ls : List_t u32) (x : u32) (ret : List_t u32) : result (List_t u32) :=
   match ls with
