@@ -67,8 +67,8 @@ Definition test_bool_trait_option (T : Type) (x : option T) : result bool :=
 (** [traits::test_bool_trait]: forward function
     Source: 'src/traits.rs', lines 35:0-35:50 *)
 Definition test_bool_trait
-  (T : Type) (inst : BoolTrait_t T) (x : T) : result bool :=
-  inst.(BoolTrait_t_get_bool) x
+  (T : Type) (boolTraitTInst : BoolTrait_t T) (x : T) : result bool :=
+  boolTraitTInst.(BoolTrait_t_get_bool) x
 .
 
 (** Trait declaration: [traits::ToU64]
@@ -94,30 +94,31 @@ Definition traits_ToU64U64Inst : ToU64_t u64 := {|
 (** [traits::{(A, A)#3}::to_u64]: forward function
     Source: 'src/traits.rs', lines 50:4-50:26 *)
 Definition pair_to_u64
-  (A : Type) (inst : ToU64_t A) (self : (A * A)) : result u64 :=
+  (A : Type) (toU64AInst : ToU64_t A) (self : (A * A)) : result u64 :=
   let (t, t0) := self in
-  i <- inst.(ToU64_t_to_u64) t;
-  i0 <- inst.(ToU64_t_to_u64) t0;
+  i <- toU64AInst.(ToU64_t_to_u64) t;
+  i0 <- toU64AInst.(ToU64_t_to_u64) t0;
   u64_add i i0
 .
 
 (** Trait implementation: [traits::{(A, A)#3}]
     Source: 'src/traits.rs', lines 49:0-49:31 *)
-Definition traits_ToU64TupleAAInst (A : Type) (inst : ToU64_t A) : ToU64_t (A *
-  A) := {|
-  ToU64_t_to_u64 := pair_to_u64 A inst;
+Definition traits_ToU64TupleAAInst (A : Type) (toU64AInst : ToU64_t A) :
+  ToU64_t (A * A) := {|
+  ToU64_t_to_u64 := pair_to_u64 A toU64AInst;
 |}.
 
 (** [traits::f]: forward function
     Source: 'src/traits.rs', lines 55:0-55:36 *)
-Definition f (T : Type) (inst : ToU64_t T) (x : (T * T)) : result u64 :=
-  pair_to_u64 T inst x
+Definition f (T : Type) (toU64TInst : ToU64_t T) (x : (T * T)) : result u64 :=
+  pair_to_u64 T toU64TInst x
 .
 
 (** [traits::g]: forward function
     Source: 'src/traits.rs', lines 59:0-61:18 *)
-Definition g (T : Type) (inst : ToU64_t (T * T)) (x : (T * T)) : result u64 :=
-  inst.(ToU64_t_to_u64) x
+Definition g
+  (T : Type) (toU64TupleTTInst : ToU64_t (T * T)) (x : (T * T)) : result u64 :=
+  toU64TupleTTInst.(ToU64_t_to_u64) x
 .
 
 (** [traits::h0]: forward function
@@ -135,15 +136,15 @@ Arguments wrapper_x { _ }.
 (** [traits::{traits::Wrapper<T>#4}::to_u64]: forward function
     Source: 'src/traits.rs', lines 75:4-75:26 *)
 Definition wrapper_to_u64
-  (T : Type) (inst : ToU64_t T) (self : Wrapper_t T) : result u64 :=
-  inst.(ToU64_t_to_u64) self.(wrapper_x)
+  (T : Type) (toU64TInst : ToU64_t T) (self : Wrapper_t T) : result u64 :=
+  toU64TInst.(ToU64_t_to_u64) self.(wrapper_x)
 .
 
 (** Trait implementation: [traits::{traits::Wrapper<T>#4}]
     Source: 'src/traits.rs', lines 74:0-74:35 *)
-Definition traits_ToU64traitsWrapperTInst (T : Type) (inst : ToU64_t T) :
+Definition traits_ToU64traitsWrapperTInst (T : Type) (toU64TInst : ToU64_t T) :
   ToU64_t (Wrapper_t T) := {|
-  ToU64_t_to_u64 := wrapper_to_u64 T inst;
+  ToU64_t_to_u64 := wrapper_to_u64 T toU64TInst;
 |}.
 
 (** [traits::h1]: forward function
@@ -154,8 +155,9 @@ Definition h1 (x : Wrapper_t u64) : result u64 :=
 
 (** [traits::h2]: forward function
     Source: 'src/traits.rs', lines 84:0-84:41 *)
-Definition h2 (T : Type) (inst : ToU64_t T) (x : Wrapper_t T) : result u64 :=
-  wrapper_to_u64 T inst x
+Definition h2
+  (T : Type) (toU64TInst : ToU64_t T) (x : Wrapper_t T) : result u64 :=
+  wrapper_to_u64 T toU64TInst x
 .
 
 (** Trait declaration: [traits::ToType]
@@ -181,8 +183,8 @@ Definition traits_ToTypeU64BoolInst : ToType_t u64 bool := {|
 (** Trait declaration: [traits::OfType]
     Source: 'src/traits.rs', lines 98:0-98:16 *)
 Record OfType_t (Self : Type) := mkOfType_t {
-  OfType_t_of_type : forall (T : Type) (inst : ToType_t T Self), T -> result
-    Self;
+  OfType_t_of_type : forall (T : Type) (toTypeTSelfInst : ToType_t T Self), T
+    -> result Self;
 }.
 
 Arguments mkOfType_t { _ }.
@@ -191,10 +193,11 @@ Arguments OfType_t_of_type { _ }.
 (** [traits::h3]: forward function
     Source: 'src/traits.rs', lines 104:0-104:50 *)
 Definition h3
-  (T1 T2 : Type) (inst : OfType_t T1) (inst0 : ToType_t T2 T1) (y : T2) :
+  (T1 T2 : Type) (ofTypeT1Inst : OfType_t T1) (toTypeT2T1Inst : ToType_t T2 T1)
+  (y : T2) :
   result T1
   :=
-  inst.(OfType_t_of_type) T2 inst0 y
+  ofTypeT1Inst.(OfType_t_of_type) T2 toTypeT2T1Inst y
 .
 
 (** Trait declaration: [traits::OfTypeBis]
@@ -211,10 +214,11 @@ Arguments OfTypeBis_t_of_type { _ _ }.
 (** [traits::h4]: forward function
     Source: 'src/traits.rs', lines 118:0-118:57 *)
 Definition h4
-  (T1 T2 : Type) (inst : OfTypeBis_t T1 T2) (inst0 : ToType_t T2 T1) (y : T2) :
+  (T1 T2 : Type) (ofTypeBisT1T2Inst : OfTypeBis_t T1 T2) (toTypeT2T1Inst :
+  ToType_t T2 T1) (y : T2) :
   result T1
   :=
-  inst.(OfTypeBis_t_of_type) y
+  ofTypeBisT1T2Inst.(OfTypeBis_t_of_type) y
 .
 
 (** [traits::TestType]
@@ -258,8 +262,10 @@ Definition traits_TestType_test_TestTraittraitstraitsTestTypeTtestTestType1Inst
 (** [traits::{traits::TestType<T>#6}::test]: forward function
     Source: 'src/traits.rs', lines 126:4-126:36 *)
 Definition testType_test
-  (T : Type) (inst : ToU64_t T) (self : TestType_t T) (x : T) : result bool :=
-  x0 <- inst.(ToU64_t_to_u64) x;
+  (T : Type) (toU64TInst : ToU64_t T) (self : TestType_t T) (x : T) :
+  result bool
+  :=
+  x0 <- toU64TInst.(ToU64_t_to_u64) x;
   if x0 s> 0%u64
   then testType_test_TestType1_test {| testType_test_TestType1_0 := 0%u64 |}
   else Return false
@@ -272,15 +278,17 @@ Record BoolWrapper_t := mkBoolWrapper_t { boolWrapper_0 : bool; }.
 (** [traits::{traits::BoolWrapper#7}::to_type]: forward function
     Source: 'src/traits.rs', lines 156:4-156:25 *)
 Definition boolWrapper_to_type
-  (T : Type) (inst : ToType_t bool T) (self : BoolWrapper_t) : result T :=
-  inst.(ToType_t_to_type) self.(boolWrapper_0)
+  (T : Type) (toTypeBoolTInst : ToType_t bool T) (self : BoolWrapper_t) :
+  result T
+  :=
+  toTypeBoolTInst.(ToType_t_to_type) self.(boolWrapper_0)
 .
 
 (** Trait implementation: [traits::{traits::BoolWrapper#7}]
     Source: 'src/traits.rs', lines 152:0-152:33 *)
-Definition traits_ToTypetraitsBoolWrapperTInst (T : Type) (inst : ToType_t bool
-  T) : ToType_t BoolWrapper_t T := {|
-  ToType_t_to_type := boolWrapper_to_type T inst;
+Definition traits_ToTypetraitsBoolWrapperTInst (T : Type) (toTypeBoolTInst :
+  ToType_t bool T) : ToType_t BoolWrapper_t T := {|
+  ToType_t_to_type := boolWrapper_to_type T toTypeBoolTInst;
 |}.
 
 (** [traits::WithConstTy::LEN2]
@@ -333,15 +341,17 @@ Definition traits_WithConstTyBool32Inst : WithConstTy_t bool 32%usize := {|
 (** [traits::use_with_const_ty1]: forward function
     Source: 'src/traits.rs', lines 183:0-183:75 *)
 Definition use_with_const_ty1
-  (H : Type) (LEN : usize) (inst : WithConstTy_t H LEN) : result usize :=
-  let i := inst.(WithConstTy_tWithConstTy_t_LEN1) in Return i
+  (H : Type) (LEN : usize) (withConstTyHLENInst : WithConstTy_t H LEN) :
+  result usize
+  :=
+  let i := withConstTyHLENInst.(WithConstTy_tWithConstTy_t_LEN1) in Return i
 .
 
 (** [traits::use_with_const_ty2]: forward function
     Source: 'src/traits.rs', lines 187:0-187:73 *)
 Definition use_with_const_ty2
-  (H : Type) (LEN : usize) (inst : WithConstTy_t H LEN)
-  (w : inst.(WithConstTy_tWithConstTy_t_W)) :
+  (H : Type) (LEN : usize) (withConstTyHLENInst : WithConstTy_t H LEN)
+  (w : withConstTyHLENInst.(WithConstTy_tWithConstTy_t_W)) :
   result unit
   :=
   Return tt
@@ -350,11 +360,12 @@ Definition use_with_const_ty2
 (** [traits::use_with_const_ty3]: forward function
     Source: 'src/traits.rs', lines 189:0-189:80 *)
 Definition use_with_const_ty3
-  (H : Type) (LEN : usize) (inst : WithConstTy_t H LEN)
-  (x : inst.(WithConstTy_tWithConstTy_t_W)) :
+  (H : Type) (LEN : usize) (withConstTyHLENInst : WithConstTy_t H LEN)
+  (x : withConstTyHLENInst.(WithConstTy_tWithConstTy_t_W)) :
   result u64
   :=
-  inst.(WithConstTy_tWithConstTy_t_W_clause_0).(ToU64_t_to_u64) x
+  withConstTyHLENInst.(WithConstTy_tWithConstTy_t_W_clause_0).(ToU64_t_to_u64)
+    x
 .
 
 (** [traits::test_where1]: forward function
@@ -365,7 +376,9 @@ Definition test_where1 (T : Type) (_x : T) : result unit :=
 (** [traits::test_where2]: forward function
     Source: 'src/traits.rs', lines 194:0-194:57 *)
 Definition test_where2
-  (T : Type) (inst : WithConstTy_t T 32%usize) (_x : u32) : result unit :=
+  (T : Type) (withConstTyT32Inst : WithConstTy_t T 32%usize) (_x : u32) :
+  result unit
+  :=
   Return tt
 .
 
@@ -406,25 +419,29 @@ Arguments ChildTrait_tChildTrait_t_ParentTrait1SelfInst { _ }.
 (** [traits::test_child_trait1]: forward function
     Source: 'src/traits.rs', lines 209:0-209:56 *)
 Definition test_child_trait1
-  (T : Type) (inst : ChildTrait_t T) (x : T) : result alloc_string_String_t :=
-  inst.(ChildTrait_tChildTrait_t_ParentTrait0SelfInst).(ParentTrait0_t_get_name)
+  (T : Type) (childTraitTInst : ChildTrait_t T) (x : T) :
+  result alloc_string_String_t
+  :=
+  childTraitTInst.(ChildTrait_tChildTrait_t_ParentTrait0SelfInst).(ParentTrait0_t_get_name)
     x
 .
 
 (** [traits::test_child_trait2]: forward function
     Source: 'src/traits.rs', lines 213:0-213:54 *)
 Definition test_child_trait2
-  (T : Type) (inst : ChildTrait_t T) (x : T) :
+  (T : Type) (childTraitTInst : ChildTrait_t T) (x : T) :
   result
-    inst.(ChildTrait_tChildTrait_t_ParentTrait0SelfInst).(ParentTrait0_tParentTrait0_t_W)
+    childTraitTInst.(ChildTrait_tChildTrait_t_ParentTrait0SelfInst).(ParentTrait0_tParentTrait0_t_W)
   :=
-  inst.(ChildTrait_tChildTrait_t_ParentTrait0SelfInst).(ParentTrait0_t_get_w) x
+  childTraitTInst.(ChildTrait_tChildTrait_t_ParentTrait0SelfInst).(ParentTrait0_t_get_w)
+    x
 .
 
 (** [traits::order1]: forward function
     Source: 'src/traits.rs', lines 219:0-219:59 *)
 Definition order1
-  (T U : Type) (inst : ParentTrait0_t T) (inst0 : ParentTrait0_t U) :
+  (T U : Type) (parentTrait0TInst : ParentTrait0_t T) (parentTrait0UInst :
+  ParentTrait0_t U) :
   result unit
   :=
   Return tt

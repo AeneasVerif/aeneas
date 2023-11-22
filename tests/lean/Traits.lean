@@ -61,8 +61,9 @@ def test_bool_trait_option (T : Type) (x : Option T) : Result Bool :=
 
 /- [traits::test_bool_trait]: forward function
    Source: 'src/traits.rs', lines 35:0-35:50 -/
-def test_bool_trait (T : Type) (inst : BoolTrait T) (x : T) : Result Bool :=
-  inst.get_bool x
+def test_bool_trait
+  (T : Type) (BoolTraitTInst : BoolTrait T) (x : T) : Result Bool :=
+  BoolTraitTInst.get_bool x
 
 /- Trait declaration: [traits::ToU64]
    Source: 'src/traits.rs', lines 39:0-39:15 -/
@@ -82,28 +83,31 @@ def traits.ToU64U64Inst : ToU64 U64 := {
 
 /- [traits::{(A, A)#3}::to_u64]: forward function
    Source: 'src/traits.rs', lines 50:4-50:26 -/
-def Pair.to_u64 (A : Type) (inst : ToU64 A) (self : (A × A)) : Result U64 :=
+def Pair.to_u64
+  (A : Type) (ToU64AInst : ToU64 A) (self : (A × A)) : Result U64 :=
   do
     let (t, t0) := self
-    let i ← inst.to_u64 t
-    let i0 ← inst.to_u64 t0
+    let i ← ToU64AInst.to_u64 t
+    let i0 ← ToU64AInst.to_u64 t0
     i + i0
 
 /- Trait implementation: [traits::{(A, A)#3}]
    Source: 'src/traits.rs', lines 49:0-49:31 -/
-def traits.ToU64TupleAAInst (A : Type) (inst : ToU64 A) : ToU64 (A × A) := {
-  to_u64 := Pair.to_u64 A inst
+def traits.ToU64TupleAAInst (A : Type) (ToU64AInst : ToU64 A) : ToU64 (A × A)
+  := {
+  to_u64 := Pair.to_u64 A ToU64AInst
 }
 
 /- [traits::f]: forward function
    Source: 'src/traits.rs', lines 55:0-55:36 -/
-def f (T : Type) (inst : ToU64 T) (x : (T × T)) : Result U64 :=
-  Pair.to_u64 T inst x
+def f (T : Type) (ToU64TInst : ToU64 T) (x : (T × T)) : Result U64 :=
+  Pair.to_u64 T ToU64TInst x
 
 /- [traits::g]: forward function
    Source: 'src/traits.rs', lines 59:0-61:18 -/
-def g (T : Type) (inst : ToU64 (T × T)) (x : (T × T)) : Result U64 :=
-  inst.to_u64 x
+def g
+  (T : Type) (ToU64TupleTTInst : ToU64 (T × T)) (x : (T × T)) : Result U64 :=
+  ToU64TupleTTInst.to_u64 x
 
 /- [traits::h0]: forward function
    Source: 'src/traits.rs', lines 66:0-66:24 -/
@@ -118,14 +122,14 @@ structure Wrapper (T : Type) where
 /- [traits::{traits::Wrapper<T>#4}::to_u64]: forward function
    Source: 'src/traits.rs', lines 75:4-75:26 -/
 def Wrapper.to_u64
-  (T : Type) (inst : ToU64 T) (self : Wrapper T) : Result U64 :=
-  inst.to_u64 self.x
+  (T : Type) (ToU64TInst : ToU64 T) (self : Wrapper T) : Result U64 :=
+  ToU64TInst.to_u64 self.x
 
 /- Trait implementation: [traits::{traits::Wrapper<T>#4}]
    Source: 'src/traits.rs', lines 74:0-74:35 -/
-def traits.ToU64traitsWrapperTInst (T : Type) (inst : ToU64 T) : ToU64 (Wrapper
-  T) := {
-  to_u64 := Wrapper.to_u64 T inst
+def traits.ToU64traitsWrapperTInst (T : Type) (ToU64TInst : ToU64 T) : ToU64
+  (Wrapper T) := {
+  to_u64 := Wrapper.to_u64 T ToU64TInst
 }
 
 /- [traits::h1]: forward function
@@ -135,8 +139,8 @@ def h1 (x : Wrapper U64) : Result U64 :=
 
 /- [traits::h2]: forward function
    Source: 'src/traits.rs', lines 84:0-84:41 -/
-def h2 (T : Type) (inst : ToU64 T) (x : Wrapper T) : Result U64 :=
-  Wrapper.to_u64 T inst x
+def h2 (T : Type) (ToU64TInst : ToU64 T) (x : Wrapper T) : Result U64 :=
+  Wrapper.to_u64 T ToU64TInst x
 
 /- Trait declaration: [traits::ToType]
    Source: 'src/traits.rs', lines 88:0-88:19 -/
@@ -157,15 +161,17 @@ def traits.ToTypeU64BoolInst : ToType U64 Bool := {
 /- Trait declaration: [traits::OfType]
    Source: 'src/traits.rs', lines 98:0-98:16 -/
 structure OfType (Self : Type) where
-  of_type : forall (T : Type) (inst : ToType T Self), T → Result Self
+  of_type : forall (T : Type) (ToTypeTSelfInst : ToType T Self), T → Result
+    Self
 
 /- [traits::h3]: forward function
    Source: 'src/traits.rs', lines 104:0-104:50 -/
 def h3
-  (T1 T2 : Type) (inst : OfType T1) (inst0 : ToType T2 T1) (y : T2) :
+  (T1 T2 : Type) (OfTypeT1Inst : OfType T1) (ToTypeT2T1Inst : ToType T2 T1)
+  (y : T2) :
   Result T1
   :=
-  inst.of_type T2 inst0 y
+  OfTypeT1Inst.of_type T2 ToTypeT2T1Inst y
 
 /- Trait declaration: [traits::OfTypeBis]
    Source: 'src/traits.rs', lines 109:0-109:36 -/
@@ -176,10 +182,11 @@ structure OfTypeBis (Self T : Type) where
 /- [traits::h4]: forward function
    Source: 'src/traits.rs', lines 118:0-118:57 -/
 def h4
-  (T1 T2 : Type) (inst : OfTypeBis T1 T2) (inst0 : ToType T2 T1) (y : T2) :
+  (T1 T2 : Type) (OfTypeBisT1T2Inst : OfTypeBis T1 T2) (ToTypeT2T1Inst : ToType
+  T2 T1) (y : T2) :
   Result T1
   :=
-  inst.of_type y
+  OfTypeBisT1T2Inst.of_type y
 
 /- [traits::TestType]
    Source: 'src/traits.rs', lines 122:0-122:22 -/
@@ -212,9 +219,11 @@ def traits.TestType.test.TestTraittraitstraitsTestTypeTtestTestType1Inst :
 /- [traits::{traits::TestType<T>#6}::test]: forward function
    Source: 'src/traits.rs', lines 126:4-126:36 -/
 def TestType.test
-  (T : Type) (inst : ToU64 T) (self : TestType T) (x : T) : Result Bool :=
+  (T : Type) (ToU64TInst : ToU64 T) (self : TestType T) (x : T) :
+  Result Bool
+  :=
   do
-    let x0 ← inst.to_u64 x
+    let x0 ← ToU64TInst.to_u64 x
     if x0 > 0#u64
     then TestType.test.TestType1.test { _0 := 0#u64 }
     else Result.ret false
@@ -227,14 +236,16 @@ structure BoolWrapper where
 /- [traits::{traits::BoolWrapper#7}::to_type]: forward function
    Source: 'src/traits.rs', lines 156:4-156:25 -/
 def BoolWrapper.to_type
-  (T : Type) (inst : ToType Bool T) (self : BoolWrapper) : Result T :=
-  inst.to_type self._0
+  (T : Type) (ToTypeBoolTInst : ToType Bool T) (self : BoolWrapper) :
+  Result T
+  :=
+  ToTypeBoolTInst.to_type self._0
 
 /- Trait implementation: [traits::{traits::BoolWrapper#7}]
    Source: 'src/traits.rs', lines 152:0-152:33 -/
-def traits.ToTypetraitsBoolWrapperTInst (T : Type) (inst : ToType Bool T) :
-  ToType BoolWrapper T := {
-  to_type := BoolWrapper.to_type T inst
+def traits.ToTypetraitsBoolWrapperTInst (T : Type) (ToTypeBoolTInst : ToType
+  Bool T) : ToType BoolWrapper T := {
+  to_type := BoolWrapper.to_type T ToTypeBoolTInst
 }
 
 /- [traits::WithConstTy::LEN2]
@@ -278,14 +289,17 @@ def traits.WithConstTyBool32Inst : WithConstTy Bool 32#usize := {
 /- [traits::use_with_const_ty1]: forward function
    Source: 'src/traits.rs', lines 183:0-183:75 -/
 def use_with_const_ty1
-  (H : Type) (LEN : Usize) (inst : WithConstTy H LEN) : Result Usize :=
-  let i := inst.LEN1
+  (H : Type) (LEN : Usize) (WithConstTyHLENInst : WithConstTy H LEN) :
+  Result Usize
+  :=
+  let i := WithConstTyHLENInst.LEN1
   Result.ret i
 
 /- [traits::use_with_const_ty2]: forward function
    Source: 'src/traits.rs', lines 187:0-187:73 -/
 def use_with_const_ty2
-  (H : Type) (LEN : Usize) (inst : WithConstTy H LEN) (w : inst.W) :
+  (H : Type) (LEN : Usize) (WithConstTyHLENInst : WithConstTy H LEN)
+  (w : WithConstTyHLENInst.W) :
   Result Unit
   :=
   Result.ret ()
@@ -293,10 +307,11 @@ def use_with_const_ty2
 /- [traits::use_with_const_ty3]: forward function
    Source: 'src/traits.rs', lines 189:0-189:80 -/
 def use_with_const_ty3
-  (H : Type) (LEN : Usize) (inst : WithConstTy H LEN) (x : inst.W) :
+  (H : Type) (LEN : Usize) (WithConstTyHLENInst : WithConstTy H LEN)
+  (x : WithConstTyHLENInst.W) :
   Result U64
   :=
-  inst.W_clause_0.to_u64 x
+  WithConstTyHLENInst.W_clause_0.to_u64 x
 
 /- [traits::test_where1]: forward function
    Source: 'src/traits.rs', lines 193:0-193:40 -/
@@ -306,7 +321,9 @@ def test_where1 (T : Type) (_x : T) : Result Unit :=
 /- [traits::test_where2]: forward function
    Source: 'src/traits.rs', lines 194:0-194:57 -/
 def test_where2
-  (T : Type) (inst : WithConstTy T 32#usize) (_x : U32) : Result Unit :=
+  (T : Type) (WithConstTyT32Inst : WithConstTy T 32#usize) (_x : U32) :
+  Result Unit
+  :=
   Result.ret ()
 
 /- [alloc::string::String]
@@ -333,21 +350,24 @@ structure ChildTrait (Self : Type) where
 /- [traits::test_child_trait1]: forward function
    Source: 'src/traits.rs', lines 209:0-209:56 -/
 def test_child_trait1
-  (T : Type) (inst : ChildTrait T) (x : T) : Result alloc.string.String :=
-  inst.ParentTrait0SelfInst.get_name x
+  (T : Type) (ChildTraitTInst : ChildTrait T) (x : T) :
+  Result alloc.string.String
+  :=
+  ChildTraitTInst.ParentTrait0SelfInst.get_name x
 
 /- [traits::test_child_trait2]: forward function
    Source: 'src/traits.rs', lines 213:0-213:54 -/
 def test_child_trait2
-  (T : Type) (inst : ChildTrait T) (x : T) :
-  Result inst.ParentTrait0SelfInst.W
+  (T : Type) (ChildTraitTInst : ChildTrait T) (x : T) :
+  Result ChildTraitTInst.ParentTrait0SelfInst.W
   :=
-  inst.ParentTrait0SelfInst.get_w x
+  ChildTraitTInst.ParentTrait0SelfInst.get_w x
 
 /- [traits::order1]: forward function
    Source: 'src/traits.rs', lines 219:0-219:59 -/
 def order1
-  (T U : Type) (inst : ParentTrait0 T) (inst0 : ParentTrait0 U) :
+  (T U : Type) (ParentTrait0TInst : ParentTrait0 T) (ParentTrait0UInst :
+  ParentTrait0 U) :
   Result Unit
   :=
   Result.ret ()
