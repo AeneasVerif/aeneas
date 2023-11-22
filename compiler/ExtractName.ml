@@ -5,29 +5,24 @@ open Charon.NameMatcher
 let log = Logging.extract_log
 
 module NameMatcherMap = struct
-  type 'a t = (pattern * 'a) list
+  module NMM = NameMatcherMap
+
+  type 'a t = 'a NMM.t
 
   let config = { map_vars_to_vars = true }
 
   let find_opt (ctx : ctx) (name : Types.name) (m : 'a t) : 'a option =
-    match List.find_opt (fun (pat, _) -> match_name ctx config pat name) m with
-    | None -> None
-    | Some (_, v) -> Some v
+    NMM.find_opt ctx config name m
 
   let find_with_generics_opt (ctx : ctx) (name : Types.name)
       (g : Types.generic_args) (m : 'a t) : 'a option =
-    match
-      List.find_opt
-        (fun (pat, _) -> match_name_with_generics ctx config pat name g)
-        m
-    with
-    | None -> None
-    | Some (_, v) -> Some v
+    NMM.find_with_generics_opt ctx config name g m
 
   let mem (ctx : ctx) (name : Types.name) (m : 'a t) : bool =
-    find_opt ctx name m <> None
+    NMM.mem ctx config name m
 
-  let of_list (ls : (pattern * 'a) list) : 'a t = ls
+  let of_list (ls : (pattern * 'a) list) : 'a t = NMM.of_list ls
+  let to_string = NMM.to_string
 end
 
 (** Helper to convert name patterns to names for extraction.
