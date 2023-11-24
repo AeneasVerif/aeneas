@@ -2718,7 +2718,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
         let success = ctx_get_variant (TAssumed TResult) result_return_id ctx in
-        F.pp_print_string fmt ("." ^ success ^ " ())")
+        F.pp_print_string fmt (success ^ " ())")
     | HOL4 ->
         F.pp_print_string fmt "val _ = assert_return (";
         F.pp_print_string fmt "“";
