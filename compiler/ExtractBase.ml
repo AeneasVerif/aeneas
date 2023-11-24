@@ -634,11 +634,13 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TypeId id -> "type name: " ^ type_id_to_string ctx id
   | StructId id -> "struct constructor of: " ^ type_id_to_string ctx id
   | VariantId (id, variant_id) ->
+      let type_name = type_id_to_string ctx id in
       let variant_name = adt_variant_to_string ctx id (Some variant_id) in
-      "variant name: " ^ variant_name
+      "type name: " ^ type_name ^ ", variant name: " ^ variant_name
   | FieldId (id, field_id) ->
+      let type_name = type_id_to_string ctx id in
       let field_name = adt_field_to_string ctx id field_id in
-      "field name: " ^ field_name
+      "type name: " ^ type_name ^ ", field name: " ^ field_name
   | UnknownId -> "keyword"
   | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
   | ConstGenericVarId id ->
