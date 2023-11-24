@@ -61,7 +61,10 @@ let pattern_to_extract_name (is_trait_impl : bool) (name : pattern) :
               | TArray -> "Array"
               | TSlice -> "Slice"
             else expr_to_string c ty
-        | ERef _ | EVar _ -> raise (Failure ""))
+        | ERef _ | EVar _ ->
+            (* We simply convert the pattern to a string. This is not very
+               satisfying but we should rarely get there. *)
+            expr_to_string c ty)
   in
   let rec pattern_to_string (n : pattern) : string list =
     match n with
