@@ -960,31 +960,40 @@ let keywords () =
   List.concat [ named_unops; named_binops; misc ]
 
 let assumed_adts () : (assumed_ty * string) list =
-  match !backend with
-  | Lean ->
-      [
-        (TState, "State");
-        (TResult, "Result");
-        (TError, "Error");
-        (TFuel, "Nat");
-        (TArray, "Array");
-        (TSlice, "Slice");
-        (TStr, "Str");
-        (TRawPtr Mut, "MutRawPtr");
-        (TRawPtr Const, "ConstRawPtr");
-      ]
-  | Coq | FStar | HOL4 ->
-      [
-        (TState, "state");
-        (TResult, "result");
-        (TError, "error");
-        (TFuel, if !backend = HOL4 then "num" else "nat");
-        (TArray, "array");
-        (TSlice, "slice");
-        (TStr, "str");
-        (TRawPtr Mut, "mut_raw_ptr");
-        (TRawPtr Const, "const_raw_ptr");
-      ]
+  let state =
+    if !use_state then
+      match !backend with
+      | Lean -> [ (TState, "State") ]
+      | Coq | FStar | HOL4 -> [ (TState, "state") ]
+    else []
+  in
+  (* We voluntarily omit the type [Error]: it is never directly
+     referenced in the generated translation, and easily collides
+     with user-defined types *)
+  let adts =
+    match !backend with
+    | Lean ->
+        [
+          (TResult, "Result");
+          (TFuel, "Nat");
+          (TArray, "Array");
+          (TSlice, "Slice");
+          (TStr, "Str");
+          (TRawPtr Mut, "MutRawPtr");
+          (TRawPtr Const, "ConstRawPtr");
+        ]
+    | Coq | FStar | HOL4 ->
+        [
+          (TResult, "result");
+          (TFuel, if !backend = HOL4 then "num" else "nat");
+          (TArray, "array");
+          (TSlice, "slice");
+          (TStr, "str");
+          (TRawPtr Mut, "mut_raw_ptr");
+          (TRawPtr Const, "const_raw_ptr");
+        ]
+  in
+  state @ adts
 
 let assumed_struct_constructors () : (assumed_ty * string) list =
   match !backend with
@@ -1015,9 +1024,12 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | Lean ->
       [
-        (TResult, result_return_id, "ret");
-        (TResult, result_fail_id, "fail");
-        (TError, error_failure_id, "panic");
+        (TResult, result_return_id, "Result.ret");
+        (TResult, result_fail_id, "Result.fail");
+        (* For panic: we omit the prefix "Error." because the type is always
+           clear from the context. Also, "Error" is often used by user-defined
+           types (when we omit the crate as a prefix). *)
+        (TError, error_failure_id, ".panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]

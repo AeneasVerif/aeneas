@@ -173,12 +173,7 @@ let extract_adt_g_value
          *)
         let cons =
           match variant_id with
-          | Some vid -> (
-              (* In the case of Lean, we might have to add the type name as a prefix *)
-              match (!backend, adt_id) with
-              | Lean, TAssumed _ ->
-                  ctx_get_type adt_id ctx ^ "." ^ ctx_get_variant adt_id vid ctx
-              | _ -> ctx_get_variant adt_id vid ctx)
+          | Some vid -> ctx_get_variant adt_id vid ctx
           | None -> ctx_get_struct adt_id ctx
         in
         let use_parentheses = inside && field_values <> [] in
