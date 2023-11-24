@@ -1419,9 +1419,10 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
        - we add "_fwd"
      - [rg] is [None]: this is a backward function:
        - this function has one extracted backward function:
-         - if the forward function has been filtered, we add "_fwd_back":
+         - if the forward function has been filtered, we add nothing:
            the forward function is useless, so the unique backward function
-           takes its place, in a way
+           takes its place, in a way (in effect, we "merge" the forward
+           and the backward functions).
          - otherwise we add "_back"
        - this function has several backward functions: we add "_back" and an
          additional suffix to identify the precise backward function
