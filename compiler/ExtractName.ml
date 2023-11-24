@@ -76,6 +76,7 @@ let pattern_to_extract_name (is_trait_impl : bool) (name : pattern) :
   in
   pattern_to_string name
 
+let pattern_to_type_extract_name = pattern_to_extract_name false
 let pattern_to_fun_extract_name = pattern_to_extract_name false
 let pattern_to_trait_impl_extract_name = pattern_to_extract_name true
 

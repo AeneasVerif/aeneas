@@ -1109,8 +1109,9 @@ let initialize_names_maps () : names_maps =
   let init = names_map_init () in
   let int_names = List.map int_name T.all_int_types in
   let keywords =
-    List.concat
-      [ [ bool_name (); char_name (); str_name () ]; int_names; init.keywords ]
+    (* Remark: we don't put "str_name()" below because it clashes with
+       "alloc::string::String", which we register elsewhere. *)
+    List.concat [ [ bool_name (); char_name () ]; int_names; init.keywords ]
   in
   let names_set = StringSet.empty in
   let name_to_id = StringMap.empty in
