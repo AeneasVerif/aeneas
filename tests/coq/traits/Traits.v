@@ -382,15 +382,11 @@ Definition test_where2
   Return tt
 .
 
-(** [alloc::string::String]
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/string.rs', lines 365:0-365:17 *)
-Axiom alloc_string_String_t : Type.
-
 (** Trait declaration: [traits::ParentTrait0]
     Source: 'src/traits.rs', lines 200:0-200:22 *)
 Record ParentTrait0_t (Self : Type) := mkParentTrait0_t {
   ParentTrait0_tParentTrait0_t_W : Type;
-  ParentTrait0_t_get_name : Self -> result alloc_string_String_t;
+  ParentTrait0_t_get_name : Self -> result string;
   ParentTrait0_t_get_w : Self -> result ParentTrait0_tParentTrait0_t_W;
 }.
 
@@ -419,9 +415,7 @@ Arguments ChildTrait_tChildTrait_t_ParentTrait1SelfInst { _ }.
 (** [traits::test_child_trait1]: forward function
     Source: 'src/traits.rs', lines 209:0-209:56 *)
 Definition test_child_trait1
-  (T : Type) (childTraitTInst : ChildTrait_t T) (x : T) :
-  result alloc_string_String_t
-  :=
+  (T : Type) (childTraitTInst : ChildTrait_t T) (x : T) : result string :=
   childTraitTInst.(ChildTrait_tChildTrait_t_ParentTrait0SelfInst).(ParentTrait0_t_get_name)
     x
 .

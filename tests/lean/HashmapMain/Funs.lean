@@ -309,7 +309,7 @@ divergent def hashmap.HashMap.get_in_list_loop
     if ckey = key
     then Result.ret cvalue
     else hashmap.HashMap.get_in_list_loop T key tl
-  | hashmap.List.Nil => Result.fail Error.panic
+  | hashmap.List.Nil => Result.fail .panic
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_in_list]: forward function
    Source: 'src/hashmap.rs', lines 224:4-224:70 -/
@@ -340,7 +340,7 @@ divergent def hashmap.HashMap.get_mut_in_list_loop
     if ckey = key
     then Result.ret cvalue
     else hashmap.HashMap.get_mut_in_list_loop T tl key
-  | hashmap.List.Nil => Result.fail Error.panic
+  | hashmap.List.Nil => Result.fail .panic
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]: forward function
    Source: 'src/hashmap.rs', lines 245:4-245:86 -/
@@ -351,26 +351,26 @@ def hashmap.HashMap.get_mut_in_list
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]: loop 0: backward function 0
    Source: 'src/hashmap.rs', lines 245:4-254:5 -/
 divergent def hashmap.HashMap.get_mut_in_list_loop_back
-  (T : Type) (ls : hashmap.List T) (key : Usize) (ret0 : T) :
+  (T : Type) (ls : hashmap.List T) (key : Usize) (ret : T) :
   Result (hashmap.List T)
   :=
   match ls with
   | hashmap.List.Cons ckey cvalue tl =>
     if ckey = key
-    then Result.ret (hashmap.List.Cons ckey ret0 tl)
+    then Result.ret (hashmap.List.Cons ckey ret tl)
     else
       do
-        let tl0 ← hashmap.HashMap.get_mut_in_list_loop_back T tl key ret0
+        let tl0 ← hashmap.HashMap.get_mut_in_list_loop_back T tl key ret
         Result.ret (hashmap.List.Cons ckey cvalue tl0)
-  | hashmap.List.Nil => Result.fail Error.panic
+  | hashmap.List.Nil => Result.fail .panic
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]: backward function 0
    Source: 'src/hashmap.rs', lines 245:4-245:86 -/
 def hashmap.HashMap.get_mut_in_list_back
-  (T : Type) (ls : hashmap.List T) (key : Usize) (ret0 : T) :
+  (T : Type) (ls : hashmap.List T) (key : Usize) (ret : T) :
   Result (hashmap.List T)
   :=
-  hashmap.HashMap.get_mut_in_list_loop_back T ls key ret0
+  hashmap.HashMap.get_mut_in_list_loop_back T ls key ret
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]: forward function
    Source: 'src/hashmap.rs', lines 257:4-257:67 -/
@@ -389,7 +389,7 @@ def hashmap.HashMap.get_mut
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]: backward function 0
    Source: 'src/hashmap.rs', lines 257:4-257:67 -/
 def hashmap.HashMap.get_mut_back
-  (T : Type) (self : hashmap.HashMap T) (key : Usize) (ret0 : T) :
+  (T : Type) (self : hashmap.HashMap T) (key : Usize) (ret : T) :
   Result (hashmap.HashMap T)
   :=
   do
@@ -400,7 +400,7 @@ def hashmap.HashMap.get_mut_back
       alloc.vec.Vec.index_mut (hashmap.List T) Usize
         (core.slice.index.SliceIndexUsizeSliceTInst (hashmap.List T))
         self.slots hash_mod
-    let l0 ← hashmap.HashMap.get_mut_in_list_back T l key ret0
+    let l0 ← hashmap.HashMap.get_mut_in_list_back T l key ret
     let v ←
       alloc.vec.Vec.index_mut_back (hashmap.List T) Usize
         (core.slice.index.SliceIndexUsizeSliceTInst (hashmap.List T))
@@ -420,7 +420,7 @@ divergent def hashmap.HashMap.remove_from_list_loop
           hashmap.List.Nil
       match mv_ls with
       | hashmap.List.Cons i cvalue tl0 => Result.ret (some cvalue)
-      | hashmap.List.Nil => Result.fail Error.panic
+      | hashmap.List.Nil => Result.fail .panic
     else hashmap.HashMap.remove_from_list_loop T key tl
   | hashmap.List.Nil => Result.ret none
 
@@ -443,7 +443,7 @@ divergent def hashmap.HashMap.remove_from_list_loop_back
           hashmap.List.Nil
       match mv_ls with
       | hashmap.List.Cons i cvalue tl0 => Result.ret tl0
-      | hashmap.List.Nil => Result.fail Error.panic
+      | hashmap.List.Nil => Result.fail .panic
     else
       do
         let tl0 ← hashmap.HashMap.remove_from_list_loop_back T key tl
@@ -520,37 +520,37 @@ def hashmap.test1 : Result Unit :=
     let hm3 ← hashmap.HashMap.insert U64 hm2 1056#usize 256#u64
     let i ← hashmap.HashMap.get U64 hm3 128#usize
     if not (i = 18#u64)
-    then Result.fail Error.panic
+    then Result.fail .panic
     else
       do
         let hm4 ← hashmap.HashMap.get_mut_back U64 hm3 1024#usize 56#u64
         let i0 ← hashmap.HashMap.get U64 hm4 1024#usize
         if not (i0 = 56#u64)
-        then Result.fail Error.panic
+        then Result.fail .panic
         else
           do
             let x ← hashmap.HashMap.remove U64 hm4 1024#usize
             match x with
-            | none => Result.fail Error.panic
+            | none => Result.fail .panic
             | some x0 =>
               if not (x0 = 56#u64)
-              then Result.fail Error.panic
+              then Result.fail .panic
               else
                 do
                   let hm5 ← hashmap.HashMap.remove_back U64 hm4 1024#usize
                   let i1 ← hashmap.HashMap.get U64 hm5 0#usize
                   if not (i1 = 42#u64)
-                  then Result.fail Error.panic
+                  then Result.fail .panic
                   else
                     do
                       let i2 ← hashmap.HashMap.get U64 hm5 128#usize
                       if not (i2 = 18#u64)
-                      then Result.fail Error.panic
+                      then Result.fail .panic
                       else
                         do
                           let i3 ← hashmap.HashMap.get U64 hm5 1056#usize
                           if not (i3 = 256#u64)
-                          then Result.fail Error.panic
+                          then Result.fail .panic
                           else Result.ret ()
 
 /- [hashmap_main::insert_on_disk]: forward function

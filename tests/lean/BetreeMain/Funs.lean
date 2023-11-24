@@ -121,7 +121,7 @@ divergent def betree.List.split_at
         let (ls0, ls1) := p
         let l := ls0
         Result.ret (betree.List.Cons hd l, ls1)
-    | betree.List.Nil => Result.fail Error.panic
+    | betree.List.Nil => Result.fail .panic
 
 /- [betree_main::betree::{betree_main::betree::List<T>#1}::push_front]: merged forward/backward function
    (there is a single backward function, and the forward function returns ())
@@ -138,7 +138,7 @@ def betree.List.pop_front (T : Type) (self : betree.List T) : Result T :=
   let ls := core.mem.replace (betree.List T) self betree.List.Nil
   match ls with
   | betree.List.Cons x tl => Result.ret x
-  | betree.List.Nil => Result.fail Error.panic
+  | betree.List.Nil => Result.fail .panic
 
 /- [betree_main::betree::{betree_main::betree::List<T>#1}::pop_front]: backward function 0
    Source: 'src/betree.rs', lines 306:4-306:32 -/
@@ -147,14 +147,14 @@ def betree.List.pop_front_back
   let ls := core.mem.replace (betree.List T) self betree.List.Nil
   match ls with
   | betree.List.Cons x tl => Result.ret tl
-  | betree.List.Nil => Result.fail Error.panic
+  | betree.List.Nil => Result.fail .panic
 
 /- [betree_main::betree::{betree_main::betree::List<T>#1}::hd]: forward function
    Source: 'src/betree.rs', lines 318:4-318:22 -/
 def betree.List.hd (T : Type) (self : betree.List T) : Result T :=
   match self with
   | betree.List.Cons hd l => Result.ret hd
-  | betree.List.Nil => Result.fail Error.panic
+  | betree.List.Nil => Result.fail .panic
 
 /- [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::head_has_key]: forward function
    Source: 'src/betree.rs', lines 327:4-327:44 -/
@@ -241,20 +241,20 @@ divergent def betree.Node.lookup_first_message_for_key
    Source: 'src/betree.rs', lines 789:4-792:34 -/
 divergent def betree.Node.lookup_first_message_for_key_back
   (key : U64) (msgs : betree.List (U64 × betree.Message))
-  (ret0 : betree.List (U64 × betree.Message)) :
+  (ret : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × betree.Message))
   :=
   match msgs with
   | betree.List.Cons x next_msgs =>
     let (i, m) := x
     if i >= key
-    then Result.ret ret0
+    then Result.ret ret
     else
       do
         let next_msgs0 ←
-          betree.Node.lookup_first_message_for_key_back key next_msgs ret0
+          betree.Node.lookup_first_message_for_key_back key next_msgs ret
         Result.ret (betree.List.Cons (i, m) next_msgs0)
-  | betree.List.Nil => Result.ret ret0
+  | betree.List.Nil => Result.ret ret
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::apply_upserts]: forward function
    Source: 'src/betree.rs', lines 819:4-819:90 -/
@@ -271,8 +271,8 @@ divergent def betree.Node.apply_upserts
         let msg ← betree.List.pop_front (U64 × betree.Message) msgs
         let (_, m) := msg
         match m with
-        | betree.Message.Insert i => Result.fail Error.panic
-        | betree.Message.Delete => Result.fail Error.panic
+        | betree.Message.Insert i => Result.fail .panic
+        | betree.Message.Delete => Result.fail .panic
         | betree.Message.Upsert s =>
           do
             let v ← betree.upsert_update prev s
@@ -302,8 +302,8 @@ divergent def betree.Node.apply_upserts_back
         let msg ← betree.List.pop_front (U64 × betree.Message) msgs
         let (_, m) := msg
         match m with
-        | betree.Message.Insert i => Result.fail Error.panic
-        | betree.Message.Delete => Result.fail Error.panic
+        | betree.Message.Insert i => Result.fail .panic
+        | betree.Message.Delete => Result.fail .panic
         | betree.Message.Upsert s =>
           do
             let v ← betree.upsert_update prev s
@@ -542,7 +542,7 @@ divergent def betree.Node.lookup_first_message_after_key
    Source: 'src/betree.rs', lines 689:4-692:34 -/
 divergent def betree.Node.lookup_first_message_after_key_back
   (key : U64) (msgs : betree.List (U64 × betree.Message))
-  (ret0 : betree.List (U64 × betree.Message)) :
+  (ret : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × betree.Message))
   :=
   match msgs with
@@ -552,10 +552,10 @@ divergent def betree.Node.lookup_first_message_after_key_back
     then
       do
         let next_msgs0 ←
-          betree.Node.lookup_first_message_after_key_back key next_msgs ret0
+          betree.Node.lookup_first_message_after_key_back key next_msgs ret
         Result.ret (betree.List.Cons (k, m) next_msgs0)
-    else Result.ret ret0
-  | betree.List.Nil => Result.ret ret0
+    else Result.ret ret
+  | betree.List.Nil => Result.ret ret
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::apply_to_internal]: merged forward/backward function
    (there is a single backward function, and the forward function returns ())
@@ -658,19 +658,19 @@ divergent def betree.Node.lookup_mut_in_bindings
    Source: 'src/betree.rs', lines 653:4-656:32 -/
 divergent def betree.Node.lookup_mut_in_bindings_back
   (key : U64) (bindings : betree.List (U64 × U64))
-  (ret0 : betree.List (U64 × U64)) :
+  (ret : betree.List (U64 × U64)) :
   Result (betree.List (U64 × U64))
   :=
   match bindings with
   | betree.List.Cons hd tl =>
     let (i, i0) := hd
     if i >= key
-    then Result.ret ret0
+    then Result.ret ret
     else
       do
-        let tl0 ← betree.Node.lookup_mut_in_bindings_back key tl ret0
+        let tl0 ← betree.Node.lookup_mut_in_bindings_back key tl ret
         Result.ret (betree.List.Cons (i, i0) tl0)
-  | betree.List.Nil => Result.ret ret0
+  | betree.List.Nil => Result.ret ret
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::apply_to_leaf]: merged forward/backward function
    (there is a single backward function, and the forward function returns ())
@@ -1069,6 +1069,6 @@ def main : Result Unit :=
   Result.ret ()
 
 /- Unit test for [betree_main::main] -/
-#assert (main == .ret ())
+#assert (main == Result.ret ())
 
 end betree_main

@@ -45,7 +45,7 @@ def test_vec : Result Unit :=
     Result.ret ()
 
 /- Unit test for [external::test_vec] -/
-#assert (test_vec == .ret ())
+#assert (test_vec == Result.ret ())
 
 /- [external::custom_swap]: forward function
    Source: 'src/external.rs', lines 24:0-24:66 -/
@@ -60,14 +60,14 @@ def custom_swap
 /- [external::custom_swap]: backward function 0
    Source: 'src/external.rs', lines 24:0-24:66 -/
 def custom_swap_back
-  (T : Type) (x : T) (y : T) (st : State) (ret0 : T) (st0 : State) :
+  (T : Type) (x : T) (y : T) (st : State) (ret : T) (st0 : State) :
   Result (State × (T × T))
   :=
   do
     let (st1, _) ← core.mem.swap T x y st
     let (st2, _) ← core.mem.swap_back0 T x y st st1
     let (_, y0) ← core.mem.swap_back1 T x y st st2
-    Result.ret (st0, (ret0, y0))
+    Result.ret (st0, (ret, y0))
 
 /- [external::test_custom_swap]: forward function
    Source: 'src/external.rs', lines 29:0-29:59 -/
@@ -92,7 +92,7 @@ def test_swap_non_zero (x : U32) (st : State) : Result (State × U32) :=
     let (st0, _) ← swap U32 x 0#u32 st
     let (st1, (x0, _)) ← swap_back U32 x 0#u32 st st0
     if x0 = 0#u32
-    then Result.fail Error.panic
+    then Result.fail .panic
     else Result.ret (st1, x0)
 
 end external

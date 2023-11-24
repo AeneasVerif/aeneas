@@ -31,10 +31,10 @@ def array_to_mut_slice_ (T : Type) (s : Array T 32#usize) : Result (Slice T) :=
 /- [array::array_to_mut_slice_]: backward function 0
    Source: 'src/array.rs', lines 21:0-21:58 -/
 def array_to_mut_slice__back
-  (T : Type) (s : Array T 32#usize) (ret0 : Slice T) :
+  (T : Type) (s : Array T 32#usize) (ret : Slice T) :
   Result (Array T 32#usize)
   :=
-  Array.from_slice T 32#usize s ret0
+  Array.from_slice T 32#usize s ret
 
 /- [array::array_len]: forward function
    Source: 'src/array.rs', lines 25:0-25:40 -/
@@ -82,10 +82,10 @@ def index_mut_array (T : Type) (s : Array T 32#usize) (i : Usize) : Result T :=
 /- [array::index_mut_array]: backward function 0
    Source: 'src/array.rs', lines 52:0-52:62 -/
 def index_mut_array_back
-  (T : Type) (s : Array T 32#usize) (i : Usize) (ret0 : T) :
+  (T : Type) (s : Array T 32#usize) (i : Usize) (ret : T) :
   Result (Array T 32#usize)
   :=
-  Array.update_usize T 32#usize s i ret0
+  Array.update_usize T 32#usize s i ret
 
 /- [array::index_slice]: forward function
    Source: 'src/array.rs', lines 56:0-56:46 -/
@@ -100,8 +100,8 @@ def index_mut_slice (T : Type) (s : Slice T) (i : Usize) : Result T :=
 /- [array::index_mut_slice]: backward function 0
    Source: 'src/array.rs', lines 60:0-60:58 -/
 def index_mut_slice_back
-  (T : Type) (s : Slice T) (i : Usize) (ret0 : T) : Result (Slice T) :=
-  Slice.update_usize T s i ret0
+  (T : Type) (s : Slice T) (i : Usize) (ret : T) : Result (Slice T) :=
+  Slice.update_usize T s i ret
 
 /- [array::slice_subslice_shared_]: forward function
    Source: 'src/array.rs', lines 64:0-64:70 -/
@@ -122,12 +122,12 @@ def slice_subslice_mut_
 /- [array::slice_subslice_mut_]: backward function 0
    Source: 'src/array.rs', lines 68:0-68:75 -/
 def slice_subslice_mut__back
-  (x : Slice U32) (y : Usize) (z : Usize) (ret0 : Slice U32) :
+  (x : Slice U32) (y : Usize) (z : Usize) (ret : Slice U32) :
   Result (Slice U32)
   :=
   core.slice.index.Slice.index_mut_back U32 (core.ops.range.Range Usize)
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
-    { start := y, end_ := z } ret0
+    { start := y, end_ := z } ret
 
 /- [array::array_to_slice_shared_]: forward function
    Source: 'src/array.rs', lines 72:0-72:54 -/
@@ -142,8 +142,8 @@ def array_to_slice_mut_ (x : Array U32 32#usize) : Result (Slice U32) :=
 /- [array::array_to_slice_mut_]: backward function 0
    Source: 'src/array.rs', lines 76:0-76:59 -/
 def array_to_slice_mut__back
-  (x : Array U32 32#usize) (ret0 : Slice U32) : Result (Array U32 32#usize) :=
-  Array.from_slice U32 32#usize x ret0
+  (x : Array U32 32#usize) (ret : Slice U32) : Result (Array U32 32#usize) :=
+  Array.from_slice U32 32#usize x ret
 
 /- [array::array_subslice_shared_]: forward function
    Source: 'src/array.rs', lines 80:0-80:74 -/
@@ -166,13 +166,13 @@ def array_subslice_mut_
 /- [array::array_subslice_mut_]: backward function 0
    Source: 'src/array.rs', lines 84:0-84:79 -/
 def array_subslice_mut__back
-  (x : Array U32 32#usize) (y : Usize) (z : Usize) (ret0 : Slice U32) :
+  (x : Array U32 32#usize) (y : Usize) (z : Usize) (ret : Slice U32) :
   Result (Array U32 32#usize)
   :=
   core.array.Array.index_mut_back U32 (core.ops.range.Range Usize) 32#usize
     (core.ops.index.IndexMutSliceTIInst U32 (core.ops.range.Range Usize)
     (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
-    { start := y, end_ := z } ret0
+    { start := y, end_ := z } ret
 
 /- [array::index_slice_0]: forward function
    Source: 'src/array.rs', lines 88:0-88:38 -/
@@ -417,7 +417,7 @@ def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
   let i := Slice.len U32 s
   let i0 := Slice.len U32 s2
   if not (i = i0)
-  then Result.fail Error.panic
+  then Result.fail .panic
   else sum2_loop s s2 0#u32 0#usize
 
 /- [array::f0]: forward function
