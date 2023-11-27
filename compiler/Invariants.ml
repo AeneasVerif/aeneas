@@ -804,7 +804,7 @@ let check_symbolic_values (ctx : eval_ctx) : unit =
   M.iter check_info !infos
 
 let check_invariants (ctx : eval_ctx) : unit =
-  if !Config.check_invariants then (
+  if !Config.sanity_checks then (
     log#ldebug (lazy ("Checking invariants:\n" ^ eval_ctx_to_string ctx));
     check_loans_borrows_relation_invariant ctx;
     check_borrowed_values_invariant ctx;

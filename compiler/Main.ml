@@ -107,10 +107,10 @@ let () =
         Arg.Set split_files,
         " Split the definitions between different files for types, functions, \
          etc." );
-      ( "-no-check-inv",
-        Arg.Clear check_invariants,
-        " Deactivate the invariant sanity checks performed at every evaluation \
-         step. Dramatically increases speed." );
+      ( "-checks",
+        Arg.Set sanity_checks,
+        " Activate extensive sanity checks (warning: causes a ~100 times slow \
+         down)." );
       ( "-no-gen-lib-entry",
         Arg.Clear generate_lib_entry_point,
         " Do not generate the entry point file for the generated library (only \

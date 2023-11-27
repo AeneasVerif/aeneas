@@ -2155,7 +2155,7 @@ let merge_into_abstraction_aux (abs_kind : abs_kind) (can_end : bool)
      ^ "\n\n- abs1:\n" ^ abs_to_string ctx abs1));
 
   (* Check that the abstractions are destructured *)
-  if !Config.check_invariants then (
+  if !Config.sanity_checks then (
     let destructure_shared_values = true in
     assert (abs_is_destructured destructure_shared_values ctx abs0);
     assert (abs_is_destructured destructure_shared_values ctx abs1));
@@ -2487,7 +2487,7 @@ let merge_into_abstraction_aux (abs_kind : abs_kind) (can_end : bool)
   in
 
   (* Sanity check *)
-  if !Config.check_invariants then assert (abs_is_destructured true ctx abs);
+  if !Config.sanity_checks then assert (abs_is_destructured true ctx abs);
   (* Return *)
   abs
 

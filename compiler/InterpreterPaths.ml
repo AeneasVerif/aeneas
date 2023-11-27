@@ -311,7 +311,7 @@ let try_read_place (access : access_kind) (p : place) (ctx : eval_ctx) :
       (* Note that we ignore the new environment: it should be the same as the
          original one.
       *)
-      if !Config.check_invariants then
+      if !Config.sanity_checks then
         if ctx1 <> ctx then (
           let msg =
             "Unexpected environment update:\nNew environment:\n"

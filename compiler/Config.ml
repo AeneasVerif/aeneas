@@ -35,11 +35,11 @@ let backend = ref FStar
 
 (** {1 Interpreter} *)
 
-(** Check that invariants are maintained whenever we execute a statement
-
-    TODO: rename to sanity_checks.
+(** Activate the sanity checks, and in particular the invariant checks
+    that are performed at every evaluation step. This is very expensive
+    (~100x slow down) but very efficient to catch mistakes early.
  *)
-let check_invariants = ref true
+let sanity_checks = ref false
 
 (** Expand all symbolic values containing borrows upon introduction - allows
     to use restrict ourselves to a simpler model for the projectors over

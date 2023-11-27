@@ -1580,7 +1580,7 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
        ^ eval_ctx_to_string tgt_ctx));
 
     (* Sanity check *)
-    if !Config.check_invariants then
+    if !Config.sanity_checks then
       Invariants.check_borrowed_values_invariant tgt_ctx;
 
     (* End all the borrows which appear in the *new* abstractions *)
