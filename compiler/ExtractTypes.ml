@@ -213,7 +213,7 @@ let is_empty_record_type_decl_group (dg : Pure.type_decl list) : bool =
     - in Lean, groups of mutually recursive definitions must end with "end"
     - in HOL4 (in most situations) the whole group must be within a `Define` command
 
-    Calls to {!extract_fun_decl} should be inserted between calls to
+    Calls to {!Extract.extract_fun_decl} should be inserted between calls to
     {!start_fun_decl_group} and {!end_fun_decl_group}.
 
     TODO: maybe those [{start/end}_decl_group] functions are not that much a good

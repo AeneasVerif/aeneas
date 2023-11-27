@@ -112,7 +112,7 @@ let reset_global_counters () =
   fun_call_id_counter := FunCallId.generator_zero;
   dummy_var_id_counter := DummyVarId.generator_zero
 
-(** Ancestor for {!env} iter visitor *)
+(** Ancestor for {!type:env} iter visitor *)
 class ['self] iter_env_base =
   object (_self : 'self)
     inherit [_] iter_abs
@@ -120,7 +120,7 @@ class ['self] iter_env_base =
     method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for {!env} map visitor *)
+(** Ancestor for {!type:env} map visitor *)
 class ['self] map_env_base =
   object (_self : 'self)
     inherit [_] map_abs
@@ -423,11 +423,11 @@ let erase_regions (ty : ty) : ty =
   in
   v#visit_ty () ty
 
-(** Push an uninitialized variable (which thus maps to {!constructor:Values.value.Bottom}) *)
+(** Push an uninitialized variable (which thus maps to {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =
   ctx_push_var ctx var (mk_bottom (erase_regions var.var_ty))
 
-(** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.Bottom}) *)
+(** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom (erase_regions v.var_ty))) vars in
   ctx_push_vars ctx vars

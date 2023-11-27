@@ -5,7 +5,7 @@ include Charon.TypesUtils
 (** Retuns true if the type contains borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes
-    we erase the lists of regions (by replacing them with [[]] when using {!Types.ety},
+    we erase the lists of regions (by replacing them with [[]] when using {!type:Types.ty},
     and when a type uses 'static this region doesn't appear in the region parameters.
  *)
 let ty_has_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
@@ -15,7 +15,7 @@ let ty_has_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
 (** Retuns true if the type contains nested borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes
-    we erase the lists of regions (by replacing them with [[]] when using {!Types.ety},
+    we erase the lists of regions (by replacing them with [[]] when using {!type:Types.ty},
     and when a type uses 'static this region doesn't appear in the region parameters.
  *)
 let ty_has_nested_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =

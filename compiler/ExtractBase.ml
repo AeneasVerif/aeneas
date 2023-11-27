@@ -311,7 +311,7 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
     the same name because Lean uses the typing information to resolve the
     ambiguities.
 
-    This map complements the {!names_map}, which checks for collisions.
+    This map complements the {!type:names_map}, which checks for collisions.
   *)
 type unsafe_names_map = { id_to_name : string IdMap.t }
 
@@ -1639,7 +1639,7 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
       function is an assumed function or a local function
     - function basename
     - the number of loops in the parent function. This is used for
-      the same purpose as in {!field:llbc_name}.
+      the same purpose as in [llbc_name].
     - loop identifier, if this is for a loop
  *)
 let ctx_compute_termination_measure_name (ctx : extraction_ctx)
@@ -1668,7 +1668,7 @@ let ctx_compute_termination_measure_name (ctx : extraction_ctx)
       function is an assumed function or a local function
     - function basename
     - the number of loops in the parent function. This is used for
-      the same purpose as in {!field:llbc_name}.
+      the same purpose as in [llbc_name].
     - loop identifier, if this is for a loop
  *)
 let ctx_compute_decreases_proof_name (ctx : extraction_ctx)

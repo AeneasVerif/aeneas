@@ -924,7 +924,7 @@ let remove_intersecting_aproj_borrows_shared (regions : RegionId.Set.t)
         
     [subst]: takes as parameters the abstraction in which we perform the
     substitution and the list of given back values at the projector of
-    loans where we perform the substitution (see the fields in {!AProjLoans}).
+    loans where we perform the substitution (see the fields in {!Values.AProjLoans}).
     Note that the symbolic value at this place is necessarily equal to [sv],
     which is why we don't give it as parameters.
  *)
@@ -970,13 +970,13 @@ let update_intersecting_aproj_loans (proj_regions : RegionId.Set.t)
   (* Return *)
   ctx
 
-(** Helper function: lookup an {!AProjLoans} by using an abstraction id and a
+(** Helper function: lookup an {!constructor:Values.aproj.AProjLoans} by using an abstraction id and a
     symbolic value.
-    
+
     We return the information from the looked up projector of loans. See the
-    fields in {!AProjLoans} (we don't return the symbolic value, because it
+    fields in {!constructor:Values.aproj.AProjLoans} (we don't return the symbolic value, because it
     is equal to [sv]).
-    
+
     Sanity check: we check that there is exactly one projector which corresponds
     to the couple (abstraction id, symbolic value).
  *)
@@ -1115,7 +1115,7 @@ let update_aproj_borrows (abs_id : AbstractionId.id) (sv : symbolic_value)
 
 (** Helper function: might break invariants.
 
-    Converts an {!AProjLoans} to an {!AEndedProjLoans}. The projector is identified
+    Converts an {!Values.aproj.AProjLoans} to an {!Values.aproj.AEndedProjLoans}. The projector is identified
     by a symbolic value and an abstraction id.
  *)
 let update_aproj_loans_to_ended (abs_id : AbstractionId.id)
