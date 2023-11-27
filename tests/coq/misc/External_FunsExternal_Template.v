@@ -7,8 +7,8 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
-Require Export External_Types.
-Import External_Types.
+Require Import External_Types.
+Include External_Types.
 Module External_FunsExternal_Template.
 
 (** [core::mem::swap]: forward function
@@ -41,4 +41,4 @@ Axiom core_option_Option_unwrap :
   forall(T : Type), option T -> state -> result (state * T)
 .
 
-End External_FunsExternal_Template .
+End External_FunsExternal_Template.

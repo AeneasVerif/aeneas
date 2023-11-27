@@ -7,8 +7,8 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
-Require Export BetreeMain_Types.
-Import BetreeMain_Types.
+Require Import BetreeMain_Types.
+Include BetreeMain_Types.
 Module BetreeMain_FunsExternal_Template.
 
 (** [betree_main::betree_utils::load_internal_node]: forward function
@@ -43,4 +43,4 @@ Axiom core_option_Option_unwrap :
   forall(T : Type), option T -> state -> result (state * T)
 .
 
-End BetreeMain_FunsExternal_Template .
+End BetreeMain_FunsExternal_Template.

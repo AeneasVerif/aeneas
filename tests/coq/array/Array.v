@@ -528,4 +528,4 @@ Definition ite : result unit :=
   Return tt
 .
 
-End Array .
+End Array.

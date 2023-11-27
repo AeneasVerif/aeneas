@@ -6,5 +6,7 @@
 HashmapMain_Types.v
 Primitives.v
 HashmapMain_Funs.v
+HashmapMain_TypesExternal.v
 HashmapMain_FunsExternal_Template.v
 HashmapMain_FunsExternal.v
+HashmapMain_TypesExternal_Template.v

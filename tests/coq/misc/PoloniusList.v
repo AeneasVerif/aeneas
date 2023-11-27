@@ -41,4 +41,4 @@ Fixpoint get_list_at_x_back
   end
 .
 
-End PoloniusList .
+End PoloniusList.

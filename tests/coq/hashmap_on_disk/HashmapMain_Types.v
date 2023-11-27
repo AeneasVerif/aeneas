@@ -6,6 +6,8 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
+Require Import HashmapMain_TypesExternal.
+Include HashmapMain_TypesExternal.
 Module HashmapMain_Types.
 
 (** [hashmap_main::hashmap::List]
@@ -35,7 +37,4 @@ Arguments hashmap_HashMap_max_load_factor { _ }.
 Arguments hashmap_HashMap_max_load { _ }.
 Arguments hashmap_HashMap_slots { _ }.
 
-(** The state type used in the state-error monad *)
-Axiom state : Type.
-
-End HashmapMain_Types .
+End HashmapMain_Types.

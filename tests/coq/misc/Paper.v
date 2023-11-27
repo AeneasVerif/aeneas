@@ -128,4 +128,4 @@ Definition call_choose (p : (u32 * u32)) : result u32 :=
   Return px0
 .
 
-End Paper .
+End Paper.

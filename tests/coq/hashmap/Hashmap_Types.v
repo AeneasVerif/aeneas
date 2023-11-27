@@ -35,4 +35,4 @@ Arguments hashMap_max_load_factor { _ }.
 Arguments hashMap_max_load { _ }.
 Arguments hashMap_slots { _ }.
 
-End Hashmap_Types .
+End Hashmap_Types.

@@ -7,7 +7,7 @@ Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
 Require Export External_Types.
-Import External_Types.
+Include External_Types.
 Module External_FunsExternal.
 
 (** [core::mem::swap]: forward function

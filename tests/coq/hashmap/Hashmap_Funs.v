@@ -6,8 +6,8 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
-Require Export Hashmap_Types.
-Import Hashmap_Types.
+Require Import Hashmap_Types.
+Include Hashmap_Types.
 Module Hashmap_Funs.
 
 (** [hashmap::hash_key]: forward function
@@ -668,4 +668,4 @@ Definition test1 (n : nat) : result unit :=
       end))
 .
 
-End Hashmap_Funs .
+End Hashmap_Funs.

@@ -481,9 +481,19 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
       defs
   in
 
+  let dont_extract (d : Pure.type_decl) : bool =
+    match d.kind with
+    | Enum _ | Struct _ -> not config.extract_transparent
+    | Opaque -> not config.extract_opaque
+  in
+
   if List.exists (fun b -> b) builtin then
     (* Sanity check *)
     assert (List.for_all (fun b -> b) builtin)
+  else if List.exists dont_extract defs then
+    (* Check if we have to ignore declarations *)
+    (* Sanity check *)
+    assert (List.for_all dont_extract defs)
   else (
     (* Extract the type declarations.
 
@@ -873,6 +883,7 @@ type extract_file_info = {
   filename : string;
   namespace : string;
   in_namespace : bool;
+  open_namespace : bool;
   crate_name : string;
   rust_module_name : string;
   module_name : string;
@@ -931,8 +942,22 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       (* Add the custom includes *)
       List.iter
         (fun m ->
-          Printf.fprintf out "Require Export %s.\n" m;
-          Printf.fprintf out "Import %s.\n" m)
+          (* TODO: I don't really understand how the "Require Export",
+             "Require Import", "Include" work.
+             I used to have:
+             {[
+               Require Export %s.
+               Import %s.
+             ]}
+
+             I now have:
+             {[
+               Require Import %s.
+               Include %s.
+             ]}
+          *)
+          Printf.fprintf out "Require Import %s.\n" m;
+          Printf.fprintf out "Include %s.\n" m)
         fi.custom_includes;
       Printf.fprintf out "Module %s.\n" fi.module_name
   | Lean ->
@@ -943,9 +968,10 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_includes;
       (* Always open the Primitives namespace *)
       Printf.fprintf out "open Primitives\n";
-      (* If we are inside the namespace: declare it, otherwise: open it *)
-      if fi.in_namespace then Printf.fprintf out "\nnamespace %s\n" fi.namespace
-      else Printf.fprintf out "open %s\n" fi.namespace
+      (* If we are inside the namespace: declare it *)
+      if fi.in_namespace then Printf.fprintf out "\nnamespace %s\n" fi.namespace;
+      (* We might need to open the namespace *)
+      if fi.open_namespace then Printf.fprintf out "open %s\n" fi.namespace
   | HOL4 ->
       Printf.fprintf out "open primitivesLib divDefLib\n";
       (* Add the custom imports and includes *)
@@ -1250,12 +1276,72 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
      in
      let has_opaque_types = has_opaque_types || !Config.use_state in
 
-     (* Extract the types *)
+     (*
+      * Extract the types
+      *)
      (* If there are opaque types, we extract in an interface *)
-     (* TODO: for Lean and Coq: generate a template file *)
+     (* Extract the opaque type declarations, if needed *)
+     let opaque_types_module =
+       if has_opaque_types then (
+         (* For F*, we generate an .fsti, and let the user write the .fst.
+            For the other backends, we generate a template file as a model
+            for the file the user has to provide. *)
+         let module_suffix, opaque_imported_suffix, custom_msg =
+           match !Config.backend with
+           | FStar ->
+               ("TypesExternal", "TypesExternal", ": external type declarations")
+           | HOL4 | Coq | Lean ->
+               ( (* The name of the file we generate *)
+                 "TypesExternal_Template",
+                 (* The name of the file that will be imported by the Types
+                    module, and that the user has to provide. *)
+                 "TypesExternal",
+                 ": external types.\n\
+                  -- This is a template file: rename it to \
+                  \"TypesExternal.lean\" and fill the holes." )
+         in
+         let opaque_filename =
+           extract_filebasename ^ file_delimiter ^ module_suffix ^ opaque_ext
+         in
+         let opaque_module = crate_name ^ module_delimiter ^ module_suffix in
+         let opaque_imported_module =
+           crate_name ^ module_delimiter ^ opaque_imported_suffix
+         in
+         let opaque_config =
+           {
+             base_gen_config with
+             extract_opaque = true;
+             extract_transparent = false;
+             extract_types = true;
+             extract_trait_decls = true;
+             extract_state_type = !Config.use_state;
+             interface = true;
+           }
+         in
+         let file_info =
+           {
+             filename = opaque_filename;
+             namespace;
+             in_namespace = false;
+             open_namespace = false;
+             crate_name;
+             rust_module_name = crate.name;
+             module_name = opaque_module;
+             custom_msg;
+             custom_imports = [];
+             custom_includes = [];
+           }
+         in
+         extract_file opaque_config ctx file_info;
+         (* Return the additional dependencies *)
+         [ opaque_imported_module ])
+       else []
+     in
+
+     (* Extract the non opaque types *)
      let types_filename_ext =
        match !Config.backend with
-       | FStar -> if has_opaque_types then ".fsti" else ".fst"
+       | FStar -> ".fst"
        | Coq -> ".v"
        | Lean -> ".lean"
        | HOL4 -> "Script.sml"
@@ -1269,8 +1355,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          base_gen_config with
          extract_types = true;
          extract_trait_decls = true;
-         extract_opaque = true;
-         extract_state_type = !Config.use_state;
+         extract_opaque = false;
          interface = has_opaque_types;
        }
      in
@@ -1279,12 +1364,13 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          filename = types_filename;
          namespace;
          in_namespace = true;
+         open_namespace = false;
          crate_name;
          rust_module_name = crate.name;
          module_name = types_module;
          custom_msg = ": type definitions";
          custom_imports = [];
-         custom_includes = [];
+         custom_includes = opaque_types_module;
        }
      in
      extract_file types_config ctx file_info;
@@ -1307,6 +1393,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
             filename = template_clauses_filename;
             namespace;
             in_namespace = true;
+            open_namespace = false;
             crate_name;
             rust_module_name = crate.name;
             module_name = template_clauses_module;
@@ -1317,7 +1404,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
         in
         extract_file template_clauses_config ctx file_info);
 
-     (* Extract the opaque declarations, if needed *)
+     (* Extract the opaque fun declarations, if needed *)
      let opaque_funs_module =
        if has_opaque_funs then (
          (* For F*, we generate an .fsti, and let the user write the .fst.
@@ -1362,6 +1449,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
              filename = opaque_filename;
              namespace;
              in_namespace = false;
+             open_namespace = true;
              crate_name;
              rust_module_name = crate.name;
              module_name = opaque_module;
@@ -1401,6 +1489,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          filename = fun_filename;
          namespace;
          in_namespace = true;
+         open_namespace = false;
          crate_name;
          rust_module_name = crate.name;
          module_name = fun_module;
@@ -1434,6 +1523,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          filename = extract_filebasename ^ ext;
          namespace;
          in_namespace = true;
+         open_namespace = false;
          crate_name;
          rust_module_name = crate.name;
          module_name = crate_name;

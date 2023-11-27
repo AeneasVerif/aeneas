@@ -611,4 +611,4 @@ Arguments CFn_t_call_mut { _ _ }.
 Definition incr_u32 (x : u32) : result u32 :=
   u32_add x 1%u32.
 
-End Traits .
+End Traits.
