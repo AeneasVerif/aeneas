@@ -52,7 +52,8 @@ let greedy_expand_symbolics_with_borrows = true
 
 (** Experimental.
 
-    TODO: remove (always true now)
+    TODO: remove (always true now), but check that when we panic/call a function
+    there is no bottom below a borrow.
 
     We sometimes want to temporarily break the invariant that there is no
     bottom value below a borrow. If this value is true, we don't check
