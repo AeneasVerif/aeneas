@@ -1206,20 +1206,27 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     match primitives_src_dest with
     | None -> ()
     | Some (primitives_src, primitives_destname) -> (
-        let src = open_in (exe_dir ^ primitives_src) in
-        let tgt_filename = Filename.concat dest_dir primitives_destname in
-        let tgt = open_out tgt_filename in
-        (* Very annoying: I couldn't find a "cp" function in the OCaml libraries... *)
         try
-          while true do
-            (* We copy line by line *)
-            let line = input_line src in
-            Printf.fprintf tgt "%s\n" line
-          done
-        with End_of_file ->
-          close_in src;
-          close_out tgt;
-          log#linfo (lazy ("Copied:    " ^ tgt_filename)))
+          (* TODO: stop copying the primitives file *)
+          let src = open_in (exe_dir ^ primitives_src) in
+          let tgt_filename = Filename.concat dest_dir primitives_destname in
+          let tgt = open_out tgt_filename in
+          (* Very annoying: I couldn't find a "cp" function in the OCaml libraries... *)
+          try
+            while true do
+              (* We copy line by line *)
+              let line = input_line src in
+              Printf.fprintf tgt "%s\n" line
+            done
+          with End_of_file ->
+            close_in src;
+            close_out tgt;
+            log#linfo (lazy ("Copied:    " ^ tgt_filename))
+        with Sys_error _ ->
+          log#error
+            "Could not copy the primitives file: %s.\n\
+             You will have to copy it/set up the project by hand."
+            primitives_src)
   in
 
   (* Extract the file(s) *)
