@@ -8,8 +8,8 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Require Export HashmapMain_Types.
 Import HashmapMain_Types.
-Require Export HashmapMain_Opaque.
-Import HashmapMain_Opaque.
+Require Export HashmapMain_FunsExternal.
+Import HashmapMain_FunsExternal.
 Module HashmapMain_Funs.
 
 (** [hashmap_main::hashmap::hash_key]: forward function

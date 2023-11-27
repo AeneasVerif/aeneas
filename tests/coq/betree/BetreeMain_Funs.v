@@ -8,8 +8,8 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Require Export BetreeMain_Types.
 Import BetreeMain_Types.
-Require Export BetreeMain_Opaque.
-Import BetreeMain_Opaque.
+Require Export BetreeMain_FunsExternal.
+Import BetreeMain_FunsExternal.
 Module BetreeMain_Funs.
 
 (** [betree_main::betree::load_internal_node]: forward function

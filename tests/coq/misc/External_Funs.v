@@ -8,8 +8,8 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Require Export External_Types.
 Import External_Types.
-Require Export External_Opaque.
-Import External_Opaque.
+Require Export External_FunsExternal.
+Import External_FunsExternal.
 Module External_Funs.
 
 (** [external::swap]: forward function

@@ -3,7 +3,7 @@
 module External.Funs
 open Primitives
 include External.Types
-include External.Opaque
+include External.FunsExternal
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 

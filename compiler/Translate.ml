@@ -977,7 +977,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   | FStar -> ()
   | Lean -> if fi.in_namespace then Printf.fprintf out "end %s\n" fi.namespace
   | HOL4 -> Printf.fprintf out "val _ = export_theory ()\n"
-  | Coq -> Printf.fprintf out "End %s .\n" fi.module_name);
+  | Coq -> Printf.fprintf out "End %s.\n" fi.module_name);
 
   (* Some logging *)
   log#linfo (lazy ("Generated: " ^ fi.filename));
@@ -1320,13 +1320,20 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
      (* Extract the opaque declarations, if needed *)
      let opaque_funs_module =
        if has_opaque_funs then (
-         (* In the case of Lean we generate a template file *)
+         (* For F*, we generate an .fsti, and let the user write the .fst.
+            For the other backends, we generate a template file as a model
+            for the file the user has to provide. *)
          let module_suffix, opaque_imported_suffix, custom_msg =
            match !Config.backend with
-           | FStar | Coq | HOL4 ->
-               ("Opaque", "Opaque", ": external function declarations")
-           | Lean ->
-               ( "FunsExternal_Template",
+           | FStar ->
+               ( "FunsExternal",
+                 "FunsExternal",
+                 ": external function declarations" )
+           | HOL4 | Coq | Lean ->
+               ( (* The name of the file we generate *)
+                 "FunsExternal_Template",
+                 (* The name of the file that will be imported by the Funs
+                    module, and that the user has to provide. *)
                  "FunsExternal",
                  ": external functions.\n\
                   -- This is a template file: rename it to \
@@ -1337,9 +1344,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          in
          let opaque_module = crate_name ^ module_delimiter ^ module_suffix in
          let opaque_imported_module =
-           if !Config.backend = Lean then
-             crate_name ^ module_delimiter ^ opaque_imported_suffix
-           else opaque_module
+           crate_name ^ module_delimiter ^ opaque_imported_suffix
          in
          let opaque_config =
            {

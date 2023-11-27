@@ -8,7 +8,7 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Require Export External_Types.
 Import External_Types.
-Module External_Opaque.
+Module External_FunsExternal.
 
 (** [core::mem::swap]: forward function
     Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 *)
@@ -40,4 +40,4 @@ Axiom core_option_Option_unwrap :
   forall(T : Type), option T -> state -> result (state * T)
 .
 
-End External_Opaque .
+End External_FunsExternal.

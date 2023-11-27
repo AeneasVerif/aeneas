@@ -10,5 +10,6 @@ Constants.v
 PoloniusList.v
 External_Types.v
 NoNestedBorrows.v
-External_Opaque.v
+External_FunsExternal.v
+External_FunsExternal_Template.v
 Paper.v

@@ -3,7 +3,7 @@
 module BetreeMain.Funs
 open Primitives
 include BetreeMain.Types
-include BetreeMain.Opaque
+include BetreeMain.FunsExternal
 include BetreeMain.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
