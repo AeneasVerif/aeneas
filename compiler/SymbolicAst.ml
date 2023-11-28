@@ -66,8 +66,8 @@ type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
 
 (** Ancestor for {!expression} iter visitor.
 
-    We could make it inherit the visitor for {!eval_ctx}, but in all the uses
-    of this visitor we don't need to explore {!eval_ctx}, so we make it inherit
+    We could make it inherit the visitor for {!Contexts.eval_ctx}, but in all the uses
+    of this visitor we don't need to explore {!Contexts.eval_ctx}, so we make it inherit
     the abstraction visitors instead.
  *)
 class ['self] iter_expression_base =

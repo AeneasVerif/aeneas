@@ -326,15 +326,11 @@ def test_where2
   :=
   Result.ret ()
 
-/- [alloc::string::String]
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/string.rs', lines 365:0-365:17 -/
-axiom alloc.string.String : Type
-
 /- Trait declaration: [traits::ParentTrait0]
    Source: 'src/traits.rs', lines 200:0-200:22 -/
 structure ParentTrait0 (Self : Type) where
   W : Type
-  get_name : Self → Result alloc.string.String
+  get_name : Self → Result String
   get_w : Self → Result W
 
 /- Trait declaration: [traits::ParentTrait1]
@@ -350,9 +346,7 @@ structure ChildTrait (Self : Type) where
 /- [traits::test_child_trait1]: forward function
    Source: 'src/traits.rs', lines 209:0-209:56 -/
 def test_child_trait1
-  (T : Type) (ChildTraitTInst : ChildTrait T) (x : T) :
-  Result alloc.string.String
-  :=
+  (T : Type) (ChildTraitTInst : ChildTrait T) (x : T) : Result String :=
   ChildTraitTInst.ParentTrait0SelfInst.get_name x
 
 /- [traits::test_child_trait2]: forward function

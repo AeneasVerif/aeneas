@@ -111,7 +111,7 @@ let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
 (** Create a loans projector value from a symbolic value.
     
     Checks if the projector will actually project some regions. If not,
-    returns {!AIgnored} ([_]).
+    returns {!Values.AIgnored} ([_]).
     
     TODO: update to handle 'static
  *)
@@ -238,7 +238,7 @@ let symbolic_value_has_ended_regions (ended_regions : RegionId.Set.t)
   let regions = ty_regions s.sv_ty in
   not (RegionId.Set.disjoint regions ended_regions)
 
-(** Check if a {!type:value} contains [⊥].
+(** Check if a {!type:Values.value} contains [⊥].
 
     Note that this function is very general: it also checks wether
     symbolic values contain already ended regions.

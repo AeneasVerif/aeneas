@@ -3,7 +3,7 @@
 module HashmapMain.Funs
 open Primitives
 include HashmapMain.Types
-include HashmapMain.Opaque
+include HashmapMain.FunsExternal
 include HashmapMain.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"

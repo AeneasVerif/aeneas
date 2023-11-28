@@ -79,6 +79,6 @@ val expand_symbolic_int :
   m_fun
 
 (** If this mode is activated through the [config], greedily expand the symbolic
-    values which need to be expanded. See {!type:config} for more information.
+    values which need to be expanded. See {!type:Contexts.config} for more information.
  *)
 val greedy_expand_symbolic_values : config -> cm_fun

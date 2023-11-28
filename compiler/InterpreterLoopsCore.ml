@@ -41,10 +41,10 @@ type abs_borrows_loans_maps = {
   borrow_loan_to_abs : AbstractionId.Set.t BorrowId.Map.t;
 }
 
-(** See {!InterpreterLoopsMatchCtxs.MakeMatcher} and {!InterpreterLoopsCore.Matcher}.
+(** See {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} and [Matcher].
 
     This module contains primitive match functions to instantiate the generic
-    {!InterpreterLoopsMatchCtxs.MakeMatcher} functor.
+    {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} functor.
   *)
 module type PrimMatcher = sig
   val match_etys : ety -> ety -> ety
@@ -231,8 +231,8 @@ module type Matcher = sig
     eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
 end
 
-(** See {!InterpreterLoopsMatchCtxs.MakeCheckEquivMatcher} and
-    {!InterpreterLoopsCore.CheckEquivMatcher}.
+(** See {!module:InterpreterLoopsMatchCtxs.MakeCheckEquivMatcher} and
+    {!module-type:InterpreterLoopsCore.CheckEquivMatcher}.
 
     Very annoying: functors only take modules as inputs...
  *)

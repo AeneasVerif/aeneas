@@ -2,6 +2,7 @@
 (** [betree_main]: type definitions *)
 module BetreeMain.Types
 open Primitives
+include BetreeMain.TypesExternal
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
@@ -57,7 +58,4 @@ type betree_BeTree_t =
   node_id_cnt : betree_NodeIdCounter_t;
   root : betree_Node_t;
 }
-
-(** The state type used in the state-error monad *)
-val state : Type0
 

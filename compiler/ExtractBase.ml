@@ -311,7 +311,7 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
     the same name because Lean uses the typing information to resolve the
     ambiguities.
 
-    This map complements the {!names_map}, which checks for collisions.
+    This map complements the {!type:names_map}, which checks for collisions.
   *)
 type unsafe_names_map = { id_to_name : string IdMap.t }
 
@@ -634,11 +634,13 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TypeId id -> "type name: " ^ type_id_to_string ctx id
   | StructId id -> "struct constructor of: " ^ type_id_to_string ctx id
   | VariantId (id, variant_id) ->
+      let type_name = type_id_to_string ctx id in
       let variant_name = adt_variant_to_string ctx id (Some variant_id) in
-      "variant name: " ^ variant_name
+      "type name: " ^ type_name ^ ", variant name: " ^ variant_name
   | FieldId (id, field_id) ->
+      let type_name = type_id_to_string ctx id in
       let field_name = adt_field_to_string ctx id field_id in
-      "field name: " ^ field_name
+      "type name: " ^ type_name ^ ", field name: " ^ field_name
   | UnknownId -> "keyword"
   | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
   | ConstGenericVarId id ->
@@ -958,31 +960,40 @@ let keywords () =
   List.concat [ named_unops; named_binops; misc ]
 
 let assumed_adts () : (assumed_ty * string) list =
-  match !backend with
-  | Lean ->
-      [
-        (TState, "State");
-        (TResult, "Result");
-        (TError, "Error");
-        (TFuel, "Nat");
-        (TArray, "Array");
-        (TSlice, "Slice");
-        (TStr, "Str");
-        (TRawPtr Mut, "MutRawPtr");
-        (TRawPtr Const, "ConstRawPtr");
-      ]
-  | Coq | FStar | HOL4 ->
-      [
-        (TState, "state");
-        (TResult, "result");
-        (TError, "error");
-        (TFuel, if !backend = HOL4 then "num" else "nat");
-        (TArray, "array");
-        (TSlice, "slice");
-        (TStr, "str");
-        (TRawPtr Mut, "mut_raw_ptr");
-        (TRawPtr Const, "const_raw_ptr");
-      ]
+  let state =
+    if !use_state then
+      match !backend with
+      | Lean -> [ (TState, "State") ]
+      | Coq | FStar | HOL4 -> [ (TState, "state") ]
+    else []
+  in
+  (* We voluntarily omit the type [Error]: it is never directly
+     referenced in the generated translation, and easily collides
+     with user-defined types *)
+  let adts =
+    match !backend with
+    | Lean ->
+        [
+          (TResult, "Result");
+          (TFuel, "Nat");
+          (TArray, "Array");
+          (TSlice, "Slice");
+          (TStr, "Str");
+          (TRawPtr Mut, "MutRawPtr");
+          (TRawPtr Const, "ConstRawPtr");
+        ]
+    | Coq | FStar | HOL4 ->
+        [
+          (TResult, "result");
+          (TFuel, if !backend = HOL4 then "num" else "nat");
+          (TArray, "array");
+          (TSlice, "slice");
+          (TStr, "str");
+          (TRawPtr Mut, "mut_raw_ptr");
+          (TRawPtr Const, "const_raw_ptr");
+        ]
+  in
+  state @ adts
 
 let assumed_struct_constructors () : (assumed_ty * string) list =
   match !backend with
@@ -1013,9 +1024,12 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | Lean ->
       [
-        (TResult, result_return_id, "ret");
-        (TResult, result_fail_id, "fail");
-        (TError, error_failure_id, "panic");
+        (TResult, result_return_id, "Result.ret");
+        (TResult, result_fail_id, "Result.fail");
+        (* For panic: we omit the prefix "Error." because the type is always
+           clear from the context. Also, "Error" is often used by user-defined
+           types (when we omit the crate as a prefix). *)
+        (TError, error_failure_id, ".panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]
@@ -1095,8 +1109,9 @@ let initialize_names_maps () : names_maps =
   let init = names_map_init () in
   let int_names = List.map int_name T.all_int_types in
   let keywords =
-    List.concat
-      [ [ bool_name (); char_name (); str_name () ]; int_names; init.keywords ]
+    (* Remark: we don't put "str_name()" below because it clashes with
+       "alloc::string::String", which we register elsewhere. *)
+    List.concat [ [ bool_name (); char_name () ]; int_names; init.keywords ]
   in
   let names_set = StringSet.empty in
   let name_to_id = StringMap.empty in
@@ -1405,9 +1420,10 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
        - we add "_fwd"
      - [rg] is [None]: this is a backward function:
        - this function has one extracted backward function:
-         - if the forward function has been filtered, we add "_fwd_back":
+         - if the forward function has been filtered, we add nothing:
            the forward function is useless, so the unique backward function
-           takes its place, in a way
+           takes its place, in a way (in effect, we "merge" the forward
+           and the backward functions).
          - otherwise we add "_back"
        - this function has several backward functions: we add "_back" and an
          additional suffix to identify the precise backward function
@@ -1623,7 +1639,7 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
       function is an assumed function or a local function
     - function basename
     - the number of loops in the parent function. This is used for
-      the same purpose as in {!field:llbc_name}.
+      the same purpose as in [llbc_name].
     - loop identifier, if this is for a loop
  *)
 let ctx_compute_termination_measure_name (ctx : extraction_ctx)
@@ -1652,7 +1668,7 @@ let ctx_compute_termination_measure_name (ctx : extraction_ctx)
       function is an assumed function or a local function
     - function basename
     - the number of loops in the parent function. This is used for
-      the same purpose as in {!field:llbc_name}.
+      the same purpose as in [llbc_name].
     - loop identifier, if this is for a loop
  *)
 let ctx_compute_decreases_proof_name (ctx : extraction_ctx)

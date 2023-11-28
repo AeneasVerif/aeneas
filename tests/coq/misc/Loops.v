@@ -914,4 +914,4 @@ Definition list_nth_shared_mut_loop_pair_merge_back
   list_nth_shared_mut_loop_pair_merge_loop_back T n ls0 ls1 i ret
 .
 
-End Loops .
+End Loops.

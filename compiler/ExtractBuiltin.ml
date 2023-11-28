@@ -127,9 +127,15 @@ let mk_struct_constructor (type_name : string) : string =
     a type parameter for the allocator to use, which we want to filter.
  *)
 let builtin_types () : builtin_type_info list =
-  let mk_type (rust_name : string) ?(keep_params : bool list option = None)
+  let mk_type (rust_name : string) ?(custom_name : string option = None)
+      ?(keep_params : bool list option = None)
       ?(kind : type_variant_kind = KOpaque) () : builtin_type_info =
-    let extract_name = flatten_name (split_on_separator rust_name) in
+    let rust_name = parse_pattern rust_name in
+    let extract_name =
+      match custom_name with
+      | None -> flatten_name (pattern_to_type_extract_name rust_name)
+      | Some name -> flatten_name (split_on_separator name)
+    in
     let body_info : builtin_type_body_info option =
       match kind with
       | KOpaque -> None
@@ -147,13 +153,16 @@ let builtin_types () : builtin_type_info list =
           Some (Struct (constructor, fields))
       | KEnum -> raise (Failure "TODO")
     in
-    let rust_name = parse_pattern rust_name in
     { rust_name; extract_name; keep_params; body_info }
   in
 
   [
     (* Alloc *)
     mk_type "alloc::alloc::Global" ();
+    (* String *)
+    mk_type "alloc::string::String"
+      ~custom_name:(Some (backend_choice "string" "String"))
+      ();
     (* Vec *)
     mk_type "alloc::vec::Vec" ~keep_params:(Some [ true; false ]) ();
     (* Range *)

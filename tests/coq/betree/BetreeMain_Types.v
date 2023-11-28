@@ -6,6 +6,8 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
+Require Import BetreeMain_TypesExternal.
+Include BetreeMain_TypesExternal.
 Module BetreeMain_Types.
 
 (** [betree_main::betree::List]
@@ -113,7 +115,4 @@ mkbetree_BeTree_t {
 }
 .
 
-(** The state type used in the state-error monad *)
-Axiom state : Type.
-
-End BetreeMain_Types .
+End BetreeMain_Types.

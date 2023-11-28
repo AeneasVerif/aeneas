@@ -173,12 +173,7 @@ let extract_adt_g_value
          *)
         let cons =
           match variant_id with
-          | Some vid -> (
-              (* In the case of Lean, we might have to add the type name as a prefix *)
-              match (!backend, adt_id) with
-              | Lean, TAssumed _ ->
-                  ctx_get_type adt_id ctx ^ "." ^ ctx_get_variant adt_id vid ctx
-              | _ -> ctx_get_variant adt_id vid ctx)
+          | Some vid -> ctx_get_variant adt_id vid ctx
           | None -> ctx_get_struct adt_id ctx
         in
         let use_parentheses = inside && field_values <> [] in
@@ -2723,7 +2718,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
         let success = ctx_get_variant (TAssumed TResult) result_return_id ctx in
-        F.pp_print_string fmt ("." ^ success ^ " ())")
+        F.pp_print_string fmt (success ^ " ())")
     | HOL4 ->
         F.pp_print_string fmt "val _ = assert_return (";
         F.pp_print_string fmt "“";

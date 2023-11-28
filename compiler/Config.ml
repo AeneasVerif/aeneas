@@ -35,11 +35,11 @@ let backend = ref FStar
 
 (** {1 Interpreter} *)
 
-(** Check that invariants are maintained whenever we execute a statement
-
-    TODO: rename to sanity_checks.
+(** Activate the sanity checks, and in particular the invariant checks
+    that are performed at every evaluation step. This is very expensive
+    (~100x slow down) but very efficient to catch mistakes early.
  *)
-let check_invariants = ref true
+let sanity_checks = ref false
 
 (** Expand all symbolic values containing borrows upon introduction - allows
     to use restrict ourselves to a simpler model for the projectors over
@@ -52,7 +52,8 @@ let greedy_expand_symbolics_with_borrows = true
 
 (** Experimental.
 
-    TODO: remove (always true now)
+    TODO: remove (always true now), but check that when we panic/call a function
+    there is no bottom below a borrow.
 
     We sometimes want to temporarily break the invariant that there is no
     bottom value below a borrow. If this value is true, we don't check
@@ -288,7 +289,7 @@ let unfold_monadic_let_bindings = ref false
     we later filter the useless *forward* calls in the micro-passes, where it is
     more natural to do.
 
-    See the comments for {!val:PureMicroPasses.expression_contains_child_call_in_all_paths}
+    See the comments for {!PureMicroPasses.expression_contains_child_call_in_all_paths}
     for additional explanations.
  *)
 let filter_useless_monadic_calls = ref true

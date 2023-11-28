@@ -76,7 +76,7 @@ let erase_regions_subst : subst =
     tr_self = Self;
   }
 
-(** Convert an {!rty} to an {!ety} by erasing the region variables *)
+(** Erase the region variables in a type *)
 let erase_regions (ty : ty) : ty = ty_substitute erase_regions_subst ty
 
 let trait_ref_erase_regions (tr : trait_ref) : trait_ref =

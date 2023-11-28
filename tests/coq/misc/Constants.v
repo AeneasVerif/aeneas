@@ -157,4 +157,4 @@ Definition s3_c : Pair_t u32 u32 := s3_body%global.
 Definition s4_body : result (Pair_t u32 u32) := mk_pair1 7%u32 8%u32.
 Definition s4_c : Pair_t u32 u32 := s4_body%global.
 
-End Constants .
+End Constants.

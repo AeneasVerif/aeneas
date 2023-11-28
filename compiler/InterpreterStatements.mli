@@ -10,7 +10,7 @@ open Cps
     dummy variables, after ending the proper borrows of course) but the return
     variable, move the return value out of the return variable, remove all the
     local variables (but preserve the abstractions!), remove the
-    {!constructor:env_elem.Frame} indicator delimiting the current frame and
+    {!constructor:Contexts.env_elem.EFrame} indicator delimiting the current frame and
     handle the return value to the continuation.
 
     If the boolean is false, we don't move the return value, and call the

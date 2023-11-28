@@ -6,7 +6,7 @@ open Contexts
 
     Apply a proj_borrows on a shared borrow.
     Note that when projecting over shared values, we generate
-    {!type:abstract_shared_borrows}, not {!type:avalue}s.
+    {!type:Aeneas.Values.abstract_shared_borrows}, not {!type:Aeneas.Values.avalue}s.
 
     Parameters:
     [regions]

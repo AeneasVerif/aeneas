@@ -307,15 +307,11 @@ let test_where2
   =
   Return ()
 
-(** [alloc::string::String]
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/string.rs', lines 365:0-365:17 *)
-assume type alloc_string_String_t : Type0
-
 (** Trait declaration: [traits::ParentTrait0]
     Source: 'src/traits.rs', lines 200:0-200:22 *)
 noeq type parentTrait0_t (self : Type0) = {
   tW : Type0;
-  get_name : self -> result alloc_string_String_t;
+  get_name : self -> result string;
   get_w : self -> result tW;
 }
 
@@ -333,9 +329,7 @@ noeq type childTrait_t (self : Type0) = {
 (** [traits::test_child_trait1]: forward function
     Source: 'src/traits.rs', lines 209:0-209:56 *)
 let test_child_trait1
-  (t : Type0) (childTraitTInst : childTrait_t t) (x : t) :
-  result alloc_string_String_t
-  =
+  (t : Type0) (childTraitTInst : childTrait_t t) (x : t) : result string =
   childTraitTInst.parentTrait0SelfInst.get_name x
 
 (** [traits::test_child_trait2]: forward function

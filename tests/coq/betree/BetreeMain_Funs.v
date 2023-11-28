@@ -6,10 +6,10 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
-Require Export BetreeMain_Types.
-Import BetreeMain_Types.
-Require Export BetreeMain_Opaque.
-Import BetreeMain_Opaque.
+Require Import BetreeMain_Types.
+Include BetreeMain_Types.
+Require Import BetreeMain_FunsExternal.
+Include BetreeMain_FunsExternal.
 Module BetreeMain_Funs.
 
 (** [betree_main::betree::load_internal_node]: forward function
@@ -1230,4 +1230,4 @@ Definition main : result unit :=
 (** Unit test for [betree_main::main] *)
 Check (main )%return.
 
-End BetreeMain_Funs .
+End BetreeMain_Funs.

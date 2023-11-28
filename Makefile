@@ -30,11 +30,8 @@ CHARON_TESTS_POLONIUS_DIR ?= $(CHARON_HOME)/tests-polonius
 AENEAS_EXE ?= bin/aeneas
 
 # The user can specify additional translation options for Aeneas.
-# By default we do:
-# - unfold all the monadic let bindings to matches (required by F*)
-# - insert calls to the normalizer in the translated code to test the
-#   generated unit functions
-OPTIONS +=
+# By default we activate the (expensive) sanity checks.
+OPTIONS ?= -checks
 
 #
 # The rules use (and update) the following variables

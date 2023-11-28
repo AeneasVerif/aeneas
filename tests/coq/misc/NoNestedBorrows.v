@@ -586,4 +586,4 @@ Definition test_shared_borrow_enum1 (l : List_t u32) : result u32 :=
 Definition test_shared_borrow_enum2 : result u32 :=
   Return 0%u32.
 
-End NoNestedBorrows .
+End NoNestedBorrows.

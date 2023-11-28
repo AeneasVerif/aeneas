@@ -714,7 +714,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (loop_id : LoopId.id)
         ^ eval_ctx_to_string !joined_ctx));
 
     (* Sanity check *)
-    if !Config.check_invariants then Invariants.check_invariants !joined_ctx;
+    if !Config.sanity_checks then Invariants.check_invariants !joined_ctx;
     (* Return *)
     ctx1
   in

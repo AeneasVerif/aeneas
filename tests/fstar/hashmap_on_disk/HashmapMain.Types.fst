@@ -2,6 +2,7 @@
 (** [hashmap_main]: type definitions *)
 module HashmapMain.Types
 open Primitives
+include HashmapMain.TypesExternal
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
@@ -20,7 +21,4 @@ type hashmap_HashMap_t (t : Type0) =
   max_load : usize;
   slots : alloc_vec_Vec (hashmap_List_t t);
 }
-
-(** The state type used in the state-error monad *)
-val state : Type0
 

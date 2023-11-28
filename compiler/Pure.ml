@@ -273,7 +273,7 @@ class virtual ['self] mapreduce_ty_base =
 
 type ty =
   | TAdt of type_id * generic_args
-      (** {!Adt} encodes ADTs and tuples and assumed types.
+      (** {!TAdt} encodes ADTs and tuples and assumed types.
 
           TODO: what about the ended regions? (ADTs may be parameterized
           with several region variables. When giving back an ADT value, we may
@@ -1064,7 +1064,7 @@ type trait_impl = {
   meta : meta;
   impl_trait : trait_decl_ref;
   llbc_impl_trait : Types.trait_decl_ref;
-      (** Same remark as for {llbc_generics}. *)
+      (** Same remark as for {!field:llbc_generics}. *)
   generics : generic_params;
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance

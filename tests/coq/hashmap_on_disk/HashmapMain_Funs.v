@@ -6,10 +6,10 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
-Require Export HashmapMain_Types.
-Import HashmapMain_Types.
-Require Export HashmapMain_Opaque.
-Import HashmapMain_Opaque.
+Require Import HashmapMain_Types.
+Include HashmapMain_Types.
+Require Import HashmapMain_FunsExternal.
+Include HashmapMain_FunsExternal.
 Module HashmapMain_Funs.
 
 (** [hashmap_main::hashmap::hash_key]: forward function
@@ -717,4 +717,4 @@ Definition insert_on_disk
 Definition main : result unit :=
   Return tt.
 
-End HashmapMain_Funs .
+End HashmapMain_Funs.
