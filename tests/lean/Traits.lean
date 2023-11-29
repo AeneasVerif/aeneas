@@ -468,9 +468,4 @@ structure CFn (Self Args : Type) where
   call_mut : Self → Args → Result
     CFnMutSelfArgsInst.CFnOnceSelfArgsInst.Output
 
-/- [traits::incr_u32]: forward function
-   Source: 'src/traits.rs', lines 300:0-300:30 -/
-def incr_u32 (x : U32) : Result U32 :=
-  x + 1#u32
-
 end traits
