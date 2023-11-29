@@ -3,13 +3,14 @@
 open Charon.NameMatcher
 
 let log = Logging.extract_log
+let match_with_trait_decl_refs = true
 
 module NameMatcherMap = struct
   module NMM = NameMatcherMap
 
   type 'a t = 'a NMM.t
 
-  let config = { map_vars_to_vars = true }
+  let config = { map_vars_to_vars = true; match_with_trait_decl_refs }
 
   let find_opt (ctx : ctx) (name : Types.name) (m : 'a t) : 'a option =
     NMM.find_opt ctx config name m
@@ -85,7 +86,9 @@ let pattern_to_trait_impl_extract_name = pattern_to_extract_name true
    consistent with the extraction names we derive from the Rust names *)
 let name_to_simple_name (ctx : ctx) (is_trait_impl : bool) (n : Types.name) :
     string list =
-  let c : to_pat_config = { tgt = TkName } in
+  let c : to_pat_config =
+    { tgt = TkName; use_trait_decl_refs = match_with_trait_decl_refs }
+  in
   pattern_to_extract_name is_trait_impl (name_to_pattern ctx c n)
 
 (** If the [prefix] is Some, we attempt to remove the common prefix
@@ -93,15 +96,17 @@ let name_to_simple_name (ctx : ctx) (is_trait_impl : bool) (n : Types.name) :
 let name_with_generics_to_simple_name (ctx : ctx) (is_trait_impl : bool)
     ?(prefix : Types.name option = None) (name : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
-  let c : to_pat_config = { tgt = TkName } in
-  let name = name_with_generics_to_pattern ctx c name p g in
+  let c : to_pat_config =
+    { tgt = TkName; use_trait_decl_refs = match_with_trait_decl_refs }
+  in
+  let name = name_with_generics_to_pattern ctx c p name g in
   let name =
     match prefix with
     | None -> name
     | Some prefix ->
         let prefix =
-          name_with_generics_to_pattern ctx c prefix
-            TypesUtils.empty_generic_params TypesUtils.empty_generic_args
+          name_with_generics_to_pattern ctx c TypesUtils.empty_generic_params
+            prefix TypesUtils.empty_generic_args
         in
         let _, _, name = pattern_common_prefix prefix name in
         name

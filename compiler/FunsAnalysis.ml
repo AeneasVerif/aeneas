@@ -62,7 +62,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       {
         type_decls = m.type_decls;
         global_decls = m.global_decls;
+        fun_decls = m.fun_decls;
         trait_decls = m.trait_decls;
+        trait_impls = m.trait_impls;
       }
     in
 

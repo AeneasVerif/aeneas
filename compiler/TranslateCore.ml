@@ -39,7 +39,9 @@ let match_name_find_opt (ctx : trans_ctx) (name : Types.name)
     {
       type_decls = ctx.type_ctx.type_decls;
       global_decls = ctx.global_ctx.global_decls;
+      fun_decls = ctx.fun_ctx.fun_decls;
       trait_decls = ctx.trait_decls_ctx.trait_decls;
+      trait_impls = ctx.trait_impls_ctx.trait_impls;
     }
   in
   NameMatcherMap.find_opt mctx name m
@@ -52,7 +54,9 @@ let match_name_with_generics_find_opt (ctx : trans_ctx) (name : Types.name)
     {
       type_decls = ctx.type_ctx.type_decls;
       global_decls = ctx.global_ctx.global_decls;
+      fun_decls = ctx.fun_ctx.fun_decls;
       trait_decls = ctx.trait_decls_ctx.trait_decls;
+      trait_impls = ctx.trait_impls_ctx.trait_impls;
     }
   in
   NameMatcherMap.find_with_generics_opt mctx name generics m
@@ -62,7 +66,9 @@ let name_to_simple_name (ctx : trans_ctx) (n : Types.name) : string list =
     {
       type_decls = ctx.type_ctx.type_decls;
       global_decls = ctx.global_ctx.global_decls;
+      fun_decls = ctx.fun_ctx.fun_decls;
       trait_decls = ctx.trait_decls_ctx.trait_decls;
+      trait_impls = ctx.trait_impls_ctx.trait_impls;
     }
   in
   let is_trait_impl = false in
@@ -75,7 +81,9 @@ let trait_name_with_generics_to_simple_name (ctx : trans_ctx)
     {
       type_decls = ctx.type_ctx.type_decls;
       global_decls = ctx.global_ctx.global_decls;
+      fun_decls = ctx.fun_ctx.fun_decls;
       trait_decls = ctx.trait_decls_ctx.trait_decls;
+      trait_impls = ctx.trait_impls_ctx.trait_impls;
     }
   in
   let is_trait_impl = true in
