@@ -786,7 +786,7 @@ let unop_name (unop : unop) : string =
     like [<]).
  *)
 let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
-  let binop =
+  let binop_s =
     match binop with
     | Div -> "div"
     | Rem -> "rem"
@@ -800,16 +800,14 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
     | BitXor -> "xor"
     | BitAnd -> "and"
     | BitOr -> "or"
-    | Shl -> "lsl"
-    | Shr ->
-        "asr"
-        (* NOTE: make sure arithmetic shift right is implemented, i.e. OCaml's asr operator, not lsr *)
+    | Shl -> "shl"
+    | Shr -> "shr"
     | _ -> raise (Failure "Unreachable")
   in
   (* Remark: the Lean case is actually not used *)
   match !backend with
-  | Lean -> int_name int_ty ^ "." ^ binop
-  | FStar | Coq | HOL4 -> int_name int_ty ^ "_" ^ binop
+  | Lean -> int_name int_ty ^ "." ^ binop_s
+  | FStar | Coq | HOL4 -> int_name int_ty ^ "_" ^ binop_s
 
 (** A list of keywords/identifiers used by the backend and with which we
     want to check collision.

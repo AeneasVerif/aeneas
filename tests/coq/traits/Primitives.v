@@ -255,6 +255,12 @@ Definition scalar_rem {ty} (x y: scalar ty) : result (scalar ty) := mk_scalar ty
   
 Definition scalar_neg {ty} (x: scalar ty) : result (scalar ty) := mk_scalar ty (-(to_Z x)).
 
+Axiom scalar_xor : forall ty, scalar ty -> scalar ty -> scalar ty. (* TODO *)
+Axiom scalar_or : forall ty, scalar ty -> scalar ty -> scalar ty. (* TODO *)
+Axiom scalar_and : forall ty, scalar ty -> scalar ty -> scalar ty. (* TODO *)
+Axiom scalar_shl : forall ty0 ty1, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
+Axiom scalar_shr : forall ty0 ty1, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
+
 (** Cast an integer from a [src_ty] to a [tgt_ty] *)
 (* TODO: check the semantics of casts in Rust *)
 Definition scalar_cast (src_ty tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) :=
@@ -371,6 +377,76 @@ Definition u16_mul   := @scalar_mul U16.
 Definition u32_mul   := @scalar_mul U32.
 Definition u64_mul   := @scalar_mul U64.
 Definition u128_mul  := @scalar_mul U128.
+
+(** Xor *)
+Definition u8_xor := @scalar_xor U8.
+Definition u16_xor := @scalar_xor U16.
+Definition u32_xor := @scalar_xor U32.
+Definition u64_xor := @scalar_xor U64.
+Definition u128_xor := @scalar_xor U128.
+Definition usize_xor := @scalar_xor Usize.
+Definition i8_xor := @scalar_xor I8.
+Definition i16_xor := @scalar_xor I16.
+Definition i32_xor := @scalar_xor I32.
+Definition i64_xor := @scalar_xor I64.
+Definition i128_xor := @scalar_xor I128.
+Definition isize_xor := @scalar_xor Isize.
+
+(** Or *)
+Definition u8_or := @scalar_or U8.
+Definition u16_or := @scalar_or U16.
+Definition u32_or := @scalar_or U32.
+Definition u64_or := @scalar_or U64.
+Definition u128_or := @scalar_or U128.
+Definition usize_or := @scalar_or Usize.
+Definition i8_or := @scalar_or I8.
+Definition i16_or := @scalar_or I16.
+Definition i32_or := @scalar_or I32.
+Definition i64_or := @scalar_or I64.
+Definition i128_or := @scalar_or I128.
+Definition isize_or := @scalar_or Isize.
+
+(** And *)
+Definition u8_and := @scalar_and U8.
+Definition u16_and := @scalar_and U16.
+Definition u32_and := @scalar_and U32.
+Definition u64_and := @scalar_and U64.
+Definition u128_and := @scalar_and U128.
+Definition usize_and := @scalar_and Usize.
+Definition i8_and := @scalar_and I8.
+Definition i16_and := @scalar_and I16.
+Definition i32_and := @scalar_and I32.
+Definition i64_and := @scalar_and I64.
+Definition i128_and := @scalar_and I128.
+Definition isize_and := @scalar_and Isize.
+
+(** Shift left *)
+Definition u8_shl {ty} := @scalar_shl U8 ty.
+Definition u16_shl {ty} := @scalar_shl U16 ty.
+Definition u32_shl {ty} := @scalar_shl U32 ty.
+Definition u64_shl {ty} := @scalar_shl U64 ty.
+Definition u128_shl {ty} := @scalar_shl U128 ty.
+Definition usize_shl {ty} := @scalar_shl Usize ty.
+Definition i8_shl {ty} := @scalar_shl I8 ty.
+Definition i16_shl {ty} := @scalar_shl I16 ty.
+Definition i32_shl {ty} := @scalar_shl I32 ty.
+Definition i64_shl {ty} := @scalar_shl I64 ty.
+Definition i128_shl {ty} := @scalar_shl I128 ty.
+Definition isize_shl {ty} := @scalar_shl Isize ty.
+
+(** Shift right *)
+Definition u8_shr {ty} := @scalar_shr U8 ty.
+Definition u16_shr {ty} := @scalar_shr U16 ty.
+Definition u32_shr {ty} := @scalar_shr U32 ty.
+Definition u64_shr {ty} := @scalar_shr U64 ty.
+Definition u128_shr {ty} := @scalar_shr U128 ty.
+Definition usize_shr {ty} := @scalar_shr Usize ty.
+Definition i8_shr {ty} := @scalar_shr I8 ty.
+Definition i16_shr {ty} := @scalar_shr I16 ty.
+Definition i32_shr {ty} := @scalar_shr I32 ty.
+Definition i64_shr {ty} := @scalar_shr I64 ty.
+Definition i128_shr {ty} := @scalar_shr I128 ty.
+Definition isize_shr {ty} := @scalar_shr Isize ty.
 
 (** Small utility *)
 Definition usize_to_nat (x: usize) : nat := Z.to_nat (to_Z x).
