@@ -606,9 +606,4 @@ Arguments mkCFn_t { _ _ }.
 Arguments CFn_tCFn_t_CFnMutSelfArgsInst { _ _ }.
 Arguments CFn_t_call_mut { _ _ }.
 
-(** [traits::incr_u32]: forward function
-    Source: 'src/traits.rs', lines 300:0-300:30 *)
-Definition incr_u32 (x : u32) : result u32 :=
-  u32_add x 1%u32.
-
 End Traits.

@@ -256,8 +256,21 @@ Definition take_slice (s : slice u32) : result unit :=
 Definition take_mut_slice (s : slice u32) : result (slice u32) :=
   Return s.
 
+(** [array::const_array]: forward function
+    Source: 'src/array.rs', lines 127:0-127:32 *)
+Definition const_array : result (array u32 2%usize) :=
+  Return (mk_array u32 2%usize [ 0%u32; 0%u32 ])
+.
+
+(** [array::const_slice]: forward function
+    Source: 'src/array.rs', lines 131:0-131:20 *)
+Definition const_slice : result unit :=
+  _ <- array_to_slice u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  Return tt
+.
+
 (** [array::take_all]: forward function
-    Source: 'src/array.rs', lines 127:0-127:17 *)
+    Source: 'src/array.rs', lines 141:0-141:17 *)
 Definition take_all : result unit :=
   _ <- take_array (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
   _ <- take_array_borrow (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
@@ -270,37 +283,37 @@ Definition take_all : result unit :=
 .
 
 (** [array::index_array]: forward function
-    Source: 'src/array.rs', lines 141:0-141:38 *)
+    Source: 'src/array.rs', lines 155:0-155:38 *)
 Definition index_array (x : array u32 2%usize) : result u32 :=
   array_index_usize u32 2%usize x 0%usize
 .
 
 (** [array::index_array_borrow]: forward function
-    Source: 'src/array.rs', lines 144:0-144:46 *)
+    Source: 'src/array.rs', lines 158:0-158:46 *)
 Definition index_array_borrow (x : array u32 2%usize) : result u32 :=
   array_index_usize u32 2%usize x 0%usize
 .
 
 (** [array::index_slice_u32_0]: forward function
-    Source: 'src/array.rs', lines 148:0-148:42 *)
+    Source: 'src/array.rs', lines 162:0-162:42 *)
 Definition index_slice_u32_0 (x : slice u32) : result u32 :=
   slice_index_usize u32 x 0%usize
 .
 
 (** [array::index_mut_slice_u32_0]: forward function
-    Source: 'src/array.rs', lines 152:0-152:50 *)
+    Source: 'src/array.rs', lines 166:0-166:50 *)
 Definition index_mut_slice_u32_0 (x : slice u32) : result u32 :=
   slice_index_usize u32 x 0%usize
 .
 
 (** [array::index_mut_slice_u32_0]: backward function 0
-    Source: 'src/array.rs', lines 152:0-152:50 *)
+    Source: 'src/array.rs', lines 166:0-166:50 *)
 Definition index_mut_slice_u32_0_back (x : slice u32) : result (slice u32) :=
   _ <- slice_index_usize u32 x 0%usize; Return x
 .
 
 (** [array::index_all]: forward function
-    Source: 'src/array.rs', lines 156:0-156:25 *)
+    Source: 'src/array.rs', lines 170:0-170:25 *)
 Definition index_all : result u32 :=
   i <- index_array (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
   i0 <- index_array (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
@@ -319,14 +332,14 @@ Definition index_all : result u32 :=
 .
 
 (** [array::update_array]: forward function
-    Source: 'src/array.rs', lines 170:0-170:36 *)
+    Source: 'src/array.rs', lines 184:0-184:36 *)
 Definition update_array (x : array u32 2%usize) : result unit :=
   _ <- array_update_usize u32 2%usize x 0%usize 1%u32; Return tt
 .
 
 (** [array::update_array_mut_borrow]: merged forward/backward function
     (there is a single backward function, and the forward function returns ())
-    Source: 'src/array.rs', lines 173:0-173:48 *)
+    Source: 'src/array.rs', lines 187:0-187:48 *)
 Definition update_array_mut_borrow
   (x : array u32 2%usize) : result (array u32 2%usize) :=
   array_update_usize u32 2%usize x 0%usize 1%u32
@@ -334,13 +347,13 @@ Definition update_array_mut_borrow
 
 (** [array::update_mut_slice]: merged forward/backward function
     (there is a single backward function, and the forward function returns ())
-    Source: 'src/array.rs', lines 176:0-176:38 *)
+    Source: 'src/array.rs', lines 190:0-190:38 *)
 Definition update_mut_slice (x : slice u32) : result (slice u32) :=
   slice_update_usize u32 x 0%usize 1%u32
 .
 
 (** [array::update_all]: forward function
-    Source: 'src/array.rs', lines 180:0-180:19 *)
+    Source: 'src/array.rs', lines 194:0-194:19 *)
 Definition update_all : result unit :=
   _ <- update_array (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
   x <- update_array_mut_borrow (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
@@ -351,7 +364,7 @@ Definition update_all : result unit :=
 .
 
 (** [array::range_all]: forward function
-    Source: 'src/array.rs', lines 191:0-191:18 *)
+    Source: 'src/array.rs', lines 205:0-205:18 *)
 Definition range_all : result unit :=
   s <-
     core_array_Array_index_mut u32 (core_ops_range_Range usize) 4%usize
@@ -376,37 +389,37 @@ Definition range_all : result unit :=
 .
 
 (** [array::deref_array_borrow]: forward function
-    Source: 'src/array.rs', lines 200:0-200:46 *)
+    Source: 'src/array.rs', lines 214:0-214:46 *)
 Definition deref_array_borrow (x : array u32 2%usize) : result u32 :=
   array_index_usize u32 2%usize x 0%usize
 .
 
 (** [array::deref_array_mut_borrow]: forward function
-    Source: 'src/array.rs', lines 205:0-205:54 *)
+    Source: 'src/array.rs', lines 219:0-219:54 *)
 Definition deref_array_mut_borrow (x : array u32 2%usize) : result u32 :=
   array_index_usize u32 2%usize x 0%usize
 .
 
 (** [array::deref_array_mut_borrow]: backward function 0
-    Source: 'src/array.rs', lines 205:0-205:54 *)
+    Source: 'src/array.rs', lines 219:0-219:54 *)
 Definition deref_array_mut_borrow_back
   (x : array u32 2%usize) : result (array u32 2%usize) :=
   _ <- array_index_usize u32 2%usize x 0%usize; Return x
 .
 
 (** [array::take_array_t]: forward function
-    Source: 'src/array.rs', lines 213:0-213:31 *)
+    Source: 'src/array.rs', lines 227:0-227:31 *)
 Definition take_array_t (a : array AB_t 2%usize) : result unit :=
   Return tt.
 
 (** [array::non_copyable_array]: forward function
-    Source: 'src/array.rs', lines 215:0-215:27 *)
+    Source: 'src/array.rs', lines 229:0-229:27 *)
 Definition non_copyable_array : result unit :=
   _ <- take_array_t (mk_array AB_t 2%usize [ AB_A; AB_B ]); Return tt
 .
 
 (** [array::sum]: loop 0: forward function
-    Source: 'src/array.rs', lines 228:0-236:1 *)
+    Source: 'src/array.rs', lines 242:0-250:1 *)
 Fixpoint sum_loop
   (n : nat) (s : slice u32) (sum0 : u32) (i : usize) : result u32 :=
   match n with
@@ -424,13 +437,13 @@ Fixpoint sum_loop
 .
 
 (** [array::sum]: forward function
-    Source: 'src/array.rs', lines 228:0-228:28 *)
+    Source: 'src/array.rs', lines 242:0-242:28 *)
 Definition sum (n : nat) (s : slice u32) : result u32 :=
   sum_loop n s 0%u32 0%usize
 .
 
 (** [array::sum2]: loop 0: forward function
-    Source: 'src/array.rs', lines 238:0-247:1 *)
+    Source: 'src/array.rs', lines 252:0-261:1 *)
 Fixpoint sum2_loop
   (n : nat) (s : slice u32) (s2 : slice u32) (sum0 : u32) (i : usize) :
   result u32
@@ -452,7 +465,7 @@ Fixpoint sum2_loop
 .
 
 (** [array::sum2]: forward function
-    Source: 'src/array.rs', lines 238:0-238:41 *)
+    Source: 'src/array.rs', lines 252:0-252:41 *)
 Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
   let i := slice_len u32 s in
   let i0 := slice_len u32 s2 in
@@ -460,7 +473,7 @@ Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
 .
 
 (** [array::f0]: forward function
-    Source: 'src/array.rs', lines 249:0-249:11 *)
+    Source: 'src/array.rs', lines 263:0-263:11 *)
 Definition f0 : result unit :=
   s <- array_to_slice u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ]);
   s0 <- slice_update_usize u32 s 0%usize 1%u32;
@@ -469,7 +482,7 @@ Definition f0 : result unit :=
 .
 
 (** [array::f1]: forward function
-    Source: 'src/array.rs', lines 254:0-254:11 *)
+    Source: 'src/array.rs', lines 268:0-268:11 *)
 Definition f1 : result unit :=
   _ <-
     array_update_usize u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ])
@@ -478,12 +491,12 @@ Definition f1 : result unit :=
 .
 
 (** [array::f2]: forward function
-    Source: 'src/array.rs', lines 259:0-259:17 *)
+    Source: 'src/array.rs', lines 273:0-273:17 *)
 Definition f2 (i : u32) : result unit :=
   Return tt.
 
 (** [array::f4]: forward function
-    Source: 'src/array.rs', lines 268:0-268:54 *)
+    Source: 'src/array.rs', lines 282:0-282:54 *)
 Definition f4
   (x : array u32 32%usize) (y : usize) (z : usize) : result (slice u32) :=
   core_array_Array_index u32 (core_ops_range_Range usize) 32%usize
@@ -493,7 +506,7 @@ Definition f4
 .
 
 (** [array::f3]: forward function
-    Source: 'src/array.rs', lines 261:0-261:18 *)
+    Source: 'src/array.rs', lines 275:0-275:18 *)
 Definition f3 (n : nat) : result u32 :=
   i <-
     array_index_usize u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ])
@@ -506,18 +519,18 @@ Definition f3 (n : nat) : result u32 :=
 .
 
 (** [array::SZ]
-    Source: 'src/array.rs', lines 272:0-272:19 *)
+    Source: 'src/array.rs', lines 286:0-286:19 *)
 Definition sz_body : result usize := Return 32%usize.
 Definition sz_c : usize := sz_body%global.
 
 (** [array::f5]: forward function
-    Source: 'src/array.rs', lines 275:0-275:31 *)
+    Source: 'src/array.rs', lines 289:0-289:31 *)
 Definition f5 (x : array u32 32%usize) : result u32 :=
   array_index_usize u32 32%usize x 0%usize
 .
 
 (** [array::ite]: forward function
-    Source: 'src/array.rs', lines 280:0-280:12 *)
+    Source: 'src/array.rs', lines 294:0-294:12 *)
 Definition ite : result unit :=
   s <- array_to_slice u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
   s0 <- array_to_slice u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);

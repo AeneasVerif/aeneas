@@ -454,8 +454,3 @@ noeq type cFn_t (self args : Type0) = {
     cFnMutSelfArgsInst.cFnOnceSelfArgsInst.tOutput;
 }
 
-(** [traits::incr_u32]: forward function
-    Source: 'src/traits.rs', lines 300:0-300:30 *)
-let incr_u32 (x : u32) : result u32 =
-  u32_add x 1
-
