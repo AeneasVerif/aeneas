@@ -163,7 +163,7 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
   (match (!backend, binop) with
   | HOL4, (Eq | Ne)
   | (FStar | Coq | Lean), (Eq | Lt | Le | Ne | Ge | Gt)
-  | Lean, (Div | Rem | Add | Sub | Mul) ->
+  | Lean, (Div | Rem | Add | Sub | Mul | Shl | Shr | BitXor | BitOr | BitAnd) ->
       let binop =
         match binop with
         | Eq -> "="
@@ -179,7 +179,9 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
         | Mul -> "*"
         | Shl -> "<<<"
         | Shr -> ">>>"
-        | BitXor | BitAnd | BitOr -> raise (Failure "Unimplemented")
+        | BitXor -> "^^^"
+        | BitOr -> "|||"
+        | BitAnd -> "&&&"
       in
       let binop =
         match !backend with FStar | Lean | HOL4 -> binop | Coq -> "s" ^ binop
@@ -192,6 +194,14 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
   | _ ->
       let binop = named_binop_name binop int_ty in
       F.pp_print_string fmt binop;
+      (* In the case of F*, because machine integers are simply integers
+         with a refinement, if the second argument is a constant we
+         need to provide the second implicit type argument *)
+      if !backend = FStar && is_const arg1 then (
+        F.pp_print_space fmt ();
+        let ty = ty_as_integer arg1.ty in
+        F.pp_print_string fmt
+          ("#" ^ StringUtils.capitalize_first_letter (int_name ty)));
       F.pp_print_space fmt ();
       extract_expr true arg0;
       F.pp_print_space fmt ();

@@ -386,10 +386,28 @@ def Scalar.sub {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar 
 def Scalar.mul {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
   Scalar.tryMk ty (x.val * y.val)
 
--- TODO: instances of +, -, * etc. for scalars
+-- TODO: shift left
+def Scalar.shiftl {ty0 ty1 : ScalarTy} (x : Scalar ty0) (y : Scalar ty1) : Result (Scalar ty0) :=
+  sorry
+
+-- TODO: shift right
+def Scalar.shiftr {ty0 ty1 : ScalarTy} (x : Scalar ty0) (y : Scalar ty1) : Result (Scalar ty0) :=
+  sorry
+
+-- TODO: xor
+def Scalar.xor {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
+  sorry
+
+-- TODO: and
+def Scalar.and {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
+  sorry
+
+-- TODO: or
+def Scalar.or {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
+  sorry
 
 -- Cast an integer from a [src_ty] to a [tgt_ty]
--- TODO: check the semantics of casts in Rust
+-- TODO: double-check the semantics of casts in Rust
 def Scalar.cast {src_ty : ScalarTy} (tgt_ty : ScalarTy) (x : Scalar src_ty) : Result (Scalar tgt_ty) :=
   Scalar.tryMk tgt_ty x.val
 
@@ -485,6 +503,26 @@ instance {ty} : HDiv (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
 -- Remainder
 instance {ty} : HMod (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
   hMod x y := Scalar.rem x y
+
+-- Shift left
+instance {ty0 ty1} : HShiftLeft (Scalar ty0) (Scalar ty1) (Result (Scalar ty0)) where
+  hShiftLeft x y := Scalar.shiftl x y
+
+-- Shift right
+instance {ty0 ty1} : HShiftRight (Scalar ty0) (Scalar ty1) (Result (Scalar ty0)) where
+  hShiftRight x y := Scalar.shiftr x y
+
+-- Xor
+instance {ty} : HXor (Scalar ty) (Scalar ty) (Scalar ty) where
+  hXor x y := Scalar.xor x y
+
+-- Or
+instance {ty} : HOr (Scalar ty) (Scalar ty) (Scalar ty) where
+  hOr x y := Scalar.or x y
+
+-- And
+instance {ty} : HAnd (Scalar ty) (Scalar ty) (Scalar ty) where
+  hAnd x y := Scalar.and x y
 
 -- Generic theorem - shouldn't be used much
 @[cpspec]
