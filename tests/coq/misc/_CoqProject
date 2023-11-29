@@ -13,5 +13,6 @@ Constants.v
 PoloniusList.v
 NoNestedBorrows.v
 External_FunsExternal.v
+Bitwise.v
 External_TypesExternal_Template.v
 External_FunsExternal_Template.v

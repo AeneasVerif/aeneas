@@ -65,6 +65,10 @@ type const_raw_ptr (t : Type0) = { v : t }
 (*** Scalars *)
 /// Rem.: most of the following code was partially generated
 
+assume val size_numbits : pos
+
+// TODO: we could use FStar.Int.int_t and FStar.UInt.int_t
+
 let isize_min : int = -9223372036854775808 // TODO: should be opaque
 let isize_max : int = 9223372036854775807 // TODO: should be opaque
 let i8_min : int = -128
@@ -107,7 +111,6 @@ type scalar_ty =
 let is_unsigned = function
   | Isize | I8 | I16 | I32 | I64 | I128 -> false
   | Usize | U8 | U16 | U32 | U64 | U128 -> true
-
 
 let scalar_min (ty : scalar_ty) : int =
   match ty with
@@ -171,7 +174,7 @@ let scalar_sub (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scala
 let scalar_mul (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scalar ty) =
   mk_scalar ty (x * y)
 
-let scalar_lxor (#ty : scalar_ty { is_unsigned ty && ty <> Usize })
+let scalar_xor (#ty : scalar_ty)
     (x : scalar ty) (y : scalar ty) : scalar ty =
   match ty with
   | U8 -> FStar.UInt.logxor #8 x y
@@ -179,6 +182,91 @@ let scalar_lxor (#ty : scalar_ty { is_unsigned ty && ty <> Usize })
   | U32 -> FStar.UInt.logxor #32 x y
   | U64 -> FStar.UInt.logxor #64 x y
   | U128 -> FStar.UInt.logxor #128 x y
+  | Usize -> admit() // TODO
+  | I8 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 8);
+    normalize_spec (scalar I8);
+    FStar.Int.logxor #8 x y
+  | I16 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 16);
+    normalize_spec (scalar I16);
+    FStar.Int.logxor #16 x y
+  | I32 -> FStar.Int.logxor #32 x y
+  | I64 -> FStar.Int.logxor #64 x y
+  | I128 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 128);
+    normalize_spec (scalar I128);
+    FStar.Int.logxor #128 x y
+  | Isize -> admit() // TODO
+
+let scalar_or (#ty : scalar_ty)
+    (x : scalar ty) (y : scalar ty) : scalar ty =
+  match ty with
+  | U8 -> FStar.UInt.logor #8 x y
+  | U16 -> FStar.UInt.logor #16 x y
+  | U32 -> FStar.UInt.logor #32 x y
+  | U64 -> FStar.UInt.logor #64 x y
+  | U128 -> FStar.UInt.logor #128 x y
+  | Usize -> admit() // TODO
+  | I8 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 8);
+    normalize_spec (scalar I8);
+    FStar.Int.logor #8 x y
+  | I16 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 16);
+    normalize_spec (scalar I16);
+    FStar.Int.logor #16 x y
+  | I32 -> FStar.Int.logor #32 x y
+  | I64 -> FStar.Int.logor #64 x y
+  | I128 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 128);
+    normalize_spec (scalar I128);
+    FStar.Int.logor #128 x y
+  | Isize -> admit() // TODO
+
+let scalar_and (#ty : scalar_ty)
+    (x : scalar ty) (y : scalar ty) : scalar ty =
+  match ty with
+  | U8 -> FStar.UInt.logand #8 x y
+  | U16 -> FStar.UInt.logand #16 x y
+  | U32 -> FStar.UInt.logand #32 x y
+  | U64 -> FStar.UInt.logand #64 x y
+  | U128 -> FStar.UInt.logand #128 x y
+  | Usize -> admit() // TODO
+  | I8 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 8);
+    normalize_spec (scalar I8);
+    FStar.Int.logand #8 x y
+  | I16 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 16);
+    normalize_spec (scalar I16);
+    FStar.Int.logand #16 x y
+  | I32 -> FStar.Int.logand #32 x y
+  | I64 -> FStar.Int.logand #64 x y
+  | I128 ->
+    // Encoding issues...
+    normalize_spec (FStar.Int.int_t 128);
+    normalize_spec (scalar I128);
+    FStar.Int.logand #128 x y
+  | Isize -> admit() // TODO
+
+// Shift left
+let scalar_shl (#ty0 #ty1 : scalar_ty)
+    (x : scalar ty0) (y : scalar ty1) : result (scalar ty0) =
+  admit()
+
+// Shift right
+let scalar_shr (#ty0 #ty1 : scalar_ty)
+    (x : scalar ty0) (y : scalar ty1) : result (scalar ty0) =
+  admit()
 
 (** Cast an integer from a [src_ty] to a [tgt_ty] *)
 // TODO: check the semantics of casts in Rust
@@ -304,12 +392,75 @@ let u32_mul = scalar_mul #U32
 let u64_mul = scalar_mul #U64
 let u128_mul = scalar_mul #U128
 
-/// Logical operators, defined for unsigned types only, so far
-let u8_xor = scalar_lxor #U8
-let u16_xor = scalar_lxor #U16
-let u32_xor = scalar_lxor #U32
-let u64_xor = scalar_lxor #U64
-let u128_xor = scalar_lxor #U128
+/// Xor
+let u8_xor = scalar_xor #U8
+let u16_xor = scalar_xor #U16
+let u32_xor = scalar_xor #U32
+let u64_xor = scalar_xor #U64
+let u128_xor = scalar_xor #U128
+let usize_xor = scalar_xor #Usize
+let i8_xor = scalar_xor #I8
+let i16_xor = scalar_xor #I16
+let i32_xor = scalar_xor #I32
+let i64_xor = scalar_xor #I64
+let i128_xor = scalar_xor #I128
+let isize_xor = scalar_xor #Isize
+
+/// Or
+let u8_or = scalar_or #U8
+let u16_or = scalar_or #U16
+let u32_or = scalar_or #U32
+let u64_or = scalar_or #U64
+let u128_or = scalar_or #U128
+let usize_or = scalar_or #Usize
+let i8_or = scalar_or #I8
+let i16_or = scalar_or #I16
+let i32_or = scalar_or #I32
+let i64_or = scalar_or #I64
+let i128_or = scalar_or #I128
+let isize_or = scalar_or #Isize
+
+/// And
+let u8_and = scalar_and #U8
+let u16_and = scalar_and #U16
+let u32_and = scalar_and #U32
+let u64_and = scalar_and #U64
+let u128_and = scalar_and #U128
+let usize_and = scalar_and #Usize
+let i8_and = scalar_and #I8
+let i16_and = scalar_and #I16
+let i32_and = scalar_and #I32
+let i64_and = scalar_and #I64
+let i128_and = scalar_and #I128
+let isize_and = scalar_and #Isize
+
+/// Shift left
+let u8_shl #ty = scalar_shl #U8 #ty
+let u16_shl #ty = scalar_shl #U16 #ty
+let u32_shl #ty = scalar_shl #U32 #ty
+let u64_shl #ty = scalar_shl #U64 #ty
+let u128_shl #ty = scalar_shl #U128 #ty
+let usize_shl #ty = scalar_shl #Usize #ty
+let i8_shl #ty = scalar_shl #I8 #ty
+let i16_shl #ty = scalar_shl #I16 #ty
+let i32_shl #ty = scalar_shl #I32 #ty
+let i64_shl #ty = scalar_shl #I64 #ty
+let i128_shl #ty = scalar_shl #I128 #ty
+let isize_shl #ty = scalar_shl #Isize #ty
+
+/// Shift right
+let u8_shr #ty = scalar_shr #U8 #ty
+let u16_shr #ty = scalar_shr #U16 #ty
+let u32_shr #ty = scalar_shr #U32 #ty
+let u64_shr #ty = scalar_shr #U64 #ty
+let u128_shr #ty = scalar_shr #U128 #ty
+let usize_shr #ty = scalar_shr #Usize #ty
+let i8_shr #ty = scalar_shr #I8 #ty
+let i16_shr #ty = scalar_shr #I16 #ty
+let i32_shr #ty = scalar_shr #I32 #ty
+let i64_shr #ty = scalar_shr #I64 #ty
+let i128_shr #ty = scalar_shr #I128 #ty
+let isize_shr #ty = scalar_shr #Isize #ty
 
 (*** core::ops *)
 
