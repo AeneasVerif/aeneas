@@ -6,8 +6,14 @@ include Charon.Logging
 (** Logger for PrePasses *)
 let pre_passes_log = L.get_logger "MainLogger.PrePasses"
 
+(** Logger for RegionsHierarchy *)
+let regions_hierarchy_log = L.get_logger "MainLogger.RegionsHierarchy"
+
 (** Logger for Translate *)
 let translate_log = L.get_logger "MainLogger.Translate"
+
+(** Logger for Contexts *)
+let contexts_log = L.get_logger "MainLogger.Contexts"
 
 (** Logger for PureUtils *)
 let pure_utils_log = L.get_logger "MainLogger.PureUtils"
@@ -19,7 +25,10 @@ let symbolic_to_pure_log = L.get_logger "MainLogger.SymbolicToPure"
 let pure_micro_passes_log = L.get_logger "MainLogger.PureMicroPasses"
 
 (** Logger for ExtractBase *)
-let pure_to_extract_log = L.get_logger "MainLogger.ExtractBase"
+let extract_log = L.get_logger "MainLogger.ExtractBase"
+
+(** Logger for ExtractBuiltin *)
+let builtin_log = L.get_logger "MainLogger.Builtin"
 
 (** Logger for Interpreter *)
 let interpreter_log = L.get_logger "MainLogger.Interpreter"
@@ -56,6 +65,9 @@ let borrows_log = L.get_logger "MainLogger.Interpreter.Borrows"
 
 (** Logger for Invariants *)
 let invariants_log = L.get_logger "MainLogger.Interpreter.Invariants"
+
+(** Logger for AssociatedTypes *)
+let associated_types_log = L.get_logger "MainLogger.AssociatedTypes"
 
 (** Logger for SCC *)
 let scc_log = L.get_logger "MainLogger.Graph.SCC"

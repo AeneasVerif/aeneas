@@ -1,10 +1,8 @@
 (** This module defines various utilities to write the interpretation functions
     in continuation passing style. *)
 
-module T = Types
-module V = Values
-module C = Contexts
-module SA = SymbolicAst
+open Values
+open Contexts
 
 (** TODO: change the name *)
 type eval_error = EPanic
@@ -16,9 +14,9 @@ type statement_eval_res =
   | Continue of int
   | Return
   | Panic
-  | LoopReturn of V.loop_id
+  | LoopReturn of loop_id
       (** We reached a return statement *while inside a loop* *)
-  | EndEnterLoop of V.loop_id * V.typed_value V.SymbolicValueId.Map.t
+  | EndEnterLoop of loop_id * typed_value SymbolicValueId.Map.t
       (** When we enter a loop, we delegate the end of the function is
           synthesized with a call to the loop translation. We use this
           evaluation result to transmit the fact that we end evaluation
@@ -27,7 +25,7 @@ type statement_eval_res =
           We provide the list of values for the translated loop function call
           (or to be more precise the input values instantiation).
        *)
-  | EndContinue of V.loop_id * V.typed_value V.SymbolicValueId.Map.t
+  | EndContinue of loop_id * typed_value SymbolicValueId.Map.t
       (** For loop translations: we end with a continue (i.e., a recursive call
           to the translation for the loop body).
 
@@ -36,21 +34,21 @@ type statement_eval_res =
        *)
 [@@deriving show]
 
-type eval_result = SA.expression option
+type eval_result = SymbolicAst.expression option
 
 (** Continuation function *)
-type m_fun = C.eval_ctx -> eval_result
+type m_fun = eval_ctx -> eval_result
 
 (** Continuation taking another continuation as parameter *)
 type cm_fun = m_fun -> m_fun
 
 (** Continuation taking a typed value as parameter - TODO: use more *)
-type typed_value_m_fun = V.typed_value -> m_fun
+type typed_value_m_fun = typed_value -> m_fun
 
 (** Continuation taking another continuation as parameter and a typed
     value as parameter.
  *)
-type typed_value_cm_fun = V.typed_value -> cm_fun
+type typed_value_cm_fun = typed_value -> cm_fun
 
 (** Type of a continuation used when evaluating a statement *)
 type st_m_fun = statement_eval_res -> m_fun
@@ -59,13 +57,13 @@ type st_m_fun = statement_eval_res -> m_fun
 type st_cm_fun = st_m_fun -> m_fun
 
 (** Convert a unit function to a cm function *)
-let unit_to_cm_fun (f : C.eval_ctx -> unit) : cm_fun =
+let unit_to_cm_fun (f : eval_ctx -> unit) : cm_fun =
  fun cf ctx ->
   f ctx;
   cf ctx
 
 (** *)
-let update_to_cm_fun (f : C.eval_ctx -> C.eval_ctx) : cm_fun =
+let update_to_cm_fun (f : eval_ctx -> eval_ctx) : cm_fun =
  fun cf ctx ->
   let ctx = f ctx in
   cf ctx
@@ -75,10 +73,10 @@ let update_to_cm_fun (f : C.eval_ctx -> C.eval_ctx) : cm_fun =
 let comp (f : 'c -> 'd -> 'e) (g : ('a -> 'b) -> 'c) : ('a -> 'b) -> 'd -> 'e =
  fun cf ctx -> f (g cf) ctx
 
-let comp_unit (f : cm_fun) (g : C.eval_ctx -> unit) : cm_fun =
+let comp_unit (f : cm_fun) (g : eval_ctx -> unit) : cm_fun =
   comp f (unit_to_cm_fun g)
 
-let comp_update (f : cm_fun) (g : C.eval_ctx -> C.eval_ctx) : cm_fun =
+let comp_update (f : cm_fun) (g : eval_ctx -> eval_ctx) : cm_fun =
   comp f (update_to_cm_fun g)
 
 (** This is just a test, to check that {!comp} is general enough to handle a case
@@ -88,8 +86,8 @@ let comp_update (f : cm_fun) (g : C.eval_ctx -> C.eval_ctx) : cm_fun =
     Keeping this here also makes it a good reference, when one wants to figure
     out the signatures he should use for such a composition.
  *)
-let comp_ret_val (f : (V.typed_value -> m_fun) -> m_fun)
-    (g : m_fun -> V.typed_value -> m_fun) : cm_fun =
+let comp_ret_val (f : (typed_value -> m_fun) -> m_fun)
+    (g : m_fun -> typed_value -> m_fun) : cm_fun =
   comp f g
 
 let apply (f : cm_fun) (g : m_fun) : m_fun = fun ctx -> f g ctx

@@ -2,17 +2,18 @@ open Utils
 open LlbcAstUtils
 open Pure
 open PureUtils
-module Id = Identifiers
+open InterpreterUtils
+open FunsAnalysis
+open TypesAnalysis
+module T = Types
+module V = Values
 module C = Contexts
+module A = LlbcAst
 module S = SymbolicAst
-module TA = TypesAnalysis
-module L = Logging
 module PP = PrintPure
-module FA = FunsAnalysis
-module IU = InterpreterUtils
 
 (** The local logger *)
-let log = L.symbolic_to_pure_log
+let log = Logging.symbolic_to_pure_log
 
 type type_context = {
   llbc_type_decls : T.type_decl TypeDeclId.Map.t;
@@ -22,7 +23,7 @@ type type_context = {
           This map is empty when we translate the types, then contains all
           the translated types when we translate the functions.
        *)
-  type_infos : TA.type_infos;
+  type_infos : type_infos;
   recursive_decls : T.TypeDeclId.Set.t;
 }
 [@@deriving show]
@@ -45,12 +46,16 @@ type fun_sig_named_outputs = {
 type fun_context = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdNotLoopMap.t;  (** *)
-  fun_infos : FA.fun_info A.FunDeclId.Map.t;
+  fun_infos : fun_info A.FunDeclId.Map.t;
+  regions_hierarchies : T.region_groups FunIdMap.t;
 }
 [@@deriving show]
 
 type global_context = { llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t }
 [@@deriving show]
+
+type trait_decls_context = A.trait_decl A.TraitDeclId.Map.t [@@deriving show]
+type trait_impls_context = A.trait_impl A.TraitImplId.Map.t [@@deriving show]
 
 (** Whenever we translate a function call or an ended abstraction, we
     store the related information (this is useful when translating ended
@@ -106,8 +111,7 @@ type loop_info = {
   loop_id : LoopId.id;
   input_vars : var list;
   input_svl : V.symbolic_value list;
-  type_args : ty list;
-  const_generic_args : const_generic list;
+  generics : generic_args;
   forward_inputs : texpression list option;
       (** The forward inputs are initialized at [None] *)
   forward_output_no_state_no_result : var option;
@@ -120,6 +124,8 @@ type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
   global_context : global_context;
+  trait_decls_ctx : trait_decls_context;
+  trait_impls_ctx : trait_impls_context;
   fun_decl : A.fun_decl;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sg : fun_sig;
@@ -201,144 +207,111 @@ type bs_ctx = {
 }
 [@@deriving show]
 
-let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
-  let env = VarId.Map.empty in
-  let ctx =
-    {
-      PureTypeCheck.type_decls = ctx.type_context.type_decls;
-      global_decls = ctx.global_context.llbc_global_decls;
-      env;
-    }
-  in
-  let _ = PureTypeCheck.check_typed_pattern ctx v in
-  ()
-
-let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
-  let env = VarId.Map.empty in
-  let ctx =
-    {
-      PureTypeCheck.type_decls = ctx.type_context.type_decls;
-      global_decls = ctx.global_context.llbc_global_decls;
-      env;
-    }
-  in
-  PureTypeCheck.check_texpression ctx e
-
 (* TODO: move *)
-let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.Ast.ast_formatter =
-  Print.Ast.decls_and_fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
-    ctx.fun_context.llbc_fun_decls ctx.global_context.llbc_global_decls
-    ctx.fun_decl
-
-let bs_ctx_to_ctx_formatter (ctx : bs_ctx) : Print.Contexts.ctx_formatter =
-  let rvar_to_string = Print.Types.region_var_id_to_string in
-  let r_to_string = Print.Types.region_id_to_string in
-  let type_var_id_to_string = Print.Types.type_var_id_to_string in
-  let var_id_to_string = Print.Expressions.var_id_to_string in
-  let ast_fmt = bs_ctx_to_ast_formatter ctx in
+let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fun_decls = ctx.fun_context.llbc_fun_decls in
+  let global_decls = ctx.global_context.llbc_global_decls in
+  let trait_decls = ctx.trait_decls_ctx in
+  let trait_impls = ctx.trait_impls_ctx in
+  let generics = ctx.fun_decl.signature.generics in
+  let preds = ctx.fun_decl.signature.preds in
   {
-    Print.Values.rvar_to_string;
-    r_to_string;
-    type_var_id_to_string;
-    type_decl_id_to_string = ast_fmt.type_decl_id_to_string;
-    const_generic_var_id_to_string = ast_fmt.const_generic_var_id_to_string;
-    global_decl_id_to_string = ast_fmt.global_decl_id_to_string;
-    adt_variant_to_string = ast_fmt.adt_variant_to_string;
-    var_id_to_string;
-    adt_field_names = ast_fmt.adt_field_names;
+    type_decls;
+    fun_decls;
+    global_decls;
+    trait_decls;
+    trait_impls;
+    generics;
+    preds;
+    locals = [];
   }
 
-let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
-  let type_params = ctx.fun_decl.signature.type_params in
-  let cg_params = ctx.fun_decl.signature.const_generic_params in
+let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
-  PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
-    cg_params
+  let trait_decls = ctx.trait_decls_ctx in
+  let trait_impls = ctx.trait_impls_ctx in
+  let generics = ctx.sg.generics in
+  {
+    type_decls;
+    fun_decls;
+    global_decls;
+    trait_decls;
+    trait_impls;
+    generics;
+    locals = [];
+  }
+
+let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Types.generic_args_to_string env args
+
+let name_to_string (ctx : bs_ctx) =
+  Print.Types.name_to_string (bs_ctx_to_fmt_env ctx)
 
 let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
-  let fmt = bs_ctx_to_ctx_formatter ctx in
-  let fmt = Print.PC.ctx_to_rtype_formatter fmt in
-  Print.PV.symbolic_value_to_string fmt sv
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Values.symbolic_value_to_string env sv
 
 let typed_value_to_string (ctx : bs_ctx) (v : V.typed_value) : string =
-  let fmt = bs_ctx_to_ctx_formatter ctx in
-  Print.PV.typed_value_to_string fmt v
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Values.typed_value_to_string env v
 
-let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
-  let fmt = bs_ctx_to_pp_ast_formatter ctx in
-  let fmt = PrintPure.ast_to_type_formatter fmt in
-  PrintPure.ty_to_string fmt false ty
+let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.ty_to_string env false ty
 
-let rty_to_string (ctx : bs_ctx) (ty : T.rty) : string =
-  let fmt = bs_ctx_to_ctx_formatter ctx in
-  let fmt = Print.PC.ctx_to_rtype_formatter fmt in
-  Print.PT.rty_to_string fmt ty
+let ty_to_string (ctx : bs_ctx) (ty : T.ty) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Types.ty_to_string env ty
 
-let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
-  let type_params = def.type_params in
-  let cg_params = def.const_generic_params in
-  let type_decls = ctx.type_context.llbc_type_decls in
-  let global_decls = ctx.global_context.llbc_global_decls in
-  let fmt =
-    PrintPure.mk_type_formatter type_decls global_decls type_params cg_params
-  in
-  PrintPure.type_decl_to_string fmt def
+let type_decl_to_string (ctx : bs_ctx) (def : T.type_decl) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Types.type_decl_to_string env def
+
+let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.type_decl_to_string env def
 
 let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
-  let fmt = bs_ctx_to_pp_ast_formatter ctx in
-  PrintPure.texpression_to_string fmt false "" "  " e
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.texpression_to_string env false "" "  " e
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
-  let type_params = sg.type_params in
-  let cg_params = sg.const_generic_params in
-  let type_decls = ctx.type_context.llbc_type_decls in
-  let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let global_decls = ctx.global_context.llbc_global_decls in
-  let fmt =
-    PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
-      cg_params
-  in
-  PrintPure.fun_sig_to_string fmt sg
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.fun_sig_to_string env sg
 
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
-  let type_params = def.signature.type_params in
-  let cg_params = def.signature.const_generic_params in
-  let type_decls = ctx.type_context.llbc_type_decls in
-  let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let global_decls = ctx.global_context.llbc_global_decls in
-  let fmt =
-    PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
-      cg_params
-  in
-  PrintPure.fun_decl_to_string fmt def
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.fun_decl_to_string env def
 
 let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
-  let fmt = bs_ctx_to_pp_ast_formatter ctx in
-  PrintPure.typed_pattern_to_string fmt p
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.typed_pattern_to_string env p
 
 (* TODO: move *)
 let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
-  let fmt = bs_ctx_to_ast_formatter ctx in
-  let fmt = Print.Contexts.ast_to_value_formatter fmt in
+  let env = bs_ctx_to_fmt_env ctx in
   let verbose = false in
   let indent = "" in
   let indent_incr = "  " in
-  Print.Values.abs_to_string fmt verbose indent indent_incr abs
+  Print.Values.abs_to_string env verbose indent indent_incr abs
 
 let get_instantiated_fun_sig (fun_id : A.fun_id)
-    (back_id : T.RegionGroupId.id option) (tys : ty list)
-    (cgs : const_generic list) (ctx : bs_ctx) : inst_fun_sig =
+    (back_id : T.RegionGroupId.id option) (generics : generic_args)
+    (ctx : bs_ctx) : inst_fun_sig =
   (* Lookup the non-instantiated function signature *)
   let sg =
     (RegularFunIdNotLoopMap.find (fun_id, back_id) ctx.fun_context.fun_sigs).sg
   in
   (* Create the substitution *)
-  let tsubst = make_type_subst sg.type_params tys in
-  let cgsubst = make_const_generic_subst sg.const_generic_params cgs in
+  (* There shouldn't be any reference to Self *)
+  let tr_self = UnknownTrait __FUNCTION__ in
+  let subst = make_subst_from_generics sg.generics generics tr_self in
   (* Apply *)
-  fun_sig_substitute tsubst cgsubst sg
+  fun_sig_substitute subst sg
 
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
@@ -351,8 +324,402 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
 (* TODO: move *)
 let bs_ctx_lookup_local_function_sig (def_id : A.FunDeclId.id)
     (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
-  let id = (A.Regular def_id, back_id) in
+  let id = (E.FRegular def_id, back_id) in
   (RegularFunIdNotLoopMap.find id ctx.fun_context.fun_sigs).sg
+
+(* Some generic translation functions (we need to translate different "flavours"
+   of types: forward types, backward types, etc.) *)
+let rec translate_generic_args (translate_ty : T.ty -> ty)
+    (generics : T.generic_args) : generic_args =
+  (* We ignore the regions: if they didn't cause trouble for the symbolic execution,
+     then everything's fine *)
+  let types = List.map translate_ty generics.types in
+  let const_generics = generics.const_generics in
+  let trait_refs =
+    List.map (translate_trait_ref translate_ty) generics.trait_refs
+  in
+  { types; const_generics; trait_refs }
+
+and translate_trait_ref (translate_ty : T.ty -> ty) (tr : T.trait_ref) :
+    trait_ref =
+  let trait_id = translate_trait_instance_id translate_ty tr.trait_id in
+  let generics = translate_generic_args translate_ty tr.generics in
+  let trait_decl_ref =
+    translate_trait_decl_ref translate_ty tr.trait_decl_ref
+  in
+  { trait_id; generics; trait_decl_ref }
+
+and translate_trait_decl_ref (translate_ty : T.ty -> ty) (tr : T.trait_decl_ref)
+    : trait_decl_ref =
+  let decl_generics = translate_generic_args translate_ty tr.decl_generics in
+  { trait_decl_id = tr.trait_decl_id; decl_generics }
+
+and translate_trait_instance_id (translate_ty : T.ty -> ty)
+    (id : T.trait_instance_id) : trait_instance_id =
+  let translate_trait_instance_id = translate_trait_instance_id translate_ty in
+  match id with
+  | T.Self -> Self
+  | TraitImpl id -> TraitImpl id
+  | BuiltinOrAuto _ ->
+      (* We should have eliminated those in the prepasses *)
+      raise (Failure "Unreachable")
+  | Clause id -> Clause id
+  | ParentClause (inst_id, decl_id, clause_id) ->
+      let inst_id = translate_trait_instance_id inst_id in
+      ParentClause (inst_id, decl_id, clause_id)
+  | ItemClause (inst_id, decl_id, item_name, clause_id) ->
+      let inst_id = translate_trait_instance_id inst_id in
+      ItemClause (inst_id, decl_id, item_name, clause_id)
+  | TraitRef tr -> TraitRef (translate_trait_ref translate_ty tr)
+  | FnPointer _ -> raise (Failure "TODO")
+  | UnknownTrait s -> raise (Failure ("Unknown trait found: " ^ s))
+
+(** Translate a signature type - TODO: factor out the different translation functions *)
+let rec translate_sty (ty : T.ty) : ty =
+  let translate = translate_sty in
+  match ty with
+  | T.TAdt (type_id, generics) -> (
+      let generics = translate_sgeneric_args generics in
+      match type_id with
+      | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
+      | T.TTuple ->
+          assert (generics.const_generics = []);
+          mk_simpl_tuple_ty generics.types
+      | T.TAssumed aty -> (
+          match aty with
+          | T.TBox -> (
+              (* Eliminate the boxes *)
+              match generics.types with
+              | [ ty ] -> ty
+              | _ ->
+                  raise
+                    (Failure
+                       "Box/vec/option type with incorrect number of arguments")
+              )
+          | T.TArray -> TAdt (TAssumed TArray, generics)
+          | T.TSlice -> TAdt (TAssumed TSlice, generics)
+          | T.TStr -> TAdt (TAssumed TStr, generics)))
+  | TVar vid -> TVar vid
+  | TLiteral ty -> TLiteral ty
+  | TNever -> raise (Failure "Unreachable")
+  | TRef (_, rty, _) -> translate rty
+  | TRawPtr (ty, rkind) ->
+      let mut = match rkind with RMut -> Mut | RShared -> Const in
+      let ty = translate ty in
+      let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
+      TAdt (TAssumed (TRawPtr mut), generics)
+  | TTraitType (trait_ref, generics, type_name) ->
+      let trait_ref = translate_strait_ref trait_ref in
+      let generics = translate_sgeneric_args generics in
+      TTraitType (trait_ref, generics, type_name)
+  | TArrow _ -> raise (Failure "TODO")
+
+and translate_sgeneric_args (generics : T.generic_args) : generic_args =
+  translate_generic_args translate_sty generics
+
+and translate_strait_ref (tr : T.trait_ref) : trait_ref =
+  translate_trait_ref translate_sty tr
+
+and translate_strait_instance_id (id : T.trait_instance_id) : trait_instance_id
+    =
+  translate_trait_instance_id translate_sty id
+
+let translate_trait_clause (clause : T.trait_clause) : trait_clause =
+  let { T.clause_id; meta = _; trait_id; clause_generics } = clause in
+  let generics = translate_sgeneric_args clause_generics in
+  { clause_id; trait_id; generics }
+
+let translate_strait_type_constraint (ttc : T.trait_type_constraint) :
+    trait_type_constraint =
+  let { T.trait_ref; generics; type_name; ty } = ttc in
+  let trait_ref = translate_strait_ref trait_ref in
+  let generics = translate_sgeneric_args generics in
+  let ty = translate_sty ty in
+  { trait_ref; generics; type_name; ty }
+
+let translate_predicates (preds : T.predicates) : predicates =
+  let trait_type_constraints =
+    List.map translate_strait_type_constraint preds.trait_type_constraints
+  in
+  { trait_type_constraints }
+
+let translate_generic_params (generics : T.generic_params) : generic_params =
+  let { T.regions = _; types; const_generics; trait_clauses } = generics in
+  let trait_clauses = List.map translate_trait_clause trait_clauses in
+  { types; const_generics; trait_clauses }
+
+let translate_field (f : T.field) : field =
+  let field_name = f.field_name in
+  let field_ty = translate_sty f.field_ty in
+  { field_name; field_ty }
+
+let translate_fields (fl : T.field list) : field list =
+  List.map translate_field fl
+
+let translate_variant (v : T.variant) : variant =
+  let variant_name = v.variant_name in
+  let fields = translate_fields v.fields in
+  { variant_name; fields }
+
+let translate_variants (vl : T.variant list) : variant list =
+  List.map translate_variant vl
+
+(** Translate a type def kind from LLBC *)
+let translate_type_decl_kind (kind : T.type_decl_kind) : type_decl_kind =
+  match kind with
+  | T.Struct fields -> Struct (translate_fields fields)
+  | T.Enum variants -> Enum (translate_variants variants)
+  | T.Opaque -> Opaque
+
+(** Translate a type definition from LLBC
+
+    Remark: this is not symbolic to pure but LLBC to pure. Still,
+    I don't see the point of moving this definition for now.
+ *)
+let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
+    type_decl =
+  log#ldebug
+    (lazy
+      (let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
+       "translate_type_decl:\n\n"
+       ^ Print.Types.type_decl_to_string ctx def
+       ^ "\n"));
+  let env = Print.Contexts.decls_ctx_to_fmt_env ctx in
+  let def_id = def.T.def_id in
+  let llbc_name = def.name in
+  let name = Print.Types.name_to_string env def.name in
+  let { T.regions; types; const_generics; trait_clauses } = def.generics in
+  (* Can't translate types with regions for now *)
+  assert (regions = []);
+  let trait_clauses = List.map translate_trait_clause trait_clauses in
+  let generics = { types; const_generics; trait_clauses } in
+  let kind = translate_type_decl_kind def.T.kind in
+  let preds = translate_predicates def.preds in
+  let is_local = def.is_local in
+  let meta = def.meta in
+  {
+    def_id;
+    is_local;
+    llbc_name;
+    name;
+    meta;
+    generics;
+    llbc_generics = def.generics;
+    kind;
+    preds;
+  }
+
+let translate_type_id (id : T.type_id) : type_id =
+  match id with
+  | TAdtId adt_id -> TAdtId adt_id
+  | TAssumed aty ->
+      let aty =
+        match aty with
+        | T.TArray -> TArray
+        | T.TSlice -> TSlice
+        | T.TStr -> TStr
+        | T.TBox ->
+            (* Boxes have to be eliminated: this type id shouldn't
+               be translated *)
+            raise (Failure "Unreachable")
+      in
+      TAssumed aty
+  | TTuple -> TTuple
+
+(** Translate a type, seen as an input/output of a forward function
+    (preserve all borrows, etc.).
+
+    Remark: it doesn't matter whether the types has regions or erased regions
+    (both cases happen, actually).
+
+    TODO: factor out the various translation functions.
+*)
+let rec translate_fwd_ty (type_infos : type_infos) (ty : T.ty) : ty =
+  let translate = translate_fwd_ty type_infos in
+  match ty with
+  | T.TAdt (type_id, generics) -> (
+      let t_generics = translate_fwd_generic_args type_infos generics in
+      (* Eliminate boxes and simplify tuples *)
+      match type_id with
+      | TAdtId _ | TAssumed (TArray | TSlice | TStr) ->
+          let type_id = translate_type_id type_id in
+          TAdt (type_id, t_generics)
+      | TTuple ->
+          (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
+             identity *)
+          mk_simpl_tuple_ty t_generics.types
+      | TAssumed TBox -> (
+          (* We eliminate boxes *)
+          (* No general parametricity for now *)
+          assert (
+            not
+              (List.exists
+                 (TypesUtils.ty_has_borrows type_infos)
+                 generics.types));
+          match t_generics.types with
+          | [ bty ] -> bty
+          | _ ->
+              raise
+                (Failure
+                   "Unreachable: box/vec/option receives exactly one type \
+                    parameter")))
+  | TVar vid -> TVar vid
+  | TNever -> raise (Failure "Unreachable")
+  | TLiteral lty -> TLiteral lty
+  | TRef (_, rty, _) -> translate rty
+  | TRawPtr (ty, rkind) ->
+      let mut = match rkind with RMut -> Mut | RShared -> Const in
+      let ty = translate ty in
+      let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
+      TAdt (TAssumed (TRawPtr mut), generics)
+  | TTraitType (trait_ref, generics, type_name) ->
+      let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
+      let generics = translate_fwd_generic_args type_infos generics in
+      TTraitType (trait_ref, generics, type_name)
+  | TArrow _ -> raise (Failure "TODO")
+
+and translate_fwd_generic_args (type_infos : type_infos)
+    (generics : T.generic_args) : generic_args =
+  translate_generic_args (translate_fwd_ty type_infos) generics
+
+and translate_fwd_trait_ref (type_infos : type_infos) (tr : T.trait_ref) :
+    trait_ref =
+  translate_trait_ref (translate_fwd_ty type_infos) tr
+
+and translate_fwd_trait_instance_id (type_infos : type_infos)
+    (id : T.trait_instance_id) : trait_instance_id =
+  translate_trait_instance_id (translate_fwd_ty type_infos) id
+
+(** Simply calls [translate_fwd_ty] *)
+let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
+  let type_infos = ctx.type_context.type_infos in
+  translate_fwd_ty type_infos ty
+
+(** Simply calls [translate_fwd_generic_args] *)
+let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
+    generic_args =
+  let type_infos = ctx.type_context.type_infos in
+  translate_fwd_generic_args type_infos generics
+
+(** Translate a type, when some regions may have ended.
+    
+    We return an option, because the translated type may be empty.
+    
+    [inside_mut]: are we inside a mutable borrow?
+ *)
+let rec translate_back_ty (type_infos : type_infos)
+    (keep_region : T.region -> bool) (inside_mut : bool) (ty : T.ty) : ty option
+    =
+  let translate = translate_back_ty type_infos keep_region inside_mut in
+  (* A small helper for "leave" types *)
+  let wrap ty = if inside_mut then Some ty else None in
+  match ty with
+  | T.TAdt (type_id, generics) -> (
+      match type_id with
+      | TAdtId _ | TAssumed (TArray | TSlice | TStr) ->
+          let type_id = translate_type_id type_id in
+          if inside_mut then
+            (* We do not want to filter anything, so we translate the generics
+               as "forward" types *)
+            let generics = translate_fwd_generic_args type_infos generics in
+            Some (TAdt (type_id, generics))
+          else
+            (* If not inside a mutable reference: check if at least one
+               of the generics contains a mutable reference (i.e., is not
+               translated to `None`. If yes, keep the whole type, and
+               translate all the generics as "forward" types (the backward
+               function will extract the proper information from the ADT value)
+            *)
+            let types = List.filter_map translate generics.types in
+            if types <> [] then
+              let generics = translate_fwd_generic_args type_infos generics in
+              Some (TAdt (type_id, generics))
+            else None
+      | TAssumed TBox -> (
+          (* Don't accept ADTs (which are not tuples) with borrows for now *)
+          assert (not (TypesUtils.ty_has_borrows type_infos ty));
+          (* Eliminate the box *)
+          match generics.types with
+          | [ bty ] -> translate bty
+          | _ ->
+              raise
+                (Failure "Unreachable: boxes receive exactly one type parameter")
+          )
+      | TTuple -> (
+          (* Tuples can contain borrows (which we eliminate) *)
+          let tys_t = List.filter_map translate generics.types in
+          match tys_t with
+          | [] -> None
+          | _ ->
+              (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
+               * is the identity *)
+              Some (mk_simpl_tuple_ty tys_t)))
+  | TVar vid -> wrap (TVar vid)
+  | TNever -> raise (Failure "Unreachable")
+  | TLiteral lty -> wrap (TLiteral lty)
+  | TRef (r, rty, rkind) -> (
+      match rkind with
+      | RShared ->
+          (* Ignore shared references, unless we are below a mutable borrow *)
+          if inside_mut then translate rty else None
+      | RMut ->
+          (* Dive in, remembering the fact that we are inside a mutable borrow *)
+          let inside_mut = true in
+          if keep_region r then
+            translate_back_ty type_infos keep_region inside_mut rty
+          else None)
+  | TRawPtr _ ->
+      (* TODO: not sure what to do here *)
+      None
+  | TTraitType (trait_ref, generics, type_name) ->
+      assert (generics.regions = []);
+      (* Translate the trait ref and the generics as "forward" generics -
+         we do not want to filter any type *)
+      let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
+      let generics = translate_fwd_generic_args type_infos generics in
+      Some (TTraitType (trait_ref, generics, type_name))
+  | TArrow _ -> raise (Failure "TODO")
+
+(** Simply calls [translate_back_ty] *)
+let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
+    (inside_mut : bool) (ty : T.ty) : ty option =
+  let type_infos = ctx.type_context.type_infos in
+  translate_back_ty type_infos keep_region inside_mut ty
+
+let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
+  let const_generics =
+    T.ConstGenericVarId.Map.of_list
+      (List.map
+         (fun (cg : T.const_generic_var) ->
+           (cg.index, ctx_translate_fwd_ty ctx (T.TLiteral cg.ty)))
+         ctx.sg.generics.const_generics)
+  in
+  let env = VarId.Map.empty in
+  {
+    PureTypeCheck.type_decls = ctx.type_context.type_decls;
+    global_decls = ctx.global_context.llbc_global_decls;
+    env;
+    const_generics;
+  }
+
+let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
+  let ctx = mk_type_check_ctx ctx in
+  let _ = PureTypeCheck.check_typed_pattern ctx v in
+  ()
+
+let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
+  if !Config.type_check_pure_code then
+    let ctx = mk_type_check_ctx ctx in
+    PureTypeCheck.check_texpression ctx e
+
+let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
+    (id : A.fun_id_or_trait_method_ref) : fun_id_or_trait_method_ref =
+  match id with
+  | FunId fun_id -> FunId fun_id
+  | TraitMethod (trait_ref, method_name, fun_decl_id) ->
+      let type_infos = ctx.type_context.type_infos in
+      let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
+      TraitMethod (trait_ref, method_name, fun_decl_id)
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (args : texpression list) (ctx : bs_ctx) : bs_ctx =
@@ -385,209 +752,13 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   (* Retrieve the fun_id *)
   let fun_id =
     match info.forward.call_id with
-    | S.Fun (fid, _) -> Fun (FromLlbc (fid, None, Some back_id))
+    | S.Fun (fid, _) ->
+        let fid = translate_fun_id_or_trait_method_ref ctx fid in
+        Fun (FromLlbc (fid, None, Some back_id))
     | S.Unop _ | S.Binop _ -> raise (Failure "Unreachable")
   in
   (* Update the context and return *)
   ({ ctx with calls; abstractions }, fun_id)
-
-let rec translate_sty (ty : T.sty) : ty =
-  let translate = translate_sty in
-  match ty with
-  | T.Adt (type_id, regions, tys, cgs) -> (
-      (* Can't translate types with regions for now *)
-      assert (regions = []);
-      let tys = List.map translate tys in
-      match type_id with
-      | T.AdtId adt_id -> Adt (AdtId adt_id, tys, cgs)
-      | T.Tuple -> mk_simpl_tuple_ty tys
-      | T.Assumed aty -> (
-          match aty with
-          | T.Vec -> Adt (Assumed Vec, tys, cgs)
-          | T.Option -> Adt (Assumed Option, tys, cgs)
-          | T.Box -> (
-              (* Eliminate the boxes *)
-              match tys with
-              | [ ty ] -> ty
-              | _ ->
-                  raise
-                    (Failure
-                       "Box/vec/option type with incorrect number of arguments")
-              )
-          | T.Array -> Adt (Assumed Array, tys, cgs)
-          | T.Slice -> Adt (Assumed Slice, tys, cgs)
-          | T.Str -> Adt (Assumed Str, tys, cgs)
-          | T.Range -> Adt (Assumed Range, tys, cgs)))
-  | TypeVar vid -> TypeVar vid
-  | Literal ty -> Literal ty
-  | Never -> raise (Failure "Unreachable")
-  | Ref (_, rty, _) -> translate rty
-
-let translate_field (f : T.field) : field =
-  let field_name = f.field_name in
-  let field_ty = translate_sty f.field_ty in
-  { field_name; field_ty }
-
-let translate_fields (fl : T.field list) : field list =
-  List.map translate_field fl
-
-let translate_variant (v : T.variant) : variant =
-  let variant_name = v.variant_name in
-  let fields = translate_fields v.fields in
-  { variant_name; fields }
-
-let translate_variants (vl : T.variant list) : variant list =
-  List.map translate_variant vl
-
-(** Translate a type def kind to IM *)
-let translate_type_decl_kind (kind : T.type_decl_kind) : type_decl_kind =
-  match kind with
-  | T.Struct fields -> Struct (translate_fields fields)
-  | T.Enum variants -> Enum (translate_variants variants)
-  | T.Opaque -> Opaque
-
-(** Translate a type definition from IM 
-
-    TODO: this is not symbolic to pure but IM to pure. Still, I don't see the
-    point of moving this definition for now.
- *)
-let translate_type_decl (def : T.type_decl) : type_decl =
-  (* Translate *)
-  let def_id = def.T.def_id in
-  let name = def.name in
-  (* Can't translate types with regions for now *)
-  assert (def.region_params = []);
-  let type_params = def.type_params in
-  let const_generic_params = def.const_generic_params in
-  let kind = translate_type_decl_kind def.T.kind in
-  { def_id; name; type_params; const_generic_params; kind }
-
-let translate_type_id (id : T.type_id) : type_id =
-  match id with
-  | AdtId adt_id -> AdtId adt_id
-  | T.Assumed aty ->
-      let aty =
-        match aty with
-        | T.Vec -> Vec
-        | T.Option -> Option
-        | T.Array -> Array
-        | T.Slice -> Slice
-        | T.Str -> Str
-        | T.Range -> Range
-        | T.Box ->
-            (* Boxes have to be eliminated: this type id shouldn't
-               be translated *)
-            raise (Failure "Unreachable")
-      in
-      Assumed aty
-  | T.Tuple -> Tuple
-
-(** Translate a type, seen as an input/output of a forward function
-    (preserve all borrows, etc.)
-*)
-let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
-  let translate = translate_fwd_ty type_infos in
-  match ty with
-  | T.Adt (type_id, regions, tys, cgs) -> (
-      (* Can't translate types with regions for now *)
-      assert (regions = []);
-      (* Translate the type parameters *)
-      let t_tys = List.map translate tys in
-      (* Eliminate boxes and simplify tuples *)
-      match type_id with
-      | AdtId _
-      | T.Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
-          (* No general parametricity for now *)
-          assert (not (List.exists (TypesUtils.ty_has_borrows type_infos) tys));
-          let type_id = translate_type_id type_id in
-          Adt (type_id, t_tys, cgs)
-      | Tuple ->
-          (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
-             identity *)
-          mk_simpl_tuple_ty t_tys
-      | T.Assumed T.Box -> (
-          (* We eliminate boxes *)
-          (* No general parametricity for now *)
-          assert (not (List.exists (TypesUtils.ty_has_borrows type_infos) tys));
-          match t_tys with
-          | [ bty ] -> bty
-          | _ ->
-              raise
-                (Failure
-                   "Unreachable: box/vec/option receives exactly one type \
-                    parameter")))
-  | TypeVar vid -> TypeVar vid
-  | Never -> raise (Failure "Unreachable")
-  | Literal lty -> Literal lty
-  | Ref (_, rty, _) -> translate rty
-
-(** Simply calls [translate_fwd_ty] *)
-let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : 'r T.ty) : ty =
-  let type_infos = ctx.type_context.type_infos in
-  translate_fwd_ty type_infos ty
-
-(** Translate a type, when some regions may have ended.
-    
-    We return an option, because the translated type may be empty.
-    
-    [inside_mut]: are we inside a mutable borrow?
- *)
-let rec translate_back_ty (type_infos : TA.type_infos)
-    (keep_region : 'r -> bool) (inside_mut : bool) (ty : 'r T.ty) : ty option =
-  let translate = translate_back_ty type_infos keep_region inside_mut in
-  (* A small helper for "leave" types *)
-  let wrap ty = if inside_mut then Some ty else None in
-  match ty with
-  | T.Adt (type_id, _, tys, cgs) -> (
-      match type_id with
-      | T.AdtId _
-      | Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
-          (* Don't accept ADTs (which are not tuples) with borrows for now *)
-          assert (not (TypesUtils.ty_has_borrows type_infos ty));
-          let type_id = translate_type_id type_id in
-          if inside_mut then
-            let tys_t = List.filter_map translate tys in
-            Some (Adt (type_id, tys_t, cgs))
-          else None
-      | Assumed T.Box -> (
-          (* Don't accept ADTs (which are not tuples) with borrows for now *)
-          assert (not (TypesUtils.ty_has_borrows type_infos ty));
-          (* Eliminate the box *)
-          match tys with
-          | [ bty ] -> translate bty
-          | _ ->
-              raise
-                (Failure "Unreachable: boxes receive exactly one type parameter")
-          )
-      | T.Tuple -> (
-          (* Tuples can contain borrows (which we eliminated) *)
-          let tys_t = List.filter_map translate tys in
-          match tys_t with
-          | [] -> None
-          | _ ->
-              (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
-               * is the identity *)
-              Some (mk_simpl_tuple_ty tys_t)))
-  | TypeVar vid -> wrap (TypeVar vid)
-  | Never -> raise (Failure "Unreachable")
-  | Literal lty -> wrap (Literal lty)
-  | Ref (r, rty, rkind) -> (
-      match rkind with
-      | T.Shared ->
-          (* Ignore shared references, unless we are below a mutable borrow *)
-          if inside_mut then translate rty else None
-      | T.Mut ->
-          (* Dive in, remembering the fact that we are inside a mutable borrow *)
-          let inside_mut = true in
-          if keep_region r then
-            translate_back_ty type_infos keep_region inside_mut rty
-          else None)
-
-(** Simply calls [translate_back_ty] *)
-let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
-    (inside_mut : bool) (ty : 'r T.ty) : ty option =
-  let type_infos = ctx.type_context.type_infos in
-  translate_back_ty type_infos keep_region inside_mut ty
 
 (** List the ancestors of an abstraction *)
 let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
@@ -641,11 +812,11 @@ let mk_fuel_input_as_list (ctx : bs_ctx) (info : fun_effect_info) :
   if function_uses_fuel info then [ mk_fuel_texpression ctx.fuel ] else []
 
 (** Small utility. *)
-let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
-    (fun_id : A.fun_id) (lid : V.LoopId.id option)
+let get_fun_effect_info (fun_infos : fun_info A.FunDeclId.Map.t)
+    (fun_id : A.fun_id_or_trait_method_ref) (lid : V.LoopId.id option)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | A.Regular fid ->
+  | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
       let info = A.FunDeclId.Map.find fid fun_infos in
       let stateful_group = info.stateful in
       let stateful =
@@ -658,10 +829,10 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
         can_diverge = info.can_diverge;
         is_rec = info.is_rec || Option.is_some lid;
       }
-  | A.Assumed aid ->
+  | FunId (FAssumed aid) ->
       assert (lid = None);
       {
-        can_fail = Assumed.assumed_can_fail aid;
+        can_fail = Assumed.assumed_fun_can_fail aid;
         stateful_group = false;
         stateful = false;
         can_diverge = false;
@@ -673,23 +844,55 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     Note that the function also takes a list of names for the inputs, and
     computes, for every output for the backward functions, a corresponding
     name (outputs for backward functions come from borrows in the inputs
-    of the forward function) which we use as hints to generate pretty names.
+    of the forward function) which we use as hints to generate pretty names
+    in the extracted code.
  *)
-let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
-    (fun_id : A.fun_id) (type_infos : TA.type_infos) (sg : A.fun_sig)
-    (input_names : string option list) (bid : T.RegionGroupId.id option) :
-    fun_sig_named_outputs =
+let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
+    (sg : A.fun_sig) (input_names : string option list)
+    (bid : T.RegionGroupId.id option) : fun_sig_named_outputs =
+  let fun_infos = decls_ctx.fun_ctx.fun_infos in
+  let type_infos = decls_ctx.type_ctx.type_infos in
   (* Retrieve the list of parent backward functions *)
+  let regions_hierarchy =
+    FunIdMap.find fun_id decls_ctx.fun_ctx.regions_hierarchies
+  in
   let gid, parents =
     match bid with
     | None -> (None, T.RegionGroupId.Set.empty)
     | Some bid ->
-        let parents = list_ancestor_region_groups sg bid in
+        let parents = list_ancestor_region_groups regions_hierarchy bid in
         (Some bid, parents)
   in
   (* Is the function stateful, and can it fail? *)
   let lid = None in
-  let effect_info = get_fun_effect_info fun_infos fun_id lid bid in
+  let effect_info = get_fun_effect_info fun_infos (FunId fun_id) lid bid in
+  (* We need an evaluation context to normalize the types (to normalize the
+     associated types, etc. - for instance it may happen that the types
+     refer to the types associated to a trait ref, but where the trait ref
+     is a known impl). *)
+  (* Create the context *)
+  let ctx =
+    let region_groups =
+      List.map (fun (g : T.region_group) -> g.id) regions_hierarchy
+    in
+    let ctx =
+      InterpreterUtils.initialize_eval_context decls_ctx region_groups
+        sg.generics.types sg.generics.const_generics
+    in
+    (* Compute the normalization map for the *sty* types and add it to the context *)
+    AssociatedTypes.ctx_add_norm_trait_types_from_preds ctx
+      sg.preds.trait_type_constraints
+  in
+
+  (* Normalize the signature *)
+  let sg =
+    let ({ A.inputs; output; _ } : A.fun_sig) = sg in
+    let norm = AssociatedTypes.ctx_normalize_ty ctx in
+    let inputs = List.map norm inputs in
+    let output = norm output in
+    { sg with A.inputs; output }
+  in
+
   (* List the inputs for:
    * - the fuel
    * - the forward function
@@ -702,14 +905,14 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
    * so just check that there aren't parent regions *)
   assert (T.RegionGroupId.Set.is_empty parents);
   (* Small helper to translate types for backward functions *)
-  let translate_back_ty_for_gid (gid : T.RegionGroupId.id) : T.sty -> ty option
-      =
-    let rg = T.RegionGroupId.nth sg.regions_hierarchy gid in
-    let regions = T.RegionVarId.Set.of_list rg.regions in
+  let translate_back_ty_for_gid (gid : T.RegionGroupId.id) : T.ty -> ty option =
+    let rg = T.RegionGroupId.nth regions_hierarchy gid in
+    let regions = T.RegionId.Set.of_list rg.regions in
     let keep_region r =
       match r with
-      | T.Static -> raise Unimplemented
-      | T.Var r -> T.RegionVarId.Set.mem r regions
+      | T.RStatic -> raise Unimplemented
+      | T.RErased -> raise (Failure "Unexpected erased region")
+      | T.RVar r -> T.RegionId.Set.mem r regions
     in
     let inside_mut = false in
     translate_back_ty type_infos keep_region inside_mut
@@ -806,9 +1009,8 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     (* Wrap in a result type *)
     if effect_info.can_fail then mk_result_ty output else output
   in
-  (* Type/const generic parameters *)
-  let type_params = sg.type_params in
-  let const_generic_params = sg.const_generic_params in
+  (* Generic parameters *)
+  let generics = translate_generic_params sg.generics in
   (* Return *)
   let has_fuel = fuel <> [] in
   let num_fwd_inputs_no_state = List.length fwd_inputs in
@@ -836,8 +1038,17 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
       effect_info;
     }
   in
+  let preds = translate_predicates sg.preds in
   let sg =
-    { type_params; const_generic_params; inputs; output; doutputs; info }
+    {
+      generics;
+      llbc_generics = sg.generics;
+      preds;
+      inputs;
+      output;
+      doutputs;
+      info;
+    }
   in
   { sg; output_names }
 
@@ -853,7 +1064,7 @@ let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * typed_pattern =
   (* Return *)
   (ctx, state_pat)
 
-let fresh_var_llbc_ty (basename : string option) (ty : 'r T.ty) (ctx : bs_ctx) :
+let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * var =
   (* Generate the fresh variable *)
   let id, var_counter = VarId.fresh ctx.var_counter in
@@ -917,7 +1128,7 @@ let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
 (** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
   match (v.value, v.ty) with
-  | V.Adt av, T.Adt (T.Assumed T.Box, _, _, _) -> (
+  | V.VAdt av, T.TAdt (T.TAssumed T.TBox, _) -> (
       match av.field_values with
       | [ bv ] -> unbox_typed_value bv
       | _ -> raise (Failure "Unreachable"))
@@ -956,22 +1167,22 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
   (* Translate the value *)
   let value =
     match v.value with
-    | V.Literal cv -> { e = Const cv; ty }
-    | Adt av -> (
+    | VLiteral cv -> { e = Const cv; ty }
+    | VAdt av -> (
         let variant_id = av.variant_id in
         let field_values = List.map translate av.field_values in
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
-        | T.Adt (T.Tuple, _, _, _) ->
+        | TAdt (TTuple, _) ->
             assert (variant_id = None);
             mk_simpl_tuple_texpression field_values
         | _ ->
-            (* Retrieve the type, the translated type arguments and the
-             * const generic arguments from the translated type (simpler this way) *)
-            let adt_id, type_args, const_generic_args = ty_as_adt ty in
+            (* Retrieve the type and the translated generics from the translated
+               type (simpler this way) *)
+            let adt_id, generics = ty_as_adt ty in
             (* Create the constructor *)
             let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
-            let qualif = { id = qualif_id; type_args; const_generic_args } in
+            let qualif = { id = qualif_id; generics } in
             let cons_e = Qualif qualif in
             let field_tys =
               List.map (fun (v : texpression) -> v.ty) field_values
@@ -980,27 +1191,27 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
             mk_apps cons field_values)
-    | Bottom -> raise (Failure "Unreachable")
-    | Loan lc -> (
+    | VBottom -> raise (Failure "Unreachable")
+    | VLoan lc -> (
         match lc with
-        | SharedLoan (_, v) -> translate v
-        | MutLoan _ -> raise (Failure "Unreachable"))
-    | Borrow bc -> (
+        | VSharedLoan (_, v) -> translate v
+        | VMutLoan _ -> raise (Failure "Unreachable"))
+    | VBorrow bc -> (
         match bc with
-        | V.SharedBorrow bid ->
+        | VSharedBorrow bid ->
             (* Lookup the shared value in the context, and continue *)
             let sv = InterpreterBorrowsCore.lookup_shared_value ectx bid in
             translate sv
-        | V.ReservedMutBorrow bid ->
+        | VReservedMutBorrow bid ->
             (* Same as for shared borrows. However, note that we use reserved borrows
              * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
             let sv = InterpreterBorrowsCore.lookup_shared_value ectx bid in
             translate sv
-        | V.MutBorrow (_, v) ->
+        | VMutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
             translate v)
-    | Symbolic sv -> symbolic_value_to_texpression ctx sv
+    | VSymbolic sv -> symbolic_value_to_texpression ctx sv
   in
   (* Debugging *)
   log#ldebug
@@ -1038,14 +1249,12 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* Translate the field values *)
         let field_values = List.filter_map translate adt_v.field_values in
         (* For now, only tuples can contain borrows *)
-        let adt_id, _, _, _ = TypesUtils.ty_as_adt av.ty in
+        let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | T.AdtId _
-        | T.Assumed
-            (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
+        | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
             assert (field_values = []);
             None
-        | T.Tuple ->
+        | TTuple ->
             (* Return *)
             if field_values = [] then None
             else
@@ -1185,14 +1394,12 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         (* For now, only tuples can contain borrows - note that if we gave
          * something like a [&mut Vec] to a function, we give back the
          * vector value upon visiting the "abstraction borrow" node *)
-        let adt_id, _, _, _ = TypesUtils.ty_as_adt av.ty in
+        let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | T.AdtId _
-        | T.Assumed
-            (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
+        | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
             assert (field_values = []);
             (ctx, None)
-        | T.Tuple ->
+        | TTuple ->
             (* Return *)
             let variant_id = adt_v.variant_id in
             assert (variant_id = None);
@@ -1303,11 +1510,11 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
   (call_info.forward, abs_ancestors)
 
 (** Add meta-information to an expression *)
-let mk_meta_symbolic_assignments (vars : var list) (values : texpression list)
+let mk_emeta_symbolic_assignments (vars : var list) (values : texpression list)
     (e : texpression) : texpression =
   let var_values = List.combine vars values in
   List.fold_right
-    (fun (var, arg) e -> mk_meta (SymbolicAssignment (var_get_id var, arg)) e)
+    (fun (var, arg) e -> mk_emeta (SymbolicAssignment (var_get_id var, arg)) e)
     var_values e
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -1323,7 +1530,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
-  | Meta (meta, e) -> translate_meta meta e ctx
+  | Meta (meta, e) -> translate_emeta meta e ctx
   | ForwardEnd (ectx, loop_input_values, e, back_e) ->
       translate_forward_end ectx loop_input_values e back_e ctx
   | Loop loop -> translate_loop loop ctx
@@ -1457,9 +1664,12 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
+  log#ldebug
+    (lazy
+      ("translate_function_call:\n"
+      ^ ctx_generic_args_to_string ctx call.generics));
   (* Translate the function call *)
-  let type_args = List.map (ctx_translate_fwd_ty ctx) call.type_params in
-  let const_generic_args = call.const_generic_params in
+  let generics = ctx_translate_fwd_generic_args ctx call.generics in
   let args =
     let args = List.map (typed_value_to_texpression ctx call.ctx) call.args in
     let args_mplaces = List.map translate_opt_mplace call.args_places in
@@ -1475,7 +1685,8 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     match call.call_id with
     | S.Fun (fid, call_id) ->
         (* Regular function call *)
-        let func = Fun (FromLlbc (fid, None, None)) in
+        let fid_t = translate_fun_id_or_trait_method_ref ctx fid in
+        let func = Fun (FromLlbc (fid_t, None, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
         let effect_info =
@@ -1525,18 +1736,20 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             (ctx, Unop (Neg int_ty), effect_info, args, None)
         | _ -> raise (Failure "Unreachable"))
-    | S.Unop (E.Cast (src_ty, tgt_ty)) ->
-        (* Note that cast can fail *)
-        let effect_info =
-          {
-            can_fail = true;
-            stateful_group = false;
-            stateful = false;
-            can_diverge = false;
-            is_rec = false;
-          }
-        in
-        (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None)
+    | S.Unop (E.Cast cast_kind) -> (
+        match cast_kind with
+        | CastInteger (src_ty, tgt_ty) ->
+            (* Note that cast can fail *)
+            let effect_info =
+              {
+                can_fail = true;
+                stateful_group = false;
+                stateful = false;
+                can_diverge = false;
+                is_rec = false;
+              }
+            in
+            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None))
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -1565,7 +1778,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     | None -> dest
     | Some out_state -> mk_simpl_tuple_pattern [ out_state; dest ]
   in
-  let func = { id = FunOrOp fun_id; type_args; const_generic_args } in
+  let func = { id = FunOrOp fun_id; generics } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
   let ret_ty =
     if effect_info.can_fail then mk_result_ty dest_v.ty else dest_v.ty
@@ -1600,13 +1813,13 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   log#ldebug
     (lazy
       ("translate_end_abstraction_synth_input:" ^ "\n- function: "
-      ^ Print.name_to_string ctx.fun_decl.name
+      ^ name_to_string ctx ctx.fun_decl.name
       ^ "\n- rg_id: "
       ^ T.RegionGroupId.to_string rg_id
       ^ "\n- loop_id: "
       ^ Print.option_to_string Pure.LoopId.to_string ctx.loop_id
-      ^ "\n- eval_ctx:\n" ^ IU.eval_ctx_to_string ectx ^ "\n- abs:\n"
-      ^ IU.abs_to_string ectx abs ^ "\n"));
+      ^ "\n- eval_ctx:\n" ^ eval_ctx_to_string ectx ^ "\n- abs:\n"
+      ^ abs_to_string ctx abs ^ "\n"));
 
   (* When we end an input abstraction, this input abstraction gets back
    * the borrows which it introduced in the context through the input
@@ -1658,20 +1871,23 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
       ("translate_end_abstraction_synth_input:"
      ^ "\n\n- given back variables types:\n"
       ^ Print.list_to_string
-          (fun (v : var) -> ty_to_string ctx v.ty)
+          (fun (v : var) -> pure_ty_to_string ctx v.ty)
           given_back_variables
       ^ "\n\n- consumed values:\n"
       ^ Print.list_to_string
-          (fun e -> texpression_to_string ctx e ^ " : " ^ ty_to_string ctx e.ty)
+          (fun e ->
+            texpression_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
           consumed_values
       ^ "\n"));
 
   (* Group the two lists *)
   let variables_values = List.combine given_back_variables consumed_values in
   (* Sanity check: the two lists match (same types) *)
-  List.iter
-    (fun (var, v) -> assert ((var : var).ty = (v : texpression).ty))
-    variables_values;
+  (* TODO: normalize the types *)
+  if !Config.type_check_pure_code then
+    List.iter
+      (fun (var, v) -> assert ((var : var).ty = (v : texpression).ty))
+      variables_values;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Generate the assignemnts *)
@@ -1696,8 +1912,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   let effect_info =
     get_fun_effect_info ctx.fun_context.fun_infos fun_id None (Some rg_id)
   in
-  let type_args = List.map (ctx_translate_fwd_ty ctx) call.type_params in
-  let const_generic_args = call.const_generic_params in
+  let generics = ctx_translate_fwd_generic_args ctx call.generics in
   (* Retrieve the original call and the parent abstractions *)
   let _forward, backwards = get_abs_ancestors ctx abs call_id in
   (* Retrieve the values consumed when we called the forward function and
@@ -1745,34 +1960,36 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | Some nstate -> mk_simpl_tuple_pattern [ nstate; output ]
   in
   (* Sanity check: there is the proper number of inputs and outputs, and they have the proper type *)
-  let _ =
-    let inst_sg =
-      get_instantiated_fun_sig fun_id (Some rg_id) type_args const_generic_args
-        ctx
-    in
-    log#ldebug
-      (lazy
-        ("\n- fun_id: " ^ A.show_fun_id fun_id ^ "\n- inputs ("
-        ^ string_of_int (List.length inputs)
-        ^ "): "
-        ^ String.concat ", " (List.map (texpression_to_string ctx) inputs)
-        ^ "\n- inst_sg.inputs ("
-        ^ string_of_int (List.length inst_sg.inputs)
-        ^ "): "
-        ^ String.concat ", " (List.map (ty_to_string ctx) inst_sg.inputs)));
-    List.iter
-      (fun (x, ty) -> assert ((x : texpression).ty = ty))
-      (List.combine inputs inst_sg.inputs);
-    log#ldebug
-      (lazy
-        ("\n- outputs: "
-        ^ string_of_int (List.length outputs)
-        ^ "\n- expected outputs: "
-        ^ string_of_int (List.length inst_sg.doutputs)));
-    List.iter
-      (fun (x, ty) -> assert ((x : typed_pattern).ty = ty))
-      (List.combine outputs inst_sg.doutputs)
-  in
+  (if (* TODO: normalize the types *) !Config.type_check_pure_code then
+     match fun_id with
+     | FunId fun_id ->
+         let inst_sg =
+           get_instantiated_fun_sig fun_id (Some rg_id) generics ctx
+         in
+         log#ldebug
+           (lazy
+             ("\n- fun_id: " ^ A.show_fun_id fun_id ^ "\n- inputs ("
+             ^ string_of_int (List.length inputs)
+             ^ "): "
+             ^ String.concat ", " (List.map (texpression_to_string ctx) inputs)
+             ^ "\n- inst_sg.inputs ("
+             ^ string_of_int (List.length inst_sg.inputs)
+             ^ "): "
+             ^ String.concat ", "
+                 (List.map (pure_ty_to_string ctx) inst_sg.inputs)));
+         List.iter
+           (fun (x, ty) -> assert ((x : texpression).ty = ty))
+           (List.combine inputs inst_sg.inputs);
+         log#ldebug
+           (lazy
+             ("\n- outputs: "
+             ^ string_of_int (List.length outputs)
+             ^ "\n- expected outputs: "
+             ^ string_of_int (List.length inst_sg.doutputs)));
+         List.iter
+           (fun (x, ty) -> assert ((x : typed_pattern).ty = ty))
+           (List.combine outputs inst_sg.doutputs)
+     | _ -> (* TODO: trait methods *) ());
   (* Retrieve the function id, and register the function call in the context
    * if necessary *)
   let ctx, func =
@@ -1792,7 +2009,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     if effect_info.can_fail then mk_result_ty output.ty else output.ty
   in
   let func_ty = mk_arrows input_tys ret_ty in
-  let func = { id = FunOrOp func; type_args; const_generic_args } in
+  let func = { id = FunOrOp func; generics } in
   let func = { e = Qualif func; ty = func_ty } in
   let call = mk_apps func args in
   (* **Optimization**:
@@ -1881,8 +2098,9 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
       log#ldebug
         (lazy
           ("\n- given_back ty: "
-          ^ ty_to_string ctx given_back.ty
-          ^ "\n- sig input ty: " ^ ty_to_string ctx input.ty));
+          ^ pure_ty_to_string ctx given_back.ty
+          ^ "\n- sig input ty: "
+          ^ pure_ty_to_string ctx input.ty));
       assert (given_back.ty = input.ty))
     given_back_inputs;
   (* Translate the next expression *)
@@ -1909,14 +2127,13 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       (* Actually the same case as [SynthInput] *)
       translate_end_abstraction_synth_input ectx abs e ctx rg_id
   | V.LoopCall ->
-      let fun_id = A.Regular ctx.fun_decl.A.def_id in
+      let fun_id = E.FRegular ctx.fun_decl.def_id in
       let effect_info =
-        get_fun_effect_info ctx.fun_context.fun_infos fun_id (Some vloop_id)
-          (Some rg_id)
+        get_fun_effect_info ctx.fun_context.fun_infos (FunId fun_id)
+          (Some vloop_id) (Some rg_id)
       in
       let loop_info = LoopId.Map.find loop_id ctx.loops in
-      let type_args = loop_info.type_args in
-      let const_generic_args = loop_info.const_generic_args in
+      let generics = loop_info.generics in
       let fwd_inputs = Option.get loop_info.forward_inputs in
       (* Retrieve the additional backward inputs. Note that those are actually
          the backward inputs of the function we are synthesizing (and that we
@@ -1964,8 +2181,8 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
         if effect_info.can_fail then mk_result_ty output.ty else output.ty
       in
       let func_ty = mk_arrows input_tys ret_ty in
-      let func = Fun (FromLlbc (fun_id, Some loop_id, Some rg_id)) in
-      let func = { id = FunOrOp func; type_args; const_generic_args } in
+      let func = Fun (FromLlbc (FunId fun_id, Some loop_id, Some rg_id)) in
+      let func = { id = FunOrOp func; generics } in
       let func = { e = Qualif func; ty = func_ty } in
       let call = mk_apps func args in
       (* **Optimization**:
@@ -2014,7 +2231,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
                 var_values
             in
             let vars, values = List.split var_values in
-            mk_meta_symbolic_assignments vars values next_e
+            mk_emeta_symbolic_assignments vars values next_e
           else next_e
         in
 
@@ -2025,9 +2242,7 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (sval : V.symbolic_value)
     (e : S.expression) (ctx : bs_ctx) : texpression =
   let ctx, var = fresh_var_for_symbolic_value sval ctx in
   let decl = A.GlobalDeclId.Map.find gid ctx.global_context.llbc_global_decls in
-  let global_expr =
-    { id = Global gid; type_args = []; const_generic_args = [] }
-  in
+  let global_expr = { id = Global gid; generics = empty_generic_args } in
   (* We use translate_fwd_ty to translate the global type *)
   let ty = ctx_translate_fwd_ty ctx decl.ty in
   let gval = { e = Qualif global_expr; ty } in
@@ -2041,13 +2256,9 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
   let v = typed_value_to_texpression ctx ectx v in
   let args = [ v ] in
   let func =
-    {
-      id = FunOrOp (Fun (Pure Assert));
-      type_args = [];
-      const_generic_args = [];
-    }
+    { id = FunOrOp (Fun (Pure Assert)); generics = empty_generic_args }
   in
-  let func_ty = mk_arrow (Literal Bool) mk_unit_ty in
+  let func_ty = mk_arrow (TLiteral TBool) mk_unit_ty in
   let func = { e = Qualif func; ty = func_ty } in
   let assertion = mk_apps func args in
   mk_let monadic (mk_dummy_pattern mk_unit_ty) assertion next_e
@@ -2143,12 +2354,12 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
         (* We don't need to update the context: we don't introduce any
            * new values/variables *)
         let branch = translate_expression branch_e ctx in
-        let pat = mk_typed_pattern_from_literal (PV.Scalar v) in
+        let pat = mk_typed_pattern_from_literal (VScalar v) in
         { pat; branch }
       in
       let branches = List.map translate_branch branches in
       let otherwise = translate_expression otherwise ctx in
-      let pat_ty = Literal (Integer int_ty) in
+      let pat_ty = TLiteral (TInteger int_ty) in
       let otherwise_pat : typed_pattern = { value = PatDummy; ty = pat_ty } in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }
@@ -2193,11 +2404,11 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
     (branch : S.expression) (ctx : bs_ctx) : texpression =
   (* TODO: always introduce a match, and use micro-passes to turn the
      the match into a let? *)
-  let type_id, _, _, _ = TypesUtils.ty_as_adt sv.V.sv_ty in
+  let type_id, _ = TypesUtils.ty_as_adt sv.V.sv_ty in
   let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
   let branch = translate_expression branch ctx in
   match type_id with
-  | T.AdtId adt_id ->
+  | TAdtId adt_id ->
       (* Detect if this is an enumeration or not *)
       let tdef = bs_ctx_lookup_llbc_type_decl adt_id ctx in
       let is_enum = TypesUtils.type_decl_is_enum tdef in
@@ -2228,10 +2439,10 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
          * field.
          * We use the [dest] variable in order not to have to recompute
          * the type of the result of the projection... *)
-        let adt_id, type_args, const_generic_args = ty_as_adt scrutinee.ty in
+        let adt_id, generics = ty_as_adt scrutinee.ty in
         let gen_field_proj (field_id : FieldId.id) (dest : var) : texpression =
           let proj_kind = { adt_id; field_id } in
-          let qualif = { id = Proj proj_kind; type_args; const_generic_args } in
+          let qualif = { id = Proj proj_kind; generics } in
           let proj_e = Qualif qualif in
           let proj_ty = mk_arrow scrutinee.ty dest.ty in
           let proj = { e = proj_e; ty = proj_ty } in
@@ -2244,14 +2455,14 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
             let field_proj = gen_field_proj fid var in
             mk_let monadic (mk_typed_pattern_from_var var None) field_proj e)
           id_var_pairs branch
-  | T.Tuple ->
+  | TTuple ->
       let vars = List.map (fun x -> mk_typed_pattern_from_var x None) vars in
       let monadic = false in
       mk_let monadic
         (mk_simpl_tuple_pattern vars)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
-  | T.Assumed T.Box ->
+  | TAssumed TBox ->
       (* There should be exactly one variable *)
       let var =
         match vars with [ v ] -> v | _ -> raise (Failure "Unreachable")
@@ -2263,17 +2474,12 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
         (mk_typed_pattern_from_var var None)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
-  | T.Assumed (T.Vec | T.Array | T.Slice | T.Str) ->
+  | TAssumed (TArray | TSlice | TStr) ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
       raise (Failure "Attempt to expand a non-expandable value")
-  | T.Assumed Range -> raise (Failure "Unimplemented")
-  | T.Assumed T.Option ->
-      (* We shouldn't get there in the "one-branch" case: options have
-       * two variants *)
-      raise (Failure "Unreachable")
 
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)
@@ -2286,22 +2492,31 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
 
-  (* Translate the value: there are two cases, depending on whether this
-     is a "regular" let-binding or an array aggregate.
+  (* Translate the value: there are several cases, depending on whether this
+     is a "regular" let-binding, an array aggregate, a const generic or
+     a trait associated constant.
   *)
   let v =
     match v with
-    | SingleValue v -> typed_value_to_texpression ctx ectx v
-    | Array values ->
+    | VaSingleValue v -> typed_value_to_texpression ctx ectx v
+    | VaArray values ->
         (* We use a struct update to encode the array aggregate, in order
            to preserve the structure and allow generating code of the shape
            `[x0, ...., xn]` *)
         let values = List.map (typed_value_to_texpression ctx ectx) values in
         let values = FieldId.mapi (fun fid v -> (fid, v)) values in
         let su : struct_update =
-          { struct_id = Assumed Array; init = None; updates = values }
+          { struct_id = TAssumed TArray; init = None; updates = values }
         in
         { e = StructUpdate su; ty = var.ty }
+    | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
+    | VaTraitConstValue (trait_ref, generics, const_name) ->
+        let type_infos = ctx.type_context.type_infos in
+        let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
+        let generics = translate_fwd_generic_args type_infos generics in
+        let qualif_id = TraitConst (trait_ref, generics, const_name) in
+        let qualif = { id = qualif_id; generics = empty_generic_args } in
+        { e = Qualif qualif; ty = var.ty }
   in
 
   (* Make the let-binding *)
@@ -2372,9 +2587,9 @@ and translate_forward_end (ectx : C.eval_ctx)
       let org_args = args in
 
       (* Lookup the effect info for the loop function *)
-      let fid = A.Regular ctx.fun_decl.A.def_id in
+      let fid = E.FRegular ctx.fun_decl.def_id in
       let effect_info =
-        get_fun_effect_info ctx.fun_context.fun_infos fid None ctx.bid
+        get_fun_effect_info ctx.fun_context.fun_infos (FunId fid) None ctx.bid
       in
 
       (* Introduce a fresh output value for the forward function *)
@@ -2419,14 +2634,8 @@ and translate_forward_end (ectx : C.eval_ctx)
       let out_pat = mk_simpl_tuple_pattern out_pats in
 
       let loop_call =
-        let fun_id = Fun (FromLlbc (fid, Some loop_id, None)) in
-        let func =
-          {
-            id = FunOrOp fun_id;
-            type_args = loop_info.type_args;
-            const_generic_args = loop_info.const_generic_args;
-          }
-        in
+        let fun_id = Fun (FromLlbc (FunId fid, Some loop_id, None)) in
+        let func = { id = FunOrOp fun_id; generics = loop_info.generics } in
         let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
         let ret_ty =
           if effect_info.can_fail then mk_result_ty out_pat.ty else out_pat.ty
@@ -2453,7 +2662,7 @@ and translate_forward_end (ectx : C.eval_ctx)
          We then remove all the meta information from the body *before* calling
          {!PureMicroPasses.decompose_loops}.
       *)
-      mk_meta_symbolic_assignments loop_info.input_vars org_args e
+      mk_emeta_symbolic_assignments loop_info.input_vars org_args e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
@@ -2481,7 +2690,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         ^ T.RegionGroupId.Map.show
             (fun (rids, tys) ->
               "(" ^ T.RegionId.Set.show rids ^ ", "
-              ^ Print.list_to_string (rty_to_string ctx) tys
+              ^ Print.list_to_string (ty_to_string ctx) tys
               ^ ")")
             loop.rg_to_given_back_tys
         ^ "\n"));
@@ -2545,14 +2754,29 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
 
     (* Note that we will retrieve the input values later in the [ForwardEnd]
        (and will introduce the outputs at that moment, together with the actual
-       call to the loop forward function *)
-    let type_args =
-      List.map (fun (ty : T.type_var) -> TypeVar ty.T.index) ctx.sg.type_params
-    in
-    let const_generic_args =
-      List.map
-        (fun (cg : T.const_generic_var) -> T.ConstGenericVar cg.T.index)
-        ctx.sg.const_generic_params
+       call to the loop forward function) *)
+    let generics =
+      let { types; const_generics; trait_clauses } = ctx.sg.generics in
+      let types = List.map (fun (ty : T.type_var) -> TVar ty.T.index) types in
+      let const_generics =
+        List.map
+          (fun (cg : T.const_generic_var) -> T.CgVar cg.T.index)
+          const_generics
+      in
+      let trait_refs =
+        List.map
+          (fun (c : trait_clause) ->
+            let trait_decl_ref =
+              { trait_decl_id = c.trait_id; decl_generics = empty_generic_args }
+            in
+            {
+              trait_id = Clause c.clause_id;
+              generics = empty_generic_args;
+              trait_decl_ref;
+            })
+          trait_clauses
+      in
+      { types; const_generics; trait_refs }
     in
 
     let loop_info =
@@ -2560,8 +2784,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         loop_id;
         input_vars = inputs;
         input_svl = loop.input_svalues;
-        type_args;
-        const_generic_args;
+        generics;
         forward_inputs = None;
         forward_output_no_state_no_result = None;
       }
@@ -2597,6 +2820,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       {
         fun_end;
         loop_id;
+        meta = loop.meta;
         fuel0 = ctx.fuel0;
         fuel = ctx.fuel;
         input_state;
@@ -2612,7 +2836,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let ty = fun_end.ty in
   { e = loop; ty }
 
-and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
+and translate_emeta (meta : S.emeta) (e : S.expression) (ctx : bs_ctx) :
     texpression =
   let next_e = translate_expression e ctx in
   let meta =
@@ -2652,8 +2876,7 @@ let wrap_in_match_fuel (fuel0 : VarId.id) (fuel : VarId.id) (body : texpression)
         let func =
           {
             id = FunOrOp (Fun (Pure FuelEqZero));
-            type_args = [];
-            const_generic_args = [];
+            generics = empty_generic_args;
           }
         in
         let func_ty = mk_arrow mk_fuel_ty mk_bool_ty in
@@ -2665,8 +2888,7 @@ let wrap_in_match_fuel (fuel0 : VarId.id) (fuel : VarId.id) (body : texpression)
         let func =
           {
             id = FunOrOp (Fun (Pure FuelDecrease));
-            type_args = [];
-            const_generic_args = [];
+            generics = empty_generic_args;
           }
         in
         let func_ty = mk_arrow mk_fuel_ty mk_fuel_ty in
@@ -2715,24 +2937,28 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   log#ldebug
     (lazy
       ("SymbolicToPure.translate_fun_decl: "
-      ^ Print.fun_name_to_string def.A.name
+      ^ name_to_string ctx def.name
       ^ " ("
       ^ Print.option_to_string T.RegionGroupId.to_string bid
       ^ ")\n"));
 
   (* Translate the declaration *)
-  let def_id = def.A.def_id in
-  let basename = def.name in
+  let def_id = def.def_id in
+  let llbc_name = def.name in
+  let name = name_to_string ctx llbc_name in
   (* Retrieve the signature *)
   let signature = ctx.sg in
+  let regions_hierarchy =
+    FunIdMap.find (FRegular def_id) ctx.fun_context.regions_hierarchies
+  in
   (* Translate the body, if there is *)
   let body =
     match body with
     | None -> None
     | Some body ->
         let effect_info =
-          get_fun_effect_info ctx.fun_context.fun_infos (Regular def_id) None
-            bid
+          get_fun_effect_info ctx.fun_context.fun_infos
+            (FunId (FRegular def_id)) None bid
         in
         let body = translate_expression body ctx in
         (* Add a match over the fuel, if necessary *)
@@ -2766,7 +2992,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
           | None -> []
           | Some back_id ->
               let parents_ids =
-                list_ordered_ancestor_region_groups def.signature back_id
+                list_ordered_ancestor_region_groups regions_hierarchy back_id
               in
               let backward_ids = List.append parents_ids [ back_id ] in
               List.concat
@@ -2793,7 +3019,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         log#ldebug
           (lazy
             ("SymbolicToPure.translate_fun_decl: "
-            ^ Print.fun_name_to_string def.A.name
+            ^ name_to_string ctx def.name
             ^ " ("
             ^ Print.option_to_string T.RegionGroupId.to_string bid
             ^ ")" ^ "\n- forward_inputs: "
@@ -2805,12 +3031,14 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
             ^ "\n- back_state: "
             ^ String.concat ", " (List.map show_var back_state)
             ^ "\n- signature.inputs: "
-            ^ String.concat ", " (List.map (ty_to_string ctx) signature.inputs)
-            ));
-        assert (
-          List.for_all
-            (fun (var, ty) -> (var : var).ty = ty)
-            (List.combine inputs signature.inputs));
+            ^ String.concat ", "
+                (List.map (pure_ty_to_string ctx) signature.inputs)));
+        (* TODO: we need to normalize the types *)
+        if !Config.type_check_pure_code then
+          assert (
+            List.for_all
+              (fun (var, ty) -> (var : var).ty = ty)
+              (List.combine inputs signature.inputs));
         Some { inputs; inputs_lvs; body }
   in
 
@@ -2822,13 +3050,17 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let loop_id = None in
 
   (* Assemble the declaration *)
-  let def =
+  let def : fun_decl =
     {
       def_id;
+      is_local = def.is_local;
+      meta = def.meta;
+      kind = def.kind;
       num_loops;
       loop_id;
       back_id = bid;
-      basename;
+      llbc_name;
+      name;
       signature;
       is_global_decl_body = def.is_global_decl_body;
       body;
@@ -2842,8 +3074,9 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   (* return *)
   def
 
-let translate_type_decls (type_decls : T.type_decl list) : type_decl list =
-  List.map translate_type_decl type_decls
+let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
+  List.map (translate_type_decl ctx)
+    (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 
 (** Translates function signatures.
 
@@ -2857,8 +3090,7 @@ let translate_type_decls (type_decls : T.type_decl list) : type_decl list =
     - optional names for the outputs values (we derive them for the backward
       functions)
  *)
-let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
-    (type_infos : TA.type_infos)
+let translate_fun_signatures (decls_ctx : C.decls_ctx)
     (functions : (A.fun_id * string option list * A.fun_sig) list) :
     fun_sig_named_outputs RegularFunIdNotLoopMap.t =
   (* For every function, translate the signatures of:
@@ -2868,22 +3100,23 @@ let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
   let translate_one (fun_id : A.fun_id) (input_names : string option list)
       (sg : A.fun_sig) : (regular_fun_id_not_loop * fun_sig_named_outputs) list
       =
-    (* The forward function *)
-    let fwd_sg =
-      translate_fun_sig fun_infos fun_id type_infos sg input_names None
+    (* Retrieve the regions hierarchy *)
+    let regions_hierarchy =
+      FunIdMap.find fun_id decls_ctx.fun_ctx.regions_hierarchies
     in
+    (* The forward function *)
+    let fwd_sg = translate_fun_sig decls_ctx fun_id sg input_names None in
     let fwd_id = (fun_id, None) in
     (* The backward functions *)
     let back_sgs =
       List.map
-        (fun (rg : T.region_var_group) ->
+        (fun (rg : T.region_group) ->
           let tsg =
-            translate_fun_sig fun_infos fun_id type_infos sg input_names
-              (Some rg.id)
+            translate_fun_sig decls_ctx fun_id sg input_names (Some rg.id)
           in
           let id = (fun_id, Some rg.id) in
           (id, tsg))
-        sg.regions_hierarchy
+        regions_hierarchy
     in
     (* Return *)
     (fwd_id, fwd_sg) :: back_sgs
@@ -2895,3 +3128,120 @@ let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
   List.fold_left
     (fun m (id, sg) -> RegularFunIdNotLoopMap.add id sg m)
     RegularFunIdNotLoopMap.empty translated
+
+let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
+    : trait_decl =
+  let {
+    def_id;
+    is_local;
+    name = llbc_name;
+    meta;
+    generics = llbc_generics;
+    preds;
+    parent_clauses = llbc_parent_clauses;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  } : A.trait_decl =
+    trait_decl
+  in
+  let type_infos = ctx.type_ctx.type_infos in
+  let name =
+    Print.Types.name_to_string
+      (Print.Contexts.decls_ctx_to_fmt_env ctx)
+      llbc_name
+  in
+  let generics = translate_generic_params llbc_generics in
+  let preds = translate_predicates preds in
+  let parent_clauses = List.map translate_trait_clause llbc_parent_clauses in
+  let consts =
+    List.map
+      (fun (name, (ty, id)) -> (name, (translate_fwd_ty type_infos ty, id)))
+      consts
+  in
+  let types =
+    List.map
+      (fun (name, (trait_clauses, ty)) ->
+        ( name,
+          ( List.map translate_trait_clause trait_clauses,
+            Option.map (translate_fwd_ty type_infos) ty ) ))
+      types
+  in
+  {
+    def_id;
+    is_local;
+    llbc_name;
+    name;
+    meta;
+    generics;
+    llbc_generics;
+    preds;
+    parent_clauses;
+    llbc_parent_clauses;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  }
+
+let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
+    : trait_impl =
+  let {
+    A.def_id;
+    is_local;
+    name = llbc_name;
+    meta;
+    impl_trait = llbc_impl_trait;
+    generics = llbc_generics;
+    preds;
+    parent_trait_refs;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  } =
+    trait_impl
+  in
+  let type_infos = ctx.type_ctx.type_infos in
+  let impl_trait =
+    translate_trait_decl_ref (translate_fwd_ty type_infos) llbc_impl_trait
+  in
+  let name =
+    Print.Types.name_to_string
+      (Print.Contexts.decls_ctx_to_fmt_env ctx)
+      llbc_name
+  in
+  let generics = translate_generic_params llbc_generics in
+  let preds = translate_predicates preds in
+  let parent_trait_refs = List.map translate_strait_ref parent_trait_refs in
+  let consts =
+    List.map
+      (fun (name, (ty, id)) -> (name, (translate_fwd_ty type_infos ty, id)))
+      consts
+  in
+  let types =
+    List.map
+      (fun (name, (trait_refs, ty)) ->
+        ( name,
+          ( List.map (translate_fwd_trait_ref type_infos) trait_refs,
+            translate_fwd_ty type_infos ty ) ))
+      types
+  in
+  {
+    def_id;
+    is_local;
+    llbc_name;
+    name;
+    meta;
+    impl_trait;
+    llbc_impl_trait;
+    generics;
+    llbc_generics;
+    preds;
+    parent_trait_refs;
+    consts;
+    types;
+    required_methods;
+    provided_methods;
+  }

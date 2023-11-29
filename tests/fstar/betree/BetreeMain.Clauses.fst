@@ -8,8 +8,8 @@ open BetreeMain.Types
 (*** Well-founded relations *)
 
 (* We had a few issues when proving termination of the mutually recursive functions:
- * - betree_internal_flush
- * - betree_node_apply_messages
+ * - betree_Internal_flush
+ * - betree_Node_apply_messages
  *
  * The quantity which effectively decreases is:
  *   (betree_size, messages_length)
@@ -103,108 +103,108 @@ let wf_nat_pair_lem (p0 p1 : nat_pair) :
 
 (** [betree_main::betree::List::{1}::len]: decreases clause *)
 unfold
-let betree_list_len_decreases (t : Type0) (self : betree_list_t t) : betree_list_t t =
+let betree_List_len_decreases (t : Type0) (self : betree_List_t t) : betree_List_t t =
   self
 
 (** [betree_main::betree::List::{1}::split_at]: decreases clause *)
 unfold
-let betree_list_split_at_decreases (t : Type0) (self : betree_list_t t)
+let betree_List_split_at_decreases (t : Type0) (self : betree_List_t t)
   (n : u64) : nat =
   n
 
 (** [betree_main::betree::List::{2}::partition_at_pivot]: decreases clause *)
 unfold
-let betree_list_partition_at_pivot_decreases (t : Type0)
-  (self : betree_list_t (u64 & t)) (pivot : u64) : betree_list_t (u64 & t) =
+let betree_ListTupleU64T_partition_at_pivot_decreases (t : Type0)
+  (self : betree_List_t (u64 & t)) (pivot : u64) : betree_List_t (u64 & t) =
   self
 
 (** [betree_main::betree::Node::{5}::lookup_in_bindings]: decreases clause *)
 unfold
-let betree_node_lookup_in_bindings_decreases (key : u64)
-  (bindings : betree_list_t (u64 & u64)) : betree_list_t (u64 & u64) =
+let betree_Node_lookup_in_bindings_decreases (key : u64)
+  (bindings : betree_List_t (u64 & u64)) : betree_List_t (u64 & u64) =
   bindings
 
 (** [betree_main::betree::Node::{5}::lookup_first_message_for_key]: decreases clause *)
 unfold
-let betree_node_lookup_first_message_for_key_decreases (key : u64)
-  (msgs : betree_list_t (u64 & betree_message_t)) : betree_list_t (u64 & betree_message_t) =
+let betree_Node_lookup_first_message_for_key_decreases (key : u64)
+  (msgs : betree_List_t (u64 & betree_Message_t)) : betree_List_t (u64 & betree_Message_t) =
   msgs
 
 (** [betree_main::betree::Node::{5}::apply_upserts]: decreases clause *)
 unfold
-let betree_node_apply_upserts_decreases
-  (msgs : betree_list_t (u64 & betree_message_t)) (prev : option u64)
-  (key : u64) (st : state) : betree_list_t (u64 & betree_message_t) =
+let betree_Node_apply_upserts_decreases
+  (msgs : betree_List_t (u64 & betree_Message_t)) (prev : option u64)
+  (key : u64) (st : state) : betree_List_t (u64 & betree_Message_t) =
   msgs
 
 (** [betree_main::betree::Internal::{4}::lookup_in_children]: decreases clause *)
 unfold
-let betree_internal_lookup_in_children_decreases (self : betree_internal_t)
-  (key : u64) (st : state) : betree_internal_t =
+let betree_Internal_lookup_in_children_decreases (self : betree_Internal_t)
+  (key : u64) (st : state) : betree_Internal_t =
   self
 
 (** [betree_main::betree::Node::{5}::lookup]: decreases clause *)
 unfold
-let betree_node_lookup_decreases (self : betree_node_t) (key : u64)
-  (st : state) : betree_node_t =
+let betree_Node_lookup_decreases (self : betree_Node_t) (key : u64)
+  (st : state) : betree_Node_t =
   self
 
 (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings]: decreases clause *)
 unfold
-let betree_node_lookup_mut_in_bindings_decreases (key : u64)
-  (bindings : betree_list_t (u64 & u64)) : betree_list_t (u64 & u64) =
+let betree_Node_lookup_mut_in_bindings_decreases (key : u64)
+  (bindings : betree_List_t (u64 & u64)) : betree_List_t (u64 & u64) =
   bindings
 
 unfold
-let betree_node_apply_messages_to_leaf_decreases
-  (bindings : betree_list_t (u64 & u64))
-  (new_msgs : betree_list_t (u64 & betree_message_t)) : betree_list_t (u64 & betree_message_t) =
+let betree_Node_apply_messages_to_leaf_decreases
+  (bindings : betree_List_t (u64 & u64))
+  (new_msgs : betree_List_t (u64 & betree_Message_t)) : betree_List_t (u64 & betree_Message_t) =
   new_msgs
 
 (** [betree_main::betree::Node::{5}::filter_messages_for_key]: decreases clause *)
 unfold
-let betree_node_filter_messages_for_key_decreases (key : u64)
-  (msgs : betree_list_t (u64 & betree_message_t)) : betree_list_t (u64 & betree_message_t) =
+let betree_Node_filter_messages_for_key_decreases (key : u64)
+  (msgs : betree_List_t (u64 & betree_Message_t)) : betree_List_t (u64 & betree_Message_t) =
   msgs
 
 (** [betree_main::betree::Node::{5}::lookup_first_message_after_key]: decreases clause *)
 unfold
-let betree_node_lookup_first_message_after_key_decreases (key : u64)
-  (msgs : betree_list_t (u64 & betree_message_t)) : betree_list_t (u64 & betree_message_t) =
+let betree_Node_lookup_first_message_after_key_decreases (key : u64)
+  (msgs : betree_List_t (u64 & betree_Message_t)) : betree_List_t (u64 & betree_Message_t) =
   msgs
 
-let betree_node_apply_messages_to_internal_decreases
-  (msgs : betree_list_t (u64 & betree_message_t))
-  (new_msgs : betree_list_t (u64 & betree_message_t)) : betree_list_t (u64 & betree_message_t) =
+let betree_Node_apply_messages_to_internal_decreases
+  (msgs : betree_List_t (u64 & betree_Message_t))
+  (new_msgs : betree_List_t (u64 & betree_Message_t)) : betree_List_t (u64 & betree_Message_t) =
   new_msgs
 
 (*** Decrease clauses - nat_pair *)
 /// The following decrease clauses use the [nat_pair] definition and the well-founded
 /// relation proven above.
 
-let rec betree_size (bt : betree_node_t) : nat =
+let rec betree_size (bt : betree_Node_t) : nat =
   match bt with
-  | BetreeNodeInternal node -> 1 + betree_internal_size node
-  | BetreeNodeLeaf _ -> 1
+  | Betree_Node_Internal node -> 1 + betree_Internal_size node
+  | Betree_Node_Leaf _ -> 1
 
-and betree_internal_size (node : betree_internal_t) : nat =
-  1 + betree_size node.betree_internal_left + betree_size node.betree_internal_right
+and betree_Internal_size (node : betree_Internal_t) : nat =
+  1 + betree_size node.left + betree_size node.right
 
-let rec betree_list_len (#a : Type0) (ls : betree_list_t a) : nat =
+let rec betree_List_len (#a : Type0) (ls : betree_List_t a) : nat =
   match ls with
-  | BetreeListCons _ tl -> 1 + betree_list_len tl
-  | BetreeListNil -> 0
+  | Betree_List_Cons _ tl -> 1 + betree_List_len tl
+  | Betree_List_Nil -> 0
 
 (** [betree_main::betree::Internal::{4}::flush]: decreases clause *)
 unfold
-let betree_internal_flush_decreases (self : betree_internal_t)
-  (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
-  (content : betree_list_t (u64 & betree_message_t)) (st : state) : nat_pair =
-  (|betree_internal_size self, 0|)
+let betree_Internal_flush_decreases (self : betree_Internal_t)
+  (params : betree_Params_t) (node_id_cnt : betree_NodeIdCounter_t)
+  (content : betree_List_t (u64 & betree_Message_t)) (st : state) : nat_pair =
+  (|betree_Internal_size self, 0|)
 
 (** [betree_main::betree::Node::{5}::apply_messages]: decreases clause *)
 unfold
-let betree_node_apply_messages_decreases (self : betree_node_t)
-  (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
-  (msgs : betree_list_t (u64 & betree_message_t)) (st : state) : nat_pair =
-  (|betree_size self, betree_list_len msgs|)
+let betree_Node_apply_messages_decreases (self : betree_Node_t)
+  (params : betree_Params_t) (node_id_cnt : betree_NodeIdCounter_t)
+  (msgs : betree_List_t (u64 & betree_Message_t)) (st : state) : nat_pair =
+  (|betree_size self, betree_List_len msgs|)

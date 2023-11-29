@@ -8,29 +8,31 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module Hashmap_Types.
 
-(** [hashmap::List] *)
+(** [hashmap::List]
+    Source: 'src/hashmap.rs', lines 19:0-19:16 *)
 Inductive List_t (T : Type) :=
-| ListCons : usize -> T -> List_t T -> List_t T
-| ListNil : List_t T
+| List_Cons : usize -> T -> List_t T -> List_t T
+| List_Nil : List_t T
 .
 
-Arguments ListCons {T} _ _ _.
-Arguments ListNil {T}.
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
 
-(** [hashmap::HashMap] *)
-Record Hash_map_t (T : Type) :=
-mkHash_map_t {
-  Hash_map_num_entries : usize;
-  Hash_map_max_load_factor : (usize * usize);
-  Hash_map_max_load : usize;
-  Hash_map_slots : vec (List_t T);
+(** [hashmap::HashMap]
+    Source: 'src/hashmap.rs', lines 35:0-35:21 *)
+Record HashMap_t (T : Type) :=
+mkHashMap_t {
+  hashMap_num_entries : usize;
+  hashMap_max_load_factor : (usize * usize);
+  hashMap_max_load : usize;
+  hashMap_slots : alloc_vec_Vec (List_t T);
 }
 .
 
-Arguments mkHash_map_t {T} _ _ _ _.
-Arguments Hash_map_num_entries {T}.
-Arguments Hash_map_max_load_factor {T}.
-Arguments Hash_map_max_load {T}.
-Arguments Hash_map_slots {T}.
+Arguments mkHashMap_t { _ }.
+Arguments hashMap_num_entries { _ }.
+Arguments hashMap_max_load_factor { _ }.
+Arguments hashMap_max_load { _ }.
+Arguments hashMap_slots { _ }.
 
-End Hashmap_Types .
+End Hashmap_Types.

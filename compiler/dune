@@ -1,17 +1,18 @@
 (executable
- (name driver)
- (public_name aeneas_driver)
+ (name main)
+ (public_name aeneas)
  (package aeneas)
  (libraries aeneas)
- (modules Driver))
+ (modules Main))
 
 (library
  (name aeneas) ;; The name as used in the project
  (public_name aeneas) ;; The name as revealed to the projects importing this library
  (preprocess
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
- (libraries charon core_unix unionFind ocamlgraph)
+ (libraries charon core_unix unionFind ocamlgraph str)
  (modules
+  AssociatedTypes
   Assumed
   Collections
   Config
@@ -22,6 +23,9 @@
   ExpressionsUtils
   Extract
   ExtractBase
+  ExtractBuiltin
+  ExtractName
+  ExtractTypes
   FunsAnalysis
   Identifiers
   InterpreterBorrowsCore
@@ -44,16 +48,14 @@
   LlbcOfJson
   Logging
   Meta
-  Names
   PrePasses
   Print
   PrintPure
-  PrimitiveValues
-  PrimitiveValuesUtils
   PureMicroPasses
   Pure
   PureTypeCheck
   PureUtils
+  RegionsHierarchy
   ReorderDecls
   SCC
   Scalars
@@ -82,7 +84,7 @@
    -g
    ;-dsource
    -warn-error
-   -5@8-9-11-14-33-20-21-26-27-39))
+   -5@8-11-14-33-20-21-26-27-39))
  (release
   (flags
    :standard
@@ -90,4 +92,4 @@
    -g
    ;-dsource
    -warn-error
-   -5-8-9-11-14-33-20-21-26-27-39)))
+   -5@8-11-14-33-20-21-26-27-39)))

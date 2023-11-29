@@ -555,6 +555,32 @@ Proof
 QED
 val _ = evalLib.add_unfold_thm "mk_isize_unfold"
 
+(** Constants *)
+val core_i8_min_def    = Define ‘core_i8_min     = int_to_i8 i8_min’
+val core_i8_max_def    = Define ‘core_i8_max     = int_to_i8 i8_max’
+val core_i16_min_def   = Define ‘core_i16_min    = int_to_i16 i16_min’
+val core_i16_max_def   = Define ‘core_i16_max    = int_to_i16 i16_max’
+val core_i32_min_def   = Define ‘core_i32_min    = int_to_i32 i32_min’
+val core_i32_max_def   = Define ‘core_i32_max    = int_to_i32 i32_max’
+val core_i64_min_def   = Define ‘core_i64_min    = int_to_i64 i64_min’
+val core_i64_max_def   = Define ‘core_i64_max    = int_to_i64 i64_max’
+val core_i128_min_def  = Define ‘core_i128_min   = int_to_i128 i128_min’
+val core_i128_max_def  = Define ‘core_i128_max   = int_to_i128 i128_max’
+val core_isize_min_def = Define ‘core_isize_min  = int_to_isize isize_min’
+val core_isize_max_def = Define ‘core_isize_max  = int_to_isize isize_max’
+val core_u8_min_def    = Define ‘core_u8_min     = int_to_u8 0’
+val core_u8_max_def    = Define ‘core_u8_max     = int_to_u8 u8_max’
+val core_u16_min_def   = Define ‘core_u16_min    = int_to_u16 0’
+val core_u16_max_def   = Define ‘core_u16_max    = int_to_u16 u16_max’
+val core_u32_min_def   = Define ‘core_u32_min    = int_to_u32 0’
+val core_u32_max_def   = Define ‘core_u32_max    = int_to_u32 u32_max’
+val core_u64_min_def   = Define ‘core_u64_min    = int_to_u64 0’
+val core_u64_max_def   = Define ‘core_u64_max    = int_to_u64 u64_max’
+val core_u128_min_def  = Define ‘core_u128_min   = int_to_u128 0’
+val core_u128_max_def  = Define ‘core_u128_max   = int_to_u128 u128_max’
+val core_usize_min_def = Define ‘core_usize_min  = int_to_usize 0’
+val core_usize_max_def = Define ‘core_usize_max  = int_to_usize usize_max’
+
 val isize_neg_def = Define ‘isize_neg x = mk_isize (- (isize_to_int x))’
 val i8_neg_def    = Define ‘i8_neg x    = mk_i8 (- (i8_to_int x))’
 val i16_neg_def   = Define ‘i16_neg x   = mk_i16 (- (i16_to_int x))’

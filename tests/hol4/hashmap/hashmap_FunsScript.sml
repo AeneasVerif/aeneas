@@ -170,14 +170,6 @@ val hash_map_insert_no_resize_fwd_back_def = Define ‘
     od
 ’
 
-(** [core::num::u32::{8}::MAX] *)
-Definition core_num_u32_max_body_def:
-  core_num_u32_max_body : u32 result = Return (int_to_u32 4294967295)
-End
-Definition core_num_u32_max_c_def:
-  core_num_u32_max_c : u32 = get_return_value core_num_u32_max_body
-End
-
 val [hash_map_move_elements_from_list_loop_fwd_back_def] = DefineDiv ‘
   (** [hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
       (there is a single backward function, and the forward function returns ()) *)
@@ -241,7 +233,7 @@ val hash_map_try_resize_fwd_back_def = Define ‘
       (there is a single backward function, and the forward function returns ()) *)
   hash_map_try_resize_fwd_back (self : 't hash_map_t) : 't hash_map_t result =
     do
-    max_usize <- mk_usize (u32_to_int core_num_u32_max_c);
+    max_usize <- mk_usize (u32_to_int core_u32_max);
     let capacity = vec_len self.hash_map_slots in
     do
     n1 <- usize_div max_usize (int_to_usize 2);

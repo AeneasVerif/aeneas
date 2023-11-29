@@ -2,16 +2,13 @@
     (concrete/symbolic) interpreter on it
  *)
 
-module T = Types
-module V = Values
-module E = Expressions
-module C = Contexts
-module A = LlbcAst
-module L = Logging
+open Types
+open Expressions
+open LlbcAst
 open Utils
 open LlbcAstUtils
 
-let log = L.pre_passes_log
+let log = Logging.pre_passes_log
 
 (** Rustc inserts a lot of drops before the assignments.
 
@@ -27,11 +24,11 @@ let log = L.pre_passes_log
 
     Rem.: we don't use this anymore
  *)
-let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
+let filter_drop_assigns (f : fun_decl) : fun_decl =
   (* The visitor *)
   let obj =
     object (self)
-      inherit [_] A.map_statement as super
+      inherit [_] map_statement as super
 
       method! visit_Sequence env st1 st2 =
         match (st1.content, st2.content) with
@@ -91,7 +88,7 @@ let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
       restrictions on the rvalue), fake reads, drops (usually, returns will be
       followed by such statements)
  *)
-let remove_useless_cf_merges (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
+let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
   (* Return [true] if the statement can be moved inside the branches of a switch.
    *
@@ -99,16 +96,15 @@ let remove_useless_cf_merges (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
    * (inside the encountered sequences) don't need to end with [return] or [panic],
    * but all the paths inside the whole statement have to.
    * *)
-  let rec can_be_moved_aux (must_end_with_exit : bool) (st : A.statement) : bool
-      =
+  let rec can_be_moved_aux (must_end_with_exit : bool) (st : statement) : bool =
     match st.content with
     | SetDiscriminant _ | Assert _ | Call _ | Break _ | Continue _ | Switch _
     | Loop _ ->
         false
     | Assign (_, rv) -> (
         match rv with
-        | Use _ | Ref _ -> not must_end_with_exit
-        | Aggregate (AggregatedTuple, []) -> not must_end_with_exit
+        | Use _ | RvRef _ -> not must_end_with_exit
+        | Aggregate (AggregatedAdt (TTuple, _, _), []) -> not must_end_with_exit
         | _ -> false)
     | FakeRead _ | Drop _ | Nop -> not must_end_with_exit
     | Panic | Return -> true
@@ -120,7 +116,7 @@ let remove_useless_cf_merges (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
   (* The visitor *)
   let obj =
     object
-      inherit [_] A.map_statement as super
+      inherit [_] map_statement as super
 
       method! visit_Sequence env st1 st2 =
         match st1.content with
@@ -189,14 +185,14 @@ let remove_useless_cf_merges (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
       };
     ]}
  *)
-let remove_loop_breaks (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
+let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
 
   (* Check that a statement doesn't contain loops, breaks or continues *)
-  let statement_has_no_loop_break_continue (st : A.statement) : bool =
+  let statement_has_no_loop_break_continue (st : statement) : bool =
     let obj =
       object
-        inherit [_] A.iter_statement
+        inherit [_] iter_statement
         method! visit_Loop _ _ = raise Found
         method! visit_Break _ _ = raise Found
         method! visit_Continue _ _ = raise Found
@@ -212,10 +208,10 @@ let remove_loop_breaks (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
      break statement breaks exactly one level, and that there are no nested
      loops.
   *)
-  let replace_breaks_with (st : A.statement) (nst : A.statement) : A.statement =
+  let replace_breaks_with (st : statement) (nst : statement) : statement =
     let obj =
       object
-        inherit [_] A.map_statement as super
+        inherit [_] map_statement as super
 
         method! visit_Loop entered_loop loop =
           assert (not entered_loop);
@@ -232,7 +228,7 @@ let remove_loop_breaks (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
   (* The visitor *)
   let obj =
     object
-      inherit [_] A.map_statement as super
+      inherit [_] map_statement as super
 
       method! visit_Sequence env st1 st2 =
         match st1.content with
@@ -365,27 +361,27 @@ let remove_loop_breaks (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
     We then check that [x] completely disappeared from the function body (for
     sanity).
  *)
-let remove_shallow_borrows (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
+let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
-  let filter_in_body (body : A.statement) : A.statement =
-    let filtered = ref E.VarId.Set.empty in
+  let filter_in_body (body : statement) : statement =
+    let filtered = ref VarId.Set.empty in
 
     let filter_visitor =
       object
-        inherit [_] A.map_statement as super
+        inherit [_] map_statement as super
 
         method! visit_Assign env p rv =
           match (p.projection, rv) with
-          | [], E.Ref (_, E.Shallow) ->
+          | [], RvRef (_, BShallow) ->
               (* Filter *)
-              filtered := E.VarId.Set.add p.var_id !filtered;
+              filtered := VarId.Set.add p.var_id !filtered;
               Nop
           | _ ->
               (* Don't filter *)
               super#visit_Assign env p rv
 
         method! visit_FakeRead env p =
-          if p.projection = [] && E.VarId.Set.mem p.var_id !filtered then
+          if p.projection = [] && VarId.Set.mem p.var_id !filtered then
             (* Filter *)
             Nop
           else super#visit_FakeRead env p
@@ -398,8 +394,8 @@ let remove_shallow_borrows (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
     (* Check that the filtered variables completely disappeared from the body *)
     let check_visitor =
       object
-        inherit [_] A.iter_statement
-        method! visit_var_id _ id = assert (not (E.VarId.Set.mem id !filtered))
+        inherit [_] iter_statement
+        method! visit_var_id _ id = assert (not (VarId.Set.mem id !filtered))
       end
     in
     check_visitor#visit_statement () body;
@@ -423,14 +419,14 @@ let remove_shallow_borrows (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
       ^ "\n"));
   f
 
-let apply_passes (crate : A.crate) : A.crate =
+let apply_passes (crate : crate) : crate =
   let passes = [ remove_loop_breaks crate; remove_shallow_borrows crate ] in
-  let functions =
+  let fun_decls =
     List.fold_left
-      (fun fl pass -> A.FunDeclId.Map.map pass fl)
-      crate.functions passes
+      (fun fl pass -> FunDeclId.Map.map pass fl)
+      crate.fun_decls passes
   in
-  let crate = { crate with functions } in
+  let crate = { crate with fun_decls } in
   log#ldebug
     (lazy ("After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"));
   crate

@@ -5,8 +5,9 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [loops::List] *)
+(** [loops::List]
+    Source: 'src/loops.rs', lines 60:0-60:16 *)
 type list_t (t : Type0) =
-| ListCons : t -> list_t t -> list_t t
-| ListNil : list_t t
+| List_Cons : t -> list_t t -> list_t t
+| List_Nil : list_t t
 

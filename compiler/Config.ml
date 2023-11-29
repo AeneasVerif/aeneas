@@ -35,11 +35,11 @@ let backend = ref FStar
 
 (** {1 Interpreter} *)
 
-(** Check that invariants are maintained whenever we execute a statement
-
-    TODO: rename to sanity_checks.
+(** Activate the sanity checks, and in particular the invariant checks
+    that are performed at every evaluation step. This is very expensive
+    (~100x slow down) but very efficient to catch mistakes early.
  *)
-let check_invariants = ref true
+let sanity_checks = ref false
 
 (** Expand all symbolic values containing borrows upon introduction - allows
     to use restrict ourselves to a simpler model for the projectors over
@@ -52,7 +52,8 @@ let greedy_expand_symbolics_with_borrows = true
 
 (** Experimental.
 
-    TODO: remove (always true now)
+    TODO: remove (always true now), but check that when we panic/call a function
+    there is no bottom below a borrow.
 
     We sometimes want to temporarily break the invariant that there is no
     bottom value below a borrow. If this value is true, we don't check
@@ -124,7 +125,7 @@ let always_deconstruct_adts_with_matches = ref false
 (** Controls whether we need to use a state to model the external world
     (I/O, for instance).
  *)
-let use_state = ref true
+let use_state = ref false
 
 (** Controls whether we use fuel to control termination.
  *)
@@ -160,7 +161,7 @@ let backward_no_state_update = ref false
     files for the types, clauses and functions, or if we group them in
     one file.
  *)
-let split_files = ref true
+let split_files = ref false
 
 (** Generate the library entry point, if the crate is split between different files.
 
@@ -288,7 +289,7 @@ let unfold_monadic_let_bindings = ref false
     we later filter the useless *forward* calls in the micro-passes, where it is
     more natural to do.
 
-    See the comments for {!val:PureMicroPasses.expression_contains_child_call_in_all_paths}
+    See the comments for {!PureMicroPasses.expression_contains_child_call_in_all_paths}
     for additional explanations.
  *)
 let filter_useless_monadic_calls = ref true
@@ -306,13 +307,6 @@ let filter_useless_monadic_calls = ref true
  *)
 let filter_useless_functions = ref true
 
-(** Obsolete. TODO: remove.
-
-    For Lean we used to parameterize the entire development by a section variable
-    called opaque_defs, of type OpaqueDefs.
-  *)
-let wrap_opaque_in_sig = ref false
-
 (** Use short names for the record fields.
 
     Some backends can't disambiguate records when their field names have collisions.
@@ -323,3 +317,50 @@ let wrap_opaque_in_sig = ref false
     information), we use short names (i.e., the original field names).
  *)
 let record_fields_short_names = ref false
+
+(** Parameterize the traits with their associated types, so as not to use
+    types as first class objects.
+
+    This is useful for some backends with limited expressiveness like HOL4,
+    and to account for type constraints (like [fn f<T : Foo>(...) where T::bar = usize]).
+ *)
+let parameterize_trait_types = ref false
+
+(** For sanity check: type check the generated pure code (activates checks in
+    several places).
+
+    TODO: deactivated for now because we need to implement the normalization of
+    trait associated types in the pure code.
+ *)
+let type_check_pure_code = ref false
+
+(** Shall we fail hard if we encounter an issue, or should we attempt to go
+    as far as possible while leaving "holes" in the generated code? *)
+let fail_hard = ref true
+
+(** if true, add the type name as a prefix
+    to the variant names.
+    Ex.:
+    In Rust:
+      {[
+        enum List = {
+          Cons(u32, Box<List>),x
+          Nil,
+        }
+      ]}
+
+    F*, if option activated:
+      {[
+        type list =
+        | ListCons : u32 -> list -> list
+        | ListNil : list
+      ]}
+
+    F*, if option not activated:
+      {[
+        type list =
+        | Cons : u32 -> list -> list
+        | Nil : list
+      ]}
+ *)
+let variant_concatenate_type_name = ref true

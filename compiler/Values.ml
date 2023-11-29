@@ -1,6 +1,6 @@
 open Identifiers
 open Types
-module PrimitiveValues = PrimitiveValues
+include Charon.Values
 
 (* TODO(SH): I often write "abstract" (value, borrow content, etc.) while I should
  * write "abstraction" (because those values are not abstract, they simply are
@@ -12,9 +12,6 @@ module AbstractionId = IdGen ()
 module FunCallId = IdGen ()
 module LoopId = IdGen ()
 
-type big_int = PrimitiveValues.big_int [@@deriving show, ord]
-type scalar_value = PrimitiveValues.scalar_value [@@deriving show, ord]
-type literal = PrimitiveValues.literal [@@deriving show, ord]
 type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
 type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
@@ -52,56 +49,11 @@ type sv_kind =
       (** The result of a loop join (when computing loop fixed points) *)
   | Aggregate
       (** A symbolic value we introduce in place of an aggregate value *)
+  | ConstGeneric
+      (** A symbolic value we introduce when using a const generic as a value *)
+  | TraitConst
+      (** A symbolic value we introduce when evaluating a trait associated constant *)
 [@@deriving show, ord]
-
-(** Ancestor for {!symbolic_value} iter visitor *)
-class ['self] iter_symbolic_value_base =
-  object (_self : 'self)
-    inherit [_] VisitorsRuntime.iter
-    method visit_sv_kind : 'env -> sv_kind -> unit = fun _ _ -> ()
-    method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
-
-    method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
-      fun _ _ -> ()
-  end
-
-(** Ancestor for {!symbolic_value} map visitor for *)
-class ['self] map_symbolic_value_base =
-  object (_self : 'self)
-    inherit [_] VisitorsRuntime.map
-    method visit_sv_kind : 'env -> sv_kind -> sv_kind = fun _ x -> x
-    method visit_rty : 'env -> rty -> rty = fun _ x -> x
-
-    method visit_symbolic_value_id
-        : 'env -> symbolic_value_id -> symbolic_value_id =
-      fun _ x -> x
-  end
-
-(** A symbolic value *)
-type symbolic_value = {
-  sv_kind : sv_kind;
-  sv_id : symbolic_value_id;
-  sv_ty : rty;
-}
-[@@deriving
-  show,
-    ord,
-    visitors
-      {
-        name = "iter_symbolic_value";
-        variety = "iter";
-        ancestors = [ "iter_symbolic_value_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      },
-    visitors
-      {
-        name = "map_symbolic_value";
-        variety = "map";
-        ancestors = [ "map_symbolic_value_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      }]
 
 type borrow_id = BorrowId.id [@@deriving show, ord]
 type borrow_id_set = BorrowId.Set.t [@@deriving show, ord]
@@ -111,11 +63,13 @@ type loan_id_set = BorrowId.Set.t [@@deriving show, ord]
 (** Ancestor for {!typed_value} iter visitor *)
 class ['self] iter_typed_value_base =
   object (self : 'self)
-    inherit [_] iter_symbolic_value
-    method visit_literal : 'env -> literal -> unit = fun _ _ -> ()
-    method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
+    inherit [_] iter_ty
+    method visit_sv_kind : 'env -> sv_kind -> unit = fun _ _ -> ()
+
+    method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
+      fun _ _ -> ()
+
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
-    method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
     method visit_borrow_id : 'env -> borrow_id -> unit = fun _ _ -> ()
     method visit_loan_id : 'env -> loan_id -> unit = fun _ _ -> ()
 
@@ -129,13 +83,13 @@ class ['self] iter_typed_value_base =
 (** Ancestor for {!typed_value} map visitor for *)
 class ['self] map_typed_value_base =
   object (self : 'self)
-    inherit [_] map_symbolic_value
-    method visit_literal : 'env -> literal -> literal = fun _ cv -> cv
+    inherit [_] map_ty
+    method visit_sv_kind : 'env -> sv_kind -> sv_kind = fun _ x -> x
 
-    method visit_erased_region : 'env -> erased_region -> erased_region =
-      fun _ r -> r
+    method visit_symbolic_value_id
+        : 'env -> symbolic_value_id -> symbolic_value_id =
+      fun _ x -> x
 
-    method visit_ety : 'env -> ety -> ety = fun _ ty -> ty
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
     method visit_borrow_id : 'env -> borrow_id -> borrow_id = fun _ id -> id
     method visit_loan_id : 'env -> loan_id -> loan_id = fun _ id -> id
@@ -147,14 +101,21 @@ class ['self] map_typed_value_base =
       fun env ids -> BorrowId.Set.map (self#visit_loan_id env) ids
   end
 
-(** An untyped value, used in the environments *)
-type value =
-  | Literal of literal  (** Non-symbolic primitive value *)
-  | Adt of adt_value  (** Enumerations and structures *)
-  | Bottom  (** No value (uninitialized or moved value) *)
-  | Borrow of borrow_content  (** A borrowed value *)
-  | Loan of loan_content  (** A loaned value *)
-  | Symbolic of symbolic_value
+(** A symbolic value *)
+type symbolic_value = {
+  sv_kind : sv_kind;
+  sv_id : symbolic_value_id;
+  sv_ty : ty;  (** This should be a type with regions *)
+}
+
+(** An untyped value, used in the environments - TODO: prefix the names with "V" *)
+and value =
+  | VLiteral of literal  (** Non-symbolic primitive value *)
+  | VAdt of adt_value  (** Enumerations and structures *)
+  | VBottom  (** No value (uninitialized or moved value) *)
+  | VBorrow of borrow_content  (** A borrowed value *)
+  | VLoan of loan_content  (** A loaned value *)
+  | VSymbolic of symbolic_value
       (** Borrow projector over a symbolic value.
       
           Note that contrary to the abstraction-values case, symbolic values
@@ -168,9 +129,9 @@ and adt_value = {
 }
 
 and borrow_content =
-  | SharedBorrow of borrow_id  (** A shared borrow. *)
-  | MutBorrow of borrow_id * typed_value  (** A mutably borrowed value. *)
-  | ReservedMutBorrow of borrow_id
+  | VSharedBorrow of borrow_id  (** A shared borrow. *)
+  | VMutBorrow of borrow_id * typed_value  (** A mutably borrowed value. *)
+  | VReservedMutBorrow of borrow_id
       (** A reserved mut borrow.
 
           This is used to model {{: https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html} two-phase borrows}.
@@ -208,28 +169,17 @@ and borrow_content =
        *)
 
 and loan_content =
-  | SharedLoan of loan_id_set * typed_value
-  | MutLoan of loan_id
-
-(** "Meta"-value: information we store for the synthesis.
-
-     Note that we never automatically visit the meta-values with the
-     visitors: they really are meta information, and shouldn't be considered
-     as part of the environment during a symbolic execution.
-     
-     TODO: we may want to create wrappers, to prevent accidently mixing meta
-     values and regular values.
- *)
-and mvalue = typed_value
+  | VSharedLoan of loan_id_set * typed_value
+  | VMutLoan of loan_id
 
 (** "Regular" typed value (we map variables to typed values) *)
-and typed_value = { value : value; ty : ety }
+and typed_value = { value : value; ty : ty }
 [@@deriving
   show,
     ord,
     visitors
       {
-        name = "iter_typed_value_visit_mvalue";
+        name = "iter_typed_value";
         variety = "iter";
         ancestors = [ "iter_typed_value_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
@@ -237,12 +187,23 @@ and typed_value = { value : value; ty : ety }
       },
     visitors
       {
-        name = "map_typed_value_visit_mvalue";
+        name = "map_typed_value";
         variety = "map";
         ancestors = [ "map_typed_value_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
+
+(** "Meta"-value: information we store for the synthesis.
+
+     Note that we never automatically visit the meta-values with the
+     visitors: they really are meta information, and shouldn't be considered
+     as part of the environment during a symbolic execution.
+
+     TODO: we may want to create wrappers, to prevent accidently mixing meta
+     values and regular values.
+ *)
+type mvalue = typed_value [@@deriving show, ord]
 
 (** "Meta"-symbolic value.
 
@@ -253,28 +214,47 @@ and typed_value = { value : value; ty : ety }
  *)
 type msymbolic_value = symbolic_value [@@deriving show, ord]
 
-class ['self] iter_typed_value =
-  object (_self : 'self)
-    inherit [_] iter_typed_value_visit_mvalue
+type region_id = RegionId.id [@@deriving show, ord]
+type region_id_set = RegionId.Set.t [@@deriving show, ord]
+type abstraction_id = AbstractionId.id [@@deriving show, ord]
+type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 
-    (** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
-        to ignore meta-values *)
-    method! visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
+(** Ancestor for {!typed_avalue} iter visitor *)
+class ['self] iter_typed_avalue_base =
+  object (self : 'self)
+    inherit [_] iter_typed_value
+    method visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
       fun _ _ -> ()
+
+    method visit_region_id_set : 'env -> region_id_set -> unit =
+      fun env ids -> RegionId.Set.iter (self#visit_region_id env) ids
+
+    method visit_abstraction_id : 'env -> abstraction_id -> unit = fun _ _ -> ()
+
+    method visit_abstraction_id_set : 'env -> abstraction_id_set -> unit =
+      fun env ids -> AbstractionId.Set.iter (self#visit_abstraction_id env) ids
   end
 
-class ['self] map_typed_value =
-  object (_self : 'self)
-    inherit [_] map_typed_value_visit_mvalue
-
-    (** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
-        to ignore meta-values *)
-    method! visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
+(** Ancestor for {!typed_avalue} map visitor *)
+class ['self] map_typed_avalue_base =
+  object (self : 'self)
+    inherit [_] map_typed_value
+    method visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
       fun _ m -> m
+
+    method visit_region_id_set : 'env -> region_id_set -> region_id_set =
+      fun env ids -> RegionId.Set.map (self#visit_region_id env) ids
+
+    method visit_abstraction_id : 'env -> abstraction_id -> abstraction_id =
+      fun _ x -> x
+
+    method visit_abstraction_id_set
+        : 'env -> abstraction_id_set -> abstraction_id_set =
+      fun env ids -> AbstractionId.Set.map (self#visit_abstraction_id env) ids
   end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
@@ -293,62 +273,12 @@ class ['self] map_typed_value =
 *)
 type abstract_shared_borrow =
   | AsbBorrow of borrow_id
-  | AsbProjReborrows of symbolic_value * rty
-[@@deriving
-  show,
-    ord,
-    visitors
-      {
-        name = "iter_abstract_shared_borrow";
-        variety = "iter";
-        ancestors = [ "iter_typed_value" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      },
-    visitors
-      {
-        name = "map_abstract_shared_borrow";
-        variety = "map";
-        ancestors = [ "map_typed_value" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      }]
+  | AsbProjReborrows of symbolic_value * ty
 
 (** A set of abstract shared borrows *)
-type abstract_shared_borrows = abstract_shared_borrow list
-[@@deriving
-  show,
-    ord,
-    visitors
-      {
-        name = "iter_abstract_shared_borrows";
-        variety = "iter";
-        ancestors = [ "iter_abstract_shared_borrow" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      },
-    visitors
-      {
-        name = "map_abstract_shared_borrows";
-        variety = "map";
-        ancestors = [ "map_abstract_shared_borrow" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      }]
+and abstract_shared_borrows = abstract_shared_borrow list
 
-(** Ancestor for {!aproj} iter visitor *)
-class ['self] iter_aproj_base =
-  object (_self : 'self)
-    inherit [_] iter_abstract_shared_borrows
-  end
-
-(** Ancestor for {!aproj} map visitor *)
-class ['self] map_aproj_base =
-  object (_self : 'self)
-    inherit [_] map_abstract_shared_borrows
-  end
-
-type aproj =
+and aproj =
   | AProjLoans of symbolic_value * (msymbolic_value * aproj) list
       (** A projector of loans over a symbolic value.
       
@@ -389,7 +319,7 @@ type aproj =
           anywhere in the context below a projector of borrows which intersects
           this projector of loans.
        *)
-  | AProjBorrows of symbolic_value * rty
+  | AProjBorrows of symbolic_value * ty
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use {!abstract_shared_borrow}.
           
@@ -410,82 +340,6 @@ type aproj =
           ending the borrow.
        *)
   | AIgnoredProjBorrows
-[@@deriving
-  show,
-    ord,
-    visitors
-      {
-        name = "iter_aproj";
-        variety = "iter";
-        ancestors = [ "iter_aproj_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      },
-    visitors
-      {
-        name = "map_aproj";
-        variety = "map";
-        ancestors = [ "map_aproj_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      }]
-
-type region = RegionVarId.id Types.region [@@deriving show, ord]
-type region_var_id = RegionVarId.id [@@deriving show, ord]
-type region_id = RegionId.id [@@deriving show, ord]
-type region_id_set = RegionId.Set.t [@@deriving show, ord]
-type abstraction_id = AbstractionId.id [@@deriving show, ord]
-type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
-
-(** Ancestor for {!typed_avalue} iter visitor *)
-class ['self] iter_typed_avalue_base =
-  object (self : 'self)
-    inherit [_] iter_aproj
-    method visit_region_var_id : 'env -> region_var_id -> unit = fun _ _ -> ()
-
-    method visit_region : 'env -> region -> unit =
-      fun env r ->
-        match r with
-        | Static -> ()
-        | Var rid -> self#visit_region_var_id env rid
-
-    method visit_region_id : 'env -> region_id -> unit = fun _ _ -> ()
-
-    method visit_region_id_set : 'env -> region_id_set -> unit =
-      fun env ids -> RegionId.Set.iter (self#visit_region_id env) ids
-
-    method visit_abstraction_id : 'env -> abstraction_id -> unit = fun _ _ -> ()
-
-    method visit_abstraction_id_set : 'env -> abstraction_id_set -> unit =
-      fun env ids -> AbstractionId.Set.iter (self#visit_abstraction_id env) ids
-  end
-
-(** Ancestor for {!typed_avalue} map visitor *)
-class ['self] map_typed_avalue_base =
-  object (self : 'self)
-    inherit [_] map_aproj
-
-    method visit_region_var_id : 'env -> region_var_id -> region_var_id =
-      fun _ x -> x
-
-    method visit_region : 'env -> region -> region =
-      fun env r ->
-        match r with
-        | Static -> Static
-        | Var rid -> Var (self#visit_region_var_id env rid)
-
-    method visit_region_id : 'env -> region_id -> region_id = fun _ x -> x
-
-    method visit_region_id_set : 'env -> region_id_set -> region_id_set =
-      fun env ids -> RegionId.Set.map (self#visit_region_id env) ids
-
-    method visit_abstraction_id : 'env -> abstraction_id -> abstraction_id =
-      fun _ x -> x
-
-    method visit_abstraction_id_set
-        : 'env -> abstraction_id_set -> abstraction_id_set =
-      fun env ids -> AbstractionId.Set.map (self#visit_abstraction_id env) ids
-  end
 
 (** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.
@@ -493,7 +347,7 @@ class ['self] map_typed_avalue_base =
     When calling a function, we lose information about the borrow graph:
     part of it is thus "abstracted" away.
 *)
-type avalue =
+and avalue =
   | AAdt of adt_avalue
   | ABottom (* TODO: remove once we change the way internal borrows are ended *)
   | ALoan of aloan_content
@@ -871,7 +725,10 @@ and aborrow_content =
     To be more precise, shared aloans have the borrow type (i.e., a shared aloan
     has type [& (mut) T] instead of [T]).
  *)
-and typed_avalue = { value : avalue; ty : rty }
+and typed_avalue = {
+  value : avalue;
+  ty : ty;  (** This should be a type with regions *)
+}
 [@@deriving
   show,
     ord,

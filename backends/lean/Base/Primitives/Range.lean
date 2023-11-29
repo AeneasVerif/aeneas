@@ -11,7 +11,7 @@ import Base.Progress.Base
 
 namespace Primitives
 
-structure Range (α : Type u) where
+structure core.ops.range.Range (α : Type u) where
   mk ::
   start: α
   end_: α

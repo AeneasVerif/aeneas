@@ -6,16 +6,17 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
-Require Export External_Types.
-Import External_Types.
-Require Export External_Opaque.
-Import External_Opaque.
+Require Import External_Types.
+Include External_Types.
+Require Import External_FunsExternal.
+Include External_FunsExternal.
 Module External_Funs.
 
-(** [external::swap]: forward function *)
-Definition swap_fwd
+(** [external::swap]: forward function
+    Source: 'src/external.rs', lines 6:0-6:46 *)
+Definition swap
   (T : Type) (x : T) (y : T) (st : state) : result (state * unit) :=
-  p <- core_mem_swap_fwd T x y st;
+  p <- core_mem_swap T x y st;
   let (st0, _) := p in
   p0 <- core_mem_swap_back0 T x y st st0;
   let (st1, _) := p0 in
@@ -24,12 +25,13 @@ Definition swap_fwd
   Return (st2, tt)
 .
 
-(** [external::swap]: backward function 0 *)
+(** [external::swap]: backward function 0
+    Source: 'src/external.rs', lines 6:0-6:46 *)
 Definition swap_back
   (T : Type) (x : T) (y : T) (st : state) (st0 : state) :
   result (state * (T * T))
   :=
-  p <- core_mem_swap_fwd T x y st;
+  p <- core_mem_swap T x y st;
   let (st1, _) := p in
   p0 <- core_mem_swap_back0 T x y st st1;
   let (st2, x0) := p0 in
@@ -38,26 +40,31 @@ Definition swap_back
   Return (st0, (x0, y0))
 .
 
-(** [external::test_new_non_zero_u32]: forward function *)
-Definition test_new_non_zero_u32_fwd
-  (x : u32) (st : state) : result (state * Core_num_nonzero_non_zero_u32_t) :=
-  p <- core_num_nonzero_non_zero_u32_new_fwd x st;
-  let (st0, opt) := p in
-  core_option_option_unwrap_fwd Core_num_nonzero_non_zero_u32_t opt st0
+(** [external::test_new_non_zero_u32]: forward function
+    Source: 'src/external.rs', lines 11:0-11:60 *)
+Definition test_new_non_zero_u32
+  (x : u32) (st : state) : result (state * core_num_nonzero_NonZeroU32_t) :=
+  p <- core_num_nonzero_NonZeroU32_new x st;
+  let (st0, o) := p in
+  core_option_Option_unwrap core_num_nonzero_NonZeroU32_t o st0
 .
 
-(** [external::test_vec]: forward function *)
-Definition test_vec_fwd : result unit :=
-  let v := vec_new u32 in _ <- vec_push_back u32 v 0%u32; Return tt
+(** [external::test_vec]: forward function
+    Source: 'src/external.rs', lines 17:0-17:17 *)
+Definition test_vec : result unit :=
+  let v := alloc_vec_Vec_new u32 in
+  _ <- alloc_vec_Vec_push u32 v 0%u32;
+  Return tt
 .
 
 (** Unit test for [external::test_vec] *)
-Check (test_vec_fwd )%return.
+Check (test_vec )%return.
 
-(** [external::custom_swap]: forward function *)
-Definition custom_swap_fwd
+(** [external::custom_swap]: forward function
+    Source: 'src/external.rs', lines 24:0-24:66 *)
+Definition custom_swap
   (T : Type) (x : T) (y : T) (st : state) : result (state * T) :=
-  p <- core_mem_swap_fwd T x y st;
+  p <- core_mem_swap T x y st;
   let (st0, _) := p in
   p0 <- core_mem_swap_back0 T x y st st0;
   let (st1, x0) := p0 in
@@ -66,12 +73,13 @@ Definition custom_swap_fwd
   Return (st2, x0)
 .
 
-(** [external::custom_swap]: backward function 0 *)
+(** [external::custom_swap]: backward function 0
+    Source: 'src/external.rs', lines 24:0-24:66 *)
 Definition custom_swap_back
   (T : Type) (x : T) (y : T) (st : state) (ret : T) (st0 : state) :
   result (state * (T * T))
   :=
-  p <- core_mem_swap_fwd T x y st;
+  p <- core_mem_swap T x y st;
   let (st1, _) := p in
   p0 <- core_mem_swap_back0 T x y st st1;
   let (st2, _) := p0 in
@@ -80,13 +88,15 @@ Definition custom_swap_back
   Return (st0, (ret, y0))
 .
 
-(** [external::test_custom_swap]: forward function *)
-Definition test_custom_swap_fwd
+(** [external::test_custom_swap]: forward function
+    Source: 'src/external.rs', lines 29:0-29:59 *)
+Definition test_custom_swap
   (x : u32) (y : u32) (st : state) : result (state * unit) :=
-  p <- custom_swap_fwd u32 x y st; let (st0, _) := p in Return (st0, tt)
+  p <- custom_swap u32 x y st; let (st0, _) := p in Return (st0, tt)
 .
 
-(** [external::test_custom_swap]: backward function 0 *)
+(** [external::test_custom_swap]: backward function 0
+    Source: 'src/external.rs', lines 29:0-29:59 *)
 Definition test_custom_swap_back
   (x : u32) (y : u32) (st : state) (st0 : state) :
   result (state * (u32 * u32))
@@ -94,10 +104,10 @@ Definition test_custom_swap_back
   custom_swap_back u32 x y st 1%u32 st0
 .
 
-(** [external::test_swap_non_zero]: forward function *)
-Definition test_swap_non_zero_fwd
-  (x : u32) (st : state) : result (state * u32) :=
-  p <- swap_fwd u32 x 0%u32 st;
+(** [external::test_swap_non_zero]: forward function
+    Source: 'src/external.rs', lines 35:0-35:44 *)
+Definition test_swap_non_zero (x : u32) (st : state) : result (state * u32) :=
+  p <- swap u32 x 0%u32 st;
   let (st0, _) := p in
   p0 <- swap_back u32 x 0%u32 st st0;
   let (st1, p1) := p0 in
@@ -105,4 +115,4 @@ Definition test_swap_non_zero_fwd
   if x0 s= 0%u32 then Fail_ Failure else Return (st1, x0)
 .
 
-End External_Funs .
+End External_Funs.

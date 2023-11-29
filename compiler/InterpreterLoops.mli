@@ -56,7 +56,9 @@
     From here, we deduce that [abs@fp { MB l0, ML l1}] is the loop abstraction.
   *)
 
-module C = Contexts
+open Contexts
+open Cps
+open Meta
 
 (** Evaluate a loop *)
-val eval_loop : C.config -> Cps.st_cm_fun -> Cps.st_cm_fun
+val eval_loop : config -> meta -> st_cm_fun -> st_cm_fun
