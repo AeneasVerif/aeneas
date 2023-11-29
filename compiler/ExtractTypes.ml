@@ -192,12 +192,13 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
       F.pp_print_space fmt ();
       extract_expr false arg1
   | _ ->
+      let binop_is_shift = match binop with Shl | Shr -> true | _ -> false in
       let binop = named_binop_name binop int_ty in
       F.pp_print_string fmt binop;
-      (* In the case of F*, because machine integers are simply integers
-         with a refinement, if the second argument is a constant we
-         need to provide the second implicit type argument *)
-      if !backend = FStar && is_const arg1 then (
+      (* In the case of F*, for shift operations, because machine integers
+         are simply integers with a refinement, if the second argument is a
+         constant we need to provide the second implicit type argument *)
+      if binop_is_shift && !backend = FStar && is_const arg1 then (
         F.pp_print_space fmt ();
         let ty = ty_as_integer arg1.ty in
         F.pp_print_string fmt
