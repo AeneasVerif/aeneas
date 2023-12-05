@@ -86,6 +86,16 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
           method may_fail b = can_fail := !can_fail || b
           method maybe_stateful b = stateful := !stateful || b
 
+          method visit_fid id =
+            if FunDeclId.Set.mem id fun_ids then (
+              can_diverge := true;
+              is_rec := true)
+            else
+              let info = FunDeclId.Map.find id !infos in
+              self#may_fail info.can_fail;
+              stateful := !stateful || info.stateful;
+              can_diverge := !can_diverge || info.can_diverge
+
           method! visit_Assert env a =
             self#may_fail true;
             super#visit_Assert env a
@@ -97,25 +107,32 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail
 
+          method! visit_Closure env id args =
+            (* Remark: `Closure` is a trait instance id - TODO: rename this variant *)
+            self#visit_fid id;
+            super#visit_Closure env id args
+
+          method! visit_AggregatedClosure env id args =
+            self#visit_fid id;
+            super#visit_AggregatedClosure env id args
+
           method! visit_Call env call =
-            (match call.func.func with
-            | FunId (FRegular id) ->
-                if FunDeclId.Set.mem id fun_ids then (
-                  can_diverge := true;
-                  is_rec := true)
-                else
-                  let info = FunDeclId.Map.find id !infos in
-                  self#may_fail info.can_fail;
-                  stateful := !stateful || info.stateful;
-                  can_diverge := !can_diverge || info.can_diverge
-            | FunId (FAssumed id) ->
-                (* None of the assumed functions can diverge nor are considered stateful *)
-                can_fail := !can_fail || Assumed.assumed_fun_can_fail id
-            | TraitMethod _ ->
-                (* We consider trait functions can fail, but can not diverge and are not stateful.
-                   TODO: this may cause issues if we use use a fuel parameter.
-                *)
-                can_fail := true);
+            (match call.func with
+            | FnOpMove _ ->
+                (* Ignoring this: we lookup the called function upon creating
+                   the closure *)
+                ()
+            | FnOpRegular func -> (
+                match func.func with
+                | FunId (FRegular id) -> self#visit_fid id
+                | FunId (FAssumed id) ->
+                    (* None of the assumed functions can diverge nor are considered stateful *)
+                    can_fail := !can_fail || Assumed.assumed_fun_can_fail id
+                | TraitMethod _ ->
+                    (* We consider trait functions can fail, but can not diverge and are not stateful.
+                       TODO: this may cause issues if we use use a fuel parameter.
+                    *)
+                    can_fail := true));
             super#visit_Call env call
 
           method! visit_Panic env =

@@ -258,6 +258,22 @@ let rec betree_Node_lookup_first_message_for_key_back
   | Betree_List_Nil -> Return ret
   end
 
+(** [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]: forward function
+    Source: 'src/betree.rs', lines 636:4-636:80 *)
+let rec betree_Node_lookup_in_bindings
+  (key : u64) (bindings : betree_List_t (u64 & u64)) :
+  Tot (result (option u64))
+  (decreases (betree_Node_lookup_in_bindings_decreases key bindings))
+  =
+  begin match bindings with
+  | Betree_List_Cons hd tl ->
+    let (i, i0) = hd in
+    if i = key
+    then Return (Some i0)
+    else if i > key then Return None else betree_Node_lookup_in_bindings key tl
+  | Betree_List_Nil -> Return None
+  end
+
 (** [betree_main::betree::{betree_main::betree::Node#5}::apply_upserts]: forward function
     Source: 'src/betree.rs', lines 819:4-819:90 *)
 let rec betree_Node_apply_upserts
@@ -311,22 +327,6 @@ let rec betree_Node_apply_upserts_back
     let* (_, v) = core_option_Option_unwrap u64 prev st in
     betree_List_push_front (u64 & betree_Message_t) msgs (key,
       Betree_Message_Insert v)
-
-(** [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]: forward function
-    Source: 'src/betree.rs', lines 636:4-636:80 *)
-let rec betree_Node_lookup_in_bindings
-  (key : u64) (bindings : betree_List_t (u64 & u64)) :
-  Tot (result (option u64))
-  (decreases (betree_Node_lookup_in_bindings_decreases key bindings))
-  =
-  begin match bindings with
-  | Betree_List_Cons hd tl ->
-    let (i, i0) = hd in
-    if i = key
-    then Return (Some i0)
-    else if i > key then Return None else betree_Node_lookup_in_bindings key tl
-  | Betree_List_Nil -> Return None
-  end
 
 (** [betree_main::betree::{betree_main::betree::Internal#4}::lookup_in_children]: forward function
     Source: 'src/betree.rs', lines 395:4-395:63 *)

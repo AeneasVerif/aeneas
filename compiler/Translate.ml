@@ -188,7 +188,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   in
 
   (* Translate the backward functions *)
-  let translate_backward (rg : region_group) : Pure.fun_decl =
+  let translate_backward (rg : region_var_group) : Pure.fun_decl =
     (* For the backward inputs/outputs initialization: we use the fact that
      * there are no nested borrows for now, and so that the region groups
      * can't have parents *)

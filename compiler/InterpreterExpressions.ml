@@ -761,6 +761,7 @@ let eval_rvalue_aggregate (config : config) (aggregate_kind : aggregate_kind)
             (* Introduce the symbolic value in the AST *)
             let sv = ValuesUtils.value_as_symbolic saggregated.value in
             Some (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)))
+    | AggregatedClosure _ -> raise (Failure "Closures are not supported yet")
   in
   (* Compose and apply *)
   comp eval_ops compute cf

@@ -36,8 +36,8 @@ open LlbcAst
 module Sig = struct
   (** A few utilities *)
 
-  let rvar_id_0 = RegionId.of_int 0
-  let rvar_0 : region = RVar rvar_id_0
+  let rvar_id_0 = RegionVarId.of_int 0
+  let rvar_0 : region = RBVar (0, rvar_id_0)
   let rg_id_0 = RegionGroupId.of_int 0
   let tvar_id_0 = TypeVarId.of_int 0
   let tvar_0 : ty = TVar tvar_id_0
@@ -48,7 +48,7 @@ module Sig = struct
   let region_param_0 : region_var = { index = rvar_id_0; name = Some "'a" }
 
   (** Region group: [{ parent={}; regions:{'a of id 0} }] *)
-  let region_group_0 : region_group =
+  let region_group_0 : region_var_group =
     { id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
 
   (** Type parameter [T] of id 0 *)
@@ -84,6 +84,8 @@ module Sig = struct
     in
     {
       is_unsafe = false;
+      is_closure = false;
+      closure_info = None;
       generics;
       preds;
       parent_params_info = None;

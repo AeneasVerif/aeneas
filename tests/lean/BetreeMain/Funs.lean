@@ -256,6 +256,21 @@ divergent def betree.Node.lookup_first_message_for_key_back
         Result.ret (betree.List.Cons (i, m) next_msgs0)
   | betree.List.Nil => Result.ret ret
 
+/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]: forward function
+   Source: 'src/betree.rs', lines 636:4-636:80 -/
+divergent def betree.Node.lookup_in_bindings
+  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
+  match bindings with
+  | betree.List.Cons hd tl =>
+    let (i, i0) := hd
+    if i = key
+    then Result.ret (some i0)
+    else
+      if i > key
+      then Result.ret none
+      else betree.Node.lookup_in_bindings key tl
+  | betree.List.Nil => Result.ret none
+
 /- [betree_main::betree::{betree_main::betree::Node#5}::apply_upserts]: forward function
    Source: 'src/betree.rs', lines 819:4-819:90 -/
 divergent def betree.Node.apply_upserts
@@ -315,21 +330,6 @@ divergent def betree.Node.apply_upserts_back
         let (_, v) ← core.option.Option.unwrap U64 prev st
         betree.List.push_front (U64 × betree.Message) msgs (key,
           betree.Message.Insert v)
-
-/- [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]: forward function
-   Source: 'src/betree.rs', lines 636:4-636:80 -/
-divergent def betree.Node.lookup_in_bindings
-  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
-  match bindings with
-  | betree.List.Cons hd tl =>
-    let (i, i0) := hd
-    if i = key
-    then Result.ret (some i0)
-    else
-      if i > key
-      then Result.ret none
-      else betree.Node.lookup_in_bindings key tl
-  | betree.List.Nil => Result.ret none
 
 /- [betree_main::betree::{betree_main::betree::Internal#4}::lookup_in_children]: forward function
    Source: 'src/betree.rs', lines 395:4-395:63 -/

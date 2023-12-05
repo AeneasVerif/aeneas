@@ -62,7 +62,7 @@ let pattern_to_extract_name (is_trait_impl : bool) (name : pattern) :
               | TArray -> "Array"
               | TSlice -> "Slice"
             else expr_to_string c ty
-        | ERef _ | EVar _ ->
+        | ERef _ | EVar _ | EArrow _ | ERawPtr _ ->
             (* We simply convert the pattern to a string. This is not very
                satisfying but we should rarely get there. *)
             expr_to_string c ty)
@@ -108,7 +108,7 @@ let name_with_generics_to_simple_name (ctx : ctx) (is_trait_impl : bool)
           name_with_generics_to_pattern ctx c TypesUtils.empty_generic_params
             prefix TypesUtils.empty_generic_args
         in
-        let _, _, name = pattern_common_prefix prefix name in
+        let _, _, name = pattern_common_prefix { equiv = true } prefix name in
         name
   in
   pattern_to_extract_name is_trait_impl name

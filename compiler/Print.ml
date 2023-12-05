@@ -393,7 +393,6 @@ module Contexts = struct
     let global_decls = ctx.global_ctx.global_decls in
     let trait_decls = ctx.trait_decls_ctx.trait_decls in
     let trait_impls = ctx.trait_impls_ctx.trait_impls in
-    let generics = TypesUtils.empty_generic_params in
     let preds = TypesUtils.empty_predicates in
     {
       type_decls;
@@ -401,7 +400,10 @@ module Contexts = struct
       global_decls;
       trait_decls;
       trait_impls;
-      generics;
+      regions = [];
+      types = [];
+      const_generics = [];
+      trait_clauses = [];
       preds;
       locals = [];
     }
@@ -415,16 +417,6 @@ module Contexts = struct
     (* Below: it is always safe to omit fields - if an id can't be found at
        printing time, we print the id (in raw form) instead of the name it
        designates. *)
-    let generics : generic_params =
-      {
-        types = ctx.type_vars;
-        (* The regions have been transformed to region groups *)
-        regions = [];
-        const_generics = ctx.const_generic_vars;
-        (* We don't need the trait clauses so we initialize them to empty *)
-        trait_clauses = [];
-      }
-    in
     (* We don't need the predicates so we initialize them to empty *)
     let preds = empty_predicates in
     (* For the locals: we retrieve the information from the environment.
@@ -444,7 +436,12 @@ module Contexts = struct
       global_decls;
       trait_decls;
       trait_impls;
-      generics;
+      types = ctx.type_vars;
+      (* The regions have been transformed to region groups *)
+      regions = [];
+      const_generics = ctx.const_generic_vars;
+      (* We don't need the trait clauses so we initialize them to empty *)
+      trait_clauses = [];
       preds;
       locals;
     }
@@ -596,7 +593,7 @@ module EvalCtx = struct
   let fun_id_or_trait_method_ref_to_string (ctx : eval_ctx)
       (x : fun_id_or_trait_method_ref) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    fun_id_or_trait_method_ref_to_string env x "..."
+    fun_id_or_trait_method_ref_to_string env x
 
   let statement_to_string (ctx : eval_ctx) (indent : string)
       (indent_incr : string) (e : statement) : string =

@@ -455,7 +455,7 @@ let initialize_eval_context (ctx : decls_ctx)
  *)
 let instantiate_fun_sig (ctx : eval_ctx) (generics : generic_args)
     (tr_self : trait_instance_id) (sg : fun_sig)
-    (regions_hierarchy : region_groups) : inst_fun_sig =
+    (regions_hierarchy : region_var_groups) : inst_fun_sig =
   log#ldebug
     (lazy
       ("instantiate_fun_sig:" ^ "\n- generics: "
@@ -484,7 +484,11 @@ let instantiate_fun_sig (ctx : eval_ctx) (generics : generic_args)
     RegionGroupId.Map.find rg_id asubst_map
   in
   (* Generate fresh regions and their substitutions *)
-  let _, rsubst, _ = Substitute.fresh_regions_with_substs sg.generics.regions in
+  let _, rsubst, _ =
+    Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
+      sg.generics.regions
+  in
+  let rsubst r = Option.get (rsubst r) in
   (* Generate the type substitution
      Note that for now we don't support instantiating the type parameters with
      types containing regions. *)

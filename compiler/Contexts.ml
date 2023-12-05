@@ -190,7 +190,7 @@ type type_context = {
 type fun_context = {
   fun_decls : fun_decl FunDeclId.Map.t;
   fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
-  regions_hierarchies : region_groups FunIdMap.t;
+  regions_hierarchies : region_var_groups FunIdMap.t;
 }
 [@@deriving show]
 

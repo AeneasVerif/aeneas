@@ -92,7 +92,8 @@ let ctx_add_norm_trait_types_from_preds (ctx : eval_ctx)
 let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
-  | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ | FnPointer _ ->
+  | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ | FnPointer _
+  | Closure _ ->
       false
   | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
       trait_instance_id_is_local_clause id
@@ -118,13 +119,10 @@ let norm_ctx_to_fmt_env (ctx : norm_ctx) : Print.fmt_env =
     global_decls = ctx.global_decls;
     trait_decls = ctx.trait_decls;
     trait_impls = ctx.trait_impls;
-    generics =
-      {
-        types = ctx.type_vars;
-        const_generics = ctx.const_generic_vars;
-        regions = [];
-        trait_clauses = [];
-      };
+    types = ctx.type_vars;
+    const_generics = ctx.const_generic_vars;
+    regions = [];
+    trait_clauses = [];
     preds = empty_predicates;
     locals = [];
   }
@@ -220,10 +218,13 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
   | TRawPtr (ty, rkind) ->
       let ty = norm_ctx_normalize_ty ctx ty in
       TRawPtr (ty, rkind)
-  | TArrow (inputs, output) ->
+  | TArrow (regions, inputs, output) ->
+      (* TODO: for now it works because we don't support predicates with
+         bound regions. If we do support them, we probably need to do
+         something smarter here. *)
       let inputs = List.map (norm_ctx_normalize_ty ctx) inputs in
       let output = norm_ctx_normalize_ty ctx output in
-      TArrow (inputs, output)
+      TArrow (regions, inputs, output)
   | TTraitType (trait_ref, generics, type_name) -> (
       log#ldebug
         (lazy
@@ -429,6 +430,9 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       (* TODO: we might want to return the ref to the function pointer,
          in order to later normalize a call to this function pointer *)
       (FnPointer ty, None)
+  | Closure (fid, generics) ->
+      let generics = norm_ctx_normalize_generic_args ctx generics in
+      (Closure (fid, generics), None)
   | UnknownTrait _ ->
       (* This is actually an error case *)
       (id, None)
@@ -562,11 +566,11 @@ let ctx_adt_get_inst_norm_field_etypes (ctx : eval_ctx) (def_id : TypeDeclId.id)
 (** Same as [substitute_signature] but normalizes the types *)
 let ctx_subst_norm_signature (ctx : eval_ctx)
     (asubst : RegionGroupId.id -> AbstractionId.id)
-    (r_subst : RegionId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
+    (r_subst : RegionVarId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
     (cg_subst : ConstGenericVarId.id -> const_generic)
     (tr_subst : TraitClauseId.id -> trait_instance_id)
     (tr_self : trait_instance_id) (sg : fun_sig)
-    (regions_hierarchy : region_groups) : inst_fun_sig =
+    (regions_hierarchy : region_var_groups) : inst_fun_sig =
   let sg =
     Subst.substitute_signature asubst r_subst ty_subst cg_subst tr_subst tr_self
       sg regions_hierarchy
