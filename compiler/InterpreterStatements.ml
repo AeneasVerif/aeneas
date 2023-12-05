@@ -1008,7 +1008,7 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id) :
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
       assert (ty_no_regions global.ty);
-      let sval = mk_fresh_symbolic_value Global global.ty in
+      let sval = mk_fresh_symbolic_value global.ty in
       let cc =
         assign_to_place config (mk_typed_value_from_symbolic_value sval) dest
       in
@@ -1312,7 +1312,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
-  let ret_spc = mk_fresh_symbolic_value FunCallRet ret_sv_ty in
+  let ret_spc = mk_fresh_symbolic_value ret_sv_ty in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
   let ret_av regions =
     mk_aproj_loans_value_from_symbolic_value regions ret_spc

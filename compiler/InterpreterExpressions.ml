@@ -283,7 +283,7 @@ let eval_operand_no_reorganize (config : config) (op : operand)
                 List.find (fun (name, _) -> name = const_name) trait_decl.consts
               in
               (* Introduce a fresh symbolic value *)
-              let v = mk_fresh_symbolic_typed_value TraitConst ty in
+              let v = mk_fresh_symbolic_typed_value ty in
               (* Continue the evaluation *)
               let e = cf v ctx in
               (* We have to wrap the generated expression *)
@@ -315,7 +315,7 @@ let eval_operand_no_reorganize (config : config) (op : operand)
                 copy_value allow_adt_copy config ctx cv
             | SymbolicMode ->
                 (* We use the looked up value only for its type *)
-                let v = mk_fresh_symbolic_typed_value KindConstGeneric cv.ty in
+                let v = mk_fresh_symbolic_typed_value cv.ty in
                 (ctx, v)
           in
           (* Continue *)
@@ -464,9 +464,7 @@ let eval_unary_op_symbolic (config : config) (unop : unop) (op : operand)
       | Cast (CastInteger (_, tgt_ty)), _ -> TLiteral (TInteger tgt_ty)
       | _ -> raise (Failure "Invalid input for unop")
     in
-    let res_sv =
-      { sv_kind = FunCallRet; sv_id = res_sv_id; sv_ty = res_sv_ty }
-    in
+    let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
     (* Call the continuation *)
     let expr = cf (Ok (mk_typed_value_from_symbolic_value res_sv)) ctx in
     (* Synthesize the symbolic AST *)
@@ -603,9 +601,7 @@ let eval_binary_op_symbolic (config : config) (binop : binop) (op1 : operand)
             | Ne | Eq -> raise (Failure "Unreachable"))
         | _ -> raise (Failure "Invalid inputs for binop")
     in
-    let res_sv =
-      { sv_kind = FunCallRet; sv_id = res_sv_id; sv_ty = res_sv_ty }
-    in
+    let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
     (* Call the continuattion *)
     let v = mk_typed_value_from_symbolic_value res_sv in
     let expr = cf (Ok v) ctx in
@@ -769,7 +765,7 @@ let eval_rvalue_aggregate (config : config) (aggregate_kind : aggregate_kind)
            array we introduce here might be duplicated in the generated
            code: by introducing a symbolic value we introduce a let-binding
            in the generated code. *)
-        let saggregated = mk_fresh_symbolic_typed_value Aggregate ty in
+        let saggregated = mk_fresh_symbolic_typed_value ty in
         (* Call the continuation *)
         match cf saggregated ctx with
         | None -> None

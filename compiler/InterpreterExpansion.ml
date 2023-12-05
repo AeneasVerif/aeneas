@@ -209,8 +209,8 @@ let apply_symbolic_expansion_non_borrow (config : config)
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_non_assumed_adt_value (expand_enumerations : bool)
-    (kind : sv_kind) (def_id : TypeDeclId.id) (generics : generic_args)
-    (ctx : eval_ctx) : symbolic_expansion list =
+    (def_id : TypeDeclId.id) (generics : generic_args) (ctx : eval_ctx) :
+    symbolic_expansion list =
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
   let def = ctx_lookup_type_decl ctx def_id in
@@ -227,7 +227,7 @@ let compute_expanded_symbolic_non_assumed_adt_value (expand_enumerations : bool)
   let initialize ((variant_id, field_types) : VariantId.id option * rty list) :
       symbolic_expansion =
     let field_values =
-      List.map (fun (ty : rty) -> mk_fresh_symbolic_value kind ty) field_types
+      List.map (fun (ty : rty) -> mk_fresh_symbolic_value ty) field_types
     in
     let see = SeAdt (variant_id, field_values) in
     see
@@ -235,20 +235,19 @@ let compute_expanded_symbolic_non_assumed_adt_value (expand_enumerations : bool)
   (* Initialize all the expanded values of all the variants *)
   List.map initialize variants_fields_types
 
-let compute_expanded_symbolic_tuple_value (kind : sv_kind)
-    (field_types : rty list) : symbolic_expansion =
+let compute_expanded_symbolic_tuple_value (field_types : rty list) :
+    symbolic_expansion =
   (* Generate the field values *)
   let field_values =
-    List.map (fun sv_ty -> mk_fresh_symbolic_value kind sv_ty) field_types
+    List.map (fun sv_ty -> mk_fresh_symbolic_value sv_ty) field_types
   in
   let variant_id = None in
   let see = SeAdt (variant_id, field_values) in
   see
 
-let compute_expanded_symbolic_box_value (kind : sv_kind) (boxed_ty : rty) :
-    symbolic_expansion =
+let compute_expanded_symbolic_box_value (boxed_ty : rty) : symbolic_expansion =
   (* Introduce a fresh symbolic value *)
-  let boxed_value = mk_fresh_symbolic_value kind boxed_ty in
+  let boxed_value = mk_fresh_symbolic_value boxed_ty in
   let see = SeAdt (None, [ boxed_value ]) in
   see
 
@@ -262,16 +261,15 @@ let compute_expanded_symbolic_box_value (kind : sv_kind) (boxed_ty : rty) :
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
-    (kind : sv_kind) (adt_id : type_id) (generics : generic_args)
-    (ctx : eval_ctx) : symbolic_expansion list =
+    (adt_id : type_id) (generics : generic_args) (ctx : eval_ctx) :
+    symbolic_expansion list =
   match (adt_id, generics.regions, generics.types) with
   | TAdtId def_id, _, _ ->
-      compute_expanded_symbolic_non_assumed_adt_value expand_enumerations kind
-        def_id generics ctx
-  | TTuple, [], _ ->
-      [ compute_expanded_symbolic_tuple_value kind generics.types ]
+      compute_expanded_symbolic_non_assumed_adt_value expand_enumerations def_id
+        generics ctx
+  | TTuple, [], _ -> [ compute_expanded_symbolic_tuple_value generics.types ]
   | TAssumed TBox, [], [ boxed_ty ] ->
-      [ compute_expanded_symbolic_box_value kind boxed_ty ]
+      [ compute_expanded_symbolic_box_value boxed_ty ]
   | _ ->
       raise
         (Failure "compute_expanded_symbolic_adt_value: unexpected combination")
@@ -313,7 +311,7 @@ let expand_symbolic_value_shared_borrow (config : config)
     else None
   in
   (* The fresh symbolic value for the shared value *)
-  let shared_sv = mk_fresh_symbolic_value original_sv.sv_kind ref_ty in
+  let shared_sv = mk_fresh_symbolic_value ref_ty in
   (* Visitor to replace the projectors on borrows *)
   let obj =
     object (self)
@@ -403,7 +401,7 @@ let expand_symbolic_value_borrow (config : config)
   | RMut ->
       (* Simple case: simply create a fresh symbolic value and a fresh
        * borrow id *)
-      let sv = mk_fresh_symbolic_value original_sv.sv_kind ref_ty in
+      let sv = mk_fresh_symbolic_value ref_ty in
       let bid = fresh_borrow_id () in
       let see = SeMutRef (bid, sv) in
       (* Expand the symbolic values - we simply perform a substitution (and
@@ -524,8 +522,8 @@ let expand_symbolic_value_no_branching (config : config) (sv : symbolic_value)
         (* Compute the expanded value *)
         let allow_branching = false in
         let seel =
-          compute_expanded_symbolic_adt_value allow_branching sv.sv_kind adt_id
-            generics ctx
+          compute_expanded_symbolic_adt_value allow_branching adt_id generics
+            ctx
         in
         (* There should be exacly one branch *)
         let see = Collections.List.to_cons_nil seel in
@@ -581,8 +579,7 @@ let expand_symbolic_adt (config : config) (sv : symbolic_value)
       let allow_branching = true in
       (* Compute the expanded value *)
       let seel =
-        compute_expanded_symbolic_adt_value allow_branching sv.sv_kind adt_id
-          generics ctx
+        compute_expanded_symbolic_adt_value allow_branching adt_id generics ctx
       in
       (* Apply *)
       let seel = List.map (fun see -> (Some see, cf_branches)) seel in

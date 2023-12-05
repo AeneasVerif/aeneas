@@ -74,31 +74,29 @@ let mk_place_from_var_id (var_id : VarId.id) : place =
   { var_id; projection = [] }
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value (sv_kind : sv_kind) (ty : ty) : symbolic_value =
+let mk_fresh_symbolic_value (ty : ty) : symbolic_value =
   (* Sanity check *)
   assert (ty_is_rty ty);
   let sv_id = fresh_symbolic_value_id () in
-  let svalue = { sv_kind; sv_id; sv_ty = ty } in
+  let svalue = { sv_id; sv_ty = ty } in
   svalue
 
-let mk_fresh_symbolic_value_from_no_regions_ty (sv_kind : sv_kind) (ty : ty) :
-    symbolic_value =
+let mk_fresh_symbolic_value_from_no_regions_ty (ty : ty) : symbolic_value =
   assert (ty_no_regions ty);
-  mk_fresh_symbolic_value sv_kind ty
+  mk_fresh_symbolic_value ty
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_typed_value (sv_kind : sv_kind) (rty : ty) : typed_value =
+let mk_fresh_symbolic_typed_value (rty : ty) : typed_value =
   assert (ty_is_rty rty);
   let ty = Substitute.erase_regions rty in
   (* Generate the fresh a symbolic value *)
-  let value = mk_fresh_symbolic_value sv_kind rty in
+  let value = mk_fresh_symbolic_value rty in
   let value = VSymbolic value in
   { value; ty }
 
-let mk_fresh_symbolic_typed_value_from_no_regions_ty (sv_kind : sv_kind)
-    (ty : ty) : typed_value =
+let mk_fresh_symbolic_typed_value_from_no_regions_ty (ty : ty) : typed_value =
   assert (ty_no_regions ty);
-  mk_fresh_symbolic_typed_value sv_kind ty
+  mk_fresh_symbolic_typed_value ty
 
 (** Create a typed value from a symbolic value. *)
 let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
@@ -267,15 +265,9 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : eval_ctx)
       inherit [_] iter_typed_value
 
       method! visit_symbolic_value _ s =
-        match s.sv_kind with
-        | FunCallRet | LoopOutput | LoopJoin ->
-            if ty_has_borrow_under_mut ctx.type_context.type_infos s.sv_ty then
-              raise Found
-            else ()
-        | SynthInput | SynthInputGivenBack | FunCallGivenBack
-        | SynthRetGivenBack | Global | KindConstGeneric | LoopGivenBack
-        | Aggregate | ConstGeneric | TraitConst ->
-            ()
+        if ty_has_borrow_under_mut ctx.type_context.type_infos s.sv_ty then
+          raise Found
+        else ()
     end
   in
   (* We use exceptions *)
@@ -430,7 +422,7 @@ let initialize_eval_context (ctx : decls_ctx)
       (List.map
          (fun (cg : const_generic_var) ->
            let ty = TLiteral cg.ty in
-           let cv = mk_fresh_symbolic_typed_value ConstGeneric ty in
+           let cv = mk_fresh_symbolic_typed_value ty in
            (cg.index, cv))
          const_generic_vars)
   in

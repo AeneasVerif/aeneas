@@ -444,13 +444,6 @@ let give_back_symbolic_value (_config : config) (proj_regions : RegionId.Set.t)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
   assert (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty);
-  (match nsv.sv_kind with
-  | SynthInputGivenBack | SynthRetGivenBack | FunCallGivenBack | LoopGivenBack
-    ->
-      ()
-  | FunCallRet | SynthInput | Global | KindConstGeneric | LoopOutput | LoopJoin
-  | Aggregate | ConstGeneric | TraitConst ->
-      raise (Failure "Unreachable"));
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
@@ -459,31 +452,20 @@ let give_back_symbolic_value (_config : config) (proj_regions : RegionId.Set.t)
     let _ = raise Utils.Unimplemented in
     (* Compute the projection over the given back value *)
     let child_proj =
-      match nsv.sv_kind with
-      | SynthRetGivenBack ->
-          (* The given back value comes from the return value of the function
-             we are currently synthesizing (as it is given back, it means
-             we ended one of the regions appearing in the signature: we are
-             currently synthesizing one of the backward functions).
+      (* TODO: there is something wrong here.
+         Consider this:
+         {[
+           abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
+           abs1 {'b} { AProjBorrows (s0 : &'a mut T <: &'b mut T) }
+         ]}
 
-             As we don't allow borrow overwrites on returned value, we can
-             (and MUST) forget the borrows *)
-          AIgnoredProjBorrows
-      | FunCallGivenBack ->
-          (* TODO: there is something wrong here.
-             Consider this:
-             {[
-               abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
-               abs1 {'b} { AProjBorrows (s0 : &'a mut T <: &'b mut T) }
-             ]}
-
-             Upon ending abs1, we give back some fresh symbolic value [s1],
-             that we reinsert where the loan for [s0] is. However, the mutable
-             borrow in the type [&'a mut T] was ended: we give back a value of
-             type [T]! We thus *mustn't* introduce a projector here.
-          *)
-          AProjBorrows (nsv, sv.sv_ty)
-      | _ -> raise (Failure "Unreachable")
+         Upon ending abs1, we give back some fresh symbolic value [s1],
+         that we reinsert where the loan for [s0] is. However, the mutable
+         borrow in the type [&'a mut T] was ended: we give back a value of
+         type [T]! We thus *mustn't* introduce a projector here.
+      *)
+      (* AProjBorrows (nsv, sv.sv_ty) *)
+      raise (Failure "TODO")
     in
     AProjLoans (sv, (mv, child_proj) :: local_given_back)
   in
@@ -739,17 +721,7 @@ let reborrow_shared (original_bid : BorrowId.id) (new_bid : BorrowId.id)
  *)
 let convert_avalue_to_given_back_value (abs_kind : abs_kind) (av : typed_avalue)
     : symbolic_value =
-  let sv_kind =
-    match abs_kind with
-    | FunCall _ -> FunCallGivenBack
-    | SynthRet _ -> SynthRetGivenBack
-    | SynthInput _ -> SynthInputGivenBack
-    | Loop _ -> LoopGivenBack
-    | Identity ->
-        (* Identity abstractions give back nothing *)
-        raise (Failure "Unreachable")
-  in
-  mk_fresh_symbolic_value sv_kind av.ty
+  mk_fresh_symbolic_value av.ty
 
 (** Auxiliary function: see {!end_borrow_aux}.
 
@@ -1239,7 +1211,7 @@ and end_abstraction_borrows (config : config) (chain : borrow_or_abs_ids)
           ("end_abstraction_borrows: found aproj borrows: "
           ^ aproj_to_string ctx (AProjBorrows (sv, proj_ty))));
       (* Generate a fresh symbolic value *)
-      let nsv = mk_fresh_symbolic_value FunCallGivenBack proj_ty in
+      let nsv = mk_fresh_symbolic_value proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
       let ended_borrow = AEndedProjBorrows nsv in
       let ctx = update_aproj_borrows abs.abs_id sv ended_borrow ctx in
