@@ -35,7 +35,9 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_assumed : bool) :
     {
       type_decls = k.type_decls;
       global_decls = k.global_decls;
+      fun_decls = k.fun_decls;
       trait_decls = k.trait_decls;
+      trait_impls = k.trait_impls;
     }
   in
   let is_opaque_fun (d : fun_decl) : bool =

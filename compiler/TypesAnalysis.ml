@@ -233,7 +233,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         in
         (* Return *)
         ty_info
-    | TArrow (inputs, output) ->
+    | TArrow (_regions, inputs, output) ->
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left

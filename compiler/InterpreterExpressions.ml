@@ -300,13 +300,29 @@ let eval_operand_no_reorganize (config : config) (op : operand)
                          e ))))
       | CVar vid -> (
           let ctx0 = ctx in
-          (* Lookup the const generic value *)
-          let cv = ctx_lookup_const_generic_value ctx vid in
-          (* Copy the value *)
-          let allow_adt_copy = false in
-          let ctx, v = copy_value allow_adt_copy config ctx cv in
+          (* In concrete mode: lookup the const generic value.
+             In symbolic mode: introduce a fresh symbolic value.
+
+             We have nothing to do: the value is copyable, so we can freely
+             duplicate it.
+          *)
+          let ctx, cv =
+            let cv = ctx_lookup_const_generic_value ctx vid in
+            match config.mode with
+            | ConcreteMode ->
+                (* Copy the value - this is more of a sanity check *)
+                let allow_adt_copy = false in
+                copy_value allow_adt_copy config ctx cv
+            | SymbolicMode ->
+                (* We use the looked up value only for its type *)
+                let v = mk_fresh_symbolic_typed_value KindConstGeneric cv.ty in
+                (ctx, v)
+          in
           (* Continue *)
-          let e = cf v ctx in
+          let e = cf cv ctx in
+          (* If we are synthesizing a symbolic AST, it means that we are in symbolic
+             mode: the value of the const generic is necessarily symbolic. *)
+          assert (e = None || is_symbolic cv.value);
           (* We have to wrap the generated expression *)
           match e with
           | None -> None
@@ -319,7 +335,7 @@ let eval_operand_no_reorganize (config : config) (op : operand)
                 (SymbolicAst.IntroSymbolic
                    ( ctx0,
                      None,
-                     value_as_symbolic v.value,
+                     value_as_symbolic cv.value,
                      SymbolicAst.VaCgValue vid,
                      e )))
       | CFnPtr _ -> raise (Failure "TODO"))
@@ -761,6 +777,7 @@ let eval_rvalue_aggregate (config : config) (aggregate_kind : aggregate_kind)
             (* Introduce the symbolic value in the AST *)
             let sv = ValuesUtils.value_as_symbolic saggregated.value in
             Some (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)))
+    | AggregatedClosure _ -> raise (Failure "Closures are not supported yet")
   in
   (* Compose and apply *)
   comp eval_ops compute cf

@@ -448,8 +448,8 @@ let give_back_symbolic_value (_config : config) (proj_regions : RegionId.Set.t)
   | SynthInputGivenBack | SynthRetGivenBack | FunCallGivenBack | LoopGivenBack
     ->
       ()
-  | FunCallRet | SynthInput | Global | LoopOutput | LoopJoin | Aggregate
-  | ConstGeneric | TraitConst ->
+  | FunCallRet | SynthInput | Global | KindConstGeneric | LoopOutput | LoopJoin
+  | Aggregate | ConstGeneric | TraitConst ->
       raise (Failure "Unreachable"));
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
@@ -1870,7 +1870,7 @@ let convert_value_to_abstractions (abs_kind : abs_kind) (can_end : bool)
         match bc with
         | VSharedBorrow bid ->
             assert (ty_no_regions ref_ty);
-            let ty = TRef (RVar r_id, ref_ty, kind) in
+            let ty = TRef (RFVar r_id, ref_ty, kind) in
             let value = ABorrow (ASharedBorrow bid) in
             ([ { value; ty } ], v)
         | VMutBorrow (bid, bv) ->
@@ -1878,7 +1878,7 @@ let convert_value_to_abstractions (abs_kind : abs_kind) (can_end : bool)
             (* We don't support nested borrows for now *)
             assert (not (value_has_borrows ctx bv.value));
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
-            let ty = TRef (RVar r_id, ref_ty, kind) in
+            let ty = TRef (RFVar r_id, ref_ty, kind) in
             let ignored = mk_aignored ref_ty in
             let av = ABorrow (AMutBorrow (bid, ignored)) in
             let av = { value = av; ty } in
@@ -1899,7 +1899,7 @@ let convert_value_to_abstractions (abs_kind : abs_kind) (can_end : bool)
             (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
             (* For avalues, a loan has the borrow type *)
             assert (ty_no_regions ty);
-            let ty = mk_ref_ty (RVar r_id) ty RShared in
+            let ty = mk_ref_ty (RFVar r_id) ty RShared in
             let ignored = mk_aignored ty in
             (* Rem.: the shared value might contain loans *)
             let avl, sv = to_avalues false true true r_id sv in
@@ -1917,7 +1917,7 @@ let convert_value_to_abstractions (abs_kind : abs_kind) (can_end : bool)
             (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
             (* For avalues, a loan has the borrow type *)
             assert (ty_no_regions ty);
-            let ty = mk_ref_ty (RVar r_id) ty RMut in
+            let ty = mk_ref_ty (RFVar r_id) ty RMut in
             let ignored = mk_aignored ty in
             let av = ALoan (AMutLoan (bid, ignored)) in
             let av = { value = av; ty } in

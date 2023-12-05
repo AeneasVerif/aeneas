@@ -29,16 +29,19 @@ let ty_has_borrow_under_mut (infos : TypesAnalysis.type_infos) (ty : ty) : bool
   info.TypesAnalysis.contains_borrow_under_mut
 
 (** Small helper *)
-let raise_if_erased_ty_visitor =
+let raise_if_not_rty_visitor =
   object
     inherit [_] iter_ty
-    method! visit_RErased _ = raise Found
+
+    method! visit_region _ r =
+      match r with RBVar _ | RErased -> raise Found | RStatic | RFVar _ -> ()
   end
 
-(** Return [true] if the type is a region type (i.e., it doesn't contain erased regions) *)
+(** Return [true] if the type is a region type (i.e., it doesn't contain erased
+    regions), and only contains free regions) *)
 let ty_is_rty (ty : ty) : bool =
   try
-    raise_if_erased_ty_visitor#visit_ty () ty;
+    raise_if_not_rty_visitor#visit_ty () ty;
     true
   with Found -> false
 
@@ -46,8 +49,9 @@ let ty_is_rty (ty : ty) : bool =
 let raise_if_not_erased_ty_visitor =
   object
     inherit [_] iter_ty
-    method! visit_RStatic _ = raise Found
-    method! visit_RVar _ = raise Found
+
+    method! visit_region _ r =
+      match r with RStatic | RBVar _ | RFVar _ -> raise Found | RErased -> ()
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased regions) *)

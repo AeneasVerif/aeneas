@@ -23,6 +23,8 @@
     have to compute the SCCs of the lifetimes (two lifetimes 'a and 'b may
     satisfy 'a : 'b and 'b : 'a, meaning they are actually equal and should
     be grouped together).
+
+    TODO: we don't handle locally bound regions yet.
  *)
 
 open Types
@@ -42,7 +44,7 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
     (global_decls : global_decl GlobalDeclId.Map.t)
     (trait_decls : trait_decl TraitDeclId.Map.t)
     (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : string)
-    (sg : fun_sig) : region_groups =
+    (sg : fun_sig) : region_var_groups =
   log#ldebug (lazy (__FUNCTION__ ^ ": " ^ fun_name));
   (* Initialize a normalization context (we may need to normalize some
      associated types) *)
@@ -74,12 +76,27 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
      - the region variables
      - the static region
      - edges from the region variables to the static region
+
+     Note that we introduce free variables for all the regions bound at the
+     level of the signature (this excludes the regions locally bound inside
+     the types, for instance at the level of an arrow type).
   *)
+  let bound_regions, bound_regions_id_subst, bound_regions_subst =
+    Subst.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
+      sg.generics.regions
+  in
+  let region_id_to_var_map : RegionVarId.id RegionId.Map.t =
+    RegionId.Map.of_list
+      (List.combine bound_regions
+         (List.map (fun (r : region_var) -> r.index) sg.generics.regions))
+  in
+  let subst = { Subst.empty_subst with r_subst = bound_regions_subst } in
   let g : RegionSet.t RegionMap.t ref =
     let s_set = RegionSet.singleton RStatic in
     let m =
       List.map
-        (fun (r : region_var) -> (RVar r.index, s_set))
+        (fun (r : region_var) ->
+          (RFVar (Option.get (bound_regions_id_subst r.index)), s_set))
         sg.generics.regions
     in
     let s = (RStatic, RegionSet.empty) in
@@ -87,10 +104,17 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
   in
 
   let add_edge ~(short : region) ~(long : region) =
-    let m = !g in
-    let s = RegionMap.find short !g in
-    let s = RegionSet.add long s in
-    g := RegionMap.add short s m
+    (* Sanity checks *)
+    assert (short <> RErased);
+    assert (long <> RErased);
+    (* Ignore the locally bound regions (at the level of arrow types for instance *)
+    match (short, long) with
+    | RBVar _, _ | _, RBVar _ -> ()
+    | _, _ ->
+        let m = !g in
+        let s = RegionMap.find short !g in
+        let s = RegionSet.add long s in
+        g := RegionMap.add short s m
   in
 
   let add_edge_from_region_constraint ((long, short) : region_outlives) =
@@ -152,13 +176,21 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
           AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id);
         (* We have nothing to do *)
         ()
-    | TArrow (inputs, output) ->
-        (* TODO: this may be too constraining *)
-        List.iter (explore_ty outer) (output :: inputs)
+    | TArrow (regions, inputs, output) ->
+        (* TODO: *)
+        assert (regions = []);
+        (* We can ignore the outer regions *)
+        List.iter (explore_ty []) (output :: inputs)
   and explore_generics (outer : region list) (generics : generic_args) =
     let { regions; types; const_generics = _; trait_refs = _ } = generics in
     List.iter (fun long -> add_edges ~long ~shorts:outer) regions;
     List.iter (explore_ty outer) types
+  in
+
+  (* Substitute the regions in a type, then explore *)
+  let explore_ty_subst ty =
+    let ty = Subst.ty_substitute subst ty in
+    explore_ty [] ty
   in
 
   (* Normalize the types then explore *)
@@ -167,7 +199,7 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
       (AssociatedTypes.norm_ctx_normalize_ty norm_ctx)
       (sg.output :: sg.inputs)
   in
-  List.iter (explore_ty []) tys;
+  List.iter explore_ty_subst tys;
 
   (* Compute the ordered SCCs *)
   let module Scc = SCC.Make (RegionOrderedType) in
@@ -240,10 +272,12 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
       let id = RegionGroupId.of_int i in
 
       (* Retrieve the set of regions in the group *)
-      let regions =
+      let regions : RegionVarId.id list =
         List.map
           (fun r ->
-            match r with RVar r -> r | _ -> raise (Failure "Unreachable"))
+            match r with
+            | RFVar rid -> RegionId.Map.find rid region_id_to_var_map
+            | _ -> raise (Failure "Unreachable"))
           scc
       in
 
@@ -262,7 +296,8 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
     (fun_decls : fun_decl FunDeclId.Map.t)
     (global_decls : global_decl GlobalDeclId.Map.t)
     (trait_decls : trait_decl TraitDeclId.Map.t)
-    (trait_impls : trait_impl TraitImplId.Map.t) : region_groups FunIdMap.t =
+    (trait_impls : trait_impl TraitImplId.Map.t) : region_var_groups FunIdMap.t
+    =
   let open Print in
   let env : fmt_env =
     {
@@ -271,7 +306,10 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
       global_decls;
       trait_decls;
       trait_impls;
-      generics = empty_generic_params;
+      regions = [];
+      types = [];
+      const_generics = [];
+      trait_clauses = [];
       preds = empty_predicates;
       locals = [];
     }

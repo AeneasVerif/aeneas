@@ -47,7 +47,7 @@ type fun_context = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdNotLoopMap.t;  (** *)
   fun_infos : fun_info A.FunDeclId.Map.t;
-  regions_hierarchies : T.region_groups FunIdMap.t;
+  regions_hierarchies : T.region_var_groups FunIdMap.t;
 }
 [@@deriving show]
 
@@ -214,7 +214,9 @@ let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
   let global_decls = ctx.global_context.llbc_global_decls in
   let trait_decls = ctx.trait_decls_ctx in
   let trait_impls = ctx.trait_impls_ctx in
-  let generics = ctx.fun_decl.signature.generics in
+  let { regions; types; const_generics; trait_clauses } : T.generic_params =
+    ctx.fun_decl.signature.generics
+  in
   let preds = ctx.fun_decl.signature.preds in
   {
     type_decls;
@@ -222,7 +224,10 @@ let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
     global_decls;
     trait_decls;
     trait_impls;
-    generics;
+    regions = [ regions ];
+    types;
+    const_generics;
+    trait_clauses;
     preds;
     locals = [];
   }
@@ -278,6 +283,10 @@ let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
 let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.texpression_to_string env false "" "  " e
+
+let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Expressions.fun_id_to_string env id
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
@@ -371,7 +380,7 @@ and translate_trait_instance_id (translate_ty : T.ty -> ty)
       let inst_id = translate_trait_instance_id inst_id in
       ItemClause (inst_id, decl_id, item_name, clause_id)
   | TraitRef tr -> TraitRef (translate_trait_ref translate_ty tr)
-  | FnPointer _ -> raise (Failure "TODO")
+  | FnPointer _ | Closure _ -> raise (Failure "Closures are not supported yet")
   | UnknownTrait s -> raise (Failure ("Unknown trait found: " ^ s))
 
 (** Translate a signature type - TODO: factor out the different translation functions *)
@@ -873,7 +882,7 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   (* Create the context *)
   let ctx =
     let region_groups =
-      List.map (fun (g : T.region_group) -> g.id) regions_hierarchy
+      List.map (fun (g : T.region_var_group) -> g.id) regions_hierarchy
     in
     let ctx =
       InterpreterUtils.initialize_eval_context decls_ctx region_groups
@@ -905,17 +914,30 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
    * so just check that there aren't parent regions *)
   assert (T.RegionGroupId.Set.is_empty parents);
   (* Small helper to translate types for backward functions *)
-  let translate_back_ty_for_gid (gid : T.RegionGroupId.id) : T.ty -> ty option =
+  let translate_back_ty_for_gid (gid : T.RegionGroupId.id) (ty : T.ty) :
+      ty option =
     let rg = T.RegionGroupId.nth regions_hierarchy gid in
-    let regions = T.RegionId.Set.of_list rg.regions in
+    (* Turn *all* the outer bound regions into free regions *)
+    let _, rid_subst, r_subst =
+      Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
+        sg.generics.regions
+    in
+    let subst = { Substitute.empty_subst with r_subst } in
+    let ty = Substitute.ty_substitute subst ty in
+    (* Compute the set of regions belonging to this group *)
+    let gr_regions =
+      T.RegionId.Set.of_list
+        (List.map (fun rid -> Option.get (rid_subst rid)) rg.regions)
+    in
     let keep_region r =
       match r with
       | T.RStatic -> raise Unimplemented
-      | T.RErased -> raise (Failure "Unexpected erased region")
-      | T.RVar r -> T.RegionId.Set.mem r regions
+      | RErased -> raise (Failure "Unexpected erased region")
+      | RBVar _ -> raise (Failure "Unexpected bound region")
+      | RFVar rid -> T.RegionId.Set.mem rid gr_regions
     in
     let inside_mut = false in
-    translate_back_ty type_infos keep_region inside_mut
+    translate_back_ty type_infos keep_region inside_mut ty
   in
   (* Compute the additinal inputs for the current function, if it is a backward
    * function *)
@@ -1064,6 +1086,8 @@ let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * typed_pattern =
   (* Return *)
   (ctx, state_pat)
 
+(** WARNING: do not call this function directly.
+    Call [fresh_named_var_for_symbolic_value] instead. *)
 let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * var =
   (* Generate the fresh variable *)
@@ -1749,7 +1773,8 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                 is_rec = false;
               }
             in
-            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None))
+            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None)
+        | CastFnPtr _ -> raise (Failure "TODO: function casts"))
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -1758,8 +1783,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             (match binop with
             (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
             | E.Shl | E.Shr -> ()
-            | _ -> assert (int_ty0 = int_ty1)
-            );
+            | _ -> assert (int_ty0 = int_ty1));
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -2484,9 +2508,13 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)
     (ctx : bs_ctx) : texpression =
+  log#ldebug
+    (lazy
+      ("translate_intro_symbolic:" ^ "\n- value aggregate: "
+     ^ S.show_value_aggregate v));
   let mplace = translate_opt_mplace p in
 
-  (* Introduce a fresh variable for the symbolic value *)
+  (* Introduce a fresh variable for the symbolic value. *)
   let ctx, var = fresh_var_for_symbolic_value sv ctx in
 
   (* Translate the next expression *)
@@ -3100,6 +3128,12 @@ let translate_fun_signatures (decls_ctx : C.decls_ctx)
   let translate_one (fun_id : A.fun_id) (input_names : string option list)
       (sg : A.fun_sig) : (regular_fun_id_not_loop * fun_sig_named_outputs) list
       =
+    log#ldebug
+      (lazy
+        ("Translating signature of function: "
+        ^ Print.Expressions.fun_id_to_string
+            (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
+            fun_id));
     (* Retrieve the regions hierarchy *)
     let regions_hierarchy =
       FunIdMap.find fun_id decls_ctx.fun_ctx.regions_hierarchies
@@ -3110,7 +3144,7 @@ let translate_fun_signatures (decls_ctx : C.decls_ctx)
     (* The backward functions *)
     let back_sgs =
       List.map
-        (fun (rg : T.region_group) ->
+        (fun (rg : T.region_var_group) ->
           let tsg =
             translate_fun_sig decls_ctx fun_id sg input_names (Some rg.id)
           in

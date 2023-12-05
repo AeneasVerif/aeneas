@@ -68,7 +68,7 @@ let normalize_inst_fun_sig (ctx : eval_ctx) (sg : inst_fun_sig) : inst_fun_sig =
     normalize because a trait clause was instantiated with a specific trait ref).
  *)
 let symbolic_instantiate_fun_sig (ctx : eval_ctx) (sg : fun_sig)
-    (regions_hierarchy : region_groups) (kind : fun_kind) :
+    (regions_hierarchy : region_var_groups) (kind : fun_kind) :
     eval_ctx * inst_fun_sig =
   let tr_self =
     match kind with
@@ -192,7 +192,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
   let region_groups =
-    List.map (fun (g : region_group) -> g.id) regions_hierarchy
+    List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
   in
   let ctx =
     initialize_eval_context ctx region_groups sg.generics.types

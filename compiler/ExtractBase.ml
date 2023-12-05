@@ -1984,7 +1984,7 @@ let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
         let rg = T.RegionGroupId.nth regions_hierarchy rg_id in
         let region_names =
           List.map
-            (fun rid -> (T.RegionId.nth sg.generics.regions rid).name)
+            (fun rid -> (T.RegionVarId.nth sg.generics.regions rid).name)
             rg.regions
         in
         Some { id = rg_id; region_names }

@@ -66,7 +66,7 @@ let () =
   (* Print the imported llbc *)
   let print_llbc = ref false in
 
-  let spec =
+  let spec_ls =
     [
       ( "-backend",
         Arg.Symbol (backend_names, set_backend),
@@ -123,7 +123,7 @@ let () =
     ]
   in
 
-  let spec = Arg.align spec in
+  let spec = Arg.align spec_ls in
   let filenames = ref [] in
   let add_filename f = filenames := f :: !filenames in
   Arg.parse spec add_filename usage;
@@ -132,20 +132,50 @@ let () =
     exit 1
   in
 
-  if !extract_template_decreases_clauses then extract_decreases_clauses := true;
+  (* Small helper to check the validity of the input arguments and print
+     an error if necessary *)
+  let check_arg_name name =
+    assert (List.exists (fun (n, _, _) -> n = name) spec_ls)
+  in
+  let check_arg_implies (arg0 : bool) (name0 : string) (arg1 : bool)
+      (name1 : string) : unit =
+    check_arg_name name0;
+    check_arg_name name1;
+    if (not arg0) || arg1 then ()
+    else (
+      log#error "Invalid command-line arguments: the use of %s requires %s"
+        name0 name1;
+      fail ())
+  in
+
+  let check_arg_not (arg0 : bool) (name0 : string) (arg1 : bool)
+      (name1 : string) : unit =
+    check_arg_name name0;
+    check_arg_name name1;
+    if (not arg0) || not arg1 then ()
+    else (
+      log#error
+        "Invalid command-line arguments: the use of %s is incompatible with %s"
+        name0 name1;
+      fail ())
+  in
+
   if !print_llbc then main_log#set_level EL.Debug;
 
   (* Sanity check (now that the arguments are parsed!): -template-clauses ==> decrease-clauses *)
-  assert (!extract_decreases_clauses || not !extract_template_decreases_clauses);
+  check_arg_implies
+    !extract_template_decreases_clauses
+    "-template-clauses" !extract_decreases_clauses "-decreases-clauses";
   (* Sanity check: -backward-no-state-update ==> -state *)
-  assert ((not !backward_no_state_update) || !use_state);
+  check_arg_implies !backward_no_state_update "-backward-no-state-update"
+    !use_state "-state";
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
-  assert (
-    (not !use_fuel)
-    || (not !extract_decreases_clauses)
-       && not !extract_template_decreases_clauses);
+  check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
+    "-decreases-clauses";
   (* We have: not generate_lib_entry_point ==> split_files *)
-  assert (!split_files || !generate_lib_entry_point);
+  check_arg_implies
+    (not !generate_lib_entry_point)
+    "-no-gen-lib-entry" !split_files "-split-files";
   if !lean_gen_lakefile && not (!backend = Lean) then
     log#error
       "The -lean-default-lakefile option is valid only for the Lean backend";

@@ -493,77 +493,84 @@ let eval_box_free (config : config) (generics : generic_args)
 (** Evaluate a non-local function call in concrete mode *)
 let eval_assumed_function_call_concrete (config : config) (fid : assumed_fun_id)
     (call : call) : cm_fun =
-  let generics = call.func.generics in
   let args = call.args in
   let dest = call.dest in
-  (* Sanity check: we don't fully handle the const generic vars environment
-     in concrete mode yet *)
-  assert (generics.const_generics = []);
-  (* There are two cases (and this is extremely annoying):
-     - the function is not box_free
-     - the function is box_free
-     See {!eval_box_free}
-  *)
-  match fid with
-  | BoxFree ->
-      (* Degenerate case: box_free *)
-      eval_box_free config generics args dest
-  | _ ->
-      (* "Normal" case: not box_free *)
-      (* Evaluate the operands *)
-      (*      let ctx, args_vl = eval_operands config ctx args in *)
-      let cf_eval_ops = eval_operands config args in
+  match call.func with
+  | FnOpMove _ ->
+      (* Closure case: TODO *)
+      raise (Failure "Closures are not supported yet")
+  | FnOpRegular func -> (
+      let generics = func.generics in
+      (* Sanity check: we don't fully handle the const generic vars environment
+         in concrete mode yet *)
+      assert (generics.const_generics = []);
+      (* There are two cases (and this is extremely annoying):
+         - the function is not box_free
+         - the function is box_free
+         See {!eval_box_free}
+      *)
+      match fid with
+      | BoxFree ->
+          (* Degenerate case: box_free *)
+          eval_box_free config generics args dest
+      | _ ->
+          (* "Normal" case: not box_free *)
+          (* Evaluate the operands *)
+          (*      let ctx, args_vl = eval_operands config ctx args in *)
+          let cf_eval_ops = eval_operands config args in
 
-      (* Evaluate the call
-       *
-       * Style note: at some point we used {!comp_transmit} to
-       * transmit the result of {!eval_operands} above down to {!push_vars}
-       * below, without having to introduce an intermediary function call,
-       * but it made it less clear where the computed values came from,
-       * so we reversed the modifications. *)
-      let cf_eval_call cf (args_vl : typed_value list) : m_fun =
-       fun ctx ->
-        (* Push the stack frame: we initialize the frame with the return variable,
-           and one variable per input argument *)
-        let cc = push_frame in
+          (* Evaluate the call
+           *
+           * Style note: at some point we used {!comp_transmit} to
+           * transmit the result of {!eval_operands} above down to {!push_vars}
+           * below, without having to introduce an intermediary function call,
+           * but it made it less clear where the computed values came from,
+           * so we reversed the modifications. *)
+          let cf_eval_call cf (args_vl : typed_value list) : m_fun =
+           fun ctx ->
+            (* Push the stack frame: we initialize the frame with the return variable,
+               and one variable per input argument *)
+            let cc = push_frame in
 
-        (* Create and push the return variable *)
-        let ret_vid = VarId.zero in
-        let ret_ty = get_assumed_function_return_type ctx fid generics in
-        let ret_var = mk_var ret_vid (Some "@return") ret_ty in
-        let cc = comp cc (push_uninitialized_var ret_var) in
+            (* Create and push the return variable *)
+            let ret_vid = VarId.zero in
+            let ret_ty = get_assumed_function_return_type ctx fid generics in
+            let ret_var = mk_var ret_vid (Some "@return") ret_ty in
+            let cc = comp cc (push_uninitialized_var ret_var) in
 
-        (* Create and push the input variables *)
-        let input_vars =
-          VarId.mapi_from1
-            (fun id (v : typed_value) -> (mk_var id None v.ty, v))
-            args_vl
-        in
-        let cc = comp cc (push_vars input_vars) in
+            (* Create and push the input variables *)
+            let input_vars =
+              VarId.mapi_from1
+                (fun id (v : typed_value) -> (mk_var id None v.ty, v))
+                args_vl
+            in
+            let cc = comp cc (push_vars input_vars) in
 
-        (* "Execute" the function body. As the functions are assumed, here we call
-         * custom functions to perform the proper manipulations: we don't have
-         * access to a body. *)
-        let cf_eval_body : cm_fun =
-          match fid with
-          | BoxNew -> eval_box_new_concrete config generics
-          | BoxFree ->
-              (* Should have been treated above *) raise (Failure "Unreachable")
-          | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
-          | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut ->
-              raise (Failure "Unimplemented")
-        in
+            (* "Execute" the function body. As the functions are assumed, here we call
+             * custom functions to perform the proper manipulations: we don't have
+             * access to a body. *)
+            let cf_eval_body : cm_fun =
+              match fid with
+              | BoxNew -> eval_box_new_concrete config generics
+              | BoxFree ->
+                  (* Should have been treated above *)
+                  raise (Failure "Unreachable")
+              | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
+              | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
+                ->
+                  raise (Failure "Unimplemented")
+            in
 
-        let cc = comp cc cf_eval_body in
+            let cc = comp cc cf_eval_body in
 
-        (* Pop the frame *)
-        let cc = comp cc (pop_frame_assign config dest) in
+            (* Pop the frame *)
+            let cc = comp cc (pop_frame_assign config dest) in
 
-        (* Continue *)
-        cc cf ctx
-      in
-      (* Compose and apply *)
-      comp cf_eval_ops cf_eval_call
+            (* Continue *)
+            cc cf ctx
+          in
+          (* Compose and apply *)
+          comp cf_eval_ops cf_eval_call)
 
 (** Helper
  
@@ -651,6 +658,240 @@ let create_push_abstractions_from_abs_region_groups
     ctx
   in
   List.fold_left insert_abs ctx empty_absl
+
+(** Auxiliary helper for [eval_transparent_function_call_symbolic]
+    Instantiate the signature and introduce fresh abstractions and region ids while doing so.
+
+    We perform some manipulations when instantiating the signature.
+
+    # Trait impl calls
+    ==================
+    In particular, we have a special treatment of trait method calls when
+    the trait ref is a known impl.
+
+    For instance:
+    {[
+      trait HasValue {
+        fn has_value(&self) -> bool;
+      }
+
+      impl<T> HasValue for Option<T> {
+        fn has_value(&self) {
+          match self {
+            None => false,
+            Some(_) => true,
+          }
+        }
+      }
+
+      fn option_has_value<T>(x: &Option<T>) -> bool {
+        x.has_value()
+      }
+    ]}
+
+    The generated code looks like this:
+    {[
+      structure HasValue (Self : Type) = {
+        has_value : Self -> result bool
+      }
+
+      let OptionHasValueImpl.has_value (Self : Type) (self : Self) : result bool =
+        match self with
+        | None => false
+        | Some _ => true
+
+      let OptionHasValueInstance (T : Type) : HasValue (Option T) = {
+        has_value = OptionHasValueInstance.has_value
+      }
+    ]}
+
+    In [option_has_value], we don't want to refer to the [has_value] method
+    of the instance of [HasValue] for [Option<T>]. We want to refer directly
+    to the function which implements [has_value] for [Option<T>].
+    That is, instead of generating this:
+    {[
+      let option_has_value (T : Type) (x : Option T) : result bool =
+        (OptionHasValueInstance T).has_value x
+    ]}
+
+    We want to generate this:
+    {[
+      let option_has_value (T : Type) (x : Option T) : result bool =
+        OptionHasValueImpl.has_value T x
+    ]}
+
+    # Provided trait methods
+    ========================
+    Calls to provided trait methods also have a special treatment because
+    for now we forbid overriding provided trait methods in the trait implementations,
+    which means that whenever we call a provided trait method, we do not refer
+    to a trait clause but directly to the method provided in the trait declaration.
+ *)
+let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
+    : fun_id_or_trait_method_ref * generic_args * fun_decl * inst_fun_sig =
+  match call.func with
+  | FnOpMove _ ->
+      (* Closure case: TODO *)
+      raise (Failure "Closures are not supported yet")
+  | FnOpRegular func -> (
+      match func.func with
+      | FunId (FRegular fid) ->
+          let def = ctx_lookup_fun_decl ctx fid in
+          log#ldebug
+            (lazy
+              ("fun call:\n- call: " ^ call_to_string ctx call
+             ^ "\n- call.generics:\n"
+              ^ generic_args_to_string ctx func.generics
+              ^ "\n- def.signature:\n"
+              ^ fun_sig_to_string ctx def.signature));
+          let tr_self = UnknownTrait __FUNCTION__ in
+          let regions_hierarchy =
+            LlbcAstUtils.FunIdMap.find (FRegular fid)
+              ctx.fun_context.regions_hierarchies
+          in
+          let inst_sg =
+            instantiate_fun_sig ctx func.generics tr_self def.signature
+              regions_hierarchy
+          in
+          (func.func, func.generics, def, inst_sg)
+      | FunId (FAssumed _) ->
+          (* Unreachable: must be a transparent function *)
+          raise (Failure "Unreachable")
+      | TraitMethod (trait_ref, method_name, _) -> (
+          log#ldebug
+            (lazy
+              ("trait method call:\n- call: " ^ call_to_string ctx call
+             ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
+              ^ generic_args_to_string ctx func.generics
+              ^ "\n- trait and method generics:\n"
+              ^ generic_args_to_string ctx
+                  (Option.get func.trait_and_method_generic_args)));
+          (* When instantiating, we need to group the generics for the trait ref
+             and the method *)
+          let generics = Option.get func.trait_and_method_generic_args in
+          (* Lookup the trait method signature - there are several possibilities
+             depending on whethere we call a top-level trait method impl or the
+             method from a local clause *)
+          match trait_ref.trait_id with
+          | TraitImpl impl_id -> (
+              (* Lookup the trait impl *)
+              let trait_impl = ctx_lookup_trait_impl ctx impl_id in
+              log#ldebug
+                (lazy ("trait impl: " ^ trait_impl_to_string ctx trait_impl));
+              (* First look in the required methods *)
+              let method_id =
+                List.find_opt
+                  (fun (s, _) -> s = method_name)
+                  trait_impl.required_methods
+              in
+              match method_id with
+              | Some (_, id) ->
+                  (* This is a required method *)
+                  let method_def = ctx_lookup_fun_decl ctx id in
+                  (* Instantiate *)
+                  let tr_self = TraitRef trait_ref in
+                  let fid : fun_id = FRegular id in
+                  let regions_hierarchy =
+                    LlbcAstUtils.FunIdMap.find fid
+                      ctx.fun_context.regions_hierarchies
+                  in
+                  let inst_sg =
+                    instantiate_fun_sig ctx generics tr_self
+                      method_def.signature regions_hierarchy
+                  in
+                  (* Also update the function identifier: we want to forget
+                     the fact that we called a trait method, and treat it as
+                     a regular function call to the top-level function
+                     which implements the method. In order to do this properly,
+                     we also need to update the generics.
+                  *)
+                  let func = FunId fid in
+                  (func, generics, method_def, inst_sg)
+              | None ->
+                  (* If not found, lookup the methods provided by the trait *declaration*
+                     (remember: for now, we forbid overriding provided methods) *)
+                  assert (trait_impl.provided_methods = []);
+                  let trait_decl =
+                    ctx_lookup_trait_decl ctx
+                      trait_ref.trait_decl_ref.trait_decl_id
+                  in
+                  let _, method_id =
+                    List.find
+                      (fun (s, _) -> s = method_name)
+                      trait_decl.provided_methods
+                  in
+                  let method_id = Option.get method_id in
+                  let method_def = ctx_lookup_fun_decl ctx method_id in
+                  (* For the instantiation we have to do something peculiar
+                     because the method was defined for the trait declaration.
+                     We have to group:
+                     - the parameters given to the trait decl reference
+                     - the parameters given to the method itself
+                     For instance:
+                     {[
+                       trait Foo<T> {
+                         fn f<U>(...) { ... }
+                       }
+
+                       fn g<G>(x : G) where Clause0: Foo<G, bool>
+                       {
+                         x.f::<u32>(...) // The arguments to f are: <G, bool, u32>
+                       }
+                     ]}
+                  *)
+                  let all_generics =
+                    TypesUtils.merge_generic_args
+                      trait_ref.trait_decl_ref.decl_generics func.generics
+                  in
+                  log#ldebug
+                    (lazy
+                      ("provided method call:" ^ "\n- method name: "
+                     ^ method_name ^ "\n- all_generics:\n"
+                      ^ generic_args_to_string ctx all_generics
+                      ^ "\n- parent params info: "
+                      ^ Print.option_to_string show_params_info
+                          method_def.signature.parent_params_info));
+                  let regions_hierarchy =
+                    LlbcAstUtils.FunIdMap.find (FRegular method_id)
+                      ctx.fun_context.regions_hierarchies
+                  in
+                  let tr_self = TraitRef trait_ref in
+                  let inst_sg =
+                    instantiate_fun_sig ctx all_generics tr_self
+                      method_def.signature regions_hierarchy
+                  in
+                  (func.func, func.generics, method_def, inst_sg))
+          | _ ->
+              (* We are using a local clause - we lookup the trait decl *)
+              let trait_decl =
+                ctx_lookup_trait_decl ctx trait_ref.trait_decl_ref.trait_decl_id
+              in
+              (* Lookup the method decl in the required *and* the provided methods *)
+              let _, method_id =
+                let provided =
+                  List.filter_map
+                    (fun (id, f) ->
+                      match f with None -> None | Some f -> Some (id, f))
+                    trait_decl.provided_methods
+                in
+                List.find
+                  (fun (s, _) -> s = method_name)
+                  (List.append trait_decl.required_methods provided)
+              in
+              let method_def = ctx_lookup_fun_decl ctx method_id in
+              log#ldebug
+                (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
+              (* Instantiate *)
+              let regions_hierarchy =
+                LlbcAstUtils.FunIdMap.find (FRegular method_id)
+                  ctx.fun_context.regions_hierarchies
+              in
+              let tr_self = TraitRef trait_ref in
+              let inst_sg =
+                instantiate_fun_sig ctx generics tr_self method_def.signature
+                  regions_hierarchy
+              in
+              (func.func, func.generics, method_def, inst_sg)))
 
 (** Evaluate a statement *)
 let rec eval_statement (config : config) (st : statement) : st_cm_fun =
@@ -761,7 +1002,7 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id) :
           trait_and_method_generic_args = None;
         }
       in
-      let call = { func; args = []; dest } in
+      let call = { func = FnOpRegular func; args = []; dest } in
       (eval_transparent_function_call_concrete config global.body call) cf ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
@@ -915,337 +1156,126 @@ and eval_function_call (config : config) (call : call) : st_cm_fun =
 
 and eval_function_call_concrete (config : config) (call : call) : st_cm_fun =
  fun cf ctx ->
-  match call.func.func with
-  | FunId (FRegular fid) ->
-      eval_transparent_function_call_concrete config fid call cf ctx
-  | FunId (FAssumed fid) ->
-      (* Continue - note that we do as if the function call has been successful,
-       * by giving {!Unit} to the continuation, because we place us in the case
-       * where we haven't panicked. Of course, the translation needs to take the
-       * panic case into account... *)
-      eval_assumed_function_call_concrete config fid call (cf Unit) ctx
-  | TraitMethod _ -> raise (Failure "Unimplemented")
+  match call.func with
+  | FnOpMove _ -> raise (Failure "Closures are not supported yet")
+  | FnOpRegular func -> (
+      match func.func with
+      | FunId (FRegular fid) ->
+          eval_transparent_function_call_concrete config fid call cf ctx
+      | FunId (FAssumed fid) ->
+          (* Continue - note that we do as if the function call has been successful,
+           * by giving {!Unit} to the continuation, because we place us in the case
+           * where we haven't panicked. Of course, the translation needs to take the
+           * panic case into account... *)
+          eval_assumed_function_call_concrete config fid call (cf Unit) ctx
+      | TraitMethod _ -> raise (Failure "Unimplemented"))
 
 and eval_function_call_symbolic (config : config) (call : call) : st_cm_fun =
-  match call.func.func with
-  | FunId (FRegular _) | TraitMethod _ ->
-      eval_transparent_function_call_symbolic config call
-  | FunId (FAssumed fid) -> eval_assumed_function_call_symbolic config fid call
+  match call.func with
+  | FnOpMove _ -> raise (Failure "Closures are not supported yet")
+  | FnOpRegular func -> (
+      match func.func with
+      | FunId (FRegular _) | TraitMethod _ ->
+          eval_transparent_function_call_symbolic config call
+      | FunId (FAssumed fid) ->
+          eval_assumed_function_call_symbolic config fid call func)
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_transparent_function_call_concrete (config : config)
     (fid : FunDeclId.id) (call : call) : st_cm_fun =
-  let generics = call.func.generics in
   let args = call.args in
   let dest = call.dest in
-  (* Sanity check: we don't fully handle the const generic vars environment
-     in concrete mode yet *)
-  assert (generics.const_generics = []);
-  fun cf ctx ->
-    (* Retrieve the (correctly instantiated) body *)
-    let def = ctx_lookup_fun_decl ctx fid in
-    (* We can evaluate the function call only if it is not opaque *)
-    let body =
-      match def.body with
-      | None ->
-          raise
-            (Failure
-               ("Can't evaluate a call to an opaque function: "
-               ^ name_to_string ctx def.name))
-      | Some body -> body
-    in
-    (* TODO: we need to normalize the types if we want to correctly support traits *)
-    assert (generics.trait_refs = []);
-    (* There shouldn't be any reference to Self *)
-    let tr_self = UnknownTrait __FUNCTION__ in
-    let subst =
-      Subst.make_subst_from_generics def.signature.generics generics tr_self
-    in
-    let locals, body_st = Subst.fun_body_substitute_in_body subst body in
+  match call.func with
+  | FnOpMove _ -> raise (Failure "Closures are not supported yet")
+  | FnOpRegular func ->
+      let generics = func.generics in
+      (* Sanity check: we don't fully handle the const generic vars environment
+         in concrete mode yet *)
+      assert (generics.const_generics = []);
+      fun cf ctx ->
+        (* Retrieve the (correctly instantiated) body *)
+        let def = ctx_lookup_fun_decl ctx fid in
+        (* We can evaluate the function call only if it is not opaque *)
+        let body =
+          match def.body with
+          | None ->
+              raise
+                (Failure
+                   ("Can't evaluate a call to an opaque function: "
+                   ^ name_to_string ctx def.name))
+          | Some body -> body
+        in
+        (* TODO: we need to normalize the types if we want to correctly support traits *)
+        assert (generics.trait_refs = []);
+        (* There shouldn't be any reference to Self *)
+        let tr_self = UnknownTrait __FUNCTION__ in
+        let subst =
+          Subst.make_subst_from_generics def.signature.generics generics tr_self
+        in
+        let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
-    (* Evaluate the input operands *)
-    assert (List.length args = body.arg_count);
-    let cc = eval_operands config args in
+        (* Evaluate the input operands *)
+        assert (List.length args = body.arg_count);
+        let cc = eval_operands config args in
 
-    (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
-     * of the operands evaluation from above to the functions afterwards, while
-     * ignoring it in this function *)
-    let cc = comp_transmit cc push_frame in
+        (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
+         * of the operands evaluation from above to the functions afterwards, while
+         * ignoring it in this function *)
+        let cc = comp_transmit cc push_frame in
 
-    (* Compute the initial values for the local variables *)
-    (* 1. Push the return value *)
-    let ret_var, locals =
-      match locals with
-      | ret_ty :: locals -> (ret_ty, locals)
-      | _ -> raise (Failure "Unreachable")
-    in
-    let input_locals, locals =
-      Collections.List.split_at locals body.arg_count
-    in
+        (* Compute the initial values for the local variables *)
+        (* 1. Push the return value *)
+        let ret_var, locals =
+          match locals with
+          | ret_ty :: locals -> (ret_ty, locals)
+          | _ -> raise (Failure "Unreachable")
+        in
+        let input_locals, locals =
+          Collections.List.split_at locals body.arg_count
+        in
 
-    let cc = comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty)) in
+        let cc =
+          comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty))
+        in
 
-    (* 2. Push the input values *)
-    let cf_push_inputs cf args =
-      let inputs = List.combine input_locals args in
-      (* Note that this function checks that the variables and their values
-       * have the same type (this is important) *)
-      push_vars inputs cf
-    in
-    let cc = comp cc cf_push_inputs in
+        (* 2. Push the input values *)
+        let cf_push_inputs cf args =
+          let inputs = List.combine input_locals args in
+          (* Note that this function checks that the variables and their values
+           * have the same type (this is important) *)
+          push_vars inputs cf
+        in
+        let cc = comp cc cf_push_inputs in
 
-    (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
-    let cc = comp cc (push_uninitialized_vars locals) in
+        (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
+        let cc = comp cc (push_uninitialized_vars locals) in
 
-    (* Execute the function body *)
-    let cc = comp cc (eval_function_body config body_st) in
+        (* Execute the function body *)
+        let cc = comp cc (eval_function_body config body_st) in
 
-    (* Pop the stack frame and move the return value to its destination *)
-    let cf_finish cf res =
-      match res with
-      | Panic -> cf Panic
-      | Return ->
-          (* Pop the stack frame, retrieve the return value, move it to
-           * its destination and continue *)
-          pop_frame_assign config dest (cf Unit)
-      | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
-      | EndContinue _ ->
-          raise (Failure "Unreachable")
-    in
-    let cc = comp cc cf_finish in
+        (* Pop the stack frame and move the return value to its destination *)
+        let cf_finish cf res =
+          match res with
+          | Panic -> cf Panic
+          | Return ->
+              (* Pop the stack frame, retrieve the return value, move it to
+               * its destination and continue *)
+              pop_frame_assign config dest (cf Unit)
+          | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
+          | EndContinue _ ->
+              raise (Failure "Unreachable")
+        in
+        let cc = comp cc cf_finish in
 
-    (* Continue *)
-    cc cf ctx
+        (* Continue *)
+        cc cf ctx
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
 and eval_transparent_function_call_symbolic (config : config) (call : call) :
     st_cm_fun =
  fun cf ctx ->
-  (* Instantiate the signature and introduce fresh abstractions and region ids while doing so.
-
-     We perform some manipulations when instantiating the signature.
-
-     # Trait impl calls
-     ==================
-     In particular, we have a special treatment of trait method calls when
-     the trait ref is a known impl.
-
-     For instance:
-     {[
-       trait HasValue {
-         fn has_value(&self) -> bool;
-       }
-
-       impl<T> HasValue for Option<T> {
-         fn has_value(&self) {
-           match self {
-             None => false,
-             Some(_) => true,
-           }
-         }
-       }
-
-       fn option_has_value<T>(x: &Option<T>) -> bool {
-         x.has_value()
-       }
-     ]}
-
-     The generated code looks like this:
-     {[
-       structure HasValue (Self : Type) = {
-         has_value : Self -> result bool
-       }
-
-       let OptionHasValueImpl.has_value (Self : Type) (self : Self) : result bool =
-         match self with
-         | None => false
-         | Some _ => true
-
-       let OptionHasValueInstance (T : Type) : HasValue (Option T) = {
-         has_value = OptionHasValueInstance.has_value
-       }
-     ]}
-
-     In [option_has_value], we don't want to refer to the [has_value] method
-     of the instance of [HasValue] for [Option<T>]. We want to refer directly
-     to the function which implements [has_value] for [Option<T>].
-     That is, instead of generating this:
-     {[
-       let option_has_value (T : Type) (x : Option T) : result bool =
-         (OptionHasValueInstance T).has_value x
-     ]}
-
-     We want to generate this:
-     {[
-       let option_has_value (T : Type) (x : Option T) : result bool =
-         OptionHasValueImpl.has_value T x
-     ]}
-
-     # Provided trait methods
-     ========================
-     Calls to provided trait methods also have a special treatment because
-     for now we forbid overriding provided trait methods in the trait implementations,
-     which means that whenever we call a provided trait method, we do not refer
-     to a trait clause but directly to the method provided in the trait declaration.
-  *)
   let func, generics, def, inst_sg =
-    match call.func.func with
-    | FunId (FRegular fid) ->
-        let def = ctx_lookup_fun_decl ctx fid in
-        log#ldebug
-          (lazy
-            ("fun call:\n- call: " ^ call_to_string ctx call
-           ^ "\n- call.generics:\n"
-            ^ generic_args_to_string ctx call.func.generics
-            ^ "\n- def.signature:\n"
-            ^ fun_sig_to_string ctx def.signature));
-        let tr_self = UnknownTrait __FUNCTION__ in
-        let regions_hierarchy =
-          LlbcAstUtils.FunIdMap.find (FRegular fid)
-            ctx.fun_context.regions_hierarchies
-        in
-        let inst_sg =
-          instantiate_fun_sig ctx call.func.generics tr_self def.signature
-            regions_hierarchy
-        in
-        (call.func.func, call.func.generics, def, inst_sg)
-    | FunId (FAssumed _) ->
-        (* Unreachable: must be a transparent function *)
-        raise (Failure "Unreachable")
-    | TraitMethod (trait_ref, method_name, _) -> (
-        log#ldebug
-          (lazy
-            ("trait method call:\n- call: " ^ call_to_string ctx call
-           ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
-            ^ generic_args_to_string ctx call.func.generics
-            ^ "\n- trait and method generics:\n"
-            ^ generic_args_to_string ctx
-                (Option.get call.func.trait_and_method_generic_args)));
-        (* When instantiating, we need to group the generics for the trait ref
-           and the method *)
-        let generics = Option.get call.func.trait_and_method_generic_args in
-        (* Lookup the trait method signature - there are several possibilities
-           depending on whethere we call a top-level trait method impl or the
-           method from a local clause *)
-        match trait_ref.trait_id with
-        | TraitImpl impl_id -> (
-            (* Lookup the trait impl *)
-            let trait_impl = ctx_lookup_trait_impl ctx impl_id in
-            log#ldebug
-              (lazy ("trait impl: " ^ trait_impl_to_string ctx trait_impl));
-            (* First look in the required methods *)
-            let method_id =
-              List.find_opt
-                (fun (s, _) -> s = method_name)
-                trait_impl.required_methods
-            in
-            match method_id with
-            | Some (_, id) ->
-                (* This is a required method *)
-                let method_def = ctx_lookup_fun_decl ctx id in
-                (* Instantiate *)
-                let tr_self = TraitRef trait_ref in
-                let fid : fun_id = FRegular id in
-                let regions_hierarchy =
-                  LlbcAstUtils.FunIdMap.find fid
-                    ctx.fun_context.regions_hierarchies
-                in
-                let inst_sg =
-                  instantiate_fun_sig ctx generics tr_self method_def.signature
-                    regions_hierarchy
-                in
-                (* Also update the function identifier: we want to forget
-                   the fact that we called a trait method, and treat it as
-                   a regular function call to the top-level function
-                   which implements the method. In order to do this properly,
-                   we also need to update the generics.
-                *)
-                let func = FunId fid in
-                (func, generics, method_def, inst_sg)
-            | None ->
-                (* If not found, lookup the methods provided by the trait *declaration*
-                   (remember: for now, we forbid overriding provided methods) *)
-                assert (trait_impl.provided_methods = []);
-                let trait_decl =
-                  ctx_lookup_trait_decl ctx
-                    trait_ref.trait_decl_ref.trait_decl_id
-                in
-                let _, method_id =
-                  List.find
-                    (fun (s, _) -> s = method_name)
-                    trait_decl.provided_methods
-                in
-                let method_id = Option.get method_id in
-                let method_def = ctx_lookup_fun_decl ctx method_id in
-                (* For the instantiation we have to do something peculiar
-                   because the method was defined for the trait declaration.
-                   We have to group:
-                   - the parameters given to the trait decl reference
-                   - the parameters given to the method itself
-                   For instance:
-                   {[
-                     trait Foo<T> {
-                       fn f<U>(...) { ... }
-                     }
-
-                     fn g<G>(x : G) where Clause0: Foo<G, bool>
-                     {
-                       x.f::<u32>(...) // The arguments to f are: <G, bool, u32>
-                     }
-                   ]}
-                *)
-                let all_generics =
-                  TypesUtils.merge_generic_args
-                    trait_ref.trait_decl_ref.decl_generics call.func.generics
-                in
-                log#ldebug
-                  (lazy
-                    ("provided method call:" ^ "\n- method name: " ^ method_name
-                   ^ "\n- all_generics:\n"
-                    ^ generic_args_to_string ctx all_generics
-                    ^ "\n- parent params info: "
-                    ^ Print.option_to_string show_params_info
-                        method_def.signature.parent_params_info));
-                let regions_hierarchy =
-                  LlbcAstUtils.FunIdMap.find (FRegular method_id)
-                    ctx.fun_context.regions_hierarchies
-                in
-                let tr_self = TraitRef trait_ref in
-                let inst_sg =
-                  instantiate_fun_sig ctx all_generics tr_self
-                    method_def.signature regions_hierarchy
-                in
-                (call.func.func, call.func.generics, method_def, inst_sg))
-        | _ ->
-            (* We are using a local clause - we lookup the trait decl *)
-            let trait_decl =
-              ctx_lookup_trait_decl ctx trait_ref.trait_decl_ref.trait_decl_id
-            in
-            (* Lookup the method decl in the required *and* the provided methods *)
-            let _, method_id =
-              let provided =
-                List.filter_map
-                  (fun (id, f) ->
-                    match f with None -> None | Some f -> Some (id, f))
-                  trait_decl.provided_methods
-              in
-              List.find
-                (fun (s, _) -> s = method_name)
-                (List.append trait_decl.required_methods provided)
-            in
-            let method_def = ctx_lookup_fun_decl ctx method_id in
-            log#ldebug (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
-            (* Instantiate *)
-            let regions_hierarchy =
-              LlbcAstUtils.FunIdMap.find (FRegular method_id)
-                ctx.fun_context.regions_hierarchies
-            in
-            let tr_self = TraitRef trait_ref in
-            let inst_sg =
-              instantiate_fun_sig ctx generics tr_self method_def.signature
-                regions_hierarchy
-            in
-            (call.func.func, call.func.generics, method_def, inst_sg))
+    eval_transparent_function_call_symbolic_inst call ctx
   in
   (* Sanity check *)
   assert (List.length call.args = List.length def.signature.inputs);
@@ -1408,9 +1438,9 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
 (** Evaluate a non-local function call in symbolic mode *)
 and eval_assumed_function_call_symbolic (config : config) (fid : assumed_fun_id)
-    (call : call) : st_cm_fun =
+    (call : call) (func : fn_ptr) : st_cm_fun =
  fun cf ctx ->
-  let generics = call.func.generics in
+  let generics = func.generics in
   let args = call.args in
   let dest = call.dest in
   (* Sanity check: make sure the type parameters don't contain regions -

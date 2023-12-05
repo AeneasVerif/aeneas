@@ -439,7 +439,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin bv_ty
       in
 
-      let borrow_ty = mk_ref_ty (RVar rid) bv_ty kind in
+      let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (bid : borrow_id) : typed_avalue =
@@ -537,7 +537,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let kind = RMut in
         let bv_ty = bv.ty in
         assert (ty_no_regions bv_ty);
-        let borrow_ty = mk_ref_ty (RVar rid) bv_ty kind in
+        let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
         let borrow_av =
           let ty = borrow_ty in
@@ -586,7 +586,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin bv_ty
       in
 
-      let borrow_ty = mk_ref_ty (RVar rid) bv_ty kind in
+      let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (bid : borrow_id) (bv : typed_value) : typed_avalue =
@@ -825,9 +825,9 @@ struct
     let match_regions r0 r1 =
       match (r0, r1) with
       | RStatic, RStatic -> r1
-      | RVar rid0, RVar rid1 ->
+      | RFVar rid0, RFVar rid1 ->
           let rid = match_rid rid0 rid1 in
-          RVar rid
+          RFVar rid
       | _ -> raise (Distinct "match_rtys")
     in
     match_types match_distinct_types match_regions ty0 ty1

@@ -318,6 +318,29 @@ Fixpoint betree_Node_lookup_first_message_for_key_back
   end
 .
 
+(** [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]: forward function
+    Source: 'src/betree.rs', lines 636:4-636:80 *)
+Fixpoint betree_Node_lookup_in_bindings
+  (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
+  result (option u64)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match bindings with
+    | Betree_List_Cons hd tl =>
+      let (i, i0) := hd in
+      if i s= key
+      then Return (Some i0)
+      else
+        if i s> key
+        then Return None
+        else betree_Node_lookup_in_bindings n0 key tl
+    | Betree_List_Nil => Return None
+    end
+  end
+.
+
 (** [betree_main::betree::{betree_main::betree::Node#5}::apply_upserts]: forward function
     Source: 'src/betree.rs', lines 819:4-819:90 *)
 Fixpoint betree_Node_apply_upserts
@@ -379,29 +402,6 @@ Fixpoint betree_Node_apply_upserts_back
       let (_, v) := p in
       betree_List_push_front (u64 * betree_Message_t) msgs (key,
         Betree_Message_Insert v))
-  end
-.
-
-(** [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]: forward function
-    Source: 'src/betree.rs', lines 636:4-636:80 *)
-Fixpoint betree_Node_lookup_in_bindings
-  (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
-  result (option u64)
-  :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    match bindings with
-    | Betree_List_Cons hd tl =>
-      let (i, i0) := hd in
-      if i s= key
-      then Return (Some i0)
-      else
-        if i s> key
-        then Return None
-        else betree_Node_lookup_in_bindings n0 key tl
-    | Betree_List_Nil => Return None
-    end
   end
 .
 
