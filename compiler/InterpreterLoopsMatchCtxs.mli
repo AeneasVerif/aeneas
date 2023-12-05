@@ -4,15 +4,8 @@
     to check if two contexts are equivalent (modulo conversion).
  *)
 
-module T = Types
-module PV = PrimitiveValues
-module V = Values
-module E = Expressions
-module C = Contexts
-module Subst = Substitute
-module A = LlbcAst
-module Inv = Invariants
-module S = SynthesizeSymbolic
+open Values
+open Contexts
 open Cps
 open InterpreterUtils
 open InterpreterLoopsCore
@@ -26,7 +19,7 @@ open InterpreterLoopsCore
     - [env]
  *)
 val compute_abs_borrows_loans_maps :
-  bool -> (V.abs -> bool) -> C.env -> abs_borrows_loans_maps
+  bool -> (abs -> bool) -> env -> abs_borrows_loans_maps
 
 (** Generic functor to implement matching functions between values, environments,
     etc.
@@ -34,13 +27,13 @@ val compute_abs_borrows_loans_maps :
     We use it for joins, to check if two environments are convertible, etc.
     See for instance {!MakeJoinMatcher} and {!MakeCheckEquivMatcher}.
 
-    The functor is parameterized by a {!PrimMatcher}, which implements the
-    non-generic part of the match. More precisely, the role of {!PrimMatcher} is two
+    The functor is parameterized by a {!module-type:InterpreterLoopsCore.PrimMatcher}, which implements the
+    non-generic part of the match. More precisely, the role of {!module-type:InterpreterLoopsCore.PrimMatcher} is two
     provide generic functions which recursively match two values (by recursively
     matching the fields of ADT values for instance). When it does need to match
     values in a non-trivial manner (if two ADT values don't have the same
     variant for instance) it calls the corresponding specialized function from
-    {!PrimMatcher}.
+    {!module-type:InterpreterLoopsCore.PrimMatcher}.
  *)
 module MakeMatcher : functor (_ : PrimMatcher) -> Matcher
 
@@ -100,10 +93,10 @@ module MakeCheckEquivMatcher : functor (_ : MatchCheckEquivState) ->
 val match_ctxs :
   bool ->
   ids_sets ->
-  (V.loan_id -> V.typed_value) ->
-  (V.loan_id -> V.typed_value) ->
-  C.eval_ctx ->
-  C.eval_ctx ->
+  (loan_id -> typed_value) ->
+  (loan_id -> typed_value) ->
+  eval_ctx ->
+  eval_ctx ->
   ids_maps option
 
 (** Compute whether two contexts are equivalent modulo an identifier substitution.
@@ -142,7 +135,7 @@ val match_ctxs :
     - [ctx0]
     - [ctx1]
  *)
-val ctxs_are_equivalent : ids_sets -> C.eval_ctx -> C.eval_ctx -> bool
+val ctxs_are_equivalent : ids_sets -> eval_ctx -> eval_ctx -> bool
 
 (** Match a context with a target context.
 
@@ -291,11 +284,11 @@ val ctxs_are_equivalent : ids_sets -> C.eval_ctx -> C.eval_ctx -> bool
    - [src_ctx]
  *)
 val match_ctx_with_target :
-  C.config ->
-  V.loop_id ->
+  config ->
+  loop_id ->
   bool ->
   borrow_loan_corresp ->
-  V.symbolic_value_id list ->
+  symbolic_value_id list ->
   ids_sets ->
-  C.eval_ctx ->
+  eval_ctx ->
   st_cm_fun

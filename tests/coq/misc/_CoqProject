@@ -4,11 +4,15 @@
 -arg all
 
 Loops.v
+External_Types.v
 Primitives.v
 External_Funs.v
+External_TypesExternal.v
 Constants.v
 PoloniusList.v
-External_Types.v
-NoNestedBorrows.v
-External_Opaque.v
 Paper.v
+NoNestedBorrows.v
+External_FunsExternal.v
+Bitwise.v
+External_TypesExternal_Template.v
+External_FunsExternal_Template.v

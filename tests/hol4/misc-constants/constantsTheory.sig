@@ -4,8 +4,6 @@ sig
   
   (*  Definitions  *)
     val add_fwd_def : thm
-    val core_num_u32_max_body_def : thm
-    val core_num_u32_max_c_def : thm
     val get_z1_fwd_def : thm
     val get_z1_z1_body_def : thm
     val get_z1_z1_c_def : thm
@@ -109,14 +107,6 @@ sig
    [add_fwd_def]  Definition
       
       ⊢ ∀a b. add_fwd a b = i32_add a b
-   
-   [core_num_u32_max_body_def]  Definition
-      
-      ⊢ core_num_u32_max_body = Return (int_to_u32 4294967295)
-   
-   [core_num_u32_max_c_def]  Definition
-      
-      ⊢ core_num_u32_max_c = get_return_value core_num_u32_max_body
    
    [get_z1_fwd_def]  Definition
       
@@ -321,7 +311,7 @@ sig
    
    [x1_body_def]  Definition
       
-      ⊢ x1_body = Return core_num_u32_max_c
+      ⊢ x1_body = Return core_u32_max
    
    [x1_c_def]  Definition
       

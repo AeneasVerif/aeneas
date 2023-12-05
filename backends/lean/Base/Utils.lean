@@ -604,16 +604,12 @@ example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
   rename_i x y z
   exists x + y + z
 
-/- Call the simp tactic.
-   The initialization of the context is adapted from Tactic.elabSimpArgs.
-   Something very annoying is that there is no function which allows to
-   initialize a simp context without doing an elaboration - as a consequence
-   we write our own here. -/
-def simpAt (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
-  (loc : Tactic.Location) :
-  Tactic.TacticM Unit := do
-  -- Initialize with the builtin simp theorems
-  let simpThms ← Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
+def mkSimpCtx (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+  Tactic.TacticM Simp.Context := do
+  -- Initialize either with the builtin simp theorems or with all the simp theorems
+  let simpThms ←
+    if simpOnly then Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
+    else getSimpTheorems
   -- Add the equational theorem for the declarations to unfold
   let simpThms ←
     declsToUnfold.foldlM (fun thms decl => thms.addDeclToUnfold decl) simpThms
@@ -637,8 +633,63 @@ def simpAt (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVar
         throwError "Not a proposition: {thmName}"
       ) simpThms
   let congrTheorems ← getSimpCongrTheorems
-  let ctx : Simp.Context := { simpTheorems := #[simpThms], congrTheorems }
+  pure { simpTheorems := #[simpThms], congrTheorems }
+
+
+inductive Location where
+  /-- Apply the tactic everywhere. Same as `Tactic.Location.wildcard` -/
+  | wildcard
+  /-- Apply the tactic everywhere, including in the variable types (i.e., in
+      assumptions which are not propositions).  --/
+  | wildcard_dep
+  /-- Same as Tactic.Location -/
+  | targets (hypotheses : Array Syntax) (type : Bool)
+
+-- Comes from Tactic.simpLocation
+def customSimpLocation (ctx : Simp.Context) (discharge? : Option Simp.Discharge := none)
+  (loc : Location) : TacticM Simp.UsedSimps := do
+  match loc with
+  | Location.targets hyps simplifyTarget =>
+    withMainContext do
+      let fvarIds ← Lean.Elab.Tactic.getFVarIds hyps
+      go fvarIds simplifyTarget
+  | Location.wildcard =>
+    withMainContext do
+      go (← (← getMainGoal).getNondepPropHyps) (simplifyTarget := true)
+  | Location.wildcard_dep =>
+    withMainContext do
+      let ctx ← Lean.MonadLCtx.getLCtx
+      let decls ← ctx.getDecls
+      let tgts := (decls.map (fun d => d.fvarId)).toArray
+      go tgts (simplifyTarget := true)
+where
+  go (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool) : TacticM Simp.UsedSimps := do
+    let mvarId ← getMainGoal
+    let (result?, usedSimps) ← simpGoal mvarId ctx (simplifyTarget := simplifyTarget) (discharge? := discharge?) (fvarIdsToSimp := fvarIdsToSimp)
+    match result? with
+    | none => replaceMainGoal []
+    | some (_, mvarId) => replaceMainGoal [mvarId]
+    return usedSimps
+
+/- Call the simp tactic.
+   The initialization of the context is adapted from Tactic.elabSimpArgs.
+   Something very annoying is that there is no function which allows to
+   initialize a simp context without doing an elaboration - as a consequence
+   we write our own here. -/
+def simpAt (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
+  (loc : Location) :
+  Tactic.TacticM Unit := do
+  -- Initialize the simp context
+  let ctx ← mkSimpCtx simpOnly declsToUnfold thms hypsToUse
   -- Apply the simplifier
-  let _ ← Tactic.simpLocation ctx (discharge? := .none) loc
+  let _ ← customSimpLocation ctx (discharge? := .none) loc
+
+-- Call the simpAll tactic
+def simpAll (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+  Tactic.TacticM Unit := do
+  -- Initialize the simp context
+  let ctx ← mkSimpCtx false declsToUnfold thms hypsToUse
+  -- Apply the simplifier
+  let _ ← Lean.Meta.simpAll (← getMainGoal) ctx
 
 end Utils

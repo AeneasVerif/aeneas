@@ -1,33 +1,25 @@
-module T = Types
-module V = Values
-module E = Expressions
-module C = Contexts
-module Subst = Substitute
-module L = Logging
-open InterpreterBorrowsCore
+open Types
+open Values
+open Contexts
 
 (** Auxiliary function.
 
     Apply a proj_borrows on a shared borrow.
     Note that when projecting over shared values, we generate
-    {!type:V.abstract_shared_borrows}, not {!type:V.avalue}s.
+    {!type:Aeneas.Values.abstract_shared_borrows}, not {!type:Aeneas.Values.avalue}s.
 
     Parameters:
     [regions]
     [ancestor_regions]
     [see]
-    [original_sv_ty]
+    [original_sv_ty]: shouldn't have erased regions
 *)
 val apply_proj_loans_on_symbolic_expansion :
-  T.RegionId.Set.t ->
-  T.RegionId.Set.t ->
-  V.symbolic_expansion ->
-  T.rty ->
-  V.typed_avalue
+  RegionId.Set.t -> RegionId.Set.t -> symbolic_expansion -> rty -> typed_avalue
 
 (** Convert a symbolic expansion *which is not a borrow* to a value *)
 val symbolic_expansion_non_borrow_to_value :
-  V.symbolic_value -> V.symbolic_expansion -> V.typed_value
+  symbolic_value -> symbolic_expansion -> typed_value
 
 (** Convert a symbolic expansion *which is not a shared borrow* to a value.
 
@@ -36,7 +28,7 @@ val symbolic_expansion_non_borrow_to_value :
     during a symbolic expansion.
   *)
 val symbolic_expansion_non_shared_borrow_to_value :
-  V.symbolic_value -> V.symbolic_expansion -> V.typed_value
+  symbolic_value -> symbolic_expansion -> typed_value
 
 (** Auxiliary function to prepare reborrowing operations (used when
     applying projectors).
@@ -51,9 +43,7 @@ val symbolic_expansion_non_shared_borrow_to_value :
     - [allow_reborrows]
  *)
 val prepare_reborrows :
-  C.config ->
-  bool ->
-  (V.BorrowId.id -> V.BorrowId.id) * (C.eval_ctx -> C.eval_ctx)
+  config -> bool -> (BorrowId.id -> BorrowId.id) * (eval_ctx -> eval_ctx)
 
 (** Apply (and reduce) a projector over borrows to an avalue.
     We use this for instance to spread the borrows present in the inputs
@@ -107,13 +97,13 @@ val prepare_reborrows :
 *)
 val apply_proj_borrows :
   bool ->
-  C.eval_ctx ->
-  (V.BorrowId.id -> V.BorrowId.id) ->
-  T.RegionId.Set.t ->
-  T.RegionId.Set.t ->
-  V.typed_value ->
-  T.rty ->
-  V.typed_avalue
+  eval_ctx ->
+  (BorrowId.id -> BorrowId.id) ->
+  RegionId.Set.t ->
+  RegionId.Set.t ->
+  typed_value ->
+  rty ->
+  typed_avalue
 
 (** Parameters:
     - [config]
@@ -121,14 +111,14 @@ val apply_proj_borrows :
     - [regions]: the regions to project
     - [ancestors_regions]
     - [v]: the value on which to apply the projection
-    - [ty]: the type (with regions) to use for the projection
-
+    - [ty]: the type (with regions) to use for the projection (shouldn't have
+      erased regions)
  *)
 val apply_proj_borrows_on_input_value :
-  C.config ->
-  C.eval_ctx ->
-  T.RegionId.Set.t ->
-  T.RegionId.Set.t ->
-  V.typed_value ->
-  T.rty ->
-  C.eval_ctx * V.typed_avalue
+  config ->
+  eval_ctx ->
+  RegionId.Set.t ->
+  RegionId.Set.t ->
+  typed_value ->
+  rty ->
+  eval_ctx * typed_avalue

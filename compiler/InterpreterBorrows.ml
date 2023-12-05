@@ -1,9 +1,6 @@
-module T = Types
-module V = Values
-module C = Contexts
-module Subst = Substitute
-module L = Logging
-module S = SynthesizeSymbolic
+open Types
+open Values
+open Contexts
 open Cps
 open ValuesUtils
 open TypesUtils
@@ -12,11 +9,11 @@ open InterpreterBorrowsCore
 open InterpreterProjectors
 
 (** The local logger *)
-let log = L.borrows_log
+let log = Logging.borrows_log
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
-    replaced by {!V.Bottom})) if we can end the borrow (for instance, it is not
+    replaced by {!Bottom})) if we can end the borrow (for instance, it is not
     an outer borrow...) or return the reason why we couldn't update the borrow.
 
     [end_borrow_aux] then simply performs a loop: as long as we need to end (outer)
@@ -32,18 +29,18 @@ let log = L.borrows_log
       loans. This is used to merge borrows with abstractions, to compute loop
       fixed points for instance.
 *)
-let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
-    (allow_inner_loans : bool) (l : V.BorrowId.id) (ctx : C.eval_ctx) :
-    ( C.eval_ctx * (V.AbstractionId.id option * g_borrow_content) option,
+let end_borrow_get_borrow (allowed_abs : AbstractionId.id option)
+    (allow_inner_loans : bool) (l : BorrowId.id) (ctx : eval_ctx) :
+    ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
       priority_borrows_or_abs )
     result =
   (* We use a reference to communicate the kind of borrow we found, if we
    * find one *)
-  let replaced_bc : (V.AbstractionId.id option * g_borrow_content) option ref =
+  let replaced_bc : (AbstractionId.id option * g_borrow_content) option ref =
     ref None
   in
-  let set_replaced_bc (abs_id : V.AbstractionId.id option)
-      (bc : g_borrow_content) =
+  let set_replaced_bc (abs_id : AbstractionId.id option) (bc : g_borrow_content)
+      =
     assert (Option.is_none !replaced_bc);
     replaced_bc := Some (abs_id, bc)
   in
@@ -52,8 +49,8 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
    * - if we are inside an abstraction
    * - there are inner loans
    * this exception is caught in a wrapper function *)
-  let raise_if_priority (outer : V.AbstractionId.id option * borrow_ids option)
-      (borrowed_value : V.typed_value option) =
+  let raise_if_priority (outer : AbstractionId.id option * borrow_ids option)
+      (borrowed_value : typed_value option) =
     (* First, look for outer borrows or abstraction *)
     let outer_abs, outer_borrows = outer in
     (match outer_abs with
@@ -79,31 +76,31 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
           | None -> ()
           | Some c -> (
               match c with
-              | V.SharedLoan (bids, _) ->
+              | VSharedLoan (bids, _) ->
                   raise (FoundPriority (InnerLoans (Borrows bids)))
-              | V.MutLoan bid -> raise (FoundPriority (InnerLoans (Borrow bid)))
-              ))
+              | VMutLoan bid -> raise (FoundPriority (InnerLoans (Borrow bid))))
+          )
   in
 
   (* The environment is used to keep track of the outer loans *)
   let obj =
     object
-      inherit [_] C.map_eval_ctx as super
+      inherit [_] map_eval_ctx as super
 
       (** We reimplement {!visit_Loan} because we may have to update the
           outer borrows *)
-      method! visit_Loan (outer : V.AbstractionId.id option * borrow_ids option)
+      method! visit_VLoan (outer : AbstractionId.id option * borrow_ids option)
           lc =
         match lc with
-        | V.MutLoan bid -> V.Loan (super#visit_MutLoan outer bid)
-        | V.SharedLoan (bids, v) ->
+        | VMutLoan bid -> VLoan (super#visit_VMutLoan outer bid)
+        | VSharedLoan (bids, v) ->
             (* Update the outer borrows before diving into the shared value *)
             let outer = update_outer_borrows outer (Borrows bids) in
-            V.Loan (super#visit_SharedLoan outer bids v)
+            VLoan (super#visit_VSharedLoan outer bids v)
 
-      method! visit_Borrow outer bc =
+      method! visit_VBorrow outer bc =
         match bc with
-        | SharedBorrow l' | ReservedMutBorrow l' ->
+        | VSharedBorrow l' | VReservedMutBorrow l' ->
             (* Check if this is the borrow we are looking for *)
             if l = l' then (
               (* Check if there are outer borrows or if we are inside an abstraction *)
@@ -111,9 +108,9 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
               (* Register the update *)
               set_replaced_bc (fst outer) (Concrete bc);
               (* Update the value *)
-              V.Bottom)
-            else super#visit_Borrow outer bc
-        | V.MutBorrow (l', bv) ->
+              VBottom)
+            else super#visit_VBorrow outer bc
+        | VMutBorrow (l', bv) ->
             (* Check if this is the borrow we are looking for *)
             if l = l' then (
               (* Check if there are outer borrows or if we are inside an abstraction *)
@@ -121,11 +118,11 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
               (* Register the update *)
               set_replaced_bc (fst outer) (Concrete bc);
               (* Update the value *)
-              V.Bottom)
+              VBottom)
             else
               (* Update the outer borrows before diving into the borrowed value *)
               let outer = update_outer_borrows outer (Borrow l') in
-              V.Borrow (super#visit_MutBorrow outer l' bv)
+              VBorrow (super#visit_VMutBorrow outer l' bv)
 
       (** We reimplement {!visit_ALoan} because we may have to update the
           outer borrows *)
@@ -136,31 +133,31 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
          * need it to properly instantiate the backward functions when generating
          * the pure translation. *)
         match lc with
-        | V.AMutLoan (_, _) ->
+        | AMutLoan (_, _) ->
             (* Nothing special to do *)
             super#visit_ALoan outer lc
-        | V.ASharedLoan (bids, v, av) ->
+        | ASharedLoan (bids, v, av) ->
             (* Explore the shared value - we need to update the outer borrows *)
             let souter = update_outer_borrows outer (Borrows bids) in
             let v = super#visit_typed_value souter v in
             (* Explore the child avalue - we keep the same outer borrows *)
             let av = super#visit_typed_avalue outer av in
             (* Reconstruct *)
-            V.ALoan (V.ASharedLoan (bids, v, av))
-        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
-        | V.AEndedSharedLoan _
+            ALoan (ASharedLoan (bids, v, av))
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | AEndedSharedLoan _
         (* The loan has ended, so no need to update the outer borrows *)
-        | V.AIgnoredMutLoan _ (* Nothing special to do *)
-        | V.AEndedIgnoredMutLoan
+        | AIgnoredMutLoan _ (* Nothing special to do *)
+        | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_meta = _ }
         (* Nothing special to do *)
-        | V.AIgnoredSharedLoan _ ->
+        | AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
             super#visit_ALoan outer lc
 
       method! visit_ABorrow outer bc =
         match bc with
-        | V.AMutBorrow (bid, _) ->
+        | AMutBorrow (bid, _) ->
             (* Check if this is the borrow we are looking for *)
             if bid = l then (
               (* TODO: treat this case differently. We should not introduce
@@ -184,12 +181,12 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
                * abstraction (and not really giving the value back to the context)
                * we do not insert {!AEndedMutBorrow} but rather {!ABottom} *)
               raise (Failure "Unimplemented")
-              (* V.ABottom *))
+              (* ABottom *))
             else
               (* Update the outer borrows before diving into the child avalue *)
               let outer = update_outer_borrows outer (Borrow bid) in
               super#visit_ABorrow outer bc
-        | V.ASharedBorrow bid ->
+        | ASharedBorrow bid ->
             (* Check if this is the borrow we are looking for *)
             if bid = l then (
               (* Check there are outer borrows, or if we need to end the whole
@@ -199,16 +196,16 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
               set_replaced_bc (fst outer) (Abstract bc);
               (* Update the value - note that we are necessarily in the second
                * of the two cases described above *)
-              V.ABottom)
+              ABottom)
             else super#visit_ABorrow outer bc
-        | V.AIgnoredMutBorrow (_, _)
-        | V.AEndedMutBorrow _
-        | V.AEndedIgnoredMutBorrow
+        | AIgnoredMutBorrow (_, _)
+        | AEndedMutBorrow _
+        | AEndedIgnoredMutBorrow
             { given_back = _; child = _; given_back_meta = _ }
-        | V.AEndedSharedBorrow ->
+        | AEndedSharedBorrow ->
             (* Nothing special to do *)
             super#visit_ABorrow outer bc
-        | V.AProjSharedBorrow asb ->
+        | AProjSharedBorrow asb ->
             (* Check if the borrow we are looking for is in the asb *)
             if borrow_in_asb l asb then (
               (* Check there are outer borrows, or if we need to end the whole
@@ -219,7 +216,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
               (* Update the value - note that we are necessarily in the second
                * of the two cases described above *)
               let asb = remove_borrow_from_asb l asb in
-              V.ABorrow (V.AProjSharedBorrow asb))
+              ABorrow (AProjSharedBorrow asb))
             else (* Nothing special to do *)
               super#visit_ABorrow outer bc
 
@@ -228,7 +225,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
         let outer_abs, outer_borrows = outer in
         assert (Option.is_none outer_abs);
         assert (Option.is_none outer_borrows);
-        let outer = (Some abs.V.abs_id, None) in
+        let outer = (Some abs.abs_id, None) in
         super#visit_abs outer abs
     end
   in
@@ -247,15 +244,15 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
     give the value back.
     TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
-let give_back_value (config : C.config) (bid : V.BorrowId.id)
-    (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
+let give_back_value (config : config) (bid : BorrowId.id) (nv : typed_value)
+    (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
   assert (not (loans_in_value nv));
   assert (not (bottom_in_value ctx.ended_regions nv));
   (* Debug *)
   log#ldebug
     (lazy
-      ("give_back_value:\n- bid: " ^ V.BorrowId.to_string bid ^ "\n- value: "
+      ("give_back_value:\n- bid: " ^ BorrowId.to_string bid ^ "\n- value: "
       ^ typed_value_to_string ctx nv
       ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* We use a reference to check that we updated exactly one loan *)
@@ -274,66 +271,65 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* The visitor to give back the values *)
   let obj =
     object (self)
-      inherit [_] C.map_eval_ctx as super
+      inherit [_] map_eval_ctx as super
 
       (** This is a bit annoying, but as we need the type of the value we
           are exploring, for sanity checks, we need to implement
           {!visit_typed_avalue} instead of
           overriding {!visit_ALoan} *)
-      method! visit_typed_value opt_abs (v : V.typed_value) : V.typed_value =
-        match v.V.value with
-        | V.Loan lc ->
-            let value = self#visit_typed_Loan opt_abs v.V.ty lc in
-            ({ v with V.value } : V.typed_value)
+      method! visit_typed_value opt_abs (v : typed_value) : typed_value =
+        match v.value with
+        | VLoan lc ->
+            let value = self#visit_typed_Loan opt_abs v.ty lc in
+            ({ v with value } : typed_value)
         | _ -> super#visit_typed_value opt_abs v
 
       method visit_typed_Loan opt_abs ty lc =
         match lc with
-        | V.SharedLoan (bids, v) ->
+        | VSharedLoan (bids, v) ->
             (* We are giving back a value (i.e., the content of a *mutable*
              * borrow): nothing special to do *)
-            V.Loan (super#visit_SharedLoan opt_abs bids v)
-        | V.MutLoan bid' ->
+            VLoan (super#visit_VSharedLoan opt_abs bids v)
+        | VMutLoan bid' ->
             (* Check if this is the loan we are looking for *)
             if bid' = bid then (
               (* Sanity check *)
               let expected_ty = ty in
-              if nv.V.ty <> expected_ty then (
+              if nv.ty <> expected_ty then (
                 log#serror
                   ("give_back_value: improper type:\n- expected: "
-                 ^ ety_to_string ctx ty ^ "\n- received: "
-                 ^ ety_to_string ctx nv.V.ty);
+                 ^ ty_to_string ctx ty ^ "\n- received: "
+                 ^ ty_to_string ctx nv.ty);
                 raise (Failure "Value given back doesn't have the proper type"));
               (* Replace *)
               set_replaced ();
-              nv.V.value)
-            else V.Loan (super#visit_MutLoan opt_abs bid')
+              nv.value)
+            else VLoan (super#visit_VMutLoan opt_abs bid')
 
       (** This is a bit annoying, but as we need the type of the avalue we
           are exploring, in order to be able to project the value we give
           back, we need to reimplement {!visit_typed_avalue} instead of
           {!visit_ALoan} *)
-      method! visit_typed_avalue opt_abs (av : V.typed_avalue) : V.typed_avalue
-          =
-        match av.V.value with
-        | V.ALoan lc ->
-            let value = self#visit_typed_ALoan opt_abs av.V.ty lc in
-            ({ av with V.value } : V.typed_avalue)
+      method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
+        match av.value with
+        | ALoan lc ->
+            let value = self#visit_typed_ALoan opt_abs av.ty lc in
+            ({ av with value } : typed_avalue)
         | _ -> super#visit_typed_avalue opt_abs av
 
       (** We need to inspect ignored mutable borrows, to insert loan projectors
           if necessary.
        *)
-      method! visit_ABorrow (opt_abs : V.abs option) (bc : V.aborrow_content)
-          : V.avalue =
+      method! visit_ABorrow (opt_abs : abs option) (bc : aborrow_content)
+          : avalue =
         match bc with
-        | V.AIgnoredMutBorrow (bid', child) ->
+        | AIgnoredMutBorrow (bid', child) ->
             if bid' = Some bid then
               (* Insert a loans projector - note that if this case happens,
                * it is necessarily because we ended a parent abstraction,
                * and the given back value is thus a symbolic value *)
-              match nv.V.value with
-              | V.Symbolic sv ->
+              match nv.value with
+              | VSymbolic sv ->
                   let abs = Option.get opt_abs in
                   (* Remember the given back value as a meta-value
                    * TODO: it is a bit annoying to have to deconstruct
@@ -346,26 +342,26 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in
                   (* Return *)
-                  V.ABorrow
-                    (V.AEndedIgnoredMutBorrow
+                  ABorrow
+                    (AEndedIgnoredMutBorrow
                        { given_back; child; given_back_meta })
               | _ -> raise (Failure "Unreachable")
             else
               (* Continue exploring *)
-              V.ABorrow (super#visit_AIgnoredMutBorrow opt_abs bid' child)
+              ABorrow (super#visit_AIgnoredMutBorrow opt_abs bid' child)
         | _ ->
             (* Continue exploring *)
             super#visit_ABorrow opt_abs bc
 
       (** We are not specializing an already existing method, but adding a
           new method (for projections, we need type information) *)
-      method visit_typed_ALoan (opt_abs : V.abs option) (ty : T.rty)
-          (lc : V.aloan_content) : V.avalue =
+      method visit_typed_ALoan (opt_abs : abs option) (ty : rty)
+          (lc : aloan_content) : avalue =
         (* Preparing a bit *)
         let regions, ancestors_regions =
           match opt_abs with
           | None -> raise (Failure "Unreachable")
-          | Some abs -> (abs.V.regions, abs.V.ancestors_regions)
+          | Some abs -> (abs.regions, abs.ancestors_regions)
         in
         (* Rk.: there is a small issue with the types of the aloan values.
          * See the comment at the level of definition of {!typed_avalue} *)
@@ -374,7 +370,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
           ty
         in
         match lc with
-        | V.AMutLoan (bid', child) ->
+        | AMutLoan (bid', child) ->
             if bid' = bid then (
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
@@ -391,17 +387,17 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
               (* Return the new value *)
-              V.ALoan (V.AEndedMutLoan { child; given_back; given_back_meta }))
+              ALoan (AEndedMutLoan { child; given_back; given_back_meta }))
             else (* Continue exploring *)
               super#visit_ALoan opt_abs lc
-        | V.ASharedLoan (_, _, _) ->
+        | ASharedLoan (_, _, _) ->
             (* We are giving back a value to a *mutable* loan: nothing special to do *)
             super#visit_ALoan opt_abs lc
-        | V.AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
-        | V.AEndedSharedLoan (_, _) ->
+        | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
+        | AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
-        | V.AIgnoredMutLoan (opt_bid, child) ->
+        | AIgnoredMutLoan (opt_bid, child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
             if opt_bid = Some bid then
@@ -417,21 +413,21 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
-              V.ALoan
-                (V.AEndedIgnoredMutLoan { given_back; child; given_back_meta })
+              ALoan
+                (AEndedIgnoredMutLoan { given_back; child; given_back_meta })
             else super#visit_ALoan opt_abs lc
-        | V.AEndedIgnoredMutLoan
+        | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_meta = _ }
-        | V.AIgnoredSharedLoan _ ->
+        | AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
 
-      method! visit_Abs opt_abs abs =
+      method! visit_EAbs opt_abs abs =
         (* We remember in which abstraction we are before diving -
          * this is necessary for projecting values: we need to know
          * over which regions to project *)
         assert (Option.is_none opt_abs);
-        super#visit_Abs (Some abs) abs
+        super#visit_EAbs (Some abs) abs
     end
   in
 
@@ -443,27 +439,28 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   apply_registered_reborrows ctx
 
 (** Give back a *modified* symbolic value. *)
-let give_back_symbolic_value (_config : C.config)
-    (proj_regions : T.RegionId.Set.t) (proj_ty : T.rty) (sv : V.symbolic_value)
-    (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
+let give_back_symbolic_value (_config : config) (proj_regions : RegionId.Set.t)
+    (proj_ty : rty) (sv : symbolic_value) (nsv : symbolic_value)
+    (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
-  assert (sv.sv_id <> nsv.sv_id);
+  assert (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty);
   (match nsv.sv_kind with
-  | V.SynthInputGivenBack | SynthRetGivenBack | FunCallGivenBack | LoopGivenBack
+  | SynthInputGivenBack | SynthRetGivenBack | FunCallGivenBack | LoopGivenBack
     ->
       ()
-  | FunCallRet | SynthInput | Global | LoopOutput | LoopJoin | Aggregate ->
+  | FunCallRet | SynthInput | Global | KindConstGeneric | LoopOutput | LoopJoin
+  | Aggregate | ConstGeneric | TraitConst ->
       raise (Failure "Unreachable"));
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
-  let subst (_abs : V.abs) local_given_back =
+  let subst (_abs : abs) local_given_back =
     (* See the below comments: there is something wrong here *)
     let _ = raise Utils.Unimplemented in
     (* Compute the projection over the given back value *)
     let child_proj =
       match nsv.sv_kind with
-      | V.SynthRetGivenBack ->
+      | SynthRetGivenBack ->
           (* The given back value comes from the return value of the function
              we are currently synthesizing (as it is given back, it means
              we ended one of the regions appearing in the signature: we are
@@ -471,8 +468,8 @@ let give_back_symbolic_value (_config : C.config)
 
              As we don't allow borrow overwrites on returned value, we can
              (and MUST) forget the borrows *)
-          V.AIgnoredProjBorrows
-      | V.FunCallGivenBack ->
+          AIgnoredProjBorrows
+      | FunCallGivenBack ->
           (* TODO: there is something wrong here.
              Consider this:
              {[
@@ -485,16 +482,16 @@ let give_back_symbolic_value (_config : C.config)
              borrow in the type [&'a mut T] was ended: we give back a value of
              type [T]! We thus *mustn't* introduce a projector here.
           *)
-          V.AProjBorrows (nsv, sv.V.sv_ty)
+          AProjBorrows (nsv, sv.sv_ty)
       | _ -> raise (Failure "Unreachable")
     in
-    V.AProjLoans (sv, (mv, child_proj) :: local_given_back)
+    AProjLoans (sv, (mv, child_proj) :: local_given_back)
   in
   update_intersecting_aproj_loans proj_regions proj_ty sv subst ctx
 
 (** Auxiliary function to end borrows. See {!give_back}.
 
-    This function is similar to {!give_back_value} but gives back an {!V.avalue}
+    This function is similar to {!give_back_value} but gives back an {!avalue}
     (coming from an abstraction).
 
     It is used when ending a borrow inside an abstraction, when the corresponding
@@ -503,11 +500,10 @@ let give_back_symbolic_value (_config : C.config)
     
     REMARK: this function can't be used to give back the values borrowed by
     end abstraction when ending this abstraction. When doing this, we need
-    to convert the {!V.avalue} to a {!type:V.value} by introducing the proper symbolic values.
+    to convert the {!avalue} to a {!type:value} by introducing the proper symbolic values.
  *)
-let give_back_avalue_to_same_abstraction (_config : C.config)
-    (bid : V.BorrowId.id) (nv : V.typed_avalue) (nsv : V.typed_value)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+let give_back_avalue_to_same_abstraction (_config : config) (bid : BorrowId.id)
+    (nv : typed_avalue) (nsv : typed_value) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -516,7 +512,7 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
   in
   let obj =
     object (self)
-      inherit [_] C.map_eval_ctx as super
+      inherit [_] map_eval_ctx as super
 
       (** This is a bit annoying, but as we need the type of the avalue we
           are exploring, in order to be able to project the value we give
@@ -526,12 +522,11 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
           TODO: it is possible to do this by remembering the type of the last
           typed avalue we entered.
        *)
-      method! visit_typed_avalue opt_abs (av : V.typed_avalue) : V.typed_avalue
-          =
-        match av.V.value with
-        | V.ALoan lc ->
-            let value = self#visit_typed_ALoan opt_abs av.V.ty lc in
-            ({ av with V.value } : V.typed_avalue)
+      method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
+        match av.value with
+        | ALoan lc ->
+            let value = self#visit_typed_ALoan opt_abs av.ty lc in
+            ({ av with value } : typed_avalue)
         | _ -> super#visit_typed_avalue opt_abs av
 
       (** We are not specializing an already existing method, but adding a
@@ -540,21 +535,21 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
           TODO: it is possible to do this by remembering the type of the last
           typed avalue we entered.
         *)
-      method visit_typed_ALoan (opt_abs : V.abs option) (ty : T.rty)
-          (lc : V.aloan_content) : V.avalue =
+      method visit_typed_ALoan (opt_abs : abs option) (ty : rty)
+          (lc : aloan_content) : avalue =
         match lc with
-        | V.AMutLoan (bid', child) ->
+        | AMutLoan (bid', child) ->
             if bid' = bid then (
               (* Sanity check - about why we need to call {!ty_get_ref}
                * (and don't do the same thing as in {!give_back_value})
                * see the comment at the level of the definition of
                * {!typed_avalue} *)
               let _, expected_ty, _ = ty_get_ref ty in
-              if nv.V.ty <> expected_ty then (
+              if nv.ty <> expected_ty then (
                 log#serror
                   ("give_back_avalue_to_same_abstraction: improper type:\n\
-                    - expected: " ^ rty_to_string ctx ty ^ "\n- received: "
-                 ^ rty_to_string ctx nv.V.ty);
+                    - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
+                 ^ ty_to_string ctx nv.ty);
                 raise (Failure "Value given back doesn't have the proper type"));
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
@@ -562,18 +557,17 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
               (* Register the insertion *)
               set_replaced ();
               (* Return the new value *)
-              V.ALoan
-                (V.AEndedMutLoan
-                   { given_back = nv; child; given_back_meta = nsv }))
+              ALoan
+                (AEndedMutLoan { given_back = nv; child; given_back_meta = nsv }))
             else (* Continue exploring *)
               super#visit_ALoan opt_abs lc
-        | V.ASharedLoan (_, _, _)
+        | ASharedLoan (_, _, _)
         (* We are giving back a value to a *mutable* loan: nothing special to do *)
-        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
-        | V.AEndedSharedLoan (_, _) ->
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
-        | V.AIgnoredMutLoan (bid_opt, child) ->
+        | AIgnoredMutLoan (bid_opt, child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
             if bid_opt = Some bid then (
@@ -582,14 +576,14 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call {!set_replaced}) *)
               (* Sanity check *)
-              assert (nv.V.ty = ty);
-              V.ALoan
-                (V.AEndedIgnoredMutLoan
+              assert (nv.ty = ty);
+              ALoan
+                (AEndedIgnoredMutLoan
                    { given_back = nv; child; given_back_meta = nsv }))
             else super#visit_ALoan opt_abs lc
-        | V.AEndedIgnoredMutLoan
+        | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_meta = _ }
-        | V.AIgnoredSharedLoan _ ->
+        | AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
     end
@@ -611,8 +605,7 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
     we update.
     TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
-let give_back_shared _config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
-    C.eval_ctx =
+let give_back_shared _config (bid : BorrowId.id) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -621,59 +614,58 @@ let give_back_shared _config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
   in
   let obj =
     object
-      inherit [_] C.map_eval_ctx as super
+      inherit [_] map_eval_ctx as super
 
-      method! visit_Loan opt_abs lc =
+      method! visit_VLoan opt_abs lc =
         match lc with
-        | V.SharedLoan (bids, shared_value) ->
-            if V.BorrowId.Set.mem bid bids then (
+        | VSharedLoan (bids, shared_value) ->
+            if BorrowId.Set.mem bid bids then (
               (* This is the loan we are looking for *)
               set_replaced ();
               (* If there remains exactly one borrow identifier, we need
                * to end the loan. Otherwise, we just remove the current
                * loan identifier *)
-              if V.BorrowId.Set.cardinal bids = 1 then shared_value.V.value
+              if BorrowId.Set.cardinal bids = 1 then shared_value.value
               else
-                V.Loan
-                  (V.SharedLoan (V.BorrowId.Set.remove bid bids, shared_value)))
+                VLoan (VSharedLoan (BorrowId.Set.remove bid bids, shared_value)))
             else
               (* Not the loan we are looking for: continue exploring *)
-              V.Loan (super#visit_SharedLoan opt_abs bids shared_value)
-        | V.MutLoan bid' ->
+              VLoan (super#visit_VSharedLoan opt_abs bids shared_value)
+        | VMutLoan bid' ->
             (* We are giving back a *shared* borrow: nothing special to do *)
-            V.Loan (super#visit_MutLoan opt_abs bid')
+            VLoan (super#visit_VMutLoan opt_abs bid')
 
       method! visit_ALoan opt_abs lc =
         match lc with
-        | V.AMutLoan (bid, av) ->
+        | AMutLoan (bid, av) ->
             (* Nothing special to do (we are giving back a *shared* borrow) *)
-            V.ALoan (super#visit_AMutLoan opt_abs bid av)
-        | V.ASharedLoan (bids, shared_value, child) ->
-            if V.BorrowId.Set.mem bid bids then (
+            ALoan (super#visit_AMutLoan opt_abs bid av)
+        | ASharedLoan (bids, shared_value, child) ->
+            if BorrowId.Set.mem bid bids then (
               (* This is the loan we are looking for *)
               set_replaced ();
               (* If there remains exactly one borrow identifier, we need
                * to end the loan. Otherwise, we just remove the current
                * loan identifier *)
-              if V.BorrowId.Set.cardinal bids = 1 then
-                V.ALoan (V.AEndedSharedLoan (shared_value, child))
+              if BorrowId.Set.cardinal bids = 1 then
+                ALoan (AEndedSharedLoan (shared_value, child))
               else
-                V.ALoan
-                  (V.ASharedLoan
-                     (V.BorrowId.Set.remove bid bids, shared_value, child)))
+                ALoan
+                  (ASharedLoan
+                     (BorrowId.Set.remove bid bids, shared_value, child)))
             else
               (* Not the loan we are looking for: continue exploring *)
               super#visit_ALoan opt_abs lc
-        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         (* Nothing special to do (the loan has ended) *)
-        | V.AEndedSharedLoan (_, _)
+        | AEndedSharedLoan (_, _)
         (* Nothing special to do (the loan has ended) *)
-        | V.AIgnoredMutLoan (_, _)
+        | AIgnoredMutLoan (_, _)
         (* Nothing special to do (we are giving back a *shared* borrow) *)
-        | V.AEndedIgnoredMutLoan
+        | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_meta = _ }
         (* Nothing special to do *)
-        | V.AIgnoredSharedLoan _ ->
+        | AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
     end
@@ -691,8 +683,8 @@ let give_back_shared _config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
     to an environment by inserting a new borrow id in the set of borrows tracked
     by a shared value, referenced by the [original_bid] argument.
  *)
-let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+let reborrow_shared (original_bid : BorrowId.id) (new_bid : BorrowId.id)
+    (ctx : eval_ctx) : eval_ctx =
   (* Keep track of changes *)
   let r = ref false in
   let set_ref () =
@@ -702,24 +694,24 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
 
   let obj =
     object
-      inherit [_] C.map_env as super
+      inherit [_] map_env as super
 
-      method! visit_SharedLoan env bids sv =
+      method! visit_VSharedLoan env bids sv =
         (* Shared loan: check if the borrow id we are looking for is in the
            set of borrow ids. If yes, insert the new borrow id, otherwise
            explore inside the shared value *)
-        if V.BorrowId.Set.mem original_bid bids then (
+        if BorrowId.Set.mem original_bid bids then (
           set_ref ();
-          let bids' = V.BorrowId.Set.add new_bid bids in
-          V.SharedLoan (bids', sv))
-        else super#visit_SharedLoan env bids sv
+          let bids' = BorrowId.Set.add new_bid bids in
+          VSharedLoan (bids', sv))
+        else super#visit_VSharedLoan env bids sv
 
       method! visit_ASharedLoan env bids v av =
         (* This case is similar to the {!SharedLoan} case *)
-        if V.BorrowId.Set.mem original_bid bids then (
+        if BorrowId.Set.mem original_bid bids then (
           set_ref ();
-          let bids' = V.BorrowId.Set.add new_bid bids in
-          V.ASharedLoan (bids', v, av))
+          let bids' = BorrowId.Set.add new_bid bids in
+          ASharedLoan (bids', v, av))
         else super#visit_ASharedLoan env bids v av
     end
   in
@@ -729,11 +721,11 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
   assert !r;
   { ctx with env }
 
-(** Convert an {!type:V.avalue} to a {!type:V.value}.
+(** Convert an {!type:avalue} to a {!type:value}.
 
     This function is used when ending abstractions: whenever we end a borrow
-    in an abstraction, we converted the borrowed {!V.avalue} to a fresh symbolic
-    {!type:V.value}, then give back this {!type:V.value} to the context.
+    in an abstraction, we converted the borrowed {!avalue} to a fresh symbolic
+    {!type:value}, then give back this {!type:value} to the context.
 
     Note that some regions may have ended in the symbolic value we generate.
     For instance, consider the following function signature:
@@ -745,19 +737,19 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
     be expanded (because expanding this symbolic value would require expanding
     a reference whose region has already ended).
  *)
-let convert_avalue_to_given_back_value (abs_kind : V.abs_kind)
-    (av : V.typed_avalue) : V.symbolic_value =
+let convert_avalue_to_given_back_value (abs_kind : abs_kind) (av : typed_avalue)
+    : symbolic_value =
   let sv_kind =
     match abs_kind with
-    | V.FunCall _ -> V.FunCallGivenBack
-    | V.SynthRet _ -> V.SynthRetGivenBack
-    | V.SynthInput _ -> V.SynthInputGivenBack
-    | V.Loop _ -> V.LoopGivenBack
-    | V.Identity ->
+    | FunCall _ -> FunCallGivenBack
+    | SynthRet _ -> SynthRetGivenBack
+    | SynthInput _ -> SynthInputGivenBack
+    | Loop _ -> LoopGivenBack
+    | Identity ->
         (* Identity abstractions give back nothing *)
         raise (Failure "Unreachable")
   in
-  mk_fresh_symbolic_value sv_kind av.V.ty
+  mk_fresh_symbolic_value sv_kind av.ty
 
 (** Auxiliary function: see {!end_borrow_aux}.
 
@@ -775,9 +767,8 @@ let convert_avalue_to_given_back_value (abs_kind : V.abs_kind)
     borrows. This kind of internal reshuffling. should be similar to ending
     abstractions (it is tantamount to ending *sub*-abstractions).
  *)
-let give_back (config : C.config) (abs_id_opt : V.AbstractionId.id option)
-    (l : V.BorrowId.id) (bc : g_borrow_content) (ctx : C.eval_ctx) : C.eval_ctx
-    =
+let give_back (config : config) (abs_id_opt : AbstractionId.id option)
+    (l : BorrowId.id) (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
   log#ldebug
     (lazy
@@ -786,14 +777,14 @@ let give_back (config : C.config) (abs_id_opt : V.AbstractionId.id option)
          | Concrete bc -> borrow_content_to_string ctx bc
          | Abstract bc -> aborrow_content_to_string ctx bc
        in
-       "give_back:\n- bid: " ^ V.BorrowId.to_string l ^ "\n- content: " ^ bc
+       "give_back:\n- bid: " ^ BorrowId.to_string l ^ "\n- content: " ^ bc
        ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* This is used for sanity checks *)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
   in
   match bc with
-  | Concrete (V.MutBorrow (l', tv)) ->
+  | Concrete (VMutBorrow (l', tv)) ->
       (* Sanity check *)
       assert (l' = l);
       assert (not (loans_in_value tv));
@@ -801,14 +792,14 @@ let give_back (config : C.config) (abs_id_opt : V.AbstractionId.id option)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_value config l tv ctx
-  | Concrete (V.SharedBorrow l' | V.ReservedMutBorrow l') ->
+  | Concrete (VSharedBorrow l' | VReservedMutBorrow l') ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_shared config l ctx
-  | Abstract (V.AMutBorrow (l', av)) ->
+  | Abstract (AMutBorrow (l', av)) ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
@@ -819,39 +810,39 @@ let give_back (config : C.config) (abs_id_opt : V.AbstractionId.id option)
          which takes care of ending *sub*-abstractions.
       *)
       let abs_id = Option.get abs_id_opt in
-      let abs = C.ctx_lookup_abs ctx abs_id in
+      let abs = ctx_lookup_abs ctx abs_id in
       let sv = convert_avalue_to_given_back_value abs.kind av in
       (* Update the context *)
       give_back_avalue_to_same_abstraction config l av
         (mk_typed_value_from_symbolic_value sv)
         ctx
-  | Abstract (V.ASharedBorrow l') ->
+  | Abstract (ASharedBorrow l') ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_shared config l ctx
-  | Abstract (V.AProjSharedBorrow asb) ->
+  | Abstract (AProjSharedBorrow asb) ->
       (* Sanity check *)
       assert (borrow_in_asb l asb);
       (* Update the context *)
       give_back_shared config l ctx
   | Abstract
-      ( V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _
-      | V.AEndedSharedBorrow ) ->
+      ( AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
+      | AEndedSharedBorrow ) ->
       raise (Failure "Unreachable")
 
-let check_borrow_disappeared (fun_name : string) (l : V.BorrowId.id)
-    (ctx0 : C.eval_ctx) : cm_fun =
-  let check_disappeared (ctx : C.eval_ctx) : unit =
+let check_borrow_disappeared (fun_name : string) (l : BorrowId.id)
+    (ctx0 : eval_ctx) : cm_fun =
+  let check_disappeared (ctx : eval_ctx) : unit =
     let _ =
       match lookup_borrow_opt ek_all l ctx with
       | None -> () (* Ok *)
       | Some _ ->
           log#lerror
             (lazy
-              (fun_name ^ ": " ^ V.BorrowId.to_string l
+              (fun_name ^ ": " ^ BorrowId.to_string l
              ^ ": borrow didn't disappear:\n- original context:\n"
              ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
              ^ eval_ctx_to_string ctx));
@@ -862,7 +853,7 @@ let check_borrow_disappeared (fun_name : string) (l : V.BorrowId.id)
     | Some _ ->
         log#lerror
           (lazy
-            (fun_name ^ ": " ^ V.BorrowId.to_string l
+            (fun_name ^ ": " ^ BorrowId.to_string l
            ^ ": loan didn't disappear:\n- original context:\n"
            ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
            ^ eval_ctx_to_string ctx));
@@ -891,8 +882,8 @@ let check_borrow_disappeared (fun_name : string) (l : V.BorrowId.id)
     perform anything smart and is trusted, and another function for the
     book-keeping.
  *)
-let rec end_borrow_aux (config : C.config) (chain : borrow_or_abs_ids)
-    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id) : cm_fun =
+let rec end_borrow_aux (config : config) (chain : borrow_or_abs_ids)
+    (allowed_abs : AbstractionId.id option) (l : BorrowId.id) : cm_fun =
  fun cf ctx ->
   (* Check that we don't loop *)
   let chain0 = chain in
@@ -901,7 +892,7 @@ let rec end_borrow_aux (config : C.config) (chain : borrow_or_abs_ids)
   in
   log#ldebug
     (lazy
-      ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- original context:\n"
+      ("end borrow: " ^ BorrowId.to_string l ^ ":\n- original context:\n"
      ^ eval_ctx_to_string ctx));
 
   (* Utility function for the sanity checks: check that the borrow disappeared
@@ -927,7 +918,7 @@ let rec end_borrow_aux (config : C.config) (chain : borrow_or_abs_ids)
       (* Debug *)
       log#ldebug
         (lazy
-          ("end borrow: " ^ V.BorrowId.to_string l
+          ("end borrow: " ^ BorrowId.to_string l
          ^ ": found outer borrows/abs or inner loans:"
           ^ show_priority_borrows_or_abs priority));
       (* End the priority borrows, abstractions, then try again to end the target
@@ -969,7 +960,7 @@ let rec end_borrow_aux (config : C.config) (chain : borrow_or_abs_ids)
   | Ok (ctx, Some (abs_id_opt, bc)) ->
       (* Sanity check: the borrowed value shouldn't contain loans *)
       (match bc with
-      | Concrete (V.MutBorrow (_, bv)) ->
+      | Concrete (VMutBorrow (_, bv)) ->
           assert (Option.is_none (get_first_loan_in_value bv))
       | _ -> ());
       (* Give back the value *)
@@ -977,20 +968,19 @@ let rec end_borrow_aux (config : C.config) (chain : borrow_or_abs_ids)
       (* Do a sanity check and continue *)
       cf_check cf ctx
 
-and end_borrows_aux (config : C.config) (chain : borrow_or_abs_ids)
-    (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t) : cm_fun
-    =
+and end_borrows_aux (config : config) (chain : borrow_or_abs_ids)
+    (allowed_abs : AbstractionId.id option) (lset : BorrowId.Set.t) : cm_fun =
  fun cf ->
   (* This is not necessary, but we prefer to reorder the borrow ids,
    * so that we actually end from the smallest id to the highest id - just
    * a matter of taste, and may make debugging easier *)
-  let ids = V.BorrowId.Set.fold (fun id ids -> id :: ids) lset [] in
+  let ids = BorrowId.Set.fold (fun id ids -> id :: ids) lset [] in
   List.fold_left
     (fun cf id -> end_borrow_aux config chain allowed_abs id cf)
     cf ids
 
-and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_id : V.AbstractionId.id) : cm_fun =
+and end_abstraction_aux (config : config) (chain : borrow_or_abs_ids)
+    (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
   (* Check that we don't loop *)
   let chain =
@@ -1001,11 +991,11 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
   log#ldebug
     (lazy
       ("end_abstraction_aux: "
-      ^ V.AbstractionId.to_string abs_id
+      ^ AbstractionId.to_string abs_id
       ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
 
   (* Lookup the abstraction *)
-  let abs = C.ctx_lookup_abs ctx abs_id in
+  let abs = ctx_lookup_abs ctx abs_id in
 
   (* Check that we can end the abstraction *)
   if abs.can_end then ()
@@ -1013,7 +1003,7 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
     raise
       (Failure
          ("Can't end abstraction "
-         ^ V.AbstractionId.to_string abs.abs_id
+         ^ AbstractionId.to_string abs.abs_id
          ^ " as it is set as non-endable"));
 
   (* End the parent abstractions first *)
@@ -1023,7 +1013,7 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
         log#ldebug
           (lazy
             ("end_abstraction_aux: "
-            ^ V.AbstractionId.to_string abs_id
+            ^ AbstractionId.to_string abs_id
             ^ "\n- context after parent abstractions ended:\n"
             ^ eval_ctx_to_string ctx)))
   in
@@ -1035,7 +1025,7 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
         log#ldebug
           (lazy
             ("end_abstraction_aux: "
-            ^ V.AbstractionId.to_string abs_id
+            ^ AbstractionId.to_string abs_id
             ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx)))
   in
 
@@ -1047,9 +1037,7 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
    * changes... *)
   let cc =
     comp_update cc (fun ctx ->
-        let ended_regions =
-          T.RegionId.Set.union ctx.ended_regions abs.V.regions
-        in
+        let ended_regions = RegionId.Set.union ctx.ended_regions abs.regions in
         { ctx with ended_regions })
   in
 
@@ -1064,7 +1052,7 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
         log#ldebug
           (lazy
             ("end_abstraction_aux: "
-            ^ V.AbstractionId.to_string abs_id
+            ^ AbstractionId.to_string abs_id
             ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
             ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx)))
   in
@@ -1075,22 +1063,22 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
   (* Apply the continuation *)
   cc cf ctx
 
-and end_abstractions_aux (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_ids : V.AbstractionId.Set.t) : cm_fun =
+and end_abstractions_aux (config : config) (chain : borrow_or_abs_ids)
+    (abs_ids : AbstractionId.Set.t) : cm_fun =
  fun cf ->
   (* This is not necessary, but we prefer to reorder the abstraction ids,
    * so that we actually end from the smallest id to the highest id - just
    * a matter of taste, and may make debugging easier *)
-  let abs_ids = V.AbstractionId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
+  let abs_ids = AbstractionId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
   List.fold_left
     (fun cf id -> end_abstraction_aux config chain id cf)
     cf abs_ids
 
-and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_id : V.AbstractionId.id) : cm_fun =
+and end_abstraction_loans (config : config) (chain : borrow_or_abs_ids)
+    (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
   (* Lookup the abstraction *)
-  let abs = C.ctx_lookup_abs ctx abs_id in
+  let abs = ctx_lookup_abs ctx abs_id in
   (* End the first loan we find.
    *
    * We ignore the "ignored mut/shared loans": as we should have already ended
@@ -1120,12 +1108,12 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
       (* Continue *)
       cc cf ctx
 
-and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_id : V.AbstractionId.id) : cm_fun =
+and end_abstraction_borrows (config : config) (chain : borrow_or_abs_ids)
+    (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
   log#ldebug
     (lazy
-      ("end_abstraction_borrows: abs_id: " ^ V.AbstractionId.to_string abs_id));
+      ("end_abstraction_borrows: abs_id: " ^ AbstractionId.to_string abs_id));
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
@@ -1145,7 +1133,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
    *)
   let obj =
     object
-      inherit [_] V.iter_abs as super
+      inherit [_] iter_abs as super
 
       method! visit_aborrow_content env bc =
         (* In-depth exploration *)
@@ -1153,40 +1141,38 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         (* No exception was raise: we can raise an exception for the
          * current borrow *)
         match bc with
-        | V.AMutBorrow _ | V.ASharedBorrow _ ->
+        | AMutBorrow _ | ASharedBorrow _ ->
             (* Raise an exception *)
             raise (FoundABorrowContent bc)
-        | V.AProjSharedBorrow asb ->
+        | AProjSharedBorrow asb ->
             (* Raise an exception only if the asb contains borrows *)
             if
               List.exists
-                (fun x -> match x with V.AsbBorrow _ -> true | _ -> false)
+                (fun x -> match x with AsbBorrow _ -> true | _ -> false)
                 asb
             then raise (FoundABorrowContent bc)
             else ()
-        | V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _
-        | V.AEndedIgnoredMutBorrow _ | V.AEndedSharedBorrow ->
+        | AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
+        | AEndedSharedBorrow ->
             (* Nothing to do for ignored borrows *)
             ()
 
       method! visit_aproj env sproj =
         (match sproj with
-        | V.AProjLoans _ -> raise (Failure "Unexpected")
-        | V.AProjBorrows (sv, proj_ty) ->
-            raise (FoundAProjBorrows (sv, proj_ty))
-        | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
-            ());
+        | AProjLoans _ -> raise (Failure "Unexpected")
+        | AProjBorrows (sv, proj_ty) -> raise (FoundAProjBorrows (sv, proj_ty))
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj env sproj
 
       (** We may need to end borrows in "regular" values, because of shared values *)
       method! visit_borrow_content _ bc =
         match bc with
-        | V.SharedBorrow _ | V.MutBorrow (_, _) -> raise (FoundBorrowContent bc)
-        | V.ReservedMutBorrow _ -> raise (Failure "Unreachable")
+        | VSharedBorrow _ | VMutBorrow (_, _) -> raise (FoundBorrowContent bc)
+        | VReservedMutBorrow _ -> raise (Failure "Unreachable")
     end
   in
   (* Lookup the abstraction *)
-  let abs = C.ctx_lookup_abs ctx abs_id in
+  let abs = ctx_lookup_abs ctx abs_id in
   try
     (* Explore the abstraction, looking for borrows *)
     obj#visit_abs () abs;
@@ -1201,37 +1187,37 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
           ^ aborrow_content_to_string ctx bc));
       let ctx =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | AMutBorrow (bid, av) ->
             (* First, convert the avalue to a (fresh symbolic) value *)
             let sv = convert_avalue_to_given_back_value abs.kind av in
             (* Replace the mut borrow to register the fact that we ended
              * it and store with it the freshly generated given back value *)
-            let ended_borrow = V.ABorrow (V.AEndedMutBorrow (sv, av)) in
+            let ended_borrow = ABorrow (AEndedMutBorrow (sv, av)) in
             let ctx = update_aborrow ek_all bid ended_borrow ctx in
             (* Give the value back *)
             let sv = mk_typed_value_from_symbolic_value sv in
             give_back_value config bid sv ctx
-        | V.ASharedBorrow bid ->
+        | ASharedBorrow bid ->
             (* Replace the shared borrow to account for the fact it ended *)
-            let ended_borrow = V.ABorrow V.AEndedSharedBorrow in
+            let ended_borrow = ABorrow AEndedSharedBorrow in
             let ctx = update_aborrow ek_all bid ended_borrow ctx in
             (* Give back *)
             give_back_shared config bid ctx
-        | V.AProjSharedBorrow asb ->
+        | AProjSharedBorrow asb ->
             (* Retrieve the borrow ids *)
             let bids =
               List.filter_map
                 (fun asb ->
                   match asb with
-                  | V.AsbBorrow bid -> Some bid
-                  | V.AsbProjReborrows (_, _) -> None)
+                  | AsbBorrow bid -> Some bid
+                  | AsbProjReborrows (_, _) -> None)
                 asb
             in
             (* There should be at least one borrow identifier in the set, which we
              * can use to identify the whole set *)
             let repr_bid = List.hd bids in
             (* Replace the shared borrow with Bottom *)
-            let ctx = update_aborrow ek_all repr_bid V.ABottom ctx in
+            let ctx = update_aborrow ek_all repr_bid ABottom ctx in
             (* Give back the shared borrows *)
             let ctx =
               List.fold_left
@@ -1240,8 +1226,8 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             in
             (* Continue *)
             ctx
-        | V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _
-        | V.AEndedIgnoredMutBorrow _ | V.AEndedSharedBorrow ->
+        | AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
+        | AEndedSharedBorrow ->
             raise (Failure "Unexpected")
       in
       (* Reexplore *)
@@ -1251,11 +1237,11 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       log#ldebug
         (lazy
           ("end_abstraction_borrows: found aproj borrows: "
-          ^ aproj_to_string ctx (V.AProjBorrows (sv, proj_ty))));
+          ^ aproj_to_string ctx (AProjBorrows (sv, proj_ty))));
       (* Generate a fresh symbolic value *)
-      let nsv = mk_fresh_symbolic_value V.FunCallGivenBack proj_ty in
+      let nsv = mk_fresh_symbolic_value FunCallGivenBack proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
-      let ended_borrow = V.AEndedProjBorrows nsv in
+      let ended_borrow = AEndedProjBorrows nsv in
       let ctx = update_aproj_borrows abs.abs_id sv ended_borrow ctx in
       (* Give back the symbolic value *)
       let ctx =
@@ -1271,7 +1257,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
           ^ borrow_content_to_string ctx bc));
       let ctx =
         match bc with
-        | V.SharedBorrow bid -> (
+        | VSharedBorrow bid -> (
             (* Replace the shared borrow with bottom *)
             let allow_inner_loans = false in
             match
@@ -1281,7 +1267,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             | Ok (ctx, _) ->
                 (* Give back *)
                 give_back_shared config bid ctx)
-        | V.MutBorrow (bid, v) -> (
+        | VMutBorrow (bid, v) -> (
             (* Replace the mut borrow with bottom *)
             let allow_inner_loans = false in
             match
@@ -1292,21 +1278,21 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
                 (* Give the value back - note that the mut borrow was below a
                  * shared borrow: the value is thus unchanged *)
                 give_back_value config bid v ctx)
-        | V.ReservedMutBorrow _ -> raise (Failure "Unreachable")
+        | VReservedMutBorrow _ -> raise (Failure "Unreachable")
       in
       (* Reexplore *)
       end_abstraction_borrows config chain abs_id cf ctx
 
 (** Remove an abstraction from the context, as well as all its references *)
-and end_abstraction_remove_from_context (_config : C.config)
-    (abs_id : V.AbstractionId.id) : cm_fun =
+and end_abstraction_remove_from_context (_config : config)
+    (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
-  let ctx, abs = C.ctx_remove_abs ctx abs_id in
+  let ctx, abs = ctx_remove_abs ctx abs_id in
   let abs = Option.get abs in
   (* Apply the continuation *)
   let expr = cf ctx in
   (* Synthesize the symbolic AST *)
-  S.synthesize_end_abstraction ctx abs expr
+  SynthesizeSymbolic.synthesize_end_abstraction ctx abs expr
 
 (** End a proj_loan over a symbolic value by ending the proj_borrows which
     intersect this proj_loans.
@@ -1322,9 +1308,9 @@ and end_abstraction_remove_from_context (_config : C.config)
         intersecting proj_borrows, either in the concrete context or in an
         abstraction
 *)
-and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_id : V.AbstractionId.id) (regions : T.RegionId.Set.t)
-    (sv : V.symbolic_value) : cm_fun =
+and end_proj_loans_symbolic (config : config) (chain : borrow_or_abs_ids)
+    (abs_id : AbstractionId.id) (regions : RegionId.Set.t) (sv : symbolic_value)
+    : cm_fun =
  fun cf ctx ->
   (* Small helpers for sanity checks *)
   let check ctx = no_aproj_over_symbolic_in_context sv ctx in
@@ -1381,8 +1367,8 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         let abs_ids = List.map fst external_projs in
         let abs_ids =
           List.fold_left
-            (fun s id -> V.AbstractionId.Set.add id s)
-            V.AbstractionId.Set.empty abs_ids
+            (fun s id -> AbstractionId.Set.add id s)
+            AbstractionId.Set.empty abs_ids
         in
         (* End the abstractions and continue *)
         end_abstractions_aux config chain abs_ids cf ctx
@@ -1425,7 +1411,7 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         *)
         (* End the projector of borrows - TODO: not completely sure what to
          * replace it with... Maybe we should introduce an ABottomProj? *)
-        let ctx = update_aproj_borrows abs_id sv V.AIgnoredProjBorrows ctx in
+        let ctx = update_aproj_borrows abs_id sv AIgnoredProjBorrows ctx in
         (* Sanity check: no other occurrence of an intersecting projector of borrows *)
         assert (
           Option.is_none
@@ -1448,9 +1434,9 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         (* Continue *)
         cc cf ctx
 
-let end_borrow config : V.BorrowId.id -> cm_fun = end_borrow_aux config [] None
+let end_borrow config : BorrowId.id -> cm_fun = end_borrow_aux config [] None
 
-let end_borrows config : V.BorrowId.Set.t -> cm_fun =
+let end_borrows config : BorrowId.Set.t -> cm_fun =
   end_borrows_aux config [] None
 
 let end_abstraction config = end_abstraction_aux config []
@@ -1477,20 +1463,20 @@ let end_abstractions_no_synth config ids ctx =
 
     The returned value (previously shared) is checked:
     - it mustn't contain loans
-    - it mustn't contain {!V.Bottom}
+    - it mustn't contain {!Bottom}
     - it mustn't contain reserved borrows
     TODO: this kind of checks should be put in an auxiliary helper, because
     they are redundant.
 
     The loan to update mustn't be a borrowed value.
  *)
-let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
-    (cf : V.typed_value -> m_fun) : m_fun =
+let promote_shared_loan_to_mut_loan (l : BorrowId.id)
+    (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   (* Debug *)
   log#ldebug
     (lazy
-      ("promote_shared_loan_to_mut_loan:\n- loan: " ^ V.BorrowId.to_string l
+      ("promote_shared_loan_to_mut_loan:\n- loan: " ^ BorrowId.to_string l
      ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Lookup the shared loan - note that we can't promote a shared loan
    * in a shared value, but we can do it in a mutably borrowed value.
@@ -1500,11 +1486,11 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
   match lookup_loan ek l ctx with
-  | _, Concrete (V.MutLoan _) ->
+  | _, Concrete (VMutLoan _) ->
       raise (Failure "Expected a shared loan, found a mut loan")
-  | _, Concrete (V.SharedLoan (bids, sv)) ->
+  | _, Concrete (VSharedLoan (bids, sv)) ->
       (* Check that there is only one borrow id (l) and update the loan *)
-      assert (V.BorrowId.Set.mem l bids && V.BorrowId.Set.cardinal bids = 1);
+      assert (BorrowId.Set.mem l bids && BorrowId.Set.cardinal bids = 1);
       (* We need to check that there aren't any loans in the value:
          we should have gotten rid of those already, but it is better
          to do a sanity check. *)
@@ -1514,7 +1500,7 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
       (* Check there aren't reserved borrows *)
       assert (not (reserved_in_value sv));
       (* Update the loan content *)
-      let ctx = update_loan ek l (V.MutLoan l) ctx in
+      let ctx = update_loan ek l (VMutLoan l) ctx in
       (* Continue *)
       cf sv ctx
   | _, Abstract _ ->
@@ -1530,8 +1516,8 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
     This function updates a shared borrow to a mutable borrow (and that is
     all: it doesn't touch the corresponding loan).
  *)
-let replace_reserved_borrow_with_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
-    (borrowed_value : V.typed_value) : m_fun =
+let replace_reserved_borrow_with_mut_borrow (l : BorrowId.id) (cf : m_fun)
+    (borrowed_value : typed_value) : m_fun =
  fun ctx ->
   (* Lookup the reserved borrow - note that we don't go inside borrows/loans:
      there can't be reserved borrows inside other borrows/loans
@@ -1541,11 +1527,11 @@ let replace_reserved_borrow_with_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
   in
   let ctx =
     match lookup_borrow ek l ctx with
-    | Concrete (V.SharedBorrow _ | V.MutBorrow (_, _)) ->
+    | Concrete (VSharedBorrow _ | VMutBorrow (_, _)) ->
         raise (Failure "Expected a reserved mutable borrow")
-    | Concrete (V.ReservedMutBorrow _) ->
+    | Concrete (VReservedMutBorrow _) ->
         (* Update it *)
-        update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx
+        update_borrow ek l (VMutBorrow (l, borrowed_value)) ctx
     | Abstract _ ->
         (* This can't happen for sure *)
         raise
@@ -1557,16 +1543,16 @@ let replace_reserved_borrow_with_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
   cf ctx
 
 (** Promote a reserved mut borrow to a mut borrow. *)
-let rec promote_reserved_mut_borrow (config : C.config) (l : V.BorrowId.id) :
-    cm_fun =
+let rec promote_reserved_mut_borrow (config : config) (l : BorrowId.id) : cm_fun
+    =
  fun cf ctx ->
   (* Lookup the value *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
   match lookup_loan ek l ctx with
-  | _, Concrete (V.MutLoan _) -> raise (Failure "Unreachable")
-  | _, Concrete (V.SharedLoan (bids, sv)) -> (
+  | _, Concrete (VMutLoan _) -> raise (Failure "Unreachable")
+  | _, Concrete (VSharedLoan (bids, sv)) -> (
       (* If there are loans inside the value, end them. Note that there can't be
          reserved borrows inside the value.
          If we perform an update, do a recursive call to lookup the updated value *)
@@ -1575,8 +1561,8 @@ let rec promote_reserved_mut_borrow (config : C.config) (l : V.BorrowId.id) :
           (* End the loans *)
           let cc =
             match lc with
-            | V.SharedLoan (bids, _) -> end_borrows config bids
-            | V.MutLoan bid -> end_borrow config bid
+            | VSharedLoan (bids, _) -> end_borrows config bids
+            | VMutLoan bid -> end_borrow config bid
           in
           (* Recursive call *)
           let cc = comp cc (promote_reserved_mut_borrow config l) in
@@ -1594,7 +1580,7 @@ let rec promote_reserved_mut_borrow (config : C.config) (l : V.BorrowId.id) :
           assert (not (reserved_in_value sv));
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
-          let bids = V.BorrowId.Set.remove l bids in
+          let bids = BorrowId.Set.remove l bids in
           let cc = end_borrows config bids in
           (* Promote the loan - TODO: this will fail if the value contains
            * any loans. In practice, it shouldn't, but we could also
@@ -1618,9 +1604,8 @@ let rec promote_reserved_mut_borrow (config : C.config) (l : V.BorrowId.id) :
            "Can't activate a reserved mutable borrow referencing a loan inside\n\
            \         an abstraction")
 
-let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
-    (destructure_shared_values : bool) (ctx : C.eval_ctx) (abs0 : V.abs) : V.abs
-    =
+let destructure_abs (abs_kind : abs_kind) (can_end : bool)
+    (destructure_shared_values : bool) (ctx : eval_ctx) (abs0 : abs) : abs =
   (* Accumulator to store the destructured values *)
   let avalues = ref [] in
   (* Utility function to store a value in the accumulator *)
@@ -1634,10 +1619,10 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
   *)
   let push_fail _ = raise (Failure "Unreachable") in
   (* Function to explore an avalue and destructure it *)
-  let rec list_avalues (allow_borrows : bool) (push : V.typed_avalue -> unit)
-      (av : V.typed_avalue) : unit =
-    let ty = av.V.ty in
-    match av.V.value with
+  let rec list_avalues (allow_borrows : bool) (push : typed_avalue -> unit)
+      (av : typed_avalue) : unit =
+    let ty = av.ty in
+    match av.value with
     | ABottom | AIgnored -> ()
     | AAdt adt ->
         (* Simply explore the children *)
@@ -1645,17 +1630,17 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
     | ALoan lc -> (
         (* Explore the loan content *)
         match lc with
-        | V.ASharedLoan (bids, sv, child_av) ->
+        | ASharedLoan (bids, sv, child_av) ->
             (* We don't support nested borrows for now *)
-            assert (not (value_has_borrows ctx sv.V.value));
+            assert (not (value_has_borrows ctx sv.value));
             (* Destructure the shared value *)
             let avl, sv =
               if destructure_shared_values then list_values sv else ([], sv)
             in
             (* Push a value *)
-            let ignored = mk_aignored child_av.V.ty in
-            let value = V.ALoan (V.ASharedLoan (bids, sv, ignored)) in
-            push { V.value; ty };
+            let ignored = mk_aignored child_av.ty in
+            let value = ALoan (ASharedLoan (bids, sv, ignored)) in
+            push { value; ty };
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Push the avalues introduced because we decomposed the inner loans -
@@ -1665,25 +1650,25 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
                exactly the same way as [list_avalues] (i.e., with a similar
                signature) *)
             List.iter push avl
-        | V.AMutLoan (bid, child_av) ->
+        | AMutLoan (bid, child_av) ->
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the whole loan *)
-            let ignored = mk_aignored child_av.V.ty in
-            let value = V.ALoan (V.AMutLoan (bid, ignored)) in
-            push { V.value; ty }
-        | V.AIgnoredMutLoan (opt_bid, child_av) ->
+            let ignored = mk_aignored child_av.ty in
+            let value = ALoan (AMutLoan (bid, ignored)) in
+            push { value; ty }
+        | AIgnoredMutLoan (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
             assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
             assert (opt_bid = None);
             (* Simply explore the child *)
             list_avalues false push_fail child_av
-        | V.AEndedMutLoan
+        | AEndedMutLoan
             { child = child_av; given_back = _; given_back_meta = _ }
-        | V.AEndedSharedLoan (_, child_av)
-        | V.AEndedIgnoredMutLoan
+        | AEndedSharedLoan (_, child_av)
+        | AEndedIgnoredMutLoan
             { child = child_av; given_back = _; given_back_meta = _ }
-        | V.AIgnoredSharedLoan child_av ->
+        | AIgnoredSharedLoan child_av ->
             (* We don't support nested borrows for now *)
             assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
             (* Simply explore the child *)
@@ -1693,34 +1678,34 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
         assert allow_borrows;
         (* Explore the borrow content *)
         match bc with
-        | V.AMutBorrow (bid, child_av) ->
+        | AMutBorrow (bid, child_av) ->
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the borrow *)
-            let ignored = mk_aignored child_av.V.ty in
-            let value = V.ABorrow (V.AMutBorrow (bid, ignored)) in
-            push { V.value; ty }
-        | V.ASharedBorrow _ ->
+            let ignored = mk_aignored child_av.ty in
+            let value = ABorrow (AMutBorrow (bid, ignored)) in
+            push { value; ty }
+        | ASharedBorrow _ ->
             (* Nothing specific to do: keep the value as it is *)
             push av
-        | V.AIgnoredMutBorrow (opt_bid, child_av) ->
+        | AIgnoredMutBorrow (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
             assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
             assert (opt_bid = None);
             (* Just explore the child *)
             list_avalues false push_fail child_av
-        | V.AEndedIgnoredMutBorrow
+        | AEndedIgnoredMutBorrow
             { child = child_av; given_back = _; given_back_meta = _ } ->
             (* We don't support nested borrows for now *)
             assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
             (* Just explore the child *)
             list_avalues false push_fail child_av
-        | V.AProjSharedBorrow asb ->
+        | AProjSharedBorrow asb ->
             (* We don't support nested borrows *)
             assert (asb = []);
             (* Nothing specific to do *)
             ()
-        | V.AEndedMutBorrow _ | V.AEndedSharedBorrow ->
+        | AEndedMutBorrow _ | AEndedSharedBorrow ->
             (* If we get there it means the abstraction ended: it should not
                be in the context anymore (if we end *one* borrow in an abstraction,
                we have to end them all and remove the abstraction from the context)
@@ -1730,55 +1715,52 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
         assert (not (ty_has_borrows ctx.type_context.type_infos ty))
-  and list_values (v : V.typed_value) : V.typed_avalue list * V.typed_value =
-    let ty = v.V.ty in
-    match v.V.value with
-    | Literal _ -> ([], v)
-    | Adt adt ->
+  and list_values (v : typed_value) : typed_avalue list * typed_value =
+    let ty = v.ty in
+    match v.value with
+    | VLiteral _ -> ([], v)
+    | VAdt adt ->
         let avll, field_values =
           List.split (List.map list_values adt.field_values)
         in
         let avl = List.concat avll in
-        let adt = { adt with V.field_values } in
-        (avl, { v with V.value = Adt adt })
-    | Bottom -> raise (Failure "Unreachable")
-    | Borrow _ ->
+        let adt = { adt with field_values } in
+        (avl, { v with value = VAdt adt })
+    | VBottom -> raise (Failure "Unreachable")
+    | VBorrow _ ->
         (* We don't support nested borrows for now *)
         raise (Failure "Unreachable")
-    | Loan lc -> (
+    | VLoan lc -> (
         match lc with
-        | SharedLoan (bids, sv) ->
+        | VSharedLoan (bids, sv) ->
             let avl, sv = list_values sv in
-            if destructure_shared_values then
+            if destructure_shared_values then (
               (* Rem.: the shared value can't contain loans nor borrows *)
-              let rty = ety_no_regions_to_rty ty in
-              let av : V.typed_avalue =
-                assert (not (value_has_loans_or_borrows ctx sv.V.value));
+              assert (ty_no_regions ty);
+              let av : typed_avalue =
+                assert (not (value_has_loans_or_borrows ctx sv.value));
                 (* We introduce fresh ids for the symbolic values *)
-                let mk_value_with_fresh_sids (v : V.typed_value) : V.typed_value
-                    =
+                let mk_value_with_fresh_sids (v : typed_value) : typed_value =
                   let visitor =
                     object
-                      inherit [_] V.map_typed_avalue
+                      inherit [_] map_typed_avalue
 
                       method! visit_symbolic_value_id _ _ =
-                        C.fresh_symbolic_value_id ()
+                        fresh_symbolic_value_id ()
                     end
                   in
                   visitor#visit_typed_value () v
                 in
                 let sv = mk_value_with_fresh_sids sv in
                 (* Create the new avalue *)
-                let value =
-                  V.ALoan (V.ASharedLoan (bids, sv, mk_aignored rty))
-                in
-                { V.value; ty = rty }
+                let value = ALoan (ASharedLoan (bids, sv, mk_aignored ty)) in
+                { value; ty }
               in
               let avl = List.append [ av ] avl in
-              (avl, sv)
-            else (avl, { v with V.value = V.Loan (V.SharedLoan (bids, sv)) })
-        | MutLoan _ -> raise (Failure "Unreachable"))
-    | Symbolic _ ->
+              (avl, sv))
+            else (avl, { v with value = VLoan (VSharedLoan (bids, sv)) })
+        | VMutLoan _ -> raise (Failure "Unreachable"))
+    | VSymbolic _ ->
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
         assert (not (ty_has_borrows ctx.type_context.type_infos ty));
@@ -1786,37 +1768,37 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
   in
 
   (* Destructure the avalues *)
-  List.iter (list_avalues true push_avalue) abs0.V.avalues;
+  List.iter (list_avalues true push_avalue) abs0.avalues;
   let avalues = !avalues in
   (* Update *)
-  { abs0 with V.avalues; kind = abs_kind; can_end }
+  { abs0 with avalues; kind = abs_kind; can_end }
 
-let abs_is_destructured (destructure_shared_values : bool) (ctx : C.eval_ctx)
-    (abs : V.abs) : bool =
+let abs_is_destructured (destructure_shared_values : bool) (ctx : eval_ctx)
+    (abs : abs) : bool =
   let abs' =
     destructure_abs abs.kind abs.can_end destructure_shared_values ctx abs
   in
   abs = abs'
 
-let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
-    (destructure_shared_values : bool) (ctx : C.eval_ctx) (v : V.typed_value) :
-    V.abs list =
+let convert_value_to_abstractions (abs_kind : abs_kind) (can_end : bool)
+    (destructure_shared_values : bool) (ctx : eval_ctx) (v : typed_value) :
+    abs list =
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
-  let push_abs (r_id : T.RegionId.id) (avalues : V.typed_avalue list) : unit =
+  let push_abs (r_id : RegionId.id) (avalues : typed_avalue list) : unit =
     if avalues = [] then ()
     else
       (* Create the abs - note that we keep the order of the avalues as it is
          (unlike the environments) *)
       let abs =
         {
-          V.abs_id = C.fresh_abstraction_id ();
+          abs_id = fresh_abstraction_id ();
           kind = abs_kind;
           can_end;
-          parents = V.AbstractionId.Set.empty;
+          parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions = T.RegionId.Set.singleton r_id;
-          ancestors_regions = T.RegionId.Set.empty;
+          regions = RegionId.Set.singleton r_id;
+          ancestors_regions = RegionId.Set.empty;
           avalues;
         }
       in
@@ -1831,22 +1813,22 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
      is [true], this shared value will be stripped of its shared loans.
   *)
   let rec to_avalues (allow_borrows : bool) (inside_borrowed : bool)
-      (group : bool) (r_id : T.RegionId.id) (v : V.typed_value) :
-      V.typed_avalue list * V.typed_value =
+      (group : bool) (r_id : RegionId.id) (v : typed_value) :
+      typed_avalue list * typed_value =
     (* Debug *)
     log#ldebug
       (lazy
         ("convert_value_to_abstractions: to_avalues:\n- value: "
         ^ typed_value_to_string ctx v));
 
-    let ty = v.V.ty in
-    match v.V.value with
-    | V.Literal _ -> ([], v)
-    | V.Bottom ->
+    let ty = v.ty in
+    match v.value with
+    | VLiteral _ -> ([], v)
+    | VBottom ->
         (* Can happen: we *do* convert dummy values to abstractions, and dummy
            values can contain bottoms *)
         ([], v)
-    | V.Adt adt ->
+    | VAdt adt ->
         (* Two cases, depending on whether we have to group all the borrows/loans
            inside one abstraction or not *)
         let avl, field_values =
@@ -1864,7 +1846,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             let field_values =
               List.map
                 (fun fv ->
-                  let r_id = C.fresh_region_id () in
+                  let r_id = fresh_region_id () in
                   let avl, fv =
                     to_avalues allow_borrows inside_borrowed group r_id fv
                   in
@@ -1878,98 +1860,98 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             ([], field_values)
         in
         let adt = { adt with field_values } in
-        (avl, { v with V.value = V.Adt adt })
-    | V.Borrow bc -> (
+        (avl, { v with value = VAdt adt })
+    | VBorrow bc -> (
         let _, ref_ty, kind = ty_as_ref ty in
+        assert (ty_no_regions ref_ty);
         (* Sanity check *)
         assert allow_borrows;
         (* Convert the borrow content *)
         match bc with
-        | SharedBorrow bid ->
-            let ref_ty = ety_no_regions_to_rty ref_ty in
-            let ty = T.Ref (T.Var r_id, ref_ty, kind) in
-            let value = V.ABorrow (V.ASharedBorrow bid) in
-            ([ { V.value; ty } ], v)
-        | MutBorrow (bid, bv) ->
-            let r_id = if group then r_id else C.fresh_region_id () in
+        | VSharedBorrow bid ->
+            assert (ty_no_regions ref_ty);
+            let ty = TRef (RFVar r_id, ref_ty, kind) in
+            let value = ABorrow (ASharedBorrow bid) in
+            ([ { value; ty } ], v)
+        | VMutBorrow (bid, bv) ->
+            let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
-            assert (not (value_has_borrows ctx bv.V.value));
+            assert (not (value_has_borrows ctx bv.value));
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
-            let ref_ty = ety_no_regions_to_rty ref_ty in
-            let ty = T.Ref (T.Var r_id, ref_ty, kind) in
+            let ty = TRef (RFVar r_id, ref_ty, kind) in
             let ignored = mk_aignored ref_ty in
-            let av = V.ABorrow (V.AMutBorrow (bid, ignored)) in
-            let av = { V.value = av; ty } in
+            let av = ABorrow (AMutBorrow (bid, ignored)) in
+            let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
             let avl, bv = to_avalues false true true r_id bv in
-            let value = { v with V.value = V.Borrow (V.MutBorrow (bid, bv)) } in
+            let value = { v with value = VBorrow (VMutBorrow (bid, bv)) } in
             (av :: avl, value)
-        | ReservedMutBorrow _ ->
+        | VReservedMutBorrow _ ->
             (* This borrow should have been activated *)
             raise (Failure "Unexpected"))
-    | V.Loan lc -> (
+    | VLoan lc -> (
         match lc with
-        | V.SharedLoan (bids, sv) ->
-            let r_id = if group then r_id else C.fresh_region_id () in
+        | VSharedLoan (bids, sv) ->
+            let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
-            assert (not (value_has_borrows ctx sv.V.value));
+            assert (not (value_has_borrows ctx sv.value));
             (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
             (* For avalues, a loan has the borrow type *)
-            let ty = ety_no_regions_to_rty ty in
-            let ty = mk_ref_ty (T.Var r_id) ty T.Shared in
+            assert (ty_no_regions ty);
+            let ty = mk_ref_ty (RFVar r_id) ty RShared in
             let ignored = mk_aignored ty in
             (* Rem.: the shared value might contain loans *)
             let avl, sv = to_avalues false true true r_id sv in
-            let av = V.ALoan (V.ASharedLoan (bids, sv, ignored)) in
-            let av = { V.value = av; ty } in
+            let av = ALoan (ASharedLoan (bids, sv, ignored)) in
+            let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
-            let value : V.value =
-              if destructure_shared_values then sv.V.value
-              else V.Loan (V.SharedLoan (bids, sv))
+            let value : value =
+              if destructure_shared_values then sv.value
+              else VLoan (VSharedLoan (bids, sv))
             in
-            let value = { v with V.value } in
+            let value = { v with value } in
             (av :: avl, value)
-        | V.MutLoan bid ->
+        | VMutLoan bid ->
             (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
             (* For avalues, a loan has the borrow type *)
-            let ty = ety_no_regions_to_rty ty in
-            let ty = mk_ref_ty (T.Var r_id) ty T.Mut in
+            assert (ty_no_regions ty);
+            let ty = mk_ref_ty (RFVar r_id) ty RMut in
             let ignored = mk_aignored ty in
-            let av = V.ALoan (V.AMutLoan (bid, ignored)) in
-            let av = { V.value = av; ty } in
+            let av = ALoan (AMutLoan (bid, ignored)) in
+            let av = { value = av; ty } in
             ([ av ], v))
-    | V.Symbolic _ ->
+    | VSymbolic _ ->
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
-        assert (not (value_has_borrows ctx v.V.value));
+        assert (not (value_has_borrows ctx v.value));
         (* Return nothing *)
         ([], v)
   in
   (* Generate the avalues *)
-  let r_id = C.fresh_region_id () in
+  let r_id = fresh_region_id () in
   let values, _ = to_avalues true false false r_id v in
   (* Introduce an abstraction for the returned values *)
   push_abs r_id values;
   (* Return *)
   List.rev !absl
 
-type borrow_or_loan_id = BorrowId of V.borrow_id | LoanId of V.loan_id
+type borrow_or_loan_id = BorrowId of borrow_id | LoanId of loan_id
 
 type g_loan_content_with_ty =
-  (T.ety * V.loan_content, T.rty * V.aloan_content) concrete_or_abs
+  (ety * loan_content, rty * aloan_content) concrete_or_abs
 
 type g_borrow_content_with_ty =
-  (T.ety * V.borrow_content, T.rty * V.aborrow_content) concrete_or_abs
+  (ety * borrow_content, rty * aborrow_content) concrete_or_abs
 
 type merge_abstraction_info = {
-  loans : V.loan_id_set;
-  borrows : V.borrow_id_set;
+  loans : loan_id_set;
+  borrows : borrow_id_set;
   borrows_loans : borrow_or_loan_id list;
       (** We use a list to preserve the order in which the borrows were found *)
-  loan_to_content : g_loan_content_with_ty V.BorrowId.Map.t;
-  borrow_to_content : g_borrow_content_with_ty V.BorrowId.Map.t;
+  loan_to_content : g_loan_content_with_ty BorrowId.Map.t;
+  borrow_to_content : g_borrow_content_with_ty BorrowId.Map.t;
 }
 
 (** Small utility to help merging abstractions.
@@ -1984,54 +1966,54 @@ type merge_abstraction_info = {
     - all the borrows are destructured (for instance, shared loans can't
       contain shared loans).
  *)
-let compute_merge_abstraction_info (ctx : C.eval_ctx) (abs : V.abs) :
+let compute_merge_abstraction_info (ctx : eval_ctx) (abs : abs) :
     merge_abstraction_info =
-  let loans : V.loan_id_set ref = ref V.BorrowId.Set.empty in
-  let borrows : V.borrow_id_set ref = ref V.BorrowId.Set.empty in
+  let loans : loan_id_set ref = ref BorrowId.Set.empty in
+  let borrows : borrow_id_set ref = ref BorrowId.Set.empty in
   let borrows_loans : borrow_or_loan_id list ref = ref [] in
-  let loan_to_content : g_loan_content_with_ty V.BorrowId.Map.t ref =
-    ref V.BorrowId.Map.empty
+  let loan_to_content : g_loan_content_with_ty BorrowId.Map.t ref =
+    ref BorrowId.Map.empty
   in
-  let borrow_to_content : g_borrow_content_with_ty V.BorrowId.Map.t ref =
-    ref V.BorrowId.Map.empty
+  let borrow_to_content : g_borrow_content_with_ty BorrowId.Map.t ref =
+    ref BorrowId.Map.empty
   in
 
   let push_loans ids (lc : g_loan_content_with_ty) : unit =
-    assert (V.BorrowId.Set.disjoint !loans ids);
-    loans := V.BorrowId.Set.union !loans ids;
-    V.BorrowId.Set.iter
+    assert (BorrowId.Set.disjoint !loans ids);
+    loans := BorrowId.Set.union !loans ids;
+    BorrowId.Set.iter
       (fun id ->
-        assert (not (V.BorrowId.Map.mem id !loan_to_content));
-        loan_to_content := V.BorrowId.Map.add id lc !loan_to_content;
+        assert (not (BorrowId.Map.mem id !loan_to_content));
+        loan_to_content := BorrowId.Map.add id lc !loan_to_content;
         borrows_loans := LoanId id :: !borrows_loans)
       ids
   in
   let push_loan id (lc : g_loan_content_with_ty) : unit =
-    assert (not (V.BorrowId.Set.mem id !loans));
-    loans := V.BorrowId.Set.add id !loans;
-    assert (not (V.BorrowId.Map.mem id !loan_to_content));
-    loan_to_content := V.BorrowId.Map.add id lc !loan_to_content;
+    assert (not (BorrowId.Set.mem id !loans));
+    loans := BorrowId.Set.add id !loans;
+    assert (not (BorrowId.Map.mem id !loan_to_content));
+    loan_to_content := BorrowId.Map.add id lc !loan_to_content;
     borrows_loans := LoanId id :: !borrows_loans
   in
   let push_borrow id (bc : g_borrow_content_with_ty) : unit =
-    assert (not (V.BorrowId.Set.mem id !borrows));
-    borrows := V.BorrowId.Set.add id !borrows;
-    assert (not (V.BorrowId.Map.mem id !borrow_to_content));
-    borrow_to_content := V.BorrowId.Map.add id bc !borrow_to_content;
+    assert (not (BorrowId.Set.mem id !borrows));
+    borrows := BorrowId.Set.add id !borrows;
+    assert (not (BorrowId.Map.mem id !borrow_to_content));
+    borrow_to_content := BorrowId.Map.add id bc !borrow_to_content;
     borrows_loans := BorrowId id :: !borrows_loans
   in
 
   let iter_avalues =
     object
-      inherit [_] V.iter_typed_avalue as super
+      inherit [_] iter_typed_avalue as super
 
       (** We redefine this to track the types *)
       method! visit_typed_avalue _ v =
-        super#visit_typed_avalue (Some (Abstract v.V.ty)) v
+        super#visit_typed_avalue (Some (Abstract v.ty)) v
 
       (** We redefine this to track the types *)
-      method! visit_typed_value _ (v : V.typed_value) =
-        super#visit_typed_value (Some (Concrete v.V.ty)) v
+      method! visit_typed_value _ (v : typed_value) =
+        super#visit_typed_value (Some (Concrete v.ty)) v
 
       method! visit_loan_content env lc =
         (* Can happen if we explore shared values whose sub-values are
@@ -2042,8 +2024,8 @@ let compute_merge_abstraction_info (ctx : C.eval_ctx) (abs : V.abs) :
           | Abstract _ -> raise (Failure "Unreachable")
         in
         (match lc with
-        | SharedLoan (bids, _) -> push_loans bids (Concrete (ty, lc))
-        | MutLoan _ -> raise (Failure "Unreachable"));
+        | VSharedLoan (bids, _) -> push_loans bids (Concrete (ty, lc))
+        | VMutLoan _ -> raise (Failure "Unreachable"));
         (* Continue *)
         super#visit_loan_content env lc
 
@@ -2060,10 +2042,10 @@ let compute_merge_abstraction_info (ctx : C.eval_ctx) (abs : V.abs) :
         in
         (* Register the loans *)
         (match lc with
-        | V.ASharedLoan (bids, _, _) -> push_loans bids (Abstract (ty, lc))
-        | V.AMutLoan (bid, _) -> push_loan bid (Abstract (ty, lc))
-        | V.AEndedMutLoan _ | V.AEndedSharedLoan _ | V.AIgnoredMutLoan _
-        | V.AEndedIgnoredMutLoan _ | V.AIgnoredSharedLoan _ ->
+        | ASharedLoan (bids, _, _) -> push_loans bids (Abstract (ty, lc))
+        | AMutLoan (bid, _) -> push_loan bid (Abstract (ty, lc))
+        | AEndedMutLoan _ | AEndedSharedLoan _ | AIgnoredMutLoan _
+        | AEndedIgnoredMutLoan _ | AIgnoredSharedLoan _ ->
             (* The abstraction has been destructured, so those shouldn't appear *)
             raise (Failure "Unreachable"));
         (* Continue *)
@@ -2077,20 +2059,20 @@ let compute_merge_abstraction_info (ctx : C.eval_ctx) (abs : V.abs) :
         in
         (* Explore the borrow content *)
         (match bc with
-        | V.AMutBorrow (bid, _) -> push_borrow bid (Abstract (ty, bc))
-        | V.ASharedBorrow bid -> push_borrow bid (Abstract (ty, bc))
-        | V.AProjSharedBorrow asb ->
+        | AMutBorrow (bid, _) -> push_borrow bid (Abstract (ty, bc))
+        | ASharedBorrow bid -> push_borrow bid (Abstract (ty, bc))
+        | AProjSharedBorrow asb ->
             let register asb =
               match asb with
-              | V.AsbBorrow bid -> push_borrow bid (Abstract (ty, bc))
-              | V.AsbProjReborrows _ ->
+              | AsbBorrow bid -> push_borrow bid (Abstract (ty, bc))
+              | AsbProjReborrows _ ->
                   (* Can only happen if the symbolic value (potentially) contains
                      borrows - i.e., we have nested borrows *)
                   raise (Failure "Unreachable")
             in
             List.iter register asb
-        | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _
-        | V.AEndedMutBorrow _ | V.AEndedSharedBorrow ->
+        | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedMutBorrow _
+        | AEndedSharedBorrow ->
             (* The abstraction has been destructured, so those shouldn't appear *)
             raise (Failure "Unreachable"));
         super#visit_aborrow_content env bc
@@ -2101,7 +2083,7 @@ let compute_merge_abstraction_info (ctx : C.eval_ctx) (abs : V.abs) :
     end
   in
 
-  List.iter (iter_avalues#visit_typed_avalue None) abs.V.avalues;
+  List.iter (iter_avalues#visit_typed_avalue None) abs.avalues;
 
   {
     loans = !loans;
@@ -2113,12 +2095,7 @@ let compute_merge_abstraction_info (ctx : C.eval_ctx) (abs : V.abs) :
 
 type merge_duplicates_funcs = {
   merge_amut_borrows :
-    V.borrow_id ->
-    T.rty ->
-    V.typed_avalue ->
-    T.rty ->
-    V.typed_avalue ->
-    V.typed_avalue;
+    borrow_id -> rty -> typed_avalue -> rty -> typed_avalue -> typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -2128,19 +2105,14 @@ type merge_duplicates_funcs = {
 
           The children should be [AIgnored].
        *)
-  merge_ashared_borrows : V.borrow_id -> T.rty -> T.rty -> V.typed_avalue;
+  merge_ashared_borrows : borrow_id -> rty -> rty -> typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
           - [ty1]
        *)
   merge_amut_loans :
-    V.loan_id ->
-    T.rty ->
-    V.typed_avalue ->
-    T.rty ->
-    V.typed_avalue ->
-    V.typed_avalue;
+    loan_id -> rty -> typed_avalue -> rty -> typed_avalue -> typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -2151,14 +2123,14 @@ type merge_duplicates_funcs = {
           The children should be [AIgnored].
        *)
   merge_ashared_loans :
-    V.loan_id_set ->
-    T.rty ->
-    V.typed_value ->
-    V.typed_avalue ->
-    T.rty ->
-    V.typed_value ->
-    V.typed_avalue ->
-    V.typed_avalue;
+    loan_id_set ->
+    rty ->
+    typed_value ->
+    typed_avalue ->
+    rty ->
+    typed_value ->
+    typed_avalue ->
+    typed_avalue;
       (** Parameters:
           - [ids]
           - [ty0]
@@ -2174,16 +2146,16 @@ type merge_duplicates_funcs = {
 
     Merge two abstractions into one, without updating the context.
  *)
-let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
-    (merge_funs : merge_duplicates_funcs option) (ctx : C.eval_ctx)
-    (abs0 : V.abs) (abs1 : V.abs) : V.abs =
+let merge_into_abstraction_aux (abs_kind : abs_kind) (can_end : bool)
+    (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
+    (abs1 : abs) : abs =
   log#ldebug
     (lazy
       ("merge_into_abstraction_aux:\n- abs0:\n" ^ abs_to_string ctx abs0
      ^ "\n\n- abs1:\n" ^ abs_to_string ctx abs1));
 
   (* Check that the abstractions are destructured *)
-  if !Config.check_invariants then (
+  if !Config.sanity_checks then (
     let destructure_shared_values = true in
     assert (abs_is_destructured destructure_shared_values ctx abs0);
     assert (abs_is_destructured destructure_shared_values ctx abs1));
@@ -2212,8 +2184,8 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
   (* Sanity check: there is no loan/borrows which appears in both abstractions,
      unless we allow to merge duplicates *)
   if merge_funs = None then (
-    assert (V.BorrowId.Set.disjoint borrows0 borrows1);
-    assert (V.BorrowId.Set.disjoint loans0 loans1));
+    assert (BorrowId.Set.disjoint borrows0 borrows1);
+    assert (BorrowId.Set.disjoint loans0 loans1));
 
   (* Merge.
      There are several cases:
@@ -2233,8 +2205,8 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
      We ignore this case for now: we check that whenever we merge two shared loans,
      then their sets of ids are equal.
   *)
-  let merged_borrows = ref V.BorrowId.Set.empty in
-  let merged_loans = ref V.BorrowId.Set.empty in
+  let merged_borrows = ref BorrowId.Set.empty in
+  let merged_loans = ref BorrowId.Set.empty in
   let avalues = ref [] in
   let push_avalue av =
     log#ldebug
@@ -2248,35 +2220,35 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
   in
 
   let intersect =
-    V.BorrowId.Set.union
-      (V.BorrowId.Set.inter loans0 borrows1)
-      (V.BorrowId.Set.inter loans1 borrows0)
+    BorrowId.Set.union
+      (BorrowId.Set.inter loans0 borrows1)
+      (BorrowId.Set.inter loans1 borrows0)
   in
-  let filter_bids (bids : V.BorrowId.Set.t) : V.BorrowId.Set.t =
-    let bids = V.BorrowId.Set.diff bids intersect in
-    assert (not (V.BorrowId.Set.is_empty bids));
+  let filter_bids (bids : BorrowId.Set.t) : BorrowId.Set.t =
+    let bids = BorrowId.Set.diff bids intersect in
+    assert (not (BorrowId.Set.is_empty bids));
     bids
   in
-  let filter_bid (bid : V.BorrowId.id) : V.BorrowId.id option =
-    if V.BorrowId.Set.mem bid intersect then None else Some bid
+  let filter_bid (bid : BorrowId.id) : BorrowId.id option =
+    if BorrowId.Set.mem bid intersect then None else Some bid
   in
 
-  let borrow_is_merged id = V.BorrowId.Set.mem id !merged_borrows in
+  let borrow_is_merged id = BorrowId.Set.mem id !merged_borrows in
   let set_borrow_as_merged id =
-    merged_borrows := V.BorrowId.Set.add id !merged_borrows
+    merged_borrows := BorrowId.Set.add id !merged_borrows
   in
-  let loan_is_merged id = V.BorrowId.Set.mem id !merged_loans in
+  let loan_is_merged id = BorrowId.Set.mem id !merged_loans in
   let set_loan_as_merged id =
-    merged_loans := V.BorrowId.Set.add id !merged_loans
+    merged_loans := BorrowId.Set.add id !merged_loans
   in
-  let set_loans_as_merged ids = V.BorrowId.Set.iter set_loan_as_merged ids in
+  let set_loans_as_merged ids = BorrowId.Set.iter set_loan_as_merged ids in
 
   (* Some utility functions *)
   (* Merge two aborrow contents - note that those contents must have the same id *)
-  let merge_aborrow_contents (ty0 : T.rty) (bc0 : V.aborrow_content)
-      (ty1 : T.rty) (bc1 : V.aborrow_content) : V.typed_avalue =
+  let merge_aborrow_contents (ty0 : rty) (bc0 : aborrow_content) (ty1 : rty)
+      (bc1 : aborrow_content) : typed_avalue =
     match (bc0, bc1) with
-    | V.AMutBorrow (id, child0), V.AMutBorrow (_, child1) ->
+    | AMutBorrow (id, child0), AMutBorrow (_, child1) ->
         (Option.get merge_funs).merge_amut_borrows id ty0 child0 ty1 child1
     | ASharedBorrow id, ASharedBorrow _ ->
         (Option.get merge_funs).merge_ashared_borrows id ty0 ty1
@@ -2290,7 +2262,7 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
   in
 
   let merge_g_borrow_contents (bc0 : g_borrow_content_with_ty)
-      (bc1 : g_borrow_content_with_ty) : V.typed_avalue =
+      (bc1 : g_borrow_content_with_ty) : typed_avalue =
     match (bc0, bc1) with
     | Concrete _, Concrete _ ->
         (* This can happen only in case of nested borrows *)
@@ -2302,10 +2274,10 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
         raise (Failure "Unreachable")
   in
 
-  let merge_aloan_contents (ty0 : T.rty) (lc0 : V.aloan_content) (ty1 : T.rty)
-      (lc1 : V.aloan_content) : V.typed_avalue option =
+  let merge_aloan_contents (ty0 : rty) (lc0 : aloan_content) (ty1 : rty)
+      (lc1 : aloan_content) : typed_avalue option =
     match (lc0, lc1) with
-    | V.AMutLoan (id, child0), V.AMutLoan (_, child1) ->
+    | AMutLoan (id, child0), AMutLoan (_, child1) ->
         (* Register the loan id *)
         set_loan_as_merged id;
         (* Merge *)
@@ -2317,9 +2289,9 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
         (* Check that the sets of ids are the same - if it is not the case, it
            means we actually need to merge more than 2 avalues: we ignore this
            case for now *)
-        assert (V.BorrowId.Set.equal ids0 ids1);
+        assert (BorrowId.Set.equal ids0 ids1);
         let ids = ids0 in
-        if V.BorrowId.Set.is_empty ids then (
+        if BorrowId.Set.is_empty ids then (
           (* If the set of ids is empty, we can eliminate this shared loan.
              For now, we check that we can eliminate the whole shared value
              altogether.
@@ -2329,10 +2301,10 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
              to preserve (in practice it works because we destructure the
              shared values in the abstractions, and forbid nested borrows).
           *)
-          assert (not (value_has_loans_or_borrows ctx sv0.V.value));
-          assert (not (value_has_loans_or_borrows ctx sv0.V.value));
-          assert (is_aignored child0.V.value);
-          assert (is_aignored child1.V.value);
+          assert (not (value_has_loans_or_borrows ctx sv0.value));
+          assert (not (value_has_loans_or_borrows ctx sv0.value));
+          assert (is_aignored child0.value);
+          assert (is_aignored child1.value);
           None)
         else (
           (* Register the loan ids *)
@@ -2351,7 +2323,7 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
      to register the merged loan ids: the caller doesn't do it (contrary to
      the borrow case) *)
   let merge_g_loan_contents (lc0 : g_loan_content_with_ty)
-      (lc1 : g_loan_content_with_ty) : V.typed_avalue option =
+      (lc1 : g_loan_content_with_ty) : typed_avalue option =
     match (lc0, lc1) with
     | Concrete _, Concrete _ ->
         (* This can not happen: the values should have been destructured *)
@@ -2375,7 +2347,7 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
           log#ldebug
             (lazy
               ("merge_into_abstraction_aux: merging borrow "
-             ^ V.BorrowId.to_string bid));
+             ^ BorrowId.to_string bid));
 
           (* Check if the borrow has already been merged - this can happen
              because we go through all the borrows/loans in [abs0] *then*
@@ -2389,10 +2361,10 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
             | None -> ()
             | Some bid ->
                 (* Lookup the contents *)
-                let bc0 = V.BorrowId.Map.find_opt bid borrow_to_content0 in
-                let bc1 = V.BorrowId.Map.find_opt bid borrow_to_content1 in
+                let bc0 = BorrowId.Map.find_opt bid borrow_to_content0 in
+                let bc1 = BorrowId.Map.find_opt bid borrow_to_content1 in
                 (* Merge *)
-                let av : V.typed_avalue =
+                let av : typed_avalue =
                   match (bc0, bc1) with
                   | None, Some bc | Some bc, None -> (
                       match bc with
@@ -2402,7 +2374,7 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
                              loan
                           *)
                           raise (Failure "Unreachable")
-                      | Abstract (ty, bc) -> { V.value = V.ABorrow bc; ty })
+                      | Abstract (ty, bc) -> { value = ABorrow bc; ty })
                   | Some bc0, Some bc1 ->
                       assert (merge_funs <> None);
                       merge_g_borrow_contents bc0 bc1
@@ -2422,17 +2394,17 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
             log#ldebug
               (lazy
                 ("merge_into_abstraction_aux: merging loan "
-               ^ V.BorrowId.to_string bid));
+               ^ BorrowId.to_string bid));
 
             (* Check if we need to filter it *)
             match filter_bid bid with
             | None -> ()
             | Some bid ->
                 (* Lookup the contents *)
-                let lc0 = V.BorrowId.Map.find_opt bid loan_to_content0 in
-                let lc1 = V.BorrowId.Map.find_opt bid loan_to_content1 in
+                let lc0 = BorrowId.Map.find_opt bid loan_to_content0 in
+                let lc1 = BorrowId.Map.find_opt bid loan_to_content1 in
                 (* Merge *)
-                let av : V.typed_avalue option =
+                let av : typed_avalue option =
                   match (lc0, lc1) with
                   | None, Some lc | Some lc, None -> (
                       match lc with
@@ -2442,21 +2414,21 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
                           raise (Failure "Unreachable")
                       | Abstract (ty, lc) -> (
                           match lc with
-                          | V.ASharedLoan (bids, sv, child) ->
+                          | ASharedLoan (bids, sv, child) ->
                               let bids = filter_bids bids in
-                              assert (not (V.BorrowId.Set.is_empty bids));
-                              assert (is_aignored child.V.value);
+                              assert (not (BorrowId.Set.is_empty bids));
+                              assert (is_aignored child.value);
                               assert (
-                                not (value_has_loans_or_borrows ctx sv.V.value));
-                              let lc = V.ASharedLoan (bids, sv, child) in
+                                not (value_has_loans_or_borrows ctx sv.value));
+                              let lc = ASharedLoan (bids, sv, child) in
                               set_loans_as_merged bids;
-                              Some { V.value = V.ALoan lc; ty }
-                          | V.AMutLoan _ ->
+                              Some { value = ALoan lc; ty }
+                          | AMutLoan _ ->
                               set_loan_as_merged bid;
-                              Some { V.value = V.ALoan lc; ty }
-                          | V.AEndedMutLoan _ | V.AEndedSharedLoan _
-                          | V.AIgnoredMutLoan _ | V.AEndedIgnoredMutLoan _
-                          | V.AIgnoredSharedLoan _ ->
+                              Some { value = ALoan lc; ty }
+                          | AEndedMutLoan _ | AEndedSharedLoan _
+                          | AIgnoredMutLoan _ | AEndedIgnoredMutLoan _
+                          | AIgnoredSharedLoan _ ->
                               (* The abstraction has been destructured, so those shouldn't appear *)
                               raise (Failure "Unreachable")))
                   | Some lc0, Some lc1 ->
@@ -2476,8 +2448,8 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
      meaning it is easier to find fixed points).
   *)
   let avalues =
-    let is_borrow (av : V.typed_avalue) : bool =
-      match av.V.value with
+    let is_borrow (av : typed_avalue) : bool =
+      match av.value with
       | ABorrow _ -> true
       | ALoan _ -> false
       | _ -> raise (Failure "Unexpected")
@@ -2489,21 +2461,21 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
   (* Filter the regions *)
 
   (* Create the new abstraction *)
-  let abs_id = C.fresh_abstraction_id () in
+  let abs_id = fresh_abstraction_id () in
   (* Note that one of the two abstractions might a parent of the other *)
   let parents =
-    V.AbstractionId.Set.diff
-      (V.AbstractionId.Set.union abs0.parents abs1.parents)
-      (V.AbstractionId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
+    AbstractionId.Set.diff
+      (AbstractionId.Set.union abs0.parents abs1.parents)
+      (AbstractionId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
   in
-  let original_parents = V.AbstractionId.Set.elements parents in
-  let regions = T.RegionId.Set.union abs0.regions abs1.regions in
+  let original_parents = AbstractionId.Set.elements parents in
+  let regions = RegionId.Set.union abs0.regions abs1.regions in
   let ancestors_regions =
-    T.RegionId.Set.diff (T.RegionId.Set.union abs0.regions abs1.regions) regions
+    RegionId.Set.diff (RegionId.Set.union abs0.regions abs1.regions) regions
   in
   let abs =
     {
-      V.abs_id;
+      abs_id;
       kind = abs_kind;
       can_end;
       parents;
@@ -2515,24 +2487,24 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
   in
 
   (* Sanity check *)
-  if !Config.check_invariants then assert (abs_is_destructured true ctx abs);
+  if !Config.sanity_checks then assert (abs_is_destructured true ctx abs);
   (* Return *)
   abs
 
 (** Merge the regions in a context to a single region *)
-let ctx_merge_regions (ctx : C.eval_ctx) (rid : T.RegionId.id)
-    (rids : T.RegionId.Set.t) : C.eval_ctx =
-  let rsubst x = if T.RegionId.Set.mem x rids then rid else x in
+let ctx_merge_regions (ctx : eval_ctx) (rid : RegionId.id)
+    (rids : RegionId.Set.t) : eval_ctx =
+  let rsubst x = if RegionId.Set.mem x rids then rid else x in
   let env = Substitute.env_subst_rids rsubst ctx.env in
-  { ctx with C.env }
+  { ctx with env }
 
-let merge_into_abstraction (abs_kind : V.abs_kind) (can_end : bool)
-    (merge_funs : merge_duplicates_funcs option) (ctx : C.eval_ctx)
-    (abs_id0 : V.AbstractionId.id) (abs_id1 : V.AbstractionId.id) :
-    C.eval_ctx * V.AbstractionId.id =
+let merge_into_abstraction (abs_kind : abs_kind) (can_end : bool)
+    (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
+    (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
+    eval_ctx * AbstractionId.id =
   (* Lookup the abstractions *)
-  let abs0 = C.ctx_lookup_abs ctx abs_id0 in
-  let abs1 = C.ctx_lookup_abs ctx abs_id1 in
+  let abs0 = ctx_lookup_abs ctx abs_id0 in
+  let abs1 = ctx_lookup_abs ctx abs_id1 in
 
   (* Merge them *)
   let nabs =
@@ -2541,8 +2513,8 @@ let merge_into_abstraction (abs_kind : V.abs_kind) (can_end : bool)
 
   (* Update the environment: replace the abstraction 1 with the result of the merge,
      remove the abstraction 0 *)
-  let ctx = fst (C.ctx_subst_abs ctx abs_id1 nabs) in
-  let ctx = fst (C.ctx_remove_abs ctx abs_id0) in
+  let ctx = fst (ctx_subst_abs ctx abs_id1 nabs) in
+  let ctx = fst (ctx_remove_abs ctx abs_id0) in
 
   (* Merge all the regions from the abstraction into one (the first - i.e., the
      one with the smallest id). Note that we need to do this in the whole
@@ -2553,11 +2525,11 @@ let merge_into_abstraction (abs_kind : V.abs_kind) (can_end : bool)
   let ctx =
     let regions = nabs.regions in
     (* Pick the first region id (this is the smallest) *)
-    let rid = T.RegionId.Set.min_elt regions in
+    let rid = RegionId.Set.min_elt regions in
     (* If there is only one region, do nothing *)
-    if T.RegionId.Set.cardinal regions = 1 then ctx
+    if RegionId.Set.cardinal regions = 1 then ctx
     else
-      let rids = T.RegionId.Set.remove rid regions in
+      let rids = RegionId.Set.remove rid regions in
       ctx_merge_regions ctx rid rids
   in
 

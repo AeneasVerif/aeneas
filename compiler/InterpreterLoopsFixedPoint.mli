@@ -1,13 +1,5 @@
-module T = Types
-module PV = PrimitiveValues
-module V = Values
-module E = Expressions
-module C = Contexts
-module Subst = Substitute
-module A = LlbcAst
-module L = Logging
-module Inv = Invariants
-module S = SynthesizeSymbolic
+open Values
+open Contexts
 open InterpreterUtils
 open InterpreterLoopsCore
 
@@ -56,7 +48,7 @@ open InterpreterLoopsCore
 
     we only introduce a fresh abstraction for [l1].
   *)
-val prepare_ashared_loans : V.loop_id option -> Cps.cm_fun
+val prepare_ashared_loans : loop_id option -> Cps.cm_fun
 
 (** Compute a fixed-point for the context at the entry of the loop.
     We also return:
@@ -71,11 +63,11 @@ val prepare_ashared_loans : V.loop_id option -> Cps.cm_fun
     the values which are read or modified (some symbolic values may be ignored).
  *)
 val compute_loop_entry_fixed_point :
-  C.config ->
-  V.loop_id ->
+  config ->
+  loop_id ->
   Cps.st_cm_fun ->
-  C.eval_ctx ->
-  C.eval_ctx * ids_sets * V.abs SymbolicAst.region_group_id_map
+  eval_ctx ->
+  eval_ctx * ids_sets * abs SymbolicAst.region_group_id_map
 
 (** For the abstractions in the fixed point, compute the correspondance between
     the borrows ids and the loans ids, if we want to introduce equivalent
@@ -154,7 +146,7 @@ val compute_loop_entry_fixed_point :
     through the loan [l1] is actually the value which has to be given back to [l0].
  *)
 val compute_fixed_point_id_correspondance :
-  ids_sets -> C.eval_ctx -> C.eval_ctx -> borrow_loan_corresp
+  ids_sets -> eval_ctx -> eval_ctx -> borrow_loan_corresp
 
 (** Compute the set of "quantified" symbolic value ids in a fixed-point context.
 
@@ -163,4 +155,4 @@ val compute_fixed_point_id_correspondance :
     - the list of input symbolic values
  *)
 val compute_fp_ctx_symbolic_values :
-  C.eval_ctx -> C.eval_ctx -> V.symbolic_value_id_set * V.symbolic_value list
+  eval_ctx -> eval_ctx -> symbolic_value_id_set * symbolic_value list

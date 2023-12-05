@@ -33,37 +33,22 @@
           };
           buildInputs = [ ocamlPackages.calendar ];
         };
-        ocamlgraph = ocamlPackages.buildDunePackage rec {
-          pname = "ocamlgraph";
-          version = "2.0.0";
-          src = pkgs.fetchurl {
-            url = "https://github.com/backtracking/ocamlgraph/releases/download/2.0.0/ocamlgraph-2.0.0.tbz";
-            sha256 = "20fe267797de5322088a4dfb52389b2ea051787952a8a4f6ed70fcb697482609";
-          };
-          buildInputs = [ ocamlPackages.stdlib-shims ocamlPackages.graphics ];
-        };
-        unionFind = ocamlPackages.buildDunePackage rec {
-          pname = "unionFind";
-          version = "20220122";
-          src = pkgs.fetchurl {
-            url = "https://gitlab.inria.fr/fpottier/unionFind/-/archive/20220122/archive.tar.gz";
-            sha512 = "c49dd3f9a6689f6a5efe39c26efe2c137f8812b4be6ee76c2cc20068cf86ad73c0ac97ec9a543245dddb63792ce8c1904576b3435bf419cc7837bc5e368eee6d";
-          };
-          buildInputs = [];
-        };
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
           duneVersion = "3";
           src = ./compiler;
-          buildInputs = [ easy_logging ocamlgraph unionFind charon.packages.${system}.charon-ml ]
-            ++ (with ocamlPackages; [
+          propagatedBuildInputs = [
+            easy_logging charon.packages.${system}.charon-ml
+            ] ++ (with ocamlPackages; [
               calendar
               core_unix
               ppx_deriving
               visitors
               yojson
               zarith
+              ocamlgraph
+              unionFind
             ]);
           afterBuild = ''
           echo charon.packages.${system}.tests
@@ -89,14 +74,31 @@
             export CHARON_TESTS_POLONIUS_DIR=${charon.checks.${system}.tests-polonius}
 
             # Copy the Aeneas executable, and update the path to it
-            cp ${aeneas}/bin/aeneas_driver aeneas.exe
-            export AENEAS_EXE=./aeneas.exe
+            cp ${aeneas}/bin/aeneas aeneas
+            export AENEAS_EXE=./aeneas
 
-            # Run the tests
+            # Copy the tests
+            mkdir tests-copy
+            cp -r tests tests-copy
+
+            # TODO: remove the test files to make sure we regenerate exactly
+            # the files which are checked out (we have to be careful about
+            # files like lakefile.lean, and the user hand-written files)
+
+            # Run the tests - remark: we could remove the file
             make tests -j $NIX_BUILD_CORES
+
+            # Check that there are no differences between the generated tests
+            # and the original tests
+            if [[ $(diff -rq tests tests-copy) ]]; then
+              echo "Ok: the regenerated test files are the same as the checked out files"
+            else
+              echo "Error: the regenerated test files differ from the checked out files"
+              exit 1
+            fi
           '';
           # Tests don't generate anything new as the generated files are
-          # versionned, but the installation phase still needs to prodocue
+          # versionned, but the installation phase still needs to produce
           # something, otherwise Nix will consider the build has failed.
           installPhase = "touch $out";
         };
@@ -169,6 +171,5 @@
           default = aeneas;
         };
         checks = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean aeneas-verify-hol4; };
-        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean aeneas-verify-hol4; };
       });
 }

@@ -162,7 +162,7 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     -- Add a declaration
     let nval ← Utils.addDeclTac name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
-    Utils.simpAt [declToUnfold] [] [] (Tactic.Location.targets #[mkIdent name] false)
+    Utils.simpAt true [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
     -- Return the new value
     pure nval
 
@@ -240,7 +240,7 @@ def intTac (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Ta
   -- the goal. I think before leads to a smaller proof term?
   Tactic.allGoals (intTacPreprocess extraPreprocess)
   -- More preprocessing
-  Tactic.allGoals (Utils.tryTac (Utils.simpAt [] [``nat_zero_eq_int_zero] [] .wildcard))
+  Tactic.allGoals (Utils.tryTac (Utils.simpAt true [] [``nat_zero_eq_int_zero] [] .wildcard))
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call linarith
@@ -269,6 +269,17 @@ def intTac (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Ta
 elab "int_tac" args:(" split_goal"?): tactic =>
   let split := args.raw.getArgs.size > 0
   intTac split (do pure ())
+
+-- For termination proofs
+syntax "int_decr_tac" : tactic
+macro_rules
+  | `(tactic| int_decr_tac) =>
+    `(tactic|
+      simp_wf;
+      -- TODO: don't use a macro (namespace problems)
+      (first | apply Arith.to_int_to_nat_lt
+             | apply Arith.to_int_sub_to_nat_lt) <;>
+      simp_all <;> int_tac)
 
 example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
   int_tac_preprocess

@@ -6,21 +6,21 @@ module SccId = Identifiers.IdGen ()
 (** The local logger *)
 let log = Logging.scc_log
 
+(** A structure containing information about SCCs (strongly connected components) *)
+type 'id sccs = {
+  sccs : 'id list SccId.Map.t;
+  scc_deps : SccId.Set.t SccId.Map.t;  (** The dependencies between sccs *)
+}
+[@@deriving show]
+
 (** A functor which provides functions to work on strongly connected components *)
-module Make (Id : OrderedType) = struct
+module MakeReorder (Id : OrderedType) = struct
   module IdMap = MakeMap (Id)
   module IdSet = MakeSet (Id)
 
   type id = Id.t
 
   let pp_id = Id.pp_t
-
-  (** A structure containing information about SCCs (strongly connected components) *)
-  type sccs = {
-    sccs : id list SccId.Map.t;
-    scc_deps : SccId.Set.t SccId.Map.t;  (** The dependencies between sccs *)
-  }
-  [@@deriving show]
 
   (** The order in which Tarjan's algorithm generates the SCCs is arbitrary,
       while we want to keep as much as possible the original order (the order
@@ -93,7 +93,7 @@ module Make (Id : OrderedType) = struct
       Charon project.
   *)
   let reorder_sccs (id_deps : Id.t list IdMap.t) (ids : Id.t list)
-      (sccs : Id.t list list) : sccs =
+      (sccs : Id.t list list) : id sccs =
     (* Map the identifiers to the SCC indices *)
     let id_to_scc =
       IdMap.of_list
@@ -168,13 +168,114 @@ module Make (Id : OrderedType) = struct
     { sccs = tgt_sccs; scc_deps = tgt_deps }
 end
 
+module Make (Id : OrderedType) = struct
+  module M = MakeMap (Id)
+  module S = MakeSet (Id)
+
+  (** Compute the ordered SCC components for a graph, which is a map
+      from identifier to set of identifiers (which represent the set
+      of edges starting from an identifier).
+   *)
+  let compute (m : (Id.t * S.t) list) : Id.t sccs =
+    (*
+     * Create the dependency graph
+     *)
+    (* Compute the list/set of identifiers *)
+    let idl = List.map fst m in
+    let ids = S.of_list idl in
+
+    (* Convert the ids to vertices (i.e., injectively map ids to integers,
+       and create vertices labeled with those integers).
+
+       Rem.: [Graph.create] is *imperative*: it generates a new vertex every
+       time it is called (!!). For this reason, we first add all the vertices
+       we need, then add the edges.
+    *)
+    let open Graph in
+    let module IntMap = MakeMap (OrderedInt) in
+    let module Graph = Pack.Digraph in
+    let id_to_vertex : Graph.V.t M.t =
+      let cnt = ref 0 in
+      M.of_list
+        (List.map
+           (fun id ->
+             let lbl = !cnt in
+             cnt := !cnt + 1;
+             (* We create a vertex *)
+             let v = Graph.V.create lbl in
+             (id, v))
+           idl)
+    in
+    let vertex_to_id : Id.t IntMap.t =
+      IntMap.of_list
+        (List.map
+           (fun (fid, v) -> (Graph.V.label v, fid))
+           (M.bindings id_to_vertex))
+    in
+
+    let to_v id = M.find id id_to_vertex in
+    let to_id v = IntMap.find (Graph.V.label v) vertex_to_id in
+
+    let g = Graph.create () in
+
+    (* Add the edges, first from the vertices to themselves, then between
+       vertices. *)
+    List.iter
+      (fun (id, deps) ->
+        let v = to_v id in
+        Graph.add_edge g v v;
+        S.iter (fun dep_id -> Graph.add_edge g v (to_v dep_id)) deps)
+      m;
+
+    (* Compute the SCCs *)
+    let module Comp = Components.Make (Graph) in
+    let sccs = Comp.scc_list g in
+
+    (* Convert the vertices to ids *)
+    let sccs = List.map (List.map to_id) sccs in
+
+    (* Sanity check *)
+    let _ =
+      (* Check that the SCCs are pairwise disjoint *)
+      assert (S.pairwise_disjoint (List.map S.of_list sccs));
+      (* Check that all the ids are in the sccs *)
+      let scc_ids = S.of_list (List.concat sccs) in
+
+      log#ldebug
+        (lazy
+          ("group_reorder_fun_decls: sanity check:" ^ "\n- ids    : "
+         ^ S.show ids ^ "\n- scc_ids: " ^ S.show scc_ids));
+
+      assert (S.equal scc_ids ids)
+    in
+
+    (* Reorder *)
+    let module Reorder = MakeReorder (Id) in
+    let id_deps =
+      M.of_list (List.map (fun (fid, deps) -> (fid, S.elements deps)) m)
+    in
+    let sccs = Reorder.reorder_sccs id_deps idl sccs in
+
+    (* Sanity check *)
+    let _ =
+      (* Check that the SCCs are pairwise disjoint *)
+      let sccs = List.map snd (SccId.Map.bindings sccs.sccs) in
+      assert (S.pairwise_disjoint (List.map S.of_list sccs));
+      (* Check that all the ids are in the sccs *)
+      let scc_ids = S.of_list (List.concat sccs) in
+      assert (S.equal scc_ids ids)
+    in
+
+    sccs
+end
+
 (** Test - TODO: make "real" unit tests *)
 let _ =
   (* Check that some SCCs are correctly reordered *)
   let check_sccs (id_deps : (int * int list) list) (ids : int list)
       (sccs : int list list) (tgt_sccs : int list list) : unit =
     let module Ord = OrderedInt in
-    let module Reorder = Make (Ord) in
+    let module Reorder = MakeReorder (Ord) in
     let module Map = MakeMap (Ord) in
     let id_deps = Map.of_list id_deps in
 

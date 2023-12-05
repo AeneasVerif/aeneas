@@ -6,13 +6,16 @@ open Array.Types
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [array::sum]: decreases clause *)
+(** [array::sum]: decreases clause
+    Source: 'src/array.rs', lines 242:0-250:1 *)
 unfold
-let sum_loop_decreases (s : slice u32) (sum : u32) (i : usize) : nat = admit ()
+let sum_loop_decreases (s : slice u32) (sum0 : u32) (i : usize) : nat =
+  admit ()
 
-(** [array::sum2]: decreases clause *)
+(** [array::sum2]: decreases clause
+    Source: 'src/array.rs', lines 252:0-261:1 *)
 unfold
-let sum2_loop_decreases (s : slice u32) (s2 : slice u32) (sum : u32)
+let sum2_loop_decreases (s : slice u32) (s2 : slice u32) (sum0 : u32)
   (i : usize) : nat =
   admit ()
 

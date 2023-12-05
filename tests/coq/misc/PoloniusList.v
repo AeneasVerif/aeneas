@@ -8,34 +8,37 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module PoloniusList.
 
-(** [polonius_list::List] *)
+(** [polonius_list::List]
+    Source: 'src/polonius_list.rs', lines 3:0-3:16 *)
 Inductive List_t (T : Type) :=
-| ListCons : T -> List_t T -> List_t T
-| ListNil : List_t T
+| List_Cons : T -> List_t T -> List_t T
+| List_Nil : List_t T
 .
 
-Arguments ListCons {T} _ _.
-Arguments ListNil {T}.
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
 
-(** [polonius_list::get_list_at_x]: forward function *)
-Fixpoint get_list_at_x_fwd (ls : List_t u32) (x : u32) : result (List_t u32) :=
+(** [polonius_list::get_list_at_x]: forward function
+    Source: 'src/polonius_list.rs', lines 13:0-13:76 *)
+Fixpoint get_list_at_x (ls : List_t u32) (x : u32) : result (List_t u32) :=
   match ls with
-  | ListCons hd tl =>
-    if hd s= x then Return (ListCons hd tl) else get_list_at_x_fwd tl x
-  | ListNil => Return ListNil
+  | List_Cons hd tl =>
+    if hd s= x then Return (List_Cons hd tl) else get_list_at_x tl x
+  | List_Nil => Return List_Nil
   end
 .
 
-(** [polonius_list::get_list_at_x]: backward function 0 *)
+(** [polonius_list::get_list_at_x]: backward function 0
+    Source: 'src/polonius_list.rs', lines 13:0-13:76 *)
 Fixpoint get_list_at_x_back
   (ls : List_t u32) (x : u32) (ret : List_t u32) : result (List_t u32) :=
   match ls with
-  | ListCons hd tl =>
+  | List_Cons hd tl =>
     if hd s= x
     then Return ret
-    else (tl0 <- get_list_at_x_back tl x ret; Return (ListCons hd tl0))
-  | ListNil => Return ret
+    else (tl0 <- get_list_at_x_back tl x ret; Return (List_Cons hd tl0))
+  | List_Nil => Return ret
   end
 .
 
-End PoloniusList .
+End PoloniusList.

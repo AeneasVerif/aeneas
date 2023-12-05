@@ -17,7 +17,7 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
    -- Reveal the concrete bounds, simplify calls to [ofInt]
-   Utils.simpAt [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
+   Utils.simpAt true [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
                  ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
                  ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
                  ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
@@ -35,6 +35,17 @@ def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
 
 elab "scalar_tac" : tactic =>
   scalarTac false
+
+-- For termination proofs
+syntax "scalar_decr_tac" : tactic
+macro_rules
+  | `(tactic| scalar_decr_tac) =>
+    `(tactic|
+      simp_wf;
+      -- TODO: don't use a macro (namespace problems)
+      (first | apply Arith.to_int_to_nat_lt
+             | apply Arith.to_int_sub_to_nat_lt) <;>
+      simp_all <;> scalar_tac)
 
 instance (ty : ScalarTy) : HasIntProp (Scalar ty) where
   -- prop_ty is inferred

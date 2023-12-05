@@ -2,9 +2,10 @@ open Types
 open Expressions
 open Values
 open LlbcAst
-module V = Values
+open LlbcAstUtils
 open ValuesUtils
 open Identifiers
+module L = Logging
 
 (** The [Id] module for dummy variables.
 
@@ -16,6 +17,9 @@ module DummyVarId =
 IdGen ()
 
 type dummy_var_id = DummyVarId.id [@@deriving show, ord]
+
+(** The local logger *)
+let log = L.contexts_log
 
 (** Some global counters.
 
@@ -40,6 +44,7 @@ type dummy_var_id = DummyVarId.id [@@deriving show, ord]
     fn f x : fun_type =
       let id = fresh_id () in
       ...
+      fun () -> ...
    
     let g = f x in   // <-- the fresh identifier gets generated here
     let x1 = g () in // <-- no fresh generation here
@@ -107,16 +112,16 @@ let reset_global_counters () =
   fun_call_id_counter := FunCallId.generator_zero;
   dummy_var_id_counter := DummyVarId.generator_zero
 
-(** Ancestor for {!var_binder} iter visitor *)
-class ['self] iter_var_binder_base =
+(** Ancestor for {!type:env} iter visitor *)
+class ['self] iter_env_base =
   object (_self : 'self)
     inherit [_] iter_abs
     method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
     method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for {!var_binder} map visitor *)
-class ['self] map_var_binder_base =
+(** Ancestor for {!type:env} map visitor *)
+class ['self] map_env_base =
   object (_self : 'self)
     inherit [_] map_abs
     method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
@@ -130,97 +135,29 @@ type var_binder = {
   index : var_id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)
 }
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_var_binder";
-        variety = "iter";
-        ancestors = [ "iter_var_binder_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      },
-    visitors
-      {
-        name = "map_var_binder";
-        variety = "map";
-        ancestors = [ "map_var_binder_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      }]
 
 (** A binder, for a "real" variable or a dummy variable *)
-type binder = VarBinder of var_binder | DummyBinder of dummy_var_id
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_binder";
-        variety = "iter";
-        ancestors = [ "iter_var_binder" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      },
-    visitors
-      {
-        name = "map_binder";
-        variety = "map";
-        ancestors = [ "map_var_binder" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      }]
-
-(** Ancestor for {!env_elem} iter visitor *)
-class ['self] iter_env_elem_base =
-  object (_self : 'self)
-    inherit [_] iter_binder
-  end
-
-(** Ancestor for {!env_elem} map visitor *)
-class ['self] map_env_elem_base =
-  object (_self : 'self)
-    inherit [_] map_binder
-  end
+and binder = BVar of var_binder | BDummy of dummy_var_id
 
 (** Environment value: mapping from variable to value, abstraction (only
     used in symbolic mode) or stack frame delimiter.
-    
-    TODO: rename Var (-> Binding?)
  *)
-type env_elem =
-  | Var of binder * typed_value
+and env_elem =
+  | EBinding of binder * typed_value
       (** Variable binding - the binder is None if the variable is a dummy variable
           (we use dummy variables to store temporaries while doing bookkeeping such
            as ending borrows for instance). *)
-  | Abs of abs
-  | Frame
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_env_elem";
-        variety = "iter";
-        ancestors = [ "iter_env_elem_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      },
-    visitors
-      {
-        name = "map_env_elem";
-        variety = "map";
-        ancestors = [ "map_env_elem_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-        concrete = true;
-      }]
+  | EAbs of abs
+  | EFrame
 
-type env = env_elem list
+and env = env_elem list
 [@@deriving
   show,
     visitors
       {
         name = "iter_env";
         variety = "iter";
-        ancestors = [ "iter_env_elem" ];
+        ancestors = [ "iter_env_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
@@ -228,7 +165,7 @@ type env = env_elem list
       {
         name = "map_env";
         variety = "map";
-        ancestors = [ "map_env_elem" ];
+        ancestors = [ "map_env_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
@@ -250,26 +187,84 @@ type type_context = {
 }
 [@@deriving show]
 
-type fun_context = { fun_decls : fun_decl FunDeclId.Map.t } [@@deriving show]
+type fun_context = {
+  fun_decls : fun_decl FunDeclId.Map.t;
+  fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
+  regions_hierarchies : region_var_groups FunIdMap.t;
+}
+[@@deriving show]
 
 type global_context = { global_decls : global_decl GlobalDeclId.Map.t }
 [@@deriving show]
+
+type trait_decls_context = { trait_decls : trait_decl TraitDeclId.Map.t }
+[@@deriving show]
+
+type trait_impls_context = { trait_impls : trait_impl TraitImplId.Map.t }
+[@@deriving show]
+
+type decls_ctx = {
+  type_ctx : type_context;
+  fun_ctx : fun_context;
+  global_ctx : global_context;
+  trait_decls_ctx : trait_decls_context;
+  trait_impls_ctx : trait_impls_context;
+}
+[@@deriving show]
+
+(** A reference to a trait associated type *)
+type trait_type_ref = { trait_ref : trait_ref; type_name : string }
+[@@deriving show, ord]
+
+(* TODO: correctly use the functors so as not to have a duplication below *)
+module TraitTypeRefOrd = struct
+  type t = trait_type_ref
+
+  let compare = compare_trait_type_ref
+  let to_string = show_trait_type_ref
+  let pp_t = pp_trait_type_ref
+  let show_t = show_trait_type_ref
+end
+
+module TraitTypeRefMap = Collections.MakeMap (TraitTypeRefOrd)
 
 (** Evaluation context *)
 type eval_ctx = {
   type_context : type_context;
   fun_context : fun_context;
   global_context : global_context;
+  trait_decls_context : trait_decls_context;
+  trait_impls_context : trait_impls_context;
   region_groups : RegionGroupId.id list;
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
+  const_generic_vars_map : typed_value Types.ConstGenericVarId.Map.t;
+      (** The map from const generic vars to their values. Those values
+          can be symbolic values or concrete values (in the latter case:
+          if we run in interpreter mode).
+
+          TODO: this is actually not used in symbolic mode, where we
+          directly introduce fresh symbolic values.
+       *)
+  norm_trait_types : ty TraitTypeRefMap.t;
+      (** The normalized trait types (a map from trait types to their representatives).
+          Note that this doesn't take into account higher-order type constraints
+          (of the shape `for<'a> ...`). *)
   env : env;
   ended_regions : RegionId.Set.t;
 }
 [@@deriving show]
 
+let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) : type_var option
+    =
+  TypeVarId.nth_opt ctx.type_vars vid
+
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
+
+let lookup_const_generic_var_opt (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
+    const_generic_var option =
+  ConstGenericVarId.nth_opt ctx.const_generic_vars vid
 
 let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
     const_generic_var =
@@ -284,10 +279,10 @@ let env_lookup_var (env : env) (vid : VarId.id) : var_binder * typed_value =
     match env with
     | [] ->
         raise (Invalid_argument ("Variable not found: " ^ VarId.to_string vid))
-    | Var (VarBinder var, v) :: env' ->
+    | EBinding (BVar var, v) :: env' ->
         if var.index = vid then (var, v) else lookup env'
-    | (Var (DummyBinder _, _) | Abs _) :: env' -> lookup env'
-    | Frame :: _ -> raise (Failure "End of frame")
+    | (EBinding (BDummy _, _) | EAbs _) :: env' -> lookup env'
+    | EFrame :: _ -> raise (Failure "End of frame")
   in
   lookup env
 
@@ -304,6 +299,12 @@ let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) :
     global_decl =
   GlobalDeclId.Map.find gid ctx.global_context.global_decls
 
+let ctx_lookup_trait_decl (ctx : eval_ctx) (id : TraitDeclId.id) : trait_decl =
+  TraitDeclId.Map.find id ctx.trait_decls_context.trait_decls
+
+let ctx_lookup_trait_impl (ctx : eval_ctx) (id : TraitImplId.id) : trait_impl =
+  TraitImplId.Map.find id ctx.trait_impls_context.trait_impls
+
 (** Retrieve a variable's value in the current frame *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
   snd (env_lookup_var env vid)
@@ -311,6 +312,11 @@ let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
 (** Retrieve a variable's value in an evaluation context *)
 let ctx_lookup_var_value (ctx : eval_ctx) (vid : VarId.id) : typed_value =
   env_lookup_var_value ctx.env vid
+
+(** Retrieve a const generic value in an evaluation context *)
+let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
+    : typed_value =
+  Types.ConstGenericVarId.Map.find vid ctx.const_generic_vars_map
 
 (** Update a variable's value in the current frame.
 
@@ -324,11 +330,11 @@ let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
   let rec update env =
     match env with
     | [] -> raise (Failure "Unexpected")
-    | Var ((VarBinder b as var), v) :: env' ->
-        if b.index = vid then Var (var, nv) :: env'
-        else Var (var, v) :: update env'
-    | ((Var (DummyBinder _, _) | Abs _) as ee) :: env' -> ee :: update env'
-    | Frame :: _ -> raise (Failure "End of frame")
+    | EBinding ((BVar b as var), v) :: env' ->
+        if b.index = vid then EBinding (var, nv) :: env'
+        else EBinding (var, v) :: update env'
+    | ((EBinding (BDummy _, _) | EAbs _) as ee) :: env' -> ee :: update env'
+    | EFrame :: _ -> raise (Failure "End of frame")
   in
   update env
 
@@ -350,9 +356,9 @@ let ctx_update_var_value (ctx : eval_ctx) (vid : VarId.id) (nv : typed_value) :
     is important).
 *)
 let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
-  assert (var.var_ty = v.ty);
+  assert (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty);
   let bv = var_to_binder var in
-  { ctx with env = Var (VarBinder bv, v) :: ctx.env }
+  { ctx with env = EBinding (BVar bv, v) :: ctx.env }
 
 (** Push a list of variables.
 
@@ -361,13 +367,23 @@ let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
 *)
 let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
     =
+  log#ldebug
+    (lazy
+      ("push_vars:\n"
+      ^ String.concat "\n"
+          (List.map
+             (fun (var, value) ->
+               (* We can unfortunately not use Print because it depends on Contexts... *)
+               show_var var ^ " -> " ^ show_typed_value value)
+             vars)));
   assert (
     List.for_all
-      (fun (var, (value : typed_value)) -> var.var_ty = value.ty)
+      (fun (var, (value : typed_value)) ->
+        TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
       vars);
   let vars =
     List.map
-      (fun (var, value) -> Var (VarBinder (var_to_binder var), value))
+      (fun (var, value) -> EBinding (BVar (var_to_binder var), value))
       vars
   in
   let vars = List.rev vars in
@@ -376,7 +392,7 @@ let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
 (** Push a dummy variable in the context's environment. *)
 let ctx_push_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) (v : typed_value)
     : eval_ctx =
-  { ctx with env = Var (DummyBinder vid, v) :: ctx.env }
+  { ctx with env = EBinding (BDummy vid, v) :: ctx.env }
 
 (** Remove a dummy variable from a context's environment. *)
 let ctx_remove_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) :
@@ -384,7 +400,7 @@ let ctx_remove_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) :
   let rec remove_var (env : env) : env * typed_value =
     match env with
     | [] -> raise (Failure "Could not lookup a dummy variable")
-    | Var (DummyBinder vid', v) :: env when vid' = vid -> (env, v)
+    | EBinding (BDummy vid', v) :: env when vid' = vid -> (env, v)
     | ee :: env ->
         let env, v = remove_var env in
         (ee :: env, v)
@@ -397,53 +413,61 @@ let ctx_lookup_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) : typed_value =
   let rec lookup_var (env : env) : typed_value =
     match env with
     | [] -> raise (Failure "Could not lookup a dummy variable")
-    | Var (DummyBinder vid', v) :: _env when vid' = vid -> v
+    | EBinding (BDummy vid', v) :: _env when vid' = vid -> v
     | _ :: env -> lookup_var env
   in
   lookup_var ctx.env
 
-(** Push an uninitialized variable (which thus maps to {!constructor:Values.value.Bottom}) *)
-let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =
-  ctx_push_var ctx var (mk_bottom var.var_ty)
+let erase_regions (ty : ty) : ty =
+  let v =
+    object
+      inherit [_] map_ty
+      method! visit_region _ _ = RErased
+    end
+  in
+  v#visit_ty () ty
 
-(** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.Bottom}) *)
+(** Push an uninitialized variable (which thus maps to {!constructor:Values.value.VBottom}) *)
+let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =
+  ctx_push_var ctx var (mk_bottom (erase_regions var.var_ty))
+
+(** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
-  let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in
+  let vars = List.map (fun v -> (v, mk_bottom (erase_regions v.var_ty))) vars in
   ctx_push_vars ctx vars
 
-let env_find_abs (env : env) (pred : V.abs -> bool) : V.abs option =
+let env_find_abs (env : env) (pred : abs -> bool) : abs option =
   let rec lookup env =
     match env with
     | [] -> None
-    | Var (_, _) :: env' -> lookup env'
-    | Abs abs :: env' -> if pred abs then Some abs else lookup env'
-    | Frame :: env' -> lookup env'
+    | EBinding (_, _) :: env' -> lookup env'
+    | EAbs abs :: env' -> if pred abs then Some abs else lookup env'
+    | EFrame :: env' -> lookup env'
   in
   lookup env
 
-let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
+let env_lookup_abs (env : env) (abs_id : AbstractionId.id) : abs =
   Option.get (env_find_abs env (fun abs -> abs.abs_id = abs_id))
 
 (** Remove an abstraction from the context, as well as all the references to
     this abstraction (for instance, remove the abs id from all the parent sets
     of all the other abstractions).
  *)
-let env_remove_abs (env : env) (abs_id : V.AbstractionId.id) :
-    env * V.abs option =
-  let rec remove (env : env) : env * V.abs option =
+let env_remove_abs (env : env) (abs_id : AbstractionId.id) : env * abs option =
+  let rec remove (env : env) : env * abs option =
     match env with
     | [] -> raise (Failure "Unreachable")
-    | Frame :: _ -> (env, None)
-    | Var (bv, v) :: env ->
+    | EFrame :: _ -> (env, None)
+    | EBinding (bv, v) :: env ->
         let env, abs_opt = remove env in
-        (Var (bv, v) :: env, abs_opt)
-    | Abs abs :: env ->
+        (EBinding (bv, v) :: env, abs_opt)
+    | EAbs abs :: env ->
         if abs.abs_id = abs_id then (env, Some abs)
         else
           let env, abs_opt = remove env in
           (* Update the parents set *)
-          let parents = V.AbstractionId.Set.remove abs_id abs.parents in
-          (Abs { abs with V.parents } :: env, abs_opt)
+          let parents = AbstractionId.Set.remove abs_id abs.parents in
+          (EAbs { abs with parents } :: env, abs_opt)
   in
   remove env
 
@@ -454,50 +478,50 @@ let env_remove_abs (env : env) (abs_id : V.AbstractionId.id) :
     we also substitute the abstraction id wherever it is used (i.e., in the
     parent sets of the other abstractions).
  *)
-let env_subst_abs (env : env) (abs_id : V.AbstractionId.id) (nabs : V.abs) :
-    env * V.abs option =
-  let rec update (env : env) : env * V.abs option =
+let env_subst_abs (env : env) (abs_id : AbstractionId.id) (nabs : abs) :
+    env * abs option =
+  let rec update (env : env) : env * abs option =
     match env with
     | [] -> raise (Failure "Unreachable")
-    | Frame :: _ -> (* We're done *) (env, None)
-    | Var (bv, v) :: env ->
+    | EFrame :: _ -> (* We're done *) (env, None)
+    | EBinding (bv, v) :: env ->
         let env, opt_abs = update env in
-        (Var (bv, v) :: env, opt_abs)
-    | Abs abs :: env ->
-        if abs.abs_id = abs_id then (Abs nabs :: env, Some abs)
+        (EBinding (bv, v) :: env, opt_abs)
+    | EAbs abs :: env ->
+        if abs.abs_id = abs_id then (EAbs nabs :: env, Some abs)
         else
           let env, opt_abs = update env in
           (* Update the parents set *)
           let parents = abs.parents in
           let parents =
-            if V.AbstractionId.Set.mem abs_id parents then
-              let parents = V.AbstractionId.Set.remove abs_id parents in
-              V.AbstractionId.Set.add nabs.abs_id parents
+            if AbstractionId.Set.mem abs_id parents then
+              let parents = AbstractionId.Set.remove abs_id parents in
+              AbstractionId.Set.add nabs.abs_id parents
             else parents
           in
-          (Abs { abs with V.parents } :: env, opt_abs)
+          (EAbs { abs with parents } :: env, opt_abs)
   in
   update env
 
-let ctx_lookup_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) : V.abs =
+let ctx_lookup_abs (ctx : eval_ctx) (abs_id : AbstractionId.id) : abs =
   env_lookup_abs ctx.env abs_id
 
-let ctx_find_abs (ctx : eval_ctx) (p : V.abs -> bool) : V.abs option =
+let ctx_find_abs (ctx : eval_ctx) (p : abs -> bool) : abs option =
   env_find_abs ctx.env p
 
 (** See the comments for {!env_remove_abs} *)
-let ctx_remove_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) :
-    eval_ctx * V.abs option =
+let ctx_remove_abs (ctx : eval_ctx) (abs_id : AbstractionId.id) :
+    eval_ctx * abs option =
   let env, abs = env_remove_abs ctx.env abs_id in
   ({ ctx with env }, abs)
 
 (** See the comments for {!env_subst_abs} *)
-let ctx_subst_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) (nabs : V.abs)
-    : eval_ctx * V.abs option =
+let ctx_subst_abs (ctx : eval_ctx) (abs_id : AbstractionId.id) (nabs : abs) :
+    eval_ctx * abs option =
   let env, abs_opt = env_subst_abs ctx.env abs_id nabs in
   ({ ctx with env }, abs_opt)
 
-let ctx_set_abs_can_end (ctx : eval_ctx) (abs_id : V.AbstractionId.id)
+let ctx_set_abs_can_end (ctx : eval_ctx) (abs_id : AbstractionId.id)
     (can_end : bool) : eval_ctx =
   let abs = ctx_lookup_abs ctx abs_id in
   let abs = { abs with can_end } in
@@ -505,7 +529,7 @@ let ctx_set_abs_can_end (ctx : eval_ctx) (abs_id : V.AbstractionId.id)
 
 let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
   let decl_group = TypeDeclId.Map.find id ctx.type_context.type_decls_groups in
-  match decl_group with Rec _ -> true | NonRec _ -> false
+  match decl_group with RecGroup _ -> true | NonRecGroup _ -> false
 
 (** Visitor to iterate over the values in the *current* frame *)
 class ['self] iter_frame =
@@ -516,7 +540,7 @@ class ['self] iter_frame =
       fun acc env ->
         match env with
         | [] -> ()
-        | Frame :: _ -> (* We stop here *) ()
+        | EFrame :: _ -> (* We stop here *) ()
         | em :: env ->
             self#visit_env_elem acc em;
             self#visit_env acc env
@@ -531,7 +555,7 @@ class ['self] map_frame_concrete =
       fun acc env ->
         match env with
         | [] -> []
-        | Frame :: env -> (* We stop here *) Frame :: env
+        | EFrame :: env -> (* We stop here *) EFrame :: env
         | em :: env ->
             let em = self#visit_env_elem acc em in
             let env = self#visit_env acc env in
@@ -558,20 +582,20 @@ class ['self] map_eval_ctx =
         { ctx with env }
   end
 
-let env_iter_abs (f : V.abs -> unit) (env : env) : unit =
+let env_iter_abs (f : abs -> unit) (env : env) : unit =
   List.iter
     (fun (ee : env_elem) ->
-      match ee with Var _ | Frame -> () | Abs abs -> f abs)
+      match ee with EBinding _ | EFrame -> () | EAbs abs -> f abs)
     env
 
-let env_map_abs (f : V.abs -> V.abs) (env : env) : env =
+let env_map_abs (f : abs -> abs) (env : env) : env =
   List.map
     (fun (ee : env_elem) ->
-      match ee with Var _ | Frame -> ee | Abs abs -> Abs (f abs))
+      match ee with EBinding _ | EFrame -> ee | EAbs abs -> EAbs (f abs))
     env
 
-let env_filter_abs (f : V.abs -> bool) (env : env) : env =
+let env_filter_abs (f : abs -> bool) (env : env) : env =
   List.filter
     (fun (ee : env_elem) ->
-      match ee with Var _ | Frame -> true | Abs abs -> f abs)
+      match ee with EBinding _ | EFrame -> true | EAbs abs -> f abs)
     env

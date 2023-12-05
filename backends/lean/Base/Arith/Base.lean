@@ -57,4 +57,16 @@ theorem int_pos_ind (p : Int → Prop) :
 -- TODO: there is probably something more general to do
 theorem nat_zero_eq_int_zero : (0 : Nat) = (0 : Int) := by simp
 
+-- This is mostly used in termination proofs
+theorem to_int_to_nat_lt (x y : ℤ) (h0 : 0 ≤ x) (h1 : x < y) :
+  ↑(x.toNat) < y := by
+  simp [*]
+
+-- This is mostly used in termination proofs
+theorem to_int_sub_to_nat_lt (x y : ℤ) (x' : ℕ)
+  (h0 : ↑x' ≤ x) (h1 : x - ↑x' < y) :
+  ↑(x.toNat - x') < y := by
+  have : 0 ≤ x := by linarith
+  simp [Int.toNat_sub_of_le, *]
+
 end Arith

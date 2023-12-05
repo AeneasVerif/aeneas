@@ -6,12 +6,8 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
+Require Import External_TypesExternal.
+Include External_TypesExternal.
 Module External_Types.
 
-(** [core::num::nonzero::NonZeroU32] *)
-Axiom Core_num_nonzero_non_zero_u32_t : Type.
-
-(** The state type used in the state-error monad *)
-Axiom state : Type.
-
-End External_Types .
+End External_Types.
