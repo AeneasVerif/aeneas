@@ -427,6 +427,9 @@ def Scalar.cast {src_ty : ScalarTy} (tgt_ty : ScalarTy) (x : Scalar src_ty) : Re
 @[reducible] def U64   := Scalar .U64
 @[reducible] def U128  := Scalar .U128
 
+instance (ty : ScalarTy) : Inhabited (Scalar ty) := by
+  constructor; cases ty <;> apply (Scalar.ofInt 0)
+
 -- TODO: reducible?
 @[reducible] def core_isize_min : Isize := Scalar.ofInt Isize.min (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Isize))
 @[reducible] def core_isize_max : Isize := Scalar.ofInt Isize.max (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Isize))
