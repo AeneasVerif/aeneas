@@ -448,8 +448,8 @@ let give_back_symbolic_value (_config : config) (proj_regions : RegionId.Set.t)
   | SynthInputGivenBack | SynthRetGivenBack | FunCallGivenBack | LoopGivenBack
     ->
       ()
-  | FunCallRet | SynthInput | Global | LoopOutput | LoopJoin | Aggregate
-  | ConstGeneric | TraitConst ->
+  | FunCallRet | SynthInput | Global | KindConstGeneric | LoopOutput | LoopJoin
+  | Aggregate | ConstGeneric | TraitConst ->
       raise (Failure "Unreachable"));
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in

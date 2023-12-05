@@ -241,7 +241,11 @@ type eval_ctx = {
   const_generic_vars_map : typed_value Types.ConstGenericVarId.Map.t;
       (** The map from const generic vars to their values. Those values
           can be symbolic values or concrete values (in the latter case:
-          if we run in interpreter mode) *)
+          if we run in interpreter mode).
+
+          TODO: this is actually not used in symbolic mode, where we
+          directly introduce fresh symbolic values.
+       *)
   norm_trait_types : ty TraitTypeRefMap.t;
       (** The normalized trait types (a map from trait types to their representatives).
           Note that this doesn't take into account higher-order type constraints

@@ -1086,6 +1086,8 @@ let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * typed_pattern =
   (* Return *)
   (ctx, state_pat)
 
+(** WARNING: do not call this function directly.
+    Call [fresh_named_var_for_symbolic_value] instead. *)
 let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * var =
   (* Generate the fresh variable *)
@@ -2506,9 +2508,13 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)
     (ctx : bs_ctx) : texpression =
+  log#ldebug
+    (lazy
+      ("translate_intro_symbolic:" ^ "\n- value aggregate: "
+     ^ S.show_value_aggregate v));
   let mplace = translate_opt_mplace p in
 
-  (* Introduce a fresh variable for the symbolic value *)
+  (* Introduce a fresh variable for the symbolic value. *)
   let ctx, var = fresh_var_for_symbolic_value sv ctx in
 
   (* Translate the next expression *)

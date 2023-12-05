@@ -273,8 +273,8 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : eval_ctx)
               raise Found
             else ()
         | SynthInput | SynthInputGivenBack | FunCallGivenBack
-        | SynthRetGivenBack | Global | LoopGivenBack | Aggregate | ConstGeneric
-        | TraitConst ->
+        | SynthRetGivenBack | Global | KindConstGeneric | LoopGivenBack
+        | Aggregate | ConstGeneric | TraitConst ->
             ()
     end
   in

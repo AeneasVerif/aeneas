@@ -42,6 +42,7 @@ type sv_kind =
   | SynthInputGivenBack
       (** The value was given back upon ending one of the input abstractions *)
   | Global  (** The value is a global *)
+  | KindConstGeneric  (** The value is a const generic *)
   | LoopOutput  (** The output of a loop (seen as a forward computation) *)
   | LoopGivenBack
       (** A value given back by a loop (when ending abstractions while going backwards) *)
