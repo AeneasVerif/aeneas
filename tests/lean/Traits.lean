@@ -190,13 +190,11 @@ def h4
 
 /- [traits::TestType]
    Source: 'src/traits.rs', lines 122:0-122:22 -/
-structure TestType (T : Type) where
-  _0 : T
+@[reducible] def TestType (T : Type) := T
 
 /- [traits::{traits::TestType<T>#6}::test::TestType1]
    Source: 'src/traits.rs', lines 127:8-127:24 -/
-structure TestType.test.TestType1 where
-  _0 : U64
+@[reducible] def TestType.test.TestType1 := U64
 
 /- Trait declaration: [traits::{traits::TestType<T>#6}::test::TestTrait]
    Source: 'src/traits.rs', lines 128:8-128:23 -/
@@ -207,7 +205,7 @@ structure TestType.test.TestTrait (Self : Type) where
    Source: 'src/traits.rs', lines 139:12-139:34 -/
 def TestType.test.TestType1.test
   (self : TestType.test.TestType1) : Result Bool :=
-  Result.ret (self._0 > 1#u64)
+  Result.ret (self > 1#u64)
 
 /- Trait implementation: [traits::{traits::TestType<T>#6}::test::{traits::{traits::TestType<T>#6}::test::TestType1}]
    Source: 'src/traits.rs', lines 138:8-138:36 -/
@@ -225,13 +223,12 @@ def TestType.test
   do
     let x0 ← ToU64TInst.to_u64 x
     if x0 > 0#u64
-    then TestType.test.TestType1.test { _0 := 0#u64 }
+    then TestType.test.TestType1.test 0#u64
     else Result.ret false
 
 /- [traits::BoolWrapper]
    Source: 'src/traits.rs', lines 150:0-150:22 -/
-structure BoolWrapper where
-  _0 : Bool
+@[reducible] def BoolWrapper := Bool
 
 /- [traits::{traits::BoolWrapper#7}::to_type]: forward function
    Source: 'src/traits.rs', lines 156:4-156:25 -/
@@ -239,7 +236,7 @@ def BoolWrapper.to_type
   (T : Type) (ToTypeBoolTInst : ToType Bool T) (self : BoolWrapper) :
   Result T
   :=
-  ToTypeBoolTInst.to_type self._0
+  ToTypeBoolTInst.to_type self
 
 /- Trait implementation: [traits::{traits::BoolWrapper#7}]
    Source: 'src/traits.rs', lines 152:0-152:33 -/

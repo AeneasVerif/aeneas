@@ -223,18 +223,11 @@ Definition h4
 
 (** [traits::TestType]
     Source: 'src/traits.rs', lines 122:0-122:22 *)
-Record TestType_t (T : Type) := mkTestType_t { testType_0 : T; }.
-
-Arguments mkTestType_t { _ }.
-Arguments testType_0 { _ }.
+Definition TestType_t (T : Type) : Type := T.
 
 (** [traits::{traits::TestType<T>#6}::test::TestType1]
     Source: 'src/traits.rs', lines 127:8-127:24 *)
-Record TestType_test_TestType1_t :=
-mkTestType_test_TestType1_t {
-  testType_test_TestType1_0 : u64;
-}
-.
+Definition TestType_test_TestType1_t : Type := u64.
 
 (** Trait declaration: [traits::{traits::TestType<T>#6}::test::TestTrait]
     Source: 'src/traits.rs', lines 128:8-128:23 *)
@@ -249,7 +242,7 @@ Arguments TestType_test_TestTrait_t_test { _ }.
     Source: 'src/traits.rs', lines 139:12-139:34 *)
 Definition testType_test_TestType1_test
   (self : TestType_test_TestType1_t) : result bool :=
-  Return (self.(testType_test_TestType1_0) s> 1%u64)
+  Return (self s> 1%u64)
 .
 
 (** Trait implementation: [traits::{traits::TestType<T>#6}::test::{traits::{traits::TestType<T>#6}::test::TestType1}]
@@ -266,14 +259,12 @@ Definition testType_test
   result bool
   :=
   x0 <- toU64TInst.(ToU64_t_to_u64) x;
-  if x0 s> 0%u64
-  then testType_test_TestType1_test {| testType_test_TestType1_0 := 0%u64 |}
-  else Return false
+  if x0 s> 0%u64 then testType_test_TestType1_test 0%u64 else Return false
 .
 
 (** [traits::BoolWrapper]
     Source: 'src/traits.rs', lines 150:0-150:22 *)
-Record BoolWrapper_t := mkBoolWrapper_t { boolWrapper_0 : bool; }.
+Definition BoolWrapper_t : Type := bool.
 
 (** [traits::{traits::BoolWrapper#7}::to_type]: forward function
     Source: 'src/traits.rs', lines 156:4-156:25 *)
@@ -281,7 +272,7 @@ Definition boolWrapper_to_type
   (T : Type) (toTypeBoolTInst : ToType_t bool T) (self : BoolWrapper_t) :
   result T
   :=
-  toTypeBoolTInst.(ToType_t_to_type) self.(boolWrapper_0)
+  toTypeBoolTInst.(ToType_t_to_type) self
 .
 
 (** Trait implementation: [traits::{traits::BoolWrapper#7}]

@@ -42,7 +42,7 @@ Inductive Enum_t := | Enum_Variant1 : Enum_t | Enum_Variant2 : Enum_t.
 
 (** [no_nested_borrows::EmptyStruct]
     Source: 'src/no_nested_borrows.rs', lines 39:0-39:22 *)
-Record EmptyStruct_t := mkEmptyStruct_t {  }.
+Definition EmptyStruct_t : Type := unit.
 
 (** [no_nested_borrows::Sum]
     Source: 'src/no_nested_borrows.rs', lines 41:0-41:20 *)
@@ -643,5 +643,37 @@ Definition test_shared_borrow_enum1 (l : List_t u32) : result u32 :=
     Source: 'src/no_nested_borrows.rs', lines 519:0-519:40 *)
 Definition test_shared_borrow_enum2 : result u32 :=
   Return 0%u32.
+
+(** [no_nested_borrows::Tuple]
+    Source: 'src/no_nested_borrows.rs', lines 530:0-530:24 *)
+Definition Tuple_t (T1 T2 : Type) : Type := T1 * T2.
+
+(** [no_nested_borrows::use_tuple_struct]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ())
+    Source: 'src/no_nested_borrows.rs', lines 532:0-532:48 *)
+Definition use_tuple_struct (x : Tuple_t u32 u32) : result (Tuple_t u32 u32) :=
+  let (_, i) := x in Return (1%u32, i)
+.
+
+(** [no_nested_borrows::create_tuple_struct]: forward function
+    Source: 'src/no_nested_borrows.rs', lines 536:0-536:61 *)
+Definition create_tuple_struct
+  (x : u32) (y : u64) : result (Tuple_t u32 u64) :=
+  Return (x, y)
+.
+
+(** [no_nested_borrows::IdType]
+    Source: 'src/no_nested_borrows.rs', lines 541:0-541:20 *)
+Definition IdType_t (T : Type) : Type := T.
+
+(** [no_nested_borrows::use_id_type]: forward function
+    Source: 'src/no_nested_borrows.rs', lines 543:0-543:40 *)
+Definition use_id_type (T : Type) (x : IdType_t T) : result T :=
+  Return x.
+
+(** [no_nested_borrows::create_id_type]: forward function
+    Source: 'src/no_nested_borrows.rs', lines 547:0-547:43 *)
+Definition create_id_type (T : Type) (x : T) : result (IdType_t T) :=
+  Return x.
 
 End NoNestedBorrows.
