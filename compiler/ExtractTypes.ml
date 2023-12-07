@@ -915,15 +915,20 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a struct as a tuple *)
 let extract_type_decl_tuple_struct_body (ctx : extraction_ctx)
     (fmt : F.formatter) (fields : field list) : unit =
-  let sep = match !backend with Coq | FStar | HOL4 -> "*" | Lean -> "×" in
-  Collections.List.iter_link
-    (fun () ->
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt sep)
-    (fun (f : field) ->
-      F.pp_print_space fmt ();
-      extract_ty ctx fmt TypeDeclId.Set.empty true f.field_ty)
-    fields
+  (* If the type is empty, we need to have a special treatment *)
+  if fields = [] then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt (unit_name ()))
+  else
+    let sep = match !backend with Coq | FStar | HOL4 -> "*" | Lean -> "×" in
+    Collections.List.iter_link
+      (fun () ->
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt sep)
+      (fun (f : field) ->
+        F.pp_print_space fmt ();
+        extract_ty ctx fmt TypeDeclId.Set.empty true f.field_ty)
+      fields
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
@@ -1287,8 +1292,9 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
   in
-  let is_tuple_struct_one_field =
-    is_tuple_struct && match def.kind with Struct [ _ ] -> true | _ -> false
+  let is_tuple_struct_one_or_zero_field =
+    is_tuple_struct
+    && match def.kind with Struct [] | Struct [ _ ] -> true | _ -> false
   in
   let type_kind =
     if extract_body then
@@ -1336,7 +1342,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      We need this annotation, otherwise Lean sometimes doesn't manage to typecheck
      the expressions when it needs to coerce the type.
   *)
-  if is_tuple_struct_one_field && !backend = Lean then (
+  if is_tuple_struct_one_or_zero_field && !backend = Lean then (
     F.pp_print_string fmt "@[reducible]";
     F.pp_print_space fmt ())
   else ();
