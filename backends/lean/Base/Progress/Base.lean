@@ -154,6 +154,7 @@ structure PSpecAttr where
    specs of the scalar operations, which is what I really need, but I'm not sure it
    applies well to other situations. A better way would probably to use type classes, but
    I couldn't get them to work on those cases. It is worth retrying.
+   UPDATE: use discrimination trees (`DiscrTree`) from core Lean
 -/
 structure PSpecClassAttr where
   attr : AttributeImpl
