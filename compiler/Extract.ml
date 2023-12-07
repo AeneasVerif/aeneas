@@ -531,28 +531,41 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
    * projection ([x.field] instead of [MkAdt?.field x] *)
   match args with
   | [ arg ] ->
-      (* Exactly one argument: pretty-print *)
-      let field_name =
-        (* Check if we need to extract the type as a structure *)
-        if
-          PureUtils.type_decl_from_type_id_is_tuple_struct
-            ctx.trans_ctx.type_ctx.type_infos proj.adt_id
-        then FieldId.to_string proj.field_id
-        else ctx_get_field proj.adt_id proj.field_id ctx
+      let is_tuple_struct =
+        PureUtils.type_decl_from_type_id_is_tuple_struct
+          ctx.trans_ctx.type_ctx.type_infos proj.adt_id
       in
-      (* Open a box *)
-      F.pp_open_hovbox fmt ctx.indent_incr;
-      (* Extract the expression *)
-      extract_texpression ctx fmt true arg;
-      (* We allow to break where the "." appears (except Lean, it's a syntax error) *)
-      if !backend <> Lean then F.pp_print_break fmt 0 0;
-      F.pp_print_string fmt ".";
-      (* If in Coq, the field projection has to be parenthesized *)
-      (match !backend with
-      | FStar | Lean | HOL4 -> F.pp_print_string fmt field_name
-      | Coq -> F.pp_print_string fmt ("(" ^ field_name ^ ")"));
-      (* Close the box *)
-      F.pp_close_box fmt ()
+      (* Check if we extract the type as a tuple, and it only has one field.
+         In this case, there is no projection. *)
+      let has_one_field =
+        match proj.adt_id with
+        | TAdtId id -> (
+            let d = TypeDeclId.Map.find id ctx.trans_types in
+            match d.kind with Struct [ _ ] -> true | _ -> false)
+        | _ -> false
+      in
+      if is_tuple_struct && has_one_field then
+        extract_texpression ctx fmt inside arg
+      else
+        (* Exactly one argument: pretty-print *)
+        let field_name =
+          (* Check if we need to extract the type as a tuple *)
+          if is_tuple_struct then FieldId.to_string proj.field_id
+          else ctx_get_field proj.adt_id proj.field_id ctx
+        in
+        (* Open a box *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        (* Extract the expression *)
+        extract_texpression ctx fmt true arg;
+        (* We allow to break where the "." appears (except Lean, it's a syntax error) *)
+        if !backend <> Lean then F.pp_print_break fmt 0 0;
+        F.pp_print_string fmt ".";
+        (* If in Coq, the field projection has to be parenthesized *)
+        (match !backend with
+        | FStar | Lean | HOL4 -> F.pp_print_string fmt field_name
+        | Coq -> F.pp_print_string fmt ("(" ^ field_name ^ ")"));
+        (* Close the box *)
+        F.pp_close_box fmt ()
   | arg :: args ->
       (* Call extract_App again, but in such a way that the first argument is
        * isolated *)

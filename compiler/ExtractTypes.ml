@@ -1287,6 +1287,9 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
   in
+  let is_tuple_struct_one_field =
+    is_tuple_struct && match def.kind with Struct [ _ ] -> true | _ -> false
+  in
   let type_kind =
     if extract_body then
       if is_tuple_struct then Some Tuple
@@ -1329,6 +1332,14 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       if is_tuple_struct then F.pp_open_hvbox fmt 0 else F.pp_open_vbox fmt 0);
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS CONST_GEN_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
+  (* > "@[reducible]"
+     We need this annotation, otherwise Lean sometimes doesn't manage to typecheck
+     the expressions when it needs to coerce the type.
+  *)
+  if is_tuple_struct_one_field && !backend = Lean then (
+    F.pp_print_string fmt "@[reducible]";
+    F.pp_print_space fmt ())
+  else ();
   (* > "type TYPE_NAME" *)
   let qualif = type_decl_kind_to_qualif kind type_kind in
   (match qualif with
