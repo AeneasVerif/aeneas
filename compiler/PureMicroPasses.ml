@@ -667,8 +667,8 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     leave the let-bindings where they are, and eliminated them in a subsequent
     pass (if they are useless).
  *)
-let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
-    (def : fun_decl) : fun_decl =
+let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
+    (inline_pure : bool) (def : fun_decl) : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -677,9 +677,12 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
           the substitution map while doing so *)
       method! visit_Let (env : texpression VarId.Map.t) monadic lv re e =
         (* In order to filter, we need to check first that:
-         * - the let-binding is not monadic
-         * - the left-value is a variable
-         *)
+           - the let-binding is not monadic
+           - the left-value is a variable
+
+           We also inline if the binding decomposes a structure that is to be
+           extracted as a tuple, and the right value is a variable.
+        *)
         match (monadic, lv.value) with
         | false, PatVar (lv_var, _) ->
             (* We can filter if: *)
@@ -725,6 +728,31 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
             let e = self#visit_texpression env e in
             (* Reconstruct the [let], only if the binding is not filtered *)
             if filter then e.e else Let (monadic, lv, re, e)
+        | ( false,
+            PatAdt
+              {
+                variant_id = None;
+                field_values = [ { value = PatVar (lv_var, _); ty = _ } ];
+              } ) ->
+            (* Second case: we deconstruct a structure with one field that we will
+               extract as tuple. *)
+            let adt_id, _ = PureUtils.ty_as_adt re.ty in
+            (* Update the rhs (we may perform substitutions inside, and it is
+             * better to do them *before* we inline it *)
+            let re = self#visit_texpression env re in
+            if
+              PureUtils.is_var re
+              && type_decl_from_type_id_is_tuple_struct ctx.type_ctx.type_infos
+                   adt_id
+            then
+              (* Update the substitution environment *)
+              let env = VarId.Map.add lv_var.id re env in
+              (* Update the next expression *)
+              let e = self#visit_texpression env e in
+              (* We filter the [let], and thus do not reconstruct it *)
+              e.e
+            else (* Nothing to do *)
+              super#visit_Let env monadic lv re e
         | _ -> super#visit_Let env monadic lv re e
 
       (** Substitute the variables *)
@@ -1792,7 +1820,7 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let inline_named_vars = true in
   let inline_pure = true in
   let def =
-    inline_useless_var_reassignments inline_named_vars inline_pure def
+    inline_useless_var_reassignments ctx inline_named_vars inline_pure def
   in
   log#ldebug
     (lazy
