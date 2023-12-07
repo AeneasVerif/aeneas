@@ -687,3 +687,14 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
   in
   parent_trait_refs = [] && consts = [] && types = [] && required_methods = []
   && provided_methods = []
+
+(** Return true if a type declaration should be extracted as a tuple, because
+    it is a non-recursive structure with unnamed fields. *)
+let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
+    (id : type_id) : bool =
+  match id with
+  | TTuple -> true
+  | TAdtId id ->
+      let info = TypeDeclId.Map.find id ctx in
+      info.is_tuple_struct
+  | TAssumed _ -> false

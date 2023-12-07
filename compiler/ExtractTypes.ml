@@ -1,7 +1,4 @@
 (** The generic extraction *)
-(* Turn the whole module into a functor: it is very annoying to carry the
-   the formatter everywhere...
-*)
 
 open Pure
 open PureUtils
@@ -696,92 +693,101 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
    * - the field names, if this is a structure
    *)
   let ctx =
-    match def.kind with
-    | Struct fields ->
-        (* Compute the names *)
-        let field_names, cons_name =
-          match info with
-          | None | Some { body_info = None; _ } ->
-              let field_names =
-                FieldId.mapi
-                  (fun fid (field : field) ->
-                    ( fid,
-                      ctx_compute_field_name ctx def.llbc_name fid
-                        field.field_name ))
-                  fields
-              in
-              let cons_name =
-                ctx_compute_struct_constructor ctx def.llbc_name
-              in
-              (field_names, cons_name)
-          | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
-              let field_names =
-                FieldId.mapi
-                  (fun fid (field : field) ->
-                    let rust_name = Option.get field.field_name in
+    (* Ignore this if the type is to be extracted as a tuple *)
+    if
+      TypesUtils.type_decl_from_decl_id_is_tuple_struct
+        ctx.trans_ctx.type_ctx.type_infos def.def_id
+    then ctx
+    else
+      match def.kind with
+      | Struct fields ->
+          (* Compute the names *)
+          let field_names, cons_name =
+            match info with
+            | None | Some { body_info = None; _ } ->
+                let field_names =
+                  FieldId.mapi
+                    (fun fid (field : field) ->
+                      ( fid,
+                        ctx_compute_field_name ctx def.llbc_name fid
+                          field.field_name ))
+                    fields
+                in
+                let cons_name =
+                  ctx_compute_struct_constructor ctx def.llbc_name
+                in
+                (field_names, cons_name)
+            | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
+                let field_names =
+                  FieldId.mapi
+                    (fun fid (field : field) ->
+                      let rust_name = Option.get field.field_name in
+                      let name =
+                        snd
+                          (List.find (fun (n, _) -> n = rust_name) field_names)
+                      in
+                      (fid, name))
+                    fields
+                in
+                (field_names, cons_name)
+            | Some info ->
+                raise
+                  (Failure
+                     ("Invalid builtin information: "
+                     ^ show_builtin_type_info info))
+          in
+          (* Add the fields *)
+          let ctx =
+            List.fold_left
+              (fun ctx (fid, name) ->
+                ctx_add (FieldId (TAdtId def.def_id, fid)) name ctx)
+              ctx field_names
+          in
+          (* Add the constructor name *)
+          ctx_add (StructId (TAdtId def.def_id)) cons_name ctx
+      | Enum variants ->
+          let variant_names =
+            match info with
+            | None ->
+                VariantId.mapi
+                  (fun variant_id (variant : variant) ->
                     let name =
-                      snd (List.find (fun (n, _) -> n = rust_name) field_names)
+                      ctx_compute_variant_name ctx def.llbc_name
+                        variant.variant_name
                     in
-                    (fid, name))
-                  fields
-              in
-              (field_names, cons_name)
-          | Some info ->
-              raise
-                (Failure
-                   ("Invalid builtin information: "
-                   ^ show_builtin_type_info info))
-        in
-        (* Add the fields *)
-        let ctx =
+                    (* Add the type name prefix for Lean *)
+                    let name =
+                      if !Config.backend = Lean then
+                        let type_name =
+                          ctx_compute_type_name ctx def.llbc_name
+                        in
+                        type_name ^ "." ^ name
+                      else name
+                    in
+                    (variant_id, name))
+                  variants
+            | Some { body_info = Some (Enum variant_infos); _ } ->
+                (* We need to compute the map from variant to variant *)
+                let variant_map =
+                  StringMap.of_list
+                    (List.map
+                       (fun (info : builtin_enum_variant_info) ->
+                         (info.rust_variant_name, info.extract_variant_name))
+                       variant_infos)
+                in
+                VariantId.mapi
+                  (fun variant_id (variant : variant) ->
+                    (variant_id, StringMap.find variant.variant_name variant_map))
+                  variants
+            | _ -> raise (Failure "Invalid builtin information")
+          in
           List.fold_left
-            (fun ctx (fid, name) ->
-              ctx_add (FieldId (TAdtId def.def_id, fid)) name ctx)
-            ctx field_names
-        in
-        (* Add the constructor name *)
-        ctx_add (StructId (TAdtId def.def_id)) cons_name ctx
-    | Enum variants ->
-        let variant_names =
-          match info with
-          | None ->
-              VariantId.mapi
-                (fun variant_id (variant : variant) ->
-                  let name =
-                    ctx_compute_variant_name ctx def.llbc_name
-                      variant.variant_name
-                  in
-                  (* Add the type name prefix for Lean *)
-                  let name =
-                    if !Config.backend = Lean then
-                      let type_name = ctx_compute_type_name ctx def.llbc_name in
-                      type_name ^ "." ^ name
-                    else name
-                  in
-                  (variant_id, name))
-                variants
-          | Some { body_info = Some (Enum variant_infos); _ } ->
-              (* We need to compute the map from variant to variant *)
-              let variant_map =
-                StringMap.of_list
-                  (List.map
-                     (fun (info : builtin_enum_variant_info) ->
-                       (info.rust_variant_name, info.extract_variant_name))
-                     variant_infos)
-              in
-              VariantId.mapi
-                (fun variant_id (variant : variant) ->
-                  (variant_id, StringMap.find variant.variant_name variant_map))
-                variants
-          | _ -> raise (Failure "Invalid builtin information")
-        in
-        List.fold_left
-          (fun ctx (vid, vname) ->
-            ctx_add (VariantId (TAdtId def.def_id, vid)) vname ctx)
-          ctx variant_names
-    | Opaque ->
-        (* Nothing to do *)
-        ctx
+            (fun ctx (vid, vname) ->
+              ctx_add (VariantId (TAdtId def.def_id, vid)) vname ctx)
+            ctx variant_names
+      | Opaque ->
+          (* Nothing to do *)
+          ctx
   in
   (* Return *)
   ctx
@@ -905,6 +911,19 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the variants *)
   let variants = VariantId.mapi (fun vid v -> (vid, v)) variants in
   List.iter (fun (vid, v) -> print_variant vid v) variants
+
+(** Extract a struct as a tuple *)
+let extract_type_decl_tuple_struct_body (ctx : extraction_ctx)
+    (fmt : F.formatter) (fields : field list) : unit =
+  let sep = match !backend with Coq | FStar | HOL4 -> "*" | Lean -> "×" in
+  Collections.List.iter_link
+    (fun () ->
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt sep)
+    (fun (f : field) ->
+      F.pp_print_space fmt ();
+      extract_ty ctx fmt TypeDeclId.Set.empty true f.field_ty)
+    fields
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
@@ -1264,12 +1283,18 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (extract_body : bool) : unit =
   (* Sanity check *)
   assert (extract_body || !backend <> HOL4);
+  let is_tuple_struct =
+    TypesUtils.type_decl_from_decl_id_is_tuple_struct
+      ctx.trans_ctx.type_ctx.type_infos def.def_id
+  in
   let type_kind =
     if extract_body then
-      match def.kind with
-      | Struct _ -> Some Struct
-      | Enum _ -> Some Enum
-      | Opaque -> None
+      if is_tuple_struct then Some Tuple
+      else
+        match def.kind with
+        | Struct _ -> Some Struct
+        | Enum _ -> Some Enum
+        | Opaque -> None
     else None
   in
   (* If in Coq and the declaration is opaque, it must have the shape:
@@ -1300,7 +1325,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    * for parsing: we thus use a hovbox. *)
   (match !backend with
   | Coq | FStar | HOL4 -> F.pp_open_hvbox fmt 0
-  | Lean -> F.pp_open_vbox fmt 0);
+  | Lean ->
+      if is_tuple_struct then F.pp_open_hvbox fmt 0 else F.pp_open_vbox fmt 0);
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS CONST_GEN_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
@@ -1320,7 +1346,11 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     let eq =
       match !backend with
       | FStar -> "="
-      | Coq -> ":="
+      | Coq ->
+          (* For Coq, the `*` is overloaded. If we want to extract a product
+             type (and not a product between, say, integers) we need to help Coq
+             a bit *)
+          if is_tuple_struct then ": Type :=" else ":="
       | Lean ->
           if type_kind = Some Struct && kind = SingleNonRec then "where"
           else ":="
@@ -1341,8 +1371,11 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (if extract_body then
      match def.kind with
      | Struct fields ->
-         extract_type_decl_struct_body ctx_body fmt type_decl_group kind def
-           type_params cg_params fields
+         if is_tuple_struct then
+           extract_type_decl_tuple_struct_body ctx_body fmt fields
+         else
+           extract_type_decl_struct_body ctx_body fmt type_decl_group kind def
+             type_params cg_params fields
      | Enum variants ->
          extract_type_decl_enum_body ctx_body fmt type_decl_group def def_name
            type_params cg_params variants
@@ -1670,8 +1703,13 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
   match !backend with
   | FStar | Lean | HOL4 -> ()
   | Coq ->
-      extract_type_decl_coq_arguments ctx fmt kind decl;
-      extract_type_decl_record_field_projectors ctx fmt kind decl
+      if
+        not
+          (TypesUtils.type_decl_from_decl_id_is_tuple_struct
+             ctx.trans_ctx.type_ctx.type_infos decl.def_id)
+      then (
+        extract_type_decl_coq_arguments ctx fmt kind decl;
+        extract_type_decl_record_field_projectors ctx fmt kind decl)
 
 (** Extract the state type declaration. *)
 let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)

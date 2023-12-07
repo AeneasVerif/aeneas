@@ -563,12 +563,13 @@ let remove_meta (def : fun_decl) : fun_decl =
 
     This micro-pass turns those into expressions which use structure syntax:
     {[
-      {
-        f0 := x0;
-        ...
-        fn := xn;
-      }
+      type struct = { f0 : nat; f1 : nat; f2 : nat }
+
+      Mkstruct x.f0 x.f1 y ~~> { x with f2 = y }
     ]}
+
+    Note however that we do not apply this transformation if the
+    structure is to be extracted as a tuple.
  *)
 let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let obj =
@@ -592,37 +593,44 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 } ->
                 (* Lookup the def *)
                 let decl = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
-                (* Check that there are as many arguments as there are fields - note
-                   that the def should have a body (otherwise we couldn't use the
-                   constructor) *)
-                let fields = TypesUtils.type_decl_get_fields decl None in
-                if List.length fields = List.length args then
-                  (* Check if the definition is recursive *)
-                  let is_rec =
-                    match
-                      TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls_groups
-                    with
-                    | NonRecGroup _ -> false
-                    | RecGroup _ -> true
-                  in
-                  (* Convert, if possible - note that for now for Lean and Coq
-                     we don't support the structure syntax on recursive structures *)
-                  if
-                    (!Config.backend <> Lean && !Config.backend <> Coq)
-                    || not is_rec
-                  then
-                    let struct_id = TAdtId adt_id in
-                    let init = None in
-                    let updates =
-                      FieldId.mapi
-                        (fun fid fe -> (fid, self#visit_texpression env fe))
-                        args
+                (* Check if the def will be extracted as a tuple *)
+                if
+                  TypesUtils.type_decl_from_decl_id_is_tuple_struct
+                    ctx.type_ctx.type_infos adt_id
+                then ignore ()
+                else
+                  (* Check that there are as many arguments as there are fields - note
+                     that the def should have a body (otherwise we couldn't use the
+                     constructor) *)
+                  let fields = TypesUtils.type_decl_get_fields decl None in
+                  if List.length fields = List.length args then
+                    (* Check if the definition is recursive *)
+                    let is_rec =
+                      match
+                        TypeDeclId.Map.find adt_id
+                          ctx.type_ctx.type_decls_groups
+                      with
+                      | NonRecGroup _ -> false
+                      | RecGroup _ -> true
                     in
-                    let ne = { struct_id; init; updates } in
-                    let nty = e.ty in
-                    { e = StructUpdate ne; ty = nty }
+                    (* Convert, if possible - note that for now for Lean and Coq
+                       we don't support the structure syntax on recursive structures *)
+                    if
+                      (!Config.backend <> Lean && !Config.backend <> Coq)
+                      || not is_rec
+                    then
+                      let struct_id = TAdtId adt_id in
+                      let init = None in
+                      let updates =
+                        FieldId.mapi
+                          (fun fid fe -> (fid, self#visit_texpression env fe))
+                          args
+                      in
+                      let ne = { struct_id; init; updates } in
+                      let nty = e.ty in
+                      { e = StructUpdate ne; ty = nty }
+                    else ignore ()
                   else ignore ()
-                else ignore ()
             | _ -> ignore ())
         | _ -> super#visit_texpression env e
     end
@@ -1069,12 +1077,10 @@ let simplify_let_then_return _ctx def =
 (** Simplify the aggregated ADTs.
     Ex.:
     {[
-      type struct = { f0 : nat; f1 : nat }
+      type struct = { f0 : nat; f1 : nat; f2 : nat }
 
-      Mkstruct x.f0 x.f1 ~~> x
+      Mkstruct x.f0 x.f1 x.f2 ~~> x
     ]}
-    
-    TODO: introduce a notation for [{ x with field = ... }], and use it.
  *)
 let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let expr_visitor =

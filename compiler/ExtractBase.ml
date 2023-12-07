@@ -109,7 +109,7 @@ let decl_is_first_from_group (kind : decl_kind) : bool =
 let decl_is_not_last_from_group (kind : decl_kind) : bool =
   not (decl_is_last_from_group kind)
 
-type type_decl_kind = Enum | Struct [@@deriving show]
+type type_decl_kind = Enum | Struct | Tuple [@@deriving show]
 
 (** We use identifiers to look for name clashes *)
 type id =
@@ -1194,12 +1194,13 @@ let type_decl_kind_to_qualif (kind : decl_kind)
       | Declared -> Some "val")
   | Coq -> (
       match (kind, type_kind) with
+      | SingleNonRec, Some Tuple -> Some "Definition"
       | SingleNonRec, Some Enum -> Some "Inductive"
       | SingleNonRec, Some Struct -> Some "Record"
       | (SingleRec | MutRecFirst), Some _ -> Some "Inductive"
       | (MutRecInner | MutRecLast), Some _ ->
           (* Coq doesn't support groups of mutually recursive definitions which mix
-           * records and inducties: we convert everything to records if this happens
+           * records and inductives: we convert everything to records if this happens
            *)
           Some "with"
       | (Assumed | Declared), None -> Some "Axiom"
@@ -1214,12 +1215,12 @@ let type_decl_kind_to_qualif (kind : decl_kind)
                ^ ")")))
   | Lean -> (
       match kind with
-      | SingleNonRec ->
-          if type_kind = Some Struct then Some "structure" else Some "inductive"
-      | SingleRec -> Some "inductive"
-      | MutRecFirst -> Some "inductive"
-      | MutRecInner -> Some "inductive"
-      | MutRecLast -> Some "inductive"
+      | SingleNonRec -> (
+          match type_kind with
+          | Some Tuple -> Some "def"
+          | Some Struct -> Some "structure"
+          | _ -> Some "inductive")
+      | SingleRec | MutRecFirst | MutRecInner | MutRecLast -> Some "inductive"
       | Assumed -> Some "axiom"
       | Declared -> Some "axiom")
   | HOL4 -> None

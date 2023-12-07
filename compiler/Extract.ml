@@ -111,7 +111,7 @@ let extract_global_decl_register_names (ctx : extraction_ctx)
     context updated with new bindings.
 
     [is_single_pat]: are we extracting a single pattern (a pattern for a let-binding
-    or a lambda).
+    or a lambda)?
 
     TODO: we don't need something very generic anymore (some definitions used
     to be polymorphic).
@@ -121,38 +121,53 @@ let extract_adt_g_value
     (fmt : F.formatter) (ctx : extraction_ctx) (is_single_pat : bool)
     (inside : bool) (variant_id : VariantId.id option) (field_values : 'v list)
     (ty : ty) : extraction_ctx =
+  let extract_as_tuple () =
+    (* This is very annoying: in Coq, we can't write [()] for the value of
+       type [unit], we have to write [tt]. *)
+    if !backend = Coq && field_values = [] then (
+      F.pp_print_string fmt "tt";
+      ctx)
+    else
+      (* If there is exactly one value, we don't print the parentheses *)
+      let lb, rb =
+        if List.length field_values = 1 then ("", "") else ("(", ")")
+      in
+      F.pp_print_string fmt lb;
+      let ctx =
+        Collections.List.fold_left_link
+          (fun () ->
+            F.pp_print_string fmt ",";
+            F.pp_print_space fmt ())
+          (fun ctx v -> extract_value ctx false v)
+          ctx field_values
+      in
+      F.pp_print_string fmt rb;
+      ctx
+  in
   match ty with
   | TAdt (TTuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
       assert (List.length generics.types = List.length field_values);
       assert (generics.const_generics = [] && generics.trait_refs = []);
-      (* This is very annoying: in Coq, we can't write [()] for the value of
-         type [unit], we have to write [tt]. *)
-      if !backend = Coq && field_values = [] then (
-        F.pp_print_string fmt "tt";
-        ctx)
-      else (
-        F.pp_print_string fmt "(";
-        let ctx =
-          Collections.List.fold_left_link
-            (fun () ->
-              F.pp_print_string fmt ",";
-              F.pp_print_space fmt ())
-            (fun ctx v -> extract_value ctx false v)
-            ctx field_values
-        in
-        F.pp_print_string fmt ")";
-        ctx)
+      extract_as_tuple ()
   | TAdt (adt_id, _) ->
       (* "Regular" ADT *)
+      (* We may still extract the ADT as a tuple, if none of the fields are
+         named *)
+      if
+        PureUtils.type_decl_from_type_id_is_tuple_struct
+          ctx.trans_ctx.type_ctx.type_infos adt_id
+      then (* Extract as a tuple *)
+        extract_as_tuple ()
+      else if
+        (* If we are generating a pattern for a let-binding and we target Lean,
+           the syntax is: `let ⟨ x0, ..., xn ⟩ := ...`.
 
-      (* If we are generating a pattern for a let-binding and we target Lean,
-         the syntax is: `let ⟨ x0, ..., xn ⟩ := ...`.
-
-         Otherwise, it is: `let Cons x0 ... xn = ...`
-      *)
-      if is_single_pat && !Config.backend = Lean then (
+           Otherwise, it is: `let Cons x0 ... xn = ...`
+        *)
+        is_single_pat && !Config.backend = Lean
+      then (
         F.pp_print_string fmt "⟨";
         F.pp_print_space fmt ();
         let ctx =
@@ -517,7 +532,14 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
   match args with
   | [ arg ] ->
       (* Exactly one argument: pretty-print *)
-      let field_name = ctx_get_field proj.adt_id proj.field_id ctx in
+      let field_name =
+        (* Check if we need to extract the type as a structure *)
+        if
+          PureUtils.type_decl_from_type_id_is_tuple_struct
+            ctx.trans_ctx.type_ctx.type_infos proj.adt_id
+        then FieldId.to_string proj.field_id
+        else ctx_get_field proj.adt_id proj.field_id ctx
+      in
       (* Open a box *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Extract the expression *)

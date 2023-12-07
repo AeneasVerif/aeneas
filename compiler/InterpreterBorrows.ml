@@ -706,7 +706,7 @@ let reborrow_shared (original_bid : BorrowId.id) (new_bid : BorrowId.id)
 (** Convert an {!type:avalue} to a {!type:value}.
 
     This function is used when ending abstractions: whenever we end a borrow
-    in an abstraction, we converted the borrowed {!avalue} to a fresh symbolic
+    in an abstraction, we convert the borrowed {!avalue} to a fresh symbolic
     {!type:value}, then give back this {!type:value} to the context.
 
     Note that some regions may have ended in the symbolic value we generate.
@@ -719,8 +719,7 @@ let reborrow_shared (original_bid : BorrowId.id) (new_bid : BorrowId.id)
     be expanded (because expanding this symbolic value would require expanding
     a reference whose region has already ended).
  *)
-let convert_avalue_to_given_back_value (abs_kind : abs_kind) (av : typed_avalue)
-    : symbolic_value =
+let convert_avalue_to_given_back_value (av : typed_avalue) : symbolic_value =
   mk_fresh_symbolic_value av.ty
 
 (** Auxiliary function: see {!end_borrow_aux}.
@@ -739,8 +738,8 @@ let convert_avalue_to_given_back_value (abs_kind : abs_kind) (av : typed_avalue)
     borrows. This kind of internal reshuffling. should be similar to ending
     abstractions (it is tantamount to ending *sub*-abstractions).
  *)
-let give_back (config : config) (abs_id_opt : AbstractionId.id option)
-    (l : BorrowId.id) (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
+let give_back (config : config) (l : BorrowId.id) (bc : g_borrow_content)
+    (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
   log#ldebug
     (lazy
@@ -781,9 +780,7 @@ let give_back (config : config) (abs_id_opt : AbstractionId.id option)
          Rem.: we shouldn't do this here. We should do this in a function
          which takes care of ending *sub*-abstractions.
       *)
-      let abs_id = Option.get abs_id_opt in
-      let abs = ctx_lookup_abs ctx abs_id in
-      let sv = convert_avalue_to_given_back_value abs.kind av in
+      let sv = convert_avalue_to_given_back_value av in
       (* Update the context *)
       give_back_avalue_to_same_abstraction config l av
         (mk_typed_value_from_symbolic_value sv)
@@ -929,14 +926,14 @@ let rec end_borrow_aux (config : config) (chain : borrow_or_abs_ids)
       cf_check cf ctx
   (* We found a borrow and replaced it with [Bottom]: give it back (i.e., update
      the corresponding loan) *)
-  | Ok (ctx, Some (abs_id_opt, bc)) ->
+  | Ok (ctx, Some (_, bc)) ->
       (* Sanity check: the borrowed value shouldn't contain loans *)
       (match bc with
       | Concrete (VMutBorrow (_, bv)) ->
           assert (Option.is_none (get_first_loan_in_value bv))
       | _ -> ());
       (* Give back the value *)
-      let ctx = give_back config abs_id_opt l bc ctx in
+      let ctx = give_back config l bc ctx in
       (* Do a sanity check and continue *)
       cf_check cf ctx
 
@@ -1161,7 +1158,7 @@ and end_abstraction_borrows (config : config) (chain : borrow_or_abs_ids)
         match bc with
         | AMutBorrow (bid, av) ->
             (* First, convert the avalue to a (fresh symbolic) value *)
-            let sv = convert_avalue_to_given_back_value abs.kind av in
+            let sv = convert_avalue_to_given_back_value av in
             (* Replace the mut borrow to register the fact that we ended
              * it and store with it the freshly generated given back value *)
             let ended_borrow = ABorrow (AEndedMutBorrow (sv, av)) in

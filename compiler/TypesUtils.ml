@@ -111,3 +111,21 @@ let trait_type_constraint_no_regions (x : trait_type_constraint) : bool =
     raise_if_region_ty_visitor#visit_ty () ty;
     true
   with Found -> false
+
+(** Return true if a type declaration should be extracted as a tuple, because
+    it is a non-recursive structure with unnamed fields. *)
+let type_decl_from_decl_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
+    (id : TypeDeclId.id) : bool =
+  let info = TypeDeclId.Map.find id ctx in
+  info.is_tuple_struct
+
+(** Return true if a type declaration should be extracted as a tuple, because
+    it is a non-recursive structure with unnamed fields. *)
+let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
+    (id : type_id) : bool =
+  match id with
+  | TTuple -> true
+  | TAdtId id ->
+      let info = TypeDeclId.Map.find id ctx in
+      info.is_tuple_struct
+  | TAssumed _ -> false
