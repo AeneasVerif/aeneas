@@ -389,7 +389,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
   let match_distinct_literals (ty : ety) (_ : literal) (_ : literal) :
       typed_value =
-    mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin ty
+    mk_fresh_symbolic_typed_value_from_no_regions_ty ty
 
   let match_distinct_adts (ty : ety) (adt0 : adt_value) (adt1 : adt_value) :
       typed_value =
@@ -418,7 +418,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     check_loans false adt1.field_values;
 
     (* No borrows, no loans: we can introduce a symbolic value *)
-    mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin ty
+    mk_fresh_symbolic_typed_value_from_no_regions_ty ty
 
   let match_shared_borrows _ (ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) :
       borrow_id =
@@ -435,9 +435,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       (* Generate a fresh symbolic value for the shared value *)
       let _, bv_ty, kind = ty_as_ref ty in
-      let sv =
-        mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin bv_ty
-      in
+      let sv = mk_fresh_symbolic_typed_value_from_no_regions_ty bv_ty in
 
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
@@ -582,9 +580,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       (* Generate a fresh symbolic value for the borrowed value *)
       let _, bv_ty, kind = ty_as_ref ty in
-      let sv =
-        mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin bv_ty
-      in
+      let sv = mk_fresh_symbolic_typed_value_from_no_regions_ty bv_ty in
 
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
@@ -664,7 +660,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          borrows *)
       assert (not (ty_has_borrows S.ctx.type_context.type_infos sv0.sv_ty));
       (* We simply introduce a fresh symbolic value *)
-      mk_fresh_symbolic_value LoopJoin sv0.sv_ty)
+      mk_fresh_symbolic_value sv0.sv_ty)
 
   let match_symbolic_with_other (left : bool) (sv : symbolic_value)
       (v : typed_value) : typed_value =
@@ -685,7 +681,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
         else raise (ValueMatchFailure (LoanInRight id)));
     (* Return a fresh symbolic value *)
-    mk_fresh_symbolic_typed_value LoopJoin sv.sv_ty
+    mk_fresh_symbolic_typed_value sv.sv_ty
 
   let match_bottom_with_other (left : bool) (v : typed_value) : typed_value =
     (* If there are outer loans in the non-bottom value, raise an exception.
@@ -834,7 +830,7 @@ struct
 
   let match_distinct_literals (ty : ety) (_ : literal) (_ : literal) :
       typed_value =
-    mk_fresh_symbolic_typed_value_from_no_regions_ty LoopJoin ty
+    mk_fresh_symbolic_typed_value_from_no_regions_ty ty
 
   let match_distinct_adts (_ty : ety) (_adt0 : adt_value) (_adt1 : adt_value) :
       typed_value =
@@ -904,11 +900,7 @@ struct
         GetSetSid.match_e "match_symbolic_values: ids: " S.sid_map id0 id1
       in
       let sv_ty = match_rtys sv0.sv_ty sv1.sv_ty in
-      let sv_kind =
-        if sv0.sv_kind = sv1.sv_kind then sv0.sv_kind
-        else raise (Distinct "match_symbolic_values: sv_kind")
-      in
-      let sv = { sv_id; sv_ty; sv_kind } in
+      let sv = { sv_id; sv_ty } in
       sv
     else (
       (* Check: fixed values are fixed *)

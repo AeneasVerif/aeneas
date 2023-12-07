@@ -2299,11 +2299,11 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       match sexp with
       | V.SeLiteral _ ->
           (* We do not *register* symbolic expansions to literal
-                   * values in the symbolic ADT *)
+             values in the symbolic ADT *)
           raise (Failure "Unreachable")
       | SeMutRef (_, nsv) | SeSharedRef (_, nsv) ->
           (* The (mut/shared) borrow type is extracted to identity: we thus simply
-                   * introduce an reassignment *)
+             introduce an reassignment *)
           let ctx, var = fresh_var_for_symbolic_value nsv ctx in
           let next_e = translate_expression e ctx in
           let monadic = false in
@@ -2324,10 +2324,10 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
                && !Config.always_deconstruct_adts_with_matches) ->
           (* There is exactly one branch: no branching.
 
-                     We can decompose the ADT value with a let-binding, unless
-                     the backend doesn't support this (see {!Config.always_deconstruct_adts_with_matches}):
-                     we *ignore* this branch (and go to the next one) if the ADT is a custom
-                     adt, and [always_deconstruct_adts_with_matches] is true.
+             We can decompose the ADT value with a let-binding, unless
+             the backend doesn't support this (see {!Config.always_deconstruct_adts_with_matches}):
+             we *ignore* this branch (and go to the next one) if the ADT is a custom
+             adt, and [always_deconstruct_adts_with_matches] is true.
           *)
           translate_ExpandAdt_one_branch sv scrutinee scrutinee_mplace
             variant_id svl branch ctx
@@ -2361,7 +2361,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           { e; ty })
   | ExpandBool (true_e, false_e) ->
       (* We don't need to update the context: we don't introduce any
-       * new values/variables *)
+         new values/variables *)
       let true_e = translate_expression true_e ctx in
       let false_e = translate_expression false_e ctx in
       let e =
@@ -2376,7 +2376,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :
           match_branch =
         (* We don't need to update the context: we don't introduce any
-           * new values/variables *)
+           new values/variables *)
         let branch = translate_expression branch_e ctx in
         let pat = mk_typed_pattern_from_literal (VScalar v) in
         { pat; branch }
@@ -2436,20 +2436,28 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       (* Detect if this is an enumeration or not *)
       let tdef = bs_ctx_lookup_llbc_type_decl adt_id ctx in
       let is_enum = TypesUtils.type_decl_is_enum tdef in
-      (* We deconstruct the ADT with a let-binding in two situations:
+      (* We deconstruct the ADT with a single let-binding in two situations:
          - if the ADT is an enumeration (which must have exactly one branch)
          - if we forbid using field projectors.
       *)
       let is_rec_def =
         T.TypeDeclId.Set.mem adt_id ctx.type_context.recursive_decls
       in
-      let use_let =
+      let use_let_with_cons =
         is_enum
         || !Config.dont_use_field_projectors
         (* TODO: for now, we don't have field projectors over recursive ADTs in Lean. *)
         || (!Config.backend = Lean && is_rec_def)
+        (* Also, there is a special case when the ADT is to be extracted as
+           a tuple, because it is a structure with unnamed fields. Some backends
+           like Lean have projectors for tuples (like so: `x.3`), but others
+           like Coq don't, in which case we have to deconstruct the whole ADT
+           at once (`let (a, b, c) = x in`) *)
+        || TypesUtils.type_decl_from_type_id_is_tuple_struct
+             ctx.type_context.type_infos type_id
+           && not (Config.backend_has_tuple_projectors ())
       in
-      if use_let then
+      if use_let_with_cons then
         (* Introduce a let binding which expands the ADT *)
         let lvars = List.map (fun v -> mk_typed_pattern_from_var v None) vars in
         let lv = mk_adt_pattern scrutinee.ty variant_id lvars in

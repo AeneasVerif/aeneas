@@ -560,3 +560,32 @@ let test_shared_borrow_enum1 (l : list_t u32) : result u32 =
 let test_shared_borrow_enum2 : result u32 =
   Return 0
 
+(** [no_nested_borrows::Tuple]
+    Source: 'src/no_nested_borrows.rs', lines 530:0-530:24 *)
+type tuple_t (t1 t2 : Type0) = t1 * t2
+
+(** [no_nested_borrows::use_tuple_struct]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ())
+    Source: 'src/no_nested_borrows.rs', lines 532:0-532:48 *)
+let use_tuple_struct (x : tuple_t u32 u32) : result (tuple_t u32 u32) =
+  let (_, i) = x in Return (1, i)
+
+(** [no_nested_borrows::create_tuple_struct]: forward function
+    Source: 'src/no_nested_borrows.rs', lines 536:0-536:61 *)
+let create_tuple_struct (x : u32) (y : u64) : result (tuple_t u32 u64) =
+  Return (x, y)
+
+(** [no_nested_borrows::IdType]
+    Source: 'src/no_nested_borrows.rs', lines 541:0-541:20 *)
+type idType_t (t : Type0) = t
+
+(** [no_nested_borrows::use_id_type]: forward function
+    Source: 'src/no_nested_borrows.rs', lines 543:0-543:40 *)
+let use_id_type (t : Type0) (x : idType_t t) : result t =
+  Return x
+
+(** [no_nested_borrows::create_id_type]: forward function
+    Source: 'src/no_nested_borrows.rs', lines 547:0-547:43 *)
+let create_id_type (t : Type0) (x : t) : result (idType_t t) =
+  Return x
+

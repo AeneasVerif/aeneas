@@ -338,7 +338,7 @@ let type_check_pure_code = ref false
     as far as possible while leaving "holes" in the generated code? *)
 let fail_hard = ref true
 
-(** if true, add the type name as a prefix
+(** If true, add the type name as a prefix
     to the variant names.
     Ex.:
     In Rust:
@@ -364,3 +364,19 @@ let fail_hard = ref true
       ]}
  *)
 let variant_concatenate_type_name = ref true
+
+(** If true, extract the structures with unnamed fields as tuples.
+
+    ex.:
+    {[
+      // Rust
+      struct Foo(u32)
+
+      // OCaml
+      type Foo = (u32)
+    ]}
+ *)
+let use_tuple_structs = ref true
+
+let backend_has_tuple_projectors () =
+  match !backend with Lean -> true | Coq | FStar | HOL4 -> false

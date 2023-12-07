@@ -206,7 +206,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
-    List.map (fun ty -> mk_fresh_symbolic_value SynthInput ty) inst_sg.inputs
+    List.map (fun ty -> mk_fresh_symbolic_value ty) inst_sg.inputs
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in

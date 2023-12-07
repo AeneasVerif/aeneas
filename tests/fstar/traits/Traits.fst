@@ -177,11 +177,11 @@ let h4
 
 (** [traits::TestType]
     Source: 'src/traits.rs', lines 122:0-122:22 *)
-type testType_t (t : Type0) = { _0 : t; }
+type testType_t (t : Type0) = t
 
 (** [traits::{traits::TestType<T>#6}::test::TestType1]
     Source: 'src/traits.rs', lines 127:8-127:24 *)
-type testType_test_TestType1_t = { _0 : u64; }
+type testType_test_TestType1_t = u64
 
 (** Trait declaration: [traits::{traits::TestType<T>#6}::test::TestTrait]
     Source: 'src/traits.rs', lines 128:8-128:23 *)
@@ -193,7 +193,7 @@ noeq type testType_test_TestTrait_t (self : Type0) = {
     Source: 'src/traits.rs', lines 139:12-139:34 *)
 let testType_test_TestType1_test
   (self : testType_test_TestType1_t) : result bool =
-  Return (self._0 > 1)
+  Return (self > 1)
 
 (** Trait implementation: [traits::{traits::TestType<T>#6}::test::{traits::{traits::TestType<T>#6}::test::TestType1}]
     Source: 'src/traits.rs', lines 138:8-138:36 *)
@@ -209,11 +209,11 @@ let testType_test
   result bool
   =
   let* x0 = toU64TInst.to_u64 x in
-  if x0 > 0 then testType_test_TestType1_test { _0 = 0 } else Return false
+  if x0 > 0 then testType_test_TestType1_test 0 else Return false
 
 (** [traits::BoolWrapper]
     Source: 'src/traits.rs', lines 150:0-150:22 *)
-type boolWrapper_t = { _0 : bool; }
+type boolWrapper_t = bool
 
 (** [traits::{traits::BoolWrapper#7}::to_type]: forward function
     Source: 'src/traits.rs', lines 156:4-156:25 *)
@@ -221,7 +221,7 @@ let boolWrapper_to_type
   (t : Type0) (toTypeBoolTInst : toType_t bool t) (self : boolWrapper_t) :
   result t
   =
-  toTypeBoolTInst.to_type self._0
+  toTypeBoolTInst.to_type self
 
 (** Trait implementation: [traits::{traits::BoolWrapper#7}]
     Source: 'src/traits.rs', lines 152:0-152:33 *)

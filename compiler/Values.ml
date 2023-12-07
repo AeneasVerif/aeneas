@@ -15,47 +15,6 @@ module LoopId = IdGen ()
 type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
 type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
-
-(** The kind of a symbolic value, which precises how the value was generated.
-
-    TODO: remove? This is not useful anymore.
-  *)
-type sv_kind =
-  | FunCallRet  (** The value is the return value of a function call *)
-  | FunCallGivenBack
-      (** The value is a borrowed value given back by an abstraction
-          (happens when giving a borrow to a function: when the abstraction
-          introduced to model the function call ends we reintroduce a symbolic
-          value in the context for the value modified by the abstraction through
-          the borrow).
-       *)
-  | SynthInput
-      (** The value is an input value of the function whose body we are
-          currently synthesizing.
-       *)
-  | SynthRetGivenBack
-      (** The value is a borrowed value that the function whose body we are
-          synthesizing returned, and which was given back because we ended
-          one of the lifetimes of this function (we do this to synthesize
-          the backward functions).
-       *)
-  | SynthInputGivenBack
-      (** The value was given back upon ending one of the input abstractions *)
-  | Global  (** The value is a global *)
-  | KindConstGeneric  (** The value is a const generic *)
-  | LoopOutput  (** The output of a loop (seen as a forward computation) *)
-  | LoopGivenBack
-      (** A value given back by a loop (when ending abstractions while going backwards) *)
-  | LoopJoin
-      (** The result of a loop join (when computing loop fixed points) *)
-  | Aggregate
-      (** A symbolic value we introduce in place of an aggregate value *)
-  | ConstGeneric
-      (** A symbolic value we introduce when using a const generic as a value *)
-  | TraitConst
-      (** A symbolic value we introduce when evaluating a trait associated constant *)
-[@@deriving show, ord]
-
 type borrow_id = BorrowId.id [@@deriving show, ord]
 type borrow_id_set = BorrowId.Set.t [@@deriving show, ord]
 type loan_id = BorrowId.id [@@deriving show, ord]
@@ -65,7 +24,6 @@ type loan_id_set = BorrowId.Set.t [@@deriving show, ord]
 class ['self] iter_typed_value_base =
   object (self : 'self)
     inherit [_] iter_ty
-    method visit_sv_kind : 'env -> sv_kind -> unit = fun _ _ -> ()
 
     method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
       fun _ _ -> ()
@@ -85,7 +43,6 @@ class ['self] iter_typed_value_base =
 class ['self] map_typed_value_base =
   object (self : 'self)
     inherit [_] map_ty
-    method visit_sv_kind : 'env -> sv_kind -> sv_kind = fun _ x -> x
 
     method visit_symbolic_value_id
         : 'env -> symbolic_value_id -> symbolic_value_id =
@@ -104,7 +61,6 @@ class ['self] map_typed_value_base =
 
 (** A symbolic value *)
 type symbolic_value = {
-  sv_kind : sv_kind;
   sv_id : symbolic_value_id;
   sv_ty : ty;  (** This should be a type with regions *)
 }
