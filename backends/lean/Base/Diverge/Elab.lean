@@ -418,7 +418,7 @@ partial def proveExprIsValid (k_var kk_var : Expr) (e : Expr) : MetaM Expr := do
   | .lit _
   | .mvar _
   | .sort _ => throwError "Unreachable"
-  | .lam .. => throwError "Unimplemented"
+  | .lam .. => throwError "Unimplemented" -- TODO
   | .forallE .. => throwError "Unreachable" -- Shouldn't get there
   | .letE .. => do
     -- Telescope all the let-bindings (remark: this also telescopes the lambdas)
@@ -585,6 +585,7 @@ partial def proveExprIsValid (k_var kk_var : Expr) (e : Expr) : MetaM Expr := do
       else do
         -- Remaining case: normal application.
         -- It shouldn't use the continuation.
+        -- TODO: actually, it can
         proveNoKExprIsValid k_var e
 
 -- Prove that a match expression is valid.
@@ -1087,16 +1088,32 @@ namespace Tests
     . intro i hpos h; simp at h; linarith
     . rename_i hd tl ih
       intro i hpos h
-      -- We can directly use `rw [list_nth]`!
+      -- We can directly use `rw [list_nth]`
       rw [list_nth]; simp
       split <;> try simp [*]
       . tauto
-      . -- TODO: we shouldn't have to do that
+      . -- We don't have to do this if we use scalar_tac
         have hneq : 0 < i := by cases i <;> rename_i a _ <;> simp_all; cases a <;> simp_all
         simp at h
         have ⟨ x, ih ⟩ := ih (i - 1) (by linarith) (by linarith)
         simp [ih]
         tauto
+
+  -- Return a continuation
+  divergent def list_nth_with_back {a: Type} (ls : List a) (i : Int) :
+    Result (a × (a → Result (List a))) :=
+    match ls with
+    | [] => .fail .panic
+    | x :: ls =>
+      if i = 0 then return (x, (λ ret => return (ret :: ls)))
+      else do
+        let (x, back) ← list_nth_with_back ls (i - 1)
+        return (x,
+          (λ ret => do
+           let ls ← back ret
+           return (x :: ls)))
+
+  #check list_nth_with_back.unfold
 
   mutual
     divergent def is_even (i : Int) : Result Bool :=
@@ -1121,7 +1138,6 @@ namespace Tests
   #check bar.unfold
 
   -- Testing dependent branching and let-bindings
-  -- TODO: why the linter warning?
   divergent def isNonZero (i : Int) : Result Bool :=
     if _h:i = 0 then return false
     else
