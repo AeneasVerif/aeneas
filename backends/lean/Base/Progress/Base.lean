@@ -2,41 +2,19 @@ import Lean
 import Std.Lean.HashSet
 import Base.Utils
 import Base.Primitives.Base
-import Base.Lookup.Base
-
+import Base.Extensions
 import Lean.Meta.DiscrTree
 import Lean.Meta.Tactic.Simp
 
 namespace Progress
 
 open Lean Elab Term Meta
-open Utils
+open Utils Extensions
 
 -- We can't define and use trace classes in the same file
 initialize registerTraceClass `Progress
 
 /- # Progress tactic -/
-
-/- Discrimination trees map expressions to values. When storing an expression
-   in a discrimination tree, the expression is first converted to an array
-   of `DiscrTree.Key`, which are the keys actually used by the discrimination
-   trees. The conversion operation is monadic, however, and extensions require
-   all the operations to be pure. For this reason, in the state extension, we
-   store the keys from *after* the transformation (i.e., the `DiscrTreeKey`
-   below).
- -/
-abbrev DiscrTreeKey (simpleReduce : Bool) := Array (DiscrTree.Key simpleReduce)
-
-abbrev DiscrTreeExtension (α : Type) (simpleReduce : Bool) :=
-  SimplePersistentEnvExtension (DiscrTreeKey simpleReduce × α) (DiscrTree α simpleReduce)
-
-def mkDiscrTreeExtention [Inhabited α] [BEq α] (name : Name := by exact decl_name%) (simpleReduce : Bool) :
-  IO (DiscrTreeExtension α simpleReduce) :=
-  registerSimplePersistentEnvExtension {
-    name          := name,
-    addImportedFn := fun a => a.foldl (fun s a => a.foldl (fun s (k, v) => s.insertCore k v) s) DiscrTree.empty,
-    addEntryFn    := fun s n => s.insertCore n.1 n.2 ,
-  }
 
 structure PSpecDesc where
   -- The universally quantified variables
