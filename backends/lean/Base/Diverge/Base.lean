@@ -5,6 +5,7 @@ import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 import Base.Primitives.Base
 import Base.Arith.Base
+import Base.Diverge.ElabBase
 
 /- TODO: this is very useful, but is there more? -/
 set_option profiler true
@@ -1467,6 +1468,7 @@ namespace Ex8
         .ret (hd :: tl)
 
   /- The validity theorem for `map`, generic in `f` -/
+  @[divspec]
   theorem map_is_valid
     (i : id) (t : ty i)
     {{f : (a i t → Result (b i t)) → (a i t) → Result c}}
@@ -1479,6 +1481,7 @@ namespace Ex8
     intros
     apply is_valid_p_bind <;> try simp_all
 
+  @[divspec]
   theorem map_is_valid'
     (i : id) (t : ty i)
     (k : ((i:id) → (t:ty i) → a i t → Result (b i t)) → (i:id) → (t:ty i) → a i t → Result (b i t))

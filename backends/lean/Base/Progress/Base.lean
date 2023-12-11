@@ -3,8 +3,6 @@ import Std.Lean.HashSet
 import Base.Utils
 import Base.Primitives.Base
 import Base.Extensions
-import Lean.Meta.DiscrTree
-import Lean.Meta.Tactic.Simp
 
 namespace Progress
 
@@ -101,7 +99,7 @@ section Methods
     -- Check if some existentially quantified variables
     let _ := do
       -- Collect all the free variables in the arguments
-      let allArgsFVars := ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
+      let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
       -- Check if they intersect the fvars we introduced for the existentially quantified variables
       let evarsSet : HashSet FVarId := HashSet.ofArray (evars.map (fun (x : Expr) => x.fvarId!))
       let filtArgsFVars := allArgsFVars.toArray.filter (fun var => evarsSet.contains var)
@@ -134,7 +132,7 @@ structure PSpecAttr where
   ext  : DiscrTreeExtension Name true
   deriving Inhabited
 
-/- The persistent map from function to pspec theorems. -/
+/- The persistent map from expressions to pspec theorems. -/
 initialize pspecAttr : PSpecAttr ← do
   let ext ← mkDiscrTreeExtention `pspecMap true
   let attrImpl : AttributeImpl := {
