@@ -371,19 +371,19 @@ def splitConjTarget : TacticM Unit := do
 
 -- Destruct an equaliy and return the two sides
 def destEq (e : Expr) : MetaM (Expr × Expr) := do
-  e.withApp fun f args =>
+  e.consumeMData.withApp fun f args =>
   if f.isConstOf ``Eq ∧ args.size = 3 then pure (args.get! 1, args.get! 2)
   else throwError "Not an equality: {e}"
 
 -- Return the set of FVarIds in the expression
 partial def getFVarIds (e : Expr) (hs : HashSet FVarId := HashSet.empty) : MetaM (HashSet FVarId) := do
-  e.withApp fun body args => do
+  e.consumeMData.withApp fun body args => do
   let hs := if body.isFVar then hs.insert body.fvarId! else hs
   args.foldlM (fun hs arg => getFVarIds arg hs) hs
 
 -- Return the set of MVarIds in the expression
 partial def getMVarIds (e : Expr) (hs : HashSet MVarId := HashSet.empty) : MetaM (HashSet MVarId) := do
-  e.withApp fun body args => do
+  e.consumeMData.withApp fun body args => do
   let hs := if body.isMVar then hs.insert body.mvarId! else hs
   args.foldlM (fun hs arg => getMVarIds arg hs) hs
 

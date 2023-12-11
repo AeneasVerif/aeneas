@@ -820,15 +820,88 @@ partial def proveAppIsValid (k_var kk_var : Expr) (e : Expr) (f : Expr) (args : 
        Check if the arguments use the continuation:
        - if no: this is simple
        - if yes: we have to lookup theorems in div spec database and continue -/
-    trace[Diverge.def.valid] "regular app: {e}"
+    trace[Diverge.def.valid] "regular app: {e}, f: {f}, args: {args}"
     let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
+    trace[Diverge.def.valid] "allArgsFVars: {allArgsFVars.toList.map mkFVar}"
     if ¬ allArgsFVars.contains kk_var.fvarId! then do
       -- Simple case
       trace[Diverge.def.valid] "kk doesn't appear in the arguments"
       proveNoKExprIsValid k_var e
     else do
       -- Lookup in the database for suitable theorems
-      throwError "TODO: {e}"
+      trace[Diverge.def.valid] "kk appears in the arguments"
+      let thms ← divspecAttr.find? e
+      trace[Diverge.def.valid] "Looked up theorems: {thms}"
+      -- Try the theorems one by one
+      proveAppIsValidApplyThms k_var kk_var e f args thms.toList
+
+partial def proveAppIsValidApplyThms (k_var kk_var : Expr) (e : Expr)
+  (f : Expr) (args : Array Expr) (thms : List Name) : MetaM Expr := do
+  trace[Diverge.def.valid] "thms: {thms}"
+  match thms with
+  | [] => throwError "Could not prove that the following expression is valid: {e}"
+  | thName :: thms =>
+    -- Lookup the theorem itself
+    let env ← getEnv
+    let thDecl := env.constants.find! thName
+    -- Introduce fresh meta-variables for the universes
+    let ul : List (Name × Level) ←
+      thDecl.levelParams.mapM (λ x => do pure (x, ← mkFreshLevelMVar))
+    let ulMap : HashMap Name Level := HashMap.ofList ul
+    let thTy := thDecl.type.instantiateLevelParamsCore (λ x => ulMap.find! x)
+    -- Introduce meta variables for the universally quantified variables
+    let (mvars, _binders, thTy) ← forallMetaTelescope thTy
+    -- thTy should now be of the shape: `is_valid_p k (λ kk => ...)`
+    /-thTy.consumeMData.withApp fun _ args => do
+    if args.size ≠ 7 then throwError "Invalid number of arguments (expected 7): {thTy}"
+    let thTermToMatch := args.get! 6 -/
+    let thTermToMatch := thTy
+    trace[Diverge.def.valid] "thTermToMatch: {thTermToMatch}"
+    -- Create the term: `is_valid_p k (λ kk => e)`
+    let termToMatch ← mkLambdaFVars #[kk_var] e
+    let termToMatch ← mkAppM ``FixII.is_valid_p #[k_var, termToMatch]
+    trace[Diverge.def.valid] "termToMatch: {termToMatch}"
+    -- Attempt to match
+    let ok ← isDefEq thTermToMatch termToMatch
+    if ¬ ok then
+      -- Failure: attempt with the other theorems
+      proveAppIsValidApplyThms k_var kk_var e f args thms
+    else do
+      -- Success: continue with this theorem
+      -- Instantiate the meta variables (some of them will not be instantiated:
+      -- they are new subgoals)
+      let mvars ← mvars.mapM instantiateMVars
+      let th ← mkAppOptM thName (Array.map some mvars)
+      trace[Diverge.def.valid] "Instantiated theorm: {th}\n{← inferType th}"
+      -- Filter the meta variables between the instantiated ones
+      for mvar in mvars do
+        if mvar.isMVar then do
+          -- Prove the subgoal (i.e., the precondition of the theorem)
+          let mvarId := mvar.mvarId!
+          let mvarDecl ← mvarId.getDecl
+          -- Dive in the type
+          forallTelescope mvarDecl.type fun forall_vars mvar_e => do
+          -- `mvar_e` should have the shape `is_valid_p k (λ kk => ...)`
+          -- We need to retrieve the new `k` variable, and dive into the
+          -- `λ kk => ...`
+          mvar_e.consumeMData.withApp fun is_valid args => do
+          if is_valid.constName? ≠ ``FixII.is_valid_p ∨ args.size ≠ 2 then
+            throwError "Invalid precondition: {mvar_e}"
+          else do
+            let k_var := args.get! 0
+            let e_lam := args.get! 1
+            lambdaTelescope e_lam.consumeMData fun lvars e => do
+            if lvars.size ≠ 1 then throwError "Invalid number of lambdas (expected 1): {e_lam}"
+            let kk_var := lvars.get! 0
+            -- Continue
+            let e_valid ← proveExprIsValid k_var kk_var e
+            let e_valid ← mkForallFVars forall_vars e_valid
+            -- Assign the meta variable
+            mvarId.assign e_valid
+        else
+          -- Nothing to do
+          pure ()
+      pure th
 
 -- Prove that a match expression is valid.
 partial def proveMatchIsValid (k_var kk_var : Expr) (me : MatchInfo) : MetaM Expr := do
@@ -852,7 +925,8 @@ partial def proveMatchIsValid (k_var kk_var : Expr) (me : MatchInfo) : MetaM Exp
                                      ^^^^^^^^^^^^^^^^^^^^
                              this is the original match expression, with the
                             the difference that the scrutinee(s) is a variable
-     ``` -/
+     ```
+   -/
   let validMotive : Expr ← do
     -- The motive is a function of the scrutinees (i.e., a lambda expression):
     -- introduce binders for the scrutinees
@@ -905,7 +979,7 @@ partial def proveSingleBodyIsValid
   trace[Diverge.def.valid] "body: {body}"
   lambdaTelescope body fun xs body => do
   trace[Diverge.def.valid] "xs: {xs}"
-  assert! xs.size = 3
+  if xs.size ≠ 3 then throwError "Invalid number of lambdas: {xs} (expected 3)"
   let kk_var := xs.get! 0
   let t_var := xs.get! 1
   let x_var := xs.get! 2
@@ -1349,6 +1423,7 @@ elab_rules : command
       Command.elabCommand <| ← `(namespace $(mkIdentFrom id ns) $cmd end $(mkIdentFrom id ns))
 
 namespace Tests
+
   /- Some examples of partial functions -/
   section HigherOrder
   open Ex8
@@ -1357,9 +1432,6 @@ namespace Tests
   | leaf (x : a)
   | node (tl : List (Tree a))
 
-  set_option trace.Diverge.def true
-  -- set_option trace.Diverge.def.genBody true
-  set_option trace.Diverge.def.valid true
   divergent def id {a : Type u} (t : Tree a) : Result (Tree a) :=
     match t with
     | .leaf x => .ret (.leaf x)
@@ -1368,7 +1440,20 @@ namespace Tests
         let tl ← map id tl
         .ret (.node tl)
 
-  set_option trace.Diverge.def false
+  #check id.unfold
+
+  /-set_option trace.Diverge.def true
+  -- set_option trace.Diverge.def.genBody true
+  set_option trace.Diverge.def.valid true
+  divergent def incr (t : Tree Nat) : Result (Tree Nat) :=
+    match t with
+    | .leaf x => .ret (.leaf (x + 1))
+    | .node tl =>
+      do
+        let tl ← map incr tl
+        .ret (.node tl)
+
+  set_option trace.Diverge.def false-/
 
   end HigherOrder
 
