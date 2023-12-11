@@ -581,7 +581,6 @@ namespace FixI
     kk_ty id a b → kk_ty id a b
 
   abbrev in_out_ty : Type (imax (u + 1) (v + 1)) := (in_ty : Type u) × ((x:in_ty) → Type v)
-  -- TODO: remove?
   abbrev mk_in_out_ty (in_ty : Type u) (out_ty : in_ty → Type v) :
     in_out_ty :=
     Sigma.mk in_ty out_ty
@@ -717,11 +716,8 @@ namespace FixI
 end FixI
 
 namespace FixII
-  /- Indexed fixed-point: definitions with indexed types, convenient to use for mutually
-     recursive definitions. We simply port the definitions and proofs from Fix to a more
-     specific case.
-
-     Here however, we group the types into a parameter distinct from the inputs.
+  /- Similar to FixI, but we split the input arguments between the type parameters
+     and the input values.
    -/
   open Primitives Fix
 
@@ -792,7 +788,6 @@ namespace FixII
 
   abbrev in_out_ty : Type (imax (u + 1) (imax (v + 1) (w + 1))) :=
     (ty : Type u) × (ty → Type v) × (ty → Type w)
-  -- TODO: remove?
   abbrev mk_in_out_ty (ty : Type u) (in_ty : ty → Type v) (out_ty : ty → Type w) :
     in_out_ty :=
     Sigma.mk ty (Prod.mk in_ty out_ty)

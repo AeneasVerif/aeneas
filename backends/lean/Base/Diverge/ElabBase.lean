@@ -11,7 +11,9 @@ open Utils
 initialize registerTraceClass `Diverge.elab
 initialize registerTraceClass `Diverge.def
 initialize registerTraceClass `Diverge.def.sigmas
+initialize registerTraceClass `Diverge.def.prods
 initialize registerTraceClass `Diverge.def.genBody
+initialize registerTraceClass `Diverge.def.genBody.visit
 initialize registerTraceClass `Diverge.def.valid
 initialize registerTraceClass `Diverge.def.unfold
 
