@@ -245,7 +245,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
   -- have the proper shape.
   let fExpr ← do
     let isGoal := true
-    withPSpec false isGoal goalTy fun desc => do
+    withPSpec isGoal goalTy fun desc => do
     let fExpr := desc.fArgsExpr
     trace[Progress] "Expression to match: {fExpr}"
     pure fExpr
@@ -385,8 +385,6 @@ namespace Test
     ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
     progress keep _ as ⟨ z, h1 .. ⟩
     simp [*, h1]
-
-  set_option trace.Progress false
 
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)

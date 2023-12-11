@@ -381,6 +381,12 @@ partial def getFVarIds (e : Expr) (hs : HashSet FVarId := HashSet.empty) : MetaM
   let hs := if body.isFVar then hs.insert body.fvarId! else hs
   args.foldlM (fun hs arg => getFVarIds arg hs) hs
 
+-- Return the set of MVarIds in the expression
+partial def getMVarIds (e : Expr) (hs : HashSet MVarId := HashSet.empty) : MetaM (HashSet MVarId) := do
+  e.withApp fun body args => do
+  let hs := if body.isMVar then hs.insert body.mvarId! else hs
+  args.foldlM (fun hs arg => getMVarIds arg hs) hs
+
 -- Tactic to split on a disjunction.
 -- The expression `h` should be an fvar.
 -- TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance

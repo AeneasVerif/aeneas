@@ -40,6 +40,7 @@ def mkDiscrTreeExtention [Inhabited α] [BEq α] (name : Name := by exact decl_n
 
 structure PSpecDesc where
   -- The universally quantified variables
+  -- Can be fvars or mvars
   fvars : Array Expr
   -- The existentially quantified variables
   evars : Array Expr
@@ -50,8 +51,6 @@ structure PSpecDesc where
   -- The function arguments
   fLevels : List Level
   args : Array Expr
-  -- The universally quantified variables which appear in the function arguments
-  argsFVars : Array FVarId
   -- The returned value
   ret : Expr
   -- The postcondition (if there is)
@@ -82,7 +81,7 @@ section Methods
      TODO: generalize for when we do inductive proofs
   -/
   partial
-  def withPSpec [Inhabited (m a)] [Nonempty (m a)] (sanityChecks : Bool := false)
+  def withPSpec [Inhabited (m a)] [Nonempty (m a)]
     (isGoal : Bool) (th : Expr) (k : PSpecDesc → m a) :
     m a := do
     trace[Progress] "Proposition: {th}"
@@ -120,19 +119,18 @@ section Methods
       else pure (mExpr, mf, margs)
     trace[Progress] "After stripping the arguments of the function call:\n- f: {f}\n- args: {args}"
     if ¬ f.isConst then throwError "Not a constant: {f}"
-    -- Compute the set of universally quantified variables which appear in the function arguments
-    let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
-    -- Sanity check
-    if sanityChecks then
-      -- All the variables which appear in the inputs given to the function are
-      -- universally quantified (in particular, they are not *existentially* quantified)
-      let fvarsSet : HashSet FVarId := HashSet.ofArray (fvars.map (fun x => x.fvarId!))
-      let filtArgsFVars := allArgsFVars.toArray.filter (fun fvar => ¬ fvarsSet.contains fvar)
-      if ¬ filtArgsFVars.isEmpty then
+    -- *Sanity check* (activated if we are analyzing a theorem to register it in a DB)
+    -- Check if some existentially quantified variables
+    let _ := do
+      -- Collect all the free variables in the arguments
+      let allArgsFVars := ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
+      -- Check if they intersect the fvars we introduced for the existentially quantified variables
+      let evarsSet : HashSet FVarId := HashSet.ofArray (evars.map (fun (x : Expr) => x.fvarId!))
+      let filtArgsFVars := allArgsFVars.toArray.filter (fun var => evarsSet.contains var)
+      if filtArgsFVars.isEmpty then pure ()
+      else
         let filtArgsFVars := filtArgsFVars.map (fun fvarId => Expr.fvar fvarId)
         throwError "Some of the function inputs are not universally quantified: {filtArgsFVars}"
-    let argsFVars := fvars.map (fun x => x.fvarId!)
-    let argsFVars := argsFVars.filter (fun fvar => allArgsFVars.contains fvar)
     -- Return
     trace[Progress] "Function with arguments: {fArgsExpr}";
     let thDesc := {
@@ -142,7 +140,6 @@ section Methods
       fName := f.constName!
       fLevels := f.constLevels!
       args := args
-      argsFVars
       ret := ret
       post := post
     }
@@ -150,11 +147,8 @@ section Methods
 
 end Methods
 
-/-def getPSpecFunArgsExpr (th : Expr) : MetaM Expr :=
-  withPSpec true th (fun d => do pure d.fArgsExpr)
-
-def getPSpecFunName (th : Expr) : MetaM Name :=
-  withPSpec true th (fun d => do pure d.fName)-/
+def getPSpecFunArgsExpr (isGoal : Bool) (th : Expr) : MetaM Expr :=
+  withPSpec isGoal th (fun d => do pure d.fArgsExpr)
 
 -- pspec attribute
 structure PSpecAttr where
@@ -176,14 +170,14 @@ initialize pspecAttr : PSpecAttr ← do
       -- Lookup the theorem
       let env ← getEnv
       let thDecl := env.constants.find! thName
-      let isGoal := false
-      let fKey ← MetaM.run' (withPSpec true isGoal thDecl.type fun d => do
-        let fExpr := d.fArgsExpr
+      let fKey ← MetaM.run' (do
+        let fExpr ← getPSpecFunArgsExpr false thDecl.type
         trace[Progress] "Registering spec theorem for {fExpr}"
         -- Convert the function expression to a discrimination tree key
         DiscrTree.mkPath fExpr)
       let env := ext.addEntry env (fKey, thName)
       setEnv env
+      trace[Progress] "Saved the environment"
       pure ()
   }
   registerBuiltinAttribute attrImpl
