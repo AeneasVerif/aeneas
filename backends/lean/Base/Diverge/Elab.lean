@@ -899,8 +899,11 @@ partial def proveAppIsValidApplyThms (k_var kk_var : Expr) (e : Expr)
           lambdaOne e_lam.consumeMData fun kk_var e => do
           -- Continue
           trace[Diverge.def.valid] "kk_var: {kk_var}\ne: {e}"
-          -- We sometimes need to reduce the term
-          let e ← whnf e
+          -- We sometimes need to reduce the term - TODO: this is really dangerous
+          let e ← do
+            let updt_config config :=
+              { config with transparency := .reducible, zetaNonDep := false }
+            withConfig updt_config (whnf e)
           trace[Diverge.def.valid] "e (after reduction): {e}"
           let e_valid ← proveExprIsValid k_var kk_var e
           trace[Diverge.def.valid] "e_valid (for e): {e_valid}"
@@ -1450,10 +1453,6 @@ namespace Tests
 
   #check id.unfold
 
-  -- set_option pp.explicit true
-  -- set_option trace.Diverge.def true
-  -- set_option trace.Diverge.def.genBody true
-  set_option trace.Diverge.def.valid true
   divergent def id1 {a : Type u} (t : Tree a) : Result (Tree a) :=
     match t with
     | .leaf x => .ret (.leaf x)
@@ -1464,12 +1463,6 @@ namespace Tests
 
   #check id1.unfold
 
-  /-set_option trace.Diverge.def false
-
-  -- set_option pp.explicit true
-  -- set_option trace.Diverge.def true
-  -- set_option trace.Diverge.def.genBody true
-  set_option trace.Diverge.def.valid true
   divergent def id2 {a : Type u} (t : Tree a) : Result (Tree a) :=
     match t with
     | .leaf x => .ret (.leaf x)
@@ -1479,8 +1472,6 @@ namespace Tests
         .ret (.node tl)
 
   #check id2.unfold
-
-  set_option trace.Diverge.def false -/
 
   /-set_option trace.Diverge.def true
   -- set_option trace.Diverge.def.genBody true
