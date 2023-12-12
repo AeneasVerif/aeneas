@@ -496,9 +496,24 @@ def mkDeclareUnaryBodies (grLvlParams : List Name) (kk_var : Expr)
             -- Not a recursive call: do nothing
             pure e
        | .const name _ =>
-         -- Sanity check: we eliminated all the recursive calls
-         if (nameToInfo.find? name).isSome then
-           throwError "mkUnaryBodies: a recursive call was not eliminated"
+         /- This might refer to the one of the top-level functions if we use
+            it without arguments (if we give it to a higher-order
+            function for instance) and there are actually no type parameters.
+          -/
+         if (nameToInfo.find? name).isSome then do
+           -- Checking the type information
+           match nameToInfo.find? name with
+           | none => pure e
+           | some (id, type_info) =>
+             trace[Diverge.def.genBody.visit] "this is a recursive call"
+             -- This is a recursive call: replace it
+             -- Compute the index
+             let i ← mkFinVal grSize id
+             -- Check that there are no type parameters
+             if type_info.num_params ≠ 0 then throwError "mkUnaryBodies: a recursive call was not eliminated"
+             -- Introduce the call to the continuation
+             let param_args ← mkSigmasVal type_info.params_ty []
+             mkAppM' kk_var #[i, param_args]
          else pure e
        | _ => pure e
     trace[Diverge.def.genBody.visit] "done with expression (depth: {i}): {e}"
@@ -1436,57 +1451,11 @@ elab_rules : command
 namespace Tests
 
   /- Some examples of partial functions -/
-  section HigherOrder
-  open Ex8
 
-  inductive Tree (a : Type u) :=
-  | leaf (x : a)
-  | node (tl : List (Tree a))
-
-  divergent def id {a : Type u} (t : Tree a) : Result (Tree a) :=
-    match t with
-    | .leaf x => .ret (.leaf x)
-    | .node tl =>
-      do
-        let tl ← map id tl
-        .ret (.node tl)
-
-  #check id.unfold
-
-  divergent def id1 {a : Type u} (t : Tree a) : Result (Tree a) :=
-    match t with
-    | .leaf x => .ret (.leaf x)
-    | .node tl =>
-      do
-        let tl ← map (fun x => id1 x) tl
-        .ret (.node tl)
-
-  #check id1.unfold
-
-  divergent def id2 {a : Type u} (t : Tree a) : Result (Tree a) :=
-    match t with
-    | .leaf x => .ret (.leaf x)
-    | .node tl =>
-      do
-        let tl ← map (fun x => do let _ ← id2 x; id2 x) tl
-        .ret (.node tl)
-
-  #check id2.unfold
-
-  /-set_option trace.Diverge.def true
-  -- set_option trace.Diverge.def.genBody true
-  set_option trace.Diverge.def.valid true
-  divergent def incr (t : Tree Nat) : Result (Tree Nat) :=
-    match t with
-    | .leaf x => .ret (.leaf (x + 1))
-    | .node tl =>
-      do
-        let tl ← map incr tl
-        .ret (.node tl)
-
-  set_option trace.Diverge.def false-/
-
-  end HigherOrder
+  --set_option trace.Diverge.def true
+  --set_option trace.Diverge.def.genBody true
+  --set_option trace.Diverge.def.valid true
+  --set_option trace.Diverge.def.genBody.visit true
 
   divergent def list_nth {a: Type u} (ls : List a) (i : Int) : Result a :=
     match ls with
@@ -1494,6 +1463,8 @@ namespace Tests
     | x :: ls =>
       if i = 0 then return x
       else return (← list_nth ls (i - 1))
+
+  --set_option trace.Diverge false
 
   #check list_nth.unfold
 
@@ -1589,6 +1560,62 @@ namespace Tests
     test1 Option.none ()
 
   #check test1.unfold
+
+  /- Tests with higher-order functions -/
+  section HigherOrder
+    open Ex8
+
+    inductive Tree (a : Type u) :=
+    | leaf (x : a)
+    | node (tl : List (Tree a))
+
+    divergent def id {a : Type u} (t : Tree a) : Result (Tree a) :=
+      match t with
+      | .leaf x => .ret (.leaf x)
+      | .node tl =>
+        do
+          let tl ← map id tl
+          .ret (.node tl)
+
+    #check id.unfold
+
+    divergent def id1 {a : Type u} (t : Tree a) : Result (Tree a) :=
+      match t with
+      | .leaf x => .ret (.leaf x)
+      | .node tl =>
+        do
+          let tl ← map (fun x => id1 x) tl
+          .ret (.node tl)
+
+    #check id1.unfold
+
+    divergent def id2 {a : Type u} (t : Tree a) : Result (Tree a) :=
+      match t with
+      | .leaf x => .ret (.leaf x)
+      | .node tl =>
+        do
+          let tl ← map (fun x => do let _ ← id2 x; id2 x) tl
+          .ret (.node tl)
+
+    #check id2.unfold
+
+    --set_option trace.Diverge.def true
+    --set_option trace.Diverge.def.genBody true
+    --set_option trace.Diverge.def.valid true
+    --set_option trace.Diverge.def.genBody.visit true
+    divergent def incr (t : Tree Nat) : Result (Tree Nat) :=
+      match t with
+      | .leaf x => .ret (.leaf (x + 1))
+      | .node tl =>
+        do
+          let tl ← map incr tl
+          .ret (.node tl)
+
+    --set_option trace.Diverge false
+
+    #check incr.unfold
+
+  end HigherOrder
 
 end Tests
 
