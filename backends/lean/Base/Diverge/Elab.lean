@@ -17,6 +17,8 @@ syntax (name := divergentDef)
 open Lean Elab Term Meta Primitives Lean.Meta
 open Utils
 
+def normalize_let_bindings := true
+
 /- The following was copied from the `wfRecursion` function. -/
 
 open WF in
@@ -649,6 +651,15 @@ mutual
  -/
 partial def proveExprIsValid (k_var kk_var : Expr) (e : Expr) : MetaM Expr := do
   trace[Diverge.def.valid] "proveExprIsValid: {e}"
+  -- Normalize to eliminate the lambdas - TODO: this is slightly dangerous.
+  let e ← do
+    if e.isLet ∧ normalize_let_bindings then do
+      let updt_config config :=
+        { config with transparency := .reducible, zetaNonDep := false }
+      let e ← withConfig updt_config (whnf e)
+      trace[Diverge.def.valid] "e (after normalization): {e}"
+      pure e
+    else pure e
   match e with
   | .const _ _ => throwError "Unimplemented" -- Shouldn't get there?
   | .bvar _
@@ -659,6 +670,7 @@ partial def proveExprIsValid (k_var kk_var : Expr) (e : Expr) : MetaM Expr := do
   | .lam .. => throwError "Unimplemented" -- TODO
   | .forallE .. => throwError "Unreachable" -- Shouldn't get there
   | .letE .. => do
+    -- Remark: this branch is not taken if we normalize the expressions (above)
     -- Telescope all the let-bindings (remark: this also telescopes the lambdas)
     lambdaLetTelescope e fun xs body => do
     -- Note that we don't visit the bound values: there shouldn't be
@@ -919,7 +931,7 @@ partial def proveAppIsValidApplyThms (k_var kk_var : Expr) (e : Expr)
             let updt_config config :=
               { config with transparency := .reducible, zetaNonDep := false }
             withConfig updt_config (whnf e)
-          trace[Diverge.def.valid] "e (after reduction): {e}"
+          trace[Diverge.def.valid] "e (after normalization): {e}"
           let e_valid ← proveExprIsValid k_var kk_var e
           trace[Diverge.def.valid] "e_valid (for e): {e_valid}"
           let e_valid ← mkLambdaFVars forall_vars e_valid
@@ -1018,6 +1030,7 @@ partial def proveSingleBodyIsValid
   let thmTy ← mkAppM ``FixII.is_valid_p #[k_var, bodyApp]
   trace[Diverge.def.valid] "thmTy: {thmTy}"
   -- Prove that the body is valid
+  trace[Diverge.def.valid] "body: {body}"
   let proof ← proveExprIsValid k_var kk_var body
   let proof ← mkLambdaFVars #[k_var, t_var, x_var] proof
   trace[Diverge.def.valid] "proveSingleBodyIsValid: proof:\n{proof}:\n{← inferType proof}"
@@ -1599,10 +1612,6 @@ namespace Tests
 
     #check id2.unfold
 
-    --set_option trace.Diverge.def true
-    --set_option trace.Diverge.def.genBody true
-    --set_option trace.Diverge.def.valid true
-    --set_option trace.Diverge.def.genBody.visit true
     divergent def incr (t : Tree Nat) : Result (Tree Nat) :=
       match t with
       | .leaf x => .ret (.leaf (x + 1))
@@ -1611,9 +1620,33 @@ namespace Tests
           let tl ← map incr tl
           .ret (.node tl)
 
-    --set_option trace.Diverge false
+    -- We handle this by inlining the let-binding
+    divergent def id3 (t : Tree Nat) : Result (Tree Nat) :=
+      match t with
+      | .leaf x => .ret (.leaf (x + 1))
+      | .node tl =>
+        do
+          let f := id3
+          let tl ← map f tl
+          .ret (.node tl)
 
-    #check incr.unfold
+    #check id3.unfold
+
+    /-
+    -- This is not handled yet: we can only do it if we introduce "general"
+    -- relations for the input types and output types (result_rel should
+    -- be parameterized by something).
+    divergent def id4 (t : Tree Nat) : Result (Tree Nat) :=
+      match t with
+      | .leaf x => .ret (.leaf (x + 1))
+      | .node tl =>
+        do
+          let f ← .ret id4
+          let tl ← map f tl
+          .ret (.node tl)
+
+    #check id4.unfold
+    -/
 
   end HigherOrder
 
