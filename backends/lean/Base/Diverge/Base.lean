@@ -1467,26 +1467,28 @@ namespace Ex8
         let tl ← map f tl
         .ret (hd :: tl)
 
-  /- The validity theorem for `map`, generic in `f` -/
+  /- The validity theorems for `map`, generic in `f` -/
+
+  -- This is not the most general lemma, but we keep it to test the `divergence` encoding on a simple case
   @[divspec]
-  theorem map_is_valid
+  theorem map_is_valid_simple
     (i : id) (t : ty i)
-    {{f : (a i t → Result (b i t)) → (a i t) → Result c}}
-    (Hfvalid : ∀ k x, is_valid_p k (λ k => f (k i t) x))
     (k : ((i:id) → (t:ty i) → a i t → Result (b i t)) → (i:id) → (t:ty i) → a i t → Result (b i t))
     (ls : List (a i t)) :
-    is_valid_p k (λ k => map (f (k i t)) ls) := by
+    is_valid_p k (λ k => map (k i t) ls) := by
     induction ls <;> simp [map]
     apply is_valid_p_bind <;> try simp_all
     intros
     apply is_valid_p_bind <;> try simp_all
 
   @[divspec]
-  theorem map_is_valid'
-    (i : id) (t : ty i)
+  theorem map_is_valid
+    (d : Type y)
+    {{f : ((i:id) → (t : ty i) → a i t → Result (b i t)) → d → Result c}}
     (k : ((i:id) → (t:ty i) → a i t → Result (b i t)) → (i:id) → (t:ty i) → a i t → Result (b i t))
-    (ls : List (a i t)) :
-    is_valid_p k (λ k => map (k i t) ls) := by
+    (Hfvalid : ∀ x1, is_valid_p k (fun kk1 => f kk1 x1))
+    (ls : List d) :
+    is_valid_p k (λ k => map (f k) ls) := by
     induction ls <;> simp [map]
     apply is_valid_p_bind <;> try simp_all
     intros
@@ -1532,7 +1534,7 @@ namespace Ex9
     apply is_valid_p_bind <;> try simp [*]
     -- We have to show that `map k tl` is valid
     -- Remark: `map_is_valid` doesn't work here, we need the specialized version
-    apply map_is_valid'
+    apply map_is_valid_simple
 
   def body (k : (i : Fin 1) → (t : ty i) → (x : input_ty i t) → Result (output_ty i t)) (i: Fin 1) :
     (t : ty i) → (x : input_ty i t) → Result (output_ty i t) := get_fun bodies i k
