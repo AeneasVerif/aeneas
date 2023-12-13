@@ -266,6 +266,10 @@ Axiom scalar_shr : forall ty0 ty1, scalar ty0 -> scalar ty1 -> result (scalar ty
 Definition scalar_cast (src_ty tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) :=
   mk_scalar tgt_ty (to_Z x).
 
+(* This can't fail, but for now we make all casts faillible (easier for the translation) *)
+Definition scalar_cast_bool (tgt_ty : scalar_ty) (x : bool) : result (scalar tgt_ty) :=
+  mk_scalar tgt_ty (if x then 1 else 0).
+
 (** Comparisons *)
 Definition scalar_leb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
   Z.leb (to_Z x) (to_Z y) .
