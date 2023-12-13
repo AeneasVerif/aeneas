@@ -435,7 +435,9 @@ let eval_unary_op_concrete (config : config) (unop : unop) (op : operand)
         match mk_scalar sv.int_ty i with
         | Error _ -> cf (Error EPanic)
         | Ok sv -> cf (Ok { v with value = VLiteral (VScalar sv) }))
-    | Cast (CastInteger (src_ty, tgt_ty)), VLiteral (VScalar sv) -> (
+    | ( Cast (CastScalar (TInteger src_ty, TInteger tgt_ty)),
+        VLiteral (VScalar sv) ) -> (
+        (* Cast between integers *)
         assert (src_ty = sv.int_ty);
         let i = sv.value in
         match mk_scalar tgt_ty i with
@@ -444,6 +446,25 @@ let eval_unary_op_concrete (config : config) (unop : unop) (op : operand)
             let ty = TLiteral (TInteger tgt_ty) in
             let value = VLiteral (VScalar sv) in
             cf (Ok { ty; value }))
+    | Cast (CastScalar (TBool, TInteger tgt_ty)), VLiteral (VBool sv) -> (
+        (* Cast bool -> int *)
+        let i = Z.of_int (if sv then 1 else 0) in
+        match mk_scalar tgt_ty i with
+        | Error _ -> cf (Error EPanic)
+        | Ok sv ->
+            let ty = TLiteral (TInteger tgt_ty) in
+            let value = VLiteral (VScalar sv) in
+            cf (Ok { ty; value }))
+    | Cast (CastScalar (TInteger _, TBool)), VLiteral (VScalar sv) ->
+        (* Cast int -> bool *)
+        let b =
+          if Z.of_int 0 = sv.value then false
+          else if Z.of_int 1 = sv.value then true
+          else raise (Failure "Conversion from int to bool: out of range")
+        in
+        let value = VLiteral (VBool b) in
+        let ty = TLiteral TBool in
+        cf (Ok { ty; value })
     | _ -> raise (Failure "Invalid input for unop")
   in
   comp eval_op apply cf
@@ -461,7 +482,7 @@ let eval_unary_op_symbolic (config : config) (unop : unop) (op : operand)
       match (unop, v.ty) with
       | Not, (TLiteral TBool as lty) -> lty
       | Neg, (TLiteral (TInteger _) as lty) -> lty
-      | Cast (CastInteger (_, tgt_ty)), _ -> TLiteral (TInteger tgt_ty)
+      | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
       | _ -> raise (Failure "Invalid input for unop")
     in
     let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
