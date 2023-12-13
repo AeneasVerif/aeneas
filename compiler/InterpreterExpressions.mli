@@ -52,7 +52,7 @@ val eval_operands :
 
     Transmits the computed rvalue to the received continuation.
 
-    Note that this function fails on {!constructor:Aeneas.Expressions.rvalue.Discriminant}: discriminant
+    Note that this function fails on {!Aeneas.Expressions.rvalue.Discriminant}: discriminant
     reads should have been eliminated from the AST.
  *)
 val eval_rvalue_not_global :
