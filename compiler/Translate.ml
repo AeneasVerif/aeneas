@@ -216,11 +216,15 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
         (* We need to ignore the forward inputs, and the state input (if there is) *)
         let backward_inputs =
           let sg = backward_sg.sg in
+          (* TODO: *)
+          assert (not !Config.return_back_funs);
           (* We need to ignore the forward state and the backward state *)
           let num_forward_inputs =
-            sg.info.num_fwd_inputs_with_fuel_with_state
+            sg.info.fwd_info.num_inputs_with_fuel_with_state
           in
-          let num_back_inputs = Option.get sg.info.num_back_inputs_no_state in
+          let num_back_inputs =
+            (Option.get sg.info.back_info).num_inputs_no_fuel_no_state
+          in
           Collections.List.subslice sg.inputs num_forward_inputs
             (num_forward_inputs + num_back_inputs)
         in

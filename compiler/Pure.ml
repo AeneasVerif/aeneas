@@ -873,23 +873,25 @@ type fun_effect_info = {
 }
 [@@deriving show]
 
+type inputs_info = {
+  has_fuel : bool;
+  num_inputs_no_fuel_no_state : int;
+      (** The number of input types ignoring the fuel (if used)
+          and ignoring the state (if used) *)
+  num_inputs_with_fuel_no_state : int;
+      (** The number of input types, with the fuel (if used)
+          and ignoring the state (if used) *)
+  num_inputs_with_fuel_with_state : int;
+      (** The number of input types, with fuel and state (if used) *)
+}
+[@@deriving show]
+
 (** Meta information about a function signature *)
 type fun_sig_info = {
-  has_fuel : bool;
-  num_fwd_inputs_no_fuel_no_state : int;
-      (** The number of input types for forward computation, ignoring the fuel (if used)
-          and ignoring the state (if used) *)
-  num_fwd_inputs_with_fuel_no_state : int;
-      (** The number of input types for forward computation, with the fuel (if used)
-          and ignoring the state (if used) *)
-  num_fwd_inputs_with_fuel_with_state : int;
-      (** The number of input types for forward computation, with fuel and state (if used) *)
-  num_back_inputs_no_state : int option;
-      (** The number of additional inputs for the backward computation (if pertinent),
-          ignoring the state (if there is one) *)
-  num_back_inputs_with_state : int option;
-      (** The number of additional inputs for the backward computation (if pertinent),
-          with the state (if there is one) *)
+  fwd_info : inputs_info;
+      (** Information about the inputs of the forward function *)
+  back_info : inputs_info option;
+      (** Information about the inputs of the backward function, if pertinent *)
   effect_info : fun_effect_info;
 }
 [@@deriving show]

@@ -1034,6 +1034,8 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   (* Generic parameters *)
   let generics = translate_generic_params sg.generics in
   (* Return *)
+  (* TODO: *)
+  assert (not !Config.return_back_funs);
   let has_fuel = fuel <> [] in
   let num_fwd_inputs_no_fuel_no_state = List.length fwd_inputs in
   let num_fwd_inputs_with_fuel_no_state =
@@ -1043,24 +1045,32 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   let num_back_inputs_no_state =
     if bid = None then None else Some (List.length back_inputs)
   in
-  let info =
+  let fwd_info : inputs_info =
     {
       has_fuel;
-      num_fwd_inputs_no_fuel_no_state;
-      num_fwd_inputs_with_fuel_no_state;
-      num_fwd_inputs_with_fuel_with_state =
+      num_inputs_no_fuel_no_state = num_fwd_inputs_no_fuel_no_state;
+      num_inputs_with_fuel_no_state = num_fwd_inputs_with_fuel_no_state;
+      num_inputs_with_fuel_with_state =
         (* We use the fact that [fwd_state_ty] has length 1 if there is a state,
            and 0 otherwise *)
         num_fwd_inputs_with_fuel_no_state + List.length fwd_state_ty;
-      num_back_inputs_no_state;
-      num_back_inputs_with_state =
-        (* Length of [back_state_ty]: similar trick as for [fwd_state_ty] *)
-        Option.map
-          (fun n -> n + List.length back_state_ty)
-          num_back_inputs_no_state;
-      effect_info;
     }
   in
+  let back_info : inputs_info option =
+    Option.map
+      (fun n ->
+        (* Note that backward functions never use fuel *)
+        {
+          has_fuel = false;
+          num_inputs_no_fuel_no_state = n;
+          num_inputs_with_fuel_no_state = n;
+          (* Length of [back_state_ty]: similar trick as for [fwd_state_ty] *)
+          num_inputs_with_fuel_with_state = n + List.length back_state_ty;
+        })
+      num_back_inputs_no_state
+  in
+  let info = { fwd_info; back_info; effect_info } in
+  assert (fun_sig_info_is_wf info);
   let preds = translate_predicates sg.preds in
   let sg =
     {

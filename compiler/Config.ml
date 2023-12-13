@@ -92,6 +92,10 @@ let loop_fixed_point_max_num_iters = 2
 
 (** {1 Translation} *)
 
+(** If true, do not define separate forward/backward functions, but make the
+    forward functions return the backward function. *)
+let return_back_funs = ref false
+
 (** Forbids using field projectors for structures.
 
     If we don't use field projectors, whenever we symbolically expand a structure

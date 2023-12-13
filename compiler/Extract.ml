@@ -1469,8 +1469,10 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
        *)
       let inputs_lvs =
         let all_inputs = (Option.get def.body).inputs_lvs in
+        (* TODO: *)
+        assert (not !Config.return_back_funs);
         let num_fwd_inputs =
-          def.signature.info.num_fwd_inputs_with_fuel_with_state
+          def.signature.info.fwd_info.num_inputs_with_fuel_with_state
         in
         Collections.List.prefix num_fwd_inputs all_inputs
       in
@@ -1515,8 +1517,10 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   if has_decreases_clause && !backend = Lean then (
     let def_body = Option.get def.body in
     let all_vars = List.map (fun (v : var) -> v.id) def_body.inputs in
+    (* TODO: *)
+    assert (not !Config.return_back_funs);
     let num_fwd_inputs =
-      def.signature.info.num_fwd_inputs_with_fuel_with_state
+      def.signature.info.fwd_info.num_inputs_with_fuel_with_state
     in
     let vars = Collections.List.prefix num_fwd_inputs all_vars in
 

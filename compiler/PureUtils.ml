@@ -57,6 +57,25 @@ end
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 module FunLoopIdSet = Collections.MakeSet (FunLoopIdOrderedType)
 
+let inputs_info_is_wf (info : inputs_info) : bool =
+  let {
+    has_fuel;
+    num_inputs_no_fuel_no_state;
+    num_inputs_with_fuel_no_state;
+    num_inputs_with_fuel_with_state;
+  } =
+    info
+  in
+  let fuel = if has_fuel then 1 else 0 in
+  num_inputs_no_fuel_no_state >= 0
+  && num_inputs_with_fuel_no_state = num_inputs_no_fuel_no_state + fuel
+  && num_inputs_with_fuel_with_state >= num_inputs_with_fuel_no_state
+
+let fun_sig_info_is_wf (info : fun_sig_info) : bool =
+  inputs_info_is_wf info.fwd_info
+  &&
+  match info.back_info with None -> true | Some info -> inputs_info_is_wf info
+
 let dest_arrow_ty (ty : ty) : ty * ty =
   match ty with
   | TArrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)

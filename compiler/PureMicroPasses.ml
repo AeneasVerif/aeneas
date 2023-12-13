@@ -1326,6 +1326,9 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
             let fun_sig_info = fun_sig.info in
             let fun_effect_info = fun_sig_info.effect_info in
 
+            (* TODO: *)
+            assert (not !Config.return_back_funs);
+
             (* Generate the loop definition *)
             let loop_effect_info =
               {
@@ -1340,38 +1343,44 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
             let loop_sig_info =
               let fuel = if !Config.use_fuel then 1 else 0 in
               let num_inputs = List.length loop.inputs in
-              let num_fwd_inputs_no_fuel_no_state = num_inputs in
-              let num_fwd_inputs_with_fuel_no_state = fuel + num_inputs in
-              let fwd_state =
-                fun_sig_info.num_fwd_inputs_with_fuel_with_state
-                - fun_sig_info.num_fwd_inputs_with_fuel_no_state
+              let fwd_info : inputs_info =
+                let info = fun_sig_info.fwd_info in
+                let fwd_state =
+                  info.num_inputs_with_fuel_with_state
+                  - info.num_inputs_with_fuel_no_state
+                in
+                {
+                  has_fuel = !Config.use_fuel;
+                  num_inputs_no_fuel_no_state = num_inputs;
+                  num_inputs_with_fuel_no_state = num_inputs + fuel;
+                  num_inputs_with_fuel_with_state =
+                    num_inputs + fuel + fwd_state;
+                }
               in
-              let num_fwd_inputs_with_fuel_with_state =
-                num_fwd_inputs_with_fuel_no_state + fwd_state
-              in
+
               {
-                has_fuel = !Config.use_fuel;
-                num_fwd_inputs_no_fuel_no_state;
-                num_fwd_inputs_with_fuel_no_state;
-                num_fwd_inputs_with_fuel_with_state;
-                num_back_inputs_no_state = fun_sig_info.num_back_inputs_no_state;
-                num_back_inputs_with_state =
-                  fun_sig_info.num_back_inputs_with_state;
+                fwd_info;
+                back_info = fun_sig_info.back_info;
                 effect_info = loop_effect_info;
               }
             in
+            assert (fun_sig_info_is_wf loop_sig_info);
 
             let inputs_tys =
+              (* TODO: *)
+              assert (not !Config.return_back_funs);
+
               let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
               let fwd_inputs = List.map (fun (v : var) -> v.ty) loop.inputs in
+              let info = fun_sig_info.fwd_info in
               let state =
                 Collections.List.subslice fun_sig.inputs
-                  fun_sig_info.num_fwd_inputs_with_fuel_no_state
-                  fun_sig_info.num_fwd_inputs_with_fuel_with_state
+                  info.num_inputs_with_fuel_no_state
+                  info.num_inputs_with_fuel_with_state
               in
               let _, back_inputs =
                 Collections.List.split_at fun_sig.inputs
-                  fun_sig_info.num_fwd_inputs_with_fuel_with_state
+                  info.num_inputs_with_fuel_with_state
               in
               List.concat [ fuel; fwd_inputs; state; back_inputs ]
             in
@@ -1432,14 +1441,17 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
               in
 
               (* Introduce the additional backward inputs *)
+              (* TODO: *)
+              assert (not !Config.return_back_funs);
               let fun_body = Option.get def.body in
+              let info = fun_sig_info.fwd_info in
               let _, back_inputs =
                 Collections.List.split_at fun_body.inputs
-                  fun_sig_info.num_fwd_inputs_with_fuel_with_state
+                  info.num_inputs_with_fuel_with_state
               in
               let _, back_inputs_lvs =
                 Collections.List.split_at fun_body.inputs_lvs
-                  fun_sig_info.num_fwd_inputs_with_fuel_with_state
+                  info.num_inputs_with_fuel_with_state
               in
 
               let inputs =
@@ -2055,12 +2067,14 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
 
   (* We start by computing the filtering information, for each function *)
   let compute_one_filter_info (decl : fun_decl) =
+    (* TODO: *)
+    assert (not !Config.return_back_funs);
     (* There should be a body *)
     let body = Option.get decl.body in
     (* We only look at the forward inputs, without the state *)
     let inputs_prefix, _ =
       Collections.List.split_at body.inputs
-        decl.signature.info.num_fwd_inputs_with_fuel_no_state
+        decl.signature.info.fwd_info.num_inputs_with_fuel_no_state
     in
     let used = ref (List.map (fun v -> (var_get_id v, false)) inputs_prefix) in
     let inputs_prefix_length = List.length inputs_prefix in
@@ -2080,7 +2094,10 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
 
     (* Set the fuel as used *)
     let sg_info = decl.signature.info in
-    if sg_info.has_fuel then set_used (fst (Collections.List.nth inputs 0));
+    (* TODO: *)
+    assert (not !Config.return_back_funs);
+    if sg_info.fwd_info.has_fuel then
+      set_used (fst (Collections.List.nth inputs 0));
 
     let visitor =
       object (self : 'self)
@@ -2168,34 +2185,35 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
               =
             decl.signature
           in
+          (* TODO: *)
+          assert (not !Config.return_back_funs);
+          let { fwd_info; back_info; effect_info } = info in
+
           let {
             has_fuel;
-            num_fwd_inputs_no_fuel_no_state;
-            num_fwd_inputs_with_fuel_no_state;
-            num_fwd_inputs_with_fuel_with_state;
-            num_back_inputs_no_state;
-            num_back_inputs_with_state;
-            effect_info;
+            num_inputs_no_fuel_no_state;
+            num_inputs_with_fuel_no_state;
+            num_inputs_with_fuel_with_state;
           } =
-            info
+            fwd_info
           in
 
           let inputs = filter_prefix used_info inputs in
 
-          let info =
+          let fwd_info =
             {
               has_fuel;
-              num_fwd_inputs_no_fuel_no_state =
-                num_fwd_inputs_no_fuel_no_state - num_filtered;
-              num_fwd_inputs_with_fuel_no_state =
-                num_fwd_inputs_with_fuel_no_state - num_filtered;
-              num_fwd_inputs_with_fuel_with_state =
-                num_fwd_inputs_with_fuel_with_state - num_filtered;
-              num_back_inputs_no_state;
-              num_back_inputs_with_state;
-              effect_info;
+              num_inputs_no_fuel_no_state =
+                num_inputs_no_fuel_no_state - num_filtered;
+              num_inputs_with_fuel_no_state =
+                num_inputs_with_fuel_no_state - num_filtered;
+              num_inputs_with_fuel_with_state =
+                num_inputs_with_fuel_with_state - num_filtered;
             }
           in
+
+          let info = { fwd_info; back_info; effect_info } in
+          assert (fun_sig_info_is_wf info);
           let signature =
             { generics; llbc_generics; preds; inputs; output; doutputs; info }
           in
