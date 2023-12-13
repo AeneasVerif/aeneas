@@ -528,7 +528,7 @@ instance {ty} : HAnd (Scalar ty) (Scalar ty) (Scalar ty) where
   hAnd x y := Scalar.and x y
 
 -- Generic theorem - shouldn't be used much
-@[cpspec]
+@[pspec]
 theorem Scalar.add_spec {ty} {x y : Scalar ty}
   (hmin : Scalar.min ty ≤ x.val + y.val)
   (hmax : x.val + y.val ≤ Scalar.max ty) :
@@ -550,62 +550,62 @@ theorem Scalar.add_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   apply add_spec <;> assumption
 
 /- Fine-grained theorems -/
-@[cepspec] theorem Usize.add_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
+@[pspec] theorem Usize.add_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
   apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U8.add_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
+@[pspec] theorem U8.add_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
   apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U16.add_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
+@[pspec] theorem U16.add_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
   apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U32.add_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
+@[pspec] theorem U32.add_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
   apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U64.add_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
+@[pspec] theorem U64.add_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
   apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U128.add_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
+@[pspec] theorem U128.add_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
   apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem Isize.add_spec {x y : Isize}
+@[pspec] theorem Isize.add_spec {x y : Isize}
   (hmin : Isize.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ Isize.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
   Scalar.add_spec hmin hmax
 
-@[cepspec] theorem I8.add_spec {x y : I8}
+@[pspec] theorem I8.add_spec {x y : I8}
   (hmin : I8.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I8.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
   Scalar.add_spec hmin hmax
 
-@[cepspec] theorem I16.add_spec {x y : I16}
+@[pspec] theorem I16.add_spec {x y : I16}
   (hmin : I16.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I16.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
   Scalar.add_spec hmin hmax
 
-@[cepspec] theorem I32.add_spec {x y : I32}
+@[pspec] theorem I32.add_spec {x y : I32}
   (hmin : I32.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I32.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
   Scalar.add_spec hmin hmax
 
-@[cepspec] theorem I64.add_spec {x y : I64}
+@[pspec] theorem I64.add_spec {x y : I64}
   (hmin : I64.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I64.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
   Scalar.add_spec hmin hmax
 
-@[cepspec] theorem I128.add_spec {x y : I128}
+@[pspec] theorem I128.add_spec {x y : I128}
   (hmin : I128.min ≤ x.val + y.val) (hmax : x.val + y.val ≤ I128.max) :
   ∃ z, x + y = ret z ∧ z.val = x.val + y.val :=
   Scalar.add_spec hmin hmax
 
 -- Generic theorem - shouldn't be used much
-@[cpspec]
+@[pspec]
 theorem Scalar.sub_spec {ty} {x y : Scalar ty}
   (hmin : Scalar.min ty ≤ x.val - y.val)
   (hmax : x.val - y.val ≤ Scalar.max ty) :
@@ -629,56 +629,56 @@ theorem Scalar.sub_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   apply sub_spec <;> assumption
 
 /- Fine-grained theorems -/
-@[cepspec] theorem Usize.sub_spec {x y : Usize} (hmin : Usize.min ≤ x.val - y.val) :
+@[pspec] theorem Usize.sub_spec {x y : Usize} (hmin : Usize.min ≤ x.val - y.val) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
   apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
 
-@[cepspec] theorem U8.sub_spec {x y : U8} (hmin : U8.min ≤ x.val - y.val) :
+@[pspec] theorem U8.sub_spec {x y : U8} (hmin : U8.min ≤ x.val - y.val) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
   apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
 
-@[cepspec] theorem U16.sub_spec {x y : U16} (hmin : U16.min ≤ x.val - y.val) :
+@[pspec] theorem U16.sub_spec {x y : U16} (hmin : U16.min ≤ x.val - y.val) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
   apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
 
-@[cepspec] theorem U32.sub_spec {x y : U32} (hmin : U32.min ≤ x.val - y.val) :
+@[pspec] theorem U32.sub_spec {x y : U32} (hmin : U32.min ≤ x.val - y.val) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
   apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
 
-@[cepspec] theorem U64.sub_spec {x y : U64} (hmin : U64.min ≤ x.val - y.val) :
+@[pspec] theorem U64.sub_spec {x y : U64} (hmin : U64.min ≤ x.val - y.val) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
   apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
 
-@[cepspec] theorem U128.sub_spec {x y : U128} (hmin : U128.min ≤ x.val - y.val) :
+@[pspec] theorem U128.sub_spec {x y : U128} (hmin : U128.min ≤ x.val - y.val) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
   apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
 
-@[cepspec] theorem Isize.sub_spec {x y : Isize} (hmin : Isize.min ≤ x.val - y.val)
+@[pspec] theorem Isize.sub_spec {x y : Isize} (hmin : Isize.min ≤ x.val - y.val)
   (hmax : x.val - y.val ≤ Isize.max) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
   Scalar.sub_spec hmin hmax
 
-@[cepspec] theorem I8.sub_spec {x y : I8} (hmin : I8.min ≤ x.val - y.val)
+@[pspec] theorem I8.sub_spec {x y : I8} (hmin : I8.min ≤ x.val - y.val)
   (hmax : x.val - y.val ≤ I8.max) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
   Scalar.sub_spec hmin hmax
 
-@[cepspec] theorem I16.sub_spec {x y : I16} (hmin : I16.min ≤ x.val - y.val)
+@[pspec] theorem I16.sub_spec {x y : I16} (hmin : I16.min ≤ x.val - y.val)
   (hmax : x.val - y.val ≤ I16.max) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
   Scalar.sub_spec hmin hmax
 
-@[cepspec] theorem I32.sub_spec {x y : I32} (hmin : I32.min ≤ x.val - y.val)
+@[pspec] theorem I32.sub_spec {x y : I32} (hmin : I32.min ≤ x.val - y.val)
   (hmax : x.val - y.val ≤ I32.max) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
   Scalar.sub_spec hmin hmax
 
-@[cepspec] theorem I64.sub_spec {x y : I64} (hmin : I64.min ≤ x.val - y.val)
+@[pspec] theorem I64.sub_spec {x y : I64} (hmin : I64.min ≤ x.val - y.val)
   (hmax : x.val - y.val ≤ I64.max) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
   Scalar.sub_spec hmin hmax
 
-@[cepspec] theorem I128.sub_spec {x y : I128} (hmin : I128.min ≤ x.val - y.val)
+@[pspec] theorem I128.sub_spec {x y : I128} (hmin : I128.min ≤ x.val - y.val)
   (hmax : x.val - y.val ≤ I128.max) :
   ∃ z, x - y = ret z ∧ z.val = x.val - y.val :=
   Scalar.sub_spec hmin hmax
@@ -705,62 +705,62 @@ theorem Scalar.mul_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   apply mul_spec <;> assumption
 
 /- Fine-grained theorems -/
-@[cepspec] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
+@[pspec] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
   apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U8.mul_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
+@[pspec] theorem U8.mul_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
   apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U16.mul_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
+@[pspec] theorem U16.mul_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
   apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U32.mul_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
+@[pspec] theorem U32.mul_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
   apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U64.mul_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
+@[pspec] theorem U64.mul_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
   apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
+@[pspec] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
   apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
 
-@[cepspec] theorem Isize.mul_spec {x y : Isize} (hmin : Isize.min ≤ x.val * y.val)
+@[pspec] theorem Isize.mul_spec {x y : Isize} (hmin : Isize.min ≤ x.val * y.val)
   (hmax : x.val * y.val ≤ Isize.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
   Scalar.mul_spec hmin hmax
 
-@[cepspec] theorem I8.mul_spec {x y : I8} (hmin : I8.min ≤ x.val * y.val)
+@[pspec] theorem I8.mul_spec {x y : I8} (hmin : I8.min ≤ x.val * y.val)
   (hmax : x.val * y.val ≤ I8.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
   Scalar.mul_spec hmin hmax
 
-@[cepspec] theorem I16.mul_spec {x y : I16} (hmin : I16.min ≤ x.val * y.val)
+@[pspec] theorem I16.mul_spec {x y : I16} (hmin : I16.min ≤ x.val * y.val)
   (hmax : x.val * y.val ≤ I16.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
   Scalar.mul_spec hmin hmax
 
-@[cepspec] theorem I32.mul_spec {x y : I32} (hmin : I32.min ≤ x.val * y.val)
+@[pspec] theorem I32.mul_spec {x y : I32} (hmin : I32.min ≤ x.val * y.val)
   (hmax : x.val * y.val ≤ I32.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
   Scalar.mul_spec hmin hmax
 
-@[cepspec] theorem I64.mul_spec {x y : I64} (hmin : I64.min ≤ x.val * y.val)
+@[pspec] theorem I64.mul_spec {x y : I64} (hmin : I64.min ≤ x.val * y.val)
   (hmax : x.val * y.val ≤ I64.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
   Scalar.mul_spec hmin hmax
 
-@[cepspec] theorem I128.mul_spec {x y : I128} (hmin : I128.min ≤ x.val * y.val)
+@[pspec] theorem I128.mul_spec {x y : I128} (hmin : I128.min ≤ x.val * y.val)
   (hmax : x.val * y.val ≤ I128.max) :
   ∃ z, x * y = ret z ∧ z.val = x.val * y.val :=
   Scalar.mul_spec hmin hmax
 
 -- Generic theorem - shouldn't be used much
-@[cpspec]
+@[pspec]
 theorem Scalar.div_spec {ty} {x y : Scalar ty}
   (hnz : y.val ≠ 0)
   (hmin : Scalar.min ty ≤ scalar_div x.val y.val)
@@ -788,66 +788,66 @@ theorem Scalar.div_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   apply hs
 
 /- Fine-grained theorems -/
-@[cepspec] theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
+@[pspec] theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
   ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
   apply Scalar.div_unsigned_spec <;> simp [*]
 
-@[cepspec] theorem U8.div_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
+@[pspec] theorem U8.div_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
   ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
   apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem U16.div_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
+@[pspec] theorem U16.div_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
   ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
   apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem U32.div_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
+@[pspec] theorem U32.div_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
   ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
   apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem U64.div_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
+@[pspec] theorem U64.div_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
   ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
   apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem U128.div_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
+@[pspec] theorem U128.div_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
   ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
   apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem Isize.div_spec (x : Isize) {y : Isize}
+@[pspec] theorem Isize.div_spec (x : Isize) {y : Isize}
   (hnz : y.val ≠ 0)
   (hmin : Isize.min ≤ scalar_div x.val y.val)
   (hmax : scalar_div x.val y.val ≤ Isize.max):
   ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
   Scalar.div_spec hnz hmin hmax
 
-@[cepspec] theorem I8.div_spec (x : I8) {y : I8}
+@[pspec] theorem I8.div_spec (x : I8) {y : I8}
   (hnz : y.val ≠ 0)
   (hmin : I8.min ≤ scalar_div x.val y.val)
   (hmax : scalar_div x.val y.val ≤ I8.max):
   ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
   Scalar.div_spec hnz hmin hmax
 
-@[cepspec] theorem I16.div_spec (x : I16) {y : I16}
+@[pspec] theorem I16.div_spec (x : I16) {y : I16}
   (hnz : y.val ≠ 0)
   (hmin : I16.min ≤ scalar_div x.val y.val)
   (hmax : scalar_div x.val y.val ≤ I16.max):
   ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
   Scalar.div_spec hnz hmin hmax
 
-@[cepspec] theorem I32.div_spec (x : I32) {y : I32}
+@[pspec] theorem I32.div_spec (x : I32) {y : I32}
   (hnz : y.val ≠ 0)
   (hmin : I32.min ≤ scalar_div x.val y.val)
   (hmax : scalar_div x.val y.val ≤ I32.max):
   ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
   Scalar.div_spec hnz hmin hmax
 
-@[cepspec] theorem I64.div_spec (x : I64) {y : I64}
+@[pspec] theorem I64.div_spec (x : I64) {y : I64}
   (hnz : y.val ≠ 0)
   (hmin : I64.min ≤ scalar_div x.val y.val)
   (hmax : scalar_div x.val y.val ≤ I64.max):
   ∃ z, x / y = ret z ∧ z.val = scalar_div x.val y.val :=
   Scalar.div_spec hnz hmin hmax
 
-@[cepspec] theorem I128.div_spec (x : I128) {y : I128}
+@[pspec] theorem I128.div_spec (x : I128) {y : I128}
   (hnz : y.val ≠ 0)
   (hmin : I128.min ≤ scalar_div x.val y.val)
   (hmax : scalar_div x.val y.val ≤ I128.max):
@@ -855,7 +855,7 @@ theorem Scalar.div_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   Scalar.div_spec hnz hmin hmax
 
 -- Generic theorem - shouldn't be used much
-@[cpspec]
+@[pspec]
 theorem Scalar.rem_spec {ty} {x y : Scalar ty}
   (hnz : y.val ≠ 0)
   (hmin : Scalar.min ty ≤ scalar_rem x.val y.val)
@@ -883,59 +883,59 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   simp [*] at hs
   simp [*]
 
-@[cepspec] theorem Usize.rem_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
+@[pspec] theorem Usize.rem_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
   apply Scalar.rem_unsigned_spec <;> simp [*]
 
-@[cepspec] theorem U8.rem_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
+@[pspec] theorem U8.rem_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
   apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem U16.rem_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
+@[pspec] theorem U16.rem_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
   apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem U32.rem_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
+@[pspec] theorem U32.rem_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
   apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem U64.rem_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
+@[pspec] theorem U64.rem_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
   apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem U128.rem_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
+@[pspec] theorem U128.rem_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
   apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
 
-@[cepspec] theorem I8.rem_spec (x : I8) {y : I8}
+@[pspec] theorem I8.rem_spec (x : I8) {y : I8}
   (hnz : y.val ≠ 0)
   (hmin : I8.min ≤ scalar_rem x.val y.val)
   (hmax : scalar_rem x.val y.val ≤ I8.max):
   ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
   Scalar.rem_spec hnz hmin hmax
 
-@[cepspec] theorem I16.rem_spec (x : I16) {y : I16}
+@[pspec] theorem I16.rem_spec (x : I16) {y : I16}
   (hnz : y.val ≠ 0)
   (hmin : I16.min ≤ scalar_rem x.val y.val)
   (hmax : scalar_rem x.val y.val ≤ I16.max):
   ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
   Scalar.rem_spec hnz hmin hmax
 
-@[cepspec] theorem I32.rem_spec (x : I32) {y : I32}
+@[pspec] theorem I32.rem_spec (x : I32) {y : I32}
   (hnz : y.val ≠ 0)
   (hmin : I32.min ≤ scalar_rem x.val y.val)
   (hmax : scalar_rem x.val y.val ≤ I32.max):
   ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
   Scalar.rem_spec hnz hmin hmax
 
-@[cepspec] theorem I64.rem_spec (x : I64) {y : I64}
+@[pspec] theorem I64.rem_spec (x : I64) {y : I64}
   (hnz : y.val ≠ 0)
   (hmin : I64.min ≤ scalar_rem x.val y.val)
   (hmax : scalar_rem x.val y.val ≤ I64.max):
   ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val :=
   Scalar.rem_spec hnz hmin hmax
 
-@[cepspec] theorem I128.rem_spec (x : I128) {y : I128}
+@[pspec] theorem I128.rem_spec (x : I128) {y : I128}
   (hnz : y.val ≠ 0)
   (hmin : I128.min ≤ scalar_rem x.val y.val)
   (hmax : scalar_rem x.val y.val ≤ I128.max):
