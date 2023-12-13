@@ -1125,7 +1125,10 @@ and eval_switch (config : config) (switch : switch) : st_cm_fun =
               let dv = Option.get adt.variant_id in
               (* Find the branch, evaluate and continue *)
               match List.find_opt (fun (svl, _) -> List.mem dv svl) stgts with
-              | None -> eval_statement config otherwise cf ctx
+              | None -> (
+                  match otherwise with
+                  | None -> raise (Failure "No otherwise branch")
+                  | Some otherwise -> eval_statement config otherwise cf ctx)
               | Some (_, tgt) -> eval_statement config tgt cf ctx)
           | VSymbolic sv ->
               (* Expand the symbolic value - may lead to branching *)
