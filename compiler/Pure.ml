@@ -860,8 +860,8 @@ type fun_effect_info = {
           the set [{ forward function } U { backward functions }].
 
           We need this because of the option {!val:Config.backward_no_state_update}:
-          if it is [true], then in case of a backward function {!stateful} is [false],
-          but we might need to know whether the corresponding forward function
+          if it is [true], then in case of a backward function {!stateful} might be
+          [false], but we might need to know whether the corresponding forward function
           is stateful or not.
        *)
   stateful : bool;  (** [true] if the function is stateful (updates a state) *)
@@ -876,7 +876,9 @@ type fun_effect_info = {
 (** Meta information about a function signature *)
 type fun_sig_info = {
   has_fuel : bool;
-  (* TODO: add [num_fwd_inputs_no_fuel_no_state] *)
+  num_fwd_inputs_no_fuel_no_state : int;
+      (** The number of input types for forward computation, ignoring the fuel (if used)
+          and ignoring the state (if used) *)
   num_fwd_inputs_with_fuel_no_state : int;
       (** The number of input types for forward computation, with the fuel (if used)
           and ignoring the state (if used) *)

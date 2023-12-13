@@ -1340,6 +1340,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
             let loop_sig_info =
               let fuel = if !Config.use_fuel then 1 else 0 in
               let num_inputs = List.length loop.inputs in
+              let num_fwd_inputs_no_fuel_no_state = num_inputs in
               let num_fwd_inputs_with_fuel_no_state = fuel + num_inputs in
               let fwd_state =
                 fun_sig_info.num_fwd_inputs_with_fuel_with_state
@@ -1350,6 +1351,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
               in
               {
                 has_fuel = !Config.use_fuel;
+                num_fwd_inputs_no_fuel_no_state;
                 num_fwd_inputs_with_fuel_no_state;
                 num_fwd_inputs_with_fuel_with_state;
                 num_back_inputs_no_state = fun_sig_info.num_back_inputs_no_state;
@@ -2168,6 +2170,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
           in
           let {
             has_fuel;
+            num_fwd_inputs_no_fuel_no_state;
             num_fwd_inputs_with_fuel_no_state;
             num_fwd_inputs_with_fuel_with_state;
             num_back_inputs_no_state;
@@ -2182,6 +2185,8 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
           let info =
             {
               has_fuel;
+              num_fwd_inputs_no_fuel_no_state =
+                num_fwd_inputs_no_fuel_no_state - num_filtered;
               num_fwd_inputs_with_fuel_no_state =
                 num_fwd_inputs_with_fuel_no_state - num_filtered;
               num_fwd_inputs_with_fuel_with_state =

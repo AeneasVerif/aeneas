@@ -1035,10 +1035,10 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   let generics = translate_generic_params sg.generics in
   (* Return *)
   let has_fuel = fuel <> [] in
-  let num_fwd_inputs_no_state = List.length fwd_inputs in
+  let num_fwd_inputs_no_fuel_no_state = List.length fwd_inputs in
   let num_fwd_inputs_with_fuel_no_state =
     (* We use the fact that [fuel] has length 1 if we use some fuel, 0 otherwise *)
-    List.length fuel + num_fwd_inputs_no_state
+    List.length fuel + num_fwd_inputs_no_fuel_no_state
   in
   let num_back_inputs_no_state =
     if bid = None then None else Some (List.length back_inputs)
@@ -1046,6 +1046,7 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   let info =
     {
       has_fuel;
+      num_fwd_inputs_no_fuel_no_state;
       num_fwd_inputs_with_fuel_no_state;
       num_fwd_inputs_with_fuel_with_state =
         (* We use the fact that [fwd_state_ty] has length 1 if there is a state,
