@@ -273,6 +273,10 @@ let scalar_shr (#ty0 #ty1 : scalar_ty)
 let scalar_cast (src_ty : scalar_ty) (tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) =
   mk_scalar tgt_ty x
 
+// This can't fail, but for now we make all casts faillible (easier for the translation)
+let scalar_cast_bool (tgt_ty : scalar_ty) (x : bool) : result (scalar tgt_ty) =
+  mk_scalar tgt_ty (if x then 1 else 0)
+
 /// The scalar types
 type isize : eqtype = scalar Isize
 type i8    : eqtype = scalar I8

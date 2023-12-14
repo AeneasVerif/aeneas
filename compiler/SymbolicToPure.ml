@@ -1793,7 +1793,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         | _ -> raise (Failure "Unreachable"))
     | S.Unop (E.Cast cast_kind) -> (
         match cast_kind with
-        | CastInteger (src_ty, tgt_ty) ->
+        | CastScalar (src_ty, tgt_ty) ->
             (* Note that cast can fail *)
             let effect_info =
               {
