@@ -855,10 +855,14 @@ let get_fun_effect_info (fun_infos : fun_info A.FunDeclId.Map.t)
     name (outputs for backward functions come from borrows in the inputs
     of the forward function) which we use as hints to generate pretty names
     in the extracted code.
+
+    We use [bid] ("backward function id") only if we split the forward
+    and the backward functions.
  *)
 let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
     (sg : A.fun_sig) (input_names : string option list)
     (bid : T.RegionGroupId.id option) : fun_sig_named_outputs =
+  assert (Option.is_none bid || not !Config.return_back_funs);
   let fun_infos = decls_ctx.fun_ctx.fun_infos in
   let type_infos = decls_ctx.type_ctx.type_infos in
   (* Retrieve the list of parent backward functions *)
@@ -938,6 +942,18 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
     in
     let inside_mut = false in
     translate_back_ty type_infos keep_region inside_mut ty
+  in
+  let translate_back_inputs_for_gid gid : ty list =
+    (* For now, we don't allow nested borrows, so the additional inputs to the
+       backward function can only come from borrows that were returned like
+       in (for the backward function we introduce for 'a):
+       {[
+         fn f<'a>(...) -> &'a mut u32;
+       ]}
+       Upon ending the abstraction for 'a, we need to get back the borrow
+       the function returned.
+    *)
+    List.filter_map (translate_back_ty_for_gid gid) [ sg.output ]
   in
   (* Compute the additinal inputs for the current function, if it is a backward
    * function *)
@@ -1056,18 +1072,22 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
         num_fwd_inputs_with_fuel_no_state + List.length fwd_state_ty;
     }
   in
-  let back_info : inputs_info option =
-    Option.map
-      (fun n ->
-        (* Note that backward functions never use fuel *)
-        {
-          has_fuel = false;
-          num_inputs_no_fuel_no_state = n;
-          num_inputs_with_fuel_no_state = n;
-          (* Length of [back_state_ty]: similar trick as for [fwd_state_ty] *)
-          num_inputs_with_fuel_with_state = n + List.length back_state_ty;
-        })
-      num_back_inputs_no_state
+  let back_info : back_inputs_info =
+    if !Config.return_back_funs then
+      SingleBack
+        (Option.map
+           (fun n ->
+             (* Note that backward functions never use fuel *)
+             {
+               has_fuel = false;
+               num_inputs_no_fuel_no_state = n;
+               num_inputs_with_fuel_no_state = n;
+               (* Length of [back_state_ty]: similar trick as for [fwd_state_ty] *)
+               num_inputs_with_fuel_with_state = n + List.length back_state_ty;
+             })
+           num_back_inputs_no_state)
+    else (* Create the map *)
+      failwith "TODO"
   in
   let info = { fwd_info; back_info; effect_info } in
   assert (fun_sig_info_is_wf info);
@@ -3162,14 +3182,16 @@ let translate_fun_signatures (decls_ctx : C.decls_ctx)
     let fwd_id = (fun_id, None) in
     (* The backward functions *)
     let back_sgs =
-      List.map
-        (fun (rg : T.region_var_group) ->
-          let tsg =
-            translate_fun_sig decls_ctx fun_id sg input_names (Some rg.id)
-          in
-          let id = (fun_id, Some rg.id) in
-          (id, tsg))
-        regions_hierarchy
+      if !Config.return_back_funs then []
+      else
+        List.map
+          (fun (rg : T.region_var_group) ->
+            let tsg =
+              translate_fun_sig decls_ctx fun_id sg input_names (Some rg.id)
+            in
+            let id = (fun_id, Some rg.id) in
+            (id, tsg))
+          regions_hierarchy
     in
     (* Return *)
     (fwd_id, fwd_sg) :: back_sgs

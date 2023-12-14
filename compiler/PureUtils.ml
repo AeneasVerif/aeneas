@@ -74,7 +74,11 @@ let inputs_info_is_wf (info : inputs_info) : bool =
 let fun_sig_info_is_wf (info : fun_sig_info) : bool =
   inputs_info_is_wf info.fwd_info
   &&
-  match info.back_info with None -> true | Some info -> inputs_info_is_wf info
+  match info.back_info with
+  | SingleBack None -> true
+  | SingleBack (Some info) -> inputs_info_is_wf info
+  | AllBacks infos ->
+      List.for_all inputs_info_is_wf (RegionGroupId.Map.values infos)
 
 let dest_arrow_ty (ty : ty) : ty * ty =
   match ty with

@@ -561,7 +561,7 @@ type fun_id_or_trait_method_ref =
 
 (** A function id for a non-assumed function *)
 type regular_fun_id =
-  fun_id_or_trait_method_ref * LoopId.id option * T.RegionGroupId.id option
+  fun_id_or_trait_method_ref * LoopId.id option * RegionGroupId.id option
 [@@deriving show, ord]
 
 (** A function identifier *)
@@ -886,12 +886,28 @@ type inputs_info = {
 }
 [@@deriving show]
 
+type 'a back_info =
+  | SingleBack of 'a option
+      (** Information about a single backward function, if pertinent.
+
+          We use this variant if we split the forward and the backward functions.
+       *)
+  | AllBacks of 'a RegionGroupId.Map.t
+      (** Information about the various backward functions.
+
+          We use this if we *do not* split the forward and the backward functions.
+          All the information is then carried by the forward function.
+       *)
+[@@deriving show]
+
+type back_inputs_info = inputs_info back_info [@@deriving show]
+
 (** Meta information about a function signature *)
 type fun_sig_info = {
   fwd_info : inputs_info;
       (** Information about the inputs of the forward function *)
-  back_info : inputs_info option;
-      (** Information about the inputs of the backward function, if pertinent *)
+  back_info : back_inputs_info;
+      (** Information about the inputs of the backward functions. *)
   effect_info : fun_effect_info;
 }
 [@@deriving show]
@@ -1024,7 +1040,7 @@ type fun_decl = {
        *)
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
-  back_id : T.RegionGroupId.id option;
+  back_id : RegionGroupId.id option;
   llbc_name : llbc_name;  (** The original LLBC name. *)
   name : string;
       (** We use the name only for printing purposes (for debugging):

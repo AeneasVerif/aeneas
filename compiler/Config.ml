@@ -93,8 +93,67 @@ let loop_fixed_point_max_num_iters = 2
 (** {1 Translation} *)
 
 (** If true, do not define separate forward/backward functions, but make the
-    forward functions return the backward function. *)
-let return_back_funs = ref false
+    forward functions return the backward function.
+
+    Example:
+    {[
+      (* Rust *)
+      pub fn list_nth<'a, T>(l: &'a mut List<T>, i: u32) -> &'a mut T {
+          match l {
+              List::Nil => {
+                  panic!()
+              }
+              List::Cons(x, tl) => {
+                  if i == 0 {
+                      x
+                  } else {
+                      list_nth(tl, i - 1)
+                  }
+              }
+          }
+      }
+
+      (* Translation, if return_back_funs = false *)
+      def list_nth (T : Type) (l : List T) (i : U32) : Result T :=
+        match l with
+        | List.Cons x tl =>
+          if i = 0#u32
+          then Result.ret x
+          else do
+                 let i0 ← i - 1#u32
+                 list_nth T tl i0
+        | List.Nil => Result.fail .panic
+
+      def list_nth_back
+        (T : Type) (l : List T) (i : U32) (ret : T) : Result (List T) :=
+        match l with
+        | List.Cons x tl =>
+          if i = 0#u32
+          then Result.ret (List.Cons ret tl)
+          else
+            do
+              let i0 ← i - 1#u32
+              let tl0 ← list_nth_back T tl i0 ret
+              Result.ret (List.Cons x tl0)
+        | List.Nil => Result.fail .panic
+
+      (* Translation, if return_back_funs = true *)
+      def list_nth (T: Type) (ls : List T) (i : U32) :
+        Result (T × (T → Result (List T))) :=
+        match ls with
+        | List.Cons x tl =>
+          if i = 0#u32
+          then Result.ret (x, (λ ret => return (ret :: ls)))
+          else do
+            let i0 ← i - 1#u32
+            let (x, back) ← list_nth ls i0
+            Return.ret (x,
+              (λ ret => do
+               let ls ← back ret
+               return (x :: ls)))
+    ]}
+ *)
+let return_back_funs = ref true
 
 (** Forbids using field projectors for structures.
 
