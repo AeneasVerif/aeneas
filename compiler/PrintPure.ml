@@ -519,7 +519,7 @@ let unop_to_string (unop : unop) : string =
   | Not -> "¬"
   | Neg _ -> "-"
   | Cast (src, tgt) ->
-      "cast<" ^ integer_type_to_string src ^ "," ^ integer_type_to_string tgt
+      "cast<" ^ literal_type_to_string src ^ "," ^ literal_type_to_string tgt
       ^ ">"
 
 let binop_to_string = Print.Expressions.binop_to_string

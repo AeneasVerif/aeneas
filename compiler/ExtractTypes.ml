@@ -107,35 +107,74 @@ let extract_unop (extract_expr : bool -> texpression -> unit)
              ]}
           *)
           if inside then F.pp_print_string fmt "(";
-          F.pp_print_string fmt ("mk_" ^ int_name tgt);
+          F.pp_print_string fmt ("mk_" ^ scalar_name tgt);
           F.pp_print_space fmt ();
           F.pp_print_string fmt "(";
-          F.pp_print_string fmt (int_name src ^ "_to_int");
+          F.pp_print_string fmt (scalar_name src ^ "_to_int");
           F.pp_print_space fmt ();
           extract_expr true arg;
           F.pp_print_string fmt ")";
           if inside then F.pp_print_string fmt ")"
       | FStar | Coq | Lean ->
-          (* Rem.: the source type is an implicit parameter *)
           if inside then F.pp_print_string fmt "(";
-          let cast_str =
-            match !backend with
-            | Coq | FStar -> "scalar_cast"
-            | Lean -> (* TODO: I8.cast, I16.cast, etc.*) "Scalar.cast"
-            | HOL4 -> raise (Failure "Unreachable")
-          in
-          F.pp_print_string fmt cast_str;
-          F.pp_print_space fmt ();
-          if !backend <> Lean then (
-            F.pp_print_string fmt
-              (StringUtils.capitalize_first_letter
-                 (PrintPure.integer_type_to_string src));
-            F.pp_print_space fmt ());
-          if !backend = Lean then F.pp_print_string fmt ("." ^ int_name tgt)
-          else
-            F.pp_print_string fmt
-              (StringUtils.capitalize_first_letter
-                 (PrintPure.integer_type_to_string tgt));
+          (* Rem.: the source type is an implicit parameter *)
+          (* Different cases depending on the conversion *)
+          (let cast_str, src, tgt =
+             let integer_type_to_string (ty : integer_type) : string =
+               if !backend = Lean then "." ^ int_name ty
+               else
+                 StringUtils.capitalize_first_letter
+                   (PrintPure.integer_type_to_string ty)
+             in
+             match (src, tgt) with
+             | TInteger src, TInteger tgt ->
+                 let cast_str =
+                   match !backend with
+                   | Coq | FStar -> "scalar_cast"
+                   | Lean -> "Scalar.cast"
+                   | HOL4 -> raise (Failure "Unreachable")
+                 in
+                 let src =
+                   if !backend <> Lean then Some (integer_type_to_string src)
+                   else None
+                 in
+                 let tgt = integer_type_to_string tgt in
+                 (cast_str, src, Some tgt)
+             | TBool, TInteger tgt ->
+                 let cast_str =
+                   match !backend with
+                   | Coq | FStar -> "scalar_cast_bool"
+                   | Lean -> "Scalar.cast_bool"
+                   | HOL4 -> raise (Failure "Unreachable")
+                 in
+                 let tgt = integer_type_to_string tgt in
+                 (cast_str, None, Some tgt)
+             | TInteger _, TBool ->
+                 (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
+                 raise (Failure "Unexpected cast: integer to bool")
+             | TBool, TBool ->
+                 (* There shouldn't be any cast here. Note that if
+                    one writes [b as bool] in Rust (where [b] is a
+                    boolean), it gets compiled to [b] (i.e., no cast
+                    is introduced). *)
+                 raise (Failure "Unexpected cast: bool to bool")
+             | _ -> raise (Failure "Unreachable")
+           in
+           (* Print the name of the function *)
+           F.pp_print_string fmt cast_str;
+           (* Print the src type argument *)
+           (match src with
+           | None -> ()
+           | Some src ->
+               F.pp_print_space fmt ();
+               F.pp_print_string fmt src);
+           (* Print the tgt type argument *)
+           match tgt with
+           | None -> ()
+           | Some tgt ->
+               F.pp_print_space fmt ();
+               F.pp_print_string fmt tgt);
+          (* Extract the argument *)
           F.pp_print_space fmt ();
           extract_expr true arg;
           if inside then F.pp_print_string fmt ")")

@@ -498,7 +498,7 @@ let char_name () = if !backend = Lean then "Char" else "char"
 let str_name () = if !backend = Lean then "String" else "string"
 
 (** Small helper to compute the name of an int type *)
-let int_name (int_ty : integer_type) =
+let int_name (int_ty : integer_type) : string =
   let isize, usize, i_format, u_format =
     match !backend with
     | FStar | Coq | HOL4 ->
@@ -518,6 +518,14 @@ let int_name (int_ty : integer_type) =
   | U32 -> Printf.sprintf u_format 32
   | U64 -> Printf.sprintf u_format 64
   | U128 -> Printf.sprintf u_format 128
+
+let scalar_name (ty : literal_type) : string =
+  match ty with
+  | TInteger ty -> int_name ty
+  | TBool -> (
+      match !backend with FStar | Coq | HOL4 -> "bool" | Lean -> "Bool")
+  | TChar -> (
+      match !backend with FStar | Coq | HOL4 -> "char" | Lean -> "Char")
 
 (** Extraction context.
 
