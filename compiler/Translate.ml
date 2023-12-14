@@ -223,7 +223,9 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
             sg.info.fwd_info.num_inputs_with_fuel_with_state
           in
           let num_back_inputs =
-            (Option.get sg.info.back_info).num_inputs_no_fuel_no_state
+            match sg.info.back_info with
+            | SingleBack (Some info) -> info.num_inputs_no_fuel_no_state
+            | _ -> raise (Failure "Unexpected")
           in
           Collections.List.subslice sg.inputs num_forward_inputs
             (num_forward_inputs + num_back_inputs)
