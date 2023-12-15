@@ -308,20 +308,6 @@ let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let indent_incr = "  " in
   Print.Values.abs_to_string env verbose indent indent_incr abs
 
-let get_instantiated_fun_sig (fun_id : A.fun_id)
-    (back_id : T.RegionGroupId.id option) (generics : generic_args)
-    (ctx : bs_ctx) : inst_fun_sig =
-  (* Lookup the non-instantiated function signature *)
-  let sg =
-    (RegularFunIdNotLoopMap.find (fun_id, back_id) ctx.fun_context.fun_sigs).sg
-  in
-  (* Create the substitution *)
-  (* There shouldn't be any reference to Self *)
-  let tr_self = UnknownTrait __FUNCTION__ in
-  let subst = make_subst_from_generics sg.generics generics tr_self in
-  (* Apply *)
-  fun_sig_substitute subst sg
-
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
   TypeDeclId.Map.find id ctx.type_context.llbc_type_decls
@@ -329,12 +315,6 @@ let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
 let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
     A.fun_decl =
   A.FunDeclId.Map.find id ctx.fun_context.llbc_fun_decls
-
-(* TODO: move *)
-let bs_ctx_lookup_local_function_sig (def_id : A.FunDeclId.id)
-    (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
-  let id = (E.FRegular def_id, back_id) in
-  (RegularFunIdNotLoopMap.find id ctx.fun_context.fun_sigs).sg
 
 (* Some generic translation functions (we need to translate different "flavours"
    of types: forward types, backward types, etc.) *)
@@ -994,35 +974,44 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
     List.concat [ fuel; fwd_inputs; fwd_state_ty; back_inputs; back_state_ty ]
   in
   (* Outputs *)
+  let compute_back_outputs_for_gid (gid : RegionGroupId.id) :
+      string option list * ty list =
+    (* The outputs are the borrows inside the regions of the abstractions
+       and which are present in the input values. For instance, see:
+       {[
+         fn f<'a>(x : &'a mut u32) -> ...;
+       ]}
+       Upon ending the abstraction for 'a, we give back the borrow which
+       was consumed through the [x] parameter.
+    *)
+    let outputs =
+      List.map
+        (fun (name, input_ty) -> (name, translate_back_ty_for_gid gid input_ty))
+        (List.combine input_names sg.inputs)
+    in
+    (* Filter *)
+    let outputs =
+      List.filter (fun (_, opt_ty) -> Option.is_some opt_ty) outputs
+    in
+    let outputs =
+      List.map (fun (name, opt_ty) -> (name, Option.get opt_ty)) outputs
+    in
+    List.split outputs
+  in
   let output_names, doutputs =
     match gid with
     | None ->
-        (* This is a forward function: there is one (unnamed) output *)
+        (* This is a forward function: there is one (unnamed) output.
+
+           If we merge the fwd/back functions we might need to compute
+           the information about the back outputs.
+        *)
+        (* TODO: *)
+        assert (not !Config.return_back_funs);
         ([ None ], [ translate_fwd_ty type_infos sg.output ])
     | Some gid ->
-        (* This is a backward function: there might be several outputs.
-           The outputs are the borrows inside the regions of the abstractions
-           and which are present in the input values. For instance, see:
-           {[
-             fn f<'a>(x : &'a mut u32) -> ...;
-           ]}
-           Upon ending the abstraction for 'a, we give back the borrow which
-           was consumed through the [x] parameter.
-        *)
-        let outputs =
-          List.map
-            (fun (name, input_ty) ->
-              (name, translate_back_ty_for_gid gid input_ty))
-            (List.combine input_names sg.inputs)
-        in
-        (* Filter *)
-        let outputs =
-          List.filter (fun (_, opt_ty) -> Option.is_some opt_ty) outputs
-        in
-        let outputs =
-          List.map (fun (name, opt_ty) -> (name, Option.get opt_ty)) outputs
-        in
-        List.split outputs
+        (* This is a backward function: there might be several outputs. *)
+        compute_back_outputs_for_gid gid
   in
   (* Create the return type *)
   let output =
@@ -2016,37 +2005,6 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | None -> output
     | Some nstate -> mk_simpl_tuple_pattern [ nstate; output ]
   in
-  (* Sanity check: there is the proper number of inputs and outputs, and they have the proper type *)
-  (if (* TODO: normalize the types *) !Config.type_check_pure_code then
-     match fun_id with
-     | FunId fun_id ->
-         let inst_sg =
-           get_instantiated_fun_sig fun_id (Some rg_id) generics ctx
-         in
-         log#ldebug
-           (lazy
-             ("\n- fun_id: " ^ A.show_fun_id fun_id ^ "\n- inputs ("
-             ^ string_of_int (List.length inputs)
-             ^ "): "
-             ^ String.concat ", " (List.map (texpression_to_string ctx) inputs)
-             ^ "\n- inst_sg.inputs ("
-             ^ string_of_int (List.length inst_sg.inputs)
-             ^ "): "
-             ^ String.concat ", "
-                 (List.map (pure_ty_to_string ctx) inst_sg.inputs)));
-         List.iter
-           (fun (x, ty) -> assert ((x : texpression).ty = ty))
-           (List.combine inputs inst_sg.inputs);
-         log#ldebug
-           (lazy
-             ("\n- outputs: "
-             ^ string_of_int (List.length outputs)
-             ^ "\n- expected outputs: "
-             ^ string_of_int (List.length inst_sg.doutputs)));
-         List.iter
-           (fun (x, ty) -> assert ((x : typed_pattern).ty = ty))
-           (List.combine outputs inst_sg.doutputs)
-     | _ -> (* TODO: trait methods *) ());
   (* Retrieve the function id, and register the function call in the context
    * if necessary *)
   let ctx, func =
