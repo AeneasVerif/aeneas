@@ -2605,10 +2605,11 @@ and translate_forward_end (ectx : C.eval_ctx)
   assert (not !Config.return_back_funs);
 
   let translate_one_end ctx (bid : RegionGroupId.id option) =
+    let ctx = { ctx with bid } in
     (* Update the current state with the additional state received by the backward
        function, if needs be, and lookup the proper expression *)
     let ctx, e, finish =
-      match ctx.bid with
+      match bid with
       | None ->
           (* We are translating the forward function - nothing to do *)
           (ctx, fwd_e, fun e -> e)
@@ -2628,7 +2629,6 @@ and translate_forward_end (ectx : C.eval_ctx)
                  to introduce fresh variables for the additional inputs,
                  because they are locally introduced in a lambda *)
               let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
-              let ctx = { ctx with bid = Some bid } in
               let ctx, backward_inputs_no_state =
                 fresh_vars back_sg.inputs_no_state ctx
               in
