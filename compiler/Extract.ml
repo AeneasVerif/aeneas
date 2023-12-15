@@ -285,9 +285,9 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | App _ ->
       let app, args = destruct_apps e in
       extract_App ctx fmt inside app args
-  | Abs _ ->
-      let xl, e = destruct_abs_list e in
-      extract_Abs ctx fmt inside xl e
+  | Lambda _ ->
+      let xl, e = destruct_lambdas e in
+      extract_Lambda ctx fmt inside xl e
   | Qualif _ ->
       (* We use the app case *)
       extract_App ctx fmt inside e []
@@ -574,7 +574,7 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
       (* No argument: shouldn't happen *)
       raise (Failure "Unreachable")
 
-and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
+and extract_Lambda (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (xl : typed_pattern list) (e : texpression) : unit =
   (* Open a box for the abs expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;

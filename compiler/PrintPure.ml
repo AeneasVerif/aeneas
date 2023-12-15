@@ -543,9 +543,9 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
       let app, args = destruct_apps e in
       (* Convert to string *)
       app_to_string env inside indent indent_incr app args
-  | Abs _ ->
-      let xl, e = destruct_abs_list e in
-      let e = abs_to_string env indent indent_incr xl e in
+  | Lambda _ ->
+      let xl, e = destruct_lambdas e in
+      let e = lambda_to_string env indent indent_incr xl e in
       if inside then "(" ^ e ^ ")" else e
   | Qualif _ ->
       (* Qualifier without arguments *)
@@ -592,14 +592,6 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
           in
           "[ " ^ String.concat ", " fields ^ " ]"
       | _ -> raise (Failure "Unexpected"))
-  | Lambda _ ->
-      let pats, e = destruct_lambdas e in
-      let vars =
-        String.concat " " (List.map (typed_pattern_to_string env) pats)
-      in
-      let e = texpression_to_string env false indent indent_incr e in
-      let s = "λ " ^ vars ^ " => " ^ e in
-      if inside then "(" ^ s ^ ")" else s
   | Meta (meta, e) -> (
       let meta_s = emeta_to_string env meta in
       let e = texpression_to_string env inside indent indent_incr e in
@@ -668,7 +660,7 @@ and app_to_string (env : fmt_env) (inside : bool) (indent : string)
   (* Add parentheses *)
   if all_args <> [] && inside then "(" ^ e ^ ")" else e
 
-and abs_to_string (env : fmt_env) (indent : string) (indent_incr : string)
+and lambda_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (xl : typed_pattern list) (e : texpression) : string =
   let xl = List.map (typed_pattern_to_string env) xl in
   let e = texpression_to_string env false indent indent_incr e in

@@ -684,7 +684,7 @@ type expression =
           field accesses with calls to projectors over fields (when there
           are clashes of field names, some provers like F* get pretty bad...)
        *)
-  | Abs of typed_pattern * texpression  (** Lambda abstraction: [fun x -> e] *)
+  | Lambda of typed_pattern * texpression  (** Lambda abstraction: [λ x => e] *)
   | Qualif of qualif  (** A top-level qualifier *)
   | Let of bool * typed_pattern * texpression * texpression
       (** Let binding.
@@ -728,7 +728,6 @@ type expression =
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Lambda of typed_pattern * texpression  (** [λ x => e] *)
   | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
 
 and switch_body = If of texpression * texpression | Match of match_branch list

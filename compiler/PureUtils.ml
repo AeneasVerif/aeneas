@@ -215,8 +215,7 @@ let fun_sig_substitute (subst : subst) (sg : fun_sig) : inst_fun_sig =
  *)
 let rec let_group_requires_parentheses (e : texpression) : bool =
   match e.e with
-  | Var _ | CVar _ | Const _ | App _ | Abs _ | Qualif _ | StructUpdate _ ->
-      false
+  | Var _ | CVar _ | Const _ | App _ | Qualif _ | StructUpdate _ -> false
   | Let (monadic, _, _, next_e) ->
       if monadic then true else let_group_requires_parentheses next_e
   | Switch (_, _) -> false
@@ -373,18 +372,6 @@ let opt_destruct_tuple (ty : ty) : ty list option =
       assert (generics.trait_refs = []);
       Some generics.types
   | _ -> None
-
-let mk_abs (x : typed_pattern) (e : texpression) : texpression =
-  let ty = TArrow (x.ty, e.ty) in
-  let e = Abs (x, e) in
-  { e; ty }
-
-let rec destruct_abs_list (e : texpression) : typed_pattern list * texpression =
-  match e.e with
-  | Abs (x, e') ->
-      let xl, e'' = destruct_abs_list e' in
-      (x :: xl, e'')
-  | _ -> ([], e)
 
 let destruct_arrow (ty : ty) : ty * ty =
   match ty with
@@ -717,13 +704,16 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
       info.is_tuple_struct
   | TAssumed _ -> false
 
+let mk_lambda (x : typed_pattern) (e : texpression) : texpression =
+  let ty = TArrow (x.ty, e.ty) in
+  let e = Lambda (x, e) in
+  { e; ty }
+
 let mk_lambda_from_var (var : var) (mp : mplace option) (e : texpression) :
     texpression =
-  let ty = TArrow (var.ty, e.ty) in
   let pat = PatVar (var, mp) in
   let pat = { value = pat; ty = var.ty } in
-  let e = Lambda (pat, e) in
-  { e; ty }
+  mk_lambda pat e
 
 let mk_lambdas_from_vars (vars : var list) (mps : mplace option list)
     (e : texpression) : texpression =
