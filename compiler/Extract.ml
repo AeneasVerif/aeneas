@@ -1472,7 +1472,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
         (* TODO: *)
         assert (not !Config.return_back_funs);
         let num_fwd_inputs =
-          def.signature.info.fwd_info.num_inputs_with_fuel_with_state
+          def.signature.fwd_info.fwd_info.num_inputs_with_fuel_with_state
         in
         Collections.List.prefix num_fwd_inputs all_inputs
       in
@@ -1520,7 +1520,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (* TODO: *)
     assert (not !Config.return_back_funs);
     let num_fwd_inputs =
-      def.signature.info.fwd_info.num_inputs_with_fuel_with_state
+      def.signature.fwd_info.fwd_info.num_inputs_with_fuel_with_state
     in
     let vars = Collections.List.prefix num_fwd_inputs all_vars in
 
@@ -1798,7 +1798,6 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   assert body.is_global_decl_body;
   assert (Option.is_none body.back_id);
   assert (body.signature.inputs = []);
-  assert (List.length body.signature.doutputs = 1);
   assert (body.signature.generics = empty_generic_params);
 
   (* Add a break then the name of the corresponding LLBC declaration *)
@@ -1817,7 +1816,8 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
   let decl_ty, body_ty =
     let ty = body.signature.output in
-    if body.signature.info.effect_info.can_fail then (unwrap_result_ty ty, ty)
+    if body.signature.fwd_info.effect_info.can_fail then
+      (unwrap_result_ty ty, ty)
     else (ty, mk_result_ty ty)
   in
   match body.body with

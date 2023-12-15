@@ -907,9 +907,85 @@ type back_inputs_info = (inputs_info option, inputs_info) back_info
 type fun_sig_info = {
   fwd_info : inputs_info;
       (** Information about the inputs of the forward function *)
-  back_info : back_inputs_info;
-      (** Information about the inputs of the backward functions. *)
   effect_info : fun_effect_info;
+}
+[@@deriving show]
+
+type back_sg_info = {
+  inputs : ty list;  (** The additional inputs of the backward function *)
+  input_names : string option list;
+      (** The optional names for the additional inputs *)
+  outputs : ty list;
+      (** The "decomposed" list of outputs.
+
+          The list contains all the types of
+          all the given back values (there is at most one type per forward
+          input argument).
+
+          Ex.:
+          {[
+            fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T;
+          ]}
+          Decomposed outputs:
+          - forward function:  [[T]]
+          - backward function: [[T; T]] (for "x" and "y")
+
+          Non-decomposed ouputs (if the function can fail, but is not stateful):
+          - [result T]
+          - [[result (T * T)]]
+       *)
+  output_names : string option list;
+      (** The optional names for the backward outputs.
+          We derive those from the names of the inputs of the original LLBC
+          function. *)
+  effect_info : fun_effect_info;
+}
+[@@deriving show]
+
+(** A *decomposed* function signature. *)
+type decomposed_fun_sig = {
+  generics : generic_params;
+      (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
+  preds : predicates;
+  fwd_inputs : ty list;
+      (** The types of the inputs of the forward function.
+
+          Note that those input types take include the [fuel] parameter,
+          if the function uses fuel for termination, and the [state] parameter,
+          if the function is stateful.
+
+          For instance, if we have the following Rust function:
+          {[
+            fn f(x : int);
+          ]}
+
+          If we translate it to a stateful function which uses fuel we get:
+          {[
+            val f : nat -> int -> state -> result (state * unit);
+          ]}
+
+          In particular, the list of input types is: [[nat; int; state]].
+       *)
+  fwd_output : ty;
+      (** The "pure" output type of the forward function.
+
+          Note that this type doesn't contain the "effect" of the function (i.e.,
+          we haven't added the [state] if it is a stateful function and haven't
+          wrapped the type in a [result]). Also, this output type is only about
+          the forward function (it doesn't contain the type of the closures we
+          return for the backward functions, in case we merge the forward and
+          backward functions).
+       *)
+  back_sg : back_sg_info RegionGroupId.Map.t;
+      (** Information about the backward functions *)
+  fwd_info : fun_sig_info;
+      (** Additional information about the forward function *)
 }
 [@@deriving show]
 
@@ -927,15 +1003,15 @@ type fun_sig_info = {
       [in_ty0 -> ... -> in_tyn -> state -> back_in0 -> ... back_inm -> state ->
        result (state & (back_out0 & ... & back_outp))] (* state-error *)
 
-       Note that a stateful backward function may take two states as inputs: the
-       state received by the associated forward function, and the state at which
-       the backward is called. This leads to code of the following shape:
+      Note that a stateful backward function may take two states as inputs: the
+      state received by the associated forward function, and the state at which
+      the backward is called. This leads to code of the following shape:
 
-       {[
-         (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
-         ... // the state may be updated
-         (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
-       ]}
+      {[
+        (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
+        ... // the state may be updated
+        (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
+      ]}
 
     The function's type should be given by [mk_arrows sig.inputs sig.output].
     We provide additional meta-information with {!fun_sig.info}:
@@ -983,40 +1059,14 @@ type fun_sig = {
           be a tuple with a [state] if the function is stateful, and will be wrapped
           in a [result] if the function can fail.
        *)
-  doutputs : ty list;
-      (** The "decomposed" list of outputs.
-
-          In case of a forward function, the list has length = 1, for the
-          type of the returned value.
-
-          In case of backward function, the list contains all the types of
-          all the given back values (there is at most one type per forward
-          input argument).
-
-          Ex.:
-          {[
-            fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T;
-          ]}
-          Decomposed outputs:
-          - forward function:  [[T]]
-          - backward function: [[T; T]] (for "x" and "y")
-
-          Non-decomposed ouputs (if the function can fail, but is not stateful):
-          - [result T]
-          - [[result (T * T)]]
-       *)
-  info : fun_sig_info;  (** Additional information *)
+  fwd_info : fun_sig_info;
+      (** Additional information about the forward function. *)
+  back_effect_info : fun_effect_info RegionGroupId.Map.t;
 }
 [@@deriving show]
 
 (** An instantiated function signature. See {!fun_sig} *)
-type inst_fun_sig = {
-  inputs : ty list;
-  output : ty;
-  doutputs : ty list;
-  info : fun_sig_info;
-}
-[@@deriving show]
+type inst_fun_sig = { inputs : ty list; output : ty } [@@deriving show]
 
 type fun_body = {
   inputs : var list;

@@ -1358,11 +1358,7 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
                 }
               in
 
-              {
-                fwd_info;
-                back_info = fun_sig_info.back_info;
-                effect_info = loop_effect_info;
-              }
+              { fwd_info; effect_info = loop_effect_info }
             in
             assert (fun_sig_info_is_wf loop_sig_info);
 
@@ -2187,7 +2183,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
           in
           (* TODO: *)
           assert (not !Config.return_back_funs);
-          let { fwd_info; back_info; effect_info } = info in
+          let { fwd_info; effect_info } = info in
 
           let {
             has_fuel;
@@ -2212,7 +2208,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
             }
           in
 
-          let info = { fwd_info; back_info; effect_info } in
+          let info = { fwd_info; effect_info } in
           assert (fun_sig_info_is_wf info);
           let signature =
             { generics; llbc_generics; preds; inputs; output; doutputs; info }

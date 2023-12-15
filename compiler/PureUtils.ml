@@ -73,12 +73,6 @@ let inputs_info_is_wf (info : inputs_info) : bool =
 
 let fun_sig_info_is_wf (info : fun_sig_info) : bool =
   inputs_info_is_wf info.fwd_info
-  &&
-  match info.back_info with
-  | SingleBack None -> true
-  | SingleBack (Some info) -> inputs_info_is_wf info
-  | AllBacks infos ->
-      List.for_all inputs_info_is_wf (RegionGroupId.Map.values infos)
 
 let dest_arrow_ty (ty : ty) : ty * ty =
   match ty with
@@ -210,9 +204,7 @@ let fun_sig_substitute (subst : subst) (sg : fun_sig) : inst_fun_sig =
   let subst = ty_substitute subst in
   let inputs = List.map subst sg.inputs in
   let output = subst sg.output in
-  let doutputs = List.map subst sg.doutputs in
-  let info = sg.info in
-  { inputs; output; doutputs; info }
+  { inputs; output }
 
 (** We use this to check whether we need to add parentheses around expressions.
     We only look for outer monadic let-bindings.
