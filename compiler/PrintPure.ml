@@ -592,6 +592,14 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
           in
           "[ " ^ String.concat ", " fields ^ " ]"
       | _ -> raise (Failure "Unexpected"))
+  | Lambda _ ->
+      let pats, e = destruct_lambdas e in
+      let vars =
+        String.concat " " (List.map (typed_pattern_to_string env) pats)
+      in
+      let e = texpression_to_string env false indent indent_incr e in
+      let s = "λ " ^ vars ^ " => " ^ e in
+      if inside then "(" ^ s ^ ")" else s
   | Meta (meta, e) -> (
       let meta_s = emeta_to_string env meta in
       let e = texpression_to_string env inside indent indent_incr e in

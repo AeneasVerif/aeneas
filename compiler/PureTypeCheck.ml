@@ -229,6 +229,12 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
               check_texpression ctx fe)
             supd.updates
       | _ -> raise (Failure "Unexpected"))
+  | Lambda (pat, e_next) ->
+      assert (e.ty = e_next.ty);
+      (* Check the pattern and register the introduced variables at the same time *)
+      let ctx = check_typed_pattern ctx pat in
+      (* Check the next expression *)
+      check_texpression ctx e_next
   | Meta (_, e_next) ->
       assert (e_next.ty = e.ty);
       check_texpression ctx e_next

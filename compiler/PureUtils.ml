@@ -221,6 +221,9 @@ let rec let_group_requires_parentheses (e : texpression) : bool =
       if monadic then true else let_group_requires_parentheses next_e
   | Switch (_, _) -> false
   | Meta (_, next_e) -> let_group_requires_parentheses next_e
+  | Lambda (_, _) ->
+      (* Being conservative here *)
+      true
   | Loop _ ->
       (* Should have been eliminated *)
       raise (Failure "Unreachable")
@@ -713,3 +716,23 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
       let info = TypeDeclId.Map.find id ctx in
       info.is_tuple_struct
   | TAssumed _ -> false
+
+let mk_lambda_from_var (var : var) (mp : mplace option) (e : texpression) :
+    texpression =
+  let ty = TArrow (var.ty, e.ty) in
+  let pat = PatVar (var, mp) in
+  let pat = { value = pat; ty = var.ty } in
+  let e = Lambda (pat, e) in
+  { e; ty }
+
+let mk_lambdas_from_vars (vars : var list) (mps : mplace option list)
+    (e : texpression) : texpression =
+  let vars = List.combine vars mps in
+  List.fold_left (fun e (v, mp) -> mk_lambda_from_var v mp e) e vars
+
+let rec destruct_lambdas (e : texpression) : typed_pattern list * texpression =
+  match e.e with
+  | Lambda (pat, e) ->
+      let pats, e = destruct_lambdas e in
+      (pat :: pats, e)
+  | _ -> ([], e)

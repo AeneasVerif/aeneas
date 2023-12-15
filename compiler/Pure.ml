@@ -728,6 +728,7 @@ type expression =
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
+  | Lambda of typed_pattern * texpression  (** [λ x => e] *)
   | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
 
 and switch_body = If of texpression * texpression | Match of match_branch list
@@ -912,9 +913,9 @@ type fun_sig_info = {
 [@@deriving show]
 
 type back_sg_info = {
-  inputs : ty list;  (** The additional inputs of the backward function *)
-  input_names : string option list;
-      (** The optional names for the additional inputs *)
+  inputs : (string option * ty) list;
+      (** The additional inputs of the backward function *)
+  inputs_no_state : (string option * ty) list;
   outputs : ty list;
       (** The "decomposed" list of outputs.
 
