@@ -45,7 +45,6 @@ type fun_sig_named_outputs = {
 
 type fun_context = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
-  fun_sigs : fun_sig_named_outputs RegularFunIdNotLoopMap.t;  (** *)
   fun_infos : fun_info A.FunDeclId.Map.t;
   regions_hierarchies : T.region_var_groups FunIdMap.t;
 }
@@ -144,7 +143,11 @@ type bs_ctx = {
           a symbolic expansion or upon ending an abstraction, for instance)
           we introduce a new variable (with a let-binding).
        *)
-  var_counter : VarId.generator;
+  var_counter : VarId.generator ref;
+      (** Using a ref to make sure all the variables identifiers are unique.
+          TODO: this is not very clean, and the code was initially written without
+          a reference (and it's shape hasn't changed). We should use DeBruijn indices.
+       *)
   state_var : VarId.id;
       (** The current state variable, in case the function is stateful *)
   back_state_vars : VarId.id RegionGroupId.Map.t;
@@ -1131,13 +1134,14 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig)
 
 let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
   (* Generate the fresh variable *)
-  let id, var_counter = VarId.fresh ctx.var_counter in
+  let id, var_counter = VarId.fresh !(ctx.var_counter) in
   let state_var =
     { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
   in
   let state_pat = mk_typed_pattern_from_var state_var None in
   (* Update the context *)
-  let ctx = { ctx with var_counter; state_var = id } in
+  ctx.var_counter := var_counter;
+  let ctx = { ctx with state_var = id } in
   (* Return *)
   (ctx, state_var, state_pat)
 
@@ -1146,11 +1150,11 @@ let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
 let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * var =
   (* Generate the fresh variable *)
-  let id, var_counter = VarId.fresh ctx.var_counter in
+  let id, var_counter = VarId.fresh !(ctx.var_counter) in
   let ty = ctx_translate_fwd_ty ctx ty in
   let var = { id; basename; ty } in
   (* Update the context *)
-  let ctx = { ctx with var_counter } in
+  ctx.var_counter := var_counter;
   (* Return *)
   (ctx, var)
 
@@ -1184,10 +1188,10 @@ let fresh_named_vars_for_symbolic_values
 let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) : bs_ctx * var
     =
   (* Generate the fresh variable *)
-  let id, var_counter = VarId.fresh ctx.var_counter in
+  let id, var_counter = VarId.fresh !(ctx.var_counter) in
   let var = { id; basename; ty } in
   (* Update the context *)
-  let ctx = { ctx with var_counter } in
+  ctx.var_counter := var_counter;
   (* Return *)
   (ctx, var)
 
@@ -3302,65 +3306,6 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
 let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
   List.map (translate_type_decl ctx)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
-
-(** Translates function signatures.
-
-    Takes as input a list of function information containing:
-    - the function id
-    - a list of optional names for the inputs
-    - the function signature
-    
-    Returns a map from forward/backward functions identifiers to:
-    - translated function signatures
-    - optional names for the outputs values (we derive them for the backward
-      functions)
- *)
-let translate_fun_signatures (decls_ctx : C.decls_ctx)
-    (functions : (A.fun_id * string option list * A.fun_sig) list) :
-    fun_sig_named_outputs RegularFunIdNotLoopMap.t =
-  (* For every function, translate the signatures of:
-     - the forward function
-     - the backward functions
-  *)
-  let translate_one (fun_id : A.fun_id) (input_names : string option list)
-      (sg : A.fun_sig) : (regular_fun_id_not_loop * fun_sig_named_outputs) list
-      =
-    log#ldebug
-      (lazy
-        ("Translating signature of function: "
-        ^ Print.Expressions.fun_id_to_string
-            (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
-            fun_id));
-    (* Retrieve the regions hierarchy *)
-    let regions_hierarchy =
-      FunIdMap.find fun_id decls_ctx.fun_ctx.regions_hierarchies
-    in
-    (* The forward function *)
-    let fwd_sg = translate_fun_sig decls_ctx fun_id sg input_names None in
-    let fwd_id = (fun_id, None) in
-    (* The backward functions *)
-    let back_sgs =
-      if !Config.return_back_funs then []
-      else
-        List.map
-          (fun (rg : T.region_var_group) ->
-            let tsg =
-              translate_fun_sig decls_ctx fun_id sg input_names (Some rg.id)
-            in
-            let id = (fun_id, Some rg.id) in
-            (id, tsg))
-          regions_hierarchy
-    in
-    (* Return *)
-    (fwd_id, fwd_sg) :: back_sgs
-  in
-  let translated =
-    List.concat
-      (List.map (fun (id, names, sg) -> translate_one id names sg) functions)
-  in
-  List.fold_left
-    (fun m (id, sg) -> RegularFunIdNotLoopMap.add id sg m)
-    RegularFunIdNotLoopMap.empty translated
 
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     : trait_decl =

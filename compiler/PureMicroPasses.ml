@@ -776,9 +776,11 @@ let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
       in
       { def with body = Some body }
 
-(** Given a forward or backward function call, is there, for every execution
+(** For the cases where we split the forward/backward functions.
+
+    Given a forward or backward function call, is there, for every execution
     path, a child backward function called later with exactly the same input
-    list prefix? We use this to filter useless function calls: if there are
+    list prefix. We use this to filter useless function calls: if there are
     such child calls, we can remove this one (in case its outputs are not
     used).
     We do this check because we can't simply remove function calls whose
@@ -1008,17 +1010,21 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
                  * under some conditions. *)
                 match (filter_monadic_calls, opt_destruct_function_call re) with
                 | true, Some (Fun (FromLlbc (fid, lp_id, rg_id)), tys, args) ->
-                    (* We need to check if there is a child call - see
-                     * the comments for:
-                     * [expression_contains_child_call_in_all_paths] *)
-                    let has_child_call =
-                      expression_contains_child_call_in_all_paths ctx fid lp_id
-                        rg_id tys args e
-                    in
-                    if has_child_call then (* Filter *)
-                      (e.e, fun _ -> used)
-                    else (* No child call: don't filter *)
-                      dont_filter ()
+                    (* If we split the forward/backward functions.
+
+                       We need to check if there is a child call - see
+                       the comments for:
+                       [expression_contains_child_call_in_all_paths] *)
+                    if not !Config.return_back_funs then
+                      let has_child_call =
+                        expression_contains_child_call_in_all_paths ctx fid
+                          lp_id rg_id tys args e
+                      in
+                      if has_child_call then (* Filter *)
+                        (e.e, fun _ -> used)
+                      else (* No child call: don't filter *)
+                        dont_filter ()
+                    else dont_filter ()
                 | _ ->
                     (* Not an LLBC function call or not allowed to filter: we can't filter *)
                     dont_filter ()
@@ -1509,9 +1515,12 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
     altogether.
   *)
 let keep_forward (fwd : fun_and_loops) (backs : fun_and_loops list) : bool =
-  (* Note that at this point, the output types are no longer seen as tuples:
-   * they should be lists of length 1. *)
-  if
+  (* The question of filtering the forward functions arises only if we split
+     the forward/backward functions *)
+  if !Config.return_back_funs then true
+  else if
+    (* Note that at this point, the output types are no longer seen as tuples:
+     * they should be lists of length 1. *)
     !Config.filter_useless_functions
     && fwd.f.signature.output = mk_result_ty mk_unit_ty
     && backs <> []
@@ -1957,9 +1966,10 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
   log#ldebug (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Remove the backward functions with no outputs.
-   * Note that the calls to those functions should already have been removed,
-   * when translating from symbolic to pure. Here, we remove the definitions
-   * altogether, because they are now useless *)
+
+     Note that the *calls* to those functions should already have been removed,
+     when translating from symbolic to pure. Here, we remove the definitions
+     altogether, because they are now useless *)
   let name = def.name ^ PrintPure.fun_suffix def.loop_id def.back_id in
   let opt_def = filter_if_backward_with_no_outputs def in
 
