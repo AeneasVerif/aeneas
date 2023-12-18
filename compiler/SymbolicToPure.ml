@@ -151,8 +151,8 @@ type bs_ctx = {
   state_var : VarId.id;
       (** The current state variable, in case the function is stateful *)
   back_state_vars : VarId.id RegionGroupId.Map.t;
-      (** The additional input state variable received by a stateful backward function,
-          **in case we are splitting the forward/backward functions**.
+      (** The additional input state variable received by a stateful backward
+          function, **in case we are splitting the forward/backward functions**.
 
           When generating stateful functions, we generate code of the following
           form:
@@ -195,7 +195,22 @@ type bs_ctx = {
        *)
   backward_outputs : var list RegionGroupId.Map.t;
       (** The variables that the backward functions will output, corresponding
-          to the borrows they give back (don't include the backward state)
+          to the borrows they give back (don't include the backward state).
+
+          The translation is done as follows:
+          - for a given backward function, we choose a set of variables [v_i]
+          - when we detect the ended input abstraction which corresponds
+            to the backward function of the LLBC function we are translating,
+            and which consumed the values [consumed_i] (that we need to give
+            back to the caller), we introduce:
+            {[
+                let v_i = consumed_i in
+                ...
+            ]}
+            Then, upon reaching the [Return] node, we introduce:
+            {[
+                (v_i)
+            ]}
        *)
   loop_backward_outputs : var list RegionGroupId.Map.t option;
       (** Same as {!backward_outputs}, but for loops (if we entered a loop).
@@ -1930,19 +1945,19 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   assert (rg_id = bid);
 
   (* The translation is done as follows:
-   * - for a given backward function, we choose a set of variables [v_i]
-   * - when we detect the ended input abstraction which corresponds
-   *   to the backward function, and which consumed the values [consumed_i],
-   *   we introduce:
-   *   {[
-       *   let v_i = consumed_i in
-       *   ...
-         *   ]}
-   *   Then, when we reach the [Return] node, we introduce:
-   *   {[
-       *   (v_i)
-       *   ]}
-   * *)
+     - for a given backward function, we choose a set of variables [v_i]
+     - when we detect the ended input abstraction which corresponds
+       to the backward function, and which consumed the values [consumed_i],
+       we introduce:
+       {[
+           let v_i = consumed_i in
+           ...
+             ]}
+       Then, when we reach the [Return] node, we introduce:
+       {[
+           (v_i)
+       ]}
+  *)
   (* First, get the given back variables.
 
      We don't use the same given back variables if we translate a loop or
