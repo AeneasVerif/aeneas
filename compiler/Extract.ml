@@ -43,8 +43,12 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
                 }
             | _ -> ctx
           in
-          let backs = List.map (fun f -> f.f) def.backs in
-          let funs = if def.keep_fwd then def.fwd.f :: backs else backs in
+          let funs =
+            if !Config.return_back_funs then [ def.fwd.f ]
+            else
+              let backs = List.map (fun f -> f.f) def.backs in
+              if def.keep_fwd then def.fwd.f :: backs else backs
+          in
           List.fold_left
             (fun ctx (f : fun_decl) ->
               let open ExtractBuiltin in
@@ -1988,7 +1992,8 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     (* We add one field per required forward/backward function *)
     let get_funs_for_id (id : fun_decl_id) : fun_decl list =
       let trans : pure_fun_translation = FunDeclId.Map.find id ctx.trans_funs in
-      List.map (fun f -> f.f) (trans.fwd :: trans.backs)
+      if !Config.return_back_funs then [ trans.fwd.f ]
+      else List.map (fun f -> f.f) (trans.fwd :: trans.backs)
     in
     match builtin_info with
     | None ->
