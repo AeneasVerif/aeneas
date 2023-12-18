@@ -48,7 +48,8 @@ Moreover, Aeneas requires the Charon ML library, defined in the
 [Charon](https://github.com/AeneasVerif/charon) project.
 The simplest way is to clone Charon, then go to [`compiler`](./compiler) and
 create a symbolic link to the Charon library:
-`ln -s PATH_TO_CHARON_REPO/charon-ml charon`
+`cd AENEAS_REPO/compiler && ln -s PATH_TO_CHARON_REPO/charon-ml charon`
+(the symbolic link should be placed inside the `aeneas/compiler/` folder).
 
 **Remark:** if you want to test if the symbolic link is valid, copy-paste the
 following script in your terminal (from the `compiler` directory):
