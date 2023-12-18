@@ -15,7 +15,7 @@ module PP = PrintPure
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
 
-type type_context = {
+type type_ctx = {
   llbc_type_decls : T.type_decl TypeDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
       (** We use this for type-checking (for sanity checks) when translating
@@ -43,18 +43,18 @@ type fun_sig_named_outputs = {
 }
 [@@deriving show]
 
-type fun_context = {
+type fun_ctx = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_infos : fun_info A.FunDeclId.Map.t;
   regions_hierarchies : T.region_var_groups FunIdMap.t;
 }
 [@@deriving show]
 
-type global_context = { llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t }
+type global_ctx = { llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t }
 [@@deriving show]
 
-type trait_decls_context = A.trait_decl A.TraitDeclId.Map.t [@@deriving show]
-type trait_impls_context = A.trait_impl A.TraitImplId.Map.t [@@deriving show]
+type trait_decls_ctx = A.trait_decl A.TraitDeclId.Map.t [@@deriving show]
+type trait_impls_ctx = A.trait_impl A.TraitImplId.Map.t [@@deriving show]
 
 (** Whenever we translate a function call or an ended abstraction, we
     store the related information (this is useful when translating ended
@@ -120,11 +120,11 @@ type loop_info = {
 
 (** Body synthesis context *)
 type bs_ctx = {
-  type_context : type_context; (* TODO: rename *)
-  fun_context : fun_context; (* TODO: rename *)
-  global_context : global_context; (* TODO: rename *)
-  trait_decls_ctx : trait_decls_context;
-  trait_impls_ctx : trait_impls_context;
+  type_ctx : type_ctx;
+  fun_ctx : fun_ctx;
+  global_ctx : global_ctx;
+  trait_decls_ctx : trait_decls_ctx;
+  trait_impls_ctx : trait_impls_ctx;
   fun_decl : A.fun_decl;
   bid : RegionGroupId.id option;
       (** TODO: rename
@@ -234,9 +234,9 @@ type bs_ctx = {
 
 (* TODO: move *)
 let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
-  let type_decls = ctx.type_context.llbc_type_decls in
-  let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let global_decls = ctx.global_context.llbc_global_decls in
+  let type_decls = ctx.type_ctx.llbc_type_decls in
+  let fun_decls = ctx.fun_ctx.llbc_fun_decls in
+  let global_decls = ctx.global_ctx.llbc_global_decls in
   let trait_decls = ctx.trait_decls_ctx in
   let trait_impls = ctx.trait_impls_ctx in
   let { regions; types; const_generics; trait_clauses } : T.generic_params =
@@ -258,9 +258,9 @@ let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
   }
 
 let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
-  let type_decls = ctx.type_context.llbc_type_decls in
-  let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let global_decls = ctx.global_context.llbc_global_decls in
+  let type_decls = ctx.type_ctx.llbc_type_decls in
+  let fun_decls = ctx.fun_ctx.llbc_fun_decls in
+  let global_decls = ctx.global_ctx.llbc_global_decls in
   let trait_decls = ctx.trait_decls_ctx in
   let trait_impls = ctx.trait_impls_ctx in
   let generics = ctx.sg.generics in
@@ -346,11 +346,11 @@ let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
 
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
-  TypeDeclId.Map.find id ctx.type_context.llbc_type_decls
+  TypeDeclId.Map.find id ctx.type_ctx.llbc_type_decls
 
 let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
     A.fun_decl =
-  A.FunDeclId.Map.find id ctx.fun_context.llbc_fun_decls
+  A.FunDeclId.Map.find id ctx.fun_ctx.llbc_fun_decls
 
 (* Some generic translation functions (we need to translate different "flavours"
    of types: forward types, backward types, etc.) *)
@@ -617,13 +617,13 @@ and translate_fwd_trait_instance_id (type_infos : type_infos)
 
 (** Simply calls [translate_fwd_ty] *)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
-  let type_infos = ctx.type_context.type_infos in
+  let type_infos = ctx.type_ctx.type_infos in
   translate_fwd_ty type_infos ty
 
 (** Simply calls [translate_fwd_generic_args] *)
 let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
     generic_args =
-  let type_infos = ctx.type_context.type_infos in
+  let type_infos = ctx.type_ctx.type_infos in
   translate_fwd_generic_args type_infos generics
 
 (** Translate a type, when some regions may have ended.
@@ -708,7 +708,7 @@ let rec translate_back_ty (type_infos : type_infos)
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
     (inside_mut : bool) (ty : T.ty) : ty option =
-  let type_infos = ctx.type_context.type_infos in
+  let type_infos = ctx.type_ctx.type_infos in
   translate_back_ty type_infos keep_region inside_mut ty
 
 let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
@@ -721,8 +721,8 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   in
   let env = VarId.Map.empty in
   {
-    PureTypeCheck.type_decls = ctx.type_context.type_decls;
-    global_decls = ctx.global_context.llbc_global_decls;
+    PureTypeCheck.type_decls = ctx.type_ctx.type_decls;
+    global_decls = ctx.global_ctx.llbc_global_decls;
     env;
     const_generics;
   }
@@ -742,7 +742,7 @@ let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
   match id with
   | FunId fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_name, fun_decl_id) ->
-      let type_infos = ctx.type_context.type_infos in
+      let type_infos = ctx.type_ctx.type_infos in
       let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
       TraitMethod (trait_ref, method_name, fun_decl_id)
 
@@ -894,7 +894,7 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
       List.map (fun (g : T.region_var_group) -> g.id) regions_hierarchy
     in
     let ctx =
-      InterpreterUtils.initialize_eval_context decls_ctx region_groups
+      InterpreterUtils.initialize_eval_ctx decls_ctx region_groups
         sg.generics.types sg.generics.const_generics
     in
     (* Compute the normalization map for the *sty* types and add it to the context *)
@@ -1786,7 +1786,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
         let effect_info =
-          get_fun_effect_info ctx.fun_context.fun_infos fid None None
+          get_fun_effect_info ctx.fun_ctx.fun_infos fid None None
         in
         (* Depending on the function effects:
            * - add the fuel
@@ -2006,7 +2006,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
         raise (Failure "Unreachable")
   in
   let effect_info =
-    get_fun_effect_info ctx.fun_context.fun_infos fun_id None (Some rg_id)
+    get_fun_effect_info ctx.fun_ctx.fun_infos fun_id None (Some rg_id)
   in
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
   (* Retrieve the original call and the parent abstractions *)
@@ -2194,8 +2194,8 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
   | V.LoopCall ->
       let fun_id = E.FRegular ctx.fun_decl.def_id in
       let effect_info =
-        get_fun_effect_info ctx.fun_context.fun_infos (FunId fun_id)
-          (Some vloop_id) (Some rg_id)
+        get_fun_effect_info ctx.fun_ctx.fun_infos (FunId fun_id) (Some vloop_id)
+          (Some rg_id)
       in
       let loop_info = LoopId.Map.find loop_id ctx.loops in
       let generics = loop_info.generics in
@@ -2306,7 +2306,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
 and translate_global_eval (gid : A.GlobalDeclId.id) (sval : V.symbolic_value)
     (e : S.expression) (ctx : bs_ctx) : texpression =
   let ctx, var = fresh_var_for_symbolic_value sval ctx in
-  let decl = A.GlobalDeclId.Map.find gid ctx.global_context.llbc_global_decls in
+  let decl = A.GlobalDeclId.Map.find gid ctx.global_ctx.llbc_global_decls in
   let global_expr = { id = Global gid; generics = empty_generic_args } in
   (* We use translate_fwd_ty to translate the global type *)
   let ty = ctx_translate_fwd_ty ctx decl.ty in
@@ -2482,7 +2482,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
          - if we forbid using field projectors.
       *)
       let is_rec_def =
-        T.TypeDeclId.Set.mem adt_id ctx.type_context.recursive_decls
+        T.TypeDeclId.Set.mem adt_id ctx.type_ctx.recursive_decls
       in
       let use_let_with_cons =
         is_enum
@@ -2495,7 +2495,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
            like Coq don't, in which case we have to deconstruct the whole ADT
            at once (`let (a, b, c) = x in`) *)
         || TypesUtils.type_decl_from_type_id_is_tuple_struct
-             ctx.type_context.type_infos type_id
+             ctx.type_ctx.type_infos type_id
            && not (Config.backend_has_tuple_projectors ())
       in
       if use_let_with_cons then
@@ -2588,7 +2588,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         { e = StructUpdate su; ty = var.ty }
     | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
     | VaTraitConstValue (trait_ref, generics, const_name) ->
-        let type_infos = ctx.type_context.type_infos in
+        let type_infos = ctx.type_ctx.type_infos in
         let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
         let generics = translate_fwd_generic_args type_infos generics in
         let qualif_id = TraitConst (trait_ref, generics, const_name) in
@@ -2722,7 +2722,7 @@ and translate_forward_end (ectx : C.eval_ctx)
         let sg = ctx.fun_decl.signature in
         let regions_hierarchy =
           LlbcAstUtils.FunIdMap.find (FRegular def_id)
-            ctx.fun_context.regions_hierarchies
+            ctx.fun_ctx.regions_hierarchies
         in
         List.map
           (fun (gid, _) ->
@@ -2816,7 +2816,7 @@ and translate_forward_end (ectx : C.eval_ctx)
       (* Lookup the effect info for the loop function *)
       let fid = E.FRegular ctx.fun_decl.def_id in
       let effect_info =
-        get_fun_effect_info ctx.fun_context.fun_infos (FunId fid) None ctx.bid
+        get_fun_effect_info ctx.fun_ctx.fun_infos (FunId fid) None ctx.bid
       in
 
       (* Introduce a fresh output value for the forward function *)
@@ -2949,7 +2949,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
           List.map
             (fun ty ->
               assert (
-                not (TypesUtils.ty_has_borrows !ctx.type_context.type_infos ty));
+                not (TypesUtils.ty_has_borrows !ctx.type_ctx.type_infos ty));
               (None, ctx_translate_fwd_ty !ctx ty))
             tys
         in
@@ -3173,7 +3173,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   (* Translate the signature *)
   let signature = translate_fun_sig_from_decomposed ctx.sg ctx.bid in
   let regions_hierarchy =
-    FunIdMap.find (FRegular def_id) ctx.fun_context.regions_hierarchies
+    FunIdMap.find (FRegular def_id) ctx.fun_ctx.regions_hierarchies
   in
   (* Translate the body, if there is *)
   let body =
@@ -3181,8 +3181,8 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     | None -> None
     | Some body ->
         let effect_info =
-          get_fun_effect_info ctx.fun_context.fun_infos
-            (FunId (FRegular def_id)) None bid
+          get_fun_effect_info ctx.fun_ctx.fun_infos (FunId (FRegular def_id))
+            None bid
         in
         let body = translate_expression body ctx in
         (* Add a match over the fuel, if necessary *)

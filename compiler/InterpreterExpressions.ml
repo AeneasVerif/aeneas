@@ -32,8 +32,7 @@ let expand_primitively_copyable_at_place (config : config)
    fun cf ctx ->
     let v = read_place access p ctx in
     match
-      find_first_primitively_copyable_sv_with_borrows
-        ctx.type_context.type_infos v
+      find_first_primitively_copyable_sv_with_borrows ctx.type_ctx.type_infos v
     with
     | None -> cf ctx
     | Some sv ->
@@ -351,7 +350,7 @@ let eval_operand_no_reorganize (config : config) (op : operand)
         assert (
           Option.is_none
             (find_first_primitively_copyable_sv_with_borrows
-               ctx.type_context.type_infos v));
+               ctx.type_ctx.type_infos v));
         (* Actually perform the copy *)
         let allow_adt_copy = false in
         let ctx, v = copy_value allow_adt_copy config ctx v in

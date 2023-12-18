@@ -265,7 +265,7 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : eval_ctx)
       inherit [_] iter_typed_value
 
       method! visit_symbolic_value _ s =
-        if ty_has_borrow_under_mut ctx.type_context.type_infos s.sv_ty then
+        if ty_has_borrow_under_mut ctx.type_ctx.type_infos s.sv_ty then
           raise Found
         else ()
     end
@@ -288,15 +288,15 @@ let rvalue_get_place (rv : rvalue) : place option =
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows (ctx : eval_ctx) (sv : symbolic_value) : bool =
-  ValuesUtils.symbolic_value_has_borrows ctx.type_context.type_infos sv
+  ValuesUtils.symbolic_value_has_borrows ctx.type_ctx.type_infos sv
 
 (** See {!ValuesUtils.value_has_borrows}. *)
 let value_has_borrows (ctx : eval_ctx) (v : value) : bool =
-  ValuesUtils.value_has_borrows ctx.type_context.type_infos v
+  ValuesUtils.value_has_borrows ctx.type_ctx.type_infos v
 
 (** See {!ValuesUtils.value_has_loans_or_borrows}. *)
 let value_has_loans_or_borrows (ctx : eval_ctx) (v : value) : bool =
-  ValuesUtils.value_has_loans_or_borrows ctx.type_context.type_infos v
+  ValuesUtils.value_has_loans_or_borrows ctx.type_ctx.type_infos v
 
 (** See {!ValuesUtils.value_has_loans}. *)
 let value_has_loans (v : value) : bool = ValuesUtils.value_has_loans v
@@ -401,19 +401,19 @@ let compute_env_elem_ids (x : env_elem) : ids_sets * ids_to_values =
   compute_env_ids [ x ]
 
 (** Compute the sets of ids found in a list of contexts. *)
-let compute_contexts_ids (ctxl : eval_ctx list) : ids_sets * ids_to_values =
+let compute_ctxs_ids (ctxl : eval_ctx list) : ids_sets * ids_to_values =
   let compute, get_ids, get_ids_to_values = compute_ids () in
   List.iter (compute#visit_eval_ctx ()) ctxl;
   (get_ids (), get_ids_to_values ())
 
 (** Compute the sets of ids found in a context. *)
-let compute_context_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
-  compute_contexts_ids [ ctx ]
+let compute_ctx_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
+  compute_ctxs_ids [ ctx ]
 
 (** **WARNING**: this function doesn't compute the normalized types
     (for the trait type aliases). This should be computed afterwards.
  *)
-let initialize_eval_context (ctx : decls_ctx)
+let initialize_eval_ctx (ctx : decls_ctx)
     (region_groups : RegionGroupId.id list) (type_vars : type_var list)
     (const_generic_vars : const_generic_var list) : eval_ctx =
   reset_global_counters ();
@@ -427,11 +427,11 @@ let initialize_eval_context (ctx : decls_ctx)
          const_generic_vars)
   in
   {
-    type_context = ctx.type_ctx;
-    fun_context = ctx.fun_ctx;
-    global_context = ctx.global_ctx;
-    trait_decls_context = ctx.trait_decls_ctx;
-    trait_impls_context = ctx.trait_impls_ctx;
+    type_ctx = ctx.type_ctx;
+    fun_ctx = ctx.fun_ctx;
+    global_ctx = ctx.global_ctx;
+    trait_decls_ctx = ctx.trait_decls_ctx;
+    trait_impls_ctx = ctx.trait_impls_ctx;
     region_groups;
     type_vars;
     const_generic_vars;

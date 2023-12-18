@@ -72,7 +72,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
            | RecGroup _ -> Some tid)
          (TypeDeclId.Map.bindings trans_ctx.type_ctx.type_decls_groups))
   in
-  let type_context =
+  let type_ctx =
     {
       SymbolicToPure.type_infos = trans_ctx.type_ctx.type_infos;
       llbc_type_decls = trans_ctx.type_ctx.type_decls;
@@ -80,14 +80,14 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       recursive_decls = recursive_type_decls;
     }
   in
-  let fun_context =
+  let fun_ctx =
     {
       SymbolicToPure.llbc_fun_decls = trans_ctx.fun_ctx.fun_decls;
       fun_infos = trans_ctx.fun_ctx.fun_infos;
       regions_hierarchies = trans_ctx.fun_ctx.regions_hierarchies;
     }
   in
-  let global_context =
+  let global_ctx =
     { SymbolicToPure.llbc_global_decls = trans_ctx.global_ctx.global_decls }
   in
 
@@ -134,7 +134,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   in
 
   let regions_hierarchy =
-    LlbcAstUtils.FunIdMap.find (FRegular def_id) fun_context.regions_hierarchies
+    LlbcAstUtils.FunIdMap.find (FRegular def_id) fun_ctx.regions_hierarchies
   in
 
   let var_counter, back_state_vars =
@@ -160,9 +160,9 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       back_state_vars;
       fuel0;
       fuel;
-      type_context;
-      fun_context;
-      global_context;
+      type_ctx;
+      fun_ctx;
+      global_ctx;
       trait_decls_ctx = trans_ctx.trait_decls_ctx.trait_decls;
       trait_impls_ctx = trans_ctx.trait_impls_ctx.trait_impls;
       fun_decl = fdef;

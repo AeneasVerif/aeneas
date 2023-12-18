@@ -747,7 +747,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
           let tr_self = UnknownTrait __FUNCTION__ in
           let regions_hierarchy =
             LlbcAstUtils.FunIdMap.find (FRegular fid)
-              ctx.fun_context.regions_hierarchies
+              ctx.fun_ctx.regions_hierarchies
           in
           let inst_sg =
             instantiate_fun_sig ctx func.generics tr_self def.signature
@@ -793,7 +793,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
                   let fid : fun_id = FRegular id in
                   let regions_hierarchy =
                     LlbcAstUtils.FunIdMap.find fid
-                      ctx.fun_context.regions_hierarchies
+                      ctx.fun_ctx.regions_hierarchies
                   in
                   let inst_sg =
                     instantiate_fun_sig ctx generics tr_self
@@ -853,7 +853,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
                           method_def.signature.parent_params_info));
                   let regions_hierarchy =
                     LlbcAstUtils.FunIdMap.find (FRegular method_id)
-                      ctx.fun_context.regions_hierarchies
+                      ctx.fun_ctx.regions_hierarchies
                   in
                   let tr_self = TraitRef trait_ref in
                   let inst_sg =
@@ -884,7 +884,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
               (* Instantiate *)
               let regions_hierarchy =
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
-                  ctx.fun_context.regions_hierarchies
+                  ctx.fun_ctx.regions_hierarchies
               in
               let tr_self = TraitRef trait_ref in
               let inst_sg =
@@ -1450,7 +1450,7 @@ and eval_assumed_function_call_symbolic (config : config) (fid : assumed_fun_id)
    * this is a current limitation of our synthesis *)
   assert (
     List.for_all
-      (fun ty -> not (ty_has_borrows ctx.type_context.type_infos ty))
+      (fun ty -> not (ty_has_borrows ctx.type_ctx.type_infos ty))
       generics.types);
 
   (* There are two cases (and this is extremely annoying):
@@ -1476,7 +1476,7 @@ and eval_assumed_function_call_symbolic (config : config) (fid : assumed_fun_id)
         | _ ->
             let regions_hierarchy =
               LlbcAstUtils.FunIdMap.find (FAssumed fid)
-                ctx.fun_context.regions_hierarchies
+                ctx.fun_ctx.regions_hierarchies
             in
             (* There shouldn't be any reference to Self *)
             let tr_self = UnknownTrait __FUNCTION__ in

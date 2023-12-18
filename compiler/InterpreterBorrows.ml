@@ -1628,7 +1628,7 @@ let destructure_abs (abs_kind : abs_kind) (can_end : bool)
             push { value; ty }
         | AIgnoredMutLoan (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
-            assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
+            assert (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty));
             assert (opt_bid = None);
             (* Simply explore the child *)
             list_avalues false push_fail child_av
@@ -1639,7 +1639,7 @@ let destructure_abs (abs_kind : abs_kind) (can_end : bool)
             { child = child_av; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child_av ->
             (* We don't support nested borrows for now *)
-            assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
+            assert (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty));
             (* Simply explore the child *)
             list_avalues false push_fail child_av)
     | ABorrow bc -> (
@@ -1659,14 +1659,14 @@ let destructure_abs (abs_kind : abs_kind) (can_end : bool)
             push av
         | AIgnoredMutBorrow (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
-            assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
+            assert (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty));
             assert (opt_bid = None);
             (* Just explore the child *)
             list_avalues false push_fail child_av
         | AEndedIgnoredMutBorrow
             { child = child_av; given_back = _; given_back_meta = _ } ->
             (* We don't support nested borrows for now *)
-            assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
+            assert (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty));
             (* Just explore the child *)
             list_avalues false push_fail child_av
         | AProjSharedBorrow asb ->
@@ -1683,7 +1683,7 @@ let destructure_abs (abs_kind : abs_kind) (can_end : bool)
     | ASymbolic _ ->
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
-        assert (not (ty_has_borrows ctx.type_context.type_infos ty))
+        assert (not (ty_has_borrows ctx.type_ctx.type_infos ty))
   and list_values (v : typed_value) : typed_avalue list * typed_value =
     let ty = v.ty in
     match v.value with
@@ -1732,7 +1732,7 @@ let destructure_abs (abs_kind : abs_kind) (can_end : bool)
     | VSymbolic _ ->
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
-        assert (not (ty_has_borrows ctx.type_context.type_infos ty));
+        assert (not (ty_has_borrows ctx.type_ctx.type_infos ty));
         ([], v)
   in
 
