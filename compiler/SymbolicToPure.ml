@@ -950,7 +950,7 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   let fwd_info =
     (* *)
     let has_fuel = fwd_fuel <> [] in
-    let num_inputs_no_fuel_no_state = List.length fwd_inputs in
+    let num_inputs_no_fuel_no_state = List.length fwd_inputs_no_fuel_no_state in
     let num_inputs_with_fuel_no_state =
       (* We use the fact that [fuel] has length 1 if we use some fuel, 0 otherwise *)
       List.length fwd_fuel + num_inputs_no_fuel_no_state
@@ -2620,9 +2620,6 @@ and translate_forward_end (ectx : C.eval_ctx)
     (loop_input_values : V.typed_value S.symbolic_value_id_map option)
     (fwd_e : S.expression) (back_e : S.expression S.region_group_id_map)
     (ctx : bs_ctx) : texpression =
-  (* TODO: *)
-  assert (not !Config.return_back_funs);
-
   let translate_one_end ctx (bid : RegionGroupId.id option) =
     let ctx = { ctx with bid } in
     (* Update the current state with the additional state received by the backward

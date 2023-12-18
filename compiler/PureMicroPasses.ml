@@ -11,6 +11,10 @@ let fun_decl_to_string (ctx : trans_ctx) (def : Pure.fun_decl) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_decl_to_string fmt def
 
+let fun_sig_to_string (ctx : trans_ctx) (sg : Pure.fun_sig) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.fun_sig_to_string fmt sg
+
 (** Small utility.
 
     We sometimes have to insert new fresh variables in a function body, in which
@@ -1303,7 +1307,8 @@ let filter_if_backward_with_no_outputs (def : fun_decl) : fun_decl option =
     those function bodies into independent definitions while removing
     occurrences of the {!Pure.Loop} node.
  *)
-let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
+let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
+    fun_decl * fun_decl list =
   match def.body with
   | None -> (def, [])
   | Some body ->
@@ -1982,7 +1987,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
         (lazy ("not filtered (not backward with no outputs): " ^ name ^ "\n"));
 
       (* Extract the loop definitions by removing the {!Loop} node *)
-      let def, loops = decompose_loops def in
+      let def, loops = decompose_loops ctx def in
 
       (* Apply the remaining passes *)
       let f = apply_end_passes_to_def ctx def in

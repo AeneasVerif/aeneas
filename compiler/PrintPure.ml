@@ -103,10 +103,13 @@ let adt_field_names (env : fmt_env) =
   Print.Types.adt_field_names (fmt_env_to_llbc_fmt_env env)
 
 let option_to_string = Print.option_to_string
-let type_var_to_string = Print.Types.type_var_to_string
-let const_generic_var_to_string = Print.Types.const_generic_var_to_string
-let integer_type_to_string = Print.Values.integer_type_to_string
 let literal_type_to_string = Print.Values.literal_type_to_string
+let type_var_to_string (v : type_var) = "(" ^ v.name ^ ": Type)"
+
+let const_generic_var_to_string (v : const_generic_var) =
+  "(" ^ v.name ^ " : " ^ literal_type_to_string v.ty ^ ")"
+
+let integer_type_to_string = Print.Values.integer_type_to_string
 let scalar_value_to_string = Print.Values.scalar_value_to_string
 let literal_to_string = Print.Values.literal_to_string
 
@@ -203,13 +206,12 @@ and trait_instance_id_to_string (env : fmt_env) (inside : bool)
   | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
 
 let trait_clause_to_string (env : fmt_env) (clause : trait_clause) : string =
-  let clause_id = trait_clause_id_to_string env clause.clause_id in
   let trait_id = trait_decl_id_to_string env clause.trait_id in
   let generics = generic_args_to_strings env true clause.generics in
   let generics =
     if generics = [] then "" else " " ^ String.concat " " generics
   in
-  "[" ^ clause_id ^ "]: " ^ trait_id ^ generics
+  trait_id ^ generics
 
 let generic_params_to_strings (env : fmt_env) (generics : generic_params) :
     string list =
