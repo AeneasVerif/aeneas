@@ -67,12 +67,6 @@ type call_info = {
 
           Those inputs include the fuel and the state, if pertinent.
        *)
-  backwards : (V.abs * texpression list) T.RegionGroupId.Map.t;
-      (** A map from region group id (i.e., backward function id) to
-          pairs (abstraction, additional arguments received by the backward function)
-       
-          TODO: remove? it is also in the bs_ctx ("abstractions" field)
-       *)
 }
 [@@deriving show]
 
@@ -224,7 +218,10 @@ type bs_ctx = {
   calls : call_info V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
   abstractions : (V.abs * texpression list) V.AbstractionId.Map.t;
-      (** The ended abstractions we encountered so far, with their additional input arguments  *)
+      (** The ended abstractions we encountered so far, with their additional
+          input arguments. We store it here and not in {!call_info} because
+          we need a map from abstraction id to abstraction (and not
+          from call id + region group id to abstraction). *)
   loop_ids_map : LoopId.id V.LoopId.Map.t;  (** Ids to use for the loops *)
   loops : loop_info LoopId.Map.t;
       (** The loops we encountered so far.
@@ -765,9 +762,7 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (args : texpression list) (ctx : bs_ctx) : bs_ctx =
   let calls = ctx.calls in
   assert (not (V.FunCallId.Map.mem call_id calls));
-  let info =
-    { forward; forward_inputs = args; backwards = T.RegionGroupId.Map.empty }
-  in
+  let info = { forward; forward_inputs = args } in
   let calls = V.FunCallId.Map.add call_id info calls in
   { ctx with calls }
 
@@ -777,11 +772,6 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
     : bs_ctx * fun_or_op_id =
   (* Insert the abstraction in the call informations *)
   let info = V.FunCallId.Map.find call_id ctx.calls in
-  assert (not (T.RegionGroupId.Map.mem back_id info.backwards));
-  let backwards =
-    T.RegionGroupId.Map.add back_id (abs, back_args) info.backwards
-  in
-  let info = { info with backwards } in
   let calls = V.FunCallId.Map.add call_id info ctx.calls in
   (* Insert the abstraction in the abstractions map *)
   let abstractions = ctx.abstractions in
