@@ -213,17 +213,6 @@ type bs_ctx = {
           The option is [None] before we detect the ended input abstraction,
           and [Some] afterwards.
        *)
-  loop_backward_outputs : var list option;
-      (** Same as {!backward_outputs}, but for loops (if we entered a loop).
-
-          TODO: merge with [backward_outputs]?
-
-          [None] if we are not inside a loop, [Some] otherwise (and whatever
-          the kind of function we are translating: it will be [Some] even
-          though we are synthesizing a forward function).
-
-          TODO: move to {!loop_info}
-       *)
   calls : call_info V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
   abstractions : (V.abs * texpression list) V.AbstractionId.Map.t;
@@ -1744,13 +1733,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
         (* Backward *)
         (* Group the variables in which we stored the values we need to give back.
          * See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
-        let backward_outputs =
-          if ctx.inside_loop then
-            (* We are synthesizing a loop body *)
-            Option.get ctx.loop_backward_outputs
-          else (* Regular function *)
-            Option.get ctx.backward_outputs
-        in
+        let backward_outputs = Option.get ctx.backward_outputs in
         let field_values = List.map mk_texpression_from_var backward_outputs in
         mk_simpl_tuple_texpression field_values
   in
@@ -1950,20 +1933,20 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      the standard body of a function.
   *)
   let ctx, given_back_variables =
-    if ctx.inside_loop then
-      (* We are synthesizing a loop body *)
-      let loop_id = Option.get ctx.loop_id in
-      let loop = LoopId.Map.find loop_id ctx.loops in
-      let tys = RegionGroupId.Map.find bid loop.back_outputs in
-      let vars = List.map (fun ty -> (None, ty)) tys in
-      let ctx, vars = fresh_vars vars ctx in
-      ({ ctx with loop_backward_outputs = Some vars }, vars)
-    else
-      (* Regular function body *)
-      let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
-      let vars = List.combine back_sg.output_names back_sg.outputs in
-      let ctx, vars = fresh_vars vars ctx in
-      ({ ctx with backward_outputs = Some vars }, vars)
+    let vars =
+      if ctx.inside_loop then
+        (* We are synthesizing a loop body *)
+        let loop_id = Option.get ctx.loop_id in
+        let loop = LoopId.Map.find loop_id ctx.loops in
+        let tys = RegionGroupId.Map.find bid loop.back_outputs in
+        List.map (fun ty -> (None, ty)) tys
+      else
+        (* Regular function body *)
+        let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
+        List.combine back_sg.output_names back_sg.outputs
+    in
+    let ctx, vars = fresh_vars vars ctx in
+    ({ ctx with backward_outputs = Some vars }, vars)
   in
 
   (* Get the list of values consumed by the abstraction upon ending *)

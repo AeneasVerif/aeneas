@@ -172,7 +172,6 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       (* Initialized just below *)
       backward_inputs_with_state = RegionGroupId.Map.empty;
       backward_outputs = None;
-      loop_backward_outputs = None;
       (* Empty for now *)
       calls;
       abstractions;
