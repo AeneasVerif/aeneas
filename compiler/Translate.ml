@@ -171,8 +171,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       backward_inputs_no_state = RegionGroupId.Map.empty;
       (* Initialized just below *)
       backward_inputs_with_state = RegionGroupId.Map.empty;
-      (* Initialized just below *)
-      backward_outputs = RegionGroupId.Map.empty;
+      backward_outputs = None;
       loop_backward_outputs = None;
       (* Empty for now *)
       calls;
@@ -233,20 +232,6 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     RegionGroupId.Map.of_list backward_inputs_with_state
   in
   let ctx = { ctx with backward_inputs_no_state; backward_inputs_with_state } in
-
-  (* Add the backward outputs *)
-  let ctx, backward_outputs =
-    List.fold_left_map
-      (fun ctx (region_vars : region_var_group) ->
-        let gid = region_vars.id in
-        let back_sg = RegionGroupId.Map.find gid sg.back_sg in
-        let outputs = List.combine back_sg.output_names back_sg.outputs in
-        let ctx, vars = SymbolicToPure.fresh_vars outputs ctx in
-        (ctx, (gid, vars)))
-      ctx regions_hierarchy
-  in
-  let backward_outputs = RegionGroupId.Map.of_list backward_outputs in
-  let ctx = { ctx with backward_outputs } in
 
   (* Translate the forward function *)
   let pure_forward =
