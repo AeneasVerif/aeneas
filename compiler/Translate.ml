@@ -42,7 +42,8 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     TODO: maybe we should introduce a record for this.
 *)
 let translate_function_to_pure (trans_ctx : trans_ctx)
-    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : fun_decl) :
+    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
+    (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
   log#ldebug
@@ -119,18 +120,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
         !m
   in
 
-  let input_names =
-    match fdef.body with
-    | None -> List.map (fun _ -> None) fdef.signature.inputs
-    | Some body ->
-        List.map
-          (fun (v : var) -> v.name)
-          (LlbcAstUtils.fun_body_get_input_vars body)
-  in
-
   let sg =
-    SymbolicToPure.translate_fun_sig_to_decomposed trans_ctx def_id
-      fdef.signature input_names
+    SymbolicToPure.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
   in
 
   let regions_hierarchy =
@@ -154,6 +145,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       decls_ctx = trans_ctx;
       SymbolicToPure.bid = None;
       sg;
+      fun_dsigs;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
       var_counter = ref var_counter;
@@ -290,10 +282,21 @@ let translate_crate_to_pure (crate : crate) :
       (List.map (fun (def : Pure.type_decl) -> (def.def_id, def)) type_decls)
   in
 
+  (* Compute the decomposed fun sigs for the whole crate *)
+  let fun_dsigs =
+    FunDeclId.Map.of_list
+      (List.map
+         (fun (fdef : LlbcAst.fun_decl) ->
+           ( fdef.def_id,
+             SymbolicToPure.translate_fun_sig_from_decl_to_decomposed trans_ctx
+               fdef ))
+         (FunDeclId.Map.values crate.fun_decls))
+  in
+
   (* Translate all the *transparent* functions *)
   let pure_translations =
     List.map
-      (translate_function_to_pure trans_ctx type_decls_map)
+      (translate_function_to_pure trans_ctx type_decls_map fun_dsigs)
       (FunDeclId.Map.values crate.fun_decls)
   in
 

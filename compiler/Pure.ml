@@ -886,23 +886,6 @@ type inputs_info = {
 }
 [@@deriving show]
 
-type ('a, 'b) back_info =
-  | SingleBack of 'a
-      (** Information about a single backward function, if pertinent.
-
-          We use this variant if we split the forward and the backward functions.
-       *)
-  | AllBacks of 'b RegionGroupId.Map.t
-      (** Information about the various backward functions.
-
-          We use this if we *do not* split the forward and the backward functions.
-          All the information is then carried by the forward function.
-       *)
-[@@deriving show]
-
-type back_inputs_info = (inputs_info option, inputs_info) back_info
-[@@deriving show]
-
 (** Meta information about a function signature *)
 type fun_sig_info = {
   fwd_info : inputs_info;
