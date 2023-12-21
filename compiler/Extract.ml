@@ -1323,18 +1323,16 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
       (Pure.FunId (FRegular def.def_id), def.loop_id, def.back_id)
       ctx.fun_name_info
   in
-  let comment_pre = "[" ^ name_to_string ctx def.llbc_name ^ "]: " in
+  let comment_pre = "[" ^ name_to_string ctx def.llbc_name ^ "]:" in
   let comment =
     let loop_comment =
       match def.loop_id with
       | None -> ""
-      | Some id -> "loop " ^ LoopId.to_string id ^ ": "
+      | Some id -> " loop " ^ LoopId.to_string id ^ ":"
     in
     let fwd_back_comment =
       match def.back_id with
-      | None ->
-          if !Config.return_back_funs then [ "function definition" ]
-          else [ "forward function" ]
+      | None -> if !Config.return_back_funs then [] else [ "forward function" ]
       | Some id ->
           (* Check if there is only one backward function, and no forward function *)
           if (not keep_fwd) && num_backs = 1 then
@@ -1346,9 +1344,9 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
           else [ "backward function " ^ T.RegionGroupId.to_string id ]
     in
     match fwd_back_comment with
-    | [] -> raise (Failure "Unreachable")
-    | [ s ] -> [ comment_pre ^ loop_comment ^ s ]
-    | s :: sl -> (comment_pre ^ loop_comment ^ s) :: sl
+    | [] -> [ comment_pre ^ loop_comment ]
+    | [ s ] -> [ comment_pre ^ loop_comment ^ " " ^ s ]
+    | s :: sl -> (comment_pre ^ loop_comment ^ " " ^ s) :: sl
   in
   extract_comment_with_span fmt comment def.meta.span
 
