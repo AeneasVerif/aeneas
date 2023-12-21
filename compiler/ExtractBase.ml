@@ -351,7 +351,7 @@ let basename_to_unique (names_set : StringSet.t)
     let s = append basename i in
     if StringSet.mem s names_set then gen (i + 1) else s
   in
-  if StringSet.mem basename names_set then gen 0 else basename
+  if StringSet.mem basename names_set then gen 1 else basename
 
 type fun_name_info = { keep_fwd : bool; num_backs : int }
 
