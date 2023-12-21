@@ -1052,10 +1052,23 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
       method! visit_expression env e =
         match e with
         | Var _ | CVar _ | Const _ | App _ | Qualif _
-        | Switch (_, _)
         | Meta (_, _)
         | StructUpdate _ | Lambda _ ->
             super#visit_expression env e
+        | Switch (scrut, switch) -> (
+            match switch with
+            | If (_, _) -> super#visit_expression env e
+            | Match branches ->
+                (* Simplify the branches *)
+                let simplify_branch (br : match_branch) =
+                  (* Compute the set of values used inside the branch *)
+                  let branch, used = self#visit_texpression env br.branch in
+                  (* Simplify the pattern *)
+                  let pat, _ = filter_typed_pattern (used ()) br.pat in
+                  { pat; branch }
+                in
+                super#visit_expression env
+                  (Switch (scrut, Match (List.map simplify_branch branches))))
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)
             let e, used = self#visit_texpression env e in
