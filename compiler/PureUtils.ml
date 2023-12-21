@@ -739,3 +739,16 @@ let rec destruct_lambdas (e : texpression) : typed_pattern list * texpression =
       let pats, e = destruct_lambdas e in
       (pat :: pats, e)
   | _ -> ([], e)
+
+let opt_dest_tuple_texpression (e : texpression) : texpression list option =
+  let app, args = destruct_apps e in
+  match app.e with
+  | Qualif { id = AdtCons { adt_id = TTuple; variant_id = None }; generics = _ }
+    ->
+      Some args
+  | _ -> None
+
+let opt_dest_struct_pattern (pat : typed_pattern) : typed_pattern list option =
+  match pat.value with
+  | PatAdt { variant_id = None; field_values } -> Some field_values
+  | _ -> None

@@ -674,6 +674,16 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let x := y
       ...
     ]}
+
+    Simplify tuples:
+    {[
+      let (y0, y1) := (x0, x1) in
+      ...
+        ~~>
+      let y0 = x0 in
+      let y1 = x1 in
+      ...
+    ]}
  *)
 let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let obj =
@@ -705,10 +715,30 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               x ) ->
             (* return/fail case *)
             if variant_id = result_return_id then
-              (* Return case *)
-              super#visit_Let env false lv x next
-            else if variant_id = result_fail_id then (* Fail case *) rv.e
+              (* Return case - note that the simplification we just perform
+                 might have unlocked the tuple simplification below *)
+              self#visit_Let env false lv x next
+            else if variant_id = result_fail_id then
+              (* Fail case *)
+              self#visit_expression env rv.e
             else raise (Failure "Unexpected")
+        | App _ ->
+            (* This might be the tuple case *)
+            if not monadic then
+              match
+                (opt_dest_struct_pattern lv, opt_dest_tuple_texpression rv)
+              with
+              | Some pats, Some vals ->
+                  (* Tuple case *)
+                  let pat_vals = List.combine pats vals in
+                  let e =
+                    List.fold_right
+                      (fun (pat, v) next -> mk_let false pat v next)
+                      pat_vals next
+                  in
+                  super#visit_expression env e.e
+              | _ -> super#visit_Let env monadic lv rv next
+            else super#visit_Let env monadic lv rv next
         | _ -> super#visit_Let env monadic lv rv next
     end
   in
