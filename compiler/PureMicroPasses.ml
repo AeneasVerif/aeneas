@@ -1337,9 +1337,6 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
             let fwd_info = fun_sig.fwd_info in
             let fwd_effect_info = fwd_info.effect_info in
 
-            (* TODO: *)
-            assert (not !Config.return_back_funs);
-
             (* Generate the loop definition *)
             let loop_fwd_effect_info = fwd_effect_info in
 

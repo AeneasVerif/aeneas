@@ -332,7 +332,10 @@ let mk_app (app : texpression) (arg : texpression) : texpression =
   match app.ty with
   | TArrow (ty0, ty1) ->
       (* Sanity check *)
-      if ty0 <> arg.ty then raise_or_return "App: wrong input type"
+      if
+        (* TODO: we need to normalize the types *)
+        !Config.type_check_pure_code && ty0 <> arg.ty
+      then raise_or_return "App: wrong input type"
       else
         let e = App (app, arg) in
         let ty = ty1 in
