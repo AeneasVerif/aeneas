@@ -1137,39 +1137,30 @@ let compute_back_tys (dsg : Pure.decomposed_fun_sig) : ty list =
       mk_arrows inputs output)
     (RegionGroupId.Map.values dsg.back_sg)
 
-(** Return the pure signature of a backward function, in the case the
-    forward/backward functions are merged (i.e., the forward functions
+(** Return the instantiated pure signature of a backward function, in the
+    case the forward/backward functions are merged (i.e., the forward functions
     return the backward functions).
-
-    TODO: merge with {!translate_fun_sig_from_decomposed}
  *)
-let translate_ret_back_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig)
-    (gid : RegionGroupId.id) : fun_sig =
+let translate_ret_back_inst_fun_sig_from_decomposed
+    (dsg : Pure.decomposed_fun_sig) (generics : generic_args)
+    (gid : RegionGroupId.id) : inst_fun_sig =
   assert !Config.return_back_funs;
-
-  let generics = dsg.generics in
-  let llbc_generics = dsg.llbc_generics in
-  let preds = dsg.preds in
-  (* Compute the effects info *)
-  let fwd_info = dsg.fwd_info in
-  let back_effect_info =
-    RegionGroupId.Map.of_list
-      (List.map
-         (fun ((gid, info) : RegionGroupId.id * back_sg_info) ->
-           (gid, info.effect_info))
-         (RegionGroupId.Map.bindings dsg.back_sg))
-  in
-  (* Two cases depending on whether we split the forward/backward functions
-     or not *)
   let mk_output_ty = mk_output_ty_from_effect_info in
-
+  (* Lookup the signature information *)
   let back_sg = RegionGroupId.Map.find gid dsg.back_sg in
   let effect_info = back_sg.effect_info in
   (* Do not prepend the forward inputs *)
   let inputs = List.map snd back_sg.inputs in
   let output = mk_simpl_tuple_ty back_sg.outputs in
   let output = mk_output_ty effect_info output in
-  { generics; llbc_generics; preds; inputs; output; fwd_info; back_effect_info }
+  (* Substitute the types *)
+  let tr_self = UnknownTrait __FUNCTION__ in
+  let subst = make_subst_from_generics dsg.generics generics tr_self in
+  let subst = ty_substitute subst in
+  let inputs = List.map subst inputs in
+  let output = subst output in
+  (* Return *)
+  { inputs; output }
 
 let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig)
     (gid : RegionGroupId.id option) : fun_sig =
@@ -1898,12 +1889,14 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                 call.regions_hierarchy
             in
             let back_sgs =
-              List.map (translate_ret_back_fun_sig_from_decomposed dsg) gids
+              List.map
+                (translate_ret_back_inst_fun_sig_from_decomposed dsg generics)
+                gids
             in
             (* Introduce variables for the backward functions *)
             let back_tys =
               List.map
-                (fun (sg : fun_sig) -> mk_arrows sg.inputs sg.output)
+                (fun (sg : inst_fun_sig) -> mk_arrows sg.inputs sg.output)
                 back_sgs
             in
             (* Compute a proper basename for the variables *)
@@ -2216,6 +2209,14 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
       (List.combine inputs args_mplaces)
   in
+  log#ldebug
+    (lazy
+      (let args = List.map (texpression_to_string ctx) args in
+       "func: "
+       ^ texpression_to_string ctx func
+       ^ "\nfunc type: "
+       ^ pure_ty_to_string ctx func.ty
+       ^ "\n\nargs:\n" ^ String.concat "\n" args));
   let call = mk_apps func args in
   (* **Optimization**:
      =================
