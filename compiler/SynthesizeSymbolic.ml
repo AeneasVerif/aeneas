@@ -2,6 +2,7 @@ open Types
 open TypesUtils
 open Expressions
 open Values
+open LlbcAst
 open SymbolicAst
 
 let mk_mplace (p : place) (ctx : Contexts.eval_ctx) : mplace =
@@ -92,6 +93,7 @@ let synthesize_symbolic_expansion_no_branching (sv : symbolic_value)
   synthesize_symbolic_expansion sv place [ Some see ] el
 
 let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
+    (sg : fun_sig option) (regions_hierarchy : region_var_groups)
     (abstractions : AbstractionId.id list) (generics : generic_args)
     (args : typed_value list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expression option)
@@ -102,6 +104,8 @@ let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
         {
           call_id;
           ctx;
+          sg;
+          regions_hierarchy;
           abstractions;
           generics;
           args;
@@ -118,28 +122,30 @@ let synthesize_global_eval (gid : GlobalDeclId.id) (dest : symbolic_value)
   Option.map (fun e -> EvalGlobal (gid, dest, e)) e
 
 let synthesize_regular_function_call (fun_id : fun_id_or_trait_method_ref)
-    (call_id : FunCallId.id) (ctx : Contexts.eval_ctx)
+    (call_id : FunCallId.id) (ctx : Contexts.eval_ctx) (sg : fun_sig)
+    (regions_hierarchy : region_var_groups)
     (abstractions : AbstractionId.id list) (generics : generic_args)
     (args : typed_value list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expression option)
     : expression option =
   synthesize_function_call
     (Fun (fun_id, call_id))
-    ctx abstractions generics args args_places dest dest_place e
+    ctx (Some sg) regions_hierarchy abstractions generics args args_places dest
+    dest_place e
 
 let synthesize_unary_op (ctx : Contexts.eval_ctx) (unop : unop)
     (arg : typed_value) (arg_place : mplace option) (dest : symbolic_value)
     (dest_place : mplace option) (e : expression option) : expression option =
   let generics = empty_generic_args in
-  synthesize_function_call (Unop unop) ctx [] generics [ arg ] [ arg_place ]
-    dest dest_place e
+  synthesize_function_call (Unop unop) ctx None [] [] generics [ arg ]
+    [ arg_place ] dest dest_place e
 
 let synthesize_binary_op (ctx : Contexts.eval_ctx) (binop : binop)
     (arg0 : typed_value) (arg0_place : mplace option) (arg1 : typed_value)
     (arg1_place : mplace option) (dest : symbolic_value)
     (dest_place : mplace option) (e : expression option) : expression option =
   let generics = empty_generic_args in
-  synthesize_function_call (Binop binop) ctx [] generics [ arg0; arg1 ]
+  synthesize_function_call (Binop binop) ctx None [] [] generics [ arg0; arg1 ]
     [ arg0_place; arg1_place ] dest dest_place e
 
 let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs)

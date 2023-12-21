@@ -129,7 +129,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   in
 
   let sg =
-    SymbolicToPure.translate_fun_sig_to_decomposed trans_ctx (FRegular def_id)
+    SymbolicToPure.translate_fun_sig_to_decomposed trans_ctx def_id
       fdef.signature input_names
   in
 
@@ -151,6 +151,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
 
   let ctx =
     {
+      decls_ctx = trans_ctx;
       SymbolicToPure.bid = None;
       sg;
       (* Will need to be updated for the backward functions *)

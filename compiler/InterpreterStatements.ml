@@ -728,7 +728,12 @@ let create_push_abstractions_from_abs_region_groups
     to a trait clause but directly to the method provided in the trait declaration.
  *)
 let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
-    : fun_id_or_trait_method_ref * generic_args * fun_decl * inst_fun_sig =
+    :
+    fun_id_or_trait_method_ref
+    * generic_args
+    * fun_decl
+    * region_var_groups
+    * inst_fun_sig =
   match call.func with
   | FnOpMove _ ->
       (* Closure case: TODO *)
@@ -753,7 +758,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
             instantiate_fun_sig ctx func.generics tr_self def.signature
               regions_hierarchy
           in
-          (func.func, func.generics, def, inst_sg)
+          (func.func, func.generics, def, regions_hierarchy, inst_sg)
       | FunId (FAssumed _) ->
           (* Unreachable: must be a transparent function *)
           raise (Failure "Unreachable")
@@ -806,7 +811,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
                      we also need to update the generics.
                   *)
                   let func = FunId fid in
-                  (func, generics, method_def, inst_sg)
+                  (func, generics, method_def, regions_hierarchy, inst_sg)
               | None ->
                   (* If not found, lookup the methods provided by the trait *declaration*
                      (remember: for now, we forbid overriding provided methods) *)
@@ -860,7 +865,11 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
                     instantiate_fun_sig ctx all_generics tr_self
                       method_def.signature regions_hierarchy
                   in
-                  (func.func, func.generics, method_def, inst_sg))
+                  ( func.func,
+                    func.generics,
+                    method_def,
+                    regions_hierarchy,
+                    inst_sg ))
           | _ ->
               (* We are using a local clause - we lookup the trait decl *)
               let trait_decl =
@@ -891,7 +900,8 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
                 instantiate_fun_sig ctx generics tr_self method_def.signature
                   regions_hierarchy
               in
-              (func.func, func.generics, method_def, inst_sg)))
+              (func.func, func.generics, method_def, regions_hierarchy, inst_sg)
+          ))
 
 (** Evaluate a statement *)
 let rec eval_statement (config : config) (st : statement) : st_cm_fun =
@@ -1277,14 +1287,14 @@ and eval_transparent_function_call_concrete (config : config)
 and eval_transparent_function_call_symbolic (config : config) (call : call) :
     st_cm_fun =
  fun cf ctx ->
-  let func, generics, def, inst_sg =
+  let func, generics, def, regions_hierarchy, inst_sg =
     eval_transparent_function_call_symbolic_inst call ctx
   in
   (* Sanity check *)
   assert (List.length call.args = List.length def.signature.inputs);
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config func inst_sg generics
-    call.args call.dest cf ctx
+  eval_function_call_symbolic_from_inst_sig config func def.signature
+    regions_hierarchy inst_sg generics call.args call.dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -1298,7 +1308,8 @@ and eval_transparent_function_call_symbolic (config : config) (call : call) :
     trait ref as input.
  *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
-    (fid : fun_id_or_trait_method_ref) (inst_sg : inst_fun_sig)
+    (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
+    (regions_hierarchy : region_var_groups) (inst_sg : inst_fun_sig)
     (generics : generic_args) (args : operand list) (dest : place) : st_cm_fun =
  fun cf ctx ->
   log#ldebug
@@ -1378,8 +1389,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     let expr = cf ctx in
 
     (* Synthesize the symbolic AST *)
-    S.synthesize_regular_function_call fid call_id ctx abs_ids generics args
-      args_places ret_spc dest_place expr
+    S.synthesize_regular_function_call fid call_id ctx sg regions_hierarchy
+      abs_ids generics args args_places ret_spc dest_place expr
   in
   let cc = comp cc cf_call in
 
@@ -1468,7 +1479,7 @@ and eval_assumed_function_call_symbolic (config : config) (fid : assumed_fun_id)
       (* In symbolic mode, the behaviour of a function call is completely defined
        * by the signature of the function: we thus simply generate correctly
        * instantiated signatures, and delegate the work to an auxiliary function *)
-      let inst_sig =
+      let sg, regions_hierarchy, inst_sig =
         match fid with
         | BoxFree ->
             (* Should have been treated above *)
@@ -1480,14 +1491,16 @@ and eval_assumed_function_call_symbolic (config : config) (fid : assumed_fun_id)
             in
             (* There shouldn't be any reference to Self *)
             let tr_self = UnknownTrait __FUNCTION__ in
-            instantiate_fun_sig ctx generics tr_self
-              (Assumed.get_assumed_fun_sig fid)
-              regions_hierarchy
+            let sg = Assumed.get_assumed_fun_sig fid in
+            let inst_sg =
+              instantiate_fun_sig ctx generics tr_self sg regions_hierarchy
+            in
+            (sg, regions_hierarchy, inst_sg)
       in
 
       (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config (FunId (FAssumed fid))
-        inst_sig generics args dest cf ctx
+      eval_function_call_symbolic_from_inst_sig config (FunId (FAssumed fid)) sg
+        regions_hierarchy inst_sig generics args dest cf ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : statement) : st_cm_fun =

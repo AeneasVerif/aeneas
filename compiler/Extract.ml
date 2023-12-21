@@ -1332,7 +1332,9 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     in
     let fwd_back_comment =
       match def.back_id with
-      | None -> [ "forward function" ]
+      | None ->
+          if !Config.return_back_funs then [ "function definition" ]
+          else [ "forward function" ]
       | Some id ->
           (* Check if there is only one backward function, and no forward function *)
           if (not keep_fwd) && num_backs = 1 then

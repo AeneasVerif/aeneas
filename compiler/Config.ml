@@ -153,7 +153,7 @@ let loop_fixed_point_max_num_iters = 2
                return (x :: ls)))
     ]}
  *)
-let return_back_funs = ref false
+let return_back_funs = ref true
 
 (** Forbids using field projectors for structures.
 

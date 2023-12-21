@@ -42,7 +42,11 @@ type call = {
           evaluated). We need it to compute the translated values for shared
           borrows (we need to perform lookups).
        *)
+  sg : fun_sig option;
+      (** The uninstantiated function signature, if this is not a unop/binop *)
+  regions_hierarchy : region_var_groups;
   abstractions : AbstractionId.id list;
+      (** The region abstractions introduced upon calling the function *)
   generics : generic_args;
   args : typed_value list;
   args_places : mplace option list;  (** Meta information *)

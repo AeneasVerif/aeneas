@@ -321,14 +321,23 @@ let destruct_apps (e : texpression) : texpression * texpression list =
 
 (** Make an [App (app, arg)] expression *)
 let mk_app (app : texpression) (arg : texpression) : texpression =
+  let raise_or_return msg =
+    if !Config.fail_hard then raise (Failure msg)
+    else
+      let e = App (app, arg) in
+      (* Dummy type - TODO: introduce an error type *)
+      let ty = app.ty in
+      { e; ty }
+  in
   match app.ty with
   | TArrow (ty0, ty1) ->
       (* Sanity check *)
-      assert (ty0 = arg.ty);
-      let e = App (app, arg) in
-      let ty = ty1 in
-      { e; ty }
-  | _ -> raise (Failure "Expected an arrow type")
+      if ty0 <> arg.ty then raise_or_return "App: wrong input type"
+      else
+        let e = App (app, arg) in
+        let ty = ty1 in
+        { e; ty }
+  | _ -> raise_or_return "Expected an arrow type"
 
 (** The reverse of {!destruct_apps} *)
 let mk_apps (app : texpression) (args : texpression list) : texpression =
