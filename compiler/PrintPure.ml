@@ -611,35 +611,36 @@ and app_to_string (env : fmt_env) (inside : bool) (indent : string)
    * expression *)
   let app, generics =
     match app.e with
-    | Qualif qualif ->
+    | Qualif qualif -> (
         (* Qualifier case *)
-        (* Convert the qualifier identifier *)
-        let qualif_s =
-          match qualif.id with
-          | FunOrOp fun_id -> fun_or_op_id_to_string env fun_id
-          | Global global_id -> global_decl_id_to_string env global_id
-          | AdtCons adt_cons_id ->
-              let variant_s =
-                adt_variant_to_string env adt_cons_id.adt_id
-                  adt_cons_id.variant_id
-              in
-              ConstStrings.constructor_prefix ^ variant_s
-          | Proj { adt_id; field_id } ->
-              let adt_s = adt_variant_to_string env adt_id None in
-              let field_s = adt_field_to_string env adt_id field_id in
-              (* Adopting an F*-like syntax *)
-              ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s
-          | TraitConst (trait_ref, generics, const_name) ->
-              let trait_ref = trait_ref_to_string env true trait_ref in
-              let generics_s = generic_args_to_string env generics in
+        match qualif.id with
+        | FunOrOp fun_id ->
+            let generics = generic_args_to_strings env true qualif.generics in
+            let qualif_s = fun_or_op_id_to_string env fun_id in
+            (qualif_s, generics)
+        | Global global_id ->
+            let generics = generic_args_to_strings env true qualif.generics in
+            (global_decl_id_to_string env global_id, generics)
+        | AdtCons adt_cons_id ->
+            let variant_s =
+              adt_variant_to_string env adt_cons_id.adt_id
+                adt_cons_id.variant_id
+            in
+            (ConstStrings.constructor_prefix ^ variant_s, [])
+        | Proj { adt_id; field_id } ->
+            let adt_s = adt_variant_to_string env adt_id None in
+            let field_s = adt_field_to_string env adt_id field_id in
+            (* Adopting an F*-like syntax *)
+            (ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s, [])
+        | TraitConst (trait_ref, generics, const_name) ->
+            let trait_ref = trait_ref_to_string env true trait_ref in
+            let generics_s = generic_args_to_string env generics in
+            let qualif =
               if generics <> empty_generic_args then
                 "(" ^ trait_ref ^ generics_s ^ ")." ^ const_name
               else trait_ref ^ "." ^ const_name
-        in
-        (* Convert the type instantiation *)
-        let generics = generic_args_to_strings env true qualif.generics in
-        (* *)
-        (qualif_s, generics)
+            in
+            (qualif, []))
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in
