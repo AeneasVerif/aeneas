@@ -1123,12 +1123,15 @@ let mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
   in
   if effect_info.can_fail then mk_result_ty output else output
 
-(** Compute the arrow types for all the backward functions *)
+(** Compute the arrow types for all the backward functions.
+
+    TODO: merge with below?
+ *)
 let compute_back_tys (dsg : Pure.decomposed_fun_sig) : ty list =
   List.map
     (fun (back_sg : back_sg_info) ->
       let effect_info = back_sg.effect_info in
-      let inputs = dsg.fwd_inputs @ List.map snd back_sg.inputs in
+      let inputs = List.map snd back_sg.inputs in
       let output = mk_simpl_tuple_ty back_sg.outputs in
       let output = mk_output_ty_from_effect_info effect_info output in
       mk_arrows inputs output)
