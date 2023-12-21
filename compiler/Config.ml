@@ -370,6 +370,32 @@ let filter_useless_monadic_calls = ref true
  *)
 let filter_useless_functions = ref true
 
+(** Simplify the forward/backward functions, in case we merge them
+    (i.e., the forward functions return the backward functions).
+
+    The simplification occurs as follows:
+    - if a forward function returns the unit type and has non-trivial backward
+      functions, then we remove the returned output.
+    - if a backward function doesn't have inputs, we evaluate it inside the
+      forward function and don't wrap it in a result.
+
+    Example:
+    {[
+      // LLBC:
+      fn incr(x: &mut u32) { *x += 1 }
+
+      // Translation without simplification:
+      let incr (x : u32) : result (unit * result u32) = ...
+                                   ^^^^   ^^^^^^
+                                    |     remove this result
+                                remove the unit
+
+      // Translation with simplification:
+      let incr (x : u32) : result u32 = ...
+    ]}
+ *)
+let simplify_merged_fwd_backs = ref true
+
 (** Use short names for the record fields.
 
     Some backends can't disambiguate records when their field names have collisions.

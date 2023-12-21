@@ -1336,6 +1336,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
             let fun_sig = def.signature in
             let fwd_info = fun_sig.fwd_info in
             let fwd_effect_info = fwd_info.effect_info in
+            let ignore_output = fwd_info.ignore_output in
 
             (* Generate the loop definition *)
             let loop_fwd_effect_info = fwd_effect_info in
@@ -1358,7 +1359,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
                 }
               in
 
-              { fwd_info; effect_info = loop_fwd_effect_info }
+              { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
             in
             assert (fun_sig_info_is_wf loop_fwd_sig_info);
 
@@ -2187,7 +2188,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
           } =
             decl.signature
           in
-          let { fwd_info; effect_info } = fwd_info in
+          let { fwd_info; effect_info; ignore_output } = fwd_info in
 
           let {
             has_fuel;
@@ -2212,7 +2213,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
             }
           in
 
-          let fwd_info = { fwd_info; effect_info } in
+          let fwd_info = { fwd_info; effect_info; ignore_output } in
           assert (fun_sig_info_is_wf fwd_info);
           let signature =
             {

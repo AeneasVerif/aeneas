@@ -448,6 +448,7 @@ let mk_simpl_tuple_ty (tys : ty list) : ty =
 
 let mk_bool_ty : ty = TLiteral TBool
 let mk_unit_ty : ty = TAdt (TTuple, empty_generic_args)
+let ty_is_unit ty : bool = ty = mk_unit_ty
 
 let mk_unit_rvalue : texpression =
   let id = AdtCons { adt_id = TTuple; variant_id = None } in

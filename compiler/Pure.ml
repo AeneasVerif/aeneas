@@ -908,6 +908,11 @@ type fun_sig_info = {
   fwd_info : inputs_info;
       (** Information about the inputs of the forward function *)
   effect_info : fun_effect_info;
+  ignore_output : bool;
+      (** In case we merge the forward/backward functions: should we ignore
+          the output (happens for forward functions if the output type is
+          [unit] and there are non-filtered backward functions)?
+       *)
 }
 [@@deriving show]
 
@@ -939,6 +944,7 @@ type back_sg_info = {
           We derive those from the names of the inputs of the original LLBC
           function. *)
   effect_info : fun_effect_info;
+  filter : bool;  (** Should we filter this backward function? *)
 }
 [@@deriving show]
 
