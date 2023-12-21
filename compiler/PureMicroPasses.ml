@@ -645,6 +645,79 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = { body with body = obj#visit_texpression () body.body } in
       { def with body = Some body }
 
+(** Simplify the let-bindings by performing the following rewritings:
+
+    Move inner let-bindings outside. This is especially useful to simplify
+    the backward expressions, when we merge the forward/backward functions.
+    Note that the rule is also applied with monadic let-bindings.
+    {[
+      let x :=
+        let y := ... in
+        e
+
+        ~~>
+
+      let y := ... in
+      let x := e
+    ]}
+
+    Simplify panics and returns:
+    {[
+      let x ← fail
+      ...
+        ~~>
+      fail
+
+      let x ← return y
+      ...
+        ~~>
+      let x := y
+      ...
+    ]}
+ *)
+let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let obj =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_Let env monadic lv rv next =
+        match rv.e with
+        | Let (rmonadic, rlv, rrv, rnext) ->
+            (* Case 1: move the inner let outside then re-visit *)
+            let rnext1 = Let (monadic, lv, rnext, next) in
+            let rnext1 = { ty = next.ty; e = rnext1 } in
+            self#visit_Let env rmonadic rlv rrv rnext1
+        | App
+            ( {
+                e =
+                  Qualif
+                    {
+                      id =
+                        AdtCons
+                          {
+                            adt_id = TAssumed TResult;
+                            variant_id = Some variant_id;
+                          };
+                      generics = _;
+                    };
+                ty = _;
+              },
+              x ) ->
+            (* return/fail case *)
+            if variant_id = result_return_id then
+              (* Return case *)
+              super#visit_Let env false lv x next
+            else if variant_id = result_fail_id then (* Fail case *) rv.e
+            else raise (Failure "Unexpected")
+        | _ -> super#visit_Let env monadic lv rv next
+    end
+  in
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body = { body with body = obj#visit_texpression () body.body } in
+      { def with body = Some body }
+
 (** Inline the useless variable (re-)assignments:
 
     A lot of intermediate variable assignments are introduced through the
@@ -1828,6 +1901,11 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let def = intro_struct_updates ctx def in
   log#ldebug
     (lazy ("intro_struct_updates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Simplify the let-bindings *)
+  let def = simplify_let_bindings ctx def in
+  log#ldebug
+    (lazy ("simplify_let_bindings:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Inline the useless variable reassignments *)
   let inline_named_vars = true in
