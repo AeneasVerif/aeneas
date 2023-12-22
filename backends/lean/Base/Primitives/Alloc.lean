@@ -12,8 +12,7 @@ namespace boxed -- alloc.boxed
 namespace Box -- alloc.boxed.Box
 
 def deref (T : Type) (x : T) : Result T := ret x
-def deref_mut (T : Type) (x : T) : Result T := ret x
-def deref_mut_back (T : Type) (_ : T) (x : T) : Result T := ret x
+def deref_mut (T : Type) (x : T) : Result (T × (T → Result T)) := ret (x, λ x => ret x)
 
 /-- Trait instance -/
 def coreopsDerefInst (Self : Type) :
@@ -27,7 +26,6 @@ def coreopsDerefMutInst (Self : Type) :
   core.ops.deref.DerefMut Self := {
   derefInst := coreopsDerefInst Self
   deref_mut := deref_mut Self
-  deref_mut_back := deref_mut_back Self
 }
 
 end Box -- alloc.boxed.Box
