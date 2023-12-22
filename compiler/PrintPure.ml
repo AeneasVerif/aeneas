@@ -711,21 +711,14 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     ^ String.concat "; " (List.map (var_to_string env) loop.inputs)
     ^ "]"
   in
-  let back_output_tys =
-    let tys =
-      match loop.back_output_tys with
-      | None -> ""
-      | Some tys -> String.concat "; " (List.map (ty_to_string env false) tys)
-    in
-    "back_output_tys: [" ^ tys ^ "]"
-  in
+  let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
   let fun_end =
     texpression_to_string env false indent2 indent_incr loop.fun_end
   in
   let loop_body =
     texpression_to_string env false indent2 indent_incr loop.loop_body
   in
-  "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ back_output_tys ^ "\n"
+  "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n"
   ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n"
   ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n"
   ^ indent ^ "}"

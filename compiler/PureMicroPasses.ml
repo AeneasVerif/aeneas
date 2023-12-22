@@ -459,7 +459,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       input_state;
       inputs;
       inputs_lvs;
-      back_output_tys;
+      output_ty;
       loop_body;
     } =
       loop
@@ -478,7 +478,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
         input_state;
         inputs;
         inputs_lvs;
-        back_output_tys;
+        output_ty;
         loop_body;
       }
     in
@@ -1498,26 +1498,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               List.concat [ fuel; fwd_inputs; fwd_state; back_inputs ]
             in
 
-            let output =
-              match loop.back_output_tys with
-              | None ->
-                  (* Forward function: the return type is the same as the
-                     parent function *)
-                  fun_sig.output
-              | Some doutputs ->
-                  (* Backward function: custom return type *)
-                  let output = mk_simpl_tuple_ty doutputs in
-                  let output =
-                    if loop_fwd_effect_info.stateful then
-                      mk_simpl_tuple_ty [ mk_state_ty; output ]
-                    else output
-                  in
-                  let output =
-                    if loop_fwd_effect_info.can_fail then mk_result_ty output
-                    else output
-                  in
-                  output
-            in
+            let output = loop.output_ty in
 
             let loop_sig =
               {
