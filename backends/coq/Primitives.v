@@ -67,7 +67,7 @@ Definition string := Coq.Strings.String.string.
 Definition char := Coq.Strings.Ascii.ascii.
 Definition char_of_byte := Coq.Strings.Ascii.ascii_of_byte.
 
-Definition core_mem_replace (a : Type) (x : a) (y : a) : a * (a -> a) := (x, fun x => x) .
+Definition core_mem_replace (a : Type) (x : a) (y : a) : a * a := (x, x) .
 
 Record mut_raw_ptr (T : Type) := { mut_raw_ptr_v : T }.
 Record const_raw_ptr (T : Type) := { const_raw_ptr_v : T }.
