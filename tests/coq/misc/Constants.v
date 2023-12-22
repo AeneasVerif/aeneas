@@ -23,7 +23,7 @@ Definition x1_c : u32 := x1_body%global.
 Definition x2_body : result u32 := Return 3%u32.
 Definition x2_c : u32 := x2_body%global.
 
-(** [constants::incr]: forward function
+(** [constants::incr]:
     Source: 'src/constants.rs', lines 17:0-17:32 *)
 Definition incr (n : u32) : result u32 :=
   u32_add n 1%u32.
@@ -33,7 +33,7 @@ Definition incr (n : u32) : result u32 :=
 Definition x3_body : result u32 := incr 32%u32.
 Definition x3_c : u32 := x3_body%global.
 
-(** [constants::mk_pair0]: forward function
+(** [constants::mk_pair0]:
     Source: 'src/constants.rs', lines 23:0-23:51 *)
 Definition mk_pair0 (x : u32) (y : u32) : result (u32 * u32) :=
   Return (x, y).
@@ -46,7 +46,7 @@ Arguments mkPair_t { _ _ }.
 Arguments pair_x { _ _ }.
 Arguments pair_y { _ _ }.
 
-(** [constants::mk_pair1]: forward function
+(** [constants::mk_pair1]:
     Source: 'src/constants.rs', lines 27:0-27:55 *)
 Definition mk_pair1 (x : u32) (y : u32) : result (Pair_t u32 u32) :=
   Return {| pair_x := x; pair_y := y |}
@@ -81,7 +81,7 @@ Record Wrap_t (T : Type) := mkWrap_t { wrap_value : T; }.
 Arguments mkWrap_t { _ }.
 Arguments wrap_value { _ }.
 
-(** [constants::{constants::Wrap<T>}::new]: forward function
+(** [constants::{constants::Wrap<T>}::new]:
     Source: 'src/constants.rs', lines 54:4-54:41 *)
 Definition wrap_new (T : Type) (value : T) : result (Wrap_t T) :=
   Return {| wrap_value := value |}
@@ -92,7 +92,7 @@ Definition wrap_new (T : Type) (value : T) : result (Wrap_t T) :=
 Definition y_body : result (Wrap_t i32) := wrap_new i32 2%i32.
 Definition y_c : Wrap_t i32 := y_body%global.
 
-(** [constants::unwrap_y]: forward function
+(** [constants::unwrap_y]:
     Source: 'src/constants.rs', lines 43:0-43:30 *)
 Definition unwrap_y : result i32 :=
   Return y_c.(wrap_value).
@@ -107,12 +107,12 @@ Definition yval_c : i32 := yval_body%global.
 Definition get_z1_z1_body : result i32 := Return 3%i32.
 Definition get_z1_z1_c : i32 := get_z1_z1_body%global.
 
-(** [constants::get_z1]: forward function
+(** [constants::get_z1]:
     Source: 'src/constants.rs', lines 61:0-61:28 *)
 Definition get_z1 : result i32 :=
   Return get_z1_z1_c.
 
-(** [constants::add]: forward function
+(** [constants::add]:
     Source: 'src/constants.rs', lines 66:0-66:39 *)
 Definition add (a : i32) (b : i32) : result i32 :=
   i32_add a b.
@@ -132,10 +132,10 @@ Definition q2_c : i32 := q2_body%global.
 Definition q3_body : result i32 := add q2_c 3%i32.
 Definition q3_c : i32 := q3_body%global.
 
-(** [constants::get_z2]: forward function
+(** [constants::get_z2]:
     Source: 'src/constants.rs', lines 70:0-70:28 *)
 Definition get_z2 : result i32 :=
-  i <- get_z1; i0 <- add i q3_c; add q1_c i0.
+  i <- get_z1; i1 <- add i q3_c; add q1_c i1.
 
 (** [constants::S1]
     Source: 'src/constants.rs', lines 80:0-80:18 *)

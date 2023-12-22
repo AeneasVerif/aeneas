@@ -67,7 +67,7 @@ Definition string := Coq.Strings.String.string.
 Definition char := Coq.Strings.Ascii.ascii.
 Definition char_of_byte := Coq.Strings.Ascii.ascii_of_byte.
 
-Definition core_mem_replace (a : Type) (x : a) (y : a) : a * (a -> a) := (x, fun x => x) .
+Definition core_mem_replace (a : Type) (x : a) (y : a) : a * a := (x, x) .
 
 Record mut_raw_ptr (T : Type) := { mut_raw_ptr_v : T }.
 Record const_raw_ptr (T : Type) := { const_raw_ptr_v : T }.
@@ -585,6 +585,13 @@ Axiom array_repeat : forall (T : Type) (n : usize) (x : T), array T n.
 Axiom array_index_usize : forall (T : Type) (n : usize) (x : array T n) (i : usize), result T.
 Axiom array_update_usize : forall (T : Type) (n : usize) (x : array T n) (i : usize) (nx : T), result (array T n).
 
+Definition array_index_mut_usize (T : Type) (n : usize) (a : array T n) (i : usize) :
+  result (T * (T -> result (array T n))) :=
+  match array_index_usize T n a i with
+  | Fail_ e => Fail_ e
+  | Return x => Return (x, array_update_usize T n a i)
+  end.
+
 (*** Slice *)
 Definition slice T := { l: list T | Z.of_nat (length l) <= usize_max}.
 
@@ -592,10 +599,24 @@ Axiom slice_len : forall (T : Type) (s : slice T), usize.
 Axiom slice_index_usize : forall (T : Type) (x : slice T) (i : usize), result T.
 Axiom slice_update_usize : forall (T : Type) (x : slice T) (i : usize) (nx : T), result (slice T).
 
+Definition slice_index_mut_usize (T : Type) (s : slice T) (i : usize) :
+  result (T * (T -> result (slice T))) :=
+  match slice_index_usize T s i with
+  | Fail_ e => Fail_ e
+  | Return x => Return (x, slice_update_usize T s i)
+  end.
+
 (*** Subslices *)
 
 Axiom array_to_slice : forall (T : Type) (n : usize) (x : array T n), result (slice T).
 Axiom array_from_slice : forall (T : Type) (n : usize) (x : array T n) (s : slice T), result (array T n).
+
+Definition array_to_slice_mut (T : Type) (n : usize) (a : array T n) :
+  result (slice T * (slice T -> result (array T n))) :=
+  match array_to_slice T n a with
+  | Fail_ e => Fail_ e
+  | Return x => Return (x, array_from_slice T n a)
+  end.
 
 Axiom array_subslice: forall (T : Type) (n : usize) (x : array T n) (r : core_ops_range_Range usize), result (slice T).
 Axiom array_update_subslice: forall (T : Type) (n : usize) (x : array T n) (r : core_ops_range_Range usize) (ns : slice T), result (array T n).

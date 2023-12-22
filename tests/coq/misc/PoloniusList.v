@@ -18,26 +18,28 @@ Inductive List_t (T : Type) :=
 Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
-(** [polonius_list::get_list_at_x]: forward function
+(** [polonius_list::get_list_at_x]:
     Source: 'src/polonius_list.rs', lines 13:0-13:76 *)
-Fixpoint get_list_at_x (ls : List_t u32) (x : u32) : result (List_t u32) :=
-  match ls with
-  | List_Cons hd tl =>
-    if hd s= x then Return (List_Cons hd tl) else get_list_at_x tl x
-  | List_Nil => Return List_Nil
-  end
-.
-
-(** [polonius_list::get_list_at_x]: backward function 0
-    Source: 'src/polonius_list.rs', lines 13:0-13:76 *)
-Fixpoint get_list_at_x_back
-  (ls : List_t u32) (x : u32) (ret : List_t u32) : result (List_t u32) :=
+Fixpoint get_list_at_x
+  (ls : List_t u32) (x : u32) :
+  result ((List_t u32) * (List_t u32 -> result (List_t u32)))
+  :=
   match ls with
   | List_Cons hd tl =>
     if hd s= x
-    then Return ret
-    else (tl0 <- get_list_at_x_back tl x ret; Return (List_Cons hd tl0))
-  | List_Nil => Return ret
+    then
+      let back_'a := fun (ret : List_t u32) => Return ret in
+      Return (List_Cons hd tl, back_'a)
+    else (
+      p <- get_list_at_x tl x;
+      let (l, get_list_at_x_back) := p in
+      let back_'a :=
+        fun (ret : List_t u32) =>
+          tl1 <- get_list_at_x_back ret; Return (List_Cons hd tl1) in
+      Return (l, back_'a))
+  | List_Nil =>
+    let back_'a := fun (ret : List_t u32) => Return ret in
+    Return (List_Nil, back_'a)
   end
 .
 
