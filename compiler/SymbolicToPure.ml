@@ -734,11 +734,15 @@ let rec translate_back_ty (type_infos : type_infos)
       None
   | TTraitType (trait_ref, generics, type_name) ->
       assert (generics.regions = []);
-      (* Translate the trait ref and the generics as "forward" generics -
-         we do not want to filter any type *)
-      let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
-      let generics = translate_fwd_generic_args type_infos generics in
-      Some (TTraitType (trait_ref, generics, type_name))
+      assert (
+        AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id);
+      if inside_mut then
+        (* Translate the trait ref and the generics as "forward" generics -
+           we do not want to filter any type *)
+        let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
+        let generics = translate_fwd_generic_args type_infos generics in
+        Some (TTraitType (trait_ref, generics, type_name))
+      else None
   | TArrow _ -> raise (Failure "TODO")
 
 (** Simply calls [translate_back_ty] *)
@@ -1056,7 +1060,21 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
        Upon ending the abstraction for 'a, we need to get back the borrow
        the function returned.
     *)
-    List.filter_map (translate_back_ty_for_gid gid) [ sg.output ]
+    let inputs =
+      List.filter_map (translate_back_ty_for_gid gid) [ sg.output ]
+    in
+    log#ldebug
+      (lazy
+        (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+         let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
+         let output = Print.Types.ty_to_string ctx sg.output in
+         let inputs =
+           Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
+         in
+         "translate_back_inputs_for_gid:" ^ "\n- gid: "
+         ^ RegionGroupId.to_string gid
+         ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs ^ "\n"));
+    inputs
   in
   let compute_back_outputs_for_gid (gid : RegionGroupId.id) :
       string option list * ty list =
@@ -1080,7 +1098,21 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     let outputs =
       List.map (fun (name, opt_ty) -> (name, Option.get opt_ty)) outputs
     in
-    List.split outputs
+    let names, outputs = List.split outputs in
+    log#ldebug
+      (lazy
+        (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+         let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
+         let inputs =
+           Print.list_to_string (Print.Types.ty_to_string ctx) sg.inputs
+         in
+         let outputs =
+           Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
+         in
+         "compute_back_outputs_for_gid:" ^ "\n- gid: "
+         ^ RegionGroupId.to_string gid
+         ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs ^ "\n"));
+    (names, outputs)
   in
   let compute_back_info_for_group (rg : T.region_var_group) :
       RegionGroupId.id * back_sg_info =
@@ -1201,8 +1233,15 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
           (fun (v : LlbcAst.var) -> v.name)
           (LlbcAstUtils.fun_body_get_input_vars body)
   in
-  translate_fun_sig_to_decomposed decls_ctx fdef.def_id fdef.signature
-    input_names
+  let sg =
+    translate_fun_sig_to_decomposed decls_ctx fdef.def_id fdef.signature
+      input_names
+  in
+  log#ldebug
+    (lazy
+      ("translate_fun_sig_from_decl_to_decomposed:" ^ "\n- name: "
+     ^ T.show_name fdef.name ^ "\n- sg:\n" ^ show_decomposed_fun_sig sg ^ "\n"));
+  sg
 
 let mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
     =

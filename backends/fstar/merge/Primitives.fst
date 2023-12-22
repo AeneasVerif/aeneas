@@ -531,9 +531,17 @@ let array_index_usize (a : Type0) (n : usize) (x : array a n) (i : usize) : resu
   if i < length x then Return (index x i)
   else Fail Failure
 
-let array_update_usize (a : Type0) (n : usize) (x : array a n) (i : usize) (nx : a) : result (array a n) =
+let array_update_usize (a : Type0) (n : usize) (x : array a n) (i : usize) (nx : a) :
+  result (array a n) =
   if i < length x then Return (list_update x i nx)
   else Fail Failure
+
+let array_index_mut_usize (a : Type0) (n : usize) (x : array a n) (i : usize) :
+  result (a & (a -> result (array a n))) =
+  match array_index_usize a n x i with
+  | Fail e -> Fail e
+  | Return v ->
+    Return (v, array_update_usize a n x i)
 
 (*** Slice *)
 type slice (a : Type0) = s:list a{length s <= usize_max}
@@ -548,12 +556,23 @@ let slice_update_usize (a : Type0) (x : slice a) (i : usize) (nx : a) : result (
   if i < length x then Return (list_update x i nx)
   else Fail Failure
 
+let slice_index_mut_usize (a : Type0) (s : slice a) (i : usize) :
+  result (a & (a -> result (slice a))) =
+  match slice_index_usize a s i with
+  | Fail e -> Fail e
+  | Return x ->
+    Return (x, slice_update_usize a s i)
+
 (*** Subslices *)
 
 let array_to_slice (a : Type0) (n : usize) (x : array a n) : result (slice a) = Return x
 let array_from_slice (a : Type0) (n : usize) (x : array a n) (s : slice a) : result (array a n) =
   if length s = n then Return s
   else Fail Failure
+
+let array_to_slice_mut (a : Type0) (n : usize) (x : array a n) :
+  result (slice a & (slice a -> result (array a n))) =
+  Return (x, array_from_slice a n x)
 
 // TODO: finish the definitions below (there lacks [List.drop] and [List.take] in the standard library *)
 let array_subslice (a : Type0) (n : usize) (x : array a n) (r : core_ops_range_Range usize) : result (slice a) =

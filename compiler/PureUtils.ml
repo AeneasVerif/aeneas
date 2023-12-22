@@ -731,7 +731,7 @@ let mk_lambda_from_var (var : var) (mp : mplace option) (e : texpression) :
 let mk_lambdas_from_vars (vars : var list) (mps : mplace option list)
     (e : texpression) : texpression =
   let vars = List.combine vars mps in
-  List.fold_left (fun e (v, mp) -> mk_lambda_from_var v mp e) e vars
+  List.fold_right (fun (v, mp) e -> mk_lambda_from_var v mp e) vars e
 
 let rec destruct_lambdas (e : texpression) : typed_pattern list * texpression =
   match e.e with

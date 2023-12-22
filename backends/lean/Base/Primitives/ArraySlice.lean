@@ -93,6 +93,21 @@ theorem Array.update_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Us
   . simp_all [length]; cases h <;> scalar_tac
   . simp_all
 
+def Array.index_mut_usize (α : Type u) (n : Usize) (v: Array α n) (i: Usize) :
+  Result (α × (α -> Result (Array α n))) := do
+  let x ← index_usize α n v i
+  ret (x, update_usize α n v i)
+
+@[pspec]
+theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
+  (hbound : i.val < v.length) :
+  ∃ x back, v.index_mut_usize α n i = ret (x, back) ∧
+  x = v.val.index i.val ∧
+  back = update_usize α n v i := by
+  simp only [index_mut_usize, Bind.bind, bind]
+  have ⟨ x, h ⟩ := index_usize_spec v i hbound
+  simp [h]
+
 def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
 instance (a : Type u) : Arith.HasIntProp (Slice a) where
@@ -167,6 +182,21 @@ theorem Slice.update_usize_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   . simp_all [length]; cases h <;> scalar_tac
   . simp_all
 
+def Slice.index_mut_usize (α : Type u) (v: Slice α) (i: Usize) :
+  Result (α × (α → Result (Slice α))) := do
+  let x ← Slice.index_usize α v i
+  ret (x, Slice.update_usize α v i)
+
+@[pspec]
+theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
+  (hbound : i.val < v.length) :
+  ∃ x back, v.index_mut_usize α i = ret (x, back) ∧
+  x = v.val.index i.val ∧
+  back = Slice.update_usize α v i := by
+  simp only [index_mut_usize, Bind.bind, bind]
+  have ⟨ x, h ⟩ := Slice.index_usize_spec v i hbound
+  simp [h]
+
 /- Array to slice/subslices -/
 
 /- We could make this function not use the `Result` type. By making it monadic, we
@@ -189,6 +219,18 @@ def Array.from_slice (α : Type u) (n : Usize) (_ : Array α n) (s : Slice α) :
 theorem Array.from_slice_spec {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.len = n.val) :
   ∃ na, from_slice α n a ns = ret na ∧ na.val = ns.val
   := by simp [from_slice, *]
+
+def Array.to_slice_mut (α : Type u) (n : Usize) (a : Array α n) :
+  Result (Slice α × (Slice α → Result (Array α n))) := do
+  let s ← Array.to_slice α n a
+  ret (s, Array.from_slice α n a)
+
+@[pspec]
+theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (v : Array α n) :
+  ∃ s back, to_slice_mut α n v = ret (s, back) ∧
+  v.val = s.val ∧
+  back = Array.from_slice α n v
+  := by simp [to_slice_mut, to_slice]
 
 def Array.subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
