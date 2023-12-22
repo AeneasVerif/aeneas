@@ -266,6 +266,21 @@ let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
       extract_adt_g_value extract_value fmt ctx is_let inside av.variant_id
         av.field_values v.ty
 
+(** Return true if we need to wrap a succession of let-bindings in a [do ...]
+    block (because some of them are monadic) *)
+let lets_require_wrap_in_do (lets : (bool * typed_pattern * texpression) list) :
+    bool =
+  match !backend with
+  | Lean ->
+      (* For Lean, we wrap in a block iff at least one of the let-bindings is monadic *)
+      List.exists (fun (m, _, _) -> m) lets
+  | HOL4 ->
+      (* HOL4 is similar to HOL4, but we add a sanity check *)
+      let wrap_in_do = List.exists (fun (m, _, _) -> m) lets in
+      if wrap_in_do then assert (List.for_all (fun (m, _, _) -> m) lets);
+      wrap_in_do
+  | FStar | Coq -> false
+
 (** [inside]: controls the introduction of parentheses. See [extract_ty]
 
     TODO: replace the formatting boolean [inside] with something more general?
@@ -634,15 +649,6 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     | HOL4 -> destruct_lets_no_interleave e
     | FStar | Coq | Lean -> destruct_lets e
   in
-  (* Open a box for the whole expression.
-
-     In the case of Lean, we use a vbox so that line breaks are inserted
-     at the end of every let-binding: let-bindings are indeed not ended
-     with an "in" keyword.
-  *)
-  if !Config.backend = Lean then F.pp_open_vbox fmt 0 else F.pp_open_hvbox fmt 0;
-  (* Open parentheses *)
-  if inside && !backend <> Lean then F.pp_print_string fmt "(";
   (* Extract the let-bindings *)
   let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : typed_pattern)
       (re : texpression) : extraction_ctx =
@@ -715,22 +721,19 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (* Return *)
     ctx
   in
+  (* Open a box for the whole expression.
+
+     In the case of Lean, we use a vbox so that line breaks are inserted
+     at the end of every let-binding: let-bindings are indeed not ended
+     with an "in" keyword.
+  *)
+  if !Config.backend = Lean then F.pp_open_vbox fmt 0 else F.pp_open_hvbox fmt 0;
+  (* Open parentheses *)
+  if inside && !backend <> Lean then F.pp_print_string fmt "(";
   (* If Lean and HOL4, we rely on monadic blocks, so we insert a do and open a new box
      immediately *)
-  let wrap_in_do_od =
-    match !backend with
-    | Lean ->
-        (* For Lean, we wrap in a block iff at least one of the let-bindings is monadic *)
-        List.exists (fun (m, _, _) -> m) lets
-    | HOL4 ->
-        (* HOL4 is similar to HOL4, but we add a sanity check *)
-        let wrap_in_do = List.exists (fun (m, _, _) -> m) lets in
-        if wrap_in_do then assert (List.for_all (fun (m, _, _) -> m) lets);
-        wrap_in_do
-    | FStar | Coq -> false
-  in
+  let wrap_in_do_od = lets_require_wrap_in_do lets in
   if wrap_in_do_od then (
-    F.pp_open_vbox fmt (if !backend = Lean then ctx.indent_incr else 0);
     F.pp_print_string fmt "do";
     F.pp_print_space fmt ());
   let ctx =
@@ -746,11 +749,10 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   F.pp_close_box fmt ();
 
   (* do-box (Lean and HOL4 only) *)
-  if wrap_in_do_od then (
+  if wrap_in_do_od then
     if !backend = HOL4 then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt "od");
-    F.pp_close_box fmt ());
   (* Close parentheses *)
   if inside && !backend <> Lean then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
