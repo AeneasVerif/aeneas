@@ -800,8 +800,8 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
     leave the let-bindings where they are, and eliminated them in a subsequent
     pass (if they are useless).
  *)
-let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
-    (inline_pure : bool) (def : fun_decl) : fun_decl =
+let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
+    ~(inline_const : bool) ~(inline_pure : bool) (def : fun_decl) : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -826,15 +826,31 @@ let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
               | _ -> false
             in
             (* And either:
-             * 2.1 the right-expression is a variable, a global or a const generic var *)
+               2.1 the right-expression is a variable, a global or a const generic var *)
             let var_or_global = is_var re || is_cvar re || is_global re in
             (* Or:
-             * 2.2 the right-expression is a constant value, an ADT value,
-             *     a projection or a primitive function call *and* the flag
-             *     [inline_pure] is set *)
+               2.2 the right-expression is a constant-value and we inline constant values,
+                   *or* it is a qualif with no arguments (we consider this as a const) *)
+            let const_re =
+              inline_const
+              &&
+              let is_const_adt =
+                let app, args = destruct_apps re in
+                if args = [] then
+                  match app.e with
+                  | Qualif _ -> true
+                  | StructUpdate upd -> upd.updates = []
+                  | _ -> false
+                else false
+              in
+              is_const re || is_const_adt
+            in
+            (* Or:
+               2.3 the right-expression is an ADT value, a projection or a
+                   primitive function call *and* the flag [inline_pure] is set *)
             let pure_re =
-              is_const re
-              ||
+              inline_pure
+              &&
               let app, _ = destruct_apps re in
               match app.e with
               | Qualif qualif -> (
@@ -849,7 +865,7 @@ let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
               | _ -> false
             in
             let filter =
-              filter_left && (var_or_global || (inline_pure && pure_re))
+              filter_left && (var_or_global || const_re || pure_re)
             in
 
             (* Update the rhs (we may perform substitutions inside, and it is
@@ -1958,12 +1974,10 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     (lazy ("simplify_let_bindings:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Inline the useless variable reassignments *)
-  let inline_named_vars = true in
-  let inline_pure = true in
-  let inline_useless_var_reassignments ctx =
-    inline_useless_var_reassignments ctx inline_named_vars inline_pure
+  let def =
+    inline_useless_var_reassignments ctx ~inline_named:true ~inline_const:true
+      ~inline_pure:true def
   in
-  let def = inline_useless_var_reassignments ctx def in
   log#ldebug
     (lazy
       ("inline_useless_var_assignments:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
@@ -2017,7 +2031,10 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       ("simplify_let_bindings (pass 2):\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Inline the useless vars again *)
-  let def = inline_useless_var_reassignments ctx def in
+  let def =
+    inline_useless_var_reassignments ctx ~inline_named:true ~inline_const:true
+      ~inline_pure:false def
+  in
   log#ldebug
     (lazy
       ("inline_useless_var_assignments (pass 2):\n\n"
@@ -2072,68 +2089,6 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
   (* We are done *)
   def
-
-(** Apply all the micro-passes to a function.
-
-    As loops are initially directly integrated into the function definition,
-    {!apply_passes_to_def} extracts those loops definitions from the body;
-    it thus returns the pair: (function def, loop defs). See {!decompose_loops}
-    for more information.
-
-    Will return [None] if the function is a backward function with no outputs.
-
-    [ctx]: used only for printing.
- *)
-let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
-    fun_and_loops option =
-  (* Debug *)
-  log#ldebug
-    (lazy
-      ("PureMicroPasses.apply_passes_to_def: " ^ def.name ^ " ("
-      ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
-      ^ ")"));
-
-  log#ldebug (lazy ("original decl:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* First, find names for the variables which are unnamed *)
-  let def = compute_pretty_names def in
-  log#ldebug
-    (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* TODO: we might want to leverage more the assignment meta-data, for
-   * aggregates for instance. *)
-
-  (* TODO: reorder the branches of the matches/switches *)
-
-  (* The meta-information is now useless: remove it.
-   * Rk.: some passes below use the fact that we removed the meta-data
-   * (otherwise we would have to "unmeta" expressions before matching) *)
-  let def = remove_meta def in
-  log#ldebug (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Remove the backward functions with no outputs.
-
-     Note that the *calls* to those functions should already have been removed,
-     when translating from symbolic to pure. Here, we remove the definitions
-     altogether, because they are now useless *)
-  let name = def.name ^ PrintPure.fun_suffix def.loop_id def.back_id in
-  let opt_def = filter_if_backward_with_no_outputs def in
-
-  match opt_def with
-  | None ->
-      log#ldebug (lazy ("filtered (backward with no outputs): " ^ name ^ "\n"));
-      None
-  | Some def ->
-      log#ldebug
-        (lazy ("not filtered (not backward with no outputs): " ^ name ^ "\n"));
-
-      (* Extract the loop definitions by removing the {!Loop} node *)
-      let def, loops = decompose_loops ctx def in
-
-      (* Apply the remaining passes *)
-      let f = apply_end_passes_to_def ctx def in
-      let loops = List.map (apply_end_passes_to_def ctx) loops in
-      Some { f; loops }
 
 (** Small utility for {!filter_loop_inputs} *)
 let filter_prefix (keep : bool list) (ls : 'a list) : 'a list =
@@ -2457,6 +2412,68 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
 
   (* Return *)
   transl
+
+(** Apply all the micro-passes to a function.
+
+    As loops are initially directly integrated into the function definition,
+    {!apply_passes_to_def} extracts those loops definitions from the body;
+    it thus returns the pair: (function def, loop defs). See {!decompose_loops}
+    for more information.
+
+    Will return [None] if the function is a backward function with no outputs.
+
+    [ctx]: used only for printing.
+ *)
+let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
+    fun_and_loops option =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("PureMicroPasses.apply_passes_to_def: " ^ def.name ^ " ("
+      ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
+      ^ ")"));
+
+  log#ldebug (lazy ("original decl:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* First, find names for the variables which are unnamed *)
+  let def = compute_pretty_names def in
+  log#ldebug
+    (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* TODO: we might want to leverage more the assignment meta-data, for
+   * aggregates for instance. *)
+
+  (* TODO: reorder the branches of the matches/switches *)
+
+  (* The meta-information is now useless: remove it.
+   * Rk.: some passes below use the fact that we removed the meta-data
+   * (otherwise we would have to "unmeta" expressions before matching) *)
+  let def = remove_meta def in
+  log#ldebug (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Remove the backward functions with no outputs.
+
+     Note that the *calls* to those functions should already have been removed,
+     when translating from symbolic to pure. Here, we remove the definitions
+     altogether, because they are now useless *)
+  let name = def.name ^ PrintPure.fun_suffix def.loop_id def.back_id in
+  let opt_def = filter_if_backward_with_no_outputs def in
+
+  match opt_def with
+  | None ->
+      log#ldebug (lazy ("filtered (backward with no outputs): " ^ name ^ "\n"));
+      None
+  | Some def ->
+      log#ldebug
+        (lazy ("not filtered (not backward with no outputs): " ^ name ^ "\n"));
+
+      (* Extract the loop definitions by removing the {!Loop} node *)
+      let def, loops = decompose_loops ctx def in
+
+      (* Apply the remaining passes *)
+      let f = apply_end_passes_to_def ctx def in
+      let loops = List.map (apply_end_passes_to_def ctx) loops in
+      Some { f; loops }
 
 (** Apply the micro-passes to a list of forward/backward translations.
 
