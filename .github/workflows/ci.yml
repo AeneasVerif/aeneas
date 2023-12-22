@@ -14,6 +14,7 @@ jobs:
       - run: nix build -L .#aeneas
       - run: nix build -L .#checks.x86_64-linux.aeneas-tests
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-fstar
+      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-fstar-split
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-coq
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
       # Lean doesn't work with Nix
