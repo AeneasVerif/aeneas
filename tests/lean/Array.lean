@@ -30,8 +30,7 @@ def array_to_mut_slice_
   :=
   do
   let (s1, to_slice_mut_back) ← Array.to_slice_mut T 32#usize s
-  let back := fun ret => to_slice_mut_back ret
-  Result.ret (s1, back)
+  Result.ret (s1, to_slice_mut_back)
 
 /- [array::array_len]:
    Source: 'src/array.rs', lines 25:0-25:40 -/
@@ -79,8 +78,7 @@ def index_mut_array
   :=
   do
   let (t, index_mut_back) ← Array.index_mut_usize T 32#usize s i
-  let back := fun ret => index_mut_back ret
-  Result.ret (t, back)
+  Result.ret (t, index_mut_back)
 
 /- [array::index_slice]:
    Source: 'src/array.rs', lines 56:0-56:46 -/
@@ -95,8 +93,7 @@ def index_mut_slice
   :=
   do
   let (t, index_mut_back) ← Slice.index_mut_usize T s i
-  let back := fun ret => index_mut_back ret
-  Result.ret (t, back)
+  Result.ret (t, index_mut_back)
 
 /- [array::slice_subslice_shared_]:
    Source: 'src/array.rs', lines 64:0-64:70 -/
@@ -117,8 +114,7 @@ def slice_subslice_mut_
     core.slice.index.Slice.index_mut U32 (core.ops.range.Range Usize)
       (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
       { start := y, end_ := z }
-  let back := fun ret => index_mut_back ret
-  Result.ret (s, back)
+  Result.ret (s, index_mut_back)
 
 /- [array::array_to_slice_shared_]:
    Source: 'src/array.rs', lines 72:0-72:54 -/
@@ -133,8 +129,7 @@ def array_to_slice_mut_
   :=
   do
   let (s, to_slice_mut_back) ← Array.to_slice_mut U32 32#usize x
-  let back := fun ret => to_slice_mut_back ret
-  Result.ret (s, back)
+  Result.ret (s, to_slice_mut_back)
 
 /- [array::array_subslice_shared_]:
    Source: 'src/array.rs', lines 80:0-80:74 -/
@@ -157,8 +152,7 @@ def array_subslice_mut_
       (core.ops.index.IndexMutSliceTIInst U32 (core.ops.range.Range Usize)
       (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
       { start := y, end_ := z }
-  let back := fun ret => index_mut_back ret
-  Result.ret (s, back)
+  Result.ret (s, index_mut_back)
 
 /- [array::index_slice_0]:
    Source: 'src/array.rs', lines 88:0-88:38 -/

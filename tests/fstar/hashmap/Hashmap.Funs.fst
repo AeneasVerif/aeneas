@@ -41,8 +41,8 @@ let hashMap_new_with_capacity
   (max_load_divisor : usize) :
   result (hashMap_t t)
   =
-  let v = alloc_vec_Vec_new (list_t t) in
-  let* slots = hashMap_allocate_slots t v capacity in
+  let* slots = hashMap_allocate_slots t (alloc_vec_Vec_new (list_t t)) capacity
+    in
   let* i = usize_mul capacity max_load_dividend in
   let* i1 = usize_div i max_load_divisor in
   Return
@@ -101,7 +101,7 @@ let rec hashMap_insert_in_list_loop
     else
       let* (b, back) = hashMap_insert_in_list_loop t key value tl in
       Return (b, List_Cons ckey cvalue back)
-  | List_Nil -> let l = List_Nil in Return (true, List_Cons key value l)
+  | List_Nil -> Return (true, List_Cons key value List_Nil)
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
@@ -309,8 +309,7 @@ let hashMap_get_mut_in_list
   result (t & (t -> result (list_t t)))
   =
   let* (x, back_'a) = hashMap_get_mut_in_list_loop t ls key in
-  let back_'a1 = fun ret -> back_'a ret in
-  Return (x, back_'a1)
+  Return (x, back_'a)
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut]:
     Source: 'src/hashmap.rs', lines 257:4-257:67 *)

@@ -32,8 +32,7 @@ Definition array_to_mut_slice_
   :=
   p <- array_to_slice_mut T 32%usize s;
   let (s1, to_slice_mut_back) := p in
-  let back := fun (ret : slice T) => to_slice_mut_back ret in
-  Return (s1, back)
+  Return (s1, to_slice_mut_back)
 .
 
 (** [array::array_len]:
@@ -81,8 +80,7 @@ Definition index_mut_array
   :=
   p <- array_index_mut_usize T 32%usize s i;
   let (t, index_mut_back) := p in
-  let back := fun (ret : T) => index_mut_back ret in
-  Return (t, back)
+  Return (t, index_mut_back)
 .
 
 (** [array::index_slice]:
@@ -99,8 +97,7 @@ Definition index_mut_slice
   :=
   p <- slice_index_mut_usize T s i;
   let (t, index_mut_back) := p in
-  let back := fun (ret : T) => index_mut_back ret in
-  Return (t, back)
+  Return (t, index_mut_back)
 .
 
 (** [array::slice_subslice_shared_]:
@@ -123,8 +120,7 @@ Definition slice_subslice_mut_
       (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
       {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |};
   let (s, index_mut_back) := p in
-  let back := fun (ret : slice u32) => index_mut_back ret in
-  Return (s, back)
+  Return (s, index_mut_back)
 .
 
 (** [array::array_to_slice_shared_]:
@@ -142,8 +138,7 @@ Definition array_to_slice_mut_
   :=
   p <- array_to_slice_mut u32 32%usize x;
   let (s, to_slice_mut_back) := p in
-  let back := fun (ret : slice u32) => to_slice_mut_back ret in
-  Return (s, back)
+  Return (s, to_slice_mut_back)
 .
 
 (** [array::array_subslice_shared_]:
@@ -168,8 +163,7 @@ Definition array_subslice_mut_
       (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
       {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |};
   let (s, index_mut_back) := p in
-  let back := fun (ret : slice u32) => index_mut_back ret in
-  Return (s, back)
+  Return (s, index_mut_back)
 .
 
 (** [array::index_slice_0]:

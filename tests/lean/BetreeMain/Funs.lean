@@ -107,8 +107,7 @@ divergent def betree.List.split_at
       let i ← n - 1#u64
       let p ← betree.List.split_at T tl i
       let (ls0, ls1) := p
-      let l := ls0
-      Result.ret (betree.List.Cons hd l, ls1)
+      Result.ret (betree.List.Cons hd ls0, ls1)
     | betree.List.Nil => Result.fail .panic
 
 /- [betree_main::betree::{betree_main::betree::List<T>#1}::push_front]:
@@ -116,8 +115,7 @@ divergent def betree.List.split_at
 def betree.List.push_front
   (T : Type) (self : betree.List T) (x : T) : Result (betree.List T) :=
   let (tl, _) := core.mem.replace (betree.List T) self betree.List.Nil
-  let l := tl
-  Result.ret (betree.List.Cons x l)
+  Result.ret (betree.List.Cons x tl)
 
 /- [betree_main::betree::{betree_main::betree::List<T>#1}::pop_front]:
    Source: 'src/betree.rs', lines 306:4-306:32 -/
@@ -159,8 +157,7 @@ divergent def betree.ListTupleU64T.partition_at_pivot
       do
       let p ← betree.ListTupleU64T.partition_at_pivot T tl pivot
       let (ls0, ls1) := p
-      let l := ls0
-      Result.ret (betree.List.Cons (i, t) l, ls1)
+      Result.ret (betree.List.Cons (i, t) ls0, ls1)
   | betree.List.Nil => Result.ret (betree.List.Nil, betree.List.Nil)
 
 /- [betree_main::betree::{betree_main::betree::Leaf#3}::split]:
@@ -194,9 +191,7 @@ divergent def betree.Node.lookup_first_message_for_key
   | betree.List.Cons x next_msgs =>
     let (i, m) := x
     if i >= key
-    then
-      let back_'a := fun ret => Result.ret ret
-      Result.ret (betree.List.Cons (i, m) next_msgs, back_'a)
+    then Result.ret (betree.List.Cons (i, m) next_msgs, Result.ret)
     else
       do
       let (l, lookup_first_message_for_key_back) ←
@@ -207,9 +202,7 @@ divergent def betree.Node.lookup_first_message_for_key
           let next_msgs1 ← lookup_first_message_for_key_back ret
           Result.ret (betree.List.Cons (i, m) next_msgs1)
       Result.ret (l, back_'a)
-  | betree.List.Nil =>
-    let back_'a := fun ret => Result.ret ret
-    Result.ret (betree.List.Nil, back_'a)
+  | betree.List.Nil => Result.ret (betree.List.Nil, Result.ret)
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]:
    Source: 'src/betree.rs', lines 636:4-636:80 -/
@@ -381,12 +374,8 @@ divergent def betree.Node.lookup_first_message_after_key
           let next_msgs1 ← lookup_first_message_after_key_back ret
           Result.ret (betree.List.Cons (k, m) next_msgs1)
       Result.ret (l, back_'a)
-    else
-      let back_'a := fun ret => Result.ret ret
-      Result.ret (betree.List.Cons (k, m) next_msgs, back_'a)
-  | betree.List.Nil =>
-    let back_'a := fun ret => Result.ret ret
-    Result.ret (betree.List.Nil, back_'a)
+    else Result.ret (betree.List.Cons (k, m) next_msgs, Result.ret)
+  | betree.List.Nil => Result.ret (betree.List.Nil, Result.ret)
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::apply_to_internal]:
    Source: 'src/betree.rs', lines 521:4-521:89 -/
@@ -478,9 +467,7 @@ divergent def betree.Node.lookup_mut_in_bindings
   | betree.List.Cons hd tl =>
     let (i, i1) := hd
     if i >= key
-    then
-      let back_'a := fun ret => Result.ret ret
-      Result.ret (betree.List.Cons (i, i1) tl, back_'a)
+    then Result.ret (betree.List.Cons (i, i1) tl, Result.ret)
     else
       do
       let (l, lookup_mut_in_bindings_back) ←
@@ -491,9 +478,7 @@ divergent def betree.Node.lookup_mut_in_bindings
           let tl1 ← lookup_mut_in_bindings_back ret
           Result.ret (betree.List.Cons (i, i1) tl1)
       Result.ret (l, back_'a)
-  | betree.List.Nil =>
-    let back_'a := fun ret => Result.ret ret
-    Result.ret (betree.List.Nil, back_'a)
+  | betree.List.Nil => Result.ret (betree.List.Nil, Result.ret)
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::apply_to_leaf]:
    Source: 'src/betree.rs', lines 460:4-460:87 -/
@@ -650,10 +635,9 @@ def betree.Node.apply
   Result (State × (betree.Node × betree.NodeIdCounter))
   :=
   do
-  let l := betree.List.Nil
   let (st1, p) ←
     betree.Node.apply_messages self params node_id_cnt (betree.List.Cons (key,
-      new_msg) l) st
+      new_msg) betree.List.Nil) st
   let (self1, node_id_cnt1) := p
   Result.ret (st1, (self1, node_id_cnt1))
 

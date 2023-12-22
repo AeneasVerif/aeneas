@@ -31,9 +31,7 @@ Definition test_new_non_zero_u32
 (** [external::test_vec]:
     Source: 'src/external.rs', lines 17:0-17:17 *)
 Definition test_vec : result unit :=
-  let v := alloc_vec_Vec_new u32 in
-  _ <- alloc_vec_Vec_push u32 v 0%u32;
-  Return tt
+  _ <- alloc_vec_Vec_push u32 (alloc_vec_Vec_new u32) 0%u32; Return tt
 .
 
 (** Unit test for [external::test_vec] *)

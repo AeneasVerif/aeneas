@@ -113,8 +113,7 @@ let rec betree_List_split_at
       let* i = u64_sub n 1 in
       let* p = betree_List_split_at t tl i in
       let (ls0, ls1) = p in
-      let l = ls0 in
-      Return (Betree_List_Cons hd l, ls1)
+      Return (Betree_List_Cons hd ls0, ls1)
     | Betree_List_Nil -> Fail Failure
     end
 
@@ -124,8 +123,7 @@ let rec betree_List_split_at
 let betree_List_push_front
   (t : Type0) (self : betree_List_t t) (x : t) : result (betree_List_t t) =
   let tl = core_mem_replace (betree_List_t t) self Betree_List_Nil in
-  let l = tl in
-  Return (Betree_List_Cons x l)
+  Return (Betree_List_Cons x tl)
 
 (** [betree_main::betree::{betree_main::betree::List<T>#1}::pop_front]: forward function
     Source: 'src/betree.rs', lines 306:4-306:32 *)
@@ -178,8 +176,7 @@ let rec betree_ListTupleU64T_partition_at_pivot
     else
       let* p = betree_ListTupleU64T_partition_at_pivot t tl pivot in
       let (ls0, ls1) = p in
-      let l = ls0 in
-      Return (Betree_List_Cons (i, x) l, ls1)
+      Return (Betree_List_Cons (i, x) ls0, ls1)
   | Betree_List_Nil -> Return (Betree_List_Nil, Betree_List_Nil)
   end
 
@@ -871,13 +868,12 @@ let betree_Node_apply
   (new_msg : betree_Message_t) (st : state) :
   result (state & unit)
   =
-  let l = Betree_List_Nil in
   let* (st1, _) =
     betree_Node_apply_messages self params node_id_cnt (Betree_List_Cons (key,
-      new_msg) l) st in
+      new_msg) Betree_List_Nil) st in
   let* _ =
     betree_Node_apply_messages_back self params node_id_cnt (Betree_List_Cons
-      (key, new_msg) l) st in
+      (key, new_msg) Betree_List_Nil) st in
   Return (st1, ())
 
 (** [betree_main::betree::{betree_main::betree::Node#5}::apply]: backward function 0
@@ -888,9 +884,8 @@ let betree_Node_apply_back
   (new_msg : betree_Message_t) (st : state) :
   result (betree_Node_t & betree_NodeIdCounter_t)
   =
-  let l = Betree_List_Nil in
   betree_Node_apply_messages_back self params node_id_cnt (Betree_List_Cons
-    (key, new_msg) l) st
+    (key, new_msg) Betree_List_Nil) st
 
 (** [betree_main::betree::{betree_main::betree::BeTree#6}::new]: forward function
     Source: 'src/betree.rs', lines 849:4-849:60 *)

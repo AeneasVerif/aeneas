@@ -96,14 +96,13 @@ Fixpoint sum (l : List_t i32) : result i32 :=
 (** [paper::test_nth]:
     Source: 'src/paper.rs', lines 68:0-68:17 *)
 Definition test_nth : result unit :=
-  let l := List_Nil in
-  let l1 := List_Cons 3%i32 l in
-  let l2 := List_Cons 2%i32 l1 in
-  p <- list_nth_mut i32 (List_Cons 1%i32 l2) 2%u32;
+  let l := List_Cons 3%i32 List_Nil in
+  let l1 := List_Cons 2%i32 l in
+  p <- list_nth_mut i32 (List_Cons 1%i32 l1) 2%u32;
   let (x, list_nth_mut_back) := p in
   x1 <- i32_add x 1%i32;
-  l3 <- list_nth_mut_back x1;
-  i <- sum l3;
+  l2 <- list_nth_mut_back x1;
+  i <- sum l2;
   if negb (i s= 7%i32) then Fail_ Failure else Return tt
 .
 

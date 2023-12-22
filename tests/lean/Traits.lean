@@ -288,8 +288,7 @@ def use_with_const_ty1
   (H : Type) (LEN : Usize) (WithConstTyHLENInst : WithConstTy H LEN) :
   Result Usize
   :=
-  let i := WithConstTyHLENInst.LEN1
-  Result.ret i
+  Result.ret WithConstTyHLENInst.LEN1
 
 /- [traits::use_with_const_ty2]:
    Source: 'src/traits.rs', lines 187:0-187:73 -/

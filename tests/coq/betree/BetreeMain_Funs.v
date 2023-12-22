@@ -123,8 +123,7 @@ Fixpoint betree_List_split_at
         i <- u64_sub n1 1%u64;
         p <- betree_List_split_at T n2 tl i;
         let (ls0, ls1) := p in
-        let l := ls0 in
-        Return (Betree_List_Cons hd l, ls1)
+        Return (Betree_List_Cons hd ls0, ls1)
       | Betree_List_Nil => Fail_ Failure
       end
   end
@@ -135,8 +134,7 @@ Fixpoint betree_List_split_at
 Definition betree_List_push_front
   (T : Type) (self : betree_List_t T) (x : T) : result (betree_List_t T) :=
   let (tl, _) := core_mem_replace (betree_List_t T) self Betree_List_Nil in
-  let l := tl in
-  Return (Betree_List_Cons x l)
+  Return (Betree_List_Cons x tl)
 .
 
 (** [betree_main::betree::{betree_main::betree::List<T>#1}::pop_front]:
@@ -186,8 +184,7 @@ Fixpoint betree_ListTupleU64T_partition_at_pivot
       else (
         p <- betree_ListTupleU64T_partition_at_pivot T n1 tl pivot;
         let (ls0, ls1) := p in
-        let l := ls0 in
-        Return (Betree_List_Cons (i, t) l, ls1))
+        Return (Betree_List_Cons (i, t) ls0, ls1))
     | Betree_List_Nil => Return (Betree_List_Nil, Betree_List_Nil)
     end
   end
@@ -242,10 +239,7 @@ Fixpoint betree_Node_lookup_first_message_for_key
     | Betree_List_Cons x next_msgs =>
       let (i, m) := x in
       if i s>= key
-      then
-        let back_'a :=
-          fun (ret : betree_List_t (u64 * betree_Message_t)) => Return ret in
-        Return (Betree_List_Cons (i, m) next_msgs, back_'a)
+      then Return (Betree_List_Cons (i, m) next_msgs, Return)
       else (
         p <- betree_Node_lookup_first_message_for_key n1 key next_msgs;
         let (l, lookup_first_message_for_key_back) := p in
@@ -254,10 +248,7 @@ Fixpoint betree_Node_lookup_first_message_for_key
             next_msgs1 <- lookup_first_message_for_key_back ret;
             Return (Betree_List_Cons (i, m) next_msgs1) in
         Return (l, back_'a))
-    | Betree_List_Nil =>
-      let back_'a :=
-        fun (ret : betree_List_t (u64 * betree_Message_t)) => Return ret in
-      Return (Betree_List_Nil, back_'a)
+    | Betree_List_Nil => Return (Betree_List_Nil, Return)
     end
   end
 .
@@ -456,14 +447,8 @@ Fixpoint betree_Node_lookup_first_message_after_key
             next_msgs1 <- lookup_first_message_after_key_back ret;
             Return (Betree_List_Cons (k, m) next_msgs1) in
         Return (l, back_'a))
-      else
-        let back_'a :=
-          fun (ret : betree_List_t (u64 * betree_Message_t)) => Return ret in
-        Return (Betree_List_Cons (k, m) next_msgs, back_'a)
-    | Betree_List_Nil =>
-      let back_'a :=
-        fun (ret : betree_List_t (u64 * betree_Message_t)) => Return ret in
-      Return (Betree_List_Nil, back_'a)
+      else Return (Betree_List_Cons (k, m) next_msgs, Return)
+    | Betree_List_Nil => Return (Betree_List_Nil, Return)
     end
   end
 .
@@ -562,9 +547,7 @@ Fixpoint betree_Node_lookup_mut_in_bindings
     | Betree_List_Cons hd tl =>
       let (i, i1) := hd in
       if i s>= key
-      then
-        let back_'a := fun (ret : betree_List_t (u64 * u64)) => Return ret in
-        Return (Betree_List_Cons (i, i1) tl, back_'a)
+      then Return (Betree_List_Cons (i, i1) tl, Return)
       else (
         p <- betree_Node_lookup_mut_in_bindings n1 key tl;
         let (l, lookup_mut_in_bindings_back) := p in
@@ -573,9 +556,7 @@ Fixpoint betree_Node_lookup_mut_in_bindings
             tl1 <- lookup_mut_in_bindings_back ret;
             Return (Betree_List_Cons (i, i1) tl1) in
         Return (l, back_'a))
-    | Betree_List_Nil =>
-      let back_'a := fun (ret : betree_List_t (u64 * u64)) => Return ret in
-      Return (Betree_List_Nil, back_'a)
+    | Betree_List_Nil => Return (Betree_List_Nil, Return)
     end
   end
 .
@@ -751,10 +732,9 @@ Definition betree_Node_apply
   (new_msg : betree_Message_t) (st : state) :
   result (state * (betree_Node_t * betree_NodeIdCounter_t))
   :=
-  let l := Betree_List_Nil in
   p <-
     betree_Node_apply_messages n self params node_id_cnt (Betree_List_Cons
-      (key, new_msg) l) st;
+      (key, new_msg) Betree_List_Nil) st;
   let (st1, p1) := p in
   let (self1, node_id_cnt1) := p1 in
   Return (st1, (self1, node_id_cnt1))

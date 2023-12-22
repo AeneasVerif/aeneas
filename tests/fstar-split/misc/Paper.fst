@@ -87,13 +87,12 @@ let rec sum (l : list_t i32) : result i32 =
 (** [paper::test_nth]: forward function
     Source: 'src/paper.rs', lines 68:0-68:17 *)
 let test_nth : result unit =
-  let l = List_Nil in
-  let l1 = List_Cons 3 l in
-  let l2 = List_Cons 2 l1 in
-  let* x = list_nth_mut i32 (List_Cons 1 l2) 2 in
+  let l = List_Cons 3 List_Nil in
+  let l1 = List_Cons 2 l in
+  let* x = list_nth_mut i32 (List_Cons 1 l1) 2 in
   let* x1 = i32_add x 1 in
-  let* l3 = list_nth_mut_back i32 (List_Cons 1 l2) 2 x1 in
-  let* i = sum l3 in
+  let* l2 = list_nth_mut_back i32 (List_Cons 1 l1) 2 x1 in
+  let* i = sum l2 in
   if not (i = 7) then Fail Failure else Return ()
 
 (** Unit test for [paper::test_nth] *)

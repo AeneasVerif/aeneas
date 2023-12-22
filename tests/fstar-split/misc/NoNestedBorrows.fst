@@ -220,9 +220,8 @@ let _ = assert_norm (test_list1 = Return ())
 (** [no_nested_borrows::test_box1]: forward function
     Source: 'src/no_nested_borrows.rs', lines 208:0-208:18 *)
 let test_box1 : result unit =
-  let b = 0 in
-  let* b1 = alloc_boxed_Box_deref_mut_back i32 b 1 in
-  let* x = alloc_boxed_Box_deref i32 b1 in
+  let* b = alloc_boxed_Box_deref_mut_back i32 0 1 in
+  let* x = alloc_boxed_Box_deref i32 b in
   if not (x = 1) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_box1] *)
@@ -262,8 +261,7 @@ let is_cons (t : Type0) (l : list_t t) : result bool =
 (** [no_nested_borrows::test_is_cons]: forward function
     Source: 'src/no_nested_borrows.rs', lines 253:0-253:21 *)
 let test_is_cons : result unit =
-  let l = List_Nil in
-  let* b = is_cons i32 (List_Cons 0 l) in
+  let* b = is_cons i32 (List_Cons 0 List_Nil) in
   if not b then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_is_cons] *)
@@ -280,8 +278,7 @@ let split_list (t : Type0) (l : list_t t) : result (t & (list_t t)) =
 (** [no_nested_borrows::test_split_list]: forward function
     Source: 'src/no_nested_borrows.rs', lines 267:0-267:24 *)
 let test_split_list : result unit =
-  let l = List_Nil in
-  let* p = split_list i32 (List_Cons 0 l) in
+  let* p = split_list i32 (List_Cons 0 List_Nil) in
   let (hd, _) = p in
   if not (hd = 0) then Fail Failure else Return ()
 
@@ -393,26 +390,25 @@ let list_rev (t : Type0) (l : list_t t) : result (list_t t) =
 (** [no_nested_borrows::test_list_functions]: forward function
     Source: 'src/no_nested_borrows.rs', lines 398:0-398:28 *)
 let test_list_functions : result unit =
-  let l = List_Nil in
-  let l1 = List_Cons 2 l in
-  let l2 = List_Cons 1 l1 in
-  let* i = list_length i32 (List_Cons 0 l2) in
+  let l = List_Cons 2 List_Nil in
+  let l1 = List_Cons 1 l in
+  let* i = list_length i32 (List_Cons 0 l1) in
   if not (i = 3)
   then Fail Failure
   else
-    let* i1 = list_nth_shared i32 (List_Cons 0 l2) 0 in
+    let* i1 = list_nth_shared i32 (List_Cons 0 l1) 0 in
     if not (i1 = 0)
     then Fail Failure
     else
-      let* i2 = list_nth_shared i32 (List_Cons 0 l2) 1 in
+      let* i2 = list_nth_shared i32 (List_Cons 0 l1) 1 in
       if not (i2 = 1)
       then Fail Failure
       else
-        let* i3 = list_nth_shared i32 (List_Cons 0 l2) 2 in
+        let* i3 = list_nth_shared i32 (List_Cons 0 l1) 2 in
         if not (i3 = 2)
         then Fail Failure
         else
-          let* ls = list_nth_mut_back i32 (List_Cons 0 l2) 1 3 in
+          let* ls = list_nth_mut_back i32 (List_Cons 0 l1) 1 3 in
           let* i4 = list_nth_shared i32 ls 0 in
           if not (i4 = 0)
           then Fail Failure

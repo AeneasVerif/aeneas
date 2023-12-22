@@ -244,10 +244,9 @@ def test_list1 : Result Unit :=
    Source: 'src/no_nested_borrows.rs', lines 208:0-208:18 -/
 def test_box1 : Result Unit :=
   do
-  let b := 0#i32
-  let (_, deref_mut_back) ← alloc.boxed.Box.deref_mut I32 b
-  let b1 ← deref_mut_back 1#i32
-  let x ← alloc.boxed.Box.deref I32 b1
+  let (_, deref_mut_back) ← alloc.boxed.Box.deref_mut I32 0#i32
+  let b ← deref_mut_back 1#i32
+  let x ← alloc.boxed.Box.deref I32 b
   if not (x = 1#i32)
   then Result.fail .panic
   else Result.ret ()
@@ -297,8 +296,7 @@ def is_cons (T : Type) (l : List T) : Result Bool :=
    Source: 'src/no_nested_borrows.rs', lines 253:0-253:21 -/
 def test_is_cons : Result Unit :=
   do
-  let l := List.Nil
-  let b ← is_cons I32 (List.Cons 0#i32 l)
+  let b ← is_cons I32 (List.Cons 0#i32 List.Nil)
   if not b
   then Result.fail .panic
   else Result.ret ()
@@ -317,8 +315,7 @@ def split_list (T : Type) (l : List T) : Result (T × (List T)) :=
    Source: 'src/no_nested_borrows.rs', lines 267:0-267:24 -/
 def test_split_list : Result Unit :=
   do
-  let l := List.Nil
-  let p ← split_list I32 (List.Cons 0#i32 l)
+  let p ← split_list I32 (List.Cons 0#i32 List.Nil)
   let (hd, _) := p
   if not (hd = 0#i32)
   then Result.fail .panic
@@ -441,31 +438,30 @@ def list_rev (T : Type) (l : List T) : Result (List T) :=
    Source: 'src/no_nested_borrows.rs', lines 398:0-398:28 -/
 def test_list_functions : Result Unit :=
   do
-  let l := List.Nil
-  let l1 := List.Cons 2#i32 l
-  let l2 := List.Cons 1#i32 l1
-  let i ← list_length I32 (List.Cons 0#i32 l2)
+  let l := List.Cons 2#i32 List.Nil
+  let l1 := List.Cons 1#i32 l
+  let i ← list_length I32 (List.Cons 0#i32 l1)
   if not (i = 3#u32)
   then Result.fail .panic
   else
     do
-    let i1 ← list_nth_shared I32 (List.Cons 0#i32 l2) 0#u32
+    let i1 ← list_nth_shared I32 (List.Cons 0#i32 l1) 0#u32
     if not (i1 = 0#i32)
     then Result.fail .panic
     else
       do
-      let i2 ← list_nth_shared I32 (List.Cons 0#i32 l2) 1#u32
+      let i2 ← list_nth_shared I32 (List.Cons 0#i32 l1) 1#u32
       if not (i2 = 1#i32)
       then Result.fail .panic
       else
         do
-        let i3 ← list_nth_shared I32 (List.Cons 0#i32 l2) 2#u32
+        let i3 ← list_nth_shared I32 (List.Cons 0#i32 l1) 2#u32
         if not (i3 = 2#i32)
         then Result.fail .panic
         else
           do
           let (_, list_nth_mut_back) ←
-            list_nth_mut I32 (List.Cons 0#i32 l2) 1#u32
+            list_nth_mut I32 (List.Cons 0#i32 l1) 1#u32
           let ls ← list_nth_mut_back 3#i32
           let i4 ← list_nth_shared I32 ls 0#u32
           if not (i4 = 0#i32)
@@ -512,9 +508,7 @@ def id_mut_pair3
   (T1 T2 : Type) (x : T1) (y : T2) :
   Result ((T1 × T2) × (T1 → Result T1) × (T2 → Result T2))
   :=
-  let back_'a := fun ret => Result.ret ret
-  let back_'b := fun ret => Result.ret ret
-  Result.ret ((x, y), back_'a, back_'b)
+  Result.ret ((x, y), Result.ret, Result.ret)
 
 /- [no_nested_borrows::id_mut_pair4]:
    Source: 'src/no_nested_borrows.rs', lines 426:0-426:92 -/
@@ -523,9 +517,7 @@ def id_mut_pair4
   Result ((T1 × T2) × (T1 → Result T1) × (T2 → Result T2))
   :=
   let (t, t1) := p
-  let back_'a := fun ret => Result.ret ret
-  let back_'b := fun ret => Result.ret ret
-  Result.ret ((t, t1), back_'a, back_'b)
+  Result.ret ((t, t1), Result.ret, Result.ret)
 
 /- [no_nested_borrows::StructWithTuple]
    Source: 'src/no_nested_borrows.rs', lines 433:0-433:34 -/

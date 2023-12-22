@@ -95,13 +95,12 @@ divergent def sum (l : List I32) : Result I32 :=
    Source: 'src/paper.rs', lines 68:0-68:17 -/
 def test_nth : Result Unit :=
   do
-  let l := List.Nil
-  let l1 := List.Cons 3#i32 l
-  let l2 := List.Cons 2#i32 l1
-  let (x, list_nth_mut_back) ← list_nth_mut I32 (List.Cons 1#i32 l2) 2#u32
+  let l := List.Cons 3#i32 List.Nil
+  let l1 := List.Cons 2#i32 l
+  let (x, list_nth_mut_back) ← list_nth_mut I32 (List.Cons 1#i32 l1) 2#u32
   let x1 ← x + 1#i32
-  let l3 ← list_nth_mut_back x1
-  let i ← sum l3
+  let l2 ← list_nth_mut_back x1
+  let i ← sum l2
   if not (i = 7#i32)
   then Result.fail .panic
   else Result.ret ()

@@ -334,7 +334,7 @@ Definition use_with_const_ty1
   (H : Type) (LEN : usize) (withConstTyHLENInst : WithConstTy_t H LEN) :
   result usize
   :=
-  let i := withConstTyHLENInst.(WithConstTy_tWithConstTy_t_LEN1) in Return i
+  Return withConstTyHLENInst.(WithConstTy_tWithConstTy_t_LEN1)
 .
 
 (** [traits::use_with_const_ty2]:

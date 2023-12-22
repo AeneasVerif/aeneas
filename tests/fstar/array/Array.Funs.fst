@@ -24,8 +24,7 @@ let array_to_mut_slice_
   result ((slice t) & (slice t -> result (array t 32)))
   =
   let* (s1, to_slice_mut_back) = array_to_slice_mut t 32 s in
-  let back = fun ret -> to_slice_mut_back ret in
-  Return (s1, back)
+  Return (s1, to_slice_mut_back)
 
 (** [array::array_len]:
     Source: 'src/array.rs', lines 25:0-25:40 *)
@@ -64,8 +63,7 @@ let index_mut_array
   result (t & (t -> result (array t 32)))
   =
   let* (x, index_mut_back) = array_index_mut_usize t 32 s i in
-  let back = fun ret -> index_mut_back ret in
-  Return (x, back)
+  Return (x, index_mut_back)
 
 (** [array::index_slice]:
     Source: 'src/array.rs', lines 56:0-56:46 *)
@@ -79,8 +77,7 @@ let index_mut_slice
   result (t & (t -> result (slice t)))
   =
   let* (x, index_mut_back) = slice_index_mut_usize t s i in
-  let back = fun ret -> index_mut_back ret in
-  Return (x, back)
+  Return (x, index_mut_back)
 
 (** [array::slice_subslice_shared_]:
     Source: 'src/array.rs', lines 64:0-64:70 *)
@@ -100,8 +97,7 @@ let slice_subslice_mut_
     core_slice_index_Slice_index_mut u32 (core_ops_range_Range usize)
       (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
       { start = y; end_ = z } in
-  let back = fun ret -> index_mut_back ret in
-  Return (s, back)
+  Return (s, index_mut_back)
 
 (** [array::array_to_slice_shared_]:
     Source: 'src/array.rs', lines 72:0-72:54 *)
@@ -115,8 +111,7 @@ let array_to_slice_mut_
   result ((slice u32) & (slice u32 -> result (array u32 32)))
   =
   let* (s, to_slice_mut_back) = array_to_slice_mut u32 32 x in
-  let back = fun ret -> to_slice_mut_back ret in
-  Return (s, back)
+  Return (s, to_slice_mut_back)
 
 (** [array::array_subslice_shared_]:
     Source: 'src/array.rs', lines 80:0-80:74 *)
@@ -138,8 +133,7 @@ let array_subslice_mut_
       (core_ops_index_IndexMutSliceTIInst u32 (core_ops_range_Range usize)
       (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
       { start = y; end_ = z } in
-  let back = fun ret -> index_mut_back ret in
-  Return (s, back)
+  Return (s, index_mut_back)
 
 (** [array::index_slice_0]:
     Source: 'src/array.rs', lines 88:0-88:38 *)

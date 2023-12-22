@@ -244,11 +244,10 @@ Check (test_list1 )%return.
 (** [no_nested_borrows::test_box1]:
     Source: 'src/no_nested_borrows.rs', lines 208:0-208:18 *)
 Definition test_box1 : result unit :=
-  let b := 0%i32 in
-  p <- alloc_boxed_Box_deref_mut i32 b;
+  p <- alloc_boxed_Box_deref_mut i32 0%i32;
   let (_, deref_mut_back) := p in
-  b1 <- deref_mut_back 1%i32;
-  x <- alloc_boxed_Box_deref i32 b1;
+  b <- deref_mut_back 1%i32;
+  x <- alloc_boxed_Box_deref i32 b;
   if negb (x s= 1%i32) then Fail_ Failure else Return tt
 .
 
@@ -290,8 +289,7 @@ Definition is_cons (T : Type) (l : List_t T) : result bool :=
 (** [no_nested_borrows::test_is_cons]:
     Source: 'src/no_nested_borrows.rs', lines 253:0-253:21 *)
 Definition test_is_cons : result unit :=
-  let l := List_Nil in
-  b <- is_cons i32 (List_Cons 0%i32 l);
+  b <- is_cons i32 (List_Cons 0%i32 List_Nil);
   if negb b then Fail_ Failure else Return tt
 .
 
@@ -310,8 +308,7 @@ Definition split_list (T : Type) (l : List_t T) : result (T * (List_t T)) :=
 (** [no_nested_borrows::test_split_list]:
     Source: 'src/no_nested_borrows.rs', lines 267:0-267:24 *)
 Definition test_split_list : result unit :=
-  let l := List_Nil in
-  p <- split_list i32 (List_Cons 0%i32 l);
+  p <- split_list i32 (List_Cons 0%i32 List_Nil);
   let (hd, _) := p in
   if negb (hd s= 0%i32) then Fail_ Failure else Return tt
 .
@@ -436,26 +433,25 @@ Definition list_rev (T : Type) (l : List_t T) : result (List_t T) :=
 (** [no_nested_borrows::test_list_functions]:
     Source: 'src/no_nested_borrows.rs', lines 398:0-398:28 *)
 Definition test_list_functions : result unit :=
-  let l := List_Nil in
-  let l1 := List_Cons 2%i32 l in
-  let l2 := List_Cons 1%i32 l1 in
-  i <- list_length i32 (List_Cons 0%i32 l2);
+  let l := List_Cons 2%i32 List_Nil in
+  let l1 := List_Cons 1%i32 l in
+  i <- list_length i32 (List_Cons 0%i32 l1);
   if negb (i s= 3%u32)
   then Fail_ Failure
   else (
-    i1 <- list_nth_shared i32 (List_Cons 0%i32 l2) 0%u32;
+    i1 <- list_nth_shared i32 (List_Cons 0%i32 l1) 0%u32;
     if negb (i1 s= 0%i32)
     then Fail_ Failure
     else (
-      i2 <- list_nth_shared i32 (List_Cons 0%i32 l2) 1%u32;
+      i2 <- list_nth_shared i32 (List_Cons 0%i32 l1) 1%u32;
       if negb (i2 s= 1%i32)
       then Fail_ Failure
       else (
-        i3 <- list_nth_shared i32 (List_Cons 0%i32 l2) 2%u32;
+        i3 <- list_nth_shared i32 (List_Cons 0%i32 l1) 2%u32;
         if negb (i3 s= 2%i32)
         then Fail_ Failure
         else (
-          p <- list_nth_mut i32 (List_Cons 0%i32 l2) 1%u32;
+          p <- list_nth_mut i32 (List_Cons 0%i32 l1) 1%u32;
           let (_, list_nth_mut_back) := p in
           ls <- list_nth_mut_back 3%i32;
           i4 <- list_nth_shared i32 ls 0%u32;
@@ -502,9 +498,7 @@ Definition id_mut_pair3
   (T1 T2 : Type) (x : T1) (y : T2) :
   result ((T1 * T2) * (T1 -> result T1) * (T2 -> result T2))
   :=
-  let back_'a := fun (ret : T1) => Return ret in
-  let back_'b := fun (ret : T2) => Return ret in
-  Return ((x, y), back_'a, back_'b)
+  Return ((x, y), Return, Return)
 .
 
 (** [no_nested_borrows::id_mut_pair4]:
@@ -513,10 +507,7 @@ Definition id_mut_pair4
   (T1 T2 : Type) (p : (T1 * T2)) :
   result ((T1 * T2) * (T1 -> result T1) * (T2 -> result T2))
   :=
-  let (t, t1) := p in
-  let back_'a := fun (ret : T1) => Return ret in
-  let back_'b := fun (ret : T2) => Return ret in
-  Return ((t, t1), back_'a, back_'b)
+  let (t, t1) := p in Return ((t, t1), Return, Return)
 .
 
 (** [no_nested_borrows::StructWithTuple]

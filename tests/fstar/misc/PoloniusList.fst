@@ -20,15 +20,13 @@ let rec get_list_at_x
   begin match ls with
   | List_Cons hd tl ->
     if hd = x
-    then
-      let back_'a = fun ret -> Return ret in Return (List_Cons hd tl, back_'a)
+    then Return (List_Cons hd tl, Return)
     else
       let* (l, get_list_at_x_back) = get_list_at_x tl x in
       let back_'a =
         fun ret ->
           let* tl1 = get_list_at_x_back ret in Return (List_Cons hd tl1) in
       Return (l, back_'a)
-  | List_Nil ->
-    let back_'a = fun ret -> Return ret in Return (List_Nil, back_'a)
+  | List_Nil -> Return (List_Nil, Return)
   end
 

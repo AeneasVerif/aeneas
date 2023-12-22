@@ -42,8 +42,9 @@ def hashmap.HashMap.new_with_capacity
   Result (hashmap.HashMap T)
   :=
   do
-  let v := alloc.vec.Vec.new (hashmap.List T)
-  let slots ← hashmap.HashMap.allocate_slots T v capacity
+  let slots ←
+    hashmap.HashMap.allocate_slots T (alloc.vec.Vec.new (hashmap.List T))
+      capacity
   let i ← capacity * max_load_dividend
   let i1 ← i / max_load_divisor
   Result.ret
@@ -105,8 +106,7 @@ divergent def hashmap.HashMap.insert_in_list_loop
       let (b, back) ← hashmap.HashMap.insert_in_list_loop T key value tl
       Result.ret (b, hashmap.List.Cons ckey cvalue back)
   | hashmap.List.Nil =>
-    let l := hashmap.List.Nil
-    Result.ret (true, hashmap.List.Cons key value l)
+    Result.ret (true, hashmap.List.Cons key value hashmap.List.Nil)
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]:
    Source: 'src/hashmap.rs', lines 97:4-97:71 -/
@@ -328,8 +328,7 @@ def hashmap.HashMap.get_mut_in_list
   :=
   do
   let (t, back_'a) ← hashmap.HashMap.get_mut_in_list_loop T ls key
-  let back_'a1 := fun ret => back_'a ret
-  Result.ret (t, back_'a1)
+  Result.ret (t, back_'a)
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]:
    Source: 'src/hashmap.rs', lines 257:4-257:67 -/

@@ -36,9 +36,7 @@ let test_new_non_zero_u32
 (** [external::test_vec]: forward function
     Source: 'src/external.rs', lines 17:0-17:17 *)
 let test_vec : result unit =
-  let v = alloc_vec_Vec_new u32 in
-  let* _ = alloc_vec_Vec_push u32 v 0 in
-  Return ()
+  let* _ = alloc_vec_Vec_push u32 (alloc_vec_Vec_new u32) 0 in Return ()
 
 (** Unit test for [external::test_vec] *)
 let _ = assert_norm (test_vec = Return ())

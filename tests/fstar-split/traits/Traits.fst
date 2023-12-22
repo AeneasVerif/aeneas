@@ -274,7 +274,7 @@ let use_with_const_ty1
   (h : Type0) (len : usize) (withConstTyHLENInst : withConstTy_t h len) :
   result usize
   =
-  let i = withConstTyHLENInst.cLEN1 in Return i
+  Return withConstTyHLENInst.cLEN1
 
 (** [traits::use_with_const_ty2]: forward function
     Source: 'src/traits.rs', lines 187:0-187:73 *)

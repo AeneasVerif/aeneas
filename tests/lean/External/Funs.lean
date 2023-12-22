@@ -25,8 +25,7 @@ def test_new_non_zero_u32
    Source: 'src/external.rs', lines 17:0-17:17 -/
 def test_vec : Result Unit :=
   do
-  let v := alloc.vec.Vec.new U32
-  let _ ← alloc.vec.Vec.push U32 v 0#u32
+  let _ ← alloc.vec.Vec.push U32 (alloc.vec.Vec.new U32) 0#u32
   Result.ret ()
 
 /- Unit test for [external::test_vec] -/

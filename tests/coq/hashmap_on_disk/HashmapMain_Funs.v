@@ -53,8 +53,9 @@ Definition hashmap_HashMap_new_with_capacity
   (max_load_divisor : usize) :
   result (hashmap_HashMap_t T)
   :=
-  let v := alloc_vec_Vec_new (hashmap_List_t T) in
-  slots <- hashmap_HashMap_allocate_slots T n v capacity;
+  slots <-
+    hashmap_HashMap_allocate_slots T n (alloc_vec_Vec_new (hashmap_List_t T))
+      capacity;
   i <- usize_mul capacity max_load_dividend;
   i1 <- usize_div i max_load_divisor;
   Return
@@ -138,7 +139,7 @@ Fixpoint hashmap_HashMap_insert_in_list_loop
         let (b, back) := p in
         Return (b, Hashmap_List_Cons ckey cvalue back))
     | Hashmap_List_Nil =>
-      let l := Hashmap_List_Nil in Return (true, Hashmap_List_Cons key value l)
+      Return (true, Hashmap_List_Cons key value Hashmap_List_Nil)
     end
   end
 .
@@ -424,8 +425,7 @@ Definition hashmap_HashMap_get_mut_in_list
   :=
   p <- hashmap_HashMap_get_mut_in_list_loop T n ls key;
   let (t, back_'a) := p in
-  let back_'a1 := fun (ret : T) => back_'a ret in
-  Return (t, back_'a1)
+  Return (t, back_'a)
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]:

@@ -43,8 +43,9 @@ let hashmap_HashMap_new_with_capacity
   (max_load_divisor : usize) :
   result (hashmap_HashMap_t t)
   =
-  let v = alloc_vec_Vec_new (hashmap_List_t t) in
-  let* slots = hashmap_HashMap_allocate_slots t v capacity in
+  let* slots =
+    hashmap_HashMap_allocate_slots t (alloc_vec_Vec_new (hashmap_List_t t))
+      capacity in
   let* i = usize_mul capacity max_load_dividend in
   let* i1 = usize_div i max_load_divisor in
   Return
@@ -128,8 +129,7 @@ let rec hashmap_HashMap_insert_in_list_loop_back
     else
       let* tl1 = hashmap_HashMap_insert_in_list_loop_back t key value tl in
       Return (Hashmap_List_Cons ckey cvalue tl1)
-  | Hashmap_List_Nil ->
-    let l = Hashmap_List_Nil in Return (Hashmap_List_Cons key value l)
+  | Hashmap_List_Nil -> Return (Hashmap_List_Cons key value Hashmap_List_Nil)
   end
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]: backward function 0
