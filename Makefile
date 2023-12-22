@@ -70,9 +70,11 @@ build-bin-dir: build-bin build-lib
 	mkdir -p bin
 	cp -f compiler/_build/default/main.exe bin/aeneas
 	cp -f compiler/_build/default/main.exe bin/aeneas.cmxs
-	mkdir -p bin/backends/fstar
+	mkdir -p bin/backends/fstar/split
+	mkdir -p bin/backends/fstar/merge
 	mkdir -p bin/backends/coq
-	cp -rf backends/fstar/*.fst* bin/backends/fstar/
+	cp -rf backends/fstar/split/*.fst* bin/backends/fstar/split/
+	cp -rf backends/fstar/merge/*.fst* bin/backends/fstar/merge/
 	cp -rf backends/coq/*.v bin/backends/coq/
 
 .PHONY: doc
