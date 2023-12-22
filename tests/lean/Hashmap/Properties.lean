@@ -55,71 +55,6 @@ theorem match_lawful_beq [BEq α] [LawfulBEq α] [DecidableEq α] (x y : α) :
   (x == y) = (if x = y then true else false) := by
   split <;> simp_all
 
-@[pspec]
-theorem insert_in_list_spec0 {α : Type} (key: Usize) (value: α) (ls: List α) :
-  ∃ b,
-    insert_in_list α key value ls = ret b ∧
-    (b ↔ ls.lookup key = none)
-  := match ls with
-  | .Nil => by simp [insert_in_list, insert_in_list_loop]
-  | .Cons k v tl =>
-    if h: k = key then -- TODO: The order of k/key matters
-      by
-        simp [insert_in_list]
-        rw [insert_in_list_loop]
-        simp [h]
-    else
-      have ⟨ b, hi ⟩ := insert_in_list_spec0 key value tl
-      by
-        exists b
-        simp [insert_in_list]
-        rw [insert_in_list_loop] -- TODO: Using simp leads to infinite recursion
-        simp only [insert_in_list] at hi
-        simp [*]
-
--- Variation: use progress
-theorem insert_in_list_spec1 {α : Type} (key: Usize) (value: α) (ls: List α) :
-  ∃ b,
-    insert_in_list α key value ls = ret b ∧
-    (b ↔ ls.lookup key = none)
-  := match ls with
-  | .Nil => by simp [insert_in_list, insert_in_list_loop]
-  | .Cons k v tl =>
-    if h: k = key then -- TODO: The order of k/key matters
-      by
-        simp [insert_in_list]
-        rw [insert_in_list_loop]
-        simp [h]
-    else
-      by
-        simp only [insert_in_list]
-        rw [insert_in_list_loop]
-        conv => rhs; ext; simp [*]
-        progress keep heq as ⟨ b, hi ⟩
-        simp only [insert_in_list] at heq
-        exists b
-
--- Variation: use tactics from the beginning
-theorem insert_in_list_spec2 {α : Type} (key: Usize) (value: α) (ls: List α) :
-  ∃ b,
-    insert_in_list α key value ls = ret b ∧
-    (b ↔ (ls.lookup key = none))
-  := by
-  induction ls
-  case Nil => simp [insert_in_list, insert_in_list_loop]
-  case Cons k v tl ih =>
-    simp only [insert_in_list]
-    rw [insert_in_list_loop]
-    simp only
-    if h: k = key then
-     simp [h]
-    else
-     conv => rhs; ext; left; simp [h] -- TODO: Simplify
-     simp only [insert_in_list] at ih;
-     -- TODO: give the possibility of using underscores
-     progress as ⟨ b, h ⟩
-     simp [*]
-
 def distinct_keys (ls : Core.List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
 
 def hash_mod_key (k : Usize) (l : Int) : Int :=
@@ -175,11 +110,16 @@ def inv (hm : HashMap α) : Prop :=
   base_inv hm
   -- TODO: either the hashmap is not overloaded, or we can't resize it
 
-theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
+-- This rewriting lemma is problematic below
+attribute [-simp] Bool.exists_bool
+
+theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
-  ∃ l1,
-    insert_in_list_back α key value l0 = ret l1 ∧
+  ∃ b l1,
+    insert_in_list α key value l0 = ret (b, l1) ∧
+    -- The boolean is true ↔ we inserted a new binding
+    (b ↔ (l0.lookup key = none)) ∧
     -- We update the binding
     l1.lookup key = value ∧
     (∀ k, k ≠ key → l1.lookup k = l0.lookup k) ∧
@@ -193,16 +133,19 @@ theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: 
     distinct_keys l1.v ∧
     -- We need this auxiliary property to prove that the keys distinct properties is preserved
     (∀ k, k ≠ key → l0.v.allP (λ (k1, _) => k ≠ k1) → l1.v.allP (λ (k1, _) => k ≠ k1))
-  := match l0 with
-  | .Nil => by checkpoint
+  :=
+  match l0 with
+  | .Nil => by
+    exists true -- TODO: why do we need to do this?
     simp (config := {contextual := true})
-      [insert_in_list_back, insert_in_list_loop_back,
+      [insert_in_list, insert_in_list_loop,
        List.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
   | .Cons k v tl0 =>
-     if h: k = key then by checkpoint
-       simp [insert_in_list_back]
-       rw [insert_in_list_loop_back]
+     if h: k = key then by
+       rw [insert_in_list]
+       rw [insert_in_list_loop]
        simp [h]
+       exists false; simp -- TODO: why do we need to do this?
        split_conjs
        . intros; simp [*]
        . simp [List.v, slot_s_inv_hash] at *
@@ -210,17 +153,17 @@ theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: 
        . simp [*, distinct_keys] at *
          apply hdk
        . tauto
-     else by checkpoint
-       simp [insert_in_list_back]
-       rw [insert_in_list_loop_back]
+     else by
+       rw [insert_in_list]
+       rw [insert_in_list_loop]
        simp [h]
        have : slot_s_inv_hash l (hash_mod_key key l) (List.v tl0) := by checkpoint
          simp_all [List.v, slot_s_inv_hash]
        have : distinct_keys (List.v tl0) := by checkpoint
          simp [distinct_keys] at hdk
          simp [hdk, distinct_keys]
-       progress keep heq as ⟨ tl1 .. ⟩
-       simp only [insert_in_list_back] at heq
+       progress keep heq as ⟨ b, tl1 .. ⟩
+       simp only [insert_in_list] at heq
        have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by checkpoint
          simp [List.v, slot_s_inv_hash] at *
          simp [*]
@@ -228,14 +171,16 @@ theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: 
          simp [distinct_keys] at *
          simp [*]
        -- TODO: canonize addition by default?
+       exists b
        simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
 
 @[pspec]
-theorem insert_in_list_back_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
+theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
-  ∃ l1,
-    insert_in_list_back α key value l0 = ret l1 ∧
+  ∃ b l1,
+    insert_in_list α key value l0 = ret (b, l1) ∧
+    (b ↔ (l0.lookup key = none)) ∧
     -- We update the binding
     l1.lookup key = value ∧
     (∀ k, k ≠ key → l1.lookup k = l0.lookup k) ∧
@@ -248,7 +193,8 @@ theorem insert_in_list_back_spec {α : Type} (l : Int) (key: Usize) (value: α) 
     -- The keys are distinct
     distinct_keys l1.v
   := by
-  progress with insert_in_list_back_spec_aux as ⟨ l1 .. ⟩
+  progress with insert_in_list_spec_aux as ⟨ b, l1 .. ⟩
+  exists b
   exists l1
 
 @[simp]
@@ -286,7 +232,7 @@ set_option pp.coercions false -- do not print coercions with ↑ (this doesn't p
 
 -- The proof below is a bit expensive, so we need to increase the maximum number
 -- of heart beats
-set_option maxHeartbeats 400000
+set_option maxHeartbeats 1000000
 
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
@@ -315,9 +261,19 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       simp [hinv]
     -- TODO: we want to automate that
     simp [*, Int.emod_lt_of_pos]
-  progress as ⟨ l, h_leq ⟩
-  -- TODO: make progress use the names written in the goal
-  progress as ⟨ inserted ⟩
+  progress as ⟨ l, index_mut_back, h_leq, h_index_mut_back ⟩
+  simp [h_index_mut_back] at *; clear h_index_mut_back index_mut_back
+  have h_slot :
+    slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v := by
+    simp [inv] at hinv
+    have h := (hinv.right.left hash_mod.val (by assumption) (by assumption)).right
+    simp [slot_t_inv, hhm] at h
+    simp [h, hhm, h_leq]
+  have hd : distinct_keys l.v := by
+    simp [inv, slots_t_inv, slot_t_inv] at hinv
+    have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
+    simp [h, h_leq]
+  progress as ⟨ inserted, l0, _, _, _, _, hlen .. ⟩
   rw [if_update_eq] -- TODO: necessary because we don't have a join
   -- TODO: progress to ...
   have hipost :
@@ -336,20 +292,9 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     else
       simp [*, Pure.pure]
   progress as ⟨ i0 ⟩
-  have h_slot : slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v
-    := by
-    simp [inv] at hinv
-    have h := (hinv.right.left hash_mod.val (by assumption) (by assumption)).right
-    simp [slot_t_inv, hhm] at h
-    simp [h, hhm, h_leq]
-  have hd : distinct_keys l.v := by checkpoint
-    simp [inv, slots_t_inv, slot_t_inv] at hinv
-    have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
-    simp [h, h_leq]
   -- TODO: hide the variables and only keep the props
   -- TODO: allow providing terms to progress to instantiate the meta variables
   -- which are not propositions
-  progress as ⟨ l0, _, _, _, hlen .. ⟩
   progress keep hv as ⟨ v, h_veq ⟩
   -- TODO: update progress to automate that
   -- TODO: later I don't want to inline nhm - we need to control simp: deactivate
@@ -428,8 +373,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
         simp [*]
       else
         simp [*]
-    . -- TODO: simp[*] fails: "(deterministic) timeout at 'whnf'"
-      simp [hinv, h_veq, nhm_eq]
+    . simp [hinv, h_veq, nhm_eq]
   simp_all
 
 end HashMap
