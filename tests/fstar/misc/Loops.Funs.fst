@@ -121,9 +121,7 @@ let list_nth_mut_loop
   (t : Type0) (ls : list_t t) (i : u32) :
   result (t & (t -> result (list_t t)))
   =
-  let* (x, back) = list_nth_mut_loop_loop t ls i in
-  let back1 = fun ret -> back ret in
-  Return (x, back1)
+  let* (x, back) = list_nth_mut_loop_loop t ls i in Return (x, back)
 
 (** [loops::list_nth_shared_loop]: loop 0:
     Source: 'src/loops.rs', lines 91:0-101:1 *)
@@ -201,7 +199,7 @@ let id_mut
   (t : Type0) (ls : list_t t) :
   result ((list_t t) & (list_t t -> result (list_t t)))
   =
-  let back = fun ret -> Return ret in Return (ls, back)
+  Return (ls, Return)
 
 (** [loops::id_shared]:
     Source: 'src/loops.rs', lines 139:0-139:45 *)
@@ -296,9 +294,7 @@ let list_nth_mut_loop_pair
   result ((t & t) & (t -> result (list_t t)) & (t -> result (list_t t)))
   =
   let* (p, back_'a, back_'b) = list_nth_mut_loop_pair_loop t ls0 ls1 i in
-  let back_'a1 = fun ret -> back_'a ret in
-  let back_'b1 = fun ret -> back_'b ret in
-  Return (p, back_'a1, back_'b1)
+  Return (p, back_'a, back_'b)
 
 (** [loops::list_nth_shared_loop_pair]: loop 0:
     Source: 'src/loops.rs', lines 198:0-219:1 *)
@@ -362,8 +358,7 @@ let list_nth_mut_loop_pair_merge
   result ((t & t) & ((t & t) -> result ((list_t t) & (list_t t))))
   =
   let* (p, back_'a) = list_nth_mut_loop_pair_merge_loop t ls0 ls1 i in
-  let back_'a1 = fun ret -> back_'a ret in
-  Return (p, back_'a1)
+  Return (p, back_'a)
 
 (** [loops::list_nth_shared_loop_pair_merge]: loop 0:
     Source: 'src/loops.rs', lines 241:0-256:1 *)
@@ -425,8 +420,7 @@ let list_nth_mut_shared_loop_pair
   result ((t & t) & (t -> result (list_t t)))
   =
   let* (p, back_'a) = list_nth_mut_shared_loop_pair_loop t ls0 ls1 i in
-  let back_'a1 = fun ret -> back_'a ret in
-  Return (p, back_'a1)
+  Return (p, back_'a)
 
 (** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0:
     Source: 'src/loops.rs', lines 278:0-293:1 *)
@@ -462,8 +456,7 @@ let list_nth_mut_shared_loop_pair_merge
   result ((t & t) & (t -> result (list_t t)))
   =
   let* (p, back_'a) = list_nth_mut_shared_loop_pair_merge_loop t ls0 ls1 i in
-  let back_'a1 = fun ret -> back_'a ret in
-  Return (p, back_'a1)
+  Return (p, back_'a)
 
 (** [loops::list_nth_shared_mut_loop_pair]: loop 0:
     Source: 'src/loops.rs', lines 297:0-312:1 *)
@@ -498,8 +491,7 @@ let list_nth_shared_mut_loop_pair
   result ((t & t) & (t -> result (list_t t)))
   =
   let* (p, back_'b) = list_nth_shared_mut_loop_pair_loop t ls0 ls1 i in
-  let back_'b1 = fun ret -> back_'b ret in
-  Return (p, back_'b1)
+  Return (p, back_'b)
 
 (** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0:
     Source: 'src/loops.rs', lines 316:0-331:1 *)
@@ -535,6 +527,5 @@ let list_nth_shared_mut_loop_pair_merge
   result ((t & t) & (t -> result (list_t t)))
   =
   let* (p, back_'a) = list_nth_shared_mut_loop_pair_merge_loop t ls0 ls1 i in
-  let back_'a1 = fun ret -> back_'a ret in
-  Return (p, back_'a1)
+  Return (p, back_'a)
 

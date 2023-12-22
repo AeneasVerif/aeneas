@@ -122,8 +122,7 @@ def list_nth_mut_loop
   (T : Type) (ls : List T) (i : U32) : Result (T × (T → Result (List T))) :=
   do
   let (t, back) ← list_nth_mut_loop_loop T ls i
-  let back1 := fun ret => back ret
-  Result.ret (t, back1)
+  Result.ret (t, back)
 
 /- [loops::list_nth_shared_loop]: loop 0:
    Source: 'src/loops.rs', lines 91:0-101:1 -/
@@ -207,8 +206,7 @@ def id_mut
   (T : Type) (ls : List T) :
   Result ((List T) × (List T → Result (List T)))
   :=
-  let back := fun ret => Result.ret ret
-  Result.ret (ls, back)
+  Result.ret (ls, Result.ret)
 
 /- [loops::id_shared]:
    Source: 'src/loops.rs', lines 139:0-139:45 -/
@@ -308,9 +306,7 @@ def list_nth_mut_loop_pair
   :=
   do
   let (p, back_'a, back_'b) ← list_nth_mut_loop_pair_loop T ls0 ls1 i
-  let back_'a1 := fun ret => back_'a ret
-  let back_'b1 := fun ret => back_'b ret
-  Result.ret (p, back_'a1, back_'b1)
+  Result.ret (p, back_'a, back_'b)
 
 /- [loops::list_nth_shared_loop_pair]: loop 0:
    Source: 'src/loops.rs', lines 198:0-219:1 -/
@@ -372,8 +368,7 @@ def list_nth_mut_loop_pair_merge
   :=
   do
   let (p, back_'a) ← list_nth_mut_loop_pair_merge_loop T ls0 ls1 i
-  let back_'a1 := fun ret => back_'a ret
-  Result.ret (p, back_'a1)
+  Result.ret (p, back_'a)
 
 /- [loops::list_nth_shared_loop_pair_merge]: loop 0:
    Source: 'src/loops.rs', lines 241:0-256:1 -/
@@ -432,8 +427,7 @@ def list_nth_mut_shared_loop_pair
   :=
   do
   let (p, back_'a) ← list_nth_mut_shared_loop_pair_loop T ls0 ls1 i
-  let back_'a1 := fun ret => back_'a ret
-  Result.ret (p, back_'a1)
+  Result.ret (p, back_'a)
 
 /- [loops::list_nth_mut_shared_loop_pair_merge]: loop 0:
    Source: 'src/loops.rs', lines 278:0-293:1 -/
@@ -470,8 +464,7 @@ def list_nth_mut_shared_loop_pair_merge
   :=
   do
   let (p, back_'a) ← list_nth_mut_shared_loop_pair_merge_loop T ls0 ls1 i
-  let back_'a1 := fun ret => back_'a ret
-  Result.ret (p, back_'a1)
+  Result.ret (p, back_'a)
 
 /- [loops::list_nth_shared_mut_loop_pair]: loop 0:
    Source: 'src/loops.rs', lines 297:0-312:1 -/
@@ -507,8 +500,7 @@ def list_nth_shared_mut_loop_pair
   :=
   do
   let (p, back_'b) ← list_nth_shared_mut_loop_pair_loop T ls0 ls1 i
-  let back_'b1 := fun ret => back_'b ret
-  Result.ret (p, back_'b1)
+  Result.ret (p, back_'b)
 
 /- [loops::list_nth_shared_mut_loop_pair_merge]: loop 0:
    Source: 'src/loops.rs', lines 316:0-331:1 -/
@@ -545,7 +537,6 @@ def list_nth_shared_mut_loop_pair_merge
   :=
   do
   let (p, back_'a) ← list_nth_shared_mut_loop_pair_merge_loop T ls0 ls1 i
-  let back_'a1 := fun ret => back_'a ret
-  Result.ret (p, back_'a1)
+  Result.ret (p, back_'a)
 
 end loops

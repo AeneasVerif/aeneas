@@ -684,6 +684,15 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let y1 = x1 in
       ...
     ]}
+
+    Simplify arrows:
+    {[
+      let f := fun x => g x in
+      ...
+        ~~>
+      let f := g in
+      ...
+    ]}
  *)
 let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let obj =
@@ -738,6 +747,23 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   in
                   super#visit_expression env e.e
               | _ -> super#visit_Let env monadic lv rv next
+            else super#visit_Let env monadic lv rv next
+        | Lambda _ ->
+            if not monadic then
+              (* Arrow case *)
+              let pats, e = destruct_lambdas rv in
+              let g, args = destruct_apps e in
+              if List.length pats = List.length args then
+                (* Check if the arguments are exactly the lambdas *)
+                let check_pat_arg ((pat, arg) : typed_pattern * texpression) =
+                  match (pat.value, arg.e) with
+                  | PatVar (v, _), Var vid -> v.id = vid
+                  | _ -> false
+                in
+                if List.for_all check_pat_arg (List.combine pats args) then
+                  self#visit_Let env monadic lv g next
+                else super#visit_Let env monadic lv rv next
+              else super#visit_Let env monadic lv rv next
             else super#visit_Let env monadic lv rv next
         | _ -> super#visit_Let env monadic lv rv next
     end
@@ -1934,9 +1960,10 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   (* Inline the useless variable reassignments *)
   let inline_named_vars = true in
   let inline_pure = true in
-  let def =
-    inline_useless_var_reassignments ctx inline_named_vars inline_pure def
+  let inline_useless_var_reassignments ctx =
+    inline_useless_var_reassignments ctx inline_named_vars inline_pure
   in
+  let def = inline_useless_var_reassignments ctx def in
   log#ldebug
     (lazy
       ("inline_useless_var_assignments:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
@@ -1981,6 +2008,20 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let def = simplify_aggregates ctx def in
   log#ldebug
     (lazy ("simplify_aggregates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Simplify the let-bindings - some simplifications may have been unlocked by
+     the pass above (for instance, the lambda simplification) *)
+  let def = simplify_let_bindings ctx def in
+  log#ldebug
+    (lazy
+      ("simplify_let_bindings (pass 2):\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Inline the useless vars again *)
+  let def = inline_useless_var_reassignments ctx def in
+  log#ldebug
+    (lazy
+      ("inline_useless_var_assignments (pass 2):\n\n"
+     ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Decompose the monadic let-bindings - used by Coq *)
   let def =
