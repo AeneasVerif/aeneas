@@ -8,22 +8,11 @@ open external
 
 /- [core::mem::swap] -/
 def core.mem.swap
-  (T : Type) : T → T → State → Result (State × Unit) :=
-  fun _x _y s => .ret (s, ())
-
-/- [core::mem::swap] -/
-def core.mem.swap_back0
-  (T : Type) : T → T → State → State → Result (State × T) :=
-  fun _x y _s0 s1 => .ret (s1, y)
-
-/- [core::mem::swap] -/
-def core.mem.swap_back1
-  (T : Type) : T → T → State → State → Result (State × T) :=
-  fun x _y _s0 s1 => .ret (s1, x)
+  (T : Type) : T → T → State → Result (State × (T × T)) :=
+  fun x y s => .ret (s, (y, x))
 
 /- [core::num::nonzero::NonZeroU32::{14}::new] -/
-def core.num.nonzero.NonZeroU32.new
-  :
+def core.num.nonzero.NonZeroU32.new :
   U32 → State → Result (State × (Option core_num_nonzero_non_zero_u32_t)) :=
   fun _ _ => .fail .panic
 
