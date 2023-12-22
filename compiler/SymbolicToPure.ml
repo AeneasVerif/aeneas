@@ -1076,16 +1076,20 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     let inputs_no_state =
       List.map (fun ty -> (Some "ret", ty)) inputs_no_state
     in
-    (* We consider the backward function as stateful and potentially failing
+    (* In case we merge the forward/backward functions:
+       we consider the backward function as stateful and potentially failing
        **only if it has inputs** (for the "potentially failing": if it has
        not inputs, we directly evaluate it in the body of the forward function).
     *)
     let back_effect_info =
-      {
-        back_effect_info with
-        stateful = back_effect_info.stateful && inputs_no_state <> [];
-        can_fail = back_effect_info.can_fail && inputs_no_state <> [];
-      }
+      if !Config.return_back_funs then
+        let b = inputs_no_state <> [] in
+        {
+          back_effect_info with
+          stateful = back_effect_info.stateful && b;
+          can_fail = back_effect_info.can_fail && b;
+        }
+      else back_effect_info
     in
     let state =
       if back_effect_info.stateful then [ (None, mk_state_ty) ] else []
@@ -1093,7 +1097,8 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     let inputs = inputs_no_state @ state in
     let output_names, outputs = compute_back_outputs_for_gid gid in
     let filter =
-      !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
+      !Config.simplify_merged_fwd_backs
+      && !Config.return_back_funs && inputs = [] && outputs = []
     in
     let info =
       {

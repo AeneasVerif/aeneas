@@ -256,14 +256,29 @@ testp-%: gen-llbcp-% tfstarp-% tcoqp-% tleanp-% thol4p-%
 .PHONY: tfstar-%
 tfstar-%: OPTIONS += -backend fstar
 tfstar-%: BACKEND_SUBDIR := fstar
-tfstar-%:
+tfstar-%: tsplit-fstar-%
 	$(AENEAS_CMD)
 
 # "p" stands for "Polonius"
 .PHONY: tfstarp-%
 tfstarp-%: OPTIONS += -backend fstar
 tfstarp-%: BACKEND_SUBDIR := fstar
-tfstarp-%:
+tfstarp-%: tsplit-fstarp-%
+	$(AENEAS_CMD)
+
+# Test where we split the forward/backward functions
+.PHONY: tsplit-fstar-%
+tsplit-fstar-%: OPTIONS += -backend fstar -split-fwd-back
+tsplit-fstar-%: BACKEND_SUBDIR := fstar-split
+tsplit-fstar-%:
+	$(AENEAS_CMD)
+
+# Test where we split the forward/backward functions
+# "p" stands for "Polonius"
+.PHONY: tsplit-fstarp-%
+tsplit-fstarp-%: OPTIONS += -backend fstar -split-fwd-back
+tsplit-fstarp-%: BACKEND_SUBDIR := fstar-split
+tsplit-fstarp-%:
 	$(AENEAS_CMD)
 
 .PHONY: tcoq-%

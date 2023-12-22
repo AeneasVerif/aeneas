@@ -120,6 +120,9 @@ let () =
         " Generate a default lakefile.lean (Lean only)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ("-k", Arg.Clear fail_hard, " Do not fail hard in case of error");
+      ( "-split-fwd-back",
+        Arg.Clear return_back_funs,
+        " Split the forward and backward functions." );
     ]
   in
 
