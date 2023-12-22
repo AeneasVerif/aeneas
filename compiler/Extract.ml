@@ -610,7 +610,7 @@ and extract_Lambda (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       ctx xl
   in
   F.pp_print_space fmt ();
-  if !backend = Lean then F.pp_print_string fmt "=>"
+  if !backend = Lean || !backend = Coq then F.pp_print_string fmt "=>"
   else F.pp_print_string fmt "->";
   F.pp_print_space fmt ();
   (* Print the body *)
