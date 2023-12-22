@@ -1985,7 +1985,9 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
   log#ldebug
     (lazy
-      ("translate_function_call:\n"
+      ("translate_function_call:\n" ^ "\n- call.call_id:"
+      ^ S.show_call_id call.call_id
+      ^ "\n\n- call.generics:\n"
       ^ ctx_generic_args_to_string ctx call.generics));
   (* Translate the function call *)
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
@@ -2025,7 +2027,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
            variables for the backward functions returned by the forward
            function. *)
         let ctx, ignore_fwd_output, back_funs_map, back_funs =
-          if !Config.return_back_funs then
+          if !Config.return_back_funs then (
             (* We need to compute the signatures of the backward functions. *)
             let sg = Option.get call.sg in
             let decls_ctx = ctx.decls_ctx in
@@ -2034,9 +2036,23 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                 fid call.regions_hierarchy sg
                 (List.map (fun _ -> None) sg.inputs)
             in
-            let tr_self = UnknownTrait __FUNCTION__ in
+            log#ldebug
+              (lazy ("dsg.generics:\n" ^ show_generic_params dsg.generics));
+            let tr_self, all_generics =
+              match call.trait_method_generics with
+              | None -> (UnknownTrait __FUNCTION__, generics)
+              | Some (all_generics, tr_self) ->
+                  let all_generics =
+                    ctx_translate_fwd_generic_args ctx all_generics
+                  in
+                  let tr_self =
+                    translate_fwd_trait_instance_id ctx.type_ctx.type_infos
+                      tr_self
+                  in
+                  (tr_self, all_generics)
+            in
             let back_tys =
-              compute_back_tys_with_info dsg (Some (generics, tr_self))
+              compute_back_tys_with_info dsg (Some (all_generics, tr_self))
             in
             (* Introduce variables for the backward functions *)
             (* Compute a proper basename for the variables *)
@@ -2106,7 +2122,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let back_funs_map =
               RegionGroupId.Map.of_list (List.combine gids back_vars)
             in
-            (ctx, dsg.fwd_info.ignore_output, Some back_funs_map, back_funs)
+            (ctx, dsg.fwd_info.ignore_output, Some back_funs_map, back_funs))
           else (ctx, false, None, [])
         in
         (* Compute the pattern for the destination *)

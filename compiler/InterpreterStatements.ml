@@ -731,6 +731,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
     :
     fun_id_or_trait_method_ref
     * generic_args
+    * (generic_args * trait_instance_id) option
     * fun_decl
     * region_var_groups
     * inst_fun_sig =
@@ -758,7 +759,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
             instantiate_fun_sig ctx func.generics tr_self def.signature
               regions_hierarchy
           in
-          (func.func, func.generics, def, regions_hierarchy, inst_sg)
+          (func.func, func.generics, None, def, regions_hierarchy, inst_sg)
       | FunId (FAssumed _) ->
           (* Unreachable: must be a transparent function *)
           raise (Failure "Unreachable")
@@ -811,7 +812,12 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
                      we also need to update the generics.
                   *)
                   let func = FunId fid in
-                  (func, generics, method_def, regions_hierarchy, inst_sg)
+                  ( func,
+                    generics,
+                    Some (generics, tr_self),
+                    method_def,
+                    regions_hierarchy,
+                    inst_sg )
               | None ->
                   (* If not found, lookup the methods provided by the trait *declaration*
                      (remember: for now, we forbid overriding provided methods) *)
@@ -867,6 +873,7 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
                   in
                   ( func.func,
                     func.generics,
+                    Some (all_generics, tr_self),
                     method_def,
                     regions_hierarchy,
                     inst_sg ))
@@ -900,8 +907,12 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
                 instantiate_fun_sig ctx generics tr_self method_def.signature
                   regions_hierarchy
               in
-              (func.func, func.generics, method_def, regions_hierarchy, inst_sg)
-          ))
+              ( func.func,
+                func.generics,
+                Some (generics, tr_self),
+                method_def,
+                regions_hierarchy,
+                inst_sg )))
 
 (** Evaluate a statement *)
 let rec eval_statement (config : config) (st : statement) : st_cm_fun =
@@ -1287,14 +1298,15 @@ and eval_transparent_function_call_concrete (config : config)
 and eval_transparent_function_call_symbolic (config : config) (call : call) :
     st_cm_fun =
  fun cf ctx ->
-  let func, generics, def, regions_hierarchy, inst_sg =
+  let func, generics, trait_method_generics, def, regions_hierarchy, inst_sg =
     eval_transparent_function_call_symbolic_inst call ctx
   in
   (* Sanity check *)
   assert (List.length call.args = List.length def.signature.inputs);
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config func def.signature
-    regions_hierarchy inst_sg generics call.args call.dest cf ctx
+    regions_hierarchy inst_sg generics trait_method_generics call.args call.dest
+    cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -1310,7 +1322,9 @@ and eval_transparent_function_call_symbolic (config : config) (call : call) :
 and eval_function_call_symbolic_from_inst_sig (config : config)
     (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) (inst_sg : inst_fun_sig)
-    (generics : generic_args) (args : operand list) (dest : place) : st_cm_fun =
+    (generics : generic_args)
+    (trait_method_generics : (generic_args * trait_instance_id) option)
+    (args : operand list) (dest : place) : st_cm_fun =
  fun cf ctx ->
   log#ldebug
     (lazy
@@ -1390,7 +1404,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
     (* Synthesize the symbolic AST *)
     S.synthesize_regular_function_call fid call_id ctx sg regions_hierarchy
-      abs_ids generics args args_places ret_spc dest_place expr
+      abs_ids generics trait_method_generics args args_places ret_spc dest_place
+      expr
   in
   let cc = comp cc cf_call in
 
@@ -1500,7 +1515,7 @@ and eval_assumed_function_call_symbolic (config : config) (fid : assumed_fun_id)
 
       (* Evaluate the function call *)
       eval_function_call_symbolic_from_inst_sig config (FunId (FAssumed fid)) sg
-        regions_hierarchy inst_sig generics args dest cf ctx
+        regions_hierarchy inst_sig generics None args dest cf ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : statement) : st_cm_fun =
