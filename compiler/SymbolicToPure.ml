@@ -123,7 +123,7 @@ type loop_info = {
   generics : generic_args;
   forward_inputs : texpression list option;
       (** The forward inputs are initialized at [None] *)
-  forward_output_no_state_no_result : var option;
+  forward_output_no_state_no_result : texpression option;
       (** The forward outputs are initialized at [None] *)
   back_outputs : ty list RegionGroupId.Map.t;
       (** The map from region group ids to the types of the values given back
@@ -1956,10 +1956,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
   *)
   let output =
     match ctx.bid with
-    | None ->
-        (* Forward *)
-        mk_texpression_from_var
-          (Option.get loop_info.forward_output_no_state_no_result)
+    | None -> Option.get loop_info.forward_output_no_state_no_result
     | Some _ ->
         (* Backward *)
         (* Group the variables in which we stored the values we need to give back.
@@ -1984,7 +1981,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     else output
   in
   (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-  mk_result_return_texpression output
+  mk_emeta (Tag "return_with_loop") (mk_result_return_texpression output)
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
@@ -3207,7 +3204,20 @@ and translate_forward_end (ectx : C.eval_ctx)
       let effect_info = get_fun_effect_info ctx (FunId fid) None ctx.bid in
 
       (* Introduce a fresh output value for the forward function *)
-      let ctx, output_var = fresh_var None ctx.sg.fwd_output ctx in
+      let ctx, fwd_output, output_pat =
+        if ctx.sg.fwd_info.ignore_output then
+          (* Note that we still need the forward output (which is unit),
+             because even though the loop function will ignore the forward output,
+             the forward expression will still compute an output (which
+             will have type unit - otherwise we can't ignore it). *)
+          (ctx, mk_unit_rvalue, [])
+        else
+          let ctx, output_var = fresh_var None ctx.sg.fwd_output ctx in
+          ( ctx,
+            mk_texpression_from_var output_var,
+            [ mk_typed_pattern_from_var output_var None ] )
+      in
+
       (* Introduce fresh variables for the backward functions of the loop.
 
          For now, the backward functions of the loop are the same as the
@@ -3236,10 +3246,8 @@ and translate_forward_end (ectx : C.eval_ctx)
 
       (* Introduce patterns *)
       let args, ctx, out_pats =
-        (* Create the pattern for the output value *)
-        let output_pat = mk_typed_pattern_from_var output_var None in
         (* Add the returned backward functions (they might be empty) *)
-        let output_pat = mk_simpl_tuple_pattern (output_pat :: back_funs) in
+        let output_pat = mk_simpl_tuple_pattern (output_pat @ back_funs) in
 
         (* Depending on the function effects:
          * - add the fuel
@@ -3261,7 +3269,7 @@ and translate_forward_end (ectx : C.eval_ctx)
         {
           loop_info with
           forward_inputs = Some args;
-          forward_output_no_state_no_result = Some output_var;
+          forward_output_no_state_no_result = Some fwd_output;
           back_funs = back_funs_map;
         }
       in
