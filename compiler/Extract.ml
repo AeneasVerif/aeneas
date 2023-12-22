@@ -241,30 +241,45 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
         Result.Ok types
 
 (** [inside]: see {!extract_ty}.
+    [with_type]: do we also generate a type annotation? This is necessary for
+    backends like Coq when we write lambdas (Coq is not powerful enough to
+    infer the type).
 
     As a pattern can introduce new variables, we return an extraction context
     updated with new bindings.
  *)
 let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
-    (is_let : bool) (inside : bool) (v : typed_pattern) : extraction_ctx =
-  match v.value with
-  | PatConstant cv ->
-      extract_literal fmt inside cv;
-      ctx
-  | PatVar (v, _) ->
-      let vname = ctx_compute_var_basename ctx v.basename v.ty in
-      let ctx, vname = ctx_add_var vname v.id ctx in
-      F.pp_print_string fmt vname;
-      ctx
-  | PatDummy ->
-      F.pp_print_string fmt "_";
-      ctx
-  | PatAdt av ->
-      let extract_value ctx inside v =
-        extract_typed_pattern ctx fmt is_let inside v
-      in
-      extract_adt_g_value extract_value fmt ctx is_let inside av.variant_id
-        av.field_values v.ty
+    (is_let : bool) (inside : bool) ?(with_type = false) (v : typed_pattern) :
+    extraction_ctx =
+  if with_type then F.pp_print_string fmt "(";
+  let inside = inside && not with_type in
+  let ctx =
+    match v.value with
+    | PatConstant cv ->
+        extract_literal fmt inside cv;
+        ctx
+    | PatVar (v, _) ->
+        let vname = ctx_compute_var_basename ctx v.basename v.ty in
+        let ctx, vname = ctx_add_var vname v.id ctx in
+        F.pp_print_string fmt vname;
+        ctx
+    | PatDummy ->
+        F.pp_print_string fmt "_";
+        ctx
+    | PatAdt av ->
+        let extract_value ctx inside v =
+          extract_typed_pattern ctx fmt is_let inside v
+        in
+        extract_adt_g_value extract_value fmt ctx is_let inside av.variant_id
+          av.field_values v.ty
+  in
+  if with_type then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
+    extract_ty ctx fmt TypeDeclId.Set.empty false v.ty;
+    F.pp_print_string fmt ")");
+  ctx
 
 (** Return true if we need to wrap a succession of let-bindings in a [do ...]
     block (because some of them are monadic) *)
@@ -602,11 +617,12 @@ and extract_Lambda (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Print the lambda - note that there should always be at least one variable *)
   assert (xl <> []);
   F.pp_print_string fmt "fun";
+  let with_type = !backend = Coq in
   let ctx =
     List.fold_left
       (fun ctx x ->
         F.pp_print_space fmt ();
-        extract_typed_pattern ctx fmt true true x)
+        extract_typed_pattern ctx fmt true true ~with_type x)
       ctx xl
   in
   F.pp_print_space fmt ();
