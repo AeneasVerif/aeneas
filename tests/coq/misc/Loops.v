@@ -358,7 +358,7 @@ Fixpoint list_nth_mut_loop_pair_loop
         else (
           i1 <- u32_sub i 1%u32;
           t <- list_nth_mut_loop_pair_loop T n1 tl0 tl1 i1;
-          let (p, back_'a, back_'b) := t in
+          let '(p, back_'a, back_'b) := t in
           let back_'a1 :=
             fun (ret : T) => tl01 <- back_'a ret; Return (List_Cons x0 tl01) in
           let back_'b1 :=
@@ -378,7 +378,7 @@ Definition list_nth_mut_loop_pair
   result ((T * T) * (T -> result (List_t T)) * (T -> result (List_t T)))
   :=
   t <- list_nth_mut_loop_pair_loop T n ls0 ls1 i;
-  let (p, back_'a, back_'b) := t in
+  let '(p, back_'a, back_'b) := t in
   Return (p, back_'a, back_'b)
 .
 

@@ -132,9 +132,15 @@ let extract_adt_g_value
       F.pp_print_string fmt "tt";
       ctx)
     else
-      (* If there is exactly one value, we don't print the parentheses *)
+      (* If there is exactly one value, we don't print the parentheses.
+         Also, for Coq, we need the special syntax ['(...)] if we destruct
+         a tuple pattern in a let-binding and the tuple has > 2 values.
+      *)
       let lb, rb =
-        if List.length field_values = 1 then ("", "") else ("(", ")")
+        if List.length field_values = 1 then ("", "")
+        else if !backend = Coq && is_single_pat && List.length field_values > 2
+        then ("'(", ")")
+        else ("(", ")")
       in
       F.pp_print_string fmt lb;
       let ctx =

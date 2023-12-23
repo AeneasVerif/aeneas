@@ -196,9 +196,6 @@ let () =
   let _ =
     match !backend with
     | FStar ->
-        (* Some patterns are not supported *)
-        decompose_monadic_let_bindings := false;
-        decompose_nested_let_patterns := false;
         (* F* can disambiguate the field names *)
         record_fields_short_names := true
     | Coq ->
