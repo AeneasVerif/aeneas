@@ -330,7 +330,8 @@ thol4p-%:
 
 # Nix - TODO: add the lean tests
 .PHONY: nix
-nix: nix-aeneas-tests nix-aeneas-verify-fstar nix-aeneas-verify-coq nix-aeneas-verify-hol4
+nix:
+	nix build && nix flake check
 
 .PHONY: nix-aeneas-tests
 nix-aeneas-tests:
@@ -339,6 +340,10 @@ nix-aeneas-tests:
 .PHONY: nix-aeneas-verify-fstar
 nix-aeneas-verify-fstar:
 	nix build .#checks.x86_64-linux.aeneas-verify-fstar --show-trace -L
+
+.PHONY: nix-aeneas-verify-fstar-split
+nix-aeneas-verify-fstar-split:
+	nix build .#checks.x86_64-linux.aeneas-verify-fstar-split --show-trace -L
 
 .PHONY: nix-aeneas-verify-coq
 nix-aeneas-verify-coq:
