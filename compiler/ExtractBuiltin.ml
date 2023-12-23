@@ -232,6 +232,14 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info list) list
   let mk_fun (rust_name : string) (extract_name : string option)
       (filter : bool list option) (with_back : bool) (back_no_suffix : bool) :
       pattern * bool list option * builtin_fun_info list =
+    (* [back_no_suffix] is used to control whether the backward function should
+       have the suffix "_back" or not (if not, then the forward function has the
+       prefix "_fwd", and is filtered anyway). This is pertinent only if we split
+       the fwd/back functions. *)
+    let back_no_suffix = back_no_suffix && not !Config.return_back_funs in
+    (* Same for the [with_back] option: this is pertinent only if we split
+       the fwd/back functions *)
+    let with_back = with_back && not !Config.return_back_funs in
     let rust_name =
       try parse_pattern rust_name
       with Failure _ ->

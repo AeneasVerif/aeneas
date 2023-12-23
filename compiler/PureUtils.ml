@@ -57,6 +57,23 @@ end
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 module FunLoopIdSet = Collections.MakeSet (FunLoopIdOrderedType)
 
+let inputs_info_is_wf (info : inputs_info) : bool =
+  let {
+    has_fuel;
+    num_inputs_no_fuel_no_state;
+    num_inputs_with_fuel_no_state;
+    num_inputs_with_fuel_with_state;
+  } =
+    info
+  in
+  let fuel = if has_fuel then 1 else 0 in
+  num_inputs_no_fuel_no_state >= 0
+  && num_inputs_with_fuel_no_state = num_inputs_no_fuel_no_state + fuel
+  && num_inputs_with_fuel_with_state >= num_inputs_with_fuel_no_state
+
+let fun_sig_info_is_wf (info : fun_sig_info) : bool =
+  inputs_info_is_wf info.fwd_info
+
 let dest_arrow_ty (ty : ty) : ty * ty =
   match ty with
   | TArrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
@@ -187,9 +204,7 @@ let fun_sig_substitute (subst : subst) (sg : fun_sig) : inst_fun_sig =
   let subst = ty_substitute subst in
   let inputs = List.map subst sg.inputs in
   let output = subst sg.output in
-  let doutputs = List.map subst sg.doutputs in
-  let info = sg.info in
-  { inputs; output; doutputs; info }
+  { inputs; output }
 
 (** We use this to check whether we need to add parentheses around expressions.
     We only look for outer monadic let-bindings.
@@ -200,12 +215,14 @@ let fun_sig_substitute (subst : subst) (sg : fun_sig) : inst_fun_sig =
  *)
 let rec let_group_requires_parentheses (e : texpression) : bool =
   match e.e with
-  | Var _ | CVar _ | Const _ | App _ | Abs _ | Qualif _ | StructUpdate _ ->
-      false
+  | Var _ | CVar _ | Const _ | App _ | Qualif _ | StructUpdate _ -> false
   | Let (monadic, _, _, next_e) ->
       if monadic then true else let_group_requires_parentheses next_e
   | Switch (_, _) -> false
   | Meta (_, next_e) -> let_group_requires_parentheses next_e
+  | Lambda (_, _) ->
+      (* Being conservative here *)
+      true
   | Loop _ ->
       (* Should have been eliminated *)
       raise (Failure "Unreachable")
@@ -304,14 +321,26 @@ let destruct_apps (e : texpression) : texpression * texpression list =
 
 (** Make an [App (app, arg)] expression *)
 let mk_app (app : texpression) (arg : texpression) : texpression =
+  let raise_or_return msg =
+    if !Config.fail_hard then raise (Failure msg)
+    else
+      let e = App (app, arg) in
+      (* Dummy type - TODO: introduce an error type *)
+      let ty = app.ty in
+      { e; ty }
+  in
   match app.ty with
   | TArrow (ty0, ty1) ->
       (* Sanity check *)
-      assert (ty0 = arg.ty);
-      let e = App (app, arg) in
-      let ty = ty1 in
-      { e; ty }
-  | _ -> raise (Failure "Expected an arrow type")
+      if
+        (* TODO: we need to normalize the types *)
+        !Config.type_check_pure_code && ty0 <> arg.ty
+      then raise_or_return "App: wrong input type"
+      else
+        let e = App (app, arg) in
+        let ty = ty1 in
+        { e; ty }
+  | _ -> raise_or_return "Expected an arrow type"
 
 (** The reverse of {!destruct_apps} *)
 let mk_apps (app : texpression) (args : texpression list) : texpression =
@@ -355,18 +384,6 @@ let opt_destruct_tuple (ty : ty) : ty list option =
       assert (generics.trait_refs = []);
       Some generics.types
   | _ -> None
-
-let mk_abs (x : typed_pattern) (e : texpression) : texpression =
-  let ty = TArrow (x.ty, e.ty) in
-  let e = Abs (x, e) in
-  { e; ty }
-
-let rec destruct_abs_list (e : texpression) : typed_pattern list * texpression =
-  match e.e with
-  | Abs (x, e') ->
-      let xl, e'' = destruct_abs_list e' in
-      (x :: xl, e'')
-  | _ -> ([], e)
 
 let destruct_arrow (ty : ty) : ty * ty =
   match ty with
@@ -431,6 +448,7 @@ let mk_simpl_tuple_ty (tys : ty list) : ty =
 
 let mk_bool_ty : ty = TLiteral TBool
 let mk_unit_ty : ty = TAdt (TTuple, empty_generic_args)
+let ty_is_unit ty : bool = ty = mk_unit_ty
 
 let mk_unit_rvalue : texpression =
   let id = AdtCons { adt_id = TTuple; variant_id = None } in
@@ -698,3 +716,39 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
       let info = TypeDeclId.Map.find id ctx in
       info.is_tuple_struct
   | TAssumed _ -> false
+
+let mk_lambda (x : typed_pattern) (e : texpression) : texpression =
+  let ty = TArrow (x.ty, e.ty) in
+  let e = Lambda (x, e) in
+  { e; ty }
+
+let mk_lambda_from_var (var : var) (mp : mplace option) (e : texpression) :
+    texpression =
+  let pat = PatVar (var, mp) in
+  let pat = { value = pat; ty = var.ty } in
+  mk_lambda pat e
+
+let mk_lambdas_from_vars (vars : var list) (mps : mplace option list)
+    (e : texpression) : texpression =
+  let vars = List.combine vars mps in
+  List.fold_right (fun (v, mp) e -> mk_lambda_from_var v mp e) vars e
+
+let rec destruct_lambdas (e : texpression) : typed_pattern list * texpression =
+  match e.e with
+  | Lambda (pat, e) ->
+      let pats, e = destruct_lambdas e in
+      (pat :: pats, e)
+  | _ -> ([], e)
+
+let opt_dest_tuple_texpression (e : texpression) : texpression list option =
+  let app, args = destruct_apps e in
+  match app.e with
+  | Qualif { id = AdtCons { adt_id = TTuple; variant_id = None }; generics = _ }
+    ->
+      Some args
+  | _ -> None
+
+let opt_dest_struct_pattern (pat : typed_pattern) : typed_pattern list option =
+  match pat.value with
+  | PatAdt { variant_id = None; field_values } -> Some field_values
+  | _ -> None

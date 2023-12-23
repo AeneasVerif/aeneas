@@ -8,29 +8,29 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module Bitwise.
 
-(** [bitwise::shift_u32]: forward function
+(** [bitwise::shift_u32]:
     Source: 'src/bitwise.rs', lines 3:0-3:31 *)
 Definition shift_u32 (a : u32) : result u32 :=
   t <- u32_shr a 16%usize; u32_shl t 16%usize
 .
 
-(** [bitwise::shift_i32]: forward function
+(** [bitwise::shift_i32]:
     Source: 'src/bitwise.rs', lines 10:0-10:31 *)
 Definition shift_i32 (a : i32) : result i32 :=
   t <- i32_shr a 16%isize; i32_shl t 16%isize
 .
 
-(** [bitwise::xor_u32]: forward function
+(** [bitwise::xor_u32]:
     Source: 'src/bitwise.rs', lines 17:0-17:37 *)
 Definition xor_u32 (a : u32) (b : u32) : result u32 :=
   Return (u32_xor a b).
 
-(** [bitwise::or_u32]: forward function
+(** [bitwise::or_u32]:
     Source: 'src/bitwise.rs', lines 21:0-21:36 *)
 Definition or_u32 (a : u32) (b : u32) : result u32 :=
   Return (u32_or a b).
 
-(** [bitwise::and_u32]: forward function
+(** [bitwise::and_u32]:
     Source: 'src/bitwise.rs', lines 25:0-25:37 *)
 Definition and_u32 (a : u32) (b : u32) : result u32 :=
   Return (u32_and a b).

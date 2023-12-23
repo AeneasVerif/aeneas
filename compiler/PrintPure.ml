@@ -103,10 +103,13 @@ let adt_field_names (env : fmt_env) =
   Print.Types.adt_field_names (fmt_env_to_llbc_fmt_env env)
 
 let option_to_string = Print.option_to_string
-let type_var_to_string = Print.Types.type_var_to_string
-let const_generic_var_to_string = Print.Types.const_generic_var_to_string
-let integer_type_to_string = Print.Values.integer_type_to_string
 let literal_type_to_string = Print.Values.literal_type_to_string
+let type_var_to_string (v : type_var) = "(" ^ v.name ^ ": Type)"
+
+let const_generic_var_to_string (v : const_generic_var) =
+  "(" ^ v.name ^ " : " ^ literal_type_to_string v.ty ^ ")"
+
+let integer_type_to_string = Print.Values.integer_type_to_string
 let scalar_value_to_string = Print.Values.scalar_value_to_string
 let literal_to_string = Print.Values.literal_to_string
 
@@ -203,13 +206,12 @@ and trait_instance_id_to_string (env : fmt_env) (inside : bool)
   | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
 
 let trait_clause_to_string (env : fmt_env) (clause : trait_clause) : string =
-  let clause_id = trait_clause_id_to_string env clause.clause_id in
   let trait_id = trait_decl_id_to_string env clause.trait_id in
   let generics = generic_args_to_strings env true clause.generics in
   let generics =
     if generics = [] then "" else " " ^ String.concat " " generics
   in
-  "[" ^ clause_id ^ "]: " ^ trait_id ^ generics
+  trait_id ^ generics
 
 let generic_params_to_strings (env : fmt_env) (generics : generic_params) :
     string list =
@@ -543,9 +545,9 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
       let app, args = destruct_apps e in
       (* Convert to string *)
       app_to_string env inside indent indent_incr app args
-  | Abs _ ->
-      let xl, e = destruct_abs_list e in
-      let e = abs_to_string env indent indent_incr xl e in
+  | Lambda _ ->
+      let xl, e = destruct_lambdas e in
+      let e = lambda_to_string env indent indent_incr xl e in
       if inside then "(" ^ e ^ ")" else e
   | Qualif _ ->
       (* Qualifier without arguments *)
@@ -609,35 +611,36 @@ and app_to_string (env : fmt_env) (inside : bool) (indent : string)
    * expression *)
   let app, generics =
     match app.e with
-    | Qualif qualif ->
+    | Qualif qualif -> (
         (* Qualifier case *)
-        (* Convert the qualifier identifier *)
-        let qualif_s =
-          match qualif.id with
-          | FunOrOp fun_id -> fun_or_op_id_to_string env fun_id
-          | Global global_id -> global_decl_id_to_string env global_id
-          | AdtCons adt_cons_id ->
-              let variant_s =
-                adt_variant_to_string env adt_cons_id.adt_id
-                  adt_cons_id.variant_id
-              in
-              ConstStrings.constructor_prefix ^ variant_s
-          | Proj { adt_id; field_id } ->
-              let adt_s = adt_variant_to_string env adt_id None in
-              let field_s = adt_field_to_string env adt_id field_id in
-              (* Adopting an F*-like syntax *)
-              ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s
-          | TraitConst (trait_ref, generics, const_name) ->
-              let trait_ref = trait_ref_to_string env true trait_ref in
-              let generics_s = generic_args_to_string env generics in
+        match qualif.id with
+        | FunOrOp fun_id ->
+            let generics = generic_args_to_strings env true qualif.generics in
+            let qualif_s = fun_or_op_id_to_string env fun_id in
+            (qualif_s, generics)
+        | Global global_id ->
+            let generics = generic_args_to_strings env true qualif.generics in
+            (global_decl_id_to_string env global_id, generics)
+        | AdtCons adt_cons_id ->
+            let variant_s =
+              adt_variant_to_string env adt_cons_id.adt_id
+                adt_cons_id.variant_id
+            in
+            (ConstStrings.constructor_prefix ^ variant_s, [])
+        | Proj { adt_id; field_id } ->
+            let adt_s = adt_variant_to_string env adt_id None in
+            let field_s = adt_field_to_string env adt_id field_id in
+            (* Adopting an F*-like syntax *)
+            (ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s, [])
+        | TraitConst (trait_ref, generics, const_name) ->
+            let trait_ref = trait_ref_to_string env true trait_ref in
+            let generics_s = generic_args_to_string env generics in
+            let qualif =
               if generics <> empty_generic_args then
                 "(" ^ trait_ref ^ generics_s ^ ")." ^ const_name
               else trait_ref ^ "." ^ const_name
-        in
-        (* Convert the type instantiation *)
-        let generics = generic_args_to_strings env true qualif.generics in
-        (* *)
-        (qualif_s, generics)
+            in
+            (qualif, []))
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in
@@ -660,7 +663,7 @@ and app_to_string (env : fmt_env) (inside : bool) (indent : string)
   (* Add parentheses *)
   if all_args <> [] && inside then "(" ^ e ^ ")" else e
 
-and abs_to_string (env : fmt_env) (indent : string) (indent_incr : string)
+and lambda_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (xl : typed_pattern list) (e : texpression) : string =
   let xl = List.map (typed_pattern_to_string env) xl in
   let e = texpression_to_string env false indent indent_incr e in
@@ -708,21 +711,14 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     ^ String.concat "; " (List.map (var_to_string env) loop.inputs)
     ^ "]"
   in
-  let back_output_tys =
-    let tys =
-      match loop.back_output_tys with
-      | None -> ""
-      | Some tys -> String.concat "; " (List.map (ty_to_string env false) tys)
-    in
-    "back_output_tys: [" ^ tys ^ "]"
-  in
+  let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
   let fun_end =
     texpression_to_string env false indent2 indent_incr loop.fun_end
   in
   let loop_body =
     texpression_to_string env false indent2 indent_incr loop.loop_body
   in
-  "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ back_output_tys ^ "\n"
+  "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n"
   ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n"
   ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n"
   ^ indent ^ "}"

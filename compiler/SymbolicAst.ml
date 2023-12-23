@@ -42,8 +42,16 @@ type call = {
           evaluated). We need it to compute the translated values for shared
           borrows (we need to perform lookups).
        *)
+  sg : fun_sig option;
+      (** The uninstantiated function signature, if this is not a unop/binop *)
+  regions_hierarchy : region_var_groups;
   abstractions : AbstractionId.id list;
+      (** The region abstractions introduced upon calling the function *)
   generics : generic_args;
+  trait_method_generics : (generic_args * trait_instance_id) option;
+      (** In case the call is to a trait method, we may need an additional type
+          parameter ([Self]) and the self trait clause to instantiate the
+          function signature. *)
   args : typed_value list;
   args_places : mplace option list;  (** Meta information *)
   dest : symbolic_value;

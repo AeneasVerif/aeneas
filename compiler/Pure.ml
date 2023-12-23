@@ -561,7 +561,7 @@ type fun_id_or_trait_method_ref =
 
 (** A function id for a non-assumed function *)
 type regular_fun_id =
-  fun_id_or_trait_method_ref * LoopId.id option * T.RegionGroupId.id option
+  fun_id_or_trait_method_ref * LoopId.id option * RegionGroupId.id option
 [@@deriving show, ord]
 
 (** A function identifier *)
@@ -684,7 +684,7 @@ type expression =
           field accesses with calls to projectors over fields (when there
           are clashes of field names, some provers like F* get pretty bad...)
        *)
-  | Abs of typed_pattern * texpression  (** Lambda abstraction: [fun x -> e] *)
+  | Lambda of typed_pattern * texpression  (** Lambda abstraction: [λ x => e] *)
   | Qualif of qualif  (** A top-level qualifier *)
   | Let of bool * typed_pattern * texpression * texpression
       (** Let binding.
@@ -754,9 +754,7 @@ and loop = {
   inputs : var list;
   inputs_lvs : typed_pattern list;
       (** The inputs seen as patterns. See {!fun_body}. *)
-  back_output_tys : ty list option;
-      (** The types of the given back values, if we ar esynthesizing a backward
-          function *)
+  output_ty : ty;  (** The output type of the loop *)
   loop_body : texpression;
 }
 
@@ -860,8 +858,8 @@ type fun_effect_info = {
           the set [{ forward function } U { backward functions }].
 
           We need this because of the option {!val:Config.backward_no_state_update}:
-          if it is [true], then in case of a backward function {!stateful} is [false],
-          but we might need to know whether the corresponding forward function
+          if it is [true], then in case of a backward function {!stateful} might be
+          [false], but we might need to know whether the corresponding forward function
           is stateful or not.
        *)
   stateful : bool;  (** [true] if the function is stateful (updates a state) *)
@@ -873,22 +871,108 @@ type fun_effect_info = {
 }
 [@@deriving show]
 
+type inputs_info = {
+  has_fuel : bool;
+  num_inputs_no_fuel_no_state : int;
+      (** The number of input types ignoring the fuel (if used)
+          and ignoring the state (if used) *)
+  num_inputs_with_fuel_no_state : int;
+      (** The number of input types, with the fuel (if used)
+          and ignoring the state (if used) *)
+  num_inputs_with_fuel_with_state : int;
+      (** The number of input types, with fuel and state (if used) *)
+}
+[@@deriving show]
+
 (** Meta information about a function signature *)
 type fun_sig_info = {
-  has_fuel : bool;
-  (* TODO: add [num_fwd_inputs_no_fuel_no_state] *)
-  num_fwd_inputs_with_fuel_no_state : int;
-      (** The number of input types for forward computation, with the fuel (if used)
-          and ignoring the state (if used) *)
-  num_fwd_inputs_with_fuel_with_state : int;
-      (** The number of input types for forward computation, with fuel and state (if used) *)
-  num_back_inputs_no_state : int option;
-      (** The number of additional inputs for the backward computation (if pertinent),
-          ignoring the state (if there is one) *)
-  num_back_inputs_with_state : int option;
-      (** The number of additional inputs for the backward computation (if pertinent),
-          with the state (if there is one) *)
+  fwd_info : inputs_info;
+      (** Information about the inputs of the forward function *)
   effect_info : fun_effect_info;
+  ignore_output : bool;
+      (** In case we merge the forward/backward functions: should we ignore
+          the output (happens for forward functions if the output type is
+          [unit] and there are non-filtered backward functions)?
+       *)
+}
+[@@deriving show]
+
+type back_sg_info = {
+  inputs : (string option * ty) list;
+      (** The additional inputs of the backward function *)
+  inputs_no_state : (string option * ty) list;
+  outputs : ty list;
+      (** The "decomposed" list of outputs.
+
+          The list contains all the types of
+          all the given back values (there is at most one type per forward
+          input argument).
+
+          Ex.:
+          {[
+            fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T;
+          ]}
+          Decomposed outputs:
+          - forward function:  [[T]]
+          - backward function: [[T; T]] (for "x" and "y")
+
+          Non-decomposed ouputs (if the function can fail, but is not stateful):
+          - [result T]
+          - [[result (T * T)]]
+       *)
+  output_names : string option list;
+      (** The optional names for the backward outputs.
+          We derive those from the names of the inputs of the original LLBC
+          function. *)
+  effect_info : fun_effect_info;
+  filter : bool;  (** Should we filter this backward function? *)
+}
+[@@deriving show]
+
+(** A *decomposed* function signature. *)
+type decomposed_fun_sig = {
+  generics : generic_params;
+      (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
+  preds : predicates;
+  fwd_inputs : ty list;
+      (** The types of the inputs of the forward function.
+
+          Note that those input types take include the [fuel] parameter,
+          if the function uses fuel for termination, and the [state] parameter,
+          if the function is stateful.
+
+          For instance, if we have the following Rust function:
+          {[
+            fn f(x : int);
+          ]}
+
+          If we translate it to a stateful function which uses fuel we get:
+          {[
+            val f : nat -> int -> state -> result (state * unit);
+          ]}
+
+          In particular, the list of input types is: [[nat; int; state]].
+       *)
+  fwd_output : ty;
+      (** The "pure" output type of the forward function.
+
+          Note that this type doesn't contain the "effect" of the function (i.e.,
+          we haven't added the [state] if it is a stateful function and haven't
+          wrapped the type in a [result]). Also, this output type is only about
+          the forward function (it doesn't contain the type of the closures we
+          return for the backward functions, in case we merge the forward and
+          backward functions).
+       *)
+  back_sg : back_sg_info RegionGroupId.Map.t;
+      (** Information about the backward functions *)
+  fwd_info : fun_sig_info;
+      (** Additional information about the forward function *)
 }
 [@@deriving show]
 
@@ -906,15 +990,15 @@ type fun_sig_info = {
       [in_ty0 -> ... -> in_tyn -> state -> back_in0 -> ... back_inm -> state ->
        result (state & (back_out0 & ... & back_outp))] (* state-error *)
 
-       Note that a stateful backward function may take two states as inputs: the
-       state received by the associated forward function, and the state at which
-       the backward is called. This leads to code of the following shape:
+      Note that a stateful backward function may take two states as inputs: the
+      state received by the associated forward function, and the state at which
+      the backward is called. This leads to code of the following shape:
 
-       {[
-         (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
-         ... // the state may be updated
-         (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
-       ]}
+      {[
+        (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
+        ... // the state may be updated
+        (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
+      ]}
 
     The function's type should be given by [mk_arrows sig.inputs sig.output].
     We provide additional meta-information with {!fun_sig.info}:
@@ -962,40 +1046,14 @@ type fun_sig = {
           be a tuple with a [state] if the function is stateful, and will be wrapped
           in a [result] if the function can fail.
        *)
-  doutputs : ty list;
-      (** The "decomposed" list of outputs.
-
-          In case of a forward function, the list has length = 1, for the
-          type of the returned value.
-
-          In case of backward function, the list contains all the types of
-          all the given back values (there is at most one type per forward
-          input argument).
-
-          Ex.:
-          {[
-            fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T;
-          ]}
-          Decomposed outputs:
-          - forward function:  [[T]]
-          - backward function: [[T; T]] (for "x" and "y")
-
-          Non-decomposed ouputs (if the function can fail, but is not stateful):
-          - [result T]
-          - [[result (T * T)]]
-       *)
-  info : fun_sig_info;  (** Additional information *)
+  fwd_info : fun_sig_info;
+      (** Additional information about the forward function. *)
+  back_effect_info : fun_effect_info RegionGroupId.Map.t;
 }
 [@@deriving show]
 
 (** An instantiated function signature. See {!fun_sig} *)
-type inst_fun_sig = {
-  inputs : ty list;
-  output : ty;
-  doutputs : ty list;
-  info : fun_sig_info;
-}
-[@@deriving show]
+type inst_fun_sig = { inputs : ty list; output : ty } [@@deriving show]
 
 type fun_body = {
   inputs : var list;
@@ -1020,7 +1078,7 @@ type fun_decl = {
        *)
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
-  back_id : T.RegionGroupId.id option;
+  back_id : RegionGroupId.id option;
   llbc_name : llbc_name;  (** The original LLBC name. *)
   name : string;
       (** We use the name only for printing purposes (for debugging):

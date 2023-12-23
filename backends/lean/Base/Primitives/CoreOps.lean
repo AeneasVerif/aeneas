@@ -16,8 +16,7 @@ structure Index (Self Idx : Type) where
 /- Trait declaration: [core::ops::index::IndexMut] -/
 structure IndexMut (Self Idx : Type) where
   indexInst : Index Self Idx
-  index_mut : Self → Idx → Result indexInst.Output
-  index_mut_back : Self → Idx → indexInst.Output → Result Self
+  index_mut : Self → Idx → Result (indexInst.Output × (indexInst.Output → Result Self))
 
 end index -- core.ops.index
 
@@ -29,8 +28,7 @@ structure Deref (Self : Type) where
 
 structure DerefMut (Self : Type) where
   derefInst : Deref Self
-  deref_mut : Self → Result derefInst.Target
-  deref_mut_back : Self → derefInst.Target → Result Self
+  deref_mut : Self → Result (derefInst.Target × (Self → Result Self))
 
 end deref -- core.ops.deref
 

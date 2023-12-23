@@ -61,31 +61,31 @@ with betree_Node_t :=
 .
 
 Definition betree_Internal_id (x : betree_Internal_t) :=
-  match x with | mkbetree_Internal_t x0 _ _ _ => x0 end
+  match x with | mkbetree_Internal_t x1 _ _ _ => x1 end
 .
 
-Notation "x1 .(betree_Internal_id)" := (betree_Internal_id x1) (at level 9).
+Notation "x2 .(betree_Internal_id)" := (betree_Internal_id x2) (at level 9).
 
 Definition betree_Internal_pivot (x : betree_Internal_t) :=
-  match x with | mkbetree_Internal_t _ x0 _ _ => x0 end
+  match x with | mkbetree_Internal_t _ x1 _ _ => x1 end
 .
 
-Notation "x1 .(betree_Internal_pivot)" := (betree_Internal_pivot x1)
+Notation "x2 .(betree_Internal_pivot)" := (betree_Internal_pivot x2)
   (at level 9)
 .
 
 Definition betree_Internal_left (x : betree_Internal_t) :=
-  match x with | mkbetree_Internal_t _ _ x0 _ => x0 end
+  match x with | mkbetree_Internal_t _ _ x1 _ => x1 end
 .
 
-Notation "x1 .(betree_Internal_left)" := (betree_Internal_left x1) (at level 9)
+Notation "x2 .(betree_Internal_left)" := (betree_Internal_left x2) (at level 9)
 .
 
 Definition betree_Internal_right (x : betree_Internal_t) :=
-  match x with | mkbetree_Internal_t _ _ _ x0 => x0 end
+  match x with | mkbetree_Internal_t _ _ _ x1 => x1 end
 .
 
-Notation "x1 .(betree_Internal_right)" := (betree_Internal_right x1)
+Notation "x2 .(betree_Internal_right)" := (betree_Internal_right x2)
   (at level 9)
 .
 

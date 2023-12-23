@@ -93,6 +93,21 @@ theorem Array.update_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Us
   . simp_all [length]; cases h <;> scalar_tac
   . simp_all
 
+def Array.index_mut_usize (α : Type u) (n : Usize) (v: Array α n) (i: Usize) :
+  Result (α × (α -> Result (Array α n))) := do
+  let x ← index_usize α n v i
+  ret (x, update_usize α n v i)
+
+@[pspec]
+theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
+  (hbound : i.val < v.length) :
+  ∃ x back, v.index_mut_usize α n i = ret (x, back) ∧
+  x = v.val.index i.val ∧
+  back = update_usize α n v i := by
+  simp only [index_mut_usize, Bind.bind, bind]
+  have ⟨ x, h ⟩ := index_usize_spec v i hbound
+  simp [h]
+
 def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
 instance (a : Type u) : Arith.HasIntProp (Slice a) where
@@ -149,13 +164,6 @@ theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Us
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
   simp [*]
 
--- This shouldn't be used
-def Slice.index_shared_back (α : Type u) (v: Slice α) (i: Usize) (_: α) : Result Unit :=
-  if i.val < List.length v.val then
-    .ret ()
-  else
-    .fail arrayOutOfBounds
-
 def Slice.update_usize (α : Type u) (v: Slice α) (i: Usize) (x: α) : Result (Slice α) :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
@@ -173,6 +181,21 @@ theorem Slice.update_usize_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   split
   . simp_all [length]; cases h <;> scalar_tac
   . simp_all
+
+def Slice.index_mut_usize (α : Type u) (v: Slice α) (i: Usize) :
+  Result (α × (α → Result (Slice α))) := do
+  let x ← Slice.index_usize α v i
+  ret (x, Slice.update_usize α v i)
+
+@[pspec]
+theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
+  (hbound : i.val < v.length) :
+  ∃ x back, v.index_mut_usize α i = ret (x, back) ∧
+  x = v.val.index i.val ∧
+  back = Slice.update_usize α v i := by
+  simp only [index_mut_usize, Bind.bind, bind]
+  have ⟨ x, h ⟩ := Slice.index_usize_spec v i hbound
+  simp [h]
 
 /- Array to slice/subslices -/
 
@@ -196,6 +219,18 @@ def Array.from_slice (α : Type u) (n : Usize) (_ : Array α n) (s : Slice α) :
 theorem Array.from_slice_spec {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.len = n.val) :
   ∃ na, from_slice α n a ns = ret na ∧ na.val = ns.val
   := by simp [from_slice, *]
+
+def Array.to_slice_mut (α : Type u) (n : Usize) (a : Array α n) :
+  Result (Slice α × (Slice α → Result (Array α n))) := do
+  let s ← Array.to_slice α n a
+  ret (s, Array.from_slice α n a)
+
+@[pspec]
+theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (v : Array α n) :
+  ∃ s back, to_slice_mut α n v = ret (s, back) ∧
+  v.val = s.val ∧
+  back = Array.from_slice α n v
+  := by simp [to_slice_mut, to_slice]
 
 def Array.subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
@@ -243,7 +278,7 @@ def Array.update_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range 
 -- but: some symbols like `+` are already overloaded to be notations for monadic
 -- operations/
 -- We should introduce special symbols for the monadic arithmetic operations
--- (the use will never write those symbols directly).
+-- (the user will never write those symbols directly).
 @[pspec]
 theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
   (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : s.length = r.end_.val - r.start.val) :
@@ -345,13 +380,11 @@ structure core.slice.index.SliceIndex (Self T : Type) where
   sealedInst : core.slice.index.private_slice_index.Sealed Self
   Output : Type
   get : Self → T → Result (Option Output)
-  get_mut : Self → T → Result (Option Output)
-  get_mut_back : Self → T → Option Output → Result T
+  get_mut : Self → T → Result (Option Output × (Option Output → Result T))
   get_unchecked : Self → ConstRawPtr T → Result (ConstRawPtr Output)
   get_unchecked_mut : Self → MutRawPtr T → Result (MutRawPtr Output)
   index : Self → T → Result Output
-  index_mut : Self → T → Result Output
-  index_mut_back : Self → T → Output → Result T
+  index_mut : Self → T → Result (Output × (Output → Result T))
 
 /- [core::slice::index::[T]::index]: forward function -/
 def core.slice.index.Slice.index
@@ -369,13 +402,7 @@ def core.slice.index.RangeUsize.get (T : Type) (i : Range Usize) (slice : Slice 
 
 /- [core::slice::index::Range::get_mut]: forward function -/
 def core.slice.index.RangeUsize.get_mut
-  (T : Type) : Range Usize → Slice T → Result (Option (Slice T)) :=
-  sorry -- TODO
-
-/- [core::slice::index::Range::get_mut]: backward function 0 -/
-def core.slice.index.RangeUsize.get_mut_back
-  (T : Type) :
-  Range Usize → Slice T → Option (Slice T) → Result (Slice T) :=
+  (T : Type) : Range Usize → Slice T → Result (Option (Slice T) × (Option (Slice T) → Result (Slice T))) :=
   sorry -- TODO
 
 /- [core::slice::index::Range::get_unchecked]: forward function -/
@@ -401,24 +428,13 @@ def core.slice.index.RangeUsize.index
 
 /- [core::slice::index::Range::index_mut]: forward function -/
 def core.slice.index.RangeUsize.index_mut
-  (T : Type) : Range Usize → Slice T → Result (Slice T) :=
-  sorry -- TODO
-
-/- [core::slice::index::Range::index_mut]: backward function 0 -/
-def core.slice.index.RangeUsize.index_mut_back
-  (T : Type) : Range Usize → Slice T → Slice T → Result (Slice T) :=
+  (T : Type) : Range Usize → Slice T → Result (Slice T × (Slice T → Result (Slice T))) :=
   sorry -- TODO
 
 /- [core::slice::index::[T]::index_mut]: forward function -/
 def core.slice.index.Slice.index_mut
   (T I : Type) (inst : core.slice.index.SliceIndex I (Slice T)) :
-  Slice T → I → Result inst.Output :=
-  sorry -- TODO
-
-/- [core::slice::index::[T]::index_mut]: backward function 0 -/
-def core.slice.index.Slice.index_mut_back
-  (T I : Type) (inst : core.slice.index.SliceIndex I (Slice T)) :
-  Slice T → I → inst.Output → Result (Slice T) :=
+  Slice T → I → Result (inst.Output × (inst.Output → Result (Slice T))) :=
   sorry -- TODO
 
 /- [core::array::[T; N]::index]: forward function -/
@@ -430,13 +446,8 @@ def core.array.Array.index
 /- [core::array::[T; N]::index_mut]: forward function -/
 def core.array.Array.index_mut
   (T I : Type) (N : Usize) (inst : core.ops.index.IndexMut (Slice T) I)
-  (a : Array T N) (i : I) : Result inst.indexInst.Output :=
-  sorry -- TODO
-
-/- [core::array::[T; N]::index_mut]: backward function 0 -/
-def core.array.Array.index_mut_back
-  (T I : Type) (N : Usize) (inst : core.ops.index.IndexMut (Slice T) I)
-  (a : Array T N) (i : I) (x : inst.indexInst.Output) : Result (Array T N) :=
+  (a : Array T N) (i : I) :
+  Result (inst.indexInst.Output × (inst.indexInst.Output → Result (Array T N))) :=
   sorry -- TODO
 
 /- Trait implementation: [core::slice::index::private_slice_index::Range] -/
@@ -450,12 +461,10 @@ def core.slice.index.SliceIndexRangeUsizeSliceTInst (T : Type) :
   Output := Slice T
   get := core.slice.index.RangeUsize.get T
   get_mut := core.slice.index.RangeUsize.get_mut T
-  get_mut_back := core.slice.index.RangeUsize.get_mut_back T
   get_unchecked := core.slice.index.RangeUsize.get_unchecked T
   get_unchecked_mut := core.slice.index.RangeUsize.get_unchecked_mut T
   index := core.slice.index.RangeUsize.index T
   index_mut := core.slice.index.RangeUsize.index_mut T
-  index_mut_back := core.slice.index.RangeUsize.index_mut_back T
 }
 
 /- Trait implementation: [core::slice::index::[T]] -/
@@ -472,7 +481,6 @@ def core.ops.index.IndexMutSliceTIInst (T I : Type)
   core.ops.index.IndexMut (Slice T) I := {
   indexInst := core.ops.index.IndexSliceTIInst T I inst
   index_mut := core.slice.index.Slice.index_mut T I inst
-  index_mut_back := core.slice.index.Slice.index_mut_back T I inst
 }
 
 /- Trait implementation: [core::array::[T; N]] -/
@@ -489,7 +497,6 @@ def core.ops.index.IndexMutArrayIInst (T I : Type) (N : Usize)
   core.ops.index.IndexMut (Array T N) I := {
   indexInst := core.ops.index.IndexArrayIInst T I N inst.indexInst
   index_mut := core.array.Array.index_mut T I N inst
-  index_mut_back := core.array.Array.index_mut_back T I N inst
 }
 
 /- [core::slice::index::usize::get]: forward function -/
@@ -499,12 +506,7 @@ def core.slice.index.Usize.get
 
 /- [core::slice::index::usize::get_mut]: forward function -/
 def core.slice.index.Usize.get_mut
-  (T : Type) : Usize → Slice T → Result (Option T) :=
-  sorry -- TODO
-
-/- [core::slice::index::usize::get_mut]: backward function 0 -/
-def core.slice.index.Usize.get_mut_back
-  (T : Type) : Usize → Slice T → Option T → Result (Slice T) :=
+  (T : Type) : Usize → Slice T → Result (Option T × (Option T → Result (Slice T))) :=
   sorry -- TODO
 
 /- [core::slice::index::usize::get_unchecked]: forward function -/
@@ -522,12 +524,8 @@ def core.slice.index.Usize.index (T : Type) : Usize → Slice T → Result T :=
   sorry -- TODO
 
 /- [core::slice::index::usize::index_mut]: forward function -/
-def core.slice.index.Usize.index_mut (T : Type) : Usize → Slice T → Result T :=
-  sorry -- TODO
-
-/- [core::slice::index::usize::index_mut]: backward function 0 -/
-def core.slice.index.Usize.index_mut_back
-  (T : Type) : Usize → Slice T → T → Result (Slice T) :=
+def core.slice.index.Usize.index_mut (T : Type) :
+  Usize → Slice T → Result (T × (T → Result (Slice T))) :=
   sorry -- TODO
 
 /- Trait implementation: [core::slice::index::private_slice_index::usize] -/
@@ -541,12 +539,10 @@ def core.slice.index.SliceIndexUsizeSliceTInst (T : Type) :
   Output := T
   get := core.slice.index.Usize.get T
   get_mut := core.slice.index.Usize.get_mut T
-  get_mut_back := core.slice.index.Usize.get_mut_back T
   get_unchecked := core.slice.index.Usize.get_unchecked T
   get_unchecked_mut := core.slice.index.Usize.get_unchecked_mut T
   index := core.slice.index.Usize.index T
   index_mut := core.slice.index.Usize.index_mut T
-  index_mut_back := core.slice.index.Usize.index_mut_back T
 }
 
 end Primitives

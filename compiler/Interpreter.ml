@@ -195,7 +195,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
   in
   let ctx =
-    initialize_eval_context ctx region_groups sg.generics.types
+    initialize_eval_ctx ctx region_groups sg.generics.types
       sg.generics.const_generics
   in
   (* Instantiate the signature. This updates the context because we compute
@@ -277,7 +277,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
   let regions_hierarchy =
-    FunIdMap.find (FRegular fdef.def_id) ctx.fun_context.regions_hierarchies
+    FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
   let _, ret_inst_sg =
     symbolic_instantiate_fun_sig ctx fdef.signature regions_hierarchy fdef.kind
@@ -466,7 +466,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
 
   let regions_hierarchy =
-    FunIdMap.find (FRegular fdef.def_id) ctx.fun_context.regions_hierarchies
+    FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
 
   (* Create the continuation to finish the evaluation *)
@@ -615,7 +615,7 @@ module Test = struct
     assert (body.arg_count = 0);
 
     (* Create the evaluation context *)
-    let ctx = initialize_eval_context decls_ctx [] [] [] in
+    let ctx = initialize_eval_ctx decls_ctx [] [] [] in
 
     (* Insert the (uninitialized) local variables *)
     let ctx = ctx_push_uninitialized_vars ctx body.locals in

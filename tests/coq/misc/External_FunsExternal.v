@@ -10,22 +10,10 @@ Require Export External_Types.
 Include External_Types.
 Module External_FunsExternal.
 
-(** [core::mem::swap]: forward function
+(** [core::mem::swap]:
     Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 *)
-Axiom core_mem_swap :
-  forall(T : Type), T -> T -> state -> result (state * unit)
-.
-
-(** [core::mem::swap]: backward function 0
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 *)
-Axiom core_mem_swap_back0 :
-  forall(T : Type), T -> T -> state -> state -> result (state * T)
-.
-
-(** [core::mem::swap]: backward function 1
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 *)
-Axiom core_mem_swap_back1 :
-  forall(T : Type), T -> T -> state -> state -> result (state * T)
+Definition core_mem_swap (T : Type) (x : T) (y : T) (s : state) :=
+  Return (s, (y, x))
 .
 
 (** [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]: forward function

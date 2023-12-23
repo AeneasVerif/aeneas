@@ -11,28 +11,25 @@ inductive List (T : Type) :=
 | Cons : T → List T → List T
 | Nil : List T
 
-/- [polonius_list::get_list_at_x]: forward function
+/- [polonius_list::get_list_at_x]:
    Source: 'src/polonius_list.rs', lines 13:0-13:76 -/
-divergent def get_list_at_x (ls : List U32) (x : U32) : Result (List U32) :=
+divergent def get_list_at_x
+  (ls : List U32) (x : U32) :
+  Result ((List U32) × (List U32 → Result (List U32)))
+  :=
   match ls with
   | List.Cons hd tl =>
     if hd = x
-    then Result.ret (List.Cons hd tl)
-    else get_list_at_x tl x
-  | List.Nil => Result.ret List.Nil
-
-/- [polonius_list::get_list_at_x]: backward function 0
-   Source: 'src/polonius_list.rs', lines 13:0-13:76 -/
-divergent def get_list_at_x_back
-  (ls : List U32) (x : U32) (ret : List U32) : Result (List U32) :=
-  match ls with
-  | List.Cons hd tl =>
-    if hd = x
-    then Result.ret ret
+    then Result.ret (List.Cons hd tl, Result.ret)
     else
       do
-        let tl0 ← get_list_at_x_back tl x ret
-        Result.ret (List.Cons hd tl0)
-  | List.Nil => Result.ret ret
+      let (l, get_list_at_x_back) ← get_list_at_x tl x
+      let back_'a :=
+        fun ret =>
+          do
+          let tl1 ← get_list_at_x_back ret
+          Result.ret (List.Cons hd tl1)
+      Result.ret (l, back_'a)
+  | List.Nil => Result.ret (List.Nil, Result.ret)
 
 end polonius_list

@@ -326,8 +326,8 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : LoopId.id) (ctx : eval_ctx)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
       let _, ty1, _ = ty_as_ref ty1 in
-      assert (not (ty_has_borrows ctx.type_context.type_infos ty0));
-      assert (not (ty_has_borrows ctx.type_context.type_infos ty1))
+      assert (not (ty_has_borrows ctx.type_ctx.type_infos ty0));
+      assert (not (ty_has_borrows ctx.type_ctx.type_infos ty1))
     in
 
     (* Same remarks as for [merge_amut_borrows] *)
@@ -543,11 +543,11 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
     (* Construct the joined context - of course, the type, fun, etc. contexts
      * should be the same in the two contexts *)
     let {
-      type_context;
-      fun_context;
-      global_context;
-      trait_decls_context;
-      trait_impls_context;
+      type_ctx;
+      fun_ctx;
+      global_ctx;
+      trait_decls_ctx;
+      trait_impls_ctx;
       region_groups;
       type_vars;
       const_generic_vars;
@@ -559,11 +559,11 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
       ctx0
     in
     let {
-      type_context = _;
-      fun_context = _;
-      global_context = _;
-      trait_decls_context = _;
-      trait_impls_context = _;
+      type_ctx = _;
+      fun_ctx = _;
+      global_ctx = _;
+      trait_decls_ctx = _;
+      trait_impls_ctx = _;
       region_groups = _;
       type_vars = _;
       const_generic_vars = _;
@@ -577,11 +577,11 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
     let ended_regions = RegionId.Set.union ended_regions0 ended_regions1 in
     Ok
       {
-        type_context;
-        fun_context;
-        global_context;
-        trait_decls_context;
-        trait_impls_context;
+        type_ctx;
+        fun_ctx;
+        global_ctx;
+        trait_decls_ctx;
+        trait_impls_ctx;
         region_groups;
         type_vars;
         const_generic_vars;
@@ -621,7 +621,7 @@ let destructure_new_abs (loop_id : LoopId.id)
     contexts we join don't have non-fixed abstractions with the same ids.
   *)
 let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
-  let ids, _ = compute_context_ids ctx in
+  let ids, _ = compute_ctx_ids ctx in
   let abs_to_refresh = AbstractionId.Set.diff ids.aids old_abs in
   let aids_subst =
     List.map

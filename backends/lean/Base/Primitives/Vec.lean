@@ -122,6 +122,26 @@ theorem Vec.update_usize_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   . simp_all [length]; cases h <;> scalar_tac
   . simp_all
 
+def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
+  Result (α × (α → Result (Vec α))) :=
+  match Vec.index_usize v i with
+  | ret x =>
+    ret (x, Vec.update_usize v i)
+  | fail e => fail e
+  | div => div
+
+@[pspec]
+theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+  (hbound : i.val < v.length) :
+  ∃ x back, v.index_mut_usize i = ret (x, back) ∧
+  x = v.val.index i.val ∧
+  -- Backward function
+  back = v.update_usize i
+  := by
+  simp only [index_mut_usize]
+  have ⟨ x, h ⟩ := index_usize_spec v i hbound
+  simp [h]
+
 /- [alloc::vec::Vec::index]: forward function -/
 def Vec.index (T I : Type) (inst : core.slice.index.SliceIndex I (Slice T))
   (self : Vec T) (i : I) : Result inst.Output :=
@@ -129,13 +149,8 @@ def Vec.index (T I : Type) (inst : core.slice.index.SliceIndex I (Slice T))
 
 /- [alloc::vec::Vec::index_mut]: forward function -/
 def Vec.index_mut (T I : Type) (inst : core.slice.index.SliceIndex I (Slice T))
-  (self : Vec T) (i : I) : Result inst.Output :=
-  sorry -- TODO
-
-/- [alloc::vec::Vec::index_mut]: backward function 0 -/
-def Vec.index_mut_back
-  (T I : Type) (inst : core.slice.index.SliceIndex I (Slice T))
-  (self : Vec T) (i : I) (x : inst.Output) : Result (alloc.vec.Vec T) :=
+  (self : Vec T) (i : I) :
+  Result (inst.Output × (inst.Output → Result (Vec T))) :=
   sorry -- TODO
 
 /- Trait implementation: [alloc::vec::Vec] -/
@@ -152,7 +167,6 @@ def Vec.coreopsindexIndexMutInst (T I : Type)
   core.ops.index.IndexMut (alloc.vec.Vec T) I := {
   indexInst := Vec.coreopsindexIndexInst T I inst
   index_mut := Vec.index_mut T I inst
-  index_mut_back := Vec.index_mut_back T I inst
 }
 
 @[simp]
@@ -164,13 +178,7 @@ theorem Vec.index_slice_index {α : Type} (v : Vec α) (i : Usize) :
 @[simp]
 theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
   Vec.index_mut α Usize (core.slice.index.SliceIndexUsizeSliceTInst α) v i =
-  Vec.index_usize v i :=
-  sorry
-
-@[simp]
-theorem Vec.index_mut_back_slice_index {α : Type} (v : Vec α) (i : Usize) (x : α) :
-  Vec.index_mut_back α Usize (core.slice.index.SliceIndexUsizeSliceTInst α) v i x =
-  Vec.update_usize v i x :=
+  index_mut_usize v i :=
   sorry
 
 end alloc.vec

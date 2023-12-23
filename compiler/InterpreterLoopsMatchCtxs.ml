@@ -658,7 +658,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     else (
       (* The caller should have checked that the symbolic values don't contain
          borrows *)
-      assert (not (ty_has_borrows S.ctx.type_context.type_infos sv0.sv_ty));
+      assert (not (ty_has_borrows S.ctx.type_ctx.type_infos sv0.sv_ty));
       (* We simply introduce a fresh symbolic value *)
       mk_fresh_symbolic_value sv0.sv_ty)
 
@@ -669,7 +669,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
        - there are no borrows in the "regular" value
        If there are loans in the regular value, raise an exception.
     *)
-    assert (not (ty_has_borrows S.ctx.type_context.type_infos sv.sv_ty));
+    assert (not (ty_has_borrows S.ctx.type_ctx.type_infos sv.sv_ty));
     assert (not (value_has_borrows S.ctx v.value));
     let value_is_left = not left in
     (match InterpreterBorrowsCore.get_first_loan_in_value v with

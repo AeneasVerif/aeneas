@@ -409,11 +409,11 @@ module Contexts = struct
     }
 
   let eval_ctx_to_fmt_env (ctx : eval_ctx) : fmt_env =
-    let type_decls = ctx.type_context.type_decls in
-    let fun_decls = ctx.fun_context.fun_decls in
-    let global_decls = ctx.global_context.global_decls in
-    let trait_decls = ctx.trait_decls_context.trait_decls in
-    let trait_impls = ctx.trait_impls_context.trait_impls in
+    let type_decls = ctx.type_ctx.type_decls in
+    let fun_decls = ctx.fun_ctx.fun_decls in
+    let global_decls = ctx.global_ctx.global_decls in
+    let trait_decls = ctx.trait_decls_ctx.trait_decls in
+    let trait_impls = ctx.trait_impls_ctx.trait_impls in
     (* Below: it is always safe to omit fields - if an id can't be found at
        printing time, we print the id (in raw form) instead of the name it
        designates. *)

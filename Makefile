@@ -70,9 +70,11 @@ build-bin-dir: build-bin build-lib
 	mkdir -p bin
 	cp -f compiler/_build/default/main.exe bin/aeneas
 	cp -f compiler/_build/default/main.exe bin/aeneas.cmxs
-	mkdir -p bin/backends/fstar
+	mkdir -p bin/backends/fstar/split
+	mkdir -p bin/backends/fstar/merge
 	mkdir -p bin/backends/coq
-	cp -rf backends/fstar/*.fst* bin/backends/fstar/
+	cp -rf backends/fstar/split/*.fst* bin/backends/fstar/split/
+	cp -rf backends/fstar/merge/*.fst* bin/backends/fstar/merge/
 	cp -rf backends/coq/*.v bin/backends/coq/
 
 .PHONY: doc
@@ -254,14 +256,29 @@ testp-%: gen-llbcp-% tfstarp-% tcoqp-% tleanp-% thol4p-%
 .PHONY: tfstar-%
 tfstar-%: OPTIONS += -backend fstar
 tfstar-%: BACKEND_SUBDIR := fstar
-tfstar-%:
+tfstar-%: tsplit-fstar-%
 	$(AENEAS_CMD)
 
 # "p" stands for "Polonius"
 .PHONY: tfstarp-%
 tfstarp-%: OPTIONS += -backend fstar
 tfstarp-%: BACKEND_SUBDIR := fstar
-tfstarp-%:
+tfstarp-%: tsplit-fstarp-%
+	$(AENEAS_CMD)
+
+# Test where we split the forward/backward functions
+.PHONY: tsplit-fstar-%
+tsplit-fstar-%: OPTIONS += -backend fstar -split-fwd-back
+tsplit-fstar-%: BACKEND_SUBDIR := fstar-split
+tsplit-fstar-%:
+	$(AENEAS_CMD)
+
+# Test where we split the forward/backward functions
+# "p" stands for "Polonius"
+.PHONY: tsplit-fstarp-%
+tsplit-fstarp-%: OPTIONS += -backend fstar -split-fwd-back
+tsplit-fstarp-%: BACKEND_SUBDIR := fstar-split
+tsplit-fstarp-%:
 	$(AENEAS_CMD)
 
 .PHONY: tcoq-%
@@ -313,7 +330,8 @@ thol4p-%:
 
 # Nix - TODO: add the lean tests
 .PHONY: nix
-nix: nix-aeneas-tests nix-aeneas-verify-fstar nix-aeneas-verify-coq nix-aeneas-verify-hol4
+nix:
+	nix build && nix flake check
 
 .PHONY: nix-aeneas-tests
 nix-aeneas-tests:
@@ -322,6 +340,10 @@ nix-aeneas-tests:
 .PHONY: nix-aeneas-verify-fstar
 nix-aeneas-verify-fstar:
 	nix build .#checks.x86_64-linux.aeneas-verify-fstar --show-trace -L
+
+.PHONY: nix-aeneas-verify-fstar-split
+nix-aeneas-verify-fstar-split:
+	nix build .#checks.x86_64-linux.aeneas-verify-fstar-split --show-trace -L
 
 .PHONY: nix-aeneas-verify-coq
 nix-aeneas-verify-coq:

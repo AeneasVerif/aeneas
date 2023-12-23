@@ -20,7 +20,7 @@ def x1_c : U32 := eval_global x1_body (by simp)
 def x2_body : Result U32 := Result.ret 3#u32
 def x2_c : U32 := eval_global x2_body (by simp)
 
-/- [constants::incr]: forward function
+/- [constants::incr]:
    Source: 'src/constants.rs', lines 17:0-17:32 -/
 def incr (n : U32) : Result U32 :=
   n + 1#u32
@@ -30,7 +30,7 @@ def incr (n : U32) : Result U32 :=
 def x3_body : Result U32 := incr 32#u32
 def x3_c : U32 := eval_global x3_body (by simp)
 
-/- [constants::mk_pair0]: forward function
+/- [constants::mk_pair0]:
    Source: 'src/constants.rs', lines 23:0-23:51 -/
 def mk_pair0 (x : U32) (y : U32) : Result (U32 × U32) :=
   Result.ret (x, y)
@@ -41,7 +41,7 @@ structure Pair (T1 T2 : Type) where
   x : T1
   y : T2
 
-/- [constants::mk_pair1]: forward function
+/- [constants::mk_pair1]:
    Source: 'src/constants.rs', lines 27:0-27:55 -/
 def mk_pair1 (x : U32) (y : U32) : Result (Pair U32 U32) :=
   Result.ret { x := x, y := y }
@@ -71,7 +71,7 @@ def p3_c : Pair U32 U32 := eval_global p3_body (by simp)
 structure Wrap (T : Type) where
   value : T
 
-/- [constants::{constants::Wrap<T>}::new]: forward function
+/- [constants::{constants::Wrap<T>}::new]:
    Source: 'src/constants.rs', lines 54:4-54:41 -/
 def Wrap.new (T : Type) (value : T) : Result (Wrap T) :=
   Result.ret { value := value }
@@ -81,7 +81,7 @@ def Wrap.new (T : Type) (value : T) : Result (Wrap T) :=
 def y_body : Result (Wrap I32) := Wrap.new I32 2#i32
 def y_c : Wrap I32 := eval_global y_body (by simp)
 
-/- [constants::unwrap_y]: forward function
+/- [constants::unwrap_y]:
    Source: 'src/constants.rs', lines 43:0-43:30 -/
 def unwrap_y : Result I32 :=
   Result.ret y_c.value
@@ -96,12 +96,12 @@ def yval_c : I32 := eval_global yval_body (by simp)
 def get_z1_z1_body : Result I32 := Result.ret 3#i32
 def get_z1_z1_c : I32 := eval_global get_z1_z1_body (by simp)
 
-/- [constants::get_z1]: forward function
+/- [constants::get_z1]:
    Source: 'src/constants.rs', lines 61:0-61:28 -/
 def get_z1 : Result I32 :=
   Result.ret get_z1_z1_c
 
-/- [constants::add]: forward function
+/- [constants::add]:
    Source: 'src/constants.rs', lines 66:0-66:39 -/
 def add (a : I32) (b : I32) : Result I32 :=
   a + b
@@ -121,13 +121,13 @@ def q2_c : I32 := eval_global q2_body (by simp)
 def q3_body : Result I32 := add q2_c 3#i32
 def q3_c : I32 := eval_global q3_body (by simp)
 
-/- [constants::get_z2]: forward function
+/- [constants::get_z2]:
    Source: 'src/constants.rs', lines 70:0-70:28 -/
 def get_z2 : Result I32 :=
   do
-    let i ← get_z1
-    let i0 ← add i q3_c
-    add q1_c i0
+  let i ← get_z1
+  let i1 ← add i q3_c
+  add q1_c i1
 
 /- [constants::S1]
    Source: 'src/constants.rs', lines 80:0-80:18 -/

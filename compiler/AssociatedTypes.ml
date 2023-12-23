@@ -493,11 +493,11 @@ let norm_ctx_normalize_trait_type_constraint (ctx : norm_ctx)
 let mk_norm_ctx (ctx : eval_ctx) : norm_ctx =
   {
     norm_trait_types = ctx.norm_trait_types;
-    type_decls = ctx.type_context.type_decls;
-    fun_decls = ctx.fun_context.fun_decls;
-    global_decls = ctx.global_context.global_decls;
-    trait_decls = ctx.trait_decls_context.trait_decls;
-    trait_impls = ctx.trait_impls_context.trait_impls;
+    type_decls = ctx.type_ctx.type_decls;
+    fun_decls = ctx.fun_ctx.fun_decls;
+    global_decls = ctx.global_ctx.global_decls;
+    trait_decls = ctx.trait_decls_ctx.trait_decls;
+    trait_impls = ctx.trait_impls_ctx.trait_impls;
     type_vars = ctx.type_vars;
     const_generic_vars = ctx.const_generic_vars;
   }

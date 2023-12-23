@@ -11,6 +11,10 @@ let fun_decl_to_string (ctx : trans_ctx) (def : Pure.fun_decl) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_decl_to_string fmt def
 
+let fun_sig_to_string (ctx : trans_ctx) (sg : Pure.fun_sig) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.fun_sig_to_string fmt sg
+
 (** Small utility.
 
     We sometimes have to insert new fresh variables in a function body, in which
@@ -385,17 +389,17 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           let ctx, arg = update_texpression arg ctx in
           let e = App (app, arg) in
           (ctx, e)
-      | Abs (x, e) -> update_abs x e ctx
       | Qualif _ -> (* nothing to do *) (ctx, e.e)
       | Let (monadic, lb, re, e) -> update_let monadic lb re e ctx
       | Switch (scrut, body) -> update_switch_body scrut body ctx
       | Loop loop -> update_loop loop ctx
       | StructUpdate supd -> update_struct_update supd ctx
+      | Lambda (lb, e) -> update_lambda lb e ctx
       | Meta (meta, e) -> update_emeta meta e ctx
     in
     (ctx, { e; ty })
   (* *)
-  and update_abs (x : typed_pattern) (e : texpression) (ctx : pn_ctx) :
+  and update_lambda (x : typed_pattern) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
     (* We first add the left-constraint *)
     let ctx = add_left_constraint x ctx in
@@ -404,7 +408,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Update the abstracted value *)
     let x = update_typed_pattern ctx x in
     (* Put together *)
-    (ctx, Abs (x, e))
+    (ctx, Lambda (x, e))
   (* *)
   and update_let (monadic : bool) (lv : typed_pattern) (re : texpression)
       (e : texpression) (ctx : pn_ctx) : pn_ctx * expression =
@@ -455,7 +459,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       input_state;
       inputs;
       inputs_lvs;
-      back_output_tys;
+      output_ty;
       loop_body;
     } =
       loop
@@ -474,7 +478,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
         input_state;
         inputs;
         inputs_lvs;
-        back_output_tys;
+        output_ty;
         loop_body;
       }
     in
@@ -641,6 +645,135 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = { body with body = obj#visit_texpression () body.body } in
       { def with body = Some body }
 
+(** Simplify the let-bindings by performing the following rewritings:
+
+    Move inner let-bindings outside. This is especially useful to simplify
+    the backward expressions, when we merge the forward/backward functions.
+    Note that the rule is also applied with monadic let-bindings.
+    {[
+      let x :=
+        let y := ... in
+        e
+
+        ~~>
+
+      let y := ... in
+      let x := e
+    ]}
+
+    Simplify panics and returns:
+    {[
+      let x ← fail
+      ...
+        ~~>
+      fail
+
+      let x ← return y
+      ...
+        ~~>
+      let x := y
+      ...
+    ]}
+
+    Simplify tuples:
+    {[
+      let (y0, y1) := (x0, x1) in
+      ...
+        ~~>
+      let y0 = x0 in
+      let y1 = x1 in
+      ...
+    ]}
+
+    Simplify arrows:
+    {[
+      let f := fun x => g x in
+      ...
+        ~~>
+      let f := g in
+      ...
+    ]}
+ *)
+let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let obj =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_Let env monadic lv rv next =
+        match rv.e with
+        | Let (rmonadic, rlv, rrv, rnext) ->
+            (* Case 1: move the inner let outside then re-visit *)
+            let rnext1 = Let (monadic, lv, rnext, next) in
+            let rnext1 = { ty = next.ty; e = rnext1 } in
+            self#visit_Let env rmonadic rlv rrv rnext1
+        | App
+            ( {
+                e =
+                  Qualif
+                    {
+                      id =
+                        AdtCons
+                          {
+                            adt_id = TAssumed TResult;
+                            variant_id = Some variant_id;
+                          };
+                      generics = _;
+                    };
+                ty = _;
+              },
+              x ) ->
+            (* return/fail case *)
+            if variant_id = result_return_id then
+              (* Return case - note that the simplification we just perform
+                 might have unlocked the tuple simplification below *)
+              self#visit_Let env false lv x next
+            else if variant_id = result_fail_id then
+              (* Fail case *)
+              self#visit_expression env rv.e
+            else raise (Failure "Unexpected")
+        | App _ ->
+            (* This might be the tuple case *)
+            if not monadic then
+              match
+                (opt_dest_struct_pattern lv, opt_dest_tuple_texpression rv)
+              with
+              | Some pats, Some vals ->
+                  (* Tuple case *)
+                  let pat_vals = List.combine pats vals in
+                  let e =
+                    List.fold_right
+                      (fun (pat, v) next -> mk_let false pat v next)
+                      pat_vals next
+                  in
+                  super#visit_expression env e.e
+              | _ -> super#visit_Let env monadic lv rv next
+            else super#visit_Let env monadic lv rv next
+        | Lambda _ ->
+            if not monadic then
+              (* Arrow case *)
+              let pats, e = destruct_lambdas rv in
+              let g, args = destruct_apps e in
+              if List.length pats = List.length args then
+                (* Check if the arguments are exactly the lambdas *)
+                let check_pat_arg ((pat, arg) : typed_pattern * texpression) =
+                  match (pat.value, arg.e) with
+                  | PatVar (v, _), Var vid -> v.id = vid
+                  | _ -> false
+                in
+                if List.for_all check_pat_arg (List.combine pats args) then
+                  self#visit_Let env monadic lv g next
+                else super#visit_Let env monadic lv rv next
+              else super#visit_Let env monadic lv rv next
+            else super#visit_Let env monadic lv rv next
+        | _ -> super#visit_Let env monadic lv rv next
+    end
+  in
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body = { body with body = obj#visit_texpression () body.body } in
+      { def with body = Some body }
+
 (** Inline the useless variable (re-)assignments:
 
     A lot of intermediate variable assignments are introduced through the
@@ -667,8 +800,8 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     leave the let-bindings where they are, and eliminated them in a subsequent
     pass (if they are useless).
  *)
-let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
-    (inline_pure : bool) (def : fun_decl) : fun_decl =
+let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
+    ~(inline_const : bool) ~(inline_pure : bool) (def : fun_decl) : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -693,15 +826,31 @@ let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
               | _ -> false
             in
             (* And either:
-             * 2.1 the right-expression is a variable, a global or a const generic var *)
+               2.1 the right-expression is a variable, a global or a const generic var *)
             let var_or_global = is_var re || is_cvar re || is_global re in
             (* Or:
-             * 2.2 the right-expression is a constant value, an ADT value,
-             *     a projection or a primitive function call *and* the flag
-             *     [inline_pure] is set *)
+               2.2 the right-expression is a constant-value and we inline constant values,
+                   *or* it is a qualif with no arguments (we consider this as a const) *)
+            let const_re =
+              inline_const
+              &&
+              let is_const_adt =
+                let app, args = destruct_apps re in
+                if args = [] then
+                  match app.e with
+                  | Qualif _ -> true
+                  | StructUpdate upd -> upd.updates = []
+                  | _ -> false
+                else false
+              in
+              is_const re || is_const_adt
+            in
+            (* Or:
+               2.3 the right-expression is an ADT value, a projection or a
+                   primitive function call *and* the flag [inline_pure] is set *)
             let pure_re =
-              is_const re
-              ||
+              inline_pure
+              &&
               let app, _ = destruct_apps re in
               match app.e with
               | Qualif qualif -> (
@@ -716,7 +865,7 @@ let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
               | _ -> false
             in
             let filter =
-              filter_left && (var_or_global || (inline_pure && pure_re))
+              filter_left && (var_or_global || const_re || pure_re)
             in
 
             (* Update the rhs (we may perform substitutions inside, and it is
@@ -776,9 +925,11 @@ let inline_useless_var_reassignments (ctx : trans_ctx) (inline_named : bool)
       in
       { def with body = Some body }
 
-(** Given a forward or backward function call, is there, for every execution
+(** For the cases where we split the forward/backward functions.
+
+    Given a forward or backward function call, is there, for every execution
     path, a child backward function called later with exactly the same input
-    list prefix? We use this to filter useless function calls: if there are
+    list prefix. We use this to filter useless function calls: if there are
     such child calls, we can remove this one (in case its outputs are not
     used).
     We do this check because we can't simply remove function calls whose
@@ -890,12 +1041,12 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
                 let call_is_child = check_call func1 generics1 args1 in
                 if call_is_child then fun () -> true
                 else fun () -> self#visit_texpression env e ())
+        | Lambda (_, e) -> self#visit_texpression env e
         | App _ -> (
             fun () ->
               match opt_destruct_function_call e with
               | Some (func1, tys1, args1) -> check_call func1 tys1 args1
               | None -> false)
-        | Abs (_, e) -> self#visit_texpression env e
         | Qualif _ ->
             (* Note that this case includes functions without arguments *)
             fun () -> false
@@ -973,10 +1124,23 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
       method! visit_expression env e =
         match e with
         | Var _ | CVar _ | Const _ | App _ | Qualif _
-        | Switch (_, _)
         | Meta (_, _)
-        | StructUpdate _ | Abs _ ->
+        | StructUpdate _ | Lambda _ ->
             super#visit_expression env e
+        | Switch (scrut, switch) -> (
+            match switch with
+            | If (_, _) -> super#visit_expression env e
+            | Match branches ->
+                (* Simplify the branches *)
+                let simplify_branch (br : match_branch) =
+                  (* Compute the set of values used inside the branch *)
+                  let branch, used = self#visit_texpression env br.branch in
+                  (* Simplify the pattern *)
+                  let pat, _ = filter_typed_pattern (used ()) br.pat in
+                  { pat; branch }
+                in
+                super#visit_expression env
+                  (Switch (scrut, Match (List.map simplify_branch branches))))
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)
             let e, used = self#visit_texpression env e in
@@ -1008,17 +1172,21 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
                  * under some conditions. *)
                 match (filter_monadic_calls, opt_destruct_function_call re) with
                 | true, Some (Fun (FromLlbc (fid, lp_id, rg_id)), tys, args) ->
-                    (* We need to check if there is a child call - see
-                     * the comments for:
-                     * [expression_contains_child_call_in_all_paths] *)
-                    let has_child_call =
-                      expression_contains_child_call_in_all_paths ctx fid lp_id
-                        rg_id tys args e
-                    in
-                    if has_child_call then (* Filter *)
-                      (e.e, fun _ -> used)
-                    else (* No child call: don't filter *)
-                      dont_filter ()
+                    (* If we split the forward/backward functions.
+
+                       We need to check if there is a child call - see
+                       the comments for:
+                       [expression_contains_child_call_in_all_paths] *)
+                    if not !Config.return_back_funs then
+                      let has_child_call =
+                        expression_contains_child_call_in_all_paths ctx fid
+                          lp_id rg_id tys args e
+                      in
+                      if has_child_call then (* Filter *)
+                        (e.e, fun _ -> used)
+                      else (* No child call: don't filter *)
+                        dont_filter ()
+                    else dont_filter ()
                 | _ ->
                     (* Not an LLBC function call or not allowed to filter: we can't filter *)
                     dont_filter ()
@@ -1297,7 +1465,8 @@ let filter_if_backward_with_no_outputs (def : fun_decl) : fun_decl option =
     those function bodies into independent definitions while removing
     occurrences of the {!Pure.Loop} node.
  *)
-let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
+let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
+    fun_decl * fun_decl list =
   match def.body with
   | None -> (def, [])
   | Some body ->
@@ -1323,77 +1492,55 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
 
           method! visit_Loop env loop =
             let fun_sig = def.signature in
-            let fun_sig_info = fun_sig.info in
-            let fun_effect_info = fun_sig_info.effect_info in
+            let fwd_info = fun_sig.fwd_info in
+            let fwd_effect_info = fwd_info.effect_info in
+            let ignore_output = fwd_info.ignore_output in
 
             (* Generate the loop definition *)
-            let loop_effect_info =
-              {
-                stateful_group = fun_effect_info.stateful_group;
-                stateful = fun_effect_info.stateful;
-                can_fail = fun_effect_info.can_fail;
-                can_diverge = fun_effect_info.can_diverge;
-                is_rec = fun_effect_info.is_rec;
-              }
-            in
+            let loop_fwd_effect_info = fwd_effect_info in
 
-            let loop_sig_info =
+            let loop_fwd_sig_info : fun_sig_info =
               let fuel = if !Config.use_fuel then 1 else 0 in
               let num_inputs = List.length loop.inputs in
-              let num_fwd_inputs_with_fuel_no_state = fuel + num_inputs in
-              let fwd_state =
-                fun_sig_info.num_fwd_inputs_with_fuel_with_state
-                - fun_sig_info.num_fwd_inputs_with_fuel_no_state
+              let fwd_info : inputs_info =
+                let info = fwd_info.fwd_info in
+                let fwd_state =
+                  info.num_inputs_with_fuel_with_state
+                  - info.num_inputs_with_fuel_no_state
+                in
+                {
+                  has_fuel = !Config.use_fuel;
+                  num_inputs_no_fuel_no_state = num_inputs;
+                  num_inputs_with_fuel_no_state = num_inputs + fuel;
+                  num_inputs_with_fuel_with_state =
+                    num_inputs + fuel + fwd_state;
+                }
               in
-              let num_fwd_inputs_with_fuel_with_state =
-                num_fwd_inputs_with_fuel_no_state + fwd_state
-              in
-              {
-                has_fuel = !Config.use_fuel;
-                num_fwd_inputs_with_fuel_no_state;
-                num_fwd_inputs_with_fuel_with_state;
-                num_back_inputs_no_state = fun_sig_info.num_back_inputs_no_state;
-                num_back_inputs_with_state =
-                  fun_sig_info.num_back_inputs_with_state;
-                effect_info = loop_effect_info;
-              }
+
+              { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
             in
+            assert (fun_sig_info_is_wf loop_fwd_sig_info);
 
             let inputs_tys =
               let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
               let fwd_inputs = List.map (fun (v : var) -> v.ty) loop.inputs in
-              let state =
+              let info = fwd_info.fwd_info in
+              let fwd_state =
                 Collections.List.subslice fun_sig.inputs
-                  fun_sig_info.num_fwd_inputs_with_fuel_no_state
-                  fun_sig_info.num_fwd_inputs_with_fuel_with_state
+                  info.num_inputs_with_fuel_no_state
+                  info.num_inputs_with_fuel_with_state
               in
-              let _, back_inputs =
-                Collections.List.split_at fun_sig.inputs
-                  fun_sig_info.num_fwd_inputs_with_fuel_with_state
+              let back_inputs =
+                if !Config.return_back_funs then []
+                else
+                  snd
+                    (Collections.List.split_at fun_sig.inputs
+                       info.num_inputs_with_fuel_with_state)
               in
-              List.concat [ fuel; fwd_inputs; state; back_inputs ]
+              List.concat [ fuel; fwd_inputs; fwd_state; back_inputs ]
             in
 
-            let output, doutputs =
-              match loop.back_output_tys with
-              | None ->
-                  (* Forward function: the return type is the same as the
-                     parent function *)
-                  (fun_sig.output, fun_sig.doutputs)
-              | Some doutputs ->
-                  (* Backward function: custom return type *)
-                  let output = mk_simpl_tuple_ty doutputs in
-                  let output =
-                    if loop_effect_info.stateful then
-                      mk_simpl_tuple_ty [ mk_state_ty; output ]
-                    else output
-                  in
-                  let output =
-                    if loop_effect_info.can_fail then mk_result_ty output
-                    else output
-                  in
-                  (output, doutputs)
-            in
+            let output = loop.output_ty in
 
             let loop_sig =
               {
@@ -1402,8 +1549,8 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
                 preds = fun_sig.preds;
                 inputs = inputs_tys;
                 output;
-                doutputs;
-                info = loop_sig_info;
+                fwd_info = loop_fwd_sig_info;
+                back_effect_info = fun_sig.back_effect_info;
               }
             in
 
@@ -1420,7 +1567,8 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
               (* Introduce the forward input state *)
               let fwd_state_var, fwd_state_lvs =
                 assert (
-                  loop_effect_info.stateful = Option.is_some loop.input_state);
+                  loop_fwd_effect_info.stateful
+                  = Option.is_some loop.input_state);
                 match loop.input_state with
                 | None -> ([], [])
                 | Some input_state ->
@@ -1429,15 +1577,16 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
                     ([ state_var ], [ state_lvs ])
               in
 
-              (* Introduce the additional backward inputs *)
+              (* Introduce the additional backward inputs, if necessary *)
               let fun_body = Option.get def.body in
+              let info = fwd_info.fwd_info in
               let _, back_inputs =
                 Collections.List.split_at fun_body.inputs
-                  fun_sig_info.num_fwd_inputs_with_fuel_with_state
+                  info.num_inputs_with_fuel_with_state
               in
               let _, back_inputs_lvs =
                 Collections.List.split_at fun_body.inputs_lvs
-                  fun_sig_info.num_fwd_inputs_with_fuel_with_state
+                  info.num_inputs_with_fuel_with_state
               in
 
               let inputs =
@@ -1508,9 +1657,12 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
     altogether.
   *)
 let keep_forward (fwd : fun_and_loops) (backs : fun_and_loops list) : bool =
-  (* Note that at this point, the output types are no longer seen as tuples:
-   * they should be lists of length 1. *)
-  if
+  (* The question of filtering the forward functions arises only if we split
+     the forward/backward functions *)
+  if !Config.return_back_funs then true
+  else if
+    (* Note that at this point, the output types are no longer seen as tuples:
+     * they should be lists of length 1. *)
     !Config.filter_useless_functions
     && fwd.f.signature.output = mk_result_ty mk_unit_ty
     && backs <> []
@@ -1816,11 +1968,15 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   log#ldebug
     (lazy ("intro_struct_updates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
+  (* Simplify the let-bindings *)
+  let def = simplify_let_bindings ctx def in
+  log#ldebug
+    (lazy ("simplify_let_bindings:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
   (* Inline the useless variable reassignments *)
-  let inline_named_vars = true in
-  let inline_pure = true in
   let def =
-    inline_useless_var_reassignments ctx inline_named_vars inline_pure def
+    inline_useless_var_reassignments ctx ~inline_named:true ~inline_const:true
+      ~inline_pure:true def
   in
   log#ldebug
     (lazy
@@ -1866,6 +2022,23 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let def = simplify_aggregates ctx def in
   log#ldebug
     (lazy ("simplify_aggregates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Simplify the let-bindings - some simplifications may have been unlocked by
+     the pass above (for instance, the lambda simplification) *)
+  let def = simplify_let_bindings ctx def in
+  log#ldebug
+    (lazy
+      ("simplify_let_bindings (pass 2):\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Inline the useless vars again *)
+  let def =
+    inline_useless_var_reassignments ctx ~inline_named:true ~inline_const:true
+      ~inline_pure:false def
+  in
+  log#ldebug
+    (lazy
+      ("inline_useless_var_assignments (pass 2):\n\n"
+     ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Decompose the monadic let-bindings - used by Coq *)
   let def =
@@ -1916,67 +2089,6 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
   (* We are done *)
   def
-
-(** Apply all the micro-passes to a function.
-
-    As loops are initially directly integrated into the function definition,
-    {!apply_passes_to_def} extracts those loops definitions from the body;
-    it thus returns the pair: (function def, loop defs). See {!decompose_loops}
-    for more information.
-
-    Will return [None] if the function is a backward function with no outputs.
-
-    [ctx]: used only for printing.
- *)
-let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
-    fun_and_loops option =
-  (* Debug *)
-  log#ldebug
-    (lazy
-      ("PureMicroPasses.apply_passes_to_def: " ^ def.name ^ " ("
-      ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
-      ^ ")"));
-
-  log#ldebug (lazy ("original decl:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* First, find names for the variables which are unnamed *)
-  let def = compute_pretty_names def in
-  log#ldebug
-    (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* TODO: we might want to leverage more the assignment meta-data, for
-   * aggregates for instance. *)
-
-  (* TODO: reorder the branches of the matches/switches *)
-
-  (* The meta-information is now useless: remove it.
-   * Rk.: some passes below use the fact that we removed the meta-data
-   * (otherwise we would have to "unmeta" expressions before matching) *)
-  let def = remove_meta def in
-  log#ldebug (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Remove the backward functions with no outputs.
-   * Note that the calls to those functions should already have been removed,
-   * when translating from symbolic to pure. Here, we remove the definitions
-   * altogether, because they are now useless *)
-  let name = def.name ^ PrintPure.fun_suffix def.loop_id def.back_id in
-  let opt_def = filter_if_backward_with_no_outputs def in
-
-  match opt_def with
-  | None ->
-      log#ldebug (lazy ("filtered (backward with no outputs): " ^ name ^ "\n"));
-      None
-  | Some def ->
-      log#ldebug
-        (lazy ("not filtered (not backward with no outputs): " ^ name ^ "\n"));
-
-      (* Extract the loop definitions by removing the {!Loop} node *)
-      let def, loops = decompose_loops def in
-
-      (* Apply the remaining passes *)
-      let f = apply_end_passes_to_def ctx def in
-      let loops = List.map (apply_end_passes_to_def ctx) loops in
-      Some { f; loops }
 
 (** Small utility for {!filter_loop_inputs} *)
 let filter_prefix (keep : bool list) (ls : 'a list) : 'a list =
@@ -2058,7 +2170,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
     (* We only look at the forward inputs, without the state *)
     let inputs_prefix, _ =
       Collections.List.split_at body.inputs
-        decl.signature.info.num_fwd_inputs_with_fuel_no_state
+        decl.signature.fwd_info.fwd_info.num_inputs_with_fuel_no_state
     in
     let used = ref (List.map (fun v -> (var_get_id v, false)) inputs_prefix) in
     let inputs_prefix_length = List.length inputs_prefix in
@@ -2077,8 +2189,9 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
     in
 
     (* Set the fuel as used *)
-    let sg_info = decl.signature.info in
-    if sg_info.has_fuel then set_used (fst (Collections.List.nth inputs 0));
+    let sg_info = decl.signature.fwd_info in
+    if sg_info.fwd_info.has_fuel then
+      set_used (fst (Collections.List.nth inputs 0));
 
     let visitor =
       object (self : 'self)
@@ -2162,37 +2275,54 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
           let num_filtered =
             List.length (List.filter (fun b -> not b) used_info)
           in
-          let { generics; llbc_generics; preds; inputs; output; doutputs; info }
-              =
+          let {
+            generics;
+            llbc_generics;
+            preds;
+            inputs;
+            output;
+            fwd_info;
+            back_effect_info;
+          } =
             decl.signature
           in
+          let { fwd_info; effect_info; ignore_output } = fwd_info in
+
           let {
             has_fuel;
-            num_fwd_inputs_with_fuel_no_state;
-            num_fwd_inputs_with_fuel_with_state;
-            num_back_inputs_no_state;
-            num_back_inputs_with_state;
-            effect_info;
+            num_inputs_no_fuel_no_state;
+            num_inputs_with_fuel_no_state;
+            num_inputs_with_fuel_with_state;
           } =
-            info
+            fwd_info
           in
 
           let inputs = filter_prefix used_info inputs in
 
-          let info =
+          let fwd_info =
             {
               has_fuel;
-              num_fwd_inputs_with_fuel_no_state =
-                num_fwd_inputs_with_fuel_no_state - num_filtered;
-              num_fwd_inputs_with_fuel_with_state =
-                num_fwd_inputs_with_fuel_with_state - num_filtered;
-              num_back_inputs_no_state;
-              num_back_inputs_with_state;
-              effect_info;
+              num_inputs_no_fuel_no_state =
+                num_inputs_no_fuel_no_state - num_filtered;
+              num_inputs_with_fuel_no_state =
+                num_inputs_with_fuel_no_state - num_filtered;
+              num_inputs_with_fuel_with_state =
+                num_inputs_with_fuel_with_state - num_filtered;
             }
           in
+
+          let fwd_info = { fwd_info; effect_info; ignore_output } in
+          assert (fun_sig_info_is_wf fwd_info);
           let signature =
-            { generics; llbc_generics; preds; inputs; output; doutputs; info }
+            {
+              generics;
+              llbc_generics;
+              preds;
+              inputs;
+              output;
+              fwd_info;
+              back_effect_info;
+            }
           in
 
           { decl with signature }
@@ -2282,6 +2412,68 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
 
   (* Return *)
   transl
+
+(** Apply all the micro-passes to a function.
+
+    As loops are initially directly integrated into the function definition,
+    {!apply_passes_to_def} extracts those loops definitions from the body;
+    it thus returns the pair: (function def, loop defs). See {!decompose_loops}
+    for more information.
+
+    Will return [None] if the function is a backward function with no outputs.
+
+    [ctx]: used only for printing.
+ *)
+let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
+    fun_and_loops option =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("PureMicroPasses.apply_passes_to_def: " ^ def.name ^ " ("
+      ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
+      ^ ")"));
+
+  log#ldebug (lazy ("original decl:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* First, find names for the variables which are unnamed *)
+  let def = compute_pretty_names def in
+  log#ldebug
+    (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* TODO: we might want to leverage more the assignment meta-data, for
+   * aggregates for instance. *)
+
+  (* TODO: reorder the branches of the matches/switches *)
+
+  (* The meta-information is now useless: remove it.
+   * Rk.: some passes below use the fact that we removed the meta-data
+   * (otherwise we would have to "unmeta" expressions before matching) *)
+  let def = remove_meta def in
+  log#ldebug (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Remove the backward functions with no outputs.
+
+     Note that the *calls* to those functions should already have been removed,
+     when translating from symbolic to pure. Here, we remove the definitions
+     altogether, because they are now useless *)
+  let name = def.name ^ PrintPure.fun_suffix def.loop_id def.back_id in
+  let opt_def = filter_if_backward_with_no_outputs def in
+
+  match opt_def with
+  | None ->
+      log#ldebug (lazy ("filtered (backward with no outputs): " ^ name ^ "\n"));
+      None
+  | Some def ->
+      log#ldebug
+        (lazy ("not filtered (not backward with no outputs): " ^ name ^ "\n"));
+
+      (* Extract the loop definitions by removing the {!Loop} node *)
+      let def, loops = decompose_loops ctx def in
+
+      (* Apply the remaining passes *)
+      let f = apply_end_passes_to_def ctx def in
+      let loops = List.map (apply_end_passes_to_def ctx) loops in
+      Some { f; loops }
 
 (** Apply the micro-passes to a list of forward/backward translations.
 

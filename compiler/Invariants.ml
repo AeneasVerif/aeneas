@@ -768,7 +768,7 @@ let check_symbolic_values (ctx : eval_ctx) : unit =
     assert (info.env_count = 0 || info.aproj_borrows = []);
     (* A symbolic value containing borrows can't be duplicated (i.e., copied):
      * it must be expanded first *)
-    if ty_has_borrows ctx.type_context.type_infos info.ty then
+    if ty_has_borrows ctx.type_ctx.type_infos info.ty then
       assert (info.env_count <= 1);
     (* A duplicated symbolic value is necessarily primitively copyable *)
     assert (info.env_count <= 1 || ty_is_primitively_copyable info.ty);

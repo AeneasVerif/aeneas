@@ -300,7 +300,7 @@ let prepare_ashared_loans (loop_id : LoopId.id option) : cm_fun =
   let env = List.append fresh_absl env in
   let ctx = { ctx with env } in
 
-  let _, new_ctx_ids_map = compute_context_ids ctx in
+  let _, new_ctx_ids_map = compute_ctx_ids ctx in
 
   (* Synthesize *)
   match cf ctx with
@@ -385,8 +385,8 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
       match !fixed_ids with
       | Some _ -> ctx1
       | None ->
-          let old_ids, _ = compute_context_ids ctx1 in
-          let new_ids, _ = compute_contexts_ids !ctxs in
+          let old_ids, _ = compute_ctx_ids ctx1 in
+          let new_ids, _ = compute_ctxs_ids !ctxs in
           let blids = BorrowId.Set.diff old_ids.blids new_ids.blids in
           let aids = AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those borrows and abstractions *)
@@ -409,7 +409,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
           ctxs := List.map (end_borrows_abs blids aids) !ctxs;
           (* Note that the fixed ids are given by the original context, from *before*
              we introduce fresh abstractions/reborrows for the shared values *)
-          fixed_ids := Some (fst (compute_context_ids ctx0));
+          fixed_ids := Some (fst (compute_ctx_ids ctx0));
           ctx1
     in
 
@@ -424,12 +424,12 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
      intersection of ids between the original environment and the list
      of new environments *)
   let compute_fixed_ids (ctxl : eval_ctx list) : ids_sets =
-    let fixed_ids, _ = compute_context_ids ctx0 in
+    let fixed_ids, _ = compute_ctx_ids ctx0 in
     let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
     let sids = ref sids in
     List.iter
       (fun ctx ->
-        let fixed_ids, _ = compute_context_ids ctx in
+        let fixed_ids, _ = compute_ctx_ids ctx in
         sids := SymbolicValueId.Set.inter !sids fixed_ids.sids)
       ctxl;
     let sids = !sids in
@@ -568,7 +568,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
                   InterpreterBorrows.end_abstraction_no_synth config abs_id ctx
                 in
                 (* Explore the context, and check which abstractions are not there anymore *)
-                let ids, _ = compute_context_ids ctx in
+                let ids, _ = compute_ctx_ids ctx in
                 let ended_ids = AbstractionId.Set.diff !fp_aids ids.aids in
                 add_ended_aids rg_id ended_ids)
               ctx.region_groups
@@ -840,8 +840,8 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
 
 let compute_fp_ctx_symbolic_values (ctx : eval_ctx) (fp_ctx : eval_ctx) :
     SymbolicValueId.Set.t * symbolic_value list =
-  let old_ids, _ = compute_context_ids ctx in
-  let fp_ids, fp_ids_maps = compute_context_ids fp_ctx in
+  let old_ids, _ = compute_ctx_ids ctx in
+  let fp_ids, fp_ids_maps = compute_ctx_ids fp_ctx in
   let fresh_sids = SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
 
   (* Compute the set of symbolic values which appear in shared values inside
