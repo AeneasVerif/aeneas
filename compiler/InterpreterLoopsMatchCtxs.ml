@@ -824,10 +824,10 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     bid1
 
   let match_mut_borrows (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (_ : borrow_id)
-      (_ : typed_value) (bid1 : borrow_id) (_ : typed_value) (bv : typed_value)
+      (_ : typed_value) (bid1 : borrow_id) (bv1 : typed_value) (_ : typed_value)
       : borrow_id * typed_value =
     (* There can't be bottoms in borrowed values *)
-    (bid1, bv)
+    (bid1, bv1)
 
   let match_shared_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
       (_ : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
