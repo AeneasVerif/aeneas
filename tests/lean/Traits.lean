@@ -338,22 +338,14 @@ structure ChildTrait (Self : Type) where
   ParentTrait0SelfInst : ParentTrait0 Self
   ParentTrait1SelfInst : ParentTrait1 Self
 
-/- [traits::test_parent_trait0]:
-   Source: 'src/traits.rs', lines 208:0-208:57 -/
-def test_parent_trait0
-  (T : Type) (ParentTrait0TInst : ParentTrait0 T) (x : T) :
-  Result ParentTrait0TInst.W
-  :=
-  ParentTrait0TInst.get_w x
-
 /- [traits::test_child_trait1]:
-   Source: 'src/traits.rs', lines 213:0-213:56 -/
+   Source: 'src/traits.rs', lines 209:0-209:56 -/
 def test_child_trait1
   (T : Type) (ChildTraitTInst : ChildTrait T) (x : T) : Result String :=
   ChildTraitTInst.ParentTrait0SelfInst.get_name x
 
 /- [traits::test_child_trait2]:
-   Source: 'src/traits.rs', lines 217:0-217:54 -/
+   Source: 'src/traits.rs', lines 213:0-213:54 -/
 def test_child_trait2
   (T : Type) (ChildTraitTInst : ChildTrait T) (x : T) :
   Result ChildTraitTInst.ParentTrait0SelfInst.W
@@ -361,7 +353,7 @@ def test_child_trait2
   ChildTraitTInst.ParentTrait0SelfInst.get_w x
 
 /- [traits::order1]:
-   Source: 'src/traits.rs', lines 223:0-223:59 -/
+   Source: 'src/traits.rs', lines 219:0-219:59 -/
 def order1
   (T U : Type) (ParentTrait0TInst : ParentTrait0 T) (ParentTrait0UInst :
   ParentTrait0 U) :
@@ -370,28 +362,28 @@ def order1
   Result.ret ()
 
 /- Trait declaration: [traits::ChildTrait1]
-   Source: 'src/traits.rs', lines 226:0-226:35 -/
+   Source: 'src/traits.rs', lines 222:0-222:35 -/
 structure ChildTrait1 (Self : Type) where
   ParentTrait1SelfInst : ParentTrait1 Self
 
 /- Trait implementation: [traits::{usize#9}]
-   Source: 'src/traits.rs', lines 228:0-228:27 -/
+   Source: 'src/traits.rs', lines 224:0-224:27 -/
 def traits.ParentTrait1UsizeInst : ParentTrait1 Usize := {
 }
 
 /- Trait implementation: [traits::{usize#10}]
-   Source: 'src/traits.rs', lines 229:0-229:26 -/
+   Source: 'src/traits.rs', lines 225:0-225:26 -/
 def traits.ChildTrait1UsizeInst : ChildTrait1 Usize := {
   ParentTrait1SelfInst := traits.ParentTrait1UsizeInst
 }
 
 /- Trait declaration: [traits::Iterator]
-   Source: 'src/traits.rs', lines 233:0-233:18 -/
+   Source: 'src/traits.rs', lines 229:0-229:18 -/
 structure Iterator (Self : Type) where
   Item : Type
 
 /- Trait declaration: [traits::IntoIterator]
-   Source: 'src/traits.rs', lines 237:0-237:22 -/
+   Source: 'src/traits.rs', lines 233:0-233:22 -/
 structure IntoIterator (Self : Type) where
   Item : Type
   IntoIter : Type
@@ -399,84 +391,84 @@ structure IntoIterator (Self : Type) where
   into_iter : Self → Result IntoIter
 
 /- Trait declaration: [traits::FromResidual]
-   Source: 'src/traits.rs', lines 254:0-254:21 -/
+   Source: 'src/traits.rs', lines 250:0-250:21 -/
 structure FromResidual (Self T : Type) where
 
 /- Trait declaration: [traits::Try]
-   Source: 'src/traits.rs', lines 250:0-250:48 -/
+   Source: 'src/traits.rs', lines 246:0-246:48 -/
 structure Try (Self : Type) where
   Residual : Type
   FromResidualSelftraitsTrySelfResidualInst : FromResidual Self Residual
 
 /- Trait declaration: [traits::WithTarget]
-   Source: 'src/traits.rs', lines 256:0-256:20 -/
+   Source: 'src/traits.rs', lines 252:0-252:20 -/
 structure WithTarget (Self : Type) where
   Target : Type
 
 /- Trait declaration: [traits::ParentTrait2]
-   Source: 'src/traits.rs', lines 260:0-260:22 -/
+   Source: 'src/traits.rs', lines 256:0-256:22 -/
 structure ParentTrait2 (Self : Type) where
   U : Type
   U_clause_0 : WithTarget U
 
 /- Trait declaration: [traits::ChildTrait2]
-   Source: 'src/traits.rs', lines 264:0-264:35 -/
+   Source: 'src/traits.rs', lines 260:0-260:35 -/
 structure ChildTrait2 (Self : Type) where
   ParentTrait2SelfInst : ParentTrait2 Self
   convert : ParentTrait2SelfInst.U → Result
     ParentTrait2SelfInst.U_clause_0.Target
 
 /- Trait implementation: [traits::{u32#11}]
-   Source: 'src/traits.rs', lines 268:0-268:23 -/
+   Source: 'src/traits.rs', lines 264:0-264:23 -/
 def traits.WithTargetU32Inst : WithTarget U32 := {
   Target := U32
 }
 
 /- Trait implementation: [traits::{u32#12}]
-   Source: 'src/traits.rs', lines 272:0-272:25 -/
+   Source: 'src/traits.rs', lines 268:0-268:25 -/
 def traits.ParentTrait2U32Inst : ParentTrait2 U32 := {
   U := U32
   U_clause_0 := traits.WithTargetU32Inst
 }
 
 /- [traits::{u32#13}::convert]:
-   Source: 'src/traits.rs', lines 277:4-277:29 -/
+   Source: 'src/traits.rs', lines 273:4-273:29 -/
 def U32.convert (x : U32) : Result U32 :=
   Result.ret x
 
 /- Trait implementation: [traits::{u32#13}]
-   Source: 'src/traits.rs', lines 276:0-276:24 -/
+   Source: 'src/traits.rs', lines 272:0-272:24 -/
 def traits.ChildTrait2U32Inst : ChildTrait2 U32 := {
   ParentTrait2SelfInst := traits.ParentTrait2U32Inst
   convert := U32.convert
 }
 
 /- Trait declaration: [traits::CFnOnce]
-   Source: 'src/traits.rs', lines 290:0-290:23 -/
+   Source: 'src/traits.rs', lines 286:0-286:23 -/
 structure CFnOnce (Self Args : Type) where
   Output : Type
   call_once : Self → Args → Result Output
 
 /- Trait declaration: [traits::CFnMut]
-   Source: 'src/traits.rs', lines 296:0-296:37 -/
+   Source: 'src/traits.rs', lines 292:0-292:37 -/
 structure CFnMut (Self Args : Type) where
   CFnOnceSelfArgsInst : CFnOnce Self Args
   call_mut : Self → Args → Result (CFnOnceSelfArgsInst.Output × Self)
 
 /- Trait declaration: [traits::CFn]
-   Source: 'src/traits.rs', lines 300:0-300:33 -/
+   Source: 'src/traits.rs', lines 296:0-296:33 -/
 structure CFn (Self Args : Type) where
   CFnMutSelfArgsInst : CFnMut Self Args
   call : Self → Args → Result CFnMutSelfArgsInst.CFnOnceSelfArgsInst.Output
 
 /- Trait declaration: [traits::GetTrait]
-   Source: 'src/traits.rs', lines 304:0-304:18 -/
+   Source: 'src/traits.rs', lines 300:0-300:18 -/
 structure GetTrait (Self : Type) where
   W : Type
   get_w : Self → Result W
 
 /- [traits::test_get_trait]:
-   Source: 'src/traits.rs', lines 309:0-309:49 -/
+   Source: 'src/traits.rs', lines 305:0-305:49 -/
 def test_get_trait
   (T : Type) (GetTraitTInst : GetTrait T) (x : T) : Result GetTraitTInst.W :=
   GetTraitTInst.get_w x

@@ -289,7 +289,6 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : LoopId.id) (ctx : eval_ctx)
     : merge_duplicates_funcs =
   (* Rem.: the merge functions raise exceptions (that we catch). *)
   let module S : MatchJoinState = struct
-    let ctx = ctx
     let loop_id = loop_id
     let nabs = ref []
   end in
@@ -360,7 +359,7 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : LoopId.id) (ctx : eval_ctx)
     assert (not (value_has_loans_or_borrows ctx sv1.value));
     let ty = ty0 in
     let child = child0 in
-    let sv = M.match_typed_values ctx sv0 sv1 in
+    let sv = M.match_typed_values ctx ctx sv0 sv1 in
     let value = ALoan (ASharedLoan (ids, sv, child)) in
     { value; ty }
   in
@@ -404,14 +403,6 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
 
   let env0 = List.rev ctx0.env in
   let env1 = List.rev ctx1.env in
-
-  (* We need to pick a context for some functions like [match_typed_values]:
-     the context is only used to lookup module data, so we can pick whichever
-     we want.
-     TODO: this is not very clean. Maybe we should just carry this data around.
-  *)
-  let ctx = ctx0 in
-
   let nabs = ref [] in
 
   (* Explore the environments. *)
@@ -449,8 +440,6 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
   in
 
   let module S : MatchJoinState = struct
-    (* The context is only used to lookup module data: we can pick whichever we want *)
-    let ctx = ctx
     let loop_id = loop_id
     let nabs = nabs
   end in
@@ -466,9 +455,9 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
           (lazy
             ("join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
-            ^ env_elem_to_string ctx var0
+            ^ env_elem_to_string ctx0 var0
             ^ "\n\n- value1:\n"
-            ^ env_elem_to_string ctx var1
+            ^ env_elem_to_string ctx1 var1
             ^ "\n\n"));
 
         (* Two cases: the dummy value is an old value, in which case the bindings
@@ -478,7 +467,7 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
           (* Still in the prefix: match the values *)
           assert (b0 = b1);
           let b = b0 in
-          let v = M.match_typed_values ctx v0 v1 in
+          let v = M.match_typed_values ctx0 ctx1 v0 v1 in
           let var = EBinding (BDummy b, v) in
           (* Continue *)
           var :: join_prefixes env0' env1')
@@ -491,9 +480,9 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
           (lazy
             ("join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
-            ^ env_elem_to_string ctx var0
+            ^ env_elem_to_string ctx0 var0
             ^ "\n\n- value1:\n"
-            ^ env_elem_to_string ctx var1
+            ^ env_elem_to_string ctx1 var1
             ^ "\n\n"));
 
         (* Variable bindings *must* be in the prefix and consequently their
@@ -501,7 +490,7 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
         assert (b0 = b1);
         (* Match the values *)
         let b = b0 in
-        let v = M.match_typed_values ctx v0 v1 in
+        let v = M.match_typed_values ctx0 ctx1 v0 v1 in
         let var = EBinding (BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
@@ -510,8 +499,8 @@ let join_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
         log#ldebug
           (lazy
             ("join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
-           ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n" ^ abs_to_string ctx abs0
-           ^ "\n\n- abs1:\n" ^ abs_to_string ctx abs1 ^ "\n\n"));
+           ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n" ^ abs_to_string ctx0 abs0
+           ^ "\n\n- abs1:\n" ^ abs_to_string ctx1 abs1 ^ "\n\n"));
 
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (

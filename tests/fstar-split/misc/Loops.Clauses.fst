@@ -19,6 +19,11 @@ unfold
 let sum_with_shared_borrows_loop_decreases (max : u32) (i : u32) (s : u32) : nat =
   if max >= i then max - i else 0
 
+(** [loops::sum_array]: decreases clause *)
+unfold
+let sum_array_loop_decreases (n : usize) (_ : array u32 n) (i : usize) (_ : u32) : nat =
+  if n >= i then n - i else 0
+
 (** [loops::clear]: decreases clause *)
 unfold let clear_loop_decreases (v : alloc_vec_Vec u32) (i : usize) : nat =
   if i <= List.Tot.length v then List.Tot.length v - i else 0

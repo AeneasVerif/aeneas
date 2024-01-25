@@ -402,17 +402,8 @@ Arguments mkChildTrait_t { _ }.
 Arguments ChildTrait_tChildTrait_t_ParentTrait0SelfInst { _ }.
 Arguments ChildTrait_tChildTrait_t_ParentTrait1SelfInst { _ }.
 
-(** [traits::test_parent_trait0]:
-    Source: 'src/traits.rs', lines 208:0-208:57 *)
-Definition test_parent_trait0
-  (T : Type) (parentTrait0TInst : ParentTrait0_t T) (x : T) :
-  result parentTrait0TInst.(ParentTrait0_tParentTrait0_t_W)
-  :=
-  parentTrait0TInst.(ParentTrait0_t_get_w) x
-.
-
 (** [traits::test_child_trait1]:
-    Source: 'src/traits.rs', lines 213:0-213:56 *)
+    Source: 'src/traits.rs', lines 209:0-209:56 *)
 Definition test_child_trait1
   (T : Type) (childTraitTInst : ChildTrait_t T) (x : T) : result string :=
   childTraitTInst.(ChildTrait_tChildTrait_t_ParentTrait0SelfInst).(ParentTrait0_t_get_name)
@@ -420,7 +411,7 @@ Definition test_child_trait1
 .
 
 (** [traits::test_child_trait2]:
-    Source: 'src/traits.rs', lines 217:0-217:54 *)
+    Source: 'src/traits.rs', lines 213:0-213:54 *)
 Definition test_child_trait2
   (T : Type) (childTraitTInst : ChildTrait_t T) (x : T) :
   result
@@ -431,7 +422,7 @@ Definition test_child_trait2
 .
 
 (** [traits::order1]:
-    Source: 'src/traits.rs', lines 223:0-223:59 *)
+    Source: 'src/traits.rs', lines 219:0-219:59 *)
 Definition order1
   (T U : Type) (parentTrait0TInst : ParentTrait0_t T) (parentTrait0UInst :
   ParentTrait0_t U) :
@@ -441,7 +432,7 @@ Definition order1
 .
 
 (** Trait declaration: [traits::ChildTrait1]
-    Source: 'src/traits.rs', lines 226:0-226:35 *)
+    Source: 'src/traits.rs', lines 222:0-222:35 *)
 Record ChildTrait1_t (Self : Type) := mkChildTrait1_t {
   ChildTrait1_tChildTrait1_t_ParentTrait1SelfInst : ParentTrait1_t Self;
 }.
@@ -450,19 +441,19 @@ Arguments mkChildTrait1_t { _ }.
 Arguments ChildTrait1_tChildTrait1_t_ParentTrait1SelfInst { _ }.
 
 (** Trait implementation: [traits::{usize#9}]
-    Source: 'src/traits.rs', lines 228:0-228:27 *)
+    Source: 'src/traits.rs', lines 224:0-224:27 *)
 Definition traits_ParentTrait1UsizeInst : ParentTrait1_t usize
   := mkParentTrait1_t.
 
 (** Trait implementation: [traits::{usize#10}]
-    Source: 'src/traits.rs', lines 229:0-229:26 *)
+    Source: 'src/traits.rs', lines 225:0-225:26 *)
 Definition traits_ChildTrait1UsizeInst : ChildTrait1_t usize := {|
   ChildTrait1_tChildTrait1_t_ParentTrait1SelfInst :=
     traits_ParentTrait1UsizeInst;
 |}.
 
 (** Trait declaration: [traits::Iterator]
-    Source: 'src/traits.rs', lines 233:0-233:18 *)
+    Source: 'src/traits.rs', lines 229:0-229:18 *)
 Record Iterator_t (Self : Type) := mkIterator_t {
   Iterator_tIterator_t_Item : Type;
 }.
@@ -471,7 +462,7 @@ Arguments mkIterator_t { _ }.
 Arguments Iterator_tIterator_t_Item { _ }.
 
 (** Trait declaration: [traits::IntoIterator]
-    Source: 'src/traits.rs', lines 237:0-237:22 *)
+    Source: 'src/traits.rs', lines 233:0-233:22 *)
 Record IntoIterator_t (Self : Type) := mkIntoIterator_t {
   IntoIterator_tIntoIterator_t_Item : Type;
   IntoIterator_tIntoIterator_t_IntoIter : Type;
@@ -488,13 +479,13 @@ Arguments IntoIterator_tIntoIterator_t_IntoIter_clause_0 { _ }.
 Arguments IntoIterator_t_into_iter { _ }.
 
 (** Trait declaration: [traits::FromResidual]
-    Source: 'src/traits.rs', lines 254:0-254:21 *)
+    Source: 'src/traits.rs', lines 250:0-250:21 *)
 Record FromResidual_t (Self T : Type) := mkFromResidual_t{}.
 
 Arguments mkFromResidual_t { _ _ }.
 
 (** Trait declaration: [traits::Try]
-    Source: 'src/traits.rs', lines 250:0-250:48 *)
+    Source: 'src/traits.rs', lines 246:0-246:48 *)
 Record Try_t (Self : Type) := mkTry_t {
   Try_tTry_t_Residual : Type;
   Try_tTry_t_FromResidualSelftraitsTrySelfResidualInst : FromResidual_t Self
@@ -506,7 +497,7 @@ Arguments Try_tTry_t_Residual { _ }.
 Arguments Try_tTry_t_FromResidualSelftraitsTrySelfResidualInst { _ }.
 
 (** Trait declaration: [traits::WithTarget]
-    Source: 'src/traits.rs', lines 256:0-256:20 *)
+    Source: 'src/traits.rs', lines 252:0-252:20 *)
 Record WithTarget_t (Self : Type) := mkWithTarget_t {
   WithTarget_tWithTarget_t_Target : Type;
 }.
@@ -515,7 +506,7 @@ Arguments mkWithTarget_t { _ }.
 Arguments WithTarget_tWithTarget_t_Target { _ }.
 
 (** Trait declaration: [traits::ParentTrait2]
-    Source: 'src/traits.rs', lines 260:0-260:22 *)
+    Source: 'src/traits.rs', lines 256:0-256:22 *)
 Record ParentTrait2_t (Self : Type) := mkParentTrait2_t {
   ParentTrait2_tParentTrait2_t_U : Type;
   ParentTrait2_tParentTrait2_t_U_clause_0 : WithTarget_t
@@ -527,7 +518,7 @@ Arguments ParentTrait2_tParentTrait2_t_U { _ }.
 Arguments ParentTrait2_tParentTrait2_t_U_clause_0 { _ }.
 
 (** Trait declaration: [traits::ChildTrait2]
-    Source: 'src/traits.rs', lines 264:0-264:35 *)
+    Source: 'src/traits.rs', lines 260:0-260:35 *)
 Record ChildTrait2_t (Self : Type) := mkChildTrait2_t {
   ChildTrait2_tChildTrait2_t_ParentTrait2SelfInst : ParentTrait2_t Self;
   ChildTrait2_t_convert :
@@ -541,25 +532,25 @@ Arguments ChildTrait2_tChildTrait2_t_ParentTrait2SelfInst { _ }.
 Arguments ChildTrait2_t_convert { _ }.
 
 (** Trait implementation: [traits::{u32#11}]
-    Source: 'src/traits.rs', lines 268:0-268:23 *)
+    Source: 'src/traits.rs', lines 264:0-264:23 *)
 Definition traits_WithTargetU32Inst : WithTarget_t u32 := {|
   WithTarget_tWithTarget_t_Target := u32;
 |}.
 
 (** Trait implementation: [traits::{u32#12}]
-    Source: 'src/traits.rs', lines 272:0-272:25 *)
+    Source: 'src/traits.rs', lines 268:0-268:25 *)
 Definition traits_ParentTrait2U32Inst : ParentTrait2_t u32 := {|
   ParentTrait2_tParentTrait2_t_U := u32;
   ParentTrait2_tParentTrait2_t_U_clause_0 := traits_WithTargetU32Inst;
 |}.
 
 (** [traits::{u32#13}::convert]:
-    Source: 'src/traits.rs', lines 277:4-277:29 *)
+    Source: 'src/traits.rs', lines 273:4-273:29 *)
 Definition u32_convert (x : u32) : result u32 :=
   Return x.
 
 (** Trait implementation: [traits::{u32#13}]
-    Source: 'src/traits.rs', lines 276:0-276:24 *)
+    Source: 'src/traits.rs', lines 272:0-272:24 *)
 Definition traits_ChildTrait2U32Inst : ChildTrait2_t u32 := {|
   ChildTrait2_tChildTrait2_t_ParentTrait2SelfInst :=
     traits_ParentTrait2U32Inst;
@@ -567,7 +558,7 @@ Definition traits_ChildTrait2U32Inst : ChildTrait2_t u32 := {|
 |}.
 
 (** Trait declaration: [traits::CFnOnce]
-    Source: 'src/traits.rs', lines 290:0-290:23 *)
+    Source: 'src/traits.rs', lines 286:0-286:23 *)
 Record CFnOnce_t (Self Args : Type) := mkCFnOnce_t {
   CFnOnce_tCFnOnce_t_Output : Type;
   CFnOnce_t_call_once : Self -> Args -> result CFnOnce_tCFnOnce_t_Output;
@@ -578,7 +569,7 @@ Arguments CFnOnce_tCFnOnce_t_Output { _ _ }.
 Arguments CFnOnce_t_call_once { _ _ }.
 
 (** Trait declaration: [traits::CFnMut]
-    Source: 'src/traits.rs', lines 296:0-296:37 *)
+    Source: 'src/traits.rs', lines 292:0-292:37 *)
 Record CFnMut_t (Self Args : Type) := mkCFnMut_t {
   CFnMut_tCFnMut_t_CFnOnceSelfArgsInst : CFnOnce_t Self Args;
   CFnMut_t_call_mut : Self -> Args -> result
@@ -591,7 +582,7 @@ Arguments CFnMut_tCFnMut_t_CFnOnceSelfArgsInst { _ _ }.
 Arguments CFnMut_t_call_mut { _ _ }.
 
 (** Trait declaration: [traits::CFn]
-    Source: 'src/traits.rs', lines 300:0-300:33 *)
+    Source: 'src/traits.rs', lines 296:0-296:33 *)
 Record CFn_t (Self Args : Type) := mkCFn_t {
   CFn_tCFn_t_CFnMutSelfArgsInst : CFnMut_t Self Args;
   CFn_t_call : Self -> Args -> result
@@ -603,7 +594,7 @@ Arguments CFn_tCFn_t_CFnMutSelfArgsInst { _ _ }.
 Arguments CFn_t_call { _ _ }.
 
 (** Trait declaration: [traits::GetTrait]
-    Source: 'src/traits.rs', lines 304:0-304:18 *)
+    Source: 'src/traits.rs', lines 300:0-300:18 *)
 Record GetTrait_t (Self : Type) := mkGetTrait_t {
   GetTrait_tGetTrait_t_W : Type;
   GetTrait_t_get_w : Self -> result GetTrait_tGetTrait_t_W;
@@ -614,7 +605,7 @@ Arguments GetTrait_tGetTrait_t_W { _ }.
 Arguments GetTrait_t_get_w { _ }.
 
 (** [traits::test_get_trait]:
-    Source: 'src/traits.rs', lines 309:0-309:49 *)
+    Source: 'src/traits.rs', lines 305:0-305:49 *)
 Definition test_get_trait
   (T : Type) (getTraitTInst : GetTrait_t T) (x : T) :
   result getTraitTInst.(GetTrait_tGetTrait_t_W)
