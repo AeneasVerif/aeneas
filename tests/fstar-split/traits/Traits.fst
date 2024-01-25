@@ -326,22 +326,14 @@ noeq type childTrait_t (self : Type0) = {
   parentTrait1SelfInst : parentTrait1_t self;
 }
 
-(** [traits::test_parent_trait0]: forward function
-    Source: 'src/traits.rs', lines 208:0-208:57 *)
-let test_parent_trait0
-  (t : Type0) (parentTrait0TInst : parentTrait0_t t) (x : t) :
-  result parentTrait0TInst.tW
-  =
-  parentTrait0TInst.get_w x
-
 (** [traits::test_child_trait1]: forward function
-    Source: 'src/traits.rs', lines 213:0-213:56 *)
+    Source: 'src/traits.rs', lines 209:0-209:56 *)
 let test_child_trait1
   (t : Type0) (childTraitTInst : childTrait_t t) (x : t) : result string =
   childTraitTInst.parentTrait0SelfInst.get_name x
 
 (** [traits::test_child_trait2]: forward function
-    Source: 'src/traits.rs', lines 217:0-217:54 *)
+    Source: 'src/traits.rs', lines 213:0-213:54 *)
 let test_child_trait2
   (t : Type0) (childTraitTInst : childTrait_t t) (x : t) :
   result childTraitTInst.parentTrait0SelfInst.tW
@@ -349,7 +341,7 @@ let test_child_trait2
   childTraitTInst.parentTrait0SelfInst.get_w x
 
 (** [traits::order1]: forward function
-    Source: 'src/traits.rs', lines 223:0-223:59 *)
+    Source: 'src/traits.rs', lines 219:0-219:59 *)
 let order1
   (t u : Type0) (parentTrait0TInst : parentTrait0_t t) (parentTrait0UInst :
   parentTrait0_t u) :
@@ -358,27 +350,27 @@ let order1
   Return ()
 
 (** Trait declaration: [traits::ChildTrait1]
-    Source: 'src/traits.rs', lines 226:0-226:35 *)
+    Source: 'src/traits.rs', lines 222:0-222:35 *)
 noeq type childTrait1_t (self : Type0) = {
   parentTrait1SelfInst : parentTrait1_t self;
 }
 
 (** Trait implementation: [traits::{usize#9}]
-    Source: 'src/traits.rs', lines 228:0-228:27 *)
+    Source: 'src/traits.rs', lines 224:0-224:27 *)
 let traits_ParentTrait1UsizeInst : parentTrait1_t usize = ()
 
 (** Trait implementation: [traits::{usize#10}]
-    Source: 'src/traits.rs', lines 229:0-229:26 *)
+    Source: 'src/traits.rs', lines 225:0-225:26 *)
 let traits_ChildTrait1UsizeInst : childTrait1_t usize = {
   parentTrait1SelfInst = traits_ParentTrait1UsizeInst;
 }
 
 (** Trait declaration: [traits::Iterator]
-    Source: 'src/traits.rs', lines 233:0-233:18 *)
+    Source: 'src/traits.rs', lines 229:0-229:18 *)
 noeq type iterator_t (self : Type0) = { tItem : Type0; }
 
 (** Trait declaration: [traits::IntoIterator]
-    Source: 'src/traits.rs', lines 237:0-237:22 *)
+    Source: 'src/traits.rs', lines 233:0-233:22 *)
 noeq type intoIterator_t (self : Type0) = {
   tItem : Type0;
   tIntoIter : Type0;
@@ -387,29 +379,29 @@ noeq type intoIterator_t (self : Type0) = {
 }
 
 (** Trait declaration: [traits::FromResidual]
-    Source: 'src/traits.rs', lines 254:0-254:21 *)
+    Source: 'src/traits.rs', lines 250:0-250:21 *)
 type fromResidual_t (self t : Type0) = unit
 
 (** Trait declaration: [traits::Try]
-    Source: 'src/traits.rs', lines 250:0-250:48 *)
+    Source: 'src/traits.rs', lines 246:0-246:48 *)
 noeq type try_t (self : Type0) = {
   tResidual : Type0;
   fromResidualSelftraitsTrySelfResidualInst : fromResidual_t self tResidual;
 }
 
 (** Trait declaration: [traits::WithTarget]
-    Source: 'src/traits.rs', lines 256:0-256:20 *)
+    Source: 'src/traits.rs', lines 252:0-252:20 *)
 noeq type withTarget_t (self : Type0) = { tTarget : Type0; }
 
 (** Trait declaration: [traits::ParentTrait2]
-    Source: 'src/traits.rs', lines 260:0-260:22 *)
+    Source: 'src/traits.rs', lines 256:0-256:22 *)
 noeq type parentTrait2_t (self : Type0) = {
   tU : Type0;
   tU_clause_0 : withTarget_t tU;
 }
 
 (** Trait declaration: [traits::ChildTrait2]
-    Source: 'src/traits.rs', lines 264:0-264:35 *)
+    Source: 'src/traits.rs', lines 260:0-260:35 *)
 noeq type childTrait2_t (self : Type0) = {
   parentTrait2SelfInst : parentTrait2_t self;
   convert : parentTrait2SelfInst.tU -> result
@@ -417,37 +409,37 @@ noeq type childTrait2_t (self : Type0) = {
 }
 
 (** Trait implementation: [traits::{u32#11}]
-    Source: 'src/traits.rs', lines 268:0-268:23 *)
+    Source: 'src/traits.rs', lines 264:0-264:23 *)
 let traits_WithTargetU32Inst : withTarget_t u32 = { tTarget = u32; }
 
 (** Trait implementation: [traits::{u32#12}]
-    Source: 'src/traits.rs', lines 272:0-272:25 *)
+    Source: 'src/traits.rs', lines 268:0-268:25 *)
 let traits_ParentTrait2U32Inst : parentTrait2_t u32 = {
   tU = u32;
   tU_clause_0 = traits_WithTargetU32Inst;
 }
 
 (** [traits::{u32#13}::convert]: forward function
-    Source: 'src/traits.rs', lines 277:4-277:29 *)
+    Source: 'src/traits.rs', lines 273:4-273:29 *)
 let u32_convert (x : u32) : result u32 =
   Return x
 
 (** Trait implementation: [traits::{u32#13}]
-    Source: 'src/traits.rs', lines 276:0-276:24 *)
+    Source: 'src/traits.rs', lines 272:0-272:24 *)
 let traits_ChildTrait2U32Inst : childTrait2_t u32 = {
   parentTrait2SelfInst = traits_ParentTrait2U32Inst;
   convert = u32_convert;
 }
 
 (** Trait declaration: [traits::CFnOnce]
-    Source: 'src/traits.rs', lines 290:0-290:23 *)
+    Source: 'src/traits.rs', lines 286:0-286:23 *)
 noeq type cFnOnce_t (self args : Type0) = {
   tOutput : Type0;
   call_once : self -> args -> result tOutput;
 }
 
 (** Trait declaration: [traits::CFnMut]
-    Source: 'src/traits.rs', lines 296:0-296:37 *)
+    Source: 'src/traits.rs', lines 292:0-292:37 *)
 noeq type cFnMut_t (self args : Type0) = {
   cFnOnceSelfArgsInst : cFnOnce_t self args;
   call_mut : self -> args -> result cFnOnceSelfArgsInst.tOutput;
@@ -455,19 +447,19 @@ noeq type cFnMut_t (self args : Type0) = {
 }
 
 (** Trait declaration: [traits::CFn]
-    Source: 'src/traits.rs', lines 300:0-300:33 *)
+    Source: 'src/traits.rs', lines 296:0-296:33 *)
 noeq type cFn_t (self args : Type0) = {
   cFnMutSelfArgsInst : cFnMut_t self args;
   call : self -> args -> result cFnMutSelfArgsInst.cFnOnceSelfArgsInst.tOutput;
 }
 
 (** Trait declaration: [traits::GetTrait]
-    Source: 'src/traits.rs', lines 304:0-304:18 *)
+    Source: 'src/traits.rs', lines 300:0-300:18 *)
 noeq type getTrait_t (self : Type0) = { tW : Type0; get_w : self -> result tW;
 }
 
 (** [traits::test_get_trait]: forward function
-    Source: 'src/traits.rs', lines 309:0-309:49 *)
+    Source: 'src/traits.rs', lines 305:0-305:49 *)
 let test_get_trait
   (t : Type0) (getTraitTInst : getTrait_t t) (x : t) :
   result getTraitTInst.tW
