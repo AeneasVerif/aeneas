@@ -45,16 +45,22 @@ type abs_borrows_loans_maps = {
 
     This module contains primitive match functions to instantiate the generic
     {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} functor.
-  *)
+
+    Remark: all the functions receive as input the left context and the right context.
+    This is useful for printing, lookups, and also in order to check the ended
+    regions.
+ *)
 module type PrimMatcher = sig
-  val match_etys : ety -> ety -> ety
-  val match_rtys : rty -> rty -> rty
+  val match_etys : eval_ctx -> eval_ctx -> ety -> ety -> ety
+  val match_rtys : eval_ctx -> eval_ctx -> rty -> rty -> rty
 
   (** The input primitive values are not equal *)
-  val match_distinct_literals : ety -> literal -> literal -> typed_value
+  val match_distinct_literals :
+    eval_ctx -> eval_ctx -> ety -> literal -> literal -> typed_value
 
   (** The input ADTs don't have the same variant *)
-  val match_distinct_adts : ety -> adt_value -> adt_value -> typed_value
+  val match_distinct_adts :
+    eval_ctx -> eval_ctx -> ety -> adt_value -> adt_value -> typed_value
 
   (** The meta-value is the result of a match.
 
@@ -67,6 +73,8 @@ module type PrimMatcher = sig
       calling the match function.
    *)
   val match_shared_borrows :
+    eval_ctx ->
+    eval_ctx ->
     (typed_value -> typed_value -> typed_value) ->
     ety ->
     borrow_id ->
@@ -82,6 +90,8 @@ module type PrimMatcher = sig
       - [bv]: the result of matching [bv0] with [bv1]
   *)
   val match_mut_borrows :
+    eval_ctx ->
+    eval_ctx ->
     ety ->
     borrow_id ->
     typed_value ->
@@ -97,16 +107,20 @@ module type PrimMatcher = sig
       [v]: the result of matching the shared values coming from the two loans
    *)
   val match_shared_loans :
+    eval_ctx ->
+    eval_ctx ->
     ety ->
     loan_id_set ->
     loan_id_set ->
     typed_value ->
     loan_id_set * typed_value
 
-  val match_mut_loans : ety -> loan_id -> loan_id -> loan_id
+  val match_mut_loans :
+    eval_ctx -> eval_ctx -> ety -> loan_id -> loan_id -> loan_id
 
   (** There are no constraints on the input symbolic values *)
-  val match_symbolic_values : symbolic_value -> symbolic_value -> symbolic_value
+  val match_symbolic_values :
+    eval_ctx -> eval_ctx -> symbolic_value -> symbolic_value -> symbolic_value
 
   (** Match a symbolic value with a value which is not symbolic.
 
@@ -116,7 +130,7 @@ module type PrimMatcher = sig
       end loans in one of the two environments).
    *)
   val match_symbolic_with_other :
-    bool -> symbolic_value -> typed_value -> typed_value
+    eval_ctx -> eval_ctx -> bool -> symbolic_value -> typed_value -> typed_value
 
   (** Match a bottom value with a value which is not bottom.
 
@@ -125,11 +139,19 @@ module type PrimMatcher = sig
       is important when throwing exceptions, for instance when we need to
       end loans in one of the two environments).
    *)
-  val match_bottom_with_other : bool -> typed_value -> typed_value
+  val match_bottom_with_other :
+    eval_ctx -> eval_ctx -> bool -> typed_value -> typed_value
 
   (** The input ADTs don't have the same variant *)
   val match_distinct_aadts :
-    rty -> adt_avalue -> rty -> adt_avalue -> rty -> typed_avalue
+    eval_ctx ->
+    eval_ctx ->
+    rty ->
+    adt_avalue ->
+    rty ->
+    adt_avalue ->
+    rty ->
+    typed_avalue
 
   (** Parameters:
       [ty0]
@@ -139,7 +161,14 @@ module type PrimMatcher = sig
       [ty]: result of matching ty0 and ty1
    *)
   val match_ashared_borrows :
-    rty -> borrow_id -> rty -> borrow_id -> rty -> typed_avalue
+    eval_ctx ->
+    eval_ctx ->
+    rty ->
+    borrow_id ->
+    rty ->
+    borrow_id ->
+    rty ->
+    typed_avalue
 
   (** Parameters:
       [ty0]
@@ -152,6 +181,8 @@ module type PrimMatcher = sig
       [av]: result of matching av0 and av1
    *)
   val match_amut_borrows :
+    eval_ctx ->
+    eval_ctx ->
     rty ->
     borrow_id ->
     typed_avalue ->
@@ -176,6 +207,8 @@ module type PrimMatcher = sig
       [av]: result of matching av0 and av1
    *)
   val match_ashared_loans :
+    eval_ctx ->
+    eval_ctx ->
     rty ->
     loan_id_set ->
     typed_value ->
@@ -200,6 +233,8 @@ module type PrimMatcher = sig
       [av]: result of matching av0 and av1
    *)
   val match_amut_loans :
+    eval_ctx ->
+    eval_ctx ->
     rty ->
     borrow_id ->
     typed_avalue ->
@@ -213,7 +248,8 @@ module type PrimMatcher = sig
   (** Match two arbitrary avalues whose constructors don't match (this function
       is typically used to raise the proper exception).
    *)
-  val match_avalues : typed_avalue -> typed_avalue -> typed_avalue
+  val match_avalues :
+    eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
 end
 
 module type Matcher = sig
@@ -221,14 +257,15 @@ module type Matcher = sig
 
       Rem.: this function raises exceptions of type {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}.
    *)
-  val match_typed_values : eval_ctx -> typed_value -> typed_value -> typed_value
+  val match_typed_values :
+    eval_ctx -> eval_ctx -> typed_value -> typed_value -> typed_value
 
   (** Match two avalues.
 
       Rem.: this function raises exceptions of type {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}.
    *)
   val match_typed_avalues :
-    eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
+    eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
 end
 
 (** See {!module:InterpreterLoopsMatchCtxs.MakeCheckEquivMatcher} and
@@ -241,7 +278,6 @@ module type MatchCheckEquivState = sig
       a source context with a target context. *)
   val check_equiv : bool
 
-  val ctx : eval_ctx
   val rid_map : RegionId.InjSubst.t ref
 
   (** Substitution for the loan and borrow ids - used only if [check_equiv] is true *)
@@ -302,9 +338,6 @@ type borrow_loan_corresp = {
 
 (* Very annoying: functors only take modules as inputs... *)
 module type MatchJoinState = sig
-  (** The current context *)
-  val ctx : eval_ctx
-
   (** The current loop *)
   val loop_id : LoopId.id
 

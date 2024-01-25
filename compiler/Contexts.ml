@@ -153,6 +153,7 @@ and env_elem =
 and env = env_elem list
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_env";
@@ -169,6 +170,17 @@ and env = env_elem list
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
+
+module OrderedBinder : Collections.OrderedType with type t = binder = struct
+  type t = binder
+
+  let compare x y = compare_binder x y
+  let to_string x = show_binder x
+  let pp_t fmt x = Format.pp_print_string fmt (show_binder x)
+  let show_t x = show_binder x
+end
+
+module BinderMap = Collections.MakeMap (OrderedBinder)
 
 type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 
@@ -393,6 +405,13 @@ let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
 let ctx_push_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) (v : typed_value)
     : eval_ctx =
   { ctx with env = EBinding (BDummy vid, v) :: ctx.env }
+
+let ctx_push_fresh_dummy_var (ctx : eval_ctx) (v : typed_value) : eval_ctx =
+  ctx_push_dummy_var ctx (fresh_dummy_var_id ()) v
+
+let ctx_push_fresh_dummy_vars (ctx : eval_ctx) (vl : typed_value list) :
+    eval_ctx =
+  List.fold_left (fun ctx v -> ctx_push_fresh_dummy_var ctx v) ctx vl
 
 (** Remove a dummy variable from a context's environment. *)
 let ctx_remove_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) :

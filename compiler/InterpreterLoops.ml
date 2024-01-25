@@ -93,10 +93,20 @@ let eval_loop_symbolic (config : config) (meta : meta)
   let fp_bl_corresp =
     compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
   in
-  let end_expr =
+  log#ldebug
+    (lazy
+      ("eval_loop_symbolic: about to match the fixed-point context with the \
+        original context:\n\
+        - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
+     ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
+  let end_expr : SymbolicAst.expression option =
     match_ctx_with_target config loop_id true fp_bl_corresp fp_input_svalues
       fixed_ids fp_ctx cf ctx
   in
+  log#ldebug
+    (lazy
+      "eval_loop_symbolic: matched the fixed-point context with the original \
+       context");
 
   (* Synthesize the loop body by evaluating it, with the continuation for
      after the loop starting at the *fixed point*, but with a special
@@ -115,6 +125,12 @@ let eval_loop_symbolic (config : config) (meta : meta)
     | Continue i ->
         (* We don't support nested loops for now *)
         assert (i = 0);
+        log#ldebug
+          (lazy
+            ("eval_loop_symbolic: about to match the fixed-point context with \
+              the context at a continue:\n\
+              - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
+           ^ "\n\n-tgt ctx (ctx at continue):\n" ^ eval_ctx_to_string ctx));
         let cc =
           match_ctx_with_target config loop_id false fp_bl_corresp
             fp_input_svalues fixed_ids fp_ctx

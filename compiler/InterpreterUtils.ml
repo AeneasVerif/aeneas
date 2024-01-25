@@ -236,25 +236,35 @@ let symbolic_value_has_ended_regions (ended_regions : RegionId.Set.t)
   let regions = ty_regions s.sv_ty in
   not (RegionId.Set.disjoint regions ended_regions)
 
+let bottom_in_value_visitor (ended_regions : RegionId.Set.t) =
+  object
+    inherit [_] iter_typed_value
+    method! visit_VBottom _ = raise Found
+
+    method! visit_symbolic_value _ s =
+      if symbolic_value_has_ended_regions ended_regions s then raise Found
+      else ()
+  end
+
 (** Check if a {!type:Values.value} contains [⊥].
 
     Note that this function is very general: it also checks wether
     symbolic values contain already ended regions.
  *)
 let bottom_in_value (ended_regions : RegionId.Set.t) (v : typed_value) : bool =
-  let obj =
-    object
-      inherit [_] iter_typed_value
-      method! visit_VBottom _ = raise Found
-
-      method! visit_symbolic_value _ s =
-        if symbolic_value_has_ended_regions ended_regions s then raise Found
-        else ()
-    end
-  in
+  let obj = bottom_in_value_visitor ended_regions in
   (* We use exceptions *)
   try
     obj#visit_typed_value () v;
+    false
+  with Found -> true
+
+let bottom_in_adt_value (ended_regions : RegionId.Set.t) (v : adt_value) : bool
+    =
+  let obj = bottom_in_value_visitor ended_regions in
+  (* We use exceptions *)
+  try
+    obj#visit_adt_value () v;
     false
   with Found -> true
 
