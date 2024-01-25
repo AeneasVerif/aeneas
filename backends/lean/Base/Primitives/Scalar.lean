@@ -1038,6 +1038,17 @@ instance {ty} : LT (Scalar ty) where
 
 instance {ty} : LE (Scalar ty) where le a b := LE.le a.val b.val
 
+theorem Scalar.lt_equiv {ty : ScalarTy} (x y : Scalar ty) :
+  x < y ↔ x.val < y.val := by simp [LT.lt]
+
+theorem Scalar.le_equiv {ty : ScalarTy} (x y : Scalar ty) :
+  x ≤ y ↔ x.val ≤ y.val := by simp [LE.le]
+
+-- Not marking this one with @[simp] on purpose
+theorem Scalar.eq_equiv {ty : ScalarTy} (x y : Scalar ty) :
+  x = y ↔ x.val = y.val := by
+  cases x; cases y; simp_all
+
 instance Scalar.decLt {ty} (a b : Scalar ty) : Decidable (LT.lt a b) := Int.decLt ..
 instance Scalar.decLe {ty} (a b : Scalar ty) : Decidable (LE.le a b) := Int.decLe ..
 

@@ -82,17 +82,21 @@ section Methods
     -- Destruct the equality
     let (mExpr, ret) ← destEq th.consumeMData
     trace[Progress] "After splitting the equality:\n- lhs: {th}\n- rhs: {ret}"
-    -- Destruct the monadic application to dive into the bind, if necessary (this
-    -- is for when we use `withPSpec` inside of the `progress` tactic), and
-    -- destruct the application to get the function name
-    mExpr.consumeMData.withApp fun mf margs => do
-    trace[Progress] "After stripping the arguments of the monad expression:\n- mf: {mf}\n- margs: {margs}"
-    let (fArgsExpr, f, args) ← do
+    -- Recursively destruct the monadic application to dive into the binds,
+    -- if necessary (this is for when we use `withPSpec` inside of the `progress` tactic),
+    -- and destruct the application to get the function name
+    let rec strip_monad mExpr := do
+      mExpr.consumeMData.withApp fun mf margs => do
+      trace[Progress] "After stripping the arguments of the monad expression:\n- mf: {mf}\n- margs: {margs}"
       if mf.isConst ∧ mf.constName = ``Bind.bind then do
         -- Dive into the bind
         let fExpr := (margs.get! 4).consumeMData
-        fExpr.withApp fun f args => pure (fExpr, f, args)
-      else pure (mExpr, mf, margs)
+        -- Recursve
+        strip_monad fExpr
+      else
+        -- No bind
+        pure (mExpr, mf, margs)
+    let (fArgsExpr, f, args) ← strip_monad mExpr
     trace[Progress] "After stripping the arguments of the function call:\n- f: {f}\n- args: {args}"
     if ¬ f.isConst then throwError "Not a constant: {f}"
     -- *Sanity check* (activated if we are analyzing a theorem to register it in a DB)

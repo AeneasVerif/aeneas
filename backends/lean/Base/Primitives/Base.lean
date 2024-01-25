@@ -116,6 +116,13 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
 @[simp] theorem bind_tc_div (f : α → Result β) :
   (do let y ← div; f y) = div := by simp [Bind.bind, bind]
 
+@[simp] theorem bind_assoc_eq {a b c : Type u}
+  (e : Result a) (g :  a → Result b) (h : b → Result c) :
+  (Bind.bind (Bind.bind e g) h) =
+  (Bind.bind e (λ x => Bind.bind (g x) h)) := by
+  simp [Bind.bind]
+  cases e <;> simp
+
 ----------
 -- MISC --
 ----------

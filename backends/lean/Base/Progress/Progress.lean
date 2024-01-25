@@ -421,6 +421,19 @@ namespace Test
     progress
     simp [*]
 
+  /- Checking that progress can handle nested blocks -/
+  example {α : Type} (v: Vec α) (i: Usize) (x : α)
+    (hbounds : i.val < v.length) :
+    ∃ nv,
+      (do
+         (do
+            let _ ← v.update_usize i x
+            .ret ())
+         .ret ()) = ret nv
+      := by
+    progress
+    simp [*]
+
 end Test
 
 end Progress

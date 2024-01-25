@@ -17,13 +17,20 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
    -- Reveal the concrete bounds, simplify calls to [ofInt]
-   Utils.simpAt true [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
+   Utils.simpAt true
+                -- Unfoldings
+                [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
                  ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
                  ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
                  ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
                  ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max,
                  ``Usize.min
-                 ] [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val] [] .wildcard
+                 ]
+                 -- Simp lemmas
+                 [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val,
+                  ``Scalar.lt_equiv, ``Scalar.le_equiv, ``Scalar.eq_equiv]
+                 -- Hypotheses
+                 [] .wildcard
    
 
 elab "scalar_tac_preprocess" : tactic =>
