@@ -106,7 +106,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
   withMainContext do -- The context changed - TODO: remove once addDeclTac is updated
   let ngoal ← getMainGoal
   trace[Progress] "current goal: {ngoal}"
-  trace[Progress] "current goal: {← ngoal.isAssigned}"
+  trace[Progress] "current goal is assigned: {← ngoal.isAssigned}"
   -- The assumption should be of the shape:
   -- `∃ x1 ... xn, f args = ... ∧ ...`
   -- We introduce the existentially quantified variables and split the top-most
@@ -131,50 +131,59 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     -- then continue splitting the post-condition
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
-    tryTac (
-      simpAt true []
-             [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
-             [hEq.fvarId!] (.targets #[] true))
-    -- TODO: remove this (some types get unfolded too much: we "fold" them back)
-    tryTac (simpAt true [] scalar_eqs [] .wildcard_dep)
-    -- Clear the equality, unless the user requests not to do so
-    let mgoal ← do
-      if keep.isSome then getMainGoal
-      else do
-        let mgoal ← getMainGoal
-        mgoal.tryClearMany #[hEq.fvarId!]
-    setGoals (mgoal :: (← getUnsolvedGoals))
-    trace[Progress] "Goal after splitting eq and post and simplifying the target: {mgoal}"
-    -- Continue splitting following the post following the user's instructions
-    match hPost with
-    | none =>
-      -- Sanity check
-      if ¬ ids.isEmpty then
-        return (.Error m!"Too many ids provided ({ids}): there is no postcondition to split")
-      else return .Ok
-    | some hPost => do
-      let rec splitPostWithIds (prevId : Name) (hPost : Expr) (ids0 : List (Option Name)) : TacticM ProgressError := do
-        match ids0 with
-        | [] =>
-          /- We used all the user provided ids.
-             Split the remaining conjunctions by using fresh ids if the user
-             instructed to fully split the post-condition, otherwise stop -/
-          if splitPost then
-            splitFullConjTac true hPost (λ _ => pure .Ok)
-          else pure .Ok
-        | nid :: ids => do
-          trace[Progress] "Splitting post: {← inferType hPost}"
-          -- Split
-          let nid ← do
-            match nid with
-            | none => mkFreshAnonPropUserName
-            | some nid => pure nid
-          trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
-          if ← isConj (← inferType hPost) then
-            splitConjTac hPost (some (prevId, nid)) (λ _ nhPost => splitPostWithIds nid nhPost ids)
-          else return (.Error m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition")
-      let curPostId := (← hPost.fvarId!.getDecl).userName
-      splitPostWithIds curPostId hPost ids
+    trace[Progress] "current goal: {← getMainGoal}"
+    Tactic.focus do
+    let _ ←
+      tryTac
+        (simpAt true []
+               [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+               [hEq.fvarId!] (.targets #[] true))
+    -- It may happen that at this point the goal is already solved (though this is rare)
+    -- TODO: not sure this is the best way of checking it
+    if (← getUnsolvedGoals) == [] then pure .Ok
+    else
+       trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
+       -- TODO: remove this (some types get unfolded too much: we "fold" them back)
+       let _ ← tryTac (simpAt true [] scalar_eqs [] .wildcard_dep)
+       trace[Progress] "goal after folding back scalar types: {← getMainGoal}"
+       -- Clear the equality, unless the user requests not to do so
+       let mgoal ← do
+         if keep.isSome then getMainGoal
+         else do
+           let mgoal ← getMainGoal
+           mgoal.tryClearMany #[hEq.fvarId!]
+       setGoals (mgoal :: (← getUnsolvedGoals))
+       trace[Progress] "Goal after splitting eq and post and simplifying the target: {mgoal}"
+       -- Continue splitting following the post following the user's instructions
+       match hPost with
+       | none =>
+         -- Sanity check
+         if ¬ ids.isEmpty then
+           return (.Error m!"Too many ids provided ({ids}): there is no postcondition to split")
+         else return .Ok
+       | some hPost => do
+         let rec splitPostWithIds (prevId : Name) (hPost : Expr) (ids0 : List (Option Name)) : TacticM ProgressError := do
+           match ids0 with
+           | [] =>
+             /- We used all the user provided ids.
+                Split the remaining conjunctions by using fresh ids if the user
+                instructed to fully split the post-condition, otherwise stop -/
+             if splitPost then
+               splitFullConjTac true hPost (λ _ => pure .Ok)
+             else pure .Ok
+           | nid :: ids => do
+             trace[Progress] "Splitting post: {← inferType hPost}"
+             -- Split
+             let nid ← do
+               match nid with
+               | none => mkFreshAnonPropUserName
+               | some nid => pure nid
+             trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
+             if ← isConj (← inferType hPost) then
+               splitConjTac hPost (some (prevId, nid)) (λ _ nhPost => splitPostWithIds nid nhPost ids)
+             else return (.Error m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition")
+         let curPostId := (← hPost.fvarId!.getDecl).userName
+         splitPostWithIds curPostId hPost ids
   match res with
   | .Error _ => return res -- Can we get there? We're using "return"
   | .Ok =>
@@ -223,9 +232,9 @@ def tryLookupApply (keep : Option Name) (ids : Array (Option Name)) (splitPost :
           pure (some res)
         catch _ => none
   match res with
-  | some .Ok => return true
+  | some .Ok => pure true
   | some (.Error msg) => throwError msg
-  | none => return false
+  | none => pure false
 
 -- The array of ids are identifiers to use when introducing fresh variables
 def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrLocal)
@@ -266,36 +275,42 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
       match res with
       | .Ok => return ()
       | .Error msg => throwError msg
-    -- It failed: lookup the pspec theorems which match the expression
-    trace[Progress] "No assumption succeeded: trying to lookup a pspec theorem"
-    let pspecs : Array TheoremOrLocal ← do
-      let thNames ← pspecAttr.find? fExpr
-      -- TODO: because of reduction, there may be several valid theorems (for
-      -- instance for the scalars). We need to sort them from most specific to
-      -- least specific. For now, we assume the most specific theorems are at
-      -- the end.
-      let thNames := thNames.reverse
-      trace[Progress] "Looked up pspec theorems: {thNames}"
-      pure (thNames.map fun th => TheoremOrLocal.Theorem th)
-    -- Try the theorems one by one
-    for pspec in pspecs do
-      if ← tryLookupApply keep ids splitPost asmTac fExpr "pspec theorem" pspec then return ()
-      else pure ()
-    -- It failed: try to use the recursive assumptions
-    trace[Progress] "Failed using a pspec theorem: trying to use a recursive assumption"
-    -- We try to apply the assumptions of kind "auxDecl"
-    let ctx ← Lean.MonadLCtx.getLCtx
-    let decls ← ctx.getAllDecls
-    let decls := decls.filter (λ decl => match decl.kind with
-      | .default | .implDetail => false | .auxDecl => true)
-    for decl in decls.reverse do
-      trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fExpr (.Local decl) keep ids splitPost asmTac catch _ => continue
-      match res with
-      | .Ok => return ()
-      | .Error msg => throwError msg
-    -- Nothing worked: failed
-    throwError "Progress failed"
+    -- It failed: lookup the pspec theorems which match the expression *only
+    -- if the function is a constant*
+    let fIsConst ← do
+      fExpr.consumeMData.withApp fun mf _ => do
+      pure mf.isConst
+    if ¬ fIsConst then throwError "Progress failed"
+    else do
+      trace[Progress] "No assumption succeeded: trying to lookup a pspec theorem"
+      let pspecs : Array TheoremOrLocal ← do
+        let thNames ← pspecAttr.find? fExpr
+        -- TODO: because of reduction, there may be several valid theorems (for
+        -- instance for the scalars). We need to sort them from most specific to
+        -- least specific. For now, we assume the most specific theorems are at
+        -- the end.
+        let thNames := thNames.reverse
+        trace[Progress] "Looked up pspec theorems: {thNames}"
+        pure (thNames.map fun th => TheoremOrLocal.Theorem th)
+      -- Try the theorems one by one
+      for pspec in pspecs do
+        if ← tryLookupApply keep ids splitPost asmTac fExpr "pspec theorem" pspec then return ()
+        else pure ()
+      -- It failed: try to use the recursive assumptions
+      trace[Progress] "Failed using a pspec theorem: trying to use a recursive assumption"
+      -- We try to apply the assumptions of kind "auxDecl"
+      let ctx ← Lean.MonadLCtx.getLCtx
+      let decls ← ctx.getAllDecls
+      let decls := decls.filter (λ decl => match decl.kind with
+        | .default | .implDetail => false | .auxDecl => true)
+      for decl in decls.reverse do
+        trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
+        let res ← do try progressWith fExpr (.Local decl) keep ids splitPost asmTac catch _ => continue
+        match res with
+        | .Ok => return ()
+        | .Error msg => throwError msg
+      -- Nothing worked: failed
+      throwError "Progress failed"
 
 syntax progressArgs := ("keep" (ident <|> "_"))? ("with" ident)? ("as" " ⟨ " (ident <|> "_"),* " .."? " ⟩")?
 
@@ -420,6 +435,28 @@ namespace Test
     nv.val = v.val.update i.val x := by
     progress
     simp [*]
+
+  /- Checking that progress can handle nested blocks -/
+  example {α : Type} (v: Vec α) (i: Usize) (x : α)
+    (hbounds : i.val < v.length) :
+    ∃ nv,
+      (do
+         (do
+            let _ ← v.update_usize i x
+            .ret ())
+         .ret ()) = ret nv
+      := by
+    progress
+    simp [*]
+
+  /- Checking the case where simplifying the goal after instantiating the
+     pspec theorem the goal actually solves it, and where the function is
+     not a constant. We also test the case where the function under scrutinee
+     is not a constant. -/
+  example {x : U32}
+    (f : U32 → Result Unit) (h : ∀ x, f x = .ret ()) :
+    f x = ret () := by
+    progress
 
 end Test
 
