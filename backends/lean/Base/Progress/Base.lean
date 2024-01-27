@@ -22,8 +22,9 @@ structure PSpecDesc where
   evars : Array Expr
   -- The function applied to its arguments
   fArgsExpr : Expr
-  -- The function
-  fName : Name
+  -- ⊤ if the function is a constant (must be if we are registering a theorem,
+  -- but is not necessarily the case if we are looking at a goal)
+  fIsConst : Bool
   -- The function arguments
   fLevels : List Level
   args : Array Expr
@@ -98,7 +99,12 @@ section Methods
         pure (mExpr, mf, margs)
     let (fArgsExpr, f, args) ← strip_monad mExpr
     trace[Progress] "After stripping the arguments of the function call:\n- f: {f}\n- args: {args}"
-    if ¬ f.isConst then throwError "Not a constant: {f}"
+    let fLevels ← do
+      -- If we are registering a theorem, then the function must be a constant
+      if ¬ f.isConst then
+        if isGoal then pure []
+        else throwError "Not a constant: {f}"
+      else pure f.constLevels!
     -- *Sanity check* (activated if we are analyzing a theorem to register it in a DB)
     -- Check if some existentially quantified variables
     let _ := do
@@ -117,8 +123,8 @@ section Methods
       fvars := fvars
       evars := evars
       fArgsExpr
-      fName := f.constName!
-      fLevels := f.constLevels!
+      fIsConst := f.isConst
+      fLevels
       args := args
       ret := ret
       post := post
