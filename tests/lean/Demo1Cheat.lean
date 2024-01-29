@@ -4,6 +4,61 @@ open Result
 
 namespace demo
 
+namespace ex
+  inductive List (a : Type) where
+  | nil : List a
+  | cons (head : a) (tail : List a) : List a
+
+  namespace List
+
+    @[simp]
+    def len {a : Type} (ls : List a) : ℤ :=
+      match ls with
+      | nil => 0
+      | cons _ tl => 1 + tl.len
+
+    @[simp]
+    def append {a : Type} (l0 l1 : List a) : List a :=
+      match l0 with
+      | nil => l1
+      | cons h tl => cons h (append tl l1)
+
+    def append_len_eq {a : Type} (l0 l1 : List a) : (l0.append l1).len = l0.len + l1.len := by
+      induction l0
+      . unfold append
+        conv => rhs; lhs; unfold len
+        simp
+      . unfold append
+        rename a => h
+        rename List a => tl
+        rename _ => hi
+        conv => lhs; unfold len
+        conv => rhs; lhs; unfold len
+        rw [hi]
+        scalar_tac
+
+    def append_len_eq1 {a : Type} (l0 l1 : List a) : (l0.append l1).len = l0.len + l1.len := by
+      induction l0
+      . simp
+      . simp [*]
+        scalar_tac
+
+    def append_len_eq2 {a : Type} (l0 l1 : List a) : (l0.append l1).len = l0.len + l1.len := by
+      match l0 with
+      | nil => simp
+      | cons h tl =>
+        have hi := append_len_eq2 tl l1
+        simp [*]
+        scalar_tac
+
+  end List
+end ex
+
+structure MySubtype {α : Type} (p : α → Prop) where
+  val : α
+  property : p val
+
+#check Subtype
 def Vec (a : Type) (n : ℤ) := { l : List a // l.len = n }
 
 -- set_option pp.explicit true
