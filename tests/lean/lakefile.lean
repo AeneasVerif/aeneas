@@ -4,19 +4,19 @@ open Lake DSL
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git"
 
-require Base from "../../backends/lean"
+require base from "../../backends/lean"
 
-package «tests» {}
+package «Tests» {}
 
-@[default_target] lean_lib tutorial
-@[default_target] lean_lib betreeMain
-@[default_target] lean_lib constants
-@[default_target] lean_lib external
-@[default_target] lean_lib hashmap
-@[default_target] lean_lib hashmapMain
-@[default_target] lean_lib loops
-@[default_target] lean_lib noNestedBorrows
-@[default_target] lean_lib paper
-@[default_target] lean_lib poloniusList
 @[default_target] lean_lib array
-@[default_target] lean_lib traits
+@[default_target] lean_lib Tutorial
+@[default_target] lean_lib BetreeMain
+@[default_target] lean_lib Constants
+@[default_target] lean_lib External
+@[default_target] lean_lib Hashmap
+@[default_target] lean_lib HashmapMain
+@[default_target] lean_lib Loops
+@[default_target] lean_lib NoNestedBorrows
+@[default_target] lean_lib Paper
+@[default_target] lean_lib PoloniusList
+@[default_target] lean_lib Traits
