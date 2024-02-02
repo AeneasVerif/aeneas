@@ -376,7 +376,7 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
 --
 -- We first specify a decreasing value. Here, we state that [x], seen as a natural number,
 -- decreases at every recursive call.
-termination_by i32_id_spec x _ => x.val.toNat
+termination_by x.val.toNat
 -- And we now have to prove that it indeed decreases - you can skip this for now.
 decreasing_by
   -- We first need to "massage" the goal (in practice, all the proofs of [decreasing_by]
