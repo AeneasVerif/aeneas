@@ -127,7 +127,7 @@ abbrev Slice.v {α : Type u} (v : Slice α) : List α := v.val
 example {a: Type u} (v : Slice a) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
-def Slice.new (α : Type u): Slice α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
+def Slice.new (α : Type u): Slice α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp; decide ⟩
 
 -- TODO: very annoying that the α is an explicit parameter
 def Slice.len (α : Type u) (v : Slice α) : Usize :=

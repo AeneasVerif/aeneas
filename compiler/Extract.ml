@@ -1864,7 +1864,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
              let body =
                match !backend with
                | FStar -> "eval_global " ^ body_name
-               | Lean -> "eval_global " ^ body_name ^ " (by simp)"
+               | Lean -> "eval_global " ^ body_name ^ " (by decide)"
                | Coq -> body_name ^ "%global"
                | HOL4 -> "get_return_value " ^ body_name
              in

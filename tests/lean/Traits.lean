@@ -249,7 +249,7 @@ def traits.ToTypetraitsBoolWrapperTInst (T : Type) (ToTypeBoolTInst : ToType
    Source: 'src/traits.rs', lines 164:4-164:21 -/
 def with_const_ty_len2_body : Result Usize := Result.ret 32#usize
 def with_const_ty_len2_c : Usize :=
-  eval_global with_const_ty_len2_body (by simp)
+  eval_global with_const_ty_len2_body (by decide)
 
 /- Trait declaration: [traits::WithConstTy]
    Source: 'src/traits.rs', lines 161:0-161:39 -/
@@ -264,7 +264,7 @@ structure WithConstTy (Self : Type) (LEN : Usize) where
 /- [traits::{bool#8}::LEN1]
    Source: 'src/traits.rs', lines 175:4-175:21 -/
 def bool_len1_body : Result Usize := Result.ret 12#usize
-def bool_len1_c : Usize := eval_global bool_len1_body (by simp)
+def bool_len1_c : Usize := eval_global bool_len1_body (by decide)
 
 /- [traits::{bool#8}::f]:
    Source: 'src/traits.rs', lines 180:4-180:39 -/

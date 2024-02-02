@@ -383,10 +383,7 @@ def mkFin (n : Nat) : Expr :=
 def mkFinVal (n i : Nat) : MetaM Expr := do
   let n_lit : Expr := .lit (.natVal (n - 1))
   let i_lit : Expr := .lit (.natVal i)
-  -- We could use `trySynthInstance`, but as we know the instance that we are
-  -- going to use, we can save the lookup
-  let ofNat ← mkAppOptM ``Fin.instOfNatFinHAddNatInstHAddInstAddNatOfNat #[n_lit, i_lit]
-  mkAppOptM ``OfNat.ofNat #[none, none, ofNat]
+  mkAppOptM ``Fin.ofNat #[.some n_lit, .some i_lit]
 
 /- Information about the type of a function in a declaration group.
 
@@ -654,8 +651,8 @@ partial def proveExprIsValid (k_var kk_var : Expr) (e : Expr) : MetaM Expr := do
   -- Normalize to eliminate the lambdas - TODO: this is slightly dangerous.
   let e ← do
     if e.isLet ∧ normalize_let_bindings then do
-      let updt_config config :=
-        { config with transparency := .reducible, zetaNonDep := false }
+      let updt_config (config : Lean.Meta.Config) :=
+        { config with transparency := .reducible }
       let e ← withConfig updt_config (whnf e)
       trace[Diverge.def.valid] "e (after normalization): {e}"
       pure e
@@ -929,7 +926,7 @@ partial def proveAppIsValidApplyThms (k_var kk_var : Expr) (e : Expr)
           -- We sometimes need to reduce the term - TODO: this is really dangerous
           let e ← do
             let updt_config config :=
-              { config with transparency := .reducible, zetaNonDep := false }
+              { config with transparency := .reducible }
             withConfig updt_config (whnf e)
           trace[Diverge.def.valid] "e (after normalization): {e}"
           let e_valid ← proveExprIsValid k_var kk_var e

@@ -1,6 +1,5 @@
 import Lean
 import Mathlib.Tactic.Core
-import Mathlib.Tactic.LeftRight
 import Base.UtilsBase
 
 /-
@@ -503,9 +502,8 @@ elab "split_disj " n:ident : tactic => do
 
 example (x y : Int) (h0 : x ≤ y ∨ x ≥ y) : x ≤ y ∨ x ≥ y := by
   split_disj h0
-  . left; assumption
-  . right; assumption
-
+  . apply Or.inl; assumption
+  . apply Or.inr; assumption
 
 -- Tactic to split on an exists.
 -- `h` must be an FVar

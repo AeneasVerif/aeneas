@@ -31,13 +31,13 @@ def mkMapDeclarationExtension [Inhabited α] (name : Name := by exact decl_name%
    store the keys from *after* the transformation (i.e., the `DiscrTreeKey`
    below). The transformation itself can be done elsewhere.
  -/
-abbrev DiscrTreeKey (simpleReduce : Bool) := Array (DiscrTree.Key simpleReduce)
+abbrev DiscrTreeKey := Array DiscrTree.Key
 
-abbrev DiscrTreeExtension (α : Type) (simpleReduce : Bool) :=
-  SimplePersistentEnvExtension (DiscrTreeKey simpleReduce × α) (DiscrTree α simpleReduce)
+abbrev DiscrTreeExtension (α : Type) :=
+  SimplePersistentEnvExtension (DiscrTreeKey × α) (DiscrTree α)
 
-def mkDiscrTreeExtention [Inhabited α] [BEq α] (name : Name := by exact decl_name%) (simpleReduce : Bool) :
-  IO (DiscrTreeExtension α simpleReduce) :=
+def mkDiscrTreeExtention [Inhabited α] [BEq α] (name : Name := by exact decl_name%) :
+  IO (DiscrTreeExtension α) :=
   registerSimplePersistentEnvExtension {
     name          := name,
     addImportedFn := fun a => a.foldl (fun s a => a.foldl (fun s (k, v) => s.insertCore k v) s) DiscrTree.empty,

@@ -27,12 +27,12 @@ initialize registerTraceClass `Diverge.attr
 -- divspec attribute
 structure DivSpecAttr where
   attr : AttributeImpl
-  ext  : DiscrTreeExtension Name true
+  ext  : DiscrTreeExtension Name
   deriving Inhabited
 
 /- The persistent map from expressions to divspec theorems. -/
 initialize divspecAttr : DivSpecAttr ← do
-  let ext ← mkDiscrTreeExtention `divspecMap true
+  let ext ← mkDiscrTreeExtention `divspecMap
   let attrImpl : AttributeImpl := {
     name := `divspec
     descr := "Marks theorems to use with the `divergent` encoding"
@@ -44,7 +44,7 @@ initialize divspecAttr : DivSpecAttr ← do
       -- Lookup the theorem
       let env ← getEnv
       let thDecl := env.constants.find! thName
-      let fKey : Array (DiscrTree.Key true) ← MetaM.run' (do
+      let fKey : Array (DiscrTree.Key) ← MetaM.run' (do
         /- The theorem should have the shape:
            `∀ ..., is_valid_p k (λ k => ...)`
 
@@ -59,7 +59,9 @@ initialize divspecAttr : DivSpecAttr ← do
         let (_, _, fExpr) ← lambdaMetaTelescope fExpr.consumeMData
         trace[Diverge] "Registering divspec theorem for {fExpr}"
         -- Convert the function expression to a discrimination tree key
-        DiscrTree.mkPath fExpr)
+        -- We use the default configuration
+        let config : WhnfCoreConfig := {}
+        DiscrTree.mkPath fExpr config)
       let env := ext.addEntry env (fKey, thName)
       setEnv env
       trace[Diverge] "Saved the environment"
@@ -69,9 +71,11 @@ initialize divspecAttr : DivSpecAttr ← do
   pure { attr := attrImpl, ext := ext }
 
 def DivSpecAttr.find? (s : DivSpecAttr) (e : Expr) : MetaM (Array Name) := do
-  (s.ext.getState (← getEnv)).getMatch e
+  -- We use the default configuration
+  let config : WhnfCoreConfig := {}
+  (s.ext.getState (← getEnv)).getMatch e config
 
-def DivSpecAttr.getState (s : DivSpecAttr) : MetaM (DiscrTree Name true) := do
+def DivSpecAttr.getState (s : DivSpecAttr) : MetaM (DiscrTree Name) := do
   pure (s.ext.getState (← getEnv))
 
 def showStoredDivSpec : MetaM Unit := do
