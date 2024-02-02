@@ -139,12 +139,12 @@ def getPSpecFunArgsExpr (isGoal : Bool) (th : Expr) : MetaM Expr :=
 -- pspec attribute
 structure PSpecAttr where
   attr : AttributeImpl
-  ext  : DiscrTreeExtension Name true
+  ext  : DiscrTreeExtension Name
   deriving Inhabited
 
 /- The persistent map from expressions to pspec theorems. -/
 initialize pspecAttr : PSpecAttr ← do
-  let ext ← mkDiscrTreeExtention `pspecMap true
+  let ext ← mkDiscrTreeExtention `pspecMap
   let attrImpl : AttributeImpl := {
     name := `pspec
     descr := "Marks theorems to use with the `progress` tactic"
@@ -160,7 +160,9 @@ initialize pspecAttr : PSpecAttr ← do
         let fExpr ← getPSpecFunArgsExpr false thDecl.type
         trace[Progress] "Registering spec theorem for {fExpr}"
         -- Convert the function expression to a discrimination tree key
-        DiscrTree.mkPath fExpr)
+        -- We use the default configuration
+        let config : WhnfCoreConfig := {}
+        DiscrTree.mkPath fExpr config)
       let env := ext.addEntry env (fKey, thName)
       setEnv env
       trace[Progress] "Saved the environment"
@@ -170,9 +172,11 @@ initialize pspecAttr : PSpecAttr ← do
   pure { attr := attrImpl, ext := ext }
 
 def PSpecAttr.find? (s : PSpecAttr) (e : Expr) : MetaM (Array Name) := do
-  (s.ext.getState (← getEnv)).getMatch e
+  -- We use the default configuration
+  let config : WhnfCoreConfig := {}
+  (s.ext.getState (← getEnv)).getMatch e config
 
-def PSpecAttr.getState (s : PSpecAttr) : MetaM (DiscrTree Name true) := do
+def PSpecAttr.getState (s : PSpecAttr) : MetaM (DiscrTree Name) := do
   pure (s.ext.getState (← getEnv))
 
 def showStoredPSpec : MetaM Unit := do

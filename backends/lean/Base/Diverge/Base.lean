@@ -21,7 +21,7 @@ namespace Lemmas
     else
       f ⟨ m, by simp_all [Nat.lt_iff_le_and_ne] ⟩ ∧
       for_all_fin_aux f (m + 1) (by simp_all [Arith.add_one_le_iff_le_ne])
-  termination_by for_all_fin_aux n _ m h => n - m
+  termination_by n - m
   decreasing_by
     simp_wf
     apply Nat.sub_add_lt_sub <;> try simp
@@ -240,8 +240,8 @@ namespace Fix
           simp [fix]
           -- By property of the least upper bound
           revert Hd Hl
-          -- TODO: there is no conversion to select the head of a function!
-          conv => lhs; apply congr_fun; apply congr_fun; apply congr_fun; simp [fix_fuel_P, div?]
+          conv => lhs; rw [fix_fuel_P]
+          simp [div?]
           cases fix_fuel (least (fix_fuel_P f x)) f x <;> simp
         have Hmono := fix_fuel_mono Hmono Hineq x
         simp [result_rel] at Hmono
@@ -255,7 +255,7 @@ namespace Fix
     intros x n Hf
     have Hfmono := fix_fuel_fix_mono Hmono n x
     -- TODO: there is no conversion to select the head of a function!
-    conv => apply congr_fun; simp [fix_fuel_P]
+    rw [fix_fuel_P]
     simp [fix_fuel_P] at Hf
     revert Hf Hfmono
     simp [div?, result_rel, fix]
@@ -268,9 +268,7 @@ namespace Fix
     fix f x = f (fix f) x := by
     have Hl := fix_fuel_P_least Hmono He
     -- TODO: better control of simplification
-    conv at Hl =>
-      apply congr_fun
-      simp [fix_fuel_P]
+    rw [fix_fuel_P] at Hl; simp at Hl
     -- The least upper bound is > 0
     have ⟨ n, Hsucc ⟩ : ∃ n, least (fix_fuel_P f x) = Nat.succ n := by
       revert Hl
@@ -618,12 +616,16 @@ namespace FixI
   @[simp] theorem is_valid_p_same
     (k : ((i:id) → (x:a i) → Result (b i x)) → (i:id) → (x:a i) → Result (b i x)) (x : Result c) :
     is_valid_p k (λ _ => x) := by
-    simp [is_valid_p, k_to_gen, e_to_gen]
+    simp [is_valid_p]
+    unfold k_to_gen e_to_gen
+    simp
 
   @[simp] theorem is_valid_p_rec
      (k : ((i:id) → (x:a i) → Result (b i x)) → (i:id) → (x:a i) → Result (b i x)) (i : id) (x : a i) :
     is_valid_p k (λ k => k i x) := by
-    simp [is_valid_p, k_to_gen, e_to_gen, kk_to_gen, kk_of_gen]
+    simp [is_valid_p]
+    unfold k_to_gen e_to_gen kk_to_gen kk_of_gen
+    simp
 
   theorem is_valid_p_ite
     (k : ((i:id) → (x:a i) → Result (b i x)) → (i:id) → (x:a i) → Result (b i x))
@@ -826,12 +828,16 @@ namespace FixII
   @[simp] theorem is_valid_p_same
     (k : ((i:id) → (t:ty i) → a i t → Result (b i t)) → (i:id) → (t:ty i) → a i t → Result (b i t)) (x : Result c) :
     is_valid_p k (λ _ => x) := by
-    simp [is_valid_p, k_to_gen, e_to_gen]
+    simp [is_valid_p]
+    unfold k_to_gen e_to_gen
+    simp
 
   @[simp] theorem is_valid_p_rec
      (k : ((i:id) → (t:ty i) → a i t → Result (b i t)) → (i:id) → (t:ty i) → a i t → Result (b i t)) (i : id) (t : ty i) (x : a i t) :
     is_valid_p k (λ k => k i t x) := by
-    simp [is_valid_p, k_to_gen, e_to_gen, kk_to_gen, kk_of_gen]
+    simp [is_valid_p]
+    unfold k_to_gen e_to_gen kk_to_gen kk_of_gen
+    simp
 
   theorem is_valid_p_ite
     (k : ((i:id) → (t:ty i) → a i t → Result (b i t)) → (i:id) → (t:ty i) → a i t → Result (b i t))
@@ -1531,10 +1537,11 @@ namespace Ex9
     intro k a x
     simp only [id_body]
     split <;> try simp
-    apply is_valid_p_bind <;> try simp [*]
-    -- We have to show that `map k tl` is valid
-    -- Remark: `map_is_valid` doesn't work here, we need the specialized version
-    apply map_is_valid_simple
+    . apply is_valid_p_same
+    . apply is_valid_p_bind <;> try simp [*]
+      -- We have to show that `map k tl` is valid
+      -- Remark: `map_is_valid` doesn't work here, we need the specialized version
+      apply map_is_valid_simple
 
   def body (k : (i : Fin 1) → (t : ty i) → (x : input_ty i t) → Result (output_ty i t)) (i: Fin 1) :
     (t : ty i) → (x : input_ty i t) → Result (output_ty i t) := get_fun bodies i k
