@@ -6,9 +6,8 @@ require mathlib from git
 
 require base from "../../backends/lean"
 
-package «Tests» {}
+package «tests» {}
 
-@[default_target] lean_lib array
 @[default_target] lean_lib Tutorial
 @[default_target] lean_lib BetreeMain
 @[default_target] lean_lib Constants
@@ -19,4 +18,5 @@ package «Tests» {}
 @[default_target] lean_lib NoNestedBorrows
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList
+@[default_target] lean_lib Arrays
 @[default_target] lean_lib Traits

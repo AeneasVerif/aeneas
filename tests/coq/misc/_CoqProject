@@ -8,9 +8,9 @@ External_Types.v
 Primitives.v
 External_Funs.v
 External_TypesExternal.v
-Paper.v
 Constants.v
 PoloniusList.v
+Paper.v
 NoNestedBorrows.v
 External_FunsExternal.v
 Bitwise.v
