@@ -66,13 +66,15 @@ theorem indexOpt_eq_index [Inhabited α] (ls : List α) (i : Int) :
   i < ls.len →
   ls.indexOpt i = some (ls.index i) :=
   match ls with
-  | [] => by simp; intros; linarith
+  | [] => by simp
   | hd :: tl =>
     if h: i = 0 then
       by simp [*]
-    else
+    else by
       have hi := indexOpt_eq_index tl (i - 1)
-      by simp [*]; intros;  apply hi <;> int_tac
+      simp [*]; intros
+      -- TODO: there seems to be syntax errors if we don't put the parentheses below??
+      apply hi <;> (int_tac)
 
 -- Remark: the list is unchanged if the index is not in bounds (in particular
 -- if it is < 0)
@@ -83,7 +85,7 @@ def update (ls : List α) (i : Int) (y : α) : List α :=
 
 -- Remark: the whole list is dropped if the index is not in bounds (in particular
 -- if it is < 0)
-def idrop (i : Int) (ls : List α) : List α :=
+def idrop {α : Type u} (i : Int) (ls : List α) : List α :=
   match ls with
   | [] => []
   | x :: tl => if i = 0 then x :: tl else idrop (i - 1) tl
@@ -117,7 +119,7 @@ variable {α : Type u}
 def ireplicate {α : Type u} (i : ℤ) (x : α) : List α :=
   if i ≤ 0 then []
   else x :: ireplicate (i - 1) x
-termination_by ireplicate i x => i.toNat
+termination_by i.toNat
 decreasing_by int_decr_tac
 
 @[simp] theorem update_nil : update ([] : List α) i y = [] := by simp [update]
@@ -137,7 +139,7 @@ decreasing_by int_decr_tac
 
 @[simp] theorem ireplicate_zero : ireplicate 0 x = [] := by rw [ireplicate]; simp
 @[simp] theorem ireplicate_nzero_cons (hne : 0 < i) : ireplicate i x = x :: ireplicate (i - 1) x := by
-  rw [ireplicate]; simp [*]; intro; linarith
+  rw [ireplicate]; simp [*]
 
 @[simp]
 theorem slice_nzero_cons (i j : Int) (x : α) (tl : List α) (hne : i ≠ 0) : slice i j ((x :: tl) : List α) = slice (i - 1) (j - 1) tl :=
@@ -148,11 +150,12 @@ theorem slice_nzero_cons (i j : Int) (x : α) (tl : List α) (hne : i ≠ 0) : s
       have : i = 1 := by int_tac
       simp [*, slice]
     else
-      have := slice_nzero_cons (i - 1) (j - 1) hd tl h
+      have hi := slice_nzero_cons (i - 1) (j - 1) hd tl h
       by
         conv => lhs; simp [slice, *]
-        conv at this => lhs; simp [slice, *]
-        simp [*, slice]
+        conv at hi => lhs; simp [slice, *]
+        simp [slice]
+        simp [*]
 
 @[simp]
 theorem ireplicate_replicate {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
@@ -166,7 +169,7 @@ theorem ireplicate_replicate {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
     have hl : l.toNat = .succ (l.toNat - 1) := by
       cases hl: l.toNat <;> simp_all
     conv => rhs; rw[hl]
-termination_by ireplicate_replicate l x h => l.toNat
+termination_by l.toNat
 decreasing_by int_decr_tac
 
 @[simp]
@@ -178,7 +181,7 @@ theorem ireplicate_len {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
     have : 0 < l := by int_tac
     have hr := ireplicate_len (l - 1) x (by int_tac)
     simp [*]
-termination_by ireplicate_len l x h => l.toNat
+termination_by l.toNat
 decreasing_by int_decr_tac
 
 theorem len_eq_length (ls : List α) : ls.len = ls.length := by
