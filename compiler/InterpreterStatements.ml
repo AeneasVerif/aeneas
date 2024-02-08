@@ -769,9 +769,8 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
               ("trait method call:\n- call: " ^ call_to_string ctx call
              ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
               ^ generic_args_to_string ctx func.generics
-              ^ "\n- trait and method generics:\n"
-              ^ generic_args_to_string ctx
-                  (Option.get func.trait_and_method_generic_args)));
+              ^ "\n- trait_ref.trait_decl_ref: "
+              ^ trait_decl_ref_to_string ctx trait_ref.trait_decl_ref));
           (* Lookup the trait method signature - there are several possibilities
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
@@ -900,9 +899,12 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
               log#ldebug
                 (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
               (* Instantiate *)
-              (* When instantiating, we need to group the generics for the trait ref
-                 and the method *)
-              let generics = Option.get func.trait_and_method_generic_args in
+              (* When instantiating, we need to group the generics for the
+                 trait ref and the generics for the method *)
+              let generics =
+                TypesUtils.merge_generic_args
+                  trait_ref.trait_decl_ref.decl_generics func.generics
+              in
               let regions_hierarchy =
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
                   ctx.fun_ctx.regions_hierarchies
@@ -1030,7 +1032,6 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id) :
         {
           func = FunId (FRegular global.body);
           generics = TypesUtils.empty_generic_args;
-          trait_and_method_generic_args = None;
         }
       in
       let call = { func = FnOpRegular func; args = []; dest } in
