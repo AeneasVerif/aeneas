@@ -772,9 +772,6 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
               ^ "\n- trait and method generics:\n"
               ^ generic_args_to_string ctx
                   (Option.get func.trait_and_method_generic_args)));
-          (* When instantiating, we need to group the generics for the trait ref
-             and the method *)
-          let generics = Option.get func.trait_and_method_generic_args in
           (* Lookup the trait method signature - there are several possibilities
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
@@ -794,6 +791,11 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
               | Some (_, id) ->
                   (* This is a required method *)
                   let method_def = ctx_lookup_fun_decl ctx id in
+                  (* We have to concatenate the generics for the impl
+                     and the generics for the method *)
+                  let generics =
+                    merge_generic_args trait_ref.generics func.generics
+                  in
                   (* Instantiate *)
                   let tr_self = TraitRef trait_ref in
                   let fid : fun_id = FRegular id in
@@ -898,6 +900,9 @@ let eval_transparent_function_call_symbolic_inst (call : call) (ctx : eval_ctx)
               log#ldebug
                 (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
               (* Instantiate *)
+              (* When instantiating, we need to group the generics for the trait ref
+                 and the method *)
+              let generics = Option.get func.trait_and_method_generic_args in
               let regions_hierarchy =
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
                   ctx.fun_ctx.regions_hierarchies
