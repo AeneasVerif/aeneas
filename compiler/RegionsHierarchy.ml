@@ -169,7 +169,7 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
         (* Continue *)
         explore_ty outer ty
     | TRawPtr (ty, _) -> explore_ty outer ty
-    | TTraitType (trait_ref, _generic_args, _) ->
+    | TTraitType (trait_ref, _) ->
         (* The trait should reference a clause, and not an implementation
            (otherwise it should have been normalized) *)
         assert (

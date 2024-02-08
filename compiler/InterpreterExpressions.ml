@@ -263,8 +263,7 @@ let eval_operand_no_reorganize (config : config) (op : operand)
       match cv.value with
       | CLiteral lit ->
           cf (literal_to_typed_value (ty_as_literal cv.ty) lit) ctx
-      | CTraitConst (trait_ref, generics, const_name) -> (
-          assert (generics = empty_generic_args);
+      | CTraitConst (trait_ref, const_name) -> (
           match trait_ref.trait_id with
           | TraitImpl _ ->
               (* This shouldn't happen: if we refer to a concrete implementation, we
@@ -294,8 +293,7 @@ let eval_operand_no_reorganize (config : config) (op : operand)
                        ( ctx0,
                          None,
                          value_as_symbolic v.value,
-                         SymbolicAst.VaTraitConstValue
-                           (trait_ref, generics, const_name),
+                         SymbolicAst.VaTraitConstValue (trait_ref, const_name),
                          e ))))
       | CVar vid -> (
           let ctx0 = ctx in

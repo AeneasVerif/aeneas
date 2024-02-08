@@ -105,9 +105,8 @@ let generic_args_no_regions (x : generic_args) : bool =
 (** Return [true] if the trait type constraint doesn't contain regions (including erased regions) *)
 let trait_type_constraint_no_regions (x : trait_type_constraint) : bool =
   try
-    let { trait_ref; generics; type_name = _; ty } = x in
+    let { trait_ref; type_name = _; ty } = x in
     raise_if_region_ty_visitor#visit_trait_ref () trait_ref;
-    raise_if_region_ty_visitor#visit_generic_args () generics;
     raise_if_region_ty_visitor#visit_ty () ty;
     true
   with Found -> false

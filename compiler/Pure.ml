@@ -283,7 +283,7 @@ type ty =
   | TVar of type_var_id
   | TLiteral of literal_type
   | TArrow of ty * ty
-  | TTraitType of trait_ref * generic_args * string
+  | TTraitType of trait_ref * string
       (** The string is for the name of the associated type *)
 
 and trait_ref = {
@@ -374,7 +374,6 @@ type generic_params = {
 
 type trait_type_constraint = {
   trait_ref : trait_ref;
-  generics : generic_args;
   type_name : trait_item_name;
   ty : ty;
 }
@@ -599,8 +598,7 @@ type qualif_id =
   | Global of global_decl_id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
-  | TraitConst of trait_ref * generic_args * string
-      (** A trait associated constant *)
+  | TraitConst of trait_ref * string  (** A trait associated constant *)
 [@@deriving show]
 
 (** An instantiated qualifier.

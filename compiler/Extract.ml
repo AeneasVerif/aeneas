@@ -326,11 +326,8 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
           extract_adt_cons ctx fmt inside adt_cons_id qualif.generics args
       | Proj proj ->
           extract_field_projector ctx fmt inside app proj qualif.generics args
-      | TraitConst (trait_ref, generics, const_name) ->
-          let use_brackets = generics <> empty_generic_args in
-          if use_brackets then F.pp_print_string fmt "(";
+      | TraitConst (trait_ref, const_name) ->
           extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref;
-          extract_generic_args ctx fmt TypeDeclId.Set.empty generics;
           let name =
             ctx_get_trait_const trait_ref.trait_decl_ref.trait_decl_id
               const_name ctx
@@ -338,7 +335,6 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
           let add_brackets (s : string) =
             if !backend = Coq then "(" ^ s ^ ")" else s
           in
-          if use_brackets then F.pp_print_string fmt ")";
           F.pp_print_string fmt ("." ^ add_brackets name))
   | _ ->
       (* "Regular" expression *)
