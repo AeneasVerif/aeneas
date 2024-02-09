@@ -1,0 +1,7 @@
+# This file was automatically generated - see ../Makefile
+-R . Lib
+-arg -w
+-arg all
+
+Demo.v
+Primitives.v
