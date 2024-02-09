@@ -20,3 +20,4 @@ package «tests» {}
 @[default_target] lean_lib PoloniusList
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib Traits
+@[default_target] lean_lib Demo
