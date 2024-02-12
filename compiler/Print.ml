@@ -88,19 +88,19 @@ module Values = struct
 
   and borrow_content_to_string (env : fmt_env) (bc : borrow_content) : string =
     match bc with
-    | VSharedBorrow bid -> "⌊shared@" ^ BorrowId.to_string bid ^ "⌋"
+    | VSharedBorrow bid -> "shared_borrow@" ^ BorrowId.to_string bid
     | VMutBorrow (bid, tv) ->
-        "&mut@" ^ BorrowId.to_string bid ^ " ("
+        "mut_borrow@" ^ BorrowId.to_string bid ^ " ("
         ^ typed_value_to_string env tv
         ^ ")"
-    | VReservedMutBorrow bid -> "⌊reserved_mut@" ^ BorrowId.to_string bid ^ "⌋"
+    | VReservedMutBorrow bid -> "reserved_borrow@" ^ BorrowId.to_string bid
 
   and loan_content_to_string (env : fmt_env) (lc : loan_content) : string =
     match lc with
     | VSharedLoan (loans, v) ->
         let loans = BorrowId.Set.to_string None loans in
         "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string env v ^ ")"
-    | VMutLoan bid -> "⌊mut@" ^ BorrowId.to_string bid ^ "⌋"
+    | VMutLoan bid -> "ml@" ^ BorrowId.to_string bid
 
   let abstract_shared_borrow_to_string (env : fmt_env)
       (abs : abstract_shared_borrow) : string =
@@ -184,9 +184,9 @@ module Values = struct
   and aloan_content_to_string (env : fmt_env) (lc : aloan_content) : string =
     match lc with
     | AMutLoan (bid, av) ->
-        "⌊mut@" ^ BorrowId.to_string bid ^ ", "
+        "@mut_loan(" ^ BorrowId.to_string bid ^ ", "
         ^ typed_avalue_to_string env av
-        ^ "⌋"
+        ^ ")"
     | ASharedLoan (loans, v, av) ->
         let loans = BorrowId.Set.to_string None loans in
         "@shared_loan(" ^ loans ^ ", "
@@ -225,10 +225,10 @@ module Values = struct
       =
     match bc with
     | AMutBorrow (bid, av) ->
-        "&mut@" ^ BorrowId.to_string bid ^ " ("
+        "mb@" ^ BorrowId.to_string bid ^ " ("
         ^ typed_avalue_to_string env av
         ^ ")"
-    | ASharedBorrow bid -> "⌊shared@" ^ BorrowId.to_string bid ^ "⌋"
+    | ASharedBorrow bid -> "sb@" ^ BorrowId.to_string bid
     | AIgnoredMutBorrow (opt_bid, av) ->
         "@ignored_mut_borrow("
         ^ option_to_string BorrowId.to_string opt_bid
