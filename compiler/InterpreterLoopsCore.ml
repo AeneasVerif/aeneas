@@ -12,6 +12,7 @@ type updt_env_kind =
   | AbsInRight of AbstractionId.id
   | LoanInRight of BorrowId.id
   | LoansInRight of BorrowId.Set.t
+[@@deriving show]
 
 (** Utility exception *)
 exception ValueMatchFailure of updt_env_kind

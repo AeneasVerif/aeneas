@@ -352,6 +352,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
 
   let cf_exit_loop_body (res : statement_eval_res) : m_fun =
    fun ctx ->
+    log#ldebug (lazy "compute_loop_entry_fixed_point: cf_exit_loop_body");
     match res with
     | Return | Panic | Break _ -> None
     | Unit ->
@@ -377,6 +378,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
      context (the context at the loop entry, after we called
      {!prepare_ashared_loans}, if this is the first iteration) *)
   let join_ctxs (ctx1 : eval_ctx) : eval_ctx =
+    log#ldebug (lazy "compute_loop_entry_fixed_point: join_ctxs");
     (* If this is the first iteration, end the borrows/loans/abs which
        appear in ctx1 and not in the other contexts, then compute the
        set of fixed ids. This means those borrows/loans have to end
@@ -400,6 +402,15 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
             ctx
           in
           (* End the borrows/abs in [ctx1] *)
+          log#ldebug
+            (lazy
+              ("compute_loop_entry_fixed_point: join_ctxs: ending \
+                borrows/abstractions before entering the loop:\n\
+                - ending borrow ids: "
+              ^ BorrowId.Set.to_string None blids
+              ^ "\n- ending abstraction ids: "
+              ^ AbstractionId.Set.to_string None aids
+              ^ "\n\n"));
           let ctx1 = end_borrows_abs blids aids ctx1 in
           (* We can also do the same in the contexts [ctxs]: if there are
              several contexts, maybe one of them ended some borrows and some
@@ -420,6 +431,8 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
     ctxs := [];
     ctx2
   in
+  log#ldebug (lazy "compute_loop_entry_fixed_point: after join_ctxs");
+
   (* Compute the set of fixed ids - for the symbolic ids, we compute the
      intersection of ids between the original environment and the list
      of new environments *)
@@ -440,6 +453,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
      existentially quantified borrows/abstractions/symbolic values.
   *)
   let equiv_ctxs (ctx1 : eval_ctx) (ctx2 : eval_ctx) : bool =
+    log#ldebug (lazy "compute_fixed_point: equiv_ctx:");
     let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
     let check_equivalent = true in
     let lookup_shared_value _ = raise (Failure "Unreachable") in
@@ -531,6 +545,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
     in
     let cf_loop : st_m_fun =
      fun res ctx ->
+      log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop");
       match res with
       | Continue _ | Panic ->
           (* We don't want to generate anything *)
@@ -544,6 +559,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
           *)
           raise (Failure "Unreachable")
       | Return ->
+          log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop: Return");
           (* Should we consume the return value and pop the frame?
            * If we check in [Interpreter] that the loop abstraction we end is
            * indeed the correct one, I think it is sound to under-approximate here
