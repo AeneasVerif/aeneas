@@ -30,6 +30,7 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
      new context (and repeat this an indefinite number of times).
   *)
   let rec reeval_loop_body (res : statement_eval_res) : m_fun =
+    log#ldebug (lazy "eval_loop_concrete: reeval_loop_body");
     match res with
     | Return -> cf (LoopReturn loop_id)
     | Panic -> cf Panic
@@ -90,139 +91,166 @@ let eval_loop_symbolic (config : config) (meta : meta)
      loop entry with the fixed point: in the synthesized code, the function
      will end with a call to the loop translation
   *)
-  let fp_bl_corresp =
-    compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
+  (* First, preemptively end borrows/move values by matching the current
+     context with the target context *)
+  let cf_prepare_ctx cf ctx =
+    log#ldebug
+      (lazy
+        ("eval_loop_symbolic: about to reorganize the original context to \
+          match  the fixed-point ctx with it:\n\
+          - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
+       ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
+
+    prepare_match_ctx_with_target config loop_id fixed_ids fp_ctx cf ctx
   in
-  log#ldebug
-    (lazy
-      ("eval_loop_symbolic: about to match the fixed-point context with the \
-        original context:\n\
-        - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
-     ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
-  let end_expr : SymbolicAst.expression option =
-    match_ctx_with_target config loop_id true fp_bl_corresp fp_input_svalues
-      fixed_ids fp_ctx cf ctx
-  in
-  log#ldebug
-    (lazy
-      "eval_loop_symbolic: matched the fixed-point context with the original \
-       context");
 
-  (* Synthesize the loop body by evaluating it, with the continuation for
-     after the loop starting at the *fixed point*, but with a special
-     treatment for the [Break] and [Continue] cases *)
-  let cf_loop : st_m_fun =
-   fun res ctx ->
-    match res with
-    | Return ->
-        (* We replace the [Return] with a [LoopReturn] *)
-        cf (LoopReturn loop_id) ctx
-    | Panic -> cf res ctx
-    | Break i ->
-        (* Break out of the loop by calling the continuation *)
-        let res = if i = 0 then Unit else Break (i - 1) in
-        cf res ctx
-    | Continue i ->
-        (* We don't support nested loops for now *)
-        assert (i = 0);
-        log#ldebug
-          (lazy
-            ("eval_loop_symbolic: about to match the fixed-point context with \
-              the context at a continue:\n\
-              - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
-           ^ "\n\n-tgt ctx (ctx at continue):\n" ^ eval_ctx_to_string ctx));
-        let cc =
-          match_ctx_with_target config loop_id false fp_bl_corresp
-            fp_input_svalues fixed_ids fp_ctx
-        in
-        cc cf ctx
-    | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
-        (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
-           For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
-        *)
-        raise (Failure "Unreachable")
-  in
-  let loop_expr = eval_loop_body cf_loop fp_ctx in
+  (* Actually match *)
+  let cf_match_ctx cf ctx =
+    log#ldebug
+      (lazy
+        ("eval_loop_symbolic: about to compute the id correspondance between \
+          the fixed-point ctx and the original ctx:\n\
+          - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
+       ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
 
-  log#ldebug
-    (lazy
-      ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string_no_filter ctx
-      ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string_no_filter fp_ctx
-      ^ "\n- fixed_sids: "
-      ^ SymbolicValueId.Set.show fixed_ids.sids
-      ^ "\n- fresh_sids: "
-      ^ SymbolicValueId.Set.show fresh_sids
-      ^ "\n- input_svalues: "
-      ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
-      ^ "\n\n"));
-
-  (* For every abstraction introduced by the fixed-point, compute the
-     types of the given back values.
-
-     We need to explore the abstractions, looking for the mutable borrows.
-     Moreover, we list the borrows in the same order as the loans (this
-     is important in {!SymbolicToPure}, where we expect the given back
-     values to have a specific order.
-  *)
-  let compute_abs_given_back_tys (abs : abs) : RegionId.Set.t * rty list =
-    let is_borrow (av : typed_avalue) : bool =
-      match av.value with
-      | ABorrow _ -> true
-      | ALoan _ -> false
-      | _ -> raise (Failure "Unreachable")
+    (* Compute the id correspondance between the contexts *)
+    let fp_bl_corresp =
+      compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
     in
-    let borrows, loans = List.partition is_borrow abs.avalues in
-
-    let borrows =
-      List.filter_map
-        (fun (av : typed_avalue) ->
-          match av.value with
-          | ABorrow (AMutBorrow (bid, child_av)) ->
-              assert (is_aignored child_av.value);
-              Some (bid, child_av.ty)
-          | ABorrow (ASharedBorrow _) -> None
-          | _ -> raise (Failure "Unreachable"))
-        borrows
+    log#ldebug
+      (lazy
+        ("eval_loop_symbolic: about to match the fixed-point context with the \
+          original context:\n\
+          - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
+       ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
+    let end_expr : SymbolicAst.expression option =
+      match_ctx_with_target config loop_id true fp_bl_corresp fp_input_svalues
+        fixed_ids fp_ctx cf ctx
     in
-    let borrows = ref (BorrowId.Map.of_list borrows) in
+    log#ldebug
+      (lazy
+        "eval_loop_symbolic: matched the fixed-point context with the original \
+         context");
 
-    let loan_ids =
-      List.filter_map
-        (fun (av : typed_avalue) ->
-          match av.value with
-          | ALoan (AMutLoan (bid, child_av)) ->
-              assert (is_aignored child_av.value);
-              Some bid
-          | ALoan (ASharedLoan _) -> None
-          | _ -> raise (Failure "Unreachable"))
-        loans
-    in
-
-    (* List the given back types, in the order given by the loans *)
-    let given_back_tys =
-      List.map
-        (fun lid ->
-          let bid =
-            BorrowId.InjSubst.find lid fp_bl_corresp.loan_to_borrow_id_map
+    (* Synthesize the loop body by evaluating it, with the continuation for
+       after the loop starting at the *fixed point*, but with a special
+       treatment for the [Break] and [Continue] cases *)
+    let cf_loop : st_m_fun =
+     fun res ctx ->
+      log#ldebug (lazy "eval_loop_symbolic: cf_loop");
+      match res with
+      | Return ->
+          (* We replace the [Return] with a [LoopReturn] *)
+          cf (LoopReturn loop_id) ctx
+      | Panic -> cf res ctx
+      | Break i ->
+          (* Break out of the loop by calling the continuation *)
+          let res = if i = 0 then Unit else Break (i - 1) in
+          cf res ctx
+      | Continue i ->
+          (* We don't support nested loops for now *)
+          assert (i = 0);
+          log#ldebug
+            (lazy
+              ("eval_loop_symbolic: about to match the fixed-point context \
+                with the context at a continue:\n\
+                - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
+             ^ "\n\n-tgt ctx (ctx at continue):\n" ^ eval_ctx_to_string ctx));
+          let cc =
+            match_ctx_with_target config loop_id false fp_bl_corresp
+              fp_input_svalues fixed_ids fp_ctx
           in
-          let ty = BorrowId.Map.find bid !borrows in
-          borrows := BorrowId.Map.remove bid !borrows;
-          ty)
-        loan_ids
+          cc cf ctx
+      | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
+          (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
+             For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
+          *)
+          raise (Failure "Unreachable")
     in
-    assert (BorrowId.Map.is_empty !borrows);
+    let loop_expr = eval_loop_body cf_loop fp_ctx in
 
-    (abs.regions, given_back_tys)
-  in
-  let rg_to_given_back =
-    RegionGroupId.Map.map compute_abs_given_back_tys rg_to_abs
-  in
+    log#ldebug
+      (lazy
+        ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
+        ^ eval_ctx_to_string_no_filter ctx
+        ^ "\n- fixed point:\n"
+        ^ eval_ctx_to_string_no_filter fp_ctx
+        ^ "\n- fixed_sids: "
+        ^ SymbolicValueId.Set.show fixed_ids.sids
+        ^ "\n- fresh_sids: "
+        ^ SymbolicValueId.Set.show fresh_sids
+        ^ "\n- input_svalues: "
+        ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
+        ^ "\n\n"));
 
-  (* Put together *)
-  S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back end_expr
-    loop_expr meta
+    (* For every abstraction introduced by the fixed-point, compute the
+       types of the given back values.
+
+       We need to explore the abstractions, looking for the mutable borrows.
+       Moreover, we list the borrows in the same order as the loans (this
+       is important in {!SymbolicToPure}, where we expect the given back
+       values to have a specific order.
+    *)
+    let compute_abs_given_back_tys (abs : abs) : RegionId.Set.t * rty list =
+      let is_borrow (av : typed_avalue) : bool =
+        match av.value with
+        | ABorrow _ -> true
+        | ALoan _ -> false
+        | _ -> raise (Failure "Unreachable")
+      in
+      let borrows, loans = List.partition is_borrow abs.avalues in
+
+      let borrows =
+        List.filter_map
+          (fun (av : typed_avalue) ->
+            match av.value with
+            | ABorrow (AMutBorrow (bid, child_av)) ->
+                assert (is_aignored child_av.value);
+                Some (bid, child_av.ty)
+            | ABorrow (ASharedBorrow _) -> None
+            | _ -> raise (Failure "Unreachable"))
+          borrows
+      in
+      let borrows = ref (BorrowId.Map.of_list borrows) in
+
+      let loan_ids =
+        List.filter_map
+          (fun (av : typed_avalue) ->
+            match av.value with
+            | ALoan (AMutLoan (bid, child_av)) ->
+                assert (is_aignored child_av.value);
+                Some bid
+            | ALoan (ASharedLoan _) -> None
+            | _ -> raise (Failure "Unreachable"))
+          loans
+      in
+
+      (* List the given back types, in the order given by the loans *)
+      let given_back_tys =
+        List.map
+          (fun lid ->
+            let bid =
+              BorrowId.InjSubst.find lid fp_bl_corresp.loan_to_borrow_id_map
+            in
+            let ty = BorrowId.Map.find bid !borrows in
+            borrows := BorrowId.Map.remove bid !borrows;
+            ty)
+          loan_ids
+      in
+      assert (BorrowId.Map.is_empty !borrows);
+
+      (abs.regions, given_back_tys)
+    in
+    let rg_to_given_back =
+      RegionGroupId.Map.map compute_abs_given_back_tys rg_to_abs
+    in
+
+    (* Put together *)
+    S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back end_expr
+      loop_expr meta
+  in
+  (* Compose *)
+  comp cf_prepare_ctx cf_match_ctx cf ctx
 
 let eval_loop (config : config) (meta : meta) (eval_loop_body : st_cm_fun) :
     st_cm_fun =

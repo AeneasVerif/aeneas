@@ -1376,9 +1376,16 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
       }
     in
     Some maps
-  with Distinct msg ->
-    log#ldebug (lazy ("match_ctxs: distinct: " ^ msg));
-    None
+  with
+  | Distinct msg ->
+      log#ldebug (lazy ("match_ctxs: distinct: " ^ msg ^ "\n"));
+      None
+  | ValueMatchFailure k ->
+      log#ldebug
+        (lazy
+          ("match_ctxs: distinct: ValueMatchFailure" ^ show_updt_env_kind k
+         ^ "\n"));
+      None
 
 let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : eval_ctx)
     (ctx1 : eval_ctx) : bool =
@@ -1388,23 +1395,16 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : eval_ctx)
     (match_ctxs check_equivalent fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
-let match_ctx_with_target (config : config) (loop_id : LoopId.id)
-    (is_loop_entry : bool) (fp_bl_maps : borrow_loan_corresp)
-    (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
-    (src_ctx : eval_ctx) : st_cm_fun =
+let prepare_match_ctx_with_target (config : config) (loop_id : LoopId.id)
+    (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
  fun cf tgt_ctx ->
   (* Debug *)
   log#ldebug
     (lazy
-      ("match_ctx_with_target:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
-     ^ "\n" ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
-     ^ eval_ctx_to_string tgt_ctx));
-
-  (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
-     ending loans for instance - remember that the [src_ctx] is the fixed point
-     context, which results from joins during which we ended the loans which
-     were introduced during the loop iterations)
-  *)
+      ("prepare_match_ctx_with_target:\n" ^ "\n- fixed_ids: "
+     ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx
+      ));
   (* End the loans which lead to mismatches when joining *)
   let rec cf_reorganize_join_tgt : cm_fun =
    fun cf tgt_ctx ->
@@ -1529,6 +1529,29 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
             raise (Failure "Unexpected")
       in
       comp cc cf_reorganize_join_tgt cf tgt_ctx
+  in
+  (* Apply the reorganization *)
+  cf_reorganize_join_tgt cf tgt_ctx
+
+let match_ctx_with_target (config : config) (loop_id : LoopId.id)
+    (is_loop_entry : bool) (fp_bl_maps : borrow_loan_corresp)
+    (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
+    (src_ctx : eval_ctx) : st_cm_fun =
+ fun cf tgt_ctx ->
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("match_ctx_with_target:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
+     ^ "\n" ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
+     ^ eval_ctx_to_string tgt_ctx));
+
+  (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
+     ending loans for instance - remember that the [src_ctx] is the fixed point
+     context, which results from joins during which we ended the loans which
+     were introduced during the loop iterations)
+  *)
+  let cf_reorganize_join_tgt =
+    prepare_match_ctx_with_target config loop_id fixed_ids src_ctx
   in
 
   (* Introduce the "identity" abstractions for the loop re-entry.
