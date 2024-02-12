@@ -467,8 +467,8 @@ let env_find_abs (env : env) (pred : abs -> bool) : abs option =
   in
   lookup env
 
-let env_lookup_abs (env : env) (abs_id : AbstractionId.id) : abs =
-  Option.get (env_find_abs env (fun abs -> abs.abs_id = abs_id))
+let env_lookup_abs_opt (env : env) (abs_id : AbstractionId.id) : abs option =
+  env_find_abs env (fun abs -> abs.abs_id = abs_id)
 
 (** Remove an abstraction from the context, as well as all the references to
     this abstraction (for instance, remove the abs id from all the parent sets
@@ -524,8 +524,12 @@ let env_subst_abs (env : env) (abs_id : AbstractionId.id) (nabs : abs) :
   in
   update env
 
+let ctx_lookup_abs_opt (ctx : eval_ctx) (abs_id : AbstractionId.id) : abs option
+    =
+  env_lookup_abs_opt ctx.env abs_id
+
 let ctx_lookup_abs (ctx : eval_ctx) (abs_id : AbstractionId.id) : abs =
-  env_lookup_abs ctx.env abs_id
+  Option.get (ctx_lookup_abs_opt ctx abs_id)
 
 let ctx_find_abs (ctx : eval_ctx) (p : abs -> bool) : abs option =
   env_find_abs ctx.env p
