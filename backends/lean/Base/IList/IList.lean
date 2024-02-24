@@ -33,7 +33,7 @@ def indexOpt (ls : List α) (i : Int) : Option α :=
 @[simp] theorem indexOpt_zero_cons : indexOpt ((x :: tl) : List α) 0 = some x := by simp [indexOpt]
 @[simp] theorem indexOpt_nzero_cons (hne : i ≠ 0) : indexOpt ((x :: tl) : List α) i = indexOpt tl (i - 1) := by simp [*, indexOpt]
 
--- Remark: if i < 0, then the result is the defaul element
+-- Remark: if i < 0, then the result is the default element
 def index [Inhabited α] (ls : List α) (i : Int) : α :=
   match ls with
   | [] => Inhabited.default
