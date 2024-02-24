@@ -577,12 +577,17 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
       in
       (* Check if we extract the type as a tuple, and it only has one field.
          In this case, there is no projection. *)
-      let has_one_field =
+      let num_fields =
         match proj.adt_id with
         | TAdtId id -> (
             let d = TypeDeclId.Map.find id ctx.trans_types in
-            match d.kind with Struct [ _ ] -> true | _ -> false)
-        | _ -> false
+            match d.kind with
+            | Struct fields -> Some (List.length fields)
+            | _ -> None)
+        | _ -> None
+      in
+      let has_one_field =
+        match num_fields with Some len -> len = 1 | None -> false
       in
       if is_tuple_struct && has_one_field then
         extract_texpression ctx fmt inside arg
@@ -590,7 +595,31 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
         (* Exactly one argument: pretty-print *)
         let field_name =
           (* Check if we need to extract the type as a tuple *)
-          if is_tuple_struct then FieldId.to_string proj.field_id
+          if is_tuple_struct then
+            match !backend with
+            | FStar | HOL4 | Coq -> FieldId.to_string proj.field_id
+            | Lean ->
+                (* Tuples in Lean are syntax sugar for nested products/pairs,
+                   so we need to map the field id accordingly.
+                   A field id i maps to:
+                   (.2)^i if i is the last element of the tuple
+                   (.2)^i.1 otherwise
+                   where (.2)^i denotes .2 repeated i times.
+                   For example, 3 maps to .2.2.2 if the tuple has 4 fields and
+                   to .2.2.2.1 if it has more than 4 fields.
+                   Note that the first "." is added below *)
+                let field_id = FieldId.to_int proj.field_id in
+                (* Helper: repeat "2.2.2..."  *)
+                let rec repeat_snd n =
+                  match n with
+                  | 0 -> ""
+                  | 1 -> "2"
+                  | _ -> "2." ^ repeat_snd (n - 1)
+                in
+                let twos_prefix = repeat_snd field_id in
+                if field_id + 1 = Option.get num_fields then twos_prefix
+                else if field_id = 0 then "1"
+                else twos_prefix ^ ".1"
           else ctx_get_field proj.adt_id proj.field_id ctx
         in
         (* Open a box *)
