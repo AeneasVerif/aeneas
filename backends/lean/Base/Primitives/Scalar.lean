@@ -488,6 +488,17 @@ class HNeg (α : Type u) (β : outParam (Type v)) where
 
 prefix:75  "-"   => HNeg.hNeg
 
+/- We need this, otherwise we break pattern matching like in:
+
+   ```
+   def is_minus_one (x : Int) : Bool :=
+     match x with
+     | -1 => true
+     | _ => false
+   ```
+-/
+attribute [match_pattern] HNeg.hNeg
+
 instance : HNeg Isize (Result Isize) where hNeg x := Scalar.neg x
 instance : HNeg I8 (Result I8) where hNeg x := Scalar.neg x
 instance : HNeg I16 (Result I16) where hNeg x := Scalar.neg x
@@ -1112,5 +1123,23 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
 --     .ret (MachineInteger.ofNatCore (MachineInteger.val x).val h)
 --   else
 --     .fail integerOverflow
+
+-- Notation for pattern matching
+-- We make the precedence looser than the negation.
+notation:70 a:70 "#scalar" => Scalar.mk (a) _ _
+
+example {ty} (x : Scalar ty) : ℤ :=
+  match x with
+  | v#scalar => v
+
+example {ty} (x : Scalar ty) : Bool :=
+  match x with
+  | 1#scalar => true
+  | _ => false
+
+example {ty} (x : Scalar ty) : Bool :=
+  match x with
+  | -(1 : Int)#scalar => true
+  | _ => false
 
 end Primitives
