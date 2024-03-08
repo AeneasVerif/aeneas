@@ -56,6 +56,8 @@ val prepare_ashared_loans : loop_id option -> Cps.cm_fun
     - the map from region group id to the corresponding abstraction appearing
       in the fixed point (this is useful to compute the return type of the loop
       backward functions for instance).
+      Note that this is a partial map: the loop doesn't necessarily introduce
+      an abstraction for each input region of the function.
 
     Rem.: the list of symbolic values should be computable by simply exploring
     the fixed point environment and listing all the symbolic values we find.

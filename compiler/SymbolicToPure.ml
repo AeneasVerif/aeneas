@@ -2944,12 +2944,9 @@ and translate_forward_end (ectx : C.eval_ctx)
           (* We are translating the forward function - nothing to do *)
           (ctx, fwd_e, fun e -> e)
       | Some bid ->
-          (* There are two cases here:
-             - if we split the fwd/backward functions, we simply need to update
-               the state.
-             - if we don't split, we also need to wrap the expression in a
-               lambda, which introduces the additional inputs of the backward
-               function
+          (* We need to update the state, and wrap the expression in a
+             lambda, which introduces the additional inputs of the backward
+             function.
           *)
           let ctx =
             (* Introduce variables for the inputs and the state variable
@@ -3266,10 +3263,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         ^ (Print.list_to_string (symbolic_value_to_string ctx)) svl
         ^ "\n- rg_to_abs\n:"
         ^ T.RegionGroupId.Map.show
-            (fun (rids, tys) ->
-              "(" ^ T.RegionId.Set.show rids ^ ", "
-              ^ Print.list_to_string (ty_to_string ctx) tys
-              ^ ")")
+            (Print.list_to_string (ty_to_string ctx))
             loop.rg_to_given_back_tys
         ^ "\n"));
     let ctx, _ = fresh_vars_for_symbolic_values svl ctx in
@@ -3297,7 +3291,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let ctx = ref ctx in
   let rg_to_given_back_tys =
     RegionGroupId.Map.map
-      (fun (_, tys) ->
+      (fun tys ->
         (* The types shouldn't contain borrows - we can translate them as forward types *)
         List.map
           (fun ty ->
@@ -3313,11 +3307,24 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let back_effect_infos, output_ty =
     (* The loop backward functions consume the same additional inputs as the parent
        function, but have custom outputs *)
-    let back_sgs = RegionGroupId.Map.bindings ctx.sg.back_sg in
-    let given_back_tys = RegionGroupId.Map.values rg_to_given_back_tys in
+    log#ldebug
+      (lazy
+        (let back_sgs = RegionGroupId.Map.bindings ctx.sg.back_sg in
+         "translate_loop:" ^ "\n- back_sgs: "
+         ^ (Print.list_to_string
+              (Print.pair_to_string RegionGroupId.to_string show_back_sg_info))
+             back_sgs
+         ^ "\n- given_back_tys: "
+         ^ (RegionGroupId.Map.to_string None
+              (Print.list_to_string (pure_ty_to_string ctx)))
+             rg_to_given_back_tys
+         ^ "\n"));
     let back_info_tys =
       List.map
-        (fun (((id, back_sg), given_back) : (_ * back_sg_info) * ty list) ->
+        (fun ((rg_id, given_back) : RegionGroupId.id * ty list) ->
+          (* Lookup the effect information about the parent function region group
+             associated to this loop region abstraction *)
+          let back_sg = RegionGroupId.Map.find rg_id ctx.sg.back_sg in
           (* Remark: the effect info of the backward function for the loop
              is almost the same as for the backward function of the parent function.
              Quite importantly, the fact that the function is stateful and/or can fail
@@ -3342,8 +3349,8 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
               let ty = mk_arrows inputs output in
               Some ty
           in
-          ((id, effect_info), ty))
-        (List.combine back_sgs given_back_tys)
+          ((rg_id, effect_info), ty))
+        (RegionGroupId.Map.bindings rg_to_given_back_tys)
     in
     let back_info = List.map fst back_info_tys in
     let back_info = RegionGroupId.Map.of_list back_info in

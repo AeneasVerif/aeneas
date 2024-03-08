@@ -191,7 +191,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
        is important in {!SymbolicToPure}, where we expect the given back
        values to have a specific order.
     *)
-    let compute_abs_given_back_tys (abs : abs) : RegionId.Set.t * rty list =
+    let compute_abs_given_back_tys (abs : abs) : rty list =
       let is_borrow (av : typed_avalue) : bool =
         match av.value with
         | ABorrow _ -> true
@@ -239,7 +239,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
       in
       assert (BorrowId.Map.is_empty !borrows);
 
-      (abs.regions, given_back_tys)
+      given_back_tys
     in
     let rg_to_given_back =
       RegionGroupId.Map.map compute_abs_given_back_tys rg_to_abs

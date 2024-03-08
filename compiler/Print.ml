@@ -16,6 +16,10 @@ module Expressions = Charon.PrintExpressions
 let list_to_string (to_string : 'a -> string) (ls : 'a list) : string =
   "[" ^ String.concat "; " (List.map to_string ls) ^ "]"
 
+let pair_to_string (to_string0 : 'a -> string) (to_string1 : 'b -> string)
+    ((x, y) : 'a * 'b) : string =
+  "(" ^ to_string0 x ^ ", " ^ to_string1 y ^ ")"
+
 let bool_to_string (b : bool) : string = if b then "true" else "false"
 
 (** Pretty-printing for values *)

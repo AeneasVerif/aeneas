@@ -301,6 +301,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let parent_input_abs_ids =
     List.filter_map (fun x -> x) parent_input_abs_ids
   in
+  (* TODO: need to be careful for loops *)
+  assert (parent_input_abs_ids = []);
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
@@ -354,7 +356,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       let fun_abs_id =
         (RegionGroupId.nth inst_sg.regions_hierarchy back_id).id
       in
-      if not inside_loop then (fun_abs_id, true)
+      if not inside_loop then (Some fun_abs_id, true)
       else
         let pred (abs : abs) =
           match abs.kind with
@@ -383,14 +385,24 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
              }
            ]}
         *)
-        let abs = Option.get (ctx_find_abs ctx pred) in
-        (abs.abs_id, false)
+        match ctx_find_abs ctx pred with
+        | None ->
+            (* The loop gives back nothing for this region group.
+               Ex.:
+               {[
+                 pub fn ignore_input_mut_borrow(_a: &mut u32) {
+                     loop {}
+                 }
+               ]}
+            *)
+            (None, false)
+        | Some abs -> (Some abs.abs_id, false)
     in
     log#ldebug
       (lazy
         ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
           input abstraction: "
-        ^ AbstractionId.to_string current_abs_id));
+        ^ Print.option_to_string AbstractionId.to_string current_abs_id));
 
     (* Set the proper abstractions as endable *)
     let ctx =
@@ -427,7 +439,10 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       visit_loop_abs#visit_eval_ctx () ctx
     in
 
-    let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
+    let current_abs_id =
+      match current_abs_id with None -> [] | Some id -> [ id ]
+    in
+    let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
     let cf_end_target_abs cf =
       List.fold_left
         (fun cf id -> end_abstraction config id cf)

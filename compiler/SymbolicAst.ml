@@ -215,8 +215,7 @@ and loop = {
   input_svalues : symbolic_value list;  (** The input symbolic values *)
   fresh_svalues : symbolic_value_id_set;
       (** The symbolic values introduced by the loop fixed-point *)
-  rg_to_given_back_tys :
-    ((RegionId.Set.t * ty list) RegionGroupId.Map.t[@opaque]);
+  rg_to_given_back_tys : (ty list RegionGroupId.Map.t[@opaque]);
       (** The map from region group ids to the types of the values given back
           by the corresponding loop abstractions.
        *)

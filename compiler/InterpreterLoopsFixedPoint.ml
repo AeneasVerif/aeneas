@@ -620,12 +620,24 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
           (* Retrieve the first id of the group *)
           match ids with
           | [] ->
-              (* We shouldn't get there: we actually introduce reborrows with
-                 {!prepare_ashared_loans} and in the [match_mut_borrows] function
-                 of {!MakeJoinMatcher} to introduce some fresh abstractions for
-                 this purpose.
+              (* We *can* get there, if the loop doesn't touch the borrowed
+                 values.
+                 For instance:
+                 {[
+                   pub fn iter_slice(a: &mut [u8]) {
+                       let len = a.len();
+                       let mut i = 0;
+                       while i < len {
+                           i += 1;
+                       }
+                   }
+                 ]}
               *)
-              raise (Failure "Unexpected")
+              log#ldebug
+                (lazy
+                  ("No loop region to end for the region group "
+                  ^ RegionGroupId.to_string rg_id));
+              ()
           | id0 :: ids ->
               let id0 = ref id0 in
               (* Add the proper region group into the abstraction *)
