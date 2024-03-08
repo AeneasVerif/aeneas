@@ -8,7 +8,9 @@ namespace Primitives
 -------------------------------
 -- Declare new syntax `a.#i` for accessing the `i`-th term in a tuple
 -- The `noWs` parser is used to ensure there is no whitespace.
-syntax term noWs ".#" noWs num : term
+-- We use the maximum precedence to make the syntax work with function calls.
+-- Ex.: `f (0, 1).#0`
+syntax:max term noWs ".#" noWs num : term
 
 open Lean Meta Elab Term
 
