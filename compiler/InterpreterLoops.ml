@@ -97,8 +97,8 @@ let eval_loop_symbolic (config : config) (meta : meta)
     log#ldebug
       (lazy
         ("eval_loop_symbolic: about to reorganize the original context to \
-          match  the fixed-point ctx with it:\n\
-          - src ctx (fixed-point ctx)" ^ eval_ctx_to_string fp_ctx
+          match the fixed-point ctx with it:\n\
+          - src ctx (fixed-point ctx):\n" ^ eval_ctx_to_string fp_ctx
        ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
 
     prepare_match_ctx_with_target config loop_id fixed_ids fp_ctx cf ctx

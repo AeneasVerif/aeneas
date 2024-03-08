@@ -11,6 +11,7 @@ open TypesUtils
 open ValuesUtils
 open Cps
 open InterpreterUtils
+open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterLoopsCore
 module S = SynthesizeSymbolic
@@ -450,8 +451,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
       mk_fresh_symbolic_typed_value_from_no_regions_ty ty
 
-  let match_shared_borrows (_ : eval_ctx) (_ : eval_ctx) _ (ty : ety)
-      (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
+  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) match_rec
+      (ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
+    (* Lookup the shared values and match them - we do this mostly
+       to make sure we end loans which might appear on one side
+       and not on the other. *)
+    let sv0 = lookup_shared_value ctx0 bid0 in
+    let sv1 = lookup_shared_value ctx1 bid1 in
+    let sv = match_rec sv0 sv1 in
     if bid0 = bid1 then bid0
     else
       (* We replace bid0 and bid1 with a fresh borrow id, and introduce
@@ -463,10 +470,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let rid = fresh_region_id () in
       let bid2 = fresh_borrow_id () in
 
-      (* Generate a fresh symbolic value for the shared value *)
+      (* Update the type of the shared loan to use the fresh region *)
       let _, bv_ty, kind = ty_as_ref ty in
-      let sv = mk_fresh_symbolic_typed_value_from_no_regions_ty bv_ty in
-
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
@@ -1574,6 +1579,13 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
   let cf_introduce_loop_fp_abs : m_fun =
    fun tgt_ctx ->
     (* Match the source and target contexts *)
+    log#ldebug
+      (lazy
+        ("cf_introduce_loop_fp_abs:\n" ^ "\n- fixed_ids: "
+       ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+       ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
+       ^ eval_ctx_to_string tgt_ctx));
+
     let filt_tgt_env, _, _ = ctx_split_fixed_new fixed_ids tgt_ctx in
     let filt_src_env, new_absl, new_dummyl =
       ctx_split_fixed_new fixed_ids src_ctx
