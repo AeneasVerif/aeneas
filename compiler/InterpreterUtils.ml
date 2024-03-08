@@ -420,6 +420,8 @@ let compute_ctxs_ids (ctxl : eval_ctx list) : ids_sets * ids_to_values =
 let compute_ctx_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
   compute_ctxs_ids [ ctx ]
 
+let empty_ids_set = fst (compute_ctxs_ids [])
+
 (** **WARNING**: this function doesn't compute the normalized types
     (for the trait type aliases). This should be computed afterwards.
  *)

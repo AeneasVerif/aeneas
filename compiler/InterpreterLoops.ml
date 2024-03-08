@@ -261,6 +261,10 @@ let eval_loop (config : config) (meta : meta) (eval_loop_body : st_cm_fun) :
   match config.mode with
   | ConcreteMode -> eval_loop_concrete eval_loop_body cf ctx
   | SymbolicMode ->
+      (* Simplify the context by ending the unnecessary borrows/loans and getting
+         rid of the useless symbolic values (which are in anonymous variables) *)
+      let cc = cleanup_fresh_values_and_abs config empty_ids_set in
+
       (* We want to make sure the loop will *not* manipulate shared avalues
          containing themselves shared loans (i.e., nested shared loans in
          the abstractions), because it complexifies the matches between values
@@ -279,5 +283,5 @@ let eval_loop (config : config) (meta : meta) (eval_loop_body : st_cm_fun) :
          introduce *fixed* abstractions, and again later to introduce
          *non-fixed* abstractions.
       *)
-      let cc = prepare_ashared_loans None in
+      let cc = comp cc (prepare_ashared_loans None) in
       comp cc (eval_loop_symbolic config meta eval_loop_body) cf ctx

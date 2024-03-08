@@ -6,12 +6,127 @@ open ValuesUtils
 module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
+open InterpreterBorrowsCore
+open InterpreterBorrows
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsJoinCtxs
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
+
+exception FoundBorrowId of BorrowId.id
+exception FoundAbsId of AbstractionId.id
+
+(* Repeat until we can't simplify the context anymore:
+   - end the borrows which appear in fresh anonymous values and don't contain loans
+   - end the fresh region abstractions which can be ended (no loans)
+*)
+let rec end_useless_fresh_borrows_and_abs (config : config)
+    (fixed_ids : ids_sets) : cm_fun =
+ fun cf ctx ->
+  let rec explore_env (env : env) : unit =
+    match env with
+    | [] -> () (* Done *)
+    | EBinding (BDummy vid, v) :: env
+      when not (DummyVarId.Set.mem vid fixed_ids.dids) ->
+        (* Explore the anonymous value - raises an exception if it finds
+           a borrow to end *)
+        let visitor =
+          object
+            inherit [_] iter_typed_value
+            method! visit_VLoan _ _ = () (* Don't enter inside loans *)
+
+            method! visit_VBorrow _ bc =
+              (* Check if we can end the borrow, do not enter inside if we can't *)
+              match bc with
+              | VSharedBorrow bid | VReservedMutBorrow bid ->
+                  raise (FoundBorrowId bid)
+              | VMutBorrow (bid, v) ->
+                  if not (value_has_loans v.value) then
+                    raise (FoundBorrowId bid)
+                  else (* Stop there *)
+                    ()
+          end
+        in
+        visitor#visit_typed_value () v;
+        (* No exception was raised: continue *)
+        explore_env env
+    | EAbs abs :: env when not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids)
+      -> (
+        (* Check if it is possible to end the abstraction: if yes, raise an exception *)
+        let opt_loan = get_first_non_ignored_aloan_in_abstraction abs in
+        match opt_loan with
+        | None ->
+            (* No remaining loans: we can end the abstraction *)
+            raise (FoundAbsId abs.abs_id)
+        | Some _ ->
+            (* There are remaining loans: we can't end the abstraction *)
+            explore_env env)
+    | _ :: env -> explore_env env
+  in
+  let rec_call = end_useless_fresh_borrows_and_abs config fixed_ids in
+  try
+    (* Explore the environment *)
+    explore_env ctx.env;
+    (* No exception raised: call the continuation *)
+    cf ctx
+  with
+  | FoundAbsId abs_id ->
+      let cc = end_abstraction config abs_id in
+      comp cc rec_call cf ctx
+  | FoundBorrowId bid ->
+      let cc = end_borrow config bid in
+      comp cc rec_call cf ctx
+
+(* Explore the fresh anonymous values and replace all the values which are not
+   borrows/loans with ⊥ *)
+let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
+ fun cf ctx ->
+  let rec explore_env (env : env) : env =
+    match env with
+    | [] -> [] (* Done *)
+    | EBinding (BDummy vid, v) :: env
+      when not (DummyVarId.Set.mem vid fixed_ids.dids) ->
+        let env = explore_env env in
+        (* Eliminate the value altogether if it doesn't contain loans/borrows *)
+        if not (value_has_loans_or_borrows ctx v.value) then env
+        else
+          (* Explore the anonymous value - raises an exception if it finds
+             a borrow to end *)
+          let visitor =
+            object
+              inherit [_] map_typed_value as super
+              method! visit_VLoan _ v = VLoan v (* Don't enter inside loans *)
+
+              method! visit_VBorrow _ v =
+                VBorrow v (* Don't enter inside borrows *)
+
+              method! visit_value _ v =
+                if not (value_has_loans_or_borrows ctx v) then VBottom
+                else super#visit_value () v
+            end
+          in
+          let v = visitor#visit_typed_value () v in
+          EBinding (BDummy vid, v) :: env
+    | x :: env -> x :: explore_env env
+  in
+  let ctx = { ctx with env = explore_env ctx.env } in
+  cf ctx
+
+(* Repeat until we can't simplify the context anymore:
+   - explore the fresh anonymous values and replace all the values which are not
+     borrows/loans with ⊥
+   - also end the borrows which appear in fresh anonymous values and don't contain loans
+   - end the fresh region abstractions which can be ended (no loans)
+*)
+let cleanup_fresh_values_and_abs (config : config) (fixed_ids : ids_sets) :
+    cm_fun =
+ fun cf ctx ->
+  comp
+    (end_useless_fresh_borrows_and_abs config fixed_ids)
+    (cleanup_fresh_values fixed_ids)
+    cf ctx
 
 (** Reorder the loans and borrows in the fresh abstractions.
 
@@ -370,7 +485,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
 
   (* The fixed ids. They are the ids of the original ctx, after we ended
      the borrows/loans which end during the first loop iteration (we do
-     one loop iteration, then set it to [Some].
+     one loop iteration, then set it to [Some]).
   *)
   let fixed_ids : ids_sets option ref = ref None in
 
@@ -425,6 +540,8 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
     in
 
     let fixed_ids = Option.get !fixed_ids in
+
+    (* Join the context with the context at the loop entry *)
     let (_, _), ctx2 =
       loop_join_origin_with_continue_ctxs config loop_id fixed_ids ctx1 !ctxs
     in

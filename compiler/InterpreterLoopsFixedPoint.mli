@@ -3,6 +3,18 @@ open Contexts
 open InterpreterUtils
 open InterpreterLoopsCore
 
+(** Repeat until we can't simplify the context anymore:
+   - explore the fresh anonymous values and replace all the values which are not
+     borrows/loans with ⊥
+   - also end the borrows which appear in fresh anonymous values and don't contain loans
+   - end the fresh region abstractions which can be ended (no loans)
+
+   Inputs:
+   - config
+   - fixed ids (the fixeds ids are the ids we consider as non-fresh)
+ *)
+val cleanup_fresh_values_and_abs : config -> ids_sets -> Cps.cm_fun
+
 (** Prepare the shared loans in the abstractions by moving them to fresh
     abstractions.
 
