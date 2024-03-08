@@ -557,4 +557,59 @@ def list_nth_shared_mut_loop_pair_merge
   let (p, back_'a) ← list_nth_shared_mut_loop_pair_merge_loop T ls0 ls1 i
   Result.ret (p, back_'a)
 
+/- [loops::ignore_input_mut_borrow]: loop 0:
+   Source: 'src/loops.rs', lines 345:0-349:1 -/
+divergent def ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
+  if i > 0#u32
+  then
+    do
+    let i1 ← i - 1#u32
+    let _ ← ignore_input_mut_borrow_loop i1
+    Result.ret ()
+  else Result.ret ()
+
+/- [loops::ignore_input_mut_borrow]:
+   Source: 'src/loops.rs', lines 345:0-345:56 -/
+def ignore_input_mut_borrow (_a : U32) (i : U32) : Result U32 :=
+  do
+  let _ ← ignore_input_mut_borrow_loop i
+  Result.ret _a
+
+/- [loops::incr_ignore_input_mut_borrow]: loop 0:
+   Source: 'src/loops.rs', lines 353:0-358:1 -/
+divergent def incr_ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
+  if i > 0#u32
+  then
+    do
+    let i1 ← i - 1#u32
+    let _ ← incr_ignore_input_mut_borrow_loop i1
+    Result.ret ()
+  else Result.ret ()
+
+/- [loops::incr_ignore_input_mut_borrow]:
+   Source: 'src/loops.rs', lines 353:0-353:60 -/
+def incr_ignore_input_mut_borrow (a : U32) (i : U32) : Result U32 :=
+  do
+  let a1 ← a + 1#u32
+  let _ ← incr_ignore_input_mut_borrow_loop i
+  Result.ret a1
+
+/- [loops::ignore_input_shared_borrow]: loop 0:
+   Source: 'src/loops.rs', lines 362:0-366:1 -/
+divergent def ignore_input_shared_borrow_loop (i : U32) : Result Unit :=
+  if i > 0#u32
+  then
+    do
+    let i1 ← i - 1#u32
+    let _ ← ignore_input_shared_borrow_loop i1
+    Result.ret ()
+  else Result.ret ()
+
+/- [loops::ignore_input_shared_borrow]:
+   Source: 'src/loops.rs', lines 362:0-362:59 -/
+def ignore_input_shared_borrow (_a : U32) (i : U32) : Result U32 :=
+  do
+  let _ ← ignore_input_shared_borrow_loop i
+  Result.ret _a
+
 end loops
