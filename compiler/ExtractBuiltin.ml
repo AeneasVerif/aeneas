@@ -213,11 +213,7 @@ let mk_builtin_types_map () =
 
 let builtin_types_map = mk_memoized mk_builtin_types_map
 
-type builtin_fun_info = {
-  rg : Types.RegionGroupId.id option;
-  extract_name : string;
-}
-[@@deriving show]
+type builtin_fun_info = { extract_name : string } [@@deriving show]
 
 (** The assumed functions.
 
@@ -227,19 +223,10 @@ type builtin_fun_info = {
  *)
 let builtin_funs () : (pattern * bool list option * builtin_fun_info list) list
     =
-  let rg0 = Some Types.RegionGroupId.zero in
   (* Small utility *)
   let mk_fun (rust_name : string) (extract_name : string option)
-      (filter : bool list option) (with_back : bool) (back_no_suffix : bool) :
+      (filter : bool list option) :
       pattern * bool list option * builtin_fun_info list =
-    (* [back_no_suffix] is used to control whether the backward function should
-       have the suffix "_back" or not (if not, then the forward function has the
-       prefix "_fwd", and is filtered anyway). This is pertinent only if we split
-       the fwd/back functions. *)
-    let back_no_suffix = back_no_suffix && not !Config.return_back_funs in
-    (* Same for the [with_back] option: this is pertinent only if we split
-       the fwd/back functions *)
-    let with_back = with_back && not !Config.return_back_funs in
     let rust_name =
       try parse_pattern rust_name
       with Failure _ ->
@@ -251,68 +238,51 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info list) list
       | Some name -> split_on_separator name
     in
     let basename = flatten_name extract_name in
-    let fwd_suffix = if with_back && back_no_suffix then "_fwd" else "" in
-    let fwd = [ { rg = None; extract_name = basename ^ fwd_suffix } ] in
-    let back_suffix = if with_back && back_no_suffix then "" else "_back" in
-    let back =
-      if with_back then [ { rg = rg0; extract_name = basename ^ back_suffix } ]
-      else []
-    in
-    (rust_name, filter, fwd @ back)
+    let f = [ { extract_name = basename } ] in
+    (rust_name, filter, f)
   in
   [
-    mk_fun "core::mem::replace" None None true false;
+    mk_fun "core::mem::replace" None None;
     mk_fun "core::slice::{[@T]}::len"
       (Some (backend_choice "slice::len" "Slice::len"))
-      None true false;
+      None;
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::new"
-      (Some "alloc::vec::Vec::new") None false false;
+      (Some "alloc::vec::Vec::new") None;
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::push" None
-      (Some [ true; false ])
-      true true;
+      (Some [ true; false ]);
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::insert" None
-      (Some [ true; false ])
-      true true;
+      (Some [ true; false ]);
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::len" None
-      (Some [ true; false ])
-      true false;
+      (Some [ true; false ]);
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::index" None
-      (Some [ true; true; false ])
-      true false;
+      (Some [ true; true; false ]);
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::index_mut" None
-      (Some [ true; true; false ])
-      true false;
-    mk_fun "alloc::boxed::{Box<@T>}::deref" None
-      (Some [ true; false ])
-      true false;
-    mk_fun "alloc::boxed::{Box<@T>}::deref_mut" None
-      (Some [ true; false ])
-      true false;
-    mk_fun "core::slice::index::{[@T]}::index" None None true false;
-    mk_fun "core::slice::index::{[@T]}::index_mut" None None true false;
-    mk_fun "core::array::{[@T; @C]}::index" None None true false;
-    mk_fun "core::array::{[@T; @C]}::index_mut" None None true false;
+      (Some [ true; true; false ]);
+    mk_fun "alloc::boxed::{Box<@T>}::deref" None (Some [ true; false ]);
+    mk_fun "alloc::boxed::{Box<@T>}::deref_mut" None (Some [ true; false ]);
+    mk_fun "core::slice::index::{[@T]}::index" None None;
+    mk_fun "core::slice::index::{[@T]}::index_mut" None None;
+    mk_fun "core::array::{[@T; @C]}::index" None None;
+    mk_fun "core::array::{[@T; @C]}::index_mut" None None;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get"
-      (Some "core::slice::index::RangeUsize::get") None true false;
+      (Some "core::slice::index::RangeUsize::get") None;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get_mut"
-      (Some "core::slice::index::RangeUsize::get_mut") None true false;
+      (Some "core::slice::index::RangeUsize::get_mut") None;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::index"
-      (Some "core::slice::index::RangeUsize::index") None true false;
+      (Some "core::slice::index::RangeUsize::index") None;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::index_mut"
-      (Some "core::slice::index::RangeUsize::index_mut") None true false;
+      (Some "core::slice::index::RangeUsize::index_mut") None;
     mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get_unchecked"
-      (Some "core::slice::index::RangeUsize::get_unchecked") None false false;
+      (Some "core::slice::index::RangeUsize::get_unchecked") None;
     mk_fun
       "core::slice::index::{core::ops::range::Range<usize>}::get_unchecked_mut"
-      (Some "core::slice::index::RangeUsize::get_unchecked_mut") None false
-      false;
-    mk_fun "core::slice::index::{usize}::get" None None true false;
-    mk_fun "core::slice::index::{usize}::get_mut" None None true false;
-    mk_fun "core::slice::index::{usize}::get_unchecked" None None false false;
-    mk_fun "core::slice::index::{usize}::get_unchecked_mut" None None false
-      false;
-    mk_fun "core::slice::index::{usize}::index" None None true false;
-    mk_fun "core::slice::index::{usize}::index_mut" None None true false;
+      (Some "core::slice::index::RangeUsize::get_unchecked_mut") None;
+    mk_fun "core::slice::index::{usize}::get" None None;
+    mk_fun "core::slice::index::{usize}::get_mut" None None;
+    mk_fun "core::slice::index::{usize}::get_unchecked" None None;
+    mk_fun "core::slice::index::{usize}::get_unchecked_mut" None None;
+    mk_fun "core::slice::index::{usize}::index" None None;
+    mk_fun "core::slice::index::{usize}::index_mut" None None;
   ]
 
 let mk_builtin_funs_map () =
@@ -412,10 +382,9 @@ type builtin_trait_decl_info = {
 [@@deriving show]
 
 let builtin_trait_decls_info () =
-  let rg0 = Some Types.RegionGroupId.zero in
   let mk_trait (rust_name : string) ?(extract_name : string option = None)
       ?(parent_clauses : string list = []) ?(types : string list = [])
-      ?(methods : (string * bool) list = []) () : builtin_trait_decl_info =
+      ?(methods : string list = []) () : builtin_trait_decl_info =
     let rust_name = parse_pattern rust_name in
     let extract_name =
       match extract_name with
@@ -443,22 +412,14 @@ let builtin_trait_decls_info () =
       List.map mk_type types
     in
     let methods =
-      let mk_method (item_name, with_back) =
+      let mk_method item_name =
         (* TODO: factor out with builtin_funs_info *)
         let basename =
           if !record_fields_short_names then item_name
           else extract_name ^ "_" ^ item_name
         in
-        let back_no_suffix = false in
-        let fwd_suffix = if with_back && back_no_suffix then "_fwd" else "" in
-        let fwd = [ { rg = None; extract_name = basename ^ fwd_suffix } ] in
-        let back_suffix = if with_back && back_no_suffix then "" else "_back" in
-        let back =
-          if with_back then
-            [ { rg = rg0; extract_name = basename ^ back_suffix } ]
-          else []
-        in
-        (item_name, fwd @ back)
+        let fwd = [ { extract_name = basename } ] in
+        (item_name, fwd)
       in
       List.map mk_method methods
     in
@@ -474,21 +435,17 @@ let builtin_trait_decls_info () =
   in
   [
     (* Deref *)
-    mk_trait "core::ops::deref::Deref" ~types:[ "Target" ]
-      ~methods:[ ("deref", true) ]
+    mk_trait "core::ops::deref::Deref" ~types:[ "Target" ] ~methods:[ "deref" ]
       ();
     (* DerefMut *)
     mk_trait "core::ops::deref::DerefMut" ~parent_clauses:[ "derefInst" ]
-      ~methods:[ ("deref_mut", true) ]
-      ();
+      ~methods:[ "deref_mut" ] ();
     (* Index *)
-    mk_trait "core::ops::index::Index" ~types:[ "Output" ]
-      ~methods:[ ("index", true) ]
+    mk_trait "core::ops::index::Index" ~types:[ "Output" ] ~methods:[ "index" ]
       ();
     (* IndexMut *)
     mk_trait "core::ops::index::IndexMut" ~parent_clauses:[ "indexInst" ]
-      ~methods:[ ("index_mut", true) ]
-      ();
+      ~methods:[ "index_mut" ] ();
     (* Sealed *)
     mk_trait "core::slice::index::private_slice_index::Sealed" ();
     (* SliceIndex *)
@@ -496,12 +453,12 @@ let builtin_trait_decls_info () =
       ~types:[ "Output" ]
       ~methods:
         [
-          ("get", true);
-          ("get_mut", true);
-          ("get_unchecked", false);
-          ("get_unchecked_mut", false);
-          ("index", true);
-          ("index_mut", true);
+          "get";
+          "get_mut";
+          "get_unchecked";
+          "get_unchecked_mut";
+          "index";
+          "index_mut";
         ]
       ();
   ]

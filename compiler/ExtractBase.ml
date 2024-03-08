@@ -471,8 +471,7 @@ type names_map_init = {
   assumed_adts : (assumed_ty * string) list;
   assumed_structs : (assumed_ty * string) list;
   assumed_variants : (assumed_ty * VariantId.id * string) list;
-  assumed_llbc_functions :
-    (A.assumed_fun_id * RegionGroupId.id option * string) list;
+  assumed_llbc_functions : (A.assumed_fun_id * string) list;
   assumed_pure_functions : (pure_assumed_fun_id * string) list;
 }
 
@@ -1052,63 +1051,28 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (* No Fuel::Succ on purpose *)
       ]
 
-let assumed_llbc_functions () :
-    (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
-  let rg0 = Some T.RegionGroupId.zero in
-  let regular : (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
-    match !backend with
-    | FStar | Coq | HOL4 ->
-        [
-          (ArrayIndexShared, None, "array_index_usize");
-          (ArrayToSliceShared, None, "array_to_slice");
-          (ArrayRepeat, None, "array_repeat");
-          (SliceIndexShared, None, "slice_index_usize");
-        ]
-    | Lean ->
-        [
-          (ArrayIndexShared, None, "Array.index_usize");
-          (ArrayToSliceShared, None, "Array.to_slice");
-          (ArrayRepeat, None, "Array.repeat");
-          (SliceIndexShared, None, "Slice.index_usize");
-        ]
-  in
-  let mut_funs : (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
-    if !Config.return_back_funs then
-      match !backend with
-      | FStar | Coq | HOL4 ->
-          [
-            (ArrayIndexMut, None, "array_index_mut_usize");
-            (ArrayToSliceMut, None, "array_to_slice_mut");
-            (SliceIndexMut, None, "slice_index_mut_usize");
-          ]
-      | Lean ->
-          [
-            (ArrayIndexMut, None, "Array.index_mut_usize");
-            (ArrayToSliceMut, None, "Array.to_slice_mut");
-            (SliceIndexMut, None, "Slice.index_mut_usize");
-          ]
-    else
-      match !backend with
-      | FStar | Coq | HOL4 ->
-          [
-            (ArrayIndexMut, None, "array_index_usize");
-            (ArrayIndexMut, rg0, "array_update_usize");
-            (ArrayToSliceMut, None, "array_to_slice");
-            (ArrayToSliceMut, rg0, "array_from_slice");
-            (SliceIndexMut, None, "slice_index_usize");
-            (SliceIndexMut, rg0, "slice_update_usize");
-          ]
-      | Lean ->
-          [
-            (ArrayIndexMut, None, "Array.index_usize");
-            (ArrayIndexMut, rg0, "Array.update_usize");
-            (ArrayToSliceMut, None, "Array.to_slice");
-            (ArrayToSliceMut, rg0, "Array.from_slice");
-            (SliceIndexMut, None, "Slice.index_usize");
-            (SliceIndexMut, rg0, "Slice.update_usize");
-          ]
-  in
-  regular @ mut_funs
+let assumed_llbc_functions () : (A.assumed_fun_id * string) list =
+  match !backend with
+  | FStar | Coq | HOL4 ->
+      [
+        (ArrayIndexShared, "array_index_usize");
+        (ArrayIndexMut, "array_index_mut_usize");
+        (ArrayToSliceShared, "array_to_slice");
+        (ArrayToSliceMut, "array_to_slice_mut");
+        (ArrayRepeat, "array_repeat");
+        (SliceIndexShared, "slice_index_usize");
+        (SliceIndexMut, "slice_index_mut_usize");
+      ]
+  | Lean ->
+      [
+        (ArrayIndexShared, "Array.index_usize");
+        (ArrayIndexMut, "Array.index_mut_usize");
+        (ArrayToSliceShared, "Array.to_slice");
+        (ArrayToSliceMut, "Array.to_slice_mut");
+        (ArrayRepeat, "Array.repeat");
+        (SliceIndexShared, "Slice.index_usize");
+        (SliceIndexMut, "Slice.index_mut_usize");
+      ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
   match !backend with

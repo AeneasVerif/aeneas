@@ -120,9 +120,6 @@ let () =
         " Generate a default lakefile.lean (Lean only)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ("-k", Arg.Clear fail_hard, " Do not fail hard in case of error");
-      ( "-split-fwd-back",
-        Arg.Clear return_back_funs,
-        " Split the forward and backward functions." );
       ( "-tuple-nested-proj",
         Arg.Set use_nested_tuple_projectors,
         " Use nested projectors for tuples (e.g., (0, 1).snd.fst instead of \
