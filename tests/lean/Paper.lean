@@ -15,7 +15,7 @@ def ref_incr (x : I32) : Result I32 :=
 def test_incr : Result Unit :=
   do
   let i ← ref_incr 0#i32
-  if not (i = 1#i32)
+  if ¬ (i = 1#i32)
   then Result.fail .panic
   else Result.ret ()
 
@@ -40,14 +40,14 @@ def test_choose : Result Unit :=
   do
   let (z, choose_back) ← choose I32 true 0#i32 0#i32
   let z1 ← z + 1#i32
-  if not (z1 = 1#i32)
+  if ¬ (z1 = 1#i32)
   then Result.fail .panic
   else
     do
     let (x, y) ← choose_back z1
-    if not (x = 1#i32)
+    if ¬ (x = 1#i32)
     then Result.fail .panic
-    else if not (y = 0#i32)
+    else if ¬ (y = 0#i32)
          then Result.fail .panic
          else Result.ret ()
 
@@ -101,7 +101,7 @@ def test_nth : Result Unit :=
   let x1 ← x + 1#i32
   let l2 ← list_nth_mut_back x1
   let i ← sum l2
-  if not (i = 7#i32)
+  if ¬ (i = 7#i32)
   then Result.fail .panic
   else Result.ret ()
 

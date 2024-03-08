@@ -397,7 +397,7 @@ divergent def sum2_loop
 def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
   let i := Slice.len U32 s
   let i1 := Slice.len U32 s2
-  if not (i = i1)
+  if ¬ (i = i1)
   then Result.fail .panic
   else sum2_loop s s2 0#u32 0#usize
 

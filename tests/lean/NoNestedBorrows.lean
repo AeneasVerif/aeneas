@@ -46,7 +46,7 @@ inductive Sum (T1 T2 : Type) :=
 /- [no_nested_borrows::neg_test]:
    Source: 'src/no_nested_borrows.rs', lines 48:0-48:30 -/
 def neg_test (x : I32) : Result I32 :=
-  - x
+  -. x
 
 /- [no_nested_borrows::add_u32]:
    Source: 'src/no_nested_borrows.rs', lines 54:0-54:37 -/
@@ -185,7 +185,7 @@ def test3 : Result Unit :=
   let x ← get_max 4#u32 3#u32
   let y ← get_max 10#u32 11#u32
   let z ← x + y
-  if not (z = 15#u32)
+  if ¬ (z = 15#u32)
   then Result.fail .panic
   else Result.ret ()
 
@@ -196,8 +196,8 @@ def test3 : Result Unit :=
    Source: 'src/no_nested_borrows.rs', lines 169:0-169:18 -/
 def test_neg1 : Result Unit :=
   do
-  let y ← - 3#i32
-  if not (y = (-(3:Int))#i32)
+  let y ← -. 3#i32
+  if ¬ (y = (-3)#i32)
   then Result.fail .panic
   else Result.ret ()
 
@@ -207,7 +207,7 @@ def test_neg1 : Result Unit :=
 /- [no_nested_borrows::refs_test1]:
    Source: 'src/no_nested_borrows.rs', lines 176:0-176:19 -/
 def refs_test1 : Result Unit :=
-  if not (1#i32 = 1#i32)
+  if ¬ (1#i32 = 1#i32)
   then Result.fail .panic
   else Result.ret ()
 
@@ -217,15 +217,15 @@ def refs_test1 : Result Unit :=
 /- [no_nested_borrows::refs_test2]:
    Source: 'src/no_nested_borrows.rs', lines 187:0-187:19 -/
 def refs_test2 : Result Unit :=
-  if not (2#i32 = 2#i32)
+  if ¬ (2#i32 = 2#i32)
   then Result.fail .panic
   else
-    if not (0#i32 = 0#i32)
+    if ¬ (0#i32 = 0#i32)
     then Result.fail .panic
     else
-      if not (2#i32 = 2#i32)
+      if ¬ (2#i32 = 2#i32)
       then Result.fail .panic
-      else if not (2#i32 = 2#i32)
+      else if ¬ (2#i32 = 2#i32)
            then Result.fail .panic
            else Result.ret ()
 
@@ -247,7 +247,7 @@ def test_box1 : Result Unit :=
   let (_, deref_mut_back) ← alloc.boxed.Box.deref_mut I32 0#i32
   let b ← deref_mut_back 1#i32
   let x ← alloc.boxed.Box.deref I32 b
-  if not (x = 1#i32)
+  if ¬ (x = 1#i32)
   then Result.fail .panic
   else Result.ret ()
 
@@ -278,7 +278,7 @@ def test_panic (b : Bool) : Result Unit :=
 def test_copy_int : Result Unit :=
   do
   let y ← copy_int 0#i32
-  if not (0#i32 = y)
+  if ¬ (0#i32 = y)
   then Result.fail .panic
   else Result.ret ()
 
@@ -297,7 +297,7 @@ def is_cons (T : Type) (l : List T) : Result Bool :=
 def test_is_cons : Result Unit :=
   do
   let b ← is_cons I32 (List.Cons 0#i32 List.Nil)
-  if not b
+  if ¬ b
   then Result.fail .panic
   else Result.ret ()
 
@@ -317,7 +317,7 @@ def test_split_list : Result Unit :=
   do
   let p ← split_list I32 (List.Cons 0#i32 List.Nil)
   let (hd, _) := p
-  if not (hd = 0#i32)
+  if ¬ (hd = 0#i32)
   then Result.fail .panic
   else Result.ret ()
 
@@ -342,14 +342,14 @@ def choose_test : Result Unit :=
   do
   let (z, choose_back) ← choose I32 true 0#i32 0#i32
   let z1 ← z + 1#i32
-  if not (z1 = 1#i32)
+  if ¬ (z1 = 1#i32)
   then Result.fail .panic
   else
     do
     let (x, y) ← choose_back z1
-    if not (x = 1#i32)
+    if ¬ (x = 1#i32)
     then Result.fail .panic
-    else if not (y = 0#i32)
+    else if ¬ (y = 0#i32)
          then Result.fail .panic
          else Result.ret ()
 
@@ -441,22 +441,22 @@ def test_list_functions : Result Unit :=
   let l := List.Cons 2#i32 List.Nil
   let l1 := List.Cons 1#i32 l
   let i ← list_length I32 (List.Cons 0#i32 l1)
-  if not (i = 3#u32)
+  if ¬ (i = 3#u32)
   then Result.fail .panic
   else
     do
     let i1 ← list_nth_shared I32 (List.Cons 0#i32 l1) 0#u32
-    if not (i1 = 0#i32)
+    if ¬ (i1 = 0#i32)
     then Result.fail .panic
     else
       do
       let i2 ← list_nth_shared I32 (List.Cons 0#i32 l1) 1#u32
-      if not (i2 = 1#i32)
+      if ¬ (i2 = 1#i32)
       then Result.fail .panic
       else
         do
         let i3 ← list_nth_shared I32 (List.Cons 0#i32 l1) 2#u32
-        if not (i3 = 2#i32)
+        if ¬ (i3 = 2#i32)
         then Result.fail .panic
         else
           do
@@ -464,17 +464,17 @@ def test_list_functions : Result Unit :=
             list_nth_mut I32 (List.Cons 0#i32 l1) 1#u32
           let ls ← list_nth_mut_back 3#i32
           let i4 ← list_nth_shared I32 ls 0#u32
-          if not (i4 = 0#i32)
+          if ¬ (i4 = 0#i32)
           then Result.fail .panic
           else
             do
             let i5 ← list_nth_shared I32 ls 1#u32
-            if not (i5 = 3#i32)
+            if ¬ (i5 = 3#i32)
             then Result.fail .panic
             else
               do
               let i6 ← list_nth_shared I32 ls 2#u32
-              if not (i6 = 2#i32)
+              if ¬ (i6 = 2#i32)
               then Result.fail .panic
               else Result.ret ()
 
@@ -555,24 +555,24 @@ def test_constants : Result Unit :=
   do
   let swt ← new_tuple1
   let (i, _) := swt.p
-  if not (i = 1#u32)
+  if ¬ (i = 1#u32)
   then Result.fail .panic
   else
     do
     let swt1 ← new_tuple2
     let (i1, _) := swt1.p
-    if not (i1 = 1#i16)
+    if ¬ (i1 = 1#i16)
     then Result.fail .panic
     else
       do
       let swt2 ← new_tuple3
       let (i2, _) := swt2.p
-      if not (i2 = 1#u64)
+      if ¬ (i2 = 1#u64)
       then Result.fail .panic
       else
         do
         let swp ← new_pair1
-        if not (swp.p.x = 1#u32)
+        if ¬ (swp.p.x = 1#u32)
         then Result.fail .panic
         else Result.ret ()
 
@@ -591,7 +591,7 @@ def test_weird_borrows1 : Result Unit :=
    Source: 'src/no_nested_borrows.rs', lines 481:0-481:37 -/
 def test_mem_replace (px : U32) : Result U32 :=
   let (y, _) := core.mem.replace U32 px 1#u32
-  if not (y = 0#u32)
+  if ¬ (y = 0#u32)
   then Result.fail .panic
   else Result.ret 2#u32
 
