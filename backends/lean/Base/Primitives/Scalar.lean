@@ -478,15 +478,24 @@ instance (ty : ScalarTy) : Inhabited (Scalar ty) := by
 Remark: there is no heterogeneous negation in the Lean prelude: we thus introduce
 one here.
 
-The notation typeclass for heterogeneous addition.
-This enables the notation `- a : β` where `a : α`.
+The notation typeclass for heterogeneous negation.
 -/
 class HNeg (α : Type u) (β : outParam (Type v)) where
   /-- `- a` computes the negation of `a`.
   The meaning of this notation is type-dependent. -/
   hNeg : α → β
 
-prefix:75  "-"   => HNeg.hNeg
+/- Notation for heterogeneous negation.
+
+   We initially used the notation "-" but it conflicted with the homogeneous
+   negation too much. In particular, it made terms like `-10` ambiguous,
+   and seemingly caused to backtracking in elaboration, leading to definitions
+   like arrays of constants to take an unreasonable time to get elaborated
+   and type-checked.
+
+   TODO: PR to replace Neg with HNeg in Lean?
+ -/
+prefix:75  "-."   => HNeg.hNeg
 
 /- We need this, otherwise we break pattern matching like in:
 
