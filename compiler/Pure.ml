@@ -560,8 +560,7 @@ type fun_id_or_trait_method_ref =
 [@@deriving show, ord]
 
 (** A function id for a non-assumed function *)
-type regular_fun_id =
-  fun_id_or_trait_method_ref * LoopId.id option * RegionGroupId.id option
+type regular_fun_id = fun_id_or_trait_method_ref * LoopId.id option
 [@@deriving show, ord]
 
 (** A function identifier *)
@@ -1078,7 +1077,6 @@ type fun_decl = {
        *)
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
-  back_id : RegionGroupId.id option;
   llbc_name : llbc_name;  (** The original LLBC name. *)
   name : string;
       (** We use the name only for printing purposes (for debugging):

@@ -167,11 +167,7 @@ type id =
   | TraitImplId of TraitImplId.id
   | LocalTraitClauseId of TraitClauseId.id
   | TraitDeclConstructorId of TraitDeclId.id
-  | TraitMethodId of TraitDeclId.id * string * T.RegionGroupId.id option
-      (** Something peculiar with trait methods: because we have to take into
-          account forward/backward functions, we may need to generate fields
-          items per method.
-       *)
+  | TraitMethodId of TraitDeclId.id * string
   | TraitItemId of TraitDeclId.id * string
       (** A trait associated item which is not a method *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
@@ -353,8 +349,6 @@ let basename_to_unique (names_set : StringSet.t)
   in
   if StringSet.mem basename names_set then gen 1 else basename
 
-type fun_name_info = { keep_fwd : bool; num_backs : int }
-
 type names_maps = {
   names_map : names_map;
       (** The map for id to names, where we forbid name collisions
@@ -384,7 +378,7 @@ let allow_collisions (id : id) : bool =
   | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
   | TraitMethodId _ ->
       !Config.record_fields_short_names
-  | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _, _)) ->
+  | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _)) ->
       (* We map several assumed functions to the same id *)
       true
   | _ -> false
@@ -549,15 +543,6 @@ type extraction_ctx = {
             -- makes the if then else dependent
           ]}
         *)
-  fun_name_info : fun_name_info PureUtils.RegularFunIdMap.t;
-      (** Information used to filter and name functions - we use it
-          to print comments in the generated code, to help link
-          the generated code to the original code (information such
-          as: "this function is the backward function of ...", or
-          "this function is the merged forward/backward function of ..."
-          in case a Rust function only has one backward translation
-          and we filter the forward function because it returns unit.
-        *)
   trait_decl_id : trait_decl_id option;
       (** If we are extracting a trait declaration, identifies it *)
   is_provided_method : bool;
@@ -668,14 +653,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       ^ TraitClauseId.to_string clause_id
   | TraitItemId (id, name) ->
       "trait_item_id: " ^ trait_decl_id_to_string id ^ ", type name: " ^ name
-  | TraitMethodId (trait_decl_id, fun_name, rg_id) ->
-      let fwd_back_kind =
-        match rg_id with
-        | None -> "forward"
-        | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
-      in
-      trait_decl_id_to_string trait_decl_id
-      ^ ", method name (" ^ fwd_back_kind ^ "): " ^ fun_name
+  | TraitMethodId (trait_decl_id, fun_name) ->
+      trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ fun_name
   | TraitSelfClauseId -> "trait_self_clause"
 
 let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
@@ -694,8 +673,8 @@ let ctx_get_function (id : fun_id) (ctx : extraction_ctx) : string =
   ctx_get (FunId id) ctx
 
 let ctx_get_local_function (id : A.FunDeclId.id) (lp : LoopId.id option)
-    (rg : RegionGroupId.id option) (ctx : extraction_ctx) : string =
-  ctx_get_function (FromLlbc (FunId (FRegular id), lp, rg)) ctx
+    (ctx : extraction_ctx) : string =
+  ctx_get_function (FromLlbc (FunId (FRegular id), lp)) ctx
 
 let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> TTuple);
@@ -733,8 +712,8 @@ let ctx_get_trait_type (id : trait_decl_id) (item_name : string)
   ctx_get_trait_item id item_name ctx
 
 let ctx_get_trait_method (id : trait_decl_id) (item_name : string)
-    (rg_id : T.RegionGroupId.id option) (ctx : extraction_ctx) : string =
-  ctx_get (TraitMethodId (id, item_name, rg_id)) ctx
+    (ctx : extraction_ctx) : string =
+  ctx_get (TraitMethodId (id, item_name)) ctx
 
 let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
     (ctx : extraction_ctx) : string =
@@ -1164,8 +1143,7 @@ let initialize_names_maps () : names_maps =
   in
   let assumed_functions =
     List.map
-      (fun (fid, rg, name) ->
-        (FromLlbc (Pure.FunId (FAssumed fid), None, rg), name))
+      (fun (fid, name) -> (FromLlbc (Pure.FunId (FAssumed fid), None), name))
       init.assumed_llbc_functions
     @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
   in
@@ -1408,61 +1386,12 @@ let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option) :
          If this function admits only one loop, we omit it. *)
       if num_loops = 1 then "_loop" else "_loop" ^ LoopId.to_string loop_id
 
-(** A helper function: generates a function suffix from a region group
-    information.
+(** A helper function: generates a function suffix.
     TODO: move all those helpers.
 *)
-let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
-    (num_region_groups : int) (rg : region_group_info option)
-    ((keep_fwd, num_backs) : bool * int) : string =
-  let lp_suff = default_fun_loop_suffix num_loops loop_id in
-
-  (* There are several cases:
-     - [rg] is [Some]: this is a forward function:
-       - we add "_fwd"
-     - [rg] is [None]: this is a backward function:
-       - this function has one extracted backward function:
-         - if the forward function has been filtered, we add nothing:
-           the forward function is useless, so the unique backward function
-           takes its place, in a way (in effect, we "merge" the forward
-           and the backward functions).
-         - otherwise we add "_back"
-       - this function has several backward functions: we add "_back" and an
-         additional suffix to identify the precise backward function
-     Note that we always add a suffix (in case there are no region groups,
-     we could not add the "_fwd" suffix) to prevent name clashes between
-     definitions (in particular between type and function definitions).
-  *)
-  let rg_suff =
-    (* TODO: make all the backends match what is done for Lean *)
-    match rg with
-    | None ->
-        if
-          (* In order to avoid name conflicts:
-           * - if the forward is eliminated, we add the suffix "_fwd" (it won't be used)
-           * - otherwise, no suffix (because the backward functions will have a suffix)
-           *)
-          num_backs = 1 && not keep_fwd
-        then "_fwd"
-        else ""
-    | Some rg ->
-        assert (num_region_groups > 0 && num_backs > 0);
-        if num_backs = 1 then
-          (* Exactly one backward function *)
-          if not keep_fwd then "" else "_back"
-        else if
-          (* Several region groups/backward functions:
-             - if all the regions in the group have names, we use those names
-             - otherwise we use an index
-          *)
-          List.for_all Option.is_some rg.region_names
-        then
-          (* Concatenate the region names *)
-          "_back" ^ String.concat "" (List.map Option.get rg.region_names)
-        else (* Use the region index *)
-          "_back" ^ RegionGroupId.to_string rg.id
-  in
-  lp_suff ^ rg_suff
+let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
+  (* We only generate a suffix for the functions we generate from the loops *)
+  default_fun_loop_suffix num_loops loop_id
 
 (** Compute the name of a regular (non-assumed) function.
 
@@ -1472,24 +1401,13 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
       indices to derive unique names for the loops for instance - if there is
       exactly one loop, we don't need to use indices)
     - loop id (if pertinent)
-    - number of region groups
-    - region group information in case of a backward function
-      ([None] if forward function)
-    - pair:
-      - do we generate the forward function (it may have been filtered)?
-      - the number of *extracted backward functions* (same comment as for
-        the number of loops)
-        The number of extracted backward functions if not necessarily
-        equal to the number of region groups, because we may have
-        filtered some of them.
     TODO: use the fun id for the assumed functions.
  *)
 let ctx_compute_fun_name (ctx : extraction_ctx) (fname : llbc_name)
-    (num_loops : int) (loop_id : LoopId.id option) (num_rgs : int)
-    (rg : region_group_info option) (filter_info : bool * int) : string =
+    (num_loops : int) (loop_id : LoopId.id option) : string =
   let fname = ctx_compute_fun_name_no_suffix ctx fname in
   (* Compute the suffix *)
-  let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
+  let suffix = default_fun_suffix num_loops loop_id in
   (* Concatenate *)
   fname ^ suffix
 
@@ -1963,61 +1881,26 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   | None ->
       (* Not the case: "standard" registration *)
       let name = ctx_compute_global_name ctx def.name in
-      let body = FunId (FromLlbc (FunId (FRegular def.body), None, None)) in
+      let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
       let ctx = ctx_add decl (name ^ "_c") ctx in
       let ctx = ctx_add body (name ^ "_body") ctx in
       ctx
 
-let ctx_compute_fun_name (trans_group : pure_fun_translation) (def : fun_decl)
-    (ctx : extraction_ctx) : string =
-  (* Lookup the LLBC def to compute the region group information *)
-  let def_id = def.def_id in
-  let llbc_def = A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_ctx.fun_decls in
-  let sg = llbc_def.signature in
-  let regions_hierarchy =
-    LlbcAstUtils.FunIdMap.find (FRegular def_id)
-      ctx.trans_ctx.fun_ctx.regions_hierarchies
-  in
-  let num_rgs = List.length regions_hierarchy in
-  let { keep_fwd; fwd = _; backs } = trans_group in
-  let num_backs = List.length backs in
-  let rg_info =
-    match def.back_id with
-    | None -> None
-    | Some rg_id ->
-        let rg = T.RegionGroupId.nth regions_hierarchy rg_id in
-        let region_names =
-          List.map
-            (fun rid -> (T.RegionVarId.nth sg.generics.regions rid).name)
-            rg.regions
-        in
-        Some { id = rg_id; region_names }
-  in
+let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
   (* Add the function name *)
-  ctx_compute_fun_name ctx def.llbc_name def.num_loops def.loop_id num_rgs
-    rg_info (keep_fwd, num_backs)
+  ctx_compute_fun_name ctx def.llbc_name def.num_loops def.loop_id
 
 (* TODO: move to Extract *)
-let ctx_add_fun_decl (trans_group : pure_fun_translation) (def : fun_decl)
-    (ctx : extraction_ctx) : extraction_ctx =
+let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Sanity check: the function should not be a global body - those are handled
    * separately *)
   assert (not def.is_global_decl_body);
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
-  let { keep_fwd; fwd = _; backs } = trans_group in
-  let num_backs = List.length backs in
   (* Add the function name *)
-  let def_name = ctx_compute_fun_name trans_group def ctx in
-  let fun_id = (Pure.FunId (FRegular def_id), def.loop_id, def.back_id) in
-  let ctx = ctx_add (FunId (FromLlbc fun_id)) def_name ctx in
-  (* Add the name info *)
-  {
-    ctx with
-    fun_name_info =
-      PureUtils.RegularFunIdMap.add fun_id { keep_fwd; num_backs }
-        ctx.fun_name_info;
-  }
+  let def_name = ctx_compute_fun_name def ctx in
+  let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
+  ctx_add (FunId (FromLlbc fun_id)) def_name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =

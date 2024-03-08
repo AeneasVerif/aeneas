@@ -263,50 +263,6 @@ let decompose_nested_let_patterns = ref false
  *)
 let unfold_monadic_let_bindings = ref false
 
-(** Controls whether we try to filter the calls to monadic functions
-    (which can fail) when their outputs are not used.
-
-    The useless calls are calls to backward functions which have no outputs.
-    This case happens if the original Rust function only takes *shared* borrows
-    as inputs, and is thus pretty common.
-
-    We are allowed to do this only because in this specific case,
-    the backward function fails *exactly* when the forward function fails
-    (they actually do exactly the same thing, the only difference being
-    that the forward function can potentially return a value), and upon
-    reaching the place where we should introduce a call to the backward
-    function, we know we have introduced a call to the forward function.
-
-    Also note that in general, backward functions "do more things" than
-    forward functions, and have more opportunities to fail (even though
-    in the generated code, calls to the backward functions should fail
-    exactly when the corresponding, previous call to the forward functions
-    failed).
-
-    This optimization is done in {!SymbolicToPure}.  We might want to move it to
-    the micro-passes subsequent to the translation from symbolic to pure, but it
-    is really super easy to do it when going from symbolic to pure. Note that
-    we later filter the useless *forward* calls in the micro-passes, where it is
-    more natural to do.
-
-    See the comments for {!PureMicroPasses.expression_contains_child_call_in_all_paths}
-    for additional explanations.
- *)
-let filter_useless_monadic_calls = ref true
-
-(** If {!filter_useless_monadic_calls} is activated, some functions
-    become useless: if this option is true, we don't extract them.
-
-    The calls to functions which always get filtered are:
-    - the forward functions with unit return value
-    - the backward functions which don't output anything (backward
-      functions coming from rust functions with no mutable borrows
-      as input values - note that if a function doesn't take mutable
-      borrows as inputs, it can't return mutable borrows; we actually
-      dynamically check for that).
- *)
-let filter_useless_functions = ref true
-
 (** Simplify the forward/backward functions, in case we merge them
     (i.e., the forward functions return the backward functions).
 

@@ -72,12 +72,6 @@ let () =
         Arg.Symbol (backend_names, set_backend),
         " Specify the target backend" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
-      ( "-no-filter-useless-calls",
-        Arg.Clear filter_useless_monadic_calls,
-        " Do not filter the useless function calls" );
-      ( "-no-filter-useless-funs",
-        Arg.Clear filter_useless_functions,
-        " Do not filter the useless forward/backward functions" );
       ( "-test-units",
         Arg.Set test_unit_functions,
         " Test the unit functions with the concrete (i.e., not symbolic) \

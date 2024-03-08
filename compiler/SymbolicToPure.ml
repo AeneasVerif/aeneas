@@ -2035,7 +2035,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     | S.Fun (fid, call_id) ->
         (* Regular function call *)
         let fid_t = translate_fun_id_or_trait_method_ref ctx fid in
-        let func = Fun (FromLlbc (fid_t, None, None)) in
+        let func = Fun (FromLlbc (fid_t, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
         let effect_info = get_fun_effect_info ctx fid None None in
@@ -2539,8 +2539,6 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
         get_fun_effect_info ctx (FunId fun_id) (Some vloop_id) (Some rg_id)
       in
       let loop_info = LoopId.Map.find loop_id ctx.loops in
-      let generics = loop_info.generics in
-      let fwd_inputs = Option.get loop_info.forward_inputs in
       (* Retrieve the additional backward inputs. Note that those are actually
          the backward inputs of the function we are synthesizing (and that we
          need to *transmit* to the loop backward function): they are not the
@@ -2581,10 +2579,6 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
         List.map
           (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
           (List.combine inputs args_mplaces)
-      in
-      let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
-      let ret_ty =
-        if effect_info.can_fail then mk_result_ty output.ty else output.ty
       in
       (* Create the expression for the function:
          - it is either a call to a top-level function, if we split the
@@ -3218,7 +3212,7 @@ and translate_forward_end (ectx : C.eval_ctx)
       let out_pat = mk_simpl_tuple_pattern out_pats in
 
       let loop_call =
-        let fun_id = Fun (FromLlbc (FunId fid, Some loop_id, None)) in
+        let fun_id = Fun (FromLlbc (FunId fid, Some loop_id)) in
         let func = { id = FunOrOp fun_id; generics = loop_info.generics } in
         let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
         let ret_ty =
@@ -3567,9 +3561,6 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let name = name_to_string ctx llbc_name in
   (* Translate the signature *)
   let signature = translate_fun_sig_from_decomposed ctx.sg in
-  let regions_hierarchy =
-    FunIdMap.find (FRegular def_id) ctx.fun_ctx.regions_hierarchies
-  in
   (* Translate the body, if there is *)
   let body =
     match body with

@@ -1,5 +1,4 @@
 open Interpreter
-open Expressions
 open Types
 open Values
 open LlbcAst
@@ -48,8 +47,6 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   (* Debug *)
   log#ldebug
     (lazy ("translate_function_to_pure: " ^ name_to_string trans_ctx fdef.name));
-
-  let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
@@ -124,20 +121,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     SymbolicToPure.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
   in
 
-  let regions_hierarchy =
-    LlbcAstUtils.FunIdMap.find (FRegular def_id) fun_ctx.regions_hierarchies
-  in
-
-  let var_counter, back_state_vars =
-    if !Config.return_back_funs then (var_counter, [])
-    else
-      List.fold_left_map
-        (fun var_counter (region_vars : region_var_group) ->
-          let gid = region_vars.id in
-          let var, var_counter = Pure.VarId.fresh var_counter in
-          (var_counter, (gid, var)))
-        var_counter regions_hierarchy
-  in
+  let var_counter, back_state_vars = (var_counter, []) in
   let back_state_vars = RegionGroupId.Map.of_list back_state_vars in
 
   let ctx =
@@ -195,28 +179,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   in
 
   (* Add the backward inputs *)
-  let ctx, backward_inputs_no_state, backward_inputs_with_state =
-    if !Config.return_back_funs then (ctx, [], [])
-    else
-      let ctx, inputs_no_with_state =
-        List.fold_left_map
-          (fun ctx (region_vars : region_var_group) ->
-            let gid = region_vars.id in
-            let back_sg = RegionGroupId.Map.find gid sg.back_sg in
-            let ctx, no_state =
-              SymbolicToPure.fresh_vars back_sg.inputs_no_state ctx
-            in
-            let ctx, with_state =
-              SymbolicToPure.fresh_vars back_sg.inputs ctx
-            in
-            (ctx, ((gid, no_state), (gid, with_state))))
-          ctx regions_hierarchy
-      in
-      let inputs_no_state, inputs_with_state =
-        List.split inputs_no_with_state
-      in
-      (ctx, inputs_no_state, inputs_with_state)
-  in
+  let backward_inputs_no_state, backward_inputs_with_state = ([], []) in
   let backward_inputs_no_state =
     RegionGroupId.Map.of_list backward_inputs_no_state
   in
@@ -225,40 +188,10 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   in
   let ctx = { ctx with backward_inputs_no_state; backward_inputs_with_state } in
 
-  (* Translate the forward function *)
-  let pure_forward =
-    match symbolic_trans with
-    | None -> SymbolicToPure.translate_fun_decl ctx None
-    | Some (_, ast) -> SymbolicToPure.translate_fun_decl ctx (Some ast)
-  in
-
-  (* Translate the backward functions, if we split the forward and backward functions *)
-  let translate_backward (rg : region_var_group) : Pure.fun_decl =
-    (* For the backward inputs/outputs initialization: we use the fact that
-     * there are no nested borrows for now, and so that the region groups
-     * can't have parents *)
-    assert (rg.parents = []);
-    let back_id = rg.id in
-
-    match symbolic_trans with
-    | None ->
-        (* Initialize the context *)
-        let ctx = { ctx with bid = Some back_id } in
-        (* Translate *)
-        SymbolicToPure.translate_fun_decl ctx None
-    | Some (_, symbolic) ->
-        (* Initialize the context *)
-        let ctx = { ctx with bid = Some back_id } in
-        (* Translate *)
-        SymbolicToPure.translate_fun_decl ctx (Some symbolic)
-  in
-  let pure_backwards =
-    if !Config.return_back_funs then []
-    else List.map translate_backward regions_hierarchy
-  in
-
-  (* Return *)
-  (pure_forward, pure_backwards)
+  (* Translate the function *)
+  match symbolic_trans with
+  | None -> SymbolicToPure.translate_fun_decl ctx None
+  | Some (_, ast) -> SymbolicToPure.translate_fun_decl ctx (Some ast)
 
 (* TODO: factor out the return type *)
 let translate_crate_to_pure (crate : crate) :
@@ -513,9 +446,8 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
   let trans = FunDeclId.Map.find global.body ctx.trans_funs in
-  assert (trans.fwd.loops = []);
-  assert (trans.backs = []);
-  let body = trans.fwd.f in
+  assert (trans.loops = []);
+  let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
   (* Check if we extract the global *)
@@ -643,7 +575,7 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     let funs_map = builtin_funs_map () in
     List.map
       (fun (trans : pure_fun_translation) ->
-        match_name_find_opt ctx.trans_ctx trans.fwd.f.llbc_name funs_map <> None)
+        match_name_find_opt ctx.trans_ctx trans.f.llbc_name funs_map <> None)
       pure_ls
   in
 
@@ -660,7 +592,7 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     (* Extract the decrease clauses template bodies *)
     if config.extract_template_decreases_clauses then
       List.iter
-        (fun { fwd; _ } ->
+        (fun f ->
           (* We only generate decreases clauses for the forward functions, because
              the termination argument should only depend on the forward inputs.
              The backward functions thus use the same decreases clauses as the
@@ -687,27 +619,14 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
                   raise
                     (Failure "HOL4 doesn't have decreases/termination clauses")
           in
-          extract_decrease fwd.f;
-          List.iter extract_decrease fwd.loops)
+          extract_decrease f.f;
+          List.iter extract_decrease f.loops)
         pure_ls;
 
-    (* Concatenate the function definitions, filtering the useless forward
-     * functions. *)
+    (* Flatten the translated functions (concatenate the functions with
+       the declarations introduced for the loops) *)
     let decls =
-      List.concat
-        (List.map
-           (fun { keep_fwd; fwd; backs } ->
-             let fwd =
-               if keep_fwd then List.append fwd.loops [ fwd.f ] else []
-             in
-             let backs : Pure.fun_decl list =
-               List.concat
-                 (List.map
-                    (fun back -> List.append back.loops [ back.f ])
-                    backs)
-             in
-             List.append fwd backs)
-           pure_ls)
+      List.concat (List.map (fun f -> List.append f.loops [ f.f ]) pure_ls)
     in
 
     (* Extract the function definitions *)
@@ -724,9 +643,7 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     (* Insert unit tests if necessary *)
     if config.test_trans_unit_functions then
       List.iter
-        (fun trans ->
-          if trans.keep_fwd then
-            Extract.extract_unit_test_if_unit_fun ctx fmt trans.fwd.f)
+        (fun trans -> Extract.extract_unit_test_if_unit_fun ctx fmt trans.f)
         pure_ls
 
 (** Export a trait declaration. *)
@@ -812,7 +729,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
            extract their type directly in the records we generate for
            the trait declarations themselves, there is no point in having
            separate type definitions) *)
-        match pure_fun.fwd.f.Pure.kind with
+        match pure_fun.f.Pure.kind with
         | TraitMethodDecl _ -> ()
         | _ ->
             (* Translate *)
@@ -1001,18 +918,18 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
    * whether we should generate a decrease clause or not. *)
   let rec_functions =
     List.map
-      (fun { fwd; _ } ->
-        let fwd_f =
-          if fwd.f.Pure.signature.fwd_info.effect_info.is_rec then
-            [ (fwd.f.def_id, None) ]
+      (fun trans ->
+        let f =
+          if trans.f.Pure.signature.fwd_info.effect_info.is_rec then
+            [ (trans.f.def_id, None) ]
           else []
         in
-        let loop_fwds =
+        let loops =
           List.map
             (fun (def : Pure.fun_decl) -> [ (def.def_id, def.loop_id) ])
-            fwd.loops
+            trans.loops
         in
-        fwd_f :: loop_fwds)
+        f :: loops)
       trans_funs
   in
   let rec_functions : PureUtils.fun_loop_id list =
@@ -1028,7 +945,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
   let trans_funs : pure_fun_translation FunDeclId.Map.t =
     FunDeclId.Map.of_list
       (List.map
-         (fun (trans : pure_fun_translation) -> (trans.fwd.f.def_id, trans))
+         (fun (trans : pure_fun_translation) -> (trans.f.def_id, trans))
          trans_funs)
   in
 
@@ -1052,7 +969,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
       names_maps;
       indent_incr = 2;
       use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
-      fun_name_info = PureUtils.RegularFunIdMap.empty;
       trait_decl_id = None (* None by default *);
       is_provided_method = false (* false by default *);
       trans_trait_decls;
@@ -1082,7 +998,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
       (fun ctx (trans : pure_fun_translation) ->
         (* If requested by the user, register termination measures and decreases
            proofs for all the recursive functions *)
-        let fwd_def = trans.fwd.f in
         let gen_decr_clause (def : Pure.fun_decl) =
           !Config.extract_decreases_clauses
           && PureUtils.FunLoopIdSet.mem
@@ -1091,7 +1006,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
         in
         (* Register the names, only if the function is not a global body -
          * those are handled later *)
-        let is_global = fwd_def.Pure.is_global_decl_body in
+        let is_global = trans.f.Pure.is_global_decl_body in
         if is_global then ctx
         else Extract.extract_fun_decl_register_names ctx gen_decr_clause trans)
       ctx
@@ -1171,13 +1086,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     let exe_dir = Filename.dirname Sys.argv.(0) in
     let primitives_src_dest =
       match !Config.backend with
-      | FStar ->
-          let src =
-            if !Config.return_back_funs then
-              "/backends/fstar/merge/Primitives.fst"
-            else "/backends/fstar/split/Primitives.fst"
-          in
-          Some (src, "Primitives.fst")
+      | FStar -> Some ("/backends/fstar/merge/Primitives.fst", "Primitives.fst")
       | Coq -> Some ("/backends/coq/Primitives.v", "Primitives.v")
       | Lean -> None
       | HOL4 -> None

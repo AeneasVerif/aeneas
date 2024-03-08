@@ -109,6 +109,8 @@ let reset_global_counters () =
   region_id_counter := RegionId.generator_zero;
   abstraction_id_counter := AbstractionId.generator_zero;
   loop_id_counter := LoopId.generator_zero;
+  (* We want the loop id to start at 1 *)
+  let _ = fresh_loop_id () in
   fun_call_id_counter := FunCallId.generator_zero;
   dummy_var_id_counter := DummyVarId.generator_zero
 

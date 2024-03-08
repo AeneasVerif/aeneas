@@ -221,12 +221,11 @@ type builtin_fun_info = { extract_name : string } [@@deriving show]
     parameters. For instance, in the case of the `Vec` functions, there is
     a type parameter for the allocator to use, which we want to filter.
  *)
-let builtin_funs () : (pattern * bool list option * builtin_fun_info list) list
-    =
+let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
   (* Small utility *)
   let mk_fun (rust_name : string) (extract_name : string option)
       (filter : bool list option) :
-      pattern * bool list option * builtin_fun_info list =
+      pattern * bool list option * builtin_fun_info =
     let rust_name =
       try parse_pattern rust_name
       with Failure _ ->
@@ -238,7 +237,7 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info list) list
       | Some name -> split_on_separator name
     in
     let basename = flatten_name extract_name in
-    let f = [ { extract_name = basename } ] in
+    let f = { extract_name = basename } in
     (rust_name, filter, f)
   in
   [
@@ -377,7 +376,7 @@ type builtin_trait_decl_info = {
           - a Rust name
           - an extraction name
           - a list of clauses *)
-  methods : (string * builtin_fun_info list) list;
+  methods : (string * builtin_fun_info) list;
 }
 [@@deriving show]
 
@@ -418,7 +417,7 @@ let builtin_trait_decls_info () =
           if !record_fields_short_names then item_name
           else extract_name ^ "_" ^ item_name
         in
-        let fwd = [ { extract_name = basename } ] in
+        let fwd = { extract_name = basename } in
         (item_name, fwd)
       in
       List.map mk_method methods
