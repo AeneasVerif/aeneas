@@ -114,18 +114,6 @@
           # The tests don't generate anything - TODO: actually they do
           installPhase = "touch $out";
         };
-        # Replay the F* proofs for the cases where we split the fwd/back functions.
-        aeneas-verify-fstar-split = pkgs.stdenv.mkDerivation {
-          name = "aeneas_verify_fstar_split";
-          src = ./tests/fstar-split;
-          FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
-          buildPhase= ''
-            make prepare-projects
-            make verify -j $NIX_BUILD_CORES
-          '';
-          # The tests don't generate anything - TODO: actually they do
-          installPhase = "touch $out";
-        };
         # Replay the Coq proofs.
         aeneas-verify-coq = pkgs.stdenv.mkDerivation {
           name = "aeneas_verify_coq";
@@ -183,7 +171,10 @@
           default = aeneas;
         };
         checks = {
-          inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-fstar-split
-                  aeneas-verify-coq aeneas-verify-lean aeneas-verify-hol4; };
+          inherit aeneas aeneas-tests
+                  aeneas-verify-fstar
+                  aeneas-verify-coq
+                  aeneas-verify-lean
+                  aeneas-verify-hol4; };
       });
 }

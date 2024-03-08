@@ -462,21 +462,13 @@ let inst_fun_sig_to_string (env : fmt_env) (sg : inst_fun_sig) : string =
   let all_types = List.append inputs [ output ] in
   String.concat " -> " all_types
 
-let fun_suffix (lp_id : LoopId.id option) (rg_id : T.RegionGroupId.id option) :
-    string =
+let fun_suffix (lp_id : LoopId.id option) : string =
   let lp_suff =
     match lp_id with
     | None -> ""
     | Some lp_id -> "^loop" ^ LoopId.to_string lp_id
   in
-
-  let rg_suff =
-    match rg_id with
-    | None -> ""
-    | Some rg_id -> "@" ^ T.RegionGroupId.to_string rg_id
-  in
-
-  lp_suff ^ rg_suff
+  lp_suff
 
 let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   match fid with
@@ -505,7 +497,7 @@ let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with
-  | FromLlbc (fid, lp_id, rg_id) ->
+  | FromLlbc (fid, lp_id) ->
       let f =
         match fid with
         | FunId (FRegular fid) -> fun_decl_id_to_string env fid
@@ -513,7 +505,7 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
         | TraitMethod (trait_ref, method_name, _) ->
             trait_ref_to_string env true trait_ref ^ "." ^ method_name
       in
-      f ^ fun_suffix lp_id rg_id
+      f ^ fun_suffix lp_id
   | Pure fid -> pure_assumed_fun_id_to_string fid
 
 let unop_to_string (unop : unop) : string =
@@ -746,7 +738,7 @@ and emeta_to_string (env : fmt_env) (meta : emeta) : string =
 
 let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
   let env = { env with generics = def.signature.generics } in
-  let name = def.name ^ fun_suffix def.loop_id def.back_id in
+  let name = def.name ^ fun_suffix def.loop_id in
   let signature = fun_sig_to_string env def.signature in
   match def.body with
   | None -> "val " ^ name ^ " :\n  " ^ signature

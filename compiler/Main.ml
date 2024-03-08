@@ -72,12 +72,6 @@ let () =
         Arg.Symbol (backend_names, set_backend),
         " Specify the target backend" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
-      ( "-no-filter-useless-calls",
-        Arg.Clear filter_useless_monadic_calls,
-        " Do not filter the useless function calls" );
-      ( "-no-filter-useless-funs",
-        Arg.Clear filter_useless_functions,
-        " Do not filter the useless forward/backward functions" );
       ( "-test-units",
         Arg.Set test_unit_functions,
         " Test the unit functions with the concrete (i.e., not symbolic) \
@@ -120,9 +114,6 @@ let () =
         " Generate a default lakefile.lean (Lean only)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ("-k", Arg.Clear fail_hard, " Do not fail hard in case of error");
-      ( "-split-fwd-back",
-        Arg.Clear return_back_funs,
-        " Split the forward and backward functions." );
       ( "-tuple-nested-proj",
         Arg.Set use_nested_tuple_projectors,
         " Use nested projectors for tuples (e.g., (0, 1).snd.fst instead of \

@@ -70,11 +70,9 @@ build-bin-dir: build-bin build-lib
 	mkdir -p bin
 	cp -f compiler/_build/default/main.exe bin/aeneas
 	cp -f compiler/_build/default/main.exe bin/aeneas.cmxs
-	mkdir -p bin/backends/fstar/split
-	mkdir -p bin/backends/fstar/merge
+	mkdir -p bin/backends/fstar
 	mkdir -p bin/backends/coq
-	cp -rf backends/fstar/split/*.fst* bin/backends/fstar/split/
-	cp -rf backends/fstar/merge/*.fst* bin/backends/fstar/merge/
+	cp -rf backends/fstar/*.fst* bin/backends/fstar/
 	cp -rf backends/coq/*.v bin/backends/coq/
 
 .PHONY: doc
@@ -263,29 +261,14 @@ testp-%: gen-llbcp-% tfstarp-% tcoqp-% tleanp-% thol4p-%
 .PHONY: tfstar-%
 tfstar-%: OPTIONS += -backend fstar
 tfstar-%: BACKEND_SUBDIR := fstar
-tfstar-%: tsplit-fstar-%
+tfstar-%:
 	$(AENEAS_CMD)
 
 # "p" stands for "Polonius"
 .PHONY: tfstarp-%
 tfstarp-%: OPTIONS += -backend fstar
 tfstarp-%: BACKEND_SUBDIR := fstar
-tfstarp-%: tsplit-fstarp-%
-	$(AENEAS_CMD)
-
-# Test where we split the forward/backward functions
-.PHONY: tsplit-fstar-%
-tsplit-fstar-%: OPTIONS += -backend fstar -split-fwd-back
-tsplit-fstar-%: BACKEND_SUBDIR := fstar-split
-tsplit-fstar-%:
-	$(AENEAS_CMD)
-
-# Test where we split the forward/backward functions
-# "p" stands for "Polonius"
-.PHONY: tsplit-fstarp-%
-tsplit-fstarp-%: OPTIONS += -backend fstar -split-fwd-back
-tsplit-fstarp-%: BACKEND_SUBDIR := fstar-split
-tsplit-fstarp-%:
+tfstarp-%:
 	$(AENEAS_CMD)
 
 .PHONY: tcoq-%
