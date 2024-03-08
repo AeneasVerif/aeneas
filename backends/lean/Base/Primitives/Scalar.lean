@@ -1154,35 +1154,4 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
 @[simp] theorem Scalar.neq_to_neq_val {ty} : ∀ {i j : Scalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
   intro i j; cases i; cases j; simp
 
--- -- We now define a type class that subsumes the various machine integer types, so
--- -- as to write a concise definition for scalar_cast, rather than exhaustively
--- -- enumerating all of the possible pairs. We remark that Rust has sane semantics
--- -- and fails if a cast operation would involve a truncation or modulo.
-
--- class MachineInteger (t: Type) where
---   size: Nat
---   val: t -> Fin size
---   ofNatCore: (n:Nat) -> LT.lt n size -> t
-
--- set_option hygiene false in
--- run_cmd
---   for typeName in [`UInt8, `UInt16, `UInt32, `UInt64, `USize].map Lean.mkIdent do
---   Lean.Elab.Command.elabCommand (← `(
---     namespace $typeName
---     instance: MachineInteger $typeName where
---       size := size
---       val := val
---       ofNatCore := ofNatCore
---     end $typeName
---   ))
-
--- -- Aeneas only instantiates the destination type (`src` is implicit). We rely on
--- -- Lean to infer `src`.
-
--- def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): Result dst :=
---   if h: MachineInteger.val x < MachineInteger.size dst then
---     .ret (MachineInteger.ofNatCore (MachineInteger.val x).val h)
---   else
---     .fail integerOverflow
-
 end Primitives
