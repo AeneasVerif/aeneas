@@ -123,6 +123,10 @@ let () =
       ( "-split-fwd-back",
         Arg.Clear return_back_funs,
         " Split the forward and backward functions." );
+      ( "-tuple-nested-proj",
+        Arg.Set use_nested_tuple_projectors,
+        " Use nested projectors for tuples (e.g., (0, 1).snd.fst instead of \
+         (0, 1).1)." );
     ]
   in
 

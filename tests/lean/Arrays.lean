@@ -397,7 +397,7 @@ divergent def sum2_loop
 def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
   let i := Slice.len U32 s
   let i1 := Slice.len U32 s2
-  if not (i = i1)
+  if ¬ (i = i1)
   then Result.fail .panic
   else sum2_loop s s2 0#u32 0#usize
 
@@ -452,7 +452,7 @@ def f3 : Result U32 :=
 /- [arrays::SZ]
    Source: 'src/arrays.rs', lines 286:0-286:19 -/
 def sz_body : Result Usize := Result.ret 32#usize
-def sz_c : Usize := eval_global sz_body (by decide)
+def sz_c : Usize := eval_global sz_body
 
 /- [arrays::f5]:
    Source: 'src/arrays.rs', lines 289:0-289:31 -/

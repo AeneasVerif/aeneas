@@ -43,7 +43,7 @@ instance (α : Type u) : Inhabited (Vec α) := by
 
 -- TODO: very annoying that the α is an explicit parameter
 def Vec.len (α : Type u) (v : Vec α) : Usize :=
-  Usize.ofIntCore v.val.len (by scalar_tac) (by scalar_tac)
+  Usize.ofIntCore v.val.len (by constructor <;> scalar_tac)
 
 @[simp]
 theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len α v).val = v.length :=

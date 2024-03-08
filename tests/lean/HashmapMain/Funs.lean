@@ -419,14 +419,14 @@ def hashmap.test1 : Result Unit :=
   let hm3 ← hashmap.HashMap.insert U64 hm2 1024#usize 138#u64
   let hm4 ← hashmap.HashMap.insert U64 hm3 1056#usize 256#u64
   let i ← hashmap.HashMap.get U64 hm4 128#usize
-  if not (i = 18#u64)
+  if ¬ (i = 18#u64)
   then Result.fail .panic
   else
     do
     let (_, get_mut_back) ← hashmap.HashMap.get_mut U64 hm4 1024#usize
     let hm5 ← get_mut_back 56#u64
     let i1 ← hashmap.HashMap.get U64 hm5 1024#usize
-    if not (i1 = 56#u64)
+    if ¬ (i1 = 56#u64)
     then Result.fail .panic
     else
       do
@@ -434,22 +434,22 @@ def hashmap.test1 : Result Unit :=
       match x with
       | none => Result.fail .panic
       | some x1 =>
-        if not (x1 = 56#u64)
+        if ¬ (x1 = 56#u64)
         then Result.fail .panic
         else
           do
           let i2 ← hashmap.HashMap.get U64 hm6 0#usize
-          if not (i2 = 42#u64)
+          if ¬ (i2 = 42#u64)
           then Result.fail .panic
           else
             do
             let i3 ← hashmap.HashMap.get U64 hm6 128#usize
-            if not (i3 = 18#u64)
+            if ¬ (i3 = 18#u64)
             then Result.fail .panic
             else
               do
               let i4 ← hashmap.HashMap.get U64 hm6 1056#usize
-              if not (i4 = 256#u64)
+              if ¬ (i4 = 256#u64)
               then Result.fail .panic
               else Result.ret ()
 

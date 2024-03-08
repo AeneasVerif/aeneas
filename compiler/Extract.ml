@@ -577,12 +577,17 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
       in
       (* Check if we extract the type as a tuple, and it only has one field.
          In this case, there is no projection. *)
-      let has_one_field =
+      let num_fields =
         match proj.adt_id with
         | TAdtId id -> (
             let d = TypeDeclId.Map.find id ctx.trans_types in
-            match d.kind with Struct [ _ ] -> true | _ -> false)
-        | _ -> false
+            match d.kind with
+            | Struct fields -> Some (List.length fields)
+            | _ -> None)
+        | _ -> None
+      in
+      let has_one_field =
+        match num_fields with Some len -> len = 1 | None -> false
       in
       if is_tuple_struct && has_one_field then
         extract_texpression ctx fmt inside arg
@@ -590,7 +595,52 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
         (* Exactly one argument: pretty-print *)
         let field_name =
           (* Check if we need to extract the type as a tuple *)
-          if is_tuple_struct then FieldId.to_string proj.field_id
+          if is_tuple_struct then
+            match !backend with
+            | FStar | HOL4 | Coq -> FieldId.to_string proj.field_id
+            | Lean ->
+                (* Tuples in Lean are syntax sugar for nested products/pairs,
+                   so we need to map the field id accordingly.
+
+                   We give two possibilities:
+                   - either we use the custom syntax [.#i], like in: [(0, 1).#1]
+                   - or we introduce nested projections which use the field
+                     projectors [.1] and [.2], like in: [(0, 1).2.1]
+
+                     This necessary in some situations, for instance if we have
+                     in Rust:
+                     {[
+                       struct Tuple(u32, (u32, u32));
+                     ]}
+
+                     The issue comes from the fact that in Lean [A * B * C] and [A * (B *
+                     C)] are the same type.  As a result, in Rust, field 1 of [Tuple] is
+                     the pair (an element of type [(u32, u32)]), however in Lean it would
+                     be the first element of the pair (an element of type [u32]). If such
+                     situations happen, we allow to force using the nested projectors by
+                     providing the proper command line argument.  TODO: we can actually
+                     check the type to determine exactly when we need to use nested
+                     projectors and when we don't.
+
+                     When using nested projectors, a field id i maps to:
+                     - (.2)^i if i is the last element of the tuple
+                     - (.2)^i.1 otherwise
+                     where (.2)^i denotes .2 repeated i times.
+                     For example, 3 maps to .2.2.2 if the tuple has 4 fields and
+                     to .2.2.2.1 if it has more than 4 fields.
+                     Note that the first "." is added below.
+                *)
+                let field_id = FieldId.to_int proj.field_id in
+                if !Config.use_nested_tuple_projectors then
+                  (* Nested projection: "2.2.2..."  *)
+                  if field_id = 0 then "1"
+                  else
+                    let twos_prefix =
+                      String.concat "." (Collections.List.repeat field_id "2")
+                    in
+                    if field_id + 1 = Option.get num_fields then twos_prefix
+                    else twos_prefix ^ ".1"
+                else "#" ^ string_of_int field_id
           else ctx_get_field proj.adt_id proj.field_id ctx
         in
         (* Open a box *)
@@ -1863,8 +1913,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
            (fun fmt ->
              let body =
                match !backend with
-               | FStar -> "eval_global " ^ body_name
-               | Lean -> "eval_global " ^ body_name ^ " (by decide)"
+               | FStar | Lean -> "eval_global " ^ body_name
                | Coq -> body_name ^ "%global"
                | HOL4 -> "get_return_value " ^ body_name
              in
