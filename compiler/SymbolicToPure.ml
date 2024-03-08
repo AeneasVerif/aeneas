@@ -1988,7 +1988,13 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
         (* Backward *)
         (* Group the variables in which we stored the values we need to give back.
          * See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
-        let backward_outputs = Option.get ctx.backward_outputs in
+        (* It can happen that we did not end any output abstraction, because the
+           loop didn't use borrows corresponding to the region we just ended.
+           If this happens, there are no backward outputs.
+        *)
+        let backward_outputs =
+          match ctx.backward_outputs with Some outputs -> outputs | None -> []
+        in
         let field_values = List.map mk_texpression_from_var backward_outputs in
         mk_simpl_tuple_texpression field_values
   in
