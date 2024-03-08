@@ -190,6 +190,9 @@ let eval_loop_symbolic (config : config) (meta : meta)
        Moreover, we list the borrows in the same order as the loans (this
        is important in {!SymbolicToPure}, where we expect the given back
        values to have a specific order.
+
+       Also, we filter the backward functions which and
+       return nothing.
     *)
     let compute_abs_given_back_tys (abs : abs) : rty list =
       let is_borrow (av : typed_avalue) : bool =
