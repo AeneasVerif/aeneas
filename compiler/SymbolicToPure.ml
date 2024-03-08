@@ -1890,7 +1890,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
          Remark: we can't get there if we are inside a loop. *)
       translate_return ectx opt_v ctx
   | ReturnWithLoop (loop_id, is_continue) ->
-      (* We end the function with a call to a loop function. *)
+      (* We reached a return and are inside a loop. *)
       translate_return_with_loop loop_id is_continue ctx
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call call e ctx
@@ -1902,7 +1902,10 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
       translate_intro_symbolic ectx p sv v e ctx
   | Meta (meta, e) -> translate_emeta meta e ctx
   | ForwardEnd (ectx, loop_input_values, e, back_e) ->
-      (* Translate the end of a function, or the end of a loop *)
+      (* Translate the end of a function, or the end of a loop.
+
+         The case where we (re-)enter a loop is handled here.
+      *)
       translate_forward_end ectx loop_input_values e back_e ctx
   | Loop loop -> translate_loop loop ctx
 

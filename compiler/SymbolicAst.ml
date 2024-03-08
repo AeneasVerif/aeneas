@@ -197,16 +197,16 @@ type expression =
           The evaluation context is the context at the moment we introduce the
           [ForwardEnd], and is used to translate the input values (see the
           comments for the {!Return} variant).
+
+          This case also handles the case where we (re-)enter a loop (once
+          we enter a loop in symbolic mode, we don't get out: the loop is
+          responsible for the end of the function).
        *)
   | Loop of loop  (** Loop *)
   | ReturnWithLoop of loop_id * bool
-      (** End the function with a call to a loop function.
-
-          This encompasses the cases when we synthesize a function body
-          and enter a loop for the first time, or when we synthesize a
-          loop body and reach a [Continue].
-
-          The boolean is [is_continue].
+      (** We reach a return while inside a loop.
+          The boolean is [true].
+          TODO: merge this with Return.
        *)
   | Meta of emeta * expression  (** Meta information *)
 
