@@ -131,7 +131,7 @@ def Slice.new (α : Type u): Slice α := ⟨ [], by apply Scalar.cMax_suffices .
 
 -- TODO: very annoying that the α is an explicit parameter
 def Slice.len (α : Type u) (v : Slice α) : Usize :=
-  Usize.ofIntCore v.val.len (by scalar_tac) (by scalar_tac)
+  Usize.ofIntCore v.val.len (by constructor <;> scalar_tac)
 
 @[simp]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len α v).val = v.length :=

@@ -74,7 +74,7 @@ example : U32.ofInt 1 ≤ U32.max := by
   scalar_tac
 
 example (x : Int) (h0 : 0 ≤ x) (h1 : x ≤ U32.max) :
-  U32.ofInt x (by constructor <;> scalar_tac) ≤ U32.max := by
+  U32.ofIntCore x (by constructor <;> scalar_tac) ≤ U32.max := by
   scalar_tac
 
 -- Not equal
