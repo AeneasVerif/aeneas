@@ -782,9 +782,13 @@ let ctx_get_termination_measure (def_id : A.FunDeclId.id)
 let unop_name (unop : unop) : string =
   match unop with
   | Not -> (
-      match !backend with FStar | Lean -> "not" | Coq -> "negb" | HOL4 -> "~")
+      match !backend with
+      | FStar -> "not"
+      | Lean -> "¬"
+      | Coq -> "negb"
+      | HOL4 -> "~")
   | Neg (int_ty : integer_type) -> (
-      match !backend with Lean -> "-" | _ -> int_name int_ty ^ "_neg")
+      match !backend with Lean -> "-." | _ -> int_name int_ty ^ "_neg")
   | Cast _ ->
       (* We never directly use the unop name in this case *)
       raise (Failure "Unsupported")

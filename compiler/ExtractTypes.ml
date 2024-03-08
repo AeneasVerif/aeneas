@@ -31,11 +31,6 @@ let extract_literal (fmt : F.formatter) (inside : bool) (cv : literal) : unit =
           (* We need to add parentheses if the value is negative *)
           if sv.value >= Z.of_int 0 then
             F.pp_print_string fmt (Z.to_string sv.value)
-          else if !backend = Lean then
-            (* TODO: parsing issues with Lean because there are ambiguous
-               interpretations between int values and nat values *)
-            F.pp_print_string fmt
-              ("(-(" ^ Z.to_string (Z.neg sv.value) ^ ":Int))")
           else F.pp_print_string fmt ("(" ^ Z.to_string sv.value ^ ")");
           (match !backend with
           | Coq ->
