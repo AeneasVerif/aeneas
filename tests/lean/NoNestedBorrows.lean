@@ -643,7 +643,7 @@ def Tuple (T1 T2 : Type) := T1 × T2
 /- [no_nested_borrows::use_tuple_struct]:
    Source: 'src/no_nested_borrows.rs', lines 556:0-556:48 -/
 def use_tuple_struct (x : Tuple U32 U32) : Result (Tuple U32 U32) :=
-  Result.ret (1#u32, x.2)
+  Result.ret (1#u32, x.#1)
 
 /- [no_nested_borrows::create_tuple_struct]:
    Source: 'src/no_nested_borrows.rs', lines 560:0-560:61 -/

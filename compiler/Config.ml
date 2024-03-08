@@ -469,3 +469,7 @@ let use_tuple_structs = ref true
 
 let backend_has_tuple_projectors () =
   match !backend with Lean -> true | Coq | FStar | HOL4 -> false
+
+(** We we use nested projectors for tuple (like: [(0, 1).snd.fst]) or do
+    we use better projector syntax? *)
+let use_nested_tuple_projectors = ref false
