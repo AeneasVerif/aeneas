@@ -358,6 +358,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       in
       if not inside_loop then (Some fun_abs_id, true)
       else
+        (* We are inside a loop *)
         let pred (abs : abs) =
           match abs.kind with
           | Loop (_, rg_id', kind) ->

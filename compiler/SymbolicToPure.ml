@@ -3044,16 +3044,19 @@ and translate_forward_end (ectx : C.eval_ctx)
     let ctx, pure_fwd_var = fresh_var None ctx.sg.fwd_output ctx in
     let fwd_e = translate_one_end ctx None in
 
-    (* If we are translating a loop, we need to ignore the backward functions
-       which are not associated to region abstractions of the loop. *)
+    (* If we reached a loop: if we are *inside* a loop, we need to ignore the
+       backward functions which are not associated to region abstractions.
+    *)
     let keep_rg_ids =
       match ctx.loop_id with
       | None -> None
       | Some loop_id ->
-          let loop_info = LoopId.Map.find loop_id ctx.loops in
-          Some
-            (RegionGroupId.Set.of_list
-               (RegionGroupId.Map.keys loop_info.back_outputs))
+          if ctx.inside_loop then
+            let loop_info = LoopId.Map.find loop_id ctx.loops in
+            Some
+              (RegionGroupId.Set.of_list
+                 (RegionGroupId.Map.keys loop_info.back_outputs))
+          else None
     in
     let keep_rg_id =
       match keep_rg_ids with
@@ -3517,9 +3520,6 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         loop_body;
       }
   in
-  (* If we translate forward functions: the return type of a loop body is the
-     same as the parent function *)
-  assert (Option.is_some ctx.bid || fun_end.ty = loop_body.ty);
   let ty = fun_end.ty in
   { e = loop; ty }
 
