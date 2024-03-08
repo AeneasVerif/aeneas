@@ -510,9 +510,19 @@ def mkDeclareUnaryBodies (grLvlParams : List Name) (kk_var : Expr)
              let i ← mkFinVal grSize id
              -- Check that there are no type parameters
              if type_info.num_params ≠ 0 then throwError "mkUnaryBodies: a recursive call was not eliminated"
-             -- Introduce the call to the continuation
-             let param_args ← mkSigmasVal type_info.params_ty []
-             mkAppM' kk_var #[i, param_args]
+             -- We might be in a degenerate case, if the function takes no arguments
+             -- at all (i.e., the function is a constant).
+             -- For instance:
+             -- ```
+             -- divergent def infinite_loop : Result Unit := infinite_loop
+             -- ``
+             if type_info.total_num_args == 0 then do
+                trace[Diverge.def.genBody.visit] "Degenerate case: total_num_args=0"
+                mkAppM' kk_var #[i, UnitValue, UnitValue]
+             else do
+               -- Introduce the call to the continuation
+               let param_args ← mkSigmasVal type_info.params_ty []
+               mkAppM' kk_var #[i, param_args]
          else pure e
        | _ => pure e
     trace[Diverge.def.genBody.visit] "done with expression (depth: {i}): {e}"
@@ -1570,6 +1580,20 @@ namespace Tests
     test1 Option.none ()
 
   #check test1.unfold
+
+  -- Testing a degenerate case
+  divergent def infinite_loop : Result Unit :=
+    do
+    let _ ← infinite_loop
+    Result.ret ()
+
+  #check infinite_loop.unfold
+
+  -- Testing a degenerate case
+  divergent def infinite_loop1 : Result Unit :=
+    infinite_loop1
+
+  #check infinite_loop1.unfold
 
   /- Tests with higher-order functions -/
   section HigherOrder
