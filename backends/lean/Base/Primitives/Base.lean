@@ -69,7 +69,7 @@ def div? {α: Type u} (r: Result α): Bool :=
 def massert (b:Bool) : Result Unit :=
   if b then ret () else fail assertionFailure
 
-def eval_global {α: Type u} (x: Result α) (_: ret? x): α :=
+def eval_global {α: Type u} (x: Result α) (_: ret? x := by decide): α :=
   match x with
   | fail _ | div => by contradiction
   | ret x => x
@@ -78,7 +78,7 @@ def eval_global {α: Type u} (x: Result α) (_: ret? x): α :=
 
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   match x with
-  | ret v  => f v 
+  | ret v  => f v
   | fail v => fail v
   | div => div
 

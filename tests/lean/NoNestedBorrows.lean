@@ -139,12 +139,12 @@ def mix_arith_i32 (x : I32) (y : I32) (z : I32) : Result I32 :=
 /- [no_nested_borrows::CONST0]
    Source: 'src/no_nested_borrows.rs', lines 125:0-125:23 -/
 def const0_body : Result Usize := 1#usize + 1#usize
-def const0_c : Usize := eval_global const0_body (by decide)
+def const0_c : Usize := eval_global const0_body
 
 /- [no_nested_borrows::CONST1]
    Source: 'src/no_nested_borrows.rs', lines 126:0-126:23 -/
 def const1_body : Result Usize := 2#usize * 2#usize
-def const1_c : Usize := eval_global const1_body (by decide)
+def const1_c : Usize := eval_global const1_body
 
 /- [no_nested_borrows::cast_u32_to_i32]:
    Source: 'src/no_nested_borrows.rs', lines 128:0-128:37 -/
