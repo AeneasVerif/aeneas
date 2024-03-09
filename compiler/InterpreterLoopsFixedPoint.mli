@@ -3,6 +3,18 @@ open Contexts
 open InterpreterUtils
 open InterpreterLoopsCore
 
+(** Repeat until we can't simplify the context anymore:
+   - explore the fresh anonymous values and replace all the values which are not
+     borrows/loans with ⊥
+   - also end the borrows which appear in fresh anonymous values and don't contain loans
+   - end the fresh region abstractions which can be ended (no loans)
+
+   Inputs:
+   - config
+   - fixed ids (the fixeds ids are the ids we consider as non-fresh)
+ *)
+val cleanup_fresh_values_and_abs : config -> ids_sets -> Cps.cm_fun
+
 (** Prepare the shared loans in the abstractions by moving them to fresh
     abstractions.
 
@@ -56,6 +68,8 @@ val prepare_ashared_loans : loop_id option -> Cps.cm_fun
     - the map from region group id to the corresponding abstraction appearing
       in the fixed point (this is useful to compute the return type of the loop
       backward functions for instance).
+      Note that this is a partial map: the loop doesn't necessarily introduce
+      an abstraction for each input region of the function.
 
     Rem.: the list of symbolic values should be computable by simply exploring
     the fixed point environment and listing all the symbolic values we find.

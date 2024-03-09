@@ -516,4 +516,73 @@ Definition ite : result unit :=
   Return tt
 .
 
+(** [arrays::zero_slice]: loop 0:
+    Source: 'src/arrays.rs', lines 303:0-310:1 *)
+Fixpoint zero_slice_loop
+  (n : nat) (a : slice u8) (i : usize) (len : usize) : result (slice u8) :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    if i s< len
+    then (
+      p <- slice_index_mut_usize u8 a i;
+      let (_, index_mut_back) := p in
+      i1 <- usize_add i 1%usize;
+      a1 <- index_mut_back 0%u8;
+      zero_slice_loop n1 a1 i1 len)
+    else Return a
+  end
+.
+
+(** [arrays::zero_slice]:
+    Source: 'src/arrays.rs', lines 303:0-303:31 *)
+Definition zero_slice (n : nat) (a : slice u8) : result (slice u8) :=
+  let len := slice_len u8 a in zero_slice_loop n a 0%usize len
+.
+
+(** [arrays::iter_mut_slice]: loop 0:
+    Source: 'src/arrays.rs', lines 312:0-318:1 *)
+Fixpoint iter_mut_slice_loop
+  (n : nat) (len : usize) (i : usize) : result unit :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    if i s< len
+    then (
+      i1 <- usize_add i 1%usize; _ <- iter_mut_slice_loop n1 len i1; Return tt)
+    else Return tt
+  end
+.
+
+(** [arrays::iter_mut_slice]:
+    Source: 'src/arrays.rs', lines 312:0-312:35 *)
+Definition iter_mut_slice (n : nat) (a : slice u8) : result (slice u8) :=
+  let len := slice_len u8 a in _ <- iter_mut_slice_loop n len 0%usize; Return a
+.
+
+(** [arrays::sum_mut_slice]: loop 0:
+    Source: 'src/arrays.rs', lines 320:0-328:1 *)
+Fixpoint sum_mut_slice_loop
+  (n : nat) (a : slice u32) (i : usize) (s : u32) : result u32 :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    let i1 := slice_len u32 a in
+    if i s< i1
+    then (
+      i2 <- slice_index_usize u32 a i;
+      s1 <- u32_add s i2;
+      i3 <- usize_add i 1%usize;
+      sum_mut_slice_loop n1 a i3 s1)
+    else Return s
+  end
+.
+
+(** [arrays::sum_mut_slice]:
+    Source: 'src/arrays.rs', lines 320:0-320:42 *)
+Definition sum_mut_slice
+  (n : nat) (a : slice u32) : result (u32 * (slice u32)) :=
+  i <- sum_mut_slice_loop n a 0%usize 0%u32; Return (i, a)
+.
+
 End Arrays.

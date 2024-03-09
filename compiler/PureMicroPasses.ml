@@ -15,6 +15,14 @@ let fun_sig_to_string (ctx : trans_ctx) (sg : Pure.fun_sig) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_sig_to_string fmt sg
 
+let var_to_string (ctx : trans_ctx) (v : var) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.var_to_string fmt v
+
+let texpression_to_string (ctx : trans_ctx) (x : texpression) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.texpression_to_string fmt false "" "  " x
+
 (** Small utility.
 
     We sometimes have to insert new fresh variables in a function body, in which
@@ -1890,7 +1898,7 @@ end
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 
 (** Filter the useless loop input parameters. *)
-let filter_loop_inputs (transl : pure_fun_translation list) :
+let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
     pure_fun_translation list =
   (* We need to explore groups of mutually recursive functions. In order
      to compute which parameters are useless, we need to explore the
@@ -1910,6 +1918,12 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
   in
   let subgroups = ReorderDecls.group_reorder_fun_decls all_decls in
 
+  log#ldebug
+    (lazy
+      ("filter_loop_inputs: all_decls:\n\n"
+      ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) all_decls)
+      ^ "\n"));
+
   (* Explore the subgroups one by one.
 
      For now, we only filter the parameters of loop functions which are simply
@@ -1918,16 +1932,7 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
      Rem.: there is a bit of redundancy in computing the useless parameters
      for the loop forward *and* the loop backward functions.
   *)
-  (* The [filtered] map: maps function identifiers to filtering information.
-
-     Note that we ignore the backward id:
-     - we filter the forward inputs only
-     - we want the filtering to be the same for the forward and the backward
-       functions
-     The reason is that for now we want to preserve the fact that a backward
-     function takes the same inputs as its associated forward function, with
-     additional parameters.
-  *)
+  (* The [filtered] map: maps function identifiers to filtering information. *)
   let used_map = ref FunLoopIdMap.empty in
 
   (* We start by computing the filtering information, for each function *)
@@ -1946,6 +1951,11 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
         (fun v -> (var_get_id v, mk_texpression_from_var v))
         inputs_prefix
     in
+    log#ldebug
+      (lazy
+        ("inputs:\n"
+        ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
+        ^ "\n"));
     let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
     assert (Option.is_some decl.loop_id);
 
@@ -1985,6 +1995,12 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
                         let beg_args, end_args =
                           Collections.List.split_at args inputs_prefix_length
                         in
+                        log#ldebug
+                          (lazy
+                            ("beg_args:\n"
+                            ^ String.concat ", "
+                                (List.map (texpression_to_string ctx) beg_args)
+                            ^ "\n"));
                         let used_args = List.combine inputs beg_args in
                         List.iter
                           (fun ((vid, var), arg) ->
@@ -2008,8 +2024,17 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
     in
     visitor#visit_texpression () body.body;
 
+    log#ldebug
+      (lazy
+        ("\n- used variables: "
+        ^ String.concat ", "
+            (List.map
+               (Print.pair_to_string VarId.to_string string_of_bool)
+               !used)
+        ^ "\n"));
+
     (* Save the filtering information, if there is anything to filter *)
-    if List.exists snd !used then
+    if List.exists (fun (_, b) -> not b) !used then
       let used = List.map snd !used in
       let used =
         match FunLoopIdMap.find_opt fun_id !used_map with
@@ -2025,6 +2050,11 @@ let filter_loop_inputs (transl : pure_fun_translation list) :
       | [ f ] ->
           (* Group made of one function: check if it is a loop. If it is the
              case, explore it. *)
+          log#ldebug
+            (lazy
+              ("filter_loop_inputs: singleton:\n\n" ^ fun_decl_to_string ctx f
+             ^ "\n"));
+
           if Option.is_some f.loop_id then compute_one_filter_info f else ()
       | _ ->
           (* Group of mutually recursive functions: ignore for now *)
@@ -2234,4 +2264,4 @@ let apply_passes_to_pure_fun_translations (ctx : trans_ctx)
   (* Filter the useless inputs in the loop functions (loops are initially
      parameterized by *all* the symbolic values in the context, because
      they may access any of them). *)
-  filter_loop_inputs transl
+  filter_loop_inputs ctx transl

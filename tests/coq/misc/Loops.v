@@ -688,4 +688,68 @@ Definition list_nth_shared_mut_loop_pair_merge
   Return (p1, back_'a)
 .
 
+(** [loops::ignore_input_mut_borrow]: loop 0:
+    Source: 'src/loops.rs', lines 345:0-349:1 *)
+Fixpoint ignore_input_mut_borrow_loop (n : nat) (i : u32) : result unit :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    if i s> 0%u32
+    then (
+      i1 <- u32_sub i 1%u32; _ <- ignore_input_mut_borrow_loop n1 i1; Return tt)
+    else Return tt
+  end
+.
+
+(** [loops::ignore_input_mut_borrow]:
+    Source: 'src/loops.rs', lines 345:0-345:56 *)
+Definition ignore_input_mut_borrow
+  (n : nat) (_a : u32) (i : u32) : result u32 :=
+  _ <- ignore_input_mut_borrow_loop n i; Return _a
+.
+
+(** [loops::incr_ignore_input_mut_borrow]: loop 0:
+    Source: 'src/loops.rs', lines 353:0-358:1 *)
+Fixpoint incr_ignore_input_mut_borrow_loop (n : nat) (i : u32) : result unit :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    if i s> 0%u32
+    then (
+      i1 <- u32_sub i 1%u32;
+      _ <- incr_ignore_input_mut_borrow_loop n1 i1;
+      Return tt)
+    else Return tt
+  end
+.
+
+(** [loops::incr_ignore_input_mut_borrow]:
+    Source: 'src/loops.rs', lines 353:0-353:60 *)
+Definition incr_ignore_input_mut_borrow
+  (n : nat) (a : u32) (i : u32) : result u32 :=
+  a1 <- u32_add a 1%u32; _ <- incr_ignore_input_mut_borrow_loop n i; Return a1
+.
+
+(** [loops::ignore_input_shared_borrow]: loop 0:
+    Source: 'src/loops.rs', lines 362:0-366:1 *)
+Fixpoint ignore_input_shared_borrow_loop (n : nat) (i : u32) : result unit :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    if i s> 0%u32
+    then (
+      i1 <- u32_sub i 1%u32;
+      _ <- ignore_input_shared_borrow_loop n1 i1;
+      Return tt)
+    else Return tt
+  end
+.
+
+(** [loops::ignore_input_shared_borrow]:
+    Source: 'src/loops.rs', lines 362:0-362:59 *)
+Definition ignore_input_shared_borrow
+  (n : nat) (_a : u32) (i : u32) : result u32 :=
+  _ <- ignore_input_shared_borrow_loop n i; Return _a
+.
+
 End Loops.

@@ -137,6 +137,21 @@ val match_ctxs :
  *)
 val ctxs_are_equivalent : ids_sets -> eval_ctx -> eval_ctx -> bool
 
+(** Reorganize a target context so that we can match it with a source context
+    (remember that the source context is generally the fixed point context,
+    which results from joins during which we ended the loans which
+    were introduced during the loop iterations).
+
+   **Parameters**:
+   - [config]
+   - [loop_id]
+   - [fixed_ids]
+   - [src_ctx]
+
+ *)
+val prepare_match_ctx_with_target :
+  config -> LoopId.id -> ids_sets -> eval_ctx -> cm_fun
+
 (** Match a context with a target context.
 
     This is used to compute application of loop translations: we use this

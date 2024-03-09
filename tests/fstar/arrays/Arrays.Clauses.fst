@@ -17,3 +17,21 @@ let sum2_loop_decreases (s : slice u32) (s2 : slice u32) (sum : u32)
   (i : usize) : nat =
   if i < length s then length s - i else 0
 
+(** [arrays::zero_slice]: decreases clause
+    Source: 'src/arrays.rs', lines 303:0-310:1 *)
+unfold
+let zero_slice_loop_decreases (a : slice u8) (i : usize) (len : usize) : nat =
+  if i < len then len - i else 0
+
+(** [arrays::iter_mut_slice]: decreases clause
+    Source: 'src/arrays.rs', lines 312:0-318:1 *)
+unfold
+let iter_mut_slice_loop_decreases (len : usize) (i : usize) : nat =
+  if i < len then len - i else 0
+
+(** [arrays::sum_mut_slice]: decreases clause
+    Source: 'src/arrays.rs', lines 320:0-328:1 *)
+unfold
+let sum_mut_slice_loop_decreases (a : slice u32) (i : usize) (s : u32) : nat =
+  if i < slice_len u32 a then slice_len u32 a - i else 0
+

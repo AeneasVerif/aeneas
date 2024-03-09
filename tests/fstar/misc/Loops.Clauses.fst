@@ -110,3 +110,17 @@ unfold
 let list_nth_shared_mut_loop_pair_merge_loop_decreases (t : Type0) (l : list_t t)
   (l0 : list_t t) (i : u32) : list_t t =
   l
+
+(** [loops::ignore_input_mut_borrow]: decreases clause
+    Source: 'src/loops.rs', lines 345:0-349:1 *)
+unfold let ignore_input_mut_borrow_loop_decreases (i : u32) : nat = i
+
+(** [loops::incr_ignore_input_mut_borrow]: decreases clause
+    Source: 'src/loops.rs', lines 353:0-358:1 *)
+unfold
+let incr_ignore_input_mut_borrow_loop_decreases (i : u32) : nat = i
+
+(** [loops::ignore_input_shared_borrow]: decreases clause
+    Source: 'src/loops.rs', lines 362:0-366:1 *)
+unfold let ignore_input_shared_borrow_loop_decreases (i : u32) : nat = i
+

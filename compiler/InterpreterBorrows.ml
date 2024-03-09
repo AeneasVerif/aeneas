@@ -963,74 +963,86 @@ and end_abstraction_aux (config : config) (chain : borrow_or_abs_ids)
       ^ AbstractionId.to_string abs_id
       ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
 
-  (* Lookup the abstraction *)
-  let abs = ctx_lookup_abs ctx abs_id in
+  (* Lookup the abstraction - note that if we end a list of abstractions,
+     ending one abstraction may lead to the current abstraction having
+     preemptively been ended, so the abstraction might not be in the context
+     anymore. *)
+  match ctx_lookup_abs_opt ctx abs_id with
+  | None ->
+      log#ldebug
+        (lazy
+          ("abs not found (already ended): "
+          ^ AbstractionId.to_string abs_id
+          ^ "\n"));
+      cf ctx
+  | Some abs ->
+      (* Check that we can end the abstraction *)
+      if abs.can_end then ()
+      else
+        raise
+          (Failure
+             ("Can't end abstraction "
+             ^ AbstractionId.to_string abs.abs_id
+             ^ " as it is set as non-endable"));
 
-  (* Check that we can end the abstraction *)
-  if abs.can_end then ()
-  else
-    raise
-      (Failure
-         ("Can't end abstraction "
-         ^ AbstractionId.to_string abs.abs_id
-         ^ " as it is set as non-endable"));
+      (* End the parent abstractions first *)
+      let cc = end_abstractions_aux config chain abs.parents in
+      let cc =
+        comp_unit cc (fun ctx ->
+            log#ldebug
+              (lazy
+                ("end_abstraction_aux: "
+                ^ AbstractionId.to_string abs_id
+                ^ "\n- context after parent abstractions ended:\n"
+                ^ eval_ctx_to_string ctx)))
+      in
 
-  (* End the parent abstractions first *)
-  let cc = end_abstractions_aux config chain abs.parents in
-  let cc =
-    comp_unit cc (fun ctx ->
-        log#ldebug
-          (lazy
-            ("end_abstraction_aux: "
-            ^ AbstractionId.to_string abs_id
-            ^ "\n- context after parent abstractions ended:\n"
-            ^ eval_ctx_to_string ctx)))
-  in
+      (* End the loans inside the abstraction *)
+      let cc = comp cc (end_abstraction_loans config chain abs_id) in
+      let cc =
+        comp_unit cc (fun ctx ->
+            log#ldebug
+              (lazy
+                ("end_abstraction_aux: "
+                ^ AbstractionId.to_string abs_id
+                ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx)))
+      in
 
-  (* End the loans inside the abstraction *)
-  let cc = comp cc (end_abstraction_loans config chain abs_id) in
-  let cc =
-    comp_unit cc (fun ctx ->
-        log#ldebug
-          (lazy
-            ("end_abstraction_aux: "
-            ^ AbstractionId.to_string abs_id
-            ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx)))
-  in
+      (* End the abstraction itself by redistributing the borrows it contains *)
+      let cc = comp cc (end_abstraction_borrows config chain abs_id) in
 
-  (* End the abstraction itself by redistributing the borrows it contains *)
-  let cc = comp cc (end_abstraction_borrows config chain abs_id) in
+      (* End the regions owned by the abstraction - note that we don't need to
+       * relookup the abstraction: the set of regions in an abstraction never
+       * changes... *)
+      let cc =
+        comp_update cc (fun ctx ->
+            let ended_regions =
+              RegionId.Set.union ctx.ended_regions abs.regions
+            in
+            { ctx with ended_regions })
+      in
 
-  (* End the regions owned by the abstraction - note that we don't need to
-   * relookup the abstraction: the set of regions in an abstraction never
-   * changes... *)
-  let cc =
-    comp_update cc (fun ctx ->
-        let ended_regions = RegionId.Set.union ctx.ended_regions abs.regions in
-        { ctx with ended_regions })
-  in
+      (* Remove all the references to the id of the current abstraction, and remove
+       * the abstraction itself.
+       * **Rk.**: this is where we synthesize the updated symbolic AST *)
+      let cc = comp cc (end_abstraction_remove_from_context config abs_id) in
 
-  (* Remove all the references to the id of the current abstraction, and remove
-   * the abstraction itself.
-   * **Rk.**: this is where we synthesize the updated symbolic AST *)
-  let cc = comp cc (end_abstraction_remove_from_context config abs_id) in
+      (* Debugging *)
+      let cc =
+        comp_unit cc (fun ctx ->
+            log#ldebug
+              (lazy
+                ("end_abstraction_aux: "
+                ^ AbstractionId.to_string abs_id
+                ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
+                ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx)))
+      in
 
-  (* Debugging *)
-  let cc =
-    comp_unit cc (fun ctx ->
-        log#ldebug
-          (lazy
-            ("end_abstraction_aux: "
-            ^ AbstractionId.to_string abs_id
-            ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
-            ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx)))
-  in
+      (* Sanity check: ending an abstraction must preserve the invariants *)
+      let cc = comp cc Invariants.cf_check_invariants in
 
-  (* Sanity check: ending an abstraction must preserve the invariants *)
-  let cc = comp cc Invariants.cf_check_invariants in
-
-  (* Apply the continuation *)
-  cc cf ctx
+      (* Apply the continuation *)
+      cc cf ctx
 
 and end_abstractions_aux (config : config) (chain : borrow_or_abs_ids)
     (abs_ids : AbstractionId.Set.t) : cm_fun =

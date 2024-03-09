@@ -933,6 +933,11 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
   (* Evaluate *)
   let cf_eval_st cf : m_fun =
    fun ctx ->
+    log#ldebug
+      (lazy
+        ("\neval_statement: cf_eval_st: statement:\n"
+        ^ statement_to_string_with_tab ctx st
+        ^ "\n\n"));
     match st.content with
     | Assign (p, rvalue) -> (
         (* We handle global assignments separately *)
@@ -1520,8 +1525,10 @@ and eval_assumed_function_call_symbolic (config : config) (fid : assumed_fun_id)
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : statement) : st_cm_fun =
  fun cf ctx ->
+  log#ldebug (lazy "eval_function_body:");
   let cc = eval_statement config body in
   let cf_finish cf res =
+    log#ldebug (lazy "eval_function_body: cf_finish");
     (* Note that we *don't* check the result ({!Panic}, {!Return}, etc.): we
      * delegate the check to the caller. *)
     (* Expand the symbolic values if necessary - we need to do that before

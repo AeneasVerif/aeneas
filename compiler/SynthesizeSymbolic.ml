@@ -171,7 +171,7 @@ let synthesize_forward_end (ctx : Contexts.eval_ctx)
 
 let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
     (fresh_svalues : SymbolicValueId.Set.t)
-    (rg_to_given_back_tys : (RegionId.Set.t * ty list) RegionGroupId.Map.t)
+    (rg_to_given_back_tys : ty list RegionGroupId.Map.t)
     (end_expr : expression option) (loop_expr : expression option)
     (meta : Meta.meta) : expression option =
   match (end_expr, loop_expr) with
