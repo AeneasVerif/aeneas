@@ -1266,18 +1266,23 @@ let name_last_elem_as_ident (n : llbc_name) : string =
     we remove it. We ignore disambiguators (there may be collisions, but we
     check if there are).
  *)
-let ctx_compute_simple_name (ctx : extraction_ctx) (name : llbc_name) :
-    string list =
+let ctx_prepare_name (ctx : extraction_ctx) (name : llbc_name) : llbc_name =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
   match name with
   | (PeIdent (crate, _) as id) :: name ->
-      let name = if crate = ctx.crate.name then name else id :: name in
-      name_to_simple_name ctx.trans_ctx name
+      if crate = ctx.crate.name then name else id :: name
   | _ ->
       raise
         (Failure
            ("Unexpected name shape: "
            ^ TranslateCore.name_to_string ctx.trans_ctx name))
+
+(** Helper *)
+let ctx_compute_simple_name (ctx : extraction_ctx) (name : llbc_name) :
+    string list =
+  (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
+  let name = ctx_prepare_name ctx name in
+  name_to_simple_name ctx.trans_ctx name
 
 (** Helper *)
 let ctx_compute_simple_type_name = ctx_compute_simple_name
@@ -1426,8 +1431,8 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
   let name =
     let params = trait_impl.llbc_generics in
     let args = trait_impl.llbc_impl_trait.decl_generics in
-    trait_name_with_generics_to_simple_name ctx.trans_ctx trait_decl.llbc_name
-      params args
+    let name = ctx_prepare_name ctx trait_decl.llbc_name in
+    trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
   in
   let name = flatten_name name in
   match !backend with
@@ -1715,6 +1720,7 @@ let ctx_compute_trait_clause_basename (ctx : extraction_ctx)
     ctx_compute_trait_clause_name ctx current_def_name params
       params.trait_clauses clause_id
   in
+  let clause = clause ^ "Inst" in
   match !backend with
   | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter clause
   | Lean -> clause

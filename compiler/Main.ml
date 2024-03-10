@@ -118,6 +118,9 @@ let () =
         Arg.Set use_nested_tuple_projectors,
         " Use nested projectors for tuples (e.g., (0, 1).snd.fst instead of \
          (0, 1).1)." );
+      ( "-ext-name-pats",
+        Arg.Set extract_external_name_patterns,
+        " Generate name patterns for the external definitions we find." );
     ]
   in
 
