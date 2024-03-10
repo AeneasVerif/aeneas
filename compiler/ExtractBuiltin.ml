@@ -253,35 +253,77 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       (Some [ true; false ]);
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::len" None
       (Some [ true; false ]);
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::index" None
+    mk_fun
+      "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T, @A>, \
+       @I>}::index"
+      (Some "alloc.vec.Vec.index")
       (Some [ true; true; false ]);
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::index_mut" None
+    mk_fun
+      "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, \
+       @I>}::index_mut"
+      (Some "alloc.vec.Vec.index_mut")
       (Some [ true; true; false ]);
-    mk_fun "alloc::boxed::{Box<@T>}::deref" None (Some [ true; false ]);
-    mk_fun "alloc::boxed::{Box<@T>}::deref_mut" None (Some [ true; false ]);
-    mk_fun "core::slice::index::{[@T]}::index" None None;
-    mk_fun "core::slice::index::{[@T]}::index_mut" None None;
-    mk_fun "core::array::{[@T; @C]}::index" None None;
-    mk_fun "core::array::{[@T; @C]}::index_mut" None None;
-    mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get"
+    mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>>}::deref"
+      (Some "alloc.boxed.Box_deref")
+      (Some [ true; false ]);
+    mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>>}::deref_mut"
+      (Some "alloc.boxed.Box.deref_mut")
+      (Some [ true; false ]);
+    mk_fun "core::slice::index::{core::ops::index::Index<[@T], @I>}::index"
+      (Some "core.slice.index.Slice.index") None;
+    mk_fun
+      "core::slice::index::{core::ops::index::IndexMut<[@T], @I>}::index_mut"
+      (Some "core.slice.index.Slice.index_mut") None;
+    mk_fun "core::array::{core::ops::index::Index<[@T; @N], @I>}::index"
+      (Some "core.array.Array.index") None;
+    mk_fun "core::array::{core::ops::index::IndexMut<[@T; @N], @I>}::index_mut"
+      (Some "core.array.Array.index_mut") None;
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T]>}::get"
       (Some "core::slice::index::RangeUsize::get") None;
-    mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get_mut"
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T]>}::get_mut"
       (Some "core::slice::index::RangeUsize::get_mut") None;
-    mk_fun "core::slice::index::{core::ops::range::Range<usize>}::index"
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T]>}::index"
       (Some "core::slice::index::RangeUsize::index") None;
-    mk_fun "core::slice::index::{core::ops::range::Range<usize>}::index_mut"
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T]>}::index_mut"
       (Some "core::slice::index::RangeUsize::index_mut") None;
-    mk_fun "core::slice::index::{core::ops::range::Range<usize>}::get_unchecked"
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T]>}::get_unchecked"
       (Some "core::slice::index::RangeUsize::get_unchecked") None;
     mk_fun
-      "core::slice::index::{core::ops::range::Range<usize>}::get_unchecked_mut"
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T]>}::get_unchecked_mut"
       (Some "core::slice::index::RangeUsize::get_unchecked_mut") None;
-    mk_fun "core::slice::index::{usize}::get" None None;
-    mk_fun "core::slice::index::{usize}::get_mut" None None;
-    mk_fun "core::slice::index::{usize}::get_unchecked" None None;
-    mk_fun "core::slice::index::{usize}::get_unchecked_mut" None None;
-    mk_fun "core::slice::index::{usize}::index" None None;
-    mk_fun "core::slice::index::{usize}::index_mut" None None;
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T]>}::get"
+      None None;
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, \
+       [@T]>}::get_mut"
+      None None;
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, \
+       [@T]>}::get_unchecked"
+      None None;
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, \
+       [@T]>}::get_unchecked_mut"
+      None None;
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T]>}::index"
+      (Some "core_slice_index_Slice_index") None;
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, \
+       [@T]>}::index_mut"
+      (Some "core_slice_index_Slice_index_mut") None;
   ]
 
 let mk_builtin_funs_map () =
@@ -351,9 +393,10 @@ let builtin_fun_effects =
     [
       (* TODO: redundancy with the funs information above *)
       "alloc::vec::{alloc::vec::Vec<@T, @A>}::push";
-      "alloc::vec::{alloc::vec::Vec<@T, @A>}::index";
-      "alloc::vec::{alloc::vec::Vec<@T, @A>}::index_mut";
-      "alloc::vec::{alloc::vec::Vec<@T, @A>}::index_mut_back";
+      "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T, @A>, \
+       @I>}::index";
+      "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, \
+       @I>}::index_mut";
     ]
   in
   let no_state_funs =
