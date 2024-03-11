@@ -264,7 +264,7 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       (Some "alloc.vec.Vec.index_mut")
       (Some [ true; true; false ]);
     mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>>}::deref"
-      (Some "alloc.boxed.Box_deref")
+      (Some "alloc.boxed.Box.deref")
       (Some [ true; false ]);
     mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>>}::deref_mut"
       (Some "alloc.boxed.Box.deref_mut")
