@@ -523,6 +523,11 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     generic_params_to_strings env x
 
+  let generic_args_to_strings (ctx : eval_ctx) (x : generic_args) :
+      string list * string list =
+    let env = eval_ctx_to_fmt_env ctx in
+    generic_args_to_strings env x
+
   let generic_args_to_string (ctx : eval_ctx) (x : generic_args) : string =
     let env = eval_ctx_to_fmt_env ctx in
     generic_args_to_string env x

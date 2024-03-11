@@ -462,11 +462,16 @@ let instantiate_fun_sig (ctx : eval_ctx) (generics : generic_args)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
   log#ldebug
     (lazy
-      ("instantiate_fun_sig:" ^ "\n- generics: "
-      ^ Print.EvalCtx.generic_args_to_string ctx generics
-      ^ "\n- tr_self: "
-      ^ Print.EvalCtx.trait_instance_id_to_string ctx tr_self
-      ^ "\n- sg: " ^ fun_sig_to_string ctx sg));
+      (let generics, generic_clauses =
+         Print.EvalCtx.generic_args_to_strings ctx generics
+       in
+       "instantiate_fun_sig:" ^ "\n- generics (without trait clauses): "
+       ^ String.concat ", " generics
+       ^ "\n- trait clauses: "
+       ^ String.concat ", " generic_clauses
+       ^ "\n- tr_self: "
+       ^ Print.EvalCtx.trait_instance_id_to_string ctx tr_self
+       ^ "\n- sg: " ^ fun_sig_to_string ctx sg));
   (* Erase the regions in the generics we use for the instantiation *)
   let generics = Substitute.generic_args_erase_regions generics in
   let tr_self = Substitute.trait_instance_id_erase_regions tr_self in
