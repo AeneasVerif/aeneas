@@ -730,7 +730,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
            the trait declarations themselves, there is no point in having
            separate type definitions) *)
         match pure_fun.f.Pure.kind with
-        | TraitMethodDecl _ -> ()
+        | TraitItemDecl _ -> ()
         | _ ->
             (* Translate *)
             export_functions_group [ pure_fun ])

@@ -1374,10 +1374,11 @@ let ctx_compute_fun_name_no_suffix (ctx : extraction_ctx) (fname : llbc_name) :
 
 (** Provided a basename, compute the name of a global declaration. *)
 let ctx_compute_global_name (ctx : extraction_ctx) (name : llbc_name) : string =
-  (* Converting to snake case also lowercases the letters (in Rust, global
-   * names are written in capital letters). *)
-  let parts = List.map to_snake_case (ctx_compute_simple_name ctx name) in
-  String.concat "_" parts
+  match !Config.backend with
+  | Coq | FStar | HOL4 ->
+      let parts = List.map to_snake_case (ctx_compute_simple_name ctx name) in
+      String.concat "_" parts
+  | Lean -> flatten_name (ctx_compute_simple_name ctx name)
 
 (** Helper function: generate a suffix for a function name, i.e., generates
     a suffix like "_loop", "loop1", etc. to append to a function name.
@@ -1511,6 +1512,7 @@ let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
     if !Config.record_fields_short_names then clause
     else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ clause
   in
+  let clause = clause ^ "Inst" in
   match !backend with
   | FStar -> StringUtils.lowercase_first_letter clause
   | Coq | HOL4 | Lean -> clause
@@ -1888,8 +1890,15 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       (* Not the case: "standard" registration *)
       let name = ctx_compute_global_name ctx def.name in
       let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
-      let ctx = ctx_add decl (name ^ "_c") ctx in
-      let ctx = ctx_add body (name ^ "_body") ctx in
+      (* If this is a provided constant (i.e., the default value for a constant
+         in a trait declaration) we add a suffix. Otherwise there is a clash
+         between the name for the default constant and the name for the field
+         in the trait declaration *)
+      let suffix =
+        match def.kind with TraitItemProvided _ -> "_default" | _ -> ""
+      in
+      let ctx = ctx_add decl (name ^ suffix) ctx in
+      let ctx = ctx_add body (name ^ suffix ^ "_body") ctx in
       ctx
 
 let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =

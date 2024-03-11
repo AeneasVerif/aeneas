@@ -39,37 +39,46 @@ let pattern_to_extract_name (name : pattern) : string list =
     | GRegion (RVar _) -> true
     | _ -> false
   in
-  let all_vars = List.for_all is_var in
-  let elem_to_string (e : pattern_elem) : string =
-    match e with
-    | PIdent _ -> pattern_elem_to_string c e
-    | PImpl ty -> (
+  let all_distinct_vars = List.for_all is_var in
+
+  (* This is a bit of a hack: we want to simplify the occurrences of
+     tuples of two variables, arrays with only variables, slices with
+     only variables, etc.
+     We explore the pattern and replace such occurrences with a specific name.
+  *)
+  let visitor =
+    object
+      inherit [_] map_pattern as super
+
+      method! visit_PImpl _ ty =
+        (* TODO: Option *)
         match ty with
         | EComp id -> (
             (* Retrieve the last ident *)
             let id = Collections.List.last id in
             match id with
-            | PIdent (s, g) ->
-                if all_vars g then s else pattern_elem_to_string c id
+            | PIdent (s, g) as id ->
+                if all_distinct_vars g then PImpl (EComp [ PIdent (s, []) ])
+                else super#visit_PImpl () (EComp [ id ])
             | PImpl _ -> raise (Failure "Unreachable"))
-        | EPrimAdt (adt, g) ->
-            if all_vars g then
-              match adt with
-              | TTuple ->
-                  let l = List.length g in
-                  if l = 2 then "Pair" else expr_to_string c ty
-              | TArray -> "Array"
-              | TSlice -> "Slice"
-            else expr_to_string c ty
-        | ERef _ | EVar _ | EArrow _ | ERawPtr _ ->
-            (* We simply convert the pattern to a string. This is not very
-               satisfying but we should rarely get there. *)
-            expr_to_string c ty)
+        | _ -> super#visit_PImpl () ty
+
+      method! visit_EPrimAdt _ adt g =
+        if all_distinct_vars g then
+          match adt with
+          | TTuple ->
+              let l = List.length g in
+              if l = 2 then EComp [ PIdent ("Pair", []) ]
+              else super#visit_EPrimAdt () adt g
+          | TArray -> EComp [ PIdent ("Array", []) ]
+          | TSlice -> EComp [ PIdent ("Slice", []) ]
+          (*else if adt = TTuple && List.length g = 2 then
+            super#visit_EComp () [ PIdent ("Pair", g) ]*)
+        else super#visit_EPrimAdt () adt g
+    end
   in
-  let rec pattern_to_string (n : pattern) : string list =
-    match n with [] -> [] | e :: n -> elem_to_string e :: pattern_to_string n
-  in
-  pattern_to_string name
+  let name = visitor#visit_pattern () name in
+  List.map (pattern_elem_to_string c) name
 
 let pattern_to_type_extract_name = pattern_to_extract_name
 let pattern_to_fun_extract_name = pattern_to_extract_name

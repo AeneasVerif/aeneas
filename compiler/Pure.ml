@@ -1063,13 +1063,13 @@ type fun_body = {
 }
 [@@deriving show]
 
-type fun_kind = A.fun_kind [@@deriving show]
+type item_kind = A.item_kind [@@deriving show]
 
 type fun_decl = {
   def_id : FunDeclId.id;
   is_local : bool;
   meta : meta;
-  kind : fun_kind;
+  kind : item_kind;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
           of loops appearing in the original Rust functions, unless some loops are

@@ -68,12 +68,12 @@ let normalize_inst_fun_sig (ctx : eval_ctx) (sg : inst_fun_sig) : inst_fun_sig =
     normalize because a trait clause was instantiated with a specific trait ref).
  *)
 let symbolic_instantiate_fun_sig (ctx : eval_ctx) (sg : fun_sig)
-    (regions_hierarchy : region_var_groups) (kind : fun_kind) :
+    (regions_hierarchy : region_var_groups) (kind : item_kind) :
     eval_ctx * inst_fun_sig =
   let tr_self =
     match kind with
-    | RegularKind | TraitMethodImpl _ -> UnknownTrait __FUNCTION__
-    | TraitMethodDecl _ | TraitMethodProvided _ -> Self
+    | RegularKind | TraitItemImpl _ -> UnknownTrait __FUNCTION__
+    | TraitItemDecl _ | TraitItemProvided _ -> Self
   in
   let generics =
     let { regions; types; const_generics; trait_clauses } = sg.generics in
