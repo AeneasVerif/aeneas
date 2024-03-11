@@ -49,13 +49,17 @@ SUBDIR :=
 # The rules
 ####################################
 
+# Build the compiler, after formatting the code
+.PHONY: build
+build: format build-dev
+
 # Build the project, test it and verify the generated files
 .PHONY: build-tests-verify
 build-tests-verify: build tests verify
 
-# Build the project
-.PHONY: build
-build: build-bin build-lib build-bin-dir doc
+# Build the project, without formatting the code
+.PHONY: build-dev
+build-dev: build-bin build-lib build-bin-dir doc
 
 .PHONY: build-bin
 build-bin:
