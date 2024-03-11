@@ -22,7 +22,7 @@ let betree_List_split_at_decreases (t : Type0) (self : betree_List_t t)
 (** [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::partition_at_pivot]: decreases clause
     Source: 'src/betree.rs', lines 339:4-339:73 *)
 unfold
-let betree_ListTupleU64T_partition_at_pivot_decreases (t : Type0)
+let betree_ListPairU64T_partition_at_pivot_decreases (t : Type0)
   (self : betree_List_t (u64 & t)) (pivot : u64) : nat =
   admit ()
 

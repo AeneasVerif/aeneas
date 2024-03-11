@@ -134,7 +134,7 @@ let betree_List_hd (t : Type0) (self : betree_List_t t) : result t =
 
 (** [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::head_has_key]:
     Source: 'src/betree.rs', lines 327:4-327:44 *)
-let betree_ListTupleU64T_head_has_key
+let betree_ListPairU64T_head_has_key
   (t : Type0) (self : betree_List_t (u64 & t)) (key : u64) : result bool =
   begin match self with
   | Betree_List_Cons hd _ -> let (i, _) = hd in Return (i = key)
@@ -143,10 +143,10 @@ let betree_ListTupleU64T_head_has_key
 
 (** [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::partition_at_pivot]:
     Source: 'src/betree.rs', lines 339:4-339:73 *)
-let rec betree_ListTupleU64T_partition_at_pivot
+let rec betree_ListPairU64T_partition_at_pivot
   (t : Type0) (self : betree_List_t (u64 & t)) (pivot : u64) :
   Tot (result ((betree_List_t (u64 & t)) & (betree_List_t (u64 & t))))
-  (decreases (betree_ListTupleU64T_partition_at_pivot_decreases t self pivot))
+  (decreases (betree_ListPairU64T_partition_at_pivot_decreases t self pivot))
   =
   begin match self with
   | Betree_List_Cons hd tl ->
@@ -154,7 +154,7 @@ let rec betree_ListTupleU64T_partition_at_pivot
     if i >= pivot
     then Return (Betree_List_Nil, Betree_List_Cons (i, x) tl)
     else
-      let* p = betree_ListTupleU64T_partition_at_pivot t tl pivot in
+      let* p = betree_ListPairU64T_partition_at_pivot t tl pivot in
       let (ls0, ls1) = p in
       Return (Betree_List_Cons (i, x) ls0, ls1)
   | Betree_List_Nil -> Return (Betree_List_Nil, Betree_List_Nil)
@@ -228,7 +228,7 @@ let rec betree_Node_apply_upserts
   Tot (result (state & (u64 & (betree_List_t (u64 & betree_Message_t)))))
   (decreases (betree_Node_apply_upserts_decreases msgs prev key st))
   =
-  let* b = betree_ListTupleU64T_head_has_key betree_Message_t msgs key in
+  let* b = betree_ListPairU64T_head_has_key betree_Message_t msgs key in
   if b
   then
     let* (msg, l) = betree_List_pop_front (u64 & betree_Message_t) msgs in
@@ -369,7 +369,7 @@ let betree_Node_apply_to_internal
   =
   let* (msgs1, lookup_first_message_for_key_back) =
     betree_Node_lookup_first_message_for_key key msgs in
-  let* b = betree_ListTupleU64T_head_has_key betree_Message_t msgs1 key in
+  let* b = betree_ListPairU64T_head_has_key betree_Message_t msgs1 key in
   if b
   then
     begin match new_msg with
@@ -467,7 +467,7 @@ let betree_Node_apply_to_leaf
   =
   let* (bindings1, lookup_mut_in_bindings_back) =
     betree_Node_lookup_mut_in_bindings key bindings in
-  let* b = betree_ListTupleU64T_head_has_key u64 bindings1 key in
+  let* b = betree_ListPairU64T_head_has_key u64 bindings1 key in
   if b
   then
     let* (hd, l) = betree_List_pop_front (u64 & u64) bindings1 in
@@ -522,7 +522,7 @@ let rec betree_Internal_flush
     betree_Internal_flush_decreases self params node_id_cnt content st))
   =
   let* p =
-    betree_ListTupleU64T_partition_at_pivot betree_Message_t content self.pivot
+    betree_ListPairU64T_partition_at_pivot betree_Message_t content self.pivot
     in
   let (msgs_left, msgs_right) = p in
   let* len_left = betree_List_len (u64 & betree_Message_t) msgs_left in

@@ -121,18 +121,18 @@ let rec i32_id (n : nat) (i : i32) : result i32 =
     Source: 'src/demo.rs', lines 83:0-83:17 *)
 noeq type counter_t (self : Type0) = { incr : self -> result (usize & self); }
 
-(** [demo::{usize}::incr]:
+(** [demo::{(demo::Counter for usize)}::incr]:
     Source: 'src/demo.rs', lines 88:4-88:31 *)
-let usize_incr (self : usize) : result (usize & usize) =
+let counterUsize_incr (self : usize) : result (usize & usize) =
   let* self1 = usize_add self 1 in Return (self, self1)
 
-(** Trait implementation: [demo::{usize}]
+(** Trait implementation: [demo::{(demo::Counter for usize)}]
     Source: 'src/demo.rs', lines 87:0-87:22 *)
-let demo_CounterUsizeInst : counter_t usize = { incr = usize_incr; }
+let counterUsize : counter_t usize = { incr = counterUsize_incr; }
 
 (** [demo::use_counter]:
     Source: 'src/demo.rs', lines 95:0-95:59 *)
 let use_counter
-  (t : Type0) (counterTInst : counter_t t) (cnt : t) : result (usize & t) =
-  counterTInst.incr cnt
+  (t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
+  counterInst.incr cnt
 

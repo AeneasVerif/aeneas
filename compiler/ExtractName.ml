@@ -31,69 +31,82 @@ end
     For impl blocks, we simply use the name of the type (without its arguments)
     if all the arguments are variables.
  *)
-let pattern_to_extract_name (is_trait_impl : bool) (name : pattern) :
-    string list =
+let pattern_to_extract_name (name : pattern) : string list =
   let c = { tgt = TkName } in
-  let is_var (g : generic_arg) : bool =
-    match g with
-    | GExpr (EVar _) -> true
-    | GRegion (RVar _) -> true
-    | _ -> false
+  let all_vars =
+    let check (g : generic_arg) : bool =
+      match g with GExpr (EVar _) | GRegion (RVar _) -> true | _ -> false
+    in
+    List.for_all check
   in
-  let all_vars = List.for_all is_var in
-  let elem_to_string (e : pattern_elem) : string =
-    match e with
-    | PIdent _ -> pattern_elem_to_string c e
-    | PImpl ty -> (
+
+  (* This is a bit of a hack: we want to simplify the occurrences of
+     tuples of two variables, arrays with only variables, slices with
+     only variables, etc.
+     We explore the pattern and replace such occurrences with a specific name.
+  *)
+  let replace_option_name (id : pattern) =
+    match id with
+    | [ PIdent ("core", []); PIdent ("option", []); PIdent ("Option", g) ] ->
+        (* Option *)
+        [ PIdent ("Option", g) ]
+    | _ -> id
+  in
+  let visitor =
+    object
+      inherit [_] map_pattern as super
+
+      method! visit_PIdent _ s g =
+        if all_vars g then super#visit_PIdent () s []
+        else super#visit_PIdent () s g
+
+      method! visit_EComp _ id =
+        (* Simplify if this is [Option] *)
+        super#visit_EComp () (replace_option_name id)
+
+      method! visit_PImpl _ ty =
         match ty with
         | EComp id -> (
-            (* Retrieve the last ident *)
+            (* Only keep the last ident *)
             let id = Collections.List.last id in
             match id with
-            | PIdent (s, g) ->
-                if all_vars g then s else pattern_elem_to_string c id
+            | PIdent (_, _) -> super#visit_PImpl () (EComp [ id ])
             | PImpl _ -> raise (Failure "Unreachable"))
-        | EPrimAdt (adt, g) ->
-            if all_vars g then
-              match adt with
-              | TTuple ->
-                  let l = List.length g in
-                  if l = 2 then "Pair" else expr_to_string c ty
-              | TArray -> "Array"
-              | TSlice -> "Slice"
-            else expr_to_string c ty
-        | ERef _ | EVar _ | EArrow _ | ERawPtr _ ->
-            (* We simply convert the pattern to a string. This is not very
-               satisfying but we should rarely get there. *)
-            expr_to_string c ty)
-  in
-  let rec pattern_to_string (n : pattern) : string list =
-    match n with
-    | [] -> raise (Failure "Unreachable")
-    | [ e ] ->
-        let e = elem_to_string e in
-        if is_trait_impl then [ e ^ "Inst" ] else [ e ]
-    | e :: n -> elem_to_string e :: pattern_to_string n
-  in
-  pattern_to_string name
+        | _ -> super#visit_PImpl () ty
 
-let pattern_to_type_extract_name = pattern_to_extract_name false
-let pattern_to_fun_extract_name = pattern_to_extract_name false
-let pattern_to_trait_impl_extract_name = pattern_to_extract_name true
+      method! visit_EPrimAdt _ adt g =
+        if all_vars g then
+          match adt with
+          | TTuple ->
+              let l = List.length g in
+              if l = 2 then EComp [ PIdent ("Pair", []) ]
+              else super#visit_EPrimAdt () adt g
+          | TArray -> EComp [ PIdent ("Array", []) ]
+          | TSlice -> EComp [ PIdent ("Slice", []) ]
+        else if adt = TTuple && List.length g = 2 then
+          super#visit_EComp () [ PIdent ("Pair", g) ]
+        else super#visit_EPrimAdt () adt g
+    end
+  in
+  let name = visitor#visit_pattern () name in
+  List.map (pattern_elem_to_string c) name
+
+let pattern_to_type_extract_name = pattern_to_extract_name
+let pattern_to_fun_extract_name = pattern_to_extract_name
+let pattern_to_trait_impl_extract_name = pattern_to_extract_name
 
 (* TODO: this is provisional. We just want to make sure that the extraction
    names we derive from the patterns (for the builtin definitions) are
    consistent with the extraction names we derive from the Rust names *)
-let name_to_simple_name (ctx : ctx) (is_trait_impl : bool) (n : Types.name) :
-    string list =
+let name_to_simple_name (ctx : ctx) (n : Types.name) : string list =
   let c : to_pat_config =
     { tgt = TkName; use_trait_decl_refs = match_with_trait_decl_refs }
   in
-  pattern_to_extract_name is_trait_impl (name_to_pattern ctx c n)
+  pattern_to_extract_name (name_to_pattern ctx c n)
 
 (** If the [prefix] is Some, we attempt to remove the common prefix
     between [prefix] and [name] from [name] *)
-let name_with_generics_to_simple_name (ctx : ctx) (is_trait_impl : bool)
+let name_with_generics_to_simple_name (ctx : ctx)
     ?(prefix : Types.name option = None) (name : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
   let c : to_pat_config =
@@ -111,4 +124,4 @@ let name_with_generics_to_simple_name (ctx : ctx) (is_trait_impl : bool)
         let _, _, name = pattern_common_prefix { equiv = true } prefix name in
         name
   in
-  pattern_to_extract_name is_trait_impl name
+  pattern_to_extract_name name

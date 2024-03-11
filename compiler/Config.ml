@@ -366,3 +366,6 @@ let backend_has_tuple_projectors () =
 (** We we use nested projectors for tuple (like: [(0, 1).snd.fst]) or do
     we use better projector syntax? *)
 let use_nested_tuple_projectors = ref false
+
+(** Generate name patterns for the external definitions we encounter *)
+let extract_external_name_patterns = ref false

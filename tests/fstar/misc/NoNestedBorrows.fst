@@ -131,12 +131,12 @@ let mix_arith_i32 (x : i32) (y : i32) (z : i32) : result i32 =
 (** [no_nested_borrows::CONST0]
     Source: 'src/no_nested_borrows.rs', lines 125:0-125:23 *)
 let const0_body : result usize = usize_add 1 1
-let const0_c : usize = eval_global const0_body
+let const0 : usize = eval_global const0_body
 
 (** [no_nested_borrows::CONST1]
     Source: 'src/no_nested_borrows.rs', lines 126:0-126:23 *)
 let const1_body : result usize = usize_mul 2 2
-let const1_c : usize = eval_global const1_body
+let const1 : usize = eval_global const1_body
 
 (** [no_nested_borrows::cast_u32_to_i32]:
     Source: 'src/no_nested_borrows.rs', lines 128:0-128:37 *)

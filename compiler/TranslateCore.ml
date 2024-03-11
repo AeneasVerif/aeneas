@@ -60,8 +60,7 @@ let name_to_simple_name (ctx : trans_ctx) (n : Types.name) : string list =
       trait_impls = ctx.trait_impls_ctx.trait_impls;
     }
   in
-  let is_trait_impl = false in
-  name_to_simple_name mctx is_trait_impl n
+  name_to_simple_name mctx n
 
 let trait_name_with_generics_to_simple_name (ctx : trans_ctx)
     ?(prefix : Types.name option = None) (n : Types.name)
@@ -75,5 +74,20 @@ let trait_name_with_generics_to_simple_name (ctx : trans_ctx)
       trait_impls = ctx.trait_impls_ctx.trait_impls;
     }
   in
-  let is_trait_impl = true in
-  name_with_generics_to_simple_name mctx is_trait_impl ~prefix n p g
+  name_with_generics_to_simple_name mctx ~prefix n p g
+
+let name_to_pattern_string (ctx : trans_ctx) (n : Types.name) : string =
+  let mctx : Charon.NameMatcher.ctx =
+    {
+      type_decls = ctx.type_ctx.type_decls;
+      global_decls = ctx.global_ctx.global_decls;
+      fun_decls = ctx.fun_ctx.fun_decls;
+      trait_decls = ctx.trait_decls_ctx.trait_decls;
+      trait_impls = ctx.trait_impls_ctx.trait_impls;
+    }
+  in
+  let c : Charon.NameMatcher.to_pat_config =
+    { tgt = TkPattern; use_trait_decl_refs = match_with_trait_decl_refs }
+  in
+  let pat = Charon.NameMatcher.name_to_pattern mctx c n in
+  Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
