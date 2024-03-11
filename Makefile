@@ -88,8 +88,8 @@ clean:
 	cd compiler && dune clean
 
 # Test the project by translating test files to F*
-.PHONY: tests
-tests: test-no_nested_borrows test-paper \
+.PHONY: test
+test: test-no_nested_borrows test-paper \
 	test-hashmap test-hashmap_main \
 	test-external test-constants \
 	testp-polonius_list testp-betree_main \
