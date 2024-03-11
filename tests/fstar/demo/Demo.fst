@@ -133,6 +133,6 @@ let counterUsize : counter_t usize = { incr = counterUsize_incr; }
 (** [demo::use_counter]:
     Source: 'src/demo.rs', lines 95:0-95:59 *)
 let use_counter
-  (t : Type0) (counterTInst : counter_t t) (cnt : t) : result (usize & t) =
-  counterTInst.incr cnt
+  (t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
+  counterInst.incr cnt
 

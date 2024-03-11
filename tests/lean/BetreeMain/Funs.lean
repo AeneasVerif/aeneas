@@ -135,7 +135,7 @@ def betree.List.hd (T : Type) (self : betree.List T) : Result T :=
 
 /- [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::head_has_key]:
    Source: 'src/betree.rs', lines 327:4-327:44 -/
-def betree.ListTupleU64T.head_has_key
+def betree.ListPairU64T.head_has_key
   (T : Type) (self : betree.List (U64 × T)) (key : U64) : Result Bool :=
   match self with
   | betree.List.Cons hd _ => let (i, _) := hd
@@ -144,7 +144,7 @@ def betree.ListTupleU64T.head_has_key
 
 /- [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::partition_at_pivot]:
    Source: 'src/betree.rs', lines 339:4-339:73 -/
-divergent def betree.ListTupleU64T.partition_at_pivot
+divergent def betree.ListPairU64T.partition_at_pivot
   (T : Type) (self : betree.List (U64 × T)) (pivot : U64) :
   Result ((betree.List (U64 × T)) × (betree.List (U64 × T)))
   :=
@@ -155,7 +155,7 @@ divergent def betree.ListTupleU64T.partition_at_pivot
     then Result.ret (betree.List.Nil, betree.List.Cons (i, t) tl)
     else
       do
-      let p ← betree.ListTupleU64T.partition_at_pivot T tl pivot
+      let p ← betree.ListPairU64T.partition_at_pivot T tl pivot
       let (ls0, ls1) := p
       Result.ret (betree.List.Cons (i, t) ls0, ls1)
   | betree.List.Nil => Result.ret (betree.List.Nil, betree.List.Nil)
@@ -227,7 +227,7 @@ divergent def betree.Node.apply_upserts
   Result (State × (U64 × (betree.List (U64 × betree.Message))))
   :=
   do
-  let b ← betree.ListTupleU64T.head_has_key betree.Message msgs key
+  let b ← betree.ListPairU64T.head_has_key betree.Message msgs key
   if b
   then
     do
@@ -387,7 +387,7 @@ def betree.Node.apply_to_internal
   do
   let (msgs1, lookup_first_message_for_key_back) ←
     betree.Node.lookup_first_message_for_key key msgs
-  let b ← betree.ListTupleU64T.head_has_key betree.Message msgs1 key
+  let b ← betree.ListPairU64T.head_has_key betree.Message msgs1 key
   if b
   then
     match new_msg with
@@ -490,7 +490,7 @@ def betree.Node.apply_to_leaf
   do
   let (bindings1, lookup_mut_in_bindings_back) ←
     betree.Node.lookup_mut_in_bindings key bindings
-  let b ← betree.ListTupleU64T.head_has_key U64 bindings1 key
+  let b ← betree.ListPairU64T.head_has_key U64 bindings1 key
   if b
   then
     do
@@ -546,7 +546,7 @@ mutual divergent def betree.Internal.flush
   :=
   do
   let ⟨ i, i1, n, n1 ⟩ := self
-  let p ← betree.ListTupleU64T.partition_at_pivot betree.Message content i1
+  let p ← betree.ListPairU64T.partition_at_pivot betree.Message content i1
   let (msgs_left, msgs_right) := p
   let len_left ← betree.List.len (U64 × betree.Message) msgs_left
   if len_left >= params.min_flush_size

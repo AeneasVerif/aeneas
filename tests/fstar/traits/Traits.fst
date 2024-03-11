@@ -34,29 +34,26 @@ let test_bool_trait_bool (x : bool) : result bool =
 
 (** [traits::{(traits::BoolTrait for core::option::Option<T>)#1}::get_bool]:
     Source: 'src/traits.rs', lines 23:4-23:30 *)
-let boolTraitcoreoptionOptionT_get_bool
-  (t : Type0) (self : option t) : result bool =
+let boolTraitOption_get_bool (t : Type0) (self : option t) : result bool =
   begin match self with | None -> Return false | Some _ -> Return true end
 
 (** Trait implementation: [traits::{(traits::BoolTrait for core::option::Option<T>)#1}]
     Source: 'src/traits.rs', lines 22:0-22:31 *)
-let boolTraitcoreoptionOptionT (t : Type0) : boolTrait_t (option t) = {
-  get_bool = boolTraitcoreoptionOptionT_get_bool t;
+let boolTraitOption (t : Type0) : boolTrait_t (option t) = {
+  get_bool = boolTraitOption_get_bool t;
 }
 
 (** [traits::test_bool_trait_option]:
     Source: 'src/traits.rs', lines 31:0-31:54 *)
 let test_bool_trait_option (t : Type0) (x : option t) : result bool =
-  let* b = boolTraitcoreoptionOptionT_get_bool t x in
-  if b
-  then boolTrait_ret_true (boolTraitcoreoptionOptionT t) x
-  else Return false
+  let* b = boolTraitOption_get_bool t x in
+  if b then boolTrait_ret_true (boolTraitOption t) x else Return false
 
 (** [traits::test_bool_trait]:
     Source: 'src/traits.rs', lines 35:0-35:50 *)
 let test_bool_trait
-  (t : Type0) (boolTraitTInst : boolTrait_t t) (x : t) : result bool =
-  boolTraitTInst.get_bool x
+  (t : Type0) (boolTraitInst : boolTrait_t t) (x : t) : result bool =
+  boolTraitInst.get_bool x
 
 (** Trait declaration: [traits::ToU64]
     Source: 'src/traits.rs', lines 39:0-39:15 *)
@@ -74,22 +71,22 @@ let toU64U64 : toU64_t u64 = { to_u64 = toU64U64_to_u64; }
 (** [traits::{(traits::ToU64 for (A, A))#3}::to_u64]:
     Source: 'src/traits.rs', lines 50:4-50:26 *)
 let toU64Pair_to_u64
-  (a : Type0) (toU64AInst : toU64_t a) (self : (a & a)) : result u64 =
+  (a : Type0) (toU64Inst : toU64_t a) (self : (a & a)) : result u64 =
   let (x, x1) = self in
-  let* i = toU64AInst.to_u64 x in
-  let* i1 = toU64AInst.to_u64 x1 in
+  let* i = toU64Inst.to_u64 x in
+  let* i1 = toU64Inst.to_u64 x1 in
   u64_add i i1
 
 (** Trait implementation: [traits::{(traits::ToU64 for (A, A))#3}]
     Source: 'src/traits.rs', lines 49:0-49:31 *)
-let toU64Pair (a : Type0) (toU64AInst : toU64_t a) : toU64_t (a & a) = {
-  to_u64 = toU64Pair_to_u64 a toU64AInst;
+let toU64Pair (a : Type0) (toU64Inst : toU64_t a) : toU64_t (a & a) = {
+  to_u64 = toU64Pair_to_u64 a toU64Inst;
 }
 
 (** [traits::f]:
     Source: 'src/traits.rs', lines 55:0-55:36 *)
-let f (t : Type0) (toU64TInst : toU64_t t) (x : (t & t)) : result u64 =
-  toU64Pair_to_u64 t toU64TInst x
+let f (t : Type0) (toU64Inst : toU64_t t) (x : (t & t)) : result u64 =
+  toU64Pair_to_u64 t toU64Inst x
 
 (** [traits::g]:
     Source: 'src/traits.rs', lines 59:0-61:18 *)
@@ -108,26 +105,26 @@ type wrapper_t (t : Type0) = { x : t; }
 
 (** [traits::{(traits::ToU64 for traits::Wrapper<T>)#4}::to_u64]:
     Source: 'src/traits.rs', lines 75:4-75:26 *)
-let toU64traitsWrapperT_to_u64
-  (t : Type0) (toU64TInst : toU64_t t) (self : wrapper_t t) : result u64 =
-  toU64TInst.to_u64 self.x
+let toU64traitsWrapper_to_u64
+  (t : Type0) (toU64Inst : toU64_t t) (self : wrapper_t t) : result u64 =
+  toU64Inst.to_u64 self.x
 
 (** Trait implementation: [traits::{(traits::ToU64 for traits::Wrapper<T>)#4}]
     Source: 'src/traits.rs', lines 74:0-74:35 *)
-let toU64traitsWrapperT (t : Type0) (toU64TInst : toU64_t t) : toU64_t
-  (wrapper_t t) = {
-  to_u64 = toU64traitsWrapperT_to_u64 t toU64TInst;
+let toU64traitsWrapper (t : Type0) (toU64Inst : toU64_t t) : toU64_t (wrapper_t
+  t) = {
+  to_u64 = toU64traitsWrapper_to_u64 t toU64Inst;
 }
 
 (** [traits::h1]:
     Source: 'src/traits.rs', lines 80:0-80:33 *)
 let h1 (x : wrapper_t u64) : result u64 =
-  toU64traitsWrapperT_to_u64 u64 toU64U64 x
+  toU64traitsWrapper_to_u64 u64 toU64U64 x
 
 (** [traits::h2]:
     Source: 'src/traits.rs', lines 84:0-84:41 *)
-let h2 (t : Type0) (toU64TInst : toU64_t t) (x : wrapper_t t) : result u64 =
-  toU64traitsWrapperT_to_u64 t toU64TInst x
+let h2 (t : Type0) (toU64Inst : toU64_t t) (x : wrapper_t t) : result u64 =
+  toU64traitsWrapper_to_u64 t toU64Inst x
 
 (** Trait declaration: [traits::ToType]
     Source: 'src/traits.rs', lines 88:0-88:19 *)
@@ -145,34 +142,33 @@ let toTypeU64Bool : toType_t u64 bool = { to_type = toTypeU64Bool_to_type; }
 (** Trait declaration: [traits::OfType]
     Source: 'src/traits.rs', lines 98:0-98:16 *)
 noeq type ofType_t (self : Type0) = {
-  of_type : (t : Type0) -> (toTypeTSelfInst : toType_t t self) -> t -> result
-    self;
+  of_type : (t : Type0) -> (toTypeInst : toType_t t self) -> t -> result self;
 }
 
 (** [traits::h3]:
     Source: 'src/traits.rs', lines 104:0-104:50 *)
 let h3
-  (t1 t2 : Type0) (ofTypeT1Inst : ofType_t t1) (toTypeT2T1Inst : toType_t t2
-  t1) (y : t2) :
+  (t1 t2 : Type0) (ofTypeInst : ofType_t t1) (toTypeInst : toType_t t2 t1)
+  (y : t2) :
   result t1
   =
-  ofTypeT1Inst.of_type t2 toTypeT2T1Inst y
+  ofTypeInst.of_type t2 toTypeInst y
 
 (** Trait declaration: [traits::OfTypeBis]
     Source: 'src/traits.rs', lines 109:0-109:36 *)
 noeq type ofTypeBis_t (self t : Type0) = {
-  toTypeTSelfInst : toType_t t self;
+  toTypeInst : toType_t t self;
   of_type : t -> result self;
 }
 
 (** [traits::h4]:
     Source: 'src/traits.rs', lines 118:0-118:57 *)
 let h4
-  (t1 t2 : Type0) (ofTypeBisT1T2Inst : ofTypeBis_t t1 t2) (toTypeT2T1Inst :
-  toType_t t2 t1) (y : t2) :
+  (t1 t2 : Type0) (ofTypeBisInst : ofTypeBis_t t1 t2) (toTypeInst : toType_t t2
+  t1) (y : t2) :
   result t1
   =
-  ofTypeBisT1T2Inst.of_type y
+  ofTypeBisInst.of_type y
 
 (** [traits::TestType]
     Source: 'src/traits.rs', lines 122:0-122:22 *)
@@ -204,10 +200,10 @@ let testType_test_TestTraittraitsTestTypetestTestType1 :
 (** [traits::{traits::TestType<T>#6}::test]:
     Source: 'src/traits.rs', lines 126:4-126:36 *)
 let testType_test
-  (t : Type0) (toU64TInst : toU64_t t) (self : testType_t t) (x : t) :
+  (t : Type0) (toU64Inst : toU64_t t) (self : testType_t t) (x : t) :
   result bool
   =
-  let* x1 = toU64TInst.to_u64 x in
+  let* x1 = toU64Inst.to_u64 x in
   if x1 > 0
   then testType_test_TestTraittraitsTestTypetestTestType1_test 0
   else Return false
@@ -273,16 +269,16 @@ let withConstTyBool32 : withConstTy_t bool 32 = {
 (** [traits::use_with_const_ty1]:
     Source: 'src/traits.rs', lines 183:0-183:75 *)
 let use_with_const_ty1
-  (h : Type0) (len : usize) (withConstTyHLENInst : withConstTy_t h len) :
+  (h : Type0) (len : usize) (withConstTyInst : withConstTy_t h len) :
   result usize
   =
-  Return withConstTyHLENInst.cLEN1
+  Return withConstTyInst.cLEN1
 
 (** [traits::use_with_const_ty2]:
     Source: 'src/traits.rs', lines 187:0-187:73 *)
 let use_with_const_ty2
-  (h : Type0) (len : usize) (withConstTyHLENInst : withConstTy_t h len)
-  (w : withConstTyHLENInst.tW) :
+  (h : Type0) (len : usize) (withConstTyInst : withConstTy_t h len)
+  (w : withConstTyInst.tW) :
   result unit
   =
   Return ()
@@ -290,11 +286,11 @@ let use_with_const_ty2
 (** [traits::use_with_const_ty3]:
     Source: 'src/traits.rs', lines 189:0-189:80 *)
 let use_with_const_ty3
-  (h : Type0) (len : usize) (withConstTyHLENInst : withConstTy_t h len)
-  (x : withConstTyHLENInst.tW) :
+  (h : Type0) (len : usize) (withConstTyInst : withConstTy_t h len)
+  (x : withConstTyInst.tW) :
   result u64
   =
-  withConstTyHLENInst.tW_clause_0.to_u64 x
+  withConstTyInst.tW_clause_0.to_u64 x
 
 (** [traits::test_where1]:
     Source: 'src/traits.rs', lines 193:0-193:40 *)
@@ -324,28 +320,28 @@ type parentTrait1_t (self : Type0) = unit
 (** Trait declaration: [traits::ChildTrait]
     Source: 'src/traits.rs', lines 206:0-206:49 *)
 noeq type childTrait_t (self : Type0) = {
-  parentTrait0SelfInst : parentTrait0_t self;
-  parentTrait1SelfInst : parentTrait1_t self;
+  parentTrait0Inst : parentTrait0_t self;
+  parentTrait1Inst : parentTrait1_t self;
 }
 
 (** [traits::test_child_trait1]:
     Source: 'src/traits.rs', lines 209:0-209:56 *)
 let test_child_trait1
-  (t : Type0) (childTraitTInst : childTrait_t t) (x : t) : result string =
-  childTraitTInst.parentTrait0SelfInst.get_name x
+  (t : Type0) (childTraitInst : childTrait_t t) (x : t) : result string =
+  childTraitInst.parentTrait0Inst.get_name x
 
 (** [traits::test_child_trait2]:
     Source: 'src/traits.rs', lines 213:0-213:54 *)
 let test_child_trait2
-  (t : Type0) (childTraitTInst : childTrait_t t) (x : t) :
-  result childTraitTInst.parentTrait0SelfInst.tW
+  (t : Type0) (childTraitInst : childTrait_t t) (x : t) :
+  result childTraitInst.parentTrait0Inst.tW
   =
-  childTraitTInst.parentTrait0SelfInst.get_w x
+  childTraitInst.parentTrait0Inst.get_w x
 
 (** [traits::order1]:
     Source: 'src/traits.rs', lines 219:0-219:59 *)
 let order1
-  (t u : Type0) (parentTrait0TInst : parentTrait0_t t) (parentTrait0UInst :
+  (t u : Type0) (parentTrait0Inst : parentTrait0_t t) (parentTrait0Inst1 :
   parentTrait0_t u) :
   result unit
   =
@@ -354,7 +350,7 @@ let order1
 (** Trait declaration: [traits::ChildTrait1]
     Source: 'src/traits.rs', lines 222:0-222:35 *)
 noeq type childTrait1_t (self : Type0) = {
-  parentTrait1SelfInst : parentTrait1_t self;
+  parentTrait1Inst : parentTrait1_t self;
 }
 
 (** Trait implementation: [traits::{(traits::ParentTrait1 for usize)#9}]
@@ -364,7 +360,7 @@ let parentTrait1Usize : parentTrait1_t usize = ()
 (** Trait implementation: [traits::{(traits::ChildTrait1 for usize)#10}]
     Source: 'src/traits.rs', lines 225:0-225:26 *)
 let childTrait1Usize : childTrait1_t usize = {
-  parentTrait1SelfInst = parentTrait1Usize;
+  parentTrait1Inst = parentTrait1Usize;
 }
 
 (** Trait declaration: [traits::Iterator]
@@ -388,7 +384,7 @@ type fromResidual_t (self t : Type0) = unit
     Source: 'src/traits.rs', lines 246:0-246:48 *)
 noeq type try_t (self : Type0) = {
   tResidual : Type0;
-  fromResidualSelftraitsTrySelfResidualInst : fromResidual_t self tResidual;
+  fromResidualSelftraitsTryResidualInst : fromResidual_t self tResidual;
 }
 
 (** Trait declaration: [traits::WithTarget]
@@ -405,9 +401,8 @@ noeq type parentTrait2_t (self : Type0) = {
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'src/traits.rs', lines 260:0-260:35 *)
 noeq type childTrait2_t (self : Type0) = {
-  parentTrait2SelfInst : parentTrait2_t self;
-  convert : parentTrait2SelfInst.tU -> result
-    parentTrait2SelfInst.tU_clause_0.tTarget;
+  parentTrait2Inst : parentTrait2_t self;
+  convert : parentTrait2Inst.tU -> result parentTrait2Inst.tU_clause_0.tTarget;
 }
 
 (** Trait implementation: [traits::{(traits::WithTarget for u32)#11}]
@@ -429,7 +424,7 @@ let childTrait2U32_convert (x : u32) : result u32 =
 (** Trait implementation: [traits::{(traits::ChildTrait2 for u32)#13}]
     Source: 'src/traits.rs', lines 272:0-272:24 *)
 let childTrait2U32 : childTrait2_t u32 = {
-  parentTrait2SelfInst = parentTrait2U32;
+  parentTrait2Inst = parentTrait2U32;
   convert = childTrait2U32_convert;
 }
 
@@ -443,15 +438,15 @@ noeq type cFnOnce_t (self args : Type0) = {
 (** Trait declaration: [traits::CFnMut]
     Source: 'src/traits.rs', lines 292:0-292:37 *)
 noeq type cFnMut_t (self args : Type0) = {
-  cFnOnceSelfArgsInst : cFnOnce_t self args;
-  call_mut : self -> args -> result (cFnOnceSelfArgsInst.tOutput & self);
+  cFnOnceInst : cFnOnce_t self args;
+  call_mut : self -> args -> result (cFnOnceInst.tOutput & self);
 }
 
 (** Trait declaration: [traits::CFn]
     Source: 'src/traits.rs', lines 296:0-296:33 *)
 noeq type cFn_t (self args : Type0) = {
-  cFnMutSelfArgsInst : cFnMut_t self args;
-  call : self -> args -> result cFnMutSelfArgsInst.cFnOnceSelfArgsInst.tOutput;
+  cFnMutInst : cFnMut_t self args;
+  call : self -> args -> result cFnMutInst.cFnOnceInst.tOutput;
 }
 
 (** Trait declaration: [traits::GetTrait]
@@ -462,8 +457,6 @@ noeq type getTrait_t (self : Type0) = { tW : Type0; get_w : self -> result tW;
 (** [traits::test_get_trait]:
     Source: 'src/traits.rs', lines 305:0-305:49 *)
 let test_get_trait
-  (t : Type0) (getTraitTInst : getTrait_t t) (x : t) :
-  result getTraitTInst.tW
-  =
-  getTraitTInst.get_w x
+  (t : Type0) (getTraitInst : getTrait_t t) (x : t) : result getTraitInst.tW =
+  getTraitInst.get_w x
 

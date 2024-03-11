@@ -142,7 +142,7 @@ def CounterUsize : Counter Usize := {
 /- [demo::use_counter]:
    Source: 'src/demo.rs', lines 95:0-95:59 -/
 def use_counter
-  (T : Type) (CounterTInst : Counter T) (cnt : T) : Result (Usize × T) :=
-  CounterTInst.incr cnt
+  (T : Type) (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
+  CounterInst.incr cnt
 
 end demo

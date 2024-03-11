@@ -159,7 +159,7 @@ Definition betree_List_hd (T : Type) (self : betree_List_t T) : result T :=
 
 (** [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::head_has_key]:
     Source: 'src/betree.rs', lines 327:4-327:44 *)
-Definition betree_ListTupleU64T_head_has_key
+Definition betree_ListPairU64T_head_has_key
   (T : Type) (self : betree_List_t (u64 * T)) (key : u64) : result bool :=
   match self with
   | Betree_List_Cons hd _ => let (i, _) := hd in Return (i s= key)
@@ -169,7 +169,7 @@ Definition betree_ListTupleU64T_head_has_key
 
 (** [betree_main::betree::{betree_main::betree::List<(u64, T)>#2}::partition_at_pivot]:
     Source: 'src/betree.rs', lines 339:4-339:73 *)
-Fixpoint betree_ListTupleU64T_partition_at_pivot
+Fixpoint betree_ListPairU64T_partition_at_pivot
   (T : Type) (n : nat) (self : betree_List_t (u64 * T)) (pivot : u64) :
   result ((betree_List_t (u64 * T)) * (betree_List_t (u64 * T)))
   :=
@@ -182,7 +182,7 @@ Fixpoint betree_ListTupleU64T_partition_at_pivot
       if i s>= pivot
       then Return (Betree_List_Nil, Betree_List_Cons (i, t) tl)
       else (
-        p <- betree_ListTupleU64T_partition_at_pivot T n1 tl pivot;
+        p <- betree_ListPairU64T_partition_at_pivot T n1 tl pivot;
         let (ls0, ls1) := p in
         Return (Betree_List_Cons (i, t) ls0, ls1))
     | Betree_List_Nil => Return (Betree_List_Nil, Betree_List_Nil)
@@ -286,7 +286,7 @@ Fixpoint betree_Node_apply_upserts
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
-    b <- betree_ListTupleU64T_head_has_key betree_Message_t msgs key;
+    b <- betree_ListPairU64T_head_has_key betree_Message_t msgs key;
     if b
     then (
       p <- betree_List_pop_front (u64 * betree_Message_t) msgs;
@@ -462,7 +462,7 @@ Definition betree_Node_apply_to_internal
   :=
   p <- betree_Node_lookup_first_message_for_key n key msgs;
   let (msgs1, lookup_first_message_for_key_back) := p in
-  b <- betree_ListTupleU64T_head_has_key betree_Message_t msgs1 key;
+  b <- betree_ListPairU64T_head_has_key betree_Message_t msgs1 key;
   if b
   then
     match new_msg with
@@ -570,7 +570,7 @@ Definition betree_Node_apply_to_leaf
   :=
   p <- betree_Node_lookup_mut_in_bindings n key bindings;
   let (bindings1, lookup_mut_in_bindings_back) := p in
-  b <- betree_ListTupleU64T_head_has_key u64 bindings1 key;
+  b <- betree_ListPairU64T_head_has_key u64 bindings1 key;
   if b
   then (
     p1 <- betree_List_pop_front (u64 * u64) bindings1;
@@ -632,7 +632,7 @@ Fixpoint betree_Internal_flush
   | O => Fail_ OutOfFuel
   | S n1 =>
     p <-
-      betree_ListTupleU64T_partition_at_pivot betree_Message_t n1 content
+      betree_ListPairU64T_partition_at_pivot betree_Message_t n1 content
         self.(betree_Internal_pivot);
     let (msgs_left, msgs_right) := p in
     len_left <- betree_List_len (u64 * betree_Message_t) n1 msgs_left;

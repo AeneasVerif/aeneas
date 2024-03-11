@@ -160,8 +160,8 @@ Definition CounterUsize : Counter_t usize := {|
 (** [demo::use_counter]:
     Source: 'src/demo.rs', lines 95:0-95:59 *)
 Definition use_counter
-  (T : Type) (counterTInst : Counter_t T) (cnt : T) : result (usize * T) :=
-  counterTInst.(Counter_t_incr) cnt
+  (T : Type) (counterInst : Counter_t T) (cnt : T) : result (usize * T) :=
+  counterInst.(Counter_t_incr) cnt
 .
 
 End Demo.
