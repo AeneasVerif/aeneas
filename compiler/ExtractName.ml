@@ -33,38 +33,49 @@ end
  *)
 let pattern_to_extract_name (name : pattern) : string list =
   let c = { tgt = TkName } in
-  let is_var (g : generic_arg) : bool =
-    match g with
-    | GExpr (EVar _) -> true
-    | GRegion (RVar _) -> true
-    | _ -> false
+  let all_vars =
+    let check (g : generic_arg) : bool =
+      match g with GExpr (EVar _) | GRegion (RVar _) -> true | _ -> false
+    in
+    List.for_all check
   in
-  let all_distinct_vars = List.for_all is_var in
 
   (* This is a bit of a hack: we want to simplify the occurrences of
      tuples of two variables, arrays with only variables, slices with
      only variables, etc.
      We explore the pattern and replace such occurrences with a specific name.
   *)
+  let replace_option_name (id : pattern) =
+    match id with
+    | [ PIdent ("core", []); PIdent ("option", []); PIdent ("Option", g) ] ->
+        (* Option *)
+        [ PIdent ("Option", g) ]
+    | _ -> id
+  in
   let visitor =
     object
       inherit [_] map_pattern as super
 
+      method! visit_PIdent _ s g =
+        if all_vars g then super#visit_PIdent () s []
+        else super#visit_PIdent () s g
+
+      method! visit_EComp _ id =
+        (* Simplify if this is [Option] *)
+        super#visit_EComp () (replace_option_name id)
+
       method! visit_PImpl _ ty =
-        (* TODO: Option *)
         match ty with
         | EComp id -> (
-            (* Retrieve the last ident *)
+            (* Only keep the last ident *)
             let id = Collections.List.last id in
             match id with
-            | PIdent (s, g) as id ->
-                if all_distinct_vars g then PImpl (EComp [ PIdent (s, []) ])
-                else super#visit_PImpl () (EComp [ id ])
+            | PIdent (_, _) -> super#visit_PImpl () (EComp [ id ])
             | PImpl _ -> raise (Failure "Unreachable"))
         | _ -> super#visit_PImpl () ty
 
       method! visit_EPrimAdt _ adt g =
-        if all_distinct_vars g then
+        if all_vars g then
           match adt with
           | TTuple ->
               let l = List.length g in
@@ -72,8 +83,8 @@ let pattern_to_extract_name (name : pattern) : string list =
               else super#visit_EPrimAdt () adt g
           | TArray -> EComp [ PIdent ("Array", []) ]
           | TSlice -> EComp [ PIdent ("Slice", []) ]
-          (*else if adt = TTuple && List.length g = 2 then
-            super#visit_EComp () [ PIdent ("Pair", g) ]*)
+        else if adt = TTuple && List.length g = 2 then
+          super#visit_EComp () [ PIdent ("Pair", g) ]
         else super#visit_EPrimAdt () adt g
     end
   in
