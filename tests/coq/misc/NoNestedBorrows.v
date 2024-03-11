@@ -150,12 +150,12 @@ Definition mix_arith_i32 (x : i32) (y : i32) (z : i32) : result i32 :=
 (** [no_nested_borrows::CONST0]
     Source: 'src/no_nested_borrows.rs', lines 125:0-125:23 *)
 Definition const0_body : result usize := usize_add 1%usize 1%usize.
-Definition const0_c : usize := const0_body%global.
+Definition const0 : usize := const0_body%global.
 
 (** [no_nested_borrows::CONST1]
     Source: 'src/no_nested_borrows.rs', lines 126:0-126:23 *)
 Definition const1_body : result usize := usize_mul 2%usize 2%usize.
-Definition const1_c : usize := const1_body%global.
+Definition const1 : usize := const1_body%global.
 
 (** [no_nested_borrows::cast_u32_to_i32]:
     Source: 'src/no_nested_borrows.rs', lines 128:0-128:37 *)

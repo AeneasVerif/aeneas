@@ -10,15 +10,15 @@ namespace traits
 structure BoolTrait (Self : Type) where
   get_bool : Self → Result Bool
 
-/- [traits::{bool}::get_bool]:
+/- [traits::{(traits::BoolTrait for bool)}::get_bool]:
    Source: 'src/traits.rs', lines 12:4-12:30 -/
-def Bool.get_bool (self : Bool) : Result Bool :=
+def BoolTraitBool.get_bool (self : Bool) : Result Bool :=
   Result.ret self
 
-/- Trait implementation: [traits::{bool}]
+/- Trait implementation: [traits::{(traits::BoolTrait for bool)}]
    Source: 'src/traits.rs', lines 11:0-11:23 -/
-def traits.BoolTraitBoolInst : BoolTrait Bool := {
-  get_bool := Bool.get_bool
+def BoolTraitBool : BoolTrait Bool := {
+  get_bool := BoolTraitBool.get_bool
 }
 
 /- [traits::BoolTrait::ret_true]:
@@ -31,32 +31,32 @@ def BoolTrait.ret_true
    Source: 'src/traits.rs', lines 17:0-17:44 -/
 def test_bool_trait_bool (x : Bool) : Result Bool :=
   do
-  let b ← Bool.get_bool x
+  let b ← BoolTraitBool.get_bool x
   if b
-  then BoolTrait.ret_true traits.BoolTraitBoolInst x
+  then BoolTrait.ret_true BoolTraitBool x
   else Result.ret false
 
-/- [traits::{core::option::Option<T>#1}::get_bool]:
+/- [traits::{(traits::BoolTrait for core::option::Option<T>)#1}::get_bool]:
    Source: 'src/traits.rs', lines 23:4-23:30 -/
-def Option.get_bool (T : Type) (self : Option T) : Result Bool :=
+def BoolTraitcoreoptionOptionT.get_bool
+  (T : Type) (self : Option T) : Result Bool :=
   match self with
   | none => Result.ret false
   | some _ => Result.ret true
 
-/- Trait implementation: [traits::{core::option::Option<T>#1}]
+/- Trait implementation: [traits::{(traits::BoolTrait for core::option::Option<T>)#1}]
    Source: 'src/traits.rs', lines 22:0-22:31 -/
-def traits.BoolTraitcoreoptionOptionTInst (T : Type) : BoolTrait (Option T)
-  := {
-  get_bool := Option.get_bool T
+def BoolTraitcoreoptionOptionT (T : Type) : BoolTrait (Option T) := {
+  get_bool := BoolTraitcoreoptionOptionT.get_bool T
 }
 
 /- [traits::test_bool_trait_option]:
    Source: 'src/traits.rs', lines 31:0-31:54 -/
 def test_bool_trait_option (T : Type) (x : Option T) : Result Bool :=
   do
-  let b ← Option.get_bool T x
+  let b ← BoolTraitcoreoptionOptionT.get_bool T x
   if b
-  then BoolTrait.ret_true (traits.BoolTraitcoreoptionOptionTInst T) x
+  then BoolTrait.ret_true (BoolTraitcoreoptionOptionT T) x
   else Result.ret false
 
 /- [traits::test_bool_trait]:
@@ -70,20 +70,20 @@ def test_bool_trait
 structure ToU64 (Self : Type) where
   to_u64 : Self → Result U64
 
-/- [traits::{u64#2}::to_u64]:
+/- [traits::{(traits::ToU64 for u64)#2}::to_u64]:
    Source: 'src/traits.rs', lines 44:4-44:26 -/
-def U64.to_u64 (self : U64) : Result U64 :=
+def ToU64U64.to_u64 (self : U64) : Result U64 :=
   Result.ret self
 
-/- Trait implementation: [traits::{u64#2}]
+/- Trait implementation: [traits::{(traits::ToU64 for u64)#2}]
    Source: 'src/traits.rs', lines 43:0-43:18 -/
-def traits.ToU64U64Inst : ToU64 U64 := {
-  to_u64 := U64.to_u64
+def ToU64U64 : ToU64 U64 := {
+  to_u64 := ToU64U64.to_u64
 }
 
-/- [traits::{(A, A)#3}::to_u64]:
+/- [traits::{(traits::ToU64 for (A, A))#3}::to_u64]:
    Source: 'src/traits.rs', lines 50:4-50:26 -/
-def Pair.to_u64
+def ToU64Pair.to_u64
   (A : Type) (ToU64AInst : ToU64 A) (self : (A × A)) : Result U64 :=
   do
   let (t, t1) := self
@@ -91,71 +91,70 @@ def Pair.to_u64
   let i1 ← ToU64AInst.to_u64 t1
   i + i1
 
-/- Trait implementation: [traits::{(A, A)#3}]
+/- Trait implementation: [traits::{(traits::ToU64 for (A, A))#3}]
    Source: 'src/traits.rs', lines 49:0-49:31 -/
-def traits.ToU64TupleAAInst (A : Type) (ToU64AInst : ToU64 A) : ToU64 (A × A)
-  := {
-  to_u64 := Pair.to_u64 A ToU64AInst
+def ToU64Pair (A : Type) (ToU64AInst : ToU64 A) : ToU64 (A × A) := {
+  to_u64 := ToU64Pair.to_u64 A ToU64AInst
 }
 
 /- [traits::f]:
    Source: 'src/traits.rs', lines 55:0-55:36 -/
 def f (T : Type) (ToU64TInst : ToU64 T) (x : (T × T)) : Result U64 :=
-  Pair.to_u64 T ToU64TInst x
+  ToU64Pair.to_u64 T ToU64TInst x
 
 /- [traits::g]:
    Source: 'src/traits.rs', lines 59:0-61:18 -/
 def g
-  (T : Type) (ToU64TupleTTInst : ToU64 (T × T)) (x : (T × T)) : Result U64 :=
-  ToU64TupleTTInst.to_u64 x
+  (T : Type) (ToU64PairInst : ToU64 (T × T)) (x : (T × T)) : Result U64 :=
+  ToU64PairInst.to_u64 x
 
 /- [traits::h0]:
    Source: 'src/traits.rs', lines 66:0-66:24 -/
 def h0 (x : U64) : Result U64 :=
-  U64.to_u64 x
+  ToU64U64.to_u64 x
 
 /- [traits::Wrapper]
    Source: 'src/traits.rs', lines 70:0-70:21 -/
 structure Wrapper (T : Type) where
   x : T
 
-/- [traits::{traits::Wrapper<T>#4}::to_u64]:
+/- [traits::{(traits::ToU64 for traits::Wrapper<T>)#4}::to_u64]:
    Source: 'src/traits.rs', lines 75:4-75:26 -/
-def Wrapper.to_u64
+def ToU64traitsWrapperT.to_u64
   (T : Type) (ToU64TInst : ToU64 T) (self : Wrapper T) : Result U64 :=
   ToU64TInst.to_u64 self.x
 
-/- Trait implementation: [traits::{traits::Wrapper<T>#4}]
+/- Trait implementation: [traits::{(traits::ToU64 for traits::Wrapper<T>)#4}]
    Source: 'src/traits.rs', lines 74:0-74:35 -/
-def traits.ToU64traitsWrapperTInst (T : Type) (ToU64TInst : ToU64 T) : ToU64
-  (Wrapper T) := {
-  to_u64 := Wrapper.to_u64 T ToU64TInst
+def ToU64traitsWrapperT (T : Type) (ToU64TInst : ToU64 T) : ToU64 (Wrapper T)
+  := {
+  to_u64 := ToU64traitsWrapperT.to_u64 T ToU64TInst
 }
 
 /- [traits::h1]:
    Source: 'src/traits.rs', lines 80:0-80:33 -/
 def h1 (x : Wrapper U64) : Result U64 :=
-  Wrapper.to_u64 U64 traits.ToU64U64Inst x
+  ToU64traitsWrapperT.to_u64 U64 ToU64U64 x
 
 /- [traits::h2]:
    Source: 'src/traits.rs', lines 84:0-84:41 -/
 def h2 (T : Type) (ToU64TInst : ToU64 T) (x : Wrapper T) : Result U64 :=
-  Wrapper.to_u64 T ToU64TInst x
+  ToU64traitsWrapperT.to_u64 T ToU64TInst x
 
 /- Trait declaration: [traits::ToType]
    Source: 'src/traits.rs', lines 88:0-88:19 -/
 structure ToType (Self T : Type) where
   to_type : Self → Result T
 
-/- [traits::{u64#5}::to_type]:
+/- [traits::{(traits::ToType<bool> for u64)#5}::to_type]:
    Source: 'src/traits.rs', lines 93:4-93:28 -/
-def U64.to_type (self : U64) : Result Bool :=
+def ToTypeU64Bool.to_type (self : U64) : Result Bool :=
   Result.ret (self > 0#u64)
 
-/- Trait implementation: [traits::{u64#5}]
+/- Trait implementation: [traits::{(traits::ToType<bool> for u64)#5}]
    Source: 'src/traits.rs', lines 92:0-92:25 -/
-def traits.ToTypeU64BoolInst : ToType U64 Bool := {
-  to_type := U64.to_type
+def ToTypeU64Bool : ToType U64 Bool := {
+  to_type := ToTypeU64Bool.to_type
 }
 
 /- Trait declaration: [traits::OfType]
@@ -201,17 +200,17 @@ def h4
 structure TestType.test.TestTrait (Self : Type) where
   test : Self → Result Bool
 
-/- [traits::{traits::TestType<T>#6}::test::{traits::{traits::TestType<T>#6}::test::TestType1}::test]:
+/- [traits::{traits::TestType<T>#6}::test::{(traits::{traits::TestType<T>#6}::test::TestTrait for traits::{traits::TestType<T>#6}::test::TestType1)}::test]:
    Source: 'src/traits.rs', lines 139:12-139:34 -/
-def TestType.test.TestType1.test
+def TestType.test.TestTraittraitsTestTypetestTestType1.test
   (self : TestType.test.TestType1) : Result Bool :=
   Result.ret (self > 1#u64)
 
-/- Trait implementation: [traits::{traits::TestType<T>#6}::test::{traits::{traits::TestType<T>#6}::test::TestType1}]
+/- Trait implementation: [traits::{traits::TestType<T>#6}::test::{(traits::{traits::TestType<T>#6}::test::TestTrait for traits::{traits::TestType<T>#6}::test::TestType1)}]
    Source: 'src/traits.rs', lines 138:8-138:36 -/
-def traits.TestType.test.TestTraittraitstraitsTestTypeTtestTestType1Inst :
+def TestType.test.TestTraittraitsTestTypetestTestType1 :
   TestType.test.TestTrait TestType.test.TestType1 := {
-  test := TestType.test.TestType1.test
+  test := TestType.test.TestTraittraitsTestTypetestTestType1.test
 }
 
 /- [traits::{traits::TestType<T>#6}::test]:
@@ -223,32 +222,33 @@ def TestType.test
   do
   let x1 ← ToU64TInst.to_u64 x
   if x1 > 0#u64
-  then TestType.test.TestType1.test 0#u64
+  then TestType.test.TestTraittraitsTestTypetestTestType1.test 0#u64
   else Result.ret false
 
 /- [traits::BoolWrapper]
    Source: 'src/traits.rs', lines 150:0-150:22 -/
 @[reducible] def BoolWrapper := Bool
 
-/- [traits::{traits::BoolWrapper#7}::to_type]:
+/- [traits::{(traits::ToType<T> for traits::BoolWrapper)#7}::to_type]:
    Source: 'src/traits.rs', lines 156:4-156:25 -/
-def BoolWrapper.to_type
+def ToTypetraitsBoolWrapperT.to_type
   (T : Type) (ToTypeBoolTInst : ToType Bool T) (self : BoolWrapper) :
   Result T
   :=
   ToTypeBoolTInst.to_type self
 
-/- Trait implementation: [traits::{traits::BoolWrapper#7}]
+/- Trait implementation: [traits::{(traits::ToType<T> for traits::BoolWrapper)#7}]
    Source: 'src/traits.rs', lines 152:0-152:33 -/
-def traits.ToTypetraitsBoolWrapperTInst (T : Type) (ToTypeBoolTInst : ToType
-  Bool T) : ToType BoolWrapper T := {
-  to_type := BoolWrapper.to_type T ToTypeBoolTInst
+def ToTypetraitsBoolWrapperT (T : Type) (ToTypeBoolTInst : ToType Bool T) :
+  ToType BoolWrapper T := {
+  to_type := ToTypetraitsBoolWrapperT.to_type T ToTypeBoolTInst
 }
 
 /- [traits::WithConstTy::LEN2]
    Source: 'src/traits.rs', lines 164:4-164:21 -/
-def with_const_ty_len2_body : Result Usize := Result.ret 32#usize
-def with_const_ty_len2_c : Usize := eval_global with_const_ty_len2_body
+def WithConstTy.LEN2_default_body : Result Usize := Result.ret 32#usize
+def WithConstTy.LEN2_default : Usize :=
+  eval_global WithConstTy.LEN2_default_body
 
 /- Trait declaration: [traits::WithConstTy]
    Source: 'src/traits.rs', lines 161:0-161:39 -/
@@ -260,25 +260,25 @@ structure WithConstTy (Self : Type) (LEN : Usize) where
   W_clause_0 : ToU64 W
   f : W → Array U8 LEN → Result W
 
-/- [traits::{bool#8}::LEN1]
+/- [traits::{(traits::WithConstTy<32: usize> for bool)#8}::LEN1]
    Source: 'src/traits.rs', lines 175:4-175:21 -/
-def bool_len1_body : Result Usize := Result.ret 12#usize
-def bool_len1_c : Usize := eval_global bool_len1_body
+def WithConstTyBool32.LEN1_body : Result Usize := Result.ret 12#usize
+def WithConstTyBool32.LEN1 : Usize := eval_global WithConstTyBool32.LEN1_body
 
-/- [traits::{bool#8}::f]:
+/- [traits::{(traits::WithConstTy<32: usize> for bool)#8}::f]:
    Source: 'src/traits.rs', lines 180:4-180:39 -/
-def Bool.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
+def WithConstTyBool32.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
   Result.ret i
 
-/- Trait implementation: [traits::{bool#8}]
+/- Trait implementation: [traits::{(traits::WithConstTy<32: usize> for bool)#8}]
    Source: 'src/traits.rs', lines 174:0-174:29 -/
-def traits.WithConstTyBool32Inst : WithConstTy Bool 32#usize := {
-  LEN1 := bool_len1_c
-  LEN2 := with_const_ty_len2_c
+def WithConstTyBool32 : WithConstTy Bool 32#usize := {
+  LEN1 := WithConstTyBool32.LEN1
+  LEN2 := WithConstTy.LEN2_default
   V := U8
   W := U64
-  W_clause_0 := traits.ToU64U64Inst
-  f := Bool.f
+  W_clause_0 := ToU64U64
+  f := WithConstTyBool32.f
 }
 
 /- [traits::use_with_const_ty1]:
@@ -365,15 +365,15 @@ def order1
 structure ChildTrait1 (Self : Type) where
   ParentTrait1SelfInst : ParentTrait1 Self
 
-/- Trait implementation: [traits::{usize#9}]
+/- Trait implementation: [traits::{(traits::ParentTrait1 for usize)#9}]
    Source: 'src/traits.rs', lines 224:0-224:27 -/
-def traits.ParentTrait1UsizeInst : ParentTrait1 Usize := {
+def ParentTrait1Usize : ParentTrait1 Usize := {
 }
 
-/- Trait implementation: [traits::{usize#10}]
+/- Trait implementation: [traits::{(traits::ChildTrait1 for usize)#10}]
    Source: 'src/traits.rs', lines 225:0-225:26 -/
-def traits.ChildTrait1UsizeInst : ChildTrait1 Usize := {
-  ParentTrait1SelfInst := traits.ParentTrait1UsizeInst
+def ChildTrait1Usize : ChildTrait1 Usize := {
+  ParentTrait1SelfInst := ParentTrait1Usize
 }
 
 /- Trait declaration: [traits::Iterator]
@@ -417,29 +417,29 @@ structure ChildTrait2 (Self : Type) where
   convert : ParentTrait2SelfInst.U → Result
     ParentTrait2SelfInst.U_clause_0.Target
 
-/- Trait implementation: [traits::{u32#11}]
+/- Trait implementation: [traits::{(traits::WithTarget for u32)#11}]
    Source: 'src/traits.rs', lines 264:0-264:23 -/
-def traits.WithTargetU32Inst : WithTarget U32 := {
+def WithTargetU32 : WithTarget U32 := {
   Target := U32
 }
 
-/- Trait implementation: [traits::{u32#12}]
+/- Trait implementation: [traits::{(traits::ParentTrait2 for u32)#12}]
    Source: 'src/traits.rs', lines 268:0-268:25 -/
-def traits.ParentTrait2U32Inst : ParentTrait2 U32 := {
+def ParentTrait2U32 : ParentTrait2 U32 := {
   U := U32
-  U_clause_0 := traits.WithTargetU32Inst
+  U_clause_0 := WithTargetU32
 }
 
-/- [traits::{u32#13}::convert]:
+/- [traits::{(traits::ChildTrait2 for u32)#13}::convert]:
    Source: 'src/traits.rs', lines 273:4-273:29 -/
-def U32.convert (x : U32) : Result U32 :=
+def ChildTrait2U32.convert (x : U32) : Result U32 :=
   Result.ret x
 
-/- Trait implementation: [traits::{u32#13}]
+/- Trait implementation: [traits::{(traits::ChildTrait2 for u32)#13}]
    Source: 'src/traits.rs', lines 272:0-272:24 -/
-def traits.ChildTrait2U32Inst : ChildTrait2 U32 := {
-  ParentTrait2SelfInst := traits.ParentTrait2U32Inst
-  convert := U32.convert
+def ChildTrait2U32 : ChildTrait2 U32 := {
+  ParentTrait2SelfInst := ParentTrait2U32
+  convert := ChildTrait2U32.convert
 }
 
 /- Trait declaration: [traits::CFnOnce]

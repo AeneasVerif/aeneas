@@ -11,17 +11,17 @@ Module Constants.
 (** [constants::X0]
     Source: 'src/constants.rs', lines 5:0-5:17 *)
 Definition x0_body : result u32 := Return 0%u32.
-Definition x0_c : u32 := x0_body%global.
+Definition x0 : u32 := x0_body%global.
 
 (** [constants::X1]
     Source: 'src/constants.rs', lines 7:0-7:17 *)
 Definition x1_body : result u32 := Return core_u32_max.
-Definition x1_c : u32 := x1_body%global.
+Definition x1 : u32 := x1_body%global.
 
 (** [constants::X2]
     Source: 'src/constants.rs', lines 10:0-10:17 *)
 Definition x2_body : result u32 := Return 3%u32.
-Definition x2_c : u32 := x2_body%global.
+Definition x2 : u32 := x2_body%global.
 
 (** [constants::incr]:
     Source: 'src/constants.rs', lines 17:0-17:32 *)
@@ -31,12 +31,13 @@ Definition incr (n : u32) : result u32 :=
 (** [constants::X3]
     Source: 'src/constants.rs', lines 15:0-15:17 *)
 Definition x3_body : result u32 := incr 32%u32.
-Definition x3_c : u32 := x3_body%global.
+Definition x3 : u32 := x3_body%global.
 
 (** [constants::mk_pair0]:
     Source: 'src/constants.rs', lines 23:0-23:51 *)
-Definition mk_pair0 (x : u32) (y : u32) : result (u32 * u32) :=
-  Return (x, y).
+Definition mk_pair0 (x : u32) (y1 : u32) : result (u32 * u32) :=
+  Return (x, y1)
+.
 
 (** [constants::Pair]
     Source: 'src/constants.rs', lines 36:0-36:23 *)
@@ -48,31 +49,31 @@ Arguments pair_y { _ _ }.
 
 (** [constants::mk_pair1]:
     Source: 'src/constants.rs', lines 27:0-27:55 *)
-Definition mk_pair1 (x : u32) (y : u32) : result (Pair_t u32 u32) :=
-  Return {| pair_x := x; pair_y := y |}
+Definition mk_pair1 (x : u32) (y1 : u32) : result (Pair_t u32 u32) :=
+  Return {| pair_x := x; pair_y := y1 |}
 .
 
 (** [constants::P0]
     Source: 'src/constants.rs', lines 31:0-31:24 *)
 Definition p0_body : result (u32 * u32) := mk_pair0 0%u32 1%u32.
-Definition p0_c : (u32 * u32) := p0_body%global.
+Definition p0 : (u32 * u32) := p0_body%global.
 
 (** [constants::P1]
     Source: 'src/constants.rs', lines 32:0-32:28 *)
 Definition p1_body : result (Pair_t u32 u32) := mk_pair1 0%u32 1%u32.
-Definition p1_c : Pair_t u32 u32 := p1_body%global.
+Definition p1 : Pair_t u32 u32 := p1_body%global.
 
 (** [constants::P2]
     Source: 'src/constants.rs', lines 33:0-33:24 *)
 Definition p2_body : result (u32 * u32) := Return (0%u32, 1%u32).
-Definition p2_c : (u32 * u32) := p2_body%global.
+Definition p2 : (u32 * u32) := p2_body%global.
 
 (** [constants::P3]
     Source: 'src/constants.rs', lines 34:0-34:28 *)
 Definition p3_body : result (Pair_t u32 u32) :=
   Return {| pair_x := 0%u32; pair_y := 1%u32 |}
 .
-Definition p3_c : Pair_t u32 u32 := p3_body%global.
+Definition p3 : Pair_t u32 u32 := p3_body%global.
 
 (** [constants::Wrap]
     Source: 'src/constants.rs', lines 49:0-49:18 *)
@@ -90,27 +91,27 @@ Definition wrap_new (T : Type) (value : T) : result (Wrap_t T) :=
 (** [constants::Y]
     Source: 'src/constants.rs', lines 41:0-41:22 *)
 Definition y_body : result (Wrap_t i32) := wrap_new i32 2%i32.
-Definition y_c : Wrap_t i32 := y_body%global.
+Definition y : Wrap_t i32 := y_body%global.
 
 (** [constants::unwrap_y]:
     Source: 'src/constants.rs', lines 43:0-43:30 *)
 Definition unwrap_y : result i32 :=
-  Return y_c.(wrap_value).
+  Return y.(wrap_value).
 
 (** [constants::YVAL]
     Source: 'src/constants.rs', lines 47:0-47:19 *)
 Definition yval_body : result i32 := unwrap_y.
-Definition yval_c : i32 := yval_body%global.
+Definition yval : i32 := yval_body%global.
 
 (** [constants::get_z1::Z1]
     Source: 'src/constants.rs', lines 62:4-62:17 *)
 Definition get_z1_z1_body : result i32 := Return 3%i32.
-Definition get_z1_z1_c : i32 := get_z1_z1_body%global.
+Definition get_z1_z1 : i32 := get_z1_z1_body%global.
 
 (** [constants::get_z1]:
     Source: 'src/constants.rs', lines 61:0-61:28 *)
 Definition get_z1 : result i32 :=
-  Return get_z1_z1_c.
+  Return get_z1_z1.
 
 (** [constants::add]:
     Source: 'src/constants.rs', lines 66:0-66:39 *)
@@ -120,41 +121,41 @@ Definition add (a : i32) (b : i32) : result i32 :=
 (** [constants::Q1]
     Source: 'src/constants.rs', lines 74:0-74:17 *)
 Definition q1_body : result i32 := Return 5%i32.
-Definition q1_c : i32 := q1_body%global.
+Definition q1 : i32 := q1_body%global.
 
 (** [constants::Q2]
     Source: 'src/constants.rs', lines 75:0-75:17 *)
-Definition q2_body : result i32 := Return q1_c.
-Definition q2_c : i32 := q2_body%global.
+Definition q2_body : result i32 := Return q1.
+Definition q2 : i32 := q2_body%global.
 
 (** [constants::Q3]
     Source: 'src/constants.rs', lines 76:0-76:17 *)
-Definition q3_body : result i32 := add q2_c 3%i32.
-Definition q3_c : i32 := q3_body%global.
+Definition q3_body : result i32 := add q2 3%i32.
+Definition q3 : i32 := q3_body%global.
 
 (** [constants::get_z2]:
     Source: 'src/constants.rs', lines 70:0-70:28 *)
 Definition get_z2 : result i32 :=
-  i <- get_z1; i1 <- add i q3_c; add q1_c i1.
+  i <- get_z1; i1 <- add i q3; add q1 i1.
 
 (** [constants::S1]
     Source: 'src/constants.rs', lines 80:0-80:18 *)
 Definition s1_body : result u32 := Return 6%u32.
-Definition s1_c : u32 := s1_body%global.
+Definition s1 : u32 := s1_body%global.
 
 (** [constants::S2]
     Source: 'src/constants.rs', lines 81:0-81:18 *)
-Definition s2_body : result u32 := incr s1_c.
-Definition s2_c : u32 := s2_body%global.
+Definition s2_body : result u32 := incr s1.
+Definition s2 : u32 := s2_body%global.
 
 (** [constants::S3]
     Source: 'src/constants.rs', lines 82:0-82:29 *)
-Definition s3_body : result (Pair_t u32 u32) := Return p3_c.
-Definition s3_c : Pair_t u32 u32 := s3_body%global.
+Definition s3_body : result (Pair_t u32 u32) := Return p3.
+Definition s3 : Pair_t u32 u32 := s3_body%global.
 
 (** [constants::S4]
     Source: 'src/constants.rs', lines 83:0-83:29 *)
 Definition s4_body : result (Pair_t u32 u32) := mk_pair1 7%u32 8%u32.
-Definition s4_c : Pair_t u32 u32 := s4_body%global.
+Definition s4 : Pair_t u32 u32 := s4_body%global.
 
 End Constants.

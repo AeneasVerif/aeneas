@@ -492,7 +492,7 @@ Definition f3 (n : nat) : result u32 :=
 (** [arrays::SZ]
     Source: 'src/arrays.rs', lines 286:0-286:19 *)
 Definition sz_body : result usize := Return 32%usize.
-Definition sz_c : usize := sz_body%global.
+Definition sz : usize := sz_body%global.
 
 (** [arrays::f5]:
     Source: 'src/arrays.rs', lines 289:0-289:31 *)

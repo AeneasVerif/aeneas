@@ -126,17 +126,17 @@ divergent def i32_id (i : I32) : Result I32 :=
 structure Counter (Self : Type) where
   incr : Self → Result (Usize × Self)
 
-/- [demo::{usize}::incr]:
+/- [demo::{(demo::Counter for usize)}::incr]:
    Source: 'src/demo.rs', lines 88:4-88:31 -/
-def Usize.incr (self : Usize) : Result (Usize × Usize) :=
+def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
   do
   let self1 ← self + 1#usize
   Result.ret (self, self1)
 
-/- Trait implementation: [demo::{usize}]
+/- Trait implementation: [demo::{(demo::Counter for usize)}]
    Source: 'src/demo.rs', lines 87:0-87:22 -/
-def demo.CounterUsizeInst : Counter Usize := {
-  incr := Usize.incr
+def CounterUsize : Counter Usize := {
+  incr := CounterUsize.incr
 }
 
 /- [demo::use_counter]:
