@@ -8,6 +8,7 @@ open Cps
 open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
+open Errors
 
 (** The local logger *)
 let log = Logging.invariants_log
@@ -47,7 +48,7 @@ type borrow_kind = BMut | BShared | BReserved
     - loans and borrows are correctly related
     - a two-phase borrow can't point to a value inside an abstraction
  *)
-let check_loans_borrows_relation_invariant (ctx : eval_ctx) : unit =
+let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
   (* Link all the borrow ids to a representant - necessary because of shared
    * borrows/loans *)
   let ids_reprs : BorrowId.id BorrowId.Map.t ref = ref BorrowId.Map.empty in
@@ -183,7 +184,7 @@ let check_loans_borrows_relation_invariant (ctx : eval_ctx) : unit =
           ^ BorrowId.to_string bid ^ ":\nContext:\n" ^ context_to_string ()
         in
         log#serror err;
-        raise (Failure err)
+        craise meta err
   in
 
   let update_info (bid : BorrowId.id) (info : borrow_info) : unit =
@@ -195,7 +196,7 @@ let check_loans_borrows_relation_invariant (ctx : eval_ctx) : unit =
         (fun x ->
           match x with
           | Some _ -> Some info
-          | None -> raise (Failure "Unreachable"))
+          | None -> craise meta "Unreachable")
         !borrows_infos
     in
     borrows_infos := infos
@@ -209,7 +210,7 @@ let check_loans_borrows_relation_invariant (ctx : eval_ctx) : unit =
     (* Check that the borrow kind is consistent *)
     (match (info.loan_kind, kind) with
     | RShared, (BShared | BReserved) | RMut, BMut -> ()
-    | _ -> raise (Failure "Invariant not satisfied"));
+    | _ -> craise meta "Invariant not satisfied");
     (* A reserved borrow can't point to a value inside an abstraction *)
     assert (kind <> BReserved || not info.loan_in_abs);
     (* Insert the borrow id *)
@@ -366,13 +367,13 @@ let check_borrowed_values_invariant (ctx : eval_ctx) : unit =
   let info = { outer_borrow = false; outer_shared = false } in
   visitor#visit_eval_ctx info ctx
 
-let check_literal_type (cv : literal) (ty : literal_type) : unit =
+let check_literal_type (meta : Meta.meta) (cv : literal) (ty : literal_type) : unit =
   match (cv, ty) with
   | VScalar sv, TInteger int_ty -> assert (sv.int_ty = int_ty)
   | VBool _, TBool | VChar _, TChar -> ()
-  | _ -> raise (Failure "Erroneous typing")
+  | _ -> craise meta "Erroneous typing"
 
-let check_typing_invariant (ctx : eval_ctx) : unit =
+let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
   (* TODO: the type of aloans doens't make sense: they have a type
    * of the shape [& (mut) T] where they should have type [T]...
    * This messes a bit the type invariant checks when checking the
@@ -405,7 +406,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
         assert (ty_is_ety tv.ty);
         (* Check the current pair (value, type) *)
         (match (tv.value, tv.ty) with
-        | VLiteral cv, TLiteral ty -> check_literal_type cv ty
+        | VLiteral cv, TLiteral ty -> check_literal_type meta cv ty
         (* ADT case *)
         | VAdt av, TAdt (TAdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
@@ -420,7 +421,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
             | Some variant_id, Enum variants ->
                 assert (VariantId.to_int variant_id < List.length variants)
             | None, Struct _ -> ()
-            | _ -> raise (Failure "Erroneous typing"));
+            | _ -> craise meta "Erroneous typing");
             (* Check that the field types are correct *)
             let field_types =
               AssociatedTypes.type_decl_get_inst_norm_field_etypes ctx def
@@ -469,39 +470,39 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
                     .value
                 in
                 assert (Z.of_int (List.length inner_values) = len)
-            | (TSlice | TStr), _, _, _, _ -> raise (Failure "Unexpected")
-            | _ -> raise (Failure "Erroneous type"))
+            | (TSlice | TStr), _, _, _, _ -> craise meta "Unexpected"
+            | _ -> craise meta "Erroneous type")
         | VBottom, _ -> (* Nothing to check *) ()
         | VBorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | VSharedBorrow bid, RShared | VReservedMutBorrow bid, RMut -> (
                 (* Lookup the borrowed value to check it has the proper type *)
-                let _, glc = lookup_loan ek_all bid ctx in
+                let _, glc = lookup_loan meta ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, sv, _)) ->
                     assert (sv.ty = ref_ty)
-                | _ -> raise (Failure "Inconsistent context"))
+                | _ -> craise meta "Inconsistent context")
             | VMutBorrow (_, bv), RMut ->
                 assert (
                   (* Check that the borrowed value has the proper type *)
                   bv.ty = ref_ty)
-            | _ -> raise (Failure "Erroneous typing"))
+            | _ -> craise meta "Erroneous typing")
         | VLoan lc, ty -> (
             match lc with
             | VSharedLoan (_, sv) -> assert (sv.ty = ty)
             | VMutLoan bid -> (
                 (* Lookup the borrowed value to check it has the proper type *)
-                let glc = lookup_borrow ek_all bid ctx in
+                let glc = lookup_borrow meta ek_all bid ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) -> assert (bv.ty = ty)
                 | Abstract (AMutBorrow (_, sv)) ->
                     assert (Substitute.erase_regions sv.ty = ty)
-                | _ -> raise (Failure "Inconsistent context")))
+                | _ -> craise meta "Inconsistent context"))
         | VSymbolic sv, ty ->
             let ty' = Substitute.erase_regions sv.sv_ty in
             assert (ty' = ty)
-        | _ -> raise (Failure "Erroneous typing"));
+        | _ -> craise meta "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_value info tv
 
@@ -535,7 +536,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
             | Some variant_id, Enum variants ->
                 assert (VariantId.to_int variant_id < List.length variants)
             | None, Struct _ -> ()
-            | _ -> raise (Failure "Erroneous typing"));
+            | _ -> craise meta "Erroneous typing");
             (* Check that the field types are correct *)
             let field_types =
               AssociatedTypes.type_decl_get_inst_norm_field_rtypes ctx def
@@ -571,7 +572,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
             (* Box *)
             | TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
                 assert (boxed_value.ty = boxed_ty)
-            | _ -> raise (Failure "Erroneous type"))
+            | _ -> craise meta "Erroneous type")
         | ABottom, _ -> (* Nothing to check *) ()
         | ABorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
@@ -580,19 +581,19 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
                 assert (av.ty = ref_ty)
             | ASharedBorrow bid, RShared -> (
                 (* Lookup the borrowed value to check it has the proper type *)
-                let _, glc = lookup_loan ek_all bid ctx in
+                let _, glc = lookup_loan meta ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, sv, _)) ->
                     assert (sv.ty = Substitute.erase_regions ref_ty)
-                | _ -> raise (Failure "Inconsistent context"))
+                | _ -> craise meta "Inconsistent context")
             | AIgnoredMutBorrow (_opt_bid, av), RMut -> assert (av.ty = ref_ty)
             | ( AEndedIgnoredMutBorrow { given_back; child; given_back_meta = _ },
                 RMut ) ->
                 assert (given_back.ty = ref_ty);
                 assert (child.ty = ref_ty)
             | AProjSharedBorrow _, RShared -> ()
-            | _ -> raise (Failure "Inconsistent context"))
+            | _ -> craise meta "Inconsistent context")
         | ALoan lc, aty -> (
             match lc with
             | AMutLoan (bid, child_av) | AIgnoredMutLoan (Some bid, child_av)
@@ -600,7 +601,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 assert (child_av.ty = borrowed_aty);
                 (* Lookup the borrowed value to check it has the proper type *)
-                let glc = lookup_borrow ek_all bid ctx in
+                let glc = lookup_borrow meta ek_all bid ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) ->
                     assert (bv.ty = Substitute.erase_regions borrowed_aty)
@@ -608,7 +609,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
                     assert (
                       Substitute.erase_regions sv.ty
                       = Substitute.erase_regions borrowed_aty)
-                | _ -> raise (Failure "Inconsistent context"))
+                | _ -> craise meta "Inconsistent context")
             | AIgnoredMutLoan (None, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 assert (child_av.ty = borrowed_aty)
@@ -647,7 +648,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
                     match proj with
                     | AProjBorrows (_sv, ty') -> assert (ty' = ty)
                     | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
-                    | _ -> raise (Failure "Unexpected"))
+                    | _ -> craise meta "Unexpected")
                   given_back_ls
             | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
         | AIgnored, _ -> ()
@@ -658,7 +659,7 @@ let check_typing_invariant (ctx : eval_ctx) : unit =
                ^ "\n- value: "
                 ^ typed_avalue_to_string ctx atv
                 ^ "\n- type: " ^ ty_to_string ctx atv.ty));
-            raise (Failure "Erroneous typing"));
+            craise meta "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_avalue info atv
     end
@@ -697,7 +698,7 @@ type sv_info = {
     - the union of the aproj_loans contains the aproj_borrows applied on the
       same symbolic values
  *)
-let check_symbolic_values (ctx : eval_ctx) : unit =
+let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
   (* Small utility *)
   let module M = SymbolicValueId.Map in
   let infos : sv_info M.t ref = ref M.empty in
@@ -796,24 +797,24 @@ let check_symbolic_values (ctx : eval_ctx) : unit =
     List.iter
       (fun binfo ->
         assert (
-          projection_contains info.ty loan_regions binfo.proj_ty binfo.regions))
+          projection_contains meta info.ty loan_regions binfo.proj_ty binfo.regions))
       info.aproj_borrows;
     ()
   in
 
   M.iter check_info !infos
 
-let check_invariants (ctx : eval_ctx) : unit =
+let check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
     log#ldebug (lazy ("Checking invariants:\n" ^ eval_ctx_to_string ctx));
-    check_loans_borrows_relation_invariant ctx;
+    check_loans_borrows_relation_invariant meta ctx;
     check_borrowed_values_invariant ctx;
-    check_typing_invariant ctx;
-    check_symbolic_values ctx)
+    check_typing_invariant meta ctx;
+    check_symbolic_values meta ctx)
   else log#ldebug (lazy "Not checking invariants (check is not activated)")
 
 (** Same as {!check_invariants}, but written in CPS *)
-let cf_check_invariants : cm_fun =
+let cf_check_invariants (meta : Meta.meta) : cm_fun =
  fun cf ctx ->
-  check_invariants ctx;
+  check_invariants meta ctx;
   cf ctx
