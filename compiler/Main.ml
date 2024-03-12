@@ -271,7 +271,7 @@ let () =
       (* Some options for the execution *)
 
       (* Test the unit functions with the concrete interpreter *)
-      if !test_unit_functions then Test.test_unit_functions m;
+      if !test_unit_functions then Test.test_unit_functions meta m;
 
       (* Translate the functions *)
       Aeneas.Translate.translate_crate meta filename dest_dir m;

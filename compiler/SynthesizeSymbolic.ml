@@ -4,21 +4,22 @@ open Expressions
 open Values
 open LlbcAst
 open SymbolicAst
+open Errors
 
-let mk_mplace (p : place) (ctx : Contexts.eval_ctx) : mplace =
-  let bv = Contexts.ctx_lookup_var_binder ctx p.var_id in
+let mk_mplace (meta : Meta.meta) (p : place) (ctx : Contexts.eval_ctx) : mplace =
+  let bv = Contexts.ctx_lookup_var_binder meta ctx p.var_id in
   { bv; projection = p.projection }
 
-let mk_opt_mplace (p : place option) (ctx : Contexts.eval_ctx) : mplace option =
-  Option.map (fun p -> mk_mplace p ctx) p
+let mk_opt_mplace (meta : Meta.meta) (p : place option) (ctx : Contexts.eval_ctx) : mplace option =
+  Option.map (fun p -> mk_mplace meta p ctx) p
 
-let mk_opt_place_from_op (op : operand) (ctx : Contexts.eval_ctx) :
+let mk_opt_place_from_op (meta : Meta.meta) (op : operand) (ctx : Contexts.eval_ctx) :
     mplace option =
-  match op with Copy p | Move p -> Some (mk_mplace p ctx) | Constant _ -> None
+  match op with Copy p | Move p -> Some (mk_mplace meta p ctx) | Constant _ -> None
 
 let mk_emeta (m : emeta) (e : expression) : expression = Meta (m, e)
 
-let synthesize_symbolic_expansion (sv : symbolic_value) (place : mplace option)
+let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value) (place : mplace option)
     (seel : symbolic_expansion option list) (el : expression list option) :
     expression option =
   match el with
@@ -36,7 +37,7 @@ let synthesize_symbolic_expansion (sv : symbolic_value) (place : mplace option)
              (Some (SeLiteral (VBool false)), false_exp);
             ] ->
                 ExpandBool (true_exp, false_exp)
-            | _ -> raise (Failure "Ill-formed boolean expansion"))
+            | _ -> craise meta "Ill-formed boolean expansion")
         | TLiteral (TInteger int_ty) ->
             (* Switch over an integer: split between the "regular" branches
                and the "otherwise" branch (which should be the last branch) *)
@@ -46,9 +47,9 @@ let synthesize_symbolic_expansion (sv : symbolic_value) (place : mplace option)
             let get_scalar (see : symbolic_expansion option) : scalar_value =
               match see with
               | Some (SeLiteral (VScalar cv)) ->
-                  assert (cv.int_ty = int_ty);
+                  cassert (cv.int_ty = int_ty) meta "For all the regular branches, the symbolic value should have been expanded to a constant TODO: Error message";
                   cv
-              | _ -> raise (Failure "Unreachable")
+              | _ -> craise meta "Unreachable"
             in
             let branches =
               List.map (fun (see, exp) -> (get_scalar see, exp)) branches
@@ -56,7 +57,7 @@ let synthesize_symbolic_expansion (sv : symbolic_value) (place : mplace option)
             (* For the otherwise branch, the symbolic value should have been left
              * unchanged *)
             let otherwise_see, otherwise = otherwise in
-            assert (otherwise_see = None);
+            cassert (otherwise_see = None) meta "For the otherwise branch, the symbolic value should have been left unchanged";
             (* Return *)
             ExpandInt (int_ty, branches, otherwise)
         | TAdt (_, _) ->
@@ -65,7 +66,7 @@ let synthesize_symbolic_expansion (sv : symbolic_value) (place : mplace option)
                 VariantId.id option * symbolic_value list =
               match see with
               | Some (SeAdt (vid, fields)) -> (vid, fields)
-              | _ -> raise (Failure "Ill-formed branching ADT expansion")
+              | _ -> craise meta "Ill-formed branching ADT expansion"
             in
             let exp =
               List.map
@@ -79,18 +80,18 @@ let synthesize_symbolic_expansion (sv : symbolic_value) (place : mplace option)
             (* Reference expansion: there should be one branch *)
             match ls with
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
-            | _ -> raise (Failure "Ill-formed borrow expansion"))
+            | _ -> craise meta "Ill-formed borrow expansion")
         | TVar _ | TLiteral TChar | TNever | TTraitType _ | TArrow _ | TRawPtr _
           ->
-            raise (Failure "Ill-formed symbolic expansion")
+            craise meta "Ill-formed symbolic expansion"
       in
       Some (Expansion (place, sv, expansion))
 
-let synthesize_symbolic_expansion_no_branching (sv : symbolic_value)
+let synthesize_symbolic_expansion_no_branching (meta : Meta.meta) (sv : symbolic_value)
     (place : mplace option) (see : symbolic_expansion) (e : expression option) :
     expression option =
   let el = Option.map (fun e -> [ e ]) e in
-  synthesize_symbolic_expansion sv place [ Some see ] el
+  synthesize_symbolic_expansion meta sv place [ Some see ] el
 
 let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
     (sg : fun_sig option) (regions_hierarchy : region_var_groups)
@@ -188,7 +189,7 @@ let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
              loop_expr;
              meta;
            })
-  | _ -> raise (Failure "Unreachable")
+  | _ -> craise meta "Unreachable"
 
 let save_snapshot (ctx : Contexts.eval_ctx) (e : expression option) :
     expression option =

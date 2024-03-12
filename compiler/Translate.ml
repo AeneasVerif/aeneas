@@ -20,7 +20,7 @@ type symbolic_fun_translation = symbolic_value list * SA.expression
 (** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
     for the forward function and the backward functions.
 *)
-let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
+let translate_function_to_symbolics (meta : Meta.meta) (trans_ctx : trans_ctx) (fdef : fun_decl) :
     symbolic_fun_translation option =
   (* Debug *)
   log#ldebug
@@ -32,7 +32,7 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
   | Some _ ->
       (* Evaluate *)
       let synthesize = true in
-      let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
+      let inputs, symb = evaluate_function_symbolic meta synthesize trans_ctx fdef in
       Some (inputs, Option.get symb)
 
 (** Translate a function, by generating its forward and backward translations.
@@ -50,7 +50,7 @@ let translate_function_to_pure (meta : Meta.meta) (trans_ctx : trans_ctx)
     (lazy ("translate_function_to_pure: " ^ name_to_string trans_ctx fdef.name));
 
   (* Compute the symbolic ASTs, if the function is transparent *)
-  let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
+  let symbolic_trans = translate_function_to_symbolics meta trans_ctx fdef in
 
   (* Convert the symbolic ASTs to pure ASTs: *)
 

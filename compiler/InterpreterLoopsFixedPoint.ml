@@ -693,7 +693,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
                   AbstractionId.of_int (RegionGroupId.to_int rg_id)
                 in
                 (* By default, the [SynthInput] abs can't end *)
-                let ctx = ctx_set_abs_can_end ctx abs_id true in
+                let ctx = ctx_set_abs_can_end meta ctx abs_id true in
                 cassert (
                   let abs = ctx_lookup_abs ctx abs_id in
                   abs.kind = SynthInput rg_id) meta "TODO :  error message ";
@@ -764,7 +764,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
               in
               let abs = ctx_lookup_abs !fp !id0 in
               let abs = { abs with kind = abs_kind } in
-              let fp', _ = ctx_subst_abs !fp !id0 abs in
+              let fp', _ = ctx_subst_abs meta !fp !id0 abs in
               fp := fp';
               (* Merge all the abstractions into this one *)
               List.iter

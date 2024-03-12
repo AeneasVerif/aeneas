@@ -1030,7 +1030,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
       (* Remove all the references to the id of the current abstraction, and remove
        * the abstraction itself.
        * **Rk.**: this is where we synthesize the updated symbolic AST *)
-      let cc = comp cc (end_abstraction_remove_from_context config abs_id) in
+      let cc = comp cc (end_abstraction_remove_from_context meta config abs_id) in
 
       (* Debugging *)
       let cc =
@@ -1273,10 +1273,10 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
       end_abstraction_borrows meta config chain abs_id cf ctx
 
 (** Remove an abstraction from the context, as well as all its references *)
-and end_abstraction_remove_from_context (_config : config)
+and end_abstraction_remove_from_context (meta : Meta.meta)  (_config : config)
     (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
-  let ctx, abs = ctx_remove_abs ctx abs_id in
+  let ctx, abs = ctx_remove_abs meta ctx abs_id in
   let abs = Option.get abs in
   (* Apply the continuation *)
   let expr = cf ctx in
@@ -2502,8 +2502,8 @@ let merge_into_abstraction (meta : Meta.meta) (abs_kind : abs_kind) (can_end : b
 
   (* Update the environment: replace the abstraction 1 with the result of the merge,
      remove the abstraction 0 *)
-  let ctx = fst (ctx_subst_abs ctx abs_id1 nabs) in
-  let ctx = fst (ctx_remove_abs ctx abs_id0) in
+  let ctx = fst (ctx_subst_abs meta ctx abs_id1 nabs) in
+  let ctx = fst (ctx_remove_abs meta ctx abs_id0) in
 
   (* Merge all the regions from the abstraction into one (the first - i.e., the
      one with the smallest id). Note that we need to do this in the whole

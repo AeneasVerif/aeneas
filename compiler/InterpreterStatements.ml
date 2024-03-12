@@ -58,33 +58,33 @@ let push_dummy_var (vid : DummyVarId.id) (v : typed_value) : cm_fun =
   cf ctx
 
 (** Remove a dummy variable from the environment *)
-let remove_dummy_var (vid : DummyVarId.id) (cf : typed_value -> m_fun) : m_fun =
+let remove_dummy_var (meta : Meta.meta) (vid : DummyVarId.id) (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
-  let ctx, v = ctx_remove_dummy_var ctx vid in
+  let ctx, v = ctx_remove_dummy_var meta ctx vid in
   cf v ctx
 
 (** Push an uninitialized variable to the environment *)
-let push_uninitialized_var (var : var) : cm_fun =
+let push_uninitialized_var (meta : Meta.meta) (var : var) : cm_fun =
  fun cf ctx ->
-  let ctx = ctx_push_uninitialized_var ctx var in
+  let ctx = ctx_push_uninitialized_var meta ctx var in
   cf ctx
 
 (** Push a list of uninitialized variables to the environment *)
-let push_uninitialized_vars (vars : var list) : cm_fun =
+let push_uninitialized_vars (meta : Meta.meta) (vars : var list) : cm_fun =
  fun cf ctx ->
-  let ctx = ctx_push_uninitialized_vars ctx vars in
+  let ctx = ctx_push_uninitialized_vars meta ctx vars in
   cf ctx
 
 (** Push a variable to the environment *)
-let push_var (var : var) (v : typed_value) : cm_fun =
+let push_var (meta : Meta.meta) (var : var) (v : typed_value) : cm_fun =
  fun cf ctx ->
-  let ctx = ctx_push_var ctx var v in
+  let ctx = ctx_push_var meta ctx var v in
   cf ctx
 
 (** Push a list of variables to the environment *)
-let push_vars (vars : (var * typed_value) list) : cm_fun =
+let push_vars (meta : Meta.meta) (vars : (var * typed_value) list) : cm_fun =
  fun cf ctx ->
-  let ctx = ctx_push_vars ctx vars in
+  let ctx = ctx_push_vars meta ctx vars in
   cf ctx
 
 (** Assign a value to a given place.
@@ -108,7 +108,7 @@ let assign_to_place (meta : Meta.meta) (config : config) (rv : typed_value) (p :
   (* Prepare the destination *)
   let cc = comp cc (prepare_lplace config p) in
   (* Retrieve the rvalue from the dummy variable *)
-  let cc = comp cc (fun cf _lv -> remove_dummy_var rvalue_vid cf) in
+  let cc = comp cc (fun cf _lv -> remove_dummy_var meta rvalue_vid cf) in
   (* Update the destination *)
   let move_dest cf (rv : typed_value) : m_fun =
    fun ctx ->
@@ -538,7 +538,7 @@ let eval_assumed_function_call_concrete (meta : Meta.meta) (config : config) (fi
             let ret_vid = VarId.zero in
             let ret_ty = get_assumed_function_return_type meta ctx fid generics in
             let ret_var = mk_var ret_vid (Some "@return") ret_ty in
-            let cc = comp cc (push_uninitialized_var ret_var) in
+            let cc = comp cc (push_uninitialized_var meta ret_var) in
 
             (* Create and push the input variables *)
             let input_vars =
@@ -546,7 +546,7 @@ let eval_assumed_function_call_concrete (meta : Meta.meta) (config : config) (fi
                 (fun id (v : typed_value) -> (mk_var id None v.ty, v))
                 args_vl
             in
-            let cc = comp cc (push_vars input_vars) in
+            let cc = comp cc (push_vars meta input_vars) in
 
             (* "Execute" the function body. As the functions are assumed, here we call
              * custom functions to perform the proper manipulations: we don't have
@@ -981,10 +981,10 @@ let rec eval_statement (meta : Meta.meta) (config : config) (st : statement) : s
                       let rp = rvalue_get_place rvalue in
                       let rp =
                         match rp with
-                        | Some rp -> Some (S.mk_mplace rp ctx)
+                        | Some rp -> Some (S.mk_mplace meta rp ctx)
                         | None -> None
                       in
-                      S.synthesize_assignment ctx (S.mk_mplace p ctx) rv rp expr
+                      S.synthesize_assignment ctx (S.mk_mplace meta p ctx) rv rp expr
                   )
             in
 
@@ -1094,7 +1094,7 @@ and eval_switch (meta : Meta.meta) (config : config) (switch : switch) : st_cm_f
               let cf_true : st_cm_fun = eval_statement meta config st1 in
               let cf_false : st_cm_fun = eval_statement meta config st2 in
               expand_symbolic_bool config sv
-                (S.mk_opt_place_from_op op ctx)
+                (S.mk_opt_place_from_op meta op ctx)
                 cf_true cf_false cf ctx
           | _ -> craise meta "Inconsistent state"
         in
@@ -1141,7 +1141,7 @@ and eval_switch (meta : Meta.meta) (config : config) (switch : switch) : st_cm_f
               let otherwise = eval_statement meta config otherwise in
               (* Expand and continue *)
               expand_symbolic_int config sv
-                (S.mk_opt_place_from_op op ctx)
+                (S.mk_opt_place_from_op meta op ctx)
                 int_ty stgts otherwise cf ctx
           | _ -> craise meta "Inconsistent state"
         in
@@ -1175,7 +1175,7 @@ and eval_switch (meta : Meta.meta) (config : config) (switch : switch) : st_cm_f
           | VSymbolic sv ->
               (* Expand the symbolic value - may lead to branching *)
               let cf_expand =
-                expand_symbolic_adt config sv (Some (S.mk_mplace p ctx))
+                expand_symbolic_adt config sv (Some (S.mk_mplace meta p ctx))
               in
               (* Re-evaluate the switch - the value is not symbolic anymore,
                  which means we will go to the other branch *)
@@ -1280,7 +1280,7 @@ and eval_transparent_function_call_concrete (meta : Meta.meta) (config : config)
         in
 
         let cc =
-          comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty))
+          comp_transmit cc (push_var meta ret_var (mk_bottom ret_var.var_ty))
         in
 
         (* 2. Push the input values *)
@@ -1288,12 +1288,12 @@ and eval_transparent_function_call_concrete (meta : Meta.meta) (config : config)
           let inputs = List.combine input_locals args in
           (* Note that this function checks that the variables and their values
            * have the same type (this is important) *)
-          push_vars inputs cf
+          push_vars meta inputs cf
         in
         let cc = comp cc cf_push_inputs in
 
         (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
-        let cc = comp cc (push_uninitialized_vars locals) in
+        let cc = comp cc (push_uninitialized_vars meta locals) in
 
         (* Execute the function body *)
         let cc = comp cc (eval_function_body meta config body_st) in
@@ -1366,8 +1366,8 @@ and eval_function_call_symbolic_from_inst_sig (meta : Meta.meta) (config : confi
   let ret_av regions =
     mk_aproj_loans_value_from_symbolic_value regions ret_spc
   in
-  let args_places = List.map (fun p -> S.mk_opt_place_from_op p ctx) args in
-  let dest_place = Some (S.mk_mplace dest ctx) in
+  let args_places = List.map (fun p -> S.mk_opt_place_from_op meta p ctx) args in
+  let dest_place = Some (S.mk_mplace meta dest ctx) in
 
   (* Evaluate the input operands *)
   let cc = eval_operands config args in

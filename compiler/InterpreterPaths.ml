@@ -259,13 +259,13 @@ let access_place (meta : Meta.meta) (access : projection_access)
       (update : typed_value -> typed_value) (p : place) (ctx : eval_ctx) :
     (eval_ctx * typed_value) path_access_result =
   (* Lookup the variable's value *)
-  let value = ctx_lookup_var_value ctx p.var_id in
+  let value = ctx_lookup_var_value meta ctx p.var_id in
   (* Apply the projection *)
   match access_projection meta access ctx update p.projection value with
   | Error err -> Error err
   | Ok (ctx, res) ->
       (* Update the value *)
-      let ctx = ctx_update_var_value ctx p.var_id res.updated in
+      let ctx = ctx_update_var_value meta ctx p.var_id res.updated in
       (* Return *)
       Ok (ctx, res.read)
 
@@ -465,7 +465,7 @@ let rec update_ctx_along_read_place (meta : Meta.meta) (config : config) (access
             in
             let prefix = { p with projection = proj } in
             expand_symbolic_value_no_branching config sp
-              (Some (Synth.mk_mplace prefix ctx))
+              (Some (Synth.mk_mplace meta prefix ctx))
         | FailBottom (_, _, _) ->
             (* We can't expand {!Bottom} values while reading them *)
             craise meta "Found [Bottom] while reading a place"
@@ -490,7 +490,7 @@ let rec update_ctx_along_write_place (meta : Meta.meta) (config : config) (acces
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
             expand_symbolic_value_no_branching config sp
-              (Some (Synth.mk_mplace p ctx))
+              (Some (Synth.mk_mplace meta p ctx))
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the {!Bottom} value *)
             fun cf ctx ->
@@ -575,7 +575,7 @@ let drop_outer_loans_at_lplace (meta : Meta.meta) (config : config) (p : place) 
   let rec drop : cm_fun =
    fun cf ctx ->
     (* Read the value *)
-    let v = ctx_lookup_dummy_var ctx dummy_id in
+    let v = ctx_lookup_dummy_var meta ctx dummy_id in
     (* Check if there are loans or borrows to end *)
     let with_borrows = false in
     match get_first_outer_loan_or_borrow_in_value with_borrows v with
@@ -599,7 +599,7 @@ let drop_outer_loans_at_lplace (meta : Meta.meta) (config : config) (p : place) 
   let cc =
     comp cc (fun cf ctx ->
         (* Pop *)
-        let ctx, v = ctx_remove_dummy_var ctx dummy_id in
+        let ctx, v = ctx_remove_dummy_var meta ctx dummy_id in
         (* Reinsert *)
         let ctx = write_place meta access p v ctx in
         (* Sanity check *)
