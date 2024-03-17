@@ -51,9 +51,10 @@ let compute_norm_trait_types_from_preds
        that it would be enough to only visit the field [ty] of the trait type
        constraint, but for safety we visit all the fields *)
     assert (trait_type_constraint_no_regions c);
-    let trait_ty = TTraitType (c.trait_ref, c.generics, c.type_name) in
+    let { trait_ref; type_name; ty } : trait_type_constraint = c in
+    let trait_ty = TTraitType (trait_ref, type_name) in
     let trait_ty_ref = get_ref trait_ty in
-    let ty_ref = get_ref c.ty in
+    let ty_ref = get_ref ty in
     let new_repr = UnionFind.get ty_ref in
     let merged = UnionFind.union trait_ty_ref ty_ref in
     (* Not sure the set operation is necessary, but I want to control which
@@ -72,9 +73,7 @@ let compute_norm_trait_types_from_preds
     List.filter_map
       (fun (k, v) ->
         match k with
-        | TTraitType (trait_ref, generics, type_name) ->
-            assert (generics = empty_generic_args);
-            Some ({ trait_ref; type_name }, v)
+        | TTraitType (trait_ref, type_name) -> Some ({ trait_ref; type_name }, v)
         | _ -> None)
       rbindings
   in
@@ -225,20 +224,15 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       let inputs = List.map (norm_ctx_normalize_ty ctx) inputs in
       let output = norm_ctx_normalize_ty ctx output in
       TArrow (regions, inputs, output)
-  | TTraitType (trait_ref, generics, type_name) -> (
+  | TTraitType (trait_ref, type_name) -> (
       log#ldebug
         (lazy
           ("norm_ctx_normalize_ty:\n- trait type: " ^ ty_to_string ctx ty
          ^ "\n- trait_ref: "
           ^ trait_ref_to_string ctx trait_ref
-          ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref
-          ^ "\n- generics:\n"
-          ^ generic_args_to_string ctx generics));
+          ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
       (* Normalize and attempt to project the type from the trait ref *)
       let trait_ref = norm_ctx_normalize_trait_ref ctx trait_ref in
-      let generics = norm_ctx_normalize_generic_args ctx generics in
-      (*  For now, we don't support higher order types *)
-      assert (generics = empty_generic_args);
       let ty : ty =
         match trait_ref.trait_id with
         | TraitRef { trait_id = TraitImpl impl_id; generics = ref_generics; _ }
@@ -284,7 +278,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
                 ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
             (* We can't project *)
             assert (trait_instance_id_is_local_clause trait_ref.trait_id);
-            TTraitType (trait_ref, generics, type_name)
+            TTraitType (trait_ref, type_name)
       in
       let tr : trait_type_ref = { trait_ref; type_name } in
       (* Lookup the representative, if there is *)
@@ -484,11 +478,10 @@ and norm_ctx_normalize_trait_decl_ref (ctx : norm_ctx)
 
 let norm_ctx_normalize_trait_type_constraint (ctx : norm_ctx)
     (ttc : trait_type_constraint) : trait_type_constraint =
-  let { trait_ref; generics; type_name; ty } = ttc in
+  let { trait_ref; type_name; ty } : trait_type_constraint = ttc in
   let trait_ref = norm_ctx_normalize_trait_ref ctx trait_ref in
-  let generics = norm_ctx_normalize_generic_args ctx generics in
   let ty = norm_ctx_normalize_ty ctx ty in
-  { trait_ref; generics; type_name; ty }
+  { trait_ref; type_name; ty }
 
 let mk_norm_ctx (ctx : eval_ctx) : norm_ctx =
   {

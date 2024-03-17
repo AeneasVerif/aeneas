@@ -251,8 +251,7 @@ and value_aggregate =
   | VaCgValue of const_generic_var_id
       (** This is used when evaluating a const generic value: in the interpreter,
           we introduce a fresh symbolic value. *)
-  | VaTraitConstValue of trait_ref * generic_args * string
-      (** A trait constant value *)
+  | VaTraitConstValue of trait_ref * string  (** A trait constant value *)
 [@@deriving
   show,
     visitors

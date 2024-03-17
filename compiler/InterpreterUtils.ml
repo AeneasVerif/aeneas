@@ -43,6 +43,8 @@ let fun_sig_to_string = Print.EvalCtx.fun_sig_to_string
 let inst_fun_sig_to_string = Print.EvalCtx.inst_fun_sig_to_string
 let ty_to_string = Print.EvalCtx.ty_to_string
 let generic_args_to_string = Print.EvalCtx.generic_args_to_string
+let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
+let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
 
 let fun_id_or_trait_method_ref_to_string =
   Print.EvalCtx.fun_id_or_trait_method_ref_to_string

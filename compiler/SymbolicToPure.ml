@@ -474,10 +474,9 @@ let rec translate_sty (ty : T.ty) : ty =
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
-  | TTraitType (trait_ref, generics, type_name) ->
+  | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_strait_ref trait_ref in
-      let generics = translate_sgeneric_args generics in
-      TTraitType (trait_ref, generics, type_name)
+      TTraitType (trait_ref, type_name)
   | TArrow _ -> raise (Failure "TODO")
 
 and translate_sgeneric_args (generics : T.generic_args) : generic_args =
@@ -497,11 +496,10 @@ let translate_trait_clause (clause : T.trait_clause) : trait_clause =
 
 let translate_strait_type_constraint (ttc : T.trait_type_constraint) :
     trait_type_constraint =
-  let { T.trait_ref; generics; type_name; ty } = ttc in
+  let { T.trait_ref; type_name; ty } = ttc in
   let trait_ref = translate_strait_ref trait_ref in
-  let generics = translate_sgeneric_args generics in
   let ty = translate_sty ty in
-  { trait_ref; generics; type_name; ty }
+  { trait_ref; type_name; ty }
 
 let translate_predicates (preds : T.predicates) : predicates =
   let trait_type_constraints =
@@ -638,10 +636,9 @@ let rec translate_fwd_ty (type_infos : type_infos) (ty : T.ty) : ty =
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
-  | TTraitType (trait_ref, generics, type_name) ->
+  | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
-      let generics = translate_fwd_generic_args type_infos generics in
-      TTraitType (trait_ref, generics, type_name)
+      TTraitType (trait_ref, type_name)
   | TArrow _ -> raise (Failure "TODO")
 
 and translate_fwd_generic_args (type_infos : type_infos)
@@ -737,16 +734,14 @@ let rec translate_back_ty (type_infos : type_infos)
   | TRawPtr _ ->
       (* TODO: not sure what to do here *)
       None
-  | TTraitType (trait_ref, generics, type_name) ->
-      assert (generics.regions = []);
+  | TTraitType (trait_ref, type_name) ->
       assert (
         AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id);
       if inside_mut then
-        (* Translate the trait ref and the generics as "forward" generics -
+        (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)
         let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
-        let generics = translate_fwd_generic_args type_infos generics in
-        Some (TTraitType (trait_ref, generics, type_name))
+        Some (TTraitType (trait_ref, type_name))
       else None
   | TArrow _ -> raise (Failure "TODO")
 
@@ -2956,11 +2951,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         in
         { e = StructUpdate su; ty = var.ty }
     | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
-    | VaTraitConstValue (trait_ref, generics, const_name) ->
+    | VaTraitConstValue (trait_ref, const_name) ->
         let type_infos = ctx.type_ctx.type_infos in
         let trait_ref = translate_fwd_trait_ref type_infos trait_ref in
-        let generics = translate_fwd_generic_args type_infos generics in
-        let qualif_id = TraitConst (trait_ref, generics, const_name) in
+        let qualif_id = TraitConst (trait_ref, const_name) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         { e = Qualif qualif; ty = var.ty }
   in

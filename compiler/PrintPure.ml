@@ -159,14 +159,9 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
         ty_to_string env true arg_ty ^ " -> " ^ ty_to_string env false ret_ty
       in
       if inside then "(" ^ ty ^ ")" else ty
-  | TTraitType (trait_ref, generics, type_name) ->
+  | TTraitType (trait_ref, type_name) ->
       let trait_ref = trait_ref_to_string env false trait_ref in
-      let s =
-        if generics = empty_generic_args then trait_ref ^ "::" ^ type_name
-        else
-          let generics = generic_args_to_string env generics in
-          "(" ^ trait_ref ^ " " ^ generics ^ ")::" ^ type_name
-      in
+      let s = trait_ref ^ "::" ^ type_name in
       if inside then "(" ^ s ^ ")" else s
 
 and generic_args_to_strings (env : fmt_env) (inside : bool)
@@ -624,14 +619,9 @@ and app_to_string (env : fmt_env) (inside : bool) (indent : string)
             let field_s = adt_field_to_string env adt_id field_id in
             (* Adopting an F*-like syntax *)
             (ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s, [])
-        | TraitConst (trait_ref, generics, const_name) ->
+        | TraitConst (trait_ref, const_name) ->
             let trait_ref = trait_ref_to_string env true trait_ref in
-            let generics_s = generic_args_to_string env generics in
-            let qualif =
-              if generics <> empty_generic_args then
-                "(" ^ trait_ref ^ generics_s ^ ")." ^ const_name
-              else trait_ref ^ "." ^ const_name
-            in
+            let qualif = trait_ref ^ "." ^ const_name in
             (qualif, []))
     | _ ->
         (* "Regular" expression case *)

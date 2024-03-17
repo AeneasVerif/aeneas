@@ -528,7 +528,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       extract_rec false ret_ty;
       if inside then F.pp_print_string fmt ")"
-  | TTraitType (trait_ref, generics, type_name) -> (
+  | TTraitType (trait_ref, type_name) -> (
       if !parameterize_trait_types then raise (Failure "Unimplemented")
       else
         let type_name =
@@ -547,7 +547,6 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            assert (generics = empty_generic_args);
             assert (trait_ref.generics = empty_generic_args);
             extract_trait_instance_id_with_dot ctx fmt no_params_tys false
               trait_ref.trait_id;
@@ -555,11 +554,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
         | _ ->
             (* HOL4 doesn't have 1st class types *)
             assert (!backend <> HOL4);
-            let use_brackets = generics <> empty_generic_args in
-            if use_brackets then F.pp_print_string fmt "(";
             extract_trait_ref ctx fmt no_params_tys false trait_ref;
-            extract_generic_args ctx fmt no_params_tys generics;
-            if use_brackets then F.pp_print_string fmt ")";
             F.pp_print_string fmt ("." ^ add_brackets type_name))
 
 and extract_trait_ref (ctx : extraction_ctx) (fmt : F.formatter)

@@ -1682,7 +1682,7 @@ let ctx_compute_var_basename (ctx : extraction_ctx) (basename : string option)
       | TLiteral lty -> (
           match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
       | TArrow _ -> "f"
-      | TTraitType (_, _, name) -> name_from_type_ident name)
+      | TTraitType (_, name) -> name_from_type_ident name)
 
 (** Generates a type variable basename. *)
 let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :
