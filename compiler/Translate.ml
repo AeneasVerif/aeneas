@@ -1086,7 +1086,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     let exe_dir = Filename.dirname Sys.argv.(0) in
     let primitives_src_dest =
       match !Config.backend with
-      | FStar -> Some ("/backends/fstar/merge/Primitives.fst", "Primitives.fst")
+      | FStar -> Some ("/backends/fstar/Primitives.fst", "Primitives.fst")
       | Coq -> Some ("/backends/coq/Primitives.v", "Primitives.v")
       | Lean -> None
       | HOL4 -> None
