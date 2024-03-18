@@ -1890,7 +1890,8 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call call e ctx
   | EndAbstraction (ectx, abs, e) -> translate_end_abstraction ectx abs e ctx
-  | EvalGlobal (gid, sv, e) -> translate_global_eval gid sv e ctx
+  | EvalGlobal (gid, generics, sv, e) ->
+      translate_global_eval gid generics sv e ctx
   | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
@@ -2662,11 +2663,12 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
           (* Create the let-binding *)
           mk_let effect_info.can_fail output call next_e)
 
-and translate_global_eval (gid : A.GlobalDeclId.id) (sval : V.symbolic_value)
-    (e : S.expression) (ctx : bs_ctx) : texpression =
+and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
+    (sval : V.symbolic_value) (e : S.expression) (ctx : bs_ctx) : texpression =
   let ctx, var = fresh_var_for_symbolic_value sval ctx in
   let decl = A.GlobalDeclId.Map.find gid ctx.global_ctx.llbc_global_decls in
-  let global_expr = { id = Global gid; generics = empty_generic_args } in
+  let generics = ctx_translate_fwd_generic_args ctx generics in
+  let global_expr = { id = Global gid; generics } in
   (* We use translate_fwd_ty to translate the global type *)
   let ty = ctx_translate_fwd_ty ctx decl.ty in
   let gval = { e = Qualif global_expr; ty } in
@@ -3837,4 +3839,41 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     types;
     required_methods;
     provided_methods;
+  }
+
+let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
+    global_decl =
+  let {
+    A.meta;
+    def_id;
+    is_local;
+    name = llbc_name;
+    generics = llbc_generics;
+    preds;
+    ty;
+    kind;
+    body = body_id;
+  } =
+    decl
+  in
+  let name =
+    Print.Types.name_to_string
+      (Print.Contexts.decls_ctx_to_fmt_env ctx)
+      llbc_name
+  in
+  let generics = translate_generic_params llbc_generics in
+  let preds = translate_predicates preds in
+  let ty = translate_fwd_ty ctx.type_ctx.type_infos ty in
+  {
+    meta;
+    def_id;
+    is_local;
+    llbc_name;
+    name;
+    llbc_generics;
+    generics;
+    preds;
+    ty;
+    kind;
+    body_id;
   }

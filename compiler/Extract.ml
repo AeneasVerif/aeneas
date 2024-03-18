@@ -185,9 +185,17 @@ let extract_adt_g_value
   | _ -> raise (Failure "Inconsistent typed value")
 
 (* Extract globals in the same way as variables *)
-let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
-    (id : A.GlobalDeclId.id) : unit =
-  F.pp_print_string fmt (ctx_get_global id ctx)
+let extract_global (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
+    (id : A.GlobalDeclId.id) (generics : generic_args) : unit =
+  let use_brackets = inside && generics <> empty_generic_args in
+  F.pp_open_hvbox fmt ctx.indent_incr;
+  if use_brackets then F.pp_print_string fmt "(";
+  (* Extract the global name *)
+  F.pp_print_string fmt (ctx_get_global id ctx);
+  (* Extract the generics *)
+  extract_generic_args ctx fmt TypeDeclId.Set.empty generics;
+  if use_brackets then F.pp_print_string fmt ")";
+  F.pp_close_box fmt ()
 
 (* Filter the generics of a function if it is builtin *)
 let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
@@ -321,7 +329,9 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       match qualif.id with
       | FunOrOp fun_id ->
           extract_function_call ctx fmt inside fun_id qualif.generics args
-      | Global global_id -> extract_global ctx fmt global_id
+      | Global global_id ->
+          assert (args = []);
+          extract_global ctx fmt inside global_id qualif.generics
       | AdtCons adt_cons_id ->
           extract_adt_cons ctx fmt inside adt_cons_id qualif.generics args
       | Proj proj ->
@@ -1691,7 +1701,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     of those declarations. See {!extract_global_decl} for more explanations.
  *)
 let extract_global_decl_body_gen (ctx : extraction_ctx) (fmt : F.formatter)
-    (kind : decl_kind) (name : string) (ty : ty)
+    (kind : decl_kind) (name : string) (generics : generic_params)
+    (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) (ty : ty)
     (extract_body : (F.formatter -> unit) Option.t) : unit =
   let is_opaque = Option.is_none extract_body in
 
@@ -1708,9 +1720,9 @@ let extract_global_decl_body_gen (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_open_hvbox fmt 0;
   F.pp_open_hvbox fmt ctx.indent_incr;
 
-  (* Open "QUALIF NAME : TYPE =" box (depth=1) *)
+  (* Open "QUALIF NAME PARAMS : TYPE =" box (depth=1) *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  (* Print "QUALIF NAME " *)
+  (* Print "QUALIF NAME PARAMS " *)
   (match fun_decl_kind_to_qualif kind with
   | Some qualif ->
       F.pp_print_string fmt qualif;
@@ -1718,6 +1730,12 @@ let extract_global_decl_body_gen (ctx : extraction_ctx) (fmt : F.formatter)
   | None -> ());
   F.pp_print_string fmt name;
   F.pp_print_space fmt ();
+
+  (* Extract the generic parameters *)
+  let space = ref true in
+  extract_generic_params ctx fmt TypeDeclId.Set.empty ~space:(Some space)
+    generics type_params cg_params trait_clauses;
+  if not !space then F.pp_print_space fmt ();
 
   (* Open ": TYPE =" box (depth=2) *)
   F.pp_open_hvbox fmt 0;
@@ -1775,7 +1793,9 @@ let extract_global_decl_body_gen (ctx : extraction_ctx) (fmt : F.formatter)
     but I could not find a better way.
  *)
 let extract_global_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
-    (name : string) (ty : ty) : unit =
+    (name : string) (generics : generic_params) (ty : ty) : unit =
+  (* TODO: non-empty generics *)
+  assert (generics = empty_generic_params);
   (* Open the definition boxe (depth=0) *)
   F.pp_open_hvbox fmt ctx.indent_incr;
   (* [val ..._def = new_constant ("...",] *)
@@ -1815,58 +1835,92 @@ let extract_global_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     and {!extract_fun_decl}.
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
-    (global : A.global_decl) (body : fun_decl) (interface : bool) : unit =
+    (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   assert body.is_global_decl_body;
   assert (body.signature.inputs = []);
-  assert (body.signature.generics = empty_generic_params);
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
   let name =
     if !Config.extract_external_name_patterns && not global.is_local then
-      Some global.name
+      Some global.llbc_name
     else None
   in
   extract_comment_with_span ctx fmt
-    [ "[" ^ name_to_string ctx global.name ^ "]" ]
+    [ "[" ^ name_to_string ctx global.llbc_name ^ "]" ]
     name global.meta.span;
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global global.def_id ctx in
   let body_name =
-    ctx_get_function (FromLlbc (Pure.FunId (FRegular global.body), None)) ctx
+    ctx_get_function (FromLlbc (Pure.FunId (FRegular global.body_id), None)) ctx
   in
-
   let decl_ty, body_ty =
     let ty = body.signature.output in
     if body.signature.fwd_info.effect_info.can_fail then
       (unwrap_result_ty ty, ty)
     else (ty, mk_result_ty ty)
   in
+  (* Add the type parameters *)
+  let ctx, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params global.llbc_name global.llbc_generics global.generics
+      ctx
+  in
   match body.body with
   | None ->
       (* No body: only generate a [val x_c : u32] declaration *)
       let kind = if interface then Declared else Assumed in
       if !backend = HOL4 then
-        extract_global_decl_hol4_opaque ctx fmt decl_name decl_ty
-      else extract_global_decl_body_gen ctx fmt kind decl_name decl_ty None
+        extract_global_decl_hol4_opaque ctx fmt decl_name global.generics
+          decl_ty
+      else
+        extract_global_decl_body_gen ctx fmt kind decl_name global.generics
+          type_params cg_params trait_clauses decl_ty None
   | Some body ->
       (* There is a body *)
       (* Generate: [let x_body : result u32 = Return 3] *)
-      extract_global_decl_body_gen ctx fmt SingleNonRec body_name body_ty
+      extract_global_decl_body_gen ctx fmt SingleNonRec body_name
+        global.generics type_params cg_params trait_clauses body_ty
         (Some (fun fmt -> extract_texpression ctx fmt false body.body));
       F.pp_print_break fmt 0 0;
       (* Generate: [let x_c : u32 = eval_global x_body] *)
-      extract_global_decl_body_gen ctx fmt SingleNonRec decl_name decl_ty
+      extract_global_decl_body_gen ctx fmt SingleNonRec decl_name
+        global.generics type_params cg_params trait_clauses decl_ty
         (Some
            (fun fmt ->
-             let body =
-               match !backend with
-               | FStar | Lean -> "eval_global " ^ body_name
-               | Coq -> body_name ^ "%global"
-               | HOL4 -> "get_return_value " ^ body_name
+             let all_params = [ type_params; cg_params; trait_clauses ] in
+             let extract_params () =
+               List.iter
+                 (fun p ->
+                   F.pp_print_space fmt ();
+                   F.pp_print_string fmt p)
+                 (List.concat all_params)
              in
-             F.pp_print_string fmt body));
+             let use_brackets = all_params <> [] in
+             (* Extract the name *)
+             let before, after =
+               match !backend with
+               | FStar | Lean ->
+                   ( (fun () ->
+                       F.pp_print_string fmt "eval_global";
+                       F.pp_print_space fmt ()),
+                     fun () -> () )
+               | Coq ->
+                   ((fun () -> ()), fun () -> F.pp_print_string fmt "%global")
+               | HOL4 ->
+                   ( (fun () ->
+                       F.pp_print_string fmt "get_return_value";
+                       F.pp_print_space fmt ()),
+                     fun () -> () )
+             in
+             before ();
+             if use_brackets then F.pp_print_string fmt "(";
+             F.pp_print_string fmt body_name;
+             (* Extract the generic params *)
+             extract_params ();
+             if use_brackets then F.pp_print_string fmt ")";
+             (* *)
+             after ()));
       (* Add a break to insert lines between declarations *)
       F.pp_print_break fmt 0 0
 
@@ -2592,7 +2646,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         let item_name = ctx_get_trait_const trait_decl_id name ctx in
         let ty () =
           F.pp_print_space fmt ();
-          F.pp_print_string fmt (ctx_get_global id ctx)
+          F.pp_print_string fmt (ctx_get_global id ctx);
+          List.iter
+            (fun p ->
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt p)
+            (List.concat [ type_params; cg_params; trait_clauses ])
         in
 
         extract_trait_impl_item ctx fmt item_name ty)

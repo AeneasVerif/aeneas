@@ -1087,6 +1087,26 @@ type fun_decl = {
 }
 [@@deriving show]
 
+type global_decl = {
+  meta : meta;
+  def_id : GlobalDeclId.id;
+  is_local : bool;
+  llbc_name : llbc_name;  (** The original LLBC name. *)
+  name : string;
+      (** We use the name only for printing purposes (for debugging):
+          the name used at extraction time will be derived from the
+          llbc_name.
+       *)
+  llbc_generics : Types.generic_params;
+      (** See the comment for [llbc_generics] in fun_decl. *)
+  generics : generic_params;
+  preds : predicates;
+  ty : ty;
+  kind : item_kind;
+  body_id : FunDeclId.id;
+}
+[@@deriving show]
+
 type trait_decl = {
   def_id : trait_decl_id;
   is_local : bool;

@@ -949,9 +949,9 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
     | Assign (p, rvalue) -> (
         (* We handle global assignments separately *)
         match rvalue with
-        | Global gid ->
+        | Global (gid, generics) ->
             (* Evaluate the global *)
-            eval_global config p gid cf ctx
+            eval_global config p gid generics cf ctx
         | _ ->
             (* Evaluate the rvalue *)
             let cf_eval_rvalue = eval_rvalue_not_global config rvalue in
@@ -1021,31 +1021,37 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
   (* Compose and apply *)
   comp cc cf_eval_st cf ctx
 
-and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id) :
-    st_cm_fun =
+and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
+    (generics : generic_args) : st_cm_fun =
  fun cf ctx ->
   let global = ctx_lookup_global_decl ctx gid in
   match config.mode with
   | ConcreteMode ->
-      (* Treat the evaluation of the global as a call to the global body (without arguments) *)
-      let func =
-        {
-          func = FunId (FRegular global.body);
-          generics = TypesUtils.empty_generic_args;
-        }
-      in
+      (* Treat the evaluation of the global as a call to the global body *)
+      let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
       (eval_transparent_function_call_concrete config global.body call) cf ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
       assert (ty_no_regions global.ty);
-      let sval = mk_fresh_symbolic_value global.ty in
+      (* Instantiate the type  *)
+      (* There shouldn't be any reference to Self *)
+      let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
+      let generics = Subst.generic_args_erase_regions generics in
+      let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
+        Subst.make_subst_from_generics global.generics generics tr_self
+      in
+      let ty =
+        Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
+          global.ty
+      in
+      let sval = mk_fresh_symbolic_value ty in
       let cc =
         assign_to_place config (mk_typed_value_from_symbolic_value sval) dest
       in
       let e = cc (cf Unit) ctx in
-      S.synthesize_global_eval gid sval e
+      S.synthesize_global_eval gid generics sval e
 
 (** Evaluate a switch *)
 and eval_switch (config : config) (switch : switch) : st_cm_fun =

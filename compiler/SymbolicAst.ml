@@ -141,7 +141,7 @@ type expression =
           The context is the evaluation context from after evaluating the asserted
           value. It has the same purpose as for the {!Return} case.
        *)
-  | EvalGlobal of global_decl_id * symbolic_value * expression
+  | EvalGlobal of global_decl_id * generic_args * symbolic_value * expression
       (** Evaluate a global to a fresh symbolic value *)
   | Assertion of Contexts.eval_ctx * typed_value * expression
       (** An assertion.
