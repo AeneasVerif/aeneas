@@ -229,9 +229,11 @@ let toTypetraitsBoolWrapperT (t : Type0) (toTypeBoolTInst : toType_t bool t) :
 
 (** [traits::WithConstTy::LEN2]
     Source: 'src/traits.rs', lines 164:4-164:21 *)
-let with_const_ty_len2_default_body : result usize = Return 32
-let with_const_ty_len2_default : usize =
-  eval_global with_const_ty_len2_default_body
+let with_const_ty_len2_default_body (self : Type0) (len : usize)
+  : result usize =
+  Return 32
+let with_const_ty_len2_default (self : Type0) (len : usize) : usize =
+  eval_global (with_const_ty_len2_default_body self len)
 
 (** Trait declaration: [traits::WithConstTy]
     Source: 'src/traits.rs', lines 161:0-161:39 *)
@@ -259,7 +261,7 @@ let withConstTyBool32_f (i : u64) (a : array u8 32) : result u64 =
     Source: 'src/traits.rs', lines 174:0-174:29 *)
 let withConstTyBool32 : withConstTy_t bool 32 = {
   cLEN1 = with_const_ty_bool32_len1;
-  cLEN2 = with_const_ty_len2_default;
+  cLEN2 = with_const_ty_len2_default bool 32;
   tV = u8;
   tW = u64;
   tW_clause_0 = toU64U64;
@@ -459,4 +461,71 @@ noeq type getTrait_t (self : Type0) = { tW : Type0; get_w : self -> result tW;
 let test_get_trait
   (t : Type0) (getTraitInst : getTrait_t t) (x : t) : result getTraitInst.tW =
   getTraitInst.get_w x
+
+(** Trait declaration: [traits::Trait]
+    Source: 'src/traits.rs', lines 310:0-310:15 *)
+noeq type trait_t (self : Type0) = { cLEN : usize; }
+
+(** [traits::{(traits::Trait for @Array<T, N>)#14}::LEN]
+    Source: 'src/traits.rs', lines 315:4-315:20 *)
+let trait_array_len_body (t : Type0) (n : usize) : result usize = Return n
+let trait_array_len (t : Type0) (n : usize) : usize =
+  eval_global (trait_array_len_body t n)
+
+(** Trait implementation: [traits::{(traits::Trait for @Array<T, N>)#14}]
+    Source: 'src/traits.rs', lines 314:0-314:40 *)
+let traitArray (t : Type0) (n : usize) : trait_t (array t n) = {
+  cLEN = trait_array_len t n;
+}
+
+(** [traits::{(traits::Trait for traits::Wrapper<T>)#15}::LEN]
+    Source: 'src/traits.rs', lines 319:4-319:20 *)
+let traittraits_wrapper_len_body (t : Type0) (traitInst : trait_t t)
+  : result usize =
+  Return 0
+let traittraits_wrapper_len (t : Type0) (traitInst : trait_t t) : usize =
+  eval_global (traittraits_wrapper_len_body t traitInst)
+
+(** Trait implementation: [traits::{(traits::Trait for traits::Wrapper<T>)#15}]
+    Source: 'src/traits.rs', lines 318:0-318:35 *)
+let traittraitsWrapper (t : Type0) (traitInst : trait_t t) : trait_t (wrapper_t
+  t) = {
+  cLEN = traittraits_wrapper_len t traitInst;
+}
+
+(** [traits::use_wrapper_len]:
+    Source: 'src/traits.rs', lines 322:0-322:43 *)
+let use_wrapper_len (t : Type0) (traitInst : trait_t t) : result usize =
+  Return (traittraitsWrapper t traitInst).cLEN
+
+(** [traits::Foo]
+    Source: 'src/traits.rs', lines 326:0-326:20 *)
+type foo_t (t u : Type0) = { x : t; y : u; }
+
+(** [core::result::Result]
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/result.rs', lines 502:0-502:21 *)
+type core_result_Result_t (t e : Type0) =
+| Core_result_Result_Ok : t -> core_result_Result_t t e
+| Core_result_Result_Err : e -> core_result_Result_t t e
+
+(** [traits::{traits::Foo<T, U>#16}::FOO]
+    Source: 'src/traits.rs', lines 332:4-332:33 *)
+let foo_foo_body (t u : Type0) (traitInst : trait_t t)
+  : result (core_result_Result_t t i32) =
+  Return (Core_result_Result_Err 0)
+let foo_foo (t u : Type0) (traitInst : trait_t t)
+  : core_result_Result_t t i32 =
+  eval_global (foo_foo_body t u traitInst)
+
+(** [traits::use_foo1]:
+    Source: 'src/traits.rs', lines 335:0-335:48 *)
+let use_foo1
+  (t u : Type0) (traitInst : trait_t t) : result (core_result_Result_t t i32) =
+  Return (foo_foo t u traitInst)
+
+(** [traits::use_foo2]:
+    Source: 'src/traits.rs', lines 339:0-339:48 *)
+let use_foo2
+  (t u : Type0) (traitInst : trait_t u) : result (core_result_Result_t u i32) =
+  Return (foo_foo u t traitInst)
 

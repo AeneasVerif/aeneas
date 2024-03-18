@@ -242,9 +242,10 @@ def ToTypetraitsBoolWrapperT (T : Type) (ToTypeBoolTInst : ToType Bool T) :
 
 /- [traits::WithConstTy::LEN2]
    Source: 'src/traits.rs', lines 164:4-164:21 -/
-def WithConstTy.LEN2_default_body : Result Usize := Result.ret 32#usize
-def WithConstTy.LEN2_default : Usize :=
-  eval_global WithConstTy.LEN2_default_body
+def WithConstTy.LEN2_default_body (Self : Type) (LEN : Usize) : Result Usize :=
+  Result.ret 32#usize
+def WithConstTy.LEN2_default (Self : Type) (LEN : Usize) : Usize :=
+  eval_global (WithConstTy.LEN2_default_body Self LEN)
 
 /- Trait declaration: [traits::WithConstTy]
    Source: 'src/traits.rs', lines 161:0-161:39 -/
@@ -270,7 +271,7 @@ def WithConstTyBool32.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
    Source: 'src/traits.rs', lines 174:0-174:29 -/
 def WithConstTyBool32 : WithConstTy Bool 32#usize := {
   LEN1 := WithConstTyBool32.LEN1
-  LEN2 := WithConstTy.LEN2_default
+  LEN2 := WithConstTy.LEN2_default Bool 32#usize
   V := U8
   W := U64
   W_clause_0 := ToU64U64
@@ -466,5 +467,74 @@ structure GetTrait (Self : Type) where
 def test_get_trait
   (T : Type) (GetTraitInst : GetTrait T) (x : T) : Result GetTraitInst.W :=
   GetTraitInst.get_w x
+
+/- Trait declaration: [traits::Trait]
+   Source: 'src/traits.rs', lines 310:0-310:15 -/
+structure Trait (Self : Type) where
+  LEN : Usize
+
+/- [traits::{(traits::Trait for @Array<T, N>)#14}::LEN]
+   Source: 'src/traits.rs', lines 315:4-315:20 -/
+def TraitArray.LEN_body (T : Type) (N : Usize) : Result Usize := Result.ret N
+def TraitArray.LEN (T : Type) (N : Usize) : Usize :=
+  eval_global (TraitArray.LEN_body T N)
+
+/- Trait implementation: [traits::{(traits::Trait for @Array<T, N>)#14}]
+   Source: 'src/traits.rs', lines 314:0-314:40 -/
+def TraitArray (T : Type) (N : Usize) : Trait (Array T N) := {
+  LEN := TraitArray.LEN T N
+}
+
+/- [traits::{(traits::Trait for traits::Wrapper<T>)#15}::LEN]
+   Source: 'src/traits.rs', lines 319:4-319:20 -/
+def TraittraitsWrapper.LEN_body (T : Type) (TraitInst : Trait T)
+  : Result Usize :=
+  Result.ret 0#usize
+def TraittraitsWrapper.LEN (T : Type) (TraitInst : Trait T) : Usize :=
+  eval_global (TraittraitsWrapper.LEN_body T TraitInst)
+
+/- Trait implementation: [traits::{(traits::Trait for traits::Wrapper<T>)#15}]
+   Source: 'src/traits.rs', lines 318:0-318:35 -/
+def TraittraitsWrapper (T : Type) (TraitInst : Trait T) : Trait (Wrapper T)
+  := {
+  LEN := TraittraitsWrapper.LEN T TraitInst
+}
+
+/- [traits::use_wrapper_len]:
+   Source: 'src/traits.rs', lines 322:0-322:43 -/
+def use_wrapper_len (T : Type) (TraitInst : Trait T) : Result Usize :=
+  Result.ret (TraittraitsWrapper T TraitInst).LEN
+
+/- [traits::Foo]
+   Source: 'src/traits.rs', lines 326:0-326:20 -/
+structure Foo (T U : Type) where
+  x : T
+  y : U
+
+/- [core::result::Result]
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/result.rs', lines 502:0-502:21 -/
+inductive core.result.Result (T E : Type) :=
+| Ok : T → core.result.Result T E
+| Err : E → core.result.Result T E
+
+/- [traits::{traits::Foo<T, U>#16}::FOO]
+   Source: 'src/traits.rs', lines 332:4-332:33 -/
+def Foo.FOO_body (T U : Type) (TraitInst : Trait T)
+  : Result (core.result.Result T I32) :=
+  Result.ret (core.result.Result.Err 0#i32)
+def Foo.FOO (T U : Type) (TraitInst : Trait T) : core.result.Result T I32 :=
+  eval_global (Foo.FOO_body T U TraitInst)
+
+/- [traits::use_foo1]:
+   Source: 'src/traits.rs', lines 335:0-335:48 -/
+def use_foo1
+  (T U : Type) (TraitInst : Trait T) : Result (core.result.Result T I32) :=
+  Result.ret (Foo.FOO T U TraitInst)
+
+/- [traits::use_foo2]:
+   Source: 'src/traits.rs', lines 339:0-339:48 -/
+def use_foo2
+  (T U : Type) (TraitInst : Trait U) : Result (core.result.Result U I32) :=
+  Result.ret (Foo.FOO U T TraitInst)
 
 end traits
