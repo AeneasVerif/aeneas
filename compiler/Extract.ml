@@ -2641,23 +2641,39 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      * Extract the items
      *)
     let trait_decl_id = impl.impl_trait.trait_decl_id in
+    let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls in
+    let trait_decl_provided_consts =
+      List.map (fun (_, (_, x)) -> x) trait_decl.consts
+    in
 
     (* The constants *)
     List.iter
-      (fun (name, (_, id)) ->
+      (fun (provided_id, (name, (_, id))) ->
         let item_name = ctx_get_trait_const trait_decl_id name ctx in
+        (* The parameters are not the same depending on whether the constant
+           is a provided constant or not *)
+        let print_params () =
+          if provided_id = Some id then
+            extract_generic_args ctx fmt TypeDeclId.Set.empty
+              impl.impl_trait.decl_generics
+          else
+            let all_params =
+              List.concat [ type_params; cg_params; trait_clauses ]
+            in
+            List.iter
+              (fun p ->
+                F.pp_print_space fmt ();
+                F.pp_print_string fmt p)
+              all_params
+        in
         let ty () =
           F.pp_print_space fmt ();
           F.pp_print_string fmt (ctx_get_global id ctx);
-          List.iter
-            (fun p ->
-              F.pp_print_space fmt ();
-              F.pp_print_string fmt p)
-            (List.concat [ type_params; cg_params; trait_clauses ])
+          print_params ()
         in
 
         extract_trait_impl_item ctx fmt item_name ty)
-      impl.consts;
+      (List.combine trait_decl_provided_consts impl.consts);
 
     (* The types *)
     List.iter
