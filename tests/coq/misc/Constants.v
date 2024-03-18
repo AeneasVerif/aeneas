@@ -158,4 +158,21 @@ Definition s3 : Pair_t u32 u32 := s3_body%global.
 Definition s4_body : result (Pair_t u32 u32) := mk_pair1 7%u32 8%u32.
 Definition s4 : Pair_t u32 u32 := s4_body%global.
 
+(** [constants::V]
+    Source: 'src/constants.rs', lines 86:0-86:31 *)
+Record V_t (T : Type) (N : usize) := mkV_t { v_x : array T N; }.
+
+Arguments mkV_t { _ _ }.
+Arguments v_x { _ _ }.
+
+(** [constants::{constants::V<T, N>#1}::LEN]
+    Source: 'src/constants.rs', lines 91:4-91:24 *)
+Definition v_len_body (T : Type) (N : usize) : result usize := Return N.
+Definition v_len (T : Type) (N : usize) : usize := (v_len_body T N)%global.
+
+(** [constants::use_v]:
+    Source: 'src/constants.rs', lines 94:0-94:42 *)
+Definition use_v (T : Type) (N : usize) : result usize :=
+  Return (v_len T N).
+
 End Constants.

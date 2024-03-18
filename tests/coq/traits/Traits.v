@@ -283,9 +283,12 @@ Definition ToTypetraitsBoolWrapperT (T : Type) (toTypeBoolTInst : ToType_t bool
 
 (** [traits::WithConstTy::LEN2]
     Source: 'src/traits.rs', lines 164:4-164:21 *)
-Definition with_const_ty_len2_default_body : result usize := Return 32%usize.
-Definition with_const_ty_len2_default : usize :=
-  with_const_ty_len2_default_body%global
+Definition with_const_ty_len2_default_body (Self : Type) (LEN : usize)
+  : result usize :=
+  Return 32%usize
+.
+Definition with_const_ty_len2_default (Self : Type) (LEN : usize) : usize :=
+  (with_const_ty_len2_default_body Self LEN)%global
 .
 
 (** Trait declaration: [traits::WithConstTy]
@@ -326,7 +329,7 @@ Definition withConstTyBool32_f
     Source: 'src/traits.rs', lines 174:0-174:29 *)
 Definition WithConstTyBool32 : WithConstTy_t bool 32%usize := {|
   WithConstTy_tWithConstTy_t_LEN1 := with_const_ty_bool32_len1;
-  WithConstTy_tWithConstTy_t_LEN2 := with_const_ty_len2_default;
+  WithConstTy_tWithConstTy_t_LEN2 := with_const_ty_len2_default bool 32%usize;
   WithConstTy_tWithConstTy_t_V := u8;
   WithConstTy_tWithConstTy_t_W := u64;
   WithConstTy_tWithConstTy_t_W_clause_0 := ToU64U64;
@@ -611,6 +614,95 @@ Definition test_get_trait
   result getTraitInst.(GetTrait_tGetTrait_t_W)
   :=
   getTraitInst.(GetTrait_t_get_w) x
+.
+
+(** Trait declaration: [traits::Trait]
+    Source: 'src/traits.rs', lines 310:0-310:15 *)
+Record Trait_t (Self : Type) := mkTrait_t { Trait_tTrait_t_LEN : usize; }.
+
+Arguments mkTrait_t { _ }.
+Arguments Trait_tTrait_t_LEN { _ }.
+
+(** [traits::{(traits::Trait for @Array<T, N>)#14}::LEN]
+    Source: 'src/traits.rs', lines 315:4-315:20 *)
+Definition trait_array_len_body (T : Type) (N : usize) : result usize :=
+  Return N
+.
+Definition trait_array_len (T : Type) (N : usize) : usize :=
+  (trait_array_len_body T N)%global
+.
+
+(** Trait implementation: [traits::{(traits::Trait for @Array<T, N>)#14}]
+    Source: 'src/traits.rs', lines 314:0-314:40 *)
+Definition TraitArray (T : Type) (N : usize) : Trait_t (array T N) := {|
+  Trait_tTrait_t_LEN := trait_array_len T N;
+|}.
+
+(** [traits::{(traits::Trait for traits::Wrapper<T>)#15}::LEN]
+    Source: 'src/traits.rs', lines 319:4-319:20 *)
+Definition traittraits_wrapper_len_body (T : Type) (traitInst : Trait_t T)
+  : result usize :=
+  Return 0%usize
+.
+Definition traittraits_wrapper_len (T : Type) (traitInst : Trait_t T)
+  : usize :=
+  (traittraits_wrapper_len_body T traitInst)%global
+.
+
+(** Trait implementation: [traits::{(traits::Trait for traits::Wrapper<T>)#15}]
+    Source: 'src/traits.rs', lines 318:0-318:35 *)
+Definition TraittraitsWrapper (T : Type) (traitInst : Trait_t T) : Trait_t
+  (Wrapper_t T) := {|
+  Trait_tTrait_t_LEN := traittraits_wrapper_len T traitInst;
+|}.
+
+(** [traits::use_wrapper_len]:
+    Source: 'src/traits.rs', lines 322:0-322:43 *)
+Definition use_wrapper_len (T : Type) (traitInst : Trait_t T) : result usize :=
+  Return (TraittraitsWrapper T traitInst).(Trait_tTrait_t_LEN)
+.
+
+(** [traits::Foo]
+    Source: 'src/traits.rs', lines 326:0-326:20 *)
+Record Foo_t (T U : Type) := mkFoo_t { foo_x : T; foo_y : U; }.
+
+Arguments mkFoo_t { _ _ }.
+Arguments foo_x { _ _ }.
+Arguments foo_y { _ _ }.
+
+(** [core::result::Result]
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/result.rs', lines 502:0-502:21 *)
+Inductive core_result_Result_t (T E : Type) :=
+| Core_result_Result_Ok : T -> core_result_Result_t T E
+| Core_result_Result_Err : E -> core_result_Result_t T E
+.
+
+Arguments Core_result_Result_Ok { _ _ }.
+Arguments Core_result_Result_Err { _ _ }.
+
+(** [traits::{traits::Foo<T, U>#16}::FOO]
+    Source: 'src/traits.rs', lines 332:4-332:33 *)
+Definition foo_foo_body (T U : Type) (traitInst : Trait_t T)
+  : result (core_result_Result_t T i32) :=
+  Return (Core_result_Result_Err 0%i32)
+.
+Definition foo_foo (T U : Type) (traitInst : Trait_t T)
+  : core_result_Result_t T i32 :=
+  (foo_foo_body T U traitInst)%global
+.
+
+(** [traits::use_foo1]:
+    Source: 'src/traits.rs', lines 335:0-335:48 *)
+Definition use_foo1
+  (T U : Type) (traitInst : Trait_t T) : result (core_result_Result_t T i32) :=
+  Return (foo_foo T U traitInst)
+.
+
+(** [traits::use_foo2]:
+    Source: 'src/traits.rs', lines 339:0-339:48 *)
+Definition use_foo2
+  (T U : Type) (traitInst : Trait_t U) : result (core_result_Result_t U i32) :=
+  Return (foo_foo U T traitInst)
 .
 
 End Traits.

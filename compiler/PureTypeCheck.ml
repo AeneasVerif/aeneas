@@ -208,7 +208,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
             get_adt_field_types ctx.type_decls adt_id variant_id adt_generics
           in
           List.iter
-            (fun (fid, fe) ->
+            (fun ((fid, fe) : _ * texpression) ->
               let expected_field_ty = FieldId.nth expected_field_tys fid in
               assert (expected_field_ty = fe.ty);
               check_texpression ctx fe)
@@ -218,7 +218,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
             Collections.List.to_cons_nil adt_generics.types
           in
           List.iter
-            (fun (_, fe) ->
+            (fun ((_, fe) : _ * texpression) ->
               assert (expected_field_ty = fe.ty);
               check_texpression ctx fe)
             supd.updates

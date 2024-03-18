@@ -1,6 +1,5 @@
 open Types
 open Values
-open LlbcAst
 open Scalars
 open Expressions
 open Utils
@@ -264,37 +263,23 @@ let eval_operand_no_reorganize (config : config) (op : operand)
       | CLiteral lit ->
           cf (literal_to_typed_value (ty_as_literal cv.ty) lit) ctx
       | CTraitConst (trait_ref, const_name) -> (
-          match trait_ref.trait_id with
-          | TraitImpl _ ->
-              (* This shouldn't happen: if we refer to a concrete implementation, we
-                 should directly refer to the top-level constant *)
-              raise (Failure "Unreachable")
-          | _ -> (
-              (* We refer to a constant defined in a local clause: simply
-                 introduce a fresh symbolic value *)
-              let ctx0 = ctx in
-              (* Lookup the trait declaration to retrieve the type of the symbolic value *)
-              let trait_decl =
-                ctx_lookup_trait_decl ctx trait_ref.trait_decl_ref.trait_decl_id
-              in
-              let _, (ty, _) =
-                List.find (fun (name, _) -> name = const_name) trait_decl.consts
-              in
-              (* Introduce a fresh symbolic value *)
-              let v = mk_fresh_symbolic_typed_value ty in
-              (* Continue the evaluation *)
-              let e = cf v ctx in
-              (* We have to wrap the generated expression *)
-              match e with
-              | None -> None
-              | Some e ->
-                  Some
-                    (SymbolicAst.IntroSymbolic
-                       ( ctx0,
-                         None,
-                         value_as_symbolic v.value,
-                         SymbolicAst.VaTraitConstValue (trait_ref, const_name),
-                         e ))))
+          let ctx0 = ctx in
+          (* Simply introduce a fresh symbolic value *)
+          let ty = cv.ty in
+          let v = mk_fresh_symbolic_typed_value ty in
+          (* Continue the evaluation *)
+          let e = cf v ctx in
+          (* Wrap the generated expression *)
+          match e with
+          | None -> None
+          | Some e ->
+              Some
+                (SymbolicAst.IntroSymbolic
+                   ( ctx0,
+                     None,
+                     value_as_symbolic v.value,
+                     SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                     e )))
       | CVar vid -> (
           let ctx0 = ctx in
           (* In concrete mode: lookup the const generic value.

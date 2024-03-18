@@ -143,3 +143,17 @@ let s3 : pair_t u32 u32 = eval_global s3_body
 let s4_body : result (pair_t u32 u32) = mk_pair1 7 8
 let s4 : pair_t u32 u32 = eval_global s4_body
 
+(** [constants::V]
+    Source: 'src/constants.rs', lines 86:0-86:31 *)
+type v_t (t : Type0) (n : usize) = { x : array t n; }
+
+(** [constants::{constants::V<T, N>#1}::LEN]
+    Source: 'src/constants.rs', lines 91:4-91:24 *)
+let v_len_body (t : Type0) (n : usize) : result usize = Return n
+let v_len (t : Type0) (n : usize) : usize = eval_global (v_len_body t n)
+
+(** [constants::use_v]:
+    Source: 'src/constants.rs', lines 94:0-94:42 *)
+let use_v (t : Type0) (n : usize) : result usize =
+  Return (v_len t n)
+

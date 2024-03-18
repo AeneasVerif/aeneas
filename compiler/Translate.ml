@@ -469,6 +469,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
        groups are always singletons, so the [extract_global_decl] function
        takes care of generating the delimiters.
     *)
+    let global = SymbolicToPure.translate_global ctx.trans_ctx global in
     Extract.extract_global_decl ctx fmt global body config.interface
 
 (** Utility.
