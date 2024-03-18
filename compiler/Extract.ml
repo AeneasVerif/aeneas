@@ -337,7 +337,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       | Proj proj ->
           extract_field_projector ctx fmt inside app proj qualif.generics args
       | TraitConst (trait_ref, const_name) ->
-          extract_trait_ref ctx fmt TypeDeclId.Set.empty false trait_ref;
+          extract_trait_ref ctx fmt TypeDeclId.Set.empty true trait_ref;
           let name =
             ctx_get_trait_const trait_ref.trait_decl_ref.trait_decl_id
               const_name ctx
@@ -1888,13 +1888,15 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
         global.generics type_params cg_params trait_clauses decl_ty
         (Some
            (fun fmt ->
-             let all_params = [ type_params; cg_params; trait_clauses ] in
+             let all_params =
+               List.concat [ type_params; cg_params; trait_clauses ]
+             in
              let extract_params () =
                List.iter
                  (fun p ->
                    F.pp_print_space fmt ();
                    F.pp_print_string fmt p)
-                 (List.concat all_params)
+                 all_params
              in
              let use_brackets = all_params <> [] in
              (* Extract the name *)
