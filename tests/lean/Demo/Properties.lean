@@ -65,4 +65,20 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
 termination_by x.val.toNat
 decreasing_by scalar_decr_tac
 
+theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
+  ∃ back, list_tail T l = ret (CList.CNil, back) ∧
+  ∀ tl', ∃ l', back tl' = ret l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
+  rw [list_tail]
+  match l with
+  | CNil =>
+    simp_all
+  | CCons hd tl =>
+    simp_all
+    progress as ⟨ back ⟩
+    simp
+    -- Proving the backward function
+    intro tl'
+    progress
+    simp_all
+
 end demo
