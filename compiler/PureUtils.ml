@@ -752,3 +752,21 @@ let opt_dest_struct_pattern (pat : typed_pattern) : typed_pattern list option =
   match pat.value with
   | PatAdt { variant_id = None; field_values } -> Some field_values
   | _ -> None
+
+(** Destruct a [ret ...] expression *)
+let opt_destruct_ret (e : texpression) : texpression option =
+  match e.e with
+  | App
+      ( {
+          e =
+            Qualif
+              {
+                id = AdtCons { adt_id = TAssumed TResult; variant_id };
+                generics = _;
+              };
+          ty = _;
+        },
+        arg )
+    when variant_id = Some result_return_id ->
+      Some arg
+  | _ -> None
