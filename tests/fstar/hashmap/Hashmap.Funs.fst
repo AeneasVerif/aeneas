@@ -308,8 +308,7 @@ let hashMap_get_mut_in_list
   (t : Type0) (ls : list_t t) (key : usize) :
   result (t & (t -> result (list_t t)))
   =
-  let* (x, back_'a) = hashMap_get_mut_in_list_loop t ls key in
-  Return (x, back_'a)
+  hashMap_get_mut_in_list_loop t ls key
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut]:
     Source: 'src/hashmap.rs', lines 257:4-257:67 *)

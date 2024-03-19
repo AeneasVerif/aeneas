@@ -27,9 +27,7 @@ Definition betree_store_internal_node
   (id : u64) (content : betree_List_t (u64 * betree_Message_t)) (st : state) :
   result (state * unit)
   :=
-  p <- betree_utils_store_internal_node id content st;
-  let (st1, _) := p in
-  Return (st1, tt)
+  betree_utils_store_internal_node id content st
 .
 
 (** [betree_main::betree::load_leaf_node]:
@@ -45,9 +43,7 @@ Definition betree_store_leaf_node
   (id : u64) (content : betree_List_t (u64 * u64)) (st : state) :
   result (state * unit)
   :=
-  p <- betree_utils_store_leaf_node id content st;
-  let (st1, _) := p in
-  Return (st1, tt)
+  betree_utils_store_leaf_node id content st
 .
 
 (** [betree_main::betree::fresh_node_id]:

@@ -127,7 +127,7 @@ Definition list_nth_mut1
   (T : Type) (n : nat) (l : CList_t T) (i : u32) :
   result (T * (T -> result (CList_t T)))
   :=
-  p <- list_nth_mut1_loop T n l i; let (t, back_'a) := p in Return (t, back_'a)
+  list_nth_mut1_loop T n l i
 .
 
 (** [demo::i32_id]:

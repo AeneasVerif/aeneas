@@ -398,9 +398,7 @@ Definition hashMap_get_mut_in_list
   (T : Type) (n : nat) (ls : List_t T) (key : usize) :
   result (T * (T -> result (List_t T)))
   :=
-  p <- hashMap_get_mut_in_list_loop T n ls key;
-  let (t, back_'a) := p in
-  Return (t, back_'a)
+  hashMap_get_mut_in_list_loop T n ls key
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut]:

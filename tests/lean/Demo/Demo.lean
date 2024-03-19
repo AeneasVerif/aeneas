@@ -116,9 +116,7 @@ def list_nth_mut1
   (T : Type) (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))
   :=
-  do
-  let (t, back_'a) ← list_nth_mut1_loop T l i
-  Result.ret (t, back_'a)
+  list_nth_mut1_loop T l i
 
 /- [demo::i32_id]:
    Source: 'src/demo.rs', lines 80:0-80:28 -/

@@ -22,8 +22,7 @@ let betree_store_internal_node
   (id : u64) (content : betree_List_t (u64 & betree_Message_t)) (st : state) :
   result (state & unit)
   =
-  let* (st1, _) = betree_utils_store_internal_node id content st in
-  Return (st1, ())
+  betree_utils_store_internal_node id content st
 
 (** [betree_main::betree::load_leaf_node]:
     Source: 'src/betree.rs', lines 46:0-46:44 *)
@@ -37,8 +36,7 @@ let betree_store_leaf_node
   (id : u64) (content : betree_List_t (u64 & u64)) (st : state) :
   result (state & unit)
   =
-  let* (st1, _) = betree_utils_store_leaf_node id content st in
-  Return (st1, ())
+  betree_utils_store_leaf_node id content st
 
 (** [betree_main::betree::fresh_node_id]:
     Source: 'src/betree.rs', lines 55:0-55:48 *)

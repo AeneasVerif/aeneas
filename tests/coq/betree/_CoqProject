@@ -3,8 +3,8 @@
 -arg -w
 -arg all
 
-BetreeMain_Types.v
 BetreeMain_TypesExternal_Template.v
+BetreeMain_Types.v
 Primitives.v
 BetreeMain_FunsExternal_Template.v
 BetreeMain_Funs.v

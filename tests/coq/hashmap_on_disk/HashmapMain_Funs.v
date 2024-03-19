@@ -423,9 +423,7 @@ Definition hashmap_HashMap_get_mut_in_list
   (T : Type) (n : nat) (ls : hashmap_List_t T) (key : usize) :
   result (T * (T -> result (hashmap_List_t T)))
   :=
-  p <- hashmap_HashMap_get_mut_in_list_loop T n ls key;
-  let (t, back_'a) := p in
-  Return (t, back_'a)
+  hashmap_HashMap_get_mut_in_list_loop T n ls key
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]:
@@ -585,9 +583,7 @@ Definition insert_on_disk
   p <- hashmap_utils_deserialize st;
   let (st1, hm) := p in
   hm1 <- hashmap_HashMap_insert u64 n hm key value;
-  p1 <- hashmap_utils_serialize hm1 st1;
-  let (st2, _) := p1 in
-  Return (st2, tt)
+  hashmap_utils_serialize hm1 st1
 .
 
 (** [hashmap_main::main]:

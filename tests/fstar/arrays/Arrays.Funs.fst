@@ -23,8 +23,7 @@ let array_to_mut_slice_
   (t : Type0) (s : array t 32) :
   result ((slice t) & (slice t -> result (array t 32)))
   =
-  let* (s1, to_slice_mut_back) = array_to_slice_mut t 32 s in
-  Return (s1, to_slice_mut_back)
+  array_to_slice_mut t 32 s
 
 (** [arrays::array_len]:
     Source: 'src/arrays.rs', lines 25:0-25:40 *)
@@ -62,8 +61,7 @@ let index_mut_array
   (t : Type0) (s : array t 32) (i : usize) :
   result (t & (t -> result (array t 32)))
   =
-  let* (x, index_mut_back) = array_index_mut_usize t 32 s i in
-  Return (x, index_mut_back)
+  array_index_mut_usize t 32 s i
 
 (** [arrays::index_slice]:
     Source: 'src/arrays.rs', lines 56:0-56:46 *)
@@ -76,8 +74,7 @@ let index_mut_slice
   (t : Type0) (s : slice t) (i : usize) :
   result (t & (t -> result (slice t)))
   =
-  let* (x, index_mut_back) = slice_index_mut_usize t s i in
-  Return (x, index_mut_back)
+  slice_index_mut_usize t s i
 
 (** [arrays::slice_subslice_shared_]:
     Source: 'src/arrays.rs', lines 64:0-64:70 *)
@@ -110,8 +107,7 @@ let array_to_slice_mut_
   (x : array u32 32) :
   result ((slice u32) & (slice u32 -> result (array u32 32)))
   =
-  let* (s, to_slice_mut_back) = array_to_slice_mut u32 32 x in
-  Return (s, to_slice_mut_back)
+  array_to_slice_mut u32 32 x
 
 (** [arrays::array_subslice_shared_]:
     Source: 'src/arrays.rs', lines 80:0-80:74 *)
@@ -308,7 +304,7 @@ let take_array_t (a : array aB_t 2) : result unit =
 (** [arrays::non_copyable_array]:
     Source: 'src/arrays.rs', lines 229:0-229:27 *)
 let non_copyable_array : result unit =
-  let* _ = take_array_t (mk_array aB_t 2 [ AB_A; AB_B ]) in Return ()
+  take_array_t (mk_array aB_t 2 [ AB_A; AB_B ])
 
 (** [arrays::sum]: loop 0:
     Source: 'src/arrays.rs', lines 242:0-250:1 *)
@@ -444,8 +440,7 @@ let rec iter_mut_slice_loop
   Tot (result unit) (decreases (iter_mut_slice_loop_decreases len i))
   =
   if i < len
-  then
-    let* i1 = usize_add i 1 in let* _ = iter_mut_slice_loop len i1 in Return ()
+  then let* i1 = usize_add i 1 in iter_mut_slice_loop len i1
   else Return ()
 
 (** [arrays::iter_mut_slice]:

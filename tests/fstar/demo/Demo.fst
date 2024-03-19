@@ -109,7 +109,7 @@ let list_nth_mut1
   (t : Type0) (n : nat) (l : cList_t t) (i : u32) :
   result (t & (t -> result (cList_t t)))
   =
-  let* (x, back_'a) = list_nth_mut1_loop t n l i in Return (x, back_'a)
+  list_nth_mut1_loop t n l i
 
 (** [demo::i32_id]:
     Source: 'src/demo.rs', lines 80:0-80:28 *)

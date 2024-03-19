@@ -311,9 +311,7 @@ def HashMap.get_mut_in_list
   (T : Type) (ls : List T) (key : Usize) :
   Result (T × (T → Result (List T)))
   :=
-  do
-  let (t, back_'a) ← HashMap.get_mut_in_list_loop T ls key
-  Result.ret (t, back_'a)
+  HashMap.get_mut_in_list_loop T ls key
 
 /- [hashmap::{hashmap::HashMap<T>}::get_mut]:
    Source: 'src/hashmap.rs', lines 257:4-257:67 -/

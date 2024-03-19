@@ -28,9 +28,7 @@ def array_to_mut_slice_
   (T : Type) (s : Array T 32#usize) :
   Result ((Slice T) × (Slice T → Result (Array T 32#usize)))
   :=
-  do
-  let (s1, to_slice_mut_back) ← Array.to_slice_mut T 32#usize s
-  Result.ret (s1, to_slice_mut_back)
+  Array.to_slice_mut T 32#usize s
 
 /- [arrays::array_len]:
    Source: 'src/arrays.rs', lines 25:0-25:40 -/
@@ -76,9 +74,7 @@ def index_mut_array
   (T : Type) (s : Array T 32#usize) (i : Usize) :
   Result (T × (T → Result (Array T 32#usize)))
   :=
-  do
-  let (t, index_mut_back) ← Array.index_mut_usize T 32#usize s i
-  Result.ret (t, index_mut_back)
+  Array.index_mut_usize T 32#usize s i
 
 /- [arrays::index_slice]:
    Source: 'src/arrays.rs', lines 56:0-56:46 -/
@@ -91,9 +87,7 @@ def index_mut_slice
   (T : Type) (s : Slice T) (i : Usize) :
   Result (T × (T → Result (Slice T)))
   :=
-  do
-  let (t, index_mut_back) ← Slice.index_mut_usize T s i
-  Result.ret (t, index_mut_back)
+  Slice.index_mut_usize T s i
 
 /- [arrays::slice_subslice_shared_]:
    Source: 'src/arrays.rs', lines 64:0-64:70 -/
@@ -127,9 +121,7 @@ def array_to_slice_mut_
   (x : Array U32 32#usize) :
   Result ((Slice U32) × (Slice U32 → Result (Array U32 32#usize)))
   :=
-  do
-  let (s, to_slice_mut_back) ← Array.to_slice_mut U32 32#usize x
-  Result.ret (s, to_slice_mut_back)
+  Array.to_slice_mut U32 32#usize x
 
 /- [arrays::array_subslice_shared_]:
    Source: 'src/arrays.rs', lines 80:0-80:74 -/
@@ -354,9 +346,7 @@ def take_array_t (a : Array AB 2#usize) : Result Unit :=
 /- [arrays::non_copyable_array]:
    Source: 'src/arrays.rs', lines 229:0-229:27 -/
 def non_copyable_array : Result Unit :=
-  do
-  let _ ← take_array_t (Array.make AB 2#usize [ AB.A, AB.B ])
-  Result.ret ()
+  take_array_t (Array.make AB 2#usize [ AB.A, AB.B ])
 
 /- [arrays::sum]: loop 0:
    Source: 'src/arrays.rs', lines 242:0-250:1 -/
@@ -496,11 +486,9 @@ def zero_slice (a : Slice U8) : Result (Slice U8) :=
    Source: 'src/arrays.rs', lines 312:0-318:1 -/
 divergent def iter_mut_slice_loop (len : Usize) (i : Usize) : Result Unit :=
   if i < len
-  then
-    do
-    let i1 ← i + 1#usize
-    let _ ← iter_mut_slice_loop len i1
-    Result.ret ()
+  then do
+       let i1 ← i + 1#usize
+       iter_mut_slice_loop len i1
   else Result.ret ()
 
 /- [arrays::iter_mut_slice]:

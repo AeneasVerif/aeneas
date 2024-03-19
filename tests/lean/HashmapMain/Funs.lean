@@ -326,9 +326,7 @@ def hashmap.HashMap.get_mut_in_list
   (T : Type) (ls : hashmap.List T) (key : Usize) :
   Result (T × (T → Result (hashmap.List T)))
   :=
-  do
-  let (t, back_'a) ← hashmap.HashMap.get_mut_in_list_loop T ls key
-  Result.ret (t, back_'a)
+  hashmap.HashMap.get_mut_in_list_loop T ls key
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]:
    Source: 'src/hashmap.rs', lines 257:4-257:67 -/
@@ -460,8 +458,7 @@ def insert_on_disk
   do
   let (st1, hm) ← hashmap_utils.deserialize st
   let hm1 ← hashmap.HashMap.insert U64 hm key value
-  let (st2, _) ← hashmap_utils.serialize hm1 st1
-  Result.ret (st2, ())
+  hashmap_utils.serialize hm1 st1
 
 /- [hashmap_main::main]:
    Source: 'src/hashmap_main.rs', lines 16:0-16:13 -/
