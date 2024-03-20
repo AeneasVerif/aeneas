@@ -935,7 +935,11 @@ let rec end_borrow_aux (config : config) (chain : borrow_or_abs_ids)
       (* Give back the value *)
       let ctx = give_back config l bc ctx in
       (* Do a sanity check and continue *)
-      cf_check cf ctx
+      let cc = cf_check in
+      (* Save a snapshot of the environment for the name generation *)
+      let cc = comp cc SynthesizeSymbolic.cf_save_snapshot in
+      (* Compose *)
+      cc cf ctx
 
 and end_borrows_aux (config : config) (chain : borrow_or_abs_ids)
     (allowed_abs : AbstractionId.id option) (lset : BorrowId.Set.t) : cm_fun =
@@ -1040,6 +1044,9 @@ and end_abstraction_aux (config : config) (chain : borrow_or_abs_ids)
 
       (* Sanity check: ending an abstraction must preserve the invariants *)
       let cc = comp cc Invariants.cf_check_invariants in
+
+      (* Save a snapshot of the environment for the name generation *)
+      let cc = comp cc SynthesizeSymbolic.cf_save_snapshot in
 
       (* Apply the continuation *)
       cc cf ctx

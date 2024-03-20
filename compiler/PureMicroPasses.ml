@@ -334,6 +334,15 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx1 = obj#visit_typed_pattern () lv () in
     merge_ctxs ctx ctx1
   in
+  (* If we have [x = y] where x and y are variables, add a constraint linking
+     the names of x and y *)
+  let add_eq_var_constraint (lv : typed_pattern) (re : texpression)
+      (ctx : pn_ctx) : pn_ctx =
+    match (lv.value, re.e) with
+    | PatVar (lv, _), Var rv when Option.is_some lv.basename ->
+        add_pure_var_constraint rv (Option.get lv.basename) ctx
+    | _ -> ctx
+  in
 
   (* This is used to propagate constraint information about places in case of
    * variable reassignments: we try to propagate the information from the
@@ -428,6 +437,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx, re = update_texpression re ctx in
     let ctx, e = update_texpression e ctx in
     let lv = update_typed_pattern ctx lv in
+    let ctx = add_eq_var_constraint lv re ctx in
     (ctx, Let (monadic, lv, re, e))
   (* *)
   and update_switch_body (scrut : texpression) (body : switch_body)
@@ -524,8 +534,15 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             | _ -> ctx
           in
           ctx
-      | SymbolicAssignment (var_id, rvalue) ->
-          add_pure_var_value_constraint var_id rvalue ctx
+      | SymbolicAssignments infos ->
+          List.fold_left
+            (fun ctx (var_id, rvalue) ->
+              add_pure_var_value_constraint var_id rvalue ctx)
+            ctx infos
+      | SymbolicPlaces infos ->
+          List.fold_left
+            (fun ctx (var_id, name) -> add_pure_var_constraint var_id name ctx)
+            ctx infos
       | MPlace mp -> add_right_constraint mp e ctx
       | Tag _ -> ctx
     in
@@ -1101,14 +1118,6 @@ let simplify_let_then_return _ctx def =
         | _ -> false)
     | _ -> false
   in
-  let match_pattern_and_ret_expr (monadic : bool) (pat : typed_pattern)
-      (e : texpression) : bool =
-    if monadic then
-      match opt_destruct_ret e with
-      | Some e -> match_pattern_and_expr pat e
-      | None -> false
-    else match_pattern_and_expr pat e
-  in
 
   let expr_visitor =
     object (self)
@@ -1124,9 +1133,25 @@ let simplify_let_then_return _ctx def =
         | Switch _ | Loop _ | Let _ ->
             (* Small shortcut to avoid doing the check on every let-binding *)
             not_simpl_e
-        | _ ->
-            if match_pattern_and_ret_expr monadic lv next_e then rv.e
-            else not_simpl_e
+        | _ -> (
+            if (* Do the check *)
+               monadic then
+              (* The first let-binding is monadic *)
+              match opt_destruct_ret next_e with
+              | Some e ->
+                  if match_pattern_and_expr lv e then rv.e else not_simpl_e
+              | None -> not_simpl_e
+            else
+              (* The first let-binding is not monadic *)
+              match opt_destruct_ret next_e with
+              | Some e ->
+                  if match_pattern_and_expr lv e then
+                    (* We need to wrap the right-value in a ret *)
+                    (mk_result_return_texpression rv).e
+                  else not_simpl_e
+              | None ->
+                  if match_pattern_and_expr lv next_e then rv.e else not_simpl_e
+            )
     end
   in
 

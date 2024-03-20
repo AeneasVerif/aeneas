@@ -807,11 +807,17 @@ and emeta =
           The mvalue stores the value which is put in the destination
           The second (optional) mplace stores the origin.
         *)
-  | SymbolicAssignment of (var_id[@opaque]) * mvalue
+  | SymbolicAssignments of ((var_id[@opaque]) * mvalue) list
       (** Informationg linking a variable (from the pure AST) to an
           expression.
 
           We use this to guide the heuristics which derive pretty names.
+        *)
+  | SymbolicPlaces of ((var_id[@opaque]) * string) list
+      (** Informationg linking a variable (from the pure AST) to a name.
+
+          We generate this information by exploring the context, and use it
+          to derive pretty names.
         *)
   | MPlace of mplace  (** Meta-information about the origin of a value *)
   | Tag of string  (** A tag - typically used for debugging *)

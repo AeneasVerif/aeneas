@@ -585,7 +585,7 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
       let meta_s = emeta_to_string env meta in
       let e = texpression_to_string env inside indent indent_incr e in
       match meta with
-      | Assignment _ | SymbolicAssignment _ | Tag _ ->
+      | Assignment _ | SymbolicAssignments _ | SymbolicPlaces _ | Tag _ ->
           let e = meta_s ^ "\n" ^ indent ^ e in
           if inside then "(" ^ e ^ ")" else e
       | MPlace _ -> "(" ^ meta_s ^ " " ^ e ^ ")")
@@ -717,10 +717,25 @@ and emeta_to_string (env : fmt_env) (meta : emeta) : string =
         "@assign(" ^ mplace_to_string env lp ^ " := "
         ^ texpression_to_string env false "" "" rv
         ^ rp ^ ")"
-    | SymbolicAssignment (var_id, rv) ->
-        "@symb_assign(" ^ VarId.to_string var_id ^ " := "
-        ^ texpression_to_string env false "" "" rv
-        ^ ")"
+    | SymbolicAssignments info ->
+        let infos =
+          List.map
+            (fun (var_id, rv) ->
+              VarId.to_string var_id ^ " == "
+              ^ texpression_to_string env false "" "" rv)
+            info
+        in
+        let infos = String.concat ", " infos in
+        "@symb_assign(" ^ infos ^ ")"
+    | SymbolicPlaces info ->
+        let infos =
+          List.map
+            (fun (var_id, name) ->
+              VarId.to_string var_id ^ " == \"" ^ name ^ "\"")
+            info
+        in
+        let infos = String.concat ", " infos in
+        "@symb_places(" ^ infos ^ ")"
     | MPlace mp -> "@mplace=" ^ mplace_to_string env mp
     | Tag msg -> "@tag \"" ^ msg ^ "\""
   in

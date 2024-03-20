@@ -931,9 +931,11 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
       ^ statement_to_string_with_tab ctx st
       ^ "\n]\n\n**Context**:\n" ^ eval_ctx_to_string ctx ^ "\n\n"));
 
+  (* Take a snapshot of the current context for the purpose of generating pretty names *)
+  let cc = S.cf_save_snapshot in
   (* Expand the symbolic values if necessary - we need to do that before
    * checking the invariants *)
-  let cc = greedy_expand_symbolic_values config in
+  let cc = comp cc (greedy_expand_symbolic_values config) in
   (* Sanity check *)
   let cc = comp cc Invariants.cf_check_invariants in
 

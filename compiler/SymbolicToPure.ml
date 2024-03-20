@@ -1873,10 +1873,48 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
 (** Add meta-information to an expression *)
 let mk_emeta_symbolic_assignments (vars : var list) (values : texpression list)
     (e : texpression) : texpression =
-  let var_values = List.combine vars values in
-  List.fold_right
-    (fun (var, arg) e -> mk_emeta (SymbolicAssignment (var_get_id var, arg)) e)
-    var_values e
+  let var_values = List.combine (List.map var_get_id vars) values in
+  if var_values <> [] then mk_emeta (SymbolicAssignments var_values) e else e
+
+(** Derive naming information from a context.
+
+    We explore the context and look in which bindings the symbolic values appear:
+    we use this information to derive naming information. *)
+let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
+    (ectx : Contexts.eval_ctx) : (VarId.id * string) list =
+  let info : (VarId.id * string) list ref = ref [] in
+  let push_info name sv = info := (name, sv) :: !info in
+  let visitor =
+    object (self)
+      inherit [_] Contexts.iter_eval_ctx
+
+      method! visit_env_elem _ ee =
+        match ee with
+        | EBinding (BVar { index = _; name = Some name }, v) ->
+            self#visit_typed_value name v
+        | _ -> () (* Ignore *)
+
+      method! visit_value name v =
+        match v with
+        | VLiteral _ | VBottom -> ()
+        | VBorrow (VMutBorrow (_, v)) | VLoan (VSharedLoan (_, v)) ->
+            self#visit_typed_value name v
+        | VSymbolic sv ->
+            (* Translate the type *)
+            let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
+            (* If the type is unit, do nothing *)
+            if ty_is_unit ty then ()
+            else
+              (* Otherwise lookup the variable *)
+              let var = lookup_var_for_symbolic_value sv ctx in
+              push_info var.id name
+        | _ -> ()
+    end
+  in
+  (* Visit the context *)
+  visitor#visit_eval_ctx "x" ectx;
+  (* Return the computed information *)
+  !info
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
@@ -3528,11 +3566,23 @@ and translate_emeta (meta : S.emeta) (e : S.expression) (ctx : bs_ctx) :
         let lp = translate_mplace lp in
         let rv = typed_value_to_texpression ctx ectx rv in
         let rp = translate_opt_mplace rp in
-        Assignment (lp, rv, rp)
+        Some (Assignment (lp, rv, rp))
+    | S.Snapshot ectx ->
+        let infos = eval_ctx_to_symbolic_assignments_info ctx ectx in
+        if infos <> [] then
+          (* If often happens that the next expression contains exactly the
+             same meta information *)
+          match next_e.e with
+          | Meta (SymbolicPlaces infos1, _) when infos1 = infos -> None
+          | _ -> Some (SymbolicPlaces infos)
+        else None
   in
-  let e = Meta (meta, next_e) in
-  let ty = next_e.ty in
-  { e; ty }
+  match meta with
+  | Some meta ->
+      let e = Meta (meta, next_e) in
+      let ty = next_e.ty in
+      { e; ty }
+  | None -> next_e
 
 (** Wrap a function body in a match over the fuel to control termination. *)
 let wrap_in_match_fuel (fuel0 : VarId.id) (fuel : VarId.id) (body : texpression)

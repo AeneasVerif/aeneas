@@ -189,3 +189,9 @@ let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
              meta;
            })
   | _ -> raise (Failure "Unreachable")
+
+let save_snapshot (ctx : Contexts.eval_ctx) (e : expression option) :
+    expression option =
+  match e with None -> None | Some e -> Some (Meta (Snapshot ctx, e))
+
+let cf_save_snapshot : Cps.cm_fun = fun cf ctx -> save_snapshot ctx (cf ctx)
