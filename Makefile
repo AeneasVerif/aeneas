@@ -49,13 +49,17 @@ SUBDIR :=
 # The rules
 ####################################
 
+# Build the compiler, after formatting the code
+.PHONY: build
+build: format build-dev
+
 # Build the project, test it and verify the generated files
 .PHONY: build-tests-verify
 build-tests-verify: build tests verify
 
-# Build the project
-.PHONY: build
-build: build-bin build-lib build-bin-dir doc
+# Build the project, without formatting the code
+.PHONY: build-dev
+build-dev: build-bin build-lib build-bin-dir doc
 
 .PHONY: build-bin
 build-bin:
@@ -84,8 +88,8 @@ clean:
 	cd compiler && dune clean
 
 # Test the project by translating test files to F*
-.PHONY: tests
-tests: test-no_nested_borrows test-paper \
+.PHONY: test
+test: test-no_nested_borrows test-paper \
 	test-hashmap test-hashmap_main \
 	test-external test-constants \
 	testp-polonius_list testp-betree_main \
