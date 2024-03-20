@@ -40,9 +40,9 @@ def incr (x : U32) : Result U32 :=
    Source: 'src/demo.rs', lines 25:0-25:17 -/
 def use_incr : Result Unit :=
   do
-  let i ← incr 0#u32
-  let i1 ← incr i
-  let _ ← incr i1
+  let x ← incr 0#u32
+  let x1 ← incr x
+  let _ ← incr x1
   Result.ret ()
 
 /- [demo::CList]

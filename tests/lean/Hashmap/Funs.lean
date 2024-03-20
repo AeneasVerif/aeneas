@@ -20,9 +20,9 @@ divergent def HashMap.allocate_slots_loop
   if n > 0#usize
   then
     do
-    let v ← alloc.vec.Vec.push (List T) slots List.Nil
+    let slots1 ← alloc.vec.Vec.push (List T) slots List.Nil
     let n1 ← n - 1#usize
-    HashMap.allocate_slots_loop T v n1
+    HashMap.allocate_slots_loop T slots1 n1
   else Result.ret slots
 
 /- [hashmap::{hashmap::HashMap<T>}::allocate_slots]:
@@ -142,8 +142,8 @@ divergent def HashMap.move_elements_from_list_loop
   match ls with
   | List.Cons k v tl =>
     do
-    let hm ← HashMap.insert_no_resize T ntable k v
-    HashMap.move_elements_from_list_loop T hm tl
+    let ntable1 ← HashMap.insert_no_resize T ntable k v
+    HashMap.move_elements_from_list_loop T ntable1 tl
   | List.Nil => Result.ret ntable
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]:
@@ -167,12 +167,10 @@ divergent def HashMap.move_elements_loop
       alloc.vec.Vec.index_mut (List T) Usize
         (core.slice.index.SliceIndexUsizeSliceTInst (List T)) slots i
     let (ls, l1) := core.mem.replace (List T) l List.Nil
-    let hm ← HashMap.move_elements_from_list T ntable ls
+    let ntable1 ← HashMap.move_elements_from_list T ntable ls
     let i2 ← i + 1#usize
     let slots1 ← index_mut_back l1
-    let back_'a ← HashMap.move_elements_loop T hm slots1 i2
-    let (hm1, v) := back_'a
-    Result.ret (hm1, v)
+    HashMap.move_elements_loop T ntable1 slots1 i2
   else Result.ret (ntable, slots)
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements]:
@@ -182,10 +180,7 @@ def HashMap.move_elements
   :
   Result ((HashMap T) × (alloc.vec.Vec (List T)))
   :=
-  do
-  let back_'a ← HashMap.move_elements_loop T ntable slots i
-  let (hm, v) := back_'a
-  Result.ret (hm, v)
+  HashMap.move_elements_loop T ntable slots i
 
 /- [hashmap::{hashmap::HashMap<T>}::try_resize]:
    Source: 'src/hashmap.rs', lines 140:4-140:28 -/
@@ -218,11 +213,11 @@ def HashMap.insert
   Result (HashMap T)
   :=
   do
-  let hm ← HashMap.insert_no_resize T self key value
-  let i ← HashMap.len T hm
-  if i > hm.max_load
-  then HashMap.try_resize T hm
-  else Result.ret hm
+  let self1 ← HashMap.insert_no_resize T self key value
+  let i ← HashMap.len T self1
+  if i > self1.max_load
+  then HashMap.try_resize T self1
+  else Result.ret self1
 
 /- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
    Source: 'src/hashmap.rs', lines 206:4-219:5 -/

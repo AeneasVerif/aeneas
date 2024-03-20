@@ -16,7 +16,7 @@ Definition ref_incr (x : i32) : result i32 :=
 (** [paper::test_incr]:
     Source: 'src/paper.rs', lines 8:0-8:18 *)
 Definition test_incr : result unit :=
-  i <- ref_incr 0%i32; if negb (i s= 1%i32) then Fail_ Failure else Return tt
+  x <- ref_incr 0%i32; if negb (x s= 1%i32) then Fail_ Failure else Return tt
 .
 
 (** Unit test for [paper::test_incr] *)

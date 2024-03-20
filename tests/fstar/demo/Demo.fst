@@ -31,7 +31,7 @@ let incr (x : u32) : result u32 =
 (** [demo::use_incr]:
     Source: 'src/demo.rs', lines 25:0-25:17 *)
 let use_incr : result unit =
-  let* i = incr 0 in let* i1 = incr i in let* _ = incr i1 in Return ()
+  let* x = incr 0 in let* x1 = incr x in let* _ = incr x1 in Return ()
 
 (** [demo::CList]
     Source: 'src/demo.rs', lines 34:0-34:17 *)

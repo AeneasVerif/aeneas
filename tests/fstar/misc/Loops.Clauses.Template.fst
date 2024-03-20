@@ -13,8 +13,7 @@ unfold let sum_loop_decreases (max : u32) (i : u32) (s : u32) : nat = admit ()
 (** [loops::sum_with_mut_borrows]: decreases clause
     Source: 'src/loops.rs', lines 19:0-31:1 *)
 unfold
-let sum_with_mut_borrows_loop_decreases (max : u32) (mi : u32) (ms : u32) : nat
-  =
+let sum_with_mut_borrows_loop_decreases (max : u32) (i : u32) (s : u32) : nat =
   admit ()
 
 (** [loops::sum_with_shared_borrows]: decreases clause

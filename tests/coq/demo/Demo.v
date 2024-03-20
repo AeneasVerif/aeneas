@@ -37,7 +37,7 @@ Definition incr (x : u32) : result u32 :=
 (** [demo::use_incr]:
     Source: 'src/demo.rs', lines 25:0-25:17 *)
 Definition use_incr : result unit :=
-  i <- incr 0%u32; i1 <- incr i; _ <- incr i1; Return tt
+  x <- incr 0%u32; x1 <- incr x; _ <- incr x1; Return tt
 .
 
 (** [demo::CList]

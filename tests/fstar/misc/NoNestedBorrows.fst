@@ -425,8 +425,7 @@ let id_mut_pair1
   (t1 t2 : Type0) (x : t1) (y : t2) :
   result ((t1 & t2) & ((t1 & t2) -> result (t1 & t2)))
   =
-  let back_'a = fun ret -> let (x1, x2) = ret in Return (x1, x2) in
-  Return ((x, y), back_'a)
+  Return ((x, y), Return)
 
 (** [no_nested_borrows::id_mut_pair2]:
     Source: 'src/no_nested_borrows.rs', lines 418:0-418:88 *)
@@ -434,9 +433,7 @@ let id_mut_pair2
   (t1 t2 : Type0) (p : (t1 & t2)) :
   result ((t1 & t2) & ((t1 & t2) -> result (t1 & t2)))
   =
-  let (x, x1) = p in
-  let back_'a = fun ret -> let (x2, x3) = ret in Return (x2, x3) in
-  Return ((x, x1), back_'a)
+  let (x, x1) = p in Return ((x, x1), Return)
 
 (** [no_nested_borrows::id_mut_pair3]:
     Source: 'src/no_nested_borrows.rs', lines 422:0-422:93 *)

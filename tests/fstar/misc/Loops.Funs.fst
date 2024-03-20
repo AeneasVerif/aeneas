@@ -25,15 +25,15 @@ let sum (max : u32) : result u32 =
 (** [loops::sum_with_mut_borrows]: loop 0:
     Source: 'src/loops.rs', lines 19:0-31:1 *)
 let rec sum_with_mut_borrows_loop
-  (max : u32) (mi : u32) (ms : u32) :
-  Tot (result u32) (decreases (sum_with_mut_borrows_loop_decreases max mi ms))
+  (max : u32) (i : u32) (s : u32) :
+  Tot (result u32) (decreases (sum_with_mut_borrows_loop_decreases max i s))
   =
-  if mi < max
+  if i < max
   then
-    let* ms1 = u32_add ms mi in
-    let* mi1 = u32_add mi 1 in
-    sum_with_mut_borrows_loop max mi1 ms1
-  else u32_mul ms 2
+    let* ms = u32_add s i in
+    let* mi = u32_add i 1 in
+    sum_with_mut_borrows_loop max mi ms
+  else u32_mul s 2
 
 (** [loops::sum_with_mut_borrows]:
     Source: 'src/loops.rs', lines 19:0-19:44 *)
@@ -185,11 +185,11 @@ let get_elem_mut
   (slots : alloc_vec_Vec (list_t usize)) (x : usize) :
   result (usize & (usize -> result (alloc_vec_Vec (list_t usize))))
   =
-  let* (l, index_mut_back) =
+  let* (ls, index_mut_back) =
     alloc_vec_Vec_index_mut (list_t usize) usize
       (core_slice_index_SliceIndexUsizeSliceTInst (list_t usize)) slots 0 in
-  let* (i, back) = get_elem_mut_loop x l in
-  let back1 = fun ret -> let* l1 = back ret in index_mut_back l1 in
+  let* (i, back) = get_elem_mut_loop x ls in
+  let back1 = fun ret -> let* l = back ret in index_mut_back l in
   Return (i, back1)
 
 (** [loops::get_elem_shared]: loop 0:
@@ -207,10 +207,10 @@ let rec get_elem_shared_loop
     Source: 'src/loops.rs', lines 129:0-129:68 *)
 let get_elem_shared
   (slots : alloc_vec_Vec (list_t usize)) (x : usize) : result usize =
-  let* l =
+  let* ls =
     alloc_vec_Vec_index (list_t usize) usize
       (core_slice_index_SliceIndexUsizeSliceTInst (list_t usize)) slots 0 in
-  get_elem_shared_loop x l
+  get_elem_shared_loop x ls
 
 (** [loops::id_mut]:
     Source: 'src/loops.rs', lines 145:0-145:50 *)

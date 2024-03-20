@@ -23,14 +23,14 @@ def sum (max : U32) : Result U32 :=
 /- [loops::sum_with_mut_borrows]: loop 0:
    Source: 'src/loops.rs', lines 19:0-31:1 -/
 divergent def sum_with_mut_borrows_loop
-  (max : U32) (mi : U32) (ms : U32) : Result U32 :=
-  if mi < max
+  (max : U32) (i : U32) (s : U32) : Result U32 :=
+  if i < max
   then
     do
-    let ms1 ← ms + mi
-    let mi1 ← mi + 1#u32
-    sum_with_mut_borrows_loop max mi1 ms1
-  else ms * 2#u32
+    let ms ← s + i
+    let mi ← i + 1#u32
+    sum_with_mut_borrows_loop max mi ms
+  else s * 2#u32
 
 /- [loops::sum_with_mut_borrows]:
    Source: 'src/loops.rs', lines 19:0-19:44 -/
@@ -187,13 +187,13 @@ def get_elem_mut
   Result (Usize × (Usize → Result (alloc.vec.Vec (List Usize))))
   :=
   do
-  let (l, index_mut_back) ←
+  let (ls, index_mut_back) ←
     alloc.vec.Vec.index_mut (List Usize) Usize
       (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
-  let (i, back) ← get_elem_mut_loop x l
+  let (i, back) ← get_elem_mut_loop x ls
   let back1 := fun ret => do
-                          let l1 ← back ret
-                          index_mut_back l1
+                          let l ← back ret
+                          index_mut_back l
   Result.ret (i, back1)
 
 /- [loops::get_elem_shared]: loop 0:
@@ -211,10 +211,10 @@ divergent def get_elem_shared_loop
 def get_elem_shared
   (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-  let l ←
+  let ls ←
     alloc.vec.Vec.index (List Usize) Usize
       (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
-  get_elem_shared_loop x l
+  get_elem_shared_loop x ls
 
 /- [loops::id_mut]:
    Source: 'src/loops.rs', lines 145:0-145:50 -/

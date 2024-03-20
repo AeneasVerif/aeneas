@@ -29,16 +29,16 @@ Definition sum (n : nat) (max : u32) : result u32 :=
 (** [loops::sum_with_mut_borrows]: loop 0:
     Source: 'src/loops.rs', lines 19:0-31:1 *)
 Fixpoint sum_with_mut_borrows_loop
-  (n : nat) (max : u32) (mi : u32) (ms : u32) : result u32 :=
+  (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
-    if mi s< max
+    if i s< max
     then (
-      ms1 <- u32_add ms mi;
-      mi1 <- u32_add mi 1%u32;
-      sum_with_mut_borrows_loop n1 max mi1 ms1)
-    else u32_mul ms 2%u32
+      ms <- u32_add s i;
+      mi <- u32_add i 1%u32;
+      sum_with_mut_borrows_loop n1 max mi ms)
+    else u32_mul s 2%u32
   end
 .
 
@@ -245,10 +245,10 @@ Definition get_elem_mut
   p <-
     alloc_vec_Vec_index_mut (List_t usize) usize
       (core_slice_index_SliceIndexUsizeSliceTInst (List_t usize)) slots 0%usize;
-  let (l, index_mut_back) := p in
-  p1 <- get_elem_mut_loop n x l;
+  let (ls, index_mut_back) := p in
+  p1 <- get_elem_mut_loop n x ls;
   let (i, back) := p1 in
-  let back1 := fun (ret : usize) => l1 <- back ret; index_mut_back l1 in
+  let back1 := fun (ret : usize) => l <- back ret; index_mut_back l in
   Return (i, back1)
 .
 
@@ -273,10 +273,10 @@ Definition get_elem_shared
   (n : nat) (slots : alloc_vec_Vec (List_t usize)) (x : usize) :
   result usize
   :=
-  l <-
+  ls <-
     alloc_vec_Vec_index (List_t usize) usize
       (core_slice_index_SliceIndexUsizeSliceTInst (List_t usize)) slots 0%usize;
-  get_elem_shared_loop n x l
+  get_elem_shared_loop n x ls
 .
 
 (** [loops::id_mut]:

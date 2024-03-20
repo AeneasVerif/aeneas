@@ -28,17 +28,17 @@ let array_to_mut_slice_
 (** [arrays::array_len]:
     Source: 'src/arrays.rs', lines 25:0-25:40 *)
 let array_len (t : Type0) (s : array t 32) : result usize =
-  let* s1 = array_to_slice t 32 s in let i = slice_len t s1 in Return i
+  let* s1 = array_to_slice t 32 s in Return (slice_len t s1)
 
 (** [arrays::shared_array_len]:
     Source: 'src/arrays.rs', lines 29:0-29:48 *)
 let shared_array_len (t : Type0) (s : array t 32) : result usize =
-  let* s1 = array_to_slice t 32 s in let i = slice_len t s1 in Return i
+  let* s1 = array_to_slice t 32 s in Return (slice_len t s1)
 
 (** [arrays::shared_slice_len]:
     Source: 'src/arrays.rs', lines 33:0-33:44 *)
 let shared_slice_len (t : Type0) (s : slice t) : result usize =
-  let i = slice_len t s in Return i
+  Return (slice_len t s)
 
 (** [arrays::index_array_shared]:
     Source: 'src/arrays.rs', lines 37:0-37:57 *)
@@ -268,8 +268,8 @@ let update_mut_slice (x : slice u32) : result (slice u32) =
 let update_all : result unit =
   let* _ = update_array (mk_array u32 2 [ 0; 0 ]) in
   let* _ = update_array (mk_array u32 2 [ 0; 0 ]) in
-  let* a = update_array_mut_borrow (mk_array u32 2 [ 0; 0 ]) in
-  let* (s, to_slice_mut_back) = array_to_slice_mut u32 2 a in
+  let* x = update_array_mut_borrow (mk_array u32 2 [ 0; 0 ]) in
+  let* (s, to_slice_mut_back) = array_to_slice_mut u32 2 x in
   let* s1 = update_mut_slice s in
   let* _ = to_slice_mut_back s1 in
   Return ()

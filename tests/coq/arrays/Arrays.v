@@ -36,19 +36,19 @@ Definition array_to_mut_slice_
 (** [arrays::array_len]:
     Source: 'src/arrays.rs', lines 25:0-25:40 *)
 Definition array_len (T : Type) (s : array T 32%usize) : result usize :=
-  s1 <- array_to_slice T 32%usize s; let i := slice_len T s1 in Return i
+  s1 <- array_to_slice T 32%usize s; Return (slice_len T s1)
 .
 
 (** [arrays::shared_array_len]:
     Source: 'src/arrays.rs', lines 29:0-29:48 *)
 Definition shared_array_len (T : Type) (s : array T 32%usize) : result usize :=
-  s1 <- array_to_slice T 32%usize s; let i := slice_len T s1 in Return i
+  s1 <- array_to_slice T 32%usize s; Return (slice_len T s1)
 .
 
 (** [arrays::shared_slice_len]:
     Source: 'src/arrays.rs', lines 33:0-33:44 *)
 Definition shared_slice_len (T : Type) (s : slice T) : result usize :=
-  let i := slice_len T s in Return i
+  Return (slice_len T s)
 .
 
 (** [arrays::index_array_shared]:
@@ -326,8 +326,8 @@ Definition update_mut_slice (x : slice u32) : result (slice u32) :=
 Definition update_all : result unit :=
   _ <- update_array (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
   _ <- update_array (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
-  a <- update_array_mut_borrow (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
-  p <- array_to_slice_mut u32 2%usize a;
+  x <- update_array_mut_borrow (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  p <- array_to_slice_mut u32 2%usize x;
   let (s, to_slice_mut_back) := p in
   s1 <- update_mut_slice s;
   _ <- to_slice_mut_back s1;

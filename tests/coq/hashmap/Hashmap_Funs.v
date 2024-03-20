@@ -26,9 +26,9 @@ Fixpoint hashMap_allocate_slots_loop
   | S n2 =>
     if n1 s> 0%usize
     then (
-      v <- alloc_vec_Vec_push (List_t T) slots List_Nil;
+      slots1 <- alloc_vec_Vec_push (List_t T) slots List_Nil;
       n3 <- usize_sub n1 1%usize;
-      hashMap_allocate_slots_loop T n2 v n3)
+      hashMap_allocate_slots_loop T n2 slots1 n3)
     else Return slots
   end
 .
@@ -190,8 +190,8 @@ Fixpoint hashMap_move_elements_from_list_loop
   | S n1 =>
     match ls with
     | List_Cons k v tl =>
-      hm <- hashMap_insert_no_resize T n1 ntable k v;
-      hashMap_move_elements_from_list_loop T n1 hm tl
+      ntable1 <- hashMap_insert_no_resize T n1 ntable k v;
+      hashMap_move_elements_from_list_loop T n1 ntable1 tl
     | List_Nil => Return ntable
     end
   end
@@ -224,12 +224,10 @@ Fixpoint hashMap_move_elements_loop
           (core_slice_index_SliceIndexUsizeSliceTInst (List_t T)) slots i;
       let (l, index_mut_back) := p in
       let (ls, l1) := core_mem_replace (List_t T) l List_Nil in
-      hm <- hashMap_move_elements_from_list T n1 ntable ls;
+      ntable1 <- hashMap_move_elements_from_list T n1 ntable ls;
       i2 <- usize_add i 1%usize;
       slots1 <- index_mut_back l1;
-      back_'a <- hashMap_move_elements_loop T n1 hm slots1 i2;
-      let (hm1, v) := back_'a in
-      Return (hm1, v))
+      hashMap_move_elements_loop T n1 ntable1 slots1 i2)
     else Return (ntable, slots)
   end
 .
@@ -241,9 +239,7 @@ Definition hashMap_move_elements
   (slots : alloc_vec_Vec (List_t T)) (i : usize) :
   result ((HashMap_t T) * (alloc_vec_Vec (List_t T)))
   :=
-  back_'a <- hashMap_move_elements_loop T n ntable slots i;
-  let (hm, v) := back_'a in
-  Return (hm, v)
+  hashMap_move_elements_loop T n ntable slots i
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::try_resize]:
@@ -284,9 +280,11 @@ Definition hashMap_insert
   (T : Type) (n : nat) (self : HashMap_t T) (key : usize) (value : T) :
   result (HashMap_t T)
   :=
-  hm <- hashMap_insert_no_resize T n self key value;
-  i <- hashMap_len T hm;
-  if i s> hm.(hashMap_max_load) then hashMap_try_resize T n hm else Return hm
+  self1 <- hashMap_insert_no_resize T n self key value;
+  i <- hashMap_len T self1;
+  if i s> self1.(hashMap_max_load)
+  then hashMap_try_resize T n self1
+  else Return self1
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:

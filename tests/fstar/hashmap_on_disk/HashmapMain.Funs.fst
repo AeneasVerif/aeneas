@@ -22,9 +22,10 @@ let rec hashmap_HashMap_allocate_slots_loop
   =
   if n > 0
   then
-    let* v = alloc_vec_Vec_push (hashmap_List_t t) slots Hashmap_List_Nil in
+    let* slots1 = alloc_vec_Vec_push (hashmap_List_t t) slots Hashmap_List_Nil
+      in
     let* n1 = usize_sub n 1 in
-    hashmap_HashMap_allocate_slots_loop t v n1
+    hashmap_HashMap_allocate_slots_loop t slots1 n1
   else Return slots
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::allocate_slots]:
@@ -149,8 +150,8 @@ let rec hashmap_HashMap_move_elements_from_list_loop
   =
   begin match ls with
   | Hashmap_List_Cons k v tl ->
-    let* hm = hashmap_HashMap_insert_no_resize t ntable k v in
-    hashmap_HashMap_move_elements_from_list_loop t hm tl
+    let* ntable1 = hashmap_HashMap_insert_no_resize t ntable k v in
+    hashmap_HashMap_move_elements_from_list_loop t ntable1 tl
   | Hashmap_List_Nil -> Return ntable
   end
 
@@ -178,12 +179,10 @@ let rec hashmap_HashMap_move_elements_loop
         (core_slice_index_SliceIndexUsizeSliceTInst (hashmap_List_t t)) slots i
       in
     let (ls, l1) = core_mem_replace (hashmap_List_t t) l Hashmap_List_Nil in
-    let* hm = hashmap_HashMap_move_elements_from_list t ntable ls in
+    let* ntable1 = hashmap_HashMap_move_elements_from_list t ntable ls in
     let* i2 = usize_add i 1 in
     let* slots1 = index_mut_back l1 in
-    let* back_'a = hashmap_HashMap_move_elements_loop t hm slots1 i2 in
-    let (hm1, v) = back_'a in
-    Return (hm1, v)
+    hashmap_HashMap_move_elements_loop t ntable1 slots1 i2
   else Return (ntable, slots)
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements]:
@@ -193,9 +192,7 @@ let hashmap_HashMap_move_elements
   (slots : alloc_vec_Vec (hashmap_List_t t)) (i : usize) :
   result ((hashmap_HashMap_t t) & (alloc_vec_Vec (hashmap_List_t t)))
   =
-  let* back_'a = hashmap_HashMap_move_elements_loop t ntable slots i in
-  let (hm, v) = back_'a in
-  Return (hm, v)
+  hashmap_HashMap_move_elements_loop t ntable slots i
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::try_resize]:
     Source: 'src/hashmap.rs', lines 140:4-140:28 *)
@@ -223,9 +220,11 @@ let hashmap_HashMap_insert
   (t : Type0) (self : hashmap_HashMap_t t) (key : usize) (value : t) :
   result (hashmap_HashMap_t t)
   =
-  let* hm = hashmap_HashMap_insert_no_resize t self key value in
-  let* i = hashmap_HashMap_len t hm in
-  if i > hm.max_load then hashmap_HashMap_try_resize t hm else Return hm
+  let* self1 = hashmap_HashMap_insert_no_resize t self key value in
+  let* i = hashmap_HashMap_len t self1 in
+  if i > self1.max_load
+  then hashmap_HashMap_try_resize t self1
+  else Return self1
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
     Source: 'src/hashmap.rs', lines 206:4-219:5 *)
