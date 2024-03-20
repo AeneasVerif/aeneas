@@ -475,9 +475,7 @@ Definition id_mut_pair1
   (T1 T2 : Type) (x : T1) (y : T2) :
   result ((T1 * T2) * ((T1 * T2) -> result (T1 * T2)))
   :=
-  let back_'a := fun (ret : (T1 * T2)) => let (t, t1) := ret in Return (t, t1)
-    in
-  Return ((x, y), back_'a)
+  Return ((x, y), Return)
 .
 
 (** [no_nested_borrows::id_mut_pair2]:
@@ -486,10 +484,7 @@ Definition id_mut_pair2
   (T1 T2 : Type) (p : (T1 * T2)) :
   result ((T1 * T2) * ((T1 * T2) -> result (T1 * T2)))
   :=
-  let (t, t1) := p in
-  let back_'a :=
-    fun (ret : (T1 * T2)) => let (t2, t3) := ret in Return (t2, t3) in
-  Return ((t, t1), back_'a)
+  let (t, t1) := p in Return ((t, t1), Return)
 .
 
 (** [no_nested_borrows::id_mut_pair3]:

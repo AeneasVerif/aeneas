@@ -65,6 +65,9 @@ type call = {
 type emeta =
   | Assignment of Contexts.eval_ctx * mplace * typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
+  | Snapshot of Contexts.eval_ctx
+      (** Remember an environment snapshot - this is useful to check where the
+          symbolic values are, to compute proper names for instance *)
 [@@deriving show]
 
 type variant_id = VariantId.id [@@deriving show]

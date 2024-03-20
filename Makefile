@@ -54,8 +54,8 @@ SUBDIR :=
 build: format build-dev
 
 # Build the project, test it and verify the generated files
-.PHONY: build-tests-verify
-build-tests-verify: build tests verify
+.PHONY: build-test-verify
+build-test-verify: build test verify
 
 # Build the project, without formatting the code
 .PHONY: build-dev

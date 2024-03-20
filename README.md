@@ -64,7 +64,7 @@ You can also use `make test` and `make verify` to run the tests, and check
 the generated files. As `make test` will run tests which use the Charon tests,
 you will need to regenerate the `.llbc` files. You have the following options:
 - run `make test` in the Charon repository
-- run `REGEN_LLBC=1 make test` in the Aeneas repository
+- run `make test` in the Aeneas repository
 
 ## Documentation
 

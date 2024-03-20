@@ -334,6 +334,15 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx1 = obj#visit_typed_pattern () lv () in
     merge_ctxs ctx ctx1
   in
+  (* If we have [x = y] where x and y are variables, add a constraint linking
+     the names of x and y *)
+  let add_eq_var_constraint (lv : typed_pattern) (re : texpression)
+      (ctx : pn_ctx) : pn_ctx =
+    match (lv.value, re.e) with
+    | PatVar (lv, _), Var rv when Option.is_some lv.basename ->
+        add_pure_var_constraint rv (Option.get lv.basename) ctx
+    | _ -> ctx
+  in
 
   (* This is used to propagate constraint information about places in case of
    * variable reassignments: we try to propagate the information from the
@@ -428,6 +437,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx, re = update_texpression re ctx in
     let ctx, e = update_texpression e ctx in
     let lv = update_typed_pattern ctx lv in
+    let ctx = add_eq_var_constraint lv re ctx in
     (ctx, Let (monadic, lv, re, e))
   (* *)
   and update_switch_body (scrut : texpression) (body : switch_body)
@@ -524,8 +534,15 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             | _ -> ctx
           in
           ctx
-      | SymbolicAssignment (var_id, rvalue) ->
-          add_pure_var_value_constraint var_id rvalue ctx
+      | SymbolicAssignments infos ->
+          List.fold_left
+            (fun ctx (var_id, rvalue) ->
+              add_pure_var_value_constraint var_id rvalue ctx)
+            ctx infos
+      | SymbolicPlaces infos ->
+          List.fold_left
+            (fun ctx (var_id, name) -> add_pure_var_constraint var_id name ctx)
+            ctx infos
       | MPlace mp -> add_right_constraint mp e ctx
       | Tag _ -> ctx
     in
@@ -1075,6 +1092,33 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
     ]}
  *)
 let simplify_let_then_return _ctx def =
+  (* Match a pattern and an expression: evaluates to [true] if the expression
+     is actually exactly the pattern *)
+  let rec match_pattern_and_expr (pat : typed_pattern) (e : texpression) : bool
+      =
+    match (pat.value, e.e) with
+    | PatConstant plit, Const lit -> plit = lit
+    | PatVar (pv, _), Var vid -> pv.id = vid
+    | PatDummy, _ ->
+        (* It is ok only if we ignore the unit value *)
+        pat.ty = mk_unit_ty && e = mk_unit_rvalue
+    | PatAdt padt, _ -> (
+        let qualif, args = destruct_apps e in
+        match qualif.e with
+        | Qualif { id = AdtCons cons_id; generics = _ } ->
+            if
+              pat.ty = e.ty
+              && padt.variant_id = cons_id.variant_id
+              && List.length padt.field_values = List.length args
+            then
+              List.for_all
+                (fun (p, e) -> match_pattern_and_expr p e)
+                (List.combine padt.field_values args)
+            else false
+        | _ -> false)
+    | _ -> false
+  in
+
   let expr_visitor =
     object (self)
       inherit [_] map_expression
@@ -1090,13 +1134,24 @@ let simplify_let_then_return _ctx def =
             (* Small shortcut to avoid doing the check on every let-binding *)
             not_simpl_e
         | _ -> (
-            match typed_pattern_to_texpression lv with
-            | None -> not_simpl_e
-            | Some lv_v ->
-                let lv_v =
-                  if monadic then mk_result_return_texpression lv_v else lv_v
-                in
-                if lv_v = next_e then rv.e else not_simpl_e)
+            if (* Do the check *)
+               monadic then
+              (* The first let-binding is monadic *)
+              match opt_destruct_ret next_e with
+              | Some e ->
+                  if match_pattern_and_expr lv e then rv.e else not_simpl_e
+              | None -> not_simpl_e
+            else
+              (* The first let-binding is not monadic *)
+              match opt_destruct_ret next_e with
+              | Some e ->
+                  if match_pattern_and_expr lv e then
+                    (* We need to wrap the right-value in a ret *)
+                    (mk_result_return_texpression rv).e
+                  else not_simpl_e
+              | None ->
+                  if match_pattern_and_expr lv next_e then rv.e else not_simpl_e
+            )
     end
   in
 
@@ -1823,6 +1878,14 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     (lazy
       ("inline_useless_var_assignments (pass 2):\n\n"
      ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Simplify the let-then return again (the lambda simplification may have
+     unlocked more simplifications here) *)
+  let def = simplify_let_then_return ctx def in
+  log#ldebug
+    (lazy
+      ("simplify_let_then_return (pass 2):\n\n" ^ fun_decl_to_string ctx def
+     ^ "\n"));
 
   (* Decompose the monadic let-bindings - used by Coq *)
   let def =

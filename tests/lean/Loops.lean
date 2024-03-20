@@ -23,14 +23,14 @@ def sum (max : U32) : Result U32 :=
 /- [loops::sum_with_mut_borrows]: loop 0:
    Source: 'src/loops.rs', lines 19:0-31:1 -/
 divergent def sum_with_mut_borrows_loop
-  (max : U32) (mi : U32) (ms : U32) : Result U32 :=
-  if mi < max
+  (max : U32) (i : U32) (s : U32) : Result U32 :=
+  if i < max
   then
     do
-    let ms1 ← ms + mi
-    let mi1 ← mi + 1#u32
-    sum_with_mut_borrows_loop max mi1 ms1
-  else ms * 2#u32
+    let ms ← s + i
+    let mi ← i + 1#u32
+    sum_with_mut_borrows_loop max mi ms
+  else s * 2#u32
 
 /- [loops::sum_with_mut_borrows]:
    Source: 'src/loops.rs', lines 19:0-19:44 -/
@@ -138,9 +138,7 @@ divergent def list_nth_mut_loop_loop
    Source: 'src/loops.rs', lines 88:0-88:71 -/
 def list_nth_mut_loop
   (T : Type) (ls : List T) (i : U32) : Result (T × (T → Result (List T))) :=
-  do
-  let (t, back) ← list_nth_mut_loop_loop T ls i
-  Result.ret (t, back)
+  list_nth_mut_loop_loop T ls i
 
 /- [loops::list_nth_shared_loop]: loop 0:
    Source: 'src/loops.rs', lines 101:0-111:1 -/
@@ -189,13 +187,13 @@ def get_elem_mut
   Result (Usize × (Usize → Result (alloc.vec.Vec (List Usize))))
   :=
   do
-  let (l, index_mut_back) ←
+  let (ls, index_mut_back) ←
     alloc.vec.Vec.index_mut (List Usize) Usize
       (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
-  let (i, back) ← get_elem_mut_loop x l
+  let (i, back) ← get_elem_mut_loop x ls
   let back1 := fun ret => do
-                          let l1 ← back ret
-                          index_mut_back l1
+                          let l ← back ret
+                          index_mut_back l
   Result.ret (i, back1)
 
 /- [loops::get_elem_shared]: loop 0:
@@ -213,10 +211,10 @@ divergent def get_elem_shared_loop
 def get_elem_shared
   (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-  let l ←
+  let ls ←
     alloc.vec.Vec.index (List Usize) Usize
       (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
-  get_elem_shared_loop x l
+  get_elem_shared_loop x ls
 
 /- [loops::id_mut]:
    Source: 'src/loops.rs', lines 145:0-145:50 -/
@@ -322,9 +320,7 @@ def list_nth_mut_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)) × (T → Result (List T)))
   :=
-  do
-  let (p, back_'a, back_'b) ← list_nth_mut_loop_pair_loop T ls0 ls1 i
-  Result.ret (p, back_'a, back_'b)
+  list_nth_mut_loop_pair_loop T ls0 ls1 i
 
 /- [loops::list_nth_shared_loop_pair]: loop 0:
    Source: 'src/loops.rs', lines 208:0-229:1 -/
@@ -384,9 +380,7 @@ def list_nth_mut_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × ((T × T) → Result ((List T) × (List T))))
   :=
-  do
-  let (p, back_'a) ← list_nth_mut_loop_pair_merge_loop T ls0 ls1 i
-  Result.ret (p, back_'a)
+  list_nth_mut_loop_pair_merge_loop T ls0 ls1 i
 
 /- [loops::list_nth_shared_loop_pair_merge]: loop 0:
    Source: 'src/loops.rs', lines 251:0-266:1 -/
@@ -443,9 +437,7 @@ def list_nth_mut_shared_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
   :=
-  do
-  let (p, back_'a) ← list_nth_mut_shared_loop_pair_loop T ls0 ls1 i
-  Result.ret (p, back_'a)
+  list_nth_mut_shared_loop_pair_loop T ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_loop_pair_merge]: loop 0:
    Source: 'src/loops.rs', lines 288:0-303:1 -/
@@ -480,9 +472,7 @@ def list_nth_mut_shared_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
   :=
-  do
-  let (p, back_'a) ← list_nth_mut_shared_loop_pair_merge_loop T ls0 ls1 i
-  Result.ret (p, back_'a)
+  list_nth_mut_shared_loop_pair_merge_loop T ls0 ls1 i
 
 /- [loops::list_nth_shared_mut_loop_pair]: loop 0:
    Source: 'src/loops.rs', lines 307:0-322:1 -/
@@ -516,9 +506,7 @@ def list_nth_shared_mut_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
   :=
-  do
-  let (p, back_'b) ← list_nth_shared_mut_loop_pair_loop T ls0 ls1 i
-  Result.ret (p, back_'b)
+  list_nth_shared_mut_loop_pair_loop T ls0 ls1 i
 
 /- [loops::list_nth_shared_mut_loop_pair_merge]: loop 0:
    Source: 'src/loops.rs', lines 326:0-341:1 -/
@@ -553,19 +541,15 @@ def list_nth_shared_mut_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
   :=
-  do
-  let (p, back_'a) ← list_nth_shared_mut_loop_pair_merge_loop T ls0 ls1 i
-  Result.ret (p, back_'a)
+  list_nth_shared_mut_loop_pair_merge_loop T ls0 ls1 i
 
 /- [loops::ignore_input_mut_borrow]: loop 0:
    Source: 'src/loops.rs', lines 345:0-349:1 -/
 divergent def ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
   if i > 0#u32
-  then
-    do
-    let i1 ← i - 1#u32
-    let _ ← ignore_input_mut_borrow_loop i1
-    Result.ret ()
+  then do
+       let i1 ← i - 1#u32
+       ignore_input_mut_borrow_loop i1
   else Result.ret ()
 
 /- [loops::ignore_input_mut_borrow]:
@@ -579,11 +563,9 @@ def ignore_input_mut_borrow (_a : U32) (i : U32) : Result U32 :=
    Source: 'src/loops.rs', lines 353:0-358:1 -/
 divergent def incr_ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
   if i > 0#u32
-  then
-    do
-    let i1 ← i - 1#u32
-    let _ ← incr_ignore_input_mut_borrow_loop i1
-    Result.ret ()
+  then do
+       let i1 ← i - 1#u32
+       incr_ignore_input_mut_borrow_loop i1
   else Result.ret ()
 
 /- [loops::incr_ignore_input_mut_borrow]:
@@ -598,11 +580,9 @@ def incr_ignore_input_mut_borrow (a : U32) (i : U32) : Result U32 :=
    Source: 'src/loops.rs', lines 362:0-366:1 -/
 divergent def ignore_input_shared_borrow_loop (i : U32) : Result Unit :=
   if i > 0#u32
-  then
-    do
-    let i1 ← i - 1#u32
-    let _ ← ignore_input_shared_borrow_loop i1
-    Result.ret ()
+  then do
+       let i1 ← i - 1#u32
+       ignore_input_shared_borrow_loop i1
   else Result.ret ()
 
 /- [loops::ignore_input_shared_borrow]:
