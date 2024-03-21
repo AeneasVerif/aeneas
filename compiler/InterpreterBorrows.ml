@@ -216,7 +216,7 @@ let end_borrow_get_borrow (meta : Meta.meta) (allowed_abs : AbstractionId.id opt
               set_replaced_bc (fst outer) (Abstract bc);
               (* Update the value - note that we are necessarily in the second
                * of the two cases described above *)
-              let asb = remove_borrow_from_asb l asb in
+              let asb = remove_borrow_from_asb meta l asb in
               ABorrow (AProjSharedBorrow asb))
             else (* Nothing special to do *)
               super#visit_ABorrow outer bc
@@ -254,8 +254,8 @@ let give_back_value (meta : Meta.meta) (config : config) (bid : BorrowId.id) (nv
   log#ldebug
     (lazy
       ("give_back_value:\n- bid: " ^ BorrowId.to_string bid ^ "\n- value: "
-      ^ typed_value_to_string ctx nv
-      ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
+      ^ typed_value_to_string meta ctx nv
+      ^ "\n- context:\n" ^ eval_ctx_to_string meta ctx ^ "\n"));
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -267,7 +267,7 @@ let give_back_value (meta : Meta.meta) (config : config) (bid : BorrowId.id) (nv
   (* We sometimes need to reborrow values while giving a value back due: prepare that *)
   let allow_reborrows = true in
   let fresh_reborrow, apply_registered_reborrows =
-    prepare_reborrows config allow_reborrows
+    prepare_reborrows meta config allow_reborrows
   in
   (* The visitor to give back the values *)
   let obj =
@@ -335,7 +335,7 @@ let give_back_value (meta : Meta.meta) (config : config) (bid : BorrowId.id) (nv
                   (* Remember the given back value as a meta-value
                    * TODO: it is a bit annoying to have to deconstruct
                    * the value... Think about a more elegant way. *)
-                  let given_back_meta = as_symbolic nv.value in
+                  let given_back_meta = as_symbolic meta nv.value in
                   (* The loan projector *)
                   let given_back =
                     mk_aproj_loans_value_from_symbolic_value abs.regions sv
@@ -382,7 +382,7 @@ let give_back_value (meta : Meta.meta) (config : config) (bid : BorrowId.id) (nv
               let given_back_meta = nv in
               (* Apply the projection *)
               let given_back =
-                apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                apply_proj_borrows meta check_symbolic_no_ended ctx fresh_reborrow
                   regions ancestors_regions nv borrowed_value_aty
               in
               (* Continue giving back in the child value *)
@@ -409,7 +409,7 @@ let give_back_value (meta : Meta.meta) (config : config) (bid : BorrowId.id) (nv
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call {!set_replaced}) *)
               let given_back =
-                apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                apply_proj_borrows meta check_symbolic_no_ended ctx fresh_reborrow
                   regions ancestors_regions nv borrowed_value_aty
               in
               (* Continue giving back in the child value *)
@@ -720,8 +720,8 @@ let reborrow_shared (meta : Meta.meta) (original_bid : BorrowId.id) (new_bid : B
     be expanded (because expanding this symbolic value would require expanding
     a reference whose region has already ended).
  *)
-let convert_avalue_to_given_back_value (av : typed_avalue) : symbolic_value =
-  mk_fresh_symbolic_value av.ty
+let convert_avalue_to_given_back_value (meta : Meta.meta) (av : typed_avalue) : symbolic_value =
+  mk_fresh_symbolic_value meta av.ty
 
 (** Auxiliary function: see {!end_borrow_aux}.
 
@@ -746,11 +746,11 @@ let give_back (meta : Meta.meta) (config : config) (l : BorrowId.id) (bc : g_bor
     (lazy
       (let bc =
          match bc with
-         | Concrete bc -> borrow_content_to_string ctx bc
-         | Abstract bc -> aborrow_content_to_string ctx bc
+         | Concrete bc -> borrow_content_to_string meta ctx bc
+         | Abstract bc -> aborrow_content_to_string meta ctx bc
        in
        "give_back:\n- bid: " ^ BorrowId.to_string l ^ "\n- content: " ^ bc
-       ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
+       ^ "\n- context:\n" ^ eval_ctx_to_string meta ctx ^ "\n"));
   (* This is used for sanity checks *)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -781,7 +781,7 @@ let give_back (meta : Meta.meta) (config : config) (l : BorrowId.id) (bc : g_bor
          Rem.: we shouldn't do this here. We should do this in a function
          which takes care of ending *sub*-abstractions.
       *)
-      let sv = convert_avalue_to_given_back_value av in
+      let sv = convert_avalue_to_given_back_value meta av in
       (* Update the context *)
       give_back_avalue_to_same_abstraction meta config l av
         (mk_typed_value_from_symbolic_value sv)
@@ -814,8 +814,8 @@ let check_borrow_disappeared (meta : Meta.meta) (fun_name : string) (l : BorrowI
             (lazy
               (fun_name ^ ": " ^ BorrowId.to_string l
              ^ ": borrow didn't disappear:\n- original context:\n"
-             ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
-             ^ eval_ctx_to_string ctx));
+             ^ eval_ctx_to_string meta ctx0 ^ "\n\n- new context:\n"
+             ^ eval_ctx_to_string meta ctx));
           craise meta "Borrow not eliminated"
     in
     match lookup_loan_opt meta ek_all l ctx with
@@ -825,8 +825,8 @@ let check_borrow_disappeared (meta : Meta.meta) (fun_name : string) (l : BorrowI
           (lazy
             (fun_name ^ ": " ^ BorrowId.to_string l
            ^ ": loan didn't disappear:\n- original context:\n"
-           ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
-           ^ eval_ctx_to_string ctx));
+           ^ eval_ctx_to_string meta ctx0 ^ "\n\n- new context:\n"
+           ^ eval_ctx_to_string meta ctx));
         craise meta "Loan not eliminated"
   in
   unit_to_cm_fun check_disappeared
@@ -858,12 +858,12 @@ let rec end_borrow_aux (meta : Meta.meta) (config : config) (chain : borrow_or_a
   (* Check that we don't loop *)
   let chain0 = chain in
   let chain =
-    add_borrow_or_abs_id_to_chain "end_borrow_aux: " (BorrowId l) chain
+    add_borrow_or_abs_id_to_chain meta "end_borrow_aux: " (BorrowId l) chain
   in
   log#ldebug
     (lazy
       ("end borrow: " ^ BorrowId.to_string l ^ ":\n- original context:\n"
-     ^ eval_ctx_to_string ctx));
+     ^ eval_ctx_to_string meta ctx));
 
   (* Utility function for the sanity checks: check that the borrow disappeared
    * from the context *)
@@ -958,7 +958,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
  fun cf ctx ->
   (* Check that we don't loop *)
   let chain =
-    add_borrow_or_abs_id_to_chain "end_abstraction_aux: " (AbsId abs_id) chain
+    add_borrow_or_abs_id_to_chain meta "end_abstraction_aux: " (AbsId abs_id) chain
   in
   (* Remember the original context for printing purposes *)
   let ctx0 = ctx in
@@ -966,7 +966,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
     (lazy
       ("end_abstraction_aux: "
       ^ AbstractionId.to_string abs_id
-      ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
+      ^ "\n- original context:\n" ^ eval_ctx_to_string meta ctx0));
 
   (* Lookup the abstraction - note that if we end a list of abstractions,
      ending one abstraction may lead to the current abstraction having
@@ -999,7 +999,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
                 ("end_abstraction_aux: "
                 ^ AbstractionId.to_string abs_id
                 ^ "\n- context after parent abstractions ended:\n"
-                ^ eval_ctx_to_string ctx)))
+                ^ eval_ctx_to_string meta ctx)))
       in
 
       (* End the loans inside the abstraction *)
@@ -1010,7 +1010,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
               (lazy
                 ("end_abstraction_aux: "
                 ^ AbstractionId.to_string abs_id
-                ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx)))
+                ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string meta ctx)))
       in
 
       (* End the abstraction itself by redistributing the borrows it contains *)
@@ -1039,8 +1039,8 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
               (lazy
                 ("end_abstraction_aux: "
                 ^ AbstractionId.to_string abs_id
-                ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
-                ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx)))
+                ^ "\n- original context:\n" ^ eval_ctx_to_string meta ctx0
+                ^ "\n\n- new context:\n" ^ eval_ctx_to_string meta ctx)))
       in
 
       (* Sanity check: ending an abstraction must preserve the invariants *)
@@ -1173,12 +1173,12 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
       log#ldebug
         (lazy
           ("end_abstraction_borrows: found aborrow content: "
-          ^ aborrow_content_to_string ctx bc));
+          ^ aborrow_content_to_string meta ctx bc));
       let ctx =
         match bc with
         | AMutBorrow (bid, av) ->
             (* First, convert the avalue to a (fresh symbolic) value *)
-            let sv = convert_avalue_to_given_back_value av in
+            let sv = convert_avalue_to_given_back_value meta av in
             (* Replace the mut borrow to register the fact that we ended
              * it and store with it the freshly generated given back value *)
             let ended_borrow = ABorrow (AEndedMutBorrow (sv, av)) in
@@ -1228,7 +1228,7 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
           ("end_abstraction_borrows: found aproj borrows: "
           ^ aproj_to_string ctx (AProjBorrows (sv, proj_ty))));
       (* Generate a fresh symbolic value *)
-      let nsv = mk_fresh_symbolic_value proj_ty in
+      let nsv = mk_fresh_symbolic_value meta proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
       let ended_borrow = AEndedProjBorrows nsv in
       let ctx = update_aproj_borrows meta abs.abs_id sv ended_borrow ctx in
@@ -1243,7 +1243,7 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
       log#ldebug
         (lazy
           ("end_abstraction_borrows: found borrow content: "
-          ^ borrow_content_to_string ctx bc));
+          ^ borrow_content_to_string meta ctx bc));
       let ctx =
         match bc with
         | VSharedBorrow bid -> (
@@ -1432,16 +1432,16 @@ let end_abstraction meta config = end_abstraction_aux meta config []
 let end_abstractions meta config = end_abstractions_aux meta config []
 
 let end_borrow_no_synth meta config id ctx =
-  get_cf_ctx_no_synth (end_borrow meta config id) ctx
+  get_cf_ctx_no_synth meta (end_borrow meta config id) ctx
 
 let end_borrows_no_synth meta config ids ctx =
-  get_cf_ctx_no_synth (end_borrows meta config ids) ctx
+  get_cf_ctx_no_synth meta (end_borrows meta config ids) ctx
 
 let end_abstraction_no_synth meta config id ctx =
-  get_cf_ctx_no_synth (end_abstraction meta config id) ctx
+  get_cf_ctx_no_synth meta (end_abstraction meta config id) ctx
 
 let end_abstractions_no_synth meta config ids ctx =
-  get_cf_ctx_no_synth (end_abstractions meta config ids) ctx
+  get_cf_ctx_no_synth meta (end_abstractions meta config ids) ctx
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
@@ -1466,7 +1466,7 @@ let promote_shared_loan_to_mut_loan (meta : Meta.meta) (l : BorrowId.id)
   log#ldebug
     (lazy
       ("promote_shared_loan_to_mut_loan:\n- loan: " ^ BorrowId.to_string l
-     ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
+     ^ "\n- context:\n" ^ eval_ctx_to_string meta ctx ^ "\n"));
   (* Lookup the shared loan - note that we can't promote a shared loan
    * in a shared value, but we can do it in a mutably borrowed value.
    * This is important because we can do: [let y = &two-phase ( *x );]
@@ -1563,7 +1563,7 @@ let rec promote_reserved_mut_borrow (meta : Meta.meta) (config : config) (l : Bo
           log#ldebug
             (lazy
               ("activate_reserved_mut_borrow: resulting value:\n"
-              ^ typed_value_to_string ctx sv));
+              ^ typed_value_to_string meta ctx sv));
           cassert (not (loans_in_value sv)) meta "TODO: error message";
           cassert (not (bottom_in_value ctx.ended_regions sv)) meta "TODO: error message";
           cassert (not (reserved_in_value sv)) meta "TODO: error message";
@@ -1627,7 +1627,7 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
               if destructure_shared_values then list_values sv else ([], sv)
             in
             (* Push a value *)
-            let ignored = mk_aignored child_av.ty in
+            let ignored = mk_aignored meta child_av.ty in
             let value = ALoan (ASharedLoan (bids, sv, ignored)) in
             push { value; ty };
             (* Explore the child *)
@@ -1643,7 +1643,7 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the whole loan *)
-            let ignored = mk_aignored child_av.ty in
+            let ignored = mk_aignored meta child_av.ty in
             let value = ALoan (AMutLoan (bid, ignored)) in
             push { value; ty }
         | AIgnoredMutLoan (opt_bid, child_av) ->
@@ -1671,7 +1671,7 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the borrow *)
-            let ignored = mk_aignored child_av.ty in
+            let ignored = mk_aignored meta child_av.ty in
             let value = ABorrow (AMutBorrow (bid, ignored)) in
             push { value; ty }
         | ASharedBorrow _ ->
@@ -1742,7 +1742,7 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
                 in
                 let sv = mk_value_with_fresh_sids sv in
                 (* Create the new avalue *)
-                let value = ALoan (ASharedLoan (bids, sv, mk_aignored ty)) in
+                let value = ALoan (ASharedLoan (bids, sv, mk_aignored meta ty)) in
                 { value; ty }
               in
               let avl = List.append [ av ] avl in
@@ -1808,7 +1808,7 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind) (can_
     log#ldebug
       (lazy
         ("convert_value_to_abstractions: to_avalues:\n- value: "
-        ^ typed_value_to_string ctx v));
+        ^ typed_value_to_string meta ctx v));
 
     let ty = v.ty in
     match v.value with
@@ -1868,7 +1868,7 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind) (can_
             cassert (not (value_has_borrows ctx bv.value)) meta "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
             let ty = TRef (RFVar r_id, ref_ty, kind) in
-            let ignored = mk_aignored ref_ty in
+            let ignored = mk_aignored meta ref_ty in
             let av = ABorrow (AMutBorrow (bid, ignored)) in
             let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
@@ -1889,7 +1889,7 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind) (can_
             (* For avalues, a loan has the borrow type *)
             cassert (ty_no_regions ty) meta "TODO: error message";
             let ty = mk_ref_ty (RFVar r_id) ty RShared in
-            let ignored = mk_aignored ty in
+            let ignored = mk_aignored meta ty in
             (* Rem.: the shared value might contain loans *)
             let avl, sv = to_avalues false true true r_id sv in
             let av = ALoan (ASharedLoan (bids, sv, ignored)) in
@@ -1907,7 +1907,7 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind) (can_
             (* For avalues, a loan has the borrow type *)
             cassert (ty_no_regions ty) meta "TODO: error message";
             let ty = mk_ref_ty (RFVar r_id) ty RMut in
-            let ignored = mk_aignored ty in
+            let ignored = mk_aignored meta ty in
             let av = ALoan (AMutLoan (bid, ignored)) in
             let av = { value = av; ty } in
             ([ av ], v))
@@ -2140,8 +2140,8 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind) (can_end
     (abs1 : abs) : abs =
   log#ldebug
     (lazy
-      ("merge_into_abstraction_aux:\n- abs0:\n" ^ abs_to_string ctx abs0
-     ^ "\n\n- abs1:\n" ^ abs_to_string ctx abs1));
+      ("merge_into_abstraction_aux:\n- abs0:\n" ^ abs_to_string meta ctx abs0
+     ^ "\n\n- abs1:\n" ^ abs_to_string meta ctx abs1));
 
   (* Check that the abstractions are destructured *)
   if !Config.sanity_checks then (
@@ -2201,7 +2201,7 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind) (can_end
     log#ldebug
       (lazy
         ("merge_into_abstraction_aux: push_avalue: "
-        ^ typed_avalue_to_string ctx av));
+        ^ typed_avalue_to_string meta ctx av));
     avalues := av :: !avalues
   in
   let push_opt_avalue av =

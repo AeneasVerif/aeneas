@@ -8,37 +8,37 @@ open Cps
     applies this change to an environment [ctx] by inserting a new borrow id in
     the set of borrows tracked by a shared value, referenced by the
     [original_bid] argument.  *)
-val reborrow_shared : BorrowId.id -> BorrowId.id -> eval_ctx -> eval_ctx
+val reborrow_shared : Meta.meta -> BorrowId.id -> BorrowId.id -> eval_ctx -> eval_ctx
 
 (** End a borrow identified by its id, while preserving the invariants.
 
     If the borrow is inside another borrow/an abstraction or contains loans,
     [end_borrow] will end those borrows/abstractions/loans first.
   *)
-val end_borrow : config -> BorrowId.id -> cm_fun
+val end_borrow : Meta.meta -> config -> BorrowId.id -> cm_fun
 
 (** End a set of borrows identified by their ids, while preserving the invariants. *)
-val end_borrows : config -> BorrowId.Set.t -> cm_fun
+val end_borrows : Meta.meta -> config -> BorrowId.Set.t -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
-val end_abstraction : config -> AbstractionId.id -> cm_fun
+val end_abstraction : Meta.meta -> config -> AbstractionId.id -> cm_fun
 
 (** End a set of abstractions while preserving the invariants. *)
-val end_abstractions : config -> AbstractionId.Set.t -> cm_fun
+val end_abstractions : Meta.meta -> config -> AbstractionId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
-val end_borrow_no_synth : config -> BorrowId.id -> eval_ctx -> eval_ctx
+val end_borrow_no_synth : Meta.meta -> config -> BorrowId.id -> eval_ctx -> eval_ctx
 
 (** End a set of borrows and return the resulting environment, ignoring synthesis *)
-val end_borrows_no_synth : config -> BorrowId.Set.t -> eval_ctx -> eval_ctx
+val end_borrows_no_synth : Meta.meta -> config -> BorrowId.Set.t -> eval_ctx -> eval_ctx
 
 (** End an abstraction and return the resulting environment, ignoring synthesis *)
 val end_abstraction_no_synth :
-  config -> AbstractionId.id -> eval_ctx -> eval_ctx
+  Meta.meta -> config -> AbstractionId.id -> eval_ctx -> eval_ctx
 
 (** End a set of abstractions and return the resulting environment, ignoring synthesis *)
 val end_abstractions_no_synth :
-  config -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
+  Meta.meta -> config -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
 
 (** Promote a reserved mut borrow to a mut borrow, while preserving the invariants.
 
@@ -49,7 +49,7 @@ val end_abstractions_no_synth :
     the corresponding shared loan with a mutable loan (after having ended the
     other shared borrows which point to this loan).
  *)
-val promote_reserved_mut_borrow : config -> BorrowId.id -> cm_fun
+val promote_reserved_mut_borrow : Meta.meta -> config -> BorrowId.id -> cm_fun
 
 (** Transform an abstraction to an abstraction where the values are not
     structured.
@@ -91,7 +91,7 @@ val promote_reserved_mut_borrow : config -> BorrowId.id -> cm_fun
     - [ctx]
     - [abs]
  *)
-val destructure_abs : abs_kind -> bool -> bool -> eval_ctx -> abs -> abs
+val destructure_abs : Meta.meta -> abs_kind -> bool -> bool -> eval_ctx -> abs -> abs
 
 (** Return [true] if the values in an abstraction are destructured.
 
@@ -99,7 +99,7 @@ val destructure_abs : abs_kind -> bool -> bool -> eval_ctx -> abs -> abs
 
     The input boolean is [destructure_shared_value]. See {!destructure_abs}.
  *)
-val abs_is_destructured : bool -> eval_ctx -> abs -> bool
+val abs_is_destructured : Meta.meta -> bool -> eval_ctx -> abs -> bool
 
 (** Turn a value into a abstractions.
 
@@ -125,7 +125,7 @@ val abs_is_destructured : bool -> eval_ctx -> abs -> bool
     - [v]
  *)
 val convert_value_to_abstractions :
-  abs_kind -> bool -> bool -> eval_ctx -> typed_value -> abs list
+  Meta.meta -> abs_kind -> bool -> bool -> eval_ctx -> typed_value -> abs list
 
 (** See {!merge_into_abstraction}.
 
@@ -232,6 +232,7 @@ type merge_duplicates_funcs = {
     results from the merge.
  *)
 val merge_into_abstraction :
+  Meta.meta -> 
   abs_kind ->
   bool ->
   merge_duplicates_funcs option ->

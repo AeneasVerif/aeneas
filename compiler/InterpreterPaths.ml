@@ -100,8 +100,8 @@ let rec access_projection (meta : Meta.meta) (access : projection_access) (ctx :
           (* Check consistency *)
           (match (proj_kind, type_id) with
           | ProjAdt (def_id, opt_variant_id), TAdtId def_id' ->
-              assert (def_id = def_id');
-              assert (opt_variant_id = adt.variant_id)
+              cassert (def_id = def_id') meta "TODO: Error message";
+              cassert (opt_variant_id = adt.variant_id) meta "TODO: Error message"
           | _ -> craise meta "Unreachable");
           (* Actually project *)
           let fv = FieldId.nth adt.field_values field_id in
@@ -117,7 +117,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access) (ctx :
               Ok (ctx, { res with updated }))
       (* Tuples *)
       | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> (
-          assert (arity = List.length adt.field_values);
+          cassert (arity = List.length adt.field_values) meta "TODO: Error message";
           let fv = FieldId.nth adt.field_values field_id in
           (* Project *)
           match access_projection meta access ctx update p' fv with
@@ -346,30 +346,30 @@ let write_place (meta : Meta.meta) (access : access_kind) (p : place) (nv : type
   | Error e -> craise meta ("Unreachable: " ^ show_path_fail_kind e)
   | Ok ctx -> ctx
 
-let compute_expanded_bottom_adt_value (ctx : eval_ctx) (def_id : TypeDeclId.id)
+let compute_expanded_bottom_adt_value (meta : Meta.meta) (ctx : eval_ctx) (def_id : TypeDeclId.id)
     (opt_variant_id : VariantId.id option) (generics : generic_args) :
-    typed_value =
-  assert (TypesUtils.generic_args_only_erased_regions generics);
+    typed_value = 
+  cassert (TypesUtils.generic_args_only_erased_regions generics) meta "TODO: Error message";
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
-  let def = ctx_lookup_type_decl ctx def_id in
-  assert (List.length generics.regions = List.length def.generics.regions);
+  let def = ctx_lookup_type_decl ctx def_id in (*TODO: check if can be moved before assert ?*)
+  cassert (List.length generics.regions = List.length def.generics.regions) meta "TODO: Error message";
   (* Compute the field types *)
   let field_types =
     AssociatedTypes.type_decl_get_inst_norm_field_etypes ctx def opt_variant_id
       generics
   in
   (* Initialize the expanded value *)
-  let fields = List.map mk_bottom field_types in
+  let fields = List.map (mk_bottom meta) field_types in
   let av = VAdt { variant_id = opt_variant_id; field_values = fields } in
   let ty = TAdt (TAdtId def_id, generics) in
   { value = av; ty }
 
-let compute_expanded_bottom_tuple_value (field_types : ety list) : typed_value =
+let compute_expanded_bottom_tuple_value (meta : Meta.meta) (field_types : ety list) : typed_value =
   (* Generate the field values *)
-  let fields = List.map mk_bottom field_types in
+  let fields = List.map (mk_bottom meta) field_types in
   let v = VAdt { variant_id = None; field_values = fields } in
   let generics = TypesUtils.mk_generic_args [] field_types [] [] in
   let ty = TAdt (TTuple, generics) in
@@ -425,16 +425,16 @@ let expand_bottom_value_from_projection (meta : Meta.meta) (access : access_kind
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         TAdt (TAdtId def_id', generics) ) ->
-        assert (def_id = def_id');
-        compute_expanded_bottom_adt_value ctx def_id opt_variant_id generics
+        cassert (def_id = def_id') meta "TODO: Error message";
+        compute_expanded_bottom_adt_value meta ctx def_id opt_variant_id generics
     (* Tuples *)
     | ( Field (ProjTuple arity, _),
         TAdt
           (TTuple, { regions = []; types; const_generics = []; trait_refs = [] })
       ) ->
-        assert (arity = List.length types);
+        cassert (arity = List.length types) meta "TODO: Error message";
         (* Generate the field values *)
-        compute_expanded_bottom_tuple_value types
+        compute_expanded_bottom_tuple_value meta types
     | _ ->
         craise
           meta
@@ -454,9 +454,9 @@ let rec update_ctx_along_read_place (meta : Meta.meta) (config : config) (access
   | Error err ->
       let cc =
         match err with
-        | FailSharedLoan bids -> end_borrows config bids
-        | FailMutLoan bid -> end_borrow config bid
-        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow config bid
+        | FailSharedLoan bids -> end_borrows meta config bids
+        | FailMutLoan bid -> end_borrow meta config bid
+        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow meta config bid
         | FailSymbolic (i, sp) ->
             (* Expand the symbolic value *)
             let proj, _ =
@@ -464,7 +464,7 @@ let rec update_ctx_along_read_place (meta : Meta.meta) (config : config) (access
                 (List.length p.projection - i)
             in
             let prefix = { p with projection = proj } in
-            expand_symbolic_value_no_branching config sp
+            expand_symbolic_value_no_branching meta config sp
               (Some (Synth.mk_mplace meta prefix ctx))
         | FailBottom (_, _, _) ->
             (* We can't expand {!Bottom} values while reading them *)
@@ -484,12 +484,12 @@ let rec update_ctx_along_write_place (meta : Meta.meta) (config : config) (acces
       (* Update the context *)
       let cc =
         match err with
-        | FailSharedLoan bids -> end_borrows config bids
-        | FailMutLoan bid -> end_borrow config bid
-        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow config bid
+        | FailSharedLoan bids -> end_borrows meta config bids
+        | FailMutLoan bid -> end_borrow meta config bid
+        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow meta config bid
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching config sp
+            expand_symbolic_value_no_branching meta config sp
               (Some (Synth.mk_mplace meta p ctx))
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the {!Bottom} value *)
@@ -525,7 +525,7 @@ let rec end_loans_at_place (meta : Meta.meta) (config : config) (access : access
             (* Nothing special to do *) super#visit_borrow_content env bc
         | VReservedMutBorrow bid ->
             (* We need to activate reserved borrows *)
-            let cc = promote_reserved_mut_borrow config bid in
+            let cc = promote_reserved_mut_borrow meta config bid in
             raise (UpdateCtx cc)
 
       method! visit_loan_content env lc =
@@ -536,11 +536,11 @@ let rec end_loans_at_place (meta : Meta.meta) (config : config) (access : access
             match access with
             | Read -> super#visit_VSharedLoan env bids v
             | Write | Move ->
-                let cc = end_borrows config bids in
+                let cc = end_borrows meta config bids in
                 raise (UpdateCtx cc))
         | VMutLoan bid ->
             (* We always need to end mutable borrows *)
-            let cc = end_borrow config bid in
+            let cc = end_borrow meta config bid in
             raise (UpdateCtx cc)
     end
   in
@@ -568,7 +568,7 @@ let drop_outer_loans_at_lplace (meta : Meta.meta) (config : config) (p : place) 
    * a dummy variable *)
   let access = Write in
   let v = read_place meta access p ctx in
-  let ctx = write_place meta access p (mk_bottom v.ty) ctx in
+  let ctx = write_place meta access p (mk_bottom meta v.ty) ctx in
   let dummy_id = fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dummy_id v in
   (* Auxiliary function *)
@@ -586,8 +586,8 @@ let drop_outer_loans_at_lplace (meta : Meta.meta) (config : config) (p : place) 
         (* There are: end them then retry *)
         let cc =
           match c with
-          | LoanContent (VSharedLoan (bids, _)) -> end_borrows config bids
-          | LoanContent (VMutLoan bid) -> end_borrow config bid
+          | LoanContent (VSharedLoan (bids, _)) -> end_borrows meta config bids
+          | LoanContent (VMutLoan bid) -> end_borrow meta config bid
           | BorrowContent _ -> craise meta "Unreachable"
         in
         (* Retry *)
@@ -603,7 +603,7 @@ let drop_outer_loans_at_lplace (meta : Meta.meta) (config : config) (p : place) 
         (* Reinsert *)
         let ctx = write_place meta access p v ctx in
         (* Sanity check *)
-        assert (not (outer_loans_in_value v));
+        cassert (not (outer_loans_in_value v)) meta "TODO: Error message";
         (* Continue *)
         cf ctx)
   in
@@ -616,7 +616,7 @@ let prepare_lplace (meta : Meta.meta) (config : config) (p : place) (cf : typed_
   log#ldebug
     (lazy
       ("prepare_lplace:" ^ "\n- p: " ^ place_to_string ctx p
-     ^ "\n- Initial context:\n" ^ eval_ctx_to_string ctx));
+     ^ "\n- Initial context:\n" ^ eval_ctx_to_string meta ctx));
   (* Access the place *)
   let access = Write in
   let cc = update_ctx_along_write_place meta config access p in
@@ -627,7 +627,7 @@ let prepare_lplace (meta : Meta.meta) (config : config) (p : place) (cf : typed_
    fun ctx ->
     let v = read_place meta access p ctx in
     (* Sanity checks *)
-    assert (not (outer_loans_in_value v));
+    cassert (not (outer_loans_in_value v)) meta "TODO: Error message";
     (* Continue *)
     cf v ctx
   in

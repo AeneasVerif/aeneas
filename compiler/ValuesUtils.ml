@@ -2,6 +2,7 @@ open Utils
 open TypesUtils
 open Types
 open Values
+open Errors
 include Charon.ValuesUtils
 
 (** Utility exception *)
@@ -10,34 +11,34 @@ exception FoundSymbolicValue of symbolic_value
 let mk_unit_value : typed_value =
   { value = VAdt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
-let mk_typed_value (ty : ty) (value : value) : typed_value =
-  assert (ty_is_ety ty);
+let mk_typed_value (meta : Meta.meta) (ty : ty) (value : value) : typed_value =
+  cassert (ty_is_ety ty) meta "TODO: error message";
   { value; ty }
 
-let mk_typed_avalue (ty : ty) (value : avalue) : typed_avalue =
-  assert (ty_is_rty ty);
+let mk_typed_avalue (meta : Meta.meta) (ty : ty) (value : avalue) : typed_avalue =
+  cassert (ty_is_rty ty) meta "TODO: error message";
   { value; ty }
 
-let mk_bottom (ty : ty) : typed_value =
-  assert (ty_is_ety ty);
+let mk_bottom (meta : Meta.meta) (ty : ty) : typed_value =
+  cassert (ty_is_ety ty) meta "TODO: error message";
   { value = VBottom; ty }
 
-let mk_abottom (ty : ty) : typed_avalue =
-  assert (ty_is_rty ty);
+let mk_abottom (meta : Meta.meta) (ty : ty) : typed_avalue =
+  cassert (ty_is_rty ty) meta "TODO: error message";
   { value = ABottom; ty }
 
-let mk_aignored (ty : ty) : typed_avalue =
-  assert (ty_is_rty ty);
+let mk_aignored (meta : Meta.meta) (ty : ty) : typed_avalue =
+  cassert (ty_is_rty ty) meta "TODO: error message";
   { value = AIgnored; ty }
 
-let value_as_symbolic (v : value) : symbolic_value =
-  match v with VSymbolic v -> v | _ -> raise (Failure "Unexpected")
+let value_as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
+  match v with VSymbolic v -> v | _ -> craise meta "Unexpected"
 
 (** Box a value *)
-let mk_box_value (v : typed_value) : typed_value =
+let mk_box_value (meta : Meta.meta) (v : typed_value) : typed_value =
   let box_ty = mk_box_ty v.ty in
   let box_v = VAdt { variant_id = None; field_values = [ v ] } in
-  mk_typed_value box_ty box_v
+  mk_typed_value meta box_ty box_v
 
 let is_bottom (v : value) : bool = match v with VBottom -> true | _ -> false
 
@@ -47,13 +48,13 @@ let is_aignored (v : avalue) : bool =
 let is_symbolic (v : value) : bool =
   match v with VSymbolic _ -> true | _ -> false
 
-let as_symbolic (v : value) : symbolic_value =
-  match v with VSymbolic s -> s | _ -> raise (Failure "Unexpected")
+let as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
+  match v with VSymbolic s -> s | _ -> craise meta "Unexpected"
 
-let as_mut_borrow (v : typed_value) : BorrowId.id * typed_value =
+let as_mut_borrow (meta : Meta.meta) (v : typed_value) : BorrowId.id * typed_value =
   match v.value with
   | VBorrow (VMutBorrow (bid, bv)) -> (bid, bv)
-  | _ -> raise (Failure "Unexpected")
+  | _ -> craise meta "Unexpected"
 
 let is_unit (v : typed_value) : bool =
   ty_is_unit v.ty

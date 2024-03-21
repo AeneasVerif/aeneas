@@ -215,7 +215,7 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
     (* Remove the shared loans *)
     let v = value_remove_shared_loans v in
     (* Substitute the symbolic values and the region *)
-    Substitute.typed_value_subst_ids
+    Substitute.typed_value_subst_ids meta
       (fun r -> if RegionId.Set.mem r rids then nrid else r)
       (fun x -> x)
       (fun x -> x)
@@ -267,9 +267,9 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
     borrow_substs := (lid, nlid) :: !borrow_substs;
 
     (* Rem.: the below sanity checks are not really necessary *)
-    cassert (AbstractionId.Set.is_empty abs.parents) meta "abs.parents is not empty TODO";
-    cassert (abs.original_parents = []) meta "original_parents is not empty TODO";
-    cassert (RegionId.Set.is_empty abs.ancestors_regions) meta "ancestors_regions is not empty TODO";
+    cassert (AbstractionId.Set.is_empty abs.parents) meta "abs.parents is not empty TODO: Error message";
+    cassert (abs.original_parents = []) meta "original_parents is not empty TODO: Error message";
+    cassert (RegionId.Set.is_empty abs.ancestors_regions) meta "ancestors_regions is not empty TODO: Error message";
 
     (* Introduce the new abstraction for the shared values *)
     cassert (ty_no_regions sv.ty) meta "TODO :  error message ";
@@ -277,19 +277,19 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
 
     (* Create the shared loan child *)
     let child_rty = rty in
-    let child_av = mk_aignored child_rty in
+    let child_av = mk_aignored meta child_rty in
 
     (* Create the shared loan *)
     let loan_rty = TRef (RFVar nrid, rty, RShared) in
     let loan_value =
       ALoan (ASharedLoan (BorrowId.Set.singleton nlid, nsv, child_av))
     in
-    let loan_value = mk_typed_avalue loan_rty loan_value in
+    let loan_value = mk_typed_avalue meta loan_rty loan_value in
 
     (* Create the shared borrow *)
     let borrow_rty = loan_rty in
     let borrow_value = ABorrow (ASharedBorrow lid) in
-    let borrow_value = mk_typed_avalue borrow_rty borrow_value in
+    let borrow_value = mk_typed_avalue meta borrow_rty borrow_value in
 
     (* Create the abstraction *)
     let avalues = [ borrow_value; loan_value ] in
@@ -435,7 +435,7 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
 
 let prepare_ashared_loans_no_synth (meta : Meta.meta) (loop_id : LoopId.id) (ctx : eval_ctx) :
     eval_ctx =
-  get_cf_ctx_no_synth (prepare_ashared_loans meta (Some loop_id)) ctx
+  get_cf_ctx_no_synth meta (prepare_ashared_loans meta (Some loop_id)) ctx
 
 let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id : LoopId.id)
     (eval_loop_body : st_cm_fun) (ctx0 : eval_ctx) :
@@ -461,9 +461,9 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
     (lazy
       ("compute_loop_entry_fixed_point: after prepare_ashared_loans:"
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ctx0
+      ^ eval_ctx_to_string_no_filter meta ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter ctx
+      ^ eval_ctx_to_string_no_filter meta ctx
       ^ "\n\n"));
 
   let cf_exit_loop_body (res : statement_eval_res) : m_fun =
@@ -510,10 +510,10 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
           (* End those borrows and abstractions *)
           let end_borrows_abs blids aids ctx =
             let ctx =
-              InterpreterBorrows.end_borrows_no_synth config blids ctx
+              InterpreterBorrows.end_borrows_no_synth meta config blids ctx
             in
             let ctx =
-              InterpreterBorrows.end_abstractions_no_synth config aids ctx
+              InterpreterBorrows.end_abstractions_no_synth meta config aids ctx
             in
             ctx
           in
@@ -544,7 +544,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
 
     (* Join the context with the context at the loop entry *)
     let (_, _), ctx2 =
-      loop_join_origin_with_continue_ctxs config loop_id fixed_ids ctx1 !ctxs
+      loop_join_origin_with_continue_ctxs meta config loop_id fixed_ids ctx1 !ctxs
     in
     ctxs := [];
     ctx2
@@ -576,7 +576,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
     let check_equivalent = true in
     let lookup_shared_value _ = craise meta "Unreachable" in
     Option.is_some
-      (match_ctxs check_equivalent fixed_ids lookup_shared_value
+      (match_ctxs meta check_equivalent fixed_ids lookup_shared_value
          lookup_shared_value ctx1 ctx2)
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
@@ -597,9 +597,9 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
       log#ldebug
         (lazy
           ("compute_fixed_point:" ^ "\n\n- ctx0:\n"
-          ^ eval_ctx_to_string_no_filter ctx
+          ^ eval_ctx_to_string_no_filter meta ctx
           ^ "\n\n- ctx1:\n"
-          ^ eval_ctx_to_string_no_filter ctx1
+          ^ eval_ctx_to_string_no_filter meta ctx1
           ^ "\n\n"));
 
       (* Check if we reached a fixed point: if not, iterate *)
@@ -612,7 +612,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
     (lazy
       ("compute_fixed_point: fixed point computed before matching with input \
         region groups:" ^ "\n\n- fp:\n"
-      ^ eval_ctx_to_string_no_filter fp
+      ^ eval_ctx_to_string_no_filter meta fp
       ^ "\n\n"));
 
   (* Make sure we have exactly one loop abstraction per function region (merge
@@ -699,7 +699,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
                   abs.kind = SynthInput rg_id) meta "TODO :  error message ";
                 (* End this abstraction *)
                 let ctx =
-                  InterpreterBorrows.end_abstraction_no_synth config abs_id ctx
+                  InterpreterBorrows.end_abstraction_no_synth meta config abs_id ctx
                 in
                 (* Explore the context, and check which abstractions are not there anymore *)
                 let ids, _ = compute_ctx_ids ctx in
@@ -725,7 +725,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
 
     (* We also check that all the regions need to end - this is not necessary per
        se, but if it doesn't happen it is bizarre and worth investigating... *)
-    cassert (AbstractionId.Set.equal !aids_union !fp_aids) meta "Not all regions need to end TODO";
+    cassert (AbstractionId.Set.equal !aids_union !fp_aids) meta "Not all regions need to end TODO: Error message";
 
     (* Merge the abstractions which need to be merged, and compute the map from
        region id to abstraction id *)
@@ -777,7 +777,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
                         ^ AbstractionId.to_string !id0));
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
-                      merge_into_abstraction loop_id abs_kind false !fp id !id0
+                      merge_into_abstraction meta loop_id abs_kind false !fp id !id0
                     in
                     fp := fp';
                     id0 := id0';
@@ -793,7 +793,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
 
     (* Reorder the loans and borrows in the fresh abstractions in the fixed-point *)
     let fp =
-      reorder_loans_borrows_in_fresh_abs (meta : Meta.meta) (Option.get !fixed_ids).aids !fp
+      reorder_loans_borrows_in_fresh_abs meta (Option.get !fixed_ids).aids !fp
     in
 
     (* Update the abstraction's [can_end] field and their kinds.
@@ -838,7 +838,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
         (lazy
           ("compute_fixed_point: fixed point after matching with the function \
             region groups:\n"
-          ^ eval_ctx_to_string_no_filter fp_test));
+          ^ eval_ctx_to_string_no_filter meta fp_test));
       compute_fixed_point fp_test 1 1
     in
 
@@ -855,21 +855,21 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta) (fixed_ids : ids_se
   log#ldebug
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
-     ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx
-     ^ "\n\n- tgt_ctx:\n" ^ eval_ctx_to_string tgt_ctx ^ "\n\n"));
+     ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n" ^ eval_ctx_to_string meta src_ctx
+     ^ "\n\n- tgt_ctx:\n" ^ eval_ctx_to_string meta tgt_ctx ^ "\n\n"));
 
-  let filt_src_env, _, _ = ctx_split_fixed_new fixed_ids src_ctx in
+  let filt_src_env, _, _ = ctx_split_fixed_new meta fixed_ids src_ctx in
   let filt_src_ctx = { src_ctx with env = filt_src_env } in
-  let filt_tgt_env, new_absl, _ = ctx_split_fixed_new fixed_ids tgt_ctx in
+  let filt_tgt_env, new_absl, _ = ctx_split_fixed_new meta fixed_ids tgt_ctx in
   let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
 
   log#ldebug
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
      ^ show_ids_sets fixed_ids ^ "\n\n- filt_src_ctx:\n"
-      ^ eval_ctx_to_string filt_src_ctx
+      ^ eval_ctx_to_string meta filt_src_ctx
       ^ "\n\n- filt_tgt_ctx:\n"
-      ^ eval_ctx_to_string filt_tgt_ctx
+      ^ eval_ctx_to_string meta filt_tgt_ctx
       ^ "\n\n"));
 
   (* Match the source context and the filtered target context *)
@@ -886,7 +886,7 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta) (fixed_ids : ids_se
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
     let lookup_in_src id = lookup_shared_loan id src_ctx in
     Option.get
-      (match_ctxs check_equiv fixed_ids lookup_in_tgt lookup_in_src filt_tgt_ctx
+      (match_ctxs meta check_equiv fixed_ids lookup_in_tgt lookup_in_src filt_tgt_ctx
          filt_src_ctx)
   in
 
@@ -1089,9 +1089,9 @@ let compute_fp_ctx_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) (fp_ctx :
   log#ldebug
     (lazy
       ("compute_fp_ctx_symbolic_values:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string_no_filter ctx
+      ^ eval_ctx_to_string_no_filter meta ctx
       ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string_no_filter fp_ctx
+      ^ eval_ctx_to_string_no_filter meta fp_ctx
       ^ "\n- fresh_sids: "
       ^ SymbolicValueId.Set.show fresh_sids
       ^ "\n- input_svalues: "

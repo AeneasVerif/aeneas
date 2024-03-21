@@ -1,4 +1,5 @@
 open Pure
+open Errors
 
 (** Default logger *)
 let log = Logging.pure_utils_log
@@ -74,10 +75,10 @@ let inputs_info_is_wf (info : inputs_info) : bool =
 let fun_sig_info_is_wf (info : fun_sig_info) : bool =
   inputs_info_is_wf info.fwd_info
 
-let dest_arrow_ty (ty : ty) : ty * ty =
+let dest_arrow_ty (meta : Meta.meta) (ty : ty) : ty * ty =
   match ty with
   | TArrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
-  | _ -> raise (Failure "Unreachable")
+  | _ -> craise meta "Unreachable"
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
@@ -213,30 +214,30 @@ let fun_sig_substitute (subst : subst) (sg : fun_sig) : inst_fun_sig =
     Rem.: this function will *fail* if there are {!Pure.Loop}
     nodes (you should call it on an expression where those nodes have been eliminated).
  *)
-let rec let_group_requires_parentheses (e : texpression) : bool =
+let rec let_group_requires_parentheses (meta : Meta.meta) (e : texpression) : bool =
   match e.e with
   | Var _ | CVar _ | Const _ | App _ | Qualif _ | StructUpdate _ -> false
   | Let (monadic, _, _, next_e) ->
-      if monadic then true else let_group_requires_parentheses next_e
+      if monadic then true else let_group_requires_parentheses meta next_e
   | Switch (_, _) -> false
-  | Meta (_, next_e) -> let_group_requires_parentheses next_e
+  | Meta (_, next_e) -> let_group_requires_parentheses meta next_e
   | Lambda (_, _) ->
       (* Being conservative here *)
       true
   | Loop _ ->
       (* Should have been eliminated *)
-      raise (Failure "Unreachable")
+      craise meta "Unreachable"
 
-let texpression_requires_parentheses e =
+let texpression_requires_parentheses meta e =
   match !Config.backend with
   | FStar | Lean -> false
-  | Coq | HOL4 -> let_group_requires_parentheses e
+  | Coq | HOL4 -> let_group_requires_parentheses meta e
 
 let is_var (e : texpression) : bool =
   match e.e with Var _ -> true | _ -> false
 
-let as_var (e : texpression) : VarId.id =
-  match e.e with Var v -> v | _ -> raise (Failure "Unreachable")
+let as_var (meta : Meta.meta) (e : texpression) : VarId.id =
+  match e.e with Var v -> v | _ -> craise meta "Unreachable"
 
 let is_cvar (e : texpression) : bool =
   match e.e with CVar _ -> true | _ -> false
@@ -247,10 +248,10 @@ let is_global (e : texpression) : bool =
 let is_const (e : texpression) : bool =
   match e.e with Const _ -> true | _ -> false
 
-let ty_as_adt (ty : ty) : type_id * generic_args =
+let ty_as_adt (meta : Meta.meta) (ty : ty) : type_id * generic_args =
   match ty with
   | TAdt (id, generics) -> (id, generics)
-  | _ -> raise (Failure "Unreachable")
+  | _ -> craise meta "Unreachable"
 
 (** Remove the external occurrences of {!Meta} *)
 let rec unmeta (e : texpression) : texpression =
@@ -287,13 +288,13 @@ let rec destruct_lets (e : texpression) :
 (** Destruct an expression into a list of nested lets, where there
     is no interleaving between monadic and non-monadic lets.
  *)
-let destruct_lets_no_interleave (e : texpression) :
+let destruct_lets_no_interleave (meta : Meta.meta) (e : texpression) :
     (bool * typed_pattern * texpression) list * texpression =
   (* Find the "kind" of the first let (monadic or non-monadic) *)
   let m =
     match e.e with
     | Let (monadic, _, _, _) -> monadic
-    | _ -> raise (Failure "Unreachable")
+    | _ -> craise meta "Unreachable"
   in
   (* Destruct the rest *)
   let rec destruct_lets (e : texpression) :
@@ -320,9 +321,9 @@ let destruct_apps (e : texpression) : texpression * texpression list =
   aux [] e
 
 (** Make an [App (app, arg)] expression *)
-let mk_app (app : texpression) (arg : texpression) : texpression =
+let mk_app (meta : Meta.meta) (app : texpression) (arg : texpression) : texpression =
   let raise_or_return msg =
-    if !Config.fail_hard then raise (Failure msg)
+    if !Config.fail_hard then craise meta msg
     else
       let e = App (app, arg) in
       (* Dummy type - TODO: introduce an error type *)
@@ -343,8 +344,8 @@ let mk_app (app : texpression) (arg : texpression) : texpression =
   | _ -> raise_or_return "Expected an arrow type"
 
 (** The reverse of {!destruct_apps} *)
-let mk_apps (app : texpression) (args : texpression list) : texpression =
-  List.fold_left (fun app arg -> mk_app app arg) app args
+let mk_apps (meta : Meta.meta) (app : texpression) (args : texpression list) : texpression =
+  List.fold_left (fun app arg -> mk_app meta app arg) app args
 
 (** Destruct an expression into a qualif identifier and a list of arguments,
  *  if possible *)
@@ -367,28 +368,28 @@ let opt_destruct_function_call (e : texpression) :
       | FunOrOp fun_id -> Some (fun_id, qualif.generics, args)
       | _ -> None)
 
-let opt_destruct_result (ty : ty) : ty option =
+let opt_destruct_result (meta : Meta.meta) (ty : ty) : ty option =
   match ty with
   | TAdt (TAssumed TResult, generics) ->
-      assert (generics.const_generics = []);
-      assert (generics.trait_refs = []);
+      cassert (generics.const_generics = []) meta "TODO: Error message";
+      cassert (generics.trait_refs = []) meta "TODO: Error message";
       Some (Collections.List.to_cons_nil generics.types)
   | _ -> None
 
-let destruct_result (ty : ty) : ty = Option.get (opt_destruct_result ty)
+let destruct_result (meta : Meta.meta) (ty : ty) : ty = Option.get (opt_destruct_result meta ty)
 
-let opt_destruct_tuple (ty : ty) : ty list option =
+let opt_destruct_tuple (meta : Meta.meta) (ty : ty) : ty list option =
   match ty with
   | TAdt (TTuple, generics) ->
-      assert (generics.const_generics = []);
-      assert (generics.trait_refs = []);
+      cassert (generics.const_generics = []) meta "TODO: Error message";
+      cassert (generics.trait_refs = []) meta "TODO: Error message";
       Some generics.types
   | _ -> None
 
-let destruct_arrow (ty : ty) : ty * ty =
+let destruct_arrow (meta : Meta.meta) (ty : ty) : ty * ty =
   match ty with
   | TArrow (ty0, ty1) -> (ty0, ty1)
-  | _ -> raise (Failure "Not an arrow type")
+  | _ -> craise meta "Not an arrow type"
 
 let rec destruct_arrows (ty : ty) : ty list * ty =
   match ty with
@@ -422,17 +423,17 @@ let iter_switch_body_branches (f : texpression -> unit) (sb : switch_body) :
       f e_else
   | Match branches -> List.iter (fun (b : match_branch) -> f b.branch) branches
 
-let mk_switch (scrut : texpression) (sb : switch_body) : texpression =
+let mk_switch (meta : Meta.meta) (scrut : texpression) (sb : switch_body) : texpression =
   (* Sanity check: the scrutinee has the proper type *)
   (match sb with
-  | If (_, _) -> assert (scrut.ty = TLiteral TBool)
+  | If (_, _) -> cassert (scrut.ty = TLiteral TBool) meta "The scrutinee does not have the proper type"
   | Match branches ->
       List.iter
-        (fun (b : match_branch) -> assert (b.pat.ty = scrut.ty))
+        (fun (b : match_branch) -> cassert (b.pat.ty = scrut.ty) meta "The scrutinee does not have the proper type")
         branches);
   (* Sanity check: all the branches have the same type *)
   let ty = get_switch_body_ty sb in
-  iter_switch_body_branches (fun e -> assert (e.ty = ty)) sb;
+  iter_switch_body_branches (fun e -> cassert (e.ty = ty) meta "All branches should have the same type") sb;
   (* Put together *)
   let e = Switch (scrut, sb) in
   { e; ty }
@@ -497,7 +498,7 @@ let mk_simpl_tuple_pattern (vl : typed_pattern list) : typed_pattern =
       { value; ty }
 
 (** Similar to {!mk_simpl_tuple_pattern} *)
-let mk_simpl_tuple_texpression (vl : texpression list) : texpression =
+let mk_simpl_tuple_texpression (meta : Meta.meta) (vl : texpression list) : texpression =
   match vl with
   | [ v ] -> v
   | _ ->
@@ -510,20 +511,20 @@ let mk_simpl_tuple_texpression (vl : texpression list) : texpression =
       let qualif = { id; generics = mk_generic_args_from_types tys } in
       (* Put everything together *)
       let cons = { e = Qualif qualif; ty } in
-      mk_apps cons vl
+      mk_apps meta cons vl
 
 let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
     (vl : typed_pattern list) : typed_pattern =
   let value = PatAdt { variant_id; field_values = vl } in
   { value; ty = adt_ty }
 
-let ty_as_integer (t : ty) : T.integer_type =
+let ty_as_integer (meta : Meta.meta) (t : ty) : T.integer_type =
   match t with
   | TLiteral (TInteger int_ty) -> int_ty
-  | _ -> raise (Failure "Unreachable")
+  | _ -> craise meta "Unreachable"
 
-let ty_as_literal (t : ty) : T.literal_type =
-  match t with TLiteral ty -> ty | _ -> raise (Failure "Unreachable")
+let ty_as_literal (meta : Meta.meta) (t : ty) : T.literal_type =
+  match t with TLiteral ty -> ty | _ -> craise meta "Unreachable"
 
 let mk_state_ty : ty = TAdt (TAssumed TState, empty_generic_args)
 
@@ -540,15 +541,15 @@ let mk_error (error : VariantId.id) : texpression =
   let e = Qualif qualif in
   { e; ty }
 
-let unwrap_result_ty (ty : ty) : ty =
+let unwrap_result_ty (meta : Meta.meta) (ty : ty) : ty =
   match ty with
   | TAdt
       ( TAssumed TResult,
         { types = [ ty ]; const_generics = []; trait_refs = [] } ) ->
       ty
-  | _ -> raise (Failure "not a result type")
+  | _ -> craise meta "not a result type"
 
-let mk_result_fail_texpression (error : texpression) (ty : ty) : texpression =
+let mk_result_fail_texpression (meta : Meta.meta) (error : texpression) (ty : ty) : texpression =
   let type_args = [ ty ] in
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
   let id =
@@ -558,14 +559,14 @@ let mk_result_fail_texpression (error : texpression) (ty : ty) : texpression =
   let cons_e = Qualif qualif in
   let cons_ty = mk_arrow error.ty ty in
   let cons = { e = cons_e; ty = cons_ty } in
-  mk_app cons error
+  mk_app meta cons error
 
-let mk_result_fail_texpression_with_error_id (error : VariantId.id) (ty : ty) :
+let mk_result_fail_texpression_with_error_id (meta : Meta.meta) (error : VariantId.id) (ty : ty) :
     texpression =
   let error = mk_error error in
-  mk_result_fail_texpression error ty
+  mk_result_fail_texpression meta error ty
 
-let mk_result_return_texpression (v : texpression) : texpression =
+let mk_result_return_texpression (meta : Meta.meta) (v : texpression) : texpression =
   let type_args = [ v.ty ] in
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
   let id =
@@ -575,7 +576,7 @@ let mk_result_return_texpression (v : texpression) : texpression =
   let cons_e = Qualif qualif in
   let cons_ty = mk_arrow v.ty ty in
   let cons = { e = cons_e; ty = cons_ty } in
-  mk_app cons v
+  mk_app meta cons v
 
 (** Create a [Fail err] pattern which captures the error *)
 let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : typed_pattern =
@@ -613,7 +614,7 @@ let mk_fuel_var (id : VarId.id) : var =
 let mk_fuel_texpression (id : VarId.id) : texpression =
   { e = Var id; ty = mk_fuel_ty }
 
-let rec typed_pattern_to_texpression (pat : typed_pattern) : texpression option
+let rec typed_pattern_to_texpression (meta : Meta.meta) (pat : typed_pattern) : texpression option
     =
   let e_opt =
     match pat.value with
@@ -621,13 +622,13 @@ let rec typed_pattern_to_texpression (pat : typed_pattern) : texpression option
     | PatVar (v, _) -> Some (Var v.id)
     | PatDummy -> None
     | PatAdt av ->
-        let fields = List.map typed_pattern_to_texpression av.field_values in
+        let fields = List.map (typed_pattern_to_texpression meta) av.field_values in
         if List.mem None fields then None
         else
           let fields_values = List.map (fun e -> Option.get e) fields in
 
           (* Retrieve the type id and the type args from the pat type (simpler this way *)
-          let adt_id, generics = ty_as_adt pat.ty in
+          let adt_id, generics = ty_as_adt meta pat.ty in
 
           (* Create the constructor *)
           let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
@@ -640,7 +641,7 @@ let rec typed_pattern_to_texpression (pat : typed_pattern) : texpression option
           let cons = { e = cons_e; ty = cons_ty } in
 
           (* Apply the constructor *)
-          Some (mk_apps cons fields_values).e
+          Some (mk_apps meta cons fields_values).e
   in
   match e_opt with None -> None | Some e -> Some { e; ty = pat.ty }
 

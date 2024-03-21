@@ -18,7 +18,7 @@ let rec apply_proj_borrows_on_shared_borrow (meta : Meta.meta) (ctx : eval_ctx)
   (* Sanity check - TODO: move those elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
-  assert (ty_is_rty ty && ety = v.ty);
+  cassert (ty_is_rty ty && ety = v.ty) meta "TODO: error message";
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then []
   else
@@ -27,7 +27,7 @@ let rec apply_proj_borrows_on_shared_borrow (meta : Meta.meta) (ctx : eval_ctx)
     | VAdt adt, TAdt (id, generics) ->
         (* Retrieve the types of the fields *)
         let field_types =
-          Assoc.ctx_adt_value_get_inst_norm_field_rtypes ctx adt id generics
+          Assoc.ctx_adt_value_get_inst_norm_field_rtypes meta ctx adt id generics
         in
 
         (* Project over the field values *)
@@ -84,7 +84,7 @@ let rec apply_proj_borrows_on_shared_borrow (meta : Meta.meta) (ctx : eval_ctx)
     | VLoan _, _ -> craise meta "Unreachable"
     | VSymbolic s, _ ->
         (* Check that the projection doesn't contain ended regions *)
-        assert (not (projections_intersect meta s.sv_ty ctx.ended_regions ty regions));
+        cassert (not (projections_intersect meta s.sv_ty ctx.ended_regions ty regions)) meta "TODO: error message";
         [ AsbProjReborrows (s, ty) ]
     | _ -> craise meta "Unreachable"
 
@@ -95,7 +95,7 @@ let rec apply_proj_borrows (meta : Meta.meta) (check_symbolic_no_ended : bool) (
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
-  assert (ty_is_rty ty && ety = v.ty);
+  cassert (ty_is_rty ty && ety = v.ty) meta "TODO: error message";
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then { value = AIgnored; ty }
   else
@@ -105,7 +105,7 @@ let rec apply_proj_borrows (meta : Meta.meta) (check_symbolic_no_ended : bool) (
       | VAdt adt, TAdt (id, generics) ->
           (* Retrieve the types of the fields *)
           let field_types =
-            Assoc.ctx_adt_value_get_inst_norm_field_rtypes ctx adt id generics
+            Assoc.ctx_adt_value_get_inst_norm_field_rtypes meta ctx adt id generics
           in
           (* Project over the field values *)
           let fields_types = List.combine adt.field_values field_types in
@@ -212,13 +212,13 @@ let rec apply_proj_borrows (meta : Meta.meta) (check_symbolic_no_ended : bool) (
                 ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
                 ^ RegionId.Set.to_string None rset2
                 ^ "\n"));
-            assert (not (projections_intersect meta ty1 rset1 ty2 rset2)));
+            cassert (not (projections_intersect meta ty1 rset1 ty2 rset2))) meta "TODO: error message";
           ASymbolic (AProjBorrows (s, ty))
       | _ ->
           log#lerror
             (lazy
               ("apply_proj_borrows: unexpected inputs:\n- input value: "
-              ^ typed_value_to_string ctx v
+              ^ typed_value_to_string meta ctx v
               ^ "\n- proj rty: " ^ ty_to_string ctx ty));
           craise meta "Unreachable"
     in
@@ -261,7 +261,7 @@ let apply_proj_loans_on_symbolic_expansion (meta : Meta.meta) (regions : RegionI
     (original_sv_ty : rty) : typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
-  assert (ty_has_regions_in_set regions original_sv_ty);
+  cassert (ty_has_regions_in_set regions original_sv_ty) meta "TODO: error message";
   (* Match *)
   let (value, ty) : avalue * ty =
     match (see, original_sv_ty) with
@@ -276,7 +276,7 @@ let apply_proj_loans_on_symbolic_expansion (meta : Meta.meta) (regions : RegionI
         (AAdt { variant_id; field_values }, original_sv_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
         (* Sanity check *)
-        assert (spc.sv_ty = ref_ty);
+        cassert (spc.sv_ty = ref_ty) meta "TODO: error message";
         (* Apply the projector to the borrowed value *)
         let child_av = mk_aproj_loans_value_from_symbolic_value regions spc in
         (* Check if the region is in the set of projected regions (note that
@@ -294,7 +294,7 @@ let apply_proj_loans_on_symbolic_expansion (meta : Meta.meta) (regions : RegionI
           (ALoan (AIgnoredMutLoan (opt_bid, child_av)), ref_ty)
     | SeSharedRef (bids, spc), TRef (r, ref_ty, RShared) ->
         (* Sanity check *)
-        assert (spc.sv_ty = ref_ty);
+        cassert (spc.sv_ty = ref_ty) meta "TODO: error message";
         (* Apply the projector to the borrowed value *)
         let child_av = mk_aproj_loans_value_from_symbolic_value regions spc in
         (* Check if the region is in the set of projected regions (note that
@@ -332,7 +332,7 @@ let apply_proj_loans_on_symbolic_expansion (meta : Meta.meta) (regions : RegionI
     borrows - easy - and mutable borrows - in this case, we reborrow the whole
     borrow: [mut_borrow ... ~~> shared_loan {...} (mut_borrow ...)]).
 *)
-let apply_reborrows (reborrows : (BorrowId.id * BorrowId.id) list)
+let apply_reborrows (meta : Meta.meta) (reborrows : (BorrowId.id * BorrowId.id) list)
     (ctx : eval_ctx) : eval_ctx =
   (* This is a bit brutal, but whenever we insert a reborrow, we remove
    * it from the list. This allows us to check that all the reborrows were
@@ -464,7 +464,7 @@ let apply_reborrows (reborrows : (BorrowId.id * BorrowId.id) list)
   (* Visit *)
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that there are no reborrows remaining *)
-  assert (!reborrows = []);
+  cassert (!reborrows = []) meta "TODO: error message";
   (* Return *)
   ctx
 
@@ -483,11 +483,11 @@ let prepare_reborrows (meta : Meta.meta) (config : config) (allow_reborrows : bo
   let apply_registered_reborrows (ctx : eval_ctx) : eval_ctx =
     match config.mode with
     | ConcreteMode ->
-        assert (!reborrows = []);
+        cassert (!reborrows = []) meta "TODO: error message";
         ctx
     | SymbolicMode ->
         (* Apply the reborrows *)
-        apply_reborrows !reborrows ctx
+        apply_reborrows meta !reborrows ctx
   in
   (fresh_reborrow, apply_registered_reborrows)
 
@@ -495,7 +495,7 @@ let prepare_reborrows (meta : Meta.meta) (config : config) (allow_reborrows : bo
 let apply_proj_borrows_on_input_value (meta : Meta.meta) (config : config) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (ancestors_regions : RegionId.Set.t)
     (v : typed_value) (ty : rty) : eval_ctx * typed_avalue =
-  assert (ty_is_rty ty);
+  cassert (ty_is_rty ty) meta "TODO: error message";
   let check_symbolic_no_ended = true in
   let allow_reborrows = true in
   (* Prepare the reborrows *)

@@ -271,10 +271,10 @@ let () =
       (* Some options for the execution *)
 
       (* Test the unit functions with the concrete interpreter *)
-      if !test_unit_functions then Test.test_unit_functions meta m;
+      if !test_unit_functions then Test.test_unit_functions m;
 
       (* Translate the functions *)
-      Aeneas.Translate.translate_crate meta filename dest_dir m;
+      Aeneas.Translate.translate_crate filename dest_dir m;
 
       (* Print total elapsed time *)
       log#linfo

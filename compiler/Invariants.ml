@@ -55,7 +55,7 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
   (* Link all the id representants to a borrow information *)
   let borrows_infos : borrow_info BorrowId.Map.t ref = ref BorrowId.Map.empty in
   let context_to_string () : string =
-    eval_ctx_to_string ctx ^ "- representants:\n"
+    eval_ctx_to_string meta ctx ^ "- representants:\n"
     ^ ids_reprs_to_string "  " !ids_reprs
     ^ "\n- info:\n"
     ^ borrows_infos_to_string "  " !borrows_infos
@@ -77,12 +77,12 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     let infos = !borrows_infos in
     (* Use the first borrow id as representant *)
     let repr_bid = BorrowId.Set.min_elt bids in
-    assert (not (BorrowId.Map.mem repr_bid infos));
+    cassert (not (BorrowId.Map.mem repr_bid infos)) meta "TODO: Error message";
     (* Insert the mappings to the representant *)
     let reprs =
       BorrowId.Set.fold
         (fun bid reprs ->
-          assert (not (BorrowId.Map.mem bid reprs));
+          cassert (not (BorrowId.Map.mem bid reprs)) meta "TODO: Error message";
           BorrowId.Map.add bid repr_bid reprs)
         bids reprs
     in
@@ -105,8 +105,8 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     let reprs = !ids_reprs in
     let infos = !borrows_infos in
     (* Sanity checks *)
-    assert (not (BorrowId.Map.mem bid reprs));
-    assert (not (BorrowId.Map.mem bid infos));
+    cassert (not (BorrowId.Map.mem bid reprs)) meta "TODO: Error message";
+    cassert (not (BorrowId.Map.mem bid infos)) meta "TODO: Error message";
     (* Add the mapping for the representant *)
     let reprs = BorrowId.Map.add bid bid reprs in
     (* Add the mapping for the loan info *)
@@ -212,10 +212,10 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     | RShared, (BShared | BReserved) | RMut, BMut -> ()
     | _ -> craise meta "Invariant not satisfied");
     (* A reserved borrow can't point to a value inside an abstraction *)
-    assert (kind <> BReserved || not info.loan_in_abs);
+    cassert (kind <> BReserved || not info.loan_in_abs) meta "A reserved borrow can't point to a value inside an abstraction";
     (* Insert the borrow id *)
     let borrow_ids = info.borrow_ids in
-    assert (not (BorrowId.Set.mem bid borrow_ids));
+    cassert (not (BorrowId.Set.mem bid borrow_ids)) meta "TODO: Error message";
     let info = { info with borrow_ids = BorrowId.Set.add bid borrow_ids } in
     (* Update the info in the map *)
     update_info bid info
@@ -270,7 +270,7 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
   List.iter
     (fun (rkind, bid) ->
       let info = find_info bid in
-      assert (info.loan_kind = rkind))
+      cassert (info.loan_kind = rkind) meta "Not all the ignored loans are present at the proper place")
     !ignored_loans;
 
   (* Then, check the borrow infos *)
@@ -278,11 +278,11 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     (fun _ info ->
       (* Note that we can't directly compare the sets - I guess they are
        * different depending on the order in which we add the elements... *)
-      assert (
+      cassert (
         BorrowId.Set.elements info.loan_ids
-        = BorrowId.Set.elements info.borrow_ids);
+        = BorrowId.Set.elements info.borrow_ids) meta "TODO: Error message";
       match info.loan_kind with
-      | RMut -> assert (BorrowId.Set.cardinal info.loan_ids = 1)
+      | RMut -> cassert (BorrowId.Set.cardinal info.loan_ids = 1) meta "TODO: Error message"
       | RShared -> ())
     !borrows_infos
 
@@ -290,14 +290,14 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     - borrows/loans can't contain ⊥ or reserved mut borrows
     - shared loans can't contain mutable loans
  *)
-let check_borrowed_values_invariant (ctx : eval_ctx) : unit =
+let check_borrowed_values_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
   let visitor =
     object
       inherit [_] iter_eval_ctx as super
 
       method! visit_VBottom info =
         (* No ⊥ inside borrowed values *)
-        assert (Config.allow_bottom_below_borrow || not info.outer_borrow)
+        cassert (Config.allow_bottom_below_borrow || not info.outer_borrow) meta "There should be no ⊥ inside borrowed values" 
 
       method! visit_ABottom _info =
         (* ⊥ inside an abstraction is not the same as in a regular value *)
@@ -310,7 +310,7 @@ let check_borrowed_values_invariant (ctx : eval_ctx) : unit =
           | VSharedLoan (_, _) -> set_outer_shared info
           | VMutLoan _ ->
               (* No mutable loan inside a shared loan *)
-              assert (not info.outer_shared);
+              cassert (not info.outer_shared) meta "There should be no mutable loan inside a shared loan";
               set_outer_mut info
         in
         (* Continue exploring *)
@@ -322,7 +322,7 @@ let check_borrowed_values_invariant (ctx : eval_ctx) : unit =
           match bc with
           | VSharedBorrow _ -> set_outer_shared info
           | VReservedMutBorrow _ ->
-              assert (not info.outer_borrow);
+              cassert (not info.outer_borrow) meta "TODO: Error message";
               set_outer_shared info
           | VMutBorrow (_, _) -> set_outer_mut info
         in
@@ -369,7 +369,7 @@ let check_borrowed_values_invariant (ctx : eval_ctx) : unit =
 
 let check_literal_type (meta : Meta.meta) (cv : literal) (ty : literal_type) : unit =
   match (cv, ty) with
-  | VScalar sv, TInteger int_ty -> assert (sv.int_ty = int_ty)
+  | VScalar sv, TInteger int_ty -> cassert (sv.int_ty = int_ty) meta "TODO: Error message"
   | VBool _, TBool | VChar _, TChar -> ()
   | _ -> craise meta "Erroneous typing"
 
@@ -393,17 +393,17 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
 
       method! visit_EBinding info binder v =
         (* We also check that the regions are erased *)
-        assert (ty_is_ety v.ty);
+        cassert (ty_is_ety v.ty) meta "The regions should be erased";
         super#visit_EBinding info binder v
 
       method! visit_symbolic_value inside_abs v =
         (* Check that the types have regions *)
-        assert (ty_is_rty v.sv_ty);
+        cassert (ty_is_rty v.sv_ty) meta "The types should have regions";
         super#visit_symbolic_value inside_abs v
 
       method! visit_typed_value info tv =
         (* Check that the types have erased regions *)
-        assert (ty_is_ety tv.ty);
+        cassert (ty_is_ety tv.ty) meta "The types should have erased regions";
         (* Check the current pair (value, type) *)
         (match (tv.value, tv.ty) with
         | VLiteral cv, TLiteral ty -> check_literal_type meta cv ty
@@ -413,13 +413,13 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
              * parameters, etc. *)
             let def = ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
-            assert (
-              List.length generics.regions = List.length def.generics.regions);
-            assert (List.length generics.types = List.length def.generics.types);
+            cassert (
+              List.length generics.regions = List.length def.generics.regions) meta "TODO: Error message";
+            cassert (List.length generics.types = List.length def.generics.types) meta "TODO: Error message";
             (* Check that the variant id is consistent *)
             (match (av.variant_id, def.kind) with
             | Some variant_id, Enum variants ->
-                assert (VariantId.to_int variant_id < List.length variants)
+                cassert (VariantId.to_int variant_id < List.length variants) meta "The variant id should be consistent"
             | None, Struct _ -> ()
             | _ -> craise meta "Erroneous typing");
             (* Check that the field types are correct *)
@@ -429,24 +429,24 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             in
             let fields_with_types = List.combine av.field_values field_types in
             List.iter
-              (fun ((v, ty) : typed_value * ty) -> assert (v.ty = ty))
+              (fun ((v, ty) : typed_value * ty) -> cassert (v.ty = ty) meta "The field types are not correct")
               fields_with_types
         (* Tuple case *)
         | VAdt av, TAdt (TTuple, generics) ->
-            assert (generics.regions = []);
-            assert (generics.const_generics = []);
-            assert (av.variant_id = None);
+            cassert (generics.regions = []) meta "TODO: Error message";
+            cassert (generics.const_generics = []) meta "TODO: Error message";
+            cassert (av.variant_id = None) meta "TODO: Error message";
             (* Check that the fields have the proper values - and check that there
              * are as many fields as field types at the same time *)
             let fields_with_types =
               List.combine av.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : typed_value * ty) -> assert (v.ty = ty))
+              (fun ((v, ty) : typed_value * ty) -> cassert (v.ty = ty) meta "The fields does not have the proper values or there are not as many fields as field types at the same time TODO: error message")
               fields_with_types
         (* Assumed type case *)
         | VAdt av, TAdt (TAssumed aty_id, generics) -> (
-            assert (av.variant_id = None);
+            cassert (av.variant_id = None) meta "TODO: Error message";
             match
               ( aty_id,
                 av.field_values,
@@ -456,20 +456,20 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             with
             (* Box *)
             | TBox, [ inner_value ], [], [ inner_ty ], [] ->
-                assert (inner_value.ty = inner_ty)
+                cassert (inner_value.ty = inner_ty) meta "TODO: Error message"
             | TArray, inner_values, _, [ inner_ty ], [ cg ] ->
                 (* *)
-                assert (
+                cassert (
                   List.for_all
                     (fun (v : typed_value) -> v.ty = inner_ty)
-                    inner_values);
+                    inner_values) meta "TODO: Error message";
                 (* The length is necessarily concrete *)
                 let len =
                   (ValuesUtils.literal_as_scalar
                      (TypesUtils.const_generic_as_literal cg))
                     .value
                 in
-                assert (Z.of_int (List.length inner_values) = len)
+                cassert (Z.of_int (List.length inner_values) = len) meta "TODO: Error message"
             | (TSlice | TStr), _, _, _, _ -> craise meta "Unexpected"
             | _ -> craise meta "Erroneous type")
         | VBottom, _ -> (* Nothing to check *) ()
@@ -481,27 +481,27 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, sv, _)) ->
-                    assert (sv.ty = ref_ty)
+                    cassert (sv.ty = ref_ty) meta "TODO: Error message"
                 | _ -> craise meta "Inconsistent context")
             | VMutBorrow (_, bv), RMut ->
-                assert (
+                cassert (
                   (* Check that the borrowed value has the proper type *)
-                  bv.ty = ref_ty)
+                  bv.ty = ref_ty) meta "TODO: Error message"
             | _ -> craise meta "Erroneous typing")
         | VLoan lc, ty -> (
             match lc with
-            | VSharedLoan (_, sv) -> assert (sv.ty = ty)
+            | VSharedLoan (_, sv) -> cassert (sv.ty = ty) meta "TODO: Error message"
             | VMutLoan bid -> (
                 (* Lookup the borrowed value to check it has the proper type *)
                 let glc = lookup_borrow meta ek_all bid ctx in
                 match glc with
-                | Concrete (VMutBorrow (_, bv)) -> assert (bv.ty = ty)
+                | Concrete (VMutBorrow (_, bv)) -> cassert (bv.ty = ty) meta "The borrowed value does not have the proper type"
                 | Abstract (AMutBorrow (_, sv)) ->
-                    assert (Substitute.erase_regions sv.ty = ty)
+                    cassert (Substitute.erase_regions sv.ty = ty) meta "The borrowed value does not have the proper type"
                 | _ -> craise meta "Inconsistent context"))
         | VSymbolic sv, ty ->
             let ty' = Substitute.erase_regions sv.sv_ty in
-            assert (ty' = ty)
+            cassert (ty' = ty) meta "TODO: Error message"
         | _ -> craise meta "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_value info tv
@@ -516,7 +516,7 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
        * *)
       method! visit_typed_avalue info atv =
         (* Check that the types have regions *)
-        assert (ty_is_rty atv.ty);
+        cassert (ty_is_rty atv.ty) meta "The types should have regions";
         (* Check the current pair (value, type) *)
         (match (atv.value, atv.ty) with
         (* ADT case *)
@@ -525,16 +525,16 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
              * parameters, etc. *)
             let def = ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
-            assert (
-              List.length generics.regions = List.length def.generics.regions);
-            assert (List.length generics.types = List.length def.generics.types);
-            assert (
+            cassert (
+              List.length generics.regions = List.length def.generics.regions) meta "TODO: Error message";
+            cassert (List.length generics.types = List.length def.generics.types) meta "TODO: Error message";
+            cassert (
               List.length generics.const_generics
-              = List.length def.generics.const_generics);
+              = List.length def.generics.const_generics) meta "TODO: Error message";
             (* Check that the variant id is consistent *)
             (match (av.variant_id, def.kind) with
             | Some variant_id, Enum variants ->
-                assert (VariantId.to_int variant_id < List.length variants)
+                cassert (VariantId.to_int variant_id < List.length variants) meta "The variant id should be consistent"
             | None, Struct _ -> ()
             | _ -> craise meta "Erroneous typing");
             (* Check that the field types are correct *)
@@ -544,24 +544,24 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             in
             let fields_with_types = List.combine av.field_values field_types in
             List.iter
-              (fun ((v, ty) : typed_avalue * ty) -> assert (v.ty = ty))
+              (fun ((v, ty) : typed_avalue * ty) -> cassert (v.ty = ty) meta "TODO: Error message")
               fields_with_types
         (* Tuple case *)
         | AAdt av, TAdt (TTuple, generics) ->
-            assert (generics.regions = []);
-            assert (generics.const_generics = []);
-            assert (av.variant_id = None);
+            cassert (generics.regions = []) meta "TODO: Error message";
+            cassert (generics.const_generics = []) meta "TODO: Error message";
+            cassert (av.variant_id = None) meta "TODO: Error message";
             (* Check that the fields have the proper values - and check that there
              * are as many fields as field types at the same time *)
             let fields_with_types =
               List.combine av.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : typed_avalue * ty) -> assert (v.ty = ty))
+              (fun ((v, ty) : typed_avalue * ty) -> cassert (v.ty = ty) meta "The fields do not have the proper values or there are not as many fields as field types at the same time TODO: Error message")
               fields_with_types
         (* Assumed type case *)
         | AAdt av, TAdt (TAssumed aty_id, generics) -> (
-            assert (av.variant_id = None);
+            cassert (av.variant_id = None) meta "TODO: Error message";
             match
               ( aty_id,
                 av.field_values,
@@ -571,27 +571,27 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             with
             (* Box *)
             | TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
-                assert (boxed_value.ty = boxed_ty)
+                cassert (boxed_value.ty = boxed_ty) meta "TODO: Error message"
             | _ -> craise meta "Erroneous type")
         | ABottom, _ -> (* Nothing to check *) ()
         | ABorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | AMutBorrow (_, av), RMut ->
                 (* Check that the child value has the proper type *)
-                assert (av.ty = ref_ty)
+                cassert (av.ty = ref_ty) meta "TODO: Error message"
             | ASharedBorrow bid, RShared -> (
                 (* Lookup the borrowed value to check it has the proper type *)
                 let _, glc = lookup_loan meta ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, sv, _)) ->
-                    assert (sv.ty = Substitute.erase_regions ref_ty)
+                    cassert (sv.ty = Substitute.erase_regions ref_ty) meta "TODO: Error message"
                 | _ -> craise meta "Inconsistent context")
-            | AIgnoredMutBorrow (_opt_bid, av), RMut -> assert (av.ty = ref_ty)
+            | AIgnoredMutBorrow (_opt_bid, av), RMut -> cassert (av.ty = ref_ty) meta "TODO: Error message"
             | ( AEndedIgnoredMutBorrow { given_back; child; given_back_meta = _ },
                 RMut ) ->
-                assert (given_back.ty = ref_ty);
-                assert (child.ty = ref_ty)
+                cassert (given_back.ty = ref_ty) meta "TODO: Error message";
+                cassert (child.ty = ref_ty) meta "TODO: Error message"
             | AProjSharedBorrow _, RShared -> ()
             | _ -> craise meta "Inconsistent context")
         | ALoan lc, aty -> (
@@ -599,54 +599,54 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             | AMutLoan (bid, child_av) | AIgnoredMutLoan (Some bid, child_av)
               -> (
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                assert (child_av.ty = borrowed_aty);
+                cassert (child_av.ty = borrowed_aty) meta "TODO: Error message";
                 (* Lookup the borrowed value to check it has the proper type *)
                 let glc = lookup_borrow meta ek_all bid ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) ->
-                    assert (bv.ty = Substitute.erase_regions borrowed_aty)
+                    cassert (bv.ty = Substitute.erase_regions borrowed_aty) meta "TODO: Error message"
                 | Abstract (AMutBorrow (_, sv)) ->
-                    assert (
+                    cassert (
                       Substitute.erase_regions sv.ty
-                      = Substitute.erase_regions borrowed_aty)
+                      = Substitute.erase_regions borrowed_aty) meta "TODO: Error message"
                 | _ -> craise meta "Inconsistent context")
             | AIgnoredMutLoan (None, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                assert (child_av.ty = borrowed_aty)
+                cassert (child_av.ty = borrowed_aty) meta "TODO: Error message"
             | ASharedLoan (_, sv, child_av) | AEndedSharedLoan (sv, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                assert (sv.ty = Substitute.erase_regions borrowed_aty);
+                cassert (sv.ty = Substitute.erase_regions borrowed_aty) meta "TODO: Error message";
                 (* TODO: the type of aloans doesn't make sense, see above *)
-                assert (child_av.ty = borrowed_aty)
+                cassert (child_av.ty = borrowed_aty) meta "TODO: Error message"
             | AEndedMutLoan { given_back; child; given_back_meta = _ }
             | AEndedIgnoredMutLoan { given_back; child; given_back_meta = _ } ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                assert (given_back.ty = borrowed_aty);
-                assert (child.ty = borrowed_aty)
+                cassert (given_back.ty = borrowed_aty) meta "TODO: Error message";
+                cassert (child.ty = borrowed_aty) meta "TODO: Error message"
             | AIgnoredSharedLoan child_av ->
-                assert (child_av.ty = aloan_get_expected_child_type aty))
+                cassert (child_av.ty = aloan_get_expected_child_type aty) meta "TODO: Error message")
         | ASymbolic aproj, ty -> (
             let ty1 = Substitute.erase_regions ty in
             match aproj with
             | AProjLoans (sv, _) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
-                assert (ty1 = ty2);
+                cassert (ty1 = ty2) meta "TODO: Error message";
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
-                assert (ty_has_regions_in_set abs.regions sv.sv_ty)
+                cassert (ty_has_regions_in_set abs.regions sv.sv_ty) meta "The symbolic values should contain regions of interest or they should have been reduced to [] TODO: error message"
             | AProjBorrows (sv, proj_ty) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
-                assert (ty1 = ty2);
+                cassert (ty1 = ty2) meta "TODO: Error message";
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
-                assert (ty_has_regions_in_set abs.regions proj_ty)
+                cassert (ty_has_regions_in_set abs.regions proj_ty) meta "The symbolic values should contain regions of interest or they should have been reduced to [] TODO: error message"
             | AEndedProjLoans (_msv, given_back_ls) ->
                 List.iter
                   (fun (_, proj) ->
                     match proj with
-                    | AProjBorrows (_sv, ty') -> assert (ty' = ty)
+                    | AProjBorrows (_sv, ty') -> cassert (ty' = ty) meta "TODO: Error message"
                     | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
                     | _ -> craise meta "Unexpected")
                   given_back_ls
@@ -657,7 +657,7 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
               (lazy
                 ("Erroneous typing:" ^ "\n- raw value: " ^ show_typed_avalue atv
                ^ "\n- value: "
-                ^ typed_avalue_to_string ctx atv
+                ^ typed_avalue_to_string meta ctx atv
                 ^ "\n- type: " ^ ty_to_string ctx atv.ty));
             craise meta "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
@@ -766,15 +766,15 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
      *)
     (* A symbolic value can't be both in the regular environment and inside
      * projectors of borrows in abstractions *)
-    assert (info.env_count = 0 || info.aproj_borrows = []);
+    cassert (info.env_count = 0 || info.aproj_borrows = []) meta "A symbolic value can't be both in the regular environment and inside projectors of borrows in abstractions";
     (* A symbolic value containing borrows can't be duplicated (i.e., copied):
      * it must be expanded first *)
     if ty_has_borrows ctx.type_ctx.type_infos info.ty then
-      assert (info.env_count <= 1);
+      cassert (info.env_count <= 1) meta "A symbolic value containing borrows can't be duplicated (i.e., copied): it must be expanded first";
     (* A duplicated symbolic value is necessarily primitively copyable *)
-    assert (info.env_count <= 1 || ty_is_primitively_copyable info.ty);
+    cassert (info.env_count <= 1 || ty_is_primitively_copyable info.ty) meta "A duplicated symbolic value should necessarily be primitively copyable";
 
-    assert (info.aproj_borrows = [] || info.aproj_loans <> []);
+    cassert (info.aproj_borrows = [] || info.aproj_loans <> []) meta "TODO: Error message";
     (* At the same time:
      * - check that the loans don't intersect
      * - compute the set of regions for which we project loans
@@ -786,7 +786,7 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
           let regions =
             RegionId.Set.fold
               (fun rid regions ->
-                assert (not (RegionId.Set.mem rid regions));
+                cassert (not (RegionId.Set.mem rid regions)) meta "The loan projectors should contain the region projectors";
                 RegionId.Set.add rid regions)
               regions linfo.regions
           in
@@ -796,8 +796,8 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
     (* Check that the union of the loan projectors contains the borrow projections. *)
     List.iter
       (fun binfo ->
-        assert (
-          projection_contains meta info.ty loan_regions binfo.proj_ty binfo.regions))
+        cassert (
+          projection_contains meta info.ty loan_regions binfo.proj_ty binfo.regions) meta "The union of the loan projectors should contain the borrow projections")
       info.aproj_borrows;
     ()
   in
@@ -806,9 +806,9 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
 
 let check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
-    log#ldebug (lazy ("Checking invariants:\n" ^ eval_ctx_to_string ctx));
+    log#ldebug (lazy ("Checking invariants:\n" ^ eval_ctx_to_string meta ctx));
     check_loans_borrows_relation_invariant meta ctx;
-    check_borrowed_values_invariant ctx;
+    check_borrowed_values_invariant meta ctx;
     check_typing_invariant meta ctx;
     check_symbolic_values meta ctx)
   else log#ldebug (lazy "Not checking invariants (check is not activated)")

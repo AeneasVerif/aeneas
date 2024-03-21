@@ -451,11 +451,11 @@ let erase_regions (ty : ty) : ty =
 
 (** Push an uninitialized variable (which thus maps to {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_var (meta : Meta.meta) (ctx : eval_ctx) (var : var) : eval_ctx =
-  ctx_push_var meta ctx var (mk_bottom (erase_regions var.var_ty))
+  ctx_push_var meta ctx var (mk_bottom meta (erase_regions var.var_ty))
 
 (** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_vars (meta : Meta.meta) (ctx : eval_ctx) (vars : var list) : eval_ctx =
-  let vars = List.map (fun v -> (v, mk_bottom (erase_regions v.var_ty))) vars in
+  let vars = List.map (fun v -> (v, mk_bottom meta (erase_regions v.var_ty))) vars in
   ctx_push_vars meta ctx vars
 
 let env_find_abs (env : env) (pred : abs -> bool) : abs option =

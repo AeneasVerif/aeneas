@@ -72,13 +72,13 @@ let borrow_or_abs_ids_chain_to_string (ids : borrow_or_abs_ids) : string =
   String.concat " -> " ids
 
 (** Add a borrow or abs id to a chain of ids, while checking that we don't loop *)
-let add_borrow_or_abs_id_to_chain (msg : string) (id : borrow_or_abs_id)
+let add_borrow_or_abs_id_to_chain (meta : Meta.meta) (msg : string) (id : borrow_or_abs_id)
     (ids : borrow_or_abs_ids) : borrow_or_abs_ids =
   if List.mem id ids then
-    raise
-      (Failure
+    craise
+      meta
          (msg ^ "detected a loop in the chain of ids: "
-         ^ borrow_or_abs_ids_chain_to_string (id :: ids)))
+         ^ borrow_or_abs_ids_chain_to_string (id :: ids))
   else id :: ids
 
 (** Helper function.
@@ -100,14 +100,14 @@ let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool
     =
   let compare = compare_rtys meta default combine compare_regions in
   (* Sanity check - TODO: don't do this at every recursive call *)
-  cassert (ty_is_rty ty1 && ty_is_rty ty2) meta "ty1 or ty2 are not rty TODO";
+  cassert (ty_is_rty ty1 && ty_is_rty ty2) meta "ty1 or ty2 are not rty TODO: Error message";
   (* Normalize the associated types *)
   match (ty1, ty2) with
   | TLiteral lit1, TLiteral lit2 ->
-      cassert (lit1 = lit2) meta "Tlitrals are not equal TODO";
+      cassert (lit1 = lit2) meta "Tlitrals are not equal TODO: Error message";
       default
   | TAdt (id1, generics1), TAdt (id2, generics2) ->
-      cassert (id1 = id2) meta "ids are not equal TODO";
+      cassert (id1 = id2) meta "ids are not equal TODO: Error message";
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
       cassert (generics1.const_generics = generics2.const_generics) meta "const generics are not the same";
@@ -144,7 +144,7 @@ let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool
       combine params_b tys_b
   | TRef (r1, ty1, kind1), TRef (r2, ty2, kind2) ->
       (* Sanity check *)
-      cassert (kind1 = kind2) meta "kind1 and kind2 are not equal TODO";
+      cassert (kind1 = kind2) meta "kind1 and kind2 are not equal TODO: Error message";
       (* Explanation for the case where we check if projections intersect:
        * the projections intersect if the borrows intersect or their contents
        * intersect. *)
@@ -152,7 +152,7 @@ let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool
       let tys_b = compare ty1 ty2 in
       combine regions_b tys_b
   | TVar id1, TVar id2 ->
-      cassert (id1 = id2) meta "Ids are not the same TODO";
+      cassert (id1 = id2) meta "Ids are not the same TODO: Error message";
       default
   | TTraitType _, TTraitType _ ->
       (* The types should have been normalized. If after normalization we
@@ -301,7 +301,7 @@ let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
     The loan is referred to by a borrow id.
     Raises an exception if no loan was found.
  *)
-let lookup_loan (meta : Meta.meta)  (ek : exploration_kind) (l : BorrowId.id) (ctx : eval_ctx) :
+let lookup_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (ctx : eval_ctx) :
     abs_or_var_id * g_loan_content =
   match lookup_loan_opt meta ek l ctx with
   | None -> craise meta "Unreachable"
@@ -936,7 +936,7 @@ let update_intersecting_aproj_loans (meta : Meta.meta) (proj_regions : RegionId.
     (subst : abs -> (msymbolic_value * aproj) list -> aproj) (ctx : eval_ctx) :
     eval_ctx =
   (* *)
-  cassert (ty_is_rty proj_ty) meta "proj_ty is not rty TODO";
+  cassert (ty_is_rty proj_ty) meta "proj_ty is not rty TODO: Error message";
   (* Small helpers for sanity checks *)
   let updated = ref false in
   let update abs local_given_back : aproj =
@@ -1158,7 +1158,7 @@ let no_aproj_over_symbolic_in_context (meta : Meta.meta)  (sv : symbolic_value) 
     
     **Remark:** we don't take the *ignored* mut/shared loans into account.
  *)
-let get_first_non_ignored_aloan_in_abstraction (meta : Meta.meta)  (abs : abs) :
+let get_first_non_ignored_aloan_in_abstraction (meta : Meta.meta) (abs : abs) :
     borrow_ids_or_symbolic_value option =
   (* Explore to find a loan *)
   let obj =

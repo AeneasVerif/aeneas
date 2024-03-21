@@ -13,13 +13,13 @@ type access_kind = Read | Write | Move
     updates the environment (by ending borrows, expanding symbolic values, etc.)
     until it manages to fully access the provided place.
  *)
-val update_ctx_along_read_place : config -> access_kind -> place -> cm_fun
+val update_ctx_along_read_place : Meta.meta -> config -> access_kind -> place -> cm_fun
 
 (** Update the environment to be able to write to a place.
 
     See {!update_ctx_along_read_place}.
 *)
-val update_ctx_along_write_place : config -> access_kind -> place -> cm_fun
+val update_ctx_along_write_place : Meta.meta -> config -> access_kind -> place -> cm_fun
 
 (** Read the value at a given place.
 
@@ -29,7 +29,7 @@ val update_ctx_along_write_place : config -> access_kind -> place -> cm_fun
     Note that we only access the value at the place, and do not check that
     the value is "well-formed" (for instance that it doesn't contain bottoms).
  *)
-val read_place : access_kind -> place -> eval_ctx -> typed_value
+val read_place : Meta.meta -> access_kind -> place -> eval_ctx -> typed_value
 
 (** Update the value at a given place.
 
@@ -40,20 +40,21 @@ val read_place : access_kind -> place -> eval_ctx -> typed_value
     the overwritten value contains borrows, loans, etc. and will simply
     overwrite it.
  *)
-val write_place : access_kind -> place -> typed_value -> eval_ctx -> eval_ctx
+val write_place : Meta.meta -> access_kind -> place -> typed_value -> eval_ctx -> eval_ctx
 
 (** Compute an expanded tuple ⊥ value.
 
     [compute_expanded_bottom_tuple_value [ty0, ..., tyn]] returns
     [(⊥:ty0, ..., ⊥:tyn)]
  *)
-val compute_expanded_bottom_tuple_value : ety list -> typed_value
+val compute_expanded_bottom_tuple_value : Meta.meta -> ety list -> typed_value
 
 (** Compute an expanded ADT ⊥ value.
 
     The types in the generics should use erased regions.
   *)
 val compute_expanded_bottom_adt_value :
+  Meta.meta ->
   eval_ctx ->
   TypeDeclId.id ->
   VariantId.id option ->
@@ -73,7 +74,7 @@ val compute_expanded_bottom_adt_value :
     that the place is *inside* a borrow, if we end the borrow, we won't be able
     to reinsert the value back).
  *)
-val drop_outer_loans_at_lplace : config -> place -> cm_fun
+val drop_outer_loans_at_lplace : Meta.meta -> config -> place -> cm_fun
 
 (** End the loans at a given place: read the value, if it contains a loan,
     end this loan, repeat.
@@ -84,7 +85,7 @@ val drop_outer_loans_at_lplace : config -> place -> cm_fun
     when moving values, we can't move a value which contains loans and thus need
     to end them, etc.
  *)
-val end_loans_at_place : config -> access_kind -> place -> cm_fun
+val end_loans_at_place : Meta.meta -> config -> access_kind -> place -> cm_fun
 
 (** Small utility.
 
@@ -95,4 +96,4 @@ val end_loans_at_place : config -> access_kind -> place -> cm_fun
     place. This value should not contain any outer loan (and we check it is the
     case). Note that this value is very likely to contain ⊥ subvalues.
   *)
-val prepare_lplace : config -> place -> (typed_value -> m_fun) -> m_fun
+val prepare_lplace : Meta.meta -> config -> place -> (typed_value -> m_fun) -> m_fun

@@ -56,7 +56,7 @@ let apply_symbolic_expansion_to_target_avalues (meta : Meta.meta) (config : conf
   let check_symbolic_no_ended = false in
   (* Prepare reborrows registration *)
   let fresh_reborrow, apply_registered_reborrows =
-    prepare_reborrows config allow_reborrows
+    prepare_reborrows meta config allow_reborrows
   in
   (* Visitor to apply the expansion *)
   let obj =
@@ -66,7 +66,7 @@ let apply_symbolic_expansion_to_target_avalues (meta : Meta.meta) (config : conf
       (** When visiting an abstraction, we remember the regions it owns to be
           able to properly reduce projectors when expanding symbolic values *)
       method! visit_abs current_abs abs =
-        cassert (Option.is_none current_abs) meta "T";
+        cassert (Option.is_none current_abs) meta "TODO: error message";
         let current_abs = Some abs in
         super#visit_abs current_abs abs
 
@@ -78,7 +78,7 @@ let apply_symbolic_expansion_to_target_avalues (meta : Meta.meta) (config : conf
       method! visit_aproj current_abs aproj =
         (match aproj with
         | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
-            cassert (not (same_symbolic_id sv original_sv)) meta "T"
+            cassert (not (same_symbolic_id sv original_sv)) meta "TODO: error message"
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj current_abs aproj
 
@@ -98,10 +98,10 @@ let apply_symbolic_expansion_to_target_avalues (meta : Meta.meta) (config : conf
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then (
               (* There mustn't be any given back values *)
-              cassert (given_back = []) meta "T";
+              cassert (given_back = []) meta "TODO: error message";
               (* Apply the projector *)
               let projected_value =
-                apply_proj_loans_on_symbolic_expansion proj_regions
+                apply_proj_loans_on_symbolic_expansion meta proj_regions
                   ancestors_regions expansion original_sv.sv_ty
               in
               (* Replace *)
@@ -118,12 +118,12 @@ let apply_symbolic_expansion_to_target_avalues (meta : Meta.meta) (config : conf
               (* WARNING: we mustn't get there if the expansion is for a shared
                * reference. *)
               let expansion =
-                symbolic_expansion_non_shared_borrow_to_value original_sv
+                symbolic_expansion_non_shared_borrow_to_value meta original_sv
                   expansion
               in
               (* Apply the projector *)
               let projected_value =
-                apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                apply_proj_borrows meta check_symbolic_no_ended ctx fresh_reborrow
                   proj_regions ancestors_regions expansion proj_ty
               in
               (* Replace *)
@@ -168,7 +168,7 @@ let replace_symbolic_values (meta : Meta.meta) (at_most_once : bool) (original_s
   (* Count *)
   let replaced = ref false in
   let replace () =
-    if at_most_once then cassert (not !replaced) meta "T";
+    if at_most_once then cassert (not !replaced) meta "TODO: error message";
     replaced := true;
     nv
   in
@@ -191,7 +191,7 @@ let apply_symbolic_expansion_non_borrow (meta : Meta.meta) (config : config)
     (original_sv : symbolic_value) (expansion : symbolic_expansion)
     (ctx : eval_ctx) : eval_ctx =
   (* Apply the expansion to non-abstraction values *)
-  let nv = symbolic_expansion_non_borrow_to_value original_sv expansion in
+  let nv = symbolic_expansion_non_borrow_to_value meta original_sv expansion in
   let at_most_once = false in
   let ctx = replace_symbolic_values meta at_most_once original_sv nv.value ctx in
   (* Apply the expansion to abstraction values *)
@@ -215,7 +215,7 @@ let compute_expanded_symbolic_non_assumed_adt_value (meta : Meta.meta) (expand_e
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
   let def = ctx_lookup_type_decl ctx def_id in
-  cassert (List.length generics.regions = List.length def.generics.regions) meta "T";
+  cassert (List.length generics.regions = List.length def.generics.regions) meta "TODO: error message";
   (* Retrieve, for every variant, the list of its instantiated field types *)
   let variants_fields_types =
     AssociatedTypes.type_decl_get_inst_norm_variants_fields_rtypes ctx def
@@ -228,7 +228,7 @@ let compute_expanded_symbolic_non_assumed_adt_value (meta : Meta.meta) (expand_e
   let initialize ((variant_id, field_types) : VariantId.id option * rty list) :
       symbolic_expansion =
     let field_values =
-      List.map (fun (ty : rty) -> mk_fresh_symbolic_value ty) field_types
+      List.map (fun (ty : rty) -> mk_fresh_symbolic_value meta ty) field_types
     in
     let see = SeAdt (variant_id, field_values) in
     see
@@ -236,19 +236,19 @@ let compute_expanded_symbolic_non_assumed_adt_value (meta : Meta.meta) (expand_e
   (* Initialize all the expanded values of all the variants *)
   List.map initialize variants_fields_types
 
-let compute_expanded_symbolic_tuple_value (field_types : rty list) :
+let compute_expanded_symbolic_tuple_value (meta : Meta.meta) (field_types : rty list) :
     symbolic_expansion =
   (* Generate the field values *)
   let field_values =
-    List.map (fun sv_ty -> mk_fresh_symbolic_value sv_ty) field_types
+    List.map (fun sv_ty -> mk_fresh_symbolic_value meta sv_ty) field_types
   in
   let variant_id = None in
   let see = SeAdt (variant_id, field_values) in
   see
 
-let compute_expanded_symbolic_box_value (boxed_ty : rty) : symbolic_expansion =
+let compute_expanded_symbolic_box_value (meta : Meta.meta) (boxed_ty : rty) : symbolic_expansion =
   (* Introduce a fresh symbolic value *)
-  let boxed_value = mk_fresh_symbolic_value boxed_ty in
+  let boxed_value = mk_fresh_symbolic_value meta boxed_ty in
   let see = SeAdt (None, [ boxed_value ]) in
   see
 
@@ -268,9 +268,9 @@ let compute_expanded_symbolic_adt_value (meta : Meta.meta) (expand_enumerations 
   | TAdtId def_id, _, _ ->
       compute_expanded_symbolic_non_assumed_adt_value meta expand_enumerations def_id
         generics ctx
-  | TTuple, [], _ -> [ compute_expanded_symbolic_tuple_value generics.types ]
+  | TTuple, [], _ -> [ compute_expanded_symbolic_tuple_value meta generics.types ]
   | TAssumed TBox, [], [ boxed_ty ] ->
-      [ compute_expanded_symbolic_box_value boxed_ty ]
+      [ compute_expanded_symbolic_box_value meta boxed_ty ]
   | _ ->
       craise
         meta "compute_expanded_symbolic_adt_value: unexpected combination"
@@ -312,7 +312,7 @@ let expand_symbolic_value_shared_borrow (meta : Meta.meta) (config : config)
     else None
   in
   (* The fresh symbolic value for the shared value *)
-  let shared_sv = mk_fresh_symbolic_value ref_ty in
+  let shared_sv = mk_fresh_symbolic_value meta ref_ty in
   (* Visitor to replace the projectors on borrows *)
   let obj =
     object (self)
@@ -325,7 +325,7 @@ let expand_symbolic_value_shared_borrow (meta : Meta.meta) (config : config)
         else super#visit_VSymbolic env sv
 
       method! visit_EAbs proj_regions abs =
-        cassert (Option.is_none proj_regions) meta "T";
+        cassert (Option.is_none proj_regions) meta "TODO: error message";
         let proj_regions = Some abs.regions in
         super#visit_EAbs proj_regions abs
 
@@ -350,7 +350,7 @@ let expand_symbolic_value_shared_borrow (meta : Meta.meta) (config : config)
       method! visit_aproj proj_regions aproj =
         (match aproj with
         | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
-            cassert (not (same_symbolic_id sv original_sv)) meta "T"
+            cassert (not (same_symbolic_id sv original_sv)) meta "TODO: error message"
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj proj_regions aproj
 
@@ -376,7 +376,7 @@ let expand_symbolic_value_shared_borrow (meta : Meta.meta) (config : config)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Finally, replace the projectors on loans *)
   let bids = !borrows in
-  cassert (not (BorrowId.Set.is_empty bids)) meta "T";
+  cassert (not (BorrowId.Set.is_empty bids)) meta "TODO: error message";
   let see = SeSharedRef (bids, shared_sv) in
   let allow_reborrows = true in
   let ctx =
@@ -394,20 +394,20 @@ let expand_symbolic_value_borrow (meta : Meta.meta) (config : config)
     (original_sv : symbolic_value) (original_sv_place : SA.mplace option)
     (region : region) (ref_ty : rty) (rkind : ref_kind) : cm_fun =
  fun cf ctx ->
-  cassert (region <> RErased) meta "T";
+  cassert (region <> RErased) meta "TODO: error message";
   (* Check that we are allowed to expand the reference *)
-  cassert (not (region_in_set region ctx.ended_regions)) meta "T";
+  cassert (not (region_in_set region ctx.ended_regions)) meta "TODO: error message";
   (* Match on the reference kind *)
   match rkind with
   | RMut ->
       (* Simple case: simply create a fresh symbolic value and a fresh
        * borrow id *)
-      let sv = mk_fresh_symbolic_value ref_ty in
+      let sv = mk_fresh_symbolic_value meta ref_ty in
       let bid = fresh_borrow_id () in
       let see = SeMutRef (bid, sv) in
       (* Expand the symbolic values - we simply perform a substitution (and
        * check that we perform exactly one substitution) *)
-      let nv = symbolic_expansion_non_shared_borrow_to_value original_sv see in
+      let nv = symbolic_expansion_non_shared_borrow_to_value meta original_sv see in
       let at_most_once = true in
       let ctx = replace_symbolic_values meta at_most_once original_sv nv.value ctx in
       (* Expand the symbolic avalues *)
@@ -446,7 +446,7 @@ let apply_branching_symbolic_expansions_non_borrow (meta : Meta.meta) (config : 
     (see_cf_l : (symbolic_expansion option * st_cm_fun) list)
     (cf_after_join : st_m_fun) : m_fun =
  fun ctx ->
-  cassert (see_cf_l <> []) meta "T";
+  cassert (see_cf_l <> []) meta "TODO: error message";
   (* Apply the symbolic expansion in the context and call the continuation *)
   let resl =
     List.map
@@ -464,8 +464,8 @@ let apply_branching_symbolic_expansions_non_borrow (meta : Meta.meta) (config : 
           (lazy
             ("apply_branching_symbolic_expansions_non_borrow: "
             ^ symbolic_value_to_string ctx0 sv
-            ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
-            ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
+            ^ "\n\n- original context:\n" ^ eval_ctx_to_string meta ctx0
+            ^ "\n\n- new context:\n" ^ eval_ctx_to_string meta ctx ^ "\n"));
         (* Continuation *)
         cf_br cf_after_join ctx)
       see_cf_l
@@ -476,7 +476,7 @@ let apply_branching_symbolic_expansions_non_borrow (meta : Meta.meta) (config : 
     match resl with
     | Some _ :: _ -> Some (List.map Option.get resl)
     | None :: _ ->
-        List.iter (fun res -> cassert (res = None) meta "T") resl;
+        List.iter (fun res -> cassert (res = None) meta "TODO: error message") resl;
         None
     | _ -> craise meta "Unreachable"
   in
@@ -492,7 +492,7 @@ let expand_symbolic_bool (meta : Meta.meta) (config : config) (sv : symbolic_val
   let original_sv = sv in
   let original_sv_place = sv_place in
   let rty = original_sv.sv_ty in
-  cassert (rty = TLiteral TBool) meta "T";
+  cassert (rty = TLiteral TBool) meta "TODO: error message";
   (* Expand the symbolic value to true or false and continue execution *)
   let see_true = SeLiteral (VBool true) in
   let see_false = SeLiteral (VBool false) in
@@ -554,10 +554,10 @@ let expand_symbolic_value_no_branching (meta : Meta.meta) (config : config) (sv 
           (lazy
             ("expand_symbolic_value_no_branching: "
             ^ symbolic_value_to_string ctx0 sv
-            ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
-            ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
+            ^ "\n\n- original context:\n" ^ eval_ctx_to_string meta ctx0
+            ^ "\n\n- new context:\n" ^ eval_ctx_to_string meta ctx ^ "\n"));
         (* Sanity check: the symbolic value has disappeared *)
-        cassert (not (symbolic_value_id_in_ctx original_sv.sv_id ctx)) meta "T")
+        cassert (not (symbolic_value_id_in_ctx original_sv.sv_id ctx)) meta "TODO: error message")
   in
   (* Continue *)
   cc cf ctx
@@ -594,7 +594,7 @@ let expand_symbolic_int (meta : Meta.meta) (config : config) (sv : symbolic_valu
     (tgts : (scalar_value * st_cm_fun) list) (otherwise : st_cm_fun)
     (cf_after_join : st_m_fun) : m_fun =
   (* Sanity check *)
-  cassert (sv.sv_ty = TLiteral (TInteger int_type)) meta "T";
+  cassert (sv.sv_ty = TLiteral (TInteger int_type)) meta "TODO: error message";
   (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is

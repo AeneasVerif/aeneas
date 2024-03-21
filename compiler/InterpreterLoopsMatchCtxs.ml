@@ -20,7 +20,7 @@ module S = SynthesizeSymbolic
 (** The local logger *)
 let log = Logging.loops_match_ctxs_log
 
-let compute_abs_borrows_loans_maps (no_duplicates : bool)
+let compute_abs_borrows_loans_maps (meta : Meta.meta) (no_duplicates : bool)
     (explore : abs -> bool) (env : env) : abs_borrows_loans_maps =
   let abs_ids = ref [] in
   let abs_to_borrows = ref AbstractionId.Map.empty in
@@ -94,7 +94,7 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
         | AIgnoredSharedLoan child ->
             (* Ignore the id of the loan, if there is *)
             self#visit_typed_avalue abs_id child
-        | AEndedMutLoan _ | AEndedSharedLoan _ -> raise (Failure "Unreachable")
+        | AEndedMutLoan _ | AEndedSharedLoan _ -> craise meta "Unreachable"
 
       (** Make sure we don't register the ignored ids *)
       method! visit_aborrow_content abs_id bc =
@@ -108,7 +108,7 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
             (* Ignore the id of the borrow, if there is *)
             self#visit_typed_avalue abs_id child
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
-            raise (Failure "Unreachable")
+            craise meta "Unreachable"
 
       method! visit_borrow_id abs_id bid = register_borrow_id abs_id bid
       method! visit_loan_id abs_id lid = register_loan_id abs_id lid
@@ -184,9 +184,9 @@ let rec match_types (match_distinct_types : ty -> ty -> ty)
   | _ -> match_distinct_types ty0 ty1
 
 module MakeMatcher (M : PrimMatcher) : Matcher = struct
-  let rec match_typed_values (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+  let rec match_typed_values (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (v0 : typed_value) (v1 : typed_value) : typed_value =
-    let match_rec = match_typed_values ctx0 ctx1 in
+    let match_rec = match_typed_values meta ctx0 ctx1 in
     let ty = M.match_etys ctx0 ctx1 v0.ty v1.ty in
     (* Using ValuesUtils.value_has_borrows on purpose here: we want
        to make explicit the fact that, though we have to pick
@@ -197,7 +197,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     in
     match (v0.value, v1.value) with
     | VLiteral lv0, VLiteral lv1 ->
-        if lv0 = lv1 then v1 else M.match_distinct_literals ctx0 ctx1 ty lv0 lv1
+        if lv0 = lv1 then v1 else M.match_distinct_literals meta ctx0 ctx1 ty lv0 lv1
     | VAdt av0, VAdt av1 ->
         if av0.variant_id = av1.variant_id then
           let fields = List.combine av0.field_values av1.field_values in
@@ -213,14 +213,14 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           assert (not (value_has_borrows v0.value));
           assert (not (value_has_borrows v1.value));
           (* Merge *)
-          M.match_distinct_adts ctx0 ctx1 ty av0 av1)
+          M.match_distinct_adts meta ctx0 ctx1 ty av0 av1)
     | VBottom, VBottom -> v0
     | VBorrow bc0, VBorrow bc1 ->
         let bc =
           match (bc0, bc1) with
           | VSharedBorrow bid0, VSharedBorrow bid1 ->
               let bid =
-                M.match_shared_borrows ctx0 ctx1 match_rec ty bid0 bid1
+                M.match_shared_borrows meta ctx0 ctx1 match_rec ty bid0 bid1
               in
               VSharedBorrow bid
           | VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1) ->
@@ -231,7 +231,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                   (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
                      bv.value));
               let bid, bv =
-                M.match_mut_borrows ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
+                M.match_mut_borrows meta ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
               in
               VMutBorrow (bid, bv)
           | VReservedMutBorrow _, _
@@ -242,7 +242,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                  trying to match a reserved borrow, which shouldn't happen because
                  reserved borrow should be eliminated very quickly - they are introduced
                  just before function calls which activate them *)
-              raise (Failure "Unexpected")
+              craise meta "Unexpected"
         in
         { value = VBorrow bc; ty }
     | VLoan lc0, VLoan lc1 ->
@@ -259,7 +259,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               let id = M.match_mut_loans ctx0 ctx1 ty id0 id1 in
               VMutLoan id
           | VSharedLoan _, VMutLoan _ | VMutLoan _, VSharedLoan _ ->
-              raise (Failure "Unreachable")
+              craise meta "Unreachable"
         in
         { value = VLoan lc; ty = v1.ty }
     | VSymbolic sv0, VSymbolic sv1 ->
@@ -268,7 +268,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         assert (not (value_has_borrows v0.value));
         assert (not (value_has_borrows v1.value));
         (* Match *)
-        let sv = M.match_symbolic_values ctx0 ctx1 sv0 sv1 in
+        let sv = M.match_symbolic_values meta ctx0 ctx1 sv0 sv1 in
         { v1 with value = VSymbolic sv }
     | VLoan lc, _ -> (
         match lc with
@@ -278,27 +278,27 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         match lc with
         | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInRight ids))
         | VMutLoan id -> raise (ValueMatchFailure (LoanInRight id)))
-    | VSymbolic sv, _ -> M.match_symbolic_with_other ctx0 ctx1 true sv v1
-    | _, VSymbolic sv -> M.match_symbolic_with_other ctx0 ctx1 false sv v0
-    | VBottom, _ -> M.match_bottom_with_other ctx0 ctx1 true v1
-    | _, VBottom -> M.match_bottom_with_other ctx0 ctx1 false v0
+    | VSymbolic sv, _ -> M.match_symbolic_with_other meta ctx0 ctx1 true sv v1
+    | _, VSymbolic sv -> M.match_symbolic_with_other meta ctx0 ctx1 false sv v0
+    | VBottom, _ -> M.match_bottom_with_other meta ctx0 ctx1 true v1
+    | _, VBottom -> M.match_bottom_with_other meta ctx0 ctx1 false v0
     | _ ->
         log#ldebug
           (lazy
             ("Unexpected match case:\n- value0: "
-            ^ typed_value_to_string ctx0 v0
+            ^ typed_value_to_string meta ctx0 v0
             ^ "\n- value1: "
-            ^ typed_value_to_string ctx1 v1));
-        raise (Failure "Unexpected match case")
+            ^ typed_value_to_string meta ctx1 v1));
+        craise meta "Unexpected match case"
 
-  and match_typed_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+  and match_typed_avalues (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (v0 : typed_avalue) (v1 : typed_avalue) : typed_avalue =
     log#ldebug
       (lazy
         ("match_typed_avalues:\n- value0: "
-        ^ typed_avalue_to_string ctx0 v0
+        ^ typed_avalue_to_string meta ctx0 v0
         ^ "\n- value1: "
-        ^ typed_avalue_to_string ctx1 v1));
+        ^ typed_avalue_to_string meta ctx1 v1));
 
     (* Using ValuesUtils.value_has_borrows on purpose here: we want
        to make explicit the fact that, though we have to pick
@@ -308,8 +308,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
       ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
     in
 
-    let match_rec = match_typed_values ctx0 ctx1 in
-    let match_arec = match_typed_avalues ctx0 ctx1 in
+    let match_rec = match_typed_values meta ctx0 ctx1 in
+    let match_arec = match_typed_avalues meta ctx0 ctx1 in
     let ty = M.match_rtys ctx0 ctx1 v0.ty v1.ty in
     match (v0.value, v1.value) with
     | AAdt av0, AAdt av1 ->
@@ -323,15 +323,15 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           in
           { value; ty }
         else (* Merge *)
-          M.match_distinct_aadts ctx0 ctx1 v0.ty av0 v1.ty av1 ty
-    | ABottom, ABottom -> mk_abottom ty
-    | AIgnored, AIgnored -> mk_aignored ty
+          M.match_distinct_aadts meta ctx0 ctx1 v0.ty av0 v1.ty av1 ty
+    | ABottom, ABottom -> mk_abottom meta ty
+    | AIgnored, AIgnored -> mk_aignored meta ty
     | ABorrow bc0, ABorrow bc1 -> (
         log#ldebug (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
         | ASharedBorrow bid0, ASharedBorrow bid1 ->
             log#ldebug (lazy "match_typed_avalues: shared borrows");
-            M.match_ashared_borrows ctx0 ctx1 v0.ty bid0 v1.ty bid1 ty
+            M.match_ashared_borrows meta ctx0 ctx1 v0.ty bid0 v1.ty bid1 ty
         | AMutBorrow (bid0, av0), AMutBorrow (bid1, av1) ->
             log#ldebug (lazy "match_typed_avalues: mut borrows");
             log#ldebug
@@ -340,10 +340,10 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let av = match_arec av0 av1 in
             log#ldebug
               (lazy "match_typed_avalues: mut borrows: matched children values");
-            M.match_amut_borrows ctx0 ctx1 v0.ty bid0 av0 v1.ty bid1 av1 ty av
+            M.match_amut_borrows meta ctx0 ctx1 v0.ty bid0 av0 v1.ty bid1 av1 ty av
         | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
             (* The abstractions are destructured: we shouldn't get there *)
-            raise (Failure "Unexpected")
+            craise meta "Unexpected"
         | AProjSharedBorrow asb0, AProjSharedBorrow asb1 -> (
             match (asb0, asb1) with
             | [], [] ->
@@ -352,7 +352,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                 v0
             | _ ->
                 (* We should get there only if there are nested borrows *)
-                raise (Failure "Unexpected"))
+                craise meta "Unexpected")
         | _ ->
             (* TODO: getting there is not necessarily inconsistent (it may
                just be because the environments don't match) so we may want
@@ -363,7 +363,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                we are *currently* ending it, in which case we need
                to completely end it before continuing.
             *)
-            raise (Failure "Unexpected"))
+            craise meta "Unexpected")
     | ALoan lc0, ALoan lc1 -> (
         log#ldebug (lazy "match_typed_avalues: loans");
         (* TODO: maybe we should enforce that the ids are always exactly the same -
@@ -374,7 +374,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             assert (not (value_has_borrows sv.value));
-            M.match_ashared_loans ctx0 ctx1 v0.ty ids0 sv0 av0 v1.ty ids1 sv1
+            M.match_ashared_loans meta ctx0 ctx1 v0.ty ids0 sv0 av0 v1.ty ids1 sv1
               av1 ty sv av
         | AMutLoan (id0, av0), AMutLoan (id1, av1) ->
             log#ldebug (lazy "match_typed_avalues: mut loans");
@@ -383,18 +383,18 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let av = match_arec av0 av1 in
             log#ldebug
               (lazy "match_typed_avalues: mut loans: matched children values");
-            M.match_amut_loans ctx0 ctx1 v0.ty id0 av0 v1.ty id1 av1 ty av
+            M.match_amut_loans meta ctx0 ctx1 v0.ty id0 av0 v1.ty id1 av1 ty av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
         | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
             (* Those should have been filtered when destructuring the abstractions -
                they are necessary only when there are nested borrows *)
-            raise (Failure "Unreachable")
-        | _ -> raise (Failure "Unreachable"))
+            craise meta "Unreachable"
+        | _ -> craise meta "Unreachable")
     | ASymbolic _, ASymbolic _ ->
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
-        raise (Failure "Unreachable")
-    | _ -> M.match_avalues ctx0 ctx1 v0 v1
+        craise meta "Unreachable"
+    | _ -> M.match_avalues meta ctx0 ctx1 v0 v1
 end
 
 module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
@@ -413,11 +413,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     assert (ty0 = ty1);
     ty0
 
-  let match_distinct_literals (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
+  let match_distinct_literals (meta : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
       (_ : literal) (_ : literal) : typed_value =
-    mk_fresh_symbolic_typed_value_from_no_regions_ty ty
+    mk_fresh_symbolic_typed_value_from_no_regions_ty meta ty
 
-  let match_distinct_adts (ctx0 : eval_ctx) (ctx1 : eval_ctx) (ty : ety)
+  let match_distinct_adts (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx) (ty : ety)
       (adt0 : adt_value) (adt1 : adt_value) : typed_value =
     (* Check that the ADTs don't contain borrows - this is redundant with checks
        performed by the caller, but we prefer to be safe with regards to future
@@ -447,12 +447,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     if
       bottom_in_adt_value ctx0.ended_regions adt0
       || bottom_in_adt_value ctx1.ended_regions adt1
-    then mk_bottom ty
+    then mk_bottom meta ty
     else
       (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
-      mk_fresh_symbolic_typed_value_from_no_regions_ty ty
+      mk_fresh_symbolic_typed_value_from_no_regions_ty meta ty
 
-  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) match_rec
+  let match_shared_borrows (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx) match_rec
       (ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
     (* Lookup the shared values and match them - we do this mostly
        to make sure we end loans which might appear on one side
@@ -483,7 +483,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrows = [ mk_aborrow bid0; mk_aborrow bid1 ] in
 
       let loan =
-        ASharedLoan (BorrowId.Set.singleton bid2, sv, mk_aignored bv_ty)
+        ASharedLoan (BorrowId.Set.singleton bid2, sv, mk_aignored meta bv_ty)
       in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
@@ -508,7 +508,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Return the new borrow *)
       bid2
 
-  let match_mut_borrows (ctx0 : eval_ctx) (_ : eval_ctx) (ty : ety)
+  let match_mut_borrows (meta : Meta.meta) (ctx0 : eval_ctx) (_ : eval_ctx) (ty : ety)
       (bid0 : borrow_id) (bv0 : typed_value) (bid1 : borrow_id)
       (bv1 : typed_value) (bv : typed_value) : borrow_id * typed_value =
     if bid0 = bid1 then (
@@ -576,14 +576,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let borrow_av =
           let ty = borrow_ty in
-          let value = ABorrow (AMutBorrow (bid0, mk_aignored bv_ty)) in
-          mk_typed_avalue ty value
+          let value = ABorrow (AMutBorrow (bid0, mk_aignored meta bv_ty)) in
+          mk_typed_avalue meta ty value
         in
 
         let loan_av =
           let ty = borrow_ty in
-          let value = ALoan (AMutLoan (nbid, mk_aignored bv_ty)) in
-          mk_typed_avalue ty value
+          let value = ALoan (AMutLoan (nbid, mk_aignored meta bv_ty)) in
+          mk_typed_avalue meta ty value
         in
 
         let avalues = [ borrow_av; loan_av ] in
@@ -617,7 +617,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       (* Generate a fresh symbolic value for the borrowed value *)
       let _, bv_ty, kind = ty_as_ref ty in
-      let sv = mk_fresh_symbolic_typed_value_from_no_regions_ty bv_ty in
+      let sv = mk_fresh_symbolic_typed_value_from_no_regions_ty meta bv_ty in
 
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
@@ -625,12 +625,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let mk_aborrow (bid : borrow_id) (bv : typed_value) : typed_avalue =
         let bv_ty = bv.ty in
         assert (ty_no_regions bv_ty);
-        let value = ABorrow (AMutBorrow (bid, mk_aignored bv_ty)) in
+        let value = ABorrow (AMutBorrow (bid, mk_aignored meta bv_ty)) in
         { value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow bid0 bv0; mk_aborrow bid1 bv1 ] in
 
-      let loan = AMutLoan (bid2, mk_aignored bv_ty) in
+      let loan = AMutLoan (bid2, mk_aignored meta bv_ty) in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
 
@@ -685,7 +685,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          both borrows *)
       raise (ValueMatchFailure (LoanInLeft id0))
 
-  let match_symbolic_values (ctx0 : eval_ctx) (_ : eval_ctx)
+  let match_symbolic_values (meta : Meta.meta) (ctx0 : eval_ctx) (_ : eval_ctx)
       (sv0 : symbolic_value) (sv1 : symbolic_value) : symbolic_value =
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
@@ -699,9 +699,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          borrows *)
       assert (not (ty_has_borrows ctx0.type_ctx.type_infos sv0.sv_ty));
       (* We simply introduce a fresh symbolic value *)
-      mk_fresh_symbolic_value sv0.sv_ty)
+      mk_fresh_symbolic_value meta sv0.sv_ty)
 
-  let match_symbolic_with_other (ctx0 : eval_ctx) (_ : eval_ctx) (left : bool)
+  let match_symbolic_with_other (meta : Meta.meta) (ctx0 : eval_ctx) (_ : eval_ctx) (left : bool)
       (sv : symbolic_value) (v : typed_value) : typed_value =
     (* Check that:
        - there are no borrows in the symbolic value
@@ -721,9 +721,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
         else raise (ValueMatchFailure (LoanInRight id)));
     (* Return a fresh symbolic value *)
-    mk_fresh_symbolic_typed_value sv.sv_ty
+    mk_fresh_symbolic_typed_value meta sv.sv_ty
 
-  let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx) (left : bool)
+  let match_bottom_with_other (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx) (left : bool)
       (v : typed_value) : typed_value =
     (* If there are outer loans in the non-bottom value, raise an exception.
        Otherwise, convert it to an abstraction and return [Bottom].
@@ -736,7 +736,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     with
     | Some (BorrowContent _) ->
         (* Can't get there: we only ask for outer *loans* *)
-        raise (Failure "Unreachable")
+        craise meta "Unreachable"
     | Some (LoanContent lc) -> (
         match lc with
         | VSharedLoan (ids, _) ->
@@ -754,25 +754,25 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let destructure_shared_values = true in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
-          convert_value_to_abstractions abs_kind can_end
+          convert_value_to_abstractions meta abs_kind can_end
             destructure_shared_values ctx v
         in
         push_absl absl;
         (* Return [Bottom] *)
-        mk_bottom v.ty
+        mk_bottom meta v.ty
 
   (* As explained in comments: we don't use the join matcher to join avalues,
      only concrete values *)
 
-  let match_distinct_aadts _ _ _ _ _ _ _ = raise (Failure "Unreachable")
-  let match_ashared_borrows _ _ _ _ _ _ = raise (Failure "Unreachable")
-  let match_amut_borrows _ _ _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
+  let match_distinct_aadts (meta : Meta.meta) _ _ _ _ _ _ _ = craise meta "Unreachable"
+  let match_ashared_borrows (meta : Meta.meta) _ _ _ _ _ _ = craise meta "Unreachable"
+  let match_amut_borrows (meta : Meta.meta) _ _ _ _ _ _ _ _ _ _ = craise meta "Unreachable"
 
-  let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ _ _ =
-    raise (Failure "Unreachable")
+  let match_ashared_loans (meta: Meta.meta) _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise meta "Unreachable"
 
-  let match_amut_loans _ _ _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
-  let match_avalues _ _ _ _ = raise (Failure "Unreachable")
+  let match_amut_loans (meta: Meta.meta) _ _ _ _ _ _ _ _ _ _ = craise meta "Unreachable"
+  let match_avalues (meta: Meta.meta) _ _ _ _ = craise meta "Unreachable"
 end
 
 (* Very annoying: functors only take modules as inputs... *)
@@ -814,22 +814,22 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     assert (ty0 = ty1);
     ty0
 
-  let match_distinct_literals (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
+  let match_distinct_literals (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
       (_ : literal) (l : literal) : typed_value =
     { value = VLiteral l; ty }
 
-  let match_distinct_adts (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
+  let match_distinct_adts (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
       (_ : adt_value) (adt1 : adt_value) : typed_value =
     (* Note that if there was a bottom inside the ADT on the left,
        the value on the left should have been simplified to bottom. *)
     { ty; value = VAdt adt1 }
 
-  let match_shared_borrows (_ : eval_ctx) (_ : eval_ctx) _ (_ : ety)
+  let match_shared_borrows (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) _ (_ : ety)
       (_ : borrow_id) (bid1 : borrow_id) : borrow_id =
     (* There can't be bottoms in shared values *)
     bid1
 
-  let match_mut_borrows (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (_ : borrow_id)
+  let match_mut_borrows (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (_ : borrow_id)
       (_ : typed_value) (bid1 : borrow_id) (bv1 : typed_value) (_ : typed_value)
       : borrow_id * typed_value =
     (* There can't be bottoms in borrowed values *)
@@ -845,15 +845,15 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
       (id1 : loan_id) : loan_id =
     id1
 
-  let match_symbolic_values (_ : eval_ctx) (_ : eval_ctx) (_ : symbolic_value)
+  let match_symbolic_values (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (_ : symbolic_value)
       (sv1 : symbolic_value) : symbolic_value =
     sv1
 
-  let match_symbolic_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
+  let match_symbolic_with_other (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (left : bool)
       (sv : symbolic_value) (v : typed_value) : typed_value =
     if left then v else mk_typed_value_from_symbolic_value sv
 
-  let match_bottom_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
+  let match_bottom_with_other (meta : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (left : bool)
       (v : typed_value) : typed_value =
     let with_borrows = false in
     if left then (
@@ -865,35 +865,35 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
       with
       | Some (BorrowContent _) ->
           (* Can't get there: we only ask for outer *loans* *)
-          raise (Failure "Unreachable")
+          craise meta "Unreachable"
       | Some (LoanContent _) ->
           (* We should have ended all the outer loans *)
-          raise (Failure "Unexpected outer loan")
+          craise meta "Unexpected outer loan"
       | None ->
           (* Move the value - note that we shouldn't get there if we
              were not allowed to move the value in the first place. *)
           push_moved_value v;
           (* Return [Bottom] *)
-          mk_bottom v.ty)
+          mk_bottom meta v.ty)
     else
       (* If we get there it means the source environment (e.g., the
          fixed-point) has a non-bottom value, while the target environment
          (e.g., the environment we have when we reach the continue)
          has bottom: we shouldn't get there. *)
-      raise (Failure "Unreachable")
+      craise meta "Unreachable"
 
   (* As explained in comments: we don't use the join matcher to join avalues,
      only concrete values *)
 
-  let match_distinct_aadts _ _ _ _ _ _ _ = raise (Failure "Unreachable")
-  let match_ashared_borrows _ _ _ _ _ _ = raise (Failure "Unreachable")
-  let match_amut_borrows _ _ _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
+  let match_distinct_aadts (meta : Meta.meta) _ _ _ _ _ _ _ = craise meta "Unreachable"
+  let match_ashared_borrows (meta : Meta.meta) _ _ _ _ _ _ = craise meta "Unreachable"
+  let match_amut_borrows (meta : Meta.meta) _ _ _ _ _ _ _ _ _ = craise meta "Unreachable"
 
-  let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ _ _ =
-    raise (Failure "Unreachable")
+  let match_ashared_loans (meta : Meta.meta) _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise meta "Unreachable"
 
-  let match_amut_loans _ _ _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
-  let match_avalues _ _ _ _ = raise (Failure "Unreachable")
+  let match_amut_loans (meta : Meta.meta) _ _ _ _ _ _ _ _ _ _ = craise meta "Unreachable"
+  let match_avalues (meta : Meta.meta) _ _ _ _ = craise meta "Unreachable"
 end
 
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) : CheckEquivMatcher =
@@ -998,15 +998,15 @@ struct
     in
     match_types match_distinct_types match_regions ty0 ty1
 
-  let match_distinct_literals (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
+  let match_distinct_literals (meta : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
       (_ : literal) (_ : literal) : typed_value =
-    mk_fresh_symbolic_typed_value_from_no_regions_ty ty
+    mk_fresh_symbolic_typed_value_from_no_regions_ty meta ty
 
-  let match_distinct_adts (_ : eval_ctx) (_ : eval_ctx) (_ty : ety)
+  let match_distinct_adts (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (_ty : ety)
       (_adt0 : adt_value) (_adt1 : adt_value) : typed_value =
     raise (Distinct "match_distinct_adts")
 
-  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+  let match_shared_borrows (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (match_typed_values : typed_value -> typed_value -> typed_value)
       (_ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
     log#ldebug
@@ -1027,16 +1027,16 @@ struct
           (lazy
             ("MakeCheckEquivMatcher: match_shared_borrows: looked up values:"
            ^ "sv0: "
-            ^ typed_value_to_string ctx0 v0
+            ^ typed_value_to_string meta ctx0 v0
             ^ ", sv1: "
-            ^ typed_value_to_string ctx1 v1));
+            ^ typed_value_to_string meta ctx1 v1));
 
         let _ = match_typed_values v0 v1 in
         ()
     in
     bid
 
-  let match_mut_borrows (_ : eval_ctx) (_ : eval_ctx) (_ty : ety)
+  let match_mut_borrows (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (_ty : ety)
       (bid0 : borrow_id) (_bv0 : typed_value) (bid1 : borrow_id)
       (_bv1 : typed_value) (bv : typed_value) : borrow_id * typed_value =
     let bid = match_borrow_id bid0 bid1 in
@@ -1052,7 +1052,7 @@ struct
       (bid1 : loan_id) : loan_id =
     match_loan_id bid0 bid1
 
-  let match_symbolic_values (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+  let match_symbolic_values (_ : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (sv0 : symbolic_value) (sv1 : symbolic_value) : symbolic_value =
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
@@ -1089,7 +1089,7 @@ struct
          we want *)
       sv0)
 
-  let match_symbolic_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
+  let match_symbolic_with_other (meta : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) (left : bool)
       (sv : symbolic_value) (v : typed_value) : typed_value =
     if S.check_equiv then raise (Distinct "match_symbolic_with_other")
     else (
@@ -1103,7 +1103,7 @@ struct
       (* Return - the returned value is not used, so we can return whatever we want *)
       v)
 
-  let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx) (left : bool)
+  let match_bottom_with_other (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx) (left : bool)
       (v : typed_value) : typed_value =
     (* It can happen that some variables get initialized in some branches
        and not in some others, which causes problems when matching. *)
@@ -1112,7 +1112,7 @@ struct
        a continue, where the fixed point contains some bottom values. *)
     let value_is_left = not left in
     let ctx = if value_is_left then ctx0 else ctx1 in
-    if left && not (value_has_loans_or_borrows ctx v.value) then mk_bottom v.ty
+    if left && not (value_has_loans_or_borrows ctx v.value) then mk_bottom meta v.ty
     else
       raise
         (Distinct
@@ -1120,51 +1120,51 @@ struct
           ^ Print.bool_to_string left ^ "\n- value to match with bottom:\n"
           ^ show_typed_value v))
 
-  let match_distinct_aadts _ _ _ _ _ _ _ =
+  let match_distinct_aadts _ _ _ _ _ _ _ _ =
     raise (Distinct "match_distinct_adts")
 
-  let match_ashared_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 bid0 _ty1 bid1 ty
+  let match_ashared_borrows (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) _ty0 bid0 _ty1 bid1 ty
       =
     let bid = match_borrow_id bid0 bid1 in
     let value = ABorrow (ASharedBorrow bid) in
     { value; ty }
 
-  let match_amut_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 bid0 _av0 _ty1 bid1
+  let match_amut_borrows (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) _ty0 bid0 _av0 _ty1 bid1
       _av1 ty av =
     let bid = match_borrow_id bid0 bid1 in
     let value = ABorrow (AMutBorrow (bid, av)) in
     { value; ty }
 
-  let match_ashared_loans (_ : eval_ctx) (_ : eval_ctx) _ty0 ids0 _v0 _av0 _ty1
+  let match_ashared_loans (_ : Meta.meta) (_ : eval_ctx) (_ : eval_ctx) _ty0 ids0 _v0 _av0 _ty1
       ids1 _v1 _av1 ty v av =
     let bids = match_loan_ids ids0 ids1 in
     let value = ALoan (ASharedLoan (bids, v, av)) in
     { value; ty }
 
-  let match_amut_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 id0 _av0 _ty1
+  let match_amut_loans (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 id0 _av0 _ty1
       id1 _av1 ty av =
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher:match_amut_loans:" ^ "\n- id0: "
        ^ BorrowId.to_string id0 ^ "\n- id1: " ^ BorrowId.to_string id1
        ^ "\n- ty: " ^ ty_to_string ctx0 ty ^ "\n- av: "
-        ^ typed_avalue_to_string ctx1 av));
+        ^ typed_avalue_to_string meta ctx1 av));
 
     let id = match_loan_id id0 id1 in
     let value = ALoan (AMutLoan (id, av)) in
     { value; ty }
 
-  let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
+  let match_avalues (meta : Meta.meta) (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
     log#ldebug
       (lazy
         ("avalues don't match:\n- v0: "
-        ^ typed_avalue_to_string ctx0 v0
+        ^ typed_avalue_to_string meta ctx0 v0
         ^ "\n- v1: "
-        ^ typed_avalue_to_string ctx1 v1));
+        ^ typed_avalue_to_string meta ctx1 v1));
     raise (Distinct "match_avalues")
 end
 
-let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
+let match_ctxs (meta : Meta.meta) (check_equiv : bool) (fixed_ids : ids_sets)
     (lookup_shared_value_in_ctx0 : BorrowId.id -> typed_value)
     (lookup_shared_value_in_ctx1 : BorrowId.id -> typed_value) (ctx0 : eval_ctx)
     (ctx1 : eval_ctx) : ids_maps option =
@@ -1172,9 +1172,9 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
     (lazy
       ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ctx0
+      ^ eval_ctx_to_string_no_filter meta ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter ctx1
+      ^ eval_ctx_to_string_no_filter meta ctx1
       ^ "\n\n"));
 
   (* Initialize the maps and instantiate the matcher *)
@@ -1282,7 +1282,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
     log#ldebug (lazy "match_abstractions: matching values");
     let _ =
       List.map
-        (fun (v0, v1) -> M.match_typed_avalues ctx0 ctx1 v0 v1)
+        (fun (v0, v1) -> M.match_typed_avalues meta ctx0 ctx1 v0 v1)
         (List.combine avalues0 avalues1)
     in
     log#ldebug (lazy "match_abstractions: values matched OK");
@@ -1303,9 +1303,9 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
         ^ "\n- aid_map: "
         ^ AbstractionId.InjSubst.show_t !aid_map
         ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string_no_filter { ctx0 with env = List.rev env0 }
+        ^ eval_ctx_to_string_no_filter meta { ctx0 with env = List.rev env0 }
         ^ "\n\n- ctx1:\n"
-        ^ eval_ctx_to_string_no_filter { ctx1 with env = List.rev env1 }
+        ^ eval_ctx_to_string_no_filter meta { ctx1 with env = List.rev env1 }
         ^ "\n\n"));
 
     match (env0, env1) with
@@ -1321,12 +1321,12 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
           assert ((not S.check_equiv) || ids_are_fixed ids));
         (* We still match the values - allows to compute mappings (which
            are the identity actually) *)
-        let _ = M.match_typed_values ctx0 ctx1 v0 v1 in
+        let _ = M.match_typed_values meta ctx0 ctx1 v0 v1 in
         match_envs env0' env1'
     | EBinding (BVar b0, v0) :: env0', EBinding (BVar b1, v1) :: env1' ->
         assert (b0 = b1);
         (* Match the values *)
-        let _ = M.match_typed_values ctx0 ctx1 v0 v1 in
+        let _ = M.match_typed_values meta ctx0 ctx1 v0 v1 in
         (* Continue *)
         match_envs env0' env1'
     | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
@@ -1366,7 +1366,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
     let env0, env1 =
       match (env0, env1) with
       | EFrame :: env0, EFrame :: env1 -> (env0, env1)
-      | _ -> raise (Failure "Unreachable")
+      | _ -> craise meta "Unreachable"
     in
 
     match_envs env0 env1;
@@ -1382,23 +1382,16 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
       }
     in
     Some maps
-  with
-  | Distinct msg ->
-      log#ldebug (lazy ("match_ctxs: distinct: " ^ msg ^ "\n"));
-      None
-  | ValueMatchFailure k ->
-      log#ldebug
-        (lazy
-          ("match_ctxs: distinct: ValueMatchFailure" ^ show_updt_env_kind k
-         ^ "\n"));
-      None
+  with Distinct msg ->
+    log#ldebug (lazy ("match_ctxs: distinct: " ^ msg));
+    None
 
-let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : eval_ctx)
+let ctxs_are_equivalent (meta : Meta.meta) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
     (ctx1 : eval_ctx) : bool =
   let check_equivalent = true in
-  let lookup_shared_value _ = raise (Failure "Unreachable") in
+  let lookup_shared_value _ = craise meta "Unreachable" in
   Option.is_some
-    (match_ctxs check_equivalent fixed_ids lookup_shared_value
+    (match_ctxs meta check_equivalent fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
 let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id : LoopId.id)
@@ -1409,23 +1402,23 @@ let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id 
     (lazy
       ("prepare_match_ctx_with_target:\n" ^ "\n- fixed_ids: "
      ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
-     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx
+     ^ eval_ctx_to_string meta src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string meta tgt_ctx
       ));
   (* End the loans which lead to mismatches when joining *)
   let rec cf_reorganize_join_tgt : cm_fun =
    fun cf tgt_ctx ->
     (* Collect fixed values in the source and target contexts: end the loans in the
        source context which don't appear in the target context *)
-    let filt_src_env, _, _ = ctx_split_fixed_new fixed_ids src_ctx in
-    let filt_tgt_env, _, _ = ctx_split_fixed_new fixed_ids tgt_ctx in
+    let filt_src_env, _, _ = ctx_split_fixed_new meta fixed_ids src_ctx in
+    let filt_tgt_env, _, _ = ctx_split_fixed_new meta fixed_ids tgt_ctx in
 
     log#ldebug
       (lazy
         ("cf_reorganize_join_tgt: match_ctx_with_target:\n" ^ "\n- fixed_ids: "
        ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- filt_src_ctx: "
-        ^ env_to_string src_ctx filt_src_env
+        ^ env_to_string meta src_ctx filt_src_env
         ^ "\n- filt_tgt_ctx: "
-        ^ env_to_string tgt_ctx filt_tgt_env));
+        ^ env_to_string meta tgt_ctx filt_tgt_env));
 
     (* Remove the abstractions *)
     let filter (ee : env_elem) : bool =
@@ -1450,13 +1443,13 @@ let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id 
             match (var0, var1) with
             | EBinding (BDummy b0, v0), EBinding (BDummy b1, v1) ->
                 assert (b0 = b1);
-                let _ = M.match_typed_values src_ctx tgt_ctx v0 v1 in
+                let _ = M.match_typed_values meta src_ctx tgt_ctx v0 v1 in
                 ()
             | EBinding (BVar b0, v0), EBinding (BVar b1, v1) ->
                 assert (b0 = b1);
-                let _ = M.match_typed_values src_ctx tgt_ctx v0 v1 in
+                let _ = M.match_typed_values meta src_ctx tgt_ctx v0 v1 in
                 ()
-            | _ -> raise (Failure "Unexpected"))
+            | _ -> craise meta "Unexpected")
           (List.combine filt_src_env filt_tgt_env)
       in
       (* No exception was thrown: continue *)
@@ -1465,9 +1458,9 @@ let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id 
           ("cf_reorganize_join_tgt: done with borrows/loans:\n"
          ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
          ^ "\n- filt_src_ctx: "
-          ^ env_to_string src_ctx filt_src_env
+          ^ env_to_string meta src_ctx filt_src_env
           ^ "\n- filt_tgt_ctx: "
-          ^ env_to_string tgt_ctx filt_tgt_env));
+          ^ env_to_string meta tgt_ctx filt_tgt_env));
 
       (* We are done with the borrows/loans: now make sure we move all
          the values which are bottom in the src environment (i.e., the
@@ -1487,13 +1480,13 @@ let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id 
             match (var0, var1) with
             | EBinding (BDummy b0, v0), EBinding ((BDummy b1 as var1), v1) ->
                 assert (b0 = b1);
-                let v = M.match_typed_values src_ctx tgt_ctx v0 v1 in
+                let v = M.match_typed_values meta src_ctx tgt_ctx v0 v1 in
                 (var1, v)
             | EBinding (BVar b0, v0), EBinding ((BVar b1 as var1), v1) ->
                 assert (b0 = b1);
-                let v = M.match_typed_values src_ctx tgt_ctx v0 v1 in
+                let v = M.match_typed_values meta src_ctx tgt_ctx v0 v1 in
                 (var1, v)
-            | _ -> raise (Failure "Unexpected"))
+            | _ -> craise meta "Unexpected")
           (List.combine filt_src_env filt_tgt_env)
       in
       let var_to_new_val = BinderMap.of_list var_to_new_val in
@@ -1521,18 +1514,18 @@ let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id 
         (lazy
           ("cf_reorganize_join_tgt: done with borrows/loans and moves:\n"
          ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
-         ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
-         ^ eval_ctx_to_string tgt_ctx));
+         ^ eval_ctx_to_string meta src_ctx ^ "\n- tgt_ctx: "
+         ^ eval_ctx_to_string meta tgt_ctx));
 
       cf tgt_ctx
     with ValueMatchFailure e ->
       (* Exception: end the corresponding borrows, and continue *)
       let cc =
         match e with
-        | LoanInRight bid -> InterpreterBorrows.end_borrow config bid
-        | LoansInRight bids -> InterpreterBorrows.end_borrows config bids
+        | LoanInRight bid -> InterpreterBorrows.end_borrow meta config bid
+        | LoansInRight bids -> InterpreterBorrows.end_borrows meta config bids
         | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
-            raise (Failure "Unexpected")
+            craise meta "Unexpected"
       in
       comp cc cf_reorganize_join_tgt cf tgt_ctx
   in
@@ -1587,9 +1580,9 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
        ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
        ^ eval_ctx_to_string tgt_ctx));
 
-    let filt_tgt_env, _, _ = ctx_split_fixed_new fixed_ids tgt_ctx in
+    let filt_tgt_env, _, _ = ctx_split_fixed_new meta fixed_ids tgt_ctx in
     let filt_src_env, new_absl, new_dummyl =
-      ctx_split_fixed_new fixed_ids src_ctx
+      ctx_split_fixed_new meta fixed_ids src_ctx
     in
     assert (new_dummyl = []);
     let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
@@ -1603,13 +1596,13 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
         match snd (lookup_loan meta ek_all lid ctx) with
         | Concrete (VSharedLoan (_, v)) -> v
         | Abstract (ASharedLoan (_, v, _)) -> v
-        | _ -> raise (Failure "Unreachable")
+        | _ -> craise meta "Unreachable"
       in
       let lookup_in_src id = lookup_shared_loan id src_ctx in
       let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
       (* Match *)
       Option.get
-        (match_ctxs check_equiv fixed_ids lookup_in_src lookup_in_tgt
+        (match_ctxs meta check_equiv fixed_ids lookup_in_src lookup_in_tgt
            filt_src_ctx filt_tgt_ctx)
     in
     let tgt_to_src_borrow_map =
@@ -1623,13 +1616,13 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
     log#ldebug
       (lazy
         ("match_ctx_with_target: cf_introduce_loop_fp_abs:" ^ "\n\n- src_ctx: "
-       ^ eval_ctx_to_string src_ctx ^ "\n\n- tgt_ctx: "
-       ^ eval_ctx_to_string tgt_ctx ^ "\n\n- filt_tgt_ctx: "
-        ^ eval_ctx_to_string_no_filter filt_tgt_ctx
+       ^ eval_ctx_to_string meta src_ctx ^ "\n\n- tgt_ctx: "
+       ^ eval_ctx_to_string meta tgt_ctx ^ "\n\n- filt_tgt_ctx: "
+        ^ eval_ctx_to_string_no_filter meta filt_tgt_ctx
         ^ "\n\n- filt_src_ctx: "
-        ^ eval_ctx_to_string_no_filter filt_src_ctx
+        ^ eval_ctx_to_string_no_filter meta filt_src_ctx
         ^ "\n\n- new_absl:\n"
-        ^ eval_ctx_to_string
+        ^ eval_ctx_to_string meta
             { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }
         ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
         ^ show_borrow_loan_corresp fp_bl_maps
@@ -1828,18 +1821,17 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
     log#ldebug
       (lazy
         ("match_ctx_with_target: cf_introduce_loop_fp_abs: done:\n\
-          - result ctx:\n" ^ eval_ctx_to_string tgt_ctx));
+          - result ctx:\n" ^ eval_ctx_to_string meta tgt_ctx));
 
     (* Sanity check *)
     if !Config.sanity_checks then
-      Invariants.check_borrowed_values_invariant tgt_ctx;
-
+      Invariants.check_borrowed_values_invariant meta tgt_ctx;
     (* End all the borrows which appear in the *new* abstractions *)
     let new_borrows =
       BorrowId.Set.of_list
         (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
     in
-    let cc = InterpreterBorrows.end_borrows config new_borrows in
+    let cc = InterpreterBorrows.end_borrows meta config new_borrows in
 
     (* Compute the loop input values *)
     let input_values =

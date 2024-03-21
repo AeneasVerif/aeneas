@@ -16,7 +16,7 @@ open Cps
     If the boolean is false, we don't move the return value, and call the
     continuation with [None].
  *)
-val pop_frame : config -> bool -> (typed_value option -> m_fun) -> m_fun
+val pop_frame : Meta.meta -> config -> bool -> (typed_value option -> m_fun) -> m_fun
 
 (** Helper.
 
@@ -48,4 +48,4 @@ val create_push_abstractions_from_abs_region_groups :
 val eval_statement : config -> statement -> st_cm_fun
 
 (** Evaluate a statement seen as a function body *)
-val eval_function_body : config -> statement -> st_cm_fun
+val eval_function_body : Meta.meta -> config -> statement -> st_cm_fun

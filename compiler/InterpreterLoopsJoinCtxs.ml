@@ -136,7 +136,7 @@ let collapse_ctx (meta : Meta.meta) (loop_id : LoopId.id)
   log#ldebug
     (lazy
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n\n"));
+     ^ "\n\n- ctx0:\n" ^ eval_ctx_to_string meta ctx0 ^ "\n\n"));
 
   let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
@@ -160,7 +160,7 @@ let collapse_ctx (meta : Meta.meta) (loop_id : LoopId.id)
            | EBinding (BDummy id, v) ->
                if is_fresh_did id then
                  let absl =
-                   convert_value_to_abstractions abs_kind can_end
+                   convert_value_to_abstractions meta abs_kind can_end
                      destructure_shared_values ctx0 v
                  in
                  List.map (fun abs -> EAbs abs) absl
@@ -171,19 +171,19 @@ let collapse_ctx (meta : Meta.meta) (loop_id : LoopId.id)
   log#ldebug
     (lazy
       ("collapse_ctx: after converting values to abstractions:\n"
-     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n\n"
+     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n" ^ eval_ctx_to_string meta ctx ^ "\n\n"
       ));
 
   log#ldebug
     (lazy
       ("collapse_ctx: after decomposing the shared values in the abstractions:\n"
-     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n\n"
+     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n" ^ eval_ctx_to_string meta ctx ^ "\n\n"
       ));
 
   (* Explore all the *new* abstractions, and compute various maps *)
   let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
   let ids_maps =
-    compute_abs_borrows_loans_maps (merge_funs = None) explore env
+    compute_abs_borrows_loans_maps meta (merge_funs = None) explore env
   in
   let {
     abs_ids;
@@ -252,12 +252,12 @@ let collapse_ctx (meta : Meta.meta) (loop_id : LoopId.id)
                         ^ AbstractionId.to_string abs_id1
                         ^ " into "
                         ^ AbstractionId.to_string abs_id0
-                        ^ ":\n\n" ^ eval_ctx_to_string !ctx));
+                        ^ ":\n\n" ^ eval_ctx_to_string meta !ctx));
 
                     (* Update the environment - pay attention to the order: we
                        we merge [abs_id1] *into* [abs_id0] *)
                     let nctx, abs_id =
-                      merge_into_abstraction abs_kind can_end merge_funs !ctx
+                      merge_into_abstraction meta abs_kind can_end merge_funs !ctx
                         abs_id1 abs_id0
                     in
                     ctx := nctx;
@@ -272,7 +272,7 @@ let collapse_ctx (meta : Meta.meta) (loop_id : LoopId.id)
   log#ldebug
     (lazy
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- after collapse:\n" ^ eval_ctx_to_string !ctx ^ "\n\n"));
+     ^ "\n\n- after collapse:\n" ^ eval_ctx_to_string meta !ctx ^ "\n\n"));
 
   (* Reorder the loans and borrows in the fresh abstractions *)
   let ctx = reorder_loans_borrows_in_fresh_abs meta old_ids.aids !ctx in
@@ -281,7 +281,7 @@ let collapse_ctx (meta : Meta.meta) (loop_id : LoopId.id)
     (lazy
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after collapse and reorder borrows/loans:\n"
-     ^ eval_ctx_to_string ctx ^ "\n\n"));
+     ^ eval_ctx_to_string meta ctx ^ "\n\n"));
 
   (* Return the new context *)
   ctx
@@ -360,7 +360,7 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta) (loop_id : LoopId.id
     cassert (not (value_has_loans_or_borrows ctx sv1.value)) meta "";
     let ty = ty0 in
     let child = child0 in
-    let sv = M.match_typed_values ctx ctx sv0 sv1 in
+    let sv = M.match_typed_values meta ctx ctx sv0 sv1 in
     let value = ALoan (ASharedLoan (ids, sv, child)) in
     { value; ty }
   in
@@ -375,7 +375,7 @@ let merge_into_abstraction (meta : Meta.meta) (loop_id : LoopId.id) (abs_kind : 
     (can_end : bool) (ctx : eval_ctx) (aid0 : AbstractionId.id)
     (aid1 : AbstractionId.id) : eval_ctx * AbstractionId.id =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs meta loop_id ctx in
-  merge_into_abstraction abs_kind can_end (Some merge_funs) ctx aid0 aid1
+  merge_into_abstraction meta abs_kind can_end (Some merge_funs) ctx aid0 aid1
 
 (** Collapse an environment, merging the duplicated borrows/loans.
 
@@ -397,9 +397,9 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
     (lazy
       ("join_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ctx0
+      ^ eval_ctx_to_string_no_filter meta ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter ctx1
+      ^ eval_ctx_to_string_no_filter meta ctx1
       ^ "\n\n"));
 
   let env0 = List.rev ctx0.env in
@@ -413,9 +413,9 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
       (lazy
         ("join_suffixes:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
        ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string_no_filter { ctx0 with env = List.rev env0 }
+        ^ eval_ctx_to_string_no_filter meta { ctx0 with env = List.rev env0 }
         ^ "\n\n- ctx1:\n"
-        ^ eval_ctx_to_string_no_filter { ctx1 with env = List.rev env1 }
+        ^ eval_ctx_to_string_no_filter meta { ctx1 with env = List.rev env1 }
         ^ "\n\n"));
 
     (* Sanity check: there are no values/abstractions which should be in the prefix *)
@@ -456,9 +456,9 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
           (lazy
             ("join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
-            ^ env_elem_to_string ctx0 var0
+            ^ env_elem_to_string meta ctx0 var0
             ^ "\n\n- value1:\n"
-            ^ env_elem_to_string ctx1 var1
+            ^ env_elem_to_string meta ctx1 var1
             ^ "\n\n"));
 
         (* Two cases: the dummy value is an old value, in which case the bindings
@@ -468,7 +468,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
           (* Still in the prefix: match the values *)
           cassert (b0 = b1) meta "Bindings are not the same. We are not in the prefix anymore";
           let b = b0 in
-          let v = M.match_typed_values ctx0 ctx1 v0 v1 in
+          let v = M.match_typed_values meta ctx0 ctx1 v0 v1 in
           let var = EBinding (BDummy b, v) in
           (* Continue *)
           var :: join_prefixes env0' env1')
@@ -481,9 +481,9 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
           (lazy
             ("join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
-            ^ env_elem_to_string ctx0 var0
+            ^ env_elem_to_string meta ctx0 var0
             ^ "\n\n- value1:\n"
-            ^ env_elem_to_string ctx1 var1
+            ^ env_elem_to_string meta ctx1 var1
             ^ "\n\n"));
 
         (* Variable bindings *must* be in the prefix and consequently their
@@ -492,7 +492,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
         ids must be the same";
         (* Match the values *)
         let b = b0 in
-        let v = M.match_typed_values ctx0 ctx1 v0 v1 in
+        let v = M.match_typed_values meta ctx0 ctx1 v0 v1 in
         let var = EBinding (BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
@@ -501,8 +501,8 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
         log#ldebug
           (lazy
             ("join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
-           ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n" ^ abs_to_string ctx0 abs0
-           ^ "\n\n- abs1:\n" ^ abs_to_string ctx1 abs1 ^ "\n\n"));
+           ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n" ^ abs_to_string meta ctx0 abs0
+           ^ "\n\n- abs1:\n" ^ abs_to_string meta ctx1 abs1 ^ "\n\n"));
 
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
@@ -584,7 +584,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
   with ValueMatchFailure e -> Error e
 
 (** Destructure all the new abstractions *)
-let destructure_new_abs (loop_id : LoopId.id)
+let destructure_new_abs (meta : Meta.meta) (loop_id : LoopId.id)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
@@ -597,7 +597,7 @@ let destructure_new_abs (loop_id : LoopId.id)
       (fun abs ->
         if is_fresh_abs_id abs.abs_id then
           let abs =
-            destructure_abs abs_kind can_end destructure_shared_values ctx abs
+            destructure_abs meta abs_kind can_end destructure_shared_values ctx abs
           in
           abs
         else abs)
@@ -657,9 +657,9 @@ let loop_join_origin_with_continue_ctxs (meta : Meta.meta) (config : config) (lo
         let ctx =
           match err with
           | LoanInRight bid ->
-              InterpreterBorrows.end_borrow_no_synth config bid ctx
+              InterpreterBorrows.end_borrow_no_synth meta config bid ctx
           | LoansInRight bids ->
-              InterpreterBorrows.end_borrows_no_synth config bids ctx
+              InterpreterBorrows.end_borrows_no_synth meta config bids ctx
           | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
               craise meta "Unexpected"
         in
@@ -669,21 +669,21 @@ let loop_join_origin_with_continue_ctxs (meta : Meta.meta) (config : config) (lo
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: initial ctx:\n"
-       ^ eval_ctx_to_string ctx));
+       ^ eval_ctx_to_string meta ctx));
 
     (* Destructure the abstractions introduced in the new context *)
-    let ctx = destructure_new_abs loop_id fixed_ids.aids ctx in
+    let ctx = destructure_new_abs meta loop_id fixed_ids.aids ctx in
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after destructure:\n"
-       ^ eval_ctx_to_string ctx));
+       ^ eval_ctx_to_string meta ctx));
 
     (* Collapse the context we want to add to the join *)
     let ctx = collapse_ctx meta loop_id None fixed_ids ctx in
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after collapse:\n"
-       ^ eval_ctx_to_string ctx));
+       ^ eval_ctx_to_string meta ctx));
 
     (* Refresh the fresh abstractions *)
     let ctx = refresh_abs fixed_ids.aids ctx in
@@ -693,7 +693,7 @@ let loop_join_origin_with_continue_ctxs (meta : Meta.meta) (config : config) (lo
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after join:\n"
-       ^ eval_ctx_to_string ctx1));
+       ^ eval_ctx_to_string meta ctx1));
 
     (* Collapse again - the join might have introduce abstractions we want
        to merge with the others (note that those abstractions may actually
@@ -702,7 +702,7 @@ let loop_join_origin_with_continue_ctxs (meta : Meta.meta) (config : config) (lo
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after join-collapse:\n"
-        ^ eval_ctx_to_string !joined_ctx));
+        ^ eval_ctx_to_string meta !joined_ctx));
 
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_invariants meta !joined_ctx;

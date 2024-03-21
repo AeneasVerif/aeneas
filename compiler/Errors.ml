@@ -12,16 +12,31 @@ let format_error_message (meta : Meta.meta) msg =
 exception CFailure of string
 
 
-let error_list : (Meta.meta * string) list ref = ref []
-let save_error (meta : Meta.meta ) (msg : string) = error_list := (meta, msg)::(!error_list)
+let error_list : (Meta.meta option * string) list ref = ref []
+let save_error (meta : Meta.meta option) (msg : string) = error_list := (meta, msg)::(!error_list)
 
 let craise (meta : Meta.meta) (msg : string) =
   if !Config.fail_hard then
     raise (Failure (format_error_message meta msg))
   else
-    let () = save_error meta msg in  
+    let () = save_error (Some meta) msg in  
     raise (CFailure msg)
 
 let cassert (b : bool) (meta : Meta.meta) (msg : string) =
   if b then
     craise meta msg
+
+let craise_opt_meta (meta : Meta.meta option) (msg : string) =
+  match meta with 
+  | Some m -> craise m msg
+  | None -> 
+      let () = save_error (None) msg in  
+      raise (CFailure msg)
+
+let cassert_opt_meta (b : bool) (meta : Meta.meta option) (msg : string) =
+  match meta with 
+  | Some m -> cassert b m msg
+  | None -> 
+    if b then 
+      let () = save_error (None) msg in  
+      raise (CFailure msg)

@@ -2,21 +2,22 @@
 
 open Pure
 open PureUtils
+open Errors
 
 (** Utility function, used for type checking.
 
     This function should only be used for "regular" ADTs, where the number
     of fields is fixed: it shouldn't be used for arrays, slices, etc.
  *)
-let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
+let get_adt_field_types (meta : Meta.meta) (type_decls : type_decl TypeDeclId.Map.t)
     (type_id : type_id) (variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   match type_id with
   | TTuple ->
       (* Tuple *)
-      assert (generics.const_generics = []);
-      assert (generics.trait_refs = []);
-      assert (variant_id = None);
+      cassert (generics.const_generics = []) meta "TODO: error message";
+      cassert (generics.trait_refs = []) meta "TODO: error message";
+      cassert (variant_id = None) meta "TODO: error message";
       generics.types
   | TAdtId def_id ->
       (* "Regular" ADT *)
@@ -27,29 +28,29 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
       match aty with
       | TState ->
           (* This type is opaque *)
-          raise (Failure "Unreachable: opaque type")
+          craise meta "Unreachable: opaque type"
       | TResult ->
           let ty = Collections.List.to_cons_nil generics.types in
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
           else
-            raise (Failure "Unreachable: improper variant id for result type")
+            craise meta "Unreachable: improper variant id for result type"
       | TError ->
-          assert (generics = empty_generic_args);
+          cassert (generics = empty_generic_args) meta "TODO: error message";
           let variant_id = Option.get variant_id in
-          assert (
-            variant_id = error_failure_id || variant_id = error_out_of_fuel_id);
+          cassert (
+            variant_id = error_failure_id || variant_id = error_out_of_fuel_id) meta "TODO: error message";
           []
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then []
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
-          else raise (Failure "Unreachable: improper variant id for fuel type")
+          else craise meta "Unreachable: improper variant id for fuel type"
       | TArray | TSlice | TStr | TRawPtr _ ->
           (* Array: when not symbolic values (for instance, because of aggregates),
              the array expressions are introduced as struct updates *)
-          raise (Failure "Attempting to access the fields of an opaque type"))
+          craise meta "Attempting to access the fields of an opaque type")
 
 type tc_ctx = {
   type_decls : type_decl TypeDeclId.Map.t;  (** The type declarations *)
@@ -61,28 +62,28 @@ type tc_ctx = {
       (* TODO: add trait type constraints *)
 }
 
-let check_literal (v : literal) (ty : literal_type) : unit =
+let check_literal (meta : Meta.meta) (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
-  | TInteger int_ty, VScalar sv -> assert (int_ty = sv.int_ty)
+  | TInteger int_ty, VScalar sv -> cassert (int_ty = sv.int_ty) meta "TODO: error message"
   | TBool, VBool _ | TChar, VChar _ -> ()
-  | _ -> raise (Failure "Inconsistent type")
+  | _ -> craise meta "Inconsistent type"
 
-let rec check_typed_pattern (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
+let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
   log#ldebug (lazy ("check_typed_pattern: " ^ show_typed_pattern v));
   match v.value with
   | PatConstant cv ->
-      check_literal cv (ty_as_literal v.ty);
+      check_literal meta cv (ty_as_literal meta v.ty);
       ctx
   | PatDummy -> ctx
   | PatVar (var, _) ->
-      assert (var.ty = v.ty);
+      cassert (var.ty = v.ty) meta "TODO: error message";
       let env = VarId.Map.add var.id var.ty ctx.env in
       { ctx with env }
   | PatAdt av ->
       (* Compute the field types *)
-      let type_id, generics = ty_as_adt v.ty in
+      let type_id, generics = ty_as_adt meta v.ty in
       let field_tys =
-        get_adt_field_types ctx.type_decls type_id av.variant_id generics
+        get_adt_field_types meta ctx.type_decls type_id av.variant_id generics
       in
       let check_value (ctx : tc_ctx) (ty : ty) (v : typed_pattern) : tc_ctx =
         if ty <> v.ty then (
@@ -90,8 +91,8 @@ let rec check_typed_pattern (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
           log#serror
             ("check_typed_pattern: not the same types:" ^ "\n- ty: "
            ^ show_ty ty ^ "\n- v.ty: " ^ show_ty v.ty);
-          raise (Failure "Inconsistent types"));
-        check_typed_pattern ctx v
+          craise meta "Inconsistent types");
+        check_typed_pattern meta ctx v
       in
       (* Check the field types: check that the field patterns have the expected
        * types, and check that the field patterns themselves are well-typed *)
@@ -100,7 +101,7 @@ let rec check_typed_pattern (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
         ctx
         (List.combine field_tys av.field_values)
 
-let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
+let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : unit =
   match e.e with
   | Var var_id -> (
       (* Lookup the variable - note that the variable may not be there,
@@ -109,24 +110,24 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
        * we use a locally nameless representation *)
       match VarId.Map.find_opt var_id ctx.env with
       | None -> ()
-      | Some ty -> assert (ty = e.ty))
+      | Some ty -> cassert (ty = e.ty) meta "TODO: error message")
   | CVar cg_id ->
       let ty = T.ConstGenericVarId.Map.find cg_id ctx.const_generics in
-      assert (ty = e.ty)
-  | Const cv -> check_literal cv (ty_as_literal e.ty)
+      cassert (ty = e.ty) meta "TODO: error message"
+  | Const cv -> check_literal meta cv (ty_as_literal meta e.ty)
   | App (app, arg) ->
-      let input_ty, output_ty = destruct_arrow app.ty in
-      assert (input_ty = arg.ty);
-      assert (output_ty = e.ty);
-      check_texpression ctx app;
-      check_texpression ctx arg
+      let input_ty, output_ty = destruct_arrow meta app.ty in
+      cassert (input_ty = arg.ty) meta "TODO: error message";
+      cassert (output_ty = e.ty) meta "TODO: error message";
+      check_texpression meta ctx app;
+      check_texpression meta ctx arg
   | Lambda (pat, body) ->
-      let pat_ty, body_ty = destruct_arrow e.ty in
-      assert (pat.ty = pat_ty);
-      assert (body.ty = body_ty);
+      let pat_ty, body_ty = destruct_arrow meta e.ty in
+      cassert (pat.ty = pat_ty) meta "TODO: error message";
+      cassert (body.ty = body_ty) meta "TODO: error message";
       (* Check the pattern and register the introduced variables at the same time *)
-      let ctx = check_typed_pattern ctx pat in
-      check_texpression ctx body
+      let ctx = check_typed_pattern meta ctx pat in
+      check_texpression meta ctx body
   | Qualif qualif -> (
       match qualif.id with
       | FunOrOp _ -> () (* TODO *)
@@ -135,83 +136,83 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       | Proj { adt_id = proj_adt_id; field_id } ->
           (* Note we can only project fields of structures (not enumerations) *)
           (* Deconstruct the projector type *)
-          let adt_ty, field_ty = destruct_arrow e.ty in
-          let adt_id, adt_generics = ty_as_adt adt_ty in
+          let adt_ty, field_ty = destruct_arrow meta e.ty in
+          let adt_id, adt_generics = ty_as_adt meta adt_ty in
           (* Check the ADT type *)
-          assert (adt_id = proj_adt_id);
-          assert (adt_generics = qualif.generics);
+          cassert (adt_id = proj_adt_id) meta "TODO: error message";
+          cassert (adt_generics = qualif.generics) meta "TODO: error message";
           (* Retrieve and check the expected field type *)
           let variant_id = None in
           let expected_field_tys =
-            get_adt_field_types ctx.type_decls proj_adt_id variant_id
+            get_adt_field_types meta ctx.type_decls proj_adt_id variant_id
               qualif.generics
           in
           let expected_field_ty = FieldId.nth expected_field_tys field_id in
-          assert (expected_field_ty = field_ty)
+          cassert (expected_field_ty = field_ty) meta "TODO: error message"
       | AdtCons id -> (
           let expected_field_tys =
-            get_adt_field_types ctx.type_decls id.adt_id id.variant_id
+            get_adt_field_types meta ctx.type_decls id.adt_id id.variant_id
               qualif.generics
           in
           let field_tys, adt_ty = destruct_arrows e.ty in
-          assert (expected_field_tys = field_tys);
+          cassert (expected_field_tys = field_tys) meta "TODO: error message";
           match adt_ty with
           | TAdt (type_id, generics) ->
-              assert (type_id = id.adt_id);
-              assert (generics = qualif.generics)
-          | _ -> raise (Failure "Unreachable")))
+              cassert (type_id = id.adt_id) meta "TODO: error message";
+              cassert (generics = qualif.generics) meta "TODO: error message"
+          | _ -> craise meta "Unreachable"))
   | Let (monadic, pat, re, e_next) ->
-      let expected_pat_ty = if monadic then destruct_result re.ty else re.ty in
-      assert (pat.ty = expected_pat_ty);
-      assert (e.ty = e_next.ty);
+      let expected_pat_ty = if monadic then destruct_result meta re.ty else re.ty in
+      cassert (pat.ty = expected_pat_ty) meta "TODO: error message";
+      cassert (e.ty = e_next.ty) meta "TODO: error message";
       (* Check the right-expression *)
-      check_texpression ctx re;
+      check_texpression meta ctx re;
       (* Check the pattern and register the introduced variables at the same time *)
-      let ctx = check_typed_pattern ctx pat in
+      let ctx = check_typed_pattern meta ctx pat in
       (* Check the next expression *)
-      check_texpression ctx e_next
+      check_texpression meta ctx e_next
   | Switch (scrut, switch_body) -> (
-      check_texpression ctx scrut;
+      check_texpression meta ctx scrut;
       match switch_body with
       | If (e_then, e_else) ->
-          assert (scrut.ty = TLiteral TBool);
-          assert (e_then.ty = e.ty);
-          assert (e_else.ty = e.ty);
-          check_texpression ctx e_then;
-          check_texpression ctx e_else
+          cassert (scrut.ty = TLiteral TBool) meta "TODO: error message";
+          cassert (e_then.ty = e.ty) meta "TODO: error message";
+          cassert (e_else.ty = e.ty) meta "TODO: error message";
+          check_texpression meta ctx e_then;
+          check_texpression meta ctx e_else
       | Match branches ->
           let check_branch (br : match_branch) : unit =
-            assert (br.pat.ty = scrut.ty);
-            let ctx = check_typed_pattern ctx br.pat in
-            check_texpression ctx br.branch
+            cassert (br.pat.ty = scrut.ty) meta "TODO: error message";
+            let ctx = check_typed_pattern meta ctx br.pat in
+            check_texpression meta ctx br.branch
           in
           List.iter check_branch branches)
   | Loop loop ->
-      assert (loop.fun_end.ty = e.ty);
-      check_texpression ctx loop.fun_end;
-      check_texpression ctx loop.loop_body
+      cassert (loop.fun_end.ty = e.ty) meta "TODO: error message";
+      check_texpression meta ctx loop.fun_end;
+      check_texpression meta ctx loop.loop_body
   | StructUpdate supd -> (
       (* Check the init value *)
       (if Option.is_some supd.init then
          match VarId.Map.find_opt (Option.get supd.init) ctx.env with
          | None -> ()
-         | Some ty -> assert (ty = e.ty));
+         | Some ty -> cassert (ty = e.ty) meta "TODO: error message");
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
-      let adt_id, adt_generics = ty_as_adt e.ty in
-      assert (adt_id = supd.struct_id);
+      let adt_id, adt_generics = ty_as_adt meta e.ty in
+      cassert (adt_id = supd.struct_id) meta "TODO: error message";
       (* The id can only be: a custom type decl or an array *)
       match adt_id with
       | TAdtId _ ->
           let variant_id = None in
           let expected_field_tys =
-            get_adt_field_types ctx.type_decls adt_id variant_id adt_generics
+            get_adt_field_types meta ctx.type_decls adt_id variant_id adt_generics
           in
           List.iter
             (fun ((fid, fe) : _ * texpression) ->
               let expected_field_ty = FieldId.nth expected_field_tys fid in
-              assert (expected_field_ty = fe.ty);
-              check_texpression ctx fe)
+              cassert (expected_field_ty = fe.ty) meta "TODO: error message";
+              check_texpression meta ctx fe)
             supd.updates
       | TAssumed TArray ->
           let expected_field_ty =
@@ -219,10 +220,10 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
           in
           List.iter
             (fun ((_, fe) : _ * texpression) ->
-              assert (expected_field_ty = fe.ty);
-              check_texpression ctx fe)
+              cassert (expected_field_ty = fe.ty) meta "TODO: error message";
+              check_texpression meta ctx fe)
             supd.updates
-      | _ -> raise (Failure "Unexpected"))
+      | _ -> craise meta "Unexpected")
   | Meta (_, e_next) ->
-      assert (e_next.ty = e.ty);
-      check_texpression ctx e_next
+      cassert (e_next.ty = e.ty) meta "TODO: error message";
+      check_texpression meta ctx e_next

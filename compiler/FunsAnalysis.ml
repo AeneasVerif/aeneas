@@ -9,6 +9,7 @@
 
 open LlbcAst
 open ExpressionsUtils
+open Errors
 
 (** Various information about a function.
 
@@ -36,7 +37,6 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (globals_map : global_decl GlobalDeclId.Map.t) (use_state : bool) :
     modules_funs_info =
   let infos = ref FunDeclId.Map.empty in
-
   let register_info (id : FunDeclId.id) (info : fun_info) : unit =
     assert (not (FunDeclId.Map.mem id !infos));
     infos := FunDeclId.Map.add id info !infos
@@ -119,7 +119,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
           method! visit_Call env call =
             (match call.func with
             | FnOpMove _ ->
-                (* Ignoring this: we lookup the called function upon creating
+                (* Ignoring this: we lookup t he called function upon creating
                    the closure *)
                 ()
             | FnOpRegular func -> (
@@ -145,7 +145,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
         end
       in
       (* Sanity check: global bodies don't contain stateful calls *)
-      assert ((not f.is_global_decl_body) || not !stateful);
+      cassert ((not f.is_global_decl_body) || not !stateful) f.meta "Global bodies should not contain stateful calls";
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
@@ -167,8 +167,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
     let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
-    assert ((not is_global_decl_body) || List.length d = 1);
-    assert ((not !group_has_builtin_info) || List.length d = 1);
+    cassert ((not is_global_decl_body) || List.length d = 1) (List.hd d).meta "The declaration group should containing globals should contain exactly one declaration"; (*TODO recheck how to get meta*)
+    cassert ((not !group_has_builtin_info) || List.length d = 1) (List.hd d).meta "The declaration group should containing globals should contain exactly one declaration";
     (* We ignore on purpose functions that cannot fail and consider they *can*
      * fail: the result of the analysis is not used yet to adjust the translation
      * so that the functions which syntactically can't fail don't use an error monad.

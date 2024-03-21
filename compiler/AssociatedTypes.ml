@@ -11,6 +11,7 @@ open TypesUtils
 open Values
 open LlbcAst
 open Contexts
+open Errors
 module Subst = Substitute
 
 (** The local logger *)
@@ -33,7 +34,7 @@ end
 
 module TyMap = Collections.MakeMap (TyOrd)
 
-let compute_norm_trait_types_from_preds
+let compute_norm_trait_types_from_preds (meta : Meta.meta option)
     (trait_type_constraints : trait_type_constraint list) : ty TraitTypeRefMap.t
     =
   (* Compute a union-find structure by recursively exploring the predicates and clauses *)
@@ -50,7 +51,7 @@ let compute_norm_trait_types_from_preds
     (* Sanity check: the type constraint can't make use of regions - Remark
        that it would be enough to only visit the field [ty] of the trait type
        constraint, but for safety we visit all the fields *)
-    assert (trait_type_constraint_no_regions c);
+    cassert_opt_meta (trait_type_constraint_no_regions c) meta "TODO: error message";
     let { trait_ref; type_name; ty } : trait_type_constraint = c in
     let trait_ty = TTraitType (trait_ref, type_name) in
     let trait_ty_ref = get_ref trait_ty in
@@ -79,10 +80,10 @@ let compute_norm_trait_types_from_preds
   in
   TraitTypeRefMap.of_list rbindings
 
-let ctx_add_norm_trait_types_from_preds (ctx : eval_ctx)
+let ctx_add_norm_trait_types_from_preds (meta : Meta.meta) (ctx : eval_ctx)
     (trait_type_constraints : trait_type_constraint list) : eval_ctx =
   let norm_trait_types =
-    compute_norm_trait_types_from_preds trait_type_constraints
+    compute_norm_trait_types_from_preds (Some meta) trait_type_constraints 
   in
   { ctx with norm_trait_types }
 
@@ -237,7 +238,8 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
         match trait_ref.trait_id with
         | TraitRef { trait_id = TraitImpl impl_id; generics = ref_generics; _ }
           ->
-            assert (ref_generics = empty_generic_args);
+            let meta = (TraitImplId.Map.find impl_id ctx.trait_impls).meta in
+            cassert (ref_generics = empty_generic_args) meta "Higher order types are not supported yet TODO: error message";
             log#ldebug
               (lazy
                 ("norm_ctx_normalize_ty: trait type: trait ref: "
@@ -277,7 +279,8 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
                 ^ trait_ref_to_string ctx trait_ref
                 ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
             (* We can't project *)
-            assert (trait_instance_id_is_local_clause trait_ref.trait_id);
+            let meta = (TraitDeclId.Map.find trait_ref.trait_decl_ref.trait_decl_id ctx.trait_decls).meta in
+            cassert (trait_instance_id_is_local_clause trait_ref.trait_id) meta "TODO: error message";
             TTraitType (trait_ref, type_name)
       in
       let tr : trait_type_ref = { trait_ref; type_name } in
@@ -342,10 +345,11 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | ParentClause (inst_id, decl_id, clause_id) -> (
       let inst_id, impl = norm_ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
+      let meta = (TraitDeclId.Map.find decl_id ctx.trait_decls).meta in
       match impl with
       | None ->
           (* This is actually a local clause *)
-          assert (trait_instance_id_is_local_clause inst_id);
+          cassert (trait_instance_id_is_local_clause inst_id) meta "TODO: error message";
           (ParentClause (inst_id, decl_id, clause_id), None)
       | Some impl ->
           (* We figure out the parent clause by doing the following:
@@ -371,12 +375,13 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
           let clause = norm_ctx_normalize_trait_ref ctx clause in
           (TraitRef clause, Some clause))
   | ItemClause (inst_id, decl_id, item_name, clause_id) -> (
+      let meta = (TraitDeclId.Map.find decl_id ctx.trait_decls).meta in
       let inst_id, impl = norm_ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
       match impl with
       | None ->
           (* This is actually a local clause *)
-          assert (trait_instance_id_is_local_clause inst_id);
+          cassert (trait_instance_id_is_local_clause inst_id) meta "Trait instance id is not a local clause";
           (ItemClause (inst_id, decl_id, item_name, clause_id), None)
       | Some impl ->
           (* We figure out the item clause by doing the following:
@@ -416,8 +421,9 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | TraitRef trait_ref ->
       (* The trait instance id necessarily refers to a local sub-clause. We
          can't project over it and can only peel off the [TraitRef] wrapper *)
-      assert (trait_instance_id_is_local_clause trait_ref.trait_id);
-      assert (trait_ref.generics = empty_generic_args);
+      let meta = (TraitDeclId.Map.find trait_ref.trait_decl_ref.trait_decl_id ctx.trait_decls).meta in
+      cassert (trait_instance_id_is_local_clause trait_ref.trait_id) meta "Trait instance id is not a local sub-clause";
+      cassert (trait_ref.generics = empty_generic_args) meta "TODO: error message";
       (trait_ref.trait_id, None)
   | FnPointer ty ->
       let ty = norm_ctx_normalize_ty ctx ty in
@@ -466,7 +472,8 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
         (lazy
           ("norm_ctx_normalize_trait_ref: normalized to: "
           ^ trait_ref_to_string ctx trait_ref));
-      assert (generics = empty_generic_args);
+      let meta = (TraitDeclId.Map.find trait_ref.trait_decl_ref.trait_decl_id ctx.trait_decls).meta in
+      cassert (generics = empty_generic_args) meta "TODO: error message";
       trait_ref
 
 (* Not sure this one is really necessary *)
@@ -528,10 +535,10 @@ let type_decl_get_inst_norm_field_rtypes (ctx : eval_ctx) (def : type_decl)
   List.map (ctx_normalize_ty ctx) types
 
 (** Same as [ctx_adt_value_get_instantiated_field_rtypes] but normalizes the types *)
-let ctx_adt_value_get_inst_norm_field_rtypes (ctx : eval_ctx) (adt : adt_value)
+let ctx_adt_value_get_inst_norm_field_rtypes (meta : Meta.meta) (ctx : eval_ctx) (adt : adt_value)
     (id : type_id) (generics : generic_args) : ty list =
   let types =
-    Subst.ctx_adt_value_get_instantiated_field_types ctx adt id generics
+    Subst.ctx_adt_value_get_instantiated_field_types meta ctx adt id generics
   in
   List.map (ctx_normalize_ty ctx) types
 

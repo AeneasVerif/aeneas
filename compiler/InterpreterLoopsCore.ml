@@ -4,6 +4,7 @@ open Types
 open Values
 open Contexts
 open InterpreterUtils
+open Errors
 
 type updt_env_kind =
   | AbsInLeft of AbstractionId.id
@@ -57,11 +58,11 @@ module type PrimMatcher = sig
 
   (** The input primitive values are not equal *)
   val match_distinct_literals :
-    eval_ctx -> eval_ctx -> ety -> literal -> literal -> typed_value
+    Meta.meta -> eval_ctx -> eval_ctx -> ety -> literal -> literal -> typed_value
 
   (** The input ADTs don't have the same variant *)
   val match_distinct_adts :
-    eval_ctx -> eval_ctx -> ety -> adt_value -> adt_value -> typed_value
+    Meta.meta -> eval_ctx -> eval_ctx -> ety -> adt_value -> adt_value -> typed_value
 
   (** The meta-value is the result of a match.
 
@@ -74,6 +75,7 @@ module type PrimMatcher = sig
       calling the match function.
    *)
   val match_shared_borrows :
+    Meta.meta ->
     eval_ctx ->
     eval_ctx ->
     (typed_value -> typed_value -> typed_value) ->
@@ -91,6 +93,7 @@ module type PrimMatcher = sig
       - [bv]: the result of matching [bv0] with [bv1]
   *)
   val match_mut_borrows :
+    Meta.meta ->
     eval_ctx ->
     eval_ctx ->
     ety ->
@@ -121,7 +124,7 @@ module type PrimMatcher = sig
 
   (** There are no constraints on the input symbolic values *)
   val match_symbolic_values :
-    eval_ctx -> eval_ctx -> symbolic_value -> symbolic_value -> symbolic_value
+    Meta.meta -> eval_ctx -> eval_ctx -> symbolic_value -> symbolic_value -> symbolic_value
 
   (** Match a symbolic value with a value which is not symbolic.
 
@@ -131,7 +134,7 @@ module type PrimMatcher = sig
       end loans in one of the two environments).
    *)
   val match_symbolic_with_other :
-    eval_ctx -> eval_ctx -> bool -> symbolic_value -> typed_value -> typed_value
+    Meta.meta -> eval_ctx -> eval_ctx -> bool -> symbolic_value -> typed_value -> typed_value
 
   (** Match a bottom value with a value which is not bottom.
 
@@ -141,10 +144,11 @@ module type PrimMatcher = sig
       end loans in one of the two environments).
    *)
   val match_bottom_with_other :
-    eval_ctx -> eval_ctx -> bool -> typed_value -> typed_value
+    Meta.meta -> eval_ctx -> eval_ctx -> bool -> typed_value -> typed_value
 
   (** The input ADTs don't have the same variant *)
   val match_distinct_aadts :
+    Meta.meta ->
     eval_ctx ->
     eval_ctx ->
     rty ->
@@ -162,6 +166,7 @@ module type PrimMatcher = sig
       [ty]: result of matching ty0 and ty1
    *)
   val match_ashared_borrows :
+    Meta.meta ->
     eval_ctx ->
     eval_ctx ->
     rty ->
@@ -182,6 +187,7 @@ module type PrimMatcher = sig
       [av]: result of matching av0 and av1
    *)
   val match_amut_borrows :
+    Meta.meta ->
     eval_ctx ->
     eval_ctx ->
     rty ->
@@ -208,6 +214,7 @@ module type PrimMatcher = sig
       [av]: result of matching av0 and av1
    *)
   val match_ashared_loans :
+    Meta.meta ->
     eval_ctx ->
     eval_ctx ->
     rty ->
@@ -234,6 +241,7 @@ module type PrimMatcher = sig
       [av]: result of matching av0 and av1
    *)
   val match_amut_loans :
+    Meta.meta ->
     eval_ctx ->
     eval_ctx ->
     rty ->
@@ -250,7 +258,7 @@ module type PrimMatcher = sig
       is typically used to raise the proper exception).
    *)
   val match_avalues :
-    eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
+    Meta.meta -> eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
 end
 
 module type Matcher = sig
@@ -259,14 +267,14 @@ module type Matcher = sig
       Rem.: this function raises exceptions of type {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}.
    *)
   val match_typed_values :
-    eval_ctx -> eval_ctx -> typed_value -> typed_value -> typed_value
+    Meta.meta -> eval_ctx -> eval_ctx -> typed_value -> typed_value -> typed_value
 
   (** Match two avalues.
 
       Rem.: this function raises exceptions of type {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}.
    *)
   val match_typed_avalues :
-    eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
+    Meta.meta -> eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
 end
 
 (** See {!module:InterpreterLoopsMatchCtxs.MakeCheckEquivMatcher} and
@@ -351,7 +359,7 @@ end
 
     Returns: (fixed, new abs, new dummies)
  *)
-let ctx_split_fixed_new (fixed_ids : ids_sets) (ctx : eval_ctx) :
+let ctx_split_fixed_new (meta : Meta.meta) (fixed_ids : ids_sets) (ctx : eval_ctx) :
     env * abs list * typed_value list =
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id fixed_ids.dids)
@@ -373,7 +381,7 @@ let ctx_split_fixed_new (fixed_ids : ids_sets) (ctx : eval_ctx) :
   let new_absl =
     List.map
       (fun ee ->
-        match ee with EAbs abs -> abs | _ -> raise (Failure "Unreachable"))
+        match ee with EAbs abs -> abs | _ -> craise meta "Unreachable")
       new_absl
   in
   let new_dummyl =
@@ -381,7 +389,7 @@ let ctx_split_fixed_new (fixed_ids : ids_sets) (ctx : eval_ctx) :
       (fun ee ->
         match ee with
         | EBinding (BDummy _, v) -> v
-        | _ -> raise (Failure "Unreachable"))
+        | _ -> craise meta "Unreachable")
       new_dummyl
   in
   (filt_env, new_absl, new_dummyl)

@@ -10,6 +10,7 @@ open Values
 open LlbcAst
 open Contexts
 open SynthesizeSymbolic
+open Errors
 module SA = SymbolicAst
 
 (** The local logger *)
@@ -67,7 +68,7 @@ let normalize_inst_fun_sig (ctx : eval_ctx) (sg : inst_fun_sig) : inst_fun_sig =
     clauses (we are not considering a function call, so we don't need to
     normalize because a trait clause was instantiated with a specific trait ref).
  *)
-let symbolic_instantiate_fun_sig (ctx : eval_ctx) (sg : fun_sig)
+let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) (kind : item_kind) :
     eval_ctx * inst_fun_sig =
   let tr_self =
@@ -83,7 +84,7 @@ let symbolic_instantiate_fun_sig (ctx : eval_ctx) (sg : fun_sig)
       List.map (fun (v : const_generic_var) -> CgVar v.index) const_generics
     in
     (* Annoying that we have to generate this substitution here *)
-    let r_subst _ = raise (Failure "Unexpected region") in
+    let r_subst _ = craise meta "Unexpected region" in
     let ty_subst =
       Substitute.make_type_subst_from_vars sg.generics.types types
     in
@@ -121,7 +122,7 @@ let symbolic_instantiate_fun_sig (ctx : eval_ctx) (sg : fun_sig)
         trait_instance_id =
       match TraitClauseId.Map.find_opt clause_id tr_map with
       | Some tr -> tr
-      | None -> raise (Failure "Local trait clause not found")
+      | None -> craise meta "Local trait clause not found"
     in
     let mk_subst tr_map =
       let tr_subst = mk_tr_subst tr_map in
@@ -149,10 +150,10 @@ let symbolic_instantiate_fun_sig (ctx : eval_ctx) (sg : fun_sig)
     in
     { regions; types; const_generics; trait_refs }
   in
-  let inst_sg = instantiate_fun_sig ctx generics tr_self sg regions_hierarchy in
+  let inst_sg = instantiate_fun_sig meta ctx generics tr_self sg regions_hierarchy in
   (* Compute the normalization maps *)
   let ctx =
-    AssociatedTypes.ctx_add_norm_trait_types_from_preds ctx
+    AssociatedTypes.ctx_add_norm_trait_types_from_preds meta ctx
       inst_sg.trait_type_constraints
   in
   (* Normalize the signature *)
@@ -173,7 +174,7 @@ let symbolic_instantiate_fun_sig (ctx : eval_ctx) (sg : fun_sig)
     - the list of symbolic values introduced for the input values
     - the instantiated function signature
  *)
-let initialize_symbolic_context_for_fun (meta : Meta.meta) (ctx : decls_ctx) (fdef : fun_decl) :
+let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     eval_ctx * symbolic_value list * inst_fun_sig =
   (* The abstractions are not initialized the same way as for function
    * calls: they contain *loan* projectors, because they "provide" us
@@ -195,22 +196,22 @@ let initialize_symbolic_context_for_fun (meta : Meta.meta) (ctx : decls_ctx) (fd
     List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
   in
   let ctx =
-    initialize_eval_ctx ctx region_groups sg.generics.types
+    initialize_eval_ctx fdef.meta ctx region_groups sg.generics.types
       sg.generics.const_generics
   in
   (* Instantiate the signature. This updates the context because we compute
      at the same time the normalization map for the associated types.
   *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig ctx fdef.signature regions_hierarchy fdef.kind
+    symbolic_instantiate_fun_sig fdef.meta ctx fdef.signature regions_hierarchy fdef.kind
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
-    List.map (fun ty -> mk_fresh_symbolic_value ty) inst_sg.inputs
+    List.map (fun ty -> mk_fresh_symbolic_value fdef.meta ty) inst_sg.inputs
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
-  assert (call_id = FunCallId.zero);
+  cassert (call_id = FunCallId.zero) fdef.meta "The abstractions should be empty (i.e., with no avalues) abstractions";
   let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
       eval_ctx * typed_avalue list =
     (* Project over the values - we use *loan* projectors, as explained above *)
@@ -232,12 +233,12 @@ let initialize_symbolic_context_for_fun (meta : Meta.meta) (ctx : decls_ctx) (fd
     Collections.List.split_at (List.tl body.locals) body.arg_count
   in
   (* Push the return variable (initialized with ⊥) *)
-  let ctx = ctx_push_uninitialized_var meta ctx ret_var in
+  let ctx = ctx_push_uninitialized_var fdef.meta ctx ret_var in
   (* Push the input variables (initialized with symbolic values) *)
   let input_values = List.map mk_typed_value_from_symbolic_value input_svs in
-  let ctx = ctx_push_vars meta ctx (List.combine input_vars input_values) in
+  let ctx = ctx_push_vars fdef.meta ctx (List.combine input_vars input_values) in
   (* Push the remaining local variables (initialized with ⊥) *)
-  let ctx = ctx_push_uninitialized_vars meta ctx local_vars in
+  let ctx = ctx_push_uninitialized_vars fdef.meta ctx local_vars in
   (* Return *)
   (ctx, input_svs, inst_sg)
 
@@ -271,7 +272,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       ^ "\n- inside_loop: "
       ^ Print.bool_to_string inside_loop
       ^ "\n- ctx:\n"
-      ^ Print.Contexts.eval_ctx_to_string ctx));
+      ^ Print.Contexts.eval_ctx_to_string fdef.meta ctx));
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
@@ -280,12 +281,12 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig ctx fdef.signature regions_hierarchy fdef.kind
+    symbolic_instantiate_fun_sig fdef.meta ctx fdef.signature regions_hierarchy fdef.kind
   in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in
-  let cf_pop_frame = pop_frame config pop_return_value in
+  let cf_pop_frame = pop_frame fdef.meta config pop_return_value in
 
   (* We need to find the parents regions/abstractions of the region we
    * will end - this will allow us to, first, mark the other return
@@ -313,7 +314,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
             eval_ctx * typed_avalue list =
           let ctx, avalue =
-            apply_proj_borrows_on_input_value config ctx abs.regions
+            apply_proj_borrows_on_input_value fdef.meta config ctx abs.regions
               abs.ancestors_regions ret_value ret_rty
           in
           (ctx, [ avalue ])
@@ -329,7 +330,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         let region_can_end rid =
           RegionGroupId.Set.mem rid parent_and_current_rgs
         in
-        assert (region_can_end back_id);
+        cassert (region_can_end back_id) fdef.meta "The region should be able to end";
         let ctx =
           create_push_abstractions_from_abs_region_groups
             (fun rg_id -> SynthRet rg_id)
@@ -416,9 +417,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
             | Loop (loop_id', rg_id', LoopSynthInput) ->
                 (* We only allow to end the loop synth input abs for the region
                    group [rg_id] *)
-                assert (
+                cassert (
                   if Option.is_some loop_id then loop_id = Some loop_id'
-                  else true);
+                  else true) fdef.meta "Only the loop synth input abs for the region group [rg_id] are allowed to end";
                 (* Loop abstractions *)
                 let rg_id' = Option.get rg_id' in
                 if rg_id' = back_id && inside_loop then
@@ -426,7 +427,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
                 else abs
             | Loop (loop_id', _, LoopCall) ->
                 (* We can end all the loop call abstractions *)
-                assert (loop_id = Some loop_id');
+                cassert (loop_id = Some loop_id') fdef.meta "TODO: error message";
                 { abs with can_end = true }
             | SynthInput rg_id' ->
                 if rg_id' = back_id && end_fun_synth_input then
@@ -446,7 +447,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
     let cf_end_target_abs cf =
       List.fold_left
-        (fun cf id -> end_abstraction config id cf)
+        (fun cf id -> end_abstraction fdef.meta config id cf)
         cf target_abs_ids
     in
     (* Generate the Return node *)
@@ -468,7 +469,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       for the synthesis)
     - the symbolic AST generated by the symbolic execution
  *)
-let evaluate_function_symbolic (meta : Meta.meta) (synthesize : bool) (ctx : decls_ctx)
+let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
     (fdef : fun_decl) : symbolic_value list * SA.expression option =
   (* Debug *)
   let name_to_string () =
@@ -479,7 +480,7 @@ let evaluate_function_symbolic (meta : Meta.meta) (synthesize : bool) (ctx : dec
   log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
 
   (* Create the evaluation context *)
-  let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun meta ctx fdef in
+  let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
 
   let regions_hierarchy =
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
@@ -512,7 +513,7 @@ let evaluate_function_symbolic (meta : Meta.meta) (synthesize : bool) (ctx : dec
           let fwd_e =
             (* Pop the frame and retrieve the returned value at the same time*)
             let pop_return_value = true in
-            let cf_pop = pop_frame config pop_return_value in
+            let cf_pop = pop_frame fdef.meta config pop_return_value in
             (* Generate the Return node *)
             let cf_return ret_value : m_fun =
              fun ctx -> Some (SA.Return (ctx, ret_value))
@@ -529,7 +530,7 @@ let evaluate_function_symbolic (meta : Meta.meta) (synthesize : bool) (ctx : dec
             match res with
             | Return -> None
             | LoopReturn loop_id -> Some loop_id
-            | _ -> raise (Failure "Unreachable")
+            | _ -> craise fdef.meta "Unreachable"
           in
           let is_regular_return = true in
           let inside_loop = Option.is_some loop_id in
@@ -555,14 +556,14 @@ let evaluate_function_symbolic (meta : Meta.meta) (synthesize : bool) (ctx : dec
             match res with
             | EndEnterLoop _ -> false
             | EndContinue _ -> true
-            | _ -> raise (Failure "Unreachable")
+            | _ -> craise fdef.meta "Unreachable"
           in
           (* Forward translation *)
           let fwd_e =
             (* Pop the frame - there is no returned value to pop: in the
                translation we will simply call the loop function *)
             let pop_return_value = false in
-            let cf_pop = pop_frame config pop_return_value in
+            let cf_pop = pop_frame fdef.meta config pop_return_value in
             (* Generate the Return node *)
             let cf_return _ret_value : m_fun =
              fun _ctx -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
@@ -596,13 +597,13 @@ let evaluate_function_symbolic (meta : Meta.meta) (synthesize : bool) (ctx : dec
          * the executions can lead to a panic *)
         if synthesize then Some SA.Panic else None
     | Unit | Break _ | Continue _ ->
-        raise
-          (Failure ("evaluate_function_symbolic failed on: " ^ name_to_string ()))
+        craise
+        fdef.meta ("evaluate_function_symbolic failed on: " ^ name_to_string ())
   in
 
   (* Evaluate the function *)
   let symbolic =
-    eval_function_body config (Option.get fdef.body).body cf_finish ctx
+    eval_function_body fdef.meta config (Option.get fdef.body).body cf_finish ctx
   in
 
   (* Return *)
@@ -612,7 +613,7 @@ module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
       environment.
    *)
-  let test_unit_function (meta : Meta.meta)  (crate : crate) (decls_ctx : decls_ctx)
+  let test_unit_function (crate : crate) (decls_ctx : decls_ctx)
       (fid : FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = FunDeclId.Map.find fid crate.fun_decls in
@@ -627,14 +628,14 @@ module Test = struct
             fdef.name));
 
     (* Sanity check - *)
-    assert (fdef.signature.generics = empty_generic_params);
-    assert (body.arg_count = 0);
+    cassert (fdef.signature.generics = empty_generic_params) fdef.meta "TODO: Error message";
+    cassert (body.arg_count = 0) fdef.meta "TODO: Error message";
 
     (* Create the evaluation context *)
-    let ctx = initialize_eval_ctx decls_ctx [] [] [] in
+    let ctx = initialize_eval_ctx fdef.meta decls_ctx [] [] [] in
 
     (* Insert the (uninitialized) local variables *)
-    let ctx = ctx_push_uninitialized_vars meta ctx body.locals in
+    let ctx = ctx_push_uninitialized_vars fdef.meta ctx body.locals in
 
     (* Create the continuation to check the function's result *)
     let config = mk_config ConcreteMode in
@@ -643,18 +644,18 @@ module Test = struct
       | Return ->
           (* Ok: drop the local variables and finish *)
           let pop_return_value = true in
-          pop_frame config pop_return_value (fun _ _ -> None) ctx
+          pop_frame fdef.meta config pop_return_value (fun _ _ -> None) ctx
       | _ ->
-          raise
-            (Failure
+          craise
+            fdef.meta
                ("Unit test failed (concrete execution) on: "
                ^ Print.Types.name_to_string
                    (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
-                   fdef.name))
+                   fdef.name)
     in
 
     (* Evaluate the function *)
-    let _ = eval_function_body config body.body cf_check ctx in
+    let _ = eval_function_body body.meta config body.body cf_check ctx in
     ()
 
   (** Small helper: return true if the function is a *transparent* unit function
@@ -665,7 +666,7 @@ module Test = struct
     && def.signature.inputs = []
 
   (** Test all the unit functions in a list of function definitions *)
-  let test_unit_functions (meta : Meta.meta)  (crate : crate) : unit =
+  let test_unit_functions (crate : crate) : unit =
     let unit_funs =
       FunDeclId.Map.filter
         (fun _ -> fun_decl_is_transparent_unit)
@@ -673,7 +674,7 @@ module Test = struct
     in
     let decls_ctx = compute_contexts crate in
     let test_unit_fun _ (def : fun_decl) : unit =
-      test_unit_function meta crate decls_ctx def.def_id
+      test_unit_function crate decls_ctx def.def_id
     in
     FunDeclId.Map.iter test_unit_fun unit_funs
 end
