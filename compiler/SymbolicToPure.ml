@@ -878,7 +878,7 @@ let mk_fuel_input_as_list (ctx : bs_ctx) (info : fun_effect_info) :
   if function_uses_fuel info then [ mk_fuel_texpression ctx.fuel ] else []
 
 (** Small utility. *)
-let compute_raw_fun_effect_info (* (meta : Meta.meta) *) (fun_infos : fun_info A.FunDeclId.Map.t)
+let compute_raw_fun_effect_info  (meta : Meta.meta) (fun_infos : fun_info A.FunDeclId.Map.t)
     (fun_id : A.fun_id_or_trait_method_ref) (lid : V.LoopId.id option)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
@@ -896,7 +896,7 @@ let compute_raw_fun_effect_info (* (meta : Meta.meta) *) (fun_infos : fun_info A
         is_rec = info.is_rec || Option.is_some lid;
       }
   | FunId (FAssumed aid) ->
-      assert (lid = None) (* meta "TODO: error message" *);
+      cassert (lid = None) meta "TODO: error message";
       {
         can_fail = Assumed.assumed_fun_can_fail aid;
         stateful_group = false;
@@ -921,7 +921,7 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           in
           { info with is_rec = info.is_rec || Option.is_some lid }
       | FunId (FAssumed _) ->
-          compute_raw_fun_effect_info (* ctx.fun_decl.meta *) ctx.fun_ctx.fun_infos fun_id lid gid)
+          compute_raw_fun_effect_info ctx.fun_decl.meta ctx.fun_ctx.fun_infos fun_id lid gid)
   | Some lid -> (
       (* This is necessarily for the current function *)
       match fun_id with
@@ -981,7 +981,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
 
   (* Is the forward function stateful, and can it fail? *)
   let fwd_effect_info =
-    compute_raw_fun_effect_info fun_infos fun_id None None
+    compute_raw_fun_effect_info meta fun_infos fun_id None None
   in
   (* Compute the forward inputs *)
   let fwd_fuel = mk_fuel_input_ty_as_list fwd_effect_info in
@@ -1099,7 +1099,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
       RegionGroupId.id * back_sg_info =
     let gid = rg.id in
     let back_effect_info =
-      compute_raw_fun_effect_info fun_infos fun_id None (Some gid)
+      compute_raw_fun_effect_info meta fun_infos fun_id None (Some gid)
     in
     let inputs_no_state = translate_back_inputs_for_gid gid in
     let inputs_no_state =

@@ -287,7 +287,7 @@ let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_string fmt
             ("val [" ^ String.concat ", " names ^ "] = DefineDiv ‘")
         else (
-          assert (List.length names = 1);
+          assert (List.length names = 1) (* TODO: Error message, meta todo*);
           let name = List.hd names in
           F.pp_print_string fmt ("val " ^ name ^ " = Define ‘"));
         F.pp_print_cut fmt ()
@@ -470,7 +470,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
               if print_paren then F.pp_print_string fmt "(";
               (* TODO: for now, only the opaque *functions* are extracted in the
                  opaque module. The opaque *types* are assumed. *)
-              F.pp_print_string fmt (ctx_get_type meta type_id ctx);
+              F.pp_print_string fmt (ctx_get_type ~meta:(Some meta) type_id ctx);
               (* We might need to filter the type arguments, if the type
                  is builtin (for instance, we filter the global allocator type
                  argument for `Vec`). *)
@@ -496,7 +496,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
           | HOL4 ->
               let { types; const_generics; trait_refs } = generics in
               (* Const generics are not supported in HOL4 *)
-              assert (const_generics = []);
+              cassert (const_generics = []) meta "Const generics are not supported in HOL4";
               let print_tys =
                 match type_id with
                 | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
@@ -513,7 +513,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
                   (extract_rec true) types;
                 if print_paren then F.pp_print_string fmt ")";
                 F.pp_print_space fmt ());
-              F.pp_print_string fmt (ctx_get_type meta type_id ctx);
+              F.pp_print_string fmt (ctx_get_type ~meta:(Some meta) type_id ctx);
               if trait_refs <> [] then (
                 F.pp_print_space fmt ();
                 Collections.List.iter_link (F.pp_print_space fmt)
@@ -554,7 +554,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
-            assert (!backend <> HOL4);
+            cassert (!backend <> HOL4) meta "TODO: Error message";
             extract_trait_ref meta ctx fmt no_params_tys false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
 
@@ -606,7 +606,7 @@ and extract_generic_args (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.form
         (extract_ty meta ctx fmt no_params_tys true)
         types);
     if const_generics <> [] then (
-      assert (!backend <> HOL4);
+      cassert (!backend <> HOL4) meta "TODO: Error message";
       F.pp_print_space fmt ();
       Collections.List.iter_link (F.pp_print_space fmt)
         (extract_const_generic meta ctx fmt true)
@@ -878,7 +878,7 @@ let extract_type_decl_variant (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F
     List.fold_left (fun ctx (fid, f) -> print_field fid f ctx) ctx fields
   in
   (* Sanity check: HOL4 doesn't support const generics *)
-  assert (cg_params = [] || !backend <> HOL4);
+  cassert (cg_params = [] || !backend <> HOL4) meta "TODO: Error message";
   (* Print the final type *)
   if !backend <> HOL4 then (
     F.pp_print_space fmt ();
@@ -1076,7 +1076,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     else (
       (* We extract for Coq or Lean, and we have a recursive record, or a record in
          a group of mutually recursive types: we extract it as an inductive type *)
-      assert (is_rec && (!backend = Coq || !backend = Lean));
+      cassert (is_rec && (!backend = Coq || !backend = Lean)) def.meta "TODO: error message";
       (* Small trick: in Lean we use namespaces, meaning we don't need to prefix
          the constructor name with the name of the type at definition site,
          i.e., instead of generating `inductive Foo := | MkFoo ...` like in Coq
@@ -1130,10 +1130,11 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
   in
   extract_comment fmt (sl @ [ span ] @ name)
 
-let extract_trait_clause_type meta (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_trait_clause_type (* (meta : Meta.meta) TODO check if right meta*) (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (clause : trait_clause) : unit =
   let trait_name = ctx_get_trait_decl clause.trait_id ctx in
   F.pp_print_string fmt trait_name;
+  let meta = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).meta in
   extract_generic_args meta ctx fmt no_params_tys clause.generics
 
 (** Insert a space, if necessary *)
@@ -1176,7 +1177,7 @@ let extract_generic_params (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.fo
     (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
-  assert (cg_params = [] || !backend <> HOL4);
+  cassert (cg_params = [] || !backend <> HOL4) meta "HOL4 doesn't support const generics";
   let left_bracket (implicit : bool) =
     if implicit && !backend <> FStar then F.pp_print_string fmt "{"
     else F.pp_print_string fmt "("
@@ -1257,7 +1258,7 @@ let extract_generic_params (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.fo
           F.pp_print_space fmt ();
           F.pp_print_string fmt ":";
           F.pp_print_space fmt ();
-          extract_trait_clause_type meta ctx fmt no_params_tys clause;
+          extract_trait_clause_type ctx fmt no_params_tys clause;
           (* ) *)
           right_bracket as_implicits;
           if use_arrows then (
@@ -1323,7 +1324,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
     (extract_body : bool) : unit =
   (* Sanity check *)
-  assert (extract_body || !backend <> HOL4);
+  cassert (extract_body || !backend <> HOL4) def.meta "TODO: error message";
   let is_tuple_struct =
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
@@ -1394,7 +1395,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   | None -> F.pp_print_string fmt def_name);
   (* HOL4 doesn't support const generics, and type definitions in HOL4 don't
      support trait clauses *)
-  assert ((cg_params = [] && trait_clauses = []) || !backend <> HOL4);
+  cassert ((cg_params = [] && trait_clauses = []) || !backend <> HOL4) def.meta "HOL4 doesn't support const generics, and type definitions in HOL4 don't support trait clauses";
   (* Print the generic parameters *)
   extract_generic_params def.meta ctx_body fmt type_decl_group ~use_forall def.generics
     type_params cg_params trait_clauses;
@@ -1463,9 +1464,9 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.meta def.def_id ctx in
   (* Generic parameters are unsupported *)
-  assert (def.generics.const_generics = []);
+  cassert (def.generics.const_generics = []) def.meta "Generic parameters are unsupported";
   (* Trait clauses on type definitions are unsupported *)
-  assert (def.generics.trait_clauses = []);
+  cassert (def.generics.trait_clauses = []) def.meta "Trait clauses on type definitions are unsupported";
   (* Types  *)
   (* Count the number of parameters *)
   let num_params = List.length def.generics.types in
@@ -1488,7 +1489,7 @@ let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.meta def.def_id ctx in
   (* Sanity check *)
-  assert (def.generics = empty_generic_params);
+  cassert (def.generics = empty_generic_params) def.meta "TODO: error message";
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ("Type " ^ def_name ^ " = “: unit”");
@@ -1564,7 +1565,7 @@ let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
-  assert (!backend = Coq);
+  cassert (!backend = Coq) decl.meta "TODO: error message";
   (* Generating the [Arguments] instructions is useful only if there are parameters *)
   let num_params =
     List.length decl.generics.types
@@ -1610,7 +1611,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
-  assert (!backend = Coq);
+  cassert (!backend = Coq) decl.meta "TODO: error message";
   match decl.kind with
   | Opaque | Enum _ -> ()
   | Struct fields ->
@@ -1770,7 +1771,7 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
         extract_type_decl_record_field_projectors ctx fmt kind decl)
 
 (** Extract the state type declaration. *)
-let extract_state_type (meta : Meta.meta) (fmt : F.formatter) (ctx : extraction_ctx)
+let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
     (kind : decl_kind) : unit =
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
@@ -1781,14 +1782,14 @@ let extract_state_type (meta : Meta.meta) (fmt : F.formatter) (ctx : extraction_
    * one line *)
   F.pp_open_hvbox fmt 0;
   (* Retrieve the name *)
-  let state_name = ctx_get_assumed_type meta TState ctx in
+  let state_name = ctx_get_assumed_type TState ctx in
   (* The syntax for Lean and Coq is almost identical. *)
   let print_axiom () =
     let axiom =
       match !backend with
       | Coq -> "Axiom"
       | Lean -> "axiom"
-      | FStar | HOL4 -> craise meta "Unexpected"
+      | FStar | HOL4 -> raise (Failure "Unexpected")
     in
     F.pp_print_string fmt axiom;
     F.pp_print_space fmt ();
@@ -1802,7 +1803,7 @@ let extract_state_type (meta : Meta.meta) (fmt : F.formatter) (ctx : extraction_
   (* The kind should be [Assumed] or [Declared] *)
   (match kind with
   | SingleNonRec | SingleRec | MutRecFirst | MutRecInner | MutRecLast ->
-      craise meta "Unexpected"
+      raise (Failure "Unexpected")
   | Assumed -> (
       match !backend with
       | FStar ->

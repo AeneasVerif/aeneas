@@ -1551,7 +1551,7 @@ and eval_function_body (meta : Meta.meta) (config : config) (body : statement) :
      * checking the invariants *)
     let cc = greedy_expand_symbolic_values body.meta config in
     (* Sanity check *)
-    let cc = comp_check_ctx cc (Invariants.check_invariants meta) in
+    let cc = comp_check_ctx cc (Invariants.check_invariants meta) in (* Check if right meta *)
     (* Continue *)
     cc (cf res)
   in

@@ -354,7 +354,7 @@ let compute_expanded_bottom_adt_value (meta : Meta.meta) (ctx : eval_ctx) (def_i
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
-  let def = ctx_lookup_type_decl ctx def_id in (*TODO: check if can be moved before assert ?*)
+  let def = ctx_lookup_type_decl ctx def_id in
   cassert (List.length generics.regions = List.length def.generics.regions) meta "TODO: Error message";
   (* Compute the field types *)
   let field_types =

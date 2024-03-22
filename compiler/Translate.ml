@@ -352,7 +352,7 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     [is_rec]: [true] if the types are recursive. Necessarily [true] if there is
     > 1 type to extract.
  *)
-let export_types_group (meta : Meta.meta) (fmt : Format.formatter) (config : gen_config)
+let export_types_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (ids : Pure.TypeDeclId.id list) : unit =
   assert (ids <> []) (* meta "TODO: Error message" *);
   let export_type = export_type fmt config ctx in
@@ -493,7 +493,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     Rem.: this function doesn't check [config.extract_fun_decls]: it should have
     been checked by the caller.
  *)
-let export_functions_group_scc (meta : Meta.meta) (fmt : Format.formatter) (config : gen_config)
+let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (decls : Pure.fun_decl list) : unit =
   (* Utility to check a function has a decrease clause *)
   let has_decreases_clause (def : Pure.fun_decl) : bool =
@@ -504,7 +504,7 @@ let export_functions_group_scc (meta : Meta.meta) (fmt : Format.formatter) (conf
   (* Extract the function declarations *)
   (* Check if the functions are mutually recursive *)
   let is_mut_rec = List.length decls > 1 in
-  cassert ((not is_mut_rec) || is_rec) meta "TODO: Error message";
+  assert ((not is_mut_rec) || is_rec);
   let decls_length = List.length decls in
   (* We open and close the declaration group with [{start, end}_fun_decl_group].
 
@@ -568,7 +568,7 @@ let export_functions_group_scc (meta : Meta.meta) (fmt : Format.formatter) (conf
     In case of (non-mutually) recursive functions, we use a simple procedure to
     check if the forward and backward functions are mutually recursive.
  *)
-let export_functions_group (meta : Meta.meta) (fmt : Format.formatter) (config : gen_config)
+let export_functions_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (pure_ls : pure_fun_translation list) : unit =
   (* Check if the definition are builtin - if yes they must be ignored.
      Note that if one definition in the group is builtin, then all the
@@ -584,7 +584,7 @@ let export_functions_group (meta : Meta.meta) (fmt : Format.formatter) (config :
 
   if List.exists (fun b -> b) builtin then
     (* Sanity check *)
-    cassert (List.for_all (fun b -> b) builtin) meta "TODO: Error message"
+    assert (List.for_all (fun b -> b) builtin)
   else
     (* Utility to check a function has a decrease clause *)
     let has_decreases_clause (def : Pure.fun_decl) : bool =
@@ -616,11 +616,11 @@ let export_functions_group (meta : Meta.meta) (fmt : Format.formatter) (config :
               | FStar ->
                   Extract.extract_template_fstar_decreases_clause ctx fmt decl
               | Coq ->
-                  craise
-                    meta "Coq doesn't have decreases/termination clauses"
+                  raise
+                    (Failure "Coq doesn't have decreases/termination clauses")
               | HOL4 ->
-                  craise
-                    meta "HOL4 doesn't have decreases/termination clauses"
+                  raise
+                    (Failure "HOL4 doesn't have decreases/termination clauses")
           in
           extract_decrease f.f;
           List.iter extract_decrease f.loops)
@@ -639,7 +639,7 @@ let export_functions_group (meta : Meta.meta) (fmt : Format.formatter) (config :
 
        (* Extract the subgroups *)
        let export_subgroup (is_rec : bool) (decls : Pure.fun_decl list) : unit =
-         export_functions_group_scc meta fmt config ctx is_rec decls
+         export_functions_group_scc fmt config ctx is_rec decls
        in
        List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
 
@@ -658,7 +658,7 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
   let open ExtractBuiltin in
   if
     match_name_find_opt ctx.trans_ctx trait_decl.llbc_name
-      (builtin_trait_decls_map trait_decl.meta ())
+      (builtin_trait_decls_map ())
     = None
   then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
@@ -694,16 +694,16 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     split the definitions between different files (or not), we can control
     what is precisely extracted.
  *)
-let extract_definitions (meta : Meta.meta) (fmt : Format.formatter) (config : gen_config)
+let extract_definitions (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) : unit =
   (* Export the definition groups to the file, in the proper order.
      - [extract_decl]: extract the type declaration (if not filtered)
      - [extract_extra_info]: extra the extra type information (e.g.,
        the [Arguments] information in Coq).
   *)
-  let export_functions_group = export_functions_group meta fmt config ctx in
+  let export_functions_group = export_functions_group fmt config ctx in
   let export_global = export_global fmt config ctx in
-  let export_types_group = export_types_group meta fmt config ctx in
+  let export_types_group = export_types_group fmt config ctx in
   let export_trait_decl_group id =
     export_trait_decl fmt config ctx id true false
   in
@@ -716,7 +716,7 @@ let extract_definitions (meta : Meta.meta) (fmt : Format.formatter) (config : ge
     let kind =
       if config.interface then ExtractBase.Declared else ExtractBase.Assumed
     in
-    Extract.extract_state_type meta fmt ctx kind
+    Extract.extract_state_type fmt ctx kind
   in
 
   let export_decl_group (dg : declaration_group) : unit =
@@ -785,7 +785,7 @@ type extract_file_info = {
   custom_includes : string list;
 }
 
-let extract_file (meta : Meta.meta) (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
+let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
     : unit =
   (* Open the file and create the formatter *)
   let out = open_out fi.filename in
@@ -885,7 +885,7 @@ let extract_file (meta : Meta.meta) (config : gen_config) (ctx : gen_ctx) (fi : 
   Format.pp_open_vbox fmt 0;
 
   (* Extract the definitions *)
-  extract_definitions meta fmt config ctx;
+  extract_definitions fmt config ctx;
 
   (* Close the box and end the formatting *)
   Format.pp_close_box fmt ();
@@ -1080,7 +1080,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     let ( ^^ ) = Filename.concat in
     if !Config.split_files then mkdir_if (dest_dir ^^ crate_name);
     if needs_clauses_module then (
-      assert !Config.split_files (* meta "TODO: Error message META?" *);
+      assert !Config.split_files;
       mkdir_if (dest_dir ^^ crate_name ^^ "Clauses")));
 
   (* Copy the "Primitives" file, if necessary *)
@@ -1230,7 +1230,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
              custom_includes = [];
            }
          in
-         extract_file meta opaque_config ctx file_info;
+         extract_file opaque_config ctx file_info;
          (* Return the additional dependencies *)
          [ opaque_imported_module ])
        else []
@@ -1271,7 +1271,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          custom_includes = opaque_types_module;
        }
      in
-     extract_file meta types_config ctx file_info;
+     extract_file types_config ctx file_info;
 
      (* Extract the template clauses *)
      (if needs_clauses_module && !Config.extract_template_decreases_clauses then
@@ -1300,7 +1300,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
             custom_includes = [];
           }
         in
-        extract_file meta template_clauses_config ctx file_info);
+        extract_file template_clauses_config ctx file_info);
 
      (* Extract the opaque fun declarations, if needed *)
      let opaque_funs_module =
@@ -1356,7 +1356,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
              custom_includes = [ types_module ];
            }
          in
-         extract_file meta opaque_config ctx file_info;
+         extract_file opaque_config ctx file_info;
          (* Return the additional dependencies *)
          [ opaque_imported_module ])
        else []
@@ -1397,7 +1397,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
            [ types_module ] @ opaque_funs_module @ clauses_module;
        }
      in
-     extract_file meta fun_config ctx file_info)
+     extract_file fun_config ctx file_info)
    else
      let gen_config =
        {
@@ -1430,7 +1430,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          custom_includes = [];
        }
      in
-     extract_file meta gen_config ctx file_info);
+     extract_file gen_config ctx file_info);
 
   (* Generate the build file *)
   match !Config.backend with

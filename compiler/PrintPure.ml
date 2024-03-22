@@ -294,7 +294,7 @@ let mplace_to_string (env : fmt_env) (p : mplace) : string =
   let name = name ^ "^" ^ E.VarId.to_string p.var_id ^ "llbc" in
   mprojection_to_string env name p.projection
 
-let adt_variant_to_string (meta : Meta.meta) (env : fmt_env) (adt_id : type_id)
+let adt_variant_to_string ?(meta = None) (env : fmt_env) (adt_id : type_id)
     (variant_id : VariantId.id option) : string =
   match adt_id with
   | TTuple -> "Tuple"
@@ -308,29 +308,29 @@ let adt_variant_to_string (meta : Meta.meta) (env : fmt_env) (adt_id : type_id)
       match aty with
       | TState | TArray | TSlice | TStr | TRawPtr _ ->
           (* Those types are opaque: we can't get there *)
-          craise meta "Unreachable"
+          craise_opt_meta meta "Unreachable"
       | TResult ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then "@Result::Return"
           else if variant_id = result_fail_id then "@Result::Fail"
           else
-            craise meta "Unreachable: improper variant id for result type"
+            craise_opt_meta meta "Unreachable: improper variant id for result type"
       | TError ->
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
-          else craise meta "Unreachable: improper variant id for error type"
+          else craise_opt_meta meta "Unreachable: improper variant id for error type"
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then "@Fuel::Zero"
           else if variant_id = fuel_succ_id then "@Fuel::Succ"
-          else craise meta "Unreachable: improper variant id for fuel type")
+          else craise_opt_meta meta "Unreachable: improper variant id for fuel type")
 
-let adt_field_to_string (meta : Meta.meta) (env : fmt_env) (adt_id : type_id)
+let adt_field_to_string ?(meta = None) (env : fmt_env) (adt_id : type_id)
     (field_id : FieldId.id) : string =
   match adt_id with
   | TTuple ->
-      craise meta "Unreachable"
+      craise_opt_meta meta "Unreachable"
       (* Tuples don't use the opaque field id for the field indices, but [int] *)
   | TAdtId def_id -> (
       (* "Regular" ADT *)
@@ -343,10 +343,10 @@ let adt_field_to_string (meta : Meta.meta) (env : fmt_env) (adt_id : type_id)
       match aty with
       | TState | TFuel | TArray | TSlice | TStr ->
           (* Opaque types: we can't get there *)
-          craise meta "Unreachable"
+          craise_opt_meta meta "Unreachable"
       | TResult | TError | TRawPtr _ ->
           (* Enumerations: we can't get there *)
-          craise meta "Unreachable")
+          craise_opt_meta meta "Unreachable")
 
 (** TODO: we don't need a general function anymore (it is now only used for
     patterns)
@@ -611,13 +611,13 @@ and app_to_string (meta : Meta.meta) (env : fmt_env) (inside : bool) (indent : s
             (global_decl_id_to_string env global_id, generics)
         | AdtCons adt_cons_id ->
             let variant_s =
-              adt_variant_to_string meta env adt_cons_id.adt_id
+              adt_variant_to_string ~meta:(Some meta) env adt_cons_id.adt_id
                 adt_cons_id.variant_id
             in
             (ConstStrings.constructor_prefix ^ variant_s, [])
         | Proj { adt_id; field_id } ->
-            let adt_s = adt_variant_to_string meta env adt_id None in
-            let field_s = adt_field_to_string meta env adt_id field_id in
+            let adt_s = adt_variant_to_string ~meta:(Some meta) env adt_id None in
+            let field_s = adt_field_to_string ~meta:(Some meta) env adt_id field_id in
             (* Adopting an F*-like syntax *)
             (ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s, [])
         | TraitConst (trait_ref, const_name) ->

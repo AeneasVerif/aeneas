@@ -2381,7 +2381,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
             in
             let ty () =
               F.pp_print_space fmt ();
-              extract_trait_clause_type decl.meta ctx fmt TypeDeclId.Set.empty clause
+              extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
             in
             extract_trait_decl_item ctx fmt item_name ty)
           clauses)
@@ -2396,7 +2396,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         in
         let ty () =
           F.pp_print_space fmt ();
-          extract_trait_clause_type decl.meta ctx fmt TypeDeclId.Set.empty clause
+          extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
         in
         extract_trait_decl_item ctx fmt item_name ty)
       decl.parent_clauses;

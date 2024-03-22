@@ -53,8 +53,8 @@ type abs_borrows_loans_maps = {
     regions.
  *)
 module type PrimMatcher = sig
-  val match_etys : eval_ctx -> eval_ctx -> ety -> ety -> ety
-  val match_rtys : eval_ctx -> eval_ctx -> rty -> rty -> rty
+  val match_etys : Meta.meta -> eval_ctx -> eval_ctx -> ety -> ety -> ety
+  val match_rtys : Meta.meta -> eval_ctx -> eval_ctx -> rty -> rty -> rty
 
   (** The input primitive values are not equal *)
   val match_distinct_literals :
@@ -111,6 +111,7 @@ module type PrimMatcher = sig
       [v]: the result of matching the shared values coming from the two loans
    *)
   val match_shared_loans :
+    Meta.meta ->
     eval_ctx ->
     eval_ctx ->
     ety ->

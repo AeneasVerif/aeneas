@@ -425,7 +425,7 @@ let names_maps_add (id_to_string : id -> string) (id : id) (name : string)
 
 (** The [id_to_string] function to print nice debugging messages if there are
     collisions *)
-let names_maps_get (meta : Meta.meta) (id_to_string : id -> string) (id : id) (nm : names_maps) :
+let names_maps_get ?(meta = None) (id_to_string : id -> string) (id : id) (nm : names_maps) :
     string =
   (* We do not use the same name map if we allow/disallow collisions *)
   let map_to_string (m : string IdMap.t) : string =
@@ -446,7 +446,7 @@ let names_maps_get (meta : Meta.meta) (id_to_string : id -> string) (id : id) (n
           ^ map_to_string m
         in
         log#serror err;
-        if !Config.fail_hard then craise meta err
+        if !Config.fail_hard then craise_opt_meta meta err
         else "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
     let m = nm.names_map.id_to_name in
@@ -458,7 +458,7 @@ let names_maps_get (meta : Meta.meta) (id_to_string : id -> string) (id : id) (n
           ^ map_to_string m
         in
         log#serror err;
-        if !Config.fail_hard then craise meta err
+        if !Config.fail_hard then craise_opt_meta meta err
         else "(ERROR: \"" ^ id_to_string id ^ "\")"
 
 type names_map_init = {
@@ -591,17 +591,17 @@ let llbc_fun_id_to_string (ctx : extraction_ctx) =
 let fun_id_to_string (ctx : extraction_ctx) =
   PrintPure.regular_fun_id_to_string (extraction_ctx_to_fmt_env ctx)
 
-let adt_variant_to_string (meta : Meta.meta) (ctx : extraction_ctx) =
-  PrintPure.adt_variant_to_string meta (extraction_ctx_to_fmt_env ctx)
+let adt_variant_to_string ?(meta = None) (ctx : extraction_ctx) =
+  PrintPure.adt_variant_to_string ~meta:meta (extraction_ctx_to_fmt_env ctx)
 
-let adt_field_to_string (meta : Meta.meta) (ctx : extraction_ctx) =
-  PrintPure.adt_field_to_string meta (extraction_ctx_to_fmt_env ctx)
+let adt_field_to_string ?(meta = None) (ctx : extraction_ctx) =
+  PrintPure.adt_field_to_string ~meta:meta (extraction_ctx_to_fmt_env ctx)
 
 (** Debugging function, used when communicating name collisions to the user,
     and also to print ids for internal debugging (in case of lookup miss for
     instance).
  *)
-let id_to_string (meta : Meta.meta) (id : id) (ctx : extraction_ctx) : string =
+let id_to_string ?(meta = None) (id : id) (ctx : extraction_ctx) : string =
   let trait_decl_id_to_string (id : A.TraitDeclId.id) : string =
     let trait_name = trait_decl_id_to_string ctx id in
     "trait_decl: " ^ trait_name ^ " (id: " ^ A.TraitDeclId.to_string id ^ ")"
@@ -629,11 +629,11 @@ let id_to_string (meta : Meta.meta) (id : id) (ctx : extraction_ctx) : string =
   | StructId id -> "struct constructor of: " ^ type_id_to_string ctx id
   | VariantId (id, variant_id) ->
       let type_name = type_id_to_string ctx id in
-      let variant_name = adt_variant_to_string meta ctx id (Some variant_id) in
+      let variant_name = adt_variant_to_string ~meta:meta ctx id (Some variant_id) in
       "type name: " ^ type_name ^ ", variant name: " ^ variant_name
   | FieldId (id, field_id) ->
       let type_name = type_id_to_string ctx id in
-      let field_name = adt_field_to_string meta ctx id field_id in
+      let field_name = adt_field_to_string ~meta:meta ctx id field_id in
       "type name: " ^ type_name ^ ", field name: " ^ field_name
   | UnknownId -> "keyword"
   | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
@@ -660,54 +660,54 @@ let id_to_string (meta : Meta.meta) (id : id) (ctx : extraction_ctx) : string =
   | TraitSelfClauseId -> "trait_self_clause"
 
 let ctx_add (meta : Meta.meta) (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
-  let id_to_string (id : id) : string = id_to_string meta id ctx in
+  let id_to_string (id : id) : string = id_to_string ~meta:(Some meta) id ctx in
   let names_maps = names_maps_add id_to_string id name ctx.names_maps in
   { ctx with names_maps }
 
-let ctx_get (meta : Meta.meta) (id : id) (ctx : extraction_ctx) : string =
-  let id_to_string (id : id) : string = id_to_string meta id ctx in
-  names_maps_get meta id_to_string id ctx.names_maps (* TODO check if we can remove the meta arg, same for following functions*)
+let ctx_get ?(meta = None) (id : id) (ctx : extraction_ctx) : string =
+  let id_to_string (id : id) : string = id_to_string ~meta:meta id ctx in
+  names_maps_get ~meta:meta id_to_string id ctx.names_maps (* TODO check if we can remove the meta arg, same for following functions*)
 
 let ctx_get_global (meta : Meta.meta) (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
-  ctx_get meta (GlobalId id) ctx
+  ctx_get ~meta:(Some meta) (GlobalId id) ctx
 
 let ctx_get_function (meta : Meta.meta) (id : fun_id) (ctx : extraction_ctx) : string =
-  ctx_get meta (FunId id) ctx
+  ctx_get ~meta:(Some meta) (FunId id) ctx
 
 let ctx_get_local_function (meta : Meta.meta) (id : A.FunDeclId.id) (lp : LoopId.id option)
     (ctx : extraction_ctx) : string =
   ctx_get_function meta (FromLlbc (FunId (FRegular id), lp)) ctx
 
-let ctx_get_type (meta : Meta.meta) (id : type_id) (ctx : extraction_ctx) : string =
-  cassert (id <> TTuple) meta "T";
-  ctx_get meta (TypeId id) ctx
+let ctx_get_type ?(meta=None) (id : type_id) (ctx : extraction_ctx) : string =
+  cassert_opt_meta (id <> TTuple) meta "T";
+  ctx_get ~meta:meta (TypeId id) ctx
 
 let ctx_get_local_type (meta : Meta.meta) (id : TypeDeclId.id) (ctx : extraction_ctx) : string =
-  ctx_get_type meta (TAdtId id) ctx
+  ctx_get_type ~meta:(Some meta) (TAdtId id) ctx
 
-let ctx_get_assumed_type (meta : Meta.meta) (id : assumed_ty) (ctx : extraction_ctx) : string =
-  ctx_get_type meta (TAssumed id) ctx
+let ctx_get_assumed_type ?(meta = None) (id : assumed_ty) (ctx : extraction_ctx) : string =
+  ctx_get_type ~meta:meta (TAssumed id) ctx
 
 let ctx_get_trait_constructor (id : trait_decl_id) (ctx : extraction_ctx) :
     string =
   let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
-  ctx_get meta (TraitDeclConstructorId id) ctx
+  ctx_get ~meta:(Some meta) (TraitDeclConstructorId id) ctx
 
 let ctx_get_trait_self_clause (meta : Meta.meta) (ctx : extraction_ctx) : string =
-  ctx_get meta TraitSelfClauseId ctx
+  ctx_get ~meta:(Some meta) TraitSelfClauseId ctx
 
 let ctx_get_trait_decl (id : trait_decl_id) (ctx : extraction_ctx) : string =
   let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
-  ctx_get meta (TraitDeclId id) ctx
+  ctx_get ~meta:(Some meta) (TraitDeclId id) ctx
 
 let ctx_get_trait_impl (id : trait_impl_id) (ctx : extraction_ctx) : string =
   let meta = (TraitImplId.Map.find id ctx.trans_trait_impls).meta in
-  ctx_get meta (TraitImplId id) ctx
+  ctx_get ~meta:(Some meta) (TraitImplId id) ctx
 
 let ctx_get_trait_item (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
     let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
-    ctx_get meta (TraitItemId (id, item_name)) ctx
+    ctx_get ~meta:(Some meta) (TraitItemId (id, item_name)) ctx
 
 let ctx_get_trait_const (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
@@ -720,51 +720,51 @@ let ctx_get_trait_type (id : trait_decl_id) (item_name : string)
 let ctx_get_trait_method (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
     let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
-  ctx_get meta (TraitMethodId (id, item_name)) ctx
+  ctx_get ~meta:(Some meta) (TraitMethodId (id, item_name)) ctx
 
 let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
     (ctx : extraction_ctx) : string =
     let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
-  ctx_get meta (TraitParentClauseId (id, clause)) ctx
+  ctx_get ~meta:(Some meta) (TraitParentClauseId (id, clause)) ctx
 
 let ctx_get_trait_item_clause (id : trait_decl_id) (item : string)
     (clause : trait_clause_id) (ctx : extraction_ctx) : string =
     let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
-  ctx_get meta (TraitItemClauseId (id, item, clause)) ctx
+  ctx_get ~meta:(Some meta) (TraitItemClauseId (id, item, clause)) ctx
 
 let ctx_get_var (meta : Meta.meta) (id : VarId.id) (ctx : extraction_ctx) : string =
-  ctx_get meta (VarId id) ctx
+  ctx_get ~meta:(Some meta) (VarId id) ctx
 
 let ctx_get_type_var (meta : Meta.meta) (id : TypeVarId.id) (ctx : extraction_ctx) : string =
-  ctx_get meta (TypeVarId id) ctx
+  ctx_get ~meta:(Some meta) (TypeVarId id) ctx
 
 let ctx_get_const_generic_var (meta : Meta.meta) (id : ConstGenericVarId.id) (ctx : extraction_ctx)
     : string =
-  ctx_get meta (ConstGenericVarId id) ctx
+  ctx_get ~meta:(Some meta) (ConstGenericVarId id) ctx
 
 let ctx_get_local_trait_clause (meta : Meta.meta) (id : TraitClauseId.id) (ctx : extraction_ctx) :
     string =
-  ctx_get meta (LocalTraitClauseId id) ctx
+  ctx_get ~meta:(Some meta) (LocalTraitClauseId id) ctx
 
 let ctx_get_field (meta : Meta.meta) (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
     (* let meta = (TypeDeclId.Map.find type_id ctx.trans_types).meta in TODO : check how to get meta *)
-  ctx_get meta (FieldId (type_id, field_id)) ctx
+  ctx_get ~meta:(Some meta) (FieldId (type_id, field_id)) ctx
 
 let ctx_get_struct (meta : Meta.meta) (def_id : type_id) (ctx : extraction_ctx) : string =
-  ctx_get meta (StructId def_id) ctx
+  ctx_get ~meta:(Some meta) (StructId def_id) ctx
 
 let ctx_get_variant (meta : Meta.meta) (def_id : type_id) (variant_id : VariantId.id)
     (ctx : extraction_ctx) : string =
-  ctx_get meta (VariantId (def_id, variant_id)) ctx
+  ctx_get ~meta:(Some meta) (VariantId (def_id, variant_id)) ctx
 
 let ctx_get_decreases_proof (meta : Meta.meta) (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
-  ctx_get meta (DecreasesProofId (FRegular def_id, loop_id)) ctx
+  ctx_get ~meta:(Some meta) (DecreasesProofId (FRegular def_id, loop_id)) ctx
 
 let ctx_get_termination_measure (meta : Meta.meta) (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
-  ctx_get meta (TerminationMeasureId (FRegular def_id, loop_id)) ctx
+  ctx_get ~meta:(Some meta) (TerminationMeasureId (FRegular def_id, loop_id)) ctx
 
 (** Small helper to compute the name of a unary operation *)
 let unop_name (unop : unop) : string =
