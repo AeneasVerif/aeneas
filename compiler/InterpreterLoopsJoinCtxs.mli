@@ -104,8 +104,8 @@ val join_ctxs : Meta.meta -> loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_
     - [ctxl]
  *)
 val loop_join_origin_with_continue_ctxs :
-  Meta.meta ->
   config ->
+  Meta.meta ->
   loop_id ->
   ids_sets ->
   eval_ctx ->

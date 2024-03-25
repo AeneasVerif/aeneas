@@ -24,7 +24,7 @@ let log = Logging.expressions_log
     Note that the place should have been prepared so that there are no remaining
     loans.
 *)
-let expand_primitively_copyable_at_place (meta : Meta.meta) (config : config)
+let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
     (access : access_kind) (p : place) : cm_fun =
  fun cf ctx ->
   (* Small helper *)
@@ -37,7 +37,7 @@ let expand_primitively_copyable_at_place (meta : Meta.meta) (config : config)
     | None -> cf ctx
     | Some sv ->
         let cc =
-          expand_symbolic_value_no_branching meta config sv (Some (mk_mplace meta p ctx))
+          expand_symbolic_value_no_branching config meta sv (Some (mk_mplace meta p ctx))
         in
         comp cc expand cf ctx
   in
@@ -60,19 +60,19 @@ let read_place (meta : Meta.meta) (access : access_kind) (p : place) (cf : typed
   (* Call the continuation *)
   cf v ctx
 
-let access_rplace_reorganize_and_read (meta : Meta.meta) (config : config)
+let access_rplace_reorganize_and_read (config : config) (meta : Meta.meta)
     (expand_prim_copy : bool) (access : access_kind) (p : place)
     (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   (* Make sure we can evaluate the path *)
-  let cc = update_ctx_along_read_place meta config access p in
+  let cc = update_ctx_along_read_place config meta access p in
   (* End the proper loans at the place itself *)
-  let cc = comp cc (end_loans_at_place meta config access p) in
+  let cc = comp cc (end_loans_at_place config meta access p) in
   (* Expand the copyable values which contain borrows (which are necessarily shared
    * borrows) *)
   let cc =
     if expand_prim_copy then
-      comp cc (expand_primitively_copyable_at_place meta config access p)
+      comp cc (expand_primitively_copyable_at_place config meta access p)
     else cc
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
@@ -80,10 +80,10 @@ let access_rplace_reorganize_and_read (meta : Meta.meta) (config : config)
   (* Compose *)
   comp cc read_place cf ctx
 
-let access_rplace_reorganize (meta : Meta.meta) (config : config) (expand_prim_copy : bool)
+let access_rplace_reorganize (config : config) (meta : Meta.meta) (expand_prim_copy : bool)
     (access : access_kind) (p : place) : cm_fun =
  fun cf ctx ->
-  access_rplace_reorganize_and_read meta config expand_prim_copy access p
+  access_rplace_reorganize_and_read config meta expand_prim_copy access p
     (fun _v -> cf)
     ctx
 
@@ -225,7 +225,7 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config) 
     what we do in the formalization (because we don't enforce the same constraints
     as MIR in the formalization).
  *)
-let prepare_eval_operand_reorganize (meta : Meta.meta) (config : config) (op : operand) : cm_fun =
+let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta) (op : operand) : cm_fun =
  fun cf ctx ->
   let prepare : cm_fun =
    fun cf ctx ->
@@ -238,18 +238,18 @@ let prepare_eval_operand_reorganize (meta : Meta.meta) (config : config) (op : o
         let access = Read in
         (* Expand the symbolic values, if necessary *)
         let expand_prim_copy = true in
-        access_rplace_reorganize meta config expand_prim_copy access p cf ctx
+        access_rplace_reorganize config meta expand_prim_copy access p cf ctx
     | Move p ->
         (* Access the value *)
         let access = Move in
         let expand_prim_copy = false in
-        access_rplace_reorganize meta config expand_prim_copy access p cf ctx
+        access_rplace_reorganize config meta expand_prim_copy access p cf ctx
   in
   (* Apply *)
   prepare cf ctx
 
 (** Evaluate an operand, without reorganizing the context before *)
-let eval_operand_no_reorganize (meta : Meta.meta) (config : config) (op : operand)
+let eval_operand_no_reorganize (config : config) (meta : Meta.meta) (op : operand)
     (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   (* Debug *)
@@ -359,7 +359,7 @@ let eval_operand_no_reorganize (meta : Meta.meta) (config : config) (op : operan
       (* Compose and apply *)
       comp cc move cf ctx
 
-let eval_operand (meta : Meta.meta)  (config : config) (op : operand) (cf : typed_value -> m_fun) :
+let eval_operand (config : config) (meta : Meta.meta) (op : operand) (cf : typed_value -> m_fun) :
     m_fun =
  fun ctx ->
   (* Debug *)
@@ -369,34 +369,34 @@ let eval_operand (meta : Meta.meta)  (config : config) (op : operand) (cf : type
      ^ eval_ctx_to_string meta ctx ^ "\n"));
   (* We reorganize the context, then evaluate the operand *)
   comp
-    (prepare_eval_operand_reorganize meta config op)
-    (eval_operand_no_reorganize meta config op)
+    (prepare_eval_operand_reorganize config meta op)
+    (eval_operand_no_reorganize config meta op)
     cf ctx
 
 (** Small utility.
 
     See [prepare_eval_operand_reorganize].
  *)
-let prepare_eval_operands_reorganize (meta : Meta.meta) (config : config) (ops : operand list) :
+let prepare_eval_operands_reorganize (config : config) (meta : Meta.meta) (ops : operand list) :
     cm_fun =
-  fold_left_apply_continuation (prepare_eval_operand_reorganize meta config) ops
+  fold_left_apply_continuation (prepare_eval_operand_reorganize config meta) ops
 
 (** Evaluate several operands. *)
-let eval_operands (meta : Meta.meta) (config : config) (ops : operand list)
+let eval_operands (config : config) (meta : Meta.meta) (ops : operand list)
     (cf : typed_value list -> m_fun) : m_fun =
  fun ctx ->
   (* Prepare the operands *)
-  let prepare = prepare_eval_operands_reorganize meta config ops in
+  let prepare = prepare_eval_operands_reorganize config meta ops in
   (* Evaluate the operands *)
   let eval =
-    fold_left_list_apply_continuation (eval_operand_no_reorganize meta config) ops
+    fold_left_list_apply_continuation (eval_operand_no_reorganize config meta) ops
   in
   (* Compose and apply *)
   comp prepare eval cf ctx
 
-let eval_two_operands (meta : Meta.meta) (config : config) (op1 : operand) (op2 : operand)
+let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand) (op2 : operand)
     (cf : typed_value * typed_value -> m_fun) : m_fun =
-  let eval_op = eval_operands meta config [ op1; op2 ] in
+  let eval_op = eval_operands config meta [ op1; op2 ] in
   let use_res cf res =
     match res with
     | [ v1; v2 ] -> cf (v1, v2)
@@ -404,10 +404,10 @@ let eval_two_operands (meta : Meta.meta) (config : config) (op1 : operand) (op2 
   in
   comp eval_op use_res cf
 
-let eval_unary_op_concrete (meta : Meta.meta) (config : config) (unop : unop) (op : operand)
+let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop) (op : operand)
     (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
   (* Evaluate the operand *)
-  let eval_op = eval_operand meta config op in
+  let eval_op = eval_operand config meta op in
   (* Apply the unop *)
   let apply cf (v : typed_value) : m_fun =
     match (unop, v.value) with
@@ -452,11 +452,11 @@ let eval_unary_op_concrete (meta : Meta.meta) (config : config) (unop : unop) (o
   in
   comp eval_op apply cf
 
-let eval_unary_op_symbolic (meta : Meta.meta) (config : config) (unop : unop) (op : operand)
+let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop) (op : operand)
     (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
  fun ctx ->
   (* Evaluate the operand *)
-  let eval_op = eval_operand meta config op in
+  let eval_op = eval_operand config meta op in
   (* Generate a fresh symbolic value to store the result *)
   let apply cf (v : typed_value) : m_fun =
    fun ctx ->
@@ -479,11 +479,11 @@ let eval_unary_op_symbolic (meta : Meta.meta) (config : config) (unop : unop) (o
   (* Compose and apply *)
   comp eval_op apply cf ctx
 
-let eval_unary_op (meta : Meta.meta) (config : config) (unop : unop) (op : operand)
+let eval_unary_op (config : config) (meta : Meta.meta) (unop : unop) (op : operand)
     (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
   match config.mode with
-  | ConcreteMode -> eval_unary_op_concrete meta config unop op cf
-  | SymbolicMode -> eval_unary_op_symbolic meta config unop op cf
+  | ConcreteMode -> eval_unary_op_concrete config meta unop op cf
+  | SymbolicMode -> eval_unary_op_symbolic config meta unop op cf
 
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
     the binop *after* the operands have been successfully evaluated
@@ -558,10 +558,10 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop) (v1 : typ
         | Ne | Eq -> craise meta "Unreachable")
     | _ -> craise meta "Invalid inputs for binop"
 
-let eval_binary_op_concrete (meta : Meta.meta) (config : config) (binop : binop) (op1 : operand)
+let eval_binary_op_concrete (config : config) (meta : Meta.meta) (binop : binop) (op1 : operand)
     (op2 : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
   (* Evaluate the operands *)
-  let eval_ops = eval_two_operands meta config op1 op2 in
+  let eval_ops = eval_two_operands config meta op1 op2 in
   (* Compute the result of the binop *)
   let compute cf (res : typed_value * typed_value) =
     let v1, v2 = res in
@@ -570,11 +570,11 @@ let eval_binary_op_concrete (meta : Meta.meta) (config : config) (binop : binop)
   (* Compose and apply *)
   comp eval_ops compute cf
 
-let eval_binary_op_symbolic (meta : Meta.meta) (config : config) (binop : binop) (op1 : operand)
+let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop) (op1 : operand)
     (op2 : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
  fun ctx ->
   (* Evaluate the operands *)
-  let eval_ops = eval_two_operands meta config op1 op2 in
+  let eval_ops = eval_two_operands config meta op1 op2 in
   (* Compute the result of applying the binop *)
   let compute cf ((v1, v2) : typed_value * typed_value) : m_fun =
    fun ctx ->
@@ -617,13 +617,13 @@ let eval_binary_op_symbolic (meta : Meta.meta) (config : config) (binop : binop)
   (* Compose and apply *)
   comp eval_ops compute cf ctx
 
-let eval_binary_op (meta : Meta.meta) (config : config) (binop : binop) (op1 : operand)
+let eval_binary_op (config : config) (meta : Meta.meta) (binop : binop) (op1 : operand)
     (op2 : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
   match config.mode with
-  | ConcreteMode -> eval_binary_op_concrete meta config binop op1 op2 cf
-  | SymbolicMode -> eval_binary_op_symbolic meta config binop op1 op2 cf
+  | ConcreteMode -> eval_binary_op_concrete config meta binop op1 op2 cf
+  | SymbolicMode -> eval_binary_op_symbolic config meta binop op1 op2 cf
 
-let eval_rvalue_ref (meta : Meta.meta) (config : config) (p : place) (bkind : borrow_kind)
+let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place) (bkind : borrow_kind)
     (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   match bkind with
@@ -644,7 +644,7 @@ let eval_rvalue_ref (meta : Meta.meta) (config : config) (p : place) (bkind : bo
 
       let expand_prim_copy = false in
       let prepare =
-        access_rplace_reorganize_and_read meta config expand_prim_copy access p
+        access_rplace_reorganize_and_read config meta expand_prim_copy access p
       in
       (* Evaluate the borrowing operation *)
       let eval (cf : typed_value -> m_fun) (v : typed_value) : m_fun =
@@ -694,7 +694,7 @@ let eval_rvalue_ref (meta : Meta.meta) (config : config) (p : place) (bkind : bo
       let access = Write in
       let expand_prim_copy = false in
       let prepare =
-        access_rplace_reorganize_and_read meta config expand_prim_copy access p
+        access_rplace_reorganize_and_read config meta expand_prim_copy access p
       in
       (* Evaluate the borrowing operation *)
       let eval (cf : typed_value -> m_fun) (v : typed_value) : m_fun =
@@ -715,10 +715,10 @@ let eval_rvalue_ref (meta : Meta.meta) (config : config) (p : place) (bkind : bo
       (* Compose and apply *)
       comp prepare eval cf ctx
 
-let eval_rvalue_aggregate (meta : Meta.meta) (config : config) (aggregate_kind : aggregate_kind)
+let eval_rvalue_aggregate (config : config) (meta : Meta.meta) (aggregate_kind : aggregate_kind)
     (ops : operand list) (cf : typed_value -> m_fun) : m_fun =
   (* Evaluate the operands *)
-  let eval_ops = eval_operands meta config ops in
+  let eval_ops = eval_operands config meta ops in
   (* Compute the value *)
   let compute (cf : typed_value -> m_fun) (values : typed_value list) : m_fun =
    fun ctx ->
@@ -782,7 +782,7 @@ let eval_rvalue_aggregate (meta : Meta.meta) (config : config) (aggregate_kind :
   (* Compose and apply *)
   comp eval_ops compute cf
 
-let eval_rvalue_not_global (meta : Meta.meta) (config : config) (rvalue : rvalue)
+let eval_rvalue_not_global (config : config) (meta : Meta.meta) (rvalue : rvalue)
     (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
  fun ctx ->
   log#ldebug (lazy "eval_rvalue");
@@ -794,12 +794,12 @@ let eval_rvalue_not_global (meta : Meta.meta) (config : config) (rvalue : rvalue
   let comp_wrap f = comp f wrap_in_result cf in
   (* Delegate to the proper auxiliary function *)
   match rvalue with
-  | Use op -> comp_wrap (eval_operand meta config op) ctx
-  | RvRef (p, bkind) -> comp_wrap (eval_rvalue_ref meta config p bkind) ctx
-  | UnaryOp (unop, op) -> eval_unary_op meta config unop op cf ctx
-  | BinaryOp (binop, op1, op2) -> eval_binary_op meta config binop op1 op2 cf ctx
+  | Use op -> comp_wrap (eval_operand config meta op) ctx
+  | RvRef (p, bkind) -> comp_wrap (eval_rvalue_ref config meta p bkind) ctx
+  | UnaryOp (unop, op) -> eval_unary_op config meta unop op cf ctx
+  | BinaryOp (binop, op1, op2) -> eval_binary_op config meta binop op1 op2 cf ctx
   | Aggregate (aggregate_kind, ops) ->
-      comp_wrap (eval_rvalue_aggregate meta config aggregate_kind ops) ctx
+      comp_wrap (eval_rvalue_aggregate config meta aggregate_kind ops) ctx
   | Discriminant _ ->
       craise
         meta
@@ -807,11 +807,11 @@ let eval_rvalue_not_global (meta : Meta.meta) (config : config) (rvalue : rvalue
             the AST"
   | Global _ -> craise meta "Unreachable"
 
-let eval_fake_read (meta : Meta.meta) (config : config) (p : place) : cm_fun =
+let eval_fake_read (config : config) (meta : Meta.meta) (p : place) : cm_fun =
  fun cf ctx ->
   let expand_prim_copy = false in
   let cf_prepare cf =
-    access_rplace_reorganize_and_read meta config expand_prim_copy Read p cf
+    access_rplace_reorganize_and_read config meta expand_prim_copy Read p cf
   in
   let cf_continue cf v : m_fun =
    fun ctx ->

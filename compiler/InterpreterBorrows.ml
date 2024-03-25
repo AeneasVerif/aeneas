@@ -245,7 +245,7 @@ let end_borrow_get_borrow (meta : Meta.meta) (allowed_abs : AbstractionId.id opt
     give the value back.
     TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
-let give_back_value (meta : Meta.meta) (config : config) (bid : BorrowId.id) (nv : typed_value)
+let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id) (nv : typed_value)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
   cassert (not (loans_in_value nv)) meta "TODO: error message";
@@ -267,7 +267,7 @@ let give_back_value (meta : Meta.meta) (config : config) (bid : BorrowId.id) (nv
   (* We sometimes need to reborrow values while giving a value back due: prepare that *)
   let allow_reborrows = true in
   let fresh_reborrow, apply_registered_reborrows =
-    prepare_reborrows meta config allow_reborrows
+    prepare_reborrows config meta allow_reborrows
   in
   (* The visitor to give back the values *)
   let obj =
@@ -440,7 +440,7 @@ let give_back_value (meta : Meta.meta) (config : config) (bid : BorrowId.id) (nv
   apply_registered_reborrows ctx
 
 (** Give back a *modified* symbolic value. *)
-let give_back_symbolic_value (meta : Meta.meta) (_config : config) (proj_regions : RegionId.Set.t)
+let give_back_symbolic_value (_config : config) (meta : Meta.meta) (proj_regions : RegionId.Set.t)
     (proj_ty : rty) (sv : symbolic_value) (nsv : symbolic_value)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
@@ -485,7 +485,7 @@ let give_back_symbolic_value (meta : Meta.meta) (_config : config) (proj_regions
     end abstraction when ending this abstraction. When doing this, we need
     to convert the {!avalue} to a {!type:value} by introducing the proper symbolic values.
  *)
-let give_back_avalue_to_same_abstraction (meta : Meta.meta) (_config : config) (bid : BorrowId.id)
+let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta) (bid : BorrowId.id)
     (nv : typed_avalue) (nsv : typed_value) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
@@ -588,7 +588,7 @@ let give_back_avalue_to_same_abstraction (meta : Meta.meta) (_config : config) (
     we update.
     TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
-let give_back_shared (meta : Meta.meta) _config (bid : BorrowId.id) (ctx : eval_ctx) : eval_ctx =
+let give_back_shared _config (meta : Meta.meta) (bid : BorrowId.id) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -739,7 +739,7 @@ let convert_avalue_to_given_back_value (meta : Meta.meta) (av : typed_avalue) : 
     borrows. This kind of internal reshuffling. should be similar to ending
     abstractions (it is tantamount to ending *sub*-abstractions).
  *)
-let give_back (meta : Meta.meta) (config : config) (l : BorrowId.id) (bc : g_borrow_content)
+let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id) (bc : g_borrow_content)
     (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
   log#ldebug
@@ -763,14 +763,14 @@ let give_back (meta : Meta.meta) (config : config) (l : BorrowId.id) (bc : g_bor
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
       cassert (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta "The corresponding loan should be somewhere";
       (* Update the context *)
-      give_back_value meta config l tv ctx
+      give_back_value config meta l tv ctx
   | Concrete (VSharedBorrow l' | VReservedMutBorrow l') ->
       (* Sanity check *)
       cassert (l' = l) meta "TODO: error message";
       (* Check that the borrow is somewhere - purely a sanity check *)
       cassert (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta "The borrow should be somewhere";
       (* Update the context *)
-      give_back_shared meta config l ctx
+      give_back_shared config meta l ctx
   | Abstract (AMutBorrow (l', av)) ->
       (* Sanity check *)
       cassert (l' = l) meta "TODO: error message";
@@ -783,7 +783,7 @@ let give_back (meta : Meta.meta) (config : config) (l : BorrowId.id) (bc : g_bor
       *)
       let sv = convert_avalue_to_given_back_value meta av in
       (* Update the context *)
-      give_back_avalue_to_same_abstraction meta config l av
+      give_back_avalue_to_same_abstraction config meta l av
         (mk_typed_value_from_symbolic_value sv)
         ctx
   | Abstract (ASharedBorrow l') ->
@@ -792,12 +792,12 @@ let give_back (meta : Meta.meta) (config : config) (l : BorrowId.id) (bc : g_bor
       (* Check that the borrow is somewhere - purely a sanity check *)
       cassert (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta "The borrow should be somewhere";
       (* Update the context *)
-      give_back_shared meta config l ctx
+      give_back_shared config meta l ctx
   | Abstract (AProjSharedBorrow asb) ->
       (* Sanity check *)
       cassert (borrow_in_asb l asb) meta "TODO: error message";
       (* Update the context *)
-      give_back_shared meta config l ctx
+      give_back_shared config meta l ctx
   | Abstract
       ( AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
       | AEndedSharedBorrow ) ->
@@ -852,7 +852,7 @@ let check_borrow_disappeared (meta : Meta.meta) (fun_name : string) (l : BorrowI
     perform anything smart and is trusted, and another function for the
     book-keeping.
  *)
-let rec end_borrow_aux (meta : Meta.meta) (config : config) (chain : borrow_or_abs_ids)
+let rec end_borrow_aux (config : config) (meta : Meta.meta) (chain : borrow_or_abs_ids)
     (allowed_abs : AbstractionId.id option) (l : BorrowId.id) : cm_fun =
  fun cf ctx ->
   (* Check that we don't loop *)
@@ -900,22 +900,22 @@ let rec end_borrow_aux (meta : Meta.meta) (config : config) (chain : borrow_or_a
            * inside another borrow *)
           let allowed_abs' = None in
           (* End the outer borrows *)
-          let cc = end_borrows_aux meta config chain allowed_abs' bids in
+          let cc = end_borrows_aux config meta chain allowed_abs' bids in
           (* Retry to end the borrow *)
-          let cc = comp cc (end_borrow_aux meta config chain0 allowed_abs l) in
+          let cc = comp cc (end_borrow_aux config meta chain0 allowed_abs l) in
           (* Check and apply *)
           comp cc cf_check cf ctx
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           let allowed_abs' = None in
           (* End the outer borrow *)
-          let cc = end_borrow_aux meta config chain allowed_abs' bid in
+          let cc = end_borrow_aux config meta chain allowed_abs' bid in
           (* Retry to end the borrow *)
-          let cc = comp cc (end_borrow_aux meta config chain0 allowed_abs l) in
+          let cc = comp cc (end_borrow_aux config meta chain0 allowed_abs l) in
           (* Check and apply *)
           comp cc cf_check cf ctx
       | OuterAbs abs_id ->
           (* The borrow is inside an abstraction: end the whole abstraction *)
-          let cf_end_abs = end_abstraction_aux meta config chain abs_id in
+          let cf_end_abs = end_abstraction_aux config meta chain abs_id in
           (* Compose with a sanity check *)
           comp cf_end_abs cf_check cf ctx)
   | Ok (ctx, None) ->
@@ -934,7 +934,7 @@ let rec end_borrow_aux (meta : Meta.meta) (config : config) (chain : borrow_or_a
           cassert (Option.is_none (get_first_loan_in_value bv)) meta "Borrowed value shouldn't contain loans"
       | _ -> ());
       (* Give back the value *)
-      let ctx = give_back meta config l bc ctx in
+      let ctx = give_back config meta l bc ctx in
       (* Do a sanity check and continue *)
       let cc = cf_check in
       (* Save a snapshot of the environment for the name generation *)
@@ -942,7 +942,7 @@ let rec end_borrow_aux (meta : Meta.meta) (config : config) (chain : borrow_or_a
       (* Compose *)
       cc cf ctx
 
-and end_borrows_aux (meta : Meta.meta) (config : config) (chain : borrow_or_abs_ids)
+and end_borrows_aux (config : config) (meta : Meta.meta) (chain : borrow_or_abs_ids)
     (allowed_abs : AbstractionId.id option) (lset : BorrowId.Set.t) : cm_fun =
  fun cf ->
   (* This is not necessary, but we prefer to reorder the borrow ids,
@@ -950,10 +950,10 @@ and end_borrows_aux (meta : Meta.meta) (config : config) (chain : borrow_or_abs_
    * a matter of taste, and may make debugging easier *)
   let ids = BorrowId.Set.fold (fun id ids -> id :: ids) lset [] in
   List.fold_left
-    (fun cf id -> end_borrow_aux meta config chain allowed_abs id cf)
+    (fun cf id -> end_borrow_aux config meta chain allowed_abs id cf)
     cf ids
 
-and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_abs_ids)
+and end_abstraction_aux (config : config) (meta : Meta.meta) (chain : borrow_or_abs_ids)
     (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
   (* Check that we don't loop *)
@@ -991,7 +991,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
              ^ " as it is set as non-endable");
 
       (* End the parent abstractions first *)
-      let cc = end_abstractions_aux meta config chain abs.parents in
+      let cc = end_abstractions_aux config meta chain abs.parents in
       let cc =
         comp_unit cc (fun ctx ->
             log#ldebug
@@ -1003,7 +1003,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
       in
 
       (* End the loans inside the abstraction *)
-      let cc = comp cc (end_abstraction_loans meta config chain abs_id) in
+      let cc = comp cc (end_abstraction_loans config meta chain abs_id) in
       let cc =
         comp_unit cc (fun ctx ->
             log#ldebug
@@ -1014,7 +1014,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
       in
 
       (* End the abstraction itself by redistributing the borrows it contains *)
-      let cc = comp cc (end_abstraction_borrows meta config chain abs_id) in
+      let cc = comp cc (end_abstraction_borrows config meta chain abs_id) in
 
       (* End the regions owned by the abstraction - note that we don't need to
        * relookup the abstraction: the set of regions in an abstraction never
@@ -1030,7 +1030,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
       (* Remove all the references to the id of the current abstraction, and remove
        * the abstraction itself.
        * **Rk.**: this is where we synthesize the updated symbolic AST *)
-      let cc = comp cc (end_abstraction_remove_from_context meta config abs_id) in
+      let cc = comp cc (end_abstraction_remove_from_context config meta abs_id) in
 
       (* Debugging *)
       let cc =
@@ -1052,7 +1052,7 @@ and end_abstraction_aux (meta : Meta.meta) (config : config) (chain : borrow_or_
       (* Apply the continuation *)
       cc cf ctx
 
-and end_abstractions_aux (meta : Meta.meta) (config : config) (chain : borrow_or_abs_ids)
+and end_abstractions_aux (config : config) (meta : Meta.meta) (chain : borrow_or_abs_ids)
     (abs_ids : AbstractionId.Set.t) : cm_fun =
  fun cf ->
   (* This is not necessary, but we prefer to reorder the abstraction ids,
@@ -1060,10 +1060,10 @@ and end_abstractions_aux (meta : Meta.meta) (config : config) (chain : borrow_or
    * a matter of taste, and may make debugging easier *)
   let abs_ids = AbstractionId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
   List.fold_left
-    (fun cf id -> end_abstraction_aux meta config chain id cf)
+    (fun cf id -> end_abstraction_aux config meta chain id cf)
     cf abs_ids
 
-and end_abstraction_loans (meta : Meta.meta) (config : config) (chain : borrow_or_abs_ids)
+and end_abstraction_loans (config : config) (meta : Meta.meta) (chain : borrow_or_abs_ids)
     (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
   (* Lookup the abstraction *)
@@ -1081,23 +1081,23 @@ and end_abstraction_loans (meta : Meta.meta) (config : config) (chain : borrow_o
       (* There are loans: end the corresponding borrows, then recheck *)
       let cc : cm_fun =
         match bids with
-        | Borrow bid -> end_borrow_aux meta config chain None bid
-        | Borrows bids -> end_borrows_aux meta config chain None bids
+        | Borrow bid -> end_borrow_aux config meta chain None bid
+        | Borrows bids -> end_borrows_aux config meta chain None bids
       in
       (* Reexplore, looking for loans *)
-      let cc = comp cc (end_abstraction_loans meta config chain abs_id) in
+      let cc = comp cc (end_abstraction_loans config meta chain abs_id) in
       (* Continue *)
       cc cf ctx
   | Some (SymbolicValue sv) ->
       (* There is a proj_loans over a symbolic value: end the proj_borrows
        * which intersect this proj_loans, then end the proj_loans itself *)
-      let cc = end_proj_loans_symbolic meta config chain abs_id abs.regions sv in
+      let cc = end_proj_loans_symbolic config meta chain abs_id abs.regions sv in
       (* Reexplore, looking for loans *)
-      let cc = comp cc (end_abstraction_loans meta config chain abs_id) in
+      let cc = comp cc (end_abstraction_loans config meta chain abs_id) in
       (* Continue *)
       cc cf ctx
 
-and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow_or_abs_ids)
+and end_abstraction_borrows (config : config) (meta : Meta.meta) (chain : borrow_or_abs_ids)
     (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
   log#ldebug
@@ -1185,13 +1185,13 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
             let ctx = update_aborrow meta ek_all bid ended_borrow ctx in
             (* Give the value back *)
             let sv = mk_typed_value_from_symbolic_value sv in
-            give_back_value meta config bid sv ctx
+            give_back_value config meta bid sv ctx
         | ASharedBorrow bid ->
             (* Replace the shared borrow to account for the fact it ended *)
             let ended_borrow = ABorrow AEndedSharedBorrow in
             let ctx = update_aborrow meta ek_all bid ended_borrow ctx in
             (* Give back *)
-            give_back_shared meta config bid ctx
+            give_back_shared config meta bid ctx
         | AProjSharedBorrow asb ->
             (* Retrieve the borrow ids *)
             let bids =
@@ -1210,7 +1210,7 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
             (* Give back the shared borrows *)
             let ctx =
               List.fold_left
-                (fun ctx bid -> give_back_shared meta config bid ctx)
+                (fun ctx bid -> give_back_shared config meta bid ctx)
                 ctx bids
             in
             (* Continue *)
@@ -1220,7 +1220,7 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
             craise meta "Unexpected"
       in
       (* Reexplore *)
-      end_abstraction_borrows meta config chain abs_id cf ctx
+      end_abstraction_borrows config meta chain abs_id cf ctx
   (* There are symbolic borrows: end them, then reexplore *)
   | FoundAProjBorrows (sv, proj_ty) ->
       log#ldebug
@@ -1234,10 +1234,10 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
       let ctx = update_aproj_borrows meta abs.abs_id sv ended_borrow ctx in
       (* Give back the symbolic value *)
       let ctx =
-        give_back_symbolic_value meta config abs.regions proj_ty sv nsv ctx
+        give_back_symbolic_value config meta abs.regions proj_ty sv nsv ctx
       in
       (* Reexplore *)
-      end_abstraction_borrows meta config chain abs_id cf ctx
+      end_abstraction_borrows config meta chain abs_id cf ctx
   (* There are concrete (i.e., not symbolic) borrows in shared values: end them, then reexplore *)
   | FoundBorrowContent bc ->
       log#ldebug
@@ -1255,7 +1255,7 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
             | Error _ -> craise meta "Unreachable"
             | Ok (ctx, _) ->
                 (* Give back *)
-                give_back_shared meta config bid ctx)
+                give_back_shared config meta bid ctx)
         | VMutBorrow (bid, v) -> (
             (* Replace the mut borrow with bottom *)
             let allow_inner_loans = false in
@@ -1266,14 +1266,14 @@ and end_abstraction_borrows (meta : Meta.meta) (config : config) (chain : borrow
             | Ok (ctx, _) ->
                 (* Give the value back - note that the mut borrow was below a
                  * shared borrow: the value is thus unchanged *)
-                give_back_value meta config bid v ctx)
+                give_back_value config meta bid v ctx)
         | VReservedMutBorrow _ -> craise meta "Unreachable"
       in
       (* Reexplore *)
-      end_abstraction_borrows meta config chain abs_id cf ctx
+      end_abstraction_borrows config meta chain abs_id cf ctx
 
 (** Remove an abstraction from the context, as well as all its references *)
-and end_abstraction_remove_from_context (meta : Meta.meta)  (_config : config)
+and end_abstraction_remove_from_context (_config : config) (meta : Meta.meta)
     (abs_id : AbstractionId.id) : cm_fun =
  fun cf ctx ->
   let ctx, abs = ctx_remove_abs meta ctx abs_id in
@@ -1297,7 +1297,7 @@ and end_abstraction_remove_from_context (meta : Meta.meta)  (_config : config)
         intersecting proj_borrows, either in the concrete context or in an
         abstraction
 *)
-and end_proj_loans_symbolic (meta : Meta.meta) (config : config) (chain : borrow_or_abs_ids)
+and end_proj_loans_symbolic (config : config) (meta : Meta.meta) (chain : borrow_or_abs_ids)
     (abs_id : AbstractionId.id) (regions : RegionId.Set.t) (sv : symbolic_value)
     : cm_fun =
  fun cf ctx ->
@@ -1360,7 +1360,7 @@ and end_proj_loans_symbolic (meta : Meta.meta) (config : config) (chain : borrow
             AbstractionId.Set.empty abs_ids
         in
         (* End the abstractions and continue *)
-        end_abstractions_aux meta config chain abs_ids cf ctx
+        end_abstractions_aux config meta chain abs_ids cf ctx
       in
       (* End the internal borrows projectors and the loans projector *)
       let cf_end_internal : cm_fun =
@@ -1413,35 +1413,35 @@ and end_proj_loans_symbolic (meta : Meta.meta) (config : config) (chain : borrow
         cf ctx)
       else
         (* The borrows proj comes from a different abstraction: end it. *)
-        let cc = end_abstraction_aux meta config chain abs_id' in
+        let cc = end_abstraction_aux config meta chain abs_id' in
         (* Retry ending the projector of loans *)
         let cc =
-          comp cc (end_proj_loans_symbolic meta config chain abs_id regions sv)
+          comp cc (end_proj_loans_symbolic config meta chain abs_id regions sv)
         in
         (* Sanity check *)
         let cc = comp cc cf_check in
         (* Continue *)
         cc cf ctx
 
-let end_borrow (meta : Meta.meta ) config : BorrowId.id -> cm_fun = end_borrow_aux meta config [] None
+let end_borrow config (meta : Meta.meta ) : BorrowId.id -> cm_fun = end_borrow_aux config meta [] None
 
-let end_borrows (meta : Meta.meta ) config : BorrowId.Set.t -> cm_fun =
-  end_borrows_aux meta config [] None
+let end_borrows config (meta : Meta.meta ) : BorrowId.Set.t -> cm_fun =
+  end_borrows_aux config meta [] None
 
-let end_abstraction meta config = end_abstraction_aux meta config []
-let end_abstractions meta config = end_abstractions_aux meta config []
+let end_abstraction config meta = end_abstraction_aux config meta []
+let end_abstractions config meta = end_abstractions_aux config meta []
 
-let end_borrow_no_synth meta config id ctx =
-  get_cf_ctx_no_synth meta (end_borrow meta config id) ctx
+let end_borrow_no_synth config meta id ctx =
+  get_cf_ctx_no_synth meta (end_borrow config meta id) ctx
 
-let end_borrows_no_synth meta config ids ctx =
-  get_cf_ctx_no_synth meta (end_borrows meta config ids) ctx
+let end_borrows_no_synth config meta ids ctx =
+  get_cf_ctx_no_synth meta (end_borrows config meta ids) ctx
 
-let end_abstraction_no_synth meta config id ctx =
-  get_cf_ctx_no_synth meta (end_abstraction meta config id) ctx
+let end_abstraction_no_synth config meta id ctx =
+  get_cf_ctx_no_synth meta (end_abstraction config meta id) ctx
 
-let end_abstractions_no_synth meta config ids ctx =
-  get_cf_ctx_no_synth meta (end_abstractions meta config ids) ctx
+let end_abstractions_no_synth config meta ids ctx =
+  get_cf_ctx_no_synth meta (end_abstractions config meta ids) ctx
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
@@ -1532,7 +1532,7 @@ let replace_reserved_borrow_with_mut_borrow (meta : Meta.meta) (l : BorrowId.id)
   cf ctx
 
 (** Promote a reserved mut borrow to a mut borrow. *)
-let rec promote_reserved_mut_borrow (meta : Meta.meta) (config : config) (l : BorrowId.id) : cm_fun
+let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta) (l : BorrowId.id) : cm_fun
     =
  fun cf ctx ->
   (* Lookup the value *)
@@ -1550,11 +1550,11 @@ let rec promote_reserved_mut_borrow (meta : Meta.meta) (config : config) (l : Bo
           (* End the loans *)
           let cc =
             match lc with
-            | VSharedLoan (bids, _) -> end_borrows meta config bids
-            | VMutLoan bid -> end_borrow meta config bid
+            | VSharedLoan (bids, _) -> end_borrows config meta bids
+            | VMutLoan bid -> end_borrow config meta bid
           in
           (* Recursive call *)
-          let cc = comp cc (promote_reserved_mut_borrow meta config l) in
+          let cc = comp cc (promote_reserved_mut_borrow config meta l) in
           (* Continue *)
           cc cf ctx
       | None ->
@@ -1570,7 +1570,7 @@ let rec promote_reserved_mut_borrow (meta : Meta.meta) (config : config) (l : Bo
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = BorrowId.Set.remove l bids in
-          let cc = end_borrows meta config bids in
+          let cc = end_borrows config meta bids in
           (* Promote the loan - TODO: this will fail if the value contains
            * any loans. In practice, it shouldn't, but we could also
            * look for loans inside the value and end them before promoting

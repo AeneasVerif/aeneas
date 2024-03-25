@@ -31,7 +31,7 @@ val read_place : Meta.meta -> access_kind -> place -> (typed_value -> m_fun) -> 
     primitively copyable and contain borrows.
  *)
 val access_rplace_reorganize_and_read :
-  Meta.meta -> config -> bool -> access_kind -> place -> (typed_value -> m_fun) -> m_fun
+  config -> Meta.meta -> bool -> access_kind -> place -> (typed_value -> m_fun) -> m_fun
 
 (** Evaluate an operand.
 
@@ -42,11 +42,11 @@ val access_rplace_reorganize_and_read :
     of the environment, before evaluating all the operands at once.
     Use {!eval_operands} instead.
  *)
-val eval_operand : Meta.meta -> config -> operand -> (typed_value -> m_fun) -> m_fun
+val eval_operand : config -> Meta.meta -> operand -> (typed_value -> m_fun) -> m_fun
 
 (** Evaluate several operands at once. *)
 val eval_operands :
-  Meta.meta -> config -> operand list -> (typed_value list -> m_fun) -> m_fun
+  config -> Meta.meta -> operand list -> (typed_value list -> m_fun) -> m_fun
 
 (** Evaluate an rvalue which is not a global (globals are handled elsewhere).
 
@@ -56,7 +56,7 @@ val eval_operands :
     reads should have been eliminated from the AST.
  *)
 val eval_rvalue_not_global :
-  Meta.meta -> config -> rvalue -> ((typed_value, eval_error) result -> m_fun) -> m_fun
+  config -> Meta.meta -> rvalue -> ((typed_value, eval_error) result -> m_fun) -> m_fun
 
 (** Evaluate a fake read (update the context so that we can read a place) *)
-val eval_fake_read : Meta.meta -> config -> place -> cm_fun
+val eval_fake_read : config -> Meta.meta -> place -> cm_fun

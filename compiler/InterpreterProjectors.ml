@@ -468,7 +468,7 @@ let apply_reborrows (meta : Meta.meta) (reborrows : (BorrowId.id * BorrowId.id) 
   (* Return *)
   ctx
 
-let prepare_reborrows (meta : Meta.meta) (config : config) (allow_reborrows : bool) :
+let prepare_reborrows (config : config) (meta : Meta.meta) (allow_reborrows : bool) :
     (BorrowId.id -> BorrowId.id) * (eval_ctx -> eval_ctx) =
   let reborrows : (BorrowId.id * BorrowId.id) list ref = ref [] in
   (* The function to generate and register fresh reborrows *)
@@ -492,7 +492,7 @@ let prepare_reborrows (meta : Meta.meta) (config : config) (allow_reborrows : bo
   (fresh_reborrow, apply_registered_reborrows)
 
 (** [ty] shouldn't have erased regions *)
-let apply_proj_borrows_on_input_value (meta : Meta.meta) (config : config) (ctx : eval_ctx)
+let apply_proj_borrows_on_input_value (config : config) (meta : Meta.meta) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (ancestors_regions : RegionId.Set.t)
     (v : typed_value) (ty : rty) : eval_ctx * typed_avalue =
   cassert (ty_is_rty ty) meta "TODO: error message";
@@ -500,7 +500,7 @@ let apply_proj_borrows_on_input_value (meta : Meta.meta) (config : config) (ctx 
   let allow_reborrows = true in
   (* Prepare the reborrows *)
   let fresh_reborrow, apply_registered_reborrows =
-    prepare_reborrows meta config allow_reborrows
+    prepare_reborrows config meta allow_reborrows
   in
   (* Apply the projector *)
   let av =

@@ -75,7 +75,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
 
   (* Compute the fixed point at the loop entrance *)
   let fp_ctx, fixed_ids, rg_to_abs =
-    compute_loop_entry_fixed_point meta config loop_id eval_loop_body ctx
+    compute_loop_entry_fixed_point config meta loop_id eval_loop_body ctx
   in
 
   (* Debug *)
@@ -125,7 +125,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
           - src ctx (fixed-point ctx)" ^ eval_ctx_to_string meta fp_ctx
        ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string meta ctx));
     let end_expr : SymbolicAst.expression option =
-      match_ctx_with_target meta config loop_id true fp_bl_corresp fp_input_svalues
+      match_ctx_with_target config meta loop_id true fp_bl_corresp fp_input_svalues
         fixed_ids fp_ctx cf ctx
     in
     log#ldebug
@@ -158,7 +158,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
                 - src ctx (fixed-point ctx)" ^ eval_ctx_to_string meta fp_ctx
              ^ "\n\n-tgt ctx (ctx at continue):\n" ^ eval_ctx_to_string meta ctx));
           let cc =
-            match_ctx_with_target meta config loop_id false fp_bl_corresp
+            match_ctx_with_target config meta loop_id false fp_bl_corresp
               fp_input_svalues fixed_ids fp_ctx
           in
           cc cf ctx

@@ -15,30 +15,30 @@ val reborrow_shared : Meta.meta -> BorrowId.id -> BorrowId.id -> eval_ctx -> eva
     If the borrow is inside another borrow/an abstraction or contains loans,
     [end_borrow] will end those borrows/abstractions/loans first.
   *)
-val end_borrow : Meta.meta -> config -> BorrowId.id -> cm_fun
+val end_borrow : config -> Meta.meta -> BorrowId.id -> cm_fun
 
 (** End a set of borrows identified by their ids, while preserving the invariants. *)
-val end_borrows : Meta.meta -> config -> BorrowId.Set.t -> cm_fun
+val end_borrows : config -> Meta.meta -> BorrowId.Set.t -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
-val end_abstraction : Meta.meta -> config -> AbstractionId.id -> cm_fun
+val end_abstraction : config -> Meta.meta -> AbstractionId.id -> cm_fun
 
 (** End a set of abstractions while preserving the invariants. *)
-val end_abstractions : Meta.meta -> config -> AbstractionId.Set.t -> cm_fun
+val end_abstractions : config -> Meta.meta -> AbstractionId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
-val end_borrow_no_synth : Meta.meta -> config -> BorrowId.id -> eval_ctx -> eval_ctx
+val end_borrow_no_synth : config -> Meta.meta -> BorrowId.id -> eval_ctx -> eval_ctx
 
 (** End a set of borrows and return the resulting environment, ignoring synthesis *)
-val end_borrows_no_synth : Meta.meta -> config -> BorrowId.Set.t -> eval_ctx -> eval_ctx
+val end_borrows_no_synth : config -> Meta.meta -> BorrowId.Set.t -> eval_ctx -> eval_ctx
 
 (** End an abstraction and return the resulting environment, ignoring synthesis *)
 val end_abstraction_no_synth :
-  Meta.meta -> config -> AbstractionId.id -> eval_ctx -> eval_ctx
+  config -> Meta.meta -> AbstractionId.id -> eval_ctx -> eval_ctx
 
 (** End a set of abstractions and return the resulting environment, ignoring synthesis *)
 val end_abstractions_no_synth :
-  Meta.meta -> config -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
+  config -> Meta.meta -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
 
 (** Promote a reserved mut borrow to a mut borrow, while preserving the invariants.
 
@@ -49,7 +49,7 @@ val end_abstractions_no_synth :
     the corresponding shared loan with a mutable loan (after having ended the
     other shared borrows which point to this loan).
  *)
-val promote_reserved_mut_borrow : Meta.meta -> config -> BorrowId.id -> cm_fun
+val promote_reserved_mut_borrow : config -> Meta.meta -> BorrowId.id -> cm_fun
 
 (** Transform an abstraction to an abstraction where the values are not
     structured.

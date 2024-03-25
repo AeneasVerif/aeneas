@@ -300,8 +300,8 @@ val prepare_match_ctx_with_target :
    - [src_ctx]
  *)
 val match_ctx_with_target :
-  Meta.meta ->
   config ->
+  Meta.meta ->
   loop_id ->
   bool ->
   borrow_loan_corresp ->

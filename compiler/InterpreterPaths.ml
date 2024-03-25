@@ -445,7 +445,7 @@ let expand_bottom_value_from_projection (meta : Meta.meta) (access : access_kind
   | Ok ctx -> ctx
   | Error _ -> craise meta "Unreachable"
 
-let rec update_ctx_along_read_place (meta : Meta.meta) (config : config) (access : access_kind)
+let rec update_ctx_along_read_place (config : config) (meta : Meta.meta) (access : access_kind)
     (p : place) : cm_fun =
  fun cf ctx ->
   (* Attempt to read the place: if it fails, update the environment and retry *)
@@ -454,9 +454,9 @@ let rec update_ctx_along_read_place (meta : Meta.meta) (config : config) (access
   | Error err ->
       let cc =
         match err with
-        | FailSharedLoan bids -> end_borrows meta config bids
-        | FailMutLoan bid -> end_borrow meta config bid
-        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow meta config bid
+        | FailSharedLoan bids -> end_borrows config meta bids
+        | FailMutLoan bid -> end_borrow config meta bid
+        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow config meta bid
         | FailSymbolic (i, sp) ->
             (* Expand the symbolic value *)
             let proj, _ =
@@ -464,16 +464,16 @@ let rec update_ctx_along_read_place (meta : Meta.meta) (config : config) (access
                 (List.length p.projection - i)
             in
             let prefix = { p with projection = proj } in
-            expand_symbolic_value_no_branching meta config sp
+            expand_symbolic_value_no_branching config meta sp
               (Some (Synth.mk_mplace meta prefix ctx))
         | FailBottom (_, _, _) ->
             (* We can't expand {!Bottom} values while reading them *)
             craise meta "Found [Bottom] while reading a place"
         | FailBorrow _ -> craise meta "Could not read a borrow"
       in
-      comp cc (update_ctx_along_read_place meta config access p) cf ctx
+      comp cc (update_ctx_along_read_place config meta access p) cf ctx
 
-let rec update_ctx_along_write_place (meta : Meta.meta) (config : config) (access : access_kind)
+let rec update_ctx_along_write_place (config : config) (meta : Meta.meta) (access : access_kind)
     (p : place) : cm_fun =
  fun cf ctx ->
   (* Attempt to *read* (yes, *read*: we check the access to the place, and
@@ -484,12 +484,12 @@ let rec update_ctx_along_write_place (meta : Meta.meta) (config : config) (acces
       (* Update the context *)
       let cc =
         match err with
-        | FailSharedLoan bids -> end_borrows meta config bids
-        | FailMutLoan bid -> end_borrow meta config bid
-        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow meta config bid
+        | FailSharedLoan bids -> end_borrows config meta bids
+        | FailMutLoan bid -> end_borrow config meta bid
+        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow config meta bid
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching meta config sp
+            expand_symbolic_value_no_branching config meta sp
               (Some (Synth.mk_mplace meta p ctx))
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the {!Bottom} value *)
@@ -502,12 +502,12 @@ let rec update_ctx_along_write_place (meta : Meta.meta) (config : config) (acces
         | FailBorrow _ -> craise meta "Could not write to a borrow"
       in
       (* Retry *)
-      comp cc (update_ctx_along_write_place meta config access p) cf ctx
+      comp cc (update_ctx_along_write_place config meta access p) cf ctx
 
 (** Small utility used to break control-flow *)
 exception UpdateCtx of cm_fun
 
-let rec end_loans_at_place (meta : Meta.meta) (config : config) (access : access_kind) (p : place)
+let rec end_loans_at_place (config : config) (meta : Meta.meta) (access : access_kind) (p : place)
     : cm_fun =
  fun cf ctx ->
   (* Iterator to explore a value and update the context whenever we find
@@ -525,7 +525,7 @@ let rec end_loans_at_place (meta : Meta.meta) (config : config) (access : access
             (* Nothing special to do *) super#visit_borrow_content env bc
         | VReservedMutBorrow bid ->
             (* We need to activate reserved borrows *)
-            let cc = promote_reserved_mut_borrow meta config bid in
+            let cc = promote_reserved_mut_borrow config meta bid in
             raise (UpdateCtx cc)
 
       method! visit_loan_content env lc =
@@ -536,11 +536,11 @@ let rec end_loans_at_place (meta : Meta.meta) (config : config) (access : access
             match access with
             | Read -> super#visit_VSharedLoan env bids v
             | Write | Move ->
-                let cc = end_borrows meta config bids in
+                let cc = end_borrows config meta bids in
                 raise (UpdateCtx cc))
         | VMutLoan bid ->
             (* We always need to end mutable borrows *)
-            let cc = end_borrow meta config bid in
+            let cc = end_borrow config meta bid in
             raise (UpdateCtx cc)
     end
   in
@@ -560,9 +560,9 @@ let rec end_loans_at_place (meta : Meta.meta) (config : config) (access : access
   with UpdateCtx cc ->
     (* We need to update the context: compose the caugth continuation with
      * a recursive call to reinspect the value *)
-    comp cc (end_loans_at_place meta config access p) cf ctx
+    comp cc (end_loans_at_place config meta access p) cf ctx
 
-let drop_outer_loans_at_lplace (meta : Meta.meta) (config : config) (p : place) : cm_fun =
+let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place) : cm_fun =
  fun cf ctx ->
   (* Move the current value in the place outside of this place and into
    * a dummy variable *)
@@ -586,8 +586,8 @@ let drop_outer_loans_at_lplace (meta : Meta.meta) (config : config) (p : place) 
         (* There are: end them then retry *)
         let cc =
           match c with
-          | LoanContent (VSharedLoan (bids, _)) -> end_borrows meta config bids
-          | LoanContent (VMutLoan bid) -> end_borrow meta config bid
+          | LoanContent (VSharedLoan (bids, _)) -> end_borrows config meta bids
+          | LoanContent (VMutLoan bid) -> end_borrow config meta bid
           | BorrowContent _ -> craise meta "Unreachable"
         in
         (* Retry *)
@@ -610,7 +610,7 @@ let drop_outer_loans_at_lplace (meta : Meta.meta) (config : config) (p : place) 
   (* Continue *)
   cc cf ctx
 
-let prepare_lplace (meta : Meta.meta) (config : config) (p : place) (cf : typed_value -> m_fun) :
+let prepare_lplace (config : config) (meta : Meta.meta) (p : place) (cf : typed_value -> m_fun) :
     m_fun =
  fun ctx ->
   log#ldebug
@@ -619,9 +619,9 @@ let prepare_lplace (meta : Meta.meta) (config : config) (p : place) (cf : typed_
      ^ "\n- Initial context:\n" ^ eval_ctx_to_string meta ctx));
   (* Access the place *)
   let access = Write in
-  let cc = update_ctx_along_write_place meta config access p in
+  let cc = update_ctx_along_write_place config meta access p in
   (* End the borrows and loans, starting with the borrows *)
-  let cc = comp cc (drop_outer_loans_at_lplace meta config p) in
+  let cc = comp cc (drop_outer_loans_at_lplace config meta p) in
   (* Read the value and check it *)
   let read_check cf : m_fun =
    fun ctx ->

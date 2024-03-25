@@ -286,7 +286,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in
-  let cf_pop_frame = pop_frame fdef.meta config pop_return_value in
+  let cf_pop_frame = pop_frame config fdef.meta pop_return_value in
 
   (* We need to find the parents regions/abstractions of the region we
    * will end - this will allow us to, first, mark the other return
@@ -314,7 +314,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
             eval_ctx * typed_avalue list =
           let ctx, avalue =
-            apply_proj_borrows_on_input_value fdef.meta config ctx abs.regions
+            apply_proj_borrows_on_input_value config fdef.meta ctx abs.regions
               abs.ancestors_regions ret_value ret_rty
           in
           (ctx, [ avalue ])
@@ -447,7 +447,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
     let cf_end_target_abs cf =
       List.fold_left
-        (fun cf id -> end_abstraction fdef.meta config id cf)
+        (fun cf id -> end_abstraction config fdef.meta id cf)
         cf target_abs_ids
     in
     (* Generate the Return node *)
@@ -513,7 +513,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
           let fwd_e =
             (* Pop the frame and retrieve the returned value at the same time*)
             let pop_return_value = true in
-            let cf_pop = pop_frame fdef.meta config pop_return_value in
+            let cf_pop = pop_frame config fdef.meta pop_return_value in
             (* Generate the Return node *)
             let cf_return ret_value : m_fun =
              fun ctx -> Some (SA.Return (ctx, ret_value))
@@ -563,7 +563,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
             (* Pop the frame - there is no returned value to pop: in the
                translation we will simply call the loop function *)
             let pop_return_value = false in
-            let cf_pop = pop_frame fdef.meta config pop_return_value in
+            let cf_pop = pop_frame config fdef.meta pop_return_value in
             (* Generate the Return node *)
             let cf_return _ret_value : m_fun =
              fun _ctx -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
@@ -603,7 +603,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
 
   (* Evaluate the function *)
   let symbolic =
-    eval_function_body fdef.meta config (Option.get fdef.body).body cf_finish ctx
+    eval_function_body config fdef.meta (Option.get fdef.body).body cf_finish ctx
   in
 
   (* Return *)
@@ -644,7 +644,7 @@ module Test = struct
       | Return ->
           (* Ok: drop the local variables and finish *)
           let pop_return_value = true in
-          pop_frame fdef.meta config pop_return_value (fun _ _ -> None) ctx
+          pop_frame config fdef.meta pop_return_value (fun _ _ -> None) ctx
       | _ ->
           craise
             fdef.meta
@@ -655,7 +655,7 @@ module Test = struct
     in
 
     (* Evaluate the function *)
-    let _ = eval_function_body body.meta config body.body cf_check ctx in
+    let _ = eval_function_body config body.meta body.body cf_check ctx in
     ()
 
   (** Small helper: return true if the function is a *transparent* unit function

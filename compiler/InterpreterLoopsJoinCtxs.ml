@@ -636,7 +636,7 @@ let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   in
   { ctx with env }
 
-let loop_join_origin_with_continue_ctxs (meta : Meta.meta) (config : config) (loop_id : LoopId.id)
+let loop_join_origin_with_continue_ctxs (config : config) (meta : Meta.meta) (loop_id : LoopId.id)
     (fixed_ids : ids_sets) (old_ctx : eval_ctx) (ctxl : eval_ctx list) :
     (eval_ctx * eval_ctx list) * eval_ctx =
   (* # Join with the new contexts, one by one
@@ -657,9 +657,9 @@ let loop_join_origin_with_continue_ctxs (meta : Meta.meta) (config : config) (lo
         let ctx =
           match err with
           | LoanInRight bid ->
-              InterpreterBorrows.end_borrow_no_synth meta config bid ctx
+              InterpreterBorrows.end_borrow_no_synth config meta bid ctx
           | LoansInRight bids ->
-              InterpreterBorrows.end_borrows_no_synth meta config bids ctx
+              InterpreterBorrows.end_borrows_no_synth config meta bids ctx
           | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
               craise meta "Unexpected"
         in

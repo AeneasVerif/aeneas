@@ -1400,7 +1400,7 @@ let ctxs_are_equivalent (meta : Meta.meta) (fixed_ids : ids_sets) (ctx0 : eval_c
     (match_ctxs meta check_equivalent fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
-let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id : LoopId.id)
+let prepare_match_ctx_with_target (config : config) (meta : Meta.meta) (loop_id : LoopId.id)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
  fun cf tgt_ctx ->
   (* Debug *)
@@ -1528,8 +1528,8 @@ let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id 
       (* Exception: end the corresponding borrows, and continue *)
       let cc =
         match e with
-        | LoanInRight bid -> InterpreterBorrows.end_borrow meta config bid
-        | LoansInRight bids -> InterpreterBorrows.end_borrows meta config bids
+        | LoanInRight bid -> InterpreterBorrows.end_borrow config meta bid
+        | LoansInRight bids -> InterpreterBorrows.end_borrows config meta bids
         | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
             craise meta "Unexpected"
       in
@@ -1837,7 +1837,7 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
       BorrowId.Set.of_list
         (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
     in
-    let cc = InterpreterBorrows.end_borrows meta config new_borrows in
+    let cc = InterpreterBorrows.end_borrows config meta new_borrows in
 
     (* Compute the loop input values *)
     let input_values =

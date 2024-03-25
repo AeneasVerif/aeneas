@@ -437,7 +437,7 @@ let prepare_ashared_loans_no_synth (meta : Meta.meta) (loop_id : LoopId.id) (ctx
     eval_ctx =
   get_cf_ctx_no_synth meta (prepare_ashared_loans meta (Some loop_id)) ctx
 
-let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id : LoopId.id)
+let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id : LoopId.id)
     (eval_loop_body : st_cm_fun) (ctx0 : eval_ctx) :
     eval_ctx * ids_sets * abs RegionGroupId.Map.t =
   (* The continuation for when we exit the loop - we register the
@@ -510,10 +510,10 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
           (* End those borrows and abstractions *)
           let end_borrows_abs blids aids ctx =
             let ctx =
-              InterpreterBorrows.end_borrows_no_synth meta config blids ctx
+              InterpreterBorrows.end_borrows_no_synth config meta blids ctx
             in
             let ctx =
-              InterpreterBorrows.end_abstractions_no_synth meta config aids ctx
+              InterpreterBorrows.end_abstractions_no_synth config meta aids ctx
             in
             ctx
           in
@@ -544,7 +544,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
 
     (* Join the context with the context at the loop entry *)
     let (_, _), ctx2 =
-      loop_join_origin_with_continue_ctxs meta config loop_id fixed_ids ctx1 !ctxs
+      loop_join_origin_with_continue_ctxs config meta loop_id fixed_ids ctx1 !ctxs
     in
     ctxs := [];
     ctx2
@@ -699,7 +699,7 @@ let compute_loop_entry_fixed_point (meta : Meta.meta) (config : config) (loop_id
                   abs.kind = SynthInput rg_id) meta "TODO :  error message ";
                 (* End this abstraction *)
                 let ctx =
-                  InterpreterBorrows.end_abstraction_no_synth meta config abs_id ctx
+                  InterpreterBorrows.end_abstraction_no_synth config meta abs_id ctx
                 in
                 (* Explore the context, and check which abstractions are not there anymore *)
                 let ids, _ = compute_ctx_ids ctx in

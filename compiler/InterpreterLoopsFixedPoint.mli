@@ -77,8 +77,8 @@ val prepare_ashared_loans : Meta.meta -> loop_id option -> Cps.cm_fun
     the values which are read or modified (some symbolic values may be ignored).
  *)
 val compute_loop_entry_fixed_point :
-  Meta.meta -> 
-  config ->
+  config -> 
+  Meta.meta ->
   loop_id ->
   Cps.st_cm_fun ->
   eval_ctx ->

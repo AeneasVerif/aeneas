@@ -43,7 +43,7 @@ val symbolic_expansion_non_shared_borrow_to_value :
     - [allow_reborrows]
  *)
 val prepare_reborrows :
-  Meta.meta -> config -> bool -> (BorrowId.id -> BorrowId.id) * (eval_ctx -> eval_ctx)
+  config -> Meta.meta -> bool -> (BorrowId.id -> BorrowId.id) * (eval_ctx -> eval_ctx)
 
 (** Apply (and reduce) a projector over borrows to an avalue.
     We use this for instance to spread the borrows present in the inputs
@@ -116,8 +116,8 @@ val apply_proj_borrows :
       erased regions)
  *)
 val apply_proj_borrows_on_input_value :
-  Meta.meta ->
   config ->
+  Meta.meta ->
   eval_ctx ->
   RegionId.Set.t ->
   RegionId.Set.t ->
