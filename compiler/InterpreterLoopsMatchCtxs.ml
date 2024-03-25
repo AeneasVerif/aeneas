@@ -149,9 +149,9 @@ let rec match_types (meta : Meta.meta) (match_distinct_types : ty -> ty -> ty)
   let match_rec = match_types meta match_distinct_types match_regions in
   match (ty0, ty1) with
   | TAdt (id0, generics0), TAdt (id1, generics1) ->
-      cassert (id0 = id1) meta "T";
-      cassert (generics0.const_generics = generics1.const_generics) meta "T";
-      cassert (generics0.trait_refs = generics1.trait_refs) meta "T";
+      cassert (id0 = id1) meta "TODO: error message";
+      cassert (generics0.const_generics = generics1.const_generics) meta "TODO: error message";
+      cassert (generics0.trait_refs = generics1.trait_refs) meta "TODO: error message";
       let id = id0 in
       let const_generics = generics1.const_generics in
       let trait_refs = generics1.trait_refs in
@@ -168,17 +168,17 @@ let rec match_types (meta : Meta.meta) (match_distinct_types : ty -> ty -> ty)
       let generics = { regions; types; const_generics; trait_refs } in
       TAdt (id, generics)
   | TVar vid0, TVar vid1 ->
-      cassert (vid0 = vid1) meta "T";
+      cassert (vid0 = vid1) meta "TODO: error message";
       let vid = vid0 in
       TVar vid
   | TLiteral lty0, TLiteral lty1 ->
-      cassert (lty0 = lty1) meta "T";
+      cassert (lty0 = lty1) meta "TODO: error message";
       ty0
   | TNever, TNever -> ty0
   | TRef (r0, ty0, k0), TRef (r1, ty1, k1) ->
       let r = match_regions r0 r1 in
       let ty = match_rec ty0 ty1 in
-      cassert (k0 = k1) meta "T";
+      cassert (k0 = k1) meta "TODO: error message";
       let k = k0 in
       TRef (r, ty, k)
   | _ -> match_distinct_types ty0 ty1
@@ -229,7 +229,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               cassert (
                 not
                   (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
-                     bv.value)) meta "T";
+                     bv.value)) meta "TODO: error message";
               let bid, bv =
                 M.match_mut_borrows meta ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
               in
@@ -252,7 +252,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           match (lc0, lc1) with
           | VSharedLoan (ids0, sv0), VSharedLoan (ids1, sv1) ->
               let sv = match_rec sv0 sv1 in
-              cassert (not (value_has_borrows sv.value)) meta "T";
+              cassert (not (value_has_borrows sv.value)) meta "TODO: error message";
               let ids, sv = M.match_shared_loans meta ctx0 ctx1 ty ids0 ids1 sv in
               VSharedLoan (ids, sv)
           | VMutLoan id0, VMutLoan id1 ->
@@ -373,7 +373,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             log#ldebug (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
-            cassert (not (value_has_borrows sv.value)) meta "T";
+            cassert (not (value_has_borrows sv.value)) meta "TODO: error message";
             M.match_ashared_loans meta ctx0 ctx1 v0.ty ids0 sv0 av0 v1.ty ids1 sv1
               av1 ty sv av
         | AMutLoan (id0, av0), AMutLoan (id1, av1) ->
@@ -404,7 +404,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let push_absl (absl : abs list) : unit = List.iter push_abs absl
 
   let match_etys (meta : Meta.meta) _ _ ty0 ty1 =
-    cassert (ty0 = ty1) meta "T";
+    cassert (ty0 = ty1) meta "TODO: error message";
     ty0
 
   let match_rtys (meta : Meta.meta) _ _ ty0 ty1 =
@@ -560,10 +560,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          will update [v], while the backward loop function will return nothing.
       *)
       cassert (
-        not (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos bv.value)) meta "T";
+        not (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos bv.value)) meta "TODO: error message";
 
       if bv0 = bv1 then (
-        cassert (bv0 = bv) meta "T";
+        cassert (bv0 = bv) meta "TODO: error message";
         (bid0, bv))
       else
         let rid = fresh_region_id () in
@@ -571,7 +571,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let kind = RMut in
         let bv_ty = bv.ty in
-        cassert (ty_no_regions bv_ty) meta "T";
+        cassert (ty_no_regions bv_ty) meta "TODO: error message";
         let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
         let borrow_av =
@@ -624,7 +624,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (bid : borrow_id) (bv : typed_value) : typed_avalue =
         let bv_ty = bv.ty in
-        cassert (ty_no_regions bv_ty) meta "T";
+        cassert (ty_no_regions bv_ty) meta "TODO: error message";
         let value = ABorrow (AMutBorrow (bid, mk_aignored meta bv_ty)) in
         { value; ty = borrow_ty }
       in
@@ -691,7 +691,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let id1 = sv1.sv_id in
     if id0 = id1 then (
       (* Sanity check *)
-      cassert (sv0 = sv1) meta "T";
+      cassert (sv0 = sv1) meta "TODO: error message";
       (* Return *)
       sv0)
     else (
@@ -811,7 +811,7 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
   let push_moved_value (v : typed_value) : unit = S.nvalues := v :: !S.nvalues
 
   let match_etys (meta : Meta.meta) _ _ ty0 ty1 =
-    cassert (ty0 = ty1) meta "T";
+    cassert (ty0 = ty1) meta "TODO: error message";
     ty0
 
   let match_rtys (meta : Meta.meta) _ _ ty0 ty1 =
@@ -1099,7 +1099,7 @@ struct
       (sv : symbolic_value) (v : typed_value) : typed_value =
     if S.check_equiv then raise (Distinct "match_symbolic_with_other")
     else (
-      cassert left meta "T";
+      cassert left meta "TODO: error message";
       let id = sv.sv_id in
       (* Check: fixed values are fixed *)
       cassert (not (SymbolicValueId.InjSubst.mem id !S.sid_map)) meta "Fixed values should be fixed";
@@ -1324,13 +1324,13 @@ let match_ctxs (meta : Meta.meta) (check_equiv : bool) (fixed_ids : ids_sets)
           cassert (v0 = v1) meta "The fixed values should be equal";
           (* The ids present in the left value must be fixed *)
           let ids, _ = compute_typed_value_ids v0 in
-          cassert ((not S.check_equiv) || ids_are_fixed ids)) meta "T";
+          cassert ((not S.check_equiv) || ids_are_fixed ids)) meta "TODO: error message";
         (* We still match the values - allows to compute mappings (which
            are the identity actually) *)
         let _ = M.match_typed_values meta ctx0 ctx1 v0 v1 in
         match_envs env0' env1'
     | EBinding (BVar b0, v0) :: env0', EBinding (BVar b1, v1) :: env1' ->
-        cassert (b0 = b1) meta "T";
+        cassert (b0 = b1) meta "TODO: error message";
         (* Match the values *)
         let _ = M.match_typed_values meta ctx0 ctx1 v0 v1 in
         (* Continue *)
@@ -1448,11 +1448,11 @@ let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id 
           (fun (var0, var1) ->
             match (var0, var1) with
             | EBinding (BDummy b0, v0), EBinding (BDummy b1, v1) ->
-                cassert (b0 = b1) meta "T";
+                cassert (b0 = b1) meta "TODO: error message";
                 let _ = M.match_typed_values meta src_ctx tgt_ctx v0 v1 in
                 ()
             | EBinding (BVar b0, v0), EBinding (BVar b1, v1) ->
-                cassert (b0 = b1) meta "T";
+                cassert (b0 = b1) meta "TODO: error message";
                 let _ = M.match_typed_values meta src_ctx tgt_ctx v0 v1 in
                 ()
             | _ -> craise meta "Unexpected")
@@ -1485,11 +1485,11 @@ let prepare_match_ctx_with_target (meta : Meta.meta) (config : config) (loop_id 
           (fun (var0, var1) ->
             match (var0, var1) with
             | EBinding (BDummy b0, v0), EBinding ((BDummy b1 as var1), v1) ->
-                cassert (b0 = b1) meta "T";
+                cassert (b0 = b1) meta "TODO: error message";
                 let v = M.match_typed_values meta src_ctx tgt_ctx v0 v1 in
                 (var1, v)
             | EBinding (BVar b0, v0), EBinding ((BVar b1 as var1), v1) ->
-                cassert (b0 = b1) meta "T";
+                cassert (b0 = b1) meta "TODO: error message";
                 let v = M.match_typed_values meta src_ctx tgt_ctx v0 v1 in
                 (var1, v)
             | _ -> craise meta "Unexpected")
@@ -1590,7 +1590,7 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
     let filt_src_env, new_absl, new_dummyl =
       ctx_split_fixed_new meta fixed_ids src_ctx
     in
-    cassert (new_dummyl = []) meta "T";
+    cassert (new_dummyl = []) meta "TODO: error message";
     let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
     let filt_src_ctx = { src_ctx with env = filt_src_env } in
 
@@ -1726,7 +1726,7 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
        abstractions and in the *variable bindings* once we allow symbolic
        values containing borrows to not be eagerly expanded.
     *)
-    cassert Config.greedy_expand_symbolics_with_borrows meta "T";
+    cassert Config.greedy_expand_symbolics_with_borrows meta "TODO: error message";
 
     (* Update the borrows and loans in the abstractions of the target context.
 
@@ -1808,8 +1808,8 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
         method! visit_abs env abs =
           match abs.kind with
           | Loop (loop_id', rg_id, kind) ->
-              cassert (loop_id' = loop_id) meta "T";
-              cassert (kind = LoopSynthInput) meta "T";
+              cassert (loop_id' = loop_id) meta "TODO: error message";
+              cassert (kind = LoopSynthInput) meta "TODO: error message";
               let can_end = false in
               let kind : abs_kind = Loop (loop_id, rg_id, LoopCall) in
               let abs = { abs with kind; can_end } in

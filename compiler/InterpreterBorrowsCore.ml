@@ -558,7 +558,7 @@ let update_aborrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) 
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : avalue =
-    cassert (not !r) meta "";
+    cassert (not !r) meta "TODO: error message";
     r := true;
     nv
   in

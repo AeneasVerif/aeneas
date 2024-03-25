@@ -326,8 +326,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta) (loop_id : LoopId.id
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
       let _, ty1, _ = ty_as_ref ty1 in
-      cassert (not (ty_has_borrows ctx.type_ctx.type_infos ty0)) meta "";
-      cassert (not (ty_has_borrows ctx.type_ctx.type_infos ty1)) meta ""
+      cassert (not (ty_has_borrows ctx.type_ctx.type_infos ty0)) meta "TODO: error message";
+      cassert (not (ty_has_borrows ctx.type_ctx.type_infos ty1)) meta "TODO: error message"
     in
 
     (* Same remarks as for [merge_amut_borrows] *)
@@ -356,8 +356,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta) (loop_id : LoopId.id
        This time we need to also merge the shared values. We rely on the
        join matcher [JM] to do so.
     *)
-    cassert (not (value_has_loans_or_borrows ctx sv0.value)) meta "";
-    cassert (not (value_has_loans_or_borrows ctx sv1.value)) meta "";
+    cassert (not (value_has_loans_or_borrows ctx sv0.value)) meta "TODO: error message";
+    cassert (not (value_has_loans_or_borrows ctx sv1.value)) meta "TODO: error message";
     let ty = ty0 in
     let child = child0 in
     let sv = M.match_typed_values meta ctx ctx sv0 sv1 in
@@ -425,9 +425,9 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
           (* Variables are necessarily in the prefix *)
           craise meta "Unreachable"
       | EBinding (BDummy did, _) ->
-          cassert (not (DummyVarId.Set.mem did fixed_ids.dids)) meta ""
+          cassert (not (DummyVarId.Set.mem did fixed_ids.dids)) meta "TODO: error message"
       | EAbs abs ->
-          cassert (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids)) meta ""
+          cassert (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids)) meta "TODO: error message"
       | EFrame ->
           (* This should have been eliminated *)
           craise meta "Unreachable"

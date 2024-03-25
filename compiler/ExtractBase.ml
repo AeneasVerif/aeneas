@@ -679,7 +679,7 @@ let ctx_get_local_function (meta : Meta.meta) (id : A.FunDeclId.id) (lp : LoopId
   ctx_get_function meta (FromLlbc (FunId (FRegular id), lp)) ctx
 
 let ctx_get_type ?(meta=None) (id : type_id) (ctx : extraction_ctx) : string =
-  cassert_opt_meta (id <> TTuple) meta "T";
+  cassert_opt_meta (id <> TTuple) meta "TODO: error message";
   ctx_get ~meta:meta (TypeId id) ctx
 
 let ctx_get_local_type (meta : Meta.meta) (id : TypeDeclId.id) (ctx : extraction_ctx) : string =
@@ -1641,7 +1641,7 @@ let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx) (basename
     let cl = to_snake_case name in
     let cl = String.split_on_char '_' cl in
     let cl = List.filter (fun s -> String.length s > 0) cl in
-    cassert (List.length cl > 0) meta "T";
+    cassert (List.length cl > 0) meta "TODO: error message";
     let cl = List.map (fun s -> s.[0]) cl in
     StringUtils.string_of_chars cl
   in
