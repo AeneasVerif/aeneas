@@ -741,7 +741,7 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta) (aggregate_kind :
               List.length type_decl.generics.regions
               = List.length generics.regions) meta "TODO: error message";
             let expected_field_types =
-              AssociatedTypes.ctx_adt_get_inst_norm_field_etypes ctx def_id
+              AssociatedTypes.ctx_adt_get_inst_norm_field_etypes meta ctx def_id
                 opt_variant_id generics
             in
             cassert (

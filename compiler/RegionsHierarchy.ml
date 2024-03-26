@@ -55,6 +55,7 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option) (type_decls : ty
         sg.preds.trait_type_constraints
     in
     {
+      meta = meta;
       norm_trait_types;
       type_decls;
       fun_decls;

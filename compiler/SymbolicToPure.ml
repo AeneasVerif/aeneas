@@ -973,7 +973,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
   (* Normalize the signature *)
   let sg =
     let ({ A.inputs; output; _ } : A.fun_sig) = sg in
-    let norm = AssociatedTypes.ctx_normalize_ty ctx in
+    let norm = AssociatedTypes.ctx_normalize_ty meta ctx in
     let inputs = List.map norm inputs in
     let output = norm output in
     { sg with A.inputs; output }

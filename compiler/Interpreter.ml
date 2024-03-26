@@ -49,11 +49,11 @@ let compute_contexts (m : crate) : decls_ctx =
     to compute a normalization map (for the associated types) and that we added
     it in the context.
  *)
-let normalize_inst_fun_sig (ctx : eval_ctx) (sg : inst_fun_sig) : inst_fun_sig =
+let normalize_inst_fun_sig (meta : Meta.meta) (ctx : eval_ctx) (sg : inst_fun_sig) : inst_fun_sig =
   let { regions_hierarchy = _; trait_type_constraints = _; inputs; output } =
     sg
   in
-  let norm = AssociatedTypes.ctx_normalize_ty ctx in
+  let norm = AssociatedTypes.ctx_normalize_ty meta ctx in
   let inputs = List.map norm inputs in
   let output = norm output in
   { sg with inputs; output }
@@ -157,7 +157,7 @@ let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx) (sg : fun_s
       inst_sg.trait_type_constraints
   in
   (* Normalize the signature *)
-  let inst_sg = normalize_inst_fun_sig ctx inst_sg in
+  let inst_sg = normalize_inst_fun_sig meta ctx inst_sg in
   (* Return *)
   (ctx, inst_sg)
 

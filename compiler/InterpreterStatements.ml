@@ -309,7 +309,7 @@ let get_assumed_function_return_type (meta : Meta.meta) (ctx : eval_ctx) (fid : 
         Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
           sg.output
       in
-      AssociatedTypes.ctx_normalize_erase_ty ctx ty
+      AssociatedTypes.ctx_normalize_erase_ty meta ctx ty
 
 let move_return_value (config : config) (meta : Meta.meta) (pop_return_value : bool)
     (cf : typed_value option -> m_fun) : m_fun =

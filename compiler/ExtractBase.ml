@@ -748,7 +748,6 @@ let ctx_get_local_trait_clause (meta : Meta.meta) (id : TraitClauseId.id) (ctx :
 
 let ctx_get_field (meta : Meta.meta) (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
-    (* let meta = (TypeDeclId.Map.find type_id ctx.trans_types).meta in TODO : check how to get meta *)
   ctx_get ~meta:(Some meta) (FieldId (type_id, field_id)) ctx
 
 let ctx_get_struct (meta : Meta.meta) (def_id : type_id) (ctx : extraction_ctx) : string =

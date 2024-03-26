@@ -514,7 +514,7 @@ let instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx) (generics : generic_
   in
   (* Substitute the signature *)
   let inst_sig =
-    AssociatedTypes.ctx_subst_norm_signature ctx asubst rsubst tsubst cgsubst
+    AssociatedTypes.ctx_subst_norm_signature meta ctx asubst rsubst tsubst cgsubst
       tr_subst tr_self sg regions_hierarchy
   in
   (* Return *)
