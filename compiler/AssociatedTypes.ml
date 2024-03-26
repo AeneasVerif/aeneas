@@ -418,7 +418,6 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | TraitRef trait_ref ->
       (* The trait instance id necessarily refers to a local sub-clause. We
          can't project over it and can only peel off the [TraitRef] wrapper *)
-(*       let meta = (TraitDeclId.Map.find trait_ref.trait_decl_ref.trait_decl_id ctx.trait_decls).meta in *)
       cassert_opt_meta (trait_instance_id_is_local_clause trait_ref.trait_id) ctx.meta "Trait instance id is not a local sub-clause";
       cassert_opt_meta (trait_ref.generics = empty_generic_args) ctx.meta "TODO: error message";
       (trait_ref.trait_id, None)

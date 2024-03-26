@@ -688,48 +688,41 @@ let ctx_get_local_type (meta : Meta.meta) (id : TypeDeclId.id) (ctx : extraction
 let ctx_get_assumed_type ?(meta = None) (id : assumed_ty) (ctx : extraction_ctx) : string =
   ctx_get_type ~meta:meta (TAssumed id) ctx
 
-let ctx_get_trait_constructor (id : trait_decl_id) (ctx : extraction_ctx) :
+let ctx_get_trait_constructor (meta : Meta.meta) (id : trait_decl_id) (ctx : extraction_ctx) :
     string =
-  let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
   ctx_get ~meta:(Some meta) (TraitDeclConstructorId id) ctx
 
 let ctx_get_trait_self_clause (meta : Meta.meta) (ctx : extraction_ctx) : string =
   ctx_get ~meta:(Some meta) TraitSelfClauseId ctx
 
-let ctx_get_trait_decl (id : trait_decl_id) (ctx : extraction_ctx) : string =
-  let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
+let ctx_get_trait_decl (meta : Meta.meta) (id : trait_decl_id) (ctx : extraction_ctx) : string =
   ctx_get ~meta:(Some meta) (TraitDeclId id) ctx
 
-let ctx_get_trait_impl (id : trait_impl_id) (ctx : extraction_ctx) : string =
-  let meta = (TraitImplId.Map.find id ctx.trans_trait_impls).meta in
+let ctx_get_trait_impl (meta : Meta.meta) (id : trait_impl_id) (ctx : extraction_ctx) : string =
   ctx_get ~meta:(Some meta) (TraitImplId id) ctx
 
-let ctx_get_trait_item (id : trait_decl_id) (item_name : string)
+let ctx_get_trait_item (meta : Meta.meta) (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
-    let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
     ctx_get ~meta:(Some meta) (TraitItemId (id, item_name)) ctx
 
-let ctx_get_trait_const (id : trait_decl_id) (item_name : string)
+let ctx_get_trait_const (meta : Meta.meta) (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
-  ctx_get_trait_item id item_name ctx
+  ctx_get_trait_item meta id item_name ctx
 
-let ctx_get_trait_type (id : trait_decl_id) (item_name : string)
+let ctx_get_trait_type (meta : Meta.meta) (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
-  ctx_get_trait_item id item_name ctx
+  ctx_get_trait_item meta id item_name ctx
 
-let ctx_get_trait_method (id : trait_decl_id) (item_name : string)
+let ctx_get_trait_method (meta : Meta.meta) (id : trait_decl_id) (item_name : string)
     (ctx : extraction_ctx) : string =
-    let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
   ctx_get ~meta:(Some meta) (TraitMethodId (id, item_name)) ctx
 
-let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
+let ctx_get_trait_parent_clause (meta : Meta.meta) (id : trait_decl_id) (clause : trait_clause_id)
     (ctx : extraction_ctx) : string =
-    let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
   ctx_get ~meta:(Some meta) (TraitParentClauseId (id, clause)) ctx
 
-let ctx_get_trait_item_clause (id : trait_decl_id) (item : string)
+let ctx_get_trait_item_clause (meta : Meta.meta) (id : trait_decl_id) (item : string)
     (clause : trait_clause_id) (ctx : extraction_ctx) : string =
-    let meta = (TraitDeclId.Map.find id ctx.trans_trait_decls).meta in
   ctx_get ~meta:(Some meta) (TraitItemClauseId (id, item, clause)) ctx
 
 let ctx_get_var (meta : Meta.meta) (id : VarId.id) (ctx : extraction_ctx) : string =

@@ -533,7 +533,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
       if !parameterize_trait_types then craise meta "Unimplemented"
       else
         let type_name =
-          ctx_get_trait_type trait_ref.trait_decl_ref.trait_decl_id type_name
+          ctx_get_trait_type meta trait_ref.trait_decl_ref.trait_decl_id type_name
             ctx
         in
         let add_brackets (s : string) =
@@ -548,7 +548,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            assert (trait_ref.generics = empty_generic_args);
+            cassert (trait_ref.generics = empty_generic_args) "TODO: Error message";
             extract_trait_instance_id_with_dot meta ctx fmt no_params_tys false
               trait_ref.trait_id;
             F.pp_print_string fmt type_name
@@ -587,7 +587,7 @@ and extract_trait_decl_ref (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.fo
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_decl_ref) :
     unit =
   let use_brackets = tr.decl_generics <> empty_generic_args && inside in
-  let name = ctx_get_trait_decl tr.trait_decl_id ctx in
+  let name = ctx_get_trait_decl meta tr.trait_decl_id ctx in
   if use_brackets then F.pp_print_string fmt "(";
   F.pp_print_string fmt name;
   (* There is something subtle here: the trait obligations for the implemented
@@ -665,19 +665,19 @@ and extract_trait_instance_id (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F
         craise meta "Unexpected occurrence of `Self`"
       else F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
   | TraitImpl id ->
-      let name = ctx_get_trait_impl id ctx in
+      let name = ctx_get_trait_impl meta id ctx in
       F.pp_print_string fmt name
   | Clause id ->
       let name = ctx_get_local_trait_clause meta id ctx in
       F.pp_print_string fmt name
   | ParentClause (inst_id, decl_id, clause_id) ->
       (* Use the trait decl id to lookup the name *)
-      let name = ctx_get_trait_parent_clause decl_id clause_id ctx in
+      let name = ctx_get_trait_parent_clause meta decl_id clause_id ctx in
       extract_trait_instance_id_with_dot meta ctx fmt no_params_tys true inst_id;
       F.pp_print_string fmt (add_brackets name)
   | ItemClause (inst_id, decl_id, item_name, clause_id) ->
       (* Use the trait decl id to lookup the name *)
-      let name = ctx_get_trait_item_clause decl_id item_name clause_id ctx in
+      let name = ctx_get_trait_item_clause meta decl_id item_name clause_id ctx in
       extract_trait_instance_id_with_dot meta ctx fmt no_params_tys true inst_id;
       F.pp_print_string fmt (add_brackets name)
   | TraitRef trait_ref ->
@@ -1130,12 +1130,12 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
   in
   extract_comment fmt (sl @ [ span ] @ name)
 
-let extract_trait_clause_type (* (meta : Meta.meta) TODO check if right meta*) (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_trait_clause_type (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (clause : trait_clause) : unit =
-  let trait_name = ctx_get_trait_decl clause.trait_id ctx in
+  let trait_name = ctx_get_trait_decl meta clause.trait_id ctx in
   F.pp_print_string fmt trait_name;
-  let meta = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).meta in
-  extract_generic_args meta ctx fmt no_params_tys clause.generics
+  (* let meta = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).meta in
+   *)extract_generic_args meta ctx fmt no_params_tys clause.generics
 
 (** Insert a space, if necessary *)
 let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
@@ -1155,7 +1155,7 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
   F.pp_print_space fmt ();
-  let trait_id = ctx_get_trait_decl trait_decl.def_id ctx in
+  let trait_id = ctx_get_trait_decl trait_decl.meta trait_decl.def_id ctx in
   F.pp_print_string fmt trait_id;
   List.iter
     (fun p ->
@@ -1258,7 +1258,7 @@ let extract_generic_params (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.fo
           F.pp_print_space fmt ();
           F.pp_print_string fmt ":";
           F.pp_print_space fmt ();
-          extract_trait_clause_type ctx fmt no_params_tys clause;
+          extract_trait_clause_type meta ctx fmt no_params_tys clause;
           (* ) *)
           right_bracket as_implicits;
           if use_arrows then (

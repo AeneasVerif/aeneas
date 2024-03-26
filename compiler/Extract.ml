@@ -452,7 +452,7 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.for
             cassert (lp_id = None) trait_decl.meta "TODO: Error message";
             extract_trait_ref trait_decl.meta ctx fmt TypeDeclId.Set.empty true trait_ref;
             let fun_name =
-              ctx_get_trait_method trait_ref.trait_decl_ref.trait_decl_id
+              ctx_get_trait_method meta trait_ref.trait_decl_ref.trait_decl_id
                 method_name ctx
             in
             let add_brackets (s : string) =
@@ -2236,7 +2236,7 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
   let trans = A.FunDeclId.Map.find id ctx.trans_funs in
   (* Extract the items *)
   let f = trans.f in
-  let fun_name = ctx_get_trait_method decl.def_id item_name ctx in
+  let fun_name = ctx_get_trait_method decl.meta decl.def_id item_name ctx in
   let ty () =
     (* Extract the generics *)
     (* We need to add the generics specific to the method, by removing those
@@ -2252,7 +2252,7 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params f.meta f.llbc_name f.signature.llbc_generics generics ctx (* TODO: confirm it's the right meta*)
+      ctx_add_generic_params decl.meta f.llbc_name f.signature.llbc_generics generics ctx (* TODO: confirm it's the right meta*)
     in
     let backend_uses_forall =
       match !backend with Coq | Lean -> true | FStar | HOL4 -> false
@@ -2261,7 +2261,7 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
     let use_forall = generics_not_empty && backend_uses_forall in
     let use_arrows = generics_not_empty && not backend_uses_forall in
     let use_forall_use_sep = false in
-    extract_generic_params f.meta ctx fmt TypeDeclId.Set.empty ~use_forall
+    extract_generic_params decl.meta ctx fmt TypeDeclId.Set.empty ~use_forall
       ~use_forall_use_sep ~use_arrows generics type_params cg_params
       trait_clauses; (* TODO: confirm it's the right meta*)
     if use_forall then F.pp_print_string fmt ",";
@@ -2275,7 +2275,7 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (decl : trait_decl) : unit =
   (* Retrieve the trait name *)
-  let decl_name = ctx_get_trait_decl decl.def_id ctx in
+  let decl_name = ctx_get_trait_decl decl.meta decl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -2331,7 +2331,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ())
   else if is_empty && !backend = Coq then (
     (* Coq is not very good at infering constructors *)
-    let cons = ctx_get_trait_constructor decl.def_id ctx in
+    let cons = ctx_get_trait_constructor decl.meta decl.def_id ctx in
     F.pp_print_string fmt (":= " ^ cons ^ "{}.");
     (* Outer box *)
     F.pp_close_box fmt ())
@@ -2340,7 +2340,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     | Lean -> F.pp_print_string fmt "where"
     | FStar -> F.pp_print_string fmt "= {"
     | Coq ->
-        let cons = ctx_get_trait_constructor decl.def_id ctx in
+        let cons = ctx_get_trait_constructor decl.meta decl.def_id ctx in
         F.pp_print_string fmt (":= " ^ cons ^ " {")
     | _ -> F.pp_print_string fmt "{");
 
@@ -2354,7 +2354,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (* The constants *)
     List.iter
       (fun (name, (ty, _)) ->
-        let item_name = ctx_get_trait_const decl.def_id name ctx in
+        let item_name = ctx_get_trait_const decl.meta decl.def_id name ctx in
         let ty () =
           let inside = false in
           F.pp_print_space fmt ();
@@ -2367,7 +2367,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (name, (clauses, _)) ->
         (* Extract the type *)
-        let item_name = ctx_get_trait_type decl.def_id name ctx in
+        let item_name = ctx_get_trait_type decl.meta decl.def_id name ctx in
         let ty () =
           F.pp_print_space fmt ();
           F.pp_print_string fmt (type_keyword decl.meta)
@@ -2377,11 +2377,11 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         List.iter
           (fun clause ->
             let item_name =
-              ctx_get_trait_item_clause decl.def_id name clause.clause_id ctx
+              ctx_get_trait_item_clause decl.meta decl.def_id name clause.clause_id ctx
             in
             let ty () =
               F.pp_print_space fmt ();
-              extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+              extract_trait_clause_type decl.meta ctx fmt TypeDeclId.Set.empty clause
             in
             extract_trait_decl_item ctx fmt item_name ty)
           clauses)
@@ -2392,11 +2392,11 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun clause ->
         let item_name =
-          ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
+          ctx_get_trait_parent_clause decl.meta decl.def_id clause.clause_id ctx
         in
         let ty () =
           F.pp_print_space fmt ();
-          extract_trait_clause_type ctx fmt TypeDeclId.Set.empty clause
+          extract_trait_clause_type decl.meta ctx fmt TypeDeclId.Set.empty clause
         in
         extract_trait_decl_item ctx fmt item_name ty)
       decl.parent_clauses;
@@ -2433,25 +2433,25 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
   in
   if num_params > 0 then (
     (* The constructor *)
-    let cons_name = ctx_get_trait_constructor decl.def_id ctx in
+    let cons_name = ctx_get_trait_constructor decl.meta decl.def_id ctx in
     extract_coq_arguments_instruction ctx fmt cons_name num_params;
     (* The constants *)
     List.iter
       (fun (name, _) ->
-        let item_name = ctx_get_trait_const decl.def_id name ctx in
+        let item_name = ctx_get_trait_const decl.meta decl.def_id name ctx in
         extract_coq_arguments_instruction ctx fmt item_name num_params)
       decl.consts;
     (* The types *)
     List.iter
       (fun (name, (clauses, _)) ->
         (* The type *)
-        let item_name = ctx_get_trait_type decl.def_id name ctx in
+        let item_name = ctx_get_trait_type decl.meta decl.def_id name ctx in
         extract_coq_arguments_instruction ctx fmt item_name num_params;
         (* The type clauses *)
         List.iter
           (fun clause ->
             let item_name =
-              ctx_get_trait_item_clause decl.def_id name clause.clause_id ctx
+              ctx_get_trait_item_clause decl.meta decl.def_id name clause.clause_id ctx
             in
             extract_coq_arguments_instruction ctx fmt item_name num_params)
           clauses)
@@ -2460,7 +2460,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun clause ->
         let item_name =
-          ctx_get_trait_parent_clause decl.def_id clause.clause_id ctx
+          ctx_get_trait_parent_clause decl.meta decl.def_id clause.clause_id ctx
         in
         extract_coq_arguments_instruction ctx fmt item_name num_params)
       decl.parent_clauses;
@@ -2468,7 +2468,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (item_name, _) ->
         (* Extract the items *)
-        let item_name = ctx_get_trait_method decl.def_id item_name ctx in
+        let item_name = ctx_get_trait_method decl.meta decl.def_id item_name ctx in
         extract_coq_arguments_instruction ctx fmt item_name num_params)
       decl.required_methods;
     (* Add a space *)
@@ -2493,7 +2493,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
   let trans = A.FunDeclId.Map.find id ctx.trans_funs in
   (* Extract the items *)
   let f = trans.f in
-  let fun_name = ctx_get_trait_method trait_decl_id item_name ctx in
+  let fun_name = ctx_get_trait_method impl.meta trait_decl_id item_name ctx in
   let ty () =
     (* Filter the generics if the method is a builtin *)
     let i_tys, _, _ = impl_generics in
@@ -2533,16 +2533,16 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, f_tys, f_cgs, f_tcs =
-      ctx_add_generic_params f.meta f.llbc_name f.signature.llbc_generics f_generics
+      ctx_add_generic_params impl.meta f.llbc_name f.signature.llbc_generics f_generics
         ctx
     in
     let use_forall = f_generics <> empty_generic_params in
-    extract_generic_params f.meta ctx fmt TypeDeclId.Set.empty ~use_forall f_generics
+    extract_generic_params impl.meta ctx fmt TypeDeclId.Set.empty ~use_forall f_generics
       f_tys f_cgs f_tcs;
     if use_forall then F.pp_print_string fmt ",";
     (* Extract the function call *)
     F.pp_print_space fmt ();
-    let fun_name = ctx_get_local_function f.meta f.def_id None ctx in
+    let fun_name = ctx_get_local_function impl.meta f.def_id None ctx in
     F.pp_print_string fmt fun_name;
     let all_generics =
       let _, i_cgs, i_tcs = impl_generics in
@@ -2565,7 +2565,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
   log#ldebug (lazy ("extract_trait_impl: " ^ name_to_string ctx impl.llbc_name));
   (* Retrieve the impl name *)
-  let impl_name = ctx_get_trait_impl impl.def_id ctx in
+  let impl_name = ctx_get_trait_impl impl.meta impl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -2629,7 +2629,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ())
   else if is_empty && !Config.backend = Coq then (
     (* Coq is not very good at infering constructors *)
-    let cons = ctx_get_trait_constructor impl.impl_trait.trait_decl_id ctx in
+    let cons = ctx_get_trait_constructor impl.meta impl.impl_trait.trait_decl_id ctx in
     F.pp_print_string fmt (":= " ^ cons ^ ".");
     (* Outer box *)
     F.pp_close_box fmt ())
@@ -2653,7 +2653,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (* The constants *)
     List.iter
       (fun (provided_id, (name, (_, id))) ->
-        let item_name = ctx_get_trait_const trait_decl_id name ctx in
+        let item_name = ctx_get_trait_const impl.meta trait_decl_id name ctx in
         (* The parameters are not the same depending on whether the constant
            is a provided constant or not *)
         let print_params () =
@@ -2683,7 +2683,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (name, (trait_refs, ty)) ->
         (* Extract the type *)
-        let item_name = ctx_get_trait_type trait_decl_id name ctx in
+        let item_name = ctx_get_trait_type impl.meta trait_decl_id name ctx in
         let ty () =
           F.pp_print_space fmt ();
           extract_ty impl.meta ctx fmt TypeDeclId.Set.empty false ty
@@ -2693,7 +2693,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         TraitClauseId.iteri
           (fun clause_id trait_ref ->
             let item_name =
-              ctx_get_trait_item_clause trait_decl_id name clause_id ctx
+              ctx_get_trait_item_clause impl.meta trait_decl_id name clause_id ctx
             in
             let ty () =
               F.pp_print_space fmt ();
@@ -2707,7 +2707,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     TraitClauseId.iteri
       (fun clause_id trait_ref ->
         let item_name =
-          ctx_get_trait_parent_clause trait_decl_id clause_id ctx
+          ctx_get_trait_parent_clause impl.meta trait_decl_id clause_id ctx
         in
         let ty () =
           F.pp_print_space fmt ();
