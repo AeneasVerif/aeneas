@@ -267,9 +267,9 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
     borrow_substs := (lid, nlid) :: !borrow_substs;
 
     (* Rem.: the below sanity checks are not really necessary *)
-    cassert (AbstractionId.Set.is_empty abs.parents) meta "abs.parents is not empty TODO: Error message";
-    cassert (abs.original_parents = []) meta "original_parents is not empty TODO: Error message";
-    cassert (RegionId.Set.is_empty abs.ancestors_regions) meta "ancestors_regions is not empty TODO: Error message";
+    sanity_check (AbstractionId.Set.is_empty abs.parents) meta;
+    sanity_check (abs.original_parents = []) meta;
+    sanity_check (RegionId.Set.is_empty abs.ancestors_regions) meta;
 
     (* Introduce the new abstraction for the shared values *)
     cassert (ty_no_regions sv.ty) meta "TODO :  error message ";
@@ -323,7 +323,7 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
   let collect_shared_values_in_abs (abs : abs) : unit =
     let collect_shared_value lids (sv : typed_value) =
       (* Sanity check: we don't support nested borrows for now *)
-      cassert (not (value_has_borrows ctx sv.value)) meta "Nested borrows not supported yet";
+      sanity_check (not (value_has_borrows ctx sv.value)) meta;
 
       (* Filter the loan ids whose corresponding borrows appear in abstractions
          (see the documentation of the function) *)

@@ -603,7 +603,7 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place) 
         (* Reinsert *)
         let ctx = write_place meta access p v ctx in
         (* Sanity check *)
-        cassert (not (outer_loans_in_value v)) meta "TODO: Error message";
+        sanity_check (not (outer_loans_in_value v)) meta;
         (* Continue *)
         cf ctx)
   in
@@ -627,7 +627,7 @@ let prepare_lplace (config : config) (meta : Meta.meta) (p : place) (cf : typed_
    fun ctx ->
     let v = read_place meta access p ctx in
     (* Sanity checks *)
-    cassert (not (outer_loans_in_value v)) meta "TODO: Error message";
+    sanity_check (not (outer_loans_in_value v)) meta;
     (* Continue *)
     cf v ctx
   in

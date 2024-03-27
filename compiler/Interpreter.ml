@@ -628,8 +628,8 @@ module Test = struct
             fdef.name));
 
     (* Sanity check - *)
-    cassert (fdef.signature.generics = empty_generic_params) fdef.meta "TODO: Error message";
-    cassert (body.arg_count = 0) fdef.meta "TODO: Error message";
+    sanity_check (fdef.signature.generics = empty_generic_params) fdef.meta;
+    sanity_check (body.arg_count = 0) fdef.meta;
 
     (* Create the evaluation context *)
     let ctx = initialize_eval_ctx fdef.meta decls_ctx [] [] [] in

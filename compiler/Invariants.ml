@@ -105,8 +105,8 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     let reprs = !ids_reprs in
     let infos = !borrows_infos in
     (* Sanity checks *)
-    cassert (not (BorrowId.Map.mem bid reprs)) meta "TODO: Error message";
-    cassert (not (BorrowId.Map.mem bid infos)) meta "TODO: Error message";
+    sanity_check (not (BorrowId.Map.mem bid reprs)) meta;
+    sanity_check (not (BorrowId.Map.mem bid infos)) meta;
     (* Add the mapping for the representant *)
     let reprs = BorrowId.Map.add bid bid reprs in
     (* Add the mapping for the loan info *)

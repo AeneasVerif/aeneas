@@ -307,8 +307,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta) (loop_id : LoopId.id
   *)
   let merge_amut_borrows id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
-    cassert (is_aignored child0.value) meta "Children are not [AIgnored]";
-    cassert (is_aignored child1.value) meta "Children are not [AIgnored]";
+    sanity_check (is_aignored child0.value) meta;
+    sanity_check (is_aignored child1.value) meta;
 
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
@@ -326,8 +326,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta) (loop_id : LoopId.id
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
       let _, ty1, _ = ty_as_ref ty1 in
-      cassert (not (ty_has_borrows ctx.type_ctx.type_infos ty0)) meta "TODO: error message";
-      cassert (not (ty_has_borrows ctx.type_ctx.type_infos ty1)) meta "TODO: error message"
+      sanity_check (not (ty_has_borrows ctx.type_ctx.type_infos ty0)) meta;
+      sanity_check (not (ty_has_borrows ctx.type_ctx.type_infos ty1)) meta
     in
 
     (* Same remarks as for [merge_amut_borrows] *)
@@ -338,8 +338,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta) (loop_id : LoopId.id
 
   let merge_amut_loans id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
-    cassert (is_aignored child0.value) meta "Children are not [AIgnored]";
-    cassert (is_aignored child1.value) meta "Children are not [AIgnored]";
+    sanity_check (is_aignored child0.value) meta;
+    sanity_check (is_aignored child1.value) meta;
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let child = child0 in
@@ -349,8 +349,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta) (loop_id : LoopId.id
   let merge_ashared_loans ids ty0 (sv0 : typed_value) child0 _ty1
       (sv1 : typed_value) child1 =
     (* Sanity checks *)
-    cassert (is_aignored child0.value) meta "Children are not [AIgnored]";
-    cassert (is_aignored child1.value) meta "Children are not [AIgnored]";
+    sanity_check (is_aignored child0.value) meta;
+    sanity_check (is_aignored child1.value) meta;
     (* Same remarks as for [merge_amut_borrows].
 
        This time we need to also merge the shared values. We rely on the
@@ -425,9 +425,9 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets) (c
           (* Variables are necessarily in the prefix *)
           craise meta "Unreachable"
       | EBinding (BDummy did, _) ->
-          cassert (not (DummyVarId.Set.mem did fixed_ids.dids)) meta "TODO: error message"
+          sanity_check (not (DummyVarId.Set.mem did fixed_ids.dids)) meta
       | EAbs abs ->
-          cassert (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids)) meta "TODO: error message"
+          sanity_check (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids)) meta
       | EFrame ->
           (* This should have been eliminated *)
           craise meta "Unreachable"

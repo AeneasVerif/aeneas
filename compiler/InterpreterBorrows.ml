@@ -248,8 +248,8 @@ let end_borrow_get_borrow (meta : Meta.meta) (allowed_abs : AbstractionId.id opt
 let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id) (nv : typed_value)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
-  cassert (not (loans_in_value nv)) meta "TODO: error message";
-  cassert (not (bottom_in_value ctx.ended_regions nv)) meta "TODO: error message";
+  sanity_check (not (loans_in_value nv)) meta;
+  sanity_check (not (bottom_in_value ctx.ended_regions nv)) meta;
   (* Debug *)
   log#ldebug
     (lazy
@@ -444,7 +444,7 @@ let give_back_symbolic_value (_config : config) (meta : Meta.meta) (proj_regions
     (proj_ty : rty) (sv : symbolic_value) (nsv : symbolic_value)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
-  cassert (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty) meta "TODO: error message";
+  sanity_check (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty) meta;
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
@@ -559,7 +559,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta) (
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call {!set_replaced}) *)
               (* Sanity check *)
-              cassert (nv.ty = ty) meta "TODO: error message";
+              sanity_check (nv.ty = ty) meta;
               ALoan
                 (AEndedIgnoredMutLoan
                    { given_back = nv; child; given_back_meta = nsv }))
@@ -758,24 +758,24 @@ let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id) (bc : g_bor
   match bc with
   | Concrete (VMutBorrow (l', tv)) ->
       (* Sanity check *)
-      cassert (l' = l) meta "TODO: error message";
-      cassert (not (loans_in_value tv)) meta "TODO: error message";
+      sanity_check (l' = l) meta;
+      sanity_check (not (loans_in_value tv)) meta;
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      cassert (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta "The corresponding loan should be somewhere";
+      sanity_check (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
       (* Update the context *)
       give_back_value config meta l tv ctx
   | Concrete (VSharedBorrow l' | VReservedMutBorrow l') ->
       (* Sanity check *)
-      cassert (l' = l) meta "TODO: error message";
+      sanity_check (l' = l) meta;
       (* Check that the borrow is somewhere - purely a sanity check *)
-      cassert (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta "The borrow should be somewhere";
+      sanity_check (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
       (* Update the context *)
       give_back_shared config meta l ctx
   | Abstract (AMutBorrow (l', av)) ->
       (* Sanity check *)
-      cassert (l' = l) meta "TODO: error message";
+      sanity_check (l' = l) meta;
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      cassert (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta "The corresponding loan should be somewhere";
+      sanity_check (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
       (* Convert the avalue to a (fresh symbolic) value.
 
          Rem.: we shouldn't do this here. We should do this in a function
@@ -788,14 +788,14 @@ let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id) (bc : g_bor
         ctx
   | Abstract (ASharedBorrow l') ->
       (* Sanity check *)
-      cassert (l' = l) meta "TODO: error message";
+      sanity_check (l' = l) meta;
       (* Check that the borrow is somewhere - purely a sanity check *)
-      cassert (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta "The borrow should be somewhere";
+      sanity_check (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
       (* Update the context *)
       give_back_shared config meta l ctx
   | Abstract (AProjSharedBorrow asb) ->
       (* Sanity check *)
-      cassert (borrow_in_asb l asb) meta "TODO: error message";
+      sanity_check (borrow_in_asb l asb) meta;
       (* Update the context *)
       give_back_shared config meta l ctx
   | Abstract
@@ -931,7 +931,7 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta) (chain : borrow_or_a
       (* Sanity check: the borrowed value shouldn't contain loans *)
       (match bc with
       | Concrete (VMutBorrow (_, bv)) ->
-          cassert (Option.is_none (get_first_loan_in_value bv)) meta "Borrowed value shouldn't contain loans"
+          sanity_check (Option.is_none (get_first_loan_in_value bv)) meta
       | _ -> ());
       (* Give back the value *)
       let ctx = give_back config meta l bc ctx in
@@ -1402,9 +1402,9 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta) (chain : borrow
          * replace it with... Maybe we should introduce an ABottomProj? *)
         let ctx = update_aproj_borrows meta abs_id sv AIgnoredProjBorrows ctx in
         (* Sanity check: no other occurrence of an intersecting projector of borrows *)
-        cassert (
+        sanity_check (
           Option.is_none
-            (lookup_intersecting_aproj_borrows_opt meta explore_shared regions sv ctx)) meta "no other occurrence of an intersecting projector of borrows";
+            (lookup_intersecting_aproj_borrows_opt meta explore_shared regions sv ctx)) meta ;
         (* End the projector of loans *)
         let ctx = update_aproj_loans_to_ended meta abs_id sv ctx in
         (* Sanity check *)
@@ -1483,7 +1483,7 @@ let promote_shared_loan_to_mut_loan (meta : Meta.meta) (l : BorrowId.id)
       (* We need to check that there aren't any loans in the value:
          we should have gotten rid of those already, but it is better
          to do a sanity check. *)
-      cassert (not (loans_in_value sv)) meta "There shouldn't be any loans in the value";
+      sanity_check (not (loans_in_value sv)) meta;
       (* Check there isn't {!Bottom} (this is actually an invariant *)
       cassert (not (bottom_in_value ctx.ended_regions sv)) meta "There shouldn't be a !Bottom";
       (* Check there aren't reserved borrows *)
@@ -1564,9 +1564,9 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta) (l : Bo
             (lazy
               ("activate_reserved_mut_borrow: resulting value:\n"
               ^ typed_value_to_string meta ctx sv));
-          cassert (not (loans_in_value sv)) meta "TODO: error message";
-          cassert (not (bottom_in_value ctx.ended_regions sv)) meta "TODO: error message";
-          cassert (not (reserved_in_value sv)) meta "TODO: error message";
+          sanity_check (not (loans_in_value sv)) meta;
+          sanity_check (not (bottom_in_value ctx.ended_regions sv)) meta;
+          sanity_check (not (reserved_in_value sv)) meta;
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = BorrowId.Set.remove l bids in
@@ -1664,7 +1664,7 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
             list_avalues false push_fail child_av)
     | ABorrow bc -> (
         (* Sanity check - rem.: may be redundant with [push_fail] *)
-        cassert allow_borrows meta "TODO: error message";
+        sanity_check allow_borrows meta;
         (* Explore the borrow content *)
         match bc with
         | AMutBorrow (bid, child_av) ->
@@ -1854,7 +1854,7 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind) (can_
         let _, ref_ty, kind = ty_as_ref ty in
         cassert (ty_no_regions ref_ty) meta "TODO: error message";
         (* Sanity check *)
-        cassert allow_borrows meta "TODO: error message";
+        sanity_check allow_borrows meta;
         (* Convert the borrow content *)
         match bc with
         | VSharedBorrow bid ->
@@ -2068,7 +2068,7 @@ let compute_merge_abstraction_info (meta : Meta.meta) (ctx : eval_ctx) (abs : ab
 
       method! visit_symbolic_value _ sv =
         (* Sanity check: no borrows *)
-        cassert (not (symbolic_value_has_borrows ctx sv)) meta "TODO: error message" 
+        sanity_check (not (symbolic_value_has_borrows ctx sv)) meta 
     end
   in
 
@@ -2173,8 +2173,8 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind) (can_end
   (* Sanity check: there is no loan/borrows which appears in both abstractions,
      unless we allow to merge duplicates *)
   if merge_funs = None then (
-    cassert (BorrowId.Set.disjoint borrows0 borrows1) meta "TODO: error message";
-    cassert (BorrowId.Set.disjoint loans0 loans1)) meta "TODO: error message";
+    sanity_check (BorrowId.Set.disjoint borrows0 borrows1) meta;
+    sanity_check (BorrowId.Set.disjoint loans0 loans1)) meta;
 
   (* Merge.
      There are several cases:
@@ -2476,7 +2476,7 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind) (can_end
   in
 
   (* Sanity check *)
-  if !Config.sanity_checks then cassert (abs_is_destructured meta true ctx abs) meta "TODO: error message";
+  if !Config.sanity_checks then sanity_check (abs_is_destructured meta true ctx abs) meta;
   (* Return *)
   abs
 

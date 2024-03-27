@@ -277,7 +277,7 @@ let lets_require_wrap_in_do (meta : Meta.meta) (lets : (bool * typed_pattern * t
   | HOL4 ->
       (* HOL4 is similar to HOL4, but we add a sanity check *)
       let wrap_in_do = List.exists (fun (m, _, _) -> m) lets in
-      if wrap_in_do then cassert (List.for_all (fun (m, _, _) -> m) lets) meta "TODO: error message";
+      if wrap_in_do then sanity_check (List.for_all (fun (m, _, _) -> m) lets) meta;
       wrap_in_do
   | FStar | Coq -> false
 
@@ -478,7 +478,7 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.for
           F.pp_print_string fmt fun_name);
 
       (* Sanity check: HOL4 doesn't support const generics *)
-      cassert (generics.const_generics = [] || !backend <> HOL4) meta "TODO: error message";
+      sanity_check (generics.const_generics = [] || !backend <> HOL4) meta;
       (* Print the generics.
 
          We might need to filter some of the type arguments, if the type

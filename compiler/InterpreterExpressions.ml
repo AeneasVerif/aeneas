@@ -137,7 +137,7 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config) 
       | TAdt (TAssumed TBox, _) ->
           craise meta "Can't copy an assumed value other than Option"
       | TAdt (TAdtId _, _) as ty ->
-          cassert (allow_adt_copy || ty_is_primitively_copyable ty) meta "TODO: error message"
+        sanity_check (allow_adt_copy || ty_is_primitively_copyable ty) meta
       | TAdt (TTuple, _) -> () (* Ok *)
       | TAdt
           ( TAssumed (TSlice | TArray),
@@ -147,7 +147,7 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config) 
               const_generics = [];
               trait_refs = [];
             } ) ->
-          cassert (ty_is_primitively_copyable ty) meta "TODO: error message"
+            sanity_check (ty_is_primitively_copyable ty) meta
       | _ -> craise meta "Unreachable");
       let ctx, fields =
         List.fold_left_map
@@ -330,11 +330,11 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta) (op : operan
       let copy cf v : m_fun =
        fun ctx ->
         (* Sanity checks *)
-        cassert (not (bottom_in_value ctx.ended_regions v)) meta "TODO: error message";
-        cassert (
+        sanity_check (not (bottom_in_value ctx.ended_regions v)) meta;
+        sanity_check (
           Option.is_none
             (find_first_primitively_copyable_sv_with_borrows
-               ctx.type_ctx.type_infos v)) meta "TODO: error message";
+               ctx.type_ctx.type_infos v)) meta;
         (* Actually perform the copy *)
         let allow_adt_copy = false in
         let ctx, v = copy_value meta allow_adt_copy config ctx v in
@@ -737,9 +737,9 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta) (aggregate_kind :
         | TAdtId def_id ->
             (* Sanity checks *)
             let type_decl = ctx_lookup_type_decl ctx def_id in
-            cassert (
+            sanity_check (
               List.length type_decl.generics.regions
-              = List.length generics.regions) meta "TODO: error message";
+              = List.length generics.regions) meta;
             let expected_field_types =
               AssociatedTypes.ctx_adt_get_inst_norm_field_etypes meta ctx def_id
                 opt_variant_id generics
@@ -758,10 +758,10 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta) (aggregate_kind :
         | TAssumed _ -> craise meta "Unreachable")
     | AggregatedArray (ety, cg) -> (
         (* Sanity check: all the values have the proper type *)
-        cassert (List.for_all (fun (v : typed_value) -> v.ty = ety) values) meta "All the values do not have the proper type";
+        sanity_check (List.for_all (fun (v : typed_value) -> v.ty = ety) values) meta;
         (* Sanity check: the number of values is consistent with the length *)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
-        cassert (len = Z.of_int (List.length values)) meta "The number of values is not consistent with the length";
+        sanity_check (len = Z.of_int (List.length values)) meta;
         let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
         let ty = TAdt (TAssumed TArray, generics) in
         (* In order to generate a better AST, we introduce a symbolic

@@ -79,7 +79,7 @@ let mk_place_from_var_id (var_id : VarId.id) : place =
 (** Create a fresh symbolic value *)
 let mk_fresh_symbolic_value (meta : Meta.meta)  (ty : ty) : symbolic_value =
   (* Sanity check *)
-  cassert (ty_is_rty ty) meta "TODO: error message";
+  sanity_check (ty_is_rty ty) meta;
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue

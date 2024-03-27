@@ -557,7 +557,7 @@ let expand_symbolic_value_no_branching (config : config) (meta : Meta.meta) (sv 
             ^ "\n\n- original context:\n" ^ eval_ctx_to_string meta ctx0
             ^ "\n\n- new context:\n" ^ eval_ctx_to_string meta ctx ^ "\n"));
         (* Sanity check: the symbolic value has disappeared *)
-        cassert (not (symbolic_value_id_in_ctx original_sv.sv_id ctx)) meta "TODO: error message")
+        sanity_check (not (symbolic_value_id_in_ctx original_sv.sv_id ctx)) meta)
   in
   (* Continue *)
   cc cf ctx
@@ -594,7 +594,7 @@ let expand_symbolic_int (config : config) (meta : Meta.meta) (sv : symbolic_valu
     (tgts : (scalar_value * st_cm_fun) list) (otherwise : st_cm_fun)
     (cf_after_join : st_m_fun) : m_fun =
   (* Sanity check *)
-  cassert (sv.sv_ty = TLiteral (TInteger int_type)) meta "TODO: error message";
+  sanity_check (sv.sv_ty = TLiteral (TInteger int_type)) meta;
   (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is

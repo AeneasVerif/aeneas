@@ -2019,7 +2019,7 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
     | Some _ ->
         (* Backward function *)
         (* Sanity check *)
-        cassert (opt_v = None) ctx.fun_decl.meta "TODO: Error message";
+        sanity_check (opt_v = None) ctx.fun_decl.meta;
         (* Group the variables in which we stored the values we need to give back.
            See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
         let backward_outputs = Option.get ctx.backward_outputs in
@@ -2429,7 +2429,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   (* TODO: normalize the types *)
   if !Config.type_check_pure_code then
     List.iter
-      (fun (var, v) -> cassert ((var : var).ty = (v : texpression).ty) ctx.fun_decl.meta "TODO: error message")
+      (fun (var, v) -> sanity_check ((var : var).ty = (v : texpression).ty) ctx.fun_decl.meta)
       variables_values;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2584,7 +2584,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
           ^ pure_ty_to_string ctx given_back.ty
           ^ "\n- sig input ty: "
           ^ pure_ty_to_string ctx input.ty));
-      cassert (given_back.ty = input.ty) ctx.fun_decl.meta "TODO: error message")
+      sanity_check (given_back.ty = input.ty) ctx.fun_decl.meta)
     given_back_inputs;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2799,7 +2799,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let branch = List.hd branches in
           let ty = branch.branch.ty in
           (* Sanity check *)
-          cassert (List.for_all (fun br -> br.branch.ty = ty) branches) ctx.fun_decl.meta "There should be at least one branch";
+          sanity_check (List.for_all (fun br -> br.branch.ty = ty) branches) ctx.fun_decl.meta;
           (* Return *)
           { e; ty })
   | ExpandBool (true_e, false_e) ->
@@ -3377,11 +3377,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   in
 
   (* Sanity check: all the non-fresh symbolic values are in the context *)
-  cassert (
+  sanity_check (
     List.for_all
       (fun (sv : V.symbolic_value) ->
         V.SymbolicValueId.Map.mem sv.sv_id ctx.sv_to_var)
-      loop.input_svalues) ctx.fun_decl.meta "All the non-fresh symbolic values should be in the context";
+      loop.input_svalues) ctx.fun_decl.meta;
 
   (* Translate the loop inputs *)
   let inputs =
@@ -3736,10 +3736,10 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
                 (List.map (pure_ty_to_string ctx) signature.inputs)));
         (* TODO: we need to normalize the types *)
         if !Config.type_check_pure_code then
-          cassert (
+          sanity_check (
             List.for_all
               (fun (var, ty) -> (var : var).ty = ty)
-              (List.combine inputs signature.inputs)) def.meta "TODO: error message";
+              (List.combine inputs signature.inputs)) def.meta;
         Some { inputs; inputs_lvs; body }
   in
 

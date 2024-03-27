@@ -878,7 +878,7 @@ let extract_type_decl_variant (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F
     List.fold_left (fun ctx (fid, f) -> print_field fid f ctx) ctx fields
   in
   (* Sanity check: HOL4 doesn't support const generics *)
-  cassert (cg_params = [] || !backend <> HOL4) meta "TODO: Error message";
+  sanity_check (cg_params = [] || !backend <> HOL4) meta;
   (* Print the final type *)
   if !backend <> HOL4 then (
     F.pp_print_space fmt ();
@@ -1324,7 +1324,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
     (extract_body : bool) : unit =
   (* Sanity check *)
-  cassert (extract_body || !backend <> HOL4) def.meta "TODO: error message";
+  sanity_check (extract_body || !backend <> HOL4) def.meta;
   let is_tuple_struct =
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
@@ -1489,7 +1489,7 @@ let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.meta def.def_id ctx in
   (* Sanity check *)
-  cassert (def.generics = empty_generic_params) def.meta "TODO: error message";
+  sanity_check (def.generics = empty_generic_params) def.meta;
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ("Type " ^ def_name ^ " = “: unit”");

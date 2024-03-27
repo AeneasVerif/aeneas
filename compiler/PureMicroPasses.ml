@@ -1240,10 +1240,10 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     if List.for_all (fun (_, y) -> y = x) end_args then (
                       (* We can substitute *)
                       (* Sanity check: all types correct *)
-                      cassert (
+                      sanity_check (
                         List.for_all
                           (fun (generics1, _) -> generics1 = generics)
-                          args) def.meta "All types are not correct";
+                          args) def.meta;
                       { e with e = Var x })
                     else super#visit_texpression env e
                   else super#visit_texpression env e

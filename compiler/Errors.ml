@@ -40,3 +40,9 @@ let cassert_opt_meta (b : bool) (meta : Meta.meta option) (msg : string) =
     if b then 
       let () = save_error (None) msg in  
       raise (CFailure msg)
+
+let sanity_check b meta = cassert b meta "Internal error, please file an issue"
+let sanity_check_opt_meta b meta = cassert_opt_meta b meta "Internal error, please file an issue"
+
+let exec_raise = craise
+let exec_assert = cassert

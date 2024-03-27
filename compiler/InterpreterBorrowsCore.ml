@@ -100,7 +100,7 @@ let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool
     =
   let compare = compare_rtys meta default combine compare_regions in
   (* Sanity check - TODO: don't do this at every recursive call *)
-  cassert (ty_is_rty ty1 && ty_is_rty ty2) meta "ty1 or ty2 are not rty TODO: Error message";
+  sanity_check (ty_is_rty ty1 && ty_is_rty ty2) meta;
   (* Normalize the associated types *)
   match (ty1, ty2) with
   | TLiteral lit1, TLiteral lit2 ->
@@ -144,7 +144,7 @@ let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool
       combine params_b tys_b
   | TRef (r1, ty1, kind1), TRef (r2, ty2, kind2) ->
       (* Sanity check *)
-      cassert (kind1 = kind2) meta "kind1 and kind2 are not equal TODO: Error message";
+      sanity_check (kind1 = kind2) meta;
       (* Explanation for the case where we check if projections intersect:
        * the projections intersect if the borrows intersect or their contents
        * intersect. *)
@@ -795,7 +795,7 @@ let update_intersecting_aproj_borrows (meta : Meta.meta) (can_update_shared : bo
   (* Small helpers for sanity checks *)
   let shared = ref None in
   let add_shared () =
-    match !shared with None -> shared := Some true | Some b -> cassert b meta "TODO :  error message "
+    match !shared with None -> shared := Some true | Some b -> sanity_check b meta
   in
   let set_non_shared () =
     match !shared with
@@ -821,7 +821,7 @@ let update_intersecting_aproj_borrows (meta : Meta.meta) (can_update_shared : bo
 
       method! visit_abstract_shared_borrows abs asb =
         (* Sanity check *)
-        (match !shared with Some b -> cassert b meta "TODO :  error message " | _ -> ());
+        (match !shared with Some b -> sanity_check  b meta | _ -> ());
         (* Explore *)
         if can_update_shared then
           let abs = Option.get abs in
@@ -1063,7 +1063,7 @@ let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symb
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Sanity check *)
-  cassert !found meta "TODO :  error message ";
+  sanity_check !found meta;
   (* Return *)
   ctx
 
@@ -1112,7 +1112,7 @@ let update_aproj_borrows (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : sy
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Sanity check *)
-  cassert !found meta "TODO :  error message ";
+  sanity_check !found meta;
   (* Return *)
   ctx
 

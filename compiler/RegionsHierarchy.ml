@@ -107,8 +107,8 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option) (type_decls : ty
 
   let add_edge ~(short : region) ~(long : region) =
     (* Sanity checks *)
-    cassert_opt_meta (short <> RErased) meta "TODO: Error message";
-    cassert_opt_meta (long <> RErased) meta "TODO: Error message";
+    sanity_check_opt_meta (short <> RErased) meta;
+    sanity_check_opt_meta (long <> RErased) meta;
     (* Ignore the locally bound regions (at the level of arrow types for instance *)
     match (short, long) with
     | RBVar _, _ | _, RBVar _ -> ()

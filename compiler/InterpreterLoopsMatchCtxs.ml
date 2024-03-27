@@ -43,8 +43,8 @@ let compute_abs_borrows_loans_maps (meta : Meta.meta) (no_duplicates : bool)
          match Id0.Map.find_opt id0 !map with
          | None -> ()
          | Some set ->
-             cassert (
-               (not check_not_already_registered) || not (Id1.Set.mem id1 set)) meta "TODO: error message");
+            sanity_check (
+               (not check_not_already_registered) || not (Id1.Set.mem id1 set)) meta);
       (* Update the mapping *)
       map :=
         Id0.Map.update id0
@@ -53,10 +53,10 @@ let compute_abs_borrows_loans_maps (meta : Meta.meta) (no_duplicates : bool)
             | None -> Some (Id1.Set.singleton id1)
             | Some ids ->
                 (* Sanity check *)
-                cassert (not check_singleton_sets) meta "TODO: error message";
-                cassert (
+                sanity_check (not check_singleton_sets) meta;
+                sanity_check (
                   (not check_not_already_registered)
-                  || not (Id1.Set.mem id1 ids)) meta "TODO: error message";
+                  || not (Id1.Set.mem id1 ids)) meta;
                 (* Update *)
                 Some (Id1.Set.add id1 ids))
           !map
@@ -691,7 +691,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let id1 = sv1.sv_id in
     if id0 = id1 then (
       (* Sanity check *)
-      cassert (sv0 = sv1) meta "TODO: error message";
+      sanity_check (sv0 = sv1) meta;
       (* Return *)
       sv0)
     else (

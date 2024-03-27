@@ -354,7 +354,7 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
         match ret_value with
         | None -> ()
         | Some ret_value ->
-            cassert (not (bottom_in_value ctx.ended_regions ret_value)) meta "TODO: Error message" )
+          sanity_check (not (bottom_in_value ctx.ended_regions ret_value)) meta)
   in
 
   (* Drop the outer *loans* we find in the local variables *)
@@ -504,8 +504,7 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta) (fi
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
-      cassert (generics.const_generics = []) meta "The const generic vars environment
-    in concrete mode is not fully handled yet";
+         sanity_check (generics.const_generics = []) meta;
       (* There are two cases (and this is extremely annoying):
          - the function is not box_free
          - the function is box_free
@@ -1111,7 +1110,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) : st_cm_f
               (* Evaluate the branch *)
               let cf_eval_branch cf =
                 (* Sanity check *)
-                cassert (sv.int_ty = int_ty) meta "TODO: Error message";
+                sanity_check (sv.int_ty = int_ty) meta;
                 (* Find the branch *)
                 match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
                 | None -> eval_statement config otherwise cf
@@ -1236,7 +1235,7 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
-      cassert (generics.const_generics = []) meta "The const generic vars environment in concrete mode is not fully handled yet";
+         sanity_check (generics.const_generics = []) meta;
       fun cf ctx ->
         (* Retrieve the (correctly instantiated) body *)
         let def = ctx_lookup_fun_decl ctx fid in
@@ -1323,7 +1322,7 @@ and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
     eval_transparent_function_call_symbolic_inst meta call ctx
   in
   (* Sanity check *)
-  cassert (List.length call.args = List.length def.signature.inputs) def.meta "TODO: Error message";
+  sanity_check (List.length call.args = List.length def.signature.inputs) def.meta;
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.meta func def.signature
     regions_hierarchy inst_sg generics trait_method_generics call.args call.dest
@@ -1495,10 +1494,10 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta) (fi
   let dest = call.dest in
   (* Sanity check: make sure the type parameters don't contain regions -
    * this is a current limitation of our synthesis *)
-  cassert (
+   sanity_check (
     List.for_all
       (fun ty -> not (ty_has_borrows ctx.type_ctx.type_infos ty))
-      generics.types) meta "The parameters should not contain regions TODO: error message";
+      generics.types) meta;
 
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free

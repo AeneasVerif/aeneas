@@ -1904,7 +1904,7 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Sanity check: the function should not be a global body - those are handled
    * separately *)
-  cassert (not def.is_global_decl_body) def.meta "The function should not be a global body - those are handled separately";
+  sanity_check (not def.is_global_decl_body) def.meta;
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
   (* Add the function name *)

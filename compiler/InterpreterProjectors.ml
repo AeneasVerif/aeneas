@@ -18,7 +18,7 @@ let rec apply_proj_borrows_on_shared_borrow (meta : Meta.meta) (ctx : eval_ctx)
   (* Sanity check - TODO: move those elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
-  cassert (ty_is_rty ty && ety = v.ty) meta "TODO: error message";
+  sanity_check (ty_is_rty ty && ety = v.ty) meta;
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then []
   else
@@ -95,7 +95,7 @@ let rec apply_proj_borrows (meta : Meta.meta) (check_symbolic_no_ended : bool) (
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
-  cassert (ty_is_rty ty && ety = v.ty) meta "TODO: error message";
+  sanity_check (ty_is_rty ty && ety = v.ty) meta;
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then { value = AIgnored; ty }
   else
@@ -261,7 +261,7 @@ let apply_proj_loans_on_symbolic_expansion (meta : Meta.meta) (regions : RegionI
     (original_sv_ty : rty) : typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
-  cassert (ty_has_regions_in_set regions original_sv_ty) meta "TODO: error message";
+  sanity_check (ty_has_regions_in_set regions original_sv_ty) meta;
   (* Match *)
   let (value, ty) : avalue * ty =
     match (see, original_sv_ty) with
@@ -276,7 +276,7 @@ let apply_proj_loans_on_symbolic_expansion (meta : Meta.meta) (regions : RegionI
         (AAdt { variant_id; field_values }, original_sv_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
         (* Sanity check *)
-        cassert (spc.sv_ty = ref_ty) meta "TODO: error message";
+        sanity_check (spc.sv_ty = ref_ty) meta;
         (* Apply the projector to the borrowed value *)
         let child_av = mk_aproj_loans_value_from_symbolic_value regions spc in
         (* Check if the region is in the set of projected regions (note that
@@ -294,7 +294,7 @@ let apply_proj_loans_on_symbolic_expansion (meta : Meta.meta) (regions : RegionI
           (ALoan (AIgnoredMutLoan (opt_bid, child_av)), ref_ty)
     | SeSharedRef (bids, spc), TRef (r, ref_ty, RShared) ->
         (* Sanity check *)
-        cassert (spc.sv_ty = ref_ty) meta "TODO: error message";
+        sanity_check (spc.sv_ty = ref_ty) meta;
         (* Apply the projector to the borrowed value *)
         let child_av = mk_aproj_loans_value_from_symbolic_value regions spc in
         (* Check if the region is in the set of projected regions (note that

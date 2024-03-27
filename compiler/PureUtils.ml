@@ -426,14 +426,14 @@ let iter_switch_body_branches (f : texpression -> unit) (sb : switch_body) :
 let mk_switch (meta : Meta.meta) (scrut : texpression) (sb : switch_body) : texpression =
   (* Sanity check: the scrutinee has the proper type *)
   (match sb with
-  | If (_, _) -> cassert (scrut.ty = TLiteral TBool) meta "The scrutinee does not have the proper type"
+  | If (_, _) -> sanity_check (scrut.ty = TLiteral TBool) meta
   | Match branches ->
       List.iter
-        (fun (b : match_branch) -> cassert (b.pat.ty = scrut.ty) meta "The scrutinee does not have the proper type")
+        (fun (b : match_branch) -> sanity_check (b.pat.ty = scrut.ty) meta)
         branches);
   (* Sanity check: all the branches have the same type *)
   let ty = get_switch_body_ty sb in
-  iter_switch_body_branches (fun e -> cassert (e.ty = ty) meta "All branches should have the same type") sb;
+  iter_switch_body_branches (fun e -> sanity_check (e.ty = ty) meta) sb;
   (* Put together *)
   let e = Switch (scrut, sb) in
   { e; ty }
