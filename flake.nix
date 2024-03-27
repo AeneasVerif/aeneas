@@ -152,6 +152,15 @@
           inherit aeneas;
           default = aeneas;
         };
+        devShells.default = pkgs.mkShell {
+          packages = [
+            pkgs.ocamlPackages.odoc
+          ];
+
+          inputsFrom = [
+            self.packages.${system}.aeneas
+          ];
+        };
         checks = {
           inherit aeneas aeneas-tests
                   aeneas-verify-fstar
