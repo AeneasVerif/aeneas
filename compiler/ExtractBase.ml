@@ -1273,12 +1273,20 @@ let ctx_prepare_name (meta : Meta.meta) (ctx : extraction_ctx) (name : llbc_name
       craise
         meta
            ("Unexpected name shape: "
-           ^ TranslateCore.name_to_string ctx.trans_ctx name))
+           ^ TranslateCore.name_to_string ctx.trans_ctx name)
+
+(** Helper *)
+let ctx_compute_simple_name (meta : Meta.meta) (ctx : extraction_ctx) (name : llbc_name) :
+    string list =
+  (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
+  let name = ctx_prepare_name meta ctx name in
+  name_to_simple_name ctx.trans_ctx name
 
 (** Helper *)
 let ctx_compute_simple_type_name = ctx_compute_simple_name
 
 (** Helper *)
+
 let ctx_compute_type_name_no_suffix (meta : Meta.meta) (ctx : extraction_ctx) (name : llbc_name) :
     string =
   flatten_name (ctx_compute_simple_type_name meta ctx name)
@@ -1369,7 +1377,7 @@ let ctx_compute_global_name (meta : Meta.meta) (ctx : extraction_ctx) (name : ll
   | Coq | FStar | HOL4 ->
       let parts = List.map to_snake_case (ctx_compute_simple_name meta ctx name) in
       String.concat "_" parts
-  | Lean -> flatten_name (ctx_compute_simple_name ctx name)
+  | Lean -> flatten_name (ctx_compute_simple_name meta ctx name)
 
 (** Helper function: generate a suffix for a function name, i.e., generates
     a suffix like "_loop", "loop1", etc. to append to a function name.
@@ -1386,7 +1394,7 @@ let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option) :
 (** A helper function: generates a function suffix.
     TODO: move all those helpers.
 *)
-let default_fun_suffix (meta : Meta.meta) (num_loops : int) (loop_id : LoopId.id option) : string =
+let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
   (* We only generate a suffix for the functions we generate from the loops *)
   default_fun_loop_suffix num_loops loop_id
 
@@ -1404,7 +1412,7 @@ let ctx_compute_fun_name (meta : Meta.meta) (ctx : extraction_ctx) (fname : llbc
     (num_loops : int) (loop_id : LoopId.id option) : string =
   let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
   (* Compute the suffix *)
-  let suffix = default_fun_suffix meta num_loops loop_id in
+  let suffix = default_fun_suffix num_loops loop_id in
   (* Concatenate *)
   fname ^ suffix
 
@@ -1423,7 +1431,7 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
   let name =
     let params = trait_impl.llbc_generics in
     let args = trait_impl.llbc_impl_trait.decl_generics in
-    let name = ctx_prepare_name ctx trait_decl.llbc_name in
+    let name = ctx_prepare_name trait_impl.meta ctx trait_decl.llbc_name in
     trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
   in
   let name = flatten_name name in
@@ -1879,7 +1887,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       ctx_add def.meta decl name ctx
   | None ->
       (* Not the case: "standard" registration *)
-      let name = ctx_compute_global_name ctx def.name in
+      let name = ctx_compute_global_name def.meta ctx def.name in
       let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
       (* If this is a provided constant (i.e., the default value for a constant
          in a trait declaration) we add a suffix. Otherwise there is a clash
@@ -1888,8 +1896,8 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       let suffix =
         match def.kind with TraitItemProvided _ -> "_default" | _ -> ""
       in
-      let ctx = ctx_add decl (name ^ suffix) ctx in
-      let ctx = ctx_add body (name ^ suffix ^ "_body") ctx in
+      let ctx = ctx_add def.meta decl (name ^ suffix) ctx in
+      let ctx = ctx_add def.meta body (name ^ suffix ^ "_body") ctx in
       ctx
 
 let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =

@@ -1140,7 +1140,7 @@ let simplify_let_then_return _ctx (def : fun_decl) =
               (* The first let-binding is monadic *)
               match opt_destruct_ret next_e with
               | Some e ->
-                  if match_pattern_and_expr def.meta lv e then rv.e else not_simpl_e
+                  if match_pattern_and_expr lv e then rv.e else not_simpl_e
               | None -> not_simpl_e
             else
               (* The first let-binding is not monadic *)

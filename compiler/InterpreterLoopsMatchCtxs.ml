@@ -459,8 +459,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Lookup the shared values and match them - we do this mostly
        to make sure we end loans which might appear on one side
        and not on the other. *)
-    let sv0 = lookup_shared_value ctx0 bid0 in
-    let sv1 = lookup_shared_value ctx1 bid1 in
+    let sv0 = lookup_shared_value meta ctx0 bid0 in
+    let sv1 = lookup_shared_value meta ctx1 bid1 in
     let sv = match_rec sv0 sv1 in
     if bid0 = bid1 then bid0
     else
@@ -1544,7 +1544,7 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta) (loop_id 
   (* Apply the reorganization *)
   cf_reorganize_join_tgt cf tgt_ctx
 
-let match_ctx_with_target (config : config) (loop_id : LoopId.id)
+let match_ctx_with_target (config : config) (meta : Meta.meta) (loop_id : LoopId.id)
     (is_loop_entry : bool) (fp_bl_maps : borrow_loan_corresp)
     (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
     (src_ctx : eval_ctx) : st_cm_fun =
@@ -1562,7 +1562,7 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
      were introduced during the loop iterations)
   *)
   let cf_reorganize_join_tgt =
-    prepare_match_ctx_with_target config loop_id fixed_ids src_ctx
+    prepare_match_ctx_with_target config meta loop_id fixed_ids src_ctx
   in
 
   (* Introduce the "identity" abstractions for the loop re-entry.

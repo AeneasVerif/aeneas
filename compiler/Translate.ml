@@ -447,9 +447,8 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
   let trans = FunDeclId.Map.find global.body ctx.trans_funs in
-  sanity_check (trans.fwd.loops = []) global.meta;
-  sanity_check (trans.backs = []) global.meta;
-  let body = trans.fwd.f in
+  sanity_check (trans.loops = []) global.meta;
+  let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
   (* Check if we extract the global *)

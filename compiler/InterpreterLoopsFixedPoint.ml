@@ -23,7 +23,7 @@ exception FoundAbsId of AbstractionId.id
    - end the borrows which appear in fresh anonymous values and don't contain loans
    - end the fresh region abstractions which can be ended (no loans)
 *)
-let rec end_useless_fresh_borrows_and_abs (config : config)
+let rec end_useless_fresh_borrows_and_abs (config : config) (meta : Meta.meta)
     (fixed_ids : ids_sets) : cm_fun =
  fun cf ctx ->
   let rec explore_env (env : env) : unit =
@@ -56,7 +56,7 @@ let rec end_useless_fresh_borrows_and_abs (config : config)
     | EAbs abs :: env when not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids)
       -> (
         (* Check if it is possible to end the abstraction: if yes, raise an exception *)
-        let opt_loan = get_first_non_ignored_aloan_in_abstraction abs in
+        let opt_loan = get_first_non_ignored_aloan_in_abstraction meta abs in
         match opt_loan with
         | None ->
             (* No remaining loans: we can end the abstraction *)
@@ -66,7 +66,7 @@ let rec end_useless_fresh_borrows_and_abs (config : config)
             explore_env env)
     | _ :: env -> explore_env env
   in
-  let rec_call = end_useless_fresh_borrows_and_abs config fixed_ids in
+  let rec_call = end_useless_fresh_borrows_and_abs config meta fixed_ids in
   try
     (* Explore the environment *)
     explore_env ctx.env;
@@ -74,10 +74,10 @@ let rec end_useless_fresh_borrows_and_abs (config : config)
     cf ctx
   with
   | FoundAbsId abs_id ->
-      let cc = end_abstraction config abs_id in
+      let cc = end_abstraction config meta abs_id in
       comp cc rec_call cf ctx
   | FoundBorrowId bid ->
-      let cc = end_borrow config bid in
+      let cc = end_borrow config meta bid in
       comp cc rec_call cf ctx
 
 (* Explore the fresh anonymous values and replace all the values which are not
@@ -121,11 +121,11 @@ let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
    - also end the borrows which appear in fresh anonymous values and don't contain loans
    - end the fresh region abstractions which can be ended (no loans)
 *)
-let cleanup_fresh_values_and_abs (config : config) (fixed_ids : ids_sets) :
+let cleanup_fresh_values_and_abs (config : config) (meta : Meta.meta) (fixed_ids : ids_sets) :
     cm_fun =
  fun cf ctx ->
   comp
-    (end_useless_fresh_borrows_and_abs config fixed_ids)
+    (end_useless_fresh_borrows_and_abs config meta fixed_ids)
     (cleanup_fresh_values fixed_ids)
     cf ctx
 

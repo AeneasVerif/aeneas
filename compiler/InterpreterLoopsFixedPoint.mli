@@ -13,7 +13,7 @@ open InterpreterLoopsCore
    - config
    - fixed ids (the fixeds ids are the ids we consider as non-fresh)
  *)
-val cleanup_fresh_values_and_abs : config -> ids_sets -> Cps.cm_fun
+val cleanup_fresh_values_and_abs : config -> Meta.meta -> ids_sets -> Cps.cm_fun
 
 (** Prepare the shared loans in the abstractions by moving them to fresh
     abstractions.

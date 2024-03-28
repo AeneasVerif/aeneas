@@ -102,7 +102,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
           - src ctx (fixed-point ctx):\n" ^ eval_ctx_to_string fp_ctx
        ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
 
-    prepare_match_ctx_with_target config loop_id fixed_ids fp_ctx cf ctx
+    prepare_match_ctx_with_target config meta loop_id fixed_ids fp_ctx cf ctx
   in
 
   (* Actually match *)
@@ -264,7 +264,7 @@ let eval_loop (config : config) (meta : meta) (eval_loop_body : st_cm_fun) :
   | SymbolicMode ->
       (* Simplify the context by ending the unnecessary borrows/loans and getting
          rid of the useless symbolic values (which are in anonymous variables) *)
-      let cc = cleanup_fresh_values_and_abs config empty_ids_set in
+      let cc = cleanup_fresh_values_and_abs config meta empty_ids_set in
 
       (* We want to make sure the loop will *not* manipulate shared avalues
          containing themselves shared loans (i.e., nested shared loans in

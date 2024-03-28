@@ -151,7 +151,7 @@ val ctxs_are_equivalent : Meta.meta -> ids_sets -> eval_ctx -> eval_ctx -> bool
 
  *)
 val prepare_match_ctx_with_target :
-  config -> LoopId.id -> ids_sets -> eval_ctx -> cm_fun
+  config -> Meta.meta -> LoopId.id -> ids_sets -> eval_ctx -> cm_fun
 
 (** Match a context with a target context.
 

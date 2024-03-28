@@ -46,7 +46,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
           let f = def.f in
           let open ExtractBuiltin in
           let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
-          ctx_add (FunId (FromLlbc fun_id)) fun_info.extract_name ctx
+          ctx_add f.meta (FunId (FromLlbc fun_id)) fun_info.extract_name ctx
       | None ->
           (* Not builtin *)
           (* If this is a trait method implementation, we prefix the name with the
@@ -194,7 +194,7 @@ let extract_global (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Extract the global name *)
   F.pp_print_string fmt (ctx_get_global meta id ctx);
   (* Extract the generics *)
-  extract_generic_args ctx fmt TypeDeclId.Set.empty generics;
+  extract_generic_args meta ctx fmt TypeDeclId.Set.empty generics;
   if use_brackets then F.pp_print_string fmt ")";
   F.pp_close_box fmt ()
 
@@ -336,7 +336,7 @@ and extract_App (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (i
       | AdtCons adt_cons_id ->
           extract_adt_cons meta ctx fmt inside adt_cons_id qualif.generics args
       | Proj proj ->
-          extract_field_projector ctx fmt inside app proj qualif.generics args
+          extract_field_projector meta ctx fmt inside app proj qualif.generics args
       | TraitConst (trait_ref, const_name) ->
           extract_trait_ref meta ctx fmt TypeDeclId.Set.empty true trait_ref;
           let name =
@@ -1735,7 +1735,7 @@ let extract_global_decl_body_gen (meta : Meta.meta) (ctx : extraction_ctx) (fmt 
 
   (* Extract the generic parameters *)
   let space = ref true in
-  extract_generic_params ctx fmt TypeDeclId.Set.empty ~space:(Some space)
+  extract_generic_params meta ctx fmt TypeDeclId.Set.empty ~space:(Some space)
     generics type_params cg_params trait_clauses;
   if not !space then F.pp_print_space fmt ();
 
@@ -1838,6 +1838,8 @@ let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx) (f
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
+
+  let meta = body.meta in
   cassert body.is_global_decl_body body.meta "TODO: Error message";
   cassert (body.signature.inputs = []) body.meta "TODO: Error message";
 
@@ -1865,7 +1867,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   in
   (* Add the type parameters *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params global.llbc_name global.llbc_generics global.generics
+    ctx_add_generic_params meta global.llbc_name global.llbc_generics global.generics
       ctx
   in
   match body.body with
@@ -2657,7 +2659,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
            is a provided constant or not *)
         let print_params () =
           if provided_id = Some id then
-            extract_generic_args ctx fmt TypeDeclId.Set.empty
+            extract_generic_args impl.meta ctx fmt TypeDeclId.Set.empty
               impl.impl_trait.decl_generics
           else
             let all_params =

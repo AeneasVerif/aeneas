@@ -548,7 +548,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            cassert (trait_ref.generics = empty_generic_args) "TODO: Error message";
+            cassert (trait_ref.generics = empty_generic_args) meta "TODO: Error message";
             extract_trait_instance_id_with_dot meta ctx fmt no_params_tys false
               trait_ref.trait_id;
             F.pp_print_string fmt type_name

@@ -1325,7 +1325,7 @@ let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_sig) : ty =
   in
   mk_output_ty_from_effect_info effect_info output
 
-let translate_fun_sig_from_decomposed (meta : Meta.meta) (dsg : Pure.decomposed_fun_sig) : fun_sig
+let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
     =
   let generics = dsg.generics in
   let llbc_generics = dsg.llbc_generics in
@@ -2512,7 +2512,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
            ^ "\nfunc type: "
            ^ pure_ty_to_string ctx func.ty
            ^ "\n\nargs:\n" ^ String.concat "\n" args));
-      let call = mk_apps func args in
+      let call = mk_apps ctx.fun_decl.meta func args in
       mk_let effect_info.can_fail output call next_e
 
 and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
@@ -2671,7 +2671,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       match func with
       | None -> next_e
       | Some func ->
-          let call = mk_apps func args in
+          let call = mk_apps ctx.fun_decl.meta func args in
           (* Add meta-information - this is slightly hacky: we look at the
              values consumed by the abstraction (note that those come from
              *before* we applied the fixed-point context) and use them to
@@ -3682,7 +3682,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let llbc_name = def.name in
   let name = name_to_string ctx llbc_name in
   (* Translate the signature *)
-  let signature = translate_fun_sig_from_decomposed def.meta ctx.sg in
+  let signature = translate_fun_sig_from_decomposed ctx.sg in
   (* Translate the body, if there is *)
   let body =
     match body with
@@ -3915,9 +3915,9 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params llbc_generics in
-  let preds = translate_predicates preds in
-  let ty = translate_fwd_ty ctx.type_ctx.type_infos ty in
+  let generics = translate_generic_params decl.meta llbc_generics in
+  let preds = translate_predicates decl.meta preds in
+  let ty = translate_fwd_ty decl.meta ctx.type_ctx.type_infos ty in
   {
     meta;
     def_id;
