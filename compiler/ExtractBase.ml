@@ -237,7 +237,7 @@ module IdSet = Collections.MakeSet (IdOrderedType)
   *)
 type names_map = {
   id_to_name : string IdMap.t;
-  name_to_id : (id * Meta.meta option) StringMap.t;
+  name_to_id : id StringMap.t;
       (** The name to id map is used to look for name clashes, and generate nice
           debugging messages: if there is a name clash, it is useful to know
           precisely which identifiers are mapped to the same name...
@@ -253,8 +253,8 @@ let empty_names_map : names_map =
   }
 
 (** Small helper to report name collision *)
-let report_name_collision (id_to_string : id -> string)
-    ((id1, meta) : id * Meta.meta option) (id2 : id) (name : string) : unit =
+let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
+    (name : string) : unit =
   let id1 = "\n- " ^ id_to_string id1 in
   let id2 = "\n- " ^ id_to_string id2 in
   let err =
@@ -263,10 +263,9 @@ let report_name_collision (id_to_string : id -> string)
     ^ "\nYou may want to rename some of your definitions, or report an issue."
   in
   (* If we fail hard on errors, raise an exception *)
-  save_error meta err
+  save_error None err
 
-let names_map_get_id_from_name (name : string) (nm : names_map) :
-    (id * meta option) option =
+let names_map_get_id_from_name (name : string) (nm : names_map) : id option =
   StringMap.find_opt name nm.name_to_id
 
 let names_map_check_collision (id_to_string : id -> string) (id : id)
