@@ -136,7 +136,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     let _ ←
       tryTac
         (simpAt true []
-               [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+               [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
     -- TODO: not sure this is the best way of checking it
@@ -397,33 +397,33 @@ namespace Test
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
-    ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep _ as ⟨ z, h1 .. ⟩
     simp [*, h1]
 
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
-    ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep h with Scalar.add_spec as ⟨ z ⟩
     simp [*, h]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
-    ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     -- This spec theorem is suboptimal, but it is good to check that it works
     progress with Scalar.add_spec as ⟨ z, h1 .. ⟩
     simp [*, h1]
  
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
-    ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress with U32.add_spec as ⟨ z, h1 .. ⟩
     simp [*, h1]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
-    ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep _ as ⟨ z, h1 .. ⟩
     simp [*, h1]
 
@@ -431,7 +431,7 @@ namespace Test
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    ∃ nv, v.update_usize i x = ret nv ∧
+    ∃ nv, v.update_usize i x = ok nv ∧
     nv.val = v.val.update i.val x := by
     progress
     simp [*]
@@ -443,8 +443,8 @@ namespace Test
       (do
          (do
             let _ ← v.update_usize i x
-            .ret ())
-         .ret ()) = ret nv
+            .ok ())
+         .ok ()) = ok nv
       := by
     progress
     simp [*]
@@ -454,8 +454,8 @@ namespace Test
      not a constant. We also test the case where the function under scrutinee
      is not a constant. -/
   example {x : U32}
-    (f : U32 → Result Unit) (h : ∀ x, f x = .ret ()) :
-    f x = ret () := by
+    (f : U32 → Result Unit) (h : ∀ x, f x = .ok ()) :
+    f x = ok () := by
     progress
 
 end Test

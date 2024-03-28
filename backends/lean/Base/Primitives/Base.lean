@@ -41,7 +41,7 @@ deriving Repr, BEq
 open Error
 
 inductive Result (α : Type u) where
-  | ret (v: α): Result α
+  | ok (v: α): Result α
   | fail (e: Error): Result α
   | div
 deriving Repr, BEq
@@ -56,29 +56,29 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 
 /- HELPERS -/
 
-def ret? {α: Type u} (r: Result α): Bool :=
+def ok? {α: Type u} (r: Result α): Bool :=
   match r with
-  | ret _ => true
+  | ok _ => true
   | fail _ | div => false
 
 def div? {α: Type u} (r: Result α): Bool :=
   match r with
   | div => true
-  | ret _ | fail _ => false
+  | ok _ | fail _ => false
 
 def massert (b:Bool) : Result Unit :=
-  if b then ret () else fail assertionFailure
+  if b then ok () else fail assertionFailure
 
-def eval_global {α: Type u} (x: Result α) (_: ret? x := by decide): α :=
+def eval_global {α: Type u} (x: Result α) (_: ok? x := by decide): α :=
   match x with
   | fail _ | div => by contradiction
-  | ret x => x
+  | ok x => x
 
 /- DO-DSL SUPPORT -/
 
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   match x with
-  | ret v  => f v
+  | ok v  => f v
   | fail v => fail v
   | div => div
 
@@ -86,11 +86,11 @@ def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Resu
 instance : Bind Result where
   bind := bind
 
--- Allows using return x in do-blocks
+-- Allows using pure x in do-blocks
 instance : Pure Result where
-  pure := fun x => ret x
+  pure := fun x => ok x
 
-@[simp] theorem bind_ret (x : α) (f : α → Result β) : bind (.ret x) f = f x := by simp [bind]
+@[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x := by simp [bind]
 @[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
 
@@ -101,14 +101,14 @@ instance : Pure Result where
 -- rely on subtype, and a custom let-binding operator, in effect recreating our
 -- own variant of the do-dsl
 
-def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
+def Result.attach {α: Type} (o : Result α): Result { x : α // o = ok x } :=
   match o with
-  | ret x => ret ⟨x, rfl⟩
+  | ok x => ok ⟨x, rfl⟩
   | fail e => fail e
   | div => div
 
-@[simp] theorem bind_tc_ret (x : α) (f : α → Result β) :
-  (do let y ← .ret x; f y) = f x := by simp [Bind.bind, bind]
+@[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
+  (do let y ← .ok x; f y) = f x := by simp [Bind.bind, bind]
 
 @[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
   (do let y ← fail x; f y) = fail x := by simp [Bind.bind, bind]
