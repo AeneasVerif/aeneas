@@ -7,6 +7,7 @@ open Expressions
 open LlbcAst
 open Utils
 open LlbcAstUtils
+open Errors
 
 let log = Logging.pre_passes_log
 
@@ -214,11 +215,12 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
         inherit [_] map_statement as super
 
         method! visit_Loop entered_loop loop =
-          assert (not entered_loop);
+          cassert (not entered_loop) st.meta
+            "Nested loops are not supported yet";
           super#visit_Loop true loop
 
         method! visit_Break _ i =
-          assert (i = 0);
+          cassert (i = 0) st.meta "Breaks to outer loops are not supported yet";
           nst.content
       end
     in
@@ -233,7 +235,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_Sequence env st1 st2 =
         match st1.content with
         | Loop _ ->
-            assert (statement_has_no_loop_break_continue st2);
+            sanity_check (statement_has_no_loop_break_continue st2) st2.meta;
             (replace_breaks_with st1 st2).content
         | _ -> super#visit_Sequence env st1 st2
     end
@@ -394,11 +396,20 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
     (* Check that the filtered variables completely disappeared from the body *)
     let check_visitor =
       object
-        inherit [_] iter_statement
-        method! visit_var_id _ id = assert (not (VarId.Set.mem id !filtered))
+        inherit [_] iter_statement as super
+        (* Remember the span of the statement we enter *)
+
+        method! visit_statement _ st = super#visit_statement st.meta st
+
+        method! visit_var_id meta id =
+          cassert
+            (not (VarId.Set.mem id !filtered))
+            meta
+            "Filtered variables should have completely disappeared from the \
+             body"
       end
     in
-    check_visitor#visit_statement () body;
+    check_visitor#visit_statement body.meta body;
 
     (* Return the updated body *)
     body
