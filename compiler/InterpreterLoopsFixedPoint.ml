@@ -121,8 +121,8 @@ let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
    - also end the borrows which appear in fresh anonymous values and don't contain loans
    - end the fresh region abstractions which can be ended (no loans)
 *)
-let cleanup_fresh_values_and_abs (config : config) (meta : Meta.meta) (fixed_ids : ids_sets) :
-    cm_fun =
+let cleanup_fresh_values_and_abs (config : config) (meta : Meta.meta)
+    (fixed_ids : ids_sets) : cm_fun =
  fun cf ctx ->
   comp
     (end_useless_fresh_borrows_and_abs config meta fixed_ids)
@@ -136,8 +136,8 @@ let cleanup_fresh_values_and_abs (config : config) (meta : Meta.meta) (fixed_ids
     called typically after we merge abstractions together (see {!collapse_ctx}
     for instance).
  *)
-let reorder_loans_borrows_in_fresh_abs (meta : Meta.meta) (old_abs_ids : AbstractionId.Set.t)
-    (ctx : eval_ctx) : eval_ctx =
+let reorder_loans_borrows_in_fresh_abs (meta : Meta.meta)
+    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let reorder_in_fresh_abs (abs : abs) : abs =
     (* Split between the loans and borrows *)
     let is_borrow (av : typed_avalue) : bool =
@@ -187,7 +187,8 @@ let reorder_loans_borrows_in_fresh_abs (meta : Meta.meta) (old_abs_ids : Abstrac
 
   { ctx with env }
 
-let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_fun =
+let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) :
+    cm_fun =
  fun cf ctx0 ->
   let ctx = ctx0 in
   (* Compute the set of borrows which appear in the abstractions, so that
@@ -357,7 +358,11 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
             TODO: implement this more general behavior.
          *)
         method! visit_symbolic_value env sv =
-          cassert (not (symbolic_value_has_borrows ctx sv)) meta "There should be no symbolic values with borrows inside the abstraction";
+          cassert
+            (not (symbolic_value_has_borrows ctx sv))
+            meta
+            "There should be no symbolic values with borrows inside the \
+             abstraction";
           super#visit_symbolic_value env sv
       end
     in
@@ -433,12 +438,12 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
              SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
            e !sid_subst)
 
-let prepare_ashared_loans_no_synth (meta : Meta.meta) (loop_id : LoopId.id) (ctx : eval_ctx) :
-    eval_ctx =
+let prepare_ashared_loans_no_synth (meta : Meta.meta) (loop_id : LoopId.id)
+    (ctx : eval_ctx) : eval_ctx =
   get_cf_ctx_no_synth meta (prepare_ashared_loans meta (Some loop_id)) ctx
 
-let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id : LoopId.id)
-    (eval_loop_body : st_cm_fun) (ctx0 : eval_ctx) :
+let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
+    (loop_id : LoopId.id) (eval_loop_body : st_cm_fun) (ctx0 : eval_ctx) :
     eval_ctx * ids_sets * abs RegionGroupId.Map.t =
   (* The continuation for when we exit the loop - we register the
      environments upon loop *reentry*, and synthesize nothing by
@@ -544,7 +549,8 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
 
     (* Join the context with the context at the loop entry *)
     let (_, _), ctx2 =
-      loop_join_origin_with_continue_ctxs config meta loop_id fixed_ids ctx1 !ctxs
+      loop_join_origin_with_continue_ctxs config meta loop_id fixed_ids ctx1
+        !ctxs
     in
     ctxs := [];
     ctx2
@@ -582,10 +588,9 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
   let rec compute_fixed_point (ctx : eval_ctx) (i0 : int) (i : int) : eval_ctx =
     if i = 0 then
-      craise
-        meta
-           ("Could not compute a loop fixed point in " ^ string_of_int i0
-          ^ " iterations")
+      craise meta
+        ("Could not compute a loop fixed point in " ^ string_of_int i0
+       ^ " iterations")
     else
       (* Evaluate the loop body to register the different contexts upon reentry *)
       let _ = eval_loop_body cf_exit_loop_body ctx in
@@ -694,12 +699,14 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
                 in
                 (* By default, the [SynthInput] abs can't end *)
                 let ctx = ctx_set_abs_can_end meta ctx abs_id true in
-                sanity_check (
-                  let abs = ctx_lookup_abs ctx abs_id in
-                  abs.kind = SynthInput rg_id) meta;
+                sanity_check
+                  (let abs = ctx_lookup_abs ctx abs_id in
+                   abs.kind = SynthInput rg_id)
+                  meta;
                 (* End this abstraction *)
                 let ctx =
-                  InterpreterBorrows.end_abstraction_no_synth config meta abs_id ctx
+                  InterpreterBorrows.end_abstraction_no_synth config meta abs_id
+                    ctx
                 in
                 (* Explore the context, and check which abstractions are not there anymore *)
                 let ids, _ = compute_ctx_ids ctx in
@@ -718,7 +725,11 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
     let _ =
       RegionGroupId.Map.iter
         (fun _ ids ->
-          cassert (AbstractionId.Set.disjoint !aids_union ids) meta "The sets of abstractions we need to end per region group are not pairwise disjoint";
+          cassert
+            (AbstractionId.Set.disjoint !aids_union ids)
+            meta
+            "The sets of abstractions we need to end per region group are not \
+             pairwise disjoint";
           aids_union := AbstractionId.Set.union ids !aids_union)
         !fp_ended_aids
     in
@@ -777,7 +788,8 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
                         ^ AbstractionId.to_string !id0));
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
-                      merge_into_abstraction meta loop_id abs_kind false !fp id !id0
+                      merge_into_abstraction meta loop_id abs_kind false !fp id
+                        !id0
                     in
                     fp := fp';
                     id0 := id0';
@@ -850,13 +862,17 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
   (* Return *)
   (fp, fixed_ids, rg_to_abs)
 
-let compute_fixed_point_id_correspondance (meta : Meta.meta) (fixed_ids : ids_sets)
-    (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) : borrow_loan_corresp =
+let compute_fixed_point_id_correspondance (meta : Meta.meta)
+    (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
+    borrow_loan_corresp =
   log#ldebug
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
-     ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n" ^ eval_ctx_to_string ~meta:(Some meta) src_ctx
-     ^ "\n\n- tgt_ctx:\n" ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx ^ "\n\n"));
+     ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) src_ctx
+      ^ "\n\n- tgt_ctx:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx
+      ^ "\n\n"));
 
   let filt_src_env, _, _ = ctx_split_fixed_new meta fixed_ids src_ctx in
   let filt_src_ctx = { src_ctx with env = filt_src_env } in
@@ -886,8 +902,8 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta) (fixed_ids : ids_se
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
     let lookup_in_src id = lookup_shared_loan id src_ctx in
     Option.get
-      (match_ctxs meta check_equiv fixed_ids lookup_in_tgt lookup_in_src filt_tgt_ctx
-         filt_src_ctx)
+      (match_ctxs meta check_equiv fixed_ids lookup_in_tgt lookup_in_src
+         filt_tgt_ctx filt_src_ctx)
   in
 
   log#ldebug
@@ -984,8 +1000,8 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta) (fixed_ids : ids_se
     loan_to_borrow_id_map = tgt_loan_to_borrow;
   }
 
-let compute_fp_ctx_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) (fp_ctx : eval_ctx) :
-    SymbolicValueId.Set.t * symbolic_value list =
+let compute_fp_ctx_symbolic_values (meta : Meta.meta) (ctx : eval_ctx)
+    (fp_ctx : eval_ctx) : SymbolicValueId.Set.t * symbolic_value list =
   let old_ids, _ = compute_ctx_ids ctx in
   let fp_ids, fp_ids_maps = compute_ctx_ids fp_ctx in
   let fresh_sids = SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in

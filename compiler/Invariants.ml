@@ -48,14 +48,16 @@ type borrow_kind = BMut | BShared | BReserved
     - loans and borrows are correctly related
     - a two-phase borrow can't point to a value inside an abstraction
  *)
-let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
+let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
+    unit =
   (* Link all the borrow ids to a representant - necessary because of shared
    * borrows/loans *)
   let ids_reprs : BorrowId.id BorrowId.Map.t ref = ref BorrowId.Map.empty in
   (* Link all the id representants to a borrow information *)
   let borrows_infos : borrow_info BorrowId.Map.t ref = ref BorrowId.Map.empty in
   let context_to_string () : string =
-    eval_ctx_to_string ~meta:(Some meta) ctx ^ "- representants:\n"
+    eval_ctx_to_string ~meta:(Some meta) ctx
+    ^ "- representants:\n"
     ^ ids_reprs_to_string "  " !ids_reprs
     ^ "\n- info:\n"
     ^ borrows_infos_to_string "  " !borrows_infos
@@ -194,9 +196,7 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     let infos =
       BorrowId.Map.update repr_bid
         (fun x ->
-          match x with
-          | Some _ -> Some info
-          | None -> craise meta "Unreachable")
+          match x with Some _ -> Some info | None -> craise meta "Unreachable")
         !borrows_infos
     in
     borrows_infos := infos
@@ -278,9 +278,10 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     (fun _ info ->
       (* Note that we can't directly compare the sets - I guess they are
        * different depending on the order in which we add the elements... *)
-      sanity_check (
-        BorrowId.Set.elements info.loan_ids
-        = BorrowId.Set.elements info.borrow_ids) meta;
+      sanity_check
+        (BorrowId.Set.elements info.loan_ids
+        = BorrowId.Set.elements info.borrow_ids)
+        meta;
       match info.loan_kind with
       | RMut -> sanity_check (BorrowId.Set.cardinal info.loan_ids = 1) meta
       | RShared -> ())
@@ -297,7 +298,9 @@ let check_borrowed_values_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
 
       method! visit_VBottom info =
         (* No ⊥ inside borrowed values *)
-        sanity_check (Config.allow_bottom_below_borrow || not info.outer_borrow) meta
+        sanity_check
+          (Config.allow_bottom_below_borrow || not info.outer_borrow)
+          meta
 
       method! visit_ABottom _info =
         (* ⊥ inside an abstraction is not the same as in a regular value *)
@@ -367,7 +370,8 @@ let check_borrowed_values_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
   let info = { outer_borrow = false; outer_shared = false } in
   visitor#visit_eval_ctx info ctx
 
-let check_literal_type (meta : Meta.meta) (cv : literal) (ty : literal_type) : unit =
+let check_literal_type (meta : Meta.meta) (cv : literal) (ty : literal_type) :
+    unit =
   match (cv, ty) with
   | VScalar sv, TInteger int_ty -> sanity_check (sv.int_ty = int_ty) meta
   | VBool _, TBool | VChar _, TChar -> ()
@@ -413,13 +417,18 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
              * parameters, etc. *)
             let def = ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
-            sanity_check (
-              List.length generics.regions = List.length def.generics.regions) meta;
-            sanity_check (List.length generics.types = List.length def.generics.types) meta;
+            sanity_check
+              (List.length generics.regions = List.length def.generics.regions)
+              meta;
+            sanity_check
+              (List.length generics.types = List.length def.generics.types)
+              meta;
             (* Check that the variant id is consistent *)
             (match (av.variant_id, def.kind) with
             | Some variant_id, Enum variants ->
-                sanity_check (VariantId.to_int variant_id < List.length variants) meta
+                sanity_check
+                  (VariantId.to_int variant_id < List.length variants)
+                  meta
             | None, Struct _ -> ()
             | _ -> craise meta "Erroneous typing");
             (* Check that the field types are correct *)
@@ -429,7 +438,8 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             in
             let fields_with_types = List.combine av.field_values field_types in
             List.iter
-              (fun ((v, ty) : typed_value * ty) -> sanity_check (v.ty = ty) meta)
+              (fun ((v, ty) : typed_value * ty) ->
+                sanity_check (v.ty = ty) meta)
               fields_with_types
         (* Tuple case *)
         | VAdt av, TAdt (TTuple, generics) ->
@@ -442,7 +452,8 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
               List.combine av.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : typed_value * ty) -> sanity_check (v.ty = ty) meta)
+              (fun ((v, ty) : typed_value * ty) ->
+                sanity_check (v.ty = ty) meta)
               fields_with_types
         (* Assumed type case *)
         | VAdt av, TAdt (TAssumed aty_id, generics) -> (
@@ -459,10 +470,11 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 sanity_check (inner_value.ty = inner_ty) meta
             | TArray, inner_values, _, [ inner_ty ], [ cg ] ->
                 (* *)
-                sanity_check (
-                  List.for_all
-                    (fun (v : typed_value) -> v.ty = inner_ty)
-                    inner_values) meta;
+                sanity_check
+                  (List.for_all
+                     (fun (v : typed_value) -> v.ty = inner_ty)
+                     inner_values)
+                  meta;
                 (* The length is necessarily concrete *)
                 let len =
                   (ValuesUtils.literal_as_scalar
@@ -484,9 +496,10 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                     sanity_check (sv.ty = ref_ty) meta
                 | _ -> craise meta "Inconsistent context")
             | VMutBorrow (_, bv), RMut ->
-                sanity_check (
-                  (* Check that the borrowed value has the proper type *)
-                  bv.ty = ref_ty) meta
+                sanity_check
+                  ((* Check that the borrowed value has the proper type *)
+                   bv.ty = ref_ty)
+                  meta
             | _ -> craise meta "Erroneous typing")
         | VLoan lc, ty -> (
             match lc with
@@ -495,7 +508,8 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 (* Lookup the borrowed value to check it has the proper type *)
                 let glc = lookup_borrow meta ek_all bid ctx in
                 match glc with
-                | Concrete (VMutBorrow (_, bv)) -> sanity_check (bv.ty = ty) meta
+                | Concrete (VMutBorrow (_, bv)) ->
+                    sanity_check (bv.ty = ty) meta
                 | Abstract (AMutBorrow (_, sv)) ->
                     sanity_check (Substitute.erase_regions sv.ty = ty) meta
                 | _ -> craise meta "Inconsistent context"))
@@ -525,16 +539,22 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
              * parameters, etc. *)
             let def = ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
-            sanity_check (
-              List.length generics.regions = List.length def.generics.regions) meta;
-            sanity_check (List.length generics.types = List.length def.generics.types) meta;
-            sanity_check (
-              List.length generics.const_generics
-              = List.length def.generics.const_generics) meta;
+            sanity_check
+              (List.length generics.regions = List.length def.generics.regions)
+              meta;
+            sanity_check
+              (List.length generics.types = List.length def.generics.types)
+              meta;
+            sanity_check
+              (List.length generics.const_generics
+              = List.length def.generics.const_generics)
+              meta;
             (* Check that the variant id is consistent *)
             (match (av.variant_id, def.kind) with
             | Some variant_id, Enum variants ->
-                sanity_check (VariantId.to_int variant_id < List.length variants) meta
+                sanity_check
+                  (VariantId.to_int variant_id < List.length variants)
+                  meta
             | None, Struct _ -> ()
             | _ -> craise meta "Erroneous typing");
             (* Check that the field types are correct *)
@@ -544,7 +564,8 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             in
             let fields_with_types = List.combine av.field_values field_types in
             List.iter
-              (fun ((v, ty) : typed_avalue * ty) -> sanity_check (v.ty = ty) meta)
+              (fun ((v, ty) : typed_avalue * ty) ->
+                sanity_check (v.ty = ty) meta)
               fields_with_types
         (* Tuple case *)
         | AAdt av, TAdt (TTuple, generics) ->
@@ -557,7 +578,8 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
               List.combine av.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : typed_avalue * ty) -> sanity_check (v.ty = ty) meta)
+              (fun ((v, ty) : typed_avalue * ty) ->
+                sanity_check (v.ty = ty) meta)
               fields_with_types
         (* Assumed type case *)
         | AAdt av, TAdt (TAssumed aty_id, generics) -> (
@@ -587,7 +609,8 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 | Abstract (ASharedLoan (_, sv, _)) ->
                     sanity_check (sv.ty = Substitute.erase_regions ref_ty) meta
                 | _ -> craise meta "Inconsistent context")
-            | AIgnoredMutBorrow (_opt_bid, av), RMut -> sanity_check (av.ty = ref_ty) meta
+            | AIgnoredMutBorrow (_opt_bid, av), RMut ->
+                sanity_check (av.ty = ref_ty) meta
             | ( AEndedIgnoredMutBorrow { given_back; child; given_back_meta = _ },
                 RMut ) ->
                 sanity_check (given_back.ty = ref_ty) meta;
@@ -604,18 +627,23 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 let glc = lookup_borrow meta ek_all bid ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) ->
-                    sanity_check (bv.ty = Substitute.erase_regions borrowed_aty) meta
+                    sanity_check
+                      (bv.ty = Substitute.erase_regions borrowed_aty)
+                      meta
                 | Abstract (AMutBorrow (_, sv)) ->
-                    sanity_check (
-                      Substitute.erase_regions sv.ty
-                      = Substitute.erase_regions borrowed_aty) meta
+                    sanity_check
+                      (Substitute.erase_regions sv.ty
+                      = Substitute.erase_regions borrowed_aty)
+                      meta
                 | _ -> craise meta "Inconsistent context")
             | AIgnoredMutLoan (None, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 sanity_check (child_av.ty = borrowed_aty) meta
             | ASharedLoan (_, sv, child_av) | AEndedSharedLoan (sv, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                sanity_check (sv.ty = Substitute.erase_regions borrowed_aty) meta;
+                sanity_check
+                  (sv.ty = Substitute.erase_regions borrowed_aty)
+                  meta;
                 (* TODO: the type of aloans doesn't make sense, see above *)
                 sanity_check (child_av.ty = borrowed_aty) meta
             | AEndedMutLoan { given_back; child; given_back_meta = _ }
@@ -624,7 +652,9 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 sanity_check (given_back.ty = borrowed_aty) meta;
                 sanity_check (child.ty = borrowed_aty) meta
             | AIgnoredSharedLoan child_av ->
-                sanity_check (child_av.ty = aloan_get_expected_child_type aty) meta)
+                sanity_check
+                  (child_av.ty = aloan_get_expected_child_type aty)
+                  meta)
         | ASymbolic aproj, ty -> (
             let ty1 = Substitute.erase_regions ty in
             match aproj with
@@ -772,7 +802,9 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
     if ty_has_borrows ctx.type_ctx.type_infos info.ty then
       sanity_check (info.env_count <= 1) meta;
     (* A duplicated symbolic value is necessarily primitively copyable *)
-    sanity_check (info.env_count <= 1 || ty_is_primitively_copyable info.ty) meta;
+    sanity_check
+      (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
+      meta;
 
     sanity_check (info.aproj_borrows = [] || info.aproj_loans <> []) meta;
     (* At the same time:
@@ -796,8 +828,10 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
     (* Check that the union of the loan projectors contains the borrow projections. *)
     List.iter
       (fun binfo ->
-        sanity_check (
-          projection_contains meta info.ty loan_regions binfo.proj_ty binfo.regions) meta)
+        sanity_check
+          (projection_contains meta info.ty loan_regions binfo.proj_ty
+             binfo.regions)
+          meta)
       info.aproj_borrows;
     ()
   in
@@ -806,7 +840,9 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
 
 let check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
-    log#ldebug (lazy ("Checking invariants:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+    log#ldebug
+      (lazy
+        ("Checking invariants:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
     check_loans_borrows_relation_invariant meta ctx;
     check_borrowed_values_invariant meta ctx;
     check_typing_invariant meta ctx;

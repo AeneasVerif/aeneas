@@ -8,7 +8,8 @@ open Cps
     applies this change to an environment [ctx] by inserting a new borrow id in
     the set of borrows tracked by a shared value, referenced by the
     [original_bid] argument.  *)
-val reborrow_shared : Meta.meta -> BorrowId.id -> BorrowId.id -> eval_ctx -> eval_ctx
+val reborrow_shared :
+  Meta.meta -> BorrowId.id -> BorrowId.id -> eval_ctx -> eval_ctx
 
 (** End a borrow identified by its id, while preserving the invariants.
 
@@ -27,10 +28,12 @@ val end_abstraction : config -> Meta.meta -> AbstractionId.id -> cm_fun
 val end_abstractions : config -> Meta.meta -> AbstractionId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
-val end_borrow_no_synth : config -> Meta.meta -> BorrowId.id -> eval_ctx -> eval_ctx
+val end_borrow_no_synth :
+  config -> Meta.meta -> BorrowId.id -> eval_ctx -> eval_ctx
 
 (** End a set of borrows and return the resulting environment, ignoring synthesis *)
-val end_borrows_no_synth : config -> Meta.meta -> BorrowId.Set.t -> eval_ctx -> eval_ctx
+val end_borrows_no_synth :
+  config -> Meta.meta -> BorrowId.Set.t -> eval_ctx -> eval_ctx
 
 (** End an abstraction and return the resulting environment, ignoring synthesis *)
 val end_abstraction_no_synth :
@@ -91,7 +94,8 @@ val promote_reserved_mut_borrow : config -> Meta.meta -> BorrowId.id -> cm_fun
     - [ctx]
     - [abs]
  *)
-val destructure_abs : Meta.meta -> abs_kind -> bool -> bool -> eval_ctx -> abs -> abs
+val destructure_abs :
+  Meta.meta -> abs_kind -> bool -> bool -> eval_ctx -> abs -> abs
 
 (** Return [true] if the values in an abstraction are destructured.
 
@@ -232,7 +236,7 @@ type merge_duplicates_funcs = {
     results from the merge.
  *)
 val merge_into_abstraction :
-  Meta.meta -> 
+  Meta.meta ->
   abs_kind ->
   bool ->
   merge_duplicates_funcs option ->

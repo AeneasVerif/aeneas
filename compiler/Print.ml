@@ -43,12 +43,13 @@ module Values = struct
    * typed_avalue_to_string. At some point we had done it, because [typed_value]
    * and [typed_avalue] were instances of the same general type [g_typed_value],
    * but then we removed this general type because it proved to be a bad idea. *)
-  let rec typed_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (v : typed_value) : string =
+  let rec typed_value_to_string ?(meta : Meta.meta option = None)
+      (env : fmt_env) (v : typed_value) : string =
     match v.value with
     | VLiteral cv -> literal_to_string cv
     | VAdt av -> (
         let field_values =
-          List.map (typed_value_to_string~meta:meta env) av.field_values
+          List.map (typed_value_to_string ~meta env) av.field_values
         in
         match v.ty with
         | TAdt (TTuple, _) ->
@@ -83,28 +84,31 @@ module Values = struct
             | TArray, _ ->
                 (* Happens when we aggregate values *)
                 "@Array[" ^ String.concat ", " field_values ^ "]"
-            | _ -> craise_opt_meta meta ("Inconsistent value: " ^ show_typed_value v)
-            )
+            | _ ->
+                craise_opt_meta meta
+                  ("Inconsistent value: " ^ show_typed_value v))
         | _ -> craise_opt_meta meta "Inconsistent typed value")
     | VBottom -> "⊥ : " ^ ty_to_string env v.ty
-    | VBorrow bc -> borrow_content_to_string ~meta:meta env bc
-    | VLoan lc -> loan_content_to_string ~meta:meta env lc
+    | VBorrow bc -> borrow_content_to_string ~meta env bc
+    | VLoan lc -> loan_content_to_string ~meta env lc
     | VSymbolic s -> symbolic_value_to_string env s
 
-  and borrow_content_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (bc : borrow_content) : string =
+  and borrow_content_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+      (bc : borrow_content) : string =
     match bc with
     | VSharedBorrow bid -> "shared_borrow@" ^ BorrowId.to_string bid
     | VMutBorrow (bid, tv) ->
         "mut_borrow@" ^ BorrowId.to_string bid ^ " ("
-        ^ typed_value_to_string ~meta:meta env tv
+        ^ typed_value_to_string ~meta env tv
         ^ ")"
     | VReservedMutBorrow bid -> "reserved_borrow@" ^ BorrowId.to_string bid
 
-  and loan_content_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (lc : loan_content) : string =
+  and loan_content_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+      (lc : loan_content) : string =
     match lc with
     | VSharedLoan (loans, v) ->
         let loans = BorrowId.Set.to_string None loans in
-        "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string ~meta:meta env v ^ ")"
+        "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string ~meta env v ^ ")"
     | VMutLoan bid -> "ml@" ^ BorrowId.to_string bid
 
   let abstract_shared_borrow_to_string (env : fmt_env)
@@ -142,11 +146,12 @@ module Values = struct
     | AEndedProjBorrows _mv -> "_"
     | AIgnoredProjBorrows -> "_"
 
-  let rec typed_avalue_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (v : typed_avalue) : string =
+  let rec typed_avalue_to_string ?(meta : Meta.meta option = None)
+      (env : fmt_env) (v : typed_avalue) : string =
     match v.value with
     | AAdt av -> (
         let field_values =
-          List.map (typed_avalue_to_string ~meta:meta env) av.field_values
+          List.map (typed_avalue_to_string ~meta env) av.field_values
         in
         match v.ty with
         | TAdt (TTuple, _) ->
@@ -181,72 +186,73 @@ module Values = struct
             | _ -> craise_opt_meta meta "Inconsistent value")
         | _ -> craise_opt_meta meta "Inconsistent typed value")
     | ABottom -> "⊥ : " ^ ty_to_string env v.ty
-    | ABorrow bc -> aborrow_content_to_string ~meta:meta env bc
-    | ALoan lc -> aloan_content_to_string ~meta:meta env lc
+    | ABorrow bc -> aborrow_content_to_string ~meta env bc
+    | ALoan lc -> aloan_content_to_string ~meta env lc
     | ASymbolic s -> aproj_to_string env s
     | AIgnored -> "_"
 
-  and aloan_content_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (lc : aloan_content) : string =
+  and aloan_content_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+      (lc : aloan_content) : string =
     match lc with
     | AMutLoan (bid, av) ->
         "@mut_loan(" ^ BorrowId.to_string bid ^ ", "
-        ^ typed_avalue_to_string ~meta:meta env av
+        ^ typed_avalue_to_string ~meta env av
         ^ ")"
     | ASharedLoan (loans, v, av) ->
         let loans = BorrowId.Set.to_string None loans in
         "@shared_loan(" ^ loans ^ ", "
-        ^ typed_value_to_string ~meta:meta env v
+        ^ typed_value_to_string ~meta env v
         ^ ", "
-        ^ typed_avalue_to_string ~meta:meta env av
+        ^ typed_avalue_to_string ~meta env av
         ^ ")"
     | AEndedMutLoan ml ->
         "@ended_mut_loan{"
-        ^ typed_avalue_to_string ~meta:meta env ml.child
+        ^ typed_avalue_to_string ~meta env ml.child
         ^ "; "
-        ^ typed_avalue_to_string ~meta:meta env ml.given_back
+        ^ typed_avalue_to_string ~meta env ml.given_back
         ^ " }"
     | AEndedSharedLoan (v, av) ->
         "@ended_shared_loan("
-        ^ typed_value_to_string ~meta:meta env v
+        ^ typed_value_to_string ~meta env v
         ^ ", "
-        ^ typed_avalue_to_string ~meta:meta env av
+        ^ typed_avalue_to_string ~meta env av
         ^ ")"
     | AIgnoredMutLoan (opt_bid, av) ->
         "@ignored_mut_loan("
         ^ option_to_string BorrowId.to_string opt_bid
         ^ ", "
-        ^ typed_avalue_to_string ~meta:meta env av
+        ^ typed_avalue_to_string ~meta env av
         ^ ")"
     | AEndedIgnoredMutLoan ml ->
         "@ended_ignored_mut_loan{ "
-        ^ typed_avalue_to_string ~meta:meta env ml.child
+        ^ typed_avalue_to_string ~meta env ml.child
         ^ "; "
-        ^ typed_avalue_to_string ~meta:meta env ml.given_back
+        ^ typed_avalue_to_string ~meta env ml.given_back
         ^ "}"
     | AIgnoredSharedLoan sl ->
-        "@ignored_shared_loan(" ^ typed_avalue_to_string ~meta:meta env sl ^ ")"
+        "@ignored_shared_loan(" ^ typed_avalue_to_string ~meta env sl ^ ")"
 
-  and aborrow_content_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (bc : aborrow_content) : string
-      =
+  and aborrow_content_to_string ?(meta : Meta.meta option = None)
+      (env : fmt_env) (bc : aborrow_content) : string =
     match bc with
     | AMutBorrow (bid, av) ->
         "mb@" ^ BorrowId.to_string bid ^ " ("
-        ^ typed_avalue_to_string ~meta:meta env av
+        ^ typed_avalue_to_string ~meta env av
         ^ ")"
     | ASharedBorrow bid -> "sb@" ^ BorrowId.to_string bid
     | AIgnoredMutBorrow (opt_bid, av) ->
         "@ignored_mut_borrow("
         ^ option_to_string BorrowId.to_string opt_bid
         ^ ", "
-        ^ typed_avalue_to_string ~meta:meta env av
+        ^ typed_avalue_to_string ~meta env av
         ^ ")"
     | AEndedMutBorrow (_mv, child) ->
-        "@ended_mut_borrow(" ^ typed_avalue_to_string ~meta:meta env child ^ ")"
+        "@ended_mut_borrow(" ^ typed_avalue_to_string ~meta env child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
-        ^ typed_avalue_to_string ~meta:meta env child
+        ^ typed_avalue_to_string ~meta env child
         ^ "; "
-        ^ typed_avalue_to_string ~meta:meta env given_back
+        ^ typed_avalue_to_string ~meta env given_back
         ^ ")"
     | AEndedSharedBorrow -> "@ended_shared_borrow"
     | AProjSharedBorrow sb ->
@@ -276,11 +282,14 @@ module Values = struct
         ^ ")"
     | Identity -> "Identity"
 
-  let abs_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (verbose : bool) (indent : string)
-      (indent_incr : string) (abs : abs) : string =
+  let abs_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+      (verbose : bool) (indent : string) (indent_incr : string) (abs : abs) :
+      string =
     let indent2 = indent ^ indent_incr in
     let avs =
-      List.map (fun av -> indent2 ^ typed_avalue_to_string ~meta:meta env av) abs.avalues
+      List.map
+        (fun av -> indent2 ^ typed_avalue_to_string ~meta env av)
+        abs.avalues
     in
     let avs = String.concat ",\n" avs in
     let kind =
@@ -323,26 +332,27 @@ module Contexts = struct
     | BVar b -> var_binder_to_string env b
     | BDummy bid -> dummy_var_id_to_string bid
 
-  let env_elem_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (verbose : bool)
-      (with_var_types : bool) (indent : string) (indent_incr : string)
-      (ev : env_elem) : string =
+  let env_elem_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+      (verbose : bool) (with_var_types : bool) (indent : string)
+      (indent_incr : string) (ev : env_elem) : string =
     match ev with
     | EBinding (var, tv) ->
         let bv = binder_to_string env var in
         let ty =
           if with_var_types then " : " ^ ty_to_string env tv.ty else ""
         in
-        indent ^ bv ^ ty ^ " -> " ^ typed_value_to_string ~meta:meta env tv ^ " ;"
-    | EAbs abs -> abs_to_string ~meta:meta env verbose indent indent_incr abs
+        indent ^ bv ^ ty ^ " -> " ^ typed_value_to_string ~meta env tv ^ " ;"
+    | EAbs abs -> abs_to_string ~meta env verbose indent indent_incr abs
     | EFrame -> craise_opt_meta meta "Can't print a Frame element"
 
-  let opt_env_elem_to_string ?(meta : Meta.meta option = None) (env : fmt_env) (verbose : bool)
-      (with_var_types : bool) (indent : string) (indent_incr : string)
-      (ev : env_elem option) : string =
+  let opt_env_elem_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+      (verbose : bool) (with_var_types : bool) (indent : string)
+      (indent_incr : string) (ev : env_elem option) : string =
     match ev with
     | None -> indent ^ "..."
     | Some ev ->
-        env_elem_to_string ~meta:meta env verbose with_var_types indent indent_incr ev
+        env_elem_to_string ~meta env verbose with_var_types indent indent_incr
+          ev
 
   (** Filters "dummy" bindings from an environment, to gain space and clarity/
       See [env_to_string]. *)
@@ -379,8 +389,9 @@ module Contexts = struct
       "..." to gain space and clarity.
       [with_var_types]: if true, print the type of the variables
    *)
-  let env_to_string ?(meta : Meta.meta option = None) (filter : bool) (fmt_env : fmt_env) (verbose : bool)
-      (with_var_types : bool) (env : env) : string =
+  let env_to_string ?(meta : Meta.meta option = None) (filter : bool)
+      (fmt_env : fmt_env) (verbose : bool) (with_var_types : bool) (env : env) :
+      string =
     let env =
       if filter then filter_env env else List.map (fun ev -> Some ev) env
     in
@@ -388,7 +399,8 @@ module Contexts = struct
     ^ String.concat "\n"
         (List.map
            (fun ev ->
-             opt_env_elem_to_string ~meta:meta fmt_env verbose with_var_types "  " "  " ev)
+             opt_env_elem_to_string ~meta fmt_env verbose with_var_types "  "
+               "  " ev)
            env)
     ^ "\n}"
 
@@ -468,8 +480,8 @@ module Contexts = struct
     let frames = split_aux [] [] env in
     frames
 
-  let eval_ctx_to_string_gen ?(meta : Meta.meta option = None) (verbose : bool) (filter : bool)
-      (with_var_types : bool) (ctx : eval_ctx) : string =
+  let eval_ctx_to_string_gen ?(meta : Meta.meta option = None) (verbose : bool)
+      (filter : bool) (with_var_types : bool) (ctx : eval_ctx) : string =
     let fmt_env = eval_ctx_to_fmt_env ctx in
     let ended_regions = RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
@@ -492,18 +504,20 @@ module Contexts = struct
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string ~meta:meta filter fmt_env verbose with_var_types f
+          ^ env_to_string ~meta filter fmt_env verbose with_var_types f
           ^ "\n")
         frames
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
     ^ " frame(s)\n" ^ String.concat "" frames
 
-  let eval_ctx_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) : string =
-    eval_ctx_to_string_gen ~meta:meta false true true ctx
+  let eval_ctx_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) :
+      string =
+    eval_ctx_to_string_gen ~meta false true true ctx
 
-  let eval_ctx_to_string_no_filter ?(meta : Meta.meta option = None) (ctx : eval_ctx) : string =
-    eval_ctx_to_string_gen ~meta:meta false false true ctx
+  let eval_ctx_to_string_no_filter ?(meta : Meta.meta option = None)
+      (ctx : eval_ctx) : string =
+    eval_ctx_to_string_gen ~meta false false true ctx
 end
 
 (** Pretty-printing for LLBC ASTs (functions based on an evaluation context) *)
@@ -541,22 +555,25 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     trait_instance_id_to_string env x
 
-  let borrow_content_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) (bc : borrow_content) : string =
+  let borrow_content_to_string ?(meta : Meta.meta option = None)
+      (ctx : eval_ctx) (bc : borrow_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    borrow_content_to_string ~meta:meta env bc
+    borrow_content_to_string ~meta env bc
 
-  let loan_content_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) (lc : loan_content) : string =
+  let loan_content_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx)
+      (lc : loan_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    loan_content_to_string ~meta:meta env lc
+    loan_content_to_string ~meta env lc
 
-  let aborrow_content_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) (bc : aborrow_content) : string
-      =
+  let aborrow_content_to_string ?(meta : Meta.meta option = None)
+      (ctx : eval_ctx) (bc : aborrow_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    aborrow_content_to_string ~meta:meta env bc
+    aborrow_content_to_string ~meta env bc
 
-  let aloan_content_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) (lc : aloan_content) : string =
+  let aloan_content_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx)
+      (lc : aloan_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    aloan_content_to_string ~meta:meta env lc
+    aloan_content_to_string ~meta env lc
 
   let aproj_to_string (ctx : eval_ctx) (p : aproj) : string =
     let env = eval_ctx_to_fmt_env ctx in
@@ -566,13 +583,15 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     symbolic_value_to_string env sv
 
-  let typed_value_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) (v : typed_value) : string =
+  let typed_value_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx)
+      (v : typed_value) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    typed_value_to_string ~meta:meta env v
+    typed_value_to_string ~meta env v
 
-  let typed_avalue_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) (v : typed_avalue) : string =
+  let typed_avalue_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx)
+      (v : typed_avalue) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    typed_avalue_to_string ~meta:meta env v
+    typed_avalue_to_string ~meta env v
 
   let place_to_string (ctx : eval_ctx) (op : place) : string =
     let env = eval_ctx_to_fmt_env ctx in
@@ -613,13 +632,13 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     trait_impl_to_string env "  " "  " timpl
 
-  let env_elem_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) (indent : string)
-      (indent_incr : string) (ev : env_elem) : string =
+  let env_elem_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx)
+      (indent : string) (indent_incr : string) (ev : env_elem) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    env_elem_to_string ~meta:meta env false true indent indent_incr ev
+    env_elem_to_string ~meta env false true indent indent_incr ev
 
-  let abs_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx) (indent : string) (indent_incr : string)
-      (abs : abs) : string =
+  let abs_to_string ?(meta : Meta.meta option = None) (ctx : eval_ctx)
+      (indent : string) (indent_incr : string) (abs : abs) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    abs_to_string ~meta:meta env false indent indent_incr abs
+    abs_to_string ~meta env false indent indent_incr abs
 end

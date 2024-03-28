@@ -72,13 +72,12 @@ let borrow_or_abs_ids_chain_to_string (ids : borrow_or_abs_ids) : string =
   String.concat " -> " ids
 
 (** Add a borrow or abs id to a chain of ids, while checking that we don't loop *)
-let add_borrow_or_abs_id_to_chain (meta : Meta.meta) (msg : string) (id : borrow_or_abs_id)
-    (ids : borrow_or_abs_ids) : borrow_or_abs_ids =
+let add_borrow_or_abs_id_to_chain (meta : Meta.meta) (msg : string)
+    (id : borrow_or_abs_id) (ids : borrow_or_abs_ids) : borrow_or_abs_ids =
   if List.mem id ids then
-    craise
-      meta
-         (msg ^ "detected a loop in the chain of ids: "
-         ^ borrow_or_abs_ids_chain_to_string (id :: ids))
+    craise meta
+      (msg ^ "detected a loop in the chain of ids: "
+      ^ borrow_or_abs_ids_chain_to_string (id :: ids))
   else id :: ids
 
 (** Helper function.
@@ -95,7 +94,8 @@ let add_borrow_or_abs_id_to_chain (meta : Meta.meta) (msg : string) (id : borrow
     TODO: is there a way of deriving such a comparison?
     TODO: rename
  *)
-let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool -> bool)
+let rec compare_rtys (meta : Meta.meta) (default : bool)
+    (combine : bool -> bool -> bool)
     (compare_regions : region -> region -> bool) (ty1 : rty) (ty2 : rty) : bool
     =
   let compare = compare_rtys meta default combine compare_regions in
@@ -173,8 +173,8 @@ let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool
     Note that the two abstractions have different views (in terms of regions)
     of the symbolic value (hence the two region types).
 *)
-let projections_intersect (meta : Meta.meta) (ty1 : rty) (rset1 : RegionId.Set.t) (ty2 : rty)
-    (rset2 : RegionId.Set.t) : bool =
+let projections_intersect (meta : Meta.meta) (ty1 : rty)
+    (rset1 : RegionId.Set.t) (ty2 : rty) (rset2 : RegionId.Set.t) : bool =
   let default = false in
   let combine b1 b2 = b1 || b2 in
   let compare_regions r1 r2 =
@@ -188,8 +188,8 @@ let projections_intersect (meta : Meta.meta) (ty1 : rty) (rset1 : RegionId.Set.t
     The regions in the types shouldn't be erased (this function will raise an exception
     otherwise).
 *)
-let projection_contains (meta : Meta.meta) (ty1 : rty) (rset1 : RegionId.Set.t) (ty2 : rty)
-    (rset2 : RegionId.Set.t) : bool =
+let projection_contains (meta : Meta.meta) (ty1 : rty) (rset1 : RegionId.Set.t)
+    (ty2 : rty) (rset2 : RegionId.Set.t) : bool =
   let default = true in
   let combine b1 b2 = b1 && b2 in
   let compare_regions r1 r2 =
@@ -205,8 +205,8 @@ let projection_contains (meta : Meta.meta) (ty1 : rty) (rset1 : RegionId.Set.t) 
     the {!InterpreterUtils.abs_or_var_id} is not necessarily {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.VarId} or
     {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.DummyVarId}: there can be concrete loans in abstractions (in the shared values).
  *)
-let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (ctx : eval_ctx) :
-    (abs_or_var_id * g_loan_content) option =
+let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
+    (ctx : eval_ctx) : (abs_or_var_id * g_loan_content) option =
   (* We store here whether we are inside an abstraction or a value - note that we
    * could also track that with the environment, it would probably be more idiomatic
    * and cleaner *)
@@ -301,8 +301,8 @@ let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
     The loan is referred to by a borrow id.
     Raises an exception if no loan was found.
  *)
-let lookup_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (ctx : eval_ctx) :
-    abs_or_var_id * g_loan_content =
+let lookup_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
+    (ctx : eval_ctx) : abs_or_var_id * g_loan_content =
   match lookup_loan_opt meta ek l ctx with
   | None -> craise meta "Unreachable"
   | Some res -> res
@@ -313,8 +313,8 @@ let lookup_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (ct
 
     This is a helper function: it might break invariants.
  *)
-let update_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (nlc : loan_content)
-    (ctx : eval_ctx) : eval_ctx =
+let update_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
+    (nlc : loan_content) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one loan: when updating
    * inside values, we check we don't update more than one loan. Then, upon
    * returning we check that we updated at least once. *)
@@ -376,8 +376,8 @@ let update_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (nl
 
     This is a helper function: it might break invariants.
  *)
-let update_aloan (meta : Meta.meta ) (ek : exploration_kind) (l : BorrowId.id) (nlc : aloan_content)
-    (ctx : eval_ctx) : eval_ctx =
+let update_aloan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
+    (nlc : aloan_content) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one loan: when updating
    * inside values, we check we don't update more than one loan. Then, upon
    * returning we check that we updated at least once. *)
@@ -482,8 +482,8 @@ let lookup_borrow_opt (ek : exploration_kind) (l : BorrowId.id) (ctx : eval_ctx)
 
     Raise an exception if no loan was found
 *)
-let lookup_borrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (ctx : eval_ctx) :
-    g_borrow_content =
+let lookup_borrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
+    (ctx : eval_ctx) : g_borrow_content =
   match lookup_borrow_opt ek l ctx with
   | None -> craise meta "Unreachable"
   | Some lc -> lc
@@ -551,8 +551,8 @@ let update_borrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
 
     This is a helper function: it might break invariants.     
  *)
-let update_aborrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (nv : avalue)
-    (ctx : eval_ctx) : eval_ctx =
+let update_aborrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
+    (nv : avalue) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
    * inside values, we check we don't update more than one borrow. Then, upon
    * returning we check that we updated at least once. *)
@@ -701,9 +701,9 @@ type looked_up_aproj_borrows =
     
     This is a helper function.
 *)
-let lookup_intersecting_aproj_borrows_opt (meta : Meta.meta) (lookup_shared : bool)
-    (regions : RegionId.Set.t) (sv : symbolic_value) (ctx : eval_ctx) :
-    looked_up_aproj_borrows option =
+let lookup_intersecting_aproj_borrows_opt (meta : Meta.meta)
+    (lookup_shared : bool) (regions : RegionId.Set.t) (sv : symbolic_value)
+    (ctx : eval_ctx) : looked_up_aproj_borrows option =
   let found : looked_up_aproj_borrows option ref = ref None in
   let set_non_shared ((id, ty) : AbstractionId.id * rty) : unit =
     match !found with
@@ -718,8 +718,7 @@ let lookup_intersecting_aproj_borrows_opt (meta : Meta.meta) (lookup_shared : bo
   in
   let check_add_proj_borrows (is_shared : bool) abs sv' proj_ty =
     if
-      proj_borrows_intersects_proj_loans
-        meta
+      proj_borrows_intersects_proj_loans meta
         (abs.regions, sv', proj_ty)
         (regions, sv)
     then
@@ -774,10 +773,13 @@ let lookup_intersecting_aproj_borrows_opt (meta : Meta.meta) (lookup_shared : bo
     Returns the id of the owning abstraction, and the projection type used in
     this abstraction.
 *)
-let lookup_intersecting_aproj_borrows_not_shared_opt (meta : Meta.meta) (regions : RegionId.Set.t)
-    (sv : symbolic_value) (ctx : eval_ctx) : (AbstractionId.id * rty) option =
+let lookup_intersecting_aproj_borrows_not_shared_opt (meta : Meta.meta)
+    (regions : RegionId.Set.t) (sv : symbolic_value) (ctx : eval_ctx) :
+    (AbstractionId.id * rty) option =
   let lookup_shared = false in
-  match lookup_intersecting_aproj_borrows_opt meta lookup_shared regions sv ctx with
+  match
+    lookup_intersecting_aproj_borrows_opt meta lookup_shared regions sv ctx
+  with
   | None -> None
   | Some (NonSharedProj (abs_id, rty)) -> Some (abs_id, rty)
   | _ -> craise meta "Unexpected"
@@ -787,7 +789,8 @@ let lookup_intersecting_aproj_borrows_not_shared_opt (meta : Meta.meta) (regions
 
     This is a helper function: it might break invariants.
  *)
-let update_intersecting_aproj_borrows (meta : Meta.meta) (can_update_shared : bool)
+let update_intersecting_aproj_borrows (meta : Meta.meta)
+    (can_update_shared : bool)
     (update_shared : AbstractionId.id -> rty -> abstract_shared_borrows)
     (update_non_shared : AbstractionId.id -> rty -> aproj)
     (regions : RegionId.Set.t) (sv : symbolic_value) (ctx : eval_ctx) : eval_ctx
@@ -795,7 +798,9 @@ let update_intersecting_aproj_borrows (meta : Meta.meta) (can_update_shared : bo
   (* Small helpers for sanity checks *)
   let shared = ref None in
   let add_shared () =
-    match !shared with None -> shared := Some true | Some b -> sanity_check b meta
+    match !shared with
+    | None -> shared := Some true
+    | Some b -> sanity_check b meta
   in
   let set_non_shared () =
     match !shared with
@@ -804,8 +809,7 @@ let update_intersecting_aproj_borrows (meta : Meta.meta) (can_update_shared : bo
   in
   let check_proj_borrows is_shared abs sv' proj_ty =
     if
-      proj_borrows_intersects_proj_loans
-        meta
+      proj_borrows_intersects_proj_loans meta
         (abs.regions, sv', proj_ty)
         (regions, sv)
     then (
@@ -821,7 +825,7 @@ let update_intersecting_aproj_borrows (meta : Meta.meta) (can_update_shared : bo
 
       method! visit_abstract_shared_borrows abs asb =
         (* Sanity check *)
-        (match !shared with Some b -> sanity_check  b meta | _ -> ());
+        (match !shared with Some b -> sanity_check b meta | _ -> ());
         (* Explore *)
         if can_update_shared then
           let abs = Option.get abs in
@@ -864,8 +868,9 @@ let update_intersecting_aproj_borrows (meta : Meta.meta) (can_update_shared : bo
 
     This is a helper function: it might break invariants.
  *)
-let update_intersecting_aproj_borrows_non_shared (meta : Meta.meta) (regions : RegionId.Set.t)
-    (sv : symbolic_value) (nv : aproj) (ctx : eval_ctx) : eval_ctx =
+let update_intersecting_aproj_borrows_non_shared (meta : Meta.meta)
+    (regions : RegionId.Set.t) (sv : symbolic_value) (nv : aproj)
+    (ctx : eval_ctx) : eval_ctx =
   (* Small helpers *)
   let can_update_shared = false in
   let update_shared _ _ = craise meta "Unexpected" in
@@ -890,8 +895,9 @@ let update_intersecting_aproj_borrows_non_shared (meta : Meta.meta) (regions : R
 
     This is a helper function: it might break invariants.
  *)
-let remove_intersecting_aproj_borrows_shared (meta : Meta.meta) (regions : RegionId.Set.t)
-    (sv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
+let remove_intersecting_aproj_borrows_shared (meta : Meta.meta)
+    (regions : RegionId.Set.t) (sv : symbolic_value) (ctx : eval_ctx) : eval_ctx
+    =
   (* Small helpers *)
   let can_update_shared = true in
   let update_shared _ _ = [] in
@@ -931,8 +937,8 @@ let remove_intersecting_aproj_borrows_shared (meta : Meta.meta) (regions : Regio
     Note that the symbolic value at this place is necessarily equal to [sv],
     which is why we don't give it as parameters.
  *)
-let update_intersecting_aproj_loans (meta : Meta.meta) (proj_regions : RegionId.Set.t)
-    (proj_ty : rty) (sv : symbolic_value)
+let update_intersecting_aproj_loans (meta : Meta.meta)
+    (proj_regions : RegionId.Set.t) (proj_ty : rty) (sv : symbolic_value)
     (subst : abs -> (msymbolic_value * aproj) list -> aproj) (ctx : eval_ctx) :
     eval_ctx =
   (* *)
@@ -960,7 +966,8 @@ let update_intersecting_aproj_loans (meta : Meta.meta) (proj_regions : RegionId.
             if same_symbolic_id sv sv' then (
               sanity_check (sv.sv_ty = sv'.sv_ty) meta;
               if
-                projections_intersect meta proj_ty proj_regions sv'.sv_ty abs.regions
+                projections_intersect meta proj_ty proj_regions sv'.sv_ty
+                  abs.regions
               then update abs given_back
               else super#visit_aproj (Some abs) sproj)
             else super#visit_aproj (Some abs) sproj
@@ -983,8 +990,8 @@ let update_intersecting_aproj_loans (meta : Meta.meta) (proj_regions : RegionId.
     Sanity check: we check that there is exactly one projector which corresponds
     to the couple (abstraction id, symbolic value).
  *)
-let lookup_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symbolic_value)
-    (ctx : eval_ctx) : (msymbolic_value * aproj) list =
+let lookup_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id)
+    (sv : symbolic_value) (ctx : eval_ctx) : (msymbolic_value * aproj) list =
   (* Small helpers for sanity checks *)
   let found = ref None in
   let set_found x =
@@ -1028,8 +1035,8 @@ let lookup_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symb
     Sanity check: we check that there is exactly one projector which corresponds
     to the couple (abstraction id, symbolic value).
  *)
-let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symbolic_value)
-    (nproj : aproj) (ctx : eval_ctx) : eval_ctx =
+let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id)
+    (sv : symbolic_value) (nproj : aproj) (ctx : eval_ctx) : eval_ctx =
   (* Small helpers for sanity checks *)
   let found = ref false in
   let update () =
@@ -1077,8 +1084,8 @@ let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symb
     
     TODO: factorize with {!update_aproj_loans}?
  *)
-let update_aproj_borrows (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symbolic_value)
-    (nproj : aproj) (ctx : eval_ctx) : eval_ctx =
+let update_aproj_borrows (meta : Meta.meta) (abs_id : AbstractionId.id)
+    (sv : symbolic_value) (nproj : aproj) (ctx : eval_ctx) : eval_ctx =
   (* Small helpers for sanity checks *)
   let found = ref false in
   let update () =
@@ -1128,12 +1135,12 @@ let update_aproj_loans_to_ended (meta : Meta.meta) (abs_id : AbstractionId.id)
   (* Create the new value for the projector *)
   let nproj = AEndedProjLoans (sv, given_back) in
   (* Insert it *)
-  let ctx =  update_aproj_loans meta abs_id sv nproj ctx in
+  let ctx = update_aproj_loans meta abs_id sv nproj ctx in
   (* Return *)
   ctx
 
-let no_aproj_over_symbolic_in_context (meta : Meta.meta)  (sv : symbolic_value) (ctx : eval_ctx) :
-    unit =
+let no_aproj_over_symbolic_in_context (meta : Meta.meta) (sv : symbolic_value)
+    (ctx : eval_ctx) : unit =
   (* The visitor *)
   let obj =
     object
@@ -1211,8 +1218,8 @@ let get_first_non_ignored_aloan_in_abstraction (meta : Meta.meta) (abs : abs) :
       (* There are loan projections over symbolic values *)
       Some (SymbolicValue sv)
 
-let lookup_shared_value_opt (meta : Meta.meta) (ctx : eval_ctx) (bid : BorrowId.id) :
-    typed_value option =
+let lookup_shared_value_opt (meta : Meta.meta) (ctx : eval_ctx)
+    (bid : BorrowId.id) : typed_value option =
   match lookup_loan_opt meta ek_all bid ctx with
   | None -> None
   | Some (_, lc) -> (
@@ -1221,5 +1228,6 @@ let lookup_shared_value_opt (meta : Meta.meta) (ctx : eval_ctx) (bid : BorrowId.
           Some sv
       | _ -> None)
 
-let lookup_shared_value (meta : Meta.meta) (ctx : eval_ctx) (bid : BorrowId.id) : typed_value =
+let lookup_shared_value (meta : Meta.meta) (ctx : eval_ctx) (bid : BorrowId.id)
+    : typed_value =
   Option.get (lookup_shared_value_opt meta ctx bid)

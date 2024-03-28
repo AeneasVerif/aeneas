@@ -128,8 +128,12 @@ let extract_adt_g_value (meta : Meta.meta)
   | TAdt (TTuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
-      cassert (List.length generics.types = List.length field_values) meta "Only fully applied tuple constructors are currently supported";
-      cassert (generics.const_generics = [] && generics.trait_refs = []) meta "Only fully applied tuple constructors are currently supported";
+      cassert
+        (List.length generics.types = List.length field_values)
+        meta "Only fully applied tuple constructors are currently supported";
+      cassert
+        (generics.const_generics = [] && generics.trait_refs = [])
+        meta "Only fully applied tuple constructors are currently supported";
       extract_as_tuple ()
   | TAdt (adt_id, _) ->
       (* "Regular" ADT *)
@@ -186,8 +190,8 @@ let extract_adt_g_value (meta : Meta.meta)
   | _ -> craise meta "Inconsistent typed value"
 
 (* Extract globals in the same way as variables *)
-let extract_global (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (id : A.GlobalDeclId.id) (generics : generic_args) : unit =
+let extract_global (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (id : A.GlobalDeclId.id) (generics : generic_args) : unit =
   let use_brackets = inside && generics <> empty_generic_args in
   F.pp_open_hvbox fmt ctx.indent_incr;
   if use_brackets then F.pp_print_string fmt "(";
@@ -232,9 +236,9 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
     As a pattern can introduce new variables, we return an extraction context
     updated with new bindings.
  *)
-let rec extract_typed_pattern (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (is_let : bool) (inside : bool) ?(with_type = false) (v : typed_pattern) :
-    extraction_ctx =
+let rec extract_typed_pattern (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (is_let : bool) (inside : bool) ?(with_type = false)
+    (v : typed_pattern) : extraction_ctx =
   if with_type then F.pp_print_string fmt "(";
   let inside = inside && not with_type in
   let ctx =
@@ -254,8 +258,8 @@ let rec extract_typed_pattern (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F
         let extract_value ctx inside v =
           extract_typed_pattern meta ctx fmt is_let inside v
         in
-        extract_adt_g_value meta extract_value fmt ctx is_let inside av.variant_id
-          av.field_values v.ty
+        extract_adt_g_value meta extract_value fmt ctx is_let inside
+          av.variant_id av.field_values v.ty
   in
   if with_type then (
     F.pp_print_space fmt ();
@@ -267,8 +271,8 @@ let rec extract_typed_pattern (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F
 
 (** Return true if we need to wrap a succession of let-bindings in a [do ...]
     block (because some of them are monadic) *)
-let lets_require_wrap_in_do (meta : Meta.meta) (lets : (bool * typed_pattern * texpression) list) :
-    bool =
+let lets_require_wrap_in_do (meta : Meta.meta)
+    (lets : (bool * typed_pattern * texpression) list) : bool =
   match !backend with
   | Lean ->
       (* For Lean, we wrap in a block iff at least one of the let-bindings is monadic *)
@@ -276,7 +280,8 @@ let lets_require_wrap_in_do (meta : Meta.meta) (lets : (bool * typed_pattern * t
   | HOL4 ->
       (* HOL4 is similar to HOL4, but we add a sanity check *)
       let wrap_in_do = List.exists (fun (m, _, _) -> m) lets in
-      if wrap_in_do then sanity_check (List.for_all (fun (m, _, _) -> m) lets) meta;
+      if wrap_in_do then
+        sanity_check (List.for_all (fun (m, _, _) -> m) lets) meta;
       wrap_in_do
   | FStar | Coq -> false
 
@@ -290,8 +295,8 @@ let lets_require_wrap_in_do (meta : Meta.meta) (lets : (bool * typed_pattern * t
     - application argument: [f (exp)]
     - match/if scrutinee: [if exp then _ else _]/[match exp | _ -> _]
  *)
-let rec extract_texpression (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (e : texpression) : unit =
+let rec extract_texpression (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (inside : bool) (e : texpression) : unit =
   match e.e with
   | Var var_id ->
       let var_name = ctx_get_var meta var_id ctx in
@@ -320,8 +325,8 @@ let rec extract_texpression (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.f
 (* Extract an application *or* a top-level qualif (function extraction has
  * to handle top-level qualifiers, so it seemed more natural to merge the
  * two cases) *)
-and extract_App (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (app : texpression) (args : texpression list) : unit =
+and extract_App (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (app : texpression) (args : texpression list) : unit =
   (* We don't do the same thing if the app is a top-level identifier (function,
    * ADT constructor...) or a "regular" expression *)
   match app.e with
@@ -336,7 +341,8 @@ and extract_App (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (i
       | AdtCons adt_cons_id ->
           extract_adt_cons meta ctx fmt inside adt_cons_id qualif.generics args
       | Proj proj ->
-          extract_field_projector meta ctx fmt inside app proj qualif.generics args
+          extract_field_projector meta ctx fmt inside app proj qualif.generics
+            args
       | TraitConst (trait_ref, const_name) ->
           extract_trait_ref meta ctx fmt TypeDeclId.Set.empty true trait_ref;
           let name =
@@ -368,9 +374,9 @@ and extract_App (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (i
       if inside then F.pp_print_string fmt ")"
 
 (** Subcase of the app case: function call *)
-and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (fid : fun_or_op_id) (generics : generic_args)
-    (args : texpression list) : unit =
+and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (inside : bool) (fid : fun_or_op_id)
+    (generics : generic_args) (args : texpression list) : unit =
   match (fid, args) with
   | Unop unop, [ arg ] ->
       (* A unop can have *at most* one argument (the result can't be a function!).
@@ -448,8 +454,9 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.for
 
           if not method_id.is_provided then (
             (* Required method *)
-            sanity_check (lp_id = None) trait_decl.meta ;
-            extract_trait_ref trait_decl.meta ctx fmt TypeDeclId.Set.empty true trait_ref;
+            sanity_check (lp_id = None) trait_decl.meta;
+            extract_trait_ref trait_decl.meta ctx fmt TypeDeclId.Set.empty true
+              trait_ref;
             let fun_name =
               ctx_get_trait_method meta trait_ref.trait_decl_ref.trait_decl_id
                 method_name ctx
@@ -471,7 +478,8 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.for
 
                Print the trait ref (to instantate the self clause) *)
             F.pp_print_space fmt ();
-            extract_trait_ref trait_decl.meta ctx fmt TypeDeclId.Set.empty true trait_ref
+            extract_trait_ref trait_decl.meta ctx fmt TypeDeclId.Set.empty true
+              trait_ref
       | _ ->
           let fun_name = ctx_get_function meta fun_id ctx in
           F.pp_print_string fmt fun_name);
@@ -498,11 +506,11 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.for
           extract_generic_args meta ctx fmt TypeDeclId.Set.empty
             { generics with types };
           (* if !Config.fail_hard then craise meta err
-          else *)
+             else *)
           save_error (Some meta) err;
           F.pp_print_string fmt
-              "(\"ERROR: ill-formed builtin: invalid number of filtering \
-               arguments\")");
+            "(\"ERROR: ill-formed builtin: invalid number of filtering \
+             arguments\")");
       (* Print the arguments *)
       List.iter
         (fun ve ->
@@ -514,18 +522,17 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.for
       (* Return *)
       if inside then F.pp_print_string fmt ")"
   | (Unop _ | Binop _), _ ->
-      craise
-        meta
-           ("Unreachable:\n" ^ "Function: " ^ show_fun_or_op_id fid
-          ^ ",\nNumber of arguments: "
-           ^ string_of_int (List.length args)
-           ^ ",\nArguments: "
-           ^ String.concat " " (List.map show_texpression args))
+      craise meta
+        ("Unreachable:\n" ^ "Function: " ^ show_fun_or_op_id fid
+       ^ ",\nNumber of arguments: "
+        ^ string_of_int (List.length args)
+        ^ ",\nArguments: "
+        ^ String.concat " " (List.map show_texpression args))
 
 (** Subcase of the app case: ADT constructor *)
-and extract_adt_cons (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (adt_cons : adt_cons_id) (generics : generic_args) (args : texpression list)
-    : unit =
+and extract_adt_cons (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (inside : bool) (adt_cons : adt_cons_id)
+    (generics : generic_args) (args : texpression list) : unit =
   let e_ty = TAdt (adt_cons.adt_id, generics) in
   let is_single_pat = false in
   let _ =
@@ -538,9 +545,10 @@ and extract_adt_cons (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatte
   ()
 
 (** Subcase of the app case: ADT field projector.  *)
-and extract_field_projector (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (original_app : texpression) (proj : projection)
-    (_generics : generic_args) (args : texpression list) : unit =
+and extract_field_projector (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (inside : bool) (original_app : texpression)
+    (proj : projection) (_generics : generic_args) (args : texpression list) :
+    unit =
   (* We isolate the first argument (if there is), in order to pretty print the
    * projection ([x.field] instead of [MkAdt?.field x] *)
   match args with
@@ -638,14 +646,14 @@ and extract_field_projector (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.f
       (* No argument: shouldn't happen *)
       craise meta "Unreachable"
 
-and extract_Lambda (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (xl : typed_pattern list) (e : texpression) : unit =
+and extract_Lambda (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (xl : typed_pattern list) (e : texpression) : unit =
   (* Open a box for the abs expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Open parentheses *)
   if inside then F.pp_print_string fmt "(";
   (* Print the lambda - note that there should always be at least one variable *)
-  sanity_check (xl <> []) meta ;
+  sanity_check (xl <> []) meta;
   F.pp_print_string fmt "fun";
   let with_type = !backend = Coq in
   let ctx =
@@ -666,8 +674,8 @@ and extract_Lambda (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Close the box for the abs expression *)
   F.pp_close_box fmt ()
 
-and extract_lets (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (e : texpression) : unit =
+and extract_lets (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (e : texpression) : unit =
   (* Destruct the lets.
 
      Note that in the case of HOL4, we stop destructing the lets if at some point
@@ -804,8 +812,8 @@ and extract_lets (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (
   (* Close the box for the whole expression *)
   F.pp_close_box fmt ()
 
-and extract_Switch (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (_inside : bool)
-    (scrut : texpression) (body : switch_body) : unit =
+and extract_Switch (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
+    (_inside : bool) (scrut : texpression) (body : switch_body) : unit =
   (* Remark: we don't use the [inside] parameter because we extract matches in
      a conservative manner: we always make sure they are parenthesized/delimited
      with keywords such as [end] *)
@@ -823,7 +831,9 @@ and extract_Switch (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_string fmt "if";
       if !backend = Lean && ctx.use_dep_ite then F.pp_print_string fmt " h:";
       F.pp_print_space fmt ();
-      let scrut_inside = PureUtils.texpression_requires_parentheses meta scrut in
+      let scrut_inside =
+        PureUtils.texpression_requires_parentheses meta scrut
+      in
       extract_texpression meta ctx fmt scrut_inside scrut;
       (* Close the box for the [if e] *)
       F.pp_close_box fmt ();
@@ -837,7 +847,9 @@ and extract_Switch (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_open_hovbox fmt 0;
         let then_or_else = if is_then then "then" else "else" in
         F.pp_print_string fmt then_or_else;
-        let parenth = PureUtils.texpression_requires_parentheses meta e_branch in
+        let parenth =
+          PureUtils.texpression_requires_parentheses meta e_branch
+        in
         (* Open the parenthesized expression *)
         let print_space_after_parenth =
           if parenth then (
@@ -889,7 +901,9 @@ and extract_Switch (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
       in
       F.pp_print_string fmt match_begin;
       F.pp_print_space fmt ();
-      let scrut_inside = PureUtils.texpression_requires_parentheses meta scrut in
+      let scrut_inside =
+        PureUtils.texpression_requires_parentheses meta scrut
+      in
       extract_texpression meta ctx fmt scrut_inside scrut;
       F.pp_print_space fmt ();
       let match_scrut_end =
@@ -940,11 +954,12 @@ and extract_Switch (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Close the box for the whole expression *)
   F.pp_close_box fmt ()
 
-and extract_StructUpdate (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (e_ty : ty) (supd : struct_update) : unit =
+and extract_StructUpdate (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (inside : bool) (e_ty : ty) (supd : struct_update) :
+    unit =
   (* We can't update a subset of the fields in Coq (i.e., we can do
      [{| x:= 3; y := 4 |}], but there is no syntax for [{| s with x := 3 |}]) *)
-  sanity_check (!backend <> Coq || supd.init = None) meta ;
+  sanity_check (!backend <> Coq || supd.init = None) meta;
   (* In the case of HOL4, records with no fields are not supported and are
      thus extracted to unit. We need to check that by looking up the definition *)
   let extract_as_unit =
@@ -1133,8 +1148,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Open a box for the generics *)
   F.pp_open_hovbox fmt 0;
   (let space = Some space in
-   extract_generic_params def.meta ctx fmt TypeDeclId.Set.empty ~space ~trait_decl
-     def.signature.generics type_params cg_params trait_clauses);
+   extract_generic_params def.meta ctx fmt TypeDeclId.Set.empty ~space
+     ~trait_decl def.signature.generics type_params cg_params trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)
@@ -1187,8 +1202,8 @@ let assert_backend_supports_decreases_clauses (meta : Meta.meta) =
   match !backend with
   | FStar | Lean -> ()
   | _ ->
-      craise
-        meta "Decreases clauses are only supported for the Lean and F* backends"
+      craise meta
+        "Decreases clauses are only supported for the Lean and F* backends"
 
 (** Extract a decreases clause function template body.
 
@@ -1208,10 +1223,14 @@ let assert_backend_supports_decreases_clauses (meta : Meta.meta) =
  *)
 let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
-  cassert (!backend = FStar) def.meta "The generation of template decrease clauses is only supported for the F* backend";
+  cassert (!backend = FStar) def.meta
+    "The generation of template decrease clauses is only supported for the F* \
+     backend";
 
   (* Retrieve the function name *)
-  let def_name = ctx_get_termination_measure def.meta def.def_id def.loop_id ctx in
+  let def_name =
+    ctx_get_termination_measure def.meta def.def_id def.loop_id ctx
+  in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -1273,12 +1292,16 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
 *)
 let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
-  cassert (!backend = Lean) def.meta "The generation of template termination and decreasing clauses is only supported for the Lean backend" ;
+  cassert (!backend = Lean) def.meta
+    "The generation of template termination and decreasing clauses is only \
+     supported for the Lean backend";
   (*
    * Extract a template for the termination measure
    *)
   (* Retrieve the function name *)
-  let def_name = ctx_get_termination_measure def.meta def.def_id def.loop_id ctx in
+  let def_name =
+    ctx_get_termination_measure def.meta def.def_id def.loop_id ctx
+  in
   let def_body = Option.get def.body in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
@@ -1396,7 +1419,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
-  sanity_check (not def.is_global_decl_body) def.meta ;
+  sanity_check (not def.is_global_decl_body) def.meta;
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
   (* Add a break before *)
@@ -1489,7 +1512,9 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       (* Open a box for the decreases term *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* The name of the decrease clause *)
-      let decr_name = ctx_get_termination_measure def.meta def.def_id def.loop_id ctx in
+      let decr_name =
+        ctx_get_termination_measure def.meta def.def_id def.loop_id ctx
+      in
       F.pp_print_string fmt decr_name;
       (* Print the generic parameters - TODO: we do this many
          times, we should have a helper to factor it out *)
@@ -1545,7 +1570,9 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (* Open a box for the body *)
     F.pp_open_hvbox fmt 0;
     (* Extract the body *)
-    let _ = extract_texpression def.meta ctx_body fmt false (Option.get def.body).body in
+    let _ =
+      extract_texpression def.meta ctx_body fmt false (Option.get def.body).body
+    in
     (* Close the box for the body *)
     F.pp_close_box fmt ());
   (* Close the inner box for the definition *)
@@ -1604,7 +1631,9 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_break fmt 0 0;
     (* Open a box for the [decreasing by ...] *)
     F.pp_open_hvbox fmt ctx.indent_incr;
-    let decreases_name = ctx_get_decreases_proof def.meta def.def_id def.loop_id ctx in
+    let decreases_name =
+      ctx_get_decreases_proof def.meta def.def_id def.loop_id ctx
+    in
     F.pp_print_string fmt "decreasing_by";
     F.pp_print_space fmt ();
     F.pp_open_hvbox fmt ctx.indent_incr;
@@ -1643,7 +1672,10 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
-  cassert (def.signature.generics.const_generics = []) def.meta "Constant generics are not supported yet when generating code for HOL4";
+  cassert
+    (def.signature.generics.const_generics = [])
+    def.meta
+    "Constant generics are not supported yet when generating code for HOL4";
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
   let ctx, _, _, _ =
@@ -1689,7 +1721,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
-  sanity_check (not def.is_global_decl_body) def.meta ;
+  sanity_check (not def.is_global_decl_body) def.meta;
   (* We treat HOL4 opaque functions in a specific manner *)
   if !backend = HOL4 && Option.is_none def.body then
     extract_fun_decl_hol4_opaque ctx fmt def
@@ -1702,10 +1734,10 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     extracted to two declarations, and we can actually factor out the generation
     of those declarations. See {!extract_global_decl} for more explanations.
  *)
-let extract_global_decl_body_gen (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (kind : decl_kind) (name : string) (generics : generic_params)
-    (type_params : string list) (cg_params : string list)
-    (trait_clauses : string list) (ty : ty)
+let extract_global_decl_body_gen (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (kind : decl_kind) (name : string)
+    (generics : generic_params) (type_params : string list)
+    (cg_params : string list) (trait_clauses : string list) (ty : ty)
     (extract_body : (F.formatter -> unit) Option.t) : unit =
   let is_opaque = Option.is_none extract_body in
 
@@ -1794,8 +1826,9 @@ let extract_global_decl_body_gen (meta : Meta.meta) (ctx : extraction_ctx) (fmt 
     Remark (SH): having to treat this specific case separately is very annoying,
     but I could not find a better way.
  *)
-let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (name : string) (generics : generic_params) (ty : ty) : unit =
+let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (name : string) (generics : generic_params) (ty : ty) :
+    unit =
   (* TODO: non-empty generics *)
   assert (generics = empty_generic_params);
   (* Open the definition boxe (depth=0) *)
@@ -1838,7 +1871,6 @@ let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx) (f
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
-
   let meta = body.meta in
   cassert body.is_global_decl_body body.meta "TODO: Error message";
   cassert (body.signature.inputs = []) body.meta "TODO: Error message";
@@ -1857,7 +1889,9 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
   let decl_name = ctx_get_global meta global.def_id ctx in
   let body_name =
-    ctx_get_function meta (FromLlbc (Pure.FunId (FRegular global.body_id), None)) ctx
+    ctx_get_function meta
+      (FromLlbc (Pure.FunId (FRegular global.body_id), None))
+      ctx
   in
   let decl_ty, body_ty =
     let ty = body.signature.output in
@@ -1867,8 +1901,8 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   in
   (* Add the type parameters *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params meta global.llbc_name global.llbc_generics global.generics
-      ctx
+    ctx_add_generic_params meta global.llbc_name global.llbc_generics
+      global.generics ctx
   in
   match body.body with
   | None ->
@@ -1957,7 +1991,9 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (cid, cname) ->
-      ctx_add trait_decl.meta (TraitParentClauseId (trait_decl.def_id, cid)) cname ctx)
+      ctx_add trait_decl.meta
+        (TraitParentClauseId (trait_decl.def_id, cid))
+        cname ctx)
     ctx clause_names
 
 (** Similar to {!extract_trait_decl_register_names} *)
@@ -1990,7 +2026,9 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (item_name, name) ->
-      ctx_add trait_decl.meta (TraitItemId (trait_decl.def_id, item_name)) name ctx)
+      ctx_add trait_decl.meta
+        (TraitItemId (trait_decl.def_id, item_name))
+        name ctx)
     ctx constant_names
 
 (** Similar to {!extract_trait_decl_register_names} *)
@@ -2049,11 +2087,13 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
   List.fold_left
     (fun ctx (item_name, (type_name, clauses)) ->
       let ctx =
-        ctx_add trait_decl.meta (TraitItemId (trait_decl.def_id, item_name)) type_name ctx
+        ctx_add trait_decl.meta
+          (TraitItemId (trait_decl.def_id, item_name))
+          type_name ctx
       in
       List.fold_left
         (fun ctx (clause_id, clause_name) ->
-          ctx_add trait_decl.meta 
+          ctx_add trait_decl.meta
             (TraitItemClauseId (trait_decl.def_id, item_name, clause_id))
             clause_name ctx)
         ctx clauses)
@@ -2105,7 +2145,9 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (item_name, fun_name) ->
-      ctx_add trait_decl.meta (TraitMethodId (trait_decl.def_id, item_name)) fun_name ctx)
+      ctx_add trait_decl.meta
+        (TraitMethodId (trait_decl.def_id, item_name))
+        fun_name ctx)
     ctx method_names
 
 (** Similar to {!extract_type_decl_register_names} *)
@@ -2125,8 +2167,11 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
             ctx_compute_trait_decl_constructor ctx trait_decl )
       | Some info -> (info.extract_name, info.constructor)
     in
-    let ctx = ctx_add trait_decl.meta (TraitDeclId trait_decl.def_id) trait_name ctx in
-    ctx_add trait_decl.meta (TraitDeclConstructorId trait_decl.def_id) trait_constructor ctx
+    let ctx =
+      ctx_add trait_decl.meta (TraitDeclId trait_decl.def_id) trait_name ctx
+    in
+    ctx_add trait_decl.meta (TraitDeclConstructorId trait_decl.def_id)
+      trait_constructor ctx
   in
   (* Parent clauses *)
   let ctx =
@@ -2180,7 +2225,9 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   in
 
   (* For now we do not support overriding provided methods *)
-  cassert (trait_impl.provided_methods = []) trait_impl.meta "Overriding provided methods is not supported yet";
+  cassert
+    (trait_impl.provided_methods = [])
+    trait_impl.meta "Overriding provided methods is not supported yet";
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
      the name of the implementation itself *)
   (* Compute the name *)
@@ -2254,7 +2301,8 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params decl.meta f.llbc_name f.signature.llbc_generics generics ctx
+      ctx_add_generic_params decl.meta f.llbc_name f.signature.llbc_generics
+        generics ctx
     in
     let backend_uses_forall =
       match !backend with Coq | Lean -> true | FStar | HOL4 -> false
@@ -2321,10 +2369,11 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params decl.meta decl.llbc_name decl.llbc_generics generics ctx
+    ctx_add_generic_params decl.meta decl.llbc_name decl.llbc_generics generics
+      ctx
   in
-  extract_generic_params decl.meta ctx fmt TypeDeclId.Set.empty generics type_params
-    cg_params trait_clauses;
+  extract_generic_params decl.meta ctx fmt TypeDeclId.Set.empty generics
+    type_params cg_params trait_clauses;
 
   F.pp_print_space fmt ();
   if is_empty && !backend = FStar then (
@@ -2379,11 +2428,13 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         List.iter
           (fun clause ->
             let item_name =
-              ctx_get_trait_item_clause decl.meta decl.def_id name clause.clause_id ctx
+              ctx_get_trait_item_clause decl.meta decl.def_id name
+                clause.clause_id ctx
             in
             let ty () =
               F.pp_print_space fmt ();
-              extract_trait_clause_type decl.meta ctx fmt TypeDeclId.Set.empty clause
+              extract_trait_clause_type decl.meta ctx fmt TypeDeclId.Set.empty
+                clause
             in
             extract_trait_decl_item ctx fmt item_name ty)
           clauses)
@@ -2398,7 +2449,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         in
         let ty () =
           F.pp_print_space fmt ();
-          extract_trait_clause_type decl.meta ctx fmt TypeDeclId.Set.empty clause
+          extract_trait_clause_type decl.meta ctx fmt TypeDeclId.Set.empty
+            clause
         in
         extract_trait_decl_item ctx fmt item_name ty)
       decl.parent_clauses;
@@ -2453,7 +2505,8 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
         List.iter
           (fun clause ->
             let item_name =
-              ctx_get_trait_item_clause decl.meta decl.def_id name clause.clause_id ctx
+              ctx_get_trait_item_clause decl.meta decl.def_id name
+                clause.clause_id ctx
             in
             extract_coq_arguments_instruction ctx fmt item_name num_params)
           clauses)
@@ -2470,7 +2523,9 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (item_name, _) ->
         (* Extract the items *)
-        let item_name = ctx_get_trait_method decl.meta decl.def_id item_name ctx in
+        let item_name =
+          ctx_get_trait_method decl.meta decl.def_id item_name ctx
+        in
         extract_coq_arguments_instruction ctx fmt item_name num_params)
       decl.required_methods;
     (* Add a space *)
@@ -2535,12 +2590,12 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, f_tys, f_cgs, f_tcs =
-      ctx_add_generic_params impl.meta f.llbc_name f.signature.llbc_generics f_generics
-        ctx
+      ctx_add_generic_params impl.meta f.llbc_name f.signature.llbc_generics
+        f_generics ctx
     in
     let use_forall = f_generics <> empty_generic_params in
-    extract_generic_params impl.meta ctx fmt TypeDeclId.Set.empty ~use_forall f_generics
-      f_tys f_cgs f_tcs;
+    extract_generic_params impl.meta ctx fmt TypeDeclId.Set.empty ~use_forall
+      f_generics f_tys f_cgs f_tcs;
     if use_forall then F.pp_print_string fmt ",";
     (* Extract the function call *)
     F.pp_print_space fmt ();
@@ -2607,17 +2662,19 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params impl.meta impl.llbc_name impl.llbc_generics impl.generics ctx
+    ctx_add_generic_params impl.meta impl.llbc_name impl.llbc_generics
+      impl.generics ctx
   in
   let all_generics = (type_params, cg_params, trait_clauses) in
-  extract_generic_params impl.meta ctx fmt TypeDeclId.Set.empty impl.generics type_params
-    cg_params trait_clauses;
+  extract_generic_params impl.meta ctx fmt TypeDeclId.Set.empty impl.generics
+    type_params cg_params trait_clauses;
 
   (* Print the type *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
   F.pp_print_space fmt ();
-  extract_trait_decl_ref impl.meta ctx fmt TypeDeclId.Set.empty false impl.impl_trait;
+  extract_trait_decl_ref impl.meta ctx fmt TypeDeclId.Set.empty false
+    impl.impl_trait;
 
   (* When checking if the trait impl is empty: we ignore the provided
      methods, because for now they are extracted separately *)
@@ -2630,7 +2687,9 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ())
   else if is_empty && !Config.backend = Coq then (
     (* Coq is not very good at infering constructors *)
-    let cons = ctx_get_trait_constructor impl.meta impl.impl_trait.trait_decl_id ctx in
+    let cons =
+      ctx_get_trait_constructor impl.meta impl.impl_trait.trait_decl_id ctx
+    in
     F.pp_print_string fmt (":= " ^ cons ^ ".");
     (* Outer box *)
     F.pp_close_box fmt ())
@@ -2694,11 +2753,13 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         TraitClauseId.iteri
           (fun clause_id trait_ref ->
             let item_name =
-              ctx_get_trait_item_clause impl.meta trait_decl_id name clause_id ctx
+              ctx_get_trait_item_clause impl.meta trait_decl_id name clause_id
+                ctx
             in
             let ty () =
               F.pp_print_space fmt ();
-              extract_trait_ref impl.meta ctx fmt TypeDeclId.Set.empty false trait_ref
+              extract_trait_ref impl.meta ctx fmt TypeDeclId.Set.empty false
+                trait_ref
             in
             extract_trait_impl_item ctx fmt item_name ty)
           trait_refs)
@@ -2712,7 +2773,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         in
         let ty () =
           F.pp_print_space fmt ();
-          extract_trait_ref impl.meta ctx fmt TypeDeclId.Set.empty false trait_ref
+          extract_trait_ref impl.meta ctx fmt TypeDeclId.Set.empty false
+            trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
       impl.parent_trait_refs;
@@ -2775,7 +2837,9 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "assert_norm";
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
-        let fun_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
+        let fun_name =
+          ctx_get_local_function def.meta def.def_id def.loop_id ctx
+        in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
           F.pp_print_space fmt ();
@@ -2783,13 +2847,17 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "=";
         F.pp_print_space fmt ();
-        let success = ctx_get_variant def.meta (TAssumed TResult) result_return_id ctx in
+        let success =
+          ctx_get_variant def.meta (TAssumed TResult) result_return_id ctx
+        in
         F.pp_print_string fmt (success ^ " ())")
     | Coq ->
         F.pp_print_string fmt "Check";
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
-        let fun_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
+        let fun_name =
+          ctx_get_local_function def.meta def.def_id def.loop_id ctx
+        in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
           F.pp_print_space fmt ();
@@ -2800,7 +2868,9 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "#assert";
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
-        let fun_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
+        let fun_name =
+          ctx_get_local_function def.meta def.def_id def.loop_id ctx
+        in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
           F.pp_print_space fmt ();
@@ -2808,12 +2878,16 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
-        let success = ctx_get_variant def.meta (TAssumed TResult) result_return_id ctx in
+        let success =
+          ctx_get_variant def.meta (TAssumed TResult) result_return_id ctx
+        in
         F.pp_print_string fmt (success ^ " ())")
     | HOL4 ->
         F.pp_print_string fmt "val _ = assert_return (";
         F.pp_print_string fmt "“";
-        let fun_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
+        let fun_name =
+          ctx_get_local_function def.meta def.def_id def.loop_id ctx
+        in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
           F.pp_print_space fmt ();

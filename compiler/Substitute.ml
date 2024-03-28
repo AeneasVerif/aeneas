@@ -68,14 +68,16 @@ let ctx_adt_get_instantiated_field_types (ctx : eval_ctx)
     **IMPORTANT**: this function doesn't normalize the types, you may want to
     use the [AssociatedTypes] equivalent instead.
  *)
-let ctx_adt_value_get_instantiated_field_types (meta : Meta.meta) (ctx : eval_ctx)
-    (adt : adt_value) (id : type_id) (generics : generic_args) : ty list =
+let ctx_adt_value_get_instantiated_field_types (meta : Meta.meta)
+    (ctx : eval_ctx) (adt : adt_value) (id : type_id) (generics : generic_args)
+    : ty list =
   match id with
   | TAdtId id ->
       (* Retrieve the types of the fields *)
       ctx_adt_get_instantiated_field_types ctx id adt.variant_id generics
   | TTuple ->
-      cassert (generics.regions = []) meta "Regions should be empty TODO: error message";
+      cassert (generics.regions = []) meta
+        "Regions should be empty TODO: error message";
       generics.types
   | TAssumed aty -> (
       match aty with
@@ -145,7 +147,8 @@ let subst_ids_visitor (r_subst : RegionId.id -> RegionId.id)
     method! visit_abstraction_id _ id = asubst id
   end
 
-let typed_value_subst_ids (meta : Meta.meta) (r_subst : RegionId.id -> RegionId.id)
+let typed_value_subst_ids (meta : Meta.meta)
+    (r_subst : RegionId.id -> RegionId.id)
     (ty_subst : TypeVarId.id -> TypeVarId.id)
     (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
     (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
@@ -154,8 +157,8 @@ let typed_value_subst_ids (meta : Meta.meta) (r_subst : RegionId.id -> RegionId.
   let vis = subst_ids_visitor r_subst ty_subst cg_subst ssubst bsubst asubst in
   vis#visit_typed_value () v
 
-let typed_value_subst_rids (meta : Meta.meta) (r_subst : RegionId.id -> RegionId.id)
-    (v : typed_value) : typed_value =
+let typed_value_subst_rids (meta : Meta.meta)
+    (r_subst : RegionId.id -> RegionId.id) (v : typed_value) : typed_value =
   typed_value_subst_ids meta r_subst
     (fun x -> x)
     (fun x -> x)
@@ -163,7 +166,8 @@ let typed_value_subst_rids (meta : Meta.meta) (r_subst : RegionId.id -> RegionId
     (fun x -> x)
     v
 
-let typed_avalue_subst_ids (meta : Meta.meta) (r_subst : RegionId.id -> RegionId.id)
+let typed_avalue_subst_ids (meta : Meta.meta)
+    (r_subst : RegionId.id -> RegionId.id)
     (ty_subst : TypeVarId.id -> TypeVarId.id)
     (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
     (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
@@ -190,8 +194,8 @@ let env_subst_ids (r_subst : RegionId.id -> RegionId.id)
   let vis = subst_ids_visitor r_subst ty_subst cg_subst ssubst bsubst asubst in
   vis#visit_env () x
 
-let typed_avalue_subst_rids (meta : Meta.meta) (r_subst : RegionId.id -> RegionId.id)
-    (x : typed_avalue) : typed_avalue =
+let typed_avalue_subst_rids (meta : Meta.meta)
+    (r_subst : RegionId.id -> RegionId.id) (x : typed_avalue) : typed_avalue =
   let asubst _ = craise meta "Unreachable" in
   let vis =
     subst_ids_visitor r_subst

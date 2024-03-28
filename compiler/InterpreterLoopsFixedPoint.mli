@@ -77,7 +77,7 @@ val prepare_ashared_loans : Meta.meta -> loop_id option -> Cps.cm_fun
     the values which are read or modified (some symbolic values may be ignored).
  *)
 val compute_loop_entry_fixed_point :
-  config -> 
+  config ->
   Meta.meta ->
   loop_id ->
   Cps.st_cm_fun ->
@@ -170,4 +170,7 @@ val compute_fixed_point_id_correspondance :
     - the list of input symbolic values
  *)
 val compute_fp_ctx_symbolic_values :
-  Meta.meta -> eval_ctx -> eval_ctx -> symbolic_value_id_set * symbolic_value list
+  Meta.meta ->
+  eval_ctx ->
+  eval_ctx ->
+  symbolic_value_id_set * symbolic_value list

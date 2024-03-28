@@ -6,22 +6,26 @@ open LlbcAst
 open SymbolicAst
 open Errors
 
-let mk_mplace (meta : Meta.meta) (p : place) (ctx : Contexts.eval_ctx) : mplace =
+let mk_mplace (meta : Meta.meta) (p : place) (ctx : Contexts.eval_ctx) : mplace
+    =
   let bv = Contexts.ctx_lookup_var_binder meta ctx p.var_id in
   { bv; projection = p.projection }
 
-let mk_opt_mplace (meta : Meta.meta) (p : place option) (ctx : Contexts.eval_ctx) : mplace option =
+let mk_opt_mplace (meta : Meta.meta) (p : place option)
+    (ctx : Contexts.eval_ctx) : mplace option =
   Option.map (fun p -> mk_mplace meta p ctx) p
 
-let mk_opt_place_from_op (meta : Meta.meta) (op : operand) (ctx : Contexts.eval_ctx) :
-    mplace option =
-  match op with Copy p | Move p -> Some (mk_mplace meta p ctx) | Constant _ -> None
+let mk_opt_place_from_op (meta : Meta.meta) (op : operand)
+    (ctx : Contexts.eval_ctx) : mplace option =
+  match op with
+  | Copy p | Move p -> Some (mk_mplace meta p ctx)
+  | Constant _ -> None
 
 let mk_emeta (m : emeta) (e : expression) : expression = Meta (m, e)
 
-let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value) (place : mplace option)
-    (seel : symbolic_expansion option list) (el : expression list option) :
-    expression option =
+let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value)
+    (place : mplace option) (seel : symbolic_expansion option list)
+    (el : expression list option) : expression option =
   match el with
   | None -> None
   | Some el ->
@@ -87,9 +91,9 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value) (plac
       in
       Some (Expansion (place, sv, expansion))
 
-let synthesize_symbolic_expansion_no_branching (meta : Meta.meta) (sv : symbolic_value)
-    (place : mplace option) (see : symbolic_expansion) (e : expression option) :
-    expression option =
+let synthesize_symbolic_expansion_no_branching (meta : Meta.meta)
+    (sv : symbolic_value) (place : mplace option) (see : symbolic_expansion)
+    (e : expression option) : expression option =
   let el = Option.map (fun e -> [ e ]) e in
   synthesize_symbolic_expansion meta sv place [ Some see ] el
 

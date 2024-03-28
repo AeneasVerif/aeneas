@@ -9,9 +9,9 @@ open Errors
     This function should only be used for "regular" ADTs, where the number
     of fields is fixed: it shouldn't be used for arrays, slices, etc.
  *)
-let get_adt_field_types (meta : Meta.meta) (type_decls : type_decl TypeDeclId.Map.t)
-    (type_id : type_id) (variant_id : VariantId.id option)
-    (generics : generic_args) : ty list =
+let get_adt_field_types (meta : Meta.meta)
+    (type_decls : type_decl TypeDeclId.Map.t) (type_id : type_id)
+    (variant_id : VariantId.id option) (generics : generic_args) : ty list =
   match type_id with
   | TTuple ->
       (* Tuple *)
@@ -34,13 +34,13 @@ let get_adt_field_types (meta : Meta.meta) (type_decls : type_decl TypeDeclId.Ma
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
-          else
-            craise meta "Unreachable: improper variant id for result type"
+          else craise meta "Unreachable: improper variant id for result type"
       | TError ->
           sanity_check (generics = empty_generic_args) meta;
           let variant_id = Option.get variant_id in
-          sanity_check (
-            variant_id = error_failure_id || variant_id = error_out_of_fuel_id) meta;
+          sanity_check
+            (variant_id = error_failure_id || variant_id = error_out_of_fuel_id)
+            meta;
           []
       | TFuel ->
           let variant_id = Option.get variant_id in
@@ -68,7 +68,8 @@ let check_literal (meta : Meta.meta) (v : literal) (ty : literal_type) : unit =
   | TBool, VBool _ | TChar, VChar _ -> ()
   | _ -> craise meta "Inconsistent type"
 
-let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
+let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx)
+    (v : typed_pattern) : tc_ctx =
   log#ldebug (lazy ("check_typed_pattern: " ^ show_typed_pattern v));
   match v.value with
   | PatConstant cv ->
@@ -101,7 +102,8 @@ let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx) (v : typed_pattern
         ctx
         (List.combine field_tys av.field_values)
 
-let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : unit =
+let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
+    unit =
   match e.e with
   | Var var_id -> (
       (* Lookup the variable - note that the variable may not be there,
@@ -162,7 +164,9 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
               sanity_check (generics = qualif.generics) meta
           | _ -> craise meta "Unreachable"))
   | Let (monadic, pat, re, e_next) ->
-      let expected_pat_ty = if monadic then destruct_result meta re.ty else re.ty in
+      let expected_pat_ty =
+        if monadic then destruct_result meta re.ty else re.ty
+      in
       sanity_check (pat.ty = expected_pat_ty) meta;
       sanity_check (e.ty = e_next.ty) meta;
       (* Check the right-expression *)
@@ -206,7 +210,8 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
       | TAdtId _ ->
           let variant_id = None in
           let expected_field_tys =
-            get_adt_field_types meta ctx.type_decls adt_id variant_id adt_generics
+            get_adt_field_types meta ctx.type_decls adt_id variant_id
+              adt_generics
           in
           List.iter
             (fun ((fid, fe) : _ * texpression) ->

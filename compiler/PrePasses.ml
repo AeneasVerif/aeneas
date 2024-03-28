@@ -215,7 +215,8 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
         inherit [_] map_statement as super
 
         method! visit_Loop entered_loop loop =
-          cassert (not entered_loop) st.meta "Nested loops are not supported yet";
+          cassert (not entered_loop) st.meta
+            "Nested loops are not supported yet";
           super#visit_Loop true loop
 
         method! visit_Break _ i =
@@ -396,9 +397,16 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
     let check_visitor =
       object
         inherit [_] iter_statement as super
-                (* Remember the span of the statement we enter *)
+        (* Remember the span of the statement we enter *)
+
         method! visit_statement _ st = super#visit_statement st.meta st
-        method! visit_var_id meta id = cassert (not (VarId.Set.mem id !filtered)) meta "Filtered variables should have completely disappeared from the body"
+
+        method! visit_var_id meta id =
+          cassert
+            (not (VarId.Set.mem id !filtered))
+            meta
+            "Filtered variables should have completely disappeared from the \
+             body"
       end
     in
     check_visitor#visit_statement body.meta body;

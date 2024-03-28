@@ -49,7 +49,8 @@ let compute_contexts (m : crate) : decls_ctx =
     to compute a normalization map (for the associated types) and that we added
     it in the context.
  *)
-let normalize_inst_fun_sig (meta : Meta.meta) (ctx : eval_ctx) (sg : inst_fun_sig) : inst_fun_sig =
+let normalize_inst_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
+    (sg : inst_fun_sig) : inst_fun_sig =
   let { regions_hierarchy = _; trait_type_constraints = _; inputs; output } =
     sg
   in
@@ -68,8 +69,8 @@ let normalize_inst_fun_sig (meta : Meta.meta) (ctx : eval_ctx) (sg : inst_fun_si
     clauses (we are not considering a function call, so we don't need to
     normalize because a trait clause was instantiated with a specific trait ref).
  *)
-let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx) (sg : fun_sig)
-    (regions_hierarchy : region_var_groups) (kind : item_kind) :
+let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
+    (sg : fun_sig) (regions_hierarchy : region_var_groups) (kind : item_kind) :
     eval_ctx * inst_fun_sig =
   let tr_self =
     match kind with
@@ -150,7 +151,9 @@ let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx) (sg : fun_s
     in
     { regions; types; const_generics; trait_refs }
   in
-  let inst_sg = instantiate_fun_sig meta ctx generics tr_self sg regions_hierarchy in
+  let inst_sg =
+    instantiate_fun_sig meta ctx generics tr_self sg regions_hierarchy
+  in
   (* Compute the normalization maps *)
   let ctx =
     AssociatedTypes.ctx_add_norm_trait_types_from_preds meta ctx
@@ -203,7 +206,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
      at the same time the normalization map for the associated types.
   *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig fdef.meta ctx fdef.signature regions_hierarchy fdef.kind
+    symbolic_instantiate_fun_sig fdef.meta ctx fdef.signature regions_hierarchy
+      fdef.kind
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -236,7 +240,9 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   let ctx = ctx_push_uninitialized_var fdef.meta ctx ret_var in
   (* Push the input variables (initialized with symbolic values) *)
   let input_values = List.map mk_typed_value_from_symbolic_value input_svs in
-  let ctx = ctx_push_vars fdef.meta ctx (List.combine input_vars input_values) in
+  let ctx =
+    ctx_push_vars fdef.meta ctx (List.combine input_vars input_values)
+  in
   (* Push the remaining local variables (initialized with ⊥) *)
   let ctx = ctx_push_uninitialized_vars fdef.meta ctx local_vars in
   (* Return *)
@@ -281,7 +287,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig fdef.meta ctx fdef.signature regions_hierarchy fdef.kind
+    symbolic_instantiate_fun_sig fdef.meta ctx fdef.signature regions_hierarchy
+      fdef.kind
   in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
@@ -417,9 +424,10 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
             | Loop (loop_id', rg_id', LoopSynthInput) ->
                 (* We only allow to end the loop synth input abs for the region
                    group [rg_id] *)
-                sanity_check (
-                  if Option.is_some loop_id then loop_id = Some loop_id'
-                  else true) fdef.meta;
+                sanity_check
+                  (if Option.is_some loop_id then loop_id = Some loop_id'
+                   else true)
+                  fdef.meta;
                 (* Loop abstractions *)
                 let rg_id' = Option.get rg_id' in
                 if rg_id' = back_id && inside_loop then
@@ -597,8 +605,8 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
          * the executions can lead to a panic *)
         if synthesize then Some SA.Panic else None
     | Unit | Break _ | Continue _ ->
-        craise
-        fdef.meta ("evaluate_function_symbolic failed on: " ^ name_to_string ())
+        craise fdef.meta
+          ("evaluate_function_symbolic failed on: " ^ name_to_string ())
   in
 
   (* Evaluate the function *)
@@ -646,12 +654,11 @@ module Test = struct
           let pop_return_value = true in
           pop_frame config fdef.meta pop_return_value (fun _ _ -> None) ctx
       | _ ->
-          craise
-            fdef.meta
-               ("Unit test failed (concrete execution) on: "
-               ^ Print.Types.name_to_string
-                   (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
-                   fdef.name)
+          craise fdef.meta
+            ("Unit test failed (concrete execution) on: "
+            ^ Print.Types.name_to_string
+                (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
+                fdef.name)
     in
 
     (* Evaluate the function *)

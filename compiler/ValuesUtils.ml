@@ -15,7 +15,8 @@ let mk_typed_value (meta : Meta.meta) (ty : ty) (value : value) : typed_value =
   sanity_check (ty_is_ety ty) meta;
   { value; ty }
 
-let mk_typed_avalue (meta : Meta.meta) (ty : ty) (value : avalue) : typed_avalue =
+let mk_typed_avalue (meta : Meta.meta) (ty : ty) (value : avalue) : typed_avalue
+    =
   sanity_check (ty_is_rty ty) meta;
   { value; ty }
 
@@ -51,7 +52,8 @@ let is_symbolic (v : value) : bool =
 let as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
   match v with VSymbolic s -> s | _ -> craise meta "Unexpected"
 
-let as_mut_borrow (meta : Meta.meta) (v : typed_value) : BorrowId.id * typed_value =
+let as_mut_borrow (meta : Meta.meta) (v : typed_value) :
+    BorrowId.id * typed_value =
   match v.value with
   | VBorrow (VMutBorrow (bid, bv)) -> (bid, bv)
   | _ -> craise meta "Unexpected"

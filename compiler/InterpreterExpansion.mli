@@ -12,7 +12,12 @@ type proj_kind = LoanProj | BorrowProj
     This function does *not* update the synthesis.
 *)
 val apply_symbolic_expansion_non_borrow :
-  config -> Meta.meta -> symbolic_value -> symbolic_expansion -> eval_ctx -> eval_ctx
+  config ->
+  Meta.meta ->
+  symbolic_value ->
+  symbolic_expansion ->
+  eval_ctx ->
+  eval_ctx
 
 (** Expand a symhbolic value, without branching *)
 val expand_symbolic_value_no_branching :
@@ -32,7 +37,13 @@ val expand_symbolic_value_no_branching :
       then call it).
  *)
 val expand_symbolic_adt :
-  config -> Meta.meta -> symbolic_value -> SA.mplace option -> st_cm_fun -> st_m_fun -> m_fun
+  config ->
+  Meta.meta ->
+  symbolic_value ->
+  SA.mplace option ->
+  st_cm_fun ->
+  st_m_fun ->
+  m_fun
 
 (** Expand a symbolic boolean.
 
@@ -41,7 +52,7 @@ val expand_symbolic_adt :
     parameter (here, there are exactly two branches).
  *)
 val expand_symbolic_bool :
-  config -> 
+  config ->
   Meta.meta ->
   symbolic_value ->
   SA.mplace option ->
@@ -70,7 +81,7 @@ val expand_symbolic_bool :
     switch. The continuation is thus for the execution *after* the switch.
  *)
 val expand_symbolic_int :
-  config -> 
+  config ->
   Meta.meta ->
   symbolic_value ->
   SA.mplace option ->

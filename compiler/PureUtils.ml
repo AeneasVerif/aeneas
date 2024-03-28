@@ -214,7 +214,8 @@ let fun_sig_substitute (subst : subst) (sg : fun_sig) : inst_fun_sig =
     Rem.: this function will *fail* if there are {!Pure.Loop}
     nodes (you should call it on an expression where those nodes have been eliminated).
  *)
-let rec let_group_requires_parentheses (meta : Meta.meta) (e : texpression) : bool =
+let rec let_group_requires_parentheses (meta : Meta.meta) (e : texpression) :
+    bool =
   match e.e with
   | Var _ | CVar _ | Const _ | App _ | Qualif _ | StructUpdate _ -> false
   | Let (monadic, _, _, next_e) ->
@@ -321,7 +322,8 @@ let destruct_apps (e : texpression) : texpression * texpression list =
   aux [] e
 
 (** Make an [App (app, arg)] expression *)
-let mk_app (meta : Meta.meta) (app : texpression) (arg : texpression) : texpression =
+let mk_app (meta : Meta.meta) (app : texpression) (arg : texpression) :
+    texpression =
   let raise_or_return msg =
     save_error (Some meta) msg;
     let e = App (app, arg) in
@@ -343,7 +345,8 @@ let mk_app (meta : Meta.meta) (app : texpression) (arg : texpression) : texpress
   | _ -> raise_or_return "Expected an arrow type"
 
 (** The reverse of {!destruct_apps} *)
-let mk_apps (meta : Meta.meta) (app : texpression) (args : texpression list) : texpression =
+let mk_apps (meta : Meta.meta) (app : texpression) (args : texpression list) :
+    texpression =
   List.fold_left (fun app arg -> mk_app meta app arg) app args
 
 (** Destruct an expression into a qualif identifier and a list of arguments,
@@ -375,7 +378,8 @@ let opt_destruct_result (meta : Meta.meta) (ty : ty) : ty option =
       Some (Collections.List.to_cons_nil generics.types)
   | _ -> None
 
-let destruct_result (meta : Meta.meta) (ty : ty) : ty = Option.get (opt_destruct_result meta ty)
+let destruct_result (meta : Meta.meta) (ty : ty) : ty =
+  Option.get (opt_destruct_result meta ty)
 
 let opt_destruct_tuple (meta : Meta.meta) (ty : ty) : ty list option =
   match ty with
@@ -422,7 +426,8 @@ let iter_switch_body_branches (f : texpression -> unit) (sb : switch_body) :
       f e_else
   | Match branches -> List.iter (fun (b : match_branch) -> f b.branch) branches
 
-let mk_switch (meta : Meta.meta) (scrut : texpression) (sb : switch_body) : texpression =
+let mk_switch (meta : Meta.meta) (scrut : texpression) (sb : switch_body) :
+    texpression =
   (* Sanity check: the scrutinee has the proper type *)
   (match sb with
   | If (_, _) -> sanity_check (scrut.ty = TLiteral TBool) meta
@@ -497,7 +502,8 @@ let mk_simpl_tuple_pattern (vl : typed_pattern list) : typed_pattern =
       { value; ty }
 
 (** Similar to {!mk_simpl_tuple_pattern} *)
-let mk_simpl_tuple_texpression (meta : Meta.meta) (vl : texpression list) : texpression =
+let mk_simpl_tuple_texpression (meta : Meta.meta) (vl : texpression list) :
+    texpression =
   match vl with
   | [ v ] -> v
   | _ ->
@@ -548,7 +554,8 @@ let unwrap_result_ty (meta : Meta.meta) (ty : ty) : ty =
       ty
   | _ -> craise meta "not a result type"
 
-let mk_result_fail_texpression (meta : Meta.meta) (error : texpression) (ty : ty) : texpression =
+let mk_result_fail_texpression (meta : Meta.meta) (error : texpression)
+    (ty : ty) : texpression =
   let type_args = [ ty ] in
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
   let id =
@@ -560,12 +567,13 @@ let mk_result_fail_texpression (meta : Meta.meta) (error : texpression) (ty : ty
   let cons = { e = cons_e; ty = cons_ty } in
   mk_app meta cons error
 
-let mk_result_fail_texpression_with_error_id (meta : Meta.meta) (error : VariantId.id) (ty : ty) :
-    texpression =
+let mk_result_fail_texpression_with_error_id (meta : Meta.meta)
+    (error : VariantId.id) (ty : ty) : texpression =
   let error = mk_error error in
   mk_result_fail_texpression meta error ty
 
-let mk_result_return_texpression (meta : Meta.meta) (v : texpression) : texpression =
+let mk_result_return_texpression (meta : Meta.meta) (v : texpression) :
+    texpression =
   let type_args = [ v.ty ] in
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
   let id =
@@ -613,15 +621,17 @@ let mk_fuel_var (id : VarId.id) : var =
 let mk_fuel_texpression (id : VarId.id) : texpression =
   { e = Var id; ty = mk_fuel_ty }
 
-let rec typed_pattern_to_texpression (meta : Meta.meta) (pat : typed_pattern) : texpression option
-    =
+let rec typed_pattern_to_texpression (meta : Meta.meta) (pat : typed_pattern) :
+    texpression option =
   let e_opt =
     match pat.value with
     | PatConstant pv -> Some (Const pv)
     | PatVar (v, _) -> Some (Var v.id)
     | PatDummy -> None
     | PatAdt av ->
-        let fields = List.map (typed_pattern_to_texpression meta) av.field_values in
+        let fields =
+          List.map (typed_pattern_to_texpression meta) av.field_values
+        in
         if List.mem None fields then None
         else
           let fields_values = List.map (fun e -> Option.get e) fields in

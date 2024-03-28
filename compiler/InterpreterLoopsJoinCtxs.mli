@@ -85,7 +85,8 @@ val merge_into_abstraction :
     - [ctx0]
     - [ctx1]
   *)
-val join_ctxs : Meta.meta -> loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
+val join_ctxs :
+  Meta.meta -> loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
 
 (** Join the context at the entry of the loop with the contexts upon reentry
     (upon reaching the [Continue] statement - the goal is to compute a fixed

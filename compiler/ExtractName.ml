@@ -32,7 +32,8 @@ end
     For impl blocks, we simply use the name of the type (without its arguments)
     if all the arguments are variables.
  *)
-let pattern_to_extract_name (meta : Meta.meta option) (name : pattern) : string list =
+let pattern_to_extract_name (meta : Meta.meta option) (name : pattern) :
+    string list =
   let c = { tgt = TkName } in
   let all_vars =
     let check (g : generic_arg) : bool =

@@ -83,7 +83,7 @@ let compute_norm_trait_types_from_preds (meta : Meta.meta option)
 let ctx_add_norm_trait_types_from_preds (meta : Meta.meta) (ctx : eval_ctx)
     (trait_type_constraints : trait_type_constraint list) : eval_ctx =
   let norm_trait_types =
-    compute_norm_trait_types_from_preds (Some meta) trait_type_constraints 
+    compute_norm_trait_types_from_preds (Some meta) trait_type_constraints
   in
   { ctx with norm_trait_types }
 
@@ -239,7 +239,9 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
         match trait_ref.trait_id with
         | TraitRef { trait_id = TraitImpl impl_id; generics = ref_generics; _ }
           ->
-            cassert_opt_meta (ref_generics = empty_generic_args) ctx.meta "Higher order trait types are not supported yet";
+            cassert_opt_meta
+              (ref_generics = empty_generic_args)
+              ctx.meta "Higher order trait types are not supported yet";
             log#ldebug
               (lazy
                 ("norm_ctx_normalize_ty: trait type: trait ref: "
@@ -279,7 +281,9 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
                 ^ trait_ref_to_string ctx trait_ref
                 ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
             (* We can't project *)
-            sanity_check_opt_meta (trait_instance_id_is_local_clause trait_ref.trait_id) ctx.meta ;
+            sanity_check_opt_meta
+              (trait_instance_id_is_local_clause trait_ref.trait_id)
+              ctx.meta;
             TTraitType (trait_ref, type_name)
       in
       let tr : trait_type_ref = { trait_ref; type_name } in
@@ -347,7 +351,9 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       match impl with
       | None ->
           (* This is actually a local clause *)
-          sanity_check_opt_meta (trait_instance_id_is_local_clause inst_id) ctx.meta ;
+          sanity_check_opt_meta
+            (trait_instance_id_is_local_clause inst_id)
+            ctx.meta;
           (ParentClause (inst_id, decl_id, clause_id), None)
       | Some impl ->
           (* We figure out the parent clause by doing the following:
@@ -378,7 +384,9 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       match impl with
       | None ->
           (* This is actually a local clause *)
-          sanity_check_opt_meta (trait_instance_id_is_local_clause inst_id) ctx.meta ;
+          sanity_check_opt_meta
+            (trait_instance_id_is_local_clause inst_id)
+            ctx.meta;
           (ItemClause (inst_id, decl_id, item_name, clause_id), None)
       | Some impl ->
           (* We figure out the item clause by doing the following:
@@ -418,8 +426,12 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | TraitRef trait_ref ->
       (* The trait instance id necessarily refers to a local sub-clause. We
          can't project over it and can only peel off the [TraitRef] wrapper *)
-      cassert_opt_meta (trait_instance_id_is_local_clause trait_ref.trait_id) ctx.meta "Trait instance id is not a local sub-clause";
-      cassert_opt_meta (trait_ref.generics = empty_generic_args) ctx.meta "TODO: error message";
+      cassert_opt_meta
+        (trait_instance_id_is_local_clause trait_ref.trait_id)
+        ctx.meta "Trait instance id is not a local sub-clause";
+      cassert_opt_meta
+        (trait_ref.generics = empty_generic_args)
+        ctx.meta "TODO: error message";
       (trait_ref.trait_id, None)
   | FnPointer ty ->
       let ty = norm_ctx_normalize_ty ctx ty in
@@ -468,7 +480,9 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
         (lazy
           ("norm_ctx_normalize_trait_ref: normalized to: "
           ^ trait_ref_to_string ctx trait_ref));
-      cassert_opt_meta (generics = empty_generic_args) ctx.meta "TODO: error message";
+      cassert_opt_meta
+        (generics = empty_generic_args)
+        ctx.meta "TODO: error message";
       trait_ref
 
 (* Not sure this one is really necessary *)
@@ -511,8 +525,8 @@ let ctx_normalize_trait_type_constraint (meta : Meta.meta) (ctx : eval_ctx)
   norm_ctx_normalize_trait_type_constraint (mk_norm_ctx meta ctx) ttc
 
 (** Same as [type_decl_get_instantiated_variants_fields_types] but normalizes the types *)
-let type_decl_get_inst_norm_variants_fields_rtypes (meta : Meta.meta) (ctx : eval_ctx)
-    (def : type_decl) (generics : generic_args) :
+let type_decl_get_inst_norm_variants_fields_rtypes (meta : Meta.meta)
+    (ctx : eval_ctx) (def : type_decl) (generics : generic_args) :
     (VariantId.id option * ty list) list =
   let res =
     Subst.type_decl_get_instantiated_variants_fields_types def generics
@@ -523,16 +537,17 @@ let type_decl_get_inst_norm_variants_fields_rtypes (meta : Meta.meta) (ctx : eva
     res
 
 (** Same as [type_decl_get_instantiated_field_types] but normalizes the types *)
-let type_decl_get_inst_norm_field_rtypes (meta : Meta.meta) (ctx : eval_ctx) (def : type_decl)
-    (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
+let type_decl_get_inst_norm_field_rtypes (meta : Meta.meta) (ctx : eval_ctx)
+    (def : type_decl) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
   let types =
     Subst.type_decl_get_instantiated_field_types def opt_variant_id generics
   in
   List.map (ctx_normalize_ty meta ctx) types
 
 (** Same as [ctx_adt_value_get_instantiated_field_rtypes] but normalizes the types *)
-let ctx_adt_value_get_inst_norm_field_rtypes (meta : Meta.meta) (ctx : eval_ctx) (adt : adt_value)
-    (id : type_id) (generics : generic_args) : ty list =
+let ctx_adt_value_get_inst_norm_field_rtypes (meta : Meta.meta) (ctx : eval_ctx)
+    (adt : adt_value) (id : type_id) (generics : generic_args) : ty list =
   let types =
     Subst.ctx_adt_value_get_instantiated_field_types meta ctx adt id generics
   in
@@ -540,8 +555,9 @@ let ctx_adt_value_get_inst_norm_field_rtypes (meta : Meta.meta) (ctx : eval_ctx)
 
 (** Same as [ctx_adt_value_get_instantiated_field_types] but normalizes the types
     and erases the regions. *)
-let type_decl_get_inst_norm_field_etypes (meta : Meta.meta) (ctx : eval_ctx) (def : type_decl)
-    (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
+let type_decl_get_inst_norm_field_etypes (meta : Meta.meta) (ctx : eval_ctx)
+    (def : type_decl) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
   let types =
     Subst.type_decl_get_instantiated_field_types def opt_variant_id generics
   in
@@ -550,8 +566,9 @@ let type_decl_get_inst_norm_field_etypes (meta : Meta.meta) (ctx : eval_ctx) (de
 
 (** Same as [ctx_adt_get_instantiated_field_types] but normalizes the types and
     erases the regions. *)
-let ctx_adt_get_inst_norm_field_etypes (meta : Meta.meta) (ctx : eval_ctx) (def_id : TypeDeclId.id)
-    (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
+let ctx_adt_get_inst_norm_field_etypes (meta : Meta.meta) (ctx : eval_ctx)
+    (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
   let types =
     Subst.ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id
       generics
@@ -575,6 +592,8 @@ let ctx_subst_norm_signature (meta : Meta.meta) (ctx : eval_ctx)
   let inputs = List.map (ctx_normalize_ty meta ctx) inputs in
   let output = ctx_normalize_ty meta ctx output in
   let trait_type_constraints =
-    List.map (ctx_normalize_trait_type_constraint meta ctx) trait_type_constraints
+    List.map
+      (ctx_normalize_trait_type_constraint meta ctx)
+      trait_type_constraints
   in
   { regions_hierarchy; inputs; output; trait_type_constraints }

@@ -13,13 +13,15 @@ type access_kind = Read | Write | Move
     updates the environment (by ending borrows, expanding symbolic values, etc.)
     until it manages to fully access the provided place.
  *)
-val update_ctx_along_read_place : config -> Meta.meta -> access_kind -> place -> cm_fun
+val update_ctx_along_read_place :
+  config -> Meta.meta -> access_kind -> place -> cm_fun
 
 (** Update the environment to be able to write to a place.
 
     See {!update_ctx_along_read_place}.
 *)
-val update_ctx_along_write_place : config -> Meta.meta -> access_kind -> place -> cm_fun
+val update_ctx_along_write_place :
+  config -> Meta.meta -> access_kind -> place -> cm_fun
 
 (** Read the value at a given place.
 
@@ -40,7 +42,8 @@ val read_place : Meta.meta -> access_kind -> place -> eval_ctx -> typed_value
     the overwritten value contains borrows, loans, etc. and will simply
     overwrite it.
  *)
-val write_place : Meta.meta -> access_kind -> place -> typed_value -> eval_ctx -> eval_ctx
+val write_place :
+  Meta.meta -> access_kind -> place -> typed_value -> eval_ctx -> eval_ctx
 
 (** Compute an expanded tuple ⊥ value.
 
@@ -96,4 +99,5 @@ val end_loans_at_place : config -> Meta.meta -> access_kind -> place -> cm_fun
     place. This value should not contain any outer loan (and we check it is the
     case). Note that this value is very likely to contain ⊥ subvalues.
   *)
-val prepare_lplace : config -> Meta.meta -> place -> (typed_value -> m_fun) -> m_fun
+val prepare_lplace :
+  config -> Meta.meta -> place -> (typed_value -> m_fun) -> m_fun

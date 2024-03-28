@@ -15,7 +15,8 @@ open Errors
 let log = Logging.loops_log
 
 (** Evaluate a loop in concrete mode *)
-let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : st_cm_fun) : st_cm_fun =
+let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : st_cm_fun) :
+    st_cm_fun =
  fun cf ctx ->
   (* We need a loop id for the [LoopReturn]. In practice it won't be used
      (it is useful only for the symbolic execution *)
@@ -68,7 +69,10 @@ let eval_loop_symbolic (config : config) (meta : meta)
  fun cf ctx ->
   (* Debug *)
   log#ldebug
-    (lazy ("eval_loop_symbolic:\nContext:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx ^ "\n\n"));
+    (lazy
+      ("eval_loop_symbolic:\nContext:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ "\n\n"));
 
   (* Generate a fresh loop id *)
   let loop_id = fresh_loop_id () in
@@ -81,11 +85,15 @@ let eval_loop_symbolic (config : config) (meta : meta)
   (* Debug *)
   log#ldebug
     (lazy
-      ("eval_loop_symbolic:\nInitial context:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx
-     ^ "\n\nFixed point:\n" ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx));
+      ("eval_loop_symbolic:\nInitial context:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ "\n\nFixed point:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx));
 
   (* Compute the loop input parameters *)
-  let fresh_sids, input_svalues = compute_fp_ctx_symbolic_values meta ctx fp_ctx in
+  let fresh_sids, input_svalues =
+    compute_fp_ctx_symbolic_values meta ctx fp_ctx
+  in
   let fp_input_svalues = List.map (fun sv -> sv.sv_id) input_svalues in
 
   (* Synthesize the end of the function - we simply match the context at the
@@ -122,11 +130,13 @@ let eval_loop_symbolic (config : config) (meta : meta)
       (lazy
         ("eval_loop_symbolic: about to match the fixed-point context with the \
           original context:\n\
-          - src ctx (fixed-point ctx)" ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
-       ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+          - src ctx (fixed-point ctx)"
+        ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
+        ^ "\n\n-tgt ctx (original context):\n"
+        ^ eval_ctx_to_string ~meta:(Some meta) ctx));
     let end_expr : SymbolicAst.expression option =
-      match_ctx_with_target config meta loop_id true fp_bl_corresp fp_input_svalues
-        fixed_ids fp_ctx cf ctx
+      match_ctx_with_target config meta loop_id true fp_bl_corresp
+        fp_input_svalues fixed_ids fp_ctx cf ctx
     in
     log#ldebug
       (lazy
@@ -155,8 +165,10 @@ let eval_loop_symbolic (config : config) (meta : meta)
             (lazy
               ("eval_loop_symbolic: about to match the fixed-point context \
                 with the context at a continue:\n\
-                - src ctx (fixed-point ctx)" ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
-             ^ "\n\n-tgt ctx (ctx at continue):\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+                - src ctx (fixed-point ctx)"
+              ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
+              ^ "\n\n-tgt ctx (ctx at continue):\n"
+              ^ eval_ctx_to_string ~meta:(Some meta) ctx));
           let cc =
             match_ctx_with_target config meta loop_id false fp_bl_corresp
               fp_input_svalues fixed_ids fp_ctx

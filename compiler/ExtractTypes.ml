@@ -15,7 +15,8 @@ include ExtractBase
       if it is made of an application (ex.: [U32 3])
     - the constant value
  *)
-let extract_literal (meta : Meta.meta) (fmt : F.formatter) (inside : bool) (cv : literal) : unit =
+let extract_literal (meta : Meta.meta) (fmt : F.formatter) (inside : bool)
+    (cv : literal) : unit =
   match cv with
   | VScalar sv -> (
       match !backend with
@@ -187,9 +188,10 @@ let extract_unop (meta : Meta.meta) (extract_expr : bool -> texpression -> unit)
     - argument 0
     - argument 1
  *)
-let extract_binop (meta : Meta.meta) (extract_expr : bool -> texpression -> unit)
-    (fmt : F.formatter) (inside : bool) (binop : E.binop)
-    (int_ty : integer_type) (arg0 : texpression) (arg1 : texpression) : unit =
+let extract_binop (meta : Meta.meta)
+    (extract_expr : bool -> texpression -> unit) (fmt : F.formatter)
+    (inside : bool) (binop : E.binop) (int_ty : integer_type)
+    (arg0 : texpression) (arg1 : texpression) : unit =
   if inside then F.pp_print_string fmt "(";
   (* Some binary operations have a special notation depending on the backend *)
   (match (!backend, binop) with
@@ -392,8 +394,8 @@ let extract_arrow (fmt : F.formatter) () : unit =
   if !Config.backend = Lean then F.pp_print_string fmt "→"
   else F.pp_print_string fmt "->"
 
-let extract_const_generic (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (cg : const_generic) : unit =
+let extract_const_generic (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (inside : bool) (cg : const_generic) : unit =
   match cg with
   | CgGlobal id ->
       let s = ctx_get_global meta id ctx in
@@ -496,7 +498,9 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
           | HOL4 ->
               let { types; const_generics; trait_refs } = generics in
               (* Const generics are not supported in HOL4 *)
-              cassert (const_generics = []) meta "Constant generics are not supported yet when generating code for HOL4";
+              cassert (const_generics = []) meta
+                "Constant generics are not supported yet when generating code \
+                 for HOL4";
               let print_tys =
                 match type_id with
                 | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
@@ -533,8 +537,8 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
       if !parameterize_trait_types then craise meta "Unimplemented"
       else
         let type_name =
-          ctx_get_trait_type meta trait_ref.trait_decl_ref.trait_decl_id type_name
-            ctx
+          ctx_get_trait_type meta trait_ref.trait_decl_ref.trait_decl_id
+            type_name ctx
         in
         let add_brackets (s : string) =
           if !backend = Coq then "(" ^ s ^ ")" else s
@@ -548,18 +552,22 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            cassert (trait_ref.generics = empty_generic_args) meta "TODO: Error message";
+            cassert
+              (trait_ref.generics = empty_generic_args)
+              meta "TODO: Error message";
             extract_trait_instance_id_with_dot meta ctx fmt no_params_tys false
               trait_ref.trait_id;
             F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
-            cassert (!backend <> HOL4) meta "Trait types are not supported yet when generating code for HOL4";
+            cassert (!backend <> HOL4) meta
+              "Trait types are not supported yet when generating code for HOL4";
             extract_trait_ref meta ctx fmt no_params_tys false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
 
-and extract_trait_ref (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_ref) : unit =
+and extract_trait_ref (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
+    (tr : trait_ref) : unit =
   let use_brackets = tr.generics <> empty_generic_args && inside in
   if use_brackets then F.pp_print_string fmt "(";
   (* We may need to filter the parameters if the trait is builtin *)
@@ -583,9 +591,9 @@ and extract_trait_ref (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatt
   extract_generic_args meta ctx fmt no_params_tys generics;
   if use_brackets then F.pp_print_string fmt ")"
 
-and extract_trait_decl_ref (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (tr : trait_decl_ref) :
-    unit =
+and extract_trait_decl_ref (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
+    (tr : trait_decl_ref) : unit =
   let use_brackets = tr.decl_generics <> empty_generic_args && inside in
   let name = ctx_get_trait_decl meta tr.trait_decl_id ctx in
   if use_brackets then F.pp_print_string fmt "(";
@@ -596,8 +604,9 @@ and extract_trait_decl_ref (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.fo
   extract_generic_args meta ctx fmt no_params_tys generics;
   if use_brackets then F.pp_print_string fmt ")"
 
-and extract_generic_args (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) (generics : generic_args) : unit =
+and extract_generic_args (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
+    (generics : generic_args) : unit =
   let { types; const_generics; trait_refs } = generics in
   if !backend <> HOL4 then (
     if types <> [] then (
@@ -606,7 +615,8 @@ and extract_generic_args (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.form
         (extract_ty meta ctx fmt no_params_tys true)
         types);
     if const_generics <> [] then (
-      cassert (!backend <> HOL4) meta "Constant generics are not supported yet when generating code for HOL4";
+      cassert (!backend <> HOL4) meta
+        "Constant generics are not supported yet when generating code for HOL4";
       F.pp_print_space fmt ();
       Collections.List.iter_link (F.pp_print_space fmt)
         (extract_const_generic meta ctx fmt true)
@@ -653,9 +663,9 @@ and extract_trait_instance_id_with_dot (meta : Meta.meta) (ctx : extraction_ctx)
       extract_trait_instance_id meta ctx fmt no_params_tys inside id;
       F.pp_print_string fmt "."
 
-and extract_trait_instance_id (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
-    : unit =
+and extract_trait_instance_id (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
+    (id : trait_instance_id) : unit =
   let add_brackets (s : string) = if !backend = Coq then "(" ^ s ^ ")" else s in
   match id with
   | Self ->
@@ -676,7 +686,9 @@ and extract_trait_instance_id (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F
       F.pp_print_string fmt (add_brackets name)
   | ItemClause (inst_id, decl_id, item_name, clause_id) ->
       (* Use the trait decl id to lookup the name *)
-      let name = ctx_get_trait_item_clause meta decl_id item_name clause_id ctx in
+      let name =
+        ctx_get_trait_item_clause meta decl_id item_name clause_id ctx
+      in
       extract_trait_instance_id_with_dot meta ctx fmt no_params_tys true inst_id;
       F.pp_print_string fmt (add_brackets name)
   | TraitRef trait_ref ->
@@ -760,10 +772,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 in
                 (field_names, cons_name)
             | Some info ->
-                craise
-                  def.meta
-                     ("Invalid builtin information: "
-                     ^ show_builtin_type_info info)
+                craise def.meta
+                  ("Invalid builtin information: " ^ show_builtin_type_info info)
           in
           (* Add the fields *)
           let ctx =
@@ -822,10 +832,10 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   ctx
 
 (** Print the variants *)
-let extract_type_decl_variant (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (type_decl_group : TypeDeclId.Set.t) (type_name : string)
-    (type_params : string list) (cg_params : string list) (cons_name : string)
-    (fields : field list) : unit =
+let extract_type_decl_variant (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (type_decl_group : TypeDeclId.Set.t)
+    (type_name : string) (type_params : string list) (cg_params : string list)
+    (cons_name : string) (fields : field list) : unit =
   F.pp_print_space fmt ();
   (* variant box *)
   F.pp_open_hvbox fmt ctx.indent_incr;
@@ -932,18 +942,20 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   let print_variant _variant_id (v : variant) =
     (* We don't lookup the name, because it may have a prefix for the type
        id (in the case of Lean) *)
-    let cons_name = ctx_compute_variant_name def.meta ctx def.llbc_name v.variant_name in
+    let cons_name =
+      ctx_compute_variant_name def.meta ctx def.llbc_name v.variant_name
+    in
     let fields = v.fields in
-    extract_type_decl_variant def.meta ctx fmt type_decl_group def_name type_params
-      cg_params cons_name fields
+    extract_type_decl_variant def.meta ctx fmt type_decl_group def_name
+      type_params cg_params cons_name fields
   in
   (* Print the variants *)
   let variants = VariantId.mapi (fun vid v -> (vid, v)) variants in
   List.iter (fun (vid, v) -> print_variant vid v) variants
 
 (** Extract a struct as a tuple *)
-let extract_type_decl_tuple_struct_body (meta : Meta.meta) (ctx : extraction_ctx)
-    (fmt : F.formatter) (fields : field list) : unit =
+let extract_type_decl_tuple_struct_body (meta : Meta.meta)
+    (ctx : extraction_ctx) (fmt : F.formatter) (fields : field list) : unit =
   (* If the type is empty, we need to have a special treatment *)
   if fields = [] then (
     F.pp_print_space fmt ();
@@ -1046,7 +1058,9 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       | Lean -> F.pp_open_vbox fmt 0);
       (* Print the fields *)
       let print_field (field_id : FieldId.id) (f : field) : unit =
-        let field_name = ctx_get_field def.meta (TAdtId def.def_id) field_id ctx in
+        let field_name =
+          ctx_get_field def.meta (TAdtId def.def_id) field_id ctx
+        in
         (* Open a box for the field *)
         F.pp_open_box fmt ctx.indent_incr;
         F.pp_print_string fmt field_name;
@@ -1075,17 +1089,21 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     else (
       (* We extract for Coq or Lean, and we have a recursive record, or a record in
          a group of mutually recursive types: we extract it as an inductive type *)
-      cassert (is_rec && (!backend = Coq || !backend = Lean)) def.meta "Constant generics are not supported yet when generating code for HOL4";
+      cassert
+        (is_rec && (!backend = Coq || !backend = Lean))
+        def.meta
+        "Constant generics are not supported yet when generating code for HOL4";
       (* Small trick: in Lean we use namespaces, meaning we don't need to prefix
          the constructor name with the name of the type at definition site,
          i.e., instead of generating `inductive Foo := | MkFoo ...` like in Coq
          we generate `inductive Foo := | mk ... *)
       let cons_name =
-        if !backend = Lean then "mk" else ctx_get_struct def.meta (TAdtId def.def_id) ctx
+        if !backend = Lean then "mk"
+        else ctx_get_struct def.meta (TAdtId def.def_id) ctx
       in
       let def_name = ctx_get_local_type def.meta def.def_id ctx in
-      extract_type_decl_variant def.meta ctx fmt type_decl_group def_name type_params
-        cg_params cons_name fields)
+      extract_type_decl_variant def.meta ctx fmt type_decl_group def_name
+        type_params cg_params cons_name fields)
   in
   ()
 
@@ -1129,12 +1147,14 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
   in
   extract_comment fmt (sl @ [ span ] @ name)
 
-let extract_trait_clause_type (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) (clause : trait_clause) : unit =
+let extract_trait_clause_type (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
+    (clause : trait_clause) : unit =
   let trait_name = ctx_get_trait_decl meta clause.trait_id ctx in
   F.pp_print_string fmt trait_name;
   (* let meta = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).meta in
-   *)extract_generic_args meta ctx fmt no_params_tys clause.generics
+   *)
+  extract_generic_args meta ctx fmt no_params_tys clause.generics
 
 (** Insert a space, if necessary *)
 let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
@@ -1167,8 +1187,8 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
  - [trait_decl]: if [Some], it means we are extracting the generics for a provided
    method and need to insert a trait self clause (see {!TraitSelfClauseId}).
  *)
-let extract_generic_params (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
+let extract_generic_params (meta : Meta.meta) (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
     ?(trait_decl : trait_decl option = None) (generics : generic_params)
@@ -1176,7 +1196,9 @@ let extract_generic_params (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.fo
     (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
-  cassert (cg_params = [] || !backend <> HOL4) meta "Constant generics are not supported yet when generating code for HOL4";
+  cassert
+    (cg_params = [] || !backend <> HOL4)
+    meta "Constant generics are not supported yet when generating code for HOL4";
   let left_bracket (implicit : bool) =
     if implicit && !backend <> FStar then F.pp_print_string fmt "{"
     else F.pp_print_string fmt "("
@@ -1304,7 +1326,8 @@ let extract_generic_params (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.fo
                   ctx_get_const_generic_var trait_decl.meta cg.index ctx)
                 dcgs;
               map
-                (fun c -> ctx_get_local_trait_clause trait_decl.meta c.clause_id ctx)
+                (fun c ->
+                  ctx_get_local_trait_clause trait_decl.meta c.clause_id ctx)
                 dtrait_clauses;
             ]
         in
@@ -1355,7 +1378,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.meta def.llbc_name def.llbc_generics def.generics ctx
+    ctx_add_generic_params def.meta def.llbc_name def.llbc_generics def.generics
+      ctx
   in
   (* Add a break before *)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
@@ -1394,10 +1418,14 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   | None -> F.pp_print_string fmt def_name);
   (* HOL4 doesn't support const generics, and type definitions in HOL4 don't
      support trait clauses *)
-  cassert ((cg_params = [] && trait_clauses = []) || !backend <> HOL4) def.meta "Constant generics and type definitions with trait clauses are not supported yet when generating code for HOL4";
+  cassert
+    ((cg_params = [] && trait_clauses = []) || !backend <> HOL4)
+    def.meta
+    "Constant generics and type definitions with trait clauses are not \
+     supported yet when generating code for HOL4";
   (* Print the generic parameters *)
-  extract_generic_params def.meta ctx_body fmt type_decl_group ~use_forall def.generics
-    type_params cg_params trait_clauses;
+  extract_generic_params def.meta ctx_body fmt type_decl_group ~use_forall
+    def.generics type_params cg_params trait_clauses;
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
@@ -1463,9 +1491,16 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.meta def.def_id ctx in
   (* Generic parameters are unsupported *)
-  cassert (def.generics.const_generics = []) def.meta "Constant generics are not supported yet when generating code for HOL4";
+  cassert
+    (def.generics.const_generics = [])
+    def.meta
+    "Constant generics are not supported yet when generating code for HOL4";
   (* Trait clauses on type definitions are unsupported *)
-  cassert (def.generics.trait_clauses = []) def.meta "Types with trait clauses are not supported yet when generating code for HOL4";
+  cassert
+    (def.generics.trait_clauses = [])
+    def.meta
+    "Types with trait clauses are not supported yet when generating code for \
+     HOL4";
   (* Types  *)
   (* Count the number of parameters *)
   let num_params = List.length def.generics.types in
@@ -1595,7 +1630,9 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
         (* Generate the instructions *)
         VariantId.iteri
           (fun vid (_ : variant) ->
-            let cons_name = ctx_get_variant decl.meta (TAdtId decl.def_id) vid ctx in
+            let cons_name =
+              ctx_get_variant decl.meta (TAdtId decl.def_id) vid ctx
+            in
             extract_coq_arguments_instruction ctx fmt cons_name num_params)
           variants;
         (* Add breaks to insert new lines between definitions *)
@@ -1619,8 +1656,8 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
       if is_rec then
         (* Add the type params *)
         let ctx, type_params, cg_params, trait_clauses =
-          ctx_add_generic_params decl.meta decl.llbc_name decl.llbc_generics decl.generics
-            ctx
+          ctx_add_generic_params decl.meta decl.llbc_name decl.llbc_generics
+            decl.generics ctx
         in
         let ctx, record_var = ctx_add_var decl.meta "x" (VarId.of_int 0) ctx in
         let ctx, field_var = ctx_add_var decl.meta "x" (VarId.of_int 1) ctx in
@@ -1636,12 +1673,14 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           F.pp_open_hovbox fmt ctx.indent_incr;
           F.pp_print_string fmt "Definition";
           F.pp_print_space fmt ();
-          let field_name = ctx_get_field decl.meta (TAdtId decl.def_id) field_id ctx in
+          let field_name =
+            ctx_get_field decl.meta (TAdtId decl.def_id) field_id ctx
+          in
           F.pp_print_string fmt field_name;
           (* Print the generics *)
           let as_implicits = true in
-          extract_generic_params decl.meta ctx fmt TypeDeclId.Set.empty ~as_implicits
-            decl.generics type_params cg_params trait_clauses;
+          extract_generic_params decl.meta ctx fmt TypeDeclId.Set.empty
+            ~as_implicits decl.generics type_params cg_params trait_clauses;
           (* Print the record parameter *)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "(";
@@ -1716,10 +1755,14 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           F.pp_open_hvbox fmt 0;
           (* Inner box for the projector definition *)
           F.pp_open_hovbox fmt ctx.indent_incr;
-          let ctx, record_var = ctx_add_var decl.meta "x" (VarId.of_int 0) ctx in
+          let ctx, record_var =
+            ctx_add_var decl.meta "x" (VarId.of_int 0) ctx
+          in
           F.pp_print_string fmt "Notation";
           F.pp_print_space fmt ();
-          let field_name = ctx_get_field decl.meta (TAdtId decl.def_id) field_id ctx in
+          let field_name =
+            ctx_get_field decl.meta (TAdtId decl.def_id) field_id ctx
+          in
           F.pp_print_string fmt ("\"" ^ record_var ^ " .(" ^ field_name ^ ")\"");
           F.pp_print_space fmt ();
           F.pp_print_string fmt ":=";

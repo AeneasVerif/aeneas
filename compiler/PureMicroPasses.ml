@@ -1240,10 +1240,11 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     if List.for_all (fun (_, y) -> y = x) end_args then (
                       (* We can substitute *)
                       (* Sanity check: all types correct *)
-                      sanity_check (
-                        List.for_all
-                          (fun (generics1, _) -> generics1 = generics)
-                          args) def.meta;
+                      sanity_check
+                        (List.for_all
+                           (fun (generics1, _) -> generics1 = generics)
+                           args)
+                        def.meta;
                       { e with e = Var x })
                     else super#visit_texpression env e
                   else super#visit_texpression env e
@@ -1398,7 +1399,9 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
 
               { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
             in
-            cassert (fun_sig_info_is_wf loop_fwd_sig_info) def.meta "TODO: error message";
+            cassert
+              (fun_sig_info_is_wf loop_fwd_sig_info)
+              def.meta "TODO: error message";
 
             let inputs_tys =
               let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
@@ -1438,9 +1441,10 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
 
               (* Introduce the forward input state *)
               let fwd_state_var, fwd_state_lvs =
-                cassert (
-                  loop_fwd_effect_info.stateful
-                  = Option.is_some loop.input_state) def.meta "TODO: error message";
+                cassert
+                  (loop_fwd_effect_info.stateful
+                  = Option.is_some loop.input_state)
+                  def.meta "TODO: error message";
                 match loop.input_state with
                 | None -> ([], [])
                 | Some input_state ->
@@ -1477,7 +1481,8 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               match fuel_vars with
               | None -> loop.loop_body
               | Some (fuel0, fuel) ->
-                  SymbolicToPure.wrap_in_match_fuel def.meta fuel0 fuel loop.loop_body
+                  SymbolicToPure.wrap_in_match_fuel def.meta fuel0 fuel
+                    loop.loop_body
             in
 
             let loop_body = { inputs; inputs_lvs; body = loop_body } in

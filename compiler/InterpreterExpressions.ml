@@ -37,7 +37,8 @@ let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
     | None -> cf ctx
     | Some sv ->
         let cc =
-          expand_symbolic_value_no_branching config meta sv (Some (mk_mplace meta p ctx))
+          expand_symbolic_value_no_branching config meta sv
+            (Some (mk_mplace meta p ctx))
         in
         comp cc expand cf ctx
   in
@@ -49,14 +50,18 @@ let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
     We also check that the value *doesn't contain bottoms or reserved
     borrows*.
  *)
-let read_place (meta : Meta.meta) (access : access_kind) (p : place) (cf : typed_value -> m_fun) :
-    m_fun =
+let read_place (meta : Meta.meta) (access : access_kind) (p : place)
+    (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   let v = read_place meta access p ctx in
   (* Check that there are no bottoms in the value *)
-  cassert (not (bottom_in_value ctx.ended_regions v)) meta "There should be no bottoms in the value";
+  cassert
+    (not (bottom_in_value ctx.ended_regions v))
+    meta "There should be no bottoms in the value";
   (* Check that there are no reserved borrows in the value *)
-  cassert (not (reserved_in_value v)) meta "There should be no reserved borrows in the value";
+  cassert
+    (not (reserved_in_value v))
+    meta "There should be no reserved borrows in the value";
   (* Call the continuation *)
   cf v ctx
 
@@ -80,15 +85,16 @@ let access_rplace_reorganize_and_read (config : config) (meta : Meta.meta)
   (* Compose *)
   comp cc read_place cf ctx
 
-let access_rplace_reorganize (config : config) (meta : Meta.meta) (expand_prim_copy : bool)
-    (access : access_kind) (p : place) : cm_fun =
+let access_rplace_reorganize (config : config) (meta : Meta.meta)
+    (expand_prim_copy : bool) (access : access_kind) (p : place) : cm_fun =
  fun cf ctx ->
   access_rplace_reorganize_and_read config meta expand_prim_copy access p
     (fun _v -> cf)
     ctx
 
 (** Convert an operand constant operand value to a typed value *)
-let literal_to_typed_value (meta : Meta.meta) (ty : literal_type) (cv : literal) : typed_value =
+let literal_to_typed_value (meta : Meta.meta) (ty : literal_type) (cv : literal)
+    : typed_value =
   (* Check the type while converting - we actually need some information
      * contained in the type *)
   log#ldebug
@@ -118,13 +124,14 @@ let literal_to_typed_value (meta : Meta.meta) (ty : literal_type) (cv : literal)
     parameter to control this copy ([allow_adt_copy]). Note that here by ADT we
     mean the user-defined ADTs (not tuples or assumed types).
  *)
-let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config) (ctx : eval_ctx)
-    (v : typed_value) : eval_ctx * typed_value =
+let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
+    (ctx : eval_ctx) (v : typed_value) : eval_ctx * typed_value =
   log#ldebug
     (lazy
       ("copy_value: "
       ^ typed_value_to_string ~meta:(Some meta) ctx v
-      ^ "\n- context:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      ^ "\n- context:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
   (* Remark: at some point we rewrote this function to use iterators, but then
    * we reverted the changes: the result was less clear actually. In particular,
    * the fact that we have exhaustive matches below makes very obvious the cases
@@ -137,7 +144,7 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config) 
       | TAdt (TAssumed TBox, _) ->
           exec_raise meta "Can't copy an assumed value other than Option"
       | TAdt (TAdtId _, _) as ty ->
-        sanity_check (allow_adt_copy || ty_is_primitively_copyable ty) meta
+          sanity_check (allow_adt_copy || ty_is_primitively_copyable ty) meta
       | TAdt (TTuple, _) -> () (* Ok *)
       | TAdt
           ( TAssumed (TSlice | TArray),
@@ -147,7 +154,9 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config) 
               const_generics = [];
               trait_refs = [];
             } ) ->
-            exec_assert (ty_is_primitively_copyable ty) meta "The type is not primitively copyable"
+          exec_assert
+            (ty_is_primitively_copyable ty)
+            meta "The type is not primitively copyable"
       | _ -> exec_raise meta "Unreachable");
       let ctx, fields =
         List.fold_left_map
@@ -180,7 +189,9 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config) 
        * Note that in the general case, copy is a trait: copying values
        * thus requires calling the proper function. Here, we copy values
        * for very simple types such as integers, shared borrows, etc. *)
-      cassert (ty_is_primitively_copyable (Substitute.erase_regions sp.sv_ty)) meta "Not primitively copyable";
+      cassert
+        (ty_is_primitively_copyable (Substitute.erase_regions sp.sv_ty))
+        meta "Not primitively copyable";
       (* If the type is copyable, we simply return the current value. Side
        * remark: what is important to look at when copying symbolic values
        * is symbolic expansion. The important subcase is the expansion of shared
@@ -225,7 +236,8 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config) 
     what we do in the formalization (because we don't enforce the same constraints
     as MIR in the formalization).
  *)
-let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta) (op : operand) : cm_fun =
+let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta)
+    (op : operand) : cm_fun =
  fun cf ctx ->
   let prepare : cm_fun =
    fun cf ctx ->
@@ -249,14 +261,16 @@ let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta) (op : o
   prepare cf ctx
 
 (** Evaluate an operand, without reorganizing the context before *)
-let eval_operand_no_reorganize (config : config) (meta : Meta.meta) (op : operand)
-    (cf : typed_value -> m_fun) : m_fun =
+let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
+    (op : operand) (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   (* Debug *)
   log#ldebug
     (lazy
       ("eval_operand_no_reorganize: op: " ^ operand_to_string ctx op
-     ^ "\n- ctx:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx ^ "\n"));
+     ^ "\n- ctx:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ "\n"));
   (* Evaluate *)
   match op with
   | Constant cv -> (
@@ -330,11 +344,14 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta) (op : operan
       let copy cf v : m_fun =
        fun ctx ->
         (* Sanity checks *)
-        exec_assert (not (bottom_in_value ctx.ended_regions v)) meta "Can not copy a value containing bottom";
-        sanity_check (
-          Option.is_none
-            (find_first_primitively_copyable_sv_with_borrows
-               ctx.type_ctx.type_infos v)) meta;
+        exec_assert
+          (not (bottom_in_value ctx.ended_regions v))
+          meta "Can not copy a value containing bottom";
+        sanity_check
+          (Option.is_none
+             (find_first_primitively_copyable_sv_with_borrows
+                ctx.type_ctx.type_infos v))
+          meta;
         (* Actually perform the copy *)
         let allow_adt_copy = false in
         let ctx, v = copy_value meta allow_adt_copy config ctx v in
@@ -351,7 +368,9 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta) (op : operan
       let move cf v : m_fun =
        fun ctx ->
         (* Check that there are no bottoms in the value we are about to move *)
-        exec_assert (not (bottom_in_value ctx.ended_regions v)) meta "There should be no bottoms in the value we are about to move";
+        exec_assert
+          (not (bottom_in_value ctx.ended_regions v))
+          meta "There should be no bottoms in the value we are about to move";
         let bottom : typed_value = { value = VBottom; ty = v.ty } in
         let ctx = write_place meta access p bottom ctx in
         cf v ctx
@@ -359,14 +378,15 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta) (op : operan
       (* Compose and apply *)
       comp cc move cf ctx
 
-let eval_operand (config : config) (meta : Meta.meta) (op : operand) (cf : typed_value -> m_fun) :
-    m_fun =
+let eval_operand (config : config) (meta : Meta.meta) (op : operand)
+    (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   (* Debug *)
   log#ldebug
     (lazy
       ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
-     ^ eval_ctx_to_string ~meta:(Some meta) ctx ^ "\n"));
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ "\n"));
   (* We reorganize the context, then evaluate the operand *)
   comp
     (prepare_eval_operand_reorganize config meta op)
@@ -377,8 +397,8 @@ let eval_operand (config : config) (meta : Meta.meta) (op : operand) (cf : typed
 
     See [prepare_eval_operand_reorganize].
  *)
-let prepare_eval_operands_reorganize (config : config) (meta : Meta.meta) (ops : operand list) :
-    cm_fun =
+let prepare_eval_operands_reorganize (config : config) (meta : Meta.meta)
+    (ops : operand list) : cm_fun =
   fold_left_apply_continuation (prepare_eval_operand_reorganize config meta) ops
 
 (** Evaluate several operands. *)
@@ -389,23 +409,23 @@ let eval_operands (config : config) (meta : Meta.meta) (ops : operand list)
   let prepare = prepare_eval_operands_reorganize config meta ops in
   (* Evaluate the operands *)
   let eval =
-    fold_left_list_apply_continuation (eval_operand_no_reorganize config meta) ops
+    fold_left_list_apply_continuation
+      (eval_operand_no_reorganize config meta)
+      ops
   in
   (* Compose and apply *)
   comp prepare eval cf ctx
 
-let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand) (op2 : operand)
-    (cf : typed_value * typed_value -> m_fun) : m_fun =
+let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand)
+    (op2 : operand) (cf : typed_value * typed_value -> m_fun) : m_fun =
   let eval_op = eval_operands config meta [ op1; op2 ] in
   let use_res cf res =
-    match res with
-    | [ v1; v2 ] -> cf (v1, v2)
-    | _ -> craise meta "Unreachable"
+    match res with [ v1; v2 ] -> cf (v1, v2) | _ -> craise meta "Unreachable"
   in
   comp eval_op use_res cf
 
-let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop) (op : operand)
-    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
+    (op : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
   (* Evaluate the operand *)
   let eval_op = eval_operand config meta op in
   (* Apply the unop *)
@@ -452,8 +472,8 @@ let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop) (o
   in
   comp eval_op apply cf
 
-let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop) (op : operand)
-    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop)
+    (op : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
  fun ctx ->
   (* Evaluate the operand *)
   let eval_op = eval_operand config meta op in
@@ -479,8 +499,8 @@ let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop) (o
   (* Compose and apply *)
   comp eval_op apply cf ctx
 
-let eval_unary_op (config : config) (meta : Meta.meta) (unop : unop) (op : operand)
-    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+let eval_unary_op (config : config) (meta : Meta.meta) (unop : unop)
+    (op : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
   match config.mode with
   | ConcreteMode -> eval_unary_op_concrete config meta unop op cf
   | SymbolicMode -> eval_unary_op_symbolic config meta unop op cf
@@ -488,15 +508,17 @@ let eval_unary_op (config : config) (meta : Meta.meta) (unop : unop) (op : opera
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
     the binop *after* the operands have been successfully evaluated
  *)
-let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop) (v1 : typed_value)
-    (v2 : typed_value) : (typed_value, eval_error) result =
+let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
+    (v1 : typed_value) (v2 : typed_value) : (typed_value, eval_error) result =
   (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
    * The remaining binops only operate on scalars. *)
   if binop = Eq || binop = Ne then (
     (* Equality operations *)
     exec_assert (v1.ty = v2.ty) meta "TODO: error message";
     (* Equality/inequality check is primitive only for a subset of types *)
-    exec_assert (ty_is_primitively_copyable v1.ty) meta "Type is not primitively copyable";
+    exec_assert
+      (ty_is_primitively_copyable v1.ty)
+      meta "Type is not primitively copyable";
     let b = v1 = v2 in
     Ok { value = VLiteral (VBool b); ty = TLiteral TBool })
   else
@@ -558,8 +580,9 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop) (v1 : typ
         | Ne | Eq -> craise meta "Unreachable")
     | _ -> craise meta "Invalid inputs for binop"
 
-let eval_binary_op_concrete (config : config) (meta : Meta.meta) (binop : binop) (op1 : operand)
-    (op2 : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+let eval_binary_op_concrete (config : config) (meta : Meta.meta) (binop : binop)
+    (op1 : operand) (op2 : operand)
+    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
   (* Evaluate the operands *)
   let eval_ops = eval_two_operands config meta op1 op2 in
   (* Compute the result of the binop *)
@@ -570,8 +593,9 @@ let eval_binary_op_concrete (config : config) (meta : Meta.meta) (binop : binop)
   (* Compose and apply *)
   comp eval_ops compute cf
 
-let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop) (op1 : operand)
-    (op2 : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
+    (op1 : operand) (op2 : operand)
+    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
  fun ctx ->
   (* Evaluate the operands *)
   let eval_ops = eval_two_operands config meta op1 op2 in
@@ -585,7 +609,9 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
         (* Equality operations *)
         sanity_check (v1.ty = v2.ty) meta;
         (* Equality/inequality check is primitive only for a subset of types *)
-        exec_assert (ty_is_primitively_copyable v1.ty) meta "The type is not primitively copyable";
+        exec_assert
+          (ty_is_primitively_copyable v1.ty)
+          meta "The type is not primitively copyable";
         TLiteral TBool)
       else
         (* Other operations: input types are integers *)
@@ -617,14 +643,15 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
   (* Compose and apply *)
   comp eval_ops compute cf ctx
 
-let eval_binary_op (config : config) (meta : Meta.meta) (binop : binop) (op1 : operand)
-    (op2 : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+let eval_binary_op (config : config) (meta : Meta.meta) (binop : binop)
+    (op1 : operand) (op2 : operand)
+    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
   match config.mode with
   | ConcreteMode -> eval_binary_op_concrete config meta binop op1 op2 cf
   | SymbolicMode -> eval_binary_op_symbolic config meta binop op1 op2 cf
 
-let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place) (bkind : borrow_kind)
-    (cf : typed_value -> m_fun) : m_fun =
+let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
+    (bkind : borrow_kind) (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   match bkind with
   | BShared | BTwoPhaseMut | BShallow ->
@@ -715,8 +742,9 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place) (bkind : bo
       (* Compose and apply *)
       comp prepare eval cf ctx
 
-let eval_rvalue_aggregate (config : config) (meta : Meta.meta) (aggregate_kind : aggregate_kind)
-    (ops : operand list) (cf : typed_value -> m_fun) : m_fun =
+let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
+    (aggregate_kind : aggregate_kind) (ops : operand list)
+    (cf : typed_value -> m_fun) : m_fun =
   (* Evaluate the operands *)
   let eval_ops = eval_operands config meta ops in
   (* Compute the value *)
@@ -737,16 +765,18 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta) (aggregate_kind :
         | TAdtId def_id ->
             (* Sanity checks *)
             let type_decl = ctx_lookup_type_decl ctx def_id in
-            sanity_check (
-              List.length type_decl.generics.regions
-              = List.length generics.regions) meta;
+            sanity_check
+              (List.length type_decl.generics.regions
+              = List.length generics.regions)
+              meta;
             let expected_field_types =
               AssociatedTypes.ctx_adt_get_inst_norm_field_etypes meta ctx def_id
                 opt_variant_id generics
             in
-            sanity_check (
-              expected_field_types
-              = List.map (fun (v : typed_value) -> v.ty) values) meta;
+            sanity_check
+              (expected_field_types
+              = List.map (fun (v : typed_value) -> v.ty) values)
+              meta;
             (* Construct the value *)
             let av : adt_value =
               { variant_id = opt_variant_id; field_values = values }
@@ -758,7 +788,9 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta) (aggregate_kind :
         | TAssumed _ -> craise meta "Unreachable")
     | AggregatedArray (ety, cg) -> (
         (* Sanity check: all the values have the proper type *)
-        sanity_check (List.for_all (fun (v : typed_value) -> v.ty = ety) values) meta;
+        sanity_check
+          (List.for_all (fun (v : typed_value) -> v.ty = ety) values)
+          meta;
         (* Sanity check: the number of values is consistent with the length *)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
         sanity_check (len = Z.of_int (List.length values)) meta;
@@ -782,8 +814,8 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta) (aggregate_kind :
   (* Compose and apply *)
   comp eval_ops compute cf
 
-let eval_rvalue_not_global (config : config) (meta : Meta.meta) (rvalue : rvalue)
-    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+let eval_rvalue_not_global (config : config) (meta : Meta.meta)
+    (rvalue : rvalue) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
  fun ctx ->
   log#ldebug (lazy "eval_rvalue");
   (* Small helpers *)
@@ -797,14 +829,14 @@ let eval_rvalue_not_global (config : config) (meta : Meta.meta) (rvalue : rvalue
   | Use op -> comp_wrap (eval_operand config meta op) ctx
   | RvRef (p, bkind) -> comp_wrap (eval_rvalue_ref config meta p bkind) ctx
   | UnaryOp (unop, op) -> eval_unary_op config meta unop op cf ctx
-  | BinaryOp (binop, op1, op2) -> eval_binary_op config meta binop op1 op2 cf ctx
+  | BinaryOp (binop, op1, op2) ->
+      eval_binary_op config meta binop op1 op2 cf ctx
   | Aggregate (aggregate_kind, ops) ->
       comp_wrap (eval_rvalue_aggregate config meta aggregate_kind ops) ctx
   | Discriminant _ ->
-      craise
-        meta
-           "Unreachable: discriminant reads should have been eliminated from \
-            the AST"
+      craise meta
+        "Unreachable: discriminant reads should have been eliminated from the \
+         AST"
   | Global _ -> craise meta "Unreachable"
 
 let eval_fake_read (config : config) (meta : Meta.meta) (p : place) : cm_fun =
@@ -815,7 +847,9 @@ let eval_fake_read (config : config) (meta : Meta.meta) (p : place) : cm_fun =
   in
   let cf_continue cf v : m_fun =
    fun ctx ->
-    cassert (not (bottom_in_value ctx.ended_regions v)) meta "Fake read: the value contains bottom";
+    cassert
+      (not (bottom_in_value ctx.ended_regions v))
+      meta "Fake read: the value contains bottom";
     cf ctx
   in
   comp cf_prepare cf_continue cf ctx

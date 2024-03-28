@@ -40,7 +40,8 @@ module Subst = Substitute
 (** The local logger *)
 let log = Logging.regions_hierarchy_log
 
-let compute_regions_hierarchy_for_sig (meta : Meta.meta option) (type_decls : type_decl TypeDeclId.Map.t)
+let compute_regions_hierarchy_for_sig (meta : Meta.meta option)
+    (type_decls : type_decl TypeDeclId.Map.t)
     (fun_decls : fun_decl FunDeclId.Map.t)
     (global_decls : global_decl GlobalDeclId.Map.t)
     (trait_decls : trait_decl TraitDeclId.Map.t)
@@ -51,11 +52,11 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option) (type_decls : ty
      associated types) *)
   let norm_ctx : AssociatedTypes.norm_ctx =
     let norm_trait_types =
-      AssociatedTypes.compute_norm_trait_types_from_preds meta 
+      AssociatedTypes.compute_norm_trait_types_from_preds meta
         sg.preds.trait_type_constraints
     in
     {
-      meta = meta;
+      meta;
       norm_trait_types;
       type_decls;
       fun_decls;
@@ -174,13 +175,15 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option) (type_decls : ty
     | TTraitType (trait_ref, _) ->
         (* The trait should reference a clause, and not an implementation
            (otherwise it should have been normalized) *)
-        sanity_check_opt_meta (
-          AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id) meta;
+        sanity_check_opt_meta
+          (AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id)
+          meta;
         (* We have nothing to do *)
         ()
     | TArrow (regions, inputs, output) ->
         (* TODO: *)
-        cassert_opt_meta (regions = []) meta "We don't support arrow types with locally quantified regions";
+        cassert_opt_meta (regions = []) meta
+          "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
         List.iter (explore_ty []) (output :: inputs)
   and explore_generics (outer : region list) (generics : generic_args) =
@@ -319,7 +322,8 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
   let regular =
     List.map
       (fun ((fid, d) : FunDeclId.id * fun_decl) ->
-        (FRegular fid, (Types.name_to_string env d.name, d.signature, Some d.meta)))
+        ( FRegular fid,
+          (Types.name_to_string env d.name, d.signature, Some d.meta) ))
       (FunDeclId.Map.bindings fun_decls)
   in
   let assumed =
@@ -332,6 +336,6 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
     (List.map
        (fun (fid, (name, sg, meta)) ->
          ( fid,
-           compute_regions_hierarchy_for_sig meta type_decls fun_decls global_decls
-             trait_decls trait_impls name sg))
+           compute_regions_hierarchy_for_sig meta type_decls fun_decls
+             global_decls trait_decls trait_impls name sg ))
        (regular @ assumed))

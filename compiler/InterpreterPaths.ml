@@ -69,7 +69,8 @@ type projection_access = {
     
     TODO: use exceptions?
  *)
-let rec access_projection (meta : Meta.meta) (access : projection_access) (ctx : eval_ctx)
+let rec access_projection (meta : Meta.meta) (access : projection_access)
+    (ctx : eval_ctx)
     (* Function to (eventually) update the value we find *)
       (update : typed_value -> typed_value) (p : projection) (v : typed_value) :
     (eval_ctx * updated_read_value) path_access_result =
@@ -86,10 +87,9 @@ let rec access_projection (meta : Meta.meta) (access : projection_access) (ctx :
           (lazy
             ("Not the same type:\n- nv.ty: " ^ show_ety nv.ty ^ "\n- v.ty: "
            ^ show_ety v.ty));
-        craise
-          meta
-             "Assertion failed: new value doesn't have the same type as its \
-              destination");
+        craise meta
+          "Assertion failed: new value doesn't have the same type as its \
+           destination");
       Ok (ctx, { read = v; updated = nv })
   | pe :: p' -> (
       (* Match on the projection element and the value *)
@@ -232,7 +232,9 @@ let rec access_projection (meta : Meta.meta) (access : projection_access) (ctx :
                  to the fact that we need to reexplore the *whole* place (i.e,
                  we mustn't ignore the current projection element *)
               if access.enter_shared_loans then
-                match access_projection meta access ctx update (pe :: p') sv with
+                match
+                  access_projection meta access ctx update (pe :: p') sv
+                with
                 | Error err -> Error err
                 | Ok (ctx, res) ->
                     let nv =
@@ -301,8 +303,8 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
     Note that we only access the value at the place, and do not check that
     the value is "well-formed" (for instance that it doesn't contain bottoms).
  *)
-let try_read_place (meta : Meta.meta) (access : access_kind) (p : place) (ctx : eval_ctx) :
-    typed_value path_access_result =
+let try_read_place (meta : Meta.meta) (access : access_kind) (p : place)
+    (ctx : eval_ctx) : typed_value path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
   let update v = v in
@@ -322,15 +324,15 @@ let try_read_place (meta : Meta.meta) (access : access_kind) (p : place) (ctx : 
           craise meta "Unexpected environment update");
       Ok read_value
 
-let read_place (meta : Meta.meta) (access : access_kind) (p : place) (ctx : eval_ctx) : typed_value
-    =
+let read_place (meta : Meta.meta) (access : access_kind) (p : place)
+    (ctx : eval_ctx) : typed_value =
   match try_read_place meta access p ctx with
   | Error e -> craise meta ("Unreachable: " ^ show_path_fail_kind e)
   | Ok v -> v
 
 (** Attempt to update the value at a given place *)
-let try_write_place (meta : Meta.meta) (access : access_kind) (p : place) (nv : typed_value)
-    (ctx : eval_ctx) : eval_ctx path_access_result =
+let try_write_place (meta : Meta.meta) (access : access_kind) (p : place)
+    (nv : typed_value) (ctx : eval_ctx) : eval_ctx path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function substitutes the value with the new value *)
   let update _ = nv in
@@ -340,26 +342,28 @@ let try_write_place (meta : Meta.meta) (access : access_kind) (p : place) (nv : 
       (* We ignore the read value *)
       Ok ctx
 
-let write_place (meta : Meta.meta) (access : access_kind) (p : place) (nv : typed_value)
-    (ctx : eval_ctx) : eval_ctx =
+let write_place (meta : Meta.meta) (access : access_kind) (p : place)
+    (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
   match try_write_place meta access p nv ctx with
   | Error e -> craise meta ("Unreachable: " ^ show_path_fail_kind e)
   | Ok ctx -> ctx
 
-let compute_expanded_bottom_adt_value (meta : Meta.meta) (ctx : eval_ctx) (def_id : TypeDeclId.id)
-    (opt_variant_id : VariantId.id option) (generics : generic_args) :
-    typed_value = 
+let compute_expanded_bottom_adt_value (meta : Meta.meta) (ctx : eval_ctx)
+    (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : typed_value =
   sanity_check (TypesUtils.generic_args_only_erased_regions generics) meta;
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
   let def = ctx_lookup_type_decl ctx def_id in
-  sanity_check (List.length generics.regions = List.length def.generics.regions) meta;
+  sanity_check
+    (List.length generics.regions = List.length def.generics.regions)
+    meta;
   (* Compute the field types *)
   let field_types =
-    AssociatedTypes.type_decl_get_inst_norm_field_etypes meta ctx def opt_variant_id
-      generics
+    AssociatedTypes.type_decl_get_inst_norm_field_etypes meta ctx def
+      opt_variant_id generics
   in
   (* Initialize the expanded value *)
   let fields = List.map (mk_bottom meta) field_types in
@@ -367,7 +371,8 @@ let compute_expanded_bottom_adt_value (meta : Meta.meta) (ctx : eval_ctx) (def_i
   let ty = TAdt (TAdtId def_id, generics) in
   { value = av; ty }
 
-let compute_expanded_bottom_tuple_value (meta : Meta.meta) (field_types : ety list) : typed_value =
+let compute_expanded_bottom_tuple_value (meta : Meta.meta)
+    (field_types : ety list) : typed_value =
   (* Generate the field values *)
   let fields = List.map (mk_bottom meta) field_types in
   let v = VAdt { variant_id = None; field_values = fields } in
@@ -396,9 +401,9 @@ let compute_expanded_bottom_tuple_value (meta : Meta.meta) (field_types : ety li
     about which variant we should project to, which is why we *can* set the
     variant index when writing one of its fields).
 *)
-let expand_bottom_value_from_projection (meta : Meta.meta) (access : access_kind) (p : place)
-    (remaining_pes : int) (pe : projection_elem) (ty : ety) (ctx : eval_ctx) :
-    eval_ctx =
+let expand_bottom_value_from_projection (meta : Meta.meta)
+    (access : access_kind) (p : place) (remaining_pes : int)
+    (pe : projection_elem) (ty : ety) (ctx : eval_ctx) : eval_ctx =
   (* Debugging *)
   log#ldebug
     (lazy
@@ -426,7 +431,8 @@ let expand_bottom_value_from_projection (meta : Meta.meta) (access : access_kind
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         TAdt (TAdtId def_id', generics) ) ->
         sanity_check (def_id = def_id') meta;
-        compute_expanded_bottom_adt_value meta ctx def_id opt_variant_id generics
+        compute_expanded_bottom_adt_value meta ctx def_id opt_variant_id
+          generics
     (* Tuples *)
     | ( Field (ProjTuple arity, _),
         TAdt
@@ -436,17 +442,16 @@ let expand_bottom_value_from_projection (meta : Meta.meta) (access : access_kind
         (* Generate the field values *)
         compute_expanded_bottom_tuple_value meta types
     | _ ->
-        craise
-          meta
-             ("Unreachable: " ^ show_projection_elem pe ^ ", " ^ show_ety ty)
+        craise meta
+          ("Unreachable: " ^ show_projection_elem pe ^ ", " ^ show_ety ty)
   in
   (* Update the context by inserting the expanded value at the proper place *)
   match try_write_place meta access p' nv ctx with
   | Ok ctx -> ctx
   | Error _ -> craise meta "Unreachable"
 
-let rec update_ctx_along_read_place (config : config) (meta : Meta.meta) (access : access_kind)
-    (p : place) : cm_fun =
+let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
+    (access : access_kind) (p : place) : cm_fun =
  fun cf ctx ->
   (* Attempt to read the place: if it fails, update the environment and retry *)
   match try_read_place meta access p ctx with
@@ -456,7 +461,8 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta) (access
         match err with
         | FailSharedLoan bids -> end_borrows config meta bids
         | FailMutLoan bid -> end_borrow config meta bid
-        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow config meta bid
+        | FailReservedMutBorrow bid ->
+            promote_reserved_mut_borrow config meta bid
         | FailSymbolic (i, sp) ->
             (* Expand the symbolic value *)
             let proj, _ =
@@ -473,8 +479,8 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta) (access
       in
       comp cc (update_ctx_along_read_place config meta access p) cf ctx
 
-let rec update_ctx_along_write_place (config : config) (meta : Meta.meta) (access : access_kind)
-    (p : place) : cm_fun =
+let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
+    (access : access_kind) (p : place) : cm_fun =
  fun cf ctx ->
   (* Attempt to *read* (yes, *read*: we check the access to the place, and
      write to it later) the place: if it fails, update the environment and retry *)
@@ -486,7 +492,8 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta) (acces
         match err with
         | FailSharedLoan bids -> end_borrows config meta bids
         | FailMutLoan bid -> end_borrow config meta bid
-        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow config meta bid
+        | FailReservedMutBorrow bid ->
+            promote_reserved_mut_borrow config meta bid
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
             expand_symbolic_value_no_branching config meta sp
@@ -495,8 +502,8 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta) (acces
             (* Expand the {!Bottom} value *)
             fun cf ctx ->
              let ctx =
-               expand_bottom_value_from_projection meta access p remaining_pes pe ty
-                 ctx
+               expand_bottom_value_from_projection meta access p remaining_pes
+                 pe ty ctx
              in
              cf ctx
         | FailBorrow _ -> craise meta "Could not write to a borrow"
@@ -507,8 +514,8 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta) (acces
 (** Small utility used to break control-flow *)
 exception UpdateCtx of cm_fun
 
-let rec end_loans_at_place (config : config) (meta : Meta.meta) (access : access_kind) (p : place)
-    : cm_fun =
+let rec end_loans_at_place (config : config) (meta : Meta.meta)
+    (access : access_kind) (p : place) : cm_fun =
  fun cf ctx ->
   (* Iterator to explore a value and update the context whenever we find
    * loans.
@@ -562,7 +569,8 @@ let rec end_loans_at_place (config : config) (meta : Meta.meta) (access : access
      * a recursive call to reinspect the value *)
     comp cc (end_loans_at_place config meta access p) cf ctx
 
-let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place) : cm_fun =
+let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
+    : cm_fun =
  fun cf ctx ->
   (* Move the current value in the place outside of this place and into
    * a dummy variable *)
@@ -610,13 +618,14 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place) 
   (* Continue *)
   cc cf ctx
 
-let prepare_lplace (config : config) (meta : Meta.meta) (p : place) (cf : typed_value -> m_fun) :
-    m_fun =
+let prepare_lplace (config : config) (meta : Meta.meta) (p : place)
+    (cf : typed_value -> m_fun) : m_fun =
  fun ctx ->
   log#ldebug
     (lazy
       ("prepare_lplace:" ^ "\n- p: " ^ place_to_string ctx p
-     ^ "\n- Initial context:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+     ^ "\n- Initial context:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
   (* Access the place *)
   let access = Write in
   let cc = update_ctx_along_write_place config meta access p in

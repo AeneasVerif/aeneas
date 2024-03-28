@@ -15,7 +15,12 @@ open Contexts
     [original_sv_ty]: shouldn't have erased regions
 *)
 val apply_proj_loans_on_symbolic_expansion :
-  Meta.meta -> RegionId.Set.t -> RegionId.Set.t -> symbolic_expansion -> rty -> typed_avalue
+  Meta.meta ->
+  RegionId.Set.t ->
+  RegionId.Set.t ->
+  symbolic_expansion ->
+  rty ->
+  typed_avalue
 
 (** Convert a symbolic expansion *which is not a borrow* to a value *)
 val symbolic_expansion_non_borrow_to_value :
@@ -28,7 +33,7 @@ val symbolic_expansion_non_borrow_to_value :
     during a symbolic expansion.
   *)
 val symbolic_expansion_non_shared_borrow_to_value :
- Meta.meta -> symbolic_value -> symbolic_expansion -> typed_value
+  Meta.meta -> symbolic_value -> symbolic_expansion -> typed_value
 
 (** Auxiliary function to prepare reborrowing operations (used when
     applying projectors).
@@ -43,7 +48,10 @@ val symbolic_expansion_non_shared_borrow_to_value :
     - [allow_reborrows]
  *)
 val prepare_reborrows :
-  config -> Meta.meta -> bool -> (BorrowId.id -> BorrowId.id) * (eval_ctx -> eval_ctx)
+  config ->
+  Meta.meta ->
+  bool ->
+  (BorrowId.id -> BorrowId.id) * (eval_ctx -> eval_ctx)
 
 (** Apply (and reduce) a projector over borrows to an avalue.
     We use this for instance to spread the borrows present in the inputs
