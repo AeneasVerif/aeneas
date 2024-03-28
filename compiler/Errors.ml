@@ -40,7 +40,7 @@ let craise_opt_meta (meta : Meta.meta option) (msg : string) =
 let craise (meta : Meta.meta) (msg : string) = craise_opt_meta (Some meta) msg
 
 let cassert_opt_meta (b : bool) (meta : Meta.meta option) (msg : string) =
-  if b then craise_opt_meta meta msg
+  if not b then craise_opt_meta meta msg
 
 let cassert (b : bool) (meta : Meta.meta) (msg : string) =
   cassert_opt_meta b (Some meta) msg
