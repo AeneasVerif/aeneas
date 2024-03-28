@@ -26,10 +26,10 @@ def test_new_non_zero_u32
 def test_vec : Result Unit :=
   do
   let _ ← alloc.vec.Vec.push U32 (alloc.vec.Vec.new U32) 0#u32
-  Result.ret ()
+  Result.ok ()
 
 /- Unit test for [external::test_vec] -/
-#assert (test_vec == Result.ret ())
+#assert (test_vec == Result.ok ())
 
 /- [external::custom_swap]:
    Source: 'src/external.rs', lines 24:0-24:66 -/
@@ -39,8 +39,8 @@ def custom_swap
   :=
   do
   let (st1, (t, t1)) ← core.mem.swap T x y st
-  let back_'a := fun ret st2 => Result.ret (st2, (ret, t1))
-  Result.ret (st1, (t, back_'a))
+  let back_'a := fun ret st2 => Result.ok (st2, (ret, t1))
+  Result.ok (st1, (t, back_'a))
 
 /- [external::test_custom_swap]:
    Source: 'src/external.rs', lines 29:0-29:59 -/
@@ -49,7 +49,7 @@ def test_custom_swap
   do
   let (st1, (_, custom_swap_back)) ← custom_swap U32 x y st
   let (_, (x1, y1)) ← custom_swap_back 1#u32 st1
-  Result.ret (st1, (x1, y1))
+  Result.ok (st1, (x1, y1))
 
 /- [external::test_swap_non_zero]:
    Source: 'src/external.rs', lines 35:0-35:44 -/
@@ -59,6 +59,6 @@ def test_swap_non_zero (x : U32) (st : State) : Result (State × U32) :=
   let (x1, _) := p
   if x1 = 0#u32
   then Result.fail .panic
-  else Result.ret (st1, x1)
+  else Result.ok (st1, x1)
 
 end external

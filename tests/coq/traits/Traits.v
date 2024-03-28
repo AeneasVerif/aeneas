@@ -20,7 +20,7 @@ Arguments BoolTrait_t_get_bool { _ }.
 (** [traits::{(traits::BoolTrait for bool)}::get_bool]:
     Source: 'src/traits.rs', lines 12:4-12:30 *)
 Definition boolTraitBool_get_bool (self : bool) : result bool :=
-  Return self.
+  Ok self.
 
 (** Trait implementation: [traits::{(traits::BoolTrait for bool)}]
     Source: 'src/traits.rs', lines 11:0-11:23 *)
@@ -32,21 +32,21 @@ Definition BoolTraitBool : BoolTrait_t bool := {|
     Source: 'src/traits.rs', lines 6:4-6:30 *)
 Definition boolTrait_ret_true
   {Self : Type} (self_clause : BoolTrait_t Self) (self : Self) : result bool :=
-  Return true
+  Ok true
 .
 
 (** [traits::test_bool_trait_bool]:
     Source: 'src/traits.rs', lines 17:0-17:44 *)
 Definition test_bool_trait_bool (x : bool) : result bool :=
   b <- boolTraitBool_get_bool x;
-  if b then boolTrait_ret_true BoolTraitBool x else Return false
+  if b then boolTrait_ret_true BoolTraitBool x else Ok false
 .
 
 (** [traits::{(traits::BoolTrait for core::option::Option<T>)#1}::get_bool]:
     Source: 'src/traits.rs', lines 23:4-23:30 *)
 Definition boolTraitOption_get_bool
   (T : Type) (self : option T) : result bool :=
-  match self with | None => Return false | Some _ => Return true end
+  match self with | None => Ok false | Some _ => Ok true end
 .
 
 (** Trait implementation: [traits::{(traits::BoolTrait for core::option::Option<T>)#1}]
@@ -59,7 +59,7 @@ Definition BoolTraitOption (T : Type) : BoolTrait_t (option T) := {|
     Source: 'src/traits.rs', lines 31:0-31:54 *)
 Definition test_bool_trait_option (T : Type) (x : option T) : result bool :=
   b <- boolTraitOption_get_bool T x;
-  if b then boolTrait_ret_true (BoolTraitOption T) x else Return false
+  if b then boolTrait_ret_true (BoolTraitOption T) x else Ok false
 .
 
 (** [traits::test_bool_trait]:
@@ -81,7 +81,7 @@ Arguments ToU64_t_to_u64 { _ }.
 (** [traits::{(traits::ToU64 for u64)#2}::to_u64]:
     Source: 'src/traits.rs', lines 44:4-44:26 *)
 Definition toU64U64_to_u64 (self : u64) : result u64 :=
-  Return self.
+  Ok self.
 
 (** Trait implementation: [traits::{(traits::ToU64 for u64)#2}]
     Source: 'src/traits.rs', lines 43:0-43:18 *)
@@ -167,7 +167,7 @@ Arguments ToType_t_to_type { _ _ }.
 (** [traits::{(traits::ToType<bool> for u64)#5}::to_type]:
     Source: 'src/traits.rs', lines 93:4-93:28 *)
 Definition toTypeU64Bool_to_type (self : u64) : result bool :=
-  Return (self s> 0%u64)
+  Ok (self s> 0%u64)
 .
 
 (** Trait implementation: [traits::{(traits::ToType<bool> for u64)#5}]
@@ -238,7 +238,7 @@ Arguments TestType_test_TestTrait_t_test { _ }.
     Source: 'src/traits.rs', lines 139:12-139:34 *)
 Definition testType_test_TestTraittraitsTestTypetestTestType1_test
   (self : TestType_test_TestType1_t) : result bool :=
-  Return (self s> 1%u64)
+  Ok (self s> 1%u64)
 .
 
 (** Trait implementation: [traits::{traits::TestType<T>#6}::test::{(traits::{traits::TestType<T>#6}::test::TestTrait for traits::{traits::TestType<T>#6}::test::TestType1)}]
@@ -258,7 +258,7 @@ Definition testType_test
   x1 <- toU64Inst.(ToU64_t_to_u64) x;
   if x1 s> 0%u64
   then testType_test_TestTraittraitsTestTypetestTestType1_test 0%u64
-  else Return false
+  else Ok false
 .
 
 (** [traits::BoolWrapper]
@@ -283,7 +283,7 @@ Definition ToTypetraitsBoolWrapperT (T : Type) (toTypeBoolTInst : ToType_t bool
 
 (** [traits::WithConstTy::LEN2]
     Source: 'src/traits.rs', lines 164:4-164:21 *)
-Definition with_const_ty_len2_default_body : result usize := Return 32%usize.
+Definition with_const_ty_len2_default_body : result usize := Ok 32%usize.
 Definition with_const_ty_len2_default : usize :=
   with_const_ty_len2_default_body%global
 .
@@ -310,7 +310,7 @@ Arguments WithConstTy_t_f { _ _ }.
 
 (** [traits::{(traits::WithConstTy<32: usize> for bool)#8}::LEN1]
     Source: 'src/traits.rs', lines 175:4-175:21 *)
-Definition with_const_ty_bool32_len1_body : result usize := Return 12%usize.
+Definition with_const_ty_bool32_len1_body : result usize := Ok 12%usize.
 Definition with_const_ty_bool32_len1 : usize :=
   with_const_ty_bool32_len1_body%global
 .
@@ -319,7 +319,7 @@ Definition with_const_ty_bool32_len1 : usize :=
     Source: 'src/traits.rs', lines 180:4-180:39 *)
 Definition withConstTyBool32_f
   (i : u64) (a : array u8 32%usize) : result u64 :=
-  Return i
+  Ok i
 .
 
 (** Trait implementation: [traits::{(traits::WithConstTy<32: usize> for bool)#8}]
@@ -339,7 +339,7 @@ Definition use_with_const_ty1
   (H : Type) (LEN : usize) (withConstTyInst : WithConstTy_t H LEN) :
   result usize
   :=
-  Return withConstTyInst.(WithConstTy_tWithConstTy_t_LEN1)
+  Ok withConstTyInst.(WithConstTy_tWithConstTy_t_LEN1)
 .
 
 (** [traits::use_with_const_ty2]:
@@ -349,7 +349,7 @@ Definition use_with_const_ty2
   (w : withConstTyInst.(WithConstTy_tWithConstTy_t_W)) :
   result unit
   :=
-  Return tt
+  Ok tt
 .
 
 (** [traits::use_with_const_ty3]:
@@ -365,7 +365,7 @@ Definition use_with_const_ty3
 (** [traits::test_where1]:
     Source: 'src/traits.rs', lines 193:0-193:40 *)
 Definition test_where1 (T : Type) (_x : T) : result unit :=
-  Return tt.
+  Ok tt.
 
 (** [traits::test_where2]:
     Source: 'src/traits.rs', lines 194:0-194:57 *)
@@ -373,7 +373,7 @@ Definition test_where2
   (T : Type) (withConstTyT32Inst : WithConstTy_t T 32%usize) (_x : u32) :
   result unit
   :=
-  Return tt
+  Ok tt
 .
 
 (** Trait declaration: [traits::ParentTrait0]
@@ -432,7 +432,7 @@ Definition order1
   ParentTrait0_t U) :
   result unit
   :=
-  Return tt
+  Ok tt
 .
 
 (** Trait declaration: [traits::ChildTrait1]
@@ -549,7 +549,7 @@ Definition ParentTrait2U32 : ParentTrait2_t u32 := {|
 (** [traits::{(traits::ChildTrait2 for u32)#13}::convert]:
     Source: 'src/traits.rs', lines 273:4-273:29 *)
 Definition childTrait2U32_convert (x : u32) : result u32 :=
-  Return x.
+  Ok x.
 
 (** Trait implementation: [traits::{(traits::ChildTrait2 for u32)#13}]
     Source: 'src/traits.rs', lines 272:0-272:24 *)

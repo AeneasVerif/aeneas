@@ -12,7 +12,7 @@ noeq type boolTrait_t (self : Type0) = { get_bool : self -> result bool; }
 (** [traits::{(traits::BoolTrait for bool)}::get_bool]:
     Source: 'src/traits.rs', lines 12:4-12:30 *)
 let boolTraitBool_get_bool (self : bool) : result bool =
-  Return self
+  Ok self
 
 (** Trait implementation: [traits::{(traits::BoolTrait for bool)}]
     Source: 'src/traits.rs', lines 11:0-11:23 *)
@@ -24,18 +24,18 @@ let boolTrait_ret_true
   (#self : Type0) (self_clause : boolTrait_t self) (self1 : self) :
   result bool
   =
-  Return true
+  Ok true
 
 (** [traits::test_bool_trait_bool]:
     Source: 'src/traits.rs', lines 17:0-17:44 *)
 let test_bool_trait_bool (x : bool) : result bool =
   let* b = boolTraitBool_get_bool x in
-  if b then boolTrait_ret_true boolTraitBool x else Return false
+  if b then boolTrait_ret_true boolTraitBool x else Ok false
 
 (** [traits::{(traits::BoolTrait for core::option::Option<T>)#1}::get_bool]:
     Source: 'src/traits.rs', lines 23:4-23:30 *)
 let boolTraitOption_get_bool (t : Type0) (self : option t) : result bool =
-  begin match self with | None -> Return false | Some _ -> Return true end
+  begin match self with | None -> Ok false | Some _ -> Ok true end
 
 (** Trait implementation: [traits::{(traits::BoolTrait for core::option::Option<T>)#1}]
     Source: 'src/traits.rs', lines 22:0-22:31 *)
@@ -47,7 +47,7 @@ let boolTraitOption (t : Type0) : boolTrait_t (option t) = {
     Source: 'src/traits.rs', lines 31:0-31:54 *)
 let test_bool_trait_option (t : Type0) (x : option t) : result bool =
   let* b = boolTraitOption_get_bool t x in
-  if b then boolTrait_ret_true (boolTraitOption t) x else Return false
+  if b then boolTrait_ret_true (boolTraitOption t) x else Ok false
 
 (** [traits::test_bool_trait]:
     Source: 'src/traits.rs', lines 35:0-35:50 *)
@@ -62,7 +62,7 @@ noeq type toU64_t (self : Type0) = { to_u64 : self -> result u64; }
 (** [traits::{(traits::ToU64 for u64)#2}::to_u64]:
     Source: 'src/traits.rs', lines 44:4-44:26 *)
 let toU64U64_to_u64 (self : u64) : result u64 =
-  Return self
+  Ok self
 
 (** Trait implementation: [traits::{(traits::ToU64 for u64)#2}]
     Source: 'src/traits.rs', lines 43:0-43:18 *)
@@ -133,7 +133,7 @@ noeq type toType_t (self t : Type0) = { to_type : self -> result t; }
 (** [traits::{(traits::ToType<bool> for u64)#5}::to_type]:
     Source: 'src/traits.rs', lines 93:4-93:28 *)
 let toTypeU64Bool_to_type (self : u64) : result bool =
-  Return (self > 0)
+  Ok (self > 0)
 
 (** Trait implementation: [traits::{(traits::ToType<bool> for u64)#5}]
     Source: 'src/traits.rs', lines 92:0-92:25 *)
@@ -188,7 +188,7 @@ noeq type testType_test_TestTrait_t (self : Type0) = {
     Source: 'src/traits.rs', lines 139:12-139:34 *)
 let testType_test_TestTraittraitsTestTypetestTestType1_test
   (self : testType_test_TestType1_t) : result bool =
-  Return (self > 1)
+  Ok (self > 1)
 
 (** Trait implementation: [traits::{traits::TestType<T>#6}::test::{(traits::{traits::TestType<T>#6}::test::TestTrait for traits::{traits::TestType<T>#6}::test::TestType1)}]
     Source: 'src/traits.rs', lines 138:8-138:36 *)
@@ -206,7 +206,7 @@ let testType_test
   let* x1 = toU64Inst.to_u64 x in
   if x1 > 0
   then testType_test_TestTraittraitsTestTypetestTestType1_test 0
-  else Return false
+  else Ok false
 
 (** [traits::BoolWrapper]
     Source: 'src/traits.rs', lines 150:0-150:22 *)
@@ -229,7 +229,7 @@ let toTypetraitsBoolWrapperT (t : Type0) (toTypeBoolTInst : toType_t bool t) :
 
 (** [traits::WithConstTy::LEN2]
     Source: 'src/traits.rs', lines 164:4-164:21 *)
-let with_const_ty_len2_default_body : result usize = Return 32
+let with_const_ty_len2_default_body : result usize = Ok 32
 let with_const_ty_len2_default : usize =
   eval_global with_const_ty_len2_default_body
 
@@ -246,14 +246,14 @@ noeq type withConstTy_t (self : Type0) (len : usize) = {
 
 (** [traits::{(traits::WithConstTy<32: usize> for bool)#8}::LEN1]
     Source: 'src/traits.rs', lines 175:4-175:21 *)
-let with_const_ty_bool32_len1_body : result usize = Return 12
+let with_const_ty_bool32_len1_body : result usize = Ok 12
 let with_const_ty_bool32_len1 : usize =
   eval_global with_const_ty_bool32_len1_body
 
 (** [traits::{(traits::WithConstTy<32: usize> for bool)#8}::f]:
     Source: 'src/traits.rs', lines 180:4-180:39 *)
 let withConstTyBool32_f (i : u64) (a : array u8 32) : result u64 =
-  Return i
+  Ok i
 
 (** Trait implementation: [traits::{(traits::WithConstTy<32: usize> for bool)#8}]
     Source: 'src/traits.rs', lines 174:0-174:29 *)
@@ -272,7 +272,7 @@ let use_with_const_ty1
   (h : Type0) (len : usize) (withConstTyInst : withConstTy_t h len) :
   result usize
   =
-  Return withConstTyInst.cLEN1
+  Ok withConstTyInst.cLEN1
 
 (** [traits::use_with_const_ty2]:
     Source: 'src/traits.rs', lines 187:0-187:73 *)
@@ -281,7 +281,7 @@ let use_with_const_ty2
   (w : withConstTyInst.tW) :
   result unit
   =
-  Return ()
+  Ok ()
 
 (** [traits::use_with_const_ty3]:
     Source: 'src/traits.rs', lines 189:0-189:80 *)
@@ -295,7 +295,7 @@ let use_with_const_ty3
 (** [traits::test_where1]:
     Source: 'src/traits.rs', lines 193:0-193:40 *)
 let test_where1 (t : Type0) (_x : t) : result unit =
-  Return ()
+  Ok ()
 
 (** [traits::test_where2]:
     Source: 'src/traits.rs', lines 194:0-194:57 *)
@@ -303,7 +303,7 @@ let test_where2
   (t : Type0) (withConstTyT32Inst : withConstTy_t t 32) (_x : u32) :
   result unit
   =
-  Return ()
+  Ok ()
 
 (** Trait declaration: [traits::ParentTrait0]
     Source: 'src/traits.rs', lines 200:0-200:22 *)
@@ -345,7 +345,7 @@ let order1
   parentTrait0_t u) :
   result unit
   =
-  Return ()
+  Ok ()
 
 (** Trait declaration: [traits::ChildTrait1]
     Source: 'src/traits.rs', lines 222:0-222:35 *)
@@ -419,7 +419,7 @@ let parentTrait2U32 : parentTrait2_t u32 = {
 (** [traits::{(traits::ChildTrait2 for u32)#13}::convert]:
     Source: 'src/traits.rs', lines 273:4-273:29 *)
 let childTrait2U32_convert (x : u32) : result u32 =
-  Return x
+  Ok x
 
 (** Trait implementation: [traits::{(traits::ChildTrait2 for u32)#13}]
     Source: 'src/traits.rs', lines 272:0-272:24 *)

@@ -17,10 +17,10 @@ def test_incr : Result Unit :=
   let i ← ref_incr 0#i32
   if ¬ (i = 1#i32)
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [paper::test_incr] -/
-#assert (test_incr == Result.ret ())
+#assert (test_incr == Result.ok ())
 
 /- [paper::choose]:
    Source: 'src/paper.rs', lines 15:0-15:70 -/
@@ -29,10 +29,10 @@ def choose
   Result (T × (T → Result (T × T)))
   :=
   if b
-  then let back_'a := fun ret => Result.ret (ret, y)
-       Result.ret (x, back_'a)
-  else let back_'a := fun ret => Result.ret (x, ret)
-       Result.ret (y, back_'a)
+  then let back_'a := fun ret => Result.ok (ret, y)
+       Result.ok (x, back_'a)
+  else let back_'a := fun ret => Result.ok (x, ret)
+       Result.ok (y, back_'a)
 
 /- [paper::test_choose]:
    Source: 'src/paper.rs', lines 23:0-23:20 -/
@@ -49,10 +49,10 @@ def test_choose : Result Unit :=
     then Result.fail .panic
     else if ¬ (y = 0#i32)
          then Result.fail .panic
-         else Result.ret ()
+         else Result.ok ()
 
 /- Unit test for [paper::test_choose] -/
-#assert (test_choose == Result.ret ())
+#assert (test_choose == Result.ok ())
 
 /- [paper::List]
    Source: 'src/paper.rs', lines 35:0-35:16 -/
@@ -68,8 +68,8 @@ divergent def list_nth_mut
   | List.Cons x tl =>
     if i = 0#u32
     then
-      let back_'a := fun ret => Result.ret (List.Cons ret tl)
-      Result.ret (x, back_'a)
+      let back_'a := fun ret => Result.ok (List.Cons ret tl)
+      Result.ok (x, back_'a)
     else
       do
       let i1 ← i - 1#u32
@@ -78,8 +78,8 @@ divergent def list_nth_mut
         fun ret =>
           do
           let tl1 ← list_nth_mut_back ret
-          Result.ret (List.Cons x tl1)
-      Result.ret (t, back_'a)
+          Result.ok (List.Cons x tl1)
+      Result.ok (t, back_'a)
   | List.Nil => Result.fail .panic
 
 /- [paper::sum]:
@@ -89,7 +89,7 @@ divergent def sum (l : List I32) : Result I32 :=
   | List.Cons x tl => do
                       let i ← sum tl
                       x + i
-  | List.Nil => Result.ret 0#i32
+  | List.Nil => Result.ok 0#i32
 
 /- [paper::test_nth]:
    Source: 'src/paper.rs', lines 68:0-68:17 -/
@@ -103,10 +103,10 @@ def test_nth : Result Unit :=
   let i ← sum l2
   if ¬ (i = 7#i32)
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [paper::test_nth] -/
-#assert (test_nth == Result.ret ())
+#assert (test_nth == Result.ok ())
 
 /- [paper::call_choose]:
    Source: 'src/paper.rs', lines 76:0-76:44 -/
@@ -116,6 +116,6 @@ def call_choose (p : (U32 × U32)) : Result U32 :=
   let (pz, choose_back) ← choose U32 true px py
   let pz1 ← pz + 1#u32
   let (px1, _) ← choose_back pz1
-  Result.ret px1
+  Result.ok px1
 
 end paper

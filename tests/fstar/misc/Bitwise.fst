@@ -18,15 +18,15 @@ let shift_i32 (a : i32) : result i32 =
 (** [bitwise::xor_u32]:
     Source: 'src/bitwise.rs', lines 17:0-17:37 *)
 let xor_u32 (a : u32) (b : u32) : result u32 =
-  Return (u32_xor a b)
+  Ok (u32_xor a b)
 
 (** [bitwise::or_u32]:
     Source: 'src/bitwise.rs', lines 21:0-21:36 *)
 let or_u32 (a : u32) (b : u32) : result u32 =
-  Return (u32_or a b)
+  Ok (u32_or a b)
 
 (** [bitwise::and_u32]:
     Source: 'src/bitwise.rs', lines 25:0-25:37 *)
 let and_u32 (a : u32) (b : u32) : result u32 =
-  Return (u32_and a b)
+  Ok (u32_and a b)
 
