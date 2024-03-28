@@ -167,8 +167,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
     let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
-    cassert ((not is_global_decl_body) || List.length d = 1) (List.hd d).meta "The declaration group should containing globals should contain exactly one declaration"; (*TODO recheck how to get meta*)
-    cassert ((not !group_has_builtin_info) || List.length d = 1) (List.hd d).meta "The declaration group should containing globals should contain exactly one declaration";
+    cassert ((not is_global_decl_body) || List.length d = 1) (List.hd d).meta "This global definition is in a group of mutually recursive definitions";
+    cassert ((not !group_has_builtin_info) || List.length d = 1) (List.hd d).meta "This builtin function belongs to a group of mutually recursive definitions";
     (* We ignore on purpose functions that cannot fail and consider they *can*
      * fail: the result of the analysis is not used yet to adjust the translation
      * so that the functions which syntactically can't fail don't use an error monad.

@@ -128,8 +128,8 @@ let extract_adt_g_value (meta : Meta.meta)
   | TAdt (TTuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
-      cassert (List.length generics.types = List.length field_values) meta "Only applied tuple constructors are currently supported";
-      cassert (generics.const_generics = [] && generics.trait_refs = []) meta "Only applied tuple constructors are currently supported";
+      cassert (List.length generics.types = List.length field_values) meta "Only fully applied tuple constructors are currently supported";
+      cassert (generics.const_generics = [] && generics.trait_refs = []) meta "Only fully applied tuple constructors are currently supported";
       extract_as_tuple ()
   | TAdt (adt_id, _) ->
       (* "Regular" ADT *)
@@ -188,7 +188,6 @@ let extract_adt_g_value (meta : Meta.meta)
 (* Extract globals in the same way as variables *)
 let extract_global (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (id : A.GlobalDeclId.id) (generics : generic_args) : unit =
-  (* let trait_decl = GlobalDeclId.Map.find id ctx.trait_decl_id in there might be a way to extract the meta ? *)
   let use_brackets = inside && generics <> empty_generic_args in
   F.pp_open_hvbox fmt ctx.indent_incr;
   if use_brackets then F.pp_print_string fmt "(";
@@ -449,7 +448,7 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.for
 
           if not method_id.is_provided then (
             (* Required method *)
-            cassert (lp_id = None) trait_decl.meta "TODO: Error message";
+            sanity_check (lp_id = None) trait_decl.meta ;
             extract_trait_ref trait_decl.meta ctx fmt TypeDeclId.Set.empty true trait_ref;
             let fun_name =
               ctx_get_trait_method meta trait_ref.trait_decl_ref.trait_decl_id
@@ -498,9 +497,10 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.for
       | Error (types, err) ->
           extract_generic_args meta ctx fmt TypeDeclId.Set.empty
             { generics with types };
-          if !Config.fail_hard then craise meta err
-          else
-            F.pp_print_string fmt
+          (* if !Config.fail_hard then craise meta err
+          else *)
+          save_error (Some meta) err;
+          F.pp_print_string fmt
               "(\"ERROR: ill-formed builtin: invalid number of filtering \
                arguments\")");
       (* Print the arguments *)
@@ -645,7 +645,7 @@ and extract_Lambda (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open parentheses *)
   if inside then F.pp_print_string fmt "(";
   (* Print the lambda - note that there should always be at least one variable *)
-  cassert (xl <> []) meta "TODO: error message";
+  sanity_check (xl <> []) meta ;
   F.pp_print_string fmt "fun";
   let with_type = !backend = Coq in
   let ctx =
@@ -944,7 +944,7 @@ and extract_StructUpdate (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.form
     (inside : bool) (e_ty : ty) (supd : struct_update) : unit =
   (* We can't update a subset of the fields in Coq (i.e., we can do
      [{| x:= 3; y := 4 |}], but there is no syntax for [{| s with x := 3 |}]) *)
-  cassert (!backend <> Coq || supd.init = None) meta "TODO: error message";
+  sanity_check (!backend <> Coq || supd.init = None) meta ;
   (* In the case of HOL4, records with no fields are not supported and are
      thus extracted to unit. We need to check that by looking up the definition *)
   let extract_as_unit =
@@ -1188,7 +1188,7 @@ let assert_backend_supports_decreases_clauses (meta : Meta.meta) =
   | FStar | Lean -> ()
   | _ ->
       craise
-        meta "decreases clauses only supported for the Lean & F* backends"
+        meta "Decreases clauses are only supported for the Lean and F* backends"
 
 (** Extract a decreases clause function template body.
 
@@ -1208,7 +1208,7 @@ let assert_backend_supports_decreases_clauses (meta : Meta.meta) =
  *)
 let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
-  cassert (!backend = FStar) def.meta "TODO: error message";
+  cassert (!backend = FStar) def.meta "The generation of template decrease clauses is only supported for the F* backend";
 
   (* Retrieve the function name *)
   let def_name = ctx_get_termination_measure def.meta def.def_id def.loop_id ctx in
@@ -1273,7 +1273,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
 *)
 let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
-  cassert (!backend = Lean) def.meta "TODO: error message";
+  cassert (!backend = Lean) def.meta "The generation of template termination and decreasing clauses is only supported for the Lean backend" ;
   (*
    * Extract a template for the termination measure
    *)
@@ -1396,7 +1396,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
-  cassert (not def.is_global_decl_body) def.meta "TODO: error message";
+  sanity_check (not def.is_global_decl_body) def.meta ;
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
   (* Add a break before *)
@@ -1643,7 +1643,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
-  cassert (def.signature.generics.const_generics = []) def.meta "TODO: error message";
+  cassert (def.signature.generics.const_generics = []) def.meta "Constant generics are not supported yet when generating code for HOL4";
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
   let ctx, _, _, _ =
@@ -1689,7 +1689,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
-  cassert (not def.is_global_decl_body) def.meta "TODO: error message";
+  sanity_check (not def.is_global_decl_body) def.meta ;
   (* We treat HOL4 opaque functions in a specific manner *)
   if !backend = HOL4 && Option.is_none def.body then
     extract_fun_decl_hol4_opaque ctx fmt def
@@ -2252,7 +2252,7 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params decl.meta f.llbc_name f.signature.llbc_generics generics ctx (* TODO: confirm it's the right meta*)
+      ctx_add_generic_params decl.meta f.llbc_name f.signature.llbc_generics generics ctx
     in
     let backend_uses_forall =
       match !backend with Coq | Lean -> true | FStar | HOL4 -> false
@@ -2263,7 +2263,7 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
     let use_forall_use_sep = false in
     extract_generic_params decl.meta ctx fmt TypeDeclId.Set.empty ~use_forall
       ~use_forall_use_sep ~use_arrows generics type_params cg_params
-      trait_clauses; (* TODO: confirm it's the right meta*)
+      trait_clauses;
     if use_forall then F.pp_print_string fmt ",";
     (* Extract the inputs and output *)
     F.pp_print_space fmt ();
@@ -2558,8 +2558,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
   in
   extract_trait_impl_item ctx fmt fun_name ty
 
-(** Extract a trait implementation 
-  * TODO: check if impl.meta everywhere is the right meta    
+(** Extract a trait implementation  
 *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =

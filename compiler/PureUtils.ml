@@ -78,7 +78,7 @@ let fun_sig_info_is_wf (info : fun_sig_info) : bool =
 let dest_arrow_ty (meta : Meta.meta) (ty : ty) : ty * ty =
   match ty with
   | TArrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
-  | _ -> craise meta "Unreachable"
+  | _ -> craise meta "Not an arrow type"
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
@@ -237,7 +237,7 @@ let is_var (e : texpression) : bool =
   match e.e with Var _ -> true | _ -> false
 
 let as_var (meta : Meta.meta) (e : texpression) : VarId.id =
-  match e.e with Var v -> v | _ -> craise meta "Unreachable"
+  match e.e with Var v -> v | _ -> craise meta "Not a var"
 
 let is_cvar (e : texpression) : bool =
   match e.e with CVar _ -> true | _ -> false
@@ -251,7 +251,7 @@ let is_const (e : texpression) : bool =
 let ty_as_adt (meta : Meta.meta) (ty : ty) : type_id * generic_args =
   match ty with
   | TAdt (id, generics) -> (id, generics)
-  | _ -> craise meta "Unreachable"
+  | _ -> craise meta "Not an ADT"
 
 (** Remove the external occurrences of {!Meta} *)
 let rec unmeta (e : texpression) : texpression =
@@ -294,7 +294,7 @@ let destruct_lets_no_interleave (meta : Meta.meta) (e : texpression) :
   let m =
     match e.e with
     | Let (monadic, _, _, _) -> monadic
-    | _ -> craise meta "Unreachable"
+    | _ -> craise meta "Not a let-binding"
   in
   (* Destruct the rest *)
   let rec destruct_lets (e : texpression) :
@@ -323,12 +323,11 @@ let destruct_apps (e : texpression) : texpression * texpression list =
 (** Make an [App (app, arg)] expression *)
 let mk_app (meta : Meta.meta) (app : texpression) (arg : texpression) : texpression =
   let raise_or_return msg =
-    if !Config.fail_hard then craise meta msg
-    else
-      let e = App (app, arg) in
-      (* Dummy type - TODO: introduce an error type *)
-      let ty = app.ty in
-      { e; ty }
+    save_error (Some meta) msg;
+    let e = App (app, arg) in
+    (* Dummy type - TODO: introduce an error type *)
+    let ty = app.ty in
+    { e; ty }
   in
   match app.ty with
   | TArrow (ty0, ty1) ->
@@ -371,8 +370,8 @@ let opt_destruct_function_call (e : texpression) :
 let opt_destruct_result (meta : Meta.meta) (ty : ty) : ty option =
   match ty with
   | TAdt (TAssumed TResult, generics) ->
-      cassert (generics.const_generics = []) meta "TODO: Error message";
-      cassert (generics.trait_refs = []) meta "TODO: Error message";
+      sanity_check (generics.const_generics = []) meta;
+      sanity_check (generics.trait_refs = []) meta;
       Some (Collections.List.to_cons_nil generics.types)
   | _ -> None
 
@@ -381,8 +380,8 @@ let destruct_result (meta : Meta.meta) (ty : ty) : ty = Option.get (opt_destruct
 let opt_destruct_tuple (meta : Meta.meta) (ty : ty) : ty list option =
   match ty with
   | TAdt (TTuple, generics) ->
-      cassert (generics.const_generics = []) meta "TODO: Error message";
-      cassert (generics.trait_refs = []) meta "TODO: Error message";
+      sanity_check (generics.const_generics = []) meta;
+      sanity_check (generics.trait_refs = []) meta;
       Some generics.types
   | _ -> None
 

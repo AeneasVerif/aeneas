@@ -371,7 +371,7 @@ let ctx_update_var_value (meta : Meta.meta) (ctx : eval_ctx) (vid : VarId.id) (n
     is important).
 *)
 let ctx_push_var (meta : Meta.meta) (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
-  cassert (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty) meta "Pushed variables and their values do not have the same type TODO: Error message";
+  cassert (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty) meta "The pushed variables and their values do not have the same type";
   let bv = var_to_binder var in
   { ctx with env = EBinding (BVar bv, v) :: ctx.env }
 
@@ -395,7 +395,7 @@ let ctx_push_vars (meta : Meta.meta) (ctx : eval_ctx) (vars : (var * typed_value
     List.for_all
       (fun (var, (value : typed_value)) ->
         TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
-      vars) meta "Pushed variables and their values do not have the same type TODO: Error message";
+      vars) meta "The pushed variables and their values do not have the same type TODO: Error message";
   let vars =
     List.map
       (fun (var, value) -> EBinding (BVar (var_to_binder var), value))

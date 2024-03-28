@@ -11,38 +11,48 @@ let format_error_message (meta : Meta.meta) msg =
 
 exception CFailure of string
 
-
 let error_list : (Meta.meta option * string) list ref = ref []
-let save_error (meta : Meta.meta option) (msg : string) = error_list := (meta, msg)::(!error_list)
+let push_error (meta : Meta.meta option) (msg : string) = error_list := (meta, msg)::(!error_list)
 
-let craise (meta : Meta.meta) (msg : string) =
-  if !Config.fail_hard then
-    raise (Failure (format_error_message meta msg))
-  else
-    let () = save_error (Some meta) msg in  
-    raise (CFailure msg)
-
-let cassert (b : bool) (meta : Meta.meta) (msg : string) =
-  if b then
-    craise meta msg
+let save_error ?(b : bool = true) (meta : Meta.meta option) (msg : string) = 
+  push_error meta msg;
+  match meta with 
+  | Some m ->
+    if !Config.fail_hard && b then
+      raise (Failure (format_error_message m msg))
+  | None -> 
+    if !Config.fail_hard && b then
+      raise (Failure msg)
 
 let craise_opt_meta (meta : Meta.meta option) (msg : string) =
   match meta with 
-  | Some m -> craise m msg
+  | Some m ->
+    if !Config.fail_hard then
+      raise (Failure (format_error_message m msg))
+    else
+      let () = push_error (Some m) msg in  
+      raise (CFailure msg)
   | None -> 
-      let () = save_error (None) msg in  
+    if !Config.fail_hard then
+      raise (Failure msg)
+    else
+      let () = push_error None msg in  
       raise (CFailure msg)
 
+let craise (meta : Meta.meta) (msg : string) =
+  craise_opt_meta (Some meta) msg
+
 let cassert_opt_meta (b : bool) (meta : Meta.meta option) (msg : string) =
-  match meta with 
-  | Some m -> cassert b m msg
-  | None -> 
-    if b then 
-      let () = save_error (None) msg in  
-      raise (CFailure msg)
+  if b then 
+    craise_opt_meta meta msg
+
+let cassert (b : bool) (meta : Meta.meta) (msg : string) =
+  cassert_opt_meta b (Some meta) msg
 
 let sanity_check b meta = cassert b meta "Internal error, please file an issue"
 let sanity_check_opt_meta b meta = cassert_opt_meta b meta "Internal error, please file an issue"
+
+let internal_error meta = craise meta "Internal error, please report an issue"
 
 let exec_raise = craise
 let exec_assert = cassert

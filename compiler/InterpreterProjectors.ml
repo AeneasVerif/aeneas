@@ -84,7 +84,7 @@ let rec apply_proj_borrows_on_shared_borrow (meta : Meta.meta) (ctx : eval_ctx)
     | VLoan _, _ -> craise meta "Unreachable"
     | VSymbolic s, _ ->
         (* Check that the projection doesn't contain ended regions *)
-        cassert (not (projections_intersect meta s.sv_ty ctx.ended_regions ty regions)) meta "TODO: error message";
+        sanity_check (not (projections_intersect meta s.sv_ty ctx.ended_regions ty regions)) meta;
         [ AsbProjReborrows (s, ty) ]
     | _ -> craise meta "Unreachable"
 
@@ -212,13 +212,13 @@ let rec apply_proj_borrows (meta : Meta.meta) (check_symbolic_no_ended : bool) (
                 ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
                 ^ RegionId.Set.to_string None rset2
                 ^ "\n"));
-            cassert (not (projections_intersect meta ty1 rset1 ty2 rset2))) meta "TODO: error message";
+            sanity_check (not (projections_intersect meta ty1 rset1 ty2 rset2))) meta;
           ASymbolic (AProjBorrows (s, ty))
       | _ ->
           log#lerror
             (lazy
               ("apply_proj_borrows: unexpected inputs:\n- input value: "
-              ^ typed_value_to_string meta ctx v
+              ^ typed_value_to_string ~meta:(Some meta) ctx v
               ^ "\n- proj rty: " ^ ty_to_string ctx ty));
           craise meta "Unreachable"
     in
@@ -464,7 +464,7 @@ let apply_reborrows (meta : Meta.meta) (reborrows : (BorrowId.id * BorrowId.id) 
   (* Visit *)
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that there are no reborrows remaining *)
-  cassert (!reborrows = []) meta "TODO: error message";
+  sanity_check (!reborrows = []) meta;
   (* Return *)
   ctx
 
@@ -483,7 +483,7 @@ let prepare_reborrows (config : config) (meta : Meta.meta) (allow_reborrows : bo
   let apply_registered_reborrows (ctx : eval_ctx) : eval_ctx =
     match config.mode with
     | ConcreteMode ->
-        cassert (!reborrows = []) meta "TODO: error message";
+        sanity_check (!reborrows = []) meta;
         ctx
     | SymbolicMode ->
         (* Apply the reborrows *)

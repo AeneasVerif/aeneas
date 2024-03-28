@@ -211,7 +211,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
-  cassert (call_id = FunCallId.zero) fdef.meta "The abstractions should be empty (i.e., with no avalues) abstractions";
+  sanity_check (call_id = FunCallId.zero) fdef.meta;
   let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
       eval_ctx * typed_avalue list =
     (* Project over the values - we use *loan* projectors, as explained above *)
@@ -272,7 +272,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       ^ "\n- inside_loop: "
       ^ Print.bool_to_string inside_loop
       ^ "\n- ctx:\n"
-      ^ Print.Contexts.eval_ctx_to_string fdef.meta ctx));
+      ^ Print.Contexts.eval_ctx_to_string ~meta:(Some fdef.meta) ctx));
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
@@ -330,7 +330,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         let region_can_end rid =
           RegionGroupId.Set.mem rid parent_and_current_rgs
         in
-        cassert (region_can_end back_id) fdef.meta "The region should be able to end";
+        sanity_check (region_can_end back_id) fdef.meta;
         let ctx =
           create_push_abstractions_from_abs_region_groups
             (fun rg_id -> SynthRet rg_id)
@@ -417,9 +417,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
             | Loop (loop_id', rg_id', LoopSynthInput) ->
                 (* We only allow to end the loop synth input abs for the region
                    group [rg_id] *)
-                cassert (
+                sanity_check (
                   if Option.is_some loop_id then loop_id = Some loop_id'
-                  else true) fdef.meta "Only the loop synth input abs for the region group [rg_id] are allowed to end";
+                  else true) fdef.meta;
                 (* Loop abstractions *)
                 let rg_id' = Option.get rg_id' in
                 if rg_id' = back_id && inside_loop then
@@ -427,7 +427,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
                 else abs
             | Loop (loop_id', _, LoopCall) ->
                 (* We can end all the loop call abstractions *)
-                cassert (loop_id = Some loop_id') fdef.meta "TODO: error message";
+                sanity_check (loop_id = Some loop_id') fdef.meta;
                 { abs with can_end = true }
             | SynthInput rg_id' ->
                 if rg_id' = back_id && end_fun_synth_input then
@@ -603,7 +603,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
 
   (* Evaluate the function *)
   let symbolic =
-    eval_function_body config fdef.meta (Option.get fdef.body).body cf_finish ctx
+    eval_function_body config (Option.get fdef.body).body cf_finish ctx
   in
 
   (* Return *)
@@ -655,7 +655,7 @@ module Test = struct
     in
 
     (* Evaluate the function *)
-    let _ = eval_function_body config body.meta body.body cf_check ctx in
+    let _ = eval_function_body config body.body cf_check ctx in
     ()
 
   (** Small helper: return true if the function is a *transparent* unit function

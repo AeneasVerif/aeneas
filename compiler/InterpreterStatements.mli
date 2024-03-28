@@ -48,4 +48,4 @@ val create_push_abstractions_from_abs_region_groups :
 val eval_statement : config -> statement -> st_cm_fun
 
 (** Evaluate a statement seen as a function body *)
-val eval_function_body : config -> Meta.meta -> statement -> st_cm_fun
+val eval_function_body : config -> statement -> st_cm_fun

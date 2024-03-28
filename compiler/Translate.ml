@@ -354,7 +354,7 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
  *)
 let export_types_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (ids : Pure.TypeDeclId.id list) : unit =
-  assert (ids <> []) (* meta "TODO: Error message" *);
+  assert (ids <> []);
   let export_type = export_type fmt config ctx in
   let ids_set = Pure.TypeDeclId.Set.of_list ids in
   let export_type_decl kind id = export_type ids_set kind id true false in
@@ -396,11 +396,11 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
 
   if List.exists (fun b -> b) builtin then
     (* Sanity check *)
-    assert (List.for_all (fun b -> b) builtin) (* meta "TODO: Error message" *)
+    assert (List.for_all (fun b -> b) builtin)
   else if List.exists dont_extract defs then
     (* Check if we have to ignore declarations *)
     (* Sanity check *)
-    assert (List.for_all dont_extract defs) (* meta "TODO: Error message" *)
+    assert (List.for_all dont_extract defs)
   else (
     (* Extract the type declarations.
 
@@ -447,8 +447,8 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
   let trans = FunDeclId.Map.find global.body ctx.trans_funs in
-  cassert (trans.fwd.loops = []) global.meta "TODO: Error message";
-  cassert (trans.backs = []) global.meta "TODO: Error message";
+  sanity_check (trans.fwd.loops = []) global.meta;
+  sanity_check (trans.backs = []) global.meta;
   let body = trans.fwd.f in
 
   let is_opaque = Option.is_none body.Pure.body in
@@ -915,7 +915,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
   (* Initialize the names map by registering the keywords used in the
      language, as well as some primitive names ("u32", etc.).
      We insert the names of the local declarations later. *)
-  let names_maps = Extract.initialize_names_maps () in (*TODO*)
+  let names_maps = Extract.initialize_names_maps () in
 
   (* We need to compute which functions are recursive, in order to know
    * whether we should generate a decrease clause or not. *)
@@ -1038,7 +1038,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     match Filename.chop_suffix_opt ~suffix:".llbc" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
-        raise (Failure "Unreachable") (* TODO check *)
+        raise (Failure "Unreachable")
     | Some filename ->
         (* Retrieve the file basename *)
         let basename = Filename.basename filename in

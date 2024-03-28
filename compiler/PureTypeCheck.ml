@@ -15,9 +15,9 @@ let get_adt_field_types (meta : Meta.meta) (type_decls : type_decl TypeDeclId.Ma
   match type_id with
   | TTuple ->
       (* Tuple *)
-      cassert (generics.const_generics = []) meta "TODO: error message";
-      cassert (generics.trait_refs = []) meta "TODO: error message";
-      cassert (variant_id = None) meta "TODO: error message";
+      sanity_check (generics.const_generics = []) meta;
+      sanity_check (generics.trait_refs = []) meta;
+      sanity_check (variant_id = None) meta;
       generics.types
   | TAdtId def_id ->
       (* "Regular" ADT *)
@@ -37,10 +37,10 @@ let get_adt_field_types (meta : Meta.meta) (type_decls : type_decl TypeDeclId.Ma
           else
             craise meta "Unreachable: improper variant id for result type"
       | TError ->
-          cassert (generics = empty_generic_args) meta "TODO: error message";
+          sanity_check (generics = empty_generic_args) meta;
           let variant_id = Option.get variant_id in
-          cassert (
-            variant_id = error_failure_id || variant_id = error_out_of_fuel_id) meta "TODO: error message";
+          sanity_check (
+            variant_id = error_failure_id || variant_id = error_out_of_fuel_id) meta;
           []
       | TFuel ->
           let variant_id = Option.get variant_id in
@@ -64,7 +64,7 @@ type tc_ctx = {
 
 let check_literal (meta : Meta.meta) (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
-  | TInteger int_ty, VScalar sv -> cassert (int_ty = sv.int_ty) meta "TODO: error message"
+  | TInteger int_ty, VScalar sv -> sanity_check (int_ty = sv.int_ty) meta
   | TBool, VBool _ | TChar, VChar _ -> ()
   | _ -> craise meta "Inconsistent type"
 
@@ -76,7 +76,7 @@ let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx) (v : typed_pattern
       ctx
   | PatDummy -> ctx
   | PatVar (var, _) ->
-      cassert (var.ty = v.ty) meta "TODO: error message";
+      sanity_check (var.ty = v.ty) meta;
       let env = VarId.Map.add var.id var.ty ctx.env in
       { ctx with env }
   | PatAdt av ->
@@ -110,21 +110,21 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
        * we use a locally nameless representation *)
       match VarId.Map.find_opt var_id ctx.env with
       | None -> ()
-      | Some ty -> cassert (ty = e.ty) meta "TODO: error message")
+      | Some ty -> sanity_check (ty = e.ty) meta)
   | CVar cg_id ->
       let ty = T.ConstGenericVarId.Map.find cg_id ctx.const_generics in
-      cassert (ty = e.ty) meta "TODO: error message"
+      sanity_check (ty = e.ty) meta
   | Const cv -> check_literal meta cv (ty_as_literal meta e.ty)
   | App (app, arg) ->
       let input_ty, output_ty = destruct_arrow meta app.ty in
-      cassert (input_ty = arg.ty) meta "TODO: error message";
-      cassert (output_ty = e.ty) meta "TODO: error message";
+      sanity_check (input_ty = arg.ty) meta;
+      sanity_check (output_ty = e.ty) meta;
       check_texpression meta ctx app;
       check_texpression meta ctx arg
   | Lambda (pat, body) ->
       let pat_ty, body_ty = destruct_arrow meta e.ty in
-      cassert (pat.ty = pat_ty) meta "TODO: error message";
-      cassert (body.ty = body_ty) meta "TODO: error message";
+      sanity_check (pat.ty = pat_ty) meta;
+      sanity_check (body.ty = body_ty) meta;
       (* Check the pattern and register the introduced variables at the same time *)
       let ctx = check_typed_pattern meta ctx pat in
       check_texpression meta ctx body
@@ -139,8 +139,8 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
           let adt_ty, field_ty = destruct_arrow meta e.ty in
           let adt_id, adt_generics = ty_as_adt meta adt_ty in
           (* Check the ADT type *)
-          cassert (adt_id = proj_adt_id) meta "TODO: error message";
-          cassert (adt_generics = qualif.generics) meta "TODO: error message";
+          sanity_check (adt_id = proj_adt_id) meta;
+          sanity_check (adt_generics = qualif.generics) meta;
           (* Retrieve and check the expected field type *)
           let variant_id = None in
           let expected_field_tys =
@@ -148,23 +148,23 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
               qualif.generics
           in
           let expected_field_ty = FieldId.nth expected_field_tys field_id in
-          cassert (expected_field_ty = field_ty) meta "TODO: error message"
+          sanity_check (expected_field_ty = field_ty) meta
       | AdtCons id -> (
           let expected_field_tys =
             get_adt_field_types meta ctx.type_decls id.adt_id id.variant_id
               qualif.generics
           in
           let field_tys, adt_ty = destruct_arrows e.ty in
-          cassert (expected_field_tys = field_tys) meta "TODO: error message";
+          sanity_check (expected_field_tys = field_tys) meta;
           match adt_ty with
           | TAdt (type_id, generics) ->
-              cassert (type_id = id.adt_id) meta "TODO: error message";
-              cassert (generics = qualif.generics) meta "TODO: error message"
+              sanity_check (type_id = id.adt_id) meta;
+              sanity_check (generics = qualif.generics) meta
           | _ -> craise meta "Unreachable"))
   | Let (monadic, pat, re, e_next) ->
       let expected_pat_ty = if monadic then destruct_result meta re.ty else re.ty in
-      cassert (pat.ty = expected_pat_ty) meta "TODO: error message";
-      cassert (e.ty = e_next.ty) meta "TODO: error message";
+      sanity_check (pat.ty = expected_pat_ty) meta;
+      sanity_check (e.ty = e_next.ty) meta;
       (* Check the right-expression *)
       check_texpression meta ctx re;
       (* Check the pattern and register the introduced variables at the same time *)
@@ -175,20 +175,20 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
       check_texpression meta ctx scrut;
       match switch_body with
       | If (e_then, e_else) ->
-          cassert (scrut.ty = TLiteral TBool) meta "TODO: error message";
-          cassert (e_then.ty = e.ty) meta "TODO: error message";
-          cassert (e_else.ty = e.ty) meta "TODO: error message";
+          sanity_check (scrut.ty = TLiteral TBool) meta;
+          sanity_check (e_then.ty = e.ty) meta;
+          sanity_check (e_else.ty = e.ty) meta;
           check_texpression meta ctx e_then;
           check_texpression meta ctx e_else
       | Match branches ->
           let check_branch (br : match_branch) : unit =
-            cassert (br.pat.ty = scrut.ty) meta "TODO: error message";
+            sanity_check (br.pat.ty = scrut.ty) meta;
             let ctx = check_typed_pattern meta ctx br.pat in
             check_texpression meta ctx br.branch
           in
           List.iter check_branch branches)
   | Loop loop ->
-      cassert (loop.fun_end.ty = e.ty) meta "TODO: error message";
+      sanity_check (loop.fun_end.ty = e.ty) meta;
       check_texpression meta ctx loop.fun_end;
       check_texpression meta ctx loop.loop_body
   | StructUpdate supd -> (
@@ -196,11 +196,11 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
       (if Option.is_some supd.init then
          match VarId.Map.find_opt (Option.get supd.init) ctx.env with
          | None -> ()
-         | Some ty -> cassert (ty = e.ty) meta "TODO: error message");
+         | Some ty -> sanity_check (ty = e.ty) meta);
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
       let adt_id, adt_generics = ty_as_adt meta e.ty in
-      cassert (adt_id = supd.struct_id) meta "TODO: error message";
+      sanity_check (adt_id = supd.struct_id) meta;
       (* The id can only be: a custom type decl or an array *)
       match adt_id with
       | TAdtId _ ->
@@ -211,7 +211,7 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
           List.iter
             (fun ((fid, fe) : _ * texpression) ->
               let expected_field_ty = FieldId.nth expected_field_tys fid in
-              cassert (expected_field_ty = fe.ty) meta "TODO: error message";
+              sanity_check (expected_field_ty = fe.ty) meta;
               check_texpression meta ctx fe)
             supd.updates
       | TAssumed TArray ->
@@ -220,10 +220,10 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) : 
           in
           List.iter
             (fun ((_, fe) : _ * texpression) ->
-              cassert (expected_field_ty = fe.ty) meta "TODO: error message";
+              sanity_check (expected_field_ty = fe.ty) meta;
               check_texpression meta ctx fe)
             supd.updates
       | _ -> craise meta "Unexpected")
   | Meta (_, e_next) ->
-      cassert (e_next.ty = e.ty) meta "TODO: error message";
+      sanity_check (e_next.ty = e.ty) meta;
       check_texpression meta ctx e_next

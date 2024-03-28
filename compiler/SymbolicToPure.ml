@@ -325,7 +325,7 @@ let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
 
 let typed_value_to_string (ctx : bs_ctx) (v : V.typed_value) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Values.typed_value_to_string ctx.fun_decl.meta env v
+  Print.Values.typed_value_to_string ~meta:(Some ctx.fun_decl.meta) env v
 
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
@@ -349,7 +349,7 @@ let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
 
 let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.texpression_to_string ctx.fun_decl.meta env false "" "  " e
+  PrintPure.texpression_to_string ~metadata:(Some ctx.fun_decl.meta) env false "" "  " e
 
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
@@ -363,9 +363,9 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_decl_to_string env def
 
-let typed_pattern_to_string (meta : Meta.meta) (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
+let typed_pattern_to_string ?(meta : Meta.meta option = None) (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.typed_pattern_to_string meta env p
+  PrintPure.typed_pattern_to_string ~meta:meta env p
 
 let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
     fun_effect_info =
@@ -384,7 +384,7 @@ let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let verbose = false in
   let indent = "" in
   let indent_incr = "  " in
-  Print.Values.abs_to_string ctx.fun_decl.meta env verbose indent indent_incr abs
+  Print.Values.abs_to_string ~meta:(Some ctx.fun_decl.meta) env verbose indent indent_incr abs
 
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
@@ -478,7 +478,7 @@ let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_strait_ref meta trait_ref in
       TTraitType (trait_ref, type_name)
-  | TArrow _ -> craise meta "TODO"
+  | TArrow _ -> craise meta "TODO: error message"
 
 and translate_sgeneric_args (meta : Meta.meta) (generics : T.generic_args) : generic_args =
   translate_generic_args meta (translate_sty meta) generics
@@ -555,7 +555,7 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let name = Print.Types.name_to_string env def.name in
   let { T.regions; types; const_generics; trait_clauses } = def.generics in
   (* Can't translate types with regions for now *)
-  cassert (regions = []) def.meta "Translating types with regions is not supported yet";
+  cassert (regions = []) def.meta "ADTs containing borrows are not supported yet";
   let trait_clauses = List.map (translate_trait_clause def.meta) trait_clauses in
   let generics = { types; const_generics; trait_clauses } in
   let kind = translate_type_decl_kind def.meta def.T.kind in
@@ -620,7 +620,7 @@ let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos) (ty : T.ty
             not
               (List.exists
                  (TypesUtils.ty_has_borrows type_infos)
-                 generics.types)) meta "General parametricity is not supported yet";
+                 generics.types)) meta "ADTs containing borrows are not supported yet";
           match t_generics.types with
           | [ bty ] -> bty
           | _ ->
@@ -640,7 +640,7 @@ let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos) (ty : T.ty
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_fwd_trait_ref meta type_infos trait_ref in
       TTraitType (trait_ref, type_name)
-  | TArrow _ -> craise meta "TODO"
+  | TArrow _ -> craise meta "TODO: error message"
 
 and translate_fwd_generic_args (meta : Meta.meta) (type_infos : type_infos)
     (generics : T.generic_args) : generic_args =
@@ -701,7 +701,7 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
             else None
       | TAssumed TBox -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
-          cassert (not (TypesUtils.ty_has_borrows type_infos ty)) meta "ADTs with borrows are not supported yet";
+          cassert (not (TypesUtils.ty_has_borrows type_infos ty)) meta "ADTs containing borrows are not supported yet";
           (* Eliminate the box *)
           match generics.types with
           | [ bty ] -> translate bty
@@ -744,7 +744,7 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
         let trait_ref = translate_fwd_trait_ref meta type_infos trait_ref in
         Some (TTraitType (trait_ref, type_name))
       else None
-  | TArrow _ -> craise meta "TODO"
+  | TArrow _ -> craise meta "TODO: error message"
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
@@ -794,7 +794,7 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (back_funs : texpression option RegionGroupId.Map.t option) (ctx : bs_ctx) :
     bs_ctx =
   let calls = ctx.calls in
-  cassert (not (V.FunCallId.Map.mem call_id calls)) ctx.fun_decl.meta "TODO: error message";
+  sanity_check (not (V.FunCallId.Map.mem call_id calls)) ctx.fun_decl.meta;
   let info = { forward; forward_inputs = args; back_funs } in
   let calls = V.FunCallId.Map.add call_id info calls in
   { ctx with calls }
@@ -816,7 +816,7 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   let calls = V.FunCallId.Map.add call_id info ctx.calls in
   (* Insert the abstraction in the abstractions map *)
   let abstractions = ctx.abstractions in
-  cassert (not (V.AbstractionId.Map.mem abs.abs_id abstractions)) ctx.fun_decl.meta "This abstraction should not be in the abstractions map";
+  sanity_check (not (V.AbstractionId.Map.mem abs.abs_id abstractions)) ctx.fun_decl.meta;
   let abstractions =
     V.AbstractionId.Map.add abs.abs_id (abs, back_args) abstractions
   in
@@ -896,7 +896,7 @@ let compute_raw_fun_effect_info  (meta : Meta.meta) (fun_infos : fun_info A.FunD
         is_rec = info.is_rec || Option.is_some lid;
       }
   | FunId (FAssumed aid) ->
-      cassert (lid = None) meta "TODO: error message";
+      sanity_check (lid = None) meta;
       {
         can_fail = Assumed.assumed_fun_can_fail aid;
         stateful_group = false;
@@ -926,7 +926,7 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
       (* This is necessarily for the current function *)
       match fun_id with
       | FunId (FRegular fid) -> (
-          cassert (fid = ctx.fun_decl.def_id) ctx.fun_decl.meta "TODO: error message";
+          sanity_check (fid = ctx.fun_decl.def_id) ctx.fun_decl.meta;
           (* Lookup the loop *)
           let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
           let loop_info = LoopId.Map.find lid ctx.loops in
@@ -1188,7 +1188,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
       else false
     in
     let info = { fwd_info; effect_info = fwd_effect_info; ignore_output } in
-    cassert (fun_sig_info_is_wf info) meta "TODO: error message";
+    sanity_check (fun_sig_info_is_wf info) meta;
     info
   in
 
@@ -1541,7 +1541,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
         | TAdt (TTuple, _) ->
-            cassert (variant_id = None) ctx.fun_decl.meta "TODO: error message";
+            sanity_check (variant_id = None) ctx.fun_decl.meta;
             mk_simpl_tuple_texpression ctx.fun_decl.meta field_values
         | _ ->
             (* Retrieve the type and the translated generics from the translated
@@ -1619,7 +1619,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert (field_values = []) ctx.fun_decl.meta "Only tuples can currently contain borrows";
+            cassert (field_values = []) ctx.fun_decl.meta "ADTs containing borrows are not supported yet";
             None
         | TTuple ->
             (* Return *)
@@ -1687,7 +1687,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
       (* The symbolic value was left unchanged *)
       Some (symbolic_value_to_texpression ctx msv)
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
-      cassert (child_aproj = AIgnoredProjBorrows) ctx.fun_decl.meta "TODO: error message";
+      sanity_check (child_aproj = AIgnoredProjBorrows) ctx.fun_decl.meta;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
@@ -1762,12 +1762,12 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert (field_values = []) ctx.fun_decl.meta "Only tuples can currently contain borrows";
+            cassert (field_values = []) ctx.fun_decl.meta "ADTs with borrows are not supported yet";
             (ctx, None)
         | TTuple ->
             (* Return *)
             let variant_id = adt_v.variant_id in
-            cassert (variant_id = None) ctx.fun_decl.meta "TODO: error message";
+            sanity_check (variant_id = None) ctx.fun_decl.meta;
             if field_values = [] then (ctx, None)
             else
               (* Note that if there is exactly one field value, [mk_simpl_tuple_pattern]
@@ -2042,9 +2042,9 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
 
 and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     (ctx : bs_ctx) : texpression =
-  cassert (is_continue = ctx.inside_loop) ctx.fun_decl.meta "TODO: error message";
+  sanity_check (is_continue = ctx.inside_loop) ctx.fun_decl.meta;
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  cassert (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta "TODO: error message";
+  sanity_check (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta;
 
   (* Lookup the loop information *)
   let loop_id = Option.get ctx.loop_id in
@@ -2313,7 +2313,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             (match binop with
             (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
             | E.Shl | E.Shr -> ()
-            | _ -> cassert (int_ty0 = int_ty1) ctx.fun_decl.meta "TODO: error message");
+            | _ -> sanity_check (int_ty0 = int_ty1) ctx.fun_decl.meta);
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -2368,7 +2368,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
       ^ T.RegionGroupId.to_string rg_id
       ^ "\n- loop_id: "
       ^ Print.option_to_string Pure.LoopId.to_string ctx.loop_id
-      ^ "\n- eval_ctx:\n" ^ eval_ctx_to_string ctx.fun_decl.meta ectx ^ "\n- abs:\n"
+      ^ "\n- eval_ctx:\n" ^ eval_ctx_to_string ~meta:(Some ctx.fun_decl.meta) ectx ^ "\n- abs:\n"
       ^ abs_to_string ctx abs ^ "\n"));
 
   (* When we end an input abstraction, this input abstraction gets back
@@ -2382,7 +2382,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      for a parent backward function.
   *)
   let bid = Option.get ctx.bid in
-  cassert (rg_id = bid) ctx.fun_decl.meta "TODO: error message";
+  sanity_check (rg_id = bid) ctx.fun_decl.meta;
 
   (* First, introduce the given back variables.
 
@@ -2523,8 +2523,8 @@ and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
   (* We can do this simply by checking that it consumes and gives back nothing *)
   let inputs = abs_to_consumed ctx ectx abs in
   let ctx, outputs = abs_to_given_back None abs ctx in
-  cassert (inputs = []) ctx.fun_decl.meta "TODO: error message";
-  cassert (outputs = []) ctx.fun_decl.meta "TODO: error message";
+  sanity_check (inputs = []) ctx.fun_decl.meta;
+  sanity_check (outputs = []) ctx.fun_decl.meta;
 
   (* Translate the next expression *)
   translate_expression e ctx
@@ -2566,7 +2566,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: as there are no nested borrows, there should be none. *)
   let consumed = abs_to_consumed ctx ectx abs in
-  cassert (consumed = []) ctx.fun_decl.meta "Nested borrows are not supported yet TODO: error message";
+  cassert (consumed = []) ctx.fun_decl.meta "Nested borrows are not supported yet";
   (* Retrieve the values given back upon ending this abstraction - note that
    * we don't provide meta-place information, because those assignments will
    * be inlined anyway... *)
@@ -2601,7 +2601,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     texpression =
   let vloop_id = loop_id in
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  cassert (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta "TODO: error message";
+  sanity_check (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta;
   let rg_id = Option.get rg_id in
   (* There are two cases depending on the [abs_kind] (whether this is a
      synth input or a regular loop call) *)
@@ -2819,7 +2819,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           ^ pure_ty_to_string ctx true_e.ty
           ^ "\n\nfalse_e.ty: "
           ^ pure_ty_to_string ctx false_e.ty));
-      if !Config.fail_hard then cassert (ty = false_e.ty) ctx.fun_decl.meta "TODO: error message"; (* TODO: remove if ? *)
+      save_error ~b:(ty = false_e.ty) (Some ctx.fun_decl.meta) "Internal error, please file an issue";
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :
@@ -2844,8 +2844,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             Match all_branches )
       in
       let ty = otherwise.branch.ty in
-      cassert (
-        List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches) ctx.fun_decl.meta "TODO: error message";
+      sanity_check (
+        List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches) ctx.fun_decl.meta;
       { e; ty }
 
 (* Translate and [ExpandAdt] when there is no branching (i.e., one branch).
@@ -3480,7 +3480,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
 
   (* Add the loop information in the context *)
   let ctx =
-    cassert (not (LoopId.Map.mem loop_id ctx.loops)) ctx.fun_decl.meta "The loop information should not already be in the context TODO: error message";
+    sanity_check (not (LoopId.Map.mem loop_id ctx.loops)) ctx.fun_decl.meta;
 
     (* Note that we will retrieve the input values later in the [ForwardEnd]
        (and will introduce the outputs at that moment, together with the actual

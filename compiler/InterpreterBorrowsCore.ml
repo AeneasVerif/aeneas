@@ -104,13 +104,13 @@ let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool
   (* Normalize the associated types *)
   match (ty1, ty2) with
   | TLiteral lit1, TLiteral lit2 ->
-      cassert (lit1 = lit2) meta "Tlitrals are not equal TODO: Error message";
+      sanity_check (lit1 = lit2) meta;
       default
   | TAdt (id1, generics1), TAdt (id2, generics2) ->
-      cassert (id1 = id2) meta "ids are not equal TODO: Error message";
+      sanity_check (id1 = id2) meta;
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
-      cassert (generics1.const_generics = generics2.const_generics) meta "const generics are not the same";
+      sanity_check (generics1.const_generics = generics2.const_generics) meta;
 
       (* We also ignore the trait refs *)
 
@@ -152,12 +152,12 @@ let rec compare_rtys (meta : Meta.meta) (default : bool) (combine : bool -> bool
       let tys_b = compare ty1 ty2 in
       combine regions_b tys_b
   | TVar id1, TVar id2 ->
-      cassert (id1 = id2) meta "Ids are not the same TODO: Error message";
+      sanity_check (id1 = id2) meta;
       default
   | TTraitType _, TTraitType _ ->
       (* The types should have been normalized. If after normalization we
          get trait types, we can consider them as variables *)
-      cassert (ty1 = ty2) meta "The types are not normalized";
+      sanity_check (ty1 = ty2) meta;
       default
   | _ ->
       log#lerror
@@ -269,7 +269,7 @@ let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
             super#visit_aloan_content env lc
 
       method! visit_EBinding env bv v =
-        cassert (Option.is_none !abs_or_var) meta "TODO :  error message ";
+        sanity_check (Option.is_none !abs_or_var) meta;
         abs_or_var :=
           Some
             (match bv with
@@ -279,7 +279,7 @@ let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
         abs_or_var := None
 
       method! visit_EAbs env abs =
-        cassert (Option.is_none !abs_or_var) meta "TODO :  error message ";
+        sanity_check (Option.is_none !abs_or_var) meta;
         if ek.enter_abs then (
           abs_or_var := Some (AbsId abs.abs_id);
           super#visit_EAbs env abs;
@@ -320,7 +320,7 @@ let update_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (nl
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : loan_content =
-    cassert (not !r) meta "TODO :  error message ";
+    sanity_check (not !r) meta;
     r := true;
     nlc
   in
@@ -367,7 +367,7 @@ let update_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) (nl
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one loan *)
-  cassert !r meta "No loan was updated";
+  sanity_check !r meta;
   ctx
 
 (** Update a abstraction loan content.
@@ -383,7 +383,7 @@ let update_aloan (meta : Meta.meta ) (ek : exploration_kind) (l : BorrowId.id) (
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : aloan_content =
-    cassert (not !r) meta "TODO :  error message ";
+    sanity_check (not !r) meta;
     r := true;
     nlc
   in
@@ -416,7 +416,7 @@ let update_aloan (meta : Meta.meta ) (ek : exploration_kind) (l : BorrowId.id) (
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one loan *)
-  cassert !r meta "No loan was uodated";
+  sanity_check !r meta;
   ctx
 
 (** Lookup a borrow content from a borrow id. *)
@@ -501,7 +501,7 @@ let update_borrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : borrow_content =
-    cassert (not !r) meta "TODO :  error message ";
+    sanity_check (not !r) meta;
     r := true;
     nbc
   in
@@ -542,7 +542,7 @@ let update_borrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one borrow *)
-  cassert !r meta "No borrow was updated";
+  sanity_check !r meta;
   ctx
 
 (** Update an abstraction borrow content.
@@ -558,7 +558,7 @@ let update_aborrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id) 
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : avalue =
-    cassert (not !r) meta "TODO: error message";
+    sanity_check (not !r) meta;
     r := true;
     nv
   in
@@ -881,7 +881,7 @@ let update_intersecting_aproj_borrows_non_shared (meta : Meta.meta) (regions : R
       update_non_shared regions sv ctx
   in
   (* Check that we updated at least once *)
-  cassert !updated meta "Not updated at least once";
+  sanity_check !updated meta;
   (* Return *)
   ctx
 
@@ -936,7 +936,7 @@ let update_intersecting_aproj_loans (meta : Meta.meta) (proj_regions : RegionId.
     (subst : abs -> (msymbolic_value * aproj) list -> aproj) (ctx : eval_ctx) :
     eval_ctx =
   (* *)
-  cassert (ty_is_rty proj_ty) meta "proj_ty is not rty TODO: Error message";
+  sanity_check (ty_is_rty proj_ty) meta;
   (* Small helpers for sanity checks *)
   let updated = ref false in
   let update abs local_given_back : aproj =
@@ -958,7 +958,7 @@ let update_intersecting_aproj_loans (meta : Meta.meta) (proj_regions : RegionId.
         | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
             if same_symbolic_id sv sv' then (
-              cassert (sv.sv_ty = sv'.sv_ty) meta "TODO :  error message ";
+              sanity_check (sv.sv_ty = sv'.sv_ty) meta;
               if
                 projections_intersect meta proj_ty proj_regions sv'.sv_ty abs.regions
               then update abs given_back
@@ -969,7 +969,7 @@ let update_intersecting_aproj_loans (meta : Meta.meta) (proj_regions : RegionId.
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
-  cassert !updated meta "Context was not updated at least once";
+  sanity_check !updated meta;
   (* Return *)
   ctx
 
@@ -989,7 +989,7 @@ let lookup_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symb
   let found = ref None in
   let set_found x =
     (* There is at most one projector which corresponds to the description *)
-    cassert (Option.is_none !found) meta "More than one projecto corresponds to the description";
+    sanity_check (Option.is_none !found) meta;
     found := Some x
   in
   (* The visitor *)
@@ -1007,9 +1007,9 @@ let lookup_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symb
             super#visit_aproj abs sproj
         | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
-            cassert (abs.abs_id = abs_id) meta "TODO :  error message ";
+            sanity_check (abs.abs_id = abs_id) meta;
             if sv'.sv_id = sv.sv_id then (
-              cassert (sv' = sv) meta "TODO :  error message ";
+              sanity_check (sv' = sv) meta;
               set_found given_back)
             else ());
         super#visit_aproj abs sproj
@@ -1034,7 +1034,7 @@ let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symb
   let found = ref false in
   let update () =
     (* We update at most once *)
-    cassert (not !found) meta "Updated more than once";
+    sanity_check (not !found) meta;
     found := true;
     nproj
   in
@@ -1053,9 +1053,9 @@ let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : symb
             super#visit_aproj abs sproj
         | AProjLoans (sv', _) ->
             let abs = Option.get abs in
-            cassert (abs.abs_id = abs_id) meta "TODO :  error message ";
+            sanity_check (abs.abs_id = abs_id) meta;
             if sv'.sv_id = sv.sv_id then (
-              cassert (sv' = sv) meta "TODO :  error message ";
+              sanity_check (sv' = sv) meta;
               update ())
             else super#visit_aproj (Some abs) sproj
     end
@@ -1083,7 +1083,7 @@ let update_aproj_borrows (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : sy
   let found = ref false in
   let update () =
     (* We update at most once *)
-    cassert (not !found) meta "Updated more than once";
+    sanity_check (not !found) meta;
     found := true;
     nproj
   in
@@ -1102,9 +1102,9 @@ let update_aproj_borrows (meta : Meta.meta) (abs_id : AbstractionId.id) (sv : sy
             super#visit_aproj abs sproj
         | AProjBorrows (sv', _proj_ty) ->
             let abs = Option.get abs in
-            cassert (abs.abs_id = abs_id) meta "TODO :  error message ";
+            sanity_check (abs.abs_id = abs_id) meta;
             if sv'.sv_id = sv.sv_id then (
-              cassert (sv' = sv) meta "TODO :  error message ";
+              sanity_check (sv' = sv) meta;
               update ())
             else super#visit_aproj (Some abs) sproj
     end

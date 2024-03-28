@@ -24,7 +24,7 @@ let drop_value (config : config) (meta : Meta.meta) (p : place) : cm_fun =
   log#ldebug
     (lazy
       ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
-     ^ eval_ctx_to_string meta ctx));
+     ^ eval_ctx_to_string ~meta:(Some meta) ctx));
   (* Note that we use [Write], not [Move]: we allow to drop values *below* borrows *)
   let access = Write in
   (* First make sure we can access the place, by ending loans or expanding
@@ -45,7 +45,7 @@ let drop_value (config : config) (meta : Meta.meta) (p : place) : cm_fun =
     log#ldebug
       (lazy
         ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
-       ^ eval_ctx_to_string meta ctx));
+       ^ eval_ctx_to_string ~meta:(Some meta) ctx));
     cf ctx
   in
   (* Compose and apply *)
@@ -99,9 +99,9 @@ let assign_to_place (config : config) (meta : Meta.meta) (rv : typed_value) (p :
   log#ldebug
     (lazy
       ("assign_to_place:" ^ "\n- rv: "
-      ^ typed_value_to_string meta ctx rv
+      ^ typed_value_to_string ~meta:(Some meta) ctx rv
       ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
-      ^ eval_ctx_to_string meta ctx));
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
   (* Push the rvalue to a dummy variable, for bookkeeping *)
   let rvalue_vid = fresh_dummy_var_id () in
   let cc = push_dummy_var rvalue_vid rv in
@@ -119,16 +119,16 @@ let assign_to_place (config : config) (meta : Meta.meta) (rv : typed_value) (p :
     let ctx = ctx_push_dummy_var ctx dest_vid mv in
     (* Write to the destination *)
     (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
-    cassert (not (bottom_in_value ctx.ended_regions rv)) meta "TODO: Error message";
+    exec_assert (not (bottom_in_value ctx.ended_regions rv)) meta "The value to move contains bottom";
     (* Update the destination *)
     let ctx = write_place meta Write p rv ctx in
     (* Debug *)
     log#ldebug
       (lazy
         ("assign_to_place:" ^ "\n- rv: "
-        ^ typed_value_to_string meta ctx rv
+        ^ typed_value_to_string ~meta:(Some meta) ctx rv
         ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Final context:\n"
-        ^ eval_ctx_to_string meta ctx));
+        ^ eval_ctx_to_string ~meta:(Some meta) ctx));
     (* Continue *)
     cf ctx
   in
@@ -149,7 +149,7 @@ let eval_assertion_concrete (config : config) (meta : Meta.meta) (assertion : as
         if b = assertion.expected then cf Unit ctx else cf Panic ctx
     | _ ->
         craise
-          meta ("Expected a boolean, got: " ^ typed_value_to_string meta ctx v)
+          meta ("Expected a boolean, got: " ^ typed_value_to_string ~meta:(Some meta) ctx v)
   in
   (* Compose and apply *)
   comp eval_op eval_assert cf ctx
@@ -167,7 +167,7 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion) 
   (* Evaluate the assertion *)
   let eval_assert cf (v : typed_value) : m_fun =
    fun ctx ->
-    cassert (v.ty = TLiteral TBool) meta "TODO: Error message";
+    sanity_check (v.ty = TLiteral TBool) meta;
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
      * know the concrete value of the boolean we test, we use this value
@@ -178,8 +178,8 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion) 
         (* Delegate to the concrete evaluation function *)
         eval_assertion_concrete config meta assertion cf ctx
     | VSymbolic sv ->
-        cassert (config.mode = SymbolicMode) meta "TODO: Error message";
-        cassert (sv.sv_ty = TLiteral TBool) meta "TODO: Error message";
+        sanity_check(config.mode = SymbolicMode) meta;
+        sanity_check (sv.sv_ty = TLiteral TBool) meta;
         (* We continue the execution as if the test had succeeded, and thus
          * perform the symbolic expansion: sv ~~> true.
          * We will of course synthesize an assertion in the generated code
@@ -194,7 +194,7 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion) 
         S.synthesize_assertion ctx v expr
     | _ ->
         craise
-          meta ("Expected a boolean, got: " ^ typed_value_to_string meta ctx v)
+          meta ("Expected a boolean, got: " ^ typed_value_to_string ~meta:(Some meta) ctx v)
   in
   (* Compose and apply *)
   comp eval_op eval_assert cf ctx
@@ -218,7 +218,7 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place) (variant_i
       ("set_discriminant:" ^ "\n- p: " ^ place_to_string ctx p
      ^ "\n- variant id: "
       ^ VariantId.to_string variant_id
-      ^ "\n- initial context:\n" ^ eval_ctx_to_string meta ctx));
+      ^ "\n- initial context:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
   (* Access the value *)
   let access = Write in
   let cc = update_ctx_along_read_place config meta access p in
@@ -259,7 +259,7 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place) (variant_i
         in
         assign_to_place config meta bottom_v p (cf Unit) ctx
     | _, VSymbolic _ ->
-        cassert (config.mode = SymbolicMode) meta "The Config mode should be SymbolicMode";
+        sanity_check (config.mode = SymbolicMode) meta;
         (* This is a bit annoying: in theory we should expand the symbolic value
          * then set the discriminant, because in the case the discriminant is
          * exactly the one we set, the fields are left untouched, and in the
@@ -287,13 +287,13 @@ let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
  *)
 let get_assumed_function_return_type (meta : Meta.meta) (ctx : eval_ctx) (fid : assumed_fun_id)
     (generics : generic_args) : ety =
-  cassert (generics.trait_refs = []) meta "TODO: Error message";
+  sanity_check (generics.trait_refs = []) meta;
   (* [Box::free] has a special treatment *)
   match fid with
   | BoxFree ->
-      cassert (generics.regions = []) meta "TODO: Error message";
-      cassert (List.length generics.types = 1) meta "TODO: Error message";
-      cassert (generics.const_generics = []) meta "TODO: Error message";
+      sanity_check (generics.regions = []) meta;
+      sanity_check (List.length generics.types = 1) meta;
+      sanity_check (generics.const_generics = []) meta;
       mk_unit_ty
   | _ ->
       (* Retrieve the function's signature *)
@@ -324,7 +324,7 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
     (cf : typed_value option -> m_fun) : m_fun =
  fun ctx ->
   (* Debug *)
-  log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string meta ctx));
+  log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
 
   (* List the local variables, but the return variable *)
   let ret_vid = VarId.zero in
@@ -377,7 +377,7 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
         log#ldebug
           (lazy
             ("pop_frame: after dropping outer loans in local variables:\n"
-           ^ eval_ctx_to_string meta ctx)))
+           ^ eval_ctx_to_string ~meta:(Some meta) ctx)))
   in
 
   (* Pop the frame - we remove the [Frame] delimiter, and reintroduce all
@@ -479,7 +479,7 @@ let eval_box_free (config : config) (meta : Meta.meta) (generics : generic_args)
       (* Required type checking *)
       let input_box = InterpreterPaths.read_place meta Write input_box_place ctx in
       (let input_ty = ty_get_box input_box.ty in
-       cassert (input_ty = boxed_ty)) meta "TODO: Error message";
+        sanity_check (input_ty = boxed_ty)) meta;
 
       (* Drop the value *)
       let cc = drop_value config meta input_box_place in
@@ -930,7 +930,7 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
     (lazy
       ("\n**About to evaluate statement**: [\n"
       ^ statement_to_string_with_tab ctx st
-      ^ "\n]\n\n**Context**:\n" ^ eval_ctx_to_string st.meta ctx ^ "\n\n"));
+      ^ "\n]\n\n**Context**:\n" ^ eval_ctx_to_string ~meta:(Some st.meta) ctx ^ "\n\n"));
 
   (* Take a snapshot of the current context for the purpose of generating pretty names *)
   let cc = S.cf_save_snapshot in
@@ -963,7 +963,7 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
               log#ldebug
                 (lazy
                   ("about to assign to place: " ^ place_to_string ctx p
-                 ^ "\n- Context:\n" ^ eval_ctx_to_string st.meta ctx));
+                 ^ "\n- Context:\n" ^ eval_ctx_to_string ~meta:(Some st.meta) ctx));
               match res with
               | Error EPanic -> cf Panic ctx
               | Ok rv -> (
@@ -1037,7 +1037,7 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      cassert (ty_no_regions global.ty) meta "TODO: Error message";
+      cassert (ty_no_regions global.ty) global.meta "Const globals should not contain regions";
       (* Instantiate the type  *)
       (* There shouldn't be any reference to Self *)
       let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
@@ -1049,7 +1049,7 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
         Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
           global.ty
       in
-      let sval = mk_fresh_symbolic_value ty in
+      let sval = mk_fresh_symbolic_value global.meta ty in
       let cc =
         assign_to_place config global.meta (mk_typed_value_from_symbolic_value sval) dest
       in
@@ -1250,7 +1250,7 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
           | Some body -> body
         in
         (* TODO: we need to normalize the types if we want to correctly support traits *)
-        cassert (generics.trait_refs = []) body.meta "Traits are not supported yet TODO: error message";
+        cassert (generics.trait_refs = []) body.meta "Traits are not supported yet in concrete mode";
         (* There shouldn't be any reference to Self *)
         let tr_self = UnknownTrait __FUNCTION__ in
         let subst =
@@ -1259,7 +1259,7 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
         let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
         (* Evaluate the input operands *)
-        cassert (List.length args = body.arg_count) body.meta "TODO: Error message";
+        sanity_check(List.length args = body.arg_count) body.meta;
         let cc = eval_operands config body.meta args in
 
         (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
@@ -1295,7 +1295,7 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
         let cc = comp cc (push_uninitialized_vars meta locals) in
 
         (* Execute the function body *)
-        let cc = comp cc (eval_function_body config meta body_st) in
+        let cc = comp cc (eval_function_body config body_st) in
 
         (* Pop the stack frame and move the return value to its destination *)
         let cf_finish cf res =
@@ -1387,11 +1387,11 @@ and eval_function_call_symbolic_from_inst_sig (config : config) (meta : Meta.met
      * be fed to functions (i.e., symbolic values output from function return
      * values and which contain borrows of borrows can't be used as function
      * inputs *)
-    cassert (
+    sanity_check (
       List.for_all
         (fun arg ->
           not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
-        args) meta "The input argument should not contain symbolic values that can't be fed to functions TODO: error message";
+        args) meta;
 
     (* Initialize the abstractions and push them in the context.
      * First, we define the function which, given an initialized, empty
@@ -1538,7 +1538,7 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta) (fi
         regions_hierarchy inst_sig generics None args dest cf ctx
 
 (** Evaluate a statement seen as a function body *)
-and eval_function_body (config : config) (meta : Meta.meta) (body : statement) : st_cm_fun =
+and eval_function_body (config : config) (body : statement) : st_cm_fun =
  fun cf ctx ->
   log#ldebug (lazy "eval_function_body:");
   let cc = eval_statement config body in
@@ -1550,7 +1550,7 @@ and eval_function_body (config : config) (meta : Meta.meta) (body : statement) :
      * checking the invariants *)
     let cc = greedy_expand_symbolic_values config body.meta in
     (* Sanity check *)
-    let cc = comp_check_ctx cc (Invariants.check_invariants meta) in (* Check if right meta *)
+    let cc = comp_check_ctx cc (Invariants.check_invariants body.meta) in (* Check if right meta *)
     (* Continue *)
     cc (cf res)
   in

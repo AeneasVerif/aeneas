@@ -12,23 +12,23 @@ let mk_unit_value : typed_value =
   { value = VAdt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
 let mk_typed_value (meta : Meta.meta) (ty : ty) (value : value) : typed_value =
-  cassert (ty_is_ety ty) meta "TODO: error message";
+  sanity_check (ty_is_ety ty) meta;
   { value; ty }
 
 let mk_typed_avalue (meta : Meta.meta) (ty : ty) (value : avalue) : typed_avalue =
-  cassert (ty_is_rty ty) meta "TODO: error message";
+  sanity_check (ty_is_rty ty) meta;
   { value; ty }
 
 let mk_bottom (meta : Meta.meta) (ty : ty) : typed_value =
-  cassert (ty_is_ety ty) meta "TODO: error message";
+  sanity_check (ty_is_ety ty) meta;
   { value = VBottom; ty }
 
 let mk_abottom (meta : Meta.meta) (ty : ty) : typed_avalue =
-  cassert (ty_is_rty ty) meta "TODO: error message";
+  sanity_check (ty_is_rty ty) meta;
   { value = ABottom; ty }
 
 let mk_aignored (meta : Meta.meta) (ty : ty) : typed_avalue =
-  cassert (ty_is_rty ty) meta "TODO: error message";
+  sanity_check (ty_is_rty ty) meta;
   { value = AIgnored; ty }
 
 let value_as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =

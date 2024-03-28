@@ -100,8 +100,8 @@ let rec access_projection (meta : Meta.meta) (access : projection_access) (ctx :
           (* Check consistency *)
           (match (proj_kind, type_id) with
           | ProjAdt (def_id, opt_variant_id), TAdtId def_id' ->
-              cassert (def_id = def_id') meta "TODO: Error message";
-              cassert (opt_variant_id = adt.variant_id) meta "TODO: Error message"
+              sanity_check (def_id = def_id') meta;
+              sanity_check (opt_variant_id = adt.variant_id) meta
           | _ -> craise meta "Unreachable");
           (* Actually project *)
           let fv = FieldId.nth adt.field_values field_id in
@@ -117,7 +117,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access) (ctx :
               Ok (ctx, { res with updated }))
       (* Tuples *)
       | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> (
-          cassert (arity = List.length adt.field_values) meta "TODO: Error message";
+          sanity_check (arity = List.length adt.field_values) meta;
           let fv = FieldId.nth adt.field_values field_id in
           (* Project *)
           match access_projection meta access ctx update p' fv with
@@ -349,16 +349,16 @@ let write_place (meta : Meta.meta) (access : access_kind) (p : place) (nv : type
 let compute_expanded_bottom_adt_value (meta : Meta.meta) (ctx : eval_ctx) (def_id : TypeDeclId.id)
     (opt_variant_id : VariantId.id option) (generics : generic_args) :
     typed_value = 
-  cassert (TypesUtils.generic_args_only_erased_regions generics) meta "TODO: Error message";
+  sanity_check (TypesUtils.generic_args_only_erased_regions generics) meta;
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
   let def = ctx_lookup_type_decl ctx def_id in
-  cassert (List.length generics.regions = List.length def.generics.regions) meta "TODO: Error message";
+  sanity_check (List.length generics.regions = List.length def.generics.regions) meta;
   (* Compute the field types *)
   let field_types =
-    AssociatedTypes.type_decl_get_inst_norm_field_etypes ctx def opt_variant_id
+    AssociatedTypes.type_decl_get_inst_norm_field_etypes meta ctx def opt_variant_id
       generics
   in
   (* Initialize the expanded value *)
@@ -425,14 +425,14 @@ let expand_bottom_value_from_projection (meta : Meta.meta) (access : access_kind
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         TAdt (TAdtId def_id', generics) ) ->
-        cassert (def_id = def_id') meta "TODO: Error message";
+        sanity_check (def_id = def_id') meta;
         compute_expanded_bottom_adt_value meta ctx def_id opt_variant_id generics
     (* Tuples *)
     | ( Field (ProjTuple arity, _),
         TAdt
           (TTuple, { regions = []; types; const_generics = []; trait_refs = [] })
       ) ->
-        cassert (arity = List.length types) meta "TODO: Error message";
+        sanity_check (arity = List.length types) meta;
         (* Generate the field values *)
         compute_expanded_bottom_tuple_value meta types
     | _ ->
@@ -616,7 +616,7 @@ let prepare_lplace (config : config) (meta : Meta.meta) (p : place) (cf : typed_
   log#ldebug
     (lazy
       ("prepare_lplace:" ^ "\n- p: " ^ place_to_string ctx p
-     ^ "\n- Initial context:\n" ^ eval_ctx_to_string meta ctx));
+     ^ "\n- Initial context:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
   (* Access the place *)
   let access = Write in
   let cc = update_ctx_along_write_place config meta access p in

@@ -215,11 +215,11 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
         inherit [_] map_statement as super
 
         method! visit_Loop entered_loop loop =
-          cassert (not entered_loop) st.meta "TODO: error message";
+          cassert (not entered_loop) st.meta "Nested loops are not supported yet";
           super#visit_Loop true loop
 
         method! visit_Break _ i =
-          cassert (i = 0) st.meta "TODO: error message";
+          cassert (i = 0) st.meta "Breaks to outer loops are not supported yet";
           nst.content
       end
     in
@@ -234,7 +234,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_Sequence env st1 st2 =
         match st1.content with
         | Loop _ ->
-            cassert (statement_has_no_loop_break_continue st2) st2.meta "TODO: error message";
+            sanity_check (statement_has_no_loop_break_continue st2) st2.meta;
             (replace_breaks_with st1 st2).content
         | _ -> super#visit_Sequence env st1 st2
     end
@@ -393,7 +393,6 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
     let body = filter_visitor#visit_statement () body in
 
     (* Check that the filtered variables completely disappeared from the body *)
-    (* let statement = crate in *)
     let check_visitor =
       object
         inherit [_] iter_statement as super

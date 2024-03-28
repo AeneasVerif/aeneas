@@ -80,9 +80,9 @@ let ctx_adt_value_get_instantiated_field_types (meta : Meta.meta) (ctx : eval_ct
   | TAssumed aty -> (
       match aty with
       | TBox ->
-          cassert (generics.regions = []) meta "Regions should be empty TODO: error message";
-          cassert (List.length generics.types = 1) meta "Too many types TODO: error message";
-          cassert (generics.const_generics = []) meta "const_generics should be empty TODO: error message";
+          sanity_check (generics.regions = []) meta;
+          sanity_check (List.length generics.types = 1) meta;
+          sanity_check (generics.const_generics = []) meta;
           generics.types
       | TArray | TSlice | TStr ->
           (* Those types don't have fields *)

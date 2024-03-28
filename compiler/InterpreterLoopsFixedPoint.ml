@@ -272,7 +272,7 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) : cm_f
     sanity_check (RegionId.Set.is_empty abs.ancestors_regions) meta;
 
     (* Introduce the new abstraction for the shared values *)
-    cassert (ty_no_regions sv.ty) meta "TODO :  error message ";
+    cassert (ty_no_regions sv.ty) meta "Nested borrows are not supported yet";
     let rty = sv.ty in
 
     (* Create the shared loan child *)
@@ -461,9 +461,9 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
     (lazy
       ("compute_loop_entry_fixed_point: after prepare_ashared_loans:"
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter meta ctx0
+      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter meta ctx
+      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx
       ^ "\n\n"));
 
   let cf_exit_loop_body (res : statement_eval_res) : m_fun =
@@ -597,9 +597,9 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
       log#ldebug
         (lazy
           ("compute_fixed_point:" ^ "\n\n- ctx0:\n"
-          ^ eval_ctx_to_string_no_filter meta ctx
+          ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx
           ^ "\n\n- ctx1:\n"
-          ^ eval_ctx_to_string_no_filter meta ctx1
+          ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx1
           ^ "\n\n"));
 
       (* Check if we reached a fixed point: if not, iterate *)
@@ -612,7 +612,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
     (lazy
       ("compute_fixed_point: fixed point computed before matching with input \
         region groups:" ^ "\n\n- fp:\n"
-      ^ eval_ctx_to_string_no_filter meta fp
+      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) fp
       ^ "\n\n"));
 
   (* Make sure we have exactly one loop abstraction per function region (merge
@@ -634,10 +634,10 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
         method! visit_abs _ abs =
           match abs.kind with
           | Loop (loop_id', _, kind) ->
-              cassert (loop_id' = loop_id) meta "TODO :  error message ";
-              cassert (kind = LoopSynthInput) meta "TODO :  error message ";
+              sanity_check (loop_id' = loop_id) meta;
+              sanity_check (kind = LoopSynthInput) meta;
               (* The abstractions introduced so far should be endable *)
-              cassert (abs.can_end = true) meta "The abstractions introduced so far can not end";
+              sanity_check (abs.can_end = true) meta;
               add_aid abs.abs_id;
               abs
           | _ -> abs
@@ -694,9 +694,9 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
                 in
                 (* By default, the [SynthInput] abs can't end *)
                 let ctx = ctx_set_abs_can_end meta ctx abs_id true in
-                cassert (
+                sanity_check (
                   let abs = ctx_lookup_abs ctx abs_id in
-                  abs.kind = SynthInput rg_id) meta "TODO :  error message ";
+                  abs.kind = SynthInput rg_id) meta;
                 (* End this abstraction *)
                 let ctx =
                   InterpreterBorrows.end_abstraction_no_synth config meta abs_id ctx
@@ -725,7 +725,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
 
     (* We also check that all the regions need to end - this is not necessary per
        se, but if it doesn't happen it is bizarre and worth investigating... *)
-    cassert (AbstractionId.Set.equal !aids_union !fp_aids) meta "Not all regions need to end TODO: Error message";
+    sanity_check (AbstractionId.Set.equal !aids_union !fp_aids) meta;
 
     (* Merge the abstractions which need to be merged, and compute the map from
        region id to abstraction id *)
@@ -815,8 +815,8 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
         method! visit_abs _ abs =
           match abs.kind with
           | Loop (loop_id', _, kind) ->
-              cassert (loop_id' = loop_id) meta "TODO :  error message ";
-              cassert (kind = LoopSynthInput) meta "TODO :  error message ";
+              sanity_check (loop_id' = loop_id) meta;
+              sanity_check (kind = LoopSynthInput) meta;
               let kind : abs_kind =
                 if remove_rg_id then Loop (loop_id, None, LoopSynthInput)
                 else abs.kind
@@ -838,7 +838,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta) (loop_id
         (lazy
           ("compute_fixed_point: fixed point after matching with the function \
             region groups:\n"
-          ^ eval_ctx_to_string_no_filter meta fp_test));
+          ^ eval_ctx_to_string_no_filter ~meta:(Some meta) fp_test));
       compute_fixed_point fp_test 1 1
     in
 
@@ -855,8 +855,8 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta) (fixed_ids : ids_se
   log#ldebug
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
-     ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n" ^ eval_ctx_to_string meta src_ctx
-     ^ "\n\n- tgt_ctx:\n" ^ eval_ctx_to_string meta tgt_ctx ^ "\n\n"));
+     ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n" ^ eval_ctx_to_string ~meta:(Some meta) src_ctx
+     ^ "\n\n- tgt_ctx:\n" ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx ^ "\n\n"));
 
   let filt_src_env, _, _ = ctx_split_fixed_new meta fixed_ids src_ctx in
   let filt_src_ctx = { src_ctx with env = filt_src_env } in
@@ -867,9 +867,9 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta) (fixed_ids : ids_se
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
      ^ show_ids_sets fixed_ids ^ "\n\n- filt_src_ctx:\n"
-      ^ eval_ctx_to_string meta filt_src_ctx
+      ^ eval_ctx_to_string ~meta:(Some meta) filt_src_ctx
       ^ "\n\n- filt_tgt_ctx:\n"
-      ^ eval_ctx_to_string meta filt_tgt_ctx
+      ^ eval_ctx_to_string ~meta:(Some meta) filt_tgt_ctx
       ^ "\n\n"));
 
   (* Match the source context and the filtered target context *)
@@ -941,7 +941,7 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta) (fixed_ids : ids_se
           ids.loan_ids
       in
       (* Check that the loan and borrows are related *)
-      cassert (BorrowId.Set.equal ids.borrow_ids loan_ids) meta "The loan and borrows are not related")
+      sanity_check (BorrowId.Set.equal ids.borrow_ids loan_ids) meta)
     new_absl;
 
   (* For every target abstraction (going back to the [list_nth_mut] example,
@@ -1089,9 +1089,9 @@ let compute_fp_ctx_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) (fp_ctx :
   log#ldebug
     (lazy
       ("compute_fp_ctx_symbolic_values:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string_no_filter meta ctx
+      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx
       ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string_no_filter meta fp_ctx
+      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) fp_ctx
       ^ "\n- fresh_sids: "
       ^ SymbolicValueId.Set.show fresh_sids
       ^ "\n- input_svalues: "

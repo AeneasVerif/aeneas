@@ -47,7 +47,7 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value) (plac
             let get_scalar (see : symbolic_expansion option) : scalar_value =
               match see with
               | Some (SeLiteral (VScalar cv)) ->
-                  cassert (cv.int_ty = int_ty) meta "For all the regular branches, the symbolic value should have been expanded to a constant TODO: Error message";
+                  sanity_check (cv.int_ty = int_ty) meta;
                   cv
               | _ -> craise meta "Unreachable"
             in
@@ -57,7 +57,7 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value) (plac
             (* For the otherwise branch, the symbolic value should have been left
              * unchanged *)
             let otherwise_see, otherwise = otherwise in
-            cassert (otherwise_see = None) meta "For the otherwise branch, the symbolic value should have been left unchanged";
+            sanity_check (otherwise_see = None) meta;
             (* Return *)
             ExpandInt (int_ty, branches, otherwise)
         | TAdt (_, _) ->

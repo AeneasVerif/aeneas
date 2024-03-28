@@ -68,7 +68,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
  fun cf ctx ->
   (* Debug *)
   log#ldebug
-    (lazy ("eval_loop_symbolic:\nContext:\n" ^ eval_ctx_to_string meta ctx ^ "\n\n"));
+    (lazy ("eval_loop_symbolic:\nContext:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx ^ "\n\n"));
 
   (* Generate a fresh loop id *)
   let loop_id = fresh_loop_id () in
@@ -81,8 +81,8 @@ let eval_loop_symbolic (config : config) (meta : meta)
   (* Debug *)
   log#ldebug
     (lazy
-      ("eval_loop_symbolic:\nInitial context:\n" ^ eval_ctx_to_string meta ctx
-     ^ "\n\nFixed point:\n" ^ eval_ctx_to_string meta fp_ctx));
+      ("eval_loop_symbolic:\nInitial context:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx
+     ^ "\n\nFixed point:\n" ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx));
 
   (* Compute the loop input parameters *)
   let fresh_sids, input_svalues = compute_fp_ctx_symbolic_values meta ctx fp_ctx in
@@ -122,8 +122,8 @@ let eval_loop_symbolic (config : config) (meta : meta)
       (lazy
         ("eval_loop_symbolic: about to match the fixed-point context with the \
           original context:\n\
-          - src ctx (fixed-point ctx)" ^ eval_ctx_to_string meta fp_ctx
-       ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string meta ctx));
+          - src ctx (fixed-point ctx)" ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
+       ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
     let end_expr : SymbolicAst.expression option =
       match_ctx_with_target config meta loop_id true fp_bl_corresp fp_input_svalues
         fixed_ids fp_ctx cf ctx
@@ -155,8 +155,8 @@ let eval_loop_symbolic (config : config) (meta : meta)
             (lazy
               ("eval_loop_symbolic: about to match the fixed-point context \
                 with the context at a continue:\n\
-                - src ctx (fixed-point ctx)" ^ eval_ctx_to_string meta fp_ctx
-             ^ "\n\n-tgt ctx (ctx at continue):\n" ^ eval_ctx_to_string meta ctx));
+                - src ctx (fixed-point ctx)" ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
+             ^ "\n\n-tgt ctx (ctx at continue):\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
           let cc =
             match_ctx_with_target config meta loop_id false fp_bl_corresp
               fp_input_svalues fixed_ids fp_ctx
@@ -173,9 +173,9 @@ let eval_loop_symbolic (config : config) (meta : meta)
     log#ldebug
       (lazy
         ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
-        ^ eval_ctx_to_string_no_filter meta ctx
+        ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx
         ^ "\n- fixed point:\n"
-        ^ eval_ctx_to_string_no_filter meta fp_ctx
+        ^ eval_ctx_to_string_no_filter ~meta:(Some meta) fp_ctx
         ^ "\n- fixed_sids: "
         ^ SymbolicValueId.Set.show fixed_ids.sids
         ^ "\n- fresh_sids: "
@@ -209,7 +209,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
           (fun (av : typed_avalue) ->
             match av.value with
             | ABorrow (AMutBorrow (bid, child_av)) ->
-                cassert (is_aignored child_av.value) meta "TODO: error message";
+                sanity_check (is_aignored child_av.value) meta;
                 Some (bid, child_av.ty)
             | ABorrow (ASharedBorrow _) -> None
             | _ -> craise meta "Unreachable")
@@ -222,7 +222,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
           (fun (av : typed_avalue) ->
             match av.value with
             | ALoan (AMutLoan (bid, child_av)) ->
-                cassert (is_aignored child_av.value) meta "TODO: error message";
+                sanity_check (is_aignored child_av.value) meta;
                 Some bid
             | ALoan (ASharedLoan _) -> None
             | _ -> craise meta "Unreachable")
@@ -241,7 +241,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
             ty)
           loan_ids
       in
-      cassert (BorrowId.Map.is_empty !borrows) meta "TODO: error message";
+      sanity_check (BorrowId.Map.is_empty !borrows) meta;
 
       given_back_tys
     in

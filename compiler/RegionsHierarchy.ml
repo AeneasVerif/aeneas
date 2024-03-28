@@ -44,7 +44,7 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option) (type_decls : ty
     (fun_decls : fun_decl FunDeclId.Map.t)
     (global_decls : global_decl GlobalDeclId.Map.t)
     (trait_decls : trait_decl TraitDeclId.Map.t)
-    (trait_impls : trait_impl TraitImplId.Map.t) (* ?meta *) (fun_name : string)
+    (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : string)
     (sg : fun_sig) : region_var_groups =
   log#ldebug (lazy (__FUNCTION__ ^ ": " ^ fun_name));
   (* Initialize a normalization context (we may need to normalize some
@@ -174,13 +174,13 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option) (type_decls : ty
     | TTraitType (trait_ref, _) ->
         (* The trait should reference a clause, and not an implementation
            (otherwise it should have been normalized) *)
-        cassert_opt_meta (
-          AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id) meta "The trait should reference a clause, and not an implementation (otherwise it should have been normalized)";
+        sanity_check_opt_meta (
+          AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id) meta;
         (* We have nothing to do *)
         ()
     | TArrow (regions, inputs, output) ->
         (* TODO: *)
-        cassert_opt_meta (regions = []) meta "Regions should be empty";
+        cassert_opt_meta (regions = []) meta "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
         List.iter (explore_ty []) (output :: inputs)
   and explore_generics (outer : region list) (generics : generic_args) =
@@ -223,7 +223,7 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option) (type_decls : ty
         (SccId.Map.bindings sccs.sccs)
     in
     (* The SCC should only contain the 'static *)
-    cassert_opt_meta (static_scc = [ RStatic ]) meta "The SCC should only contain the 'static";
+    sanity_check_opt_meta (static_scc = [ RStatic ]) meta;
     (* Remove the group as well as references to this group from the
        other SCCs *)
     let { sccs; scc_deps } = sccs in

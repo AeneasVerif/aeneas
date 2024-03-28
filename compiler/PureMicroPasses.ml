@@ -222,7 +222,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Register a variable for constraints propagation - used when an variable is
    * introduced (left-hand side of a left binding) *)
   let register_var (ctx : pn_ctx) (v : var) : pn_ctx =
-    cassert (not (VarId.Map.mem v.id ctx.pure_vars)) def.meta "TODO: error message";
+    sanity_check (not (VarId.Map.mem v.id ctx.pure_vars)) def.meta;
     match v.basename with
     | None -> ctx
     | Some name ->
@@ -1204,7 +1204,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 let num_fields = List.length fields in
                 (* In order to simplify, there must be as many arguments as
                  * there are fields *)
-                cassert (num_fields > 0) def.meta "The number of fields is not > 0";
+                sanity_check (num_fields > 0) def.meta;
                 if num_fields = List.length args then
                   (* We now need to check that all the arguments are of the form:
                    * [x.field] for some variable [x], and where the projection
@@ -1572,7 +1572,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     let arg, args = Collections.List.pop args in
                     mk_apps def.meta arg args
                 | BoxFree ->
-                    cassert (args = []) def.meta "TODO: error message";
+                    sanity_check (args = []) def.meta;
                     mk_unit_rvalue
                 | SliceIndexShared | SliceIndexMut | ArrayIndexShared
                 | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
@@ -1767,7 +1767,7 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               (* TODO: this information should be computed in SymbolicToPure and
                * store in an enum ("monadic" should be an enum, not a bool). *)
               let re_ty = Option.get (opt_destruct_result def.meta re.ty) in
-              cassert (lv.ty = re_ty) def.meta "TODO: error message";
+              sanity_check (lv.ty = re_ty) def.meta;
               let err_vid = fresh_id () in
               let err_var : var =
                 {
@@ -1981,7 +1981,6 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
       (List.concat (List.map (fun { f; loops } -> [ f :: loops ]) transl))
   in
   let subgroups = ReorderDecls.group_reorder_fun_decls all_decls in
-(* TODO meta or not meta ? *)
   log#ldebug
     (lazy
       ("filter_loop_inputs: all_decls:\n\n"
@@ -2021,7 +2020,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
         ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
         ^ "\n"));
     let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
-    cassert (Option.is_some decl.loop_id) decl.meta "TODO: error message";
+    sanity_check (Option.is_some decl.loop_id) decl.meta;
 
     let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
 
@@ -2173,7 +2172,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           in
 
           let fwd_info = { fwd_info; effect_info; ignore_output } in
-          cassert (fun_sig_info_is_wf fwd_info) decl.meta "TODO: error message";
+          sanity_check (fun_sig_info_is_wf fwd_info) decl.meta;
           let signature =
             {
               generics;
