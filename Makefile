@@ -105,7 +105,7 @@ verify:
 # Reformat the project
 .PHONY: format
 format:
-	cd compiler && dune promote
+	cd compiler && dune build @fmt --auto-promote
 
 # The commands to run Charon to generate the .llbc files
 ifeq (, $(REGEN_LLBC))
