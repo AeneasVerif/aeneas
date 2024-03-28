@@ -28,10 +28,10 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
       | TState ->
           (* This type is opaque *)
           raise (Failure "Unreachable: opaque type")
-      | TResult ->
+      | TResult | TExprResult _ ->
           let ty = Collections.List.to_cons_nil generics.types in
           let variant_id = Option.get variant_id in
-          if variant_id = result_return_id then [ ty ]
+          if variant_id = result_ok_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
           else
             raise (Failure "Unreachable: improper variant id for result type")

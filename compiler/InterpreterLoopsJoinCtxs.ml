@@ -634,7 +634,7 @@ let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   in
   { ctx with env }
 
-let loop_join_origin_with_continue_ctxs (config : config) (loop_id : LoopId.id)
+let loop_join_with_ctxs (config : config) (loop_id : LoopId.id)
     (fixed_ids : ids_sets) (old_ctx : eval_ctx) (ctxl : eval_ctx list) :
     (eval_ctx * eval_ctx list) * eval_ctx =
   (* # Join with the new contexts, one by one
@@ -666,21 +666,20 @@ let loop_join_origin_with_continue_ctxs (config : config) (loop_id : LoopId.id)
   let join_one (ctx : eval_ctx) : eval_ctx =
     log#ldebug
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: initial ctx:\n"
-       ^ eval_ctx_to_string ctx));
+        ("loop_join_with_ctxs:join_one: initial ctx:\n" ^ eval_ctx_to_string ctx));
 
     (* Destructure the abstractions introduced in the new context *)
     let ctx = destructure_new_abs loop_id fixed_ids.aids ctx in
     log#ldebug
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after destructure:\n"
+        ("loop_join_with_ctxs:join_one: after destructure:\n"
        ^ eval_ctx_to_string ctx));
 
     (* Collapse the context we want to add to the join *)
     let ctx = collapse_ctx loop_id None fixed_ids ctx in
     log#ldebug
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after collapse:\n"
+        ("loop_join_with_ctxs:join_one: after collapse:\n"
        ^ eval_ctx_to_string ctx));
 
     (* Refresh the fresh abstractions *)
@@ -690,8 +689,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (loop_id : LoopId.id)
     let ctx1 = join_one_aux ctx in
     log#ldebug
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after join:\n"
-       ^ eval_ctx_to_string ctx1));
+        ("loop_join_with_ctxs:join_one: after join:\n" ^ eval_ctx_to_string ctx1));
 
     (* Collapse again - the join might have introduce abstractions we want
        to merge with the others (note that those abstractions may actually
@@ -699,7 +697,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (loop_id : LoopId.id)
     joined_ctx := collapse_ctx_with_merge loop_id fixed_ids !joined_ctx;
     log#ldebug
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after join-collapse:\n"
+        ("loop_join_with_ctxs:join_one: after join-collapse:\n"
         ^ eval_ctx_to_string !joined_ctx));
 
     (* Sanity check *)

@@ -71,6 +71,8 @@ type variant_id = VariantId.id [@@deriving show]
 type global_decl_id = GlobalDeclId.id [@@deriving show]
 type 'a symbolic_value_id_map = 'a SymbolicValueId.Map.t [@@deriving show]
 type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
+type 'a abstraction_id_map = 'a AbstractionId.Map.t [@@deriving show]
+type loop_id = Values.loop_id [@@deriving show]
 
 (** Ancestor for {!expression} iter visitor.
 
@@ -78,7 +80,7 @@ type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
     of this visitor we don't need to explore {!Contexts.eval_ctx}, so we make it inherit
     the abstraction visitors instead.
  *)
-class ['self] iter_expression_base =
+class virtual ['self] iter_expression_base =
   object (self : 'self)
     inherit [_] iter_abs
     method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
@@ -115,6 +117,15 @@ class ['self] iter_expression_base =
 
     method visit_symbolic_expansion : 'env -> symbolic_expansion -> unit =
       fun _ _ -> ()
+
+    method visit_abstraction_id_map
+        : 'a. ('env -> 'a -> unit) -> 'env -> 'a abstraction_id_map -> unit =
+      fun f env m ->
+        AbstractionId.Map.iter
+          (fun id x ->
+            self#visit_abstraction_id env id;
+            f env x)
+          m
   end
 
 (** **Rem.:** here, {!expression} is not at all equivalent to the expressions
@@ -203,26 +214,46 @@ type expression =
           responsible for the end of the function).
        *)
   | Loop of loop  (** Loop *)
-  | ReturnWithLoop of loop_id * bool
-      (** We reach a return while inside a loop.
-          The boolean is [true].
-          TODO: merge this with Return.
-       *)
+  | LoopContinue of loop_continue
+      (** We introduce this upon re-entering a loop. *)
+  | LoopReturn of loop_id * typed_value symbolic_value_id_map * expr_call
+      (** A return that we found *inside a loop* *)
+  | LoopBreak of loop_id * typed_value symbolic_value_id_map * expr_call
+      (** A loop break *)
   | Meta of emeta * expression  (** Meta information *)
 
 and loop = {
-  loop_id : loop_id;
-  input_svalues : symbolic_value list;  (** The input symbolic values *)
-  fresh_svalues : symbolic_value_id_set;
-      (** The symbolic values introduced by the loop fixed-point *)
-  rg_to_given_back_tys : (ty list RegionGroupId.Map.t[@opaque]);
-      (** The map from region group ids to the types of the values given back
-          by the corresponding loop abstractions.
-       *)
-  end_expr : expression;
-      (** The end of the function (upon the moment it enters the loop) *)
-  loop_expr : expression;  (** The symbolically executed loop body *)
+  llbc_loop_id : (LlbcAst.LoopId.id[@opaque]);
+  id : loop_id;
+  loop_input_values : typed_value symbolic_value_id_map;
+      (** The input values *)
+  loop_fresh_svalues : symbolic_value list;
+  loan_to_borrow_id_map : (BorrowId.InjSubst.t[@opaque]);
+  loop_body : expression;  (** The body of the loop *)
+  loop_return :
+    (symbolic_value list * abs abstraction_id_map * expression) option;
+      (** The expression after the loop, for the [Return] branch (if the loop can
+          reach a [Return] *)
+  loop_break :
+    (symbolic_value list * abs abstraction_id_map * expression) option;
+      (** The expression after the loop, for the [BReak] branch (if the loop can
+          reach a [Break] *)
   meta : Meta.meta;  (** Information about where the origin of the loop body *)
+}
+
+and expr_call = {
+  fresh_svalues : symbolic_value list;
+      (** The fresh symbolic values introduced by the expression *)
+  fresh_abs : abs abstraction_id_map;
+      (** The fresh region abstractions introduced by the expression *)
+  back_exprs : expression region_group_id_map;  (** The backward expressions *)
+}
+
+and loop_continue = {
+  loop_id : loop_id;
+  continue_input_values : typed_value symbolic_value_id_map;
+  continue_return : expr_call option;
+  continue_break : expr_call option;
 }
 
 and expansion =

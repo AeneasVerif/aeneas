@@ -10,7 +10,15 @@ module BorrowId = IdGen ()
 module SymbolicValueId = IdGen ()
 module AbstractionId = IdGen ()
 module FunCallId = IdGen ()
-module LoopId = IdGen ()
+
+(** We reintroduce a loop id here. The reason is that when performing a symbolic
+    execution we may duplicate some loops because of branchings we don't join.
+    Whenever we explore a loop, we make sure we introduce a fresh identifier,
+    to make sure each symbolically executed loop has its own function in the
+    translated code.
+ *)
+module LoopId =
+IdGen ()
 
 type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
 type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
@@ -714,6 +722,8 @@ type loop_abs_kind =
   | LoopCall
       (** An abstraction introduced because we (re-)entered a loop, that we see
           like a function call. *)
+  | LoopReturn
+  | LoopBreak
 [@@deriving show, ord]
 
 (** The kind of an abstraction, which keeps track of its origin *)
@@ -748,7 +758,7 @@ type abs_kind =
 
           The region group id is initially [None].
           After we computed a fixed point, we give a unique region group
-          identifier for each loop abstraction.
+          identifier to each loop abstraction.
        *)
   | Identity
       (** An identity abstraction, which only consumes and provides shared

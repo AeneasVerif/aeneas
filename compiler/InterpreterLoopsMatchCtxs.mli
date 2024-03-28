@@ -286,8 +286,6 @@ val prepare_match_ctx_with_target :
    **Parameters**:
    - [config]
    - [loop_id]
-   - [is_loop_entry]: [true] if first entry into the loop, [false] if re-entry
-     (i.e., continue).
    - [fp_bl_maps]: for the abstractions in the fixed-point (the source context),
      the maps from loans to borrows and borrows to loans, if those abstractions
      are seen as identity abstractions (for every of those abstractions, there
@@ -301,9 +299,15 @@ val prepare_match_ctx_with_target :
 val match_ctx_with_target :
   config ->
   loop_id ->
-  bool ->
   borrow_loan_corresp ->
   symbolic_value_id list ->
   ids_sets ->
   eval_ctx ->
-  st_cm_fun
+  loop_abs_kind ->
+  bool ->
+  (typed_value SymbolicValueId.Map.t ->
+  abs AbstractionId.Map.t ->
+  eval_ctx ->
+  eval_result) ->
+  eval_ctx ->
+  eval_result

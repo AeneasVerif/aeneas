@@ -62,27 +62,6 @@ val cleanup_fresh_values_and_abs : config -> ids_sets -> Cps.cm_fun
   *)
 val prepare_ashared_loans : loop_id option -> Cps.cm_fun
 
-(** Compute a fixed-point for the context at the entry of the loop.
-    We also return:
-    - the sets of fixed ids
-    - the map from region group id to the corresponding abstraction appearing
-      in the fixed point (this is useful to compute the return type of the loop
-      backward functions for instance).
-      Note that this is a partial map: the loop doesn't necessarily introduce
-      an abstraction for each input region of the function.
-
-    Rem.: the list of symbolic values should be computable by simply exploring
-    the fixed point environment and listing all the symbolic values we find.
-    In the future, we might want to do something more precise, by listing only
-    the values which are read or modified (some symbolic values may be ignored).
- *)
-val compute_loop_entry_fixed_point :
-  config ->
-  loop_id ->
-  Cps.st_cm_fun ->
-  eval_ctx ->
-  eval_ctx * ids_sets * abs SymbolicAst.region_group_id_map
-
 (** For the abstractions in the fixed point, compute the correspondance between
     the borrows ids and the loans ids, if we want to introduce equivalent
     identity abstractions (i.e., abstractions which do nothing - the input
@@ -170,3 +149,23 @@ val compute_fixed_point_id_correspondance :
  *)
 val compute_fp_ctx_symbolic_values :
   eval_ctx -> eval_ctx -> symbolic_value_id_set * symbolic_value list
+(** Compute a fixed-point for the context at the entry of the loop.
+    We also return:
+    - the sets of fixed ids
+    - the map from region group id to the corresponding abstraction appearing
+      in the fixed point (this is useful to compute the return type of the loop
+      backward functions for instance).
+      Note that this is a partial map: the loop doesn't necessarily introduce
+      an abstraction for each input region of the function.
+
+    Rem.: the list of symbolic values should be computable by simply exploring
+    the fixed point environment and listing all the symbolic values we find.
+    In the future, we might want to do something more precise, by listing only
+    the values which are read or modified (some symbolic values may be ignored).
+ *)
+val compute_loop_entry_fixed_point :
+  config ->
+  loop_id ->
+  Cps.st_cm_fun ->
+  eval_ctx ->
+  eval_ctx * ids_sets * abs SymbolicAst.region_group_id_map

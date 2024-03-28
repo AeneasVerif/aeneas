@@ -999,14 +999,12 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
           (* Evaluation successful: evaluate the second statement *)
           | Unit -> eval_statement config st2 cf
           (* Control-flow break: transmit. We enumerate the cases on purpose *)
-          | Panic | Break _ | Continue _ | Return | LoopReturn _
-          | EndEnterLoop _ | EndContinue _ ->
-              cf res
+          | Panic | Break _ | Continue _ | Return -> cf res
         in
         (* Compose and apply *)
         comp cf_st1 cf_st2 cf ctx
-    | Loop loop_body ->
-        InterpreterLoops.eval_loop config st.meta
+    | Loop (loop_id, loop_body) ->
+        InterpreterLoops.eval_loop config st.meta loop_id
           (eval_statement config loop_body)
           cf ctx
     | Switch switch -> eval_switch config switch cf ctx
@@ -1290,9 +1288,7 @@ and eval_transparent_function_call_concrete (config : config)
               (* Pop the stack frame, retrieve the return value, move it to
                * its destination and continue *)
               pop_frame_assign config dest (cf Unit)
-          | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
-          | EndContinue _ ->
-              raise (Failure "Unreachable")
+          | Break _ | Continue _ | Unit -> raise (Failure "Unreachable")
         in
         let cc = comp cc cf_finish in
 

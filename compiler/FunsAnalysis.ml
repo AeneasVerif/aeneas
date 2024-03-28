@@ -10,22 +10,31 @@
 open LlbcAst
 open ExpressionsUtils
 
+(** *)
+type expr_info = {
+  can_fail : bool;
+      (** Not used yet: all the extracted functions use an error monad *)
+  stateful : bool;
+}
+[@@deriving show]
+
 (** Various information about a function.
 
     Note that not all this information is used yet to adjust the extraction yet.
  *)
 type fun_info = {
   can_fail : bool;
-      (* Not used yet: all the extracted functions use an error monad *)
+      (** Not used yet: all the extracted functions use an error monad *)
   stateful : bool;
   can_diverge : bool;
-  (* The function can diverge if:
-     - it is recursive
-     - it contains a loop
-     - it calls a functions which can diverge
-  *)
+      (** The function can diverge if:
+          - it is recursive
+          - it contains a loop
+          - it calls a functions which can diverge
+       *)
   is_rec : bool;
-      (* [true] if the function is recursive (or in a mutually recursive group) *)
+      (** [true] if the function is recursive (or in a mutually recursive group) *)
+  exprs_info : expr_info LoopId.Map.t;  (** Effect information for the loops *)
 }
 [@@deriving show]
 
@@ -52,12 +61,20 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
    * of function calls.
    *)
   let analyze_fun_decls (fun_ids : FunDeclId.Set.t) (d : fun_decl list) :
-      fun_info =
+      fun_info FunDeclId.Map.t =
     let can_fail = ref false in
     let stateful = ref false in
     let can_diverge = ref false in
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
+    let stateful_loops : bool LoopId.Map.t ref FunDeclId.Map.t ref =
+      ref
+        (FunDeclId.Map.of_list
+           (List.map
+              (fun id -> (id, ref LoopId.Map.empty))
+              (FunDeclId.Set.elements fun_ids)))
+    in
+
     let name_matcher_ctx : Charon.NameMatcher.ctx =
       {
         type_decls = m.type_decls;
@@ -79,17 +96,37 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
        computed? *)
-    let visit_fun (f : fun_decl) : unit =
-      let obj =
+    let visit_fun (register_loops : bool) (f : fun_decl) : unit =
+      let set_loops_stateful loop_ids =
+        if register_loops then
+          (* Lookup the map *)
+          let ids = FunDeclId.Map.find f.def_id !stateful_loops in
+          (* Update *)
+          ids :=
+            List.fold_left
+              (fun ids id -> LoopId.Map.add id true ids)
+              !ids loop_ids
+      in
+      let add_loop loop_id =
+        if register_loops then
+          (* Lookup the map *)
+          let ids = FunDeclId.Map.find f.def_id !stateful_loops in
+          (* Update *)
+          ids := LoopId.Map.add loop_id false !ids
+      in
+
+      let visitor =
         object (self)
           inherit [_] iter_statement as super
           method may_fail b = can_fail := !can_fail || b
           method maybe_stateful b = stateful := !stateful || b
 
-          method visit_fid id =
+          method visit_fid loop_ids id =
             if FunDeclId.Set.mem id fun_ids then (
               can_diverge := true;
-              is_rec := true)
+              is_rec := true;
+              (* Set the outer loops as stateful *)
+              set_loops_stateful loop_ids)
             else
               let info = FunDeclId.Map.find id !infos in
               self#may_fail info.can_fail;
@@ -109,11 +146,11 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
           method! visit_Closure env id args =
             (* Remark: `Closure` is a trait instance id - TODO: rename this variant *)
-            self#visit_fid id;
+            self#visit_fid env id;
             super#visit_Closure env id args
 
           method! visit_AggregatedClosure env id args =
-            self#visit_fid id;
+            self#visit_fid env id;
             super#visit_AggregatedClosure env id args
 
           method! visit_Call env call =
@@ -124,7 +161,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                 ()
             | FnOpRegular func -> (
                 match func.func with
-                | FunId (FRegular id) -> self#visit_fid id
+                | FunId (FRegular id) -> self#visit_fid env id
                 | FunId (FAssumed id) ->
                     (* None of the assumed functions can diverge nor are considered stateful *)
                     can_fail := !can_fail || Assumed.assumed_fun_can_fail id
@@ -139,9 +176,12 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             self#may_fail true;
             super#visit_Panic env
 
-          method! visit_Loop env loop =
+          method! visit_Loop outer_loops lp_id loop =
             can_diverge := true;
-            super#visit_Loop env loop
+            (* Add a new binding for the loop *)
+            add_loop lp_id;
+            (* Recurse *)
+            super#visit_Loop (lp_id :: outer_loops) lp_id loop
         end
       in
       (* Sanity check: global bodies don't contain stateful calls *)
@@ -156,14 +196,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             | None -> (true, use_state)
             | Some { can_fail; stateful } -> (can_fail, stateful)
           in
-          obj#may_fail info_can_fail;
-          obj#maybe_stateful
+          visitor#may_fail info_can_fail;
+          visitor#maybe_stateful
             (if f.is_global_decl_body then false
              else if not use_state then false
              else info_stateful)
-      | Some body -> obj#visit_statement () body.body
+      | Some body -> visitor#visit_statement [] body.body
     in
-    List.iter visit_fun d;
+    List.iter (visit_fun false) d;
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
     let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
@@ -179,12 +219,28 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       if is_global_decl_body then !can_fail
       else if !group_has_builtin_info then !can_fail
       else true;
-    {
-      can_fail = !can_fail;
-      stateful = !stateful;
-      can_diverge = !can_diverge;
-      is_rec = !is_rec;
-    }
+    (* Revisit the functions to compute the information for the loops - some loops
+       may contain stateful calls, some others may not: we want to be precise. *)
+    List.iter (visit_fun true) d;
+    (* Retrieve the information for the loops *)
+    FunDeclId.Map.of_list
+      (List.map
+         (fun fid ->
+           let loops_info = !(FunDeclId.Map.find fid !stateful_loops) in
+           let exprs_info =
+             LoopId.Map.map
+               (fun b -> { can_fail = true; stateful = b })
+               loops_info
+           in
+           ( fid,
+             {
+               can_fail = !can_fail;
+               stateful = !stateful;
+               can_diverge = !can_diverge;
+               is_rec = !is_rec;
+               exprs_info;
+             } ))
+         (FunDeclId.Set.elements fun_ids))
   in
 
   let analyze_fun_decl_group (d : fun_declaration_group) : unit =
@@ -194,7 +250,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.Set.of_list fun_ids in
     let info = analyze_fun_decls fun_ids funs in
-    List.iter (fun (f : fun_decl) -> register_info f.def_id info) funs
+    FunDeclId.Map.iter (fun fid info -> register_info fid info) info
   in
 
   let rec analyze_decl_groups (decls : declaration_group list) : unit =

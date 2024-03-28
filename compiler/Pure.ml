@@ -19,6 +19,8 @@ module Disambiguator = T.Disambiguator
 (** We redefine identifiers for loop: in {!Values}, the identifiers are global
     (they monotonically increase across functions) while in {!module:Pure} we want
     the indices to start at 0 for every function.
+    Also, we can't reuse the indices from {!LlbcAst} because we may have duplicated
+    some loops and we need a unique index for each loop.
  *)
 module LoopId =
 IdGen ()
@@ -52,6 +54,7 @@ type loc = Meta.loc [@@deriving show, ord]
 type file_name = Meta.file_name [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type meta = Meta.meta [@@deriving show, ord]
+type expr_result_kind = { ok : bool; return : bool } [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -73,7 +76,10 @@ type meta = Meta.meta [@@deriving show, ord]
   *)
 type assumed_ty =
   | TState
+  (* TODO: merge Result and ExprResult *)
   | TResult
+  | TExprResult of expr_result_kind
+      (** Same as TResult, but also contains a node for *return* *)
   | TError
   | TFuel
   | TArray
@@ -92,8 +98,9 @@ type assumed_ty =
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather
  * the monadic functions [return] and [fail] (makes treatment of error and
  * state-error monads more uniform) *)
-let result_return_id = VariantId.of_int 0
-let result_fail_id = VariantId.of_int 1
+let result_ok_id = VariantId.of_int 0
+let result_return_id = VariantId.of_int 1
+let result_fail_id = VariantId.of_int 2
 let option_some_id = T.option_some_id
 let option_none_id = T.option_none_id
 let error_failure_id = VariantId.of_int 0
@@ -942,7 +949,7 @@ type decomposed_fun_sig = {
   fwd_inputs : ty list;
       (** The types of the inputs of the forward function.
 
-          Note that those input types take include the [fuel] parameter,
+          Note that those input types include the [fuel] parameter,
           if the function uses fuel for termination, and the [state] parameter,
           if the function is stateful.
 

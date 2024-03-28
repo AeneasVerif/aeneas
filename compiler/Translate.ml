@@ -95,9 +95,9 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   *)
   let loop_ids_map =
     match symbolic_trans with
-    | None -> LoopId.Map.empty
+    | None -> Values.LoopId.Map.empty
     | Some (_, ast) ->
-        let m = ref LoopId.Map.empty in
+        let m = ref Values.LoopId.Map.empty in
         let _, fresh_loop_id = Pure.LoopId.fresh_stateful_generator () in
 
         let visitor =
@@ -106,9 +106,10 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
 
             method! visit_loop env loop =
               let _ =
-                match LoopId.Map.find_opt loop.loop_id !m with
+                match Values.LoopId.Map.find_opt loop.id !m with
                 | Some _ -> ()
-                | None -> m := LoopId.Map.add loop.loop_id (fresh_loop_id ()) !m
+                | None ->
+                    m := Values.LoopId.Map.add loop.id (fresh_loop_id ()) !m
               in
               super#visit_loop env loop
           end
@@ -155,7 +156,12 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       loop_id = None;
       inside_loop = false;
       loop_ids_map;
+      symb_to_llbc_loop_id = Values.LoopId.Map.empty;
       loops = Pure.LoopId.Map.empty;
+      expr_abstractions = AbstractionId.Map.empty;
+      mk_return = None;
+      mk_panic = None;
+      expr_info = None;
     }
   in
 

@@ -169,7 +169,7 @@ let synthesize_forward_end (ctx : Contexts.eval_ctx)
     (e : expression) (el : expression RegionGroupId.Map.t) =
   Some (ForwardEnd (ctx, loop_input_values, e, el))
 
-let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
+(*let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
     (fresh_svalues : SymbolicValueId.Set.t)
     (rg_to_given_back_tys : ty list RegionGroupId.Map.t)
     (end_expr : expression option) (loop_expr : expression option)
@@ -189,3 +189,4 @@ let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
              meta;
            })
   | _ -> raise (Failure "Unreachable")
+*)

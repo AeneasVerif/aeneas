@@ -1539,10 +1539,14 @@ let prepare_match_ctx_with_target (config : config) (loop_id : LoopId.id)
   cf_reorganize_join_tgt cf tgt_ctx
 
 let match_ctx_with_target (config : config) (loop_id : LoopId.id)
-    (is_loop_entry : bool) (fp_bl_maps : borrow_loan_corresp)
+    (fp_bl_maps : borrow_loan_corresp)
     (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
-    (src_ctx : eval_ctx) : st_cm_fun =
- fun cf tgt_ctx ->
+    (src_ctx : eval_ctx) (fresh_abs_kind : loop_abs_kind) (can_end : bool)
+    (cf :
+      typed_value SymbolicValueId.Map.t ->
+      abs AbstractionId.Map.t ->
+      eval_ctx ->
+      eval_result) (tgt_ctx : eval_ctx) : eval_result =
   (* Debug *)
   log#ldebug
     (lazy
@@ -1810,14 +1814,17 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
           | Loop (loop_id', rg_id, kind) ->
               assert (loop_id' = loop_id);
               assert (kind = LoopSynthInput);
-              let can_end = false in
-              let kind : abs_kind = Loop (loop_id, rg_id, LoopCall) in
+              let kind : abs_kind = Loop (loop_id, rg_id, fresh_abs_kind) in
               let abs = { abs with kind; can_end } in
               super#visit_abs env abs
           | _ -> super#visit_abs env abs
       end
     in
     let new_absl = List.map (visit_src#visit_abs ()) new_absl in
+    let new_absm =
+      AbstractionId.Map.of_list
+        (List.map (fun abs -> (abs.abs_id, abs)) new_absl)
+    in
     let new_absl = List.map (fun abs -> EAbs abs) new_absl in
 
     (* Add the abstractions from the target context to the source context *)
@@ -1833,7 +1840,7 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
     if !Config.sanity_checks then
       Invariants.check_borrowed_values_invariant tgt_ctx;
 
-    (* End all the borrows which appear in the *new* abstractions *)
+    (* End all the borrows which appear in the *new* abstractions - TODO: why? *)
     let new_borrows =
       BorrowId.Set.of_list
         (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
@@ -1850,11 +1857,7 @@ let match_ctx_with_target (config : config) (loop_id : LoopId.id)
     in
 
     (* Continue *)
-    cc
-      (cf
-         (if is_loop_entry then EndEnterLoop (loop_id, input_values)
-          else EndContinue (loop_id, input_values)))
-      tgt_ctx
+    cc (cf input_values new_absm) tgt_ctx
   in
 
   (* Compose and continue *)

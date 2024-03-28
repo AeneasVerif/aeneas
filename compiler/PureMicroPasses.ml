@@ -730,8 +730,8 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 ty = _;
               },
               x ) ->
-            (* return/fail case *)
-            if variant_id = result_return_id then
+            (* ok/fail case *)
+            if variant_id = result_ok_id then
               (* Return case - note that the simplification we just perform
                  might have unlocked the tuple simplification below *)
               self#visit_Let env false lv x next
@@ -1094,7 +1094,7 @@ let simplify_let_then_return _ctx def =
             | None -> not_simpl_e
             | Some lv_v ->
                 let lv_v =
-                  if monadic then mk_result_return_texpression lv_v else lv_v
+                  if monadic then mk_result_ok_texpression lv_v else lv_v
                 in
                 if lv_v = next_e then rv.e else not_simpl_e)
     end
@@ -1725,7 +1725,7 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               let err_v = mk_texpression_from_var err_var in
               let fail_value = mk_result_fail_texpression err_v e.ty in
               let fail_branch = { pat = fail_pat; branch = fail_value } in
-              let success_pat = mk_result_return_pattern lv in
+              let success_pat = mk_result_ok_pattern lv in
               let success_branch = { pat = success_pat; branch = e } in
               let switch_body = Match [ fail_branch; success_branch ] in
               let e = Switch (re, switch_body) in

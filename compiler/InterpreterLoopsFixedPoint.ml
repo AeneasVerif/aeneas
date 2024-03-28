@@ -436,6 +436,20 @@ let prepare_ashared_loans_no_synth (loop_id : LoopId.id) (ctx : eval_ctx) :
     eval_ctx =
   get_cf_ctx_no_synth (prepare_ashared_loans (Some loop_id)) ctx
 
+(** Compute a fixed-point for the context at the entry of the loop.
+    We also return:
+    - the sets of fixed ids
+    - the map from region group id to the corresponding abstraction appearing
+      in the fixed point (this is useful to compute the return type of the loop
+      backward functions for instance).
+      Note that this is a partial map: the loop doesn't necessarily introduce
+      an abstraction for each input region of the function.
+
+    Rem.: the list of symbolic values should be computable by simply exploring
+    the fixed point environment and listing all the symbolic values we find.
+    In the future, we might want to do something more precise, by listing only
+    the values which are read or modified (some symbolic values may be ignored).
+ *)
 let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
     (eval_loop_body : st_cm_fun) (ctx0 : eval_ctx) :
     eval_ctx * ids_sets * abs RegionGroupId.Map.t =
@@ -478,9 +492,6 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
         assert (i = 0);
         register_ctx ctx;
         None
-    | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
-        (* We don't support nested loops for now *)
-        raise (Failure "Nested loops are not supported for now")
   in
 
   (* The fixed ids. They are the ids of the original ctx, after we ended
@@ -543,7 +554,7 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
 
     (* Join the context with the context at the loop entry *)
     let (_, _), ctx2 =
-      loop_join_origin_with_continue_ctxs config loop_id fixed_ids ctx1 !ctxs
+      loop_join_with_ctxs config loop_id fixed_ids ctx1 !ctxs
     in
     ctxs := [];
     ctx2
@@ -614,8 +625,8 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
       ^ eval_ctx_to_string_no_filter fp
       ^ "\n\n"));
 
-  (* Make sure we have exactly one loop abstraction per function region (merge
-     abstractions accordingly).
+  (* We may need to merge some of the loop fixed-point abstractions if we reach
+     a return: the return may introduce lifetime constraints.
 
      Rem.: this shouldn't impact the set of symbolic value ids (because we
      already merged abstractions "vertically" and are now merging them
@@ -644,9 +655,11 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
     in
     let fp = list_loop_abstractions#visit_eval_ctx () fp in
 
-    (* For every input region group:
+    (*
+     * TODO: this is not necessary anymore
+     * For every input region group:
      * - evaluate until we get to a [return]
-     * - end the input abstraction corresponding to the input region group
+     * - end a loop input abstraction
      * - find which loop abstractions end at that moment
      *
      * [fp_ended_aids] links region groups to sets of ended abstractions.
@@ -664,16 +677,15 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
      fun res ctx ->
       log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop");
       match res with
-      | Continue _ | Panic ->
+      | Panic ->
           (* We don't want to generate anything *)
           None
-      | Break _ ->
-          (* We enforce that we can't get there: see {!PrePasses.remove_loop_breaks} *)
-          raise (Failure "Unreachable")
-      | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
-          (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
-             For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
-          *)
+      | Continue i | Break i ->
+          (* Nothing to do - but checking we don't break or continue to outer loops *)
+          assert (i = 0);
+          None
+      | Unit ->
+          (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}. *)
           raise (Failure "Unreachable")
       | Return ->
           log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop: Return");
@@ -721,10 +733,6 @@ let compute_loop_entry_fixed_point (config : config) (loop_id : LoopId.id)
           aids_union := AbstractionId.Set.union ids !aids_union)
         !fp_ended_aids
     in
-
-    (* We also check that all the regions need to end - this is not necessary per
-       se, but if it doesn't happen it is bizarre and worth investigating... *)
-    assert (AbstractionId.Set.equal !aids_union !fp_aids);
 
     (* Merge the abstractions which need to be merged, and compute the map from
        region id to abstraction id *)

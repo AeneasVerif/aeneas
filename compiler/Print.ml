@@ -257,6 +257,8 @@ module Values = struct
     match kind with
     | LoopSynthInput -> "LoopSynthInput"
     | LoopCall -> "LoopCall"
+    | LoopBreak -> "LoopBreak"
+    | LoopReturn -> "LoopReturn"
 
   let abs_kind_to_string (kind : abs_kind) : string =
     match kind with
@@ -268,7 +270,9 @@ module Values = struct
         "SynthInput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
     | SynthRet rg_id -> "SynthRet(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
     | Loop (lp_id, rg_id, abs_kind) ->
-        "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ", rg_id:"
+        "Loop(" ^ "symb_loop_id:"
+        ^ Values.LoopId.to_string lp_id
+        ^ ", rg_id:"
         ^ option_to_string RegionGroupId.to_string rg_id
         ^ ", loop abs kind: "
         ^ loop_abs_kind_to_string abs_kind

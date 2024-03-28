@@ -540,6 +540,24 @@ let mk_error (error : VariantId.id) : texpression =
   let e = Qualif qualif in
   { e; ty }
 
+let expr_result_compute_kind (ok_ty : ty option) (return_ty : ty option) :
+    expr_result_kind * ty list =
+  let compute ty =
+    match ty with None -> (false, []) | Some ty -> (true, [ ty ])
+  in
+  let ok, break_tys = compute ok_ty in
+  let return, return_tys = compute return_ty in
+  let kind = { ok; return } in
+  let tys = break_tys @ return_tys in
+  (kind, tys)
+
+let mk_expr_result_ty (ok_ty : ty option) (return_ty : ty option) : ty =
+  match (ok_ty, return_ty) with
+  | Some ok_ty, None -> mk_result_ty ok_ty
+  | _ ->
+      let kind, tys = expr_result_compute_kind ok_ty return_ty in
+      TAdt (TAssumed (TExprResult kind), mk_generic_args_from_types tys)
+
 let unwrap_result_ty (ty : ty) : ty =
   match ty with
   | TAdt
@@ -560,14 +578,67 @@ let mk_result_fail_texpression (error : texpression) (ty : ty) : texpression =
   let cons = { e = cons_e; ty = cons_ty } in
   mk_app cons error
 
+let mk_expr_result_fail_texpression (error : texpression) (ok_ty : ty option)
+    (return_ty : ty option) : texpression =
+  match (ok_ty, return_ty) with
+  | Some ok_ty, None -> mk_result_fail_texpression error ok_ty
+  | _ ->
+      let kind, type_args = expr_result_compute_kind ok_ty return_ty in
+      let ty =
+        TAdt (TAssumed (TExprResult kind), mk_generic_args_from_types type_args)
+      in
+      let id =
+        AdtCons { adt_id = TAssumed TResult; variant_id = Some result_fail_id }
+      in
+      let qualif = { id; generics = mk_generic_args_from_types type_args } in
+      let cons_e = Qualif qualif in
+      let cons_ty = mk_arrow error.ty ty in
+      let cons = { e = cons_e; ty = cons_ty } in
+      mk_app cons error
+
 let mk_result_fail_texpression_with_error_id (error : VariantId.id) (ty : ty) :
     texpression =
   let error = mk_error error in
   mk_result_fail_texpression error ty
 
-let mk_result_return_texpression (v : texpression) : texpression =
+let mk_expr_result_fail_texpression_with_error_id (error : VariantId.id)
+    (ok_ty : ty option) (return_ty : ty option) : texpression =
+  let error = mk_error error in
+  mk_expr_result_fail_texpression error ok_ty return_ty
+
+let mk_result_ok_texpression (v : texpression) : texpression =
   let type_args = [ v.ty ] in
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
+  let id =
+    AdtCons { adt_id = TAssumed TResult; variant_id = Some result_ok_id }
+  in
+  let qualif = { id; generics = mk_generic_args_from_types type_args } in
+  let cons_e = Qualif qualif in
+  let cons_ty = mk_arrow v.ty ty in
+  let cons = { e = cons_e; ty = cons_ty } in
+  mk_app cons v
+
+let mk_expr_result_ok_texpression (v : texpression) (return_ty : ty option) :
+    texpression =
+  let kind, type_args = expr_result_compute_kind (Some v.ty) return_ty in
+  let ty =
+    TAdt (TAssumed (TExprResult kind), mk_generic_args_from_types type_args)
+  in
+  let id =
+    AdtCons { adt_id = TAssumed TResult; variant_id = Some result_ok_id }
+  in
+  let qualif = { id; generics = mk_generic_args_from_types type_args } in
+  let cons_e = Qualif qualif in
+  let cons_ty = mk_arrow v.ty ty in
+  let cons = { e = cons_e; ty = cons_ty } in
+  mk_app cons v
+
+let mk_expr_result_return_texpression (ok_ty : ty option) (v : texpression) :
+    texpression =
+  let kind, type_args = expr_result_compute_kind ok_ty (Some v.ty) in
+  let ty =
+    TAdt (TAssumed (TExprResult kind), mk_generic_args_from_types type_args)
+  in
   let id =
     AdtCons { adt_id = TAssumed TResult; variant_id = Some result_return_id }
   in
@@ -591,11 +662,9 @@ let mk_result_fail_pattern_ignore_error (ty : ty) : typed_pattern =
   let error_pat : pattern = PatDummy in
   mk_result_fail_pattern error_pat ty
 
-let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
+let mk_result_ok_pattern (v : typed_pattern) : typed_pattern =
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types [ v.ty ]) in
-  let value =
-    PatAdt { variant_id = Some result_return_id; field_values = [ v ] }
-  in
+  let value = PatAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
   { value; ty }
 
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =

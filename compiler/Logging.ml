@@ -33,6 +33,9 @@ let builtin_log = L.get_logger "MainLogger.Builtin"
 (** Logger for Interpreter *)
 let interpreter_log = L.get_logger "MainLogger.Interpreter"
 
+(** Logger for InterpreterEnd *)
+let interpreter_end_log = L.get_logger "MainLogger.InterpreterEnd"
+
 (** Logger for InterpreterLoopsMatchCtxs *)
 let loops_match_ctxs_log = L.get_logger "MainLogger.Interpreter.LoopsMatchCtxs"
 

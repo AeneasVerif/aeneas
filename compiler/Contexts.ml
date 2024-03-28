@@ -84,7 +84,7 @@ let region_id_counter, fresh_region_id = RegionId.fresh_stateful_generator ()
 let abstraction_id_counter, fresh_abstraction_id =
   AbstractionId.fresh_stateful_generator ()
 
-let loop_id_counter, fresh_loop_id = LoopId.fresh_stateful_generator ()
+let loop_id_counter, fresh_loop_id = Values.LoopId.fresh_stateful_generator ()
 
 let fun_call_id_counter, fresh_fun_call_id =
   FunCallId.fresh_stateful_generator ()
@@ -108,7 +108,7 @@ let reset_global_counters () =
   borrow_id_counter := BorrowId.generator_zero;
   region_id_counter := RegionId.generator_zero;
   abstraction_id_counter := AbstractionId.generator_zero;
-  loop_id_counter := LoopId.generator_zero;
+  loop_id_counter := Values.LoopId.generator_zero;
   (* We want the loop id to start at 1 *)
   let _ = fresh_loop_id () in
   fun_call_id_counter := FunCallId.generator_zero;

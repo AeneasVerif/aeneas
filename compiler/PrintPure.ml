@@ -117,6 +117,12 @@ let assumed_ty_to_string (aty : assumed_ty) : string =
   match aty with
   | TState -> "State"
   | TResult -> "Result"
+  | TExprResult kind ->
+      "ExprResult { "
+      ^ Print.bool_to_string kind.ok
+      ^ ", "
+      ^ Print.bool_to_string kind.return
+      ^ " }"
   | TError -> "Error"
   | TFuel -> "Fuel"
   | TArray -> "Array"
@@ -315,8 +321,14 @@ let adt_variant_to_string (env : fmt_env) (adt_id : type_id)
           raise (Failure "Unreachable")
       | TResult ->
           let variant_id = Option.get variant_id in
-          if variant_id = result_return_id then "@Result::Return"
+          if variant_id = result_ok_id then "@Result::Ok"
           else if variant_id = result_fail_id then "@Result::Fail"
+          else
+            raise (Failure "Unreachable: improper variant id for result type")
+      | TExprResult _ ->
+          let variant_id = Option.get variant_id in
+          if variant_id = result_ok_id then "@ExprResult::Ok"
+          else if variant_id = result_fail_id then "@ExprResult::Fail"
           else
             raise (Failure "Unreachable: improper variant id for result type")
       | TError ->
@@ -348,7 +360,7 @@ let adt_field_to_string (env : fmt_env) (adt_id : type_id)
       | TState | TFuel | TArray | TSlice | TStr ->
           (* Opaque types: we can't get there *)
           raise (Failure "Unreachable")
-      | TResult | TError | TRawPtr _ ->
+      | TResult | TExprResult _ | TError | TRawPtr _ ->
           (* Enumerations: we can't get there *)
           raise (Failure "Unreachable"))
 
@@ -391,15 +403,21 @@ let adt_g_value_to_string (env : fmt_env) (value_to_string : 'v -> string)
       | TState | TRawPtr _ ->
           (* This type is opaque: we can't get there *)
           raise (Failure "Unreachable")
-      | TResult ->
+      | TResult | TExprResult _ ->
+          let prefix =
+            match aty with
+            | TResult -> "@Result"
+            | TExprResult _ -> "@ExprResult"
+            | _ -> raise (Failure "Unreachable")
+          in
           let variant_id = Option.get variant_id in
-          if variant_id = result_return_id then
+          if variant_id = result_ok_id then
             match field_values with
-            | [ v ] -> "@Result::Return " ^ v
-            | _ -> raise (Failure "Result::Return takes exactly one value")
+            | [ v ] -> prefix ^ "::Ok " ^ v
+            | _ -> raise (Failure "Result::Ok takes exactly one value")
           else if variant_id = result_fail_id then
             match field_values with
-            | [ v ] -> "@Result::Fail " ^ v
+            | [ v ] -> prefix ^ "::Fail " ^ v
             | _ -> raise (Failure "Result::Fail takes exactly one value")
           else
             raise (Failure "Unreachable: improper variant id for result type")

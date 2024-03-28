@@ -102,7 +102,7 @@ val join_ctxs : loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
     - [old_ctx]
     - [ctxl]
  *)
-val loop_join_origin_with_continue_ctxs :
+val loop_join_with_ctxs :
   config ->
   loop_id ->
   ids_sets ->
