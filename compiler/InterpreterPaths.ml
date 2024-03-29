@@ -87,7 +87,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
           (lazy
             ("Not the same type:\n- nv.ty: " ^ show_ety nv.ty ^ "\n- v.ty: "
            ^ show_ety v.ty));
-        craise meta
+        craise __FILE__ __LINE__ meta
           "Assertion failed: new value doesn't have the same type as its \
            destination");
       Ok (ctx, { read = v; updated = nv })
@@ -100,9 +100,9 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
           (* Check consistency *)
           (match (proj_kind, type_id) with
           | ProjAdt (def_id, opt_variant_id), TAdtId def_id' ->
-              sanity_check (def_id = def_id') meta;
-              sanity_check (opt_variant_id = adt.variant_id) meta
-          | _ -> craise meta "Unreachable");
+              sanity_check __FILE__ __LINE__ (def_id = def_id') meta;
+              sanity_check __FILE__ __LINE__ (opt_variant_id = adt.variant_id) meta
+          | _ -> craise __FILE__ __LINE__ meta "Unreachable");
           (* Actually project *)
           let fv = FieldId.nth adt.field_values field_id in
           match access_projection meta access ctx update p' fv with
@@ -117,7 +117,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
               Ok (ctx, { res with updated }))
       (* Tuples *)
       | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> (
-          sanity_check (arity = List.length adt.field_values) meta;
+          sanity_check __FILE__ __LINE__ (arity = List.length adt.field_values) meta;
           let fv = FieldId.nth adt.field_values field_id in
           (* Project *)
           match access_projection meta access ctx update p' fv with
@@ -166,7 +166,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
               if access.lookup_shared_borrows then
                 match lookup_loan meta ek bid ctx with
                 | _, Concrete (VMutLoan _) ->
-                    craise meta "Expected a shared loan"
+                    craise __FILE__ __LINE__ meta "Expected a shared loan"
                 | _, Concrete (VSharedLoan (bids, sv)) -> (
                     (* Explore the shared value *)
                     match access_projection meta access ctx update p' sv with
@@ -191,7 +191,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
                       | AEndedIgnoredMutLoan
                           { given_back = _; child = _; given_back_meta = _ }
                       | AIgnoredSharedLoan _ ) ) ->
-                    craise meta "Expected a shared (abstraction) loan"
+                    craise __FILE__ __LINE__ meta "Expected a shared (abstraction) loan"
                 | _, Abstract (ASharedLoan (bids, sv, _av)) -> (
                     (* Explore the shared value *)
                     match access_projection meta access ctx update p' sv with
@@ -201,7 +201,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
                         let av =
                           match lookup_loan meta ek bid ctx with
                           | _, Abstract (ASharedLoan (_, _, av)) -> av
-                          | _ -> craise meta "Unexpected"
+                          | _ -> craise __FILE__ __LINE__ meta "Unexpected"
                         in
                         (* Update the shared loan with the new value returned
                              by {!access_projection} *)
@@ -248,7 +248,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
           let v = "- v:\n" ^ show_value v in
           let ty = "- ty:\n" ^ show_ety ty in
           log#serror ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty);
-          craise meta "Inconsistent projection")
+          craise __FILE__ __LINE__ meta "Inconsistent projection")
 
 (** Generic function to access (read/write) the value at a given place.
 
@@ -321,13 +321,13 @@ let try_read_place (meta : Meta.meta) (access : access_kind) (p : place)
             ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
           in
           log#serror msg;
-          craise meta "Unexpected environment update");
+          craise __FILE__ __LINE__ meta "Unexpected environment update");
       Ok read_value
 
 let read_place (meta : Meta.meta) (access : access_kind) (p : place)
     (ctx : eval_ctx) : typed_value =
   match try_read_place meta access p ctx with
-  | Error e -> craise meta ("Unreachable: " ^ show_path_fail_kind e)
+  | Error e -> craise __FILE__ __LINE__ meta ("Unreachable: " ^ show_path_fail_kind e)
   | Ok v -> v
 
 (** Attempt to update the value at a given place *)
@@ -345,19 +345,19 @@ let try_write_place (meta : Meta.meta) (access : access_kind) (p : place)
 let write_place (meta : Meta.meta) (access : access_kind) (p : place)
     (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
   match try_write_place meta access p nv ctx with
-  | Error e -> craise meta ("Unreachable: " ^ show_path_fail_kind e)
+  | Error e -> craise __FILE__ __LINE__ meta ("Unreachable: " ^ show_path_fail_kind e)
   | Ok ctx -> ctx
 
 let compute_expanded_bottom_adt_value (meta : Meta.meta) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : typed_value =
-  sanity_check (TypesUtils.generic_args_only_erased_regions generics) meta;
+  sanity_check __FILE__ __LINE__ (TypesUtils.generic_args_only_erased_regions generics) meta;
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
   let def = ctx_lookup_type_decl ctx def_id in
-  sanity_check
+  sanity_check __FILE__ __LINE__
     (List.length generics.regions = List.length def.generics.regions)
     meta;
   (* Compute the field types *)
@@ -430,7 +430,7 @@ let expand_bottom_value_from_projection (meta : Meta.meta)
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         TAdt (TAdtId def_id', generics) ) ->
-        sanity_check (def_id = def_id') meta;
+        sanity_check __FILE__ __LINE__ (def_id = def_id') meta;
         compute_expanded_bottom_adt_value meta ctx def_id opt_variant_id
           generics
     (* Tuples *)
@@ -438,17 +438,17 @@ let expand_bottom_value_from_projection (meta : Meta.meta)
         TAdt
           (TTuple, { regions = []; types; const_generics = []; trait_refs = [] })
       ) ->
-        sanity_check (arity = List.length types) meta;
+        sanity_check __FILE__ __LINE__ (arity = List.length types) meta;
         (* Generate the field values *)
         compute_expanded_bottom_tuple_value meta types
     | _ ->
-        craise meta
+        craise __FILE__ __LINE__ meta
           ("Unreachable: " ^ show_projection_elem pe ^ ", " ^ show_ety ty)
   in
   (* Update the context by inserting the expanded value at the proper place *)
   match try_write_place meta access p' nv ctx with
   | Ok ctx -> ctx
-  | Error _ -> craise meta "Unreachable"
+  | Error _ -> craise __FILE__ __LINE__ meta "Unreachable"
 
 let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
     (access : access_kind) (p : place) : cm_fun =
@@ -474,8 +474,8 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
               (Some (Synth.mk_mplace meta prefix ctx))
         | FailBottom (_, _, _) ->
             (* We can't expand {!Bottom} values while reading them *)
-            craise meta "Found [Bottom] while reading a place"
-        | FailBorrow _ -> craise meta "Could not read a borrow"
+            craise __FILE__ __LINE__ meta "Found [Bottom] while reading a place"
+        | FailBorrow _ -> craise __FILE__ __LINE__ meta "Could not read a borrow"
       in
       comp cc (update_ctx_along_read_place config meta access p) cf ctx
 
@@ -506,7 +506,7 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
                  pe ty ctx
              in
              cf ctx
-        | FailBorrow _ -> craise meta "Could not write to a borrow"
+        | FailBorrow _ -> craise __FILE__ __LINE__ meta "Could not write to a borrow"
       in
       (* Retry *)
       comp cc (update_ctx_along_write_place config meta access p) cf ctx
@@ -596,7 +596,7 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
           match c with
           | LoanContent (VSharedLoan (bids, _)) -> end_borrows config meta bids
           | LoanContent (VMutLoan bid) -> end_borrow config meta bid
-          | BorrowContent _ -> craise meta "Unreachable"
+          | BorrowContent _ -> craise __FILE__ __LINE__ meta "Unreachable"
         in
         (* Retry *)
         comp cc drop cf ctx
@@ -611,7 +611,7 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
         (* Reinsert *)
         let ctx = write_place meta access p v ctx in
         (* Sanity check *)
-        sanity_check (not (outer_loans_in_value v)) meta;
+        sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) meta;
         (* Continue *)
         cf ctx)
   in
@@ -636,7 +636,7 @@ let prepare_lplace (config : config) (meta : Meta.meta) (p : place)
    fun ctx ->
     let v = read_place meta access p ctx in
     (* Sanity checks *)
-    sanity_check (not (outer_loans_in_value v)) meta;
+    sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) meta;
     (* Continue *)
     cf v ctx
   in

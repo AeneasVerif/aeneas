@@ -73,7 +73,7 @@ let pattern_to_extract_name (meta : Meta.meta option) (name : pattern) :
             let id = Collections.List.last id in
             match id with
             | PIdent (_, _) -> super#visit_PImpl () (EComp [ id ])
-            | PImpl _ -> craise_opt_meta meta "Unreachable")
+            | PImpl _ -> craise_opt_meta __FILE__ __LINE__ meta "Unreachable")
         | _ -> super#visit_PImpl () ty
 
       method! visit_EPrimAdt _ adt g =

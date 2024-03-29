@@ -85,7 +85,7 @@ let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
       List.map (fun (v : const_generic_var) -> CgVar v.index) const_generics
     in
     (* Annoying that we have to generate this substitution here *)
-    let r_subst _ = craise meta "Unexpected region" in
+    let r_subst _ = craise __FILE__ __LINE__ meta "Unexpected region" in
     let ty_subst =
       Substitute.make_type_subst_from_vars sg.generics.types types
     in
@@ -123,7 +123,7 @@ let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
         trait_instance_id =
       match TraitClauseId.Map.find_opt clause_id tr_map with
       | Some tr -> tr
-      | None -> craise meta "Local trait clause not found"
+      | None -> craise __FILE__ __LINE__ meta "Local trait clause not found"
     in
     let mk_subst tr_map =
       let tr_subst = mk_tr_subst tr_map in
@@ -215,7 +215,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
-  sanity_check (call_id = FunCallId.zero) fdef.meta;
+  sanity_check __FILE__ __LINE__ (call_id = FunCallId.zero) fdef.meta;
   let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
       eval_ctx * typed_avalue list =
     (* Project over the values - we use *loan* projectors, as explained above *)
@@ -337,7 +337,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         let region_can_end rid =
           RegionGroupId.Set.mem rid parent_and_current_rgs
         in
-        sanity_check (region_can_end back_id) fdef.meta;
+        sanity_check __FILE__ __LINE__ (region_can_end back_id) fdef.meta;
         let ctx =
           create_push_abstractions_from_abs_region_groups
             (fun rg_id -> SynthRet rg_id)
@@ -424,7 +424,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
             | Loop (loop_id', rg_id', LoopSynthInput) ->
                 (* We only allow to end the loop synth input abs for the region
                    group [rg_id] *)
-                sanity_check
+                sanity_check __FILE__ __LINE__
                   (if Option.is_some loop_id then loop_id = Some loop_id'
                    else true)
                   fdef.meta;
@@ -435,7 +435,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
                 else abs
             | Loop (loop_id', _, LoopCall) ->
                 (* We can end all the loop call abstractions *)
-                sanity_check (loop_id = Some loop_id') fdef.meta;
+                sanity_check __FILE__ __LINE__ (loop_id = Some loop_id') fdef.meta;
                 { abs with can_end = true }
             | SynthInput rg_id' ->
                 if rg_id' = back_id && end_fun_synth_input then
@@ -538,7 +538,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
             match res with
             | Return -> None
             | LoopReturn loop_id -> Some loop_id
-            | _ -> craise fdef.meta "Unreachable"
+            | _ -> craise __FILE__ __LINE__ fdef.meta "Unreachable"
           in
           let is_regular_return = true in
           let inside_loop = Option.is_some loop_id in
@@ -564,7 +564,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
             match res with
             | EndEnterLoop _ -> false
             | EndContinue _ -> true
-            | _ -> craise fdef.meta "Unreachable"
+            | _ -> craise __FILE__ __LINE__ fdef.meta "Unreachable"
           in
           (* Forward translation *)
           let fwd_e =
@@ -605,7 +605,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
          * the executions can lead to a panic *)
         if synthesize then Some SA.Panic else None
     | Unit | Break _ | Continue _ ->
-        craise fdef.meta
+        craise __FILE__ __LINE__ fdef.meta
           ("evaluate_function_symbolic failed on: " ^ name_to_string ())
   in
 
@@ -636,8 +636,8 @@ module Test = struct
             fdef.name));
 
     (* Sanity check - *)
-    sanity_check (fdef.signature.generics = empty_generic_params) fdef.meta;
-    sanity_check (body.arg_count = 0) fdef.meta;
+    sanity_check __FILE__ __LINE__ (fdef.signature.generics = empty_generic_params) fdef.meta;
+    sanity_check __FILE__ __LINE__ (body.arg_count = 0) fdef.meta;
 
     (* Create the evaluation context *)
     let ctx = initialize_eval_ctx fdef.meta decls_ctx [] [] [] in
@@ -654,7 +654,7 @@ module Test = struct
           let pop_return_value = true in
           pop_frame config fdef.meta pop_return_value (fun _ _ -> None) ctx
       | _ ->
-          craise fdef.meta
+          craise __FILE__ __LINE__ fdef.meta
             ("Unit test failed (concrete execution) on: "
             ^ Print.Types.name_to_string
                 (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)

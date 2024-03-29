@@ -308,34 +308,34 @@ let adt_variant_to_string ?(meta = None) (env : fmt_env) (adt_id : type_id)
       match aty with
       | TState | TArray | TSlice | TStr | TRawPtr _ ->
           (* Those types are opaque: we can't get there *)
-          craise_opt_meta meta "Unreachable"
+          craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       | TResult ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then "@Result::Return"
           else if variant_id = result_fail_id then "@Result::Fail"
           else
-            craise_opt_meta meta
+            craise_opt_meta __FILE__ __LINE__ meta
               "Unreachable: improper variant id for result type"
       | TError ->
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
           else
-            craise_opt_meta meta
+            craise_opt_meta __FILE__ __LINE__ meta
               "Unreachable: improper variant id for error type"
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then "@Fuel::Zero"
           else if variant_id = fuel_succ_id then "@Fuel::Succ"
           else
-            craise_opt_meta meta
+            craise_opt_meta __FILE__ __LINE__ meta
               "Unreachable: improper variant id for fuel type")
 
 let adt_field_to_string ?(meta = None) (env : fmt_env) (adt_id : type_id)
     (field_id : FieldId.id) : string =
   match adt_id with
   | TTuple ->
-      craise_opt_meta meta "Unreachable"
+      craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       (* Tuples don't use the opaque field id for the field indices, but [int] *)
   | TAdtId def_id -> (
       (* "Regular" ADT *)
@@ -348,10 +348,10 @@ let adt_field_to_string ?(meta = None) (env : fmt_env) (adt_id : type_id)
       match aty with
       | TState | TFuel | TArray | TSlice | TStr ->
           (* Opaque types: we can't get there *)
-          craise_opt_meta meta "Unreachable"
+          craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       | TResult | TError | TRawPtr _ ->
           (* Enumerations: we can't get there *)
-          craise_opt_meta meta "Unreachable")
+          craise_opt_meta __FILE__ __LINE__ meta "Unreachable")
 
 (** TODO: we don't need a general function anymore (it is now only used for
     patterns)
@@ -391,49 +391,49 @@ let adt_g_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
       match aty with
       | TState | TRawPtr _ ->
           (* This type is opaque: we can't get there *)
-          craise_opt_meta meta "Unreachable"
+          craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       | TResult ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then
             match field_values with
             | [ v ] -> "@Result::Return " ^ v
-            | _ -> craise_opt_meta meta "Result::Return takes exactly one value"
+            | _ -> craise_opt_meta __FILE__ __LINE__ meta "Result::Return takes exactly one value"
           else if variant_id = result_fail_id then
             match field_values with
             | [ v ] -> "@Result::Fail " ^ v
-            | _ -> craise_opt_meta meta "Result::Fail takes exactly one value"
+            | _ -> craise_opt_meta __FILE__ __LINE__ meta "Result::Fail takes exactly one value"
           else
-            craise_opt_meta meta
+            craise_opt_meta __FILE__ __LINE__ meta
               "Unreachable: improper variant id for result type"
       | TError ->
-          cassert_opt_meta (field_values = []) meta "TODO: error message";
+          cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta "TODO: error message";
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
           else
-            craise_opt_meta meta
+            craise_opt_meta __FILE__ __LINE__ meta
               "Unreachable: improper variant id for error type"
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then (
-            cassert_opt_meta (field_values = []) meta "TODO: error message";
+            cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta "TODO: error message";
             "@Fuel::Zero")
           else if variant_id = fuel_succ_id then
             match field_values with
             | [ v ] -> "@Fuel::Succ " ^ v
-            | _ -> craise_opt_meta meta "@Fuel::Succ takes exactly one value"
+            | _ -> craise_opt_meta __FILE__ __LINE__ meta "@Fuel::Succ takes exactly one value"
           else
-            craise_opt_meta meta
+            craise_opt_meta __FILE__ __LINE__ meta
               "Unreachable: improper variant id for fuel type"
       | TArray | TSlice | TStr ->
-          cassert_opt_meta (variant_id = None) meta "TODO: error message";
+          cassert_opt_meta __FILE__ __LINE__ (variant_id = None) meta "TODO: error message";
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in
           let id = assumed_ty_to_string aty in
           id ^ " [" ^ String.concat "; " field_values ^ "]")
   | _ ->
-      craise_opt_meta meta
+      craise_opt_meta __FILE__ __LINE__ meta
         ("Inconsistently typed value: expected ADT type but found:" ^ "\n- ty: "
        ^ ty_to_string env false ty ^ "\n- variant_id: "
         ^ Print.option_to_string VariantId.to_string variant_id)
@@ -597,7 +597,7 @@ let rec texpression_to_string ?(metadata : Meta.meta option = None)
               supd.updates
           in
           "[ " ^ String.concat ", " fields ^ " ]"
-      | _ -> craise_opt_meta metadata "Unexpected")
+      | _ -> craise_opt_meta __FILE__ __LINE__ metadata "Unexpected")
   | Meta (meta, e) -> (
       let meta_s = emeta_to_string ~metadata env meta in
       let e = texpression_to_string ~metadata env inside indent indent_incr e in

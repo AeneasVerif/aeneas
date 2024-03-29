@@ -41,7 +41,7 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value)
              (Some (SeLiteral (VBool false)), false_exp);
             ] ->
                 ExpandBool (true_exp, false_exp)
-            | _ -> craise meta "Ill-formed boolean expansion")
+            | _ -> craise __FILE__ __LINE__ meta "Ill-formed boolean expansion")
         | TLiteral (TInteger int_ty) ->
             (* Switch over an integer: split between the "regular" branches
                and the "otherwise" branch (which should be the last branch) *)
@@ -51,9 +51,9 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value)
             let get_scalar (see : symbolic_expansion option) : scalar_value =
               match see with
               | Some (SeLiteral (VScalar cv)) ->
-                  sanity_check (cv.int_ty = int_ty) meta;
+                  sanity_check __FILE__ __LINE__ (cv.int_ty = int_ty) meta;
                   cv
-              | _ -> craise meta "Unreachable"
+              | _ -> craise __FILE__ __LINE__ meta "Unreachable"
             in
             let branches =
               List.map (fun (see, exp) -> (get_scalar see, exp)) branches
@@ -61,7 +61,7 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value)
             (* For the otherwise branch, the symbolic value should have been left
              * unchanged *)
             let otherwise_see, otherwise = otherwise in
-            sanity_check (otherwise_see = None) meta;
+            sanity_check __FILE__ __LINE__ (otherwise_see = None) meta;
             (* Return *)
             ExpandInt (int_ty, branches, otherwise)
         | TAdt (_, _) ->
@@ -70,7 +70,7 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value)
                 VariantId.id option * symbolic_value list =
               match see with
               | Some (SeAdt (vid, fields)) -> (vid, fields)
-              | _ -> craise meta "Ill-formed branching ADT expansion"
+              | _ -> craise __FILE__ __LINE__ meta "Ill-formed branching ADT expansion"
             in
             let exp =
               List.map
@@ -84,10 +84,10 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value)
             (* Reference expansion: there should be one branch *)
             match ls with
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
-            | _ -> craise meta "Ill-formed borrow expansion")
+            | _ -> craise __FILE__ __LINE__ meta "Ill-formed borrow expansion")
         | TVar _ | TLiteral TChar | TNever | TTraitType _ | TArrow _ | TRawPtr _
           ->
-            craise meta "Ill-formed symbolic expansion"
+            craise __FILE__ __LINE__ meta "Ill-formed symbolic expansion"
       in
       Some (Expansion (place, sv, expansion))
 
@@ -193,7 +193,7 @@ let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
              loop_expr;
              meta;
            })
-  | _ -> craise meta "Unreachable"
+  | _ -> craise __FILE__ __LINE__ meta "Unreachable"
 
 let save_snapshot (ctx : Contexts.eval_ctx) (e : expression option) :
     expression option =

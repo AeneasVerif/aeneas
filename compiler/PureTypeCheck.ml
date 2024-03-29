@@ -15,9 +15,9 @@ let get_adt_field_types (meta : Meta.meta)
   match type_id with
   | TTuple ->
       (* Tuple *)
-      sanity_check (generics.const_generics = []) meta;
-      sanity_check (generics.trait_refs = []) meta;
-      sanity_check (variant_id = None) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.trait_refs = []) meta;
+      sanity_check __FILE__ __LINE__ (variant_id = None) meta;
       generics.types
   | TAdtId def_id ->
       (* "Regular" ADT *)
@@ -28,17 +28,17 @@ let get_adt_field_types (meta : Meta.meta)
       match aty with
       | TState ->
           (* This type is opaque *)
-          craise meta "Unreachable: opaque type"
+          craise __FILE__ __LINE__ meta "Unreachable: opaque type"
       | TResult ->
           let ty = Collections.List.to_cons_nil generics.types in
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
-          else craise meta "Unreachable: improper variant id for result type"
+          else craise __FILE__ __LINE__ meta "Unreachable: improper variant id for result type"
       | TError ->
-          sanity_check (generics = empty_generic_args) meta;
+          sanity_check __FILE__ __LINE__ (generics = empty_generic_args) meta;
           let variant_id = Option.get variant_id in
-          sanity_check
+          sanity_check __FILE__ __LINE__
             (variant_id = error_failure_id || variant_id = error_out_of_fuel_id)
             meta;
           []
@@ -46,11 +46,11 @@ let get_adt_field_types (meta : Meta.meta)
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then []
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
-          else craise meta "Unreachable: improper variant id for fuel type"
+          else craise __FILE__ __LINE__ meta "Unreachable: improper variant id for fuel type"
       | TArray | TSlice | TStr | TRawPtr _ ->
           (* Array: when not symbolic values (for instance, because of aggregates),
              the array expressions are introduced as struct updates *)
-          craise meta "Attempting to access the fields of an opaque type")
+          craise __FILE__ __LINE__ meta "Attempting to access the fields of an opaque type")
 
 type tc_ctx = {
   type_decls : type_decl TypeDeclId.Map.t;  (** The type declarations *)
@@ -64,9 +64,9 @@ type tc_ctx = {
 
 let check_literal (meta : Meta.meta) (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
-  | TInteger int_ty, VScalar sv -> sanity_check (int_ty = sv.int_ty) meta
+  | TInteger int_ty, VScalar sv -> sanity_check __FILE__ __LINE__ (int_ty = sv.int_ty) meta
   | TBool, VBool _ | TChar, VChar _ -> ()
-  | _ -> craise meta "Inconsistent type"
+  | _ -> craise __FILE__ __LINE__ meta "Inconsistent type"
 
 let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx)
     (v : typed_pattern) : tc_ctx =
@@ -77,7 +77,7 @@ let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx)
       ctx
   | PatDummy -> ctx
   | PatVar (var, _) ->
-      sanity_check (var.ty = v.ty) meta;
+      sanity_check __FILE__ __LINE__ (var.ty = v.ty) meta;
       let env = VarId.Map.add var.id var.ty ctx.env in
       { ctx with env }
   | PatAdt av ->
@@ -92,7 +92,7 @@ let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx)
           log#serror
             ("check_typed_pattern: not the same types:" ^ "\n- ty: "
            ^ show_ty ty ^ "\n- v.ty: " ^ show_ty v.ty);
-          craise meta "Inconsistent types");
+          craise __FILE__ __LINE__ meta "Inconsistent types");
         check_typed_pattern meta ctx v
       in
       (* Check the field types: check that the field patterns have the expected
@@ -112,21 +112,21 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
        * we use a locally nameless representation *)
       match VarId.Map.find_opt var_id ctx.env with
       | None -> ()
-      | Some ty -> sanity_check (ty = e.ty) meta)
+      | Some ty -> sanity_check __FILE__ __LINE__ (ty = e.ty) meta)
   | CVar cg_id ->
       let ty = T.ConstGenericVarId.Map.find cg_id ctx.const_generics in
-      sanity_check (ty = e.ty) meta
+      sanity_check __FILE__ __LINE__ (ty = e.ty) meta
   | Const cv -> check_literal meta cv (ty_as_literal meta e.ty)
   | App (app, arg) ->
       let input_ty, output_ty = destruct_arrow meta app.ty in
-      sanity_check (input_ty = arg.ty) meta;
-      sanity_check (output_ty = e.ty) meta;
+      sanity_check __FILE__ __LINE__ (input_ty = arg.ty) meta;
+      sanity_check __FILE__ __LINE__ (output_ty = e.ty) meta;
       check_texpression meta ctx app;
       check_texpression meta ctx arg
   | Lambda (pat, body) ->
       let pat_ty, body_ty = destruct_arrow meta e.ty in
-      sanity_check (pat.ty = pat_ty) meta;
-      sanity_check (body.ty = body_ty) meta;
+      sanity_check __FILE__ __LINE__ (pat.ty = pat_ty) meta;
+      sanity_check __FILE__ __LINE__ (body.ty = body_ty) meta;
       (* Check the pattern and register the introduced variables at the same time *)
       let ctx = check_typed_pattern meta ctx pat in
       check_texpression meta ctx body
@@ -141,8 +141,8 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
           let adt_ty, field_ty = destruct_arrow meta e.ty in
           let adt_id, adt_generics = ty_as_adt meta adt_ty in
           (* Check the ADT type *)
-          sanity_check (adt_id = proj_adt_id) meta;
-          sanity_check (adt_generics = qualif.generics) meta;
+          sanity_check __FILE__ __LINE__ (adt_id = proj_adt_id) meta;
+          sanity_check __FILE__ __LINE__ (adt_generics = qualif.generics) meta;
           (* Retrieve and check the expected field type *)
           let variant_id = None in
           let expected_field_tys =
@@ -150,25 +150,25 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
               qualif.generics
           in
           let expected_field_ty = FieldId.nth expected_field_tys field_id in
-          sanity_check (expected_field_ty = field_ty) meta
+          sanity_check __FILE__ __LINE__ (expected_field_ty = field_ty) meta
       | AdtCons id -> (
           let expected_field_tys =
             get_adt_field_types meta ctx.type_decls id.adt_id id.variant_id
               qualif.generics
           in
           let field_tys, adt_ty = destruct_arrows e.ty in
-          sanity_check (expected_field_tys = field_tys) meta;
+          sanity_check __FILE__ __LINE__ (expected_field_tys = field_tys) meta;
           match adt_ty with
           | TAdt (type_id, generics) ->
-              sanity_check (type_id = id.adt_id) meta;
-              sanity_check (generics = qualif.generics) meta
-          | _ -> craise meta "Unreachable"))
+              sanity_check __FILE__ __LINE__ (type_id = id.adt_id) meta;
+              sanity_check __FILE__ __LINE__ (generics = qualif.generics) meta
+          | _ -> craise __FILE__ __LINE__ meta "Unreachable"))
   | Let (monadic, pat, re, e_next) ->
       let expected_pat_ty =
         if monadic then destruct_result meta re.ty else re.ty
       in
-      sanity_check (pat.ty = expected_pat_ty) meta;
-      sanity_check (e.ty = e_next.ty) meta;
+      sanity_check __FILE__ __LINE__ (pat.ty = expected_pat_ty) meta;
+      sanity_check __FILE__ __LINE__ (e.ty = e_next.ty) meta;
       (* Check the right-expression *)
       check_texpression meta ctx re;
       (* Check the pattern and register the introduced variables at the same time *)
@@ -179,20 +179,20 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
       check_texpression meta ctx scrut;
       match switch_body with
       | If (e_then, e_else) ->
-          sanity_check (scrut.ty = TLiteral TBool) meta;
-          sanity_check (e_then.ty = e.ty) meta;
-          sanity_check (e_else.ty = e.ty) meta;
+          sanity_check __FILE__ __LINE__ (scrut.ty = TLiteral TBool) meta;
+          sanity_check __FILE__ __LINE__ (e_then.ty = e.ty) meta;
+          sanity_check __FILE__ __LINE__ (e_else.ty = e.ty) meta;
           check_texpression meta ctx e_then;
           check_texpression meta ctx e_else
       | Match branches ->
           let check_branch (br : match_branch) : unit =
-            sanity_check (br.pat.ty = scrut.ty) meta;
+            sanity_check __FILE__ __LINE__ (br.pat.ty = scrut.ty) meta;
             let ctx = check_typed_pattern meta ctx br.pat in
             check_texpression meta ctx br.branch
           in
           List.iter check_branch branches)
   | Loop loop ->
-      sanity_check (loop.fun_end.ty = e.ty) meta;
+      sanity_check __FILE__ __LINE__ (loop.fun_end.ty = e.ty) meta;
       check_texpression meta ctx loop.fun_end;
       check_texpression meta ctx loop.loop_body
   | StructUpdate supd -> (
@@ -200,11 +200,11 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
       (if Option.is_some supd.init then
          match VarId.Map.find_opt (Option.get supd.init) ctx.env with
          | None -> ()
-         | Some ty -> sanity_check (ty = e.ty) meta);
+         | Some ty -> sanity_check __FILE__ __LINE__ (ty = e.ty) meta);
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
       let adt_id, adt_generics = ty_as_adt meta e.ty in
-      sanity_check (adt_id = supd.struct_id) meta;
+      sanity_check __FILE__ __LINE__ (adt_id = supd.struct_id) meta;
       (* The id can only be: a custom type decl or an array *)
       match adt_id with
       | TAdtId _ ->
@@ -216,7 +216,7 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
           List.iter
             (fun ((fid, fe) : _ * texpression) ->
               let expected_field_ty = FieldId.nth expected_field_tys fid in
-              sanity_check (expected_field_ty = fe.ty) meta;
+              sanity_check __FILE__ __LINE__ (expected_field_ty = fe.ty) meta;
               check_texpression meta ctx fe)
             supd.updates
       | TAssumed TArray ->
@@ -225,10 +225,10 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
           in
           List.iter
             (fun ((_, fe) : _ * texpression) ->
-              sanity_check (expected_field_ty = fe.ty) meta;
+              sanity_check __FILE__ __LINE__ (expected_field_ty = fe.ty) meta;
               check_texpression meta ctx fe)
             supd.updates
-      | _ -> craise meta "Unexpected")
+      | _ -> craise __FILE__ __LINE__ meta "Unexpected")
   | Meta (_, e_next) ->
-      sanity_check (e_next.ty = e.ty) meta;
+      sanity_check __FILE__ __LINE__ (e_next.ty = e.ty) meta;
       check_texpression meta ctx e_next

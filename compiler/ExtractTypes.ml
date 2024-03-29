@@ -29,7 +29,7 @@ let extract_literal (meta : Meta.meta) (fmt : F.formatter) (inside : bool)
           | HOL4 ->
               F.pp_print_string fmt ("int_to_" ^ int_name sv.int_ty);
               F.pp_print_space fmt ()
-          | _ -> craise meta "Unreachable");
+          | _ -> craise __FILE__ __LINE__ meta "Unreachable");
           (* We need to add parentheses if the value is negative *)
           if sv.value >= Z.of_int 0 then
             F.pp_print_string fmt (Z.to_string sv.value)
@@ -42,7 +42,7 @@ let extract_literal (meta : Meta.meta) (fmt : F.formatter) (inside : bool)
               let iname = String.lowercase_ascii (int_name sv.int_ty) in
               F.pp_print_string fmt ("#" ^ iname)
           | HOL4 -> ()
-          | _ -> craise meta "Unreachable");
+          | _ -> craise __FILE__ __LINE__ meta "Unreachable");
           if print_brackets then F.pp_print_string fmt ")")
   | VBool b ->
       let b =
@@ -129,7 +129,7 @@ let extract_unop (meta : Meta.meta) (extract_expr : bool -> texpression -> unit)
                    match !backend with
                    | Coq | FStar -> "scalar_cast"
                    | Lean -> "Scalar.cast"
-                   | HOL4 -> craise meta "Unreachable"
+                   | HOL4 -> craise __FILE__ __LINE__ meta "Unreachable"
                  in
                  let src =
                    if !backend <> Lean then Some (integer_type_to_string src)
@@ -142,20 +142,20 @@ let extract_unop (meta : Meta.meta) (extract_expr : bool -> texpression -> unit)
                    match !backend with
                    | Coq | FStar -> "scalar_cast_bool"
                    | Lean -> "Scalar.cast_bool"
-                   | HOL4 -> craise meta "Unreachable"
+                   | HOL4 -> craise __FILE__ __LINE__ meta "Unreachable"
                  in
                  let tgt = integer_type_to_string tgt in
                  (cast_str, None, Some tgt)
              | TInteger _, TBool ->
                  (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
-                 craise meta "Unexpected cast: integer to bool"
+                 craise __FILE__ __LINE__ meta "Unexpected cast: integer to bool"
              | TBool, TBool ->
                  (* There shouldn't be any cast here. Note that if
                     one writes [b as bool] in Rust (where [b] is a
                     boolean), it gets compiled to [b] (i.e., no cast
                     is introduced). *)
-                 craise meta "Unexpected cast: bool to bool"
-             | _ -> craise meta "Unreachable"
+                 craise __FILE__ __LINE__ meta "Unexpected cast: bool to bool"
+             | _ -> craise __FILE__ __LINE__ meta "Unreachable"
            in
            (* Print the name of the function *)
            F.pp_print_string fmt cast_str;
@@ -289,7 +289,7 @@ let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_string fmt
             ("val [" ^ String.concat ", " names ^ "] = DefineDiv ‘")
         else (
-          sanity_check_opt_meta (List.length names = 1) None;
+          sanity_check_opt_meta __FILE__ __LINE__ (List.length names = 1) None;
           let name = List.hd names in
           F.pp_print_string fmt ("val " ^ name ^ " = Define ‘"));
         F.pp_print_cut fmt ()
@@ -498,14 +498,14 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
           | HOL4 ->
               let { types; const_generics; trait_refs } = generics in
               (* Const generics are not supported in HOL4 *)
-              cassert (const_generics = []) meta
+              cassert __FILE__ __LINE__ (const_generics = []) meta
                 "Constant generics are not supported yet when generating code \
                  for HOL4";
               let print_tys =
                 match type_id with
                 | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
                 | TAssumed _ -> true
-                | _ -> craise meta "Unreachable"
+                | _ -> craise __FILE__ __LINE__ meta "Unreachable"
               in
               if types <> [] && print_tys then (
                 let print_paren = List.length types > 1 in
@@ -534,7 +534,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
       extract_rec false ret_ty;
       if inside then F.pp_print_string fmt ")"
   | TTraitType (trait_ref, type_name) -> (
-      if !parameterize_trait_types then craise meta "Unimplemented"
+      if !parameterize_trait_types then craise __FILE__ __LINE__ meta "Unimplemented"
       else
         let type_name =
           ctx_get_trait_type meta trait_ref.trait_decl_ref.trait_decl_id
@@ -552,7 +552,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            cassert
+            cassert __FILE__ __LINE__
               (trait_ref.generics = empty_generic_args)
               meta "TODO: Error message";
             extract_trait_instance_id_with_dot meta ctx fmt no_params_tys false
@@ -560,7 +560,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
-            cassert (!backend <> HOL4) meta
+            cassert __FILE__ __LINE__ (!backend <> HOL4) meta
               "Trait types are not supported yet when generating code for HOL4";
             extract_trait_ref meta ctx fmt no_params_tys false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
@@ -615,7 +615,7 @@ and extract_generic_args (meta : Meta.meta) (ctx : extraction_ctx)
         (extract_ty meta ctx fmt no_params_tys true)
         types);
     if const_generics <> [] then (
-      cassert (!backend <> HOL4) meta
+      cassert __FILE__ __LINE__ (!backend <> HOL4) meta
         "Constant generics are not supported yet when generating code for HOL4";
       F.pp_print_space fmt ();
       Collections.List.iter_link (F.pp_print_space fmt)
@@ -671,7 +671,7 @@ and extract_trait_instance_id (meta : Meta.meta) (ctx : extraction_ctx)
   | Self ->
       (* This has a specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
-      save_error (Some meta) "Unexpected occurrence of `Self`";
+      save_error __FILE__ __LINE__ (Some meta) "Unexpected occurrence of `Self`";
       F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
   | TraitImpl id ->
       let name = ctx_get_trait_impl meta id ctx in
@@ -695,7 +695,7 @@ and extract_trait_instance_id (meta : Meta.meta) (ctx : extraction_ctx)
       extract_trait_ref meta ctx fmt no_params_tys inside trait_ref
   | UnknownTrait _ ->
       (* This is an error case *)
-      craise meta "Unexpected"
+      craise __FILE__ __LINE__ meta "Unexpected"
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type
@@ -772,7 +772,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 in
                 (field_names, cons_name)
             | Some info ->
-                craise def.meta
+                craise __FILE__ __LINE__ def.meta
                   ("Invalid builtin information: " ^ show_builtin_type_info info)
           in
           (* Add the fields *)
@@ -818,7 +818,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   (fun variant_id (variant : variant) ->
                     (variant_id, StringMap.find variant.variant_name variant_map))
                   variants
-            | _ -> craise def.meta "Invalid builtin information"
+            | _ -> craise __FILE__ __LINE__ def.meta "Invalid builtin information"
           in
           List.fold_left
             (fun ctx (vid, vname) ->
@@ -887,7 +887,7 @@ let extract_type_decl_variant (meta : Meta.meta) (ctx : extraction_ctx)
     List.fold_left (fun ctx (fid, f) -> print_field fid f ctx) ctx fields
   in
   (* Sanity check: HOL4 doesn't support const generics *)
-  sanity_check (cg_params = [] || !backend <> HOL4) meta;
+  sanity_check __FILE__ __LINE__ (cg_params = [] || !backend <> HOL4) meta;
   (* Print the final type *)
   if !backend <> HOL4 then (
     F.pp_print_space fmt ();
@@ -1089,7 +1089,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     else (
       (* We extract for Coq or Lean, and we have a recursive record, or a record in
          a group of mutually recursive types: we extract it as an inductive type *)
-      cassert
+      cassert __FILE__ __LINE__
         (is_rec && (!backend = Coq || !backend = Lean))
         def.meta
         "Constant generics are not supported yet when generating code for HOL4";
@@ -1196,7 +1196,7 @@ let extract_generic_params (meta : Meta.meta) (ctx : extraction_ctx)
     (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
-  cassert
+  cassert __FILE__ __LINE__
     (cg_params = [] || !backend <> HOL4)
     meta "Constant generics are not supported yet when generating code for HOL4";
   let left_bracket (implicit : bool) =
@@ -1346,7 +1346,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
     (extract_body : bool) : unit =
   (* Sanity check *)
-  sanity_check (extract_body || !backend <> HOL4) def.meta;
+  sanity_check __FILE__ __LINE__ (extract_body || !backend <> HOL4) def.meta;
   let is_tuple_struct =
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
@@ -1418,7 +1418,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   | None -> F.pp_print_string fmt def_name);
   (* HOL4 doesn't support const generics, and type definitions in HOL4 don't
      support trait clauses *)
-  cassert
+  cassert __FILE__ __LINE__
     ((cg_params = [] && trait_clauses = []) || !backend <> HOL4)
     def.meta
     "Constant generics and type definitions with trait clauses are not \
@@ -1465,7 +1465,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      | Enum variants ->
          extract_type_decl_enum_body ctx_body fmt type_decl_group def def_name
            type_params cg_params variants
-     | Opaque -> craise def.meta "Unreachable");
+     | Opaque -> craise __FILE__ __LINE__ def.meta "Unreachable");
   (* Add the definition end delimiter *)
   if !backend = HOL4 && decl_is_not_last_from_group kind then (
     F.pp_print_space fmt ();
@@ -1491,12 +1491,12 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.meta def.def_id ctx in
   (* Generic parameters are unsupported *)
-  cassert
+  cassert __FILE__ __LINE__
     (def.generics.const_generics = [])
     def.meta
     "Constant generics are not supported yet when generating code for HOL4";
   (* Trait clauses on type definitions are unsupported *)
-  cassert
+  cassert __FILE__ __LINE__
     (def.generics.trait_clauses = [])
     def.meta
     "Types with trait clauses are not supported yet when generating code for \
@@ -1523,7 +1523,7 @@ let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.meta def.def_id ctx in
   (* Sanity check *)
-  sanity_check (def.generics = empty_generic_params) def.meta;
+  sanity_check __FILE__ __LINE__ (def.generics = empty_generic_params) def.meta;
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ("Type " ^ def_name ^ " = “: unit”");
@@ -1599,7 +1599,7 @@ let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
-  sanity_check (!backend = Coq) decl.meta;
+  sanity_check __FILE__ __LINE__ (!backend = Coq) decl.meta;
   (* Generating the [Arguments] instructions is useful only if there are parameters *)
   let num_params =
     List.length decl.generics.types
@@ -1647,7 +1647,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
-  sanity_check (!backend = Coq) decl.meta;
+  sanity_check __FILE__ __LINE__ (!backend = Coq) decl.meta;
   match decl.kind with
   | Opaque | Enum _ -> ()
   | Struct fields ->

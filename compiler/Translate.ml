@@ -176,7 +176,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
           SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
         in
         { ctx with forward_inputs }
-    | _ -> craise fdef.meta "Unreachable"
+    | _ -> craise __FILE__ __LINE__ fdef.meta "Unreachable"
   in
 
   (* Add the backward inputs *)
@@ -447,7 +447,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
   let trans = FunDeclId.Map.find global.body ctx.trans_funs in
-  sanity_check (trans.loops = []) global.meta;
+  sanity_check __FILE__ __LINE__ (trans.loops = []) global.meta;
   let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in

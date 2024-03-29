@@ -289,7 +289,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
             (List.map
                (fun v -> List.map (fun f -> f.field_ty) v.fields)
                variants)
-      | Opaque -> craise def.meta "unreachable"
+      | Opaque -> craise __FILE__ __LINE__ def.meta "unreachable"
     in
     (* Explore the types and accumulate information *)
     let type_decl_info = TypeDeclId.Map.find def.def_id infos in

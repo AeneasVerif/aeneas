@@ -60,7 +60,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
               (* Add the decreases proof for Lean only *)
               match !Config.backend with
               | Coq | FStar -> ctx
-              | HOL4 -> craise def.meta "Unexpected"
+              | HOL4 -> craise __FILE__ __LINE__ def.meta "Unexpected"
               | Lean -> ctx_add_decreases_proof def ctx
             else ctx
           in
@@ -128,10 +128,10 @@ let extract_adt_g_value (meta : Meta.meta)
   | TAdt (TTuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
-      cassert
+      cassert __FILE__ __LINE__
         (List.length generics.types = List.length field_values)
         meta "Only fully applied tuple constructors are currently supported";
-      cassert
+      cassert __FILE__ __LINE__
         (generics.const_generics = [] && generics.trait_refs = [])
         meta "Only fully applied tuple constructors are currently supported";
       extract_as_tuple ()
@@ -187,7 +187,7 @@ let extract_adt_g_value (meta : Meta.meta)
         in
         if use_parentheses then F.pp_print_string fmt ")";
         ctx
-  | _ -> craise meta "Inconsistent typed value"
+  | _ -> craise __FILE__ __LINE__ meta "Inconsistent typed value"
 
 (* Extract globals in the same way as variables *)
 let extract_global (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
@@ -281,7 +281,7 @@ let lets_require_wrap_in_do (meta : Meta.meta)
       (* HOL4 is similar to HOL4, but we add a sanity check *)
       let wrap_in_do = List.exists (fun (m, _, _) -> m) lets in
       if wrap_in_do then
-        sanity_check (List.for_all (fun (m, _, _) -> m) lets) meta;
+        sanity_check __FILE__ __LINE__ (List.for_all (fun (m, _, _) -> m) lets) meta;
       wrap_in_do
   | FStar | Coq -> false
 
@@ -320,7 +320,7 @@ let rec extract_texpression (meta : Meta.meta) (ctx : extraction_ctx)
   | StructUpdate supd -> extract_StructUpdate meta ctx fmt inside e.ty supd
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
-      craise meta "Unreachable"
+      craise __FILE__ __LINE__ meta "Unreachable"
 
 (* Extract an application *or* a top-level qualif (function extraction has
  * to handle top-level qualifiers, so it seemed more natural to merge the
@@ -454,7 +454,7 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx)
 
           if not method_id.is_provided then (
             (* Required method *)
-            sanity_check (lp_id = None) trait_decl.meta;
+            sanity_check __FILE__ __LINE__ (lp_id = None) trait_decl.meta;
             extract_trait_ref trait_decl.meta ctx fmt TypeDeclId.Set.empty true
               trait_ref;
             let fun_name =
@@ -485,7 +485,7 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx)
           F.pp_print_string fmt fun_name);
 
       (* Sanity check: HOL4 doesn't support const generics *)
-      sanity_check (generics.const_generics = [] || !backend <> HOL4) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = [] || !backend <> HOL4) meta;
       (* Print the generics.
 
          We might need to filter some of the type arguments, if the type
@@ -505,9 +505,9 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx)
       | Error (types, err) ->
           extract_generic_args meta ctx fmt TypeDeclId.Set.empty
             { generics with types };
-          (* if !Config.fail_hard then craise meta err
+          (* if !Config.fail_hard then craise __FILE__ __LINE__ meta err
              else *)
-          save_error (Some meta) err;
+          save_error __FILE__ __LINE__ (Some meta) err;
           F.pp_print_string fmt
             "(\"ERROR: ill-formed builtin: invalid number of filtering \
              arguments\")");
@@ -522,7 +522,7 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx)
       (* Return *)
       if inside then F.pp_print_string fmt ")"
   | (Unop _ | Binop _), _ ->
-      craise meta
+      craise __FILE__ __LINE__ meta
         ("Unreachable:\n" ^ "Function: " ^ show_fun_or_op_id fid
        ^ ",\nNumber of arguments: "
         ^ string_of_int (List.length args)
@@ -644,7 +644,7 @@ and extract_field_projector (meta : Meta.meta) (ctx : extraction_ctx)
       extract_App meta ctx fmt inside (mk_app meta original_app arg) args
   | [] ->
       (* No argument: shouldn't happen *)
-      craise meta "Unreachable"
+      craise __FILE__ __LINE__ meta "Unreachable"
 
 and extract_Lambda (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (xl : typed_pattern list) (e : texpression) : unit =
@@ -653,7 +653,7 @@ and extract_Lambda (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open parentheses *)
   if inside then F.pp_print_string fmt "(";
   (* Print the lambda - note that there should always be at least one variable *)
-  sanity_check (xl <> []) meta;
+  sanity_check __FILE__ __LINE__ (xl <> []) meta;
   F.pp_print_string fmt "fun";
   let with_type = !backend = Coq in
   let ctx =
@@ -726,7 +726,7 @@ and extract_lets (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
         let arrow =
           match !backend with
           | Coq | HOL4 -> "<-"
-          | FStar | Lean -> craise meta "impossible"
+          | FStar | Lean -> craise __FILE__ __LINE__ meta "impossible"
         in
         F.pp_print_string fmt arrow;
         F.pp_print_space fmt ();
@@ -959,7 +959,7 @@ and extract_StructUpdate (meta : Meta.meta) (ctx : extraction_ctx)
     unit =
   (* We can't update a subset of the fields in Coq (i.e., we can do
      [{| x:= 3; y := 4 |}], but there is no syntax for [{| s with x := 3 |}]) *)
-  sanity_check (!backend <> Coq || supd.init = None) meta;
+  sanity_check __FILE__ __LINE__ (!backend <> Coq || supd.init = None) meta;
   (* In the case of HOL4, records with no fields are not supported and are
      thus extracted to unit. We need to check that by looking up the definition *)
   let extract_as_unit =
@@ -1099,7 +1099,7 @@ and extract_StructUpdate (meta : Meta.meta) (ctx : extraction_ctx)
         F.pp_print_string fmt "]";
         if need_paren then F.pp_print_string fmt ")";
         F.pp_close_box fmt ()
-    | _ -> craise meta "Unreachable"
+    | _ -> craise __FILE__ __LINE__ meta "Unreachable"
 
 (** A small utility to print the parameters of a function signature.
 
@@ -1202,7 +1202,7 @@ let assert_backend_supports_decreases_clauses (meta : Meta.meta) =
   match !backend with
   | FStar | Lean -> ()
   | _ ->
-      craise meta
+      craise __FILE__ __LINE__ meta
         "Decreases clauses are only supported for the Lean and F* backends"
 
 (** Extract a decreases clause function template body.
@@ -1223,7 +1223,7 @@ let assert_backend_supports_decreases_clauses (meta : Meta.meta) =
  *)
 let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
-  cassert (!backend = FStar) def.meta
+  cassert __FILE__ __LINE__ (!backend = FStar) def.meta
     "The generation of template decrease clauses is only supported for the F* \
      backend";
 
@@ -1292,7 +1292,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
 *)
 let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
-  cassert (!backend = Lean) def.meta
+  cassert __FILE__ __LINE__ (!backend = Lean) def.meta
     "The generation of template termination and decreasing clauses is only \
      supported for the Lean backend";
   (*
@@ -1419,7 +1419,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
-  sanity_check (not def.is_global_decl_body) def.meta;
+  sanity_check __FILE__ __LINE__ (not def.is_global_decl_body) def.meta;
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
   (* Add a break before *)
@@ -1672,7 +1672,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_function def.meta def.def_id def.loop_id ctx in
-  cassert
+  cassert __FILE__ __LINE__
     (def.signature.generics.const_generics = [])
     def.meta
     "Constant generics are not supported yet when generating code for HOL4";
@@ -1721,7 +1721,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
-  sanity_check (not def.is_global_decl_body) def.meta;
+  sanity_check __FILE__ __LINE__ (not def.is_global_decl_body) def.meta;
   (* We treat HOL4 opaque functions in a specific manner *)
   if !backend = HOL4 && Option.is_none def.body then
     extract_fun_decl_hol4_opaque ctx fmt def
@@ -1872,8 +1872,8 @@ let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   let meta = body.meta in
-  cassert body.is_global_decl_body body.meta "TODO: Error message";
-  cassert (body.signature.inputs = []) body.meta "TODO: Error message";
+  cassert __FILE__ __LINE__ body.is_global_decl_body body.meta "TODO: Error message";
+  cassert __FILE__ __LINE__ (body.signature.inputs = []) body.meta "TODO: Error message";
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
@@ -2225,7 +2225,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   in
 
   (* For now we do not support overriding provided methods *)
-  cassert
+  cassert __FILE__ __LINE__
     (trait_impl.provided_methods = [])
     trait_impl.meta "Overriding provided methods is not supported yet";
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*

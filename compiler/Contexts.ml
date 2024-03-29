@@ -298,7 +298,7 @@ let env_lookup_var (meta : Meta.meta) (env : env) (vid : VarId.id) :
     | EBinding (BVar var, v) :: env' ->
         if var.index = vid then (var, v) else lookup env'
     | (EBinding (BDummy _, _) | EAbs _) :: env' -> lookup env'
-    | EFrame :: _ -> craise meta "End of frame"
+    | EFrame :: _ -> craise __FILE__ __LINE__ meta "End of frame"
   in
   lookup env
 
@@ -349,12 +349,12 @@ let env_update_var_value (meta : Meta.meta) (env : env) (vid : VarId.id)
   *)
   let rec update env =
     match env with
-    | [] -> craise meta "Unexpected"
+    | [] -> craise __FILE__ __LINE__ meta "Unexpected"
     | EBinding ((BVar b as var), v) :: env' ->
         if b.index = vid then EBinding (var, nv) :: env'
         else EBinding (var, v) :: update env'
     | ((EBinding (BDummy _, _) | EAbs _) as ee) :: env' -> ee :: update env'
-    | EFrame :: _ -> craise meta "End of frame"
+    | EFrame :: _ -> craise __FILE__ __LINE__ meta "End of frame"
   in
   update env
 
@@ -377,7 +377,7 @@ let ctx_update_var_value (meta : Meta.meta) (ctx : eval_ctx) (vid : VarId.id)
 *)
 let ctx_push_var (meta : Meta.meta) (ctx : eval_ctx) (var : var)
     (v : typed_value) : eval_ctx =
-  cassert
+  cassert __FILE__ __LINE__
     (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty)
     meta "The pushed variables and their values do not have the same type";
   let bv = var_to_binder var in
@@ -399,7 +399,7 @@ let ctx_push_vars (meta : Meta.meta) (ctx : eval_ctx)
                (* We can unfortunately not use Print because it depends on Contexts... *)
                show_var var ^ " -> " ^ show_typed_value value)
              vars)));
-  cassert
+  cassert __FILE__ __LINE__
     (List.for_all
        (fun (var, (value : typed_value)) ->
          TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
@@ -432,7 +432,7 @@ let ctx_remove_dummy_var meta (ctx : eval_ctx) (vid : DummyVarId.id) :
     eval_ctx * typed_value =
   let rec remove_var (env : env) : env * typed_value =
     match env with
-    | [] -> craise meta "Could not lookup a dummy variable"
+    | [] -> craise __FILE__ __LINE__ meta "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: env when vid' = vid -> (env, v)
     | ee :: env ->
         let env, v = remove_var env in
@@ -446,7 +446,7 @@ let ctx_lookup_dummy_var (meta : Meta.meta) (ctx : eval_ctx)
     (vid : DummyVarId.id) : typed_value =
   let rec lookup_var (env : env) : typed_value =
     match env with
-    | [] -> craise meta "Could not lookup a dummy variable"
+    | [] -> craise __FILE__ __LINE__ meta "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: _env when vid' = vid -> v
     | _ :: env -> lookup_var env
   in
@@ -495,7 +495,7 @@ let env_remove_abs (meta : Meta.meta) (env : env) (abs_id : AbstractionId.id) :
     env * abs option =
   let rec remove (env : env) : env * abs option =
     match env with
-    | [] -> craise meta "Unreachable"
+    | [] -> craise __FILE__ __LINE__ meta "Unreachable"
     | EFrame :: _ -> (env, None)
     | EBinding (bv, v) :: env ->
         let env, abs_opt = remove env in
@@ -521,7 +521,7 @@ let env_subst_abs (meta : Meta.meta) (env : env) (abs_id : AbstractionId.id)
     (nabs : abs) : env * abs option =
   let rec update (env : env) : env * abs option =
     match env with
-    | [] -> craise meta "Unreachable"
+    | [] -> craise __FILE__ __LINE__ meta "Unreachable"
     | EFrame :: _ -> (* We're done *) (env, None)
     | EBinding (bv, v) :: env ->
         let env, opt_abs = update env in

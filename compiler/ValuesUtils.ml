@@ -12,28 +12,28 @@ let mk_unit_value : typed_value =
   { value = VAdt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
 let mk_typed_value (meta : Meta.meta) (ty : ty) (value : value) : typed_value =
-  sanity_check (ty_is_ety ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_ety ty) meta;
   { value; ty }
 
 let mk_typed_avalue (meta : Meta.meta) (ty : ty) (value : avalue) : typed_avalue
     =
-  sanity_check (ty_is_rty ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
   { value; ty }
 
 let mk_bottom (meta : Meta.meta) (ty : ty) : typed_value =
-  sanity_check (ty_is_ety ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_ety ty) meta;
   { value = VBottom; ty }
 
 let mk_abottom (meta : Meta.meta) (ty : ty) : typed_avalue =
-  sanity_check (ty_is_rty ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
   { value = ABottom; ty }
 
 let mk_aignored (meta : Meta.meta) (ty : ty) : typed_avalue =
-  sanity_check (ty_is_rty ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
   { value = AIgnored; ty }
 
 let value_as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
-  match v with VSymbolic v -> v | _ -> craise meta "Unexpected"
+  match v with VSymbolic v -> v | _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 (** Box a value *)
 let mk_box_value (meta : Meta.meta) (v : typed_value) : typed_value =
@@ -50,13 +50,13 @@ let is_symbolic (v : value) : bool =
   match v with VSymbolic _ -> true | _ -> false
 
 let as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
-  match v with VSymbolic s -> s | _ -> craise meta "Unexpected"
+  match v with VSymbolic s -> s | _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 let as_mut_borrow (meta : Meta.meta) (v : typed_value) :
     BorrowId.id * typed_value =
   match v.value with
   | VBorrow (VMutBorrow (bid, bv)) -> (bid, bv)
-  | _ -> craise meta "Unexpected"
+  | _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 let is_unit (v : typed_value) : bool =
   ty_is_unit v.ty

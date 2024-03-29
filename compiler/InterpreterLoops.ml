@@ -54,10 +54,10 @@ let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : st_cm_fun) :
          * {!Unit} would account for the first iteration of the loop.
          * We prefer to write it this way for consistency and sanity,
          * though. *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
     | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* We can't get there: this is only used in symbolic mode *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
   in
 
   (* Apply *)
@@ -160,7 +160,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
           cf res ctx
       | Continue i ->
           (* We don't support nested loops for now *)
-          cassert (i = 0) meta "Nested loops are not supported yet";
+          cassert __FILE__ __LINE__ (i = 0) meta "Nested loops are not supported yet";
           log#ldebug
             (lazy
               ("eval_loop_symbolic: about to match the fixed-point context \
@@ -178,7 +178,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
           (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
              For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
           *)
-          craise meta "Unreachable"
+          craise __FILE__ __LINE__ meta "Unreachable"
     in
     let loop_expr = eval_loop_body cf_loop fp_ctx in
 
@@ -212,7 +212,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
         match av.value with
         | ABorrow _ -> true
         | ALoan _ -> false
-        | _ -> craise meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
       in
       let borrows, loans = List.partition is_borrow abs.avalues in
 
@@ -221,10 +221,10 @@ let eval_loop_symbolic (config : config) (meta : meta)
           (fun (av : typed_avalue) ->
             match av.value with
             | ABorrow (AMutBorrow (bid, child_av)) ->
-                sanity_check (is_aignored child_av.value) meta;
+                sanity_check __FILE__ __LINE__ (is_aignored child_av.value) meta;
                 Some (bid, child_av.ty)
             | ABorrow (ASharedBorrow _) -> None
-            | _ -> craise meta "Unreachable")
+            | _ -> craise __FILE__ __LINE__ meta "Unreachable")
           borrows
       in
       let borrows = ref (BorrowId.Map.of_list borrows) in
@@ -234,10 +234,10 @@ let eval_loop_symbolic (config : config) (meta : meta)
           (fun (av : typed_avalue) ->
             match av.value with
             | ALoan (AMutLoan (bid, child_av)) ->
-                sanity_check (is_aignored child_av.value) meta;
+                sanity_check __FILE__ __LINE__ (is_aignored child_av.value) meta;
                 Some bid
             | ALoan (ASharedLoan _) -> None
-            | _ -> craise meta "Unreachable")
+            | _ -> craise __FILE__ __LINE__ meta "Unreachable")
           loans
       in
 
@@ -253,7 +253,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
             ty)
           loan_ids
       in
-      sanity_check (BorrowId.Map.is_empty !borrows) meta;
+      sanity_check __FILE__ __LINE__ (BorrowId.Map.is_empty !borrows) meta;
 
       given_back_tys
     in

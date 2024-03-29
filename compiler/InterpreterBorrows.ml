@@ -43,7 +43,7 @@ let end_borrow_get_borrow (meta : Meta.meta)
   in
   let set_replaced_bc (abs_id : AbstractionId.id option) (bc : g_borrow_content)
       =
-    sanity_check (Option.is_none !replaced_bc) meta;
+    sanity_check __FILE__ __LINE__ (Option.is_none !replaced_bc) meta;
     replaced_bc := Some (abs_id, bc)
   in
   (* Raise an exception if:
@@ -182,7 +182,7 @@ let end_borrow_get_borrow (meta : Meta.meta)
                * Also note that, as we are moving the borrowed value inside the
                * abstraction (and not really giving the value back to the context)
                * we do not insert {!AEndedMutBorrow} but rather {!ABottom} *)
-              craise meta "Unimplemented"
+              craise __FILE__ __LINE__ meta "Unimplemented"
               (* ABottom *))
             else
               (* Update the outer borrows before diving into the child avalue *)
@@ -225,8 +225,8 @@ let end_borrow_get_borrow (meta : Meta.meta)
       method! visit_abs outer abs =
         (* Update the outer abs *)
         let outer_abs, outer_borrows = outer in
-        sanity_check (Option.is_none outer_abs) meta;
-        sanity_check (Option.is_none outer_borrows) meta;
+        sanity_check __FILE__ __LINE__ (Option.is_none outer_abs) meta;
+        sanity_check __FILE__ __LINE__ (Option.is_none outer_borrows) meta;
         let outer = (Some abs.abs_id, None) in
         super#visit_abs outer abs
     end
@@ -249,10 +249,10 @@ let end_borrow_get_borrow (meta : Meta.meta)
 let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
     (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
-  exec_assert
+  exec_assert __FILE__ __LINE__
     (not (loans_in_value nv))
     meta "Can not end a borrow because the value to give back contains bottom";
-  exec_assert
+  exec_assert __FILE__ __LINE__
     (not (bottom_in_value ctx.ended_regions nv))
     meta "Can not end a borrow because the value to give back contains bottom";
   (* Debug *)
@@ -266,7 +266,7 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
-    sanity_check (not !replaced) meta;
+    sanity_check __FILE__ __LINE__ (not !replaced) meta;
     replaced := true
   in
   (* Whenever giving back symbolic values, they shouldn't contain already ended regions *)
@@ -308,7 +308,7 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
                   ("give_back_value: improper type:\n- expected: "
                  ^ ty_to_string ctx ty ^ "\n- received: "
                  ^ ty_to_string ctx nv.ty);
-                craise meta "Value given back doesn't have the proper type");
+                craise __FILE__ __LINE__ meta "Value given back doesn't have the proper type");
               (* Replace *)
               set_replaced ();
               nv.value)
@@ -353,7 +353,7 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
                   ABorrow
                     (AEndedIgnoredMutBorrow
                        { given_back; child; given_back_meta })
-              | _ -> craise meta "Unreachable"
+              | _ -> craise __FILE__ __LINE__ meta "Unreachable"
             else
               (* Continue exploring *)
               ABorrow (super#visit_AIgnoredMutBorrow opt_abs bid' child)
@@ -368,7 +368,7 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
         (* Preparing a bit *)
         let regions, ancestors_regions =
           match opt_abs with
-          | None -> craise meta "Unreachable"
+          | None -> craise __FILE__ __LINE__ meta "Unreachable"
           | Some abs -> (abs.regions, abs.ancestors_regions)
         in
         (* Rk.: there is a small issue with the types of the aloan values.
@@ -434,7 +434,7 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
         (* We remember in which abstraction we are before diving -
          * this is necessary for projecting values: we need to know
          * over which regions to project *)
-        sanity_check (Option.is_none opt_abs) meta;
+        sanity_check __FILE__ __LINE__ (Option.is_none opt_abs) meta;
         super#visit_EAbs (Some abs) abs
     end
   in
@@ -442,7 +442,7 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert !replaced meta "Only one loan should have been given back";
+  cassert __FILE__ __LINE__ !replaced meta "Only one loan should have been given back";
   (* Apply the reborrows *)
   apply_registered_reborrows ctx
 
@@ -451,7 +451,7 @@ let give_back_symbolic_value (_config : config) (meta : Meta.meta)
     (proj_regions : RegionId.Set.t) (proj_ty : rty) (sv : symbolic_value)
     (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
-  sanity_check (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty) meta;
+  sanity_check __FILE__ __LINE__ (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty) meta;
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
@@ -473,7 +473,7 @@ let give_back_symbolic_value (_config : config) (meta : Meta.meta)
          type [T]! We thus *mustn't* introduce a projector here.
       *)
       (* AProjBorrows (nsv, sv.sv_ty) *)
-      internal_error meta
+      internal_error __FILE__ __LINE__ meta
     in
     AProjLoans (sv, (mv, child_proj) :: local_given_back)
   in
@@ -498,7 +498,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
-    cassert (not !replaced) meta "Only one loan should have been updated";
+    cassert __FILE__ __LINE__ (not !replaced) meta "Only one loan should have been updated";
     replaced := true
   in
   let obj =
@@ -541,7 +541,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
                   ("give_back_avalue_to_same_abstraction: improper type:\n\
                     - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
                  ^ ty_to_string ctx nv.ty);
-                craise meta "Value given back doesn't have the proper type");
+                craise __FILE__ __LINE__ meta "Value given back doesn't have the proper type");
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
                * an ended loan *)
@@ -567,7 +567,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call {!set_replaced}) *)
               (* Sanity check *)
-              sanity_check (nv.ty = ty) meta;
+              sanity_check __FILE__ __LINE__ (nv.ty = ty) meta;
               ALoan
                 (AEndedIgnoredMutLoan
                    { given_back = nv; child; given_back_meta = nsv }))
@@ -583,7 +583,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert !replaced meta "Only one loan should be given back";
+  cassert __FILE__ __LINE__ !replaced meta "Only one loan should be given back";
   (* Return *)
   ctx
 
@@ -601,7 +601,7 @@ let give_back_shared _config (meta : Meta.meta) (bid : BorrowId.id)
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
-    cassert (not !replaced) meta "Only one loan should be updated";
+    cassert __FILE__ __LINE__ (not !replaced) meta "Only one loan should be updated";
     replaced := true
   in
   let obj =
@@ -666,7 +666,7 @@ let give_back_shared _config (meta : Meta.meta) (bid : BorrowId.id)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert !replaced meta "Exactly one loan should be given back";
+  cassert __FILE__ __LINE__ !replaced meta "Exactly one loan should be given back";
   (* Return *)
   ctx
 
@@ -680,7 +680,7 @@ let reborrow_shared (meta : Meta.meta) (original_bid : BorrowId.id)
   (* Keep track of changes *)
   let r = ref false in
   let set_ref () =
-    sanity_check (not !r) meta;
+    sanity_check __FILE__ __LINE__ (not !r) meta;
     r := true
   in
 
@@ -710,7 +710,7 @@ let reborrow_shared (meta : Meta.meta) (original_bid : BorrowId.id)
 
   let env = obj#visit_env () ctx.env in
   (* Check that we reborrowed once *)
-  sanity_check !r meta;
+  sanity_check __FILE__ __LINE__ !r meta;
   { ctx with env }
 
 (** Convert an {!type:avalue} to a {!type:value}.
@@ -770,24 +770,24 @@ let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id)
   match bc with
   | Concrete (VMutBorrow (l', tv)) ->
       (* Sanity check *)
-      sanity_check (l' = l) meta;
-      sanity_check (not (loans_in_value tv)) meta;
+      sanity_check __FILE__ __LINE__ (l' = l) meta;
+      sanity_check __FILE__ __LINE__ (not (loans_in_value tv)) meta;
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      sanity_check (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
+      sanity_check __FILE__ __LINE__ (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
       (* Update the context *)
       give_back_value config meta l tv ctx
   | Concrete (VSharedBorrow l' | VReservedMutBorrow l') ->
       (* Sanity check *)
-      sanity_check (l' = l) meta;
+      sanity_check __FILE__ __LINE__ (l' = l) meta;
       (* Check that the borrow is somewhere - purely a sanity check *)
-      sanity_check (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
+      sanity_check __FILE__ __LINE__ (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
       (* Update the context *)
       give_back_shared config meta l ctx
   | Abstract (AMutBorrow (l', av)) ->
       (* Sanity check *)
-      sanity_check (l' = l) meta;
+      sanity_check __FILE__ __LINE__ (l' = l) meta;
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      sanity_check (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
+      sanity_check __FILE__ __LINE__ (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
       (* Convert the avalue to a (fresh symbolic) value.
 
          Rem.: we shouldn't do this here. We should do this in a function
@@ -800,20 +800,20 @@ let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id)
         ctx
   | Abstract (ASharedBorrow l') ->
       (* Sanity check *)
-      sanity_check (l' = l) meta;
+      sanity_check __FILE__ __LINE__ (l' = l) meta;
       (* Check that the borrow is somewhere - purely a sanity check *)
-      sanity_check (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
+      sanity_check __FILE__ __LINE__ (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
       (* Update the context *)
       give_back_shared config meta l ctx
   | Abstract (AProjSharedBorrow asb) ->
       (* Sanity check *)
-      sanity_check (borrow_in_asb l asb) meta;
+      sanity_check __FILE__ __LINE__ (borrow_in_asb l asb) meta;
       (* Update the context *)
       give_back_shared config meta l ctx
   | Abstract
       ( AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
       | AEndedSharedBorrow ) ->
-      craise meta "Unreachable"
+      craise __FILE__ __LINE__ meta "Unreachable"
 
 let check_borrow_disappeared (meta : Meta.meta) (fun_name : string)
     (l : BorrowId.id) (ctx0 : eval_ctx) : cm_fun =
@@ -829,7 +829,7 @@ let check_borrow_disappeared (meta : Meta.meta) (fun_name : string)
               ^ eval_ctx_to_string ~meta:(Some meta) ctx0
               ^ "\n\n- new context:\n"
               ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-          craise meta "Borrow not eliminated"
+          craise __FILE__ __LINE__ meta "Borrow not eliminated"
     in
     match lookup_loan_opt meta ek_all l ctx with
     | None -> () (* Ok *)
@@ -841,7 +841,7 @@ let check_borrow_disappeared (meta : Meta.meta) (fun_name : string)
             ^ eval_ctx_to_string ~meta:(Some meta) ctx0
             ^ "\n\n- new context:\n"
             ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-        craise meta "Loan not eliminated"
+        craise __FILE__ __LINE__ meta "Loan not eliminated"
   in
   unit_to_cm_fun check_disappeared
 
@@ -937,7 +937,7 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
       log#ldebug (lazy "End borrow: borrow not found");
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
-      sanity_check (config.mode = SymbolicMode) meta;
+      sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) meta;
       (* Do a sanity check and continue *)
       cf_check cf ctx
   (* We found a borrow and replaced it with [Bottom]: give it back (i.e., update
@@ -946,7 +946,7 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
       (* Sanity check: the borrowed value shouldn't contain loans *)
       (match bc with
       | Concrete (VMutBorrow (_, bv)) ->
-          sanity_check (Option.is_none (get_first_loan_in_value bv)) meta
+          sanity_check __FILE__ __LINE__ (Option.is_none (get_first_loan_in_value bv)) meta
       | _ -> ());
       (* Give back the value *)
       let ctx = give_back config meta l bc ctx in
@@ -1002,7 +1002,7 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
       (* Check that we can end the abstraction *)
       if abs.can_end then ()
       else
-        craise meta
+        craise __FILE__ __LINE__ meta
           ("Can't end abstraction "
           ^ AbstractionId.to_string abs.abs_id
           ^ " as it is set as non-endable");
@@ -1172,7 +1172,7 @@ and end_abstraction_borrows (config : config) (meta : Meta.meta)
 
       method! visit_aproj env sproj =
         (match sproj with
-        | AProjLoans _ -> craise meta "Unexpected"
+        | AProjLoans _ -> craise __FILE__ __LINE__ meta "Unexpected"
         | AProjBorrows (sv, proj_ty) -> raise (FoundAProjBorrows (sv, proj_ty))
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj env sproj
@@ -1181,7 +1181,7 @@ and end_abstraction_borrows (config : config) (meta : Meta.meta)
       method! visit_borrow_content _ bc =
         match bc with
         | VSharedBorrow _ | VMutBorrow (_, _) -> raise (FoundBorrowContent bc)
-        | VReservedMutBorrow _ -> craise meta "Unreachable"
+        | VReservedMutBorrow _ -> craise __FILE__ __LINE__ meta "Unreachable"
     end
   in
   (* Lookup the abstraction *)
@@ -1241,7 +1241,7 @@ and end_abstraction_borrows (config : config) (meta : Meta.meta)
             ctx
         | AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
         | AEndedSharedBorrow ->
-            craise meta "Unexpected"
+            craise __FILE__ __LINE__ meta "Unexpected"
       in
       (* Reexplore *)
       end_abstraction_borrows config meta chain abs_id cf ctx
@@ -1276,7 +1276,7 @@ and end_abstraction_borrows (config : config) (meta : Meta.meta)
             match
               end_borrow_get_borrow meta (Some abs_id) allow_inner_loans bid ctx
             with
-            | Error _ -> craise meta "Unreachable"
+            | Error _ -> craise __FILE__ __LINE__ meta "Unreachable"
             | Ok (ctx, _) ->
                 (* Give back *)
                 give_back_shared config meta bid ctx)
@@ -1286,12 +1286,12 @@ and end_abstraction_borrows (config : config) (meta : Meta.meta)
             match
               end_borrow_get_borrow meta (Some abs_id) allow_inner_loans bid ctx
             with
-            | Error _ -> craise meta "Unreachable"
+            | Error _ -> craise __FILE__ __LINE__ meta "Unreachable"
             | Ok (ctx, _) ->
                 (* Give the value back - note that the mut borrow was below a
                  * shared borrow: the value is thus unchanged *)
                 give_back_value config meta bid v ctx)
-        | VReservedMutBorrow _ -> craise meta "Unreachable"
+        | VReservedMutBorrow _ -> craise __FILE__ __LINE__ meta "Unreachable"
       in
       (* Reexplore *)
       end_abstraction_borrows config meta chain abs_id cf ctx
@@ -1430,7 +1430,7 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta)
          * replace it with... Maybe we should introduce an ABottomProj? *)
         let ctx = update_aproj_borrows meta abs_id sv AIgnoredProjBorrows ctx in
         (* Sanity check: no other occurrence of an intersecting projector of borrows *)
-        sanity_check
+        sanity_check __FILE__ __LINE__
           (Option.is_none
              (lookup_intersecting_aproj_borrows_opt meta explore_shared regions
                 sv ctx))
@@ -1509,22 +1509,22 @@ let promote_shared_loan_to_mut_loan (meta : Meta.meta) (l : BorrowId.id)
   in
   match lookup_loan meta ek l ctx with
   | _, Concrete (VMutLoan _) ->
-      craise meta "Expected a shared loan, found a mut loan"
+      craise __FILE__ __LINE__ meta "Expected a shared loan, found a mut loan"
   | _, Concrete (VSharedLoan (bids, sv)) ->
       (* Check that there is only one borrow id (l) and update the loan *)
-      cassert
+      cassert __FILE__ __LINE__
         (BorrowId.Set.mem l bids && BorrowId.Set.cardinal bids = 1)
         meta "There should only be one borrow id";
       (* We need to check that there aren't any loans in the value:
          we should have gotten rid of those already, but it is better
          to do a sanity check. *)
-      sanity_check (not (loans_in_value sv)) meta;
+      sanity_check __FILE__ __LINE__ (not (loans_in_value sv)) meta;
       (* Check there isn't {!Bottom} (this is actually an invariant *)
-      cassert
+      cassert __FILE__ __LINE__
         (not (bottom_in_value ctx.ended_regions sv))
         meta "There shouldn't be a bottom";
       (* Check there aren't reserved borrows *)
-      cassert
+      cassert __FILE__ __LINE__
         (not (reserved_in_value sv))
         meta "There shouldn't be reserved borrows";
       (* Update the loan content *)
@@ -1534,7 +1534,7 @@ let promote_shared_loan_to_mut_loan (meta : Meta.meta) (l : BorrowId.id)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
-      craise meta
+      craise __FILE__ __LINE__ meta
         "Can't promote a shared loan to a mutable loan if the loan is inside \
          an abstraction"
 
@@ -1555,13 +1555,13 @@ let replace_reserved_borrow_with_mut_borrow (meta : Meta.meta) (l : BorrowId.id)
   let ctx =
     match lookup_borrow meta ek l ctx with
     | Concrete (VSharedBorrow _ | VMutBorrow (_, _)) ->
-        craise meta "Expected a reserved mutable borrow"
+        craise __FILE__ __LINE__ meta "Expected a reserved mutable borrow"
     | Concrete (VReservedMutBorrow _) ->
         (* Update it *)
         update_borrow meta ek l (VMutBorrow (l, borrowed_value)) ctx
     | Abstract _ ->
         (* This can't happen for sure *)
-        craise meta
+        craise __FILE__ __LINE__ meta
           "Can't promote a shared borrow to a mutable borrow if the borrow is \
            inside an abstraction"
   in
@@ -1577,7 +1577,7 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
   match lookup_loan meta ek l ctx with
-  | _, Concrete (VMutLoan _) -> craise meta "Unreachable"
+  | _, Concrete (VMutLoan _) -> craise __FILE__ __LINE__ meta "Unreachable"
   | _, Concrete (VSharedLoan (bids, sv)) -> (
       (* If there are loans inside the value, end them. Note that there can't be
          reserved borrows inside the value.
@@ -1601,9 +1601,9 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
             (lazy
               ("activate_reserved_mut_borrow: resulting value:\n"
               ^ typed_value_to_string ~meta:(Some meta) ctx sv));
-          sanity_check (not (loans_in_value sv)) meta;
-          sanity_check (not (bottom_in_value ctx.ended_regions sv)) meta;
-          sanity_check (not (reserved_in_value sv)) meta;
+          sanity_check __FILE__ __LINE__ (not (loans_in_value sv)) meta;
+          sanity_check __FILE__ __LINE__ (not (bottom_in_value ctx.ended_regions sv)) meta;
+          sanity_check __FILE__ __LINE__ (not (reserved_in_value sv)) meta;
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = BorrowId.Set.remove l bids in
@@ -1625,7 +1625,7 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
-      craise meta
+      craise __FILE__ __LINE__ meta
         "Can't activate a reserved mutable borrow referencing a loan inside\n\
         \         an abstraction"
 
@@ -1642,7 +1642,7 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
      ignore the children altogether. Instead, we explore them and make sure
      we don't register values while doing so.
   *)
-  let push_fail _ = craise meta "Unreachable" in
+  let push_fail _ = craise __FILE__ __LINE__ meta "Unreachable" in
   (* Function to explore an avalue and destructure it *)
   let rec list_avalues (allow_borrows : bool) (push : typed_avalue -> unit)
       (av : typed_avalue) : unit =
@@ -1657,7 +1657,7 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
         match lc with
         | ASharedLoan (bids, sv, child_av) ->
             (* We don't support nested borrows for now *)
-            cassert
+            cassert __FILE__ __LINE__
               (not (value_has_borrows ctx sv.value))
               meta "Nested borrows are not supported yet";
             (* Destructure the shared value *)
@@ -1686,10 +1686,10 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
             push { value; ty }
         | AIgnoredMutLoan (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
-            cassert
+            cassert __FILE__ __LINE__
               (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
               meta "Nested borrows are not supported yet";
-            sanity_check (opt_bid = None) meta;
+            sanity_check __FILE__ __LINE__ (opt_bid = None) meta;
             (* Simply explore the child *)
             list_avalues false push_fail child_av
         | AEndedMutLoan
@@ -1699,14 +1699,14 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
             { child = child_av; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child_av ->
             (* We don't support nested borrows for now *)
-            cassert
+            cassert __FILE__ __LINE__
               (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
               meta "Nested borrows are not supported yet";
             (* Simply explore the child *)
             list_avalues false push_fail child_av)
     | ABorrow bc -> (
         (* Sanity check - rem.: may be redundant with [push_fail] *)
-        sanity_check allow_borrows meta;
+        sanity_check __FILE__ __LINE__ allow_borrows meta;
         (* Explore the borrow content *)
         match bc with
         | AMutBorrow (bid, child_av) ->
@@ -1721,23 +1721,23 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
             push av
         | AIgnoredMutBorrow (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
-            cassert
+            cassert __FILE__ __LINE__
               (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
               meta "Nested borrows are not supported yet";
-            sanity_check (opt_bid = None) meta;
+            sanity_check __FILE__ __LINE__ (opt_bid = None) meta;
             (* Just explore the child *)
             list_avalues false push_fail child_av
         | AEndedIgnoredMutBorrow
             { child = child_av; given_back = _; given_back_meta = _ } ->
             (* We don't support nested borrows for now *)
-            cassert
+            cassert __FILE__ __LINE__
               (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
               meta "Nested borrows are not supported yet";
             (* Just explore the child *)
             list_avalues false push_fail child_av
         | AProjSharedBorrow asb ->
             (* We don't support nested borrows *)
-            cassert (asb = []) meta "Nested borrows are not supported yet";
+            cassert __FILE__ __LINE__ (asb = []) meta "Nested borrows are not supported yet";
             (* Nothing specific to do *)
             ()
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
@@ -1745,11 +1745,11 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
                be in the context anymore (if we end *one* borrow in an abstraction,
                we have to end them all and remove the abstraction from the context)
             *)
-            craise meta "Unreachable")
+            craise __FILE__ __LINE__ meta "Unreachable")
     | ASymbolic _ ->
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
-        sanity_check (not (ty_has_borrows ctx.type_ctx.type_infos ty)) meta
+        sanity_check __FILE__ __LINE__ (not (ty_has_borrows ctx.type_ctx.type_infos ty)) meta
   and list_values (v : typed_value) : typed_avalue list * typed_value =
     let ty = v.ty in
     match v.value with
@@ -1761,20 +1761,20 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
         let avl = List.concat avll in
         let adt = { adt with field_values } in
         (avl, { v with value = VAdt adt })
-    | VBottom -> craise meta "Unreachable"
+    | VBottom -> craise __FILE__ __LINE__ meta "Unreachable"
     | VBorrow _ ->
         (* We don't support nested borrows for now *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
     | VLoan lc -> (
         match lc with
         | VSharedLoan (bids, sv) ->
             let avl, sv = list_values sv in
             if destructure_shared_values then (
               (* Rem.: the shared value can't contain loans nor borrows *)
-              cassert (ty_no_regions ty) meta
+              cassert __FILE__ __LINE__ (ty_no_regions ty) meta
                 "Nested borrows are not supported yet";
               let av : typed_avalue =
-                sanity_check
+                sanity_check __FILE__ __LINE__
                   (not (value_has_loans_or_borrows ctx sv.value))
                   meta;
                 (* We introduce fresh ids for the symbolic values *)
@@ -1799,11 +1799,11 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
               let avl = List.append [ av ] avl in
               (avl, sv))
             else (avl, { v with value = VLoan (VSharedLoan (bids, sv)) })
-        | VMutLoan _ -> craise meta "Unreachable")
+        | VMutLoan _ -> craise __FILE__ __LINE__ meta "Unreachable")
     | VSymbolic _ ->
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
-        sanity_check (not (ty_has_borrows ctx.type_ctx.type_infos ty)) meta;
+        sanity_check __FILE__ __LINE__ (not (ty_has_borrows ctx.type_ctx.type_infos ty)) meta;
         ([], v)
   in
 
@@ -1903,14 +1903,14 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind)
         (avl, { v with value = VAdt adt })
     | VBorrow bc -> (
         let _, ref_ty, kind = ty_as_ref ty in
-        cassert (ty_no_regions ref_ty) meta
+        cassert __FILE__ __LINE__ (ty_no_regions ref_ty) meta
           "Nested borrows are not supported yet";
         (* Sanity check *)
-        sanity_check allow_borrows meta;
+        sanity_check __FILE__ __LINE__ allow_borrows meta;
         (* Convert the borrow content *)
         match bc with
         | VSharedBorrow bid ->
-            cassert (ty_no_regions ref_ty) meta
+            cassert __FILE__ __LINE__ (ty_no_regions ref_ty) meta
               "Nested borrows are not supported yet";
             let ty = TRef (RFVar r_id, ref_ty, kind) in
             let value = ABorrow (ASharedBorrow bid) in
@@ -1918,7 +1918,7 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind)
         | VMutBorrow (bid, bv) ->
             let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
-            cassert
+            cassert __FILE__ __LINE__
               (not (value_has_borrows ctx bv.value))
               meta "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
@@ -1933,18 +1933,18 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind)
             (av :: avl, value)
         | VReservedMutBorrow _ ->
             (* This borrow should have been activated *)
-            craise meta "Unexpected")
+            craise __FILE__ __LINE__ meta "Unexpected")
     | VLoan lc -> (
         match lc with
         | VSharedLoan (bids, sv) ->
             let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
-            cassert
+            cassert __FILE__ __LINE__
               (not (value_has_borrows ctx sv.value))
               meta "Nested borrows are not supported yet";
             (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
             (* For avalues, a loan has the borrow type *)
-            cassert (ty_no_regions ty) meta
+            cassert __FILE__ __LINE__ (ty_no_regions ty) meta
               "Nested borrows are not supported yet";
             let ty = mk_ref_ty (RFVar r_id) ty RShared in
             let ignored = mk_aignored meta ty in
@@ -1963,7 +1963,7 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind)
         | VMutLoan bid ->
             (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
             (* For avalues, a loan has the borrow type *)
-            cassert (ty_no_regions ty) meta
+            cassert __FILE__ __LINE__ (ty_no_regions ty) meta
               "Nested borrows are not supported yet";
             let ty = mk_ref_ty (RFVar r_id) ty RMut in
             let ignored = mk_aignored meta ty in
@@ -1973,7 +1973,7 @@ let convert_value_to_abstractions (meta : Meta.meta) (abs_kind : abs_kind)
     | VSymbolic _ ->
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
-        cassert
+        cassert __FILE__ __LINE__
           (not (value_has_borrows ctx v.value))
           meta "Nested borrows are not supported yet";
         (* Return nothing *)
@@ -2029,26 +2029,26 @@ let compute_merge_abstraction_info (meta : Meta.meta) (ctx : eval_ctx)
   in
 
   let push_loans ids (lc : g_loan_content_with_ty) : unit =
-    sanity_check (BorrowId.Set.disjoint !loans ids) meta;
+    sanity_check __FILE__ __LINE__ (BorrowId.Set.disjoint !loans ids) meta;
     loans := BorrowId.Set.union !loans ids;
     BorrowId.Set.iter
       (fun id ->
-        sanity_check (not (BorrowId.Map.mem id !loan_to_content)) meta;
+        sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem id !loan_to_content)) meta;
         loan_to_content := BorrowId.Map.add id lc !loan_to_content;
         borrows_loans := LoanId id :: !borrows_loans)
       ids
   in
   let push_loan id (lc : g_loan_content_with_ty) : unit =
-    sanity_check (not (BorrowId.Set.mem id !loans)) meta;
+    sanity_check __FILE__ __LINE__ (not (BorrowId.Set.mem id !loans)) meta;
     loans := BorrowId.Set.add id !loans;
-    sanity_check (not (BorrowId.Map.mem id !loan_to_content)) meta;
+    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem id !loan_to_content)) meta;
     loan_to_content := BorrowId.Map.add id lc !loan_to_content;
     borrows_loans := LoanId id :: !borrows_loans
   in
   let push_borrow id (bc : g_borrow_content_with_ty) : unit =
-    sanity_check (not (BorrowId.Set.mem id !borrows)) meta;
+    sanity_check __FILE__ __LINE__ (not (BorrowId.Set.mem id !borrows)) meta;
     borrows := BorrowId.Set.add id !borrows;
-    sanity_check (not (BorrowId.Map.mem id !borrow_to_content)) meta;
+    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem id !borrow_to_content)) meta;
     borrow_to_content := BorrowId.Map.add id bc !borrow_to_content;
     borrows_loans := BorrowId id :: !borrows_loans
   in
@@ -2071,23 +2071,23 @@ let compute_merge_abstraction_info (meta : Meta.meta) (ctx : eval_ctx)
         let ty =
           match Option.get env with
           | Concrete ty -> ty
-          | Abstract _ -> craise meta "Unreachable"
+          | Abstract _ -> craise __FILE__ __LINE__ meta "Unreachable"
         in
         (match lc with
         | VSharedLoan (bids, _) -> push_loans bids (Concrete (ty, lc))
-        | VMutLoan _ -> craise meta "Unreachable");
+        | VMutLoan _ -> craise __FILE__ __LINE__ meta "Unreachable");
         (* Continue *)
         super#visit_loan_content env lc
 
       method! visit_borrow_content _ _ =
         (* Can happen if we explore shared values which contain borrows -
            i.e., if we have nested borrows (we forbid this for now) *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
 
       method! visit_aloan_content env lc =
         let ty =
           match Option.get env with
-          | Concrete _ -> craise meta "Unreachable"
+          | Concrete _ -> craise __FILE__ __LINE__ meta "Unreachable"
           | Abstract ty -> ty
         in
         (* Register the loans *)
@@ -2097,14 +2097,14 @@ let compute_merge_abstraction_info (meta : Meta.meta) (ctx : eval_ctx)
         | AEndedMutLoan _ | AEndedSharedLoan _ | AIgnoredMutLoan _
         | AEndedIgnoredMutLoan _ | AIgnoredSharedLoan _ ->
             (* The abstraction has been destructured, so those shouldn't appear *)
-            craise meta "Unreachable");
+            craise __FILE__ __LINE__ meta "Unreachable");
         (* Continue *)
         super#visit_aloan_content env lc
 
       method! visit_aborrow_content env bc =
         let ty =
           match Option.get env with
-          | Concrete _ -> craise meta "Unreachable"
+          | Concrete _ -> craise __FILE__ __LINE__ meta "Unreachable"
           | Abstract ty -> ty
         in
         (* Explore the borrow content *)
@@ -2118,18 +2118,18 @@ let compute_merge_abstraction_info (meta : Meta.meta) (ctx : eval_ctx)
               | AsbProjReborrows _ ->
                   (* Can only happen if the symbolic value (potentially) contains
                      borrows - i.e., we have nested borrows *)
-                  craise meta "Unreachable"
+                  craise __FILE__ __LINE__ meta "Unreachable"
             in
             List.iter register asb
         | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedMutBorrow _
         | AEndedSharedBorrow ->
             (* The abstraction has been destructured, so those shouldn't appear *)
-            craise meta "Unreachable");
+            craise __FILE__ __LINE__ meta "Unreachable");
         super#visit_aborrow_content env bc
 
       method! visit_symbolic_value _ sv =
         (* Sanity check: no borrows *)
-        sanity_check (not (symbolic_value_has_borrows ctx sv)) meta
+        sanity_check __FILE__ __LINE__ (not (symbolic_value_has_borrows ctx sv)) meta
     end
   in
 
@@ -2209,10 +2209,10 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
   (* Check that the abstractions are destructured *)
   if !Config.sanity_checks then (
     let destructure_shared_values = true in
-    sanity_check
+    sanity_check __FILE__ __LINE__
       (abs_is_destructured meta destructure_shared_values ctx abs0)
       meta;
-    sanity_check
+    sanity_check __FILE__ __LINE__
       (abs_is_destructured meta destructure_shared_values ctx abs1)
       meta);
 
@@ -2240,8 +2240,8 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
   (* Sanity check: there is no loan/borrows which appears in both abstractions,
      unless we allow to merge duplicates *)
   if merge_funs = None then
-    (sanity_check (BorrowId.Set.disjoint borrows0 borrows1) meta;
-     sanity_check (BorrowId.Set.disjoint loans0 loans1))
+    (sanity_check __FILE__ __LINE__ (BorrowId.Set.disjoint borrows0 borrows1) meta;
+     sanity_check __FILE__ __LINE__ (BorrowId.Set.disjoint loans0 loans1))
       meta;
 
   (* Merge.
@@ -2283,7 +2283,7 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
   in
   let filter_bids (bids : BorrowId.Set.t) : BorrowId.Set.t =
     let bids = BorrowId.Set.diff bids intersect in
-    sanity_check (not (BorrowId.Set.is_empty bids)) meta;
+    sanity_check __FILE__ __LINE__ (not (BorrowId.Set.is_empty bids)) meta;
     bids
   in
   let filter_bid (bid : BorrowId.id) : BorrowId.id option =
@@ -2311,11 +2311,11 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
         (Option.get merge_funs).merge_ashared_borrows id ty0 ty1
     | AProjSharedBorrow _, AProjSharedBorrow _ ->
         (* Unreachable because requires nested borrows *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
     | _ ->
         (* Unreachable because those cases are ignored (ended/ignored borrows)
            or inconsistent *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
   in
 
   let merge_g_borrow_contents (bc0 : g_borrow_content_with_ty)
@@ -2323,12 +2323,12 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
     match (bc0, bc1) with
     | Concrete _, Concrete _ ->
         (* This can happen only in case of nested borrows *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
     | Abstract (ty0, bc0), Abstract (ty1, bc1) ->
         merge_aborrow_contents ty0 bc0 ty1 bc1
     | Concrete _, Abstract _ | Abstract _, Concrete _ ->
         (* TODO: is it really unreachable? *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
   in
 
   let merge_aloan_contents (ty0 : rty) (lc0 : aloan_content) (ty1 : rty)
@@ -2346,7 +2346,7 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
         (* Check that the sets of ids are the same - if it is not the case, it
            means we actually need to merge more than 2 avalues: we ignore this
            case for now *)
-        sanity_check (BorrowId.Set.equal ids0 ids1) meta;
+        sanity_check __FILE__ __LINE__ (BorrowId.Set.equal ids0 ids1) meta;
         let ids = ids0 in
         if BorrowId.Set.is_empty ids then (
           (* If the set of ids is empty, we can eliminate this shared loan.
@@ -2358,10 +2358,10 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
              to preserve (in practice it works because we destructure the
              shared values in the abstractions, and forbid nested borrows).
           *)
-          sanity_check (not (value_has_loans_or_borrows ctx sv0.value)) meta;
-          sanity_check (not (value_has_loans_or_borrows ctx sv0.value)) meta;
-          sanity_check (is_aignored child0.value) meta;
-          sanity_check (is_aignored child1.value) meta;
+          sanity_check __FILE__ __LINE__ (not (value_has_loans_or_borrows ctx sv0.value)) meta;
+          sanity_check __FILE__ __LINE__ (not (value_has_loans_or_borrows ctx sv0.value)) meta;
+          sanity_check __FILE__ __LINE__ (is_aignored child0.value) meta;
+          sanity_check __FILE__ __LINE__ (is_aignored child1.value) meta;
           None)
         else (
           (* Register the loan ids *)
@@ -2373,7 +2373,7 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
     | _ ->
         (* Unreachable because those cases are ignored (ended/ignored borrows)
            or inconsistent *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
   in
 
   (* Note that because we may filter ids from a set of id, this function has
@@ -2384,12 +2384,12 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
     match (lc0, lc1) with
     | Concrete _, Concrete _ ->
         (* This can not happen: the values should have been destructured *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
     | Abstract (ty0, lc0), Abstract (ty1, lc1) ->
         merge_aloan_contents ty0 lc0 ty1 lc1
     | Concrete _, Abstract _ | Abstract _, Concrete _ ->
         (* TODO: is it really unreachable? *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
   in
 
   (* Note that we first explore the borrows/loans of [abs1], because we
@@ -2430,12 +2430,12 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
                              a concrete borrow can only happen inside a shared
                              loan
                           *)
-                          craise meta "Unreachable"
+                          craise __FILE__ __LINE__ meta "Unreachable"
                       | Abstract (ty, bc) -> { value = ABorrow bc; ty })
                   | Some bc0, Some bc1 ->
-                      sanity_check (merge_funs <> None) meta;
+                      sanity_check __FILE__ __LINE__ (merge_funs <> None) meta;
                       merge_g_borrow_contents bc0 bc1
-                  | None, None -> craise meta "Unreachable"
+                  | None, None -> craise __FILE__ __LINE__ meta "Unreachable"
                 in
                 push_avalue av)
       | LoanId bid ->
@@ -2468,16 +2468,16 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
                       | Concrete _ ->
                           (* This shouldn't happen because the avalues should
                              have been destructured. *)
-                          craise meta "Unreachable"
+                          craise __FILE__ __LINE__ meta "Unreachable"
                       | Abstract (ty, lc) -> (
                           match lc with
                           | ASharedLoan (bids, sv, child) ->
                               let bids = filter_bids bids in
-                              sanity_check
+                              sanity_check __FILE__ __LINE__
                                 (not (BorrowId.Set.is_empty bids))
                                 meta;
-                              sanity_check (is_aignored child.value) meta;
-                              sanity_check
+                              sanity_check __FILE__ __LINE__ (is_aignored child.value) meta;
+                              sanity_check __FILE__ __LINE__
                                 (not (value_has_loans_or_borrows ctx sv.value))
                                 meta;
                               let lc = ASharedLoan (bids, sv, child) in
@@ -2490,11 +2490,11 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
                           | AIgnoredMutLoan _ | AEndedIgnoredMutLoan _
                           | AIgnoredSharedLoan _ ->
                               (* The abstraction has been destructured, so those shouldn't appear *)
-                              craise meta "Unreachable"))
+                              craise __FILE__ __LINE__ meta "Unreachable"))
                   | Some lc0, Some lc1 ->
-                      sanity_check (merge_funs <> None) meta;
+                      sanity_check __FILE__ __LINE__ (merge_funs <> None) meta;
                       merge_g_loan_contents lc0 lc1
-                  | None, None -> craise meta "Unreachable"
+                  | None, None -> craise __FILE__ __LINE__ meta "Unreachable"
                 in
                 push_opt_avalue av))
     borrows_loans;
@@ -2512,7 +2512,7 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
       match av.value with
       | ABorrow _ -> true
       | ALoan _ -> false
-      | _ -> craise meta "Unexpected"
+      | _ -> craise __FILE__ __LINE__ meta "Unexpected"
     in
     let aborrows, aloans = List.partition is_borrow avalues in
     List.append aborrows aloans
@@ -2547,7 +2547,7 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
   in
 
   (* Sanity check *)
-  sanity_check (abs_is_destructured meta true ctx abs) meta;
+  sanity_check __FILE__ __LINE__ (abs_is_destructured meta true ctx abs) meta;
   (* Return *)
   abs
 

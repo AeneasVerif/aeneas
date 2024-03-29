@@ -253,8 +253,8 @@ let empty_names_map : names_map =
   }
 
 (** Small helper to report name collision *)
-let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
-    (name : string) : unit =
+let report_name_collision (id_to_string : id -> string)
+    ((id1, meta) : id * Meta.meta option) (id2 : id) (name : string) : unit =
   let id1 = "\n- " ^ id_to_string id1 in
   let id2 = "\n- " ^ id_to_string id2 in
   let err =
@@ -263,9 +263,10 @@ let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
     ^ "\nYou may want to rename some of your definitions, or report an issue."
   in
   (* If we fail hard on errors, raise an exception *)
-  save_error None err
+  save_error meta err
 
-let names_map_get_id_from_name (name : string) (nm : names_map) : id option =
+let names_map_get_id_from_name (name : string) (nm : names_map) :
+    (id * meta option) option =
   StringMap.find_opt name nm.name_to_id
 
 let names_map_check_collision (id_to_string : id -> string) (id : id)
@@ -296,7 +297,7 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
        ^ ":\nThe chosen name is already in the names set: " ^ name
      in
      (* If we fail hard on errors, raise an exception *)
-     save_error None err);
+     save_error __FILE__ __LINE__ None err);
   (* Insert *)
   names_map_add_unchecked id name nm
 
@@ -443,7 +444,7 @@ let names_maps_get (meta : Meta.meta option) (id_to_string : id -> string)
           "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
           ^ map_to_string m
         in
-        save_error meta err;
+        save_error __FILE__ __LINE__ meta err;
         "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
     let m = nm.names_map.id_to_name in
@@ -454,7 +455,7 @@ let names_maps_get (meta : Meta.meta option) (id_to_string : id -> string)
           "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
           ^ map_to_string m
         in
-        save_error meta err;
+        save_error __FILE__ __LINE__ meta err;
         "(ERROR: \"" ^ id_to_string id ^ "\")"
 
 type names_map_init = {
@@ -681,7 +682,7 @@ let ctx_get_local_function (meta : Meta.meta) (id : A.FunDeclId.id)
 
 let ctx_get_type (meta : Meta.meta option) (id : type_id) (ctx : extraction_ctx)
     : string =
-  sanity_check_opt_meta (id <> TTuple) meta;
+  sanity_check_opt_meta __FILE__ __LINE__ (id <> TTuple) meta;
   ctx_get meta (TypeId id) ctx
 
 let ctx_get_local_type (meta : Meta.meta) (id : TypeDeclId.id)
@@ -1201,7 +1202,7 @@ let type_decl_kind_to_qualif (meta : Meta.meta) (kind : decl_kind)
           (* This is for traits *)
           Some "Record"
       | _ ->
-          craise meta
+          craise __FILE__ __LINE__ meta
             ("Unexpected: (" ^ show_decl_kind kind ^ ", "
             ^ Print.option_to_string show_type_decl_kind type_kind
             ^ ")"))
@@ -1262,13 +1263,13 @@ let type_keyword (meta : Meta.meta) =
   match !backend with
   | FStar -> "Type0"
   | Coq | Lean -> "Type"
-  | HOL4 -> craise meta "Unexpected"
+  | HOL4 -> craise __FILE__ __LINE__ meta "Unexpected"
 
 (** Helper *)
 let name_last_elem_as_ident (meta : Meta.meta) (n : llbc_name) : string =
   match Collections.List.last n with
   | PeIdent (s, _) -> s
-  | PeImpl _ -> craise meta "Unexpected"
+  | PeImpl _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 (** Helper
 
@@ -1284,7 +1285,7 @@ let ctx_prepare_name (meta : Meta.meta) (ctx : extraction_ctx)
   | (PeIdent (crate, _) as id) :: name ->
       if crate = ctx.crate.name then name else id :: name
   | _ ->
-      craise meta
+      craise __FILE__ __LINE__ meta
         ("Unexpected name shape: "
         ^ TranslateCore.name_to_string ctx.trans_ctx name)
 
@@ -1597,7 +1598,7 @@ let ctx_compute_termination_measure_name (meta : Meta.meta)
     match !Config.backend with
     | FStar -> "_decreases"
     | Lean -> "_terminates"
-    | Coq | HOL4 -> craise meta "Unexpected"
+    | Coq | HOL4 -> craise __FILE__ __LINE__ meta "Unexpected"
   in
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
@@ -1625,7 +1626,7 @@ let ctx_compute_decreases_proof_name (meta : Meta.meta) (ctx : extraction_ctx)
   let suffix =
     match !Config.backend with
     | Lean -> "_decreases"
-    | FStar | Coq | HOL4 -> craise meta "Unexpected"
+    | FStar | Coq | HOL4 -> craise __FILE__ __LINE__ meta "Unexpected"
   in
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
@@ -1656,7 +1657,7 @@ let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx)
     let cl = to_snake_case name in
     let cl = String.split_on_char '_' cl in
     let cl = List.filter (fun s -> String.length s > 0) cl in
-    sanity_check (List.length cl > 0) meta;
+    sanity_check __FILE__ __LINE__ (List.length cl > 0) meta;
     let cl = List.map (fun s -> s.[0]) cl in
     StringUtils.string_of_chars cl
   in
@@ -1936,7 +1937,7 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Sanity check: the function should not be a global body - those are handled
    * separately *)
-  sanity_check (not def.is_global_decl_body) def.meta;
+  sanity_check __FILE__ __LINE__ (not def.is_global_decl_body) def.meta;
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
   (* Add the function name *)

@@ -27,7 +27,7 @@ let reorder_loans_borrows_in_fresh_abs (meta : Meta.meta)
       match av.value with
       | ABorrow _ -> true
       | ALoan _ -> false
-      | _ -> craise meta "Unexpected"
+      | _ -> craise __FILE__ __LINE__ meta "Unexpected"
     in
     let aborrows, aloans = List.partition is_borrow abs.avalues in
 
@@ -40,13 +40,13 @@ let reorder_loans_borrows_in_fresh_abs (meta : Meta.meta)
     let get_borrow_id (av : typed_avalue) : BorrowId.id =
       match av.value with
       | ABorrow (AMutBorrow (bid, _) | ASharedBorrow bid) -> bid
-      | _ -> craise meta "Unexpected"
+      | _ -> craise __FILE__ __LINE__ meta "Unexpected"
     in
     let get_loan_id (av : typed_avalue) : BorrowId.id =
       match av.value with
       | ALoan (AMutLoan (lid, _)) -> lid
       | ALoan (ASharedLoan (lids, _, _)) -> BorrowId.Set.min_elt lids
-      | _ -> craise meta "Unexpected"
+      | _ -> craise __FILE__ __LINE__ meta "Unexpected"
     in
     (* We use ordered maps to reorder the borrows and loans *)
     let reorder (get_bid : typed_avalue -> BorrowId.id)
@@ -316,8 +316,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta)
   *)
   let merge_amut_borrows id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
-    sanity_check (is_aignored child0.value) meta;
-    sanity_check (is_aignored child1.value) meta;
+    sanity_check __FILE__ __LINE__ (is_aignored child0.value) meta;
+    sanity_check __FILE__ __LINE__ (is_aignored child1.value) meta;
 
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
@@ -335,8 +335,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
       let _, ty1, _ = ty_as_ref ty1 in
-      sanity_check (not (ty_has_borrows ctx.type_ctx.type_infos ty0)) meta;
-      sanity_check (not (ty_has_borrows ctx.type_ctx.type_infos ty1)) meta
+      sanity_check __FILE__ __LINE__ (not (ty_has_borrows ctx.type_ctx.type_infos ty0)) meta;
+      sanity_check __FILE__ __LINE__ (not (ty_has_borrows ctx.type_ctx.type_infos ty1)) meta
     in
 
     (* Same remarks as for [merge_amut_borrows] *)
@@ -347,8 +347,8 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta)
 
   let merge_amut_loans id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
-    sanity_check (is_aignored child0.value) meta;
-    sanity_check (is_aignored child1.value) meta;
+    sanity_check __FILE__ __LINE__ (is_aignored child0.value) meta;
+    sanity_check __FILE__ __LINE__ (is_aignored child1.value) meta;
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let child = child0 in
@@ -358,15 +358,15 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta)
   let merge_ashared_loans ids ty0 (sv0 : typed_value) child0 _ty1
       (sv1 : typed_value) child1 =
     (* Sanity checks *)
-    sanity_check (is_aignored child0.value) meta;
-    sanity_check (is_aignored child1.value) meta;
+    sanity_check __FILE__ __LINE__ (is_aignored child0.value) meta;
+    sanity_check __FILE__ __LINE__ (is_aignored child1.value) meta;
     (* Same remarks as for [merge_amut_borrows].
 
        This time we need to also merge the shared values. We rely on the
        join matcher [JM] to do so.
     *)
-    sanity_check (not (value_has_loans_or_borrows ctx sv0.value)) meta;
-    sanity_check (not (value_has_loans_or_borrows ctx sv1.value)) meta;
+    sanity_check __FILE__ __LINE__ (not (value_has_loans_or_borrows ctx sv0.value)) meta;
+    sanity_check __FILE__ __LINE__ (not (value_has_loans_or_borrows ctx sv1.value)) meta;
     let ty = ty0 in
     let child = child0 in
     let sv = M.match_typed_values ctx ctx sv0 sv1 in
@@ -398,7 +398,7 @@ let collapse_ctx_with_merge (meta : Meta.meta) (loop_id : LoopId.id)
     (old_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs meta loop_id ctx in
   try collapse_ctx meta loop_id (Some merge_funs) old_ids ctx
-  with ValueMatchFailure _ -> craise meta "Unexpected"
+  with ValueMatchFailure _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update =
@@ -435,16 +435,16 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       match ee with
       | EBinding (BVar _, _) ->
           (* Variables are necessarily in the prefix *)
-          craise meta "Unreachable"
+          craise __FILE__ __LINE__ meta "Unreachable"
       | EBinding (BDummy did, _) ->
-          sanity_check (not (DummyVarId.Set.mem did fixed_ids.dids)) meta
+          sanity_check __FILE__ __LINE__ (not (DummyVarId.Set.mem did fixed_ids.dids)) meta
       | EAbs abs ->
-          sanity_check
+          sanity_check __FILE__ __LINE__
             (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
             meta
       | EFrame ->
           (* This should have been eliminated *)
-          craise meta "Unreachable"
+          craise __FILE__ __LINE__ meta "Unreachable"
     in
     List.iter check_valid env0;
     List.iter check_valid env1;
@@ -481,7 +481,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
            are not in the prefix anymore *)
         if DummyVarId.Set.mem b0 fixed_ids.dids then (
           (* Still in the prefix: match the values *)
-          cassert (b0 = b1) meta
+          cassert __FILE__ __LINE__ (b0 = b1) meta
             "Bindings are not the same. We are not in the prefix anymore";
           let b = b0 in
           let v = M.match_typed_values ctx0 ctx1 v0 v1 in
@@ -504,7 +504,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
         (* Variable bindings *must* be in the prefix and consequently their
            ids must be the same *)
-        cassert (b0 = b1) meta
+        cassert __FILE__ __LINE__ (b0 = b1) meta
           "Variable bindings *must* be in the prefix and consequently their\n\
           \        ids must be the same";
         (* Match the values *)
@@ -527,7 +527,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
           (* Still in the prefix: the abstractions must be the same *)
-          cassert (abs0 = abs1) meta "The abstractions are not the same";
+          cassert __FILE__ __LINE__ (abs0 = abs1) meta "The abstractions are not the same";
           (* Continue *)
           abs :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)
@@ -542,7 +542,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     let env0, env1 =
       match (env0, env1) with
       | EFrame :: env0, EFrame :: env1 -> (env0, env1)
-      | _ -> craise meta "Unreachable"
+      | _ -> craise __FILE__ __LINE__ meta "Unreachable"
     in
 
     log#ldebug
@@ -682,7 +682,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (meta : Meta.meta)
           | LoansInRight bids ->
               InterpreterBorrows.end_borrows_no_synth config meta bids ctx
           | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
-              craise meta "Unexpected"
+              craise __FILE__ __LINE__ meta "Unexpected"
         in
         join_one_aux ctx
   in

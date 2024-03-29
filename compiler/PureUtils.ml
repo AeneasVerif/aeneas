@@ -78,7 +78,7 @@ let fun_sig_info_is_wf (info : fun_sig_info) : bool =
 let dest_arrow_ty (meta : Meta.meta) (ty : ty) : ty * ty =
   match ty with
   | TArrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
-  | _ -> craise meta "Not an arrow type"
+  | _ -> craise __FILE__ __LINE__ meta "Not an arrow type"
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
@@ -227,7 +227,7 @@ let rec let_group_requires_parentheses (meta : Meta.meta) (e : texpression) :
       true
   | Loop _ ->
       (* Should have been eliminated *)
-      craise meta "Unreachable"
+      craise __FILE__ __LINE__ meta "Unreachable"
 
 let texpression_requires_parentheses meta e =
   match !Config.backend with
@@ -238,7 +238,7 @@ let is_var (e : texpression) : bool =
   match e.e with Var _ -> true | _ -> false
 
 let as_var (meta : Meta.meta) (e : texpression) : VarId.id =
-  match e.e with Var v -> v | _ -> craise meta "Not a var"
+  match e.e with Var v -> v | _ -> craise __FILE__ __LINE__ meta "Not a var"
 
 let is_cvar (e : texpression) : bool =
   match e.e with CVar _ -> true | _ -> false
@@ -252,7 +252,7 @@ let is_const (e : texpression) : bool =
 let ty_as_adt (meta : Meta.meta) (ty : ty) : type_id * generic_args =
   match ty with
   | TAdt (id, generics) -> (id, generics)
-  | _ -> craise meta "Not an ADT"
+  | _ -> craise __FILE__ __LINE__ meta "Not an ADT"
 
 (** Remove the external occurrences of {!Meta} *)
 let rec unmeta (e : texpression) : texpression =
@@ -295,7 +295,7 @@ let destruct_lets_no_interleave (meta : Meta.meta) (e : texpression) :
   let m =
     match e.e with
     | Let (monadic, _, _, _) -> monadic
-    | _ -> craise meta "Not a let-binding"
+    | _ -> craise __FILE__ __LINE__ meta "Not a let-binding"
   in
   (* Destruct the rest *)
   let rec destruct_lets (e : texpression) :
@@ -325,7 +325,7 @@ let destruct_apps (e : texpression) : texpression * texpression list =
 let mk_app (meta : Meta.meta) (app : texpression) (arg : texpression) :
     texpression =
   let raise_or_return msg =
-    save_error (Some meta) msg;
+    save_error __FILE__ __LINE__ (Some meta) msg;
     let e = App (app, arg) in
     (* Dummy type - TODO: introduce an error type *)
     let ty = app.ty in
@@ -373,8 +373,8 @@ let opt_destruct_function_call (e : texpression) :
 let opt_destruct_result (meta : Meta.meta) (ty : ty) : ty option =
   match ty with
   | TAdt (TAssumed TResult, generics) ->
-      sanity_check (generics.const_generics = []) meta;
-      sanity_check (generics.trait_refs = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.trait_refs = []) meta;
       Some (Collections.List.to_cons_nil generics.types)
   | _ -> None
 
@@ -384,15 +384,15 @@ let destruct_result (meta : Meta.meta) (ty : ty) : ty =
 let opt_destruct_tuple (meta : Meta.meta) (ty : ty) : ty list option =
   match ty with
   | TAdt (TTuple, generics) ->
-      sanity_check (generics.const_generics = []) meta;
-      sanity_check (generics.trait_refs = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.trait_refs = []) meta;
       Some generics.types
   | _ -> None
 
 let destruct_arrow (meta : Meta.meta) (ty : ty) : ty * ty =
   match ty with
   | TArrow (ty0, ty1) -> (ty0, ty1)
-  | _ -> craise meta "Not an arrow type"
+  | _ -> craise __FILE__ __LINE__ meta "Not an arrow type"
 
 let rec destruct_arrows (ty : ty) : ty list * ty =
   match ty with
@@ -430,14 +430,14 @@ let mk_switch (meta : Meta.meta) (scrut : texpression) (sb : switch_body) :
     texpression =
   (* Sanity check: the scrutinee has the proper type *)
   (match sb with
-  | If (_, _) -> sanity_check (scrut.ty = TLiteral TBool) meta
+  | If (_, _) -> sanity_check __FILE__ __LINE__ (scrut.ty = TLiteral TBool) meta
   | Match branches ->
       List.iter
-        (fun (b : match_branch) -> sanity_check (b.pat.ty = scrut.ty) meta)
+        (fun (b : match_branch) -> sanity_check __FILE__ __LINE__ (b.pat.ty = scrut.ty) meta)
         branches);
   (* Sanity check: all the branches have the same type *)
   let ty = get_switch_body_ty sb in
-  iter_switch_body_branches (fun e -> sanity_check (e.ty = ty) meta) sb;
+  iter_switch_body_branches (fun e -> sanity_check __FILE__ __LINE__ (e.ty = ty) meta) sb;
   (* Put together *)
   let e = Switch (scrut, sb) in
   { e; ty }
@@ -526,10 +526,10 @@ let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
 let ty_as_integer (meta : Meta.meta) (t : ty) : T.integer_type =
   match t with
   | TLiteral (TInteger int_ty) -> int_ty
-  | _ -> craise meta "Unreachable"
+  | _ -> craise __FILE__ __LINE__ meta "Unreachable"
 
 let ty_as_literal (meta : Meta.meta) (t : ty) : T.literal_type =
-  match t with TLiteral ty -> ty | _ -> craise meta "Unreachable"
+  match t with TLiteral ty -> ty | _ -> craise __FILE__ __LINE__ meta "Unreachable"
 
 let mk_state_ty : ty = TAdt (TAssumed TState, empty_generic_args)
 
@@ -552,7 +552,7 @@ let unwrap_result_ty (meta : Meta.meta) (ty : ty) : ty =
       ( TAssumed TResult,
         { types = [ ty ]; const_generics = []; trait_refs = [] } ) ->
       ty
-  | _ -> craise meta "not a result type"
+  | _ -> craise __FILE__ __LINE__ meta "not a result type"
 
 let mk_result_fail_texpression (meta : Meta.meta) (error : texpression)
     (ty : ty) : texpression =

@@ -144,7 +144,7 @@ let reorder_loans_borrows_in_fresh_abs (meta : Meta.meta)
       match av.value with
       | ABorrow _ -> true
       | ALoan _ -> false
-      | _ -> craise meta "Unexpected"
+      | _ -> craise __FILE__ __LINE__ meta "Unexpected"
     in
     let aborrows, aloans = List.partition is_borrow abs.avalues in
 
@@ -157,13 +157,13 @@ let reorder_loans_borrows_in_fresh_abs (meta : Meta.meta)
     let get_borrow_id (av : typed_avalue) : BorrowId.id =
       match av.value with
       | ABorrow (AMutBorrow (bid, _) | ASharedBorrow bid) -> bid
-      | _ -> craise meta "Unexpected"
+      | _ -> craise __FILE__ __LINE__ meta "Unexpected"
     in
     let get_loan_id (av : typed_avalue) : BorrowId.id =
       match av.value with
       | ALoan (AMutLoan (lid, _)) -> lid
       | ALoan (ASharedLoan (lids, _, _)) -> BorrowId.Set.min_elt lids
-      | _ -> craise meta "Unexpected"
+      | _ -> craise __FILE__ __LINE__ meta "Unexpected"
     in
     (* We use ordered maps to reorder the borrows and loans *)
     let reorder (get_bid : typed_avalue -> BorrowId.id)
@@ -268,12 +268,12 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) :
     borrow_substs := (lid, nlid) :: !borrow_substs;
 
     (* Rem.: the below sanity checks are not really necessary *)
-    sanity_check (AbstractionId.Set.is_empty abs.parents) meta;
-    sanity_check (abs.original_parents = []) meta;
-    sanity_check (RegionId.Set.is_empty abs.ancestors_regions) meta;
+    sanity_check __FILE__ __LINE__ (AbstractionId.Set.is_empty abs.parents) meta;
+    sanity_check __FILE__ __LINE__ (abs.original_parents = []) meta;
+    sanity_check __FILE__ __LINE__ (RegionId.Set.is_empty abs.ancestors_regions) meta;
 
     (* Introduce the new abstraction for the shared values *)
-    cassert (ty_no_regions sv.ty) meta "Nested borrows are not supported yet";
+    cassert __FILE__ __LINE__ (ty_no_regions sv.ty) meta "Nested borrows are not supported yet";
     let rty = sv.ty in
 
     (* Create the shared loan child *)
@@ -324,7 +324,7 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) :
   let collect_shared_values_in_abs (abs : abs) : unit =
     let collect_shared_value lids (sv : typed_value) =
       (* Sanity check: we don't support nested borrows for now *)
-      sanity_check (not (value_has_borrows ctx sv.value)) meta;
+      sanity_check __FILE__ __LINE__ (not (value_has_borrows ctx sv.value)) meta;
 
       (* Filter the loan ids whose corresponding borrows appear in abstractions
          (see the documentation of the function) *)
@@ -358,7 +358,7 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) :
             TODO: implement this more general behavior.
          *)
         method! visit_symbolic_value env sv =
-          cassert
+          cassert __FILE__ __LINE__
             (not (symbolic_value_has_borrows ctx sv))
             meta
             "There should be no symbolic values with borrows inside the \
@@ -478,15 +478,15 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
     | Return | Panic | Break _ -> None
     | Unit ->
         (* See the comment in {!eval_loop} *)
-        craise meta "Unreachable"
+        craise __FILE__ __LINE__ meta "Unreachable"
     | Continue i ->
         (* For now we don't support continues to outer loops *)
-        cassert (i = 0) meta "Continues to outer loops not supported yet";
+        cassert __FILE__ __LINE__ (i = 0) meta "Continues to outer loops not supported yet";
         register_ctx ctx;
         None
     | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* We don't support nested loops for now *)
-        craise meta "Nested loops are not supported for now"
+        craise __FILE__ __LINE__ meta "Nested loops are not supported for now"
   in
 
   (* The fixed ids. They are the ids of the original ctx, after we ended
@@ -580,7 +580,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
     log#ldebug (lazy "compute_fixed_point: equiv_ctx:");
     let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
     let check_equivalent = true in
-    let lookup_shared_value _ = craise meta "Unreachable" in
+    let lookup_shared_value _ = craise __FILE__ __LINE__ meta "Unreachable" in
     Option.is_some
       (match_ctxs meta check_equivalent fixed_ids lookup_shared_value
          lookup_shared_value ctx1 ctx2)
@@ -588,7 +588,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
   let rec compute_fixed_point (ctx : eval_ctx) (i0 : int) (i : int) : eval_ctx =
     if i = 0 then
-      craise meta
+      craise __FILE__ __LINE__ meta
         ("Could not compute a loop fixed point in " ^ string_of_int i0
        ^ " iterations")
     else
@@ -639,10 +639,10 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
         method! visit_abs _ abs =
           match abs.kind with
           | Loop (loop_id', _, kind) ->
-              sanity_check (loop_id' = loop_id) meta;
-              sanity_check (kind = LoopSynthInput) meta;
+              sanity_check __FILE__ __LINE__ (loop_id' = loop_id) meta;
+              sanity_check __FILE__ __LINE__ (kind = LoopSynthInput) meta;
               (* The abstractions introduced so far should be endable *)
-              sanity_check (abs.can_end = true) meta;
+              sanity_check __FILE__ __LINE__ (abs.can_end = true) meta;
               add_aid abs.abs_id;
               abs
           | _ -> abs
@@ -675,12 +675,12 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
           None
       | Break _ ->
           (* We enforce that we can't get there: see {!PrePasses.remove_loop_breaks} *)
-          craise meta "Unreachable"
+          craise __FILE__ __LINE__ meta "Unreachable"
       | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
           (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
              For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
           *)
-          craise meta "Unreachable"
+          craise __FILE__ __LINE__ meta "Unreachable"
       | Return ->
           log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop: Return");
           (* Should we consume the return value and pop the frame?
@@ -699,7 +699,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
                 in
                 (* By default, the [SynthInput] abs can't end *)
                 let ctx = ctx_set_abs_can_end meta ctx abs_id true in
-                sanity_check
+                sanity_check __FILE__ __LINE__
                   (let abs = ctx_lookup_abs ctx abs_id in
                    abs.kind = SynthInput rg_id)
                   meta;
@@ -725,7 +725,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
     let _ =
       RegionGroupId.Map.iter
         (fun _ ids ->
-          cassert
+          cassert __FILE__ __LINE__
             (AbstractionId.Set.disjoint !aids_union ids)
             meta
             "The sets of abstractions we need to end per region group are not \
@@ -736,7 +736,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
 
     (* We also check that all the regions need to end - this is not necessary per
        se, but if it doesn't happen it is bizarre and worth investigating... *)
-    sanity_check (AbstractionId.Set.equal !aids_union !fp_aids) meta;
+    sanity_check __FILE__ __LINE__ (AbstractionId.Set.equal !aids_union !fp_aids) meta;
 
     (* Merge the abstractions which need to be merged, and compute the map from
        region id to abstraction id *)
@@ -794,7 +794,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
                     fp := fp';
                     id0 := id0';
                     ()
-                  with ValueMatchFailure _ -> craise meta "Unexpected")
+                  with ValueMatchFailure _ -> craise __FILE__ __LINE__ meta "Unexpected")
                 ids;
               (* Register the mapping *)
               let abs = ctx_lookup_abs !fp !id0 in
@@ -827,8 +827,8 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
         method! visit_abs _ abs =
           match abs.kind with
           | Loop (loop_id', _, kind) ->
-              sanity_check (loop_id' = loop_id) meta;
-              sanity_check (kind = LoopSynthInput) meta;
+              sanity_check __FILE__ __LINE__ (loop_id' = loop_id) meta;
+              sanity_check __FILE__ __LINE__ (kind = LoopSynthInput) meta;
               let kind : abs_kind =
                 if remove_rg_id then Loop (loop_id, None, LoopSynthInput)
                 else abs.kind
@@ -897,7 +897,7 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta)
       match snd (lookup_loan meta ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
       | Abstract (ASharedLoan (_, v, _)) -> v
-      | _ -> craise meta "Unreachable"
+      | _ -> craise __FILE__ __LINE__ meta "Unreachable"
     in
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
     let lookup_in_src id = lookup_shared_loan id src_ctx in
@@ -957,7 +957,7 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta)
           ids.loan_ids
       in
       (* Check that the loan and borrows are related *)
-      sanity_check (BorrowId.Set.equal ids.borrow_ids loan_ids) meta)
+      sanity_check __FILE__ __LINE__ (BorrowId.Set.equal ids.borrow_ids loan_ids) meta)
     new_absl;
 
   (* For every target abstraction (going back to the [list_nth_mut] example,
@@ -1084,7 +1084,7 @@ let compute_fp_ctx_symbolic_values (meta : Meta.meta) (ctx : eval_ctx)
             match snd (lookup_loan meta ek_all bid fp_ctx) with
             | Concrete (VSharedLoan (_, v)) -> v
             | Abstract (ASharedLoan (_, v, _)) -> v
-            | _ -> craise meta "Unreachable"
+            | _ -> craise __FILE__ __LINE__ meta "Unreachable"
           in
           self#visit_typed_value env v
 

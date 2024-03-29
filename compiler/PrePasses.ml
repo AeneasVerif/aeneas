@@ -217,11 +217,11 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
         method! visit_statement entered_loop st =
           match st.content with
           | Loop loop ->
-              cassert (not entered_loop) st.meta
+              cassert __FILE__ __LINE__ (not entered_loop) st.meta
                 "Nested loops are not supported yet";
               { st with content = super#visit_Loop true loop }
           | Break i ->
-              cassert (i = 0) st.meta
+              cassert __FILE__ __LINE__ (i = 0) st.meta
                 "Breaks to outer loops are not supported yet";
               { st with content = nst.content }
           | _ -> super#visit_statement entered_loop st
@@ -238,7 +238,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_Sequence env st1 st2 =
         match st1.content with
         | Loop _ ->
-            sanity_check (statement_has_no_loop_break_continue st2) st2.meta;
+            sanity_check __FILE__ __LINE__ (statement_has_no_loop_break_continue st2) st2.meta;
             (replace_breaks_with st1 st2).content
         | _ -> super#visit_Sequence env st1 st2
     end
@@ -405,7 +405,7 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
         method! visit_statement _ st = super#visit_statement st.meta st
 
         method! visit_var_id meta id =
-          cassert
+          cassert __FILE__ __LINE__
             (not (VarId.Set.mem id !filtered))
             meta
             "Filtered variables should have completely disappeared from the \

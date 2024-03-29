@@ -121,7 +121,7 @@ let assign_to_place (config : config) (meta : Meta.meta) (rv : typed_value)
     let ctx = ctx_push_dummy_var ctx dest_vid mv in
     (* Write to the destination *)
     (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
-    exec_assert
+    exec_assert __FILE__ __LINE__
       (not (bottom_in_value ctx.ended_regions rv))
       meta "The value to move contains bottom";
     (* Update the destination *)
@@ -152,7 +152,7 @@ let eval_assertion_concrete (config : config) (meta : Meta.meta)
         (* Branch *)
         if b = assertion.expected then cf Unit ctx else cf Panic ctx
     | _ ->
-        craise meta
+        craise __FILE__ __LINE__ meta
           ("Expected a boolean, got: "
           ^ typed_value_to_string ~meta:(Some meta) ctx v)
   in
@@ -173,7 +173,7 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
   (* Evaluate the assertion *)
   let eval_assert cf (v : typed_value) : m_fun =
    fun ctx ->
-    sanity_check (v.ty = TLiteral TBool) meta;
+    sanity_check __FILE__ __LINE__ (v.ty = TLiteral TBool) meta;
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
      * know the concrete value of the boolean we test, we use this value
@@ -184,8 +184,8 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
         (* Delegate to the concrete evaluation function *)
         eval_assertion_concrete config meta assertion cf ctx
     | VSymbolic sv ->
-        sanity_check (config.mode = SymbolicMode) meta;
-        sanity_check (sv.sv_ty = TLiteral TBool) meta;
+        sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) meta;
+        sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral TBool) meta;
         (* We continue the execution as if the test had succeeded, and thus
          * perform the symbolic expansion: sv ~~> true.
          * We will of course synthesize an assertion in the generated code
@@ -199,7 +199,7 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
         (* Add the synthesized assertion *)
         S.synthesize_assertion ctx v expr
     | _ ->
-        craise meta
+        craise __FILE__ __LINE__ meta
           ("Expected a boolean, got: "
           ^ typed_value_to_string ~meta:(Some meta) ctx v)
   in
@@ -243,7 +243,7 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
              a variant with all its fields set to {!Bottom}
         *)
         match av.variant_id with
-        | None -> craise meta "Found a struct value while expected an enum"
+        | None -> craise __FILE__ __LINE__ meta "Found a struct value while expected an enum"
         | Some variant_id' ->
             if variant_id' = variant_id then (* Nothing to do *)
               cf Unit ctx
@@ -254,7 +254,7 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
                 | TAdtId def_id ->
                     compute_expanded_bottom_adt_value meta ctx def_id
                       (Some variant_id) generics
-                | _ -> craise meta "Unreachable"
+                | _ -> craise __FILE__ __LINE__ meta "Unreachable"
               in
               assign_to_place config meta bottom_v p (cf Unit) ctx)
     | TAdt ((TAdtId _ as type_id), generics), VBottom ->
@@ -263,11 +263,11 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
           | TAdtId def_id ->
               compute_expanded_bottom_adt_value meta ctx def_id
                 (Some variant_id) generics
-          | _ -> craise meta "Unreachable"
+          | _ -> craise __FILE__ __LINE__ meta "Unreachable"
         in
         assign_to_place config meta bottom_v p (cf Unit) ctx
     | _, VSymbolic _ ->
-        sanity_check (config.mode = SymbolicMode) meta;
+        sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) meta;
         (* This is a bit annoying: in theory we should expand the symbolic value
          * then set the discriminant, because in the case the discriminant is
          * exactly the one we set, the fields are left untouched, and in the
@@ -275,9 +275,9 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
          * For now, we forbid setting the discriminant of a symbolic value:
          * setting a discriminant should only be used to initialize a value,
          * or reset an already initialized value, really. *)
-        craise meta "Unexpected value"
-    | _, (VAdt _ | VBottom) -> craise meta "Inconsistent state"
-    | _, (VLiteral _ | VBorrow _ | VLoan _) -> craise meta "Unexpected value"
+        craise __FILE__ __LINE__ meta "Unexpected value"
+    | _, (VAdt _ | VBottom) -> craise __FILE__ __LINE__ meta "Inconsistent state"
+    | _, (VLiteral _ | VBorrow _ | VLoan _) -> craise __FILE__ __LINE__ meta "Unexpected value"
   in
   (* Compose and apply *)
   comp cc update_value cf ctx
@@ -294,13 +294,13 @@ let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
  *)
 let get_assumed_function_return_type (meta : Meta.meta) (ctx : eval_ctx)
     (fid : assumed_fun_id) (generics : generic_args) : ety =
-  sanity_check (generics.trait_refs = []) meta;
+  sanity_check __FILE__ __LINE__ (generics.trait_refs = []) meta;
   (* [Box::free] has a special treatment *)
   match fid with
   | BoxFree ->
-      sanity_check (generics.regions = []) meta;
-      sanity_check (List.length generics.types = 1) meta;
-      sanity_check (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.regions = []) meta;
+      sanity_check __FILE__ __LINE__ (List.length generics.types = 1) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
       mk_unit_ty
   | _ ->
       (* Retrieve the function's signature *)
@@ -337,7 +337,7 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
   let ret_vid = VarId.zero in
   let rec list_locals env =
     match env with
-    | [] -> craise meta "Inconsistent environment"
+    | [] -> craise __FILE__ __LINE__ meta "Inconsistent environment"
     | EAbs _ :: env -> list_locals env
     | EBinding (BDummy _, _) :: env -> list_locals env
     | EBinding (BVar var, _) :: env ->
@@ -361,7 +361,7 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
         match ret_value with
         | None -> ()
         | Some ret_value ->
-            sanity_check
+            sanity_check __FILE__ __LINE__
               (not (bottom_in_value ctx.ended_regions ret_value))
               meta)
   in
@@ -394,7 +394,7 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
    * no outer loans) as dummy variables in the caller frame *)
   let rec pop env =
     match env with
-    | [] -> craise meta "Inconsistent environment"
+    | [] -> craise __FILE__ __LINE__ meta "Inconsistent environment"
     | EAbs abs :: env -> EAbs abs :: pop env
     | EBinding (_, v) :: env ->
         let vid = fresh_dummy_var_id () in
@@ -434,7 +434,7 @@ let eval_box_new_concrete (config : config) (meta : Meta.meta)
       :: EBinding (_ret_var, _)
       :: EFrame :: _ ) ->
       (* Required type checking *)
-      cassert (input_value.ty = boxed_ty) meta "TODO: Error message";
+      cassert __FILE__ __LINE__ (input_value.ty = boxed_ty) meta "TODO: Error message";
 
       (* Move the input value *)
       let cf_move =
@@ -461,7 +461,7 @@ let eval_box_new_concrete (config : config) (meta : Meta.meta)
 
       (* Compose and apply *)
       comp cf_move cf_create cf ctx
-  | _ -> craise meta "Inconsistent state"
+  | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
 
 (** Auxiliary function - see {!eval_assumed_function_call}.
 
@@ -492,7 +492,7 @@ let eval_box_free (config : config) (meta : Meta.meta) (generics : generic_args)
         InterpreterPaths.read_place meta Write input_box_place ctx
       in
       (let input_ty = ty_get_box input_box.ty in
-       sanity_check (input_ty = boxed_ty))
+       sanity_check __FILE__ __LINE__ (input_ty = boxed_ty))
         meta;
 
       (* Drop the value *)
@@ -503,7 +503,7 @@ let eval_box_free (config : config) (meta : Meta.meta) (generics : generic_args)
 
       (* Continue *)
       cc cf ctx
-  | _ -> craise meta "Inconsistent state"
+  | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
 
 (** Evaluate a non-local function call in concrete mode *)
 let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
@@ -513,12 +513,12 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
   match call.func with
   | FnOpMove _ ->
       (* Closure case: TODO *)
-      craise meta "Closures are not supported yet"
+      craise __FILE__ __LINE__ meta "Closures are not supported yet"
   | FnOpRegular func -> (
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
-      sanity_check (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
       (* There are two cases (and this is extremely annoying):
          - the function is not box_free
          - the function is box_free
@@ -571,11 +571,11 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
               | BoxNew -> eval_box_new_concrete config meta generics
               | BoxFree ->
                   (* Should have been treated above *)
-                  craise meta "Unreachable"
+                  craise __FILE__ __LINE__ meta "Unreachable"
               | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
               | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
                 ->
-                  craise meta "Unimplemented"
+                  craise __FILE__ __LINE__ meta "Unimplemented"
             in
 
             let cc = comp cc cf_eval_body in
@@ -755,7 +755,7 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
   match call.func with
   | FnOpMove _ ->
       (* Closure case: TODO *)
-      craise meta "Closures are not supported yet"
+      craise __FILE__ __LINE__ meta "Closures are not supported yet"
   | FnOpRegular func -> (
       match func.func with
       | FunId (FRegular fid) ->
@@ -779,7 +779,7 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
           (func.func, func.generics, None, def, regions_hierarchy, inst_sg)
       | FunId (FAssumed _) ->
           (* Unreachable: must be a transparent function *)
-          craise meta "Unreachable"
+          craise __FILE__ __LINE__ meta "Unreachable"
       | TraitMethod (trait_ref, method_name, _) -> (
           log#ldebug
             (lazy
@@ -839,7 +839,7 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
               | None ->
                   (* If not found, lookup the methods provided by the trait *declaration*
                      (remember: for now, we forbid overriding provided methods) *)
-                  cassert
+                  cassert __FILE__ __LINE__
                     (trait_impl.provided_methods = [])
                     meta "Overriding provided methods is currently forbidden";
                   let trait_decl =
@@ -996,7 +996,7 @@ let rec eval_statement (config : config) (st : statement) : st_cm_fun =
                    * also it can lead to issues - for instance, if we borrow a
                    * reserved borrow, we later can't translate it to pure values...) *)
                   match rvalue with
-                  | Global _ -> craise st.meta "Unreachable"
+                  | Global _ -> craise __FILE__ __LINE__ st.meta "Unreachable"
                   | Use _
                   | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
                   | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ ->
@@ -1063,7 +1063,7 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      cassert (ty_no_regions global.ty) global.meta
+      cassert __FILE__ __LINE__ (ty_no_regions global.ty) global.meta
         "Const globals should not contain regions";
       (* Instantiate the type  *)
       (* There shouldn't be any reference to Self *)
@@ -1125,7 +1125,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
               expand_symbolic_bool config meta sv
                 (S.mk_opt_place_from_op meta op ctx)
                 cf_true cf_false cf ctx
-          | _ -> craise meta "Inconsistent state"
+          | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
         in
         (* Compose *)
         comp cf_eval_op cf_if cf ctx
@@ -1140,7 +1140,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
               (* Evaluate the branch *)
               let cf_eval_branch cf =
                 (* Sanity check *)
-                sanity_check (sv.int_ty = int_ty) meta;
+                sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) meta;
                 (* Find the branch *)
                 match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
                 | None -> eval_statement config otherwise cf
@@ -1172,7 +1172,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
               expand_symbolic_int config meta sv
                 (S.mk_opt_place_from_op meta op ctx)
                 int_ty stgts otherwise cf ctx
-          | _ -> craise meta "Inconsistent state"
+          | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
         in
         (* Compose *)
         comp cf_eval_op cf_switch cf ctx
@@ -1199,7 +1199,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
               match List.find_opt (fun (svl, _) -> List.mem dv svl) stgts with
               | None -> (
                   match otherwise with
-                  | None -> craise meta "No otherwise branch"
+                  | None -> craise __FILE__ __LINE__ meta "No otherwise branch"
                   | Some otherwise -> eval_statement config otherwise cf ctx)
               | Some (_, tgt) -> eval_statement config tgt cf ctx)
           | VSymbolic sv ->
@@ -1211,7 +1211,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
               (* Re-evaluate the switch - the value is not symbolic anymore,
                  which means we will go to the other branch *)
               cf_expand (eval_switch config meta switch) cf ctx
-          | _ -> craise meta "Inconsistent state"
+          | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
         in
         (* Compose *)
         comp cf_read_p cf_match cf ctx
@@ -1235,7 +1235,7 @@ and eval_function_call_concrete (config : config) (meta : Meta.meta)
     (call : call) : st_cm_fun =
  fun cf ctx ->
   match call.func with
-  | FnOpMove _ -> craise meta "Closures are not supported yet"
+  | FnOpMove _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
   | FnOpRegular func -> (
       match func.func with
       | FunId (FRegular fid) ->
@@ -1246,12 +1246,12 @@ and eval_function_call_concrete (config : config) (meta : Meta.meta)
            * where we haven't panicked. Of course, the translation needs to take the
            * panic case into account... *)
           eval_assumed_function_call_concrete config meta fid call (cf Unit) ctx
-      | TraitMethod _ -> craise meta "Unimplemented")
+      | TraitMethod _ -> craise __FILE__ __LINE__ meta "Unimplemented")
 
 and eval_function_call_symbolic (config : config) (meta : Meta.meta)
     (call : call) : st_cm_fun =
   match call.func with
-  | FnOpMove _ -> craise meta "Closures are not supported yet"
+  | FnOpMove _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
   | FnOpRegular func -> (
       match func.func with
       | FunId (FRegular _) | TraitMethod _ ->
@@ -1265,12 +1265,12 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
   let args = call.args in
   let dest = call.dest in
   match call.func with
-  | FnOpMove _ -> craise meta "Closures are not supported yet"
+  | FnOpMove _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
   | FnOpRegular func ->
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
-      sanity_check (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
       fun cf ctx ->
         (* Retrieve the (correctly instantiated) body *)
         let def = ctx_lookup_fun_decl ctx fid in
@@ -1278,13 +1278,13 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
         let body =
           match def.body with
           | None ->
-              craise meta
+              craise __FILE__ __LINE__ meta
                 ("Can't evaluate a call to an opaque function: "
                 ^ name_to_string ctx def.name)
           | Some body -> body
         in
         (* TODO: we need to normalize the types if we want to correctly support traits *)
-        cassert (generics.trait_refs = []) body.meta
+        cassert __FILE__ __LINE__ (generics.trait_refs = []) body.meta
           "Traits are not supported yet in concrete mode";
         (* There shouldn't be any reference to Self *)
         let tr_self = UnknownTrait __FUNCTION__ in
@@ -1294,7 +1294,7 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
         let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
         (* Evaluate the input operands *)
-        sanity_check (List.length args = body.arg_count) body.meta;
+        sanity_check __FILE__ __LINE__ (List.length args = body.arg_count) body.meta;
         let cc = eval_operands config body.meta args in
 
         (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
@@ -1307,7 +1307,7 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
         let ret_var, locals =
           match locals with
           | ret_ty :: locals -> (ret_ty, locals)
-          | _ -> craise meta "Unreachable"
+          | _ -> craise __FILE__ __LINE__ meta "Unreachable"
         in
         let input_locals, locals =
           Collections.List.split_at locals body.arg_count
@@ -1343,7 +1343,7 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
               pop_frame_assign config meta dest (cf Unit)
           | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
           | EndContinue _ ->
-              craise meta "Unreachable"
+              craise __FILE__ __LINE__ meta "Unreachable"
         in
         let cc = comp cc cf_finish in
 
@@ -1358,7 +1358,7 @@ and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
     eval_transparent_function_call_symbolic_inst meta call ctx
   in
   (* Sanity check *)
-  sanity_check
+  sanity_check __FILE__ __LINE__
     (List.length call.args = List.length def.signature.inputs)
     def.meta;
   (* Evaluate the function call *)
@@ -1418,7 +1418,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     let args_with_rtypes = List.combine args inst_sg.inputs in
 
     (* Check the type of the input arguments *)
-    cassert
+    cassert __FILE__ __LINE__
       (List.for_all
          (fun ((arg, rty) : typed_value * rty) ->
            arg.ty = Subst.erase_regions rty)
@@ -1428,7 +1428,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
      * be fed to functions (i.e., symbolic values output from function return
      * values and which contain borrows of borrows can't be used as function
      * inputs *)
-    sanity_check
+    sanity_check __FILE__ __LINE__
       (List.for_all
          (fun arg ->
            not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
@@ -1536,7 +1536,7 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
   let dest = call.dest in
   (* Sanity check: make sure the type parameters don't contain regions -
    * this is a current limitation of our synthesis *)
-  sanity_check
+  sanity_check __FILE__ __LINE__
     (List.for_all
        (fun ty -> not (ty_has_borrows ctx.type_ctx.type_infos ty))
        generics.types)
@@ -1561,7 +1561,7 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
         match fid with
         | BoxFree ->
             (* Should have been treated above *)
-            craise meta "Unreachable"
+            craise __FILE__ __LINE__ meta "Unreachable"
         | _ ->
             let regions_hierarchy =
               LlbcAstUtils.FunIdMap.find (FAssumed fid)

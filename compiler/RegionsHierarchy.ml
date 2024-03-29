@@ -108,8 +108,8 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option)
 
   let add_edge ~(short : region) ~(long : region) =
     (* Sanity checks *)
-    sanity_check_opt_meta (short <> RErased) meta;
-    sanity_check_opt_meta (long <> RErased) meta;
+    sanity_check_opt_meta __FILE__ __LINE__ (short <> RErased) meta;
+    sanity_check_opt_meta __FILE__ __LINE__ (long <> RErased) meta;
     (* Ignore the locally bound regions (at the level of arrow types for instance *)
     match (short, long) with
     | RBVar _, _ | _, RBVar _ -> ()
@@ -175,14 +175,14 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option)
     | TTraitType (trait_ref, _) ->
         (* The trait should reference a clause, and not an implementation
            (otherwise it should have been normalized) *)
-        sanity_check_opt_meta
+        sanity_check_opt_meta __FILE__ __LINE__
           (AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id)
           meta;
         (* We have nothing to do *)
         ()
     | TArrow (regions, inputs, output) ->
         (* TODO: *)
-        cassert_opt_meta (regions = []) meta
+        cassert_opt_meta __FILE__ __LINE__ (regions = []) meta
           "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
         List.iter (explore_ty []) (output :: inputs)
@@ -226,7 +226,7 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option)
         (SccId.Map.bindings sccs.sccs)
     in
     (* The SCC should only contain the 'static *)
-    sanity_check_opt_meta (static_scc = [ RStatic ]) meta;
+    sanity_check_opt_meta __FILE__ __LINE__ (static_scc = [ RStatic ]) meta;
     (* Remove the group as well as references to this group from the
        other SCCs *)
     let { sccs; scc_deps } = sccs in
@@ -282,7 +282,7 @@ let compute_regions_hierarchy_for_sig (meta : Meta.meta option)
           (fun r ->
             match r with
             | RFVar rid -> RegionId.Map.find rid region_id_to_var_map
-            | _ -> craise (Option.get meta) "Unreachable")
+            | _ -> craise __FILE__ __LINE__ (Option.get meta) "Unreachable")
           scc
       in
 

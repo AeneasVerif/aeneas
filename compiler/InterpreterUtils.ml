@@ -21,7 +21,7 @@ let get_cf_ctx_no_synth (meta : Meta.meta) (f : cm_fun) (ctx : eval_ctx) :
     eval_ctx =
   let nctx = ref None in
   let cf ctx =
-    sanity_check (!nctx = None) meta;
+    sanity_check __FILE__ __LINE__ (!nctx = None) meta;
     nctx := Some ctx;
     None
   in
@@ -85,19 +85,19 @@ let mk_place_from_var_id (var_id : VarId.id) : place =
 (** Create a fresh symbolic value *)
 let mk_fresh_symbolic_value (meta : Meta.meta) (ty : ty) : symbolic_value =
   (* Sanity check *)
-  sanity_check (ty_is_rty ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue
 
 let mk_fresh_symbolic_value_from_no_regions_ty (meta : Meta.meta) (ty : ty) :
     symbolic_value =
-  sanity_check (ty_no_regions ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_no_regions ty) meta;
   mk_fresh_symbolic_value meta ty
 
 (** Create a fresh symbolic value *)
 let mk_fresh_symbolic_typed_value (meta : Meta.meta) (rty : ty) : typed_value =
-  sanity_check (ty_is_rty rty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty rty) meta;
   let ty = Substitute.erase_regions rty in
   (* Generate the fresh a symbolic value *)
   let value = mk_fresh_symbolic_value meta rty in
@@ -106,7 +106,7 @@ let mk_fresh_symbolic_typed_value (meta : Meta.meta) (rty : ty) : typed_value =
 
 let mk_fresh_symbolic_typed_value_from_no_regions_ty (meta : Meta.meta)
     (ty : ty) : typed_value =
-  sanity_check (ty_no_regions ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_no_regions ty) meta;
   mk_fresh_symbolic_typed_value meta ty
 
 (** Create a typed value from a symbolic value. *)
@@ -136,7 +136,7 @@ let mk_aproj_loans_value_from_symbolic_value (regions : RegionId.Set.t)
 let mk_aproj_borrows_from_symbolic_value (meta : Meta.meta)
     (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
     aproj =
-  sanity_check (ty_is_rty proj_ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) meta;
   if ty_has_regions_in_set proj_regions proj_ty then
     AProjBorrows (svalue, proj_ty)
   else AIgnoredProjBorrows
@@ -162,7 +162,7 @@ let remove_borrow_from_asb (meta : Meta.meta) (bid : BorrowId.id)
           false))
       asb
   in
-  sanity_check (!removed = 1) meta;
+  sanity_check __FILE__ __LINE__ (!removed = 1) meta;
   asb
 
 (** We sometimes need to return a value whose type may vary depending on
@@ -508,8 +508,8 @@ let instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
   (* Generate the type substitution
      Note that for now we don't support instantiating the type parameters with
      types containing regions. *)
-  sanity_check (List.for_all TypesUtils.ty_no_regions generics.types) meta;
-  sanity_check (TypesUtils.trait_instance_id_no_regions tr_self) meta;
+  sanity_check __FILE__ __LINE__ (List.for_all TypesUtils.ty_no_regions generics.types) meta;
+  sanity_check __FILE__ __LINE__ (TypesUtils.trait_instance_id_no_regions tr_self) meta;
   let tsubst =
     Substitute.make_type_subst_from_vars sg.generics.types generics.types
   in

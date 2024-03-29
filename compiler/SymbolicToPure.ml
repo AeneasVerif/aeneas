@@ -436,7 +436,7 @@ and translate_trait_instance_id (meta : Meta.meta) (translate_ty : T.ty -> ty)
   | TraitImpl id -> TraitImpl id
   | BuiltinOrAuto _ ->
       (* We should have eliminated those in the prepasses *)
-      craise meta "Unreachable"
+      craise __FILE__ __LINE__ meta "Unreachable"
   | Clause id -> Clause id
   | ParentClause (inst_id, decl_id, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
@@ -445,8 +445,8 @@ and translate_trait_instance_id (meta : Meta.meta) (translate_ty : T.ty -> ty)
       let inst_id = translate_trait_instance_id inst_id in
       ItemClause (inst_id, decl_id, item_name, clause_id)
   | TraitRef tr -> TraitRef (translate_trait_ref meta translate_ty tr)
-  | FnPointer _ | Closure _ -> craise meta "Closures are not supported yet"
-  | UnknownTrait s -> craise meta ("Unknown trait found: " ^ s)
+  | FnPointer _ | Closure _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
+  | UnknownTrait s -> craise __FILE__ __LINE__ meta ("Unknown trait found: " ^ s)
 
 (** Translate a signature type - TODO: factor out the different translation functions *)
 let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
@@ -457,7 +457,7 @@ let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
       match type_id with
       | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
       | T.TTuple ->
-          cassert (generics.const_generics = []) meta "TODO: error message";
+          cassert __FILE__ __LINE__ (generics.const_generics = []) meta "TODO: error message";
           mk_simpl_tuple_ty generics.types
       | T.TAssumed aty -> (
           match aty with
@@ -466,14 +466,14 @@ let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
               match generics.types with
               | [ ty ] -> ty
               | _ ->
-                  craise meta
+                  craise __FILE__ __LINE__ meta
                     "Box/vec/option type with incorrect number of arguments")
           | T.TArray -> TAdt (TAssumed TArray, generics)
           | T.TSlice -> TAdt (TAssumed TSlice, generics)
           | T.TStr -> TAdt (TAssumed TStr, generics)))
   | TVar vid -> TVar vid
   | TLiteral ty -> TLiteral ty
-  | TNever -> craise meta "Unreachable"
+  | TNever -> craise __FILE__ __LINE__ meta "Unreachable"
   | TRef (_, rty, _) -> translate meta rty
   | TRawPtr (ty, rkind) ->
       let mut = match rkind with RMut -> Mut | RShared -> Const in
@@ -483,7 +483,7 @@ let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_strait_ref meta trait_ref in
       TTraitType (trait_ref, type_name)
-  | TArrow _ -> craise meta "TODO: error message"
+  | TArrow _ -> craise __FILE__ __LINE__ meta "TODO: error message"
 
 and translate_sgeneric_args (meta : Meta.meta) (generics : T.generic_args) :
     generic_args =
@@ -567,7 +567,7 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let name = Print.Types.name_to_string env def.name in
   let { T.regions; types; const_generics; trait_clauses } = def.generics in
   (* Can't translate types with regions for now *)
-  cassert (regions = []) def.meta
+  cassert __FILE__ __LINE__ (regions = []) def.meta
     "ADTs containing borrows are not supported yet";
   let trait_clauses =
     List.map (translate_trait_clause def.meta) trait_clauses
@@ -601,7 +601,7 @@ let translate_type_id (meta : Meta.meta) (id : T.type_id) : type_id =
         | T.TBox ->
             (* Boxes have to be eliminated: this type id shouldn't
                be translated *)
-            craise meta "Unreachable"
+            craise __FILE__ __LINE__ meta "Unreachable"
       in
       TAssumed aty
   | TTuple -> TTuple
@@ -632,7 +632,7 @@ let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos)
       | TAssumed TBox -> (
           (* We eliminate boxes *)
           (* No general parametricity for now *)
-          cassert
+          cassert __FILE__ __LINE__
             (not
                (List.exists
                   (TypesUtils.ty_has_borrows type_infos)
@@ -641,11 +641,11 @@ let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos)
           match t_generics.types with
           | [ bty ] -> bty
           | _ ->
-              craise meta
+              craise __FILE__ __LINE__ meta
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
   | TVar vid -> TVar vid
-  | TNever -> craise meta "Unreachable"
+  | TNever -> craise __FILE__ __LINE__ meta "Unreachable"
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
@@ -656,7 +656,7 @@ let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos)
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_fwd_trait_ref meta type_infos trait_ref in
       TTraitType (trait_ref, type_name)
-  | TArrow _ -> craise meta "TODO: error message"
+  | TArrow _ -> craise __FILE__ __LINE__ meta "TODO: error message"
 
 and translate_fwd_generic_args (meta : Meta.meta) (type_infos : type_infos)
     (generics : T.generic_args) : generic_args =
@@ -721,14 +721,14 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
             else None
       | TAssumed TBox -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
-          cassert
+          cassert __FILE__ __LINE__
             (not (TypesUtils.ty_has_borrows type_infos ty))
             meta "ADTs containing borrows are not supported yet";
           (* Eliminate the box *)
           match generics.types with
           | [ bty ] -> translate bty
           | _ ->
-              craise meta
+              craise __FILE__ __LINE__ meta
                 "Unreachable: boxes receive exactly one type parameter")
       | TTuple -> (
           (* Tuples can contain borrows (which we eliminate) *)
@@ -740,7 +740,7 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
                * is the identity *)
               Some (mk_simpl_tuple_ty tys_t)))
   | TVar vid -> wrap (TVar vid)
-  | TNever -> craise meta "Unreachable"
+  | TNever -> craise __FILE__ __LINE__ meta "Unreachable"
   | TLiteral lty -> wrap (TLiteral lty)
   | TRef (r, rty, rkind) -> (
       match rkind with
@@ -765,7 +765,7 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
         let trait_ref = translate_fwd_trait_ref meta type_infos trait_ref in
         Some (TTraitType (trait_ref, type_name))
       else None
-  | TArrow _ -> craise meta "TODO: error message"
+  | TArrow _ -> craise __FILE__ __LINE__ meta "TODO: error message"
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
@@ -817,7 +817,7 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (back_funs : texpression option RegionGroupId.Map.t option) (ctx : bs_ctx) :
     bs_ctx =
   let calls = ctx.calls in
-  sanity_check (not (V.FunCallId.Map.mem call_id calls)) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (not (V.FunCallId.Map.mem call_id calls)) ctx.fun_decl.meta;
   let info = { forward; forward_inputs = args; back_funs } in
   let calls = V.FunCallId.Map.add call_id info calls in
   { ctx with calls }
@@ -839,7 +839,7 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   let calls = V.FunCallId.Map.add call_id info ctx.calls in
   (* Insert the abstraction in the abstractions map *)
   let abstractions = ctx.abstractions in
-  sanity_check
+  sanity_check __FILE__ __LINE__
     (not (V.AbstractionId.Map.mem abs.abs_id abstractions))
     ctx.fun_decl.meta;
   let abstractions =
@@ -922,7 +922,7 @@ let compute_raw_fun_effect_info (meta : Meta.meta)
         is_rec = info.is_rec || Option.is_some lid;
       }
   | FunId (FAssumed aid) ->
-      sanity_check (lid = None) meta;
+      sanity_check __FILE__ __LINE__ (lid = None) meta;
       {
         can_fail = Assumed.assumed_fun_can_fail aid;
         stateful_group = false;
@@ -953,14 +953,14 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
       (* This is necessarily for the current function *)
       match fun_id with
       | FunId (FRegular fid) -> (
-          sanity_check (fid = ctx.fun_decl.def_id) ctx.fun_decl.meta;
+          sanity_check __FILE__ __LINE__ (fid = ctx.fun_decl.def_id) ctx.fun_decl.meta;
           (* Lookup the loop *)
           let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
           let loop_info = LoopId.Map.find lid ctx.loops in
           match gid with
           | None -> loop_info.fwd_effect_info
           | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
-      | _ -> craise ctx.fun_decl.meta "Unreachable")
+      | _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
 
 (** Translate a function signature to a decomposed function signature.
 
@@ -1047,8 +1047,8 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
     let keep_region r =
       match r with
       | T.RStatic -> raise Unimplemented
-      | RErased -> craise meta "Unexpected erased region"
-      | RBVar _ -> craise meta "Unexpected bound region"
+      | RErased -> craise __FILE__ __LINE__ meta "Unexpected erased region"
+      | RBVar _ -> craise __FILE__ __LINE__ meta "Unexpected bound region"
       | RFVar rid -> T.RegionId.Set.mem rid gr_regions
     in
     let inside_mut = false in
@@ -1058,7 +1058,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
     (* For now we don't supported nested borrows, so we check that there
        aren't parent regions *)
     let parents = list_ancestor_region_groups regions_hierarchy gid in
-    cassert
+    cassert __FILE__ __LINE__
       (T.RegionGroupId.Set.is_empty parents)
       meta "Nested borrows are not supported yet";
     (* For now, we don't allow nested borrows, so the additional inputs to the
@@ -1217,7 +1217,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
       else false
     in
     let info = { fwd_info; effect_info = fwd_effect_info; ignore_output } in
-    sanity_check (fun_sig_info_is_wf info) meta;
+    sanity_check __FILE__ __LINE__ (fun_sig_info_is_wf info) meta;
     info
   in
 
@@ -1506,7 +1506,7 @@ let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   match V.SymbolicValueId.Map.find_opt sv.sv_id ctx.sv_to_var with
   | Some v -> v
   | None ->
-      craise ctx.fun_decl.meta
+      craise __FILE__ __LINE__ ctx.fun_decl.meta
         ("Could not find var for symbolic value: "
         ^ V.SymbolicValueId.to_string sv.sv_id)
 
@@ -1517,7 +1517,7 @@ let rec unbox_typed_value (meta : Meta.meta) (v : V.typed_value) : V.typed_value
   | V.VAdt av, T.TAdt (T.TAssumed T.TBox, _) -> (
       match av.field_values with
       | [ bv ] -> unbox_typed_value meta bv
-      | _ -> craise meta "Unreachable")
+      | _ -> craise __FILE__ __LINE__ meta "Unreachable")
   | _ -> v
 
 (** Translate a symbolic value.
@@ -1570,7 +1570,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
         | TAdt (TTuple, _) ->
-            sanity_check (variant_id = None) ctx.fun_decl.meta;
+            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.fun_decl.meta;
             mk_simpl_tuple_texpression ctx.fun_decl.meta field_values
         | _ ->
             (* Retrieve the type and the translated generics from the translated
@@ -1587,11 +1587,11 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
             mk_apps ctx.fun_decl.meta cons field_values)
-    | VBottom -> craise ctx.fun_decl.meta "Unreachable"
+    | VBottom -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
     | VLoan lc -> (
         match lc with
         | VSharedLoan (_, v) -> translate v
-        | VMutLoan _ -> craise ctx.fun_decl.meta "Unreachable")
+        | VMutLoan _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
     | VBorrow bc -> (
         match bc with
         | VSharedBorrow bid ->
@@ -1654,7 +1654,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert (field_values = []) ctx.fun_decl.meta
+            cassert __FILE__ __LINE__ (field_values = []) ctx.fun_decl.meta
               "ADTs containing borrows are not supported yet";
             None
         | TTuple ->
@@ -1667,7 +1667,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
                 mk_simpl_tuple_texpression ctx.fun_decl.meta field_values
               in
               Some rv)
-    | ABottom -> craise ctx.fun_decl.meta "Unreachable"
+    | ABottom -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
     | ALoan lc -> aloan_content_to_consumed ctx ectx lc
     | ABorrow bc -> aborrow_content_to_consumed ctx bc
     | ASymbolic aproj -> aproj_to_consumed ctx aproj
@@ -1685,7 +1685,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
     (lc : V.aloan_content) : texpression option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) ->
-      craise ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
   | AEndedMutLoan { child = _; given_back = _; given_back_meta } ->
       (* Return the meta-value *)
       Some (typed_value_to_texpression ctx ectx given_back_meta)
@@ -1697,7 +1697,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
       None
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
-      craise ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -1709,7 +1709,7 @@ and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
     texpression option =
   match bc with
   | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
-      craise _ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ _ctx.fun_decl.meta "Unreachable"
   | AEndedMutBorrow (_, _) ->
       (* We collect consumed values: ignore *)
       None
@@ -1726,7 +1726,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
       (* The symbolic value was left unchanged *)
       Some (symbolic_value_to_texpression ctx msv)
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
-      sanity_check (child_aproj = AIgnoredProjBorrows) ctx.fun_decl.meta;
+      sanity_check __FILE__ __LINE__ (child_aproj = AIgnoredProjBorrows) ctx.fun_decl.meta;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
@@ -1735,7 +1735,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
       raise Unimplemented
   | AEndedProjBorrows _ -> (* We consider consumed values *) None
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
-      craise ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
 
 (** Convert the abstraction values in an abstraction to consumed values.
 
@@ -1801,20 +1801,20 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert (field_values = []) ctx.fun_decl.meta
+            cassert __FILE__ __LINE__ (field_values = []) ctx.fun_decl.meta
               "ADTs with borrows are not supported yet";
             (ctx, None)
         | TTuple ->
             (* Return *)
             let variant_id = adt_v.variant_id in
-            sanity_check (variant_id = None) ctx.fun_decl.meta;
+            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.fun_decl.meta;
             if field_values = [] then (ctx, None)
             else
               (* Note that if there is exactly one field value, [mk_simpl_tuple_pattern]
                * is the identity *)
               let lv = mk_simpl_tuple_pattern field_values in
               (ctx, Some lv))
-    | ABottom -> craise ctx.fun_decl.meta "Unreachable"
+    | ABottom -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
     | ALoan lc -> aloan_content_to_given_back mp lc ctx
     | ABorrow bc -> aborrow_content_to_given_back mp bc ctx
     | ASymbolic aproj -> aproj_to_given_back mp aproj ctx
@@ -1830,14 +1830,14 @@ and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) ->
-      craise ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
   | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
   | AEndedSharedLoan (_, _) ->
       (* We consider given back values, and thus ignore those *)
       (ctx, None)
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
-      craise ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -1849,7 +1849,7 @@ and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match bc with
   | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
-      craise ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta-symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv ctx in
@@ -1867,7 +1867,7 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
   | V.AEndedProjLoans (_, child_projs) ->
       (* There may be children borrow projections in case of nested borrows,
        * in which case we need to dive in - we disallow nested borrows for now *)
-      cassert
+      cassert __FILE__ __LINE__
         (List.for_all
            (fun (_, aproj) -> aproj = V.AIgnoredProjBorrows)
            child_projs)
@@ -1878,7 +1878,7 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
-      craise ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
 
 (** Convert the abstraction values in an abstraction to given back values.
 
@@ -2064,7 +2064,7 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
     | Some _ ->
         (* Backward function *)
         (* Sanity check *)
-        sanity_check (opt_v = None) ctx.fun_decl.meta;
+        sanity_check __FILE__ __LINE__ (opt_v = None) ctx.fun_decl.meta;
         (* Group the variables in which we stored the values we need to give back.
            See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
         let backward_outputs = Option.get ctx.backward_outputs in
@@ -2087,9 +2087,9 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
 
 and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     (ctx : bs_ctx) : texpression =
-  sanity_check (is_continue = ctx.inside_loop) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (is_continue = ctx.inside_loop) ctx.fun_decl.meta;
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta;
 
   (* Lookup the loop information *)
   let loop_id = Option.get ctx.loop_id in
@@ -2229,7 +2229,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                   | PeIdent (s, _) -> s
                   | PeImpl _ ->
                       (* We shouldn't get there *)
-                      craise decl.meta "Unexpected")
+                      craise __FILE__ __LINE__ decl.meta "Unexpected")
             in
             name ^ "_back"
           in
@@ -2333,7 +2333,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Neg int_ty), effect_info, args, dest)
-        | _ -> craise ctx.fun_decl.meta "Unreachable")
+        | _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
     | S.Unop (E.Cast cast_kind) -> (
         match cast_kind with
         | CastScalar (src_ty, tgt_ty) ->
@@ -2350,7 +2350,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, dest)
-        | CastFnPtr _ -> craise ctx.fun_decl.meta "TODO: function casts")
+        | CastFnPtr _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "TODO: function casts")
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -2359,7 +2359,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             (match binop with
             (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
             | E.Shl | E.Shr -> ()
-            | _ -> sanity_check (int_ty0 = int_ty1) ctx.fun_decl.meta);
+            | _ -> sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1) ctx.fun_decl.meta);
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -2372,7 +2372,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Binop (binop, int_ty0), effect_info, args, dest)
-        | _ -> craise ctx.fun_decl.meta "Unreachable")
+        | _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
   in
   let func = { id = FunOrOp fun_id; generics } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
@@ -2429,7 +2429,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      for a parent backward function.
   *)
   let bid = Option.get ctx.bid in
-  sanity_check (rg_id = bid) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (rg_id = bid) ctx.fun_decl.meta;
 
   (* First, introduce the given back variables.
 
@@ -2477,7 +2477,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   if !Config.type_check_pure_code then
     List.iter
       (fun (var, v) ->
-        sanity_check ((var : var).ty = (v : texpression).ty) ctx.fun_decl.meta)
+        sanity_check __FILE__ __LINE__ ((var : var).ty = (v : texpression).ty) ctx.fun_decl.meta)
       variables_values;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2498,7 +2498,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | S.Fun (fun_id, _) -> fun_id
     | Unop _ | Binop _ ->
         (* Those don't have backward functions *)
-        craise ctx.fun_decl.meta "Unreachable"
+        craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
   in
   let effect_info = get_fun_effect_info ctx fun_id None (Some rg_id) in
   (* Retrieve the values consumed upon ending the loans inside this
@@ -2571,8 +2571,8 @@ and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
   (* We can do this simply by checking that it consumes and gives back nothing *)
   let inputs = abs_to_consumed ctx ectx abs in
   let ctx, outputs = abs_to_given_back None abs ctx in
-  sanity_check (inputs = []) ctx.fun_decl.meta;
-  sanity_check (outputs = []) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (inputs = []) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (outputs = []) ctx.fun_decl.meta;
 
   (* Translate the next expression *)
   translate_expression e ctx
@@ -2614,7 +2614,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: as there are no nested borrows, there should be none. *)
   let consumed = abs_to_consumed ctx ectx abs in
-  cassert (consumed = []) ctx.fun_decl.meta
+  cassert __FILE__ __LINE__ (consumed = []) ctx.fun_decl.meta
     "Nested borrows are not supported yet";
   (* Retrieve the values given back upon ending this abstraction - note that
    * we don't provide meta-place information, because those assignments will
@@ -2633,7 +2633,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
           ^ pure_ty_to_string ctx given_back.ty
           ^ "\n- sig input ty: "
           ^ pure_ty_to_string ctx input.ty));
-      sanity_check (given_back.ty = input.ty) ctx.fun_decl.meta)
+      sanity_check __FILE__ __LINE__ (given_back.ty = input.ty) ctx.fun_decl.meta)
     given_back_inputs;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2650,7 +2650,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     texpression =
   let vloop_id = loop_id in
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta;
   let rg_id = Option.get rg_id in
   (* There are two cases depending on the [abs_kind] (whether this is a
      synth input or a regular loop call) *)
@@ -2792,7 +2792,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       | V.SeLiteral _ ->
           (* We do not *register* symbolic expansions to literal
              values in the symbolic ADT *)
-          craise ctx.fun_decl.meta "Unreachable"
+          craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
       | SeMutRef (_, nsv) | SeSharedRef (_, nsv) ->
           (* The (mut/shared) borrow type is extracted to identity: we thus simply
              introduce an reassignment *)
@@ -2805,11 +2805,11 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             next_e
       | SeAdt _ ->
           (* Should be in the [ExpandAdt] case *)
-          craise ctx.fun_decl.meta "Unreachable")
+          craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
   | ExpandAdt branches -> (
       (* We don't do the same thing if there is a branching or not *)
       match branches with
-      | [] -> craise ctx.fun_decl.meta "Unreachable"
+      | [] -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
       | [ (variant_id, svl, branch) ]
         when not
                (TypesUtils.ty_is_custom_adt sv.V.sv_ty
@@ -2848,7 +2848,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let branch = List.hd branches in
           let ty = branch.branch.ty in
           (* Sanity check *)
-          sanity_check
+          sanity_check __FILE__ __LINE__
             (List.for_all (fun br -> br.branch.ty = ty) branches)
             ctx.fun_decl.meta;
           (* Return *)
@@ -2870,7 +2870,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           ^ pure_ty_to_string ctx true_e.ty
           ^ "\n\nfalse_e.ty: "
           ^ pure_ty_to_string ctx false_e.ty));
-      save_error ~b:(ty = false_e.ty) (Some ctx.fun_decl.meta)
+      save_error __FILE__ __LINE__ ~b:(ty = false_e.ty) (Some ctx.fun_decl.meta)
         "Internal error, please file an issue";
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
@@ -2896,7 +2896,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             Match all_branches )
       in
       let ty = otherwise.branch.ty in
-      sanity_check
+      sanity_check __FILE__ __LINE__
         (List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches)
         ctx.fun_decl.meta;
       { e; ty }
@@ -3001,7 +3001,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       let var =
         match vars with
         | [ v ] -> v
-        | _ -> craise ctx.fun_decl.meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
       in
       (* We simply introduce an assignment - the box type is the
        * identity when extracted ([box a = a]) *)
@@ -3015,7 +3015,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
-      craise ctx.fun_decl.meta "Attempt to expand a non-expandable value"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta "Attempt to expand a non-expandable value"
 
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)
@@ -3436,7 +3436,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   in
 
   (* Sanity check: all the non-fresh symbolic values are in the context *)
-  sanity_check
+  sanity_check __FILE__ __LINE__
     (List.for_all
        (fun (sv : V.symbolic_value) ->
          V.SymbolicValueId.Map.mem sv.sv_id ctx.sv_to_var)
@@ -3461,7 +3461,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         (* The types shouldn't contain borrows - we can translate them as forward types *)
         List.map
           (fun ty ->
-            cassert
+            cassert __FILE__ __LINE__
               (not (TypesUtils.ty_has_borrows !ctx.type_ctx.type_infos ty))
               !ctx.fun_decl.meta "The types shouldn't contain borrows";
             ctx_translate_fwd_ty !ctx ty)
@@ -3542,7 +3542,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
 
   (* Add the loop information in the context *)
   let ctx =
-    sanity_check (not (LoopId.Map.mem loop_id ctx.loops)) ctx.fun_decl.meta;
+    sanity_check __FILE__ __LINE__ (not (LoopId.Map.mem loop_id ctx.loops)) ctx.fun_decl.meta;
 
     (* Note that we will retrieve the input values later in the [ForwardEnd]
        (and will introduce the outputs at that moment, together with the actual
@@ -3798,7 +3798,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
                 (List.map (pure_ty_to_string ctx) signature.inputs)));
         (* TODO: we need to normalize the types *)
         if !Config.type_check_pure_code then
-          sanity_check
+          sanity_check __FILE__ __LINE__
             (List.for_all
                (fun (var, ty) -> (var : var).ty = ty)
                (List.combine inputs signature.inputs))

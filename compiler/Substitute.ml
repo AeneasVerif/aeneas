@@ -76,19 +76,19 @@ let ctx_adt_value_get_instantiated_field_types (meta : Meta.meta)
       (* Retrieve the types of the fields *)
       ctx_adt_get_instantiated_field_types ctx id adt.variant_id generics
   | TTuple ->
-      cassert (generics.regions = []) meta
+      cassert __FILE__ __LINE__ (generics.regions = []) meta
         "Regions should be empty TODO: error message";
       generics.types
   | TAssumed aty -> (
       match aty with
       | TBox ->
-          sanity_check (generics.regions = []) meta;
-          sanity_check (List.length generics.types = 1) meta;
-          sanity_check (generics.const_generics = []) meta;
+          sanity_check __FILE__ __LINE__ (generics.regions = []) meta;
+          sanity_check __FILE__ __LINE__ (List.length generics.types = 1) meta;
+          sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
           generics.types
       | TArray | TSlice | TStr ->
           (* Those types don't have fields *)
-          craise meta "Unreachable")
+          craise __FILE__ __LINE__ meta "Unreachable")
 
 (** Substitute a function signature, together with the regions hierarchy
     associated to that signature.
@@ -153,7 +153,7 @@ let typed_value_subst_ids (meta : Meta.meta)
     (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
     (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
     (bsubst : BorrowId.id -> BorrowId.id) (v : typed_value) : typed_value =
-  let asubst _ = craise meta "Unreachable" in
+  let asubst _ = craise __FILE__ __LINE__ meta "Unreachable" in
   let vis = subst_ids_visitor r_subst ty_subst cg_subst ssubst bsubst asubst in
   vis#visit_typed_value () v
 
@@ -172,7 +172,7 @@ let typed_avalue_subst_ids (meta : Meta.meta)
     (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
     (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
     (bsubst : BorrowId.id -> BorrowId.id) (v : typed_avalue) : typed_avalue =
-  let asubst _ = craise meta "Unreachable" in
+  let asubst _ = craise __FILE__ __LINE__ meta "Unreachable" in
   let vis = subst_ids_visitor r_subst ty_subst cg_subst ssubst bsubst asubst in
   vis#visit_typed_avalue () v
 
@@ -196,7 +196,7 @@ let env_subst_ids (r_subst : RegionId.id -> RegionId.id)
 
 let typed_avalue_subst_rids (meta : Meta.meta)
     (r_subst : RegionId.id -> RegionId.id) (x : typed_avalue) : typed_avalue =
-  let asubst _ = craise meta "Unreachable" in
+  let asubst _ = craise __FILE__ __LINE__ meta "Unreachable" in
   let vis =
     subst_ids_visitor r_subst
       (fun x -> x)

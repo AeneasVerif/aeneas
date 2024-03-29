@@ -75,7 +75,7 @@ let borrow_or_abs_ids_chain_to_string (ids : borrow_or_abs_ids) : string =
 let add_borrow_or_abs_id_to_chain (meta : Meta.meta) (msg : string)
     (id : borrow_or_abs_id) (ids : borrow_or_abs_ids) : borrow_or_abs_ids =
   if List.mem id ids then
-    craise meta
+    craise __FILE__ __LINE__ meta
       (msg ^ "detected a loop in the chain of ids: "
       ^ borrow_or_abs_ids_chain_to_string (id :: ids))
   else id :: ids
@@ -100,17 +100,17 @@ let rec compare_rtys (meta : Meta.meta) (default : bool)
     =
   let compare = compare_rtys meta default combine compare_regions in
   (* Sanity check - TODO: don't do this at every recursive call *)
-  sanity_check (ty_is_rty ty1 && ty_is_rty ty2) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty1 && ty_is_rty ty2) meta;
   (* Normalize the associated types *)
   match (ty1, ty2) with
   | TLiteral lit1, TLiteral lit2 ->
-      sanity_check (lit1 = lit2) meta;
+      sanity_check __FILE__ __LINE__ (lit1 = lit2) meta;
       default
   | TAdt (id1, generics1), TAdt (id2, generics2) ->
-      sanity_check (id1 = id2) meta;
+      sanity_check __FILE__ __LINE__ (id1 = id2) meta;
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
-      sanity_check (generics1.const_generics = generics2.const_generics) meta;
+      sanity_check __FILE__ __LINE__ (generics1.const_generics = generics2.const_generics) meta;
 
       (* We also ignore the trait refs *)
 
@@ -144,7 +144,7 @@ let rec compare_rtys (meta : Meta.meta) (default : bool)
       combine params_b tys_b
   | TRef (r1, ty1, kind1), TRef (r2, ty2, kind2) ->
       (* Sanity check *)
-      sanity_check (kind1 = kind2) meta;
+      sanity_check __FILE__ __LINE__ (kind1 = kind2) meta;
       (* Explanation for the case where we check if projections intersect:
        * the projections intersect if the borrows intersect or their contents
        * intersect. *)
@@ -152,19 +152,19 @@ let rec compare_rtys (meta : Meta.meta) (default : bool)
       let tys_b = compare ty1 ty2 in
       combine regions_b tys_b
   | TVar id1, TVar id2 ->
-      sanity_check (id1 = id2) meta;
+      sanity_check __FILE__ __LINE__ (id1 = id2) meta;
       default
   | TTraitType _, TTraitType _ ->
       (* The types should have been normalized. If after normalization we
          get trait types, we can consider them as variables *)
-      sanity_check (ty1 = ty2) meta;
+      sanity_check __FILE__ __LINE__ (ty1 = ty2) meta;
       default
   | _ ->
       log#lerror
         (lazy
           ("compare_rtys: unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1
          ^ "\n- ty2: " ^ show_ty ty2));
-      craise meta "Unreachable"
+      craise __FILE__ __LINE__ meta "Unreachable"
 
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that
@@ -269,7 +269,7 @@ let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
             super#visit_aloan_content env lc
 
       method! visit_EBinding env bv v =
-        sanity_check (Option.is_none !abs_or_var) meta;
+        sanity_check __FILE__ __LINE__ (Option.is_none !abs_or_var) meta;
         abs_or_var :=
           Some
             (match bv with
@@ -279,7 +279,7 @@ let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
         abs_or_var := None
 
       method! visit_EAbs env abs =
-        sanity_check (Option.is_none !abs_or_var) meta;
+        sanity_check __FILE__ __LINE__ (Option.is_none !abs_or_var) meta;
         if ek.enter_abs then (
           abs_or_var := Some (AbsId abs.abs_id);
           super#visit_EAbs env abs;
@@ -294,7 +294,7 @@ let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
   with FoundGLoanContent lc -> (
     match !abs_or_var with
     | Some abs_or_var -> Some (abs_or_var, lc)
-    | None -> craise meta "Inconsistent state")
+    | None -> craise __FILE__ __LINE__ meta "Inconsistent state")
 
 (** Lookup a loan content.
 
@@ -304,7 +304,7 @@ let lookup_loan_opt (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
 let lookup_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
     (ctx : eval_ctx) : abs_or_var_id * g_loan_content =
   match lookup_loan_opt meta ek l ctx with
-  | None -> craise meta "Unreachable"
+  | None -> craise __FILE__ __LINE__ meta "Unreachable"
   | Some res -> res
 
 (** Update a loan content.
@@ -320,7 +320,7 @@ let update_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : loan_content =
-    sanity_check (not !r) meta;
+    sanity_check __FILE__ __LINE__ (not !r) meta;
     r := true;
     nlc
   in
@@ -367,7 +367,7 @@ let update_loan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one loan *)
-  sanity_check !r meta;
+  sanity_check __FILE__ __LINE__ !r meta;
   ctx
 
 (** Update a abstraction loan content.
@@ -383,7 +383,7 @@ let update_aloan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : aloan_content =
-    sanity_check (not !r) meta;
+    sanity_check __FILE__ __LINE__ (not !r) meta;
     r := true;
     nlc
   in
@@ -416,7 +416,7 @@ let update_aloan (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one loan *)
-  sanity_check !r meta;
+  sanity_check __FILE__ __LINE__ !r meta;
   ctx
 
 (** Lookup a borrow content from a borrow id. *)
@@ -485,7 +485,7 @@ let lookup_borrow_opt (ek : exploration_kind) (l : BorrowId.id) (ctx : eval_ctx)
 let lookup_borrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
     (ctx : eval_ctx) : g_borrow_content =
   match lookup_borrow_opt ek l ctx with
-  | None -> craise meta "Unreachable"
+  | None -> craise __FILE__ __LINE__ meta "Unreachable"
   | Some lc -> lc
 
 (** Update a borrow content.
@@ -501,7 +501,7 @@ let update_borrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : borrow_content =
-    sanity_check (not !r) meta;
+    sanity_check __FILE__ __LINE__ (not !r) meta;
     r := true;
     nbc
   in
@@ -542,7 +542,7 @@ let update_borrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one borrow *)
-  sanity_check !r meta;
+  sanity_check __FILE__ __LINE__ !r meta;
   ctx
 
 (** Update an abstraction borrow content.
@@ -558,7 +558,7 @@ let update_aborrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : avalue =
-    sanity_check (not !r) meta;
+    sanity_check __FILE__ __LINE__ (not !r) meta;
     r := true;
     nv
   in
@@ -589,7 +589,7 @@ let update_aborrow (meta : Meta.meta) (ek : exploration_kind) (l : BorrowId.id)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one borrow *)
-  cassert !r meta "No borrow was updated";
+  cassert __FILE__ __LINE__ !r meta "No borrow was updated";
   ctx
 
 (** Auxiliary function: see its usage in [end_borrow_get_borrow_in_value] *)
@@ -708,13 +708,13 @@ let lookup_intersecting_aproj_borrows_opt (meta : Meta.meta)
   let set_non_shared ((id, ty) : AbstractionId.id * rty) : unit =
     match !found with
     | None -> found := Some (NonSharedProj (id, ty))
-    | Some _ -> craise meta "Unreachable"
+    | Some _ -> craise __FILE__ __LINE__ meta "Unreachable"
   in
   let add_shared (x : AbstractionId.id * rty) : unit =
     match !found with
     | None -> found := Some (SharedProjs [ x ])
     | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
-    | Some (NonSharedProj _) -> craise meta "Unreachable"
+    | Some (NonSharedProj _) -> craise __FILE__ __LINE__ meta "Unreachable"
   in
   let check_add_proj_borrows (is_shared : bool) abs sv' proj_ty =
     if
@@ -734,7 +734,7 @@ let lookup_intersecting_aproj_borrows_opt (meta : Meta.meta)
       method! visit_abstract_shared_borrow abs asb =
         (* Sanity check *)
         (match !found with
-        | Some (NonSharedProj _) -> craise meta "Unreachable"
+        | Some (NonSharedProj _) -> craise __FILE__ __LINE__ meta "Unreachable"
         | _ -> ());
         (* Explore *)
         if lookup_shared then
@@ -782,7 +782,7 @@ let lookup_intersecting_aproj_borrows_not_shared_opt (meta : Meta.meta)
   with
   | None -> None
   | Some (NonSharedProj (abs_id, rty)) -> Some (abs_id, rty)
-  | _ -> craise meta "Unexpected"
+  | _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 (** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the
     values.
@@ -800,12 +800,12 @@ let update_intersecting_aproj_borrows (meta : Meta.meta)
   let add_shared () =
     match !shared with
     | None -> shared := Some true
-    | Some b -> sanity_check b meta
+    | Some b -> sanity_check __FILE__ __LINE__ b meta
   in
   let set_non_shared () =
     match !shared with
     | None -> shared := Some false
-    | Some _ -> craise meta "Found unexpected intersecting proj_borrows"
+    | Some _ -> craise __FILE__ __LINE__ meta "Found unexpected intersecting proj_borrows"
   in
   let check_proj_borrows is_shared abs sv' proj_ty =
     if
@@ -825,7 +825,7 @@ let update_intersecting_aproj_borrows (meta : Meta.meta)
 
       method! visit_abstract_shared_borrows abs asb =
         (* Sanity check *)
-        (match !shared with Some b -> sanity_check b meta | _ -> ());
+        (match !shared with Some b -> sanity_check __FILE__ __LINE__ b meta | _ -> ());
         (* Explore *)
         if can_update_shared then
           let abs = Option.get abs in
@@ -857,7 +857,7 @@ let update_intersecting_aproj_borrows (meta : Meta.meta)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
-  cassert (Option.is_some !shared) meta "Context was not updated at least once";
+  cassert __FILE__ __LINE__ (Option.is_some !shared) meta "Context was not updated at least once";
   (* Return *)
   ctx
 
@@ -873,7 +873,7 @@ let update_intersecting_aproj_borrows_non_shared (meta : Meta.meta)
     (ctx : eval_ctx) : eval_ctx =
   (* Small helpers *)
   let can_update_shared = false in
-  let update_shared _ _ = craise meta "Unexpected" in
+  let update_shared _ _ = craise __FILE__ __LINE__ meta "Unexpected" in
   let updated = ref false in
   let update_non_shared _ _ =
     (* We can update more than one borrow! *)
@@ -886,7 +886,7 @@ let update_intersecting_aproj_borrows_non_shared (meta : Meta.meta)
       update_non_shared regions sv ctx
   in
   (* Check that we updated at least once *)
-  sanity_check !updated meta;
+  sanity_check __FILE__ __LINE__ !updated meta;
   (* Return *)
   ctx
 
@@ -901,7 +901,7 @@ let remove_intersecting_aproj_borrows_shared (meta : Meta.meta)
   (* Small helpers *)
   let can_update_shared = true in
   let update_shared _ _ = [] in
-  let update_non_shared _ _ = craise meta "Unexpected" in
+  let update_non_shared _ _ = craise __FILE__ __LINE__ meta "Unexpected" in
   (* Update *)
   update_intersecting_aproj_borrows meta can_update_shared update_shared
     update_non_shared regions sv ctx
@@ -942,7 +942,7 @@ let update_intersecting_aproj_loans (meta : Meta.meta)
     (subst : abs -> (msymbolic_value * aproj) list -> aproj) (ctx : eval_ctx) :
     eval_ctx =
   (* *)
-  sanity_check (ty_is_rty proj_ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) meta;
   (* Small helpers for sanity checks *)
   let updated = ref false in
   let update abs local_given_back : aproj =
@@ -964,7 +964,7 @@ let update_intersecting_aproj_loans (meta : Meta.meta)
         | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
             if same_symbolic_id sv sv' then (
-              sanity_check (sv.sv_ty = sv'.sv_ty) meta;
+              sanity_check __FILE__ __LINE__ (sv.sv_ty = sv'.sv_ty) meta;
               if
                 projections_intersect meta proj_ty proj_regions sv'.sv_ty
                   abs.regions
@@ -976,7 +976,7 @@ let update_intersecting_aproj_loans (meta : Meta.meta)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
-  sanity_check !updated meta;
+  sanity_check __FILE__ __LINE__ !updated meta;
   (* Return *)
   ctx
 
@@ -996,7 +996,7 @@ let lookup_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id)
   let found = ref None in
   let set_found x =
     (* There is at most one projector which corresponds to the description *)
-    sanity_check (Option.is_none !found) meta;
+    sanity_check __FILE__ __LINE__ (Option.is_none !found) meta;
     found := Some x
   in
   (* The visitor *)
@@ -1014,9 +1014,9 @@ let lookup_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id)
             super#visit_aproj abs sproj
         | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
-            sanity_check (abs.abs_id = abs_id) meta;
+            sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) meta;
             if sv'.sv_id = sv.sv_id then (
-              sanity_check (sv' = sv) meta;
+              sanity_check __FILE__ __LINE__ (sv' = sv) meta;
               set_found given_back)
             else ());
         super#visit_aproj abs sproj
@@ -1041,7 +1041,7 @@ let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id)
   let found = ref false in
   let update () =
     (* We update at most once *)
-    sanity_check (not !found) meta;
+    sanity_check __FILE__ __LINE__ (not !found) meta;
     found := true;
     nproj
   in
@@ -1060,9 +1060,9 @@ let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id)
             super#visit_aproj abs sproj
         | AProjLoans (sv', _) ->
             let abs = Option.get abs in
-            sanity_check (abs.abs_id = abs_id) meta;
+            sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) meta;
             if sv'.sv_id = sv.sv_id then (
-              sanity_check (sv' = sv) meta;
+              sanity_check __FILE__ __LINE__ (sv' = sv) meta;
               update ())
             else super#visit_aproj (Some abs) sproj
     end
@@ -1070,7 +1070,7 @@ let update_aproj_loans (meta : Meta.meta) (abs_id : AbstractionId.id)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Sanity check *)
-  sanity_check !found meta;
+  sanity_check __FILE__ __LINE__ !found meta;
   (* Return *)
   ctx
 
@@ -1090,7 +1090,7 @@ let update_aproj_borrows (meta : Meta.meta) (abs_id : AbstractionId.id)
   let found = ref false in
   let update () =
     (* We update at most once *)
-    sanity_check (not !found) meta;
+    sanity_check __FILE__ __LINE__ (not !found) meta;
     found := true;
     nproj
   in
@@ -1109,9 +1109,9 @@ let update_aproj_borrows (meta : Meta.meta) (abs_id : AbstractionId.id)
             super#visit_aproj abs sproj
         | AProjBorrows (sv', _proj_ty) ->
             let abs = Option.get abs in
-            sanity_check (abs.abs_id = abs_id) meta;
+            sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) meta;
             if sv'.sv_id = sv.sv_id then (
-              sanity_check (sv' = sv) meta;
+              sanity_check __FILE__ __LINE__ (sv' = sv) meta;
               update ())
             else super#visit_aproj (Some abs) sproj
     end
@@ -1119,7 +1119,7 @@ let update_aproj_borrows (meta : Meta.meta) (abs_id : AbstractionId.id)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Sanity check *)
-  sanity_check !found meta;
+  sanity_check __FILE__ __LINE__ !found meta;
   (* Return *)
   ctx
 
@@ -1156,7 +1156,7 @@ let no_aproj_over_symbolic_in_context (meta : Meta.meta) (sv : symbolic_value)
   in
   (* Apply *)
   try obj#visit_eval_ctx () ctx
-  with Found -> craise meta "update_aproj_loans_to_ended: failed"
+  with Found -> craise __FILE__ __LINE__ meta "update_aproj_loans_to_ended: failed"
 
 (** Helper function
 
@@ -1194,7 +1194,7 @@ let get_first_non_ignored_aloan_in_abstraction (meta : Meta.meta) (abs : abs) :
         | VMutLoan _ ->
             (* The mut loan linked to the mutable borrow present in a shared
              * value in an abstraction should be in an AProjBorrows *)
-            craise meta "Unreachable"
+            craise __FILE__ __LINE__ meta "Unreachable"
         | VSharedLoan (bids, _) -> raise (FoundBorrowIds (Borrows bids))
 
       method! visit_aproj env sproj =

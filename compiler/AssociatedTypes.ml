@@ -51,7 +51,7 @@ let compute_norm_trait_types_from_preds (meta : Meta.meta option)
     (* Sanity check: the type constraint can't make use of regions - Remark
        that it would be enough to only visit the field [ty] of the trait type
        constraint, but for safety we visit all the fields *)
-    sanity_check_opt_meta (trait_type_constraint_no_regions c) meta;
+    sanity_check_opt_meta __FILE__ __LINE__ (trait_type_constraint_no_regions c) meta;
     let { trait_ref; type_name; ty } : trait_type_constraint = c in
     let trait_ty = TTraitType (trait_ref, type_name) in
     let trait_ty_ref = get_ref trait_ty in
@@ -239,7 +239,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
         match trait_ref.trait_id with
         | TraitRef { trait_id = TraitImpl impl_id; generics = ref_generics; _ }
           ->
-            cassert_opt_meta
+            cassert_opt_meta __FILE__ __LINE__
               (ref_generics = empty_generic_args)
               ctx.meta "Higher order trait types are not supported yet";
             log#ldebug
@@ -281,7 +281,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
                 ^ trait_ref_to_string ctx trait_ref
                 ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
             (* We can't project *)
-            sanity_check_opt_meta
+            sanity_check_opt_meta __FILE__ __LINE__
               (trait_instance_id_is_local_clause trait_ref.trait_id)
               ctx.meta;
             TTraitType (trait_ref, type_name)
@@ -351,7 +351,7 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       match impl with
       | None ->
           (* This is actually a local clause *)
-          sanity_check_opt_meta
+          sanity_check_opt_meta __FILE__ __LINE__
             (trait_instance_id_is_local_clause inst_id)
             ctx.meta;
           (ParentClause (inst_id, decl_id, clause_id), None)
@@ -384,7 +384,7 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       match impl with
       | None ->
           (* This is actually a local clause *)
-          sanity_check_opt_meta
+          sanity_check_opt_meta __FILE__ __LINE__
             (trait_instance_id_is_local_clause inst_id)
             ctx.meta;
           (ItemClause (inst_id, decl_id, item_name, clause_id), None)
@@ -426,10 +426,10 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | TraitRef trait_ref ->
       (* The trait instance id necessarily refers to a local sub-clause. We
          can't project over it and can only peel off the [TraitRef] wrapper *)
-      cassert_opt_meta
+      cassert_opt_meta __FILE__ __LINE__
         (trait_instance_id_is_local_clause trait_ref.trait_id)
         ctx.meta "Trait instance id is not a local sub-clause";
-      cassert_opt_meta
+      cassert_opt_meta __FILE__ __LINE__
         (trait_ref.generics = empty_generic_args)
         ctx.meta "TODO: error message";
       (trait_ref.trait_id, None)
@@ -480,7 +480,7 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
         (lazy
           ("norm_ctx_normalize_trait_ref: normalized to: "
           ^ trait_ref_to_string ctx trait_ref));
-      cassert_opt_meta
+      cassert_opt_meta __FILE__ __LINE__
         (generics = empty_generic_args)
         ctx.meta "TODO: error message";
       trait_ref
