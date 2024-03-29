@@ -256,12 +256,12 @@ module type PrimMatcher = sig
 end
 
 module type Matcher = sig
+  val meta : Meta.meta
+
   (** Match two values.
 
       Rem.: this function raises exceptions of type {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}.
    *)
-  val meta : Meta.meta
-
   val match_typed_values :
     eval_ctx -> eval_ctx -> typed_value -> typed_value -> typed_value
 
@@ -279,6 +279,8 @@ end
     Very annoying: functors only take modules as inputs...
  *)
 module type MatchCheckEquivState = sig
+  val meta : Meta.meta
+
   (** [true] if we check equivalence between contexts, [false] if we match
       a source context with a target context. *)
   val check_equiv : bool
@@ -299,7 +301,6 @@ module type MatchCheckEquivState = sig
   val aid_map : AbstractionId.InjSubst.t ref
   val lookup_shared_value_in_ctx0 : BorrowId.id -> typed_value
   val lookup_shared_value_in_ctx1 : BorrowId.id -> typed_value
-  val meta : Meta.meta
 end
 
 module type CheckEquivMatcher = sig

@@ -483,7 +483,7 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
               (Some (Synth.mk_mplace meta prefix ctx))
         | FailBottom (_, _, _) ->
             (* We can't expand {!Bottom} values while reading them *)
-            craise __FILE__ __LINE__ meta "Found [Bottom] while reading a place"
+            craise __FILE__ __LINE__ meta "Found bottom while reading a place"
         | FailBorrow _ ->
             craise __FILE__ __LINE__ meta "Could not read a borrow"
       in

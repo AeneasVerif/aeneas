@@ -127,6 +127,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
 
   let ctx =
     {
+      meta = fdef.meta;
       decls_ctx = trans_ctx;
       SymbolicToPure.bid = None;
       sg;

@@ -491,8 +491,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
            are not in the prefix anymore *)
         if DummyVarId.Set.mem b0 fixed_ids.dids then (
           (* Still in the prefix: match the values *)
-          cassert __FILE__ __LINE__ (b0 = b1) meta
-            "Bindings are not the same. We are not in the prefix anymore";
+          sanity_check __FILE__ __LINE__ (b0 = b1) meta;
           let b = b0 in
           let v = M.match_typed_values ctx0 ctx1 v0 v1 in
           let var = EBinding (BDummy b, v) in
@@ -514,9 +513,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
         (* Variable bindings *must* be in the prefix and consequently their
            ids must be the same *)
-        cassert __FILE__ __LINE__ (b0 = b1) meta
-          "Variable bindings *must* be in the prefix and consequently their\n\
-          \        ids must be the same";
+        sanity_check __FILE__ __LINE__ (b0 = b1) meta;
         (* Match the values *)
         let b = b0 in
         let v = M.match_typed_values ctx0 ctx1 v0 v1 in
@@ -537,8 +534,7 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
           (* Still in the prefix: the abstractions must be the same *)
-          cassert __FILE__ __LINE__ (abs0 = abs1) meta
-            "The abstractions are not the same";
+          sanity_check __FILE__ __LINE__ (abs0 = abs1) meta;
           (* Continue *)
           abs :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)

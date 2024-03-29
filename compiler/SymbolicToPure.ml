@@ -144,6 +144,7 @@ type loop_info = {
 (** Body synthesis context *)
 type bs_ctx = {
   (* TODO: there are a lot of duplications with the various decls ctx *)
+  meta : Meta.meta;  (** The meta information about the current declaration *)
   decls_ctx : C.decls_ctx;
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
@@ -325,7 +326,7 @@ let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
 
 let typed_value_to_string (ctx : bs_ctx) (v : V.typed_value) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Values.typed_value_to_string ~meta:(Some ctx.fun_decl.meta) env v
+  Print.Values.typed_value_to_string ~meta:(Some ctx.meta) env v
 
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
@@ -349,8 +350,7 @@ let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
 
 let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.texpression_to_string ~metadata:(Some ctx.fun_decl.meta) env false
-    "" "  " e
+  PrintPure.texpression_to_string ~metadata:(Some ctx.meta) env false "" "  " e
 
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
@@ -364,10 +364,9 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_decl_to_string env def
 
-let typed_pattern_to_string ?(meta : Meta.meta option = None) (ctx : bs_ctx)
-    (p : Pure.typed_pattern) : string =
+let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.typed_pattern_to_string ~meta env p
+  PrintPure.typed_pattern_to_string ~meta:(Some ctx.meta) env p
 
 let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
     fun_effect_info =
@@ -386,7 +385,7 @@ let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let verbose = false in
   let indent = "" in
   let indent_incr = "  " in
-  Print.Values.abs_to_string ~meta:(Some ctx.fun_decl.meta) env verbose indent
+  Print.Values.abs_to_string ~meta:(Some ctx.meta) env verbose indent
     indent_incr abs
 
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
@@ -676,13 +675,13 @@ and translate_fwd_trait_instance_id (meta : Meta.meta) (type_infos : type_infos)
 (** Simply calls [translate_fwd_ty] *)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
   let type_infos = ctx.type_ctx.type_infos in
-  translate_fwd_ty ctx.fun_decl.meta type_infos ty
+  translate_fwd_ty ctx.meta type_infos ty
 
 (** Simply calls [translate_fwd_generic_args] *)
 let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
     generic_args =
   let type_infos = ctx.type_ctx.type_infos in
-  translate_fwd_generic_args ctx.fun_decl.meta type_infos generics
+  translate_fwd_generic_args ctx.meta type_infos generics
 
 (** Translate a type, when some regions may have ended.
     
@@ -775,7 +774,7 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
     (inside_mut : bool) (ty : T.ty) : ty option =
   let type_infos = ctx.type_ctx.type_infos in
-  translate_back_ty ctx.fun_decl.meta type_infos keep_region inside_mut ty
+  translate_back_ty ctx.meta type_infos keep_region inside_mut ty
 
 let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let const_generics =
@@ -794,14 +793,14 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   }
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
-  let meta = ctx.fun_decl.meta in
+  let meta = ctx.meta in
   let ctx = mk_type_check_ctx ctx in
   let _ = PureTypeCheck.check_typed_pattern meta ctx v in
   ()
 
 let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
   if !Config.type_check_pure_code then
-    let meta = ctx.fun_decl.meta in
+    let meta = ctx.meta in
     let ctx = mk_type_check_ctx ctx in
     PureTypeCheck.check_texpression meta ctx e
 
@@ -811,9 +810,7 @@ let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
   | FunId fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_name, fun_decl_id) ->
       let type_infos = ctx.type_ctx.type_infos in
-      let trait_ref =
-        translate_fwd_trait_ref ctx.fun_decl.meta type_infos trait_ref
-      in
+      let trait_ref = translate_fwd_trait_ref ctx.meta type_infos trait_ref in
       TraitMethod (trait_ref, method_name, fun_decl_id)
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
@@ -823,7 +820,7 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
   let calls = ctx.calls in
   sanity_check __FILE__ __LINE__
     (not (V.FunCallId.Map.mem call_id calls))
-    ctx.fun_decl.meta;
+    ctx.meta;
   let info = { forward; forward_inputs = args; back_funs } in
   let calls = V.FunCallId.Map.add call_id info calls in
   { ctx with calls }
@@ -847,7 +844,7 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   let abstractions = ctx.abstractions in
   sanity_check __FILE__ __LINE__
     (not (V.AbstractionId.Map.mem abs.abs_id abstractions))
-    ctx.fun_decl.meta;
+    ctx.meta;
   let abstractions =
     V.AbstractionId.Map.add abs.abs_id (abs, back_args) abstractions
   in
@@ -953,22 +950,20 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           in
           { info with is_rec = info.is_rec || Option.is_some lid }
       | FunId (FAssumed _) ->
-          compute_raw_fun_effect_info ctx.fun_decl.meta ctx.fun_ctx.fun_infos
-            fun_id lid gid)
+          compute_raw_fun_effect_info ctx.meta ctx.fun_ctx.fun_infos fun_id lid
+            gid)
   | Some lid -> (
       (* This is necessarily for the current function *)
       match fun_id with
       | FunId (FRegular fid) -> (
-          sanity_check __FILE__ __LINE__
-            (fid = ctx.fun_decl.def_id)
-            ctx.fun_decl.meta;
+          sanity_check __FILE__ __LINE__ (fid = ctx.fun_decl.def_id) ctx.meta;
           (* Lookup the loop *)
           let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
           let loop_info = LoopId.Map.find lid ctx.loops in
           match gid with
           | None -> loop_info.fwd_effect_info
           | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
-      | _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
+      | _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable")
 
 (** Translate a function signature to a decomposed function signature.
 
@@ -1514,7 +1509,7 @@ let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   match V.SymbolicValueId.Map.find_opt sv.sv_id ctx.sv_to_var with
   | Some v -> v
   | None ->
-      craise __FILE__ __LINE__ ctx.fun_decl.meta
+      craise __FILE__ __LINE__ ctx.meta
         ("Could not find var for symbolic value: "
         ^ V.SymbolicValueId.to_string sv.sv_id)
 
@@ -1564,7 +1559,7 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
 let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
     (v : V.typed_value) : texpression =
   (* We need to ignore boxes *)
-  let v = unbox_typed_value ctx.fun_decl.meta v in
+  let v = unbox_typed_value ctx.meta v in
   let translate = typed_value_to_texpression ctx ectx in
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx v.ty in
@@ -1578,12 +1573,12 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
         | TAdt (TTuple, _) ->
-            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.fun_decl.meta;
-            mk_simpl_tuple_texpression ctx.fun_decl.meta field_values
+            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.meta;
+            mk_simpl_tuple_texpression ctx.meta field_values
         | _ ->
             (* Retrieve the type and the translated generics from the translated
                type (simpler this way) *)
-            let adt_id, generics = ty_as_adt ctx.fun_decl.meta ty in
+            let adt_id, generics = ty_as_adt ctx.meta ty in
             (* Create the constructor *)
             let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
             let qualif = { id = qualif_id; generics } in
@@ -1594,20 +1589,18 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
             let cons_ty = mk_arrows field_tys ty in
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
-            mk_apps ctx.fun_decl.meta cons field_values)
-    | VBottom -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+            mk_apps ctx.meta cons field_values)
+    | VBottom -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
     | VLoan lc -> (
         match lc with
         | VSharedLoan (_, v) -> translate v
-        | VMutLoan _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
-        )
+        | VMutLoan _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable")
     | VBorrow bc -> (
         match bc with
         | VSharedBorrow bid ->
             (* Lookup the shared value in the context, and continue *)
             let sv =
-              InterpreterBorrowsCore.lookup_shared_value ctx.fun_decl.meta ectx
-                bid
+              InterpreterBorrowsCore.lookup_shared_value ctx.meta ectx bid
             in
             translate sv
         | VReservedMutBorrow bid ->
@@ -1615,8 +1608,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
              * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
             let sv =
-              InterpreterBorrowsCore.lookup_shared_value ctx.fun_decl.meta ectx
-                bid
+              InterpreterBorrowsCore.lookup_shared_value ctx.meta ectx bid
             in
             translate sv
         | VMutBorrow (_, v) ->
@@ -1663,7 +1655,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert __FILE__ __LINE__ (field_values = []) ctx.fun_decl.meta
+            cassert __FILE__ __LINE__ (field_values = []) ctx.meta
               "ADTs containing borrows are not supported yet";
             None
         | TTuple ->
@@ -1672,11 +1664,9 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
             else
               (* Note that if there is exactly one field value,
                * [mk_simpl_tuple_rvalue] is the identity *)
-              let rv =
-                mk_simpl_tuple_texpression ctx.fun_decl.meta field_values
-              in
+              let rv = mk_simpl_tuple_texpression ctx.meta field_values in
               Some rv)
-    | ABottom -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+    | ABottom -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
     | ALoan lc -> aloan_content_to_consumed ctx ectx lc
     | ABorrow bc -> aborrow_content_to_consumed ctx bc
     | ASymbolic aproj -> aproj_to_consumed ctx aproj
@@ -1694,7 +1684,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
     (lc : V.aloan_content) : texpression option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) ->
-      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.meta "Unreachable"
   | AEndedMutLoan { child = _; given_back = _; given_back_meta } ->
       (* Return the meta-value *)
       Some (typed_value_to_texpression ctx ectx given_back_meta)
@@ -1706,7 +1696,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
       None
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
-      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.meta "Unreachable"
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -1718,7 +1708,7 @@ and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
     texpression option =
   match bc with
   | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
-      craise __FILE__ __LINE__ _ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ _ctx.meta "Unreachable"
   | AEndedMutBorrow (_, _) ->
       (* We collect consumed values: ignore *)
       None
@@ -1737,7 +1727,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
       sanity_check __FILE__ __LINE__
         (child_aproj = AIgnoredProjBorrows)
-        ctx.fun_decl.meta;
+        ctx.meta;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
@@ -1746,7 +1736,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
       raise Unimplemented
   | AEndedProjBorrows _ -> (* We consider consumed values *) None
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
-      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.meta "Unreachable"
 
 (** Convert the abstraction values in an abstraction to consumed values.
 
@@ -1812,20 +1802,20 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert __FILE__ __LINE__ (field_values = []) ctx.fun_decl.meta
+            cassert __FILE__ __LINE__ (field_values = []) ctx.meta
               "ADTs with borrows are not supported yet";
             (ctx, None)
         | TTuple ->
             (* Return *)
             let variant_id = adt_v.variant_id in
-            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.fun_decl.meta;
+            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.meta;
             if field_values = [] then (ctx, None)
             else
               (* Note that if there is exactly one field value, [mk_simpl_tuple_pattern]
                * is the identity *)
               let lv = mk_simpl_tuple_pattern field_values in
               (ctx, Some lv))
-    | ABottom -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+    | ABottom -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
     | ALoan lc -> aloan_content_to_given_back mp lc ctx
     | ABorrow bc -> aborrow_content_to_given_back mp bc ctx
     | ASymbolic aproj -> aproj_to_given_back mp aproj ctx
@@ -1841,14 +1831,14 @@ and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) ->
-      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.meta "Unreachable"
   | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
   | AEndedSharedLoan (_, _) ->
       (* We consider given back values, and thus ignore those *)
       (ctx, None)
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
-      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.meta "Unreachable"
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -1860,7 +1850,7 @@ and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match bc with
   | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
-      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.meta "Unreachable"
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta-symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv ctx in
@@ -1882,14 +1872,14 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
         (List.for_all
            (fun (_, aproj) -> aproj = V.AIgnoredProjBorrows)
            child_projs)
-        ctx.fun_decl.meta "Nested borrows are not supported yet";
+        ctx.meta "Nested borrows are not supported yet";
       (ctx, None)
   | AEndedProjBorrows mv ->
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
-      craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.meta "Unreachable"
 
 (** Convert the abstraction values in an abstraction to given back values.
 
@@ -2004,7 +1994,7 @@ and translate_panic (ctx : bs_ctx) : texpression =
   (* Here we use the function return type - note that it is ok because
    * we don't match on panics which happen inside the function body -
    * but it won't be true anymore once we translate individual blocks *)
-  (* If we use a state modune partie nad, we need to add a lambda for the state variable *)
+  (* If we use a state monad, we need to add a lambda for the state variable *)
   (* Note that only forward functions return a state *)
   let effect_info = ctx_get_effect_info ctx in
   (* TODO: we should use a [Fail] function *)
@@ -2013,13 +2003,13 @@ and translate_panic (ctx : bs_ctx) : texpression =
       (* Create the [Fail] value *)
       let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
       let ret_v =
-        mk_result_fail_texpression_with_error_id ctx.fun_decl.meta
-          error_failure_id ret_ty
+        mk_result_fail_texpression_with_error_id ctx.meta error_failure_id
+          ret_ty
       in
       ret_v
     else
-      mk_result_fail_texpression_with_error_id ctx.fun_decl.meta
-        error_failure_id output_ty
+      mk_result_fail_texpression_with_error_id ctx.meta error_failure_id
+        output_ty
   in
   if ctx.inside_loop && Option.is_some ctx.bid then
     (* We are synthesizing the backward function of a loop body *)
@@ -2075,12 +2065,12 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
     | Some _ ->
         (* Backward function *)
         (* Sanity check *)
-        sanity_check __FILE__ __LINE__ (opt_v = None) ctx.fun_decl.meta;
+        sanity_check __FILE__ __LINE__ (opt_v = None) ctx.meta;
         (* Group the variables in which we stored the values we need to give back.
            See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
         let backward_outputs = Option.get ctx.backward_outputs in
         let field_values = List.map mk_texpression_from_var backward_outputs in
-        mk_simpl_tuple_texpression ctx.fun_decl.meta field_values
+        mk_simpl_tuple_texpression ctx.meta field_values
   in
   (* We may need to return a state
    * - error-monad: Return x
@@ -2090,21 +2080,17 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
   let output =
     if effect_info.stateful then
       let state_rvalue = mk_state_texpression ctx.state_var in
-      mk_simpl_tuple_texpression ctx.fun_decl.meta [ state_rvalue; output ]
+      mk_simpl_tuple_texpression ctx.meta [ state_rvalue; output ]
     else output
   in
   (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-  mk_result_return_texpression ctx.fun_decl.meta output
+  mk_result_return_texpression ctx.meta output
 
 and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     (ctx : bs_ctx) : texpression =
-  sanity_check __FILE__ __LINE__
-    (is_continue = ctx.inside_loop)
-    ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (is_continue = ctx.inside_loop) ctx.meta;
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check __FILE__ __LINE__
-    (loop_id = Option.get ctx.loop_id)
-    ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.meta;
 
   (* Lookup the loop information *)
   let loop_id = Option.get ctx.loop_id in
@@ -2128,7 +2114,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
           match ctx.backward_outputs with Some outputs -> outputs | None -> []
         in
         let field_values = List.map mk_texpression_from_var backward_outputs in
-        mk_simpl_tuple_texpression ctx.fun_decl.meta field_values
+        mk_simpl_tuple_texpression ctx.meta field_values
   in
 
   (* We may need to return a state
@@ -2142,12 +2128,12 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
   let output =
     if effect_info.stateful then
       let state_rvalue = mk_state_texpression ctx.state_var in
-      mk_simpl_tuple_texpression ctx.fun_decl.meta [ state_rvalue; output ]
+      mk_simpl_tuple_texpression ctx.meta [ state_rvalue; output ]
     else output
   in
   (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
   mk_emeta (Tag "return_with_loop")
-    (mk_result_return_texpression ctx.fun_decl.meta output)
+    (mk_result_return_texpression ctx.meta output)
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
@@ -2198,8 +2184,8 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           let sg = Option.get call.sg in
           let decls_ctx = ctx.decls_ctx in
           let dsg =
-            translate_fun_sig_with_regions_hierarchy_to_decomposed
-              ctx.fun_decl.meta decls_ctx fid call.regions_hierarchy sg
+            translate_fun_sig_with_regions_hierarchy_to_decomposed ctx.meta
+              decls_ctx fid call.regions_hierarchy sg
               (List.map (fun _ -> None) sg.inputs)
           in
           log#ldebug
@@ -2212,7 +2198,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                   ctx_translate_fwd_generic_args ctx all_generics
                 in
                 let tr_self =
-                  translate_fwd_trait_instance_id ctx.fun_decl.meta
+                  translate_fwd_trait_instance_id ctx.meta
                     ctx.type_ctx.type_infos tr_self
                 in
                 (tr_self, all_generics)
@@ -2333,7 +2319,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     | S.Unop E.Neg -> (
         match args with
         | [ arg ] ->
-            let int_ty = ty_as_integer ctx.fun_decl.meta arg.ty in
+            let int_ty = ty_as_integer ctx.meta arg.ty in
             (* Note that negation can lead to an overflow and thus fail (it
              * is thus monadic) *)
             let effect_info =
@@ -2348,7 +2334,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Neg int_ty), effect_info, args, dest)
-        | _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
+        | _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable")
     | S.Unop (E.Cast cast_kind) -> (
         match cast_kind with
         | CastScalar (src_ty, tgt_ty) ->
@@ -2366,18 +2352,16 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, dest)
         | CastFnPtr _ ->
-            craise __FILE__ __LINE__ ctx.fun_decl.meta "TODO: function casts")
+            craise __FILE__ __LINE__ ctx.meta "TODO: function casts")
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
-            let int_ty0 = ty_as_integer ctx.fun_decl.meta arg0.ty in
-            let int_ty1 = ty_as_integer ctx.fun_decl.meta arg1.ty in
+            let int_ty0 = ty_as_integer ctx.meta arg0.ty in
+            let int_ty1 = ty_as_integer ctx.meta arg1.ty in
             (match binop with
             (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
             | E.Shl | E.Shr -> ()
-            | _ ->
-                sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1)
-                  ctx.fun_decl.meta);
+            | _ -> sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1) ctx.meta);
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -2390,7 +2374,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Binop (binop, int_ty0), effect_info, args, dest)
-        | _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
+        | _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable")
   in
   let func = { id = FunOrOp fun_id; generics } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
@@ -2399,7 +2383,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   in
   let func_ty = mk_arrows input_tys ret_ty in
   let func = { e = Qualif func; ty = func_ty } in
-  let call = mk_apps ctx.fun_decl.meta func args in
+  let call = mk_apps ctx.meta func args in
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Put together *)
@@ -2433,7 +2417,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
       ^ "\n- loop_id: "
       ^ Print.option_to_string Pure.LoopId.to_string ctx.loop_id
       ^ "\n- eval_ctx:\n"
-      ^ eval_ctx_to_string ~meta:(Some ctx.fun_decl.meta) ectx
+      ^ eval_ctx_to_string ~meta:(Some ctx.meta) ectx
       ^ "\n- abs:\n" ^ abs_to_string ctx abs ^ "\n"));
 
   (* When we end an input abstraction, this input abstraction gets back
@@ -2447,7 +2431,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      for a parent backward function.
   *)
   let bid = Option.get ctx.bid in
-  sanity_check __FILE__ __LINE__ (rg_id = bid) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (rg_id = bid) ctx.meta;
 
   (* First, introduce the given back variables.
 
@@ -2497,7 +2481,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
       (fun (var, v) ->
         sanity_check __FILE__ __LINE__
           ((var : var).ty = (v : texpression).ty)
-          ctx.fun_decl.meta)
+          ctx.meta)
       variables_values;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2518,7 +2502,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | S.Fun (fun_id, _) -> fun_id
     | Unop _ | Binop _ ->
         (* Those don't have backward functions *)
-        craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+        craise __FILE__ __LINE__ ctx.meta "Unreachable"
   in
   let effect_info = get_fun_effect_info ctx fun_id None (Some rg_id) in
   (* Retrieve the values consumed upon ending the loans inside this
@@ -2580,7 +2564,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
            ^ "\nfunc type: "
            ^ pure_ty_to_string ctx func.ty
            ^ "\n\nargs:\n" ^ String.concat "\n" args));
-      let call = mk_apps ctx.fun_decl.meta func args in
+      let call = mk_apps ctx.meta func args in
       mk_let effect_info.can_fail output call next_e
 
 and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
@@ -2591,8 +2575,8 @@ and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
   (* We can do this simply by checking that it consumes and gives back nothing *)
   let inputs = abs_to_consumed ctx ectx abs in
   let ctx, outputs = abs_to_given_back None abs ctx in
-  sanity_check __FILE__ __LINE__ (inputs = []) ctx.fun_decl.meta;
-  sanity_check __FILE__ __LINE__ (outputs = []) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (inputs = []) ctx.meta;
+  sanity_check __FILE__ __LINE__ (outputs = []) ctx.meta;
 
   (* Translate the next expression *)
   translate_expression e ctx
@@ -2634,7 +2618,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: as there are no nested borrows, there should be none. *)
   let consumed = abs_to_consumed ctx ectx abs in
-  cassert __FILE__ __LINE__ (consumed = []) ctx.fun_decl.meta
+  cassert __FILE__ __LINE__ (consumed = []) ctx.meta
     "Nested borrows are not supported yet";
   (* Retrieve the values given back upon ending this abstraction - note that
    * we don't provide meta-place information, because those assignments will
@@ -2653,8 +2637,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
           ^ pure_ty_to_string ctx given_back.ty
           ^ "\n- sig input ty: "
           ^ pure_ty_to_string ctx input.ty));
-      sanity_check __FILE__ __LINE__ (given_back.ty = input.ty)
-        ctx.fun_decl.meta)
+      sanity_check __FILE__ __LINE__ (given_back.ty = input.ty) ctx.meta)
     given_back_inputs;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2671,9 +2654,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     texpression =
   let vloop_id = loop_id in
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check __FILE__ __LINE__
-    (loop_id = Option.get ctx.loop_id)
-    ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.meta;
   let rg_id = Option.get rg_id in
   (* There are two cases depending on the [abs_kind] (whether this is a
      synth input or a regular loop call) *)
@@ -2743,7 +2724,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       match func with
       | None -> next_e
       | Some func ->
-          let call = mk_apps ctx.fun_decl.meta func args in
+          let call = mk_apps ctx.meta func args in
           (* Add meta-information - this is slightly hacky: we look at the
              values consumed by the abstraction (note that those come from
              *before* we applied the fixed-point context) and use them to
@@ -2800,7 +2781,7 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
   in
   let func_ty = mk_arrow (TLiteral TBool) mk_unit_ty in
   let func = { e = Qualif func; ty = func_ty } in
-  let assertion = mk_apps ctx.fun_decl.meta func args in
+  let assertion = mk_apps ctx.meta func args in
   mk_let monadic (mk_dummy_pattern mk_unit_ty) assertion next_e
 
 and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
@@ -2815,7 +2796,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       | V.SeLiteral _ ->
           (* We do not *register* symbolic expansions to literal
              values in the symbolic ADT *)
-          craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+          craise __FILE__ __LINE__ ctx.meta "Unreachable"
       | SeMutRef (_, nsv) | SeSharedRef (_, nsv) ->
           (* The (mut/shared) borrow type is extracted to identity: we thus simply
              introduce an reassignment *)
@@ -2828,11 +2809,11 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             next_e
       | SeAdt _ ->
           (* Should be in the [ExpandAdt] case *)
-          craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
+          craise __FILE__ __LINE__ ctx.meta "Unreachable")
   | ExpandAdt branches -> (
       (* We don't do the same thing if there is a branching or not *)
       match branches with
-      | [] -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+      | [] -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
       | [ (variant_id, svl, branch) ]
         when not
                (TypesUtils.ty_is_custom_adt sv.V.sv_ty
@@ -2873,7 +2854,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           (* Sanity check *)
           sanity_check __FILE__ __LINE__
             (List.for_all (fun br -> br.branch.ty = ty) branches)
-            ctx.fun_decl.meta;
+            ctx.meta;
           (* Return *)
           { e; ty })
   | ExpandBool (true_e, false_e) ->
@@ -2893,7 +2874,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           ^ pure_ty_to_string ctx true_e.ty
           ^ "\n\nfalse_e.ty: "
           ^ pure_ty_to_string ctx false_e.ty));
-      sanity_check __FILE__ __LINE__ (ty = false_e.ty) ctx.fun_decl.meta;
+      sanity_check __FILE__ __LINE__ (ty = false_e.ty) ctx.meta;
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :
@@ -2920,7 +2901,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let ty = otherwise.branch.ty in
       sanity_check __FILE__ __LINE__
         (List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches)
-        ctx.fun_decl.meta;
+        ctx.meta;
       { e; ty }
 
 (* Translate and [ExpandAdt] when there is no branching (i.e., one branch).
@@ -2995,14 +2976,14 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
          * field.
          * We use the [dest] variable in order not to have to recompute
          * the type of the result of the projection... *)
-        let adt_id, generics = ty_as_adt ctx.fun_decl.meta scrutinee.ty in
+        let adt_id, generics = ty_as_adt ctx.meta scrutinee.ty in
         let gen_field_proj (field_id : FieldId.id) (dest : var) : texpression =
           let proj_kind = { adt_id; field_id } in
           let qualif = { id = Proj proj_kind; generics } in
           let proj_e = Qualif qualif in
           let proj_ty = mk_arrow scrutinee.ty dest.ty in
           let proj = { e = proj_e; ty = proj_ty } in
-          mk_app ctx.fun_decl.meta proj scrutinee
+          mk_app ctx.meta proj scrutinee
         in
         let id_var_pairs = FieldId.mapi (fun fid v -> (fid, v)) vars in
         let monadic = false in
@@ -3023,7 +3004,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       let var =
         match vars with
         | [ v ] -> v
-        | _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
       in
       (* We simply introduce an assignment - the box type is the
        * identity when extracted ([box a = a]) *)
@@ -3037,7 +3018,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
-      craise __FILE__ __LINE__ ctx.fun_decl.meta
+      craise __FILE__ __LINE__ ctx.meta
         "Attempt to expand a non-expandable value"
 
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
@@ -3075,9 +3056,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
     | VaTraitConstValue (trait_ref, const_name) ->
         let type_infos = ctx.type_ctx.type_infos in
-        let trait_ref =
-          translate_fwd_trait_ref ctx.fun_decl.meta type_infos trait_ref
-        in
+        let trait_ref = translate_fwd_trait_ref ctx.meta type_infos trait_ref in
         let qualif_id = TraitConst (trait_ref, const_name) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         { e = Qualif qualif; ty = var.ty }
@@ -3218,7 +3197,7 @@ and translate_forward_end (ectx : C.eval_ctx)
       else pure_fwd_var :: back_vars
     in
     let vars = List.map mk_texpression_from_var vars in
-    let ret = mk_simpl_tuple_texpression ctx.fun_decl.meta vars in
+    let ret = mk_simpl_tuple_texpression ctx.meta vars in
 
     (* Introduce a fresh input state variable for the forward expression *)
     let _ctx, state_var, state_pat =
@@ -3229,10 +3208,8 @@ and translate_forward_end (ectx : C.eval_ctx)
     in
 
     let state_var = List.map mk_texpression_from_var state_var in
-    let ret =
-      mk_simpl_tuple_texpression ctx.fun_decl.meta (state_var @ [ ret ])
-    in
-    let ret = mk_result_return_texpression ctx.fun_decl.meta ret in
+    let ret = mk_simpl_tuple_texpression ctx.meta (state_var @ [ ret ]) in
+    let ret = mk_result_return_texpression ctx.meta ret in
 
     (* Introduce all the let-bindings *)
 
@@ -3405,7 +3382,7 @@ and translate_forward_end (ectx : C.eval_ctx)
         in
         let func_ty = mk_arrows input_tys ret_ty in
         let func = { e = Qualif func; ty = func_ty } in
-        let call = mk_apps ctx.fun_decl.meta func args in
+        let call = mk_apps ctx.meta func args in
         call
       in
 
@@ -3464,7 +3441,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
        (fun (sv : V.symbolic_value) ->
          V.SymbolicValueId.Map.mem sv.sv_id ctx.sv_to_var)
        loop.input_svalues)
-    ctx.fun_decl.meta;
+    ctx.meta;
 
   (* Translate the loop inputs *)
   let inputs =
@@ -3486,7 +3463,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
           (fun ty ->
             cassert __FILE__ __LINE__
               (not (TypesUtils.ty_has_borrows !ctx.type_ctx.type_infos ty))
-              !ctx.fun_decl.meta "The types shouldn't contain borrows";
+              !ctx.meta "The types shouldn't contain borrows";
             ctx_translate_fwd_ty !ctx ty)
           tys)
       loop.rg_to_given_back_tys
@@ -3567,7 +3544,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let ctx =
     sanity_check __FILE__ __LINE__
       (not (LoopId.Map.mem loop_id ctx.loops))
-      ctx.fun_decl.meta;
+      ctx.meta;
 
     (* Note that we will retrieve the input values later in the [ForwardEnd]
        (and will introduce the outputs at that moment, together with the actual

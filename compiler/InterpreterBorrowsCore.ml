@@ -864,7 +864,7 @@ let update_intersecting_aproj_borrows (meta : Meta.meta)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
   cassert __FILE__ __LINE__ (Option.is_some !shared) meta
-    "Context was not updated at least once";
+    "Context was not updated";
   (* Return *)
   ctx
 

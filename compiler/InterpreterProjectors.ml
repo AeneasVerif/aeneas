@@ -199,22 +199,22 @@ let rec apply_proj_borrows (meta : Meta.meta) (check_symbolic_no_ended : bool)
       | VSymbolic s, _ ->
           (* Check that the projection doesn't contain already ended regions,
            * if necessary *)
-          if check_symbolic_no_ended then
-            (let ty1 = s.sv_ty in
-             let rset1 = ctx.ended_regions in
-             let ty2 = ty in
-             let rset2 = regions in
-             log#ldebug
-               (lazy
-                 ("projections_intersect:" ^ "\n- ty1: " ^ ty_to_string ctx ty1
-                ^ "\n- rset1: "
-                 ^ RegionId.Set.to_string None rset1
-                 ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
-                 ^ RegionId.Set.to_string None rset2
-                 ^ "\n"));
-             sanity_check __FILE__ __LINE__
-               (not (projections_intersect meta ty1 rset1 ty2 rset2)))
-              meta;
+          if check_symbolic_no_ended then (
+            let ty1 = s.sv_ty in
+            let rset1 = ctx.ended_regions in
+            let ty2 = ty in
+            let rset2 = regions in
+            log#ldebug
+              (lazy
+                ("projections_intersect:" ^ "\n- ty1: " ^ ty_to_string ctx ty1
+               ^ "\n- rset1: "
+                ^ RegionId.Set.to_string None rset1
+                ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
+                ^ RegionId.Set.to_string None rset2
+                ^ "\n"));
+            sanity_check __FILE__ __LINE__
+              (not (projections_intersect meta ty1 rset1 ty2 rset2))
+              meta);
           ASymbolic (AProjBorrows (s, ty))
       | _ ->
           log#lerror

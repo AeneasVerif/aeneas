@@ -443,8 +443,7 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert __FILE__ __LINE__ !replaced meta
-    "Only one loan should have been given back";
+  cassert __FILE__ __LINE__ !replaced meta "No loan updated";
   (* Apply the reborrows *)
   apply_registered_reborrows ctx
 
@@ -503,7 +502,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
   let replaced : bool ref = ref false in
   let set_replaced () =
     cassert __FILE__ __LINE__ (not !replaced) meta
-      "Only one loan should have been updated";
+      "Exacly one loan should be updated";
     replaced := true
   in
   let obj =
@@ -589,7 +588,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert __FILE__ __LINE__ !replaced meta "Only one loan should be given back";
+  cassert __FILE__ __LINE__ !replaced meta "No loan updated";
   (* Return *)
   ctx
 
@@ -608,7 +607,7 @@ let give_back_shared _config (meta : Meta.meta) (bid : BorrowId.id)
   let replaced : bool ref = ref false in
   let set_replaced () =
     cassert __FILE__ __LINE__ (not !replaced) meta
-      "Only one loan should be updated";
+      "Exactly one loan should be updated";
     replaced := true
   in
   let obj =
@@ -673,8 +672,7 @@ let give_back_shared _config (meta : Meta.meta) (bid : BorrowId.id)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert __FILE__ __LINE__ !replaced meta
-    "Exactly one loan should be given back";
+  cassert __FILE__ __LINE__ !replaced meta "No loan updated";
   (* Return *)
   ctx
 
@@ -1553,8 +1551,8 @@ let promote_shared_loan_to_mut_loan (meta : Meta.meta) (l : BorrowId.id)
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
       craise __FILE__ __LINE__ meta
-        "Can't promote a shared loan to a mutable loan if the loan is inside \
-         an abstraction"
+        "Can't promote a shared loan to a mutable loan if the loan is inside a \
+         region abstraction"
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
@@ -1581,7 +1579,7 @@ let replace_reserved_borrow_with_mut_borrow (meta : Meta.meta) (l : BorrowId.id)
         (* This can't happen for sure *)
         craise __FILE__ __LINE__ meta
           "Can't promote a shared borrow to a mutable borrow if the borrow is \
-           inside an abstraction"
+           inside a region abstraction"
   in
   (* Continue *)
   cf ctx
@@ -1647,7 +1645,7 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
       craise __FILE__ __LINE__ meta
         "Can't activate a reserved mutable borrow referencing a loan inside\n\
-        \         an abstraction"
+        \         a region abstraction"
 
 let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
     (destructure_shared_values : bool) (ctx : eval_ctx) (abs0 : abs) : abs =
@@ -2272,12 +2270,11 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
 
   (* Sanity check: there is no loan/borrows which appears in both abstractions,
      unless we allow to merge duplicates *)
-  if merge_funs = None then
-    (sanity_check __FILE__ __LINE__
-       (BorrowId.Set.disjoint borrows0 borrows1)
-       meta;
-     sanity_check __FILE__ __LINE__ (BorrowId.Set.disjoint loans0 loans1))
+  if merge_funs = None then (
+    sanity_check __FILE__ __LINE__
+      (BorrowId.Set.disjoint borrows0 borrows1)
       meta;
+    sanity_check __FILE__ __LINE__ (BorrowId.Set.disjoint loans0 loans1) meta);
 
   (* Merge.
      There are several cases:

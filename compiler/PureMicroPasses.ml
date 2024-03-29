@@ -1989,6 +1989,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
       (List.concat (List.map (fun { f; loops } -> [ f :: loops ]) transl))
   in
   let subgroups = ReorderDecls.group_reorder_fun_decls all_decls in
+
   log#ldebug
     (lazy
       ("filter_loop_inputs: all_decls:\n\n"

@@ -827,13 +827,13 @@ end
 
 (* Very annoying: functors only take modules as inputs... *)
 module type MatchMoveState = sig
+  val meta : Meta.meta
+
   (** The current loop *)
   val loop_id : LoopId.id
 
   (** The moved values *)
   val nvalues : typed_value list ref
-
-  val meta : Meta.meta
 end
 
 (* We use this matcher to move values in environment.
@@ -853,9 +853,9 @@ end
    indeed matches the resulting target environment: it will be re-checked later.
 *)
 module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
-  (** Small utility *)
   let meta = S.meta
 
+  (** Small utility *)
   let push_moved_value (v : typed_value) : unit = S.nvalues := v :: !S.nvalues
 
   let match_etys _ _ ty0 ty1 =
@@ -959,6 +959,8 @@ end
 
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) : CheckEquivMatcher =
 struct
+  let meta = S.meta
+
   module MkGetSetM (Id : Identifiers.Id) = struct
     module Inj = Id.InjSubst
 
@@ -1000,8 +1002,6 @@ struct
       Id.Set.of_list
         (match_el msg m (Id.Set.elements ks0) (Id.Set.elements ks1))
   end
-
-  let meta = S.meta
 
   module GetSetRid = MkGetSetM (RegionId)
 
@@ -1383,15 +1383,15 @@ let match_ctxs (meta : Meta.meta) (check_equiv : bool) (fixed_ids : ids_sets)
     | EBinding (BDummy b0, v0) :: env0', EBinding (BDummy b1, v1) :: env1' ->
         (* Sanity check: if the dummy value is an old value, the bindings must
            be the same and their values equal (and the borrows/loans/symbolic *)
-        if DummyVarId.Set.mem b0 fixed_ids.dids then
-          ((* Fixed values: the values must be equal *)
-           sanity_check __FILE__ __LINE__ (b0 = b1) meta;
-           sanity_check __FILE__ __LINE__ (v0 = v1) meta;
-           (* The ids present in the left value must be fixed *)
-           let ids, _ = compute_typed_value_ids v0 in
-           sanity_check __FILE__ __LINE__
-             ((not S.check_equiv) || ids_are_fixed ids))
-            meta;
+        if DummyVarId.Set.mem b0 fixed_ids.dids then (
+          (* Fixed values: the values must be equal *)
+          sanity_check __FILE__ __LINE__ (b0 = b1) meta;
+          sanity_check __FILE__ __LINE__ (v0 = v1) meta;
+          (* The ids present in the left value must be fixed *)
+          let ids, _ = compute_typed_value_ids v0 in
+          sanity_check __FILE__ __LINE__
+            ((not S.check_equiv) || ids_are_fixed ids)
+            meta);
         (* We still match the values - allows to compute mappings (which
            are the identity actually) *)
         let _ = M.match_typed_values ctx0 ctx1 v0 v1 in
@@ -1457,9 +1457,16 @@ let match_ctxs (meta : Meta.meta) (check_equiv : bool) (fixed_ids : ids_sets)
       }
     in
     Some maps
-  with Distinct msg ->
-    log#ldebug (lazy ("match_ctxs: distinct: " ^ msg));
-    None
+  with
+  | Distinct msg ->
+      log#ldebug (lazy ("match_ctxs: distinct: " ^ msg ^ "\n"));
+      None
+  | ValueMatchFailure k ->
+      log#ldebug
+        (lazy
+          ("match_ctxs: distinct: ValueMatchFailure" ^ show_updt_env_kind k
+         ^ "\n"));
+      None
 
 let ctxs_are_equivalent (meta : Meta.meta) (fixed_ids : ids_sets)
     (ctx0 : eval_ctx) (ctx1 : eval_ctx) : bool =

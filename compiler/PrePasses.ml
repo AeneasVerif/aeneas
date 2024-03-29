@@ -402,8 +402,8 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
     let check_visitor =
       object
         inherit [_] iter_statement as super
-        (* Remember the span of the statement we enter *)
 
+        (* Remember the span of the statement we enter *)
         method! visit_statement _ st = super#visit_statement st.meta st
 
         method! visit_var_id meta id =

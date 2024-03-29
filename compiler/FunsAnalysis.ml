@@ -119,7 +119,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
           method! visit_Call env call =
             (match call.func with
             | FnOpMove _ ->
-                (* Ignoring this: we lookup t he called function upon creating
+                (* Ignoring this: we lookup the called function upon creating
                    the closure *)
                 ()
             | FnOpRegular func -> (
@@ -145,9 +145,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
         end
       in
       (* Sanity check: global bodies don't contain stateful calls *)
-      sanity_check __FILE__ __LINE__
+      cassert __FILE__ __LINE__
         ((not f.is_global_decl_body) || not !stateful)
-        f.meta;
+        f.meta "Global definition containing a stateful call in its body";
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;

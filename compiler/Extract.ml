@@ -509,8 +509,6 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx)
       | Error (types, err) ->
           extract_generic_args meta ctx fmt TypeDeclId.Set.empty
             { generics with types };
-          (* if !Config.fail_hard then craise __FILE__ __LINE__ meta err
-             else *)
           save_error __FILE__ __LINE__ (Some meta) err;
           F.pp_print_string fmt
             "(\"ERROR: ill-formed builtin: invalid number of filtering \
@@ -1876,8 +1874,8 @@ let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   let meta = body.meta in
-  sanity_check __FILE__ __LINE__ body.is_global_decl_body body.meta;
-  sanity_check __FILE__ __LINE__ (body.signature.inputs = []) body.meta;
+  sanity_check __FILE__ __LINE__ body.is_global_decl_body meta;
+  sanity_check __FILE__ __LINE__ (body.signature.inputs = []) meta;
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
@@ -2232,7 +2230,8 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   cassert __FILE__ __LINE__
     (trait_impl.provided_methods = [])
     trait_impl.meta
-    ("Overriding provided methods is not supported yet (overriden methods: "
+    ("Overriding trait provided methods in trait implementations is not \
+      supported yet (overriden methods: "
     ^ String.concat ", " (List.map fst trait_impl.provided_methods)
     ^ ")");
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
@@ -2622,8 +2621,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
   in
   extract_trait_impl_item ctx fmt fun_name ty
 
-(** Extract a trait implementation  
-*)
+(** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
   log#ldebug (lazy ("extract_trait_impl: " ^ name_to_string ctx impl.llbc_name));
