@@ -282,7 +282,10 @@ let () =
          (* The error should have been saved *)
          let meta =
            match !Errors.error_list with
-           | (m, _) :: _ -> m
+           | (m, msg') :: _ ->
+               (* The last saved message should be the current error - but
+                  good to check *)
+               if msg = msg' then m else None
            | _ -> (* Want to be safe here *) None
          in
          let msg =
