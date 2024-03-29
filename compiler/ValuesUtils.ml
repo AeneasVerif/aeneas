@@ -33,7 +33,9 @@ let mk_aignored (meta : Meta.meta) (ty : ty) : typed_avalue =
   { value = AIgnored; ty }
 
 let value_as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
-  match v with VSymbolic v -> v | _ -> craise __FILE__ __LINE__ meta "Unexpected"
+  match v with
+  | VSymbolic v -> v
+  | _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 (** Box a value *)
 let mk_box_value (meta : Meta.meta) (v : typed_value) : typed_value =
@@ -50,7 +52,9 @@ let is_symbolic (v : value) : bool =
   match v with VSymbolic _ -> true | _ -> false
 
 let as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
-  match v with VSymbolic s -> s | _ -> craise __FILE__ __LINE__ meta "Unexpected"
+  match v with
+  | VSymbolic s -> s
+  | _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 let as_mut_borrow (meta : Meta.meta) (v : typed_value) :
     BorrowId.id * typed_value =

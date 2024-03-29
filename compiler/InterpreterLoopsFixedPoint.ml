@@ -270,10 +270,13 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) :
     (* Rem.: the below sanity checks are not really necessary *)
     sanity_check __FILE__ __LINE__ (AbstractionId.Set.is_empty abs.parents) meta;
     sanity_check __FILE__ __LINE__ (abs.original_parents = []) meta;
-    sanity_check __FILE__ __LINE__ (RegionId.Set.is_empty abs.ancestors_regions) meta;
+    sanity_check __FILE__ __LINE__
+      (RegionId.Set.is_empty abs.ancestors_regions)
+      meta;
 
     (* Introduce the new abstraction for the shared values *)
-    cassert __FILE__ __LINE__ (ty_no_regions sv.ty) meta "Nested borrows are not supported yet";
+    cassert __FILE__ __LINE__ (ty_no_regions sv.ty) meta
+      "Nested borrows are not supported yet";
     let rty = sv.ty in
 
     (* Create the shared loan child *)
@@ -481,7 +484,8 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
         craise __FILE__ __LINE__ meta "Unreachable"
     | Continue i ->
         (* For now we don't support continues to outer loops *)
-        cassert __FILE__ __LINE__ (i = 0) meta "Continues to outer loops not supported yet";
+        cassert __FILE__ __LINE__ (i = 0) meta
+          "Continues to outer loops not supported yet";
         register_ctx ctx;
         None
     | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
@@ -736,7 +740,9 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
 
     (* We also check that all the regions need to end - this is not necessary per
        se, but if it doesn't happen it is bizarre and worth investigating... *)
-    sanity_check __FILE__ __LINE__ (AbstractionId.Set.equal !aids_union !fp_aids) meta;
+    sanity_check __FILE__ __LINE__
+      (AbstractionId.Set.equal !aids_union !fp_aids)
+      meta;
 
     (* Merge the abstractions which need to be merged, and compute the map from
        region id to abstraction id *)
@@ -794,7 +800,8 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
                     fp := fp';
                     id0 := id0';
                     ()
-                  with ValueMatchFailure _ -> craise __FILE__ __LINE__ meta "Unexpected")
+                  with ValueMatchFailure _ ->
+                    craise __FILE__ __LINE__ meta "Unexpected")
                 ids;
               (* Register the mapping *)
               let abs = ctx_lookup_abs !fp !id0 in
@@ -957,7 +964,9 @@ let compute_fixed_point_id_correspondance (meta : Meta.meta)
           ids.loan_ids
       in
       (* Check that the loan and borrows are related *)
-      sanity_check __FILE__ __LINE__ (BorrowId.Set.equal ids.borrow_ids loan_ids) meta)
+      sanity_check __FILE__ __LINE__
+        (BorrowId.Set.equal ids.borrow_ids loan_ids)
+        meta)
     new_absl;
 
   (* For every target abstraction (going back to the [list_nth_mut] example,

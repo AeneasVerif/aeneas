@@ -397,16 +397,21 @@ let adt_g_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
           if variant_id = result_return_id then
             match field_values with
             | [ v ] -> "@Result::Return " ^ v
-            | _ -> craise_opt_meta __FILE__ __LINE__ meta "Result::Return takes exactly one value"
+            | _ ->
+                craise_opt_meta __FILE__ __LINE__ meta
+                  "Result::Return takes exactly one value"
           else if variant_id = result_fail_id then
             match field_values with
             | [ v ] -> "@Result::Fail " ^ v
-            | _ -> craise_opt_meta __FILE__ __LINE__ meta "Result::Fail takes exactly one value"
+            | _ ->
+                craise_opt_meta __FILE__ __LINE__ meta
+                  "Result::Fail takes exactly one value"
           else
             craise_opt_meta __FILE__ __LINE__ meta
               "Unreachable: improper variant id for result type"
       | TError ->
-          cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta "TODO: error message";
+          cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta
+            "TODO: error message";
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
@@ -416,17 +421,21 @@ let adt_g_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then (
-            cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta "TODO: error message";
+            cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta
+              "TODO: error message";
             "@Fuel::Zero")
           else if variant_id = fuel_succ_id then
             match field_values with
             | [ v ] -> "@Fuel::Succ " ^ v
-            | _ -> craise_opt_meta __FILE__ __LINE__ meta "@Fuel::Succ takes exactly one value"
+            | _ ->
+                craise_opt_meta __FILE__ __LINE__ meta
+                  "@Fuel::Succ takes exactly one value"
           else
             craise_opt_meta __FILE__ __LINE__ meta
               "Unreachable: improper variant id for fuel type"
       | TArray | TSlice | TStr ->
-          cassert_opt_meta __FILE__ __LINE__ (variant_id = None) meta "TODO: error message";
+          cassert_opt_meta __FILE__ __LINE__ (variant_id = None) meta
+            "TODO: error message";
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in

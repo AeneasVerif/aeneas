@@ -281,7 +281,9 @@ let lets_require_wrap_in_do (meta : Meta.meta)
       (* HOL4 is similar to HOL4, but we add a sanity check *)
       let wrap_in_do = List.exists (fun (m, _, _) -> m) lets in
       if wrap_in_do then
-        sanity_check __FILE__ __LINE__ (List.for_all (fun (m, _, _) -> m) lets) meta;
+        sanity_check __FILE__ __LINE__
+          (List.for_all (fun (m, _, _) -> m) lets)
+          meta;
       wrap_in_do
   | FStar | Coq -> false
 
@@ -485,7 +487,9 @@ and extract_function_call (meta : Meta.meta) (ctx : extraction_ctx)
           F.pp_print_string fmt fun_name);
 
       (* Sanity check: HOL4 doesn't support const generics *)
-      sanity_check __FILE__ __LINE__ (generics.const_generics = [] || !backend <> HOL4) meta;
+      sanity_check __FILE__ __LINE__
+        (generics.const_generics = [] || !backend <> HOL4)
+        meta;
       (* Print the generics.
 
          We might need to filter some of the type arguments, if the type
@@ -1872,8 +1876,11 @@ let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   let meta = body.meta in
-  cassert __FILE__ __LINE__ body.is_global_decl_body body.meta "TODO: Error message";
-  cassert __FILE__ __LINE__ (body.signature.inputs = []) body.meta "TODO: Error message";
+  cassert __FILE__ __LINE__ body.is_global_decl_body body.meta
+    "TODO: Error message";
+  cassert __FILE__ __LINE__
+    (body.signature.inputs = [])
+    body.meta "TODO: Error message";
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;

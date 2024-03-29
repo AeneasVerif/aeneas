@@ -78,7 +78,9 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
       method! visit_aproj current_abs aproj =
         (match aproj with
         | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
-            sanity_check __FILE__ __LINE__ (not (same_symbolic_id sv original_sv)) meta
+            sanity_check __FILE__ __LINE__
+              (not (same_symbolic_id sv original_sv))
+              meta
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj current_abs aproj
 
@@ -228,7 +230,8 @@ let compute_expanded_symbolic_non_assumed_adt_value (meta : Meta.meta)
   in
   (* Check if there is strictly more than one variant *)
   if List.length variants_fields_types > 1 && not expand_enumerations then
-    craise __FILE__ __LINE__ meta "Not allowed to expand enumerations with several variants";
+    craise __FILE__ __LINE__ meta
+      "Not allowed to expand enumerations with several variants";
   (* Initialize the expanded value for a given variant *)
   let initialize ((variant_id, field_types) : VariantId.id option * rty list) :
       symbolic_expansion =
@@ -279,7 +282,8 @@ let compute_expanded_symbolic_adt_value (meta : Meta.meta)
   | TAssumed TBox, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value meta boxed_ty ]
   | _ ->
-      craise __FILE__ __LINE__ meta "compute_expanded_symbolic_adt_value: unexpected combination"
+      craise __FILE__ __LINE__ meta
+        "compute_expanded_symbolic_adt_value: unexpected combination"
 
 let expand_symbolic_value_shared_borrow (config : config) (meta : Meta.meta)
     (original_sv : symbolic_value) (original_sv_place : SA.mplace option)
@@ -356,7 +360,9 @@ let expand_symbolic_value_shared_borrow (config : config) (meta : Meta.meta)
       method! visit_aproj proj_regions aproj =
         (match aproj with
         | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
-            sanity_check __FILE__ __LINE__ (not (same_symbolic_id sv original_sv)) meta
+            sanity_check __FILE__ __LINE__
+              (not (same_symbolic_id sv original_sv))
+              meta
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj proj_regions aproj
 
@@ -402,7 +408,9 @@ let expand_symbolic_value_borrow (config : config) (meta : Meta.meta)
  fun cf ctx ->
   sanity_check __FILE__ __LINE__ (region <> RErased) meta;
   (* Check that we are allowed to expand the reference *)
-  sanity_check __FILE__ __LINE__ (not (region_in_set region ctx.ended_regions)) meta;
+  sanity_check __FILE__ __LINE__
+    (not (region_in_set region ctx.ended_regions))
+    meta;
   (* Match on the reference kind *)
   match rkind with
   | RMut ->
@@ -490,7 +498,9 @@ let apply_branching_symbolic_expansions_non_borrow (config : config)
     match resl with
     | Some _ :: _ -> Some (List.map Option.get resl)
     | None :: _ ->
-        List.iter (fun res -> sanity_check __FILE__ __LINE__ (res = None) meta) resl;
+        List.iter
+          (fun res -> sanity_check __FILE__ __LINE__ (res = None) meta)
+          resl;
         None
     | _ -> craise __FILE__ __LINE__ meta "Unreachable"
   in
@@ -573,7 +583,9 @@ let expand_symbolic_value_no_branching (config : config) (meta : Meta.meta)
             ^ eval_ctx_to_string ~meta:(Some meta) ctx
             ^ "\n"));
         (* Sanity check: the symbolic value has disappeared *)
-        sanity_check __FILE__ __LINE__ (not (symbolic_value_id_in_ctx original_sv.sv_id ctx)) meta)
+        sanity_check __FILE__ __LINE__
+          (not (symbolic_value_id_in_ctx original_sv.sv_id ctx))
+          meta)
   in
   (* Continue *)
   cc cf ctx
@@ -603,7 +615,9 @@ let expand_symbolic_adt (config : config) (meta : Meta.meta)
       let seel = List.map (fun see -> (Some see, cf_branches)) seel in
       apply_branching_symbolic_expansions_non_borrow config meta original_sv
         original_sv_place seel cf_after_join ctx
-  | _ -> craise __FILE__ __LINE__ meta ("expand_symbolic_adt: unexpected type: " ^ show_rty rty)
+  | _ ->
+      craise __FILE__ __LINE__ meta
+        ("expand_symbolic_adt: unexpected type: " ^ show_rty rty)
 
 let expand_symbolic_int (config : config) (meta : Meta.meta)
     (sv : symbolic_value) (sv_place : SA.mplace option)
@@ -684,7 +698,8 @@ let greedy_expand_symbolics_with_borrows (config : config) (meta : Meta.meta) :
                     of [config]): "
                   ^ name_to_string ctx def.name)
             | Opaque ->
-                craise __FILE__ __LINE__ meta "Attempted to greedily expand an opaque type");
+                craise __FILE__ __LINE__ meta
+                  "Attempted to greedily expand an opaque type");
             (* Also, we need to check if the definition is recursive *)
             if ctx_type_decl_is_rec ctx def_id then
               craise __FILE__ __LINE__ meta

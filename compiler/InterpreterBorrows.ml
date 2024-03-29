@@ -308,7 +308,8 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
                   ("give_back_value: improper type:\n- expected: "
                  ^ ty_to_string ctx ty ^ "\n- received: "
                  ^ ty_to_string ctx nv.ty);
-                craise __FILE__ __LINE__ meta "Value given back doesn't have the proper type");
+                craise __FILE__ __LINE__ meta
+                  "Value given back doesn't have the proper type");
               (* Replace *)
               set_replaced ();
               nv.value)
@@ -442,7 +443,8 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert __FILE__ __LINE__ !replaced meta "Only one loan should have been given back";
+  cassert __FILE__ __LINE__ !replaced meta
+    "Only one loan should have been given back";
   (* Apply the reborrows *)
   apply_registered_reborrows ctx
 
@@ -451,7 +453,9 @@ let give_back_symbolic_value (_config : config) (meta : Meta.meta)
     (proj_regions : RegionId.Set.t) (proj_ty : rty) (sv : symbolic_value)
     (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
-  sanity_check __FILE__ __LINE__ (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty) meta;
+  sanity_check __FILE__ __LINE__
+    (sv.sv_id <> nsv.sv_id && ty_is_rty proj_ty)
+    meta;
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
@@ -498,7 +502,8 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
-    cassert __FILE__ __LINE__ (not !replaced) meta "Only one loan should have been updated";
+    cassert __FILE__ __LINE__ (not !replaced) meta
+      "Only one loan should have been updated";
     replaced := true
   in
   let obj =
@@ -541,7 +546,8 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
                   ("give_back_avalue_to_same_abstraction: improper type:\n\
                     - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
                  ^ ty_to_string ctx nv.ty);
-                craise __FILE__ __LINE__ meta "Value given back doesn't have the proper type");
+                craise __FILE__ __LINE__ meta
+                  "Value given back doesn't have the proper type");
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
                * an ended loan *)
@@ -601,7 +607,8 @@ let give_back_shared _config (meta : Meta.meta) (bid : BorrowId.id)
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
-    cassert __FILE__ __LINE__ (not !replaced) meta "Only one loan should be updated";
+    cassert __FILE__ __LINE__ (not !replaced) meta
+      "Only one loan should be updated";
     replaced := true
   in
   let obj =
@@ -666,7 +673,8 @@ let give_back_shared _config (meta : Meta.meta) (bid : BorrowId.id)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert __FILE__ __LINE__ !replaced meta "Exactly one loan should be given back";
+  cassert __FILE__ __LINE__ !replaced meta
+    "Exactly one loan should be given back";
   (* Return *)
   ctx
 
@@ -773,21 +781,27 @@ let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id)
       sanity_check __FILE__ __LINE__ (l' = l) meta;
       sanity_check __FILE__ __LINE__ (not (loans_in_value tv)) meta;
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      sanity_check __FILE__ __LINE__ (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
+      sanity_check __FILE__ __LINE__
+        (Option.is_some (lookup_loan_opt meta sanity_ek l ctx))
+        meta;
       (* Update the context *)
       give_back_value config meta l tv ctx
   | Concrete (VSharedBorrow l' | VReservedMutBorrow l') ->
       (* Sanity check *)
       sanity_check __FILE__ __LINE__ (l' = l) meta;
       (* Check that the borrow is somewhere - purely a sanity check *)
-      sanity_check __FILE__ __LINE__ (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
+      sanity_check __FILE__ __LINE__
+        (Option.is_some (lookup_loan_opt meta sanity_ek l ctx))
+        meta;
       (* Update the context *)
       give_back_shared config meta l ctx
   | Abstract (AMutBorrow (l', av)) ->
       (* Sanity check *)
       sanity_check __FILE__ __LINE__ (l' = l) meta;
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      sanity_check __FILE__ __LINE__ (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
+      sanity_check __FILE__ __LINE__
+        (Option.is_some (lookup_loan_opt meta sanity_ek l ctx))
+        meta;
       (* Convert the avalue to a (fresh symbolic) value.
 
          Rem.: we shouldn't do this here. We should do this in a function
@@ -802,7 +816,9 @@ let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id)
       (* Sanity check *)
       sanity_check __FILE__ __LINE__ (l' = l) meta;
       (* Check that the borrow is somewhere - purely a sanity check *)
-      sanity_check __FILE__ __LINE__ (Option.is_some (lookup_loan_opt meta sanity_ek l ctx)) meta;
+      sanity_check __FILE__ __LINE__
+        (Option.is_some (lookup_loan_opt meta sanity_ek l ctx))
+        meta;
       (* Update the context *)
       give_back_shared config meta l ctx
   | Abstract (AProjSharedBorrow asb) ->
@@ -946,7 +962,9 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
       (* Sanity check: the borrowed value shouldn't contain loans *)
       (match bc with
       | Concrete (VMutBorrow (_, bv)) ->
-          sanity_check __FILE__ __LINE__ (Option.is_none (get_first_loan_in_value bv)) meta
+          sanity_check __FILE__ __LINE__
+            (Option.is_none (get_first_loan_in_value bv))
+            meta
       | _ -> ());
       (* Give back the value *)
       let ctx = give_back config meta l bc ctx in
@@ -1602,7 +1620,9 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
               ("activate_reserved_mut_borrow: resulting value:\n"
               ^ typed_value_to_string ~meta:(Some meta) ctx sv));
           sanity_check __FILE__ __LINE__ (not (loans_in_value sv)) meta;
-          sanity_check __FILE__ __LINE__ (not (bottom_in_value ctx.ended_regions sv)) meta;
+          sanity_check __FILE__ __LINE__
+            (not (bottom_in_value ctx.ended_regions sv))
+            meta;
           sanity_check __FILE__ __LINE__ (not (reserved_in_value sv)) meta;
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
@@ -1737,7 +1757,8 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
             list_avalues false push_fail child_av
         | AProjSharedBorrow asb ->
             (* We don't support nested borrows *)
-            cassert __FILE__ __LINE__ (asb = []) meta "Nested borrows are not supported yet";
+            cassert __FILE__ __LINE__ (asb = []) meta
+              "Nested borrows are not supported yet";
             (* Nothing specific to do *)
             ()
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
@@ -1749,7 +1770,9 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
     | ASymbolic _ ->
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
-        sanity_check __FILE__ __LINE__ (not (ty_has_borrows ctx.type_ctx.type_infos ty)) meta
+        sanity_check __FILE__ __LINE__
+          (not (ty_has_borrows ctx.type_ctx.type_infos ty))
+          meta
   and list_values (v : typed_value) : typed_avalue list * typed_value =
     let ty = v.ty in
     match v.value with
@@ -1803,7 +1826,9 @@ let destructure_abs (meta : Meta.meta) (abs_kind : abs_kind) (can_end : bool)
     | VSymbolic _ ->
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
-        sanity_check __FILE__ __LINE__ (not (ty_has_borrows ctx.type_ctx.type_infos ty)) meta;
+        sanity_check __FILE__ __LINE__
+          (not (ty_has_borrows ctx.type_ctx.type_infos ty))
+          meta;
         ([], v)
   in
 
@@ -2033,7 +2058,9 @@ let compute_merge_abstraction_info (meta : Meta.meta) (ctx : eval_ctx)
     loans := BorrowId.Set.union !loans ids;
     BorrowId.Set.iter
       (fun id ->
-        sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem id !loan_to_content)) meta;
+        sanity_check __FILE__ __LINE__
+          (not (BorrowId.Map.mem id !loan_to_content))
+          meta;
         loan_to_content := BorrowId.Map.add id lc !loan_to_content;
         borrows_loans := LoanId id :: !borrows_loans)
       ids
@@ -2041,14 +2068,18 @@ let compute_merge_abstraction_info (meta : Meta.meta) (ctx : eval_ctx)
   let push_loan id (lc : g_loan_content_with_ty) : unit =
     sanity_check __FILE__ __LINE__ (not (BorrowId.Set.mem id !loans)) meta;
     loans := BorrowId.Set.add id !loans;
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem id !loan_to_content)) meta;
+    sanity_check __FILE__ __LINE__
+      (not (BorrowId.Map.mem id !loan_to_content))
+      meta;
     loan_to_content := BorrowId.Map.add id lc !loan_to_content;
     borrows_loans := LoanId id :: !borrows_loans
   in
   let push_borrow id (bc : g_borrow_content_with_ty) : unit =
     sanity_check __FILE__ __LINE__ (not (BorrowId.Set.mem id !borrows)) meta;
     borrows := BorrowId.Set.add id !borrows;
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem id !borrow_to_content)) meta;
+    sanity_check __FILE__ __LINE__
+      (not (BorrowId.Map.mem id !borrow_to_content))
+      meta;
     borrow_to_content := BorrowId.Map.add id bc !borrow_to_content;
     borrows_loans := BorrowId id :: !borrows_loans
   in
@@ -2129,7 +2160,9 @@ let compute_merge_abstraction_info (meta : Meta.meta) (ctx : eval_ctx)
 
       method! visit_symbolic_value _ sv =
         (* Sanity check: no borrows *)
-        sanity_check __FILE__ __LINE__ (not (symbolic_value_has_borrows ctx sv)) meta
+        sanity_check __FILE__ __LINE__
+          (not (symbolic_value_has_borrows ctx sv))
+          meta
     end
   in
 
@@ -2240,7 +2273,9 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
   (* Sanity check: there is no loan/borrows which appears in both abstractions,
      unless we allow to merge duplicates *)
   if merge_funs = None then
-    (sanity_check __FILE__ __LINE__ (BorrowId.Set.disjoint borrows0 borrows1) meta;
+    (sanity_check __FILE__ __LINE__
+       (BorrowId.Set.disjoint borrows0 borrows1)
+       meta;
      sanity_check __FILE__ __LINE__ (BorrowId.Set.disjoint loans0 loans1))
       meta;
 
@@ -2358,8 +2393,12 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
              to preserve (in practice it works because we destructure the
              shared values in the abstractions, and forbid nested borrows).
           *)
-          sanity_check __FILE__ __LINE__ (not (value_has_loans_or_borrows ctx sv0.value)) meta;
-          sanity_check __FILE__ __LINE__ (not (value_has_loans_or_borrows ctx sv0.value)) meta;
+          sanity_check __FILE__ __LINE__
+            (not (value_has_loans_or_borrows ctx sv0.value))
+            meta;
+          sanity_check __FILE__ __LINE__
+            (not (value_has_loans_or_borrows ctx sv0.value))
+            meta;
           sanity_check __FILE__ __LINE__ (is_aignored child0.value) meta;
           sanity_check __FILE__ __LINE__ (is_aignored child1.value) meta;
           None)
@@ -2476,7 +2515,8 @@ let merge_into_abstraction_aux (meta : Meta.meta) (abs_kind : abs_kind)
                               sanity_check __FILE__ __LINE__
                                 (not (BorrowId.Set.is_empty bids))
                                 meta;
-                              sanity_check __FILE__ __LINE__ (is_aignored child.value) meta;
+                              sanity_check __FILE__ __LINE__
+                                (is_aignored child.value) meta;
                               sanity_check __FILE__ __LINE__
                                 (not (value_has_loans_or_borrows ctx sv.value))
                                 meta;

@@ -160,7 +160,8 @@ let eval_loop_symbolic (config : config) (meta : meta)
           cf res ctx
       | Continue i ->
           (* We don't support nested loops for now *)
-          cassert __FILE__ __LINE__ (i = 0) meta "Nested loops are not supported yet";
+          cassert __FILE__ __LINE__ (i = 0) meta
+            "Nested loops are not supported yet";
           log#ldebug
             (lazy
               ("eval_loop_symbolic: about to match the fixed-point context \

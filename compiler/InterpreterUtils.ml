@@ -508,8 +508,12 @@ let instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
   (* Generate the type substitution
      Note that for now we don't support instantiating the type parameters with
      types containing regions. *)
-  sanity_check __FILE__ __LINE__ (List.for_all TypesUtils.ty_no_regions generics.types) meta;
-  sanity_check __FILE__ __LINE__ (TypesUtils.trait_instance_id_no_regions tr_self) meta;
+  sanity_check __FILE__ __LINE__
+    (List.for_all TypesUtils.ty_no_regions generics.types)
+    meta;
+  sanity_check __FILE__ __LINE__
+    (TypesUtils.trait_instance_id_no_regions tr_self)
+    meta;
   let tsubst =
     Substitute.make_type_subst_from_vars sg.generics.types generics.types
   in

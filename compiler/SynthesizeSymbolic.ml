@@ -70,7 +70,9 @@ let synthesize_symbolic_expansion (meta : Meta.meta) (sv : symbolic_value)
                 VariantId.id option * symbolic_value list =
               match see with
               | Some (SeAdt (vid, fields)) -> (vid, fields)
-              | _ -> craise __FILE__ __LINE__ meta "Ill-formed branching ADT expansion"
+              | _ ->
+                  craise __FILE__ __LINE__ meta
+                    "Ill-formed branching ADT expansion"
             in
             let exp =
               List.map

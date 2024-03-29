@@ -110,7 +110,9 @@ let rec compare_rtys (meta : Meta.meta) (default : bool)
       sanity_check __FILE__ __LINE__ (id1 = id2) meta;
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
-      sanity_check __FILE__ __LINE__ (generics1.const_generics = generics2.const_generics) meta;
+      sanity_check __FILE__ __LINE__
+        (generics1.const_generics = generics2.const_generics)
+        meta;
 
       (* We also ignore the trait refs *)
 
@@ -805,7 +807,9 @@ let update_intersecting_aproj_borrows (meta : Meta.meta)
   let set_non_shared () =
     match !shared with
     | None -> shared := Some false
-    | Some _ -> craise __FILE__ __LINE__ meta "Found unexpected intersecting proj_borrows"
+    | Some _ ->
+        craise __FILE__ __LINE__ meta
+          "Found unexpected intersecting proj_borrows"
   in
   let check_proj_borrows is_shared abs sv' proj_ty =
     if
@@ -825,7 +829,9 @@ let update_intersecting_aproj_borrows (meta : Meta.meta)
 
       method! visit_abstract_shared_borrows abs asb =
         (* Sanity check *)
-        (match !shared with Some b -> sanity_check __FILE__ __LINE__ b meta | _ -> ());
+        (match !shared with
+        | Some b -> sanity_check __FILE__ __LINE__ b meta
+        | _ -> ());
         (* Explore *)
         if can_update_shared then
           let abs = Option.get abs in
@@ -857,7 +863,8 @@ let update_intersecting_aproj_borrows (meta : Meta.meta)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
-  cassert __FILE__ __LINE__ (Option.is_some !shared) meta "Context was not updated at least once";
+  cassert __FILE__ __LINE__ (Option.is_some !shared) meta
+    "Context was not updated at least once";
   (* Return *)
   ctx
 
@@ -1156,7 +1163,8 @@ let no_aproj_over_symbolic_in_context (meta : Meta.meta) (sv : symbolic_value)
   in
   (* Apply *)
   try obj#visit_eval_ctx () ctx
-  with Found -> craise __FILE__ __LINE__ meta "update_aproj_loans_to_ended: failed"
+  with Found ->
+    craise __FILE__ __LINE__ meta "update_aproj_loans_to_ended: failed"
 
 (** Helper function
 

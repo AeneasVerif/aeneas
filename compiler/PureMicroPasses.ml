@@ -222,7 +222,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Register a variable for constraints propagation - used when an variable is
    * introduced (left-hand side of a left binding) *)
   let register_var (ctx : pn_ctx) (v : var) : pn_ctx =
-    sanity_check __FILE__ __LINE__ (not (VarId.Map.mem v.id ctx.pure_vars)) def.meta;
+    sanity_check __FILE__ __LINE__
+      (not (VarId.Map.mem v.id ctx.pure_vars))
+      def.meta;
     match v.basename with
     | None -> ctx
     | Some name ->
@@ -1198,7 +1200,8 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 in
                 let fields =
                   match adt_decl.kind with
-                  | Enum _ | Opaque -> craise __FILE__ __LINE__ def.meta "Unreachable"
+                  | Enum _ | Opaque ->
+                      craise __FILE__ __LINE__ def.meta "Unreachable"
                   | Struct fields -> fields
                 in
                 let num_fields = List.length fields in

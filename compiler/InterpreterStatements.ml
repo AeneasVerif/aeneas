@@ -243,7 +243,9 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
              a variant with all its fields set to {!Bottom}
         *)
         match av.variant_id with
-        | None -> craise __FILE__ __LINE__ meta "Found a struct value while expected an enum"
+        | None ->
+            craise __FILE__ __LINE__ meta
+              "Found a struct value while expected an enum"
         | Some variant_id' ->
             if variant_id' = variant_id then (* Nothing to do *)
               cf Unit ctx
@@ -276,8 +278,10 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
          * setting a discriminant should only be used to initialize a value,
          * or reset an already initialized value, really. *)
         craise __FILE__ __LINE__ meta "Unexpected value"
-    | _, (VAdt _ | VBottom) -> craise __FILE__ __LINE__ meta "Inconsistent state"
-    | _, (VLiteral _ | VBorrow _ | VLoan _) -> craise __FILE__ __LINE__ meta "Unexpected value"
+    | _, (VAdt _ | VBottom) ->
+        craise __FILE__ __LINE__ meta "Inconsistent state"
+    | _, (VLiteral _ | VBorrow _ | VLoan _) ->
+        craise __FILE__ __LINE__ meta "Unexpected value"
   in
   (* Compose and apply *)
   comp cc update_value cf ctx
@@ -434,7 +438,9 @@ let eval_box_new_concrete (config : config) (meta : Meta.meta)
       :: EBinding (_ret_var, _)
       :: EFrame :: _ ) ->
       (* Required type checking *)
-      cassert __FILE__ __LINE__ (input_value.ty = boxed_ty) meta "TODO: Error message";
+      cassert __FILE__ __LINE__
+        (input_value.ty = boxed_ty)
+        meta "TODO: Error message";
 
       (* Move the input value *)
       let cf_move =
@@ -1294,7 +1300,9 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
         let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
         (* Evaluate the input operands *)
-        sanity_check __FILE__ __LINE__ (List.length args = body.arg_count) body.meta;
+        sanity_check __FILE__ __LINE__
+          (List.length args = body.arg_count)
+          body.meta;
         let cc = eval_operands config body.meta args in
 
         (* Push a frame delimiter - we use {!comp_transmit} to transmit the result

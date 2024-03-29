@@ -101,7 +101,9 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
           (match (proj_kind, type_id) with
           | ProjAdt (def_id, opt_variant_id), TAdtId def_id' ->
               sanity_check __FILE__ __LINE__ (def_id = def_id') meta;
-              sanity_check __FILE__ __LINE__ (opt_variant_id = adt.variant_id) meta
+              sanity_check __FILE__ __LINE__
+                (opt_variant_id = adt.variant_id)
+                meta
           | _ -> craise __FILE__ __LINE__ meta "Unreachable");
           (* Actually project *)
           let fv = FieldId.nth adt.field_values field_id in
@@ -117,7 +119,9 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
               Ok (ctx, { res with updated }))
       (* Tuples *)
       | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> (
-          sanity_check __FILE__ __LINE__ (arity = List.length adt.field_values) meta;
+          sanity_check __FILE__ __LINE__
+            (arity = List.length adt.field_values)
+            meta;
           let fv = FieldId.nth adt.field_values field_id in
           (* Project *)
           match access_projection meta access ctx update p' fv with
@@ -191,7 +195,8 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
                       | AEndedIgnoredMutLoan
                           { given_back = _; child = _; given_back_meta = _ }
                       | AIgnoredSharedLoan _ ) ) ->
-                    craise __FILE__ __LINE__ meta "Expected a shared (abstraction) loan"
+                    craise __FILE__ __LINE__ meta
+                      "Expected a shared (abstraction) loan"
                 | _, Abstract (ASharedLoan (bids, sv, _av)) -> (
                     (* Explore the shared value *)
                     match access_projection meta access ctx update p' sv with
@@ -327,7 +332,8 @@ let try_read_place (meta : Meta.meta) (access : access_kind) (p : place)
 let read_place (meta : Meta.meta) (access : access_kind) (p : place)
     (ctx : eval_ctx) : typed_value =
   match try_read_place meta access p ctx with
-  | Error e -> craise __FILE__ __LINE__ meta ("Unreachable: " ^ show_path_fail_kind e)
+  | Error e ->
+      craise __FILE__ __LINE__ meta ("Unreachable: " ^ show_path_fail_kind e)
   | Ok v -> v
 
 (** Attempt to update the value at a given place *)
@@ -345,13 +351,16 @@ let try_write_place (meta : Meta.meta) (access : access_kind) (p : place)
 let write_place (meta : Meta.meta) (access : access_kind) (p : place)
     (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
   match try_write_place meta access p nv ctx with
-  | Error e -> craise __FILE__ __LINE__ meta ("Unreachable: " ^ show_path_fail_kind e)
+  | Error e ->
+      craise __FILE__ __LINE__ meta ("Unreachable: " ^ show_path_fail_kind e)
   | Ok ctx -> ctx
 
 let compute_expanded_bottom_adt_value (meta : Meta.meta) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : typed_value =
-  sanity_check __FILE__ __LINE__ (TypesUtils.generic_args_only_erased_regions generics) meta;
+  sanity_check __FILE__ __LINE__
+    (TypesUtils.generic_args_only_erased_regions generics)
+    meta;
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
@@ -475,7 +484,8 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
         | FailBottom (_, _, _) ->
             (* We can't expand {!Bottom} values while reading them *)
             craise __FILE__ __LINE__ meta "Found [Bottom] while reading a place"
-        | FailBorrow _ -> craise __FILE__ __LINE__ meta "Could not read a borrow"
+        | FailBorrow _ ->
+            craise __FILE__ __LINE__ meta "Could not read a borrow"
       in
       comp cc (update_ctx_along_read_place config meta access p) cf ctx
 
@@ -506,7 +516,8 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
                  pe ty ctx
              in
              cf ctx
-        | FailBorrow _ -> craise __FILE__ __LINE__ meta "Could not write to a borrow"
+        | FailBorrow _ ->
+            craise __FILE__ __LINE__ meta "Could not write to a borrow"
       in
       (* Retry *)
       comp cc (update_ctx_along_write_place config meta access p) cf ctx

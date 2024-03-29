@@ -238,7 +238,9 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_Sequence env st1 st2 =
         match st1.content with
         | Loop _ ->
-            sanity_check __FILE__ __LINE__ (statement_has_no_loop_break_continue st2) st2.meta;
+            sanity_check __FILE__ __LINE__
+              (statement_has_no_loop_break_continue st2)
+              st2.meta;
             (replace_breaks_with st1 st2).content
         | _ -> super#visit_Sequence env st1 st2
     end

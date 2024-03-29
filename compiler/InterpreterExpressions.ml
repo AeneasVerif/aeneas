@@ -142,9 +142,12 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
       (* Sanity check *)
       (match v.ty with
       | TAdt (TAssumed TBox, _) ->
-          exec_raise __FILE__ __LINE__ meta "Can't copy an assumed value other than Option"
+          exec_raise __FILE__ __LINE__ meta
+            "Can't copy an assumed value other than Option"
       | TAdt (TAdtId _, _) as ty ->
-          sanity_check __FILE__ __LINE__ (allow_adt_copy || ty_is_primitively_copyable ty) meta
+          sanity_check __FILE__ __LINE__
+            (allow_adt_copy || ty_is_primitively_copyable ty)
+            meta
       | TAdt (TTuple, _) -> () (* Ok *)
       | TAdt
           ( TAssumed (TSlice | TArray),
@@ -174,13 +177,15 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
           let bid' = fresh_borrow_id () in
           let ctx = InterpreterBorrows.reborrow_shared meta bid bid' ctx in
           (ctx, { v with value = VBorrow (VSharedBorrow bid') })
-      | VMutBorrow (_, _) -> exec_raise __FILE__ __LINE__ meta "Can't copy a mutable borrow"
+      | VMutBorrow (_, _) ->
+          exec_raise __FILE__ __LINE__ meta "Can't copy a mutable borrow"
       | VReservedMutBorrow _ ->
           exec_raise __FILE__ __LINE__ meta "Can't copy a reserved mut borrow")
   | VLoan lc -> (
       (* We can only copy shared loans *)
       match lc with
-      | VMutLoan _ -> exec_raise __FILE__ __LINE__ meta "Can't copy a mutable loan"
+      | VMutLoan _ ->
+          exec_raise __FILE__ __LINE__ meta "Can't copy a mutable loan"
       | VSharedLoan (_, sv) ->
           (* We don't copy the shared loan: only the shared value inside *)
           copy_value meta allow_adt_copy config ctx sv)
@@ -420,7 +425,9 @@ let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand)
     (op2 : operand) (cf : typed_value * typed_value -> m_fun) : m_fun =
   let eval_op = eval_operands config meta [ op1; op2 ] in
   let use_res cf res =
-    match res with [ v1; v2 ] -> cf (v1, v2) | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+    match res with
+    | [ v1; v2 ] -> cf (v1, v2)
+    | _ -> craise __FILE__ __LINE__ meta "Unreachable"
   in
   comp eval_op use_res cf
 
@@ -463,7 +470,9 @@ let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
         let b =
           if Z.of_int 0 = sv.value then false
           else if Z.of_int 1 = sv.value then true
-          else exec_raise __FILE__ __LINE__ meta "Conversion from int to bool: out of range"
+          else
+            exec_raise __FILE__ __LINE__ meta
+              "Conversion from int to bool: out of range"
         in
         let value = VLiteral (VBool b) in
         let ty = TLiteral TBool in
@@ -793,7 +802,9 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
           meta;
         (* Sanity check: the number of values is consistent with the length *)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
-        sanity_check __FILE__ __LINE__ (len = Z.of_int (List.length values)) meta;
+        sanity_check __FILE__ __LINE__
+          (len = Z.of_int (List.length values))
+          meta;
         let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
         let ty = TAdt (TAssumed TArray, generics) in
         (* In order to generate a better AST, we introduce a symbolic
@@ -809,7 +820,8 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
             (* Introduce the symbolic value in the AST *)
             let sv = ValuesUtils.value_as_symbolic meta saggregated.value in
             Some (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)))
-    | AggregatedClosure _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
+    | AggregatedClosure _ ->
+        craise __FILE__ __LINE__ meta "Closures are not supported yet"
   in
   (* Compose and apply *)
   comp eval_ops compute cf

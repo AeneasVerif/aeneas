@@ -196,7 +196,9 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     let infos =
       BorrowId.Map.update repr_bid
         (fun x ->
-          match x with Some _ -> Some info | None -> craise __FILE__ __LINE__ meta "Unreachable")
+          match x with
+          | Some _ -> Some info
+          | None -> craise __FILE__ __LINE__ meta "Unreachable")
         !borrows_infos
     in
     borrows_infos := infos
@@ -212,7 +214,9 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     | RShared, (BShared | BReserved) | RMut, BMut -> ()
     | _ -> craise __FILE__ __LINE__ meta "Invariant not satisfied");
     (* A reserved borrow can't point to a value inside an abstraction *)
-    sanity_check __FILE__ __LINE__ (kind <> BReserved || not info.loan_in_abs) meta;
+    sanity_check __FILE__ __LINE__
+      (kind <> BReserved || not info.loan_in_abs)
+      meta;
     (* Insert the borrow id *)
     let borrow_ids = info.borrow_ids in
     sanity_check __FILE__ __LINE__ (not (BorrowId.Set.mem bid borrow_ids)) meta;
@@ -283,7 +287,10 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
         = BorrowId.Set.elements info.borrow_ids)
         meta;
       match info.loan_kind with
-      | RMut -> sanity_check __FILE__ __LINE__ (BorrowId.Set.cardinal info.loan_ids = 1) meta
+      | RMut ->
+          sanity_check __FILE__ __LINE__
+            (BorrowId.Set.cardinal info.loan_ids = 1)
+            meta
       | RShared -> ())
     !borrows_infos
 
@@ -373,7 +380,8 @@ let check_borrowed_values_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
 let check_literal_type (meta : Meta.meta) (cv : literal) (ty : literal_type) :
     unit =
   match (cv, ty) with
-  | VScalar sv, TInteger int_ty -> sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) meta
+  | VScalar sv, TInteger int_ty ->
+      sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) meta
   | VBool _, TBool | VChar _, TChar -> ()
   | _ -> craise __FILE__ __LINE__ meta "Erroneous typing"
 
@@ -481,8 +489,11 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                      (TypesUtils.const_generic_as_literal cg))
                     .value
                 in
-                sanity_check __FILE__ __LINE__ (Z.of_int (List.length inner_values) = len) meta
-            | (TSlice | TStr), _, _, _, _ -> craise __FILE__ __LINE__ meta "Unexpected"
+                sanity_check __FILE__ __LINE__
+                  (Z.of_int (List.length inner_values) = len)
+                  meta
+            | (TSlice | TStr), _, _, _, _ ->
+                craise __FILE__ __LINE__ meta "Unexpected"
             | _ -> craise __FILE__ __LINE__ meta "Erroneous type")
         | VBottom, _ -> (* Nothing to check *) ()
         | VBorrow bc, TRef (_, ref_ty, rkind) -> (
@@ -503,7 +514,8 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             | _ -> craise __FILE__ __LINE__ meta "Erroneous typing")
         | VLoan lc, ty -> (
             match lc with
-            | VSharedLoan (_, sv) -> sanity_check __FILE__ __LINE__ (sv.ty = ty) meta
+            | VSharedLoan (_, sv) ->
+                sanity_check __FILE__ __LINE__ (sv.ty = ty) meta
             | VMutLoan bid -> (
                 (* Lookup the borrowed value to check it has the proper type *)
                 let glc = lookup_borrow meta ek_all bid ctx in
@@ -511,7 +523,9 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 | Concrete (VMutBorrow (_, bv)) ->
                     sanity_check __FILE__ __LINE__ (bv.ty = ty) meta
                 | Abstract (AMutBorrow (_, sv)) ->
-                    sanity_check __FILE__ __LINE__ (Substitute.erase_regions sv.ty = ty) meta
+                    sanity_check __FILE__ __LINE__
+                      (Substitute.erase_regions sv.ty = ty)
+                      meta
                 | _ -> craise __FILE__ __LINE__ meta "Inconsistent context"))
         | VSymbolic sv, ty ->
             let ty' = Substitute.erase_regions sv.sv_ty in
@@ -607,7 +621,9 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, sv, _)) ->
-                    sanity_check __FILE__ __LINE__ (sv.ty = Substitute.erase_regions ref_ty) meta
+                    sanity_check __FILE__ __LINE__
+                      (sv.ty = Substitute.erase_regions ref_ty)
+                      meta
                 | _ -> craise __FILE__ __LINE__ meta "Inconsistent context")
             | AIgnoredMutBorrow (_opt_bid, av), RMut ->
                 sanity_check __FILE__ __LINE__ (av.ty = ref_ty) meta
@@ -649,7 +665,9 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             | AEndedMutLoan { given_back; child; given_back_meta = _ }
             | AEndedIgnoredMutLoan { given_back; child; given_back_meta = _ } ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                sanity_check __FILE__ __LINE__ (given_back.ty = borrowed_aty) meta;
+                sanity_check __FILE__ __LINE__
+                  (given_back.ty = borrowed_aty)
+                  meta;
                 sanity_check __FILE__ __LINE__ (child.ty = borrowed_aty) meta
             | AIgnoredSharedLoan child_av ->
                 sanity_check __FILE__ __LINE__
@@ -664,19 +682,24 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
-                sanity_check __FILE__ __LINE__ (ty_has_regions_in_set abs.regions sv.sv_ty) meta
+                sanity_check __FILE__ __LINE__
+                  (ty_has_regions_in_set abs.regions sv.sv_ty)
+                  meta
             | AProjBorrows (sv, proj_ty) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
                 sanity_check __FILE__ __LINE__ (ty1 = ty2) meta;
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
-                sanity_check __FILE__ __LINE__ (ty_has_regions_in_set abs.regions proj_ty) meta
+                sanity_check __FILE__ __LINE__
+                  (ty_has_regions_in_set abs.regions proj_ty)
+                  meta
             | AEndedProjLoans (_msv, given_back_ls) ->
                 List.iter
                   (fun (_, proj) ->
                     match proj with
-                    | AProjBorrows (_sv, ty') -> sanity_check __FILE__ __LINE__ (ty' = ty) meta
+                    | AProjBorrows (_sv, ty') ->
+                        sanity_check __FILE__ __LINE__ (ty' = ty) meta
                     | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
                     | _ -> craise __FILE__ __LINE__ meta "Unexpected")
                   given_back_ls
@@ -796,7 +819,9 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
      *)
     (* A symbolic value can't be both in the regular environment and inside
      * projectors of borrows in abstractions *)
-    sanity_check __FILE__ __LINE__ (info.env_count = 0 || info.aproj_borrows = []) meta;
+    sanity_check __FILE__ __LINE__
+      (info.env_count = 0 || info.aproj_borrows = [])
+      meta;
     (* A symbolic value containing borrows can't be duplicated (i.e., copied):
      * it must be expanded first *)
     if ty_has_borrows ctx.type_ctx.type_infos info.ty then
@@ -806,7 +831,9 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
       (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
       meta;
 
-    sanity_check __FILE__ __LINE__ (info.aproj_borrows = [] || info.aproj_loans <> []) meta;
+    sanity_check __FILE__ __LINE__
+      (info.aproj_borrows = [] || info.aproj_loans <> [])
+      meta;
     (* At the same time:
      * - check that the loans don't intersect
      * - compute the set of regions for which we project loans
@@ -818,7 +845,9 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
           let regions =
             RegionId.Set.fold
               (fun rid regions ->
-                sanity_check __FILE__ __LINE__ (not (RegionId.Set.mem rid regions)) meta;
+                sanity_check __FILE__ __LINE__
+                  (not (RegionId.Set.mem rid regions))
+                  meta;
                 RegionId.Set.add rid regions)
               regions linfo.regions
           in

@@ -212,7 +212,8 @@ let rec apply_proj_borrows (meta : Meta.meta) (check_symbolic_no_ended : bool)
                  ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
                  ^ RegionId.Set.to_string None rset2
                  ^ "\n"));
-             sanity_check __FILE__ __LINE__ (not (projections_intersect meta ty1 rset1 ty2 rset2)))
+             sanity_check __FILE__ __LINE__
+               (not (projections_intersect meta ty1 rset1 ty2 rset2)))
               meta;
           ASymbolic (AProjBorrows (s, ty))
       | _ ->
@@ -250,7 +251,8 @@ let symbolic_expansion_non_shared_borrow_to_value (meta : Meta.meta)
       let value = VBorrow (VMutBorrow (bid, bv)) in
       { value; ty }
   | SeSharedRef (_, _) ->
-      craise __FILE__ __LINE__ meta "Unexpected symbolic shared reference expansion"
+      craise __FILE__ __LINE__ meta
+        "Unexpected symbolic shared reference expansion"
   | _ -> symbolic_expansion_non_borrow_to_value meta sv see
 
 (** Apply (and reduce) a projector over loans to a value.
@@ -262,7 +264,9 @@ let apply_proj_loans_on_symbolic_expansion (meta : Meta.meta)
     (see : symbolic_expansion) (original_sv_ty : rty) : typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
-  sanity_check __FILE__ __LINE__ (ty_has_regions_in_set regions original_sv_ty) meta;
+  sanity_check __FILE__ __LINE__
+    (ty_has_regions_in_set regions original_sv_ty)
+    meta;
   (* Match *)
   let (value, ty) : avalue * ty =
     match (see, original_sv_ty) with

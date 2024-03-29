@@ -445,7 +445,8 @@ and translate_trait_instance_id (meta : Meta.meta) (translate_ty : T.ty -> ty)
       let inst_id = translate_trait_instance_id inst_id in
       ItemClause (inst_id, decl_id, item_name, clause_id)
   | TraitRef tr -> TraitRef (translate_trait_ref meta translate_ty tr)
-  | FnPointer _ | Closure _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
+  | FnPointer _ | Closure _ ->
+      craise __FILE__ __LINE__ meta "Closures are not supported yet"
   | UnknownTrait s -> craise __FILE__ __LINE__ meta ("Unknown trait found: " ^ s)
 
 (** Translate a signature type - TODO: factor out the different translation functions *)
@@ -457,7 +458,9 @@ let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
       match type_id with
       | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
       | T.TTuple ->
-          cassert __FILE__ __LINE__ (generics.const_generics = []) meta "TODO: error message";
+          cassert __FILE__ __LINE__
+            (generics.const_generics = [])
+            meta "TODO: error message";
           mk_simpl_tuple_ty generics.types
       | T.TAssumed aty -> (
           match aty with
@@ -817,7 +820,9 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (back_funs : texpression option RegionGroupId.Map.t option) (ctx : bs_ctx) :
     bs_ctx =
   let calls = ctx.calls in
-  sanity_check __FILE__ __LINE__ (not (V.FunCallId.Map.mem call_id calls)) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__
+    (not (V.FunCallId.Map.mem call_id calls))
+    ctx.fun_decl.meta;
   let info = { forward; forward_inputs = args; back_funs } in
   let calls = V.FunCallId.Map.add call_id info calls in
   { ctx with calls }
@@ -953,7 +958,9 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
       (* This is necessarily for the current function *)
       match fun_id with
       | FunId (FRegular fid) -> (
-          sanity_check __FILE__ __LINE__ (fid = ctx.fun_decl.def_id) ctx.fun_decl.meta;
+          sanity_check __FILE__ __LINE__
+            (fid = ctx.fun_decl.def_id)
+            ctx.fun_decl.meta;
           (* Lookup the loop *)
           let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
           let loop_info = LoopId.Map.find lid ctx.loops in
@@ -1591,7 +1598,8 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
     | VLoan lc -> (
         match lc with
         | VSharedLoan (_, v) -> translate v
-        | VMutLoan _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable")
+        | VMutLoan _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "Unreachable"
+        )
     | VBorrow bc -> (
         match bc with
         | VSharedBorrow bid ->
@@ -1726,7 +1734,9 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
       (* The symbolic value was left unchanged *)
       Some (symbolic_value_to_texpression ctx msv)
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
-      sanity_check __FILE__ __LINE__ (child_aproj = AIgnoredProjBorrows) ctx.fun_decl.meta;
+      sanity_check __FILE__ __LINE__
+        (child_aproj = AIgnoredProjBorrows)
+        ctx.fun_decl.meta;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
@@ -2087,9 +2097,13 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
 
 and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     (ctx : bs_ctx) : texpression =
-  sanity_check __FILE__ __LINE__ (is_continue = ctx.inside_loop) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__
+    (is_continue = ctx.inside_loop)
+    ctx.fun_decl.meta;
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__
+    (loop_id = Option.get ctx.loop_id)
+    ctx.fun_decl.meta;
 
   (* Lookup the loop information *)
   let loop_id = Option.get ctx.loop_id in
@@ -2350,7 +2364,8 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, dest)
-        | CastFnPtr _ -> craise __FILE__ __LINE__ ctx.fun_decl.meta "TODO: function casts")
+        | CastFnPtr _ ->
+            craise __FILE__ __LINE__ ctx.fun_decl.meta "TODO: function casts")
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -2359,7 +2374,9 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             (match binop with
             (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
             | E.Shl | E.Shr -> ()
-            | _ -> sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1) ctx.fun_decl.meta);
+            | _ ->
+                sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1)
+                  ctx.fun_decl.meta);
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -2477,7 +2494,9 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   if !Config.type_check_pure_code then
     List.iter
       (fun (var, v) ->
-        sanity_check __FILE__ __LINE__ ((var : var).ty = (v : texpression).ty) ctx.fun_decl.meta)
+        sanity_check __FILE__ __LINE__
+          ((var : var).ty = (v : texpression).ty)
+          ctx.fun_decl.meta)
       variables_values;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2633,7 +2652,8 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
           ^ pure_ty_to_string ctx given_back.ty
           ^ "\n- sig input ty: "
           ^ pure_ty_to_string ctx input.ty));
-      sanity_check __FILE__ __LINE__ (given_back.ty = input.ty) ctx.fun_decl.meta)
+      sanity_check __FILE__ __LINE__ (given_back.ty = input.ty)
+        ctx.fun_decl.meta)
     given_back_inputs;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2650,7 +2670,9 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     texpression =
   let vloop_id = loop_id in
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.fun_decl.meta;
+  sanity_check __FILE__ __LINE__
+    (loop_id = Option.get ctx.loop_id)
+    ctx.fun_decl.meta;
   let rg_id = Option.get rg_id in
   (* There are two cases depending on the [abs_kind] (whether this is a
      synth input or a regular loop call) *)
@@ -3015,7 +3037,8 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
-      craise __FILE__ __LINE__ ctx.fun_decl.meta "Attempt to expand a non-expandable value"
+      craise __FILE__ __LINE__ ctx.fun_decl.meta
+        "Attempt to expand a non-expandable value"
 
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)
@@ -3542,7 +3565,9 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
 
   (* Add the loop information in the context *)
   let ctx =
-    sanity_check __FILE__ __LINE__ (not (LoopId.Map.mem loop_id ctx.loops)) ctx.fun_decl.meta;
+    sanity_check __FILE__ __LINE__
+      (not (LoopId.Map.mem loop_id ctx.loops))
+      ctx.fun_decl.meta;
 
     (* Note that we will retrieve the input values later in the [ForwardEnd]
        (and will introduce the outputs at that moment, together with the actual

@@ -335,8 +335,12 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
       let _, ty1, _ = ty_as_ref ty1 in
-      sanity_check __FILE__ __LINE__ (not (ty_has_borrows ctx.type_ctx.type_infos ty0)) meta;
-      sanity_check __FILE__ __LINE__ (not (ty_has_borrows ctx.type_ctx.type_infos ty1)) meta
+      sanity_check __FILE__ __LINE__
+        (not (ty_has_borrows ctx.type_ctx.type_infos ty0))
+        meta;
+      sanity_check __FILE__ __LINE__
+        (not (ty_has_borrows ctx.type_ctx.type_infos ty1))
+        meta
     in
 
     (* Same remarks as for [merge_amut_borrows] *)
@@ -365,8 +369,12 @@ let mk_collapse_ctx_merge_duplicate_funs (meta : Meta.meta)
        This time we need to also merge the shared values. We rely on the
        join matcher [JM] to do so.
     *)
-    sanity_check __FILE__ __LINE__ (not (value_has_loans_or_borrows ctx sv0.value)) meta;
-    sanity_check __FILE__ __LINE__ (not (value_has_loans_or_borrows ctx sv1.value)) meta;
+    sanity_check __FILE__ __LINE__
+      (not (value_has_loans_or_borrows ctx sv0.value))
+      meta;
+    sanity_check __FILE__ __LINE__
+      (not (value_has_loans_or_borrows ctx sv1.value))
+      meta;
     let ty = ty0 in
     let child = child0 in
     let sv = M.match_typed_values ctx ctx sv0 sv1 in
@@ -437,7 +445,9 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
           (* Variables are necessarily in the prefix *)
           craise __FILE__ __LINE__ meta "Unreachable"
       | EBinding (BDummy did, _) ->
-          sanity_check __FILE__ __LINE__ (not (DummyVarId.Set.mem did fixed_ids.dids)) meta
+          sanity_check __FILE__ __LINE__
+            (not (DummyVarId.Set.mem did fixed_ids.dids))
+            meta
       | EAbs abs ->
           sanity_check __FILE__ __LINE__
             (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
@@ -527,7 +537,8 @@ let join_ctxs (meta : Meta.meta) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
           (* Still in the prefix: the abstractions must be the same *)
-          cassert __FILE__ __LINE__ (abs0 = abs1) meta "The abstractions are not the same";
+          cassert __FILE__ __LINE__ (abs0 = abs1) meta
+            "The abstractions are not the same";
           (* Continue *)
           abs :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)

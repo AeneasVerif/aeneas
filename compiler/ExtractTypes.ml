@@ -148,7 +148,8 @@ let extract_unop (meta : Meta.meta) (extract_expr : bool -> texpression -> unit)
                  (cast_str, None, Some tgt)
              | TInteger _, TBool ->
                  (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
-                 craise __FILE__ __LINE__ meta "Unexpected cast: integer to bool"
+                 craise __FILE__ __LINE__ meta
+                   "Unexpected cast: integer to bool"
              | TBool, TBool ->
                  (* There shouldn't be any cast here. Note that if
                     one writes [b as bool] in Rust (where [b] is a
@@ -534,7 +535,8 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
       extract_rec false ret_ty;
       if inside then F.pp_print_string fmt ")"
   | TTraitType (trait_ref, type_name) -> (
-      if !parameterize_trait_types then craise __FILE__ __LINE__ meta "Unimplemented"
+      if !parameterize_trait_types then
+        craise __FILE__ __LINE__ meta "Unimplemented"
       else
         let type_name =
           ctx_get_trait_type meta trait_ref.trait_decl_ref.trait_decl_id
@@ -818,7 +820,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   (fun variant_id (variant : variant) ->
                     (variant_id, StringMap.find variant.variant_name variant_map))
                   variants
-            | _ -> craise __FILE__ __LINE__ def.meta "Invalid builtin information"
+            | _ ->
+                craise __FILE__ __LINE__ def.meta "Invalid builtin information"
           in
           List.fold_left
             (fun ctx (vid, vname) ->

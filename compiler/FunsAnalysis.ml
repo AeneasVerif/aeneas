@@ -145,7 +145,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
         end
       in
       (* Sanity check: global bodies don't contain stateful calls *)
-      sanity_check __FILE__ __LINE__ ((not f.is_global_decl_body) || not !stateful) f.meta;
+      sanity_check __FILE__ __LINE__
+        ((not f.is_global_decl_body) || not !stateful)
+        f.meta;
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;

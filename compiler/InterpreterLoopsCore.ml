@@ -380,7 +380,9 @@ let ctx_split_fixed_new (meta : Meta.meta) (fixed_ids : ids_sets)
   let new_absl =
     List.map
       (fun ee ->
-        match ee with EAbs abs -> abs | _ -> craise __FILE__ __LINE__ meta "Unreachable")
+        match ee with
+        | EAbs abs -> abs
+        | _ -> craise __FILE__ __LINE__ meta "Unreachable")
       new_absl
   in
   let new_dummyl =

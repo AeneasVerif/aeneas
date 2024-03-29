@@ -433,11 +433,14 @@ let mk_switch (meta : Meta.meta) (scrut : texpression) (sb : switch_body) :
   | If (_, _) -> sanity_check __FILE__ __LINE__ (scrut.ty = TLiteral TBool) meta
   | Match branches ->
       List.iter
-        (fun (b : match_branch) -> sanity_check __FILE__ __LINE__ (b.pat.ty = scrut.ty) meta)
+        (fun (b : match_branch) ->
+          sanity_check __FILE__ __LINE__ (b.pat.ty = scrut.ty) meta)
         branches);
   (* Sanity check: all the branches have the same type *)
   let ty = get_switch_body_ty sb in
-  iter_switch_body_branches (fun e -> sanity_check __FILE__ __LINE__ (e.ty = ty) meta) sb;
+  iter_switch_body_branches
+    (fun e -> sanity_check __FILE__ __LINE__ (e.ty = ty) meta)
+    sb;
   (* Put together *)
   let e = Switch (scrut, sb) in
   { e; ty }
@@ -529,7 +532,9 @@ let ty_as_integer (meta : Meta.meta) (t : ty) : T.integer_type =
   | _ -> craise __FILE__ __LINE__ meta "Unreachable"
 
 let ty_as_literal (meta : Meta.meta) (t : ty) : T.literal_type =
-  match t with TLiteral ty -> ty | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+  match t with
+  | TLiteral ty -> ty
+  | _ -> craise __FILE__ __LINE__ meta "Unreachable"
 
 let mk_state_ty : ty = TAdt (TAssumed TState, empty_generic_args)
 

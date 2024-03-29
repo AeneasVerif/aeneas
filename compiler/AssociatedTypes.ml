@@ -51,7 +51,9 @@ let compute_norm_trait_types_from_preds (meta : Meta.meta option)
     (* Sanity check: the type constraint can't make use of regions - Remark
        that it would be enough to only visit the field [ty] of the trait type
        constraint, but for safety we visit all the fields *)
-    sanity_check_opt_meta __FILE__ __LINE__ (trait_type_constraint_no_regions c) meta;
+    sanity_check_opt_meta __FILE__ __LINE__
+      (trait_type_constraint_no_regions c)
+      meta;
     let { trait_ref; type_name; ty } : trait_type_constraint = c in
     let trait_ty = TTraitType (trait_ref, type_name) in
     let trait_ty_ref = get_ref trait_ty in

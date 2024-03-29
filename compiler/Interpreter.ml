@@ -435,7 +435,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
                 else abs
             | Loop (loop_id', _, LoopCall) ->
                 (* We can end all the loop call abstractions *)
-                sanity_check __FILE__ __LINE__ (loop_id = Some loop_id') fdef.meta;
+                sanity_check __FILE__ __LINE__ (loop_id = Some loop_id')
+                  fdef.meta;
                 { abs with can_end = true }
             | SynthInput rg_id' ->
                 if rg_id' = back_id && end_fun_synth_input then
@@ -636,7 +637,9 @@ module Test = struct
             fdef.name));
 
     (* Sanity check - *)
-    sanity_check __FILE__ __LINE__ (fdef.signature.generics = empty_generic_params) fdef.meta;
+    sanity_check __FILE__ __LINE__
+      (fdef.signature.generics = empty_generic_params)
+      fdef.meta;
     sanity_check __FILE__ __LINE__ (body.arg_count = 0) fdef.meta;
 
     (* Create the evaluation context *)

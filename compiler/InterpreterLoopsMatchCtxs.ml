@@ -96,7 +96,8 @@ let compute_abs_borrows_loans_maps (meta : Meta.meta) (no_duplicates : bool)
         | AIgnoredSharedLoan child ->
             (* Ignore the id of the loan, if there is *)
             self#visit_typed_avalue abs_id child
-        | AEndedMutLoan _ | AEndedSharedLoan _ -> craise __FILE__ __LINE__ meta "Unreachable"
+        | AEndedMutLoan _ | AEndedSharedLoan _ ->
+            craise __FILE__ __LINE__ meta "Unreachable"
 
       (** Make sure we don't register the ignored ids *)
       method! visit_aborrow_content abs_id bc =
@@ -109,7 +110,8 @@ let compute_abs_borrows_loans_maps (meta : Meta.meta) (no_duplicates : bool)
           ->
             (* Ignore the id of the borrow, if there is *)
             self#visit_typed_avalue abs_id child
-        | AEndedMutBorrow _ | AEndedSharedBorrow -> craise __FILE__ __LINE__ meta "Unreachable"
+        | AEndedMutBorrow _ | AEndedSharedBorrow ->
+            craise __FILE__ __LINE__ meta "Unreachable"
 
       method! visit_borrow_id abs_id bid = register_borrow_id abs_id bid
       method! visit_loan_id abs_id lid = register_loan_id abs_id lid
@@ -151,8 +153,12 @@ let rec match_types (meta : Meta.meta) (match_distinct_types : ty -> ty -> ty)
   match (ty0, ty1) with
   | TAdt (id0, generics0), TAdt (id1, generics1) ->
       sanity_check __FILE__ __LINE__ (id0 = id1) meta;
-      sanity_check __FILE__ __LINE__ (generics0.const_generics = generics1.const_generics) meta;
-      sanity_check __FILE__ __LINE__ (generics0.trait_refs = generics1.trait_refs) meta;
+      sanity_check __FILE__ __LINE__
+        (generics0.const_generics = generics1.const_generics)
+        meta;
+      sanity_check __FILE__ __LINE__
+        (generics0.trait_refs = generics1.trait_refs)
+        meta;
       let id = id0 in
       let const_generics = generics1.const_generics in
       let trait_refs = generics1.trait_refs in
@@ -213,8 +219,12 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           { value; ty = v1.ty }
         else (
           (* For now, we don't merge ADTs which contain borrows *)
-          sanity_check __FILE__ __LINE__ (not (value_has_borrows v0.value)) M.meta;
-          sanity_check __FILE__ __LINE__ (not (value_has_borrows v1.value)) M.meta;
+          sanity_check __FILE__ __LINE__
+            (not (value_has_borrows v0.value))
+            M.meta;
+          sanity_check __FILE__ __LINE__
+            (not (value_has_borrows v1.value))
+            M.meta;
           (* Merge *)
           M.match_distinct_adts ctx0 ctx1 ty av0 av1)
     | VBottom, VBottom -> v0
@@ -387,7 +397,9 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             log#ldebug (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
-            sanity_check __FILE__ __LINE__ (not (value_has_borrows sv.value)) M.meta;
+            sanity_check __FILE__ __LINE__
+              (not (value_has_borrows sv.value))
+              M.meta;
             M.match_ashared_loans ctx0 ctx1 v0.ty ids0 sv0 av0 v1.ty ids1 sv1
               av1 ty sv av
         | AMutLoan (id0, av0), AMutLoan (id1, av1) ->
@@ -795,11 +807,21 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   (* As explained in comments: we don't use the join matcher to join avalues,
      only concrete values *)
 
-  let match_distinct_aadts _ _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
-  let match_ashared_borrows _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
-  let match_amut_borrows _ _ _ _ _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
-  let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
-  let match_amut_loans _ _ _ _ _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
+  let match_distinct_aadts _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
+  let match_ashared_borrows _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
+  let match_amut_borrows _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
+  let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
+  let match_amut_loans _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
 end
 
@@ -917,11 +939,21 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
   (* As explained in comments: we don't use the join matcher to join avalues,
      only concrete values *)
 
-  let match_distinct_aadts _ _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
-  let match_ashared_borrows _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
-  let match_amut_borrows _ _ _ _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
-  let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
-  let match_amut_loans _ _ _ _ _ _ _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
+  let match_distinct_aadts _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
+  let match_ashared_borrows _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
+  let match_amut_borrows _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
+  let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
+  let match_amut_loans _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ meta "Unreachable"
+
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ meta "Unreachable"
 end
 
@@ -1129,7 +1161,9 @@ struct
       sanity_check __FILE__ __LINE__ left meta;
       let id = sv.sv_id in
       (* Check: fixed values are fixed *)
-      sanity_check __FILE__ __LINE__ (not (SymbolicValueId.InjSubst.mem id !S.sid_map)) meta;
+      sanity_check __FILE__ __LINE__
+        (not (SymbolicValueId.InjSubst.mem id !S.sid_map))
+        meta;
       (* Update the binding for the target symbolic value *)
       S.sid_to_value_map :=
         SymbolicValueId.Map.add_strict id v !S.sid_to_value_map;
@@ -1355,7 +1389,8 @@ let match_ctxs (meta : Meta.meta) (check_equiv : bool) (fixed_ids : ids_sets)
            sanity_check __FILE__ __LINE__ (v0 = v1) meta;
            (* The ids present in the left value must be fixed *)
            let ids, _ = compute_typed_value_ids v0 in
-           sanity_check __FILE__ __LINE__ ((not S.check_equiv) || ids_are_fixed ids))
+           sanity_check __FILE__ __LINE__
+             ((not S.check_equiv) || ids_are_fixed ids))
             meta;
         (* We still match the values - allows to compute mappings (which
            are the identity actually) *)
@@ -1376,7 +1411,9 @@ let match_ctxs (meta : Meta.meta) (check_equiv : bool) (fixed_ids : ids_sets)
           sanity_check __FILE__ __LINE__ (abs0 = abs1) meta;
           (* Their ids must be fixed *)
           let ids, _ = compute_abs_ids abs0 in
-          sanity_check __FILE__ __LINE__ ((not S.check_equiv) || ids_are_fixed ids) meta;
+          sanity_check __FILE__ __LINE__
+            ((not S.check_equiv) || ids_are_fixed ids)
+            meta;
           (* Continue *)
           match_envs env0' env1')
         else (
@@ -1765,7 +1802,8 @@ let match_ctx_with_target (config : config) (meta : Meta.meta)
        abstractions and in the *variable bindings* once we allow symbolic
        values containing borrows to not be eagerly expanded.
     *)
-    sanity_check __FILE__ __LINE__ Config.greedy_expand_symbolics_with_borrows meta;
+    sanity_check __FILE__ __LINE__ Config.greedy_expand_symbolics_with_borrows
+      meta;
 
     (* Update the borrows and loans in the abstractions of the target context.
 

@@ -34,7 +34,9 @@ let get_adt_field_types (meta : Meta.meta)
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
-          else craise __FILE__ __LINE__ meta "Unreachable: improper variant id for result type"
+          else
+            craise __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for result type"
       | TError ->
           sanity_check __FILE__ __LINE__ (generics = empty_generic_args) meta;
           let variant_id = Option.get variant_id in
@@ -46,11 +48,14 @@ let get_adt_field_types (meta : Meta.meta)
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then []
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
-          else craise __FILE__ __LINE__ meta "Unreachable: improper variant id for fuel type"
+          else
+            craise __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for fuel type"
       | TArray | TSlice | TStr | TRawPtr _ ->
           (* Array: when not symbolic values (for instance, because of aggregates),
              the array expressions are introduced as struct updates *)
-          craise __FILE__ __LINE__ meta "Attempting to access the fields of an opaque type")
+          craise __FILE__ __LINE__ meta
+            "Attempting to access the fields of an opaque type")
 
 type tc_ctx = {
   type_decls : type_decl TypeDeclId.Map.t;  (** The type declarations *)
@@ -64,7 +69,8 @@ type tc_ctx = {
 
 let check_literal (meta : Meta.meta) (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
-  | TInteger int_ty, VScalar sv -> sanity_check __FILE__ __LINE__ (int_ty = sv.int_ty) meta
+  | TInteger int_ty, VScalar sv ->
+      sanity_check __FILE__ __LINE__ (int_ty = sv.int_ty) meta
   | TBool, VBool _ | TChar, VChar _ -> ()
   | _ -> craise __FILE__ __LINE__ meta "Inconsistent type"
 
