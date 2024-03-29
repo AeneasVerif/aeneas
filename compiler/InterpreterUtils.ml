@@ -6,7 +6,6 @@ open LlbcAst
 open Utils
 open TypesUtils
 open Cps
-open Errors
 
 (* TODO: we should probably rename the file to ContextsUtils *)
 
@@ -17,11 +16,10 @@ let log = Logging.interpreter_log
 
 (** Auxiliary function - call a function which requires a continuation,
     and return the let context given to the continuation *)
-let get_cf_ctx_no_synth (meta : Meta.meta) (f : cm_fun) (ctx : eval_ctx) :
-    eval_ctx =
+let get_cf_ctx_no_synth (f : cm_fun) (ctx : eval_ctx) : eval_ctx =
   let nctx = ref None in
   let cf ctx =
-    sanity_check __FILE__ __LINE__ (!nctx = None) meta;
+    assert (!nctx = None);
     nctx := Some ctx;
     None
   in
@@ -63,14 +61,9 @@ let statement_to_string ctx = Print.EvalCtx.statement_to_string ctx "" "  "
 let statement_to_string_with_tab ctx =
   Print.EvalCtx.statement_to_string ctx "  " "  "
 
-let env_elem_to_string meta ctx =
-  Print.EvalCtx.env_elem_to_string ~meta:(Some meta) ctx "" "  "
-
-let env_to_string meta ctx env =
-  eval_ctx_to_string ~meta:(Some meta) { ctx with env }
-
-let abs_to_string meta ctx =
-  Print.EvalCtx.abs_to_string ~meta:(Some meta) ctx "" "  "
+let env_elem_to_string ctx = Print.EvalCtx.env_elem_to_string ctx "" "  "
+let env_to_string ctx env = eval_ctx_to_string { ctx with env }
+let abs_to_string ctx = Print.EvalCtx.abs_to_string ctx "" "  "
 
 let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
   sv0.sv_id = sv1.sv_id
@@ -83,31 +76,29 @@ let mk_place_from_var_id (var_id : VarId.id) : place =
   { var_id; projection = [] }
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value (meta : Meta.meta) (ty : ty) : symbolic_value =
+let mk_fresh_symbolic_value (ty : ty) : symbolic_value =
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
+  assert (ty_is_rty ty);
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue
 
-let mk_fresh_symbolic_value_from_no_regions_ty (meta : Meta.meta) (ty : ty) :
-    symbolic_value =
-  sanity_check __FILE__ __LINE__ (ty_no_regions ty) meta;
-  mk_fresh_symbolic_value meta ty
+let mk_fresh_symbolic_value_from_no_regions_ty (ty : ty) : symbolic_value =
+  assert (ty_no_regions ty);
+  mk_fresh_symbolic_value ty
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_typed_value (meta : Meta.meta) (rty : ty) : typed_value =
-  sanity_check __FILE__ __LINE__ (ty_is_rty rty) meta;
+let mk_fresh_symbolic_typed_value (rty : ty) : typed_value =
+  assert (ty_is_rty rty);
   let ty = Substitute.erase_regions rty in
   (* Generate the fresh a symbolic value *)
-  let value = mk_fresh_symbolic_value meta rty in
+  let value = mk_fresh_symbolic_value rty in
   let value = VSymbolic value in
   { value; ty }
 
-let mk_fresh_symbolic_typed_value_from_no_regions_ty (meta : Meta.meta)
-    (ty : ty) : typed_value =
-  sanity_check __FILE__ __LINE__ (ty_no_regions ty) meta;
-  mk_fresh_symbolic_typed_value meta ty
+let mk_fresh_symbolic_typed_value_from_no_regions_ty (ty : ty) : typed_value =
+  assert (ty_no_regions ty);
+  mk_fresh_symbolic_typed_value ty
 
 (** Create a typed value from a symbolic value. *)
 let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
@@ -133,10 +124,9 @@ let mk_aproj_loans_value_from_symbolic_value (regions : RegionId.Set.t)
   else { value = AIgnored; ty = svalue.sv_ty }
 
 (** Create a borrows projector from a symbolic value *)
-let mk_aproj_borrows_from_symbolic_value (meta : Meta.meta)
-    (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
-    aproj =
-  sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) meta;
+let mk_aproj_borrows_from_symbolic_value (proj_regions : RegionId.Set.t)
+    (svalue : symbolic_value) (proj_ty : ty) : aproj =
+  assert (ty_is_rty proj_ty);
   if ty_has_regions_in_set proj_regions proj_ty then
     AProjBorrows (svalue, proj_ty)
   else AIgnoredProjBorrows
@@ -150,8 +140,8 @@ let borrow_in_asb (bid : BorrowId.id) (asb : abstract_shared_borrows) : bool =
   List.exists (borrow_is_asb bid) asb
 
 (** TODO: move *)
-let remove_borrow_from_asb (meta : Meta.meta) (bid : BorrowId.id)
-    (asb : abstract_shared_borrows) : abstract_shared_borrows =
+let remove_borrow_from_asb (bid : BorrowId.id) (asb : abstract_shared_borrows) :
+    abstract_shared_borrows =
   let removed = ref 0 in
   let asb =
     List.filter
@@ -162,7 +152,7 @@ let remove_borrow_from_asb (meta : Meta.meta) (bid : BorrowId.id)
           false))
       asb
   in
-  sanity_check __FILE__ __LINE__ (!removed = 1) meta;
+  assert (!removed = 1);
   asb
 
 (** We sometimes need to return a value whose type may vary depending on
@@ -437,7 +427,7 @@ let empty_ids_set = fst (compute_ctxs_ids [])
 (** **WARNING**: this function doesn't compute the normalized types
     (for the trait type aliases). This should be computed afterwards.
  *)
-let initialize_eval_ctx (meta : Meta.meta) (ctx : decls_ctx)
+let initialize_eval_ctx (ctx : decls_ctx)
     (region_groups : RegionGroupId.id list) (type_vars : type_var list)
     (const_generic_vars : const_generic_var list) : eval_ctx =
   reset_global_counters ();
@@ -446,7 +436,7 @@ let initialize_eval_ctx (meta : Meta.meta) (ctx : decls_ctx)
       (List.map
          (fun (cg : const_generic_var) ->
            let ty = TLiteral cg.ty in
-           let cv = mk_fresh_symbolic_typed_value meta ty in
+           let cv = mk_fresh_symbolic_typed_value ty in
            (cg.index, cv))
          const_generic_vars)
   in
@@ -469,8 +459,8 @@ let initialize_eval_ctx (meta : Meta.meta) (ctx : decls_ctx)
     region ids. This is mostly used in preparation of function calls (when
     evaluating in symbolic mode).
  *)
-let instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
-    (generics : generic_args) (tr_self : trait_instance_id) (sg : fun_sig)
+let instantiate_fun_sig (ctx : eval_ctx) (generics : generic_args)
+    (tr_self : trait_instance_id) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
   log#ldebug
     (lazy
@@ -508,12 +498,8 @@ let instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
   (* Generate the type substitution
      Note that for now we don't support instantiating the type parameters with
      types containing regions. *)
-  sanity_check __FILE__ __LINE__
-    (List.for_all TypesUtils.ty_no_regions generics.types)
-    meta;
-  sanity_check __FILE__ __LINE__
-    (TypesUtils.trait_instance_id_no_regions tr_self)
-    meta;
+  assert (List.for_all TypesUtils.ty_no_regions generics.types);
+  assert (TypesUtils.trait_instance_id_no_regions tr_self);
   let tsubst =
     Substitute.make_type_subst_from_vars sg.generics.types generics.types
   in
@@ -527,8 +513,8 @@ let instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
   in
   (* Substitute the signature *)
   let inst_sig =
-    AssociatedTypes.ctx_subst_norm_signature meta ctx asubst rsubst tsubst
-      cgsubst tr_subst tr_self sg regions_hierarchy
+    AssociatedTypes.ctx_subst_norm_signature ctx asubst rsubst tsubst cgsubst
+      tr_subst tr_self sg regions_hierarchy
   in
   (* Return *)
   inst_sig

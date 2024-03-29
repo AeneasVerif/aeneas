@@ -8,7 +8,6 @@ open Cps
 open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
-open Errors
 
 (** The local logger *)
 let log = Logging.invariants_log
@@ -48,16 +47,14 @@ type borrow_kind = BMut | BShared | BReserved
     - loans and borrows are correctly related
     - a two-phase borrow can't point to a value inside an abstraction
  *)
-let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
-    unit =
+let check_loans_borrows_relation_invariant (ctx : eval_ctx) : unit =
   (* Link all the borrow ids to a representant - necessary because of shared
    * borrows/loans *)
   let ids_reprs : BorrowId.id BorrowId.Map.t ref = ref BorrowId.Map.empty in
   (* Link all the id representants to a borrow information *)
   let borrows_infos : borrow_info BorrowId.Map.t ref = ref BorrowId.Map.empty in
   let context_to_string () : string =
-    eval_ctx_to_string ~meta:(Some meta) ctx
-    ^ "- representants:\n"
+    eval_ctx_to_string ctx ^ "- representants:\n"
     ^ ids_reprs_to_string "  " !ids_reprs
     ^ "\n- info:\n"
     ^ borrows_infos_to_string "  " !borrows_infos
@@ -79,12 +76,12 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     let infos = !borrows_infos in
     (* Use the first borrow id as representant *)
     let repr_bid = BorrowId.Set.min_elt bids in
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem repr_bid infos)) meta;
+    assert (not (BorrowId.Map.mem repr_bid infos));
     (* Insert the mappings to the representant *)
     let reprs =
       BorrowId.Set.fold
         (fun bid reprs ->
-          sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem bid reprs)) meta;
+          assert (not (BorrowId.Map.mem bid reprs));
           BorrowId.Map.add bid repr_bid reprs)
         bids reprs
     in
@@ -107,8 +104,8 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     let reprs = !ids_reprs in
     let infos = !borrows_infos in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem bid reprs)) meta;
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem bid infos)) meta;
+    assert (not (BorrowId.Map.mem bid reprs));
+    assert (not (BorrowId.Map.mem bid infos));
     (* Add the mapping for the representant *)
     let reprs = BorrowId.Map.add bid bid reprs in
     (* Add the mapping for the loan info *)
@@ -186,7 +183,7 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
           ^ BorrowId.to_string bid ^ ":\nContext:\n" ^ context_to_string ()
         in
         log#serror err;
-        craise __FILE__ __LINE__ meta err
+        raise (Failure err)
   in
 
   let update_info (bid : BorrowId.id) (info : borrow_info) : unit =
@@ -198,7 +195,7 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
         (fun x ->
           match x with
           | Some _ -> Some info
-          | None -> craise __FILE__ __LINE__ meta "Unreachable")
+          | None -> raise (Failure "Unreachable"))
         !borrows_infos
     in
     borrows_infos := infos
@@ -212,14 +209,12 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     (* Check that the borrow kind is consistent *)
     (match (info.loan_kind, kind) with
     | RShared, (BShared | BReserved) | RMut, BMut -> ()
-    | _ -> craise __FILE__ __LINE__ meta "Invariant not satisfied");
+    | _ -> raise (Failure "Invariant not satisfied"));
     (* A reserved borrow can't point to a value inside an abstraction *)
-    sanity_check __FILE__ __LINE__
-      (kind <> BReserved || not info.loan_in_abs)
-      meta;
+    assert (kind <> BReserved || not info.loan_in_abs);
     (* Insert the borrow id *)
     let borrow_ids = info.borrow_ids in
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Set.mem bid borrow_ids)) meta;
+    assert (not (BorrowId.Set.mem bid borrow_ids));
     let info = { info with borrow_ids = BorrowId.Set.add bid borrow_ids } in
     (* Update the info in the map *)
     update_info bid info
@@ -274,7 +269,7 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
   List.iter
     (fun (rkind, bid) ->
       let info = find_info bid in
-      sanity_check __FILE__ __LINE__ (info.loan_kind = rkind) meta)
+      assert (info.loan_kind = rkind))
     !ignored_loans;
 
   (* Then, check the borrow infos *)
@@ -282,15 +277,11 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     (fun _ info ->
       (* Note that we can't directly compare the sets - I guess they are
        * different depending on the order in which we add the elements... *)
-      sanity_check __FILE__ __LINE__
-        (BorrowId.Set.elements info.loan_ids
-        = BorrowId.Set.elements info.borrow_ids)
-        meta;
+      assert (
+        BorrowId.Set.elements info.loan_ids
+        = BorrowId.Set.elements info.borrow_ids);
       match info.loan_kind with
-      | RMut ->
-          sanity_check __FILE__ __LINE__
-            (BorrowId.Set.cardinal info.loan_ids = 1)
-            meta
+      | RMut -> assert (BorrowId.Set.cardinal info.loan_ids = 1)
       | RShared -> ())
     !borrows_infos
 
@@ -298,16 +289,14 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
     - borrows/loans can't contain ⊥ or reserved mut borrows
     - shared loans can't contain mutable loans
  *)
-let check_borrowed_values_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
+let check_borrowed_values_invariant (ctx : eval_ctx) : unit =
   let visitor =
     object
       inherit [_] iter_eval_ctx as super
 
       method! visit_VBottom info =
         (* No ⊥ inside borrowed values *)
-        sanity_check __FILE__ __LINE__
-          (Config.allow_bottom_below_borrow || not info.outer_borrow)
-          meta
+        assert (Config.allow_bottom_below_borrow || not info.outer_borrow)
 
       method! visit_ABottom _info =
         (* ⊥ inside an abstraction is not the same as in a regular value *)
@@ -320,7 +309,7 @@ let check_borrowed_values_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
           | VSharedLoan (_, _) -> set_outer_shared info
           | VMutLoan _ ->
               (* No mutable loan inside a shared loan *)
-              sanity_check __FILE__ __LINE__ (not info.outer_shared) meta;
+              assert (not info.outer_shared);
               set_outer_mut info
         in
         (* Continue exploring *)
@@ -332,7 +321,7 @@ let check_borrowed_values_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
           match bc with
           | VSharedBorrow _ -> set_outer_shared info
           | VReservedMutBorrow _ ->
-              sanity_check __FILE__ __LINE__ (not info.outer_borrow) meta;
+              assert (not info.outer_borrow);
               set_outer_shared info
           | VMutBorrow (_, _) -> set_outer_mut info
         in
@@ -377,15 +366,13 @@ let check_borrowed_values_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
   let info = { outer_borrow = false; outer_shared = false } in
   visitor#visit_eval_ctx info ctx
 
-let check_literal_type (meta : Meta.meta) (cv : literal) (ty : literal_type) :
-    unit =
+let check_literal_type (cv : literal) (ty : literal_type) : unit =
   match (cv, ty) with
-  | VScalar sv, TInteger int_ty ->
-      sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) meta
+  | VScalar sv, TInteger int_ty -> assert (sv.int_ty = int_ty)
   | VBool _, TBool | VChar _, TChar -> ()
-  | _ -> craise __FILE__ __LINE__ meta "Erroneous typing"
+  | _ -> raise (Failure "Erroneous typing")
 
-let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
+let check_typing_invariant (ctx : eval_ctx) : unit =
   (* TODO: the type of aloans doens't make sense: they have a type
    * of the shape [& (mut) T] where they should have type [T]...
    * This messes a bit the type invariant checks when checking the
@@ -405,67 +392,60 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
 
       method! visit_EBinding info binder v =
         (* We also check that the regions are erased *)
-        sanity_check __FILE__ __LINE__ (ty_is_ety v.ty) meta;
+        assert (ty_is_ety v.ty);
         super#visit_EBinding info binder v
 
       method! visit_symbolic_value inside_abs v =
         (* Check that the types have regions *)
-        sanity_check __FILE__ __LINE__ (ty_is_rty v.sv_ty) meta;
+        assert (ty_is_rty v.sv_ty);
         super#visit_symbolic_value inside_abs v
 
       method! visit_typed_value info tv =
         (* Check that the types have erased regions *)
-        sanity_check __FILE__ __LINE__ (ty_is_ety tv.ty) meta;
+        assert (ty_is_ety tv.ty);
         (* Check the current pair (value, type) *)
         (match (tv.value, tv.ty) with
-        | VLiteral cv, TLiteral ty -> check_literal_type meta cv ty
+        | VLiteral cv, TLiteral ty -> check_literal_type cv ty
         (* ADT case *)
         | VAdt av, TAdt (TAdtId def_id, generics) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
-            sanity_check __FILE__ __LINE__
-              (List.length generics.regions = List.length def.generics.regions)
-              meta;
-            sanity_check __FILE__ __LINE__
-              (List.length generics.types = List.length def.generics.types)
-              meta;
+            assert (
+              List.length generics.regions = List.length def.generics.regions);
+            assert (List.length generics.types = List.length def.generics.types);
             (* Check that the variant id is consistent *)
             (match (av.variant_id, def.kind) with
             | Some variant_id, Enum variants ->
-                sanity_check __FILE__ __LINE__
-                  (VariantId.to_int variant_id < List.length variants)
-                  meta
+                assert (VariantId.to_int variant_id < List.length variants)
             | None, Struct _ -> ()
-            | _ -> craise __FILE__ __LINE__ meta "Erroneous typing");
+            | _ -> raise (Failure "Erroneous typing"));
             (* Check that the field types are correct *)
             let field_types =
-              AssociatedTypes.type_decl_get_inst_norm_field_etypes meta ctx def
+              AssociatedTypes.type_decl_get_inst_norm_field_etypes ctx def
                 av.variant_id generics
             in
             let fields_with_types = List.combine av.field_values field_types in
             List.iter
-              (fun ((v, ty) : typed_value * ty) ->
-                sanity_check __FILE__ __LINE__ (v.ty = ty) meta)
+              (fun ((v, ty) : typed_value * ty) -> assert (v.ty = ty))
               fields_with_types
         (* Tuple case *)
         | VAdt av, TAdt (TTuple, generics) ->
-            sanity_check __FILE__ __LINE__ (generics.regions = []) meta;
-            sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
-            sanity_check __FILE__ __LINE__ (av.variant_id = None) meta;
+            assert (generics.regions = []);
+            assert (generics.const_generics = []);
+            assert (av.variant_id = None);
             (* Check that the fields have the proper values - and check that there
              * are as many fields as field types at the same time *)
             let fields_with_types =
               List.combine av.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : typed_value * ty) ->
-                sanity_check __FILE__ __LINE__ (v.ty = ty) meta)
+              (fun ((v, ty) : typed_value * ty) -> assert (v.ty = ty))
               fields_with_types
         (* Assumed type case *)
         | VAdt av, TAdt (TAssumed aty_id, generics) -> (
-            sanity_check __FILE__ __LINE__ (av.variant_id = None) meta;
+            assert (av.variant_id = None);
             match
               ( aty_id,
                 av.field_values,
@@ -475,62 +455,53 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             with
             (* Box *)
             | TBox, [ inner_value ], [], [ inner_ty ], [] ->
-                sanity_check __FILE__ __LINE__ (inner_value.ty = inner_ty) meta
+                assert (inner_value.ty = inner_ty)
             | TArray, inner_values, _, [ inner_ty ], [ cg ] ->
                 (* *)
-                sanity_check __FILE__ __LINE__
-                  (List.for_all
-                     (fun (v : typed_value) -> v.ty = inner_ty)
-                     inner_values)
-                  meta;
+                assert (
+                  List.for_all
+                    (fun (v : typed_value) -> v.ty = inner_ty)
+                    inner_values);
                 (* The length is necessarily concrete *)
                 let len =
                   (ValuesUtils.literal_as_scalar
                      (TypesUtils.const_generic_as_literal cg))
                     .value
                 in
-                sanity_check __FILE__ __LINE__
-                  (Z.of_int (List.length inner_values) = len)
-                  meta
-            | (TSlice | TStr), _, _, _, _ ->
-                craise __FILE__ __LINE__ meta "Unexpected"
-            | _ -> craise __FILE__ __LINE__ meta "Erroneous type")
+                assert (Z.of_int (List.length inner_values) = len)
+            | (TSlice | TStr), _, _, _, _ -> raise (Failure "Unexpected")
+            | _ -> raise (Failure "Erroneous type"))
         | VBottom, _ -> (* Nothing to check *) ()
         | VBorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | VSharedBorrow bid, RShared | VReservedMutBorrow bid, RMut -> (
                 (* Lookup the borrowed value to check it has the proper type *)
-                let _, glc = lookup_loan meta ek_all bid ctx in
+                let _, glc = lookup_loan ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, sv, _)) ->
-                    sanity_check __FILE__ __LINE__ (sv.ty = ref_ty) meta
-                | _ -> craise __FILE__ __LINE__ meta "Inconsistent context")
+                    assert (sv.ty = ref_ty)
+                | _ -> raise (Failure "Inconsistent context"))
             | VMutBorrow (_, bv), RMut ->
-                sanity_check __FILE__ __LINE__
-                  ((* Check that the borrowed value has the proper type *)
-                   bv.ty = ref_ty)
-                  meta
-            | _ -> craise __FILE__ __LINE__ meta "Erroneous typing")
+                assert (
+                  (* Check that the borrowed value has the proper type *)
+                  bv.ty = ref_ty)
+            | _ -> raise (Failure "Erroneous typing"))
         | VLoan lc, ty -> (
             match lc with
-            | VSharedLoan (_, sv) ->
-                sanity_check __FILE__ __LINE__ (sv.ty = ty) meta
+            | VSharedLoan (_, sv) -> assert (sv.ty = ty)
             | VMutLoan bid -> (
                 (* Lookup the borrowed value to check it has the proper type *)
-                let glc = lookup_borrow meta ek_all bid ctx in
+                let glc = lookup_borrow ek_all bid ctx in
                 match glc with
-                | Concrete (VMutBorrow (_, bv)) ->
-                    sanity_check __FILE__ __LINE__ (bv.ty = ty) meta
+                | Concrete (VMutBorrow (_, bv)) -> assert (bv.ty = ty)
                 | Abstract (AMutBorrow (_, sv)) ->
-                    sanity_check __FILE__ __LINE__
-                      (Substitute.erase_regions sv.ty = ty)
-                      meta
-                | _ -> craise __FILE__ __LINE__ meta "Inconsistent context"))
+                    assert (Substitute.erase_regions sv.ty = ty)
+                | _ -> raise (Failure "Inconsistent context")))
         | VSymbolic sv, ty ->
             let ty' = Substitute.erase_regions sv.sv_ty in
-            sanity_check __FILE__ __LINE__ (ty' = ty) meta
-        | _ -> craise __FILE__ __LINE__ meta "Erroneous typing");
+            assert (ty' = ty)
+        | _ -> raise (Failure "Erroneous typing"));
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_value info tv
 
@@ -544,7 +515,7 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
        * *)
       method! visit_typed_avalue info atv =
         (* Check that the types have regions *)
-        sanity_check __FILE__ __LINE__ (ty_is_rty atv.ty) meta;
+        assert (ty_is_rty atv.ty);
         (* Check the current pair (value, type) *)
         (match (atv.value, atv.ty) with
         (* ADT case *)
@@ -553,51 +524,43 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
              * parameters, etc. *)
             let def = ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
-            sanity_check __FILE__ __LINE__
-              (List.length generics.regions = List.length def.generics.regions)
-              meta;
-            sanity_check __FILE__ __LINE__
-              (List.length generics.types = List.length def.generics.types)
-              meta;
-            sanity_check __FILE__ __LINE__
-              (List.length generics.const_generics
-              = List.length def.generics.const_generics)
-              meta;
+            assert (
+              List.length generics.regions = List.length def.generics.regions);
+            assert (List.length generics.types = List.length def.generics.types);
+            assert (
+              List.length generics.const_generics
+              = List.length def.generics.const_generics);
             (* Check that the variant id is consistent *)
             (match (av.variant_id, def.kind) with
             | Some variant_id, Enum variants ->
-                sanity_check __FILE__ __LINE__
-                  (VariantId.to_int variant_id < List.length variants)
-                  meta
+                assert (VariantId.to_int variant_id < List.length variants)
             | None, Struct _ -> ()
-            | _ -> craise __FILE__ __LINE__ meta "Erroneous typing");
+            | _ -> raise (Failure "Erroneous typing"));
             (* Check that the field types are correct *)
             let field_types =
-              AssociatedTypes.type_decl_get_inst_norm_field_rtypes meta ctx def
+              AssociatedTypes.type_decl_get_inst_norm_field_rtypes ctx def
                 av.variant_id generics
             in
             let fields_with_types = List.combine av.field_values field_types in
             List.iter
-              (fun ((v, ty) : typed_avalue * ty) ->
-                sanity_check __FILE__ __LINE__ (v.ty = ty) meta)
+              (fun ((v, ty) : typed_avalue * ty) -> assert (v.ty = ty))
               fields_with_types
         (* Tuple case *)
         | AAdt av, TAdt (TTuple, generics) ->
-            sanity_check __FILE__ __LINE__ (generics.regions = []) meta;
-            sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
-            sanity_check __FILE__ __LINE__ (av.variant_id = None) meta;
+            assert (generics.regions = []);
+            assert (generics.const_generics = []);
+            assert (av.variant_id = None);
             (* Check that the fields have the proper values - and check that there
              * are as many fields as field types at the same time *)
             let fields_with_types =
               List.combine av.field_values generics.types
             in
             List.iter
-              (fun ((v, ty) : typed_avalue * ty) ->
-                sanity_check __FILE__ __LINE__ (v.ty = ty) meta)
+              (fun ((v, ty) : typed_avalue * ty) -> assert (v.ty = ty))
               fields_with_types
         (* Assumed type case *)
         | AAdt av, TAdt (TAssumed aty_id, generics) -> (
-            sanity_check __FILE__ __LINE__ (av.variant_id = None) meta;
+            assert (av.variant_id = None);
             match
               ( aty_id,
                 av.field_values,
@@ -607,101 +570,84 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             with
             (* Box *)
             | TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
-                sanity_check __FILE__ __LINE__ (boxed_value.ty = boxed_ty) meta
-            | _ -> craise __FILE__ __LINE__ meta "Erroneous type")
+                assert (boxed_value.ty = boxed_ty)
+            | _ -> raise (Failure "Erroneous type"))
         | ABottom, _ -> (* Nothing to check *) ()
         | ABorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | AMutBorrow (_, av), RMut ->
                 (* Check that the child value has the proper type *)
-                sanity_check __FILE__ __LINE__ (av.ty = ref_ty) meta
+                assert (av.ty = ref_ty)
             | ASharedBorrow bid, RShared -> (
                 (* Lookup the borrowed value to check it has the proper type *)
-                let _, glc = lookup_loan meta ek_all bid ctx in
+                let _, glc = lookup_loan ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, sv, _)) ->
-                    sanity_check __FILE__ __LINE__
-                      (sv.ty = Substitute.erase_regions ref_ty)
-                      meta
-                | _ -> craise __FILE__ __LINE__ meta "Inconsistent context")
-            | AIgnoredMutBorrow (_opt_bid, av), RMut ->
-                sanity_check __FILE__ __LINE__ (av.ty = ref_ty) meta
+                    assert (sv.ty = Substitute.erase_regions ref_ty)
+                | _ -> raise (Failure "Inconsistent context"))
+            | AIgnoredMutBorrow (_opt_bid, av), RMut -> assert (av.ty = ref_ty)
             | ( AEndedIgnoredMutBorrow { given_back; child; given_back_meta = _ },
                 RMut ) ->
-                sanity_check __FILE__ __LINE__ (given_back.ty = ref_ty) meta;
-                sanity_check __FILE__ __LINE__ (child.ty = ref_ty) meta
+                assert (given_back.ty = ref_ty);
+                assert (child.ty = ref_ty)
             | AProjSharedBorrow _, RShared -> ()
-            | _ -> craise __FILE__ __LINE__ meta "Inconsistent context")
+            | _ -> raise (Failure "Inconsistent context"))
         | ALoan lc, aty -> (
             match lc with
             | AMutLoan (bid, child_av) | AIgnoredMutLoan (Some bid, child_av)
               -> (
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) meta;
+                assert (child_av.ty = borrowed_aty);
                 (* Lookup the borrowed value to check it has the proper type *)
-                let glc = lookup_borrow meta ek_all bid ctx in
+                let glc = lookup_borrow ek_all bid ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) ->
-                    sanity_check __FILE__ __LINE__
-                      (bv.ty = Substitute.erase_regions borrowed_aty)
-                      meta
+                    assert (bv.ty = Substitute.erase_regions borrowed_aty)
                 | Abstract (AMutBorrow (_, sv)) ->
-                    sanity_check __FILE__ __LINE__
-                      (Substitute.erase_regions sv.ty
+                    assert (
+                      Substitute.erase_regions sv.ty
                       = Substitute.erase_regions borrowed_aty)
-                      meta
-                | _ -> craise __FILE__ __LINE__ meta "Inconsistent context")
+                | _ -> raise (Failure "Inconsistent context"))
             | AIgnoredMutLoan (None, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) meta
+                assert (child_av.ty = borrowed_aty)
             | ASharedLoan (_, sv, child_av) | AEndedSharedLoan (sv, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                sanity_check __FILE__ __LINE__
-                  (sv.ty = Substitute.erase_regions borrowed_aty)
-                  meta;
+                assert (sv.ty = Substitute.erase_regions borrowed_aty);
                 (* TODO: the type of aloans doesn't make sense, see above *)
-                sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) meta
+                assert (child_av.ty = borrowed_aty)
             | AEndedMutLoan { given_back; child; given_back_meta = _ }
             | AEndedIgnoredMutLoan { given_back; child; given_back_meta = _ } ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
-                sanity_check __FILE__ __LINE__
-                  (given_back.ty = borrowed_aty)
-                  meta;
-                sanity_check __FILE__ __LINE__ (child.ty = borrowed_aty) meta
+                assert (given_back.ty = borrowed_aty);
+                assert (child.ty = borrowed_aty)
             | AIgnoredSharedLoan child_av ->
-                sanity_check __FILE__ __LINE__
-                  (child_av.ty = aloan_get_expected_child_type aty)
-                  meta)
+                assert (child_av.ty = aloan_get_expected_child_type aty))
         | ASymbolic aproj, ty -> (
             let ty1 = Substitute.erase_regions ty in
             match aproj with
             | AProjLoans (sv, _) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
-                sanity_check __FILE__ __LINE__ (ty1 = ty2) meta;
+                assert (ty1 = ty2);
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
-                sanity_check __FILE__ __LINE__
-                  (ty_has_regions_in_set abs.regions sv.sv_ty)
-                  meta
+                assert (ty_has_regions_in_set abs.regions sv.sv_ty)
             | AProjBorrows (sv, proj_ty) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
-                sanity_check __FILE__ __LINE__ (ty1 = ty2) meta;
+                assert (ty1 = ty2);
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
-                sanity_check __FILE__ __LINE__
-                  (ty_has_regions_in_set abs.regions proj_ty)
-                  meta
+                assert (ty_has_regions_in_set abs.regions proj_ty)
             | AEndedProjLoans (_msv, given_back_ls) ->
                 List.iter
                   (fun (_, proj) ->
                     match proj with
-                    | AProjBorrows (_sv, ty') ->
-                        sanity_check __FILE__ __LINE__ (ty' = ty) meta
+                    | AProjBorrows (_sv, ty') -> assert (ty' = ty)
                     | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
-                    | _ -> craise __FILE__ __LINE__ meta "Unexpected")
+                    | _ -> raise (Failure "Unexpected"))
                   given_back_ls
             | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
         | AIgnored, _ -> ()
@@ -710,9 +656,9 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
               (lazy
                 ("Erroneous typing:" ^ "\n- raw value: " ^ show_typed_avalue atv
                ^ "\n- value: "
-                ^ typed_avalue_to_string ~meta:(Some meta) ctx atv
+                ^ typed_avalue_to_string ctx atv
                 ^ "\n- type: " ^ ty_to_string ctx atv.ty));
-            craise __FILE__ __LINE__ meta "Erroneous typing");
+            raise (Failure "Erroneous typing"));
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_avalue info atv
     end
@@ -751,7 +697,7 @@ type sv_info = {
     - the union of the aproj_loans contains the aproj_borrows applied on the
       same symbolic values
  *)
-let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
+let check_symbolic_values (ctx : eval_ctx) : unit =
   (* Small utility *)
   let module M = SymbolicValueId.Map in
   let infos : sv_info M.t ref = ref M.empty in
@@ -819,21 +765,15 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
      *)
     (* A symbolic value can't be both in the regular environment and inside
      * projectors of borrows in abstractions *)
-    sanity_check __FILE__ __LINE__
-      (info.env_count = 0 || info.aproj_borrows = [])
-      meta;
+    assert (info.env_count = 0 || info.aproj_borrows = []);
     (* A symbolic value containing borrows can't be duplicated (i.e., copied):
      * it must be expanded first *)
     if ty_has_borrows ctx.type_ctx.type_infos info.ty then
-      sanity_check __FILE__ __LINE__ (info.env_count <= 1) meta;
+      assert (info.env_count <= 1);
     (* A duplicated symbolic value is necessarily primitively copyable *)
-    sanity_check __FILE__ __LINE__
-      (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
-      meta;
+    assert (info.env_count <= 1 || ty_is_primitively_copyable info.ty);
 
-    sanity_check __FILE__ __LINE__
-      (info.aproj_borrows = [] || info.aproj_loans <> [])
-      meta;
+    assert (info.aproj_borrows = [] || info.aproj_loans <> []);
     (* At the same time:
      * - check that the loans don't intersect
      * - compute the set of regions for which we project loans
@@ -845,9 +785,7 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
           let regions =
             RegionId.Set.fold
               (fun rid regions ->
-                sanity_check __FILE__ __LINE__
-                  (not (RegionId.Set.mem rid regions))
-                  meta;
+                assert (not (RegionId.Set.mem rid regions));
                 RegionId.Set.add rid regions)
               regions linfo.regions
           in
@@ -857,29 +795,25 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
     (* Check that the union of the loan projectors contains the borrow projections. *)
     List.iter
       (fun binfo ->
-        sanity_check __FILE__ __LINE__
-          (projection_contains meta info.ty loan_regions binfo.proj_ty
-             binfo.regions)
-          meta)
+        assert (
+          projection_contains info.ty loan_regions binfo.proj_ty binfo.regions))
       info.aproj_borrows;
     ()
   in
 
   M.iter check_info !infos
 
-let check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
+let check_invariants (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
-    log#ldebug
-      (lazy
-        ("Checking invariants:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-    check_loans_borrows_relation_invariant meta ctx;
-    check_borrowed_values_invariant meta ctx;
-    check_typing_invariant meta ctx;
-    check_symbolic_values meta ctx)
+    log#ldebug (lazy ("Checking invariants:\n" ^ eval_ctx_to_string ctx));
+    check_loans_borrows_relation_invariant ctx;
+    check_borrowed_values_invariant ctx;
+    check_typing_invariant ctx;
+    check_symbolic_values ctx)
   else log#ldebug (lazy "Not checking invariants (check is not activated)")
 
 (** Same as {!check_invariants}, but written in CPS *)
-let cf_check_invariants (meta : Meta.meta) : cm_fun =
+let cf_check_invariants : cm_fun =
  fun cf ctx ->
-  check_invariants meta ctx;
+  check_invariants ctx;
   cf ctx

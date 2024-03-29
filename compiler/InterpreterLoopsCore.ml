@@ -4,7 +4,6 @@ open Types
 open Values
 open Contexts
 open InterpreterUtils
-open Errors
 
 type updt_env_kind =
   | AbsInLeft of AbstractionId.id
@@ -53,7 +52,6 @@ type abs_borrows_loans_maps = {
     regions.
  *)
 module type PrimMatcher = sig
-  val meta : Meta.meta
   val match_etys : eval_ctx -> eval_ctx -> ety -> ety -> ety
   val match_rtys : eval_ctx -> eval_ctx -> rty -> rty -> rty
 
@@ -256,8 +254,6 @@ module type PrimMatcher = sig
 end
 
 module type Matcher = sig
-  val meta : Meta.meta
-
   (** Match two values.
 
       Rem.: this function raises exceptions of type {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}.
@@ -279,8 +275,6 @@ end
     Very annoying: functors only take modules as inputs...
  *)
 module type MatchCheckEquivState = sig
-  val meta : Meta.meta
-
   (** [true] if we check equivalence between contexts, [false] if we match
       a source context with a target context. *)
   val check_equiv : bool
@@ -350,8 +344,6 @@ module type MatchJoinState = sig
 
   (** The abstractions introduced when performing the matches *)
   val nabs : abs list ref
-
-  val meta : Meta.meta
 end
 
 (** Split an environment between the fixed abstractions, values, etc. and
@@ -359,8 +351,8 @@ end
 
     Returns: (fixed, new abs, new dummies)
  *)
-let ctx_split_fixed_new (meta : Meta.meta) (fixed_ids : ids_sets)
-    (ctx : eval_ctx) : env * abs list * typed_value list =
+let ctx_split_fixed_new (fixed_ids : ids_sets) (ctx : eval_ctx) :
+    env * abs list * typed_value list =
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id fixed_ids.dids)
   in
@@ -381,9 +373,7 @@ let ctx_split_fixed_new (meta : Meta.meta) (fixed_ids : ids_sets)
   let new_absl =
     List.map
       (fun ee ->
-        match ee with
-        | EAbs abs -> abs
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable")
+        match ee with EAbs abs -> abs | _ -> raise (Failure "Unreachable"))
       new_absl
   in
   let new_dummyl =
@@ -391,7 +381,7 @@ let ctx_split_fixed_new (meta : Meta.meta) (fixed_ids : ids_sets)
       (fun ee ->
         match ee with
         | EBinding (BDummy _, v) -> v
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable")
+        | _ -> raise (Failure "Unreachable"))
       new_dummyl
   in
   (filt_env, new_absl, new_dummyl)

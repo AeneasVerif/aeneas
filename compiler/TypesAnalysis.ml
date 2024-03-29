@@ -1,6 +1,5 @@
 open Types
 open LlbcAst
-open Errors
 
 type subtype_info = {
   under_borrow : bool;  (** Are we inside a borrow? *)
@@ -289,7 +288,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
             (List.map
                (fun v -> List.map (fun f -> f.field_ty) v.fields)
                variants)
-      | Opaque -> craise __FILE__ __LINE__ def.meta "unreachable"
+      | Opaque -> raise (Failure "unreachable")
     in
     (* Explore the types and accumulate information *)
     let type_decl_info = TypeDeclId.Map.find def.def_id infos in

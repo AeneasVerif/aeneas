@@ -16,8 +16,7 @@ open Cps
     If the boolean is false, we don't move the return value, and call the
     continuation with [None].
  *)
-val pop_frame :
-  config -> Meta.meta -> bool -> (typed_value option -> m_fun) -> m_fun
+val pop_frame : config -> bool -> (typed_value option -> m_fun) -> m_fun
 
 (** Helper.
 

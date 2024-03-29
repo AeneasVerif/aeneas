@@ -318,7 +318,7 @@ let type_check_pure_code = ref false
 
 (** Shall we fail hard if we encounter an issue, or should we attempt to go
     as far as possible while leaving "holes" in the generated code? *)
-let fail_hard = ref false
+let fail_hard = ref true
 
 (** If true, add the type name as a prefix
     to the variant names.
