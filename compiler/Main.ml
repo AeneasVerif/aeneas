@@ -267,6 +267,7 @@ let () =
            definitions";
         fail ());
 
+      (* There may be exceptions to catch *)
       (try
          (* Apply the pre-passes *)
          let m = Aeneas.PrePasses.apply_passes m in
@@ -276,24 +277,11 @@ let () =
 
          (* Translate the functions *)
          Aeneas.Translate.translate_crate filename dest_dir m
-       with Errors.CFailure msg ->
+       with Errors.CFailure (meta, msg) ->
          (* In theory it shouldn't happen, but there may be uncaught errors -
-            note that we let the Failure errors go through *)
-         (* The error should have been saved *)
-         let meta =
-           match !Errors.error_list with
-           | (m, msg') :: _ ->
-               (* The last saved message should be the current error - but
-                  good to check *)
-               if msg = msg' then m else None
-           | _ -> (* Want to be safe here *) None
-         in
-         let msg =
-           match meta with
-           | None -> msg
-           | Some m -> Errors.format_error_message m msg
-         in
-         log#serror msg;
+            note that we let the [Failure] exceptions go through (they are
+            send if we use the option [-abort-on-error] *)
+         log#serror (Errors.format_error_message meta msg);
          exit 1);
 
       (* Print total elapsed time *)

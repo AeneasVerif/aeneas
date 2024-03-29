@@ -325,6 +325,7 @@ let destruct_apps (e : texpression) : texpression * texpression list =
 let mk_app (meta : Meta.meta) (app : texpression) (arg : texpression) :
     texpression =
   let raise_or_return msg =
+    (* We shouldn't get there, so we save an error (and eventually raise an exception) *)
     save_error __FILE__ __LINE__ (Some meta) msg;
     let e = App (app, arg) in
     (* Dummy type - TODO: introduce an error type *)

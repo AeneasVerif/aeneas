@@ -2892,8 +2892,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           ^ pure_ty_to_string ctx true_e.ty
           ^ "\n\nfalse_e.ty: "
           ^ pure_ty_to_string ctx false_e.ty));
-      save_error __FILE__ __LINE__ ~b:(ty = false_e.ty) (Some ctx.fun_decl.meta)
-        "Internal error, please file an issue";
+      sanity_check __FILE__ __LINE__ (ty = false_e.ty) ctx.fun_decl.meta;
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :

@@ -6,50 +6,38 @@ let meta_to_string (span : Meta.span) =
   "Source: '" ^ file ^ "', lines " ^ loc_to_string span.beg_loc ^ "-"
   ^ loc_to_string span.end_loc
 
-let format_error_message (meta : Meta.meta) msg =
-  msg ^ "\n" ^ meta_to_string meta.span
+let format_error_message (meta : Meta.meta option) (msg : string) =
+  let meta =
+    match meta with None -> "" | Some meta -> "\n" ^ meta_to_string meta.span
+  in
+  msg ^ meta
 
-exception CFailure of string
+let format_error_message_with_file_line (file : string) (line : int)
+    (meta : Meta.meta option) (msg : string) =
+  "In file:" ^ file ^ ", line:" ^ string_of_int line ^ "\n"
+  ^ format_error_message meta msg
+
+exception CFailure of (Meta.meta option * string)
 
 let error_list : (Meta.meta option * string) list ref = ref []
 
-let push_error (file : string) (line : int) (meta : Meta.meta option)
-    (msg : string) =
-  error_list :=
-    (meta, msg ^ "\n In file:" ^ file ^ "\n Line:" ^ string_of_int line)
-    :: !error_list
+let push_error (meta : Meta.meta option) (msg : string) =
+  error_list := (meta, msg) :: !error_list
 
-let save_error (file : string) (line : int) ?(b : bool = true)
+(** Register an error, and throw an exception if [throw] is true *)
+let save_error (file : string) (line : int) ?(throw : bool = false)
     (meta : Meta.meta option) (msg : string) =
-  push_error file line meta msg;
-  match meta with
-  | Some m ->
-      if !Config.fail_hard && not b then
-        raise
-          (Failure
-             (format_error_message m
-                (msg ^ "\n In file:" ^ file ^ "\n Line:" ^ string_of_int line)))
-  | None -> if !Config.fail_hard && not b then raise (Failure msg)
+  push_error meta msg;
+  if !Config.fail_hard && throw then
+    raise (Failure (format_error_message_with_file_line file line meta msg))
 
 let craise_opt_meta (file : string) (line : int) (meta : Meta.meta option)
     (msg : string) =
-  match meta with
-  | Some m ->
-      if !Config.fail_hard then
-        raise
-          (Failure
-             (format_error_message m
-                (msg ^ "\n In file:" ^ file ^ "\n Line:" ^ string_of_int line)))
-      else
-        let () = push_error file line (Some m) msg in
-        raise (CFailure msg)
-  | None ->
-      if !Config.fail_hard then
-        raise
-          (Failure (msg ^ "\n In file:" ^ file ^ "\n Line:" ^ string_of_int line))
-      else
-        let () = push_error file line None msg in
-        raise (CFailure msg)
+  if !Config.fail_hard then
+    raise (Failure (format_error_message_with_file_line file line meta msg))
+  else
+    let () = push_error meta msg in
+    raise (CFailure (meta, msg))
 
 let craise (file : string) (line : int) (meta : Meta.meta) (msg : string) =
   craise_opt_meta file line (Some meta) msg
@@ -69,7 +57,7 @@ let sanity_check_opt_meta (file : string) (line : int) b meta =
   cassert_opt_meta file line b meta "Internal error, please file an issue"
 
 let internal_error (file : string) (line : int) meta =
-  craise file line meta "Internal error, please report an issue"
+  craise file line meta "Internal error, please file an issue"
 
 let exec_raise = craise
 let exec_assert = cassert
