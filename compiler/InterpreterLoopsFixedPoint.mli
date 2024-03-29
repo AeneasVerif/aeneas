@@ -13,7 +13,7 @@ open InterpreterLoopsCore
    - config
    - fixed ids (the fixeds ids are the ids we consider as non-fresh)
  *)
-val cleanup_fresh_values_and_abs : config -> ids_sets -> Cps.cm_fun
+val cleanup_fresh_values_and_abs : config -> Meta.meta -> ids_sets -> Cps.cm_fun
 
 (** Prepare the shared loans in the abstractions by moving them to fresh
     abstractions.
@@ -60,7 +60,7 @@ val cleanup_fresh_values_and_abs : config -> ids_sets -> Cps.cm_fun
 
     we only introduce a fresh abstraction for [l1].
   *)
-val prepare_ashared_loans : loop_id option -> Cps.cm_fun
+val prepare_ashared_loans : Meta.meta -> loop_id option -> Cps.cm_fun
 
 (** Compute a fixed-point for the context at the entry of the loop.
     We also return:
@@ -78,6 +78,7 @@ val prepare_ashared_loans : loop_id option -> Cps.cm_fun
  *)
 val compute_loop_entry_fixed_point :
   config ->
+  Meta.meta ->
   loop_id ->
   Cps.st_cm_fun ->
   eval_ctx ->
@@ -160,7 +161,7 @@ val compute_loop_entry_fixed_point :
     through the loan [l1] is actually the value which has to be given back to [l0].
  *)
 val compute_fixed_point_id_correspondance :
-  ids_sets -> eval_ctx -> eval_ctx -> borrow_loan_corresp
+  Meta.meta -> ids_sets -> eval_ctx -> eval_ctx -> borrow_loan_corresp
 
 (** Compute the set of "quantified" symbolic value ids in a fixed-point context.
 
@@ -169,4 +170,7 @@ val compute_fixed_point_id_correspondance :
     - the list of input symbolic values
  *)
 val compute_fp_ctx_symbolic_values :
-  eval_ctx -> eval_ctx -> symbolic_value_id_set * symbolic_value list
+  Meta.meta ->
+  eval_ctx ->
+  eval_ctx ->
+  symbolic_value_id_set * symbolic_value list

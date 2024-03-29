@@ -7,6 +7,7 @@ open Expressions
 open LlbcAst
 open Utils
 open LlbcAstUtils
+open Errors
 
 let log = Logging.pre_passes_log
 
@@ -213,13 +214,17 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       object
         inherit [_] map_statement as super
 
-        method! visit_Loop entered_loop loop =
-          assert (not entered_loop);
-          super#visit_Loop true loop
-
-        method! visit_Break _ i =
-          assert (i = 0);
-          nst.content
+        method! visit_statement entered_loop st =
+          match st.content with
+          | Loop loop ->
+              cassert __FILE__ __LINE__ (not entered_loop) st.meta
+                "Nested loops are not supported yet";
+              { st with content = super#visit_Loop true loop }
+          | Break i ->
+              cassert __FILE__ __LINE__ (i = 0) st.meta
+                "Breaks to outer loops are not supported yet";
+              { st with content = nst.content }
+          | _ -> super#visit_statement entered_loop st
       end
     in
     obj#visit_statement false st
@@ -233,7 +238,9 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_Sequence env st1 st2 =
         match st1.content with
         | Loop _ ->
-            assert (statement_has_no_loop_break_continue st2);
+            sanity_check __FILE__ __LINE__
+              (statement_has_no_loop_break_continue st2)
+              st2.meta;
             (replace_breaks_with st1 st2).content
         | _ -> super#visit_Sequence env st1 st2
     end
@@ -394,11 +401,20 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
     (* Check that the filtered variables completely disappeared from the body *)
     let check_visitor =
       object
-        inherit [_] iter_statement
-        method! visit_var_id _ id = assert (not (VarId.Set.mem id !filtered))
+        inherit [_] iter_statement as super
+
+        (* Remember the span of the statement we enter *)
+        method! visit_statement _ st = super#visit_statement st.meta st
+
+        method! visit_var_id meta id =
+          cassert __FILE__ __LINE__
+            (not (VarId.Set.mem id !filtered))
+            meta
+            "Filtered variables should have completely disappeared from the \
+             body"
       end
     in
-    check_visitor#visit_statement () body;
+    check_visitor#visit_statement body.meta body;
 
     (* Return the updated body *)
     body

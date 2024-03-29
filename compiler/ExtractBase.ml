@@ -7,6 +7,7 @@ open Config
 module F = Format
 open ExtractBuiltin
 open TranslateCore
+open Errors
 
 (** The local logger *)
 let log = Logging.extract_log
@@ -261,9 +262,8 @@ let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
      \"" ^ name ^ "\":" ^ id1 ^ id2
     ^ "\nYou may want to rename some of your definitions, or report an issue."
   in
-  log#serror err;
   (* If we fail hard on errors, raise an exception *)
-  if !Config.fail_hard then raise (Failure err)
+  save_error __FILE__ __LINE__ None err
 
 let names_map_get_id_from_name (name : string) (nm : names_map) : id option =
   StringMap.find_opt name nm.name_to_id
@@ -290,14 +290,13 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
   (* Check if there is a clash *)
   names_map_check_collision id_to_string id name nm;
   (* Sanity check *)
-  if StringSet.mem name nm.names_set then (
-    let err =
-      "Error when registering the name for id: " ^ id_to_string id
-      ^ ":\nThe chosen name is already in the names set: " ^ name
-    in
-    log#serror err;
-    (* If we fail hard on errors, raise an exception *)
-    if !Config.fail_hard then raise (Failure err));
+  (if StringSet.mem name nm.names_set then
+     let err =
+       "Error when registering the name for id: " ^ id_to_string id
+       ^ ":\nThe chosen name is already in the names set: " ^ name
+     in
+     (* If we fail hard on errors, raise an exception *)
+     save_error __FILE__ __LINE__ None err);
   (* Insert *)
   names_map_add_unchecked id name nm
 
@@ -424,8 +423,8 @@ let names_maps_add (id_to_string : id -> string) (id : id) (name : string)
 
 (** The [id_to_string] function to print nice debugging messages if there are
     collisions *)
-let names_maps_get (id_to_string : id -> string) (id : id) (nm : names_maps) :
-    string =
+let names_maps_get (meta : Meta.meta option) (id_to_string : id -> string)
+    (id : id) (nm : names_maps) : string =
   (* We do not use the same name map if we allow/disallow collisions *)
   let map_to_string (m : string IdMap.t) : string =
     "[\n"
@@ -444,9 +443,8 @@ let names_maps_get (id_to_string : id -> string) (id : id) (nm : names_maps) :
           "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
           ^ map_to_string m
         in
-        log#serror err;
-        if !Config.fail_hard then raise (Failure err)
-        else "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
+        save_error __FILE__ __LINE__ meta err;
+        "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
     let m = nm.names_map.id_to_name in
     match IdMap.find_opt id m with
@@ -456,9 +454,8 @@ let names_maps_get (id_to_string : id -> string) (id : id) (nm : names_maps) :
           "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
           ^ map_to_string m
         in
-        log#serror err;
-        if !Config.fail_hard then raise (Failure err)
-        else "(ERROR: \"" ^ id_to_string id ^ "\")"
+        save_error __FILE__ __LINE__ meta err;
+        "(ERROR: \"" ^ id_to_string id ^ "\")"
 
 type names_map_init = {
   keywords : string list;
@@ -528,6 +525,7 @@ let scalar_name (ty : literal_type) : string =
     functions, etc.
  *)
 type extraction_ctx = {
+  (* mutable _meta : Meta.meta; *)
   crate : A.crate;
   trans_ctx : trans_ctx;
   names_maps : names_maps;
@@ -589,17 +587,18 @@ let llbc_fun_id_to_string (ctx : extraction_ctx) =
 let fun_id_to_string (ctx : extraction_ctx) =
   PrintPure.regular_fun_id_to_string (extraction_ctx_to_fmt_env ctx)
 
-let adt_variant_to_string (ctx : extraction_ctx) =
-  PrintPure.adt_variant_to_string (extraction_ctx_to_fmt_env ctx)
+let adt_variant_to_string (meta : Meta.meta option) (ctx : extraction_ctx) =
+  PrintPure.adt_variant_to_string ~meta (extraction_ctx_to_fmt_env ctx)
 
-let adt_field_to_string (ctx : extraction_ctx) =
-  PrintPure.adt_field_to_string (extraction_ctx_to_fmt_env ctx)
+let adt_field_to_string (meta : Meta.meta option) (ctx : extraction_ctx) =
+  PrintPure.adt_field_to_string ~meta (extraction_ctx_to_fmt_env ctx)
 
 (** Debugging function, used when communicating name collisions to the user,
     and also to print ids for internal debugging (in case of lookup miss for
     instance).
  *)
-let id_to_string (id : id) (ctx : extraction_ctx) : string =
+let id_to_string (meta : Meta.meta option) (id : id) (ctx : extraction_ctx) :
+    string =
   let trait_decl_id_to_string (id : A.TraitDeclId.id) : string =
     let trait_name = trait_decl_id_to_string ctx id in
     "trait_decl: " ^ trait_name ^ " (id: " ^ A.TraitDeclId.to_string id ^ ")"
@@ -627,11 +626,11 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | StructId id -> "struct constructor of: " ^ type_id_to_string ctx id
   | VariantId (id, variant_id) ->
       let type_name = type_id_to_string ctx id in
-      let variant_name = adt_variant_to_string ctx id (Some variant_id) in
+      let variant_name = adt_variant_to_string meta ctx id (Some variant_id) in
       "type name: " ^ type_name ^ ", variant name: " ^ variant_name
   | FieldId (id, field_id) ->
       let type_name = type_id_to_string ctx id in
-      let field_name = adt_field_to_string ctx id field_id in
+      let field_name = adt_field_to_string meta ctx id field_id in
       "type name: " ^ type_name ^ ", field name: " ^ field_name
   | UnknownId -> "keyword"
   | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
@@ -657,104 +656,117 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ fun_name
   | TraitSelfClauseId -> "trait_self_clause"
 
-let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
-  let id_to_string (id : id) : string = id_to_string id ctx in
+let ctx_add (meta : Meta.meta) (id : id) (name : string) (ctx : extraction_ctx)
+    : extraction_ctx =
+  let id_to_string (id : id) : string = id_to_string (Some meta) id ctx in
   let names_maps = names_maps_add id_to_string id name ctx.names_maps in
   { ctx with names_maps }
 
-let ctx_get (id : id) (ctx : extraction_ctx) : string =
-  let id_to_string (id : id) : string = id_to_string id ctx in
-  names_maps_get id_to_string id ctx.names_maps
+let ctx_get (meta : Meta.meta option) (id : id) (ctx : extraction_ctx) : string
+    =
+  let id_to_string (id : id) : string = id_to_string meta id ctx in
+  names_maps_get meta id_to_string id ctx.names_maps
 
-let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
-  ctx_get (GlobalId id) ctx
-
-let ctx_get_function (id : fun_id) (ctx : extraction_ctx) : string =
-  ctx_get (FunId id) ctx
-
-let ctx_get_local_function (id : A.FunDeclId.id) (lp : LoopId.id option)
+let ctx_get_global (meta : Meta.meta) (id : A.GlobalDeclId.id)
     (ctx : extraction_ctx) : string =
-  ctx_get_function (FromLlbc (FunId (FRegular id), lp)) ctx
+  ctx_get (Some meta) (GlobalId id) ctx
 
-let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
-  assert (id <> TTuple);
-  ctx_get (TypeId id) ctx
-
-let ctx_get_local_type (id : TypeDeclId.id) (ctx : extraction_ctx) : string =
-  ctx_get_type (TAdtId id) ctx
-
-let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
-  ctx_get_type (TAssumed id) ctx
-
-let ctx_get_trait_constructor (id : trait_decl_id) (ctx : extraction_ctx) :
+let ctx_get_function (meta : Meta.meta) (id : fun_id) (ctx : extraction_ctx) :
     string =
-  ctx_get (TraitDeclConstructorId id) ctx
+  ctx_get (Some meta) (FunId id) ctx
 
-let ctx_get_trait_self_clause (ctx : extraction_ctx) : string =
-  ctx_get TraitSelfClauseId ctx
+let ctx_get_local_function (meta : Meta.meta) (id : A.FunDeclId.id)
+    (lp : LoopId.id option) (ctx : extraction_ctx) : string =
+  ctx_get_function meta (FromLlbc (FunId (FRegular id), lp)) ctx
 
-let ctx_get_trait_decl (id : trait_decl_id) (ctx : extraction_ctx) : string =
-  ctx_get (TraitDeclId id) ctx
-
-let ctx_get_trait_impl (id : trait_impl_id) (ctx : extraction_ctx) : string =
-  ctx_get (TraitImplId id) ctx
-
-let ctx_get_trait_item (id : trait_decl_id) (item_name : string)
-    (ctx : extraction_ctx) : string =
-  ctx_get (TraitItemId (id, item_name)) ctx
-
-let ctx_get_trait_const (id : trait_decl_id) (item_name : string)
-    (ctx : extraction_ctx) : string =
-  ctx_get_trait_item id item_name ctx
-
-let ctx_get_trait_type (id : trait_decl_id) (item_name : string)
-    (ctx : extraction_ctx) : string =
-  ctx_get_trait_item id item_name ctx
-
-let ctx_get_trait_method (id : trait_decl_id) (item_name : string)
-    (ctx : extraction_ctx) : string =
-  ctx_get (TraitMethodId (id, item_name)) ctx
-
-let ctx_get_trait_parent_clause (id : trait_decl_id) (clause : trait_clause_id)
-    (ctx : extraction_ctx) : string =
-  ctx_get (TraitParentClauseId (id, clause)) ctx
-
-let ctx_get_trait_item_clause (id : trait_decl_id) (item : string)
-    (clause : trait_clause_id) (ctx : extraction_ctx) : string =
-  ctx_get (TraitItemClauseId (id, item, clause)) ctx
-
-let ctx_get_var (id : VarId.id) (ctx : extraction_ctx) : string =
-  ctx_get (VarId id) ctx
-
-let ctx_get_type_var (id : TypeVarId.id) (ctx : extraction_ctx) : string =
-  ctx_get (TypeVarId id) ctx
-
-let ctx_get_const_generic_var (id : ConstGenericVarId.id) (ctx : extraction_ctx)
+let ctx_get_type (meta : Meta.meta option) (id : type_id) (ctx : extraction_ctx)
     : string =
-  ctx_get (ConstGenericVarId id) ctx
+  sanity_check_opt_meta __FILE__ __LINE__ (id <> TTuple) meta;
+  ctx_get meta (TypeId id) ctx
 
-let ctx_get_local_trait_clause (id : TraitClauseId.id) (ctx : extraction_ctx) :
+let ctx_get_local_type (meta : Meta.meta) (id : TypeDeclId.id)
+    (ctx : extraction_ctx) : string =
+  ctx_get_type (Some meta) (TAdtId id) ctx
+
+let ctx_get_assumed_type (meta : Meta.meta option) (id : assumed_ty)
+    (ctx : extraction_ctx) : string =
+  ctx_get_type meta (TAssumed id) ctx
+
+let ctx_get_trait_constructor (meta : Meta.meta) (id : trait_decl_id)
+    (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (TraitDeclConstructorId id) ctx
+
+let ctx_get_trait_self_clause (meta : Meta.meta) (ctx : extraction_ctx) : string
+    =
+  ctx_get (Some meta) TraitSelfClauseId ctx
+
+let ctx_get_trait_decl (meta : Meta.meta) (id : trait_decl_id)
+    (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (TraitDeclId id) ctx
+
+let ctx_get_trait_impl (meta : Meta.meta) (id : trait_impl_id)
+    (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (TraitImplId id) ctx
+
+let ctx_get_trait_item (meta : Meta.meta) (id : trait_decl_id)
+    (item_name : string) (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (TraitItemId (id, item_name)) ctx
+
+let ctx_get_trait_const (meta : Meta.meta) (id : trait_decl_id)
+    (item_name : string) (ctx : extraction_ctx) : string =
+  ctx_get_trait_item meta id item_name ctx
+
+let ctx_get_trait_type (meta : Meta.meta) (id : trait_decl_id)
+    (item_name : string) (ctx : extraction_ctx) : string =
+  ctx_get_trait_item meta id item_name ctx
+
+let ctx_get_trait_method (meta : Meta.meta) (id : trait_decl_id)
+    (item_name : string) (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (TraitMethodId (id, item_name)) ctx
+
+let ctx_get_trait_parent_clause (meta : Meta.meta) (id : trait_decl_id)
+    (clause : trait_clause_id) (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (TraitParentClauseId (id, clause)) ctx
+
+let ctx_get_trait_item_clause (meta : Meta.meta) (id : trait_decl_id)
+    (item : string) (clause : trait_clause_id) (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (TraitItemClauseId (id, item, clause)) ctx
+
+let ctx_get_var (meta : Meta.meta) (id : VarId.id) (ctx : extraction_ctx) :
     string =
-  ctx_get (LocalTraitClauseId id) ctx
+  ctx_get (Some meta) (VarId id) ctx
 
-let ctx_get_field (type_id : type_id) (field_id : FieldId.id)
+let ctx_get_type_var (meta : Meta.meta) (id : TypeVarId.id)
     (ctx : extraction_ctx) : string =
-  ctx_get (FieldId (type_id, field_id)) ctx
+  ctx_get (Some meta) (TypeVarId id) ctx
 
-let ctx_get_struct (def_id : type_id) (ctx : extraction_ctx) : string =
-  ctx_get (StructId def_id) ctx
-
-let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
+let ctx_get_const_generic_var (meta : Meta.meta) (id : ConstGenericVarId.id)
     (ctx : extraction_ctx) : string =
-  ctx_get (VariantId (def_id, variant_id)) ctx
+  ctx_get (Some meta) (ConstGenericVarId id) ctx
 
-let ctx_get_decreases_proof (def_id : A.FunDeclId.id)
-    (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
-  ctx_get (DecreasesProofId (FRegular def_id, loop_id)) ctx
+let ctx_get_local_trait_clause (meta : Meta.meta) (id : TraitClauseId.id)
+    (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (LocalTraitClauseId id) ctx
 
-let ctx_get_termination_measure (def_id : A.FunDeclId.id)
+let ctx_get_field (meta : Meta.meta) (type_id : type_id) (field_id : FieldId.id)
+    (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (FieldId (type_id, field_id)) ctx
+
+let ctx_get_struct (meta : Meta.meta) (def_id : type_id) (ctx : extraction_ctx)
+    : string =
+  ctx_get (Some meta) (StructId def_id) ctx
+
+let ctx_get_variant (meta : Meta.meta) (def_id : type_id)
+    (variant_id : VariantId.id) (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (VariantId (def_id, variant_id)) ctx
+
+let ctx_get_decreases_proof (meta : Meta.meta) (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
-  ctx_get (TerminationMeasureId (FRegular def_id, loop_id)) ctx
+  ctx_get (Some meta) (DecreasesProofId (FRegular def_id, loop_id)) ctx
+
+let ctx_get_termination_measure (meta : Meta.meta) (def_id : A.FunDeclId.id)
+    (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
+  ctx_get (Some meta) (TerminationMeasureId (FRegular def_id, loop_id)) ctx
 
 (** Small helper to compute the name of a unary operation *)
 let unop_name (unop : unop) : string =
@@ -1161,7 +1173,7 @@ let initialize_names_maps () : names_maps =
 
     Remark: can return [None] for some backends like HOL4.
  *)
-let type_decl_kind_to_qualif (kind : decl_kind)
+let type_decl_kind_to_qualif (meta : Meta.meta) (kind : decl_kind)
     (type_kind : type_decl_kind option) : string option =
   match !backend with
   | FStar -> (
@@ -1189,11 +1201,10 @@ let type_decl_kind_to_qualif (kind : decl_kind)
           (* This is for traits *)
           Some "Record"
       | _ ->
-          raise
-            (Failure
-               ("Unexpected: (" ^ show_decl_kind kind ^ ", "
-               ^ Print.option_to_string show_type_decl_kind type_kind
-               ^ ")")))
+          craise __FILE__ __LINE__ meta
+            ("Unexpected: (" ^ show_decl_kind kind ^ ", "
+            ^ Print.option_to_string show_type_decl_kind type_kind
+            ^ ")"))
   | Lean -> (
       match kind with
       | SingleNonRec -> (
@@ -1247,17 +1258,17 @@ let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
 
     TODO: move inside the formatter?
  *)
-let type_keyword () =
+let type_keyword (meta : Meta.meta) =
   match !backend with
   | FStar -> "Type0"
   | Coq | Lean -> "Type"
-  | HOL4 -> raise (Failure "Unexpected")
+  | HOL4 -> craise __FILE__ __LINE__ meta "Unexpected"
 
 (** Helper *)
-let name_last_elem_as_ident (n : llbc_name) : string =
+let name_last_elem_as_ident (meta : Meta.meta) (n : llbc_name) : string =
   match Collections.List.last n with
   | PeIdent (s, _) -> s
-  | PeImpl _ -> raise (Failure "Unexpected")
+  | PeImpl _ -> craise __FILE__ __LINE__ meta "Unexpected"
 
 (** Helper
 
@@ -1266,35 +1277,37 @@ let name_last_elem_as_ident (n : llbc_name) : string =
     we remove it. We ignore disambiguators (there may be collisions, but we
     check if there are).
  *)
-let ctx_prepare_name (ctx : extraction_ctx) (name : llbc_name) : llbc_name =
+let ctx_prepare_name (meta : Meta.meta) (ctx : extraction_ctx)
+    (name : llbc_name) : llbc_name =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
   match name with
   | (PeIdent (crate, _) as id) :: name ->
       if crate = ctx.crate.name then name else id :: name
   | _ ->
-      raise
-        (Failure
-           ("Unexpected name shape: "
-           ^ TranslateCore.name_to_string ctx.trans_ctx name))
+      craise __FILE__ __LINE__ meta
+        ("Unexpected name shape: "
+        ^ TranslateCore.name_to_string ctx.trans_ctx name)
 
 (** Helper *)
-let ctx_compute_simple_name (ctx : extraction_ctx) (name : llbc_name) :
-    string list =
+let ctx_compute_simple_name (meta : Meta.meta) (ctx : extraction_ctx)
+    (name : llbc_name) : string list =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
-  let name = ctx_prepare_name ctx name in
+  let name = ctx_prepare_name meta ctx name in
   name_to_simple_name ctx.trans_ctx name
 
 (** Helper *)
 let ctx_compute_simple_type_name = ctx_compute_simple_name
 
 (** Helper *)
-let ctx_compute_type_name_no_suffix (ctx : extraction_ctx) (name : llbc_name) :
-    string =
-  flatten_name (ctx_compute_simple_type_name ctx name)
+
+let ctx_compute_type_name_no_suffix (meta : Meta.meta) (ctx : extraction_ctx)
+    (name : llbc_name) : string =
+  flatten_name (ctx_compute_simple_type_name meta ctx name)
 
 (** Provided a basename, compute a type name. *)
-let ctx_compute_type_name (ctx : extraction_ctx) (name : llbc_name) =
-  let name = ctx_compute_type_name_no_suffix ctx name in
+let ctx_compute_type_name (meta : Meta.meta) (ctx : extraction_ctx)
+    (name : llbc_name) =
+  let name = ctx_compute_type_name_no_suffix meta ctx name in
   match !backend with
   | FStar -> StringUtils.lowercase_first_letter (name ^ "_t")
   | Coq | HOL4 -> name ^ "_t"
@@ -1311,8 +1324,9 @@ let ctx_compute_type_name (ctx : extraction_ctx) (name : llbc_name) =
     access then causes trouble because not all provers accept syntax like
     [x.3] where [x] is a tuple.
  *)
-let ctx_compute_field_name (ctx : extraction_ctx) (def_name : llbc_name)
-    (field_id : FieldId.id) (field_name : string option) : string =
+let ctx_compute_field_name (meta : Meta.meta) (ctx : extraction_ctx)
+    (def_name : llbc_name) (field_id : FieldId.id) (field_name : string option)
+    : string =
   let field_name_s =
     match field_name with
     | Some field_name -> field_name
@@ -1326,7 +1340,7 @@ let ctx_compute_field_name (ctx : extraction_ctx) (def_name : llbc_name)
     else field_name_s
   else
     let def_name =
-      ctx_compute_type_name_no_suffix ctx def_name ^ "_" ^ field_name_s
+      ctx_compute_type_name_no_suffix meta ctx def_name ^ "_" ^ field_name_s
     in
     match !backend with
     | Lean | HOL4 -> def_name
@@ -1336,14 +1350,14 @@ let ctx_compute_field_name (ctx : extraction_ctx) (def_name : llbc_name)
     - type name
     - variant name
  *)
-let ctx_compute_variant_name (ctx : extraction_ctx) (def_name : llbc_name)
-    (variant : string) : string =
+let ctx_compute_variant_name (meta : Meta.meta) (ctx : extraction_ctx)
+    (def_name : llbc_name) (variant : string) : string =
   match !backend with
   | FStar | Coq | HOL4 ->
       let variant = to_camel_case variant in
       if !variant_concatenate_type_name then
         StringUtils.capitalize_first_letter
-          (ctx_compute_type_name_no_suffix ctx def_name ^ "_" ^ variant)
+          (ctx_compute_type_name_no_suffix meta ctx def_name ^ "_" ^ variant)
       else variant
   | Lean -> variant
 
@@ -1358,14 +1372,14 @@ let ctx_compute_variant_name (ctx : extraction_ctx) (def_name : llbc_name)
     Inputs:
     - type name
 *)
-let ctx_compute_struct_constructor (ctx : extraction_ctx) (basename : llbc_name)
-    : string =
-  let tname = ctx_compute_type_name ctx basename in
+let ctx_compute_struct_constructor (meta : Meta.meta) (ctx : extraction_ctx)
+    (basename : llbc_name) : string =
+  let tname = ctx_compute_type_name meta ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
-let ctx_compute_fun_name_no_suffix (ctx : extraction_ctx) (fname : llbc_name) :
-    string =
-  let fname = ctx_compute_simple_name ctx fname in
+let ctx_compute_fun_name_no_suffix (meta : Meta.meta) (ctx : extraction_ctx)
+    (fname : llbc_name) : string =
+  let fname = ctx_compute_simple_name meta ctx fname in
   (* TODO: don't convert to snake case for Coq, HOL4, F* *)
   let fname = flatten_name fname in
   match !backend with
@@ -1373,12 +1387,15 @@ let ctx_compute_fun_name_no_suffix (ctx : extraction_ctx) (fname : llbc_name) :
   | Lean -> fname
 
 (** Provided a basename, compute the name of a global declaration. *)
-let ctx_compute_global_name (ctx : extraction_ctx) (name : llbc_name) : string =
+let ctx_compute_global_name (meta : Meta.meta) (ctx : extraction_ctx)
+    (name : llbc_name) : string =
   match !Config.backend with
   | Coq | FStar | HOL4 ->
-      let parts = List.map to_snake_case (ctx_compute_simple_name ctx name) in
+      let parts =
+        List.map to_snake_case (ctx_compute_simple_name meta ctx name)
+      in
       String.concat "_" parts
-  | Lean -> flatten_name (ctx_compute_simple_name ctx name)
+  | Lean -> flatten_name (ctx_compute_simple_name meta ctx name)
 
 (** Helper function: generate a suffix for a function name, i.e., generates
     a suffix like "_loop", "loop1", etc. to append to a function name.
@@ -1409,9 +1426,10 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
     - loop id (if pertinent)
     TODO: use the fun id for the assumed functions.
  *)
-let ctx_compute_fun_name (ctx : extraction_ctx) (fname : llbc_name)
-    (num_loops : int) (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix ctx fname in
+let ctx_compute_fun_name (meta : Meta.meta) (ctx : extraction_ctx)
+    (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option) : string
+    =
+  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
   (* Compute the suffix *)
   let suffix = default_fun_suffix num_loops loop_id in
   (* Concatenate *)
@@ -1419,7 +1437,7 @@ let ctx_compute_fun_name (ctx : extraction_ctx) (fname : llbc_name)
 
 let ctx_compute_trait_decl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     : string =
-  ctx_compute_type_name ctx trait_decl.llbc_name
+  ctx_compute_type_name trait_decl.meta ctx trait_decl.llbc_name
 
 let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (trait_impl : trait_impl) : string =
@@ -1432,7 +1450,7 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
   let name =
     let params = trait_impl.llbc_generics in
     let args = trait_impl.llbc_impl_trait.decl_generics in
-    let name = ctx_prepare_name ctx trait_decl.llbc_name in
+    let name = ctx_prepare_name trait_impl.meta ctx trait_decl.llbc_name in
     trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
   in
   let name = flatten_name name in
@@ -1569,17 +1587,17 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
       the same purpose as in [llbc_name].
     - loop identifier, if this is for a loop
  *)
-let ctx_compute_termination_measure_name (ctx : extraction_ctx)
-    (_fid : A.FunDeclId.id) (fname : llbc_name) (num_loops : int)
-    (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix ctx fname in
+let ctx_compute_termination_measure_name (meta : Meta.meta)
+    (ctx : extraction_ctx) (_fid : A.FunDeclId.id) (fname : llbc_name)
+    (num_loops : int) (loop_id : LoopId.id option) : string =
+  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
   let lp_suffix = default_fun_loop_suffix num_loops loop_id in
   (* Compute the suffix *)
   let suffix =
     match !Config.backend with
     | FStar -> "_decreases"
     | Lean -> "_terminates"
-    | Coq | HOL4 -> raise (Failure "Unexpected")
+    | Coq | HOL4 -> craise __FILE__ __LINE__ meta "Unexpected"
   in
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
@@ -1598,16 +1616,16 @@ let ctx_compute_termination_measure_name (ctx : extraction_ctx)
       the same purpose as in [llbc_name].
     - loop identifier, if this is for a loop
  *)
-let ctx_compute_decreases_proof_name (ctx : extraction_ctx)
+let ctx_compute_decreases_proof_name (meta : Meta.meta) (ctx : extraction_ctx)
     (_fid : A.FunDeclId.id) (fname : llbc_name) (num_loops : int)
     (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix ctx fname in
+  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
   let lp_suffix = default_fun_loop_suffix num_loops loop_id in
   (* Compute the suffix *)
   let suffix =
     match !Config.backend with
     | Lean -> "_decreases"
-    | FStar | Coq | HOL4 -> raise (Failure "Unexpected")
+    | FStar | Coq | HOL4 -> craise __FILE__ __LINE__ meta "Unexpected"
   in
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
@@ -1625,8 +1643,8 @@ let ctx_compute_decreases_proof_name (ctx : extraction_ctx)
     if necessary to prevent name clashes: the burden of name clashes checks
     is thus on the caller's side.
  *)
-let ctx_compute_var_basename (ctx : extraction_ctx) (basename : string option)
-    (ty : ty) : string =
+let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx)
+    (basename : string option) (ty : ty) : string =
   (* Small helper to derive var names from ADT type names.
 
      We do the following:
@@ -1638,7 +1656,7 @@ let ctx_compute_var_basename (ctx : extraction_ctx) (basename : string option)
     let cl = to_snake_case name in
     let cl = String.split_on_char '_' cl in
     let cl = List.filter (fun s -> String.length s > 0) cl in
-    assert (List.length cl > 0);
+    sanity_check __FILE__ __LINE__ (List.length cl > 0) meta;
     let cl = List.map (fun s -> s.[0]) cl in
     StringUtils.string_of_chars cl
   in
@@ -1738,82 +1756,85 @@ let name_append_index (basename : string) (i : int) : string =
   basename ^ string_of_int i
 
 (** Generate a unique type variable name and add it to the context *)
-let ctx_add_type_var (basename : string) (id : TypeVarId.id)
+let ctx_add_type_var (meta : Meta.meta) (basename : string) (id : TypeVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name = ctx_compute_type_var_basename ctx basename in
   let name =
     basename_to_unique ctx.names_maps.names_map.names_set name_append_index name
   in
-  let ctx = ctx_add (TypeVarId id) name ctx in
+  let ctx = ctx_add meta (TypeVarId id) name ctx in
   (ctx, name)
 
 (** Generate a unique const generic variable name and add it to the context *)
-let ctx_add_const_generic_var (basename : string) (id : ConstGenericVarId.id)
-    (ctx : extraction_ctx) : extraction_ctx * string =
+let ctx_add_const_generic_var (meta : Meta.meta) (basename : string)
+    (id : ConstGenericVarId.id) (ctx : extraction_ctx) : extraction_ctx * string
+    =
   let name = ctx_compute_const_generic_var_basename ctx basename in
   let name =
     basename_to_unique ctx.names_maps.names_map.names_set name_append_index name
   in
-  let ctx = ctx_add (ConstGenericVarId id) name ctx in
+  let ctx = ctx_add meta (ConstGenericVarId id) name ctx in
   (ctx, name)
 
 (** See {!ctx_add_type_var} *)
-let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
+let ctx_add_type_vars (meta : Meta.meta) (vars : (string * TypeVarId.id) list)
     (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
-    (fun ctx (name, id) -> ctx_add_type_var name id ctx)
+    (fun ctx (name, id) -> ctx_add_type_var meta name id ctx)
     ctx vars
 
 (** Generate a unique variable name and add it to the context *)
-let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
-    extraction_ctx * string =
+let ctx_add_var (meta : Meta.meta) (basename : string) (id : VarId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
   let name =
     basename_to_unique ctx.names_maps.names_map.names_set name_append_index
       basename
   in
-  let ctx = ctx_add (VarId id) name ctx in
+  let ctx = ctx_add meta (VarId id) name ctx in
   (ctx, name)
 
 (** Generate a unique variable name for the trait self clause and add it to the context *)
-let ctx_add_trait_self_clause (ctx : extraction_ctx) : extraction_ctx * string =
+let ctx_add_trait_self_clause (meta : Meta.meta) (ctx : extraction_ctx) :
+    extraction_ctx * string =
   let basename = trait_self_clause_basename in
   let name =
     basename_to_unique ctx.names_maps.names_map.names_set name_append_index
       basename
   in
-  let ctx = ctx_add TraitSelfClauseId name ctx in
+  let ctx = ctx_add meta TraitSelfClauseId name ctx in
   (ctx, name)
 
 (** Generate a unique trait clause name and add it to the context *)
-let ctx_add_local_trait_clause (basename : string) (id : TraitClauseId.id)
-    (ctx : extraction_ctx) : extraction_ctx * string =
+let ctx_add_local_trait_clause (meta : Meta.meta) (basename : string)
+    (id : TraitClauseId.id) (ctx : extraction_ctx) : extraction_ctx * string =
   let name =
     basename_to_unique ctx.names_maps.names_map.names_set name_append_index
       basename
   in
-  let ctx = ctx_add (LocalTraitClauseId id) name ctx in
+  let ctx = ctx_add meta (LocalTraitClauseId id) name ctx in
   (ctx, name)
 
 (** See {!ctx_add_var} *)
-let ctx_add_vars (vars : var list) (ctx : extraction_ctx) :
+let ctx_add_vars (meta : Meta.meta) (vars : var list) (ctx : extraction_ctx) :
     extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (v : var) ->
-      let name = ctx_compute_var_basename ctx v.basename v.ty in
-      ctx_add_var name v.id ctx)
+      let name = ctx_compute_var_basename meta ctx v.basename v.ty in
+      ctx_add_var meta name v.id ctx)
     ctx vars
 
-let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :
-    extraction_ctx * string list =
-  List.fold_left_map
-    (fun ctx (var : type_var) -> ctx_add_type_var var.name var.index ctx)
-    ctx vars
-
-let ctx_add_const_generic_params (vars : const_generic_var list)
+let ctx_add_type_params (meta : Meta.meta) (vars : type_var list)
     (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
+    (fun ctx (var : type_var) -> ctx_add_type_var meta var.name var.index ctx)
+    ctx vars
+
+let ctx_add_const_generic_params (meta : Meta.meta)
+    (vars : const_generic_var list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
+  List.fold_left_map
     (fun ctx (var : const_generic_var) ->
-      ctx_add_const_generic_var var.name var.index ctx)
+      ctx_add_const_generic_var meta var.name var.index ctx)
     ctx vars
 
 (** Returns the lists of names for:
@@ -1825,16 +1846,17 @@ let ctx_add_const_generic_params (vars : const_generic_var list)
     pretty names for the trait clauses. See {!ctx_compute_trait_clause_name}
     for additional information.
   *)
-let ctx_add_local_trait_clauses (current_def_name : Types.name)
-    (llbc_generics : Types.generic_params) (clauses : trait_clause list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
+let ctx_add_local_trait_clauses (meta : Meta.meta)
+    (current_def_name : Types.name) (llbc_generics : Types.generic_params)
+    (clauses : trait_clause list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (c : trait_clause) ->
       let basename =
         ctx_compute_trait_clause_basename ctx current_def_name llbc_generics
           c.clause_id
       in
-      ctx_add_local_trait_clause basename c.clause_id ctx)
+      ctx_add_local_trait_clause meta basename c.clause_id ctx)
     ctx clauses
 
 (** Returns the lists of names for:
@@ -1846,33 +1868,38 @@ let ctx_add_local_trait_clauses (current_def_name : Types.name)
     pretty names for the trait clauses. See {!ctx_compute_trait_clause_name}
     for additional information.
   *)
-let ctx_add_generic_params (current_def_name : Types.name)
+let ctx_add_generic_params (meta : Meta.meta) (current_def_name : Types.name)
     (llbc_generics : Types.generic_params) (generics : generic_params)
     (ctx : extraction_ctx) :
     extraction_ctx * string list * string list * string list =
   let { types; const_generics; trait_clauses } = generics in
-  let ctx, tys = ctx_add_type_params types ctx in
-  let ctx, cgs = ctx_add_const_generic_params const_generics ctx in
+  let ctx, tys = ctx_add_type_params meta types ctx in
+  let ctx, cgs = ctx_add_const_generic_params meta const_generics ctx in
   let ctx, tcs =
-    ctx_add_local_trait_clauses current_def_name llbc_generics trait_clauses ctx
+    ctx_add_local_trait_clauses meta current_def_name llbc_generics
+      trait_clauses ctx
   in
   (ctx, tys, cgs, tcs)
 
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name =
-    ctx_compute_decreases_proof_name ctx def.def_id def.llbc_name def.num_loops
-      def.loop_id
+    ctx_compute_decreases_proof_name def.meta ctx def.def_id def.llbc_name
+      def.num_loops def.loop_id
   in
-  ctx_add (DecreasesProofId (FRegular def.def_id, def.loop_id)) name ctx
+  ctx_add def.meta
+    (DecreasesProofId (FRegular def.def_id, def.loop_id))
+    name ctx
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name =
-    ctx_compute_termination_measure_name ctx def.def_id def.llbc_name
+    ctx_compute_termination_measure_name def.meta ctx def.def_id def.llbc_name
       def.num_loops def.loop_id
   in
-  ctx_add (TerminationMeasureId (FRegular def.def_id, def.loop_id)) name ctx
+  ctx_add def.meta
+    (TerminationMeasureId (FRegular def.def_id, def.loop_id))
+    name ctx
 
 let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
@@ -1885,10 +1912,10 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   match match_name_find_opt ctx.trans_ctx def.name builtin_globals_map with
   | Some name ->
       (* Yes: register the custom binding *)
-      ctx_add decl name ctx
+      ctx_add def.meta decl name ctx
   | None ->
       (* Not the case: "standard" registration *)
-      let name = ctx_compute_global_name ctx def.name in
+      let name = ctx_compute_global_name def.meta ctx def.name in
       let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
       (* If this is a provided constant (i.e., the default value for a constant
          in a trait declaration) we add a suffix. Otherwise there is a clash
@@ -1897,26 +1924,26 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       let suffix =
         match def.kind with TraitItemProvided _ -> "_default" | _ -> ""
       in
-      let ctx = ctx_add decl (name ^ suffix) ctx in
-      let ctx = ctx_add body (name ^ suffix ^ "_body") ctx in
+      let ctx = ctx_add def.meta decl (name ^ suffix) ctx in
+      let ctx = ctx_add def.meta body (name ^ suffix ^ "_body") ctx in
       ctx
 
 let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
   (* Add the function name *)
-  ctx_compute_fun_name ctx def.llbc_name def.num_loops def.loop_id
+  ctx_compute_fun_name def.meta ctx def.llbc_name def.num_loops def.loop_id
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Sanity check: the function should not be a global body - those are handled
    * separately *)
-  assert (not def.is_global_decl_body);
+  sanity_check __FILE__ __LINE__ (not def.is_global_decl_body) def.meta;
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
   (* Add the function name *)
   let def_name = ctx_compute_fun_name def ctx in
   let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
-  ctx_add (FunId (FromLlbc fun_id)) def_name ctx
+  ctx_add def.meta (FunId (FromLlbc fun_id)) def_name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =
-  ctx_compute_type_name ctx def.llbc_name
+  ctx_compute_type_name def.meta ctx def.llbc_name
