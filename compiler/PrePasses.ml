@@ -214,14 +214,17 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       object
         inherit [_] map_statement as super
 
-        method! visit_Loop entered_loop loop =
-          cassert (not entered_loop) st.meta
-            "Nested loops are not supported yet";
-          super#visit_Loop true loop
-
-        method! visit_Break _ i =
-          cassert (i = 0) st.meta "Breaks to outer loops are not supported yet";
-          nst.content
+        method! visit_statement entered_loop st =
+          match st.content with
+          | Loop loop ->
+              cassert (not entered_loop) st.meta
+                "Nested loops are not supported yet";
+              { st with content = super#visit_Loop true loop }
+          | Break i ->
+              cassert (i = 0) st.meta
+                "Breaks to outer loops are not supported yet";
+              { st with content = nst.content }
+          | _ -> super#visit_statement entered_loop st
       end
     in
     obj#visit_statement false st

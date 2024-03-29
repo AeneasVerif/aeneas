@@ -7,7 +7,7 @@ let meta_to_string (span : Meta.span) =
   ^ loc_to_string span.end_loc
 
 let format_error_message (meta : Meta.meta) msg =
-  msg ^ ":" ^ meta_to_string meta.span
+  msg ^ "\n" ^ meta_to_string meta.span
 
 exception CFailure of string
 
