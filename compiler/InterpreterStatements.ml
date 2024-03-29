@@ -440,7 +440,7 @@ let eval_box_new_concrete (config : config) (meta : Meta.meta)
       (* Required type checking *)
       cassert __FILE__ __LINE__
         (input_value.ty = boxed_ty)
-        meta "TODO: Error message";
+        meta "The input given to Box::new doesn't have the proper type";
 
       (* Move the input value *)
       let cf_move =
@@ -1431,7 +1431,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
          (fun ((arg, rty) : typed_value * rty) ->
            arg.ty = Subst.erase_regions rty)
          args_with_rtypes)
-      meta "TODO: Error message";
+      meta "The input arguments don't have the proper type";
     (* Check that the input arguments don't contain symbolic values that can't 
      * be fed to functions (i.e., symbolic values output from function return
      * values and which contain borrows of borrows can't be used as function

@@ -1876,11 +1876,8 @@ let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   let meta = body.meta in
-  cassert __FILE__ __LINE__ body.is_global_decl_body body.meta
-    "TODO: Error message";
-  cassert __FILE__ __LINE__
-    (body.signature.inputs = [])
-    body.meta "TODO: Error message";
+  sanity_check __FILE__ __LINE__ body.is_global_decl_body body.meta;
+  sanity_check __FILE__ __LINE__ (body.signature.inputs = []) body.meta;
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
