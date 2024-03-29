@@ -254,7 +254,7 @@ let empty_names_map : names_map =
 
 (** Small helper to report name collision *)
 let report_name_collision (id_to_string : id -> string)
-    ((id1, meta) : id * Meta.meta option) (id2 : id) (name : string) : unit =
+    (id1 : id) (id2 : id) (name : string) : unit =
   let id1 = "\n- " ^ id_to_string id1 in
   let id2 = "\n- " ^ id_to_string id2 in
   let err =
@@ -263,10 +263,10 @@ let report_name_collision (id_to_string : id -> string)
     ^ "\nYou may want to rename some of your definitions, or report an issue."
   in
   (* If we fail hard on errors, raise an exception *)
-  save_error meta err
+  save_error __FILE__ __LINE__ None err
 
 let names_map_get_id_from_name (name : string) (nm : names_map) :
-    (id * meta option) option =
+    id option =
   StringMap.find_opt name nm.name_to_id
 
 let names_map_check_collision (id_to_string : id -> string) (id : id)
