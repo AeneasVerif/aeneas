@@ -404,9 +404,7 @@ let ctx_push_vars (meta : Meta.meta) (ctx : eval_ctx)
        (fun (var, (value : typed_value)) ->
          TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
        vars)
-    meta
-    "The pushed variables and their values do not have the same type TODO: \
-     Error message";
+    meta "The pushed variables and their values do not have the same type";
   let vars =
     List.map
       (fun (var, value) -> EBinding (BVar (var_to_binder var), value))
