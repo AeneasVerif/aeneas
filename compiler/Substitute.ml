@@ -77,7 +77,7 @@ let ctx_adt_value_get_instantiated_field_types (meta : Meta.meta)
       ctx_adt_get_instantiated_field_types ctx id adt.variant_id generics
   | TTuple ->
       cassert __FILE__ __LINE__ (generics.regions = []) meta
-        "Regions should be empty TODO: error message";
+        "Tuples don't have region parameters";
       generics.types
   | TAssumed aty -> (
       match aty with

@@ -502,7 +502,7 @@ let apply_proj_borrows_on_input_value (config : config) (meta : Meta.meta)
     (ctx : eval_ctx) (regions : RegionId.Set.t)
     (ancestors_regions : RegionId.Set.t) (v : typed_value) (ty : rty) :
     eval_ctx * typed_avalue =
-  cassert __FILE__ __LINE__ (ty_is_rty ty) meta "TODO: error message";
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
   let check_symbolic_no_ended = true in
   let allow_reborrows = true in
   (* Prepare the reborrows *)

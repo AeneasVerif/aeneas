@@ -411,7 +411,7 @@ let adt_g_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
               "Unreachable: improper variant id for result type"
       | TError ->
           cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta
-            "TODO: error message";
+            "Ill-formed error value";
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
@@ -422,7 +422,7 @@ let adt_g_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then (
             cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta
-              "TODO: error message";
+              "Ill-formed full value";
             "@Fuel::Zero")
           else if variant_id = fuel_succ_id then
             match field_values with
@@ -435,7 +435,7 @@ let adt_g_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
               "Unreachable: improper variant id for fuel type"
       | TArray | TSlice | TStr ->
           cassert_opt_meta __FILE__ __LINE__ (variant_id = None) meta
-            "TODO: error message";
+            "Ill-formed value";
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in

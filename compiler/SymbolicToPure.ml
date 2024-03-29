@@ -458,9 +458,7 @@ let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
       match type_id with
       | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
       | T.TTuple ->
-          cassert __FILE__ __LINE__
-            (generics.const_generics = [])
-            meta "TODO: error message";
+          sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
           mk_simpl_tuple_ty generics.types
       | T.TAssumed aty -> (
           match aty with
@@ -486,7 +484,8 @@ let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_strait_ref meta trait_ref in
       TTraitType (trait_ref, type_name)
-  | TArrow _ -> craise __FILE__ __LINE__ meta "TODO: error message"
+  | TArrow _ ->
+      craise __FILE__ __LINE__ meta "Arrow types are not supported yet"
 
 and translate_sgeneric_args (meta : Meta.meta) (generics : T.generic_args) :
     generic_args =
@@ -659,7 +658,8 @@ let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos)
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_fwd_trait_ref meta type_infos trait_ref in
       TTraitType (trait_ref, type_name)
-  | TArrow _ -> craise __FILE__ __LINE__ meta "TODO: error message"
+  | TArrow _ ->
+      craise __FILE__ __LINE__ meta "Arrow types are not supported yet"
 
 and translate_fwd_generic_args (meta : Meta.meta) (type_infos : type_infos)
     (generics : T.generic_args) : generic_args =
@@ -768,7 +768,8 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
         let trait_ref = translate_fwd_trait_ref meta type_infos trait_ref in
         Some (TTraitType (trait_ref, type_name))
       else None
-  | TArrow _ -> craise __FILE__ __LINE__ meta "TODO: error message"
+  | TArrow _ ->
+      craise __FILE__ __LINE__ meta "Arrow types are not supported yet"
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)

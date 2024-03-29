@@ -1402,9 +1402,9 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
 
               { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
             in
-            cassert __FILE__ __LINE__
+            sanity_check __FILE__ __LINE__
               (fun_sig_info_is_wf loop_fwd_sig_info)
-              def.meta "TODO: error message";
+              def.meta;
 
             let inputs_tys =
               let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
@@ -1444,10 +1444,10 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
 
               (* Introduce the forward input state *)
               let fwd_state_var, fwd_state_lvs =
-                cassert __FILE__ __LINE__
+                sanity_check __FILE__ __LINE__
                   (loop_fwd_effect_info.stateful
                   = Option.is_some loop.input_state)
-                  def.meta "TODO: error message";
+                  def.meta;
                 match loop.input_state with
                 | None -> ([], [])
                 | Some input_state ->

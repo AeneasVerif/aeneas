@@ -428,12 +428,12 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | TraitRef trait_ref ->
       (* The trait instance id necessarily refers to a local sub-clause. We
          can't project over it and can only peel off the [TraitRef] wrapper *)
-      cassert_opt_meta __FILE__ __LINE__
+      sanity_check_opt_meta __FILE__ __LINE__
         (trait_instance_id_is_local_clause trait_ref.trait_id)
-        ctx.meta "Trait instance id is not a local sub-clause";
-      cassert_opt_meta __FILE__ __LINE__
+        ctx.meta;
+      sanity_check_opt_meta __FILE__ __LINE__
         (trait_ref.generics = empty_generic_args)
-        ctx.meta "TODO: error message";
+        ctx.meta;
       (trait_ref.trait_id, None)
   | FnPointer ty ->
       let ty = norm_ctx_normalize_ty ctx ty in
@@ -482,9 +482,9 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
         (lazy
           ("norm_ctx_normalize_trait_ref: normalized to: "
           ^ trait_ref_to_string ctx trait_ref));
-      cassert_opt_meta __FILE__ __LINE__
+      sanity_check_opt_meta __FILE__ __LINE__
         (generics = empty_generic_args)
-        ctx.meta "TODO: error message";
+        ctx.meta;
       trait_ref
 
 (* Not sure this one is really necessary *)

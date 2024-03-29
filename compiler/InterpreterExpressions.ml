@@ -340,7 +340,9 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
                      value_as_symbolic meta cv.value,
                      SymbolicAst.VaCgValue vid,
                      e )))
-      | CFnPtr _ -> craise __FILE__ __LINE__ meta "TODO: error message")
+      | CFnPtr _ ->
+          craise __FILE__ __LINE__ meta
+            "Function pointers are not supported yet")
   | Copy p ->
       (* Access the value *)
       let access = Read in
@@ -523,7 +525,8 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
    * The remaining binops only operate on scalars. *)
   if binop = Eq || binop = Ne then (
     (* Equality operations *)
-    exec_assert __FILE__ __LINE__ (v1.ty = v2.ty) meta "TODO: error message";
+    exec_assert __FILE__ __LINE__ (v1.ty = v2.ty) meta
+      "The arguments given to the binop don't have the same type";
     (* Equality/inequality check is primitive only for a subset of types *)
     exec_assert __FILE__ __LINE__
       (ty_is_primitively_copyable v1.ty)

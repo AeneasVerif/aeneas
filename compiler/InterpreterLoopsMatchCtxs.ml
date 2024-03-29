@@ -243,7 +243,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                 (not
                    (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
                       bv.value))
-                M.meta "TODO: error message";
+                M.meta "The join of nested borrows is not supported yet";
               let bid, bv =
                 M.match_mut_borrows ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
               in
@@ -268,7 +268,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               let sv = match_rec sv0 sv1 in
               cassert __FILE__ __LINE__
                 (not (value_has_borrows sv.value))
-                M.meta "TODO: error message";
+                M.meta "The join of nested borrows is not supported yet";
               let ids, sv = M.match_shared_loans ctx0 ctx1 ty ids0 ids1 sv in
               VSharedLoan (ids, sv)
           | VMutLoan id0, VMutLoan id1 ->
