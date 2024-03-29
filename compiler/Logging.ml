@@ -3,6 +3,9 @@ include Charon.Logging
 (** Below, we create subgloggers for various submodules, so that we can precisely
     toggle logging on/off, depending on which information we need *)
 
+(** Logger for Errors *)
+let errors_log = L.get_logger "MainLogger.Errors"
+
 (** Logger for PrePasses *)
 let pre_passes_log = L.get_logger "MainLogger.PrePasses"
 

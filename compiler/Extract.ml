@@ -2234,7 +2234,10 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   (* For now we do not support overriding provided methods *)
   cassert __FILE__ __LINE__
     (trait_impl.provided_methods = [])
-    trait_impl.meta "Overriding provided methods is not supported yet";
+    trait_impl.meta
+    ("Overriding provided methods is not supported yet (overriden methods: "
+    ^ String.concat ", " (List.map fst trait_impl.provided_methods)
+    ^ ")");
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
      the name of the implementation itself *)
   (* Compute the name *)

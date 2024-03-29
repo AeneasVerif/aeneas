@@ -1,3 +1,5 @@
+let log = Logging.errors_log
+
 let meta_to_string (span : Meta.span) =
   let file = match span.file with Virtual s | Local s -> s in
   let loc_to_string (l : Meta.loc) : string =
@@ -14,7 +16,7 @@ let format_error_message (meta : Meta.meta option) (msg : string) =
 
 let format_error_message_with_file_line (file : string) (line : int)
     (meta : Meta.meta option) (msg : string) =
-  "In file:" ^ file ^ ", line:" ^ string_of_int line ^ "\n"
+  "In file " ^ file ^ ", line " ^ string_of_int line ^ ":\n"
   ^ format_error_message meta msg
 
 exception CFailure of (Meta.meta option * string)
@@ -28,13 +30,17 @@ let push_error (meta : Meta.meta option) (msg : string) =
 let save_error (file : string) (line : int) ?(throw : bool = false)
     (meta : Meta.meta option) (msg : string) =
   push_error meta msg;
-  if !Config.fail_hard && throw then
-    raise (Failure (format_error_message_with_file_line file line meta msg))
+  if !Config.fail_hard && throw then (
+    let msg = format_error_message_with_file_line file line meta msg in
+    log#serror (msg ^ "\n");
+    raise (Failure msg))
 
 let craise_opt_meta (file : string) (line : int) (meta : Meta.meta option)
     (msg : string) =
-  if !Config.fail_hard then
-    raise (Failure (format_error_message_with_file_line file line meta msg))
+  if !Config.fail_hard then (
+    let msg = format_error_message_with_file_line file line meta msg in
+    log#serror (msg ^ "\n");
+    raise (Failure (format_error_message_with_file_line file line meta msg)))
   else
     let () = push_error meta msg in
     raise (CFailure (meta, msg))
