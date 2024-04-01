@@ -420,7 +420,7 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
   f
 
 let apply_passes (crate : crate) : crate =
-  let passes = [ remove_loop_breaks crate; remove_shallow_borrows crate ] in
+  let passes = [ remove_shallow_borrows crate ] in
   let fun_decls =
     List.fold_left
       (fun fl pass -> FunDeclId.Map.map pass fl)
