@@ -3,6 +3,7 @@ open Types
 open Values
 open LlbcAst
 open Contexts
+open Errors
 module SA = SymbolicAst
 module Micro = PureMicroPasses
 open TranslateCore
@@ -127,6 +128,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
 
   let ctx =
     {
+      meta = fdef.meta;
       decls_ctx = trans_ctx;
       SymbolicToPure.bid = None;
       sg;
@@ -181,7 +183,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
           SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
         in
         { ctx with forward_inputs }
-    | _ -> raise (Failure "Unreachable")
+    | _ -> craise __FILE__ __LINE__ fdef.meta "Unreachable"
   in
 
   (* Add the backward inputs *)
@@ -452,7 +454,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
   let trans = FunDeclId.Map.find global.body ctx.trans_funs in
-  assert (trans.loops = []);
+  sanity_check __FILE__ __LINE__ (trans.loops = []) global.meta;
   let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
@@ -475,6 +477,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
        groups are always singletons, so the [extract_global_decl] function
        takes care of generating the delimiters.
     *)
+    let global = SymbolicToPure.translate_global ctx.trans_ctx global in
     Extract.extract_global_decl ctx fmt global body config.interface
 
 (** Utility.
@@ -1092,7 +1095,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     let exe_dir = Filename.dirname Sys.argv.(0) in
     let primitives_src_dest =
       match !Config.backend with
-      | FStar -> Some ("/backends/fstar/merge/Primitives.fst", "Primitives.fst")
+      | FStar -> Some ("/backends/fstar/Primitives.fst", "Primitives.fst")
       | Coq -> Some ("/backends/coq/Primitives.v", "Primitives.v")
       | Lean -> None
       | HOL4 -> None

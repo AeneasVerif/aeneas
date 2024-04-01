@@ -290,7 +290,7 @@ type ty =
   | TVar of type_var_id
   | TLiteral of literal_type
   | TArrow of ty * ty
-  | TTraitType of trait_ref * generic_args * string
+  | TTraitType of trait_ref * string
       (** The string is for the name of the associated type *)
 
 and trait_ref = {
@@ -381,7 +381,6 @@ type generic_params = {
 
 type trait_type_constraint = {
   trait_ref : trait_ref;
-  generics : generic_args;
   type_name : trait_item_name;
   ty : ty;
 }
@@ -606,8 +605,7 @@ type qualif_id =
   | Global of global_decl_id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
-  | TraitConst of trait_ref * generic_args * string
-      (** A trait associated constant *)
+  | TraitConst of trait_ref * string  (** A trait associated constant *)
 [@@deriving show]
 
 (** An instantiated qualifier.
@@ -816,11 +814,17 @@ and emeta =
           The mvalue stores the value which is put in the destination
           The second (optional) mplace stores the origin.
         *)
-  | SymbolicAssignment of (var_id[@opaque]) * mvalue
+  | SymbolicAssignments of ((var_id[@opaque]) * mvalue) list
       (** Informationg linking a variable (from the pure AST) to an
           expression.
 
           We use this to guide the heuristics which derive pretty names.
+        *)
+  | SymbolicPlaces of ((var_id[@opaque]) * string) list
+      (** Informationg linking a variable (from the pure AST) to a name.
+
+          We generate this information by exploring the context, and use it
+          to derive pretty names.
         *)
   | MPlace of mplace  (** Meta-information about the origin of a value *)
   | Tag of string  (** A tag - typically used for debugging *)
@@ -1093,6 +1097,26 @@ type fun_decl = {
   signature : fun_sig;
   is_global_decl_body : bool;
   body : fun_body option;
+}
+[@@deriving show]
+
+type global_decl = {
+  meta : meta;
+  def_id : GlobalDeclId.id;
+  is_local : bool;
+  llbc_name : llbc_name;  (** The original LLBC name. *)
+  name : string;
+      (** We use the name only for printing purposes (for debugging):
+          the name used at extraction time will be derived from the
+          llbc_name.
+       *)
+  llbc_generics : Types.generic_params;
+      (** See the comment for [llbc_generics] in fun_decl. *)
+  generics : generic_params;
+  preds : predicates;
+  ty : ty;
+  kind : item_kind;
+  body_id : FunDeclId.id;
 }
 [@@deriving show]
 

@@ -13,7 +13,7 @@ let ref_incr (x : i32) : result i32 =
 (** [paper::test_incr]:
     Source: 'src/paper.rs', lines 8:0-8:18 *)
 let test_incr : result unit =
-  let* i = ref_incr 0 in if not (i = 1) then Fail Failure else Ok ()
+  let* x = ref_incr 0 in if not (x = 1) then Fail Failure else Ok ()
 
 (** Unit test for [paper::test_incr] *)
 let _ = assert_norm (test_incr = Ok ())

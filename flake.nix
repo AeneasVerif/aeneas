@@ -8,15 +8,11 @@
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
     hacl-nix.url = "github:hacl-star/hacl-nix";
-    lean.url = "github:leanprover/lean4";
-    #lake.url = "github:leanprover/lake";
-    lake.url = "github:leanprover/lake/lean4-master";
-    #lake.flake = false;
   };
 
   # Remark: keep the list of outputs in sync with the list of inputs above
   # (see above remark)
-  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix, lean, lake }:
+  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -126,20 +122,6 @@
           # The tests don't generate anything - TODO: actually they do
           installPhase = "touch $out";
         };
-        # Replay the Lean proofs. TODO: doesn't work
-        aeneas-verify-lean = pkgs.stdenv.mkDerivation {
-          name = "aeneas_verify_lean";
-          src = ./tests/lean;
-          #LAKE_EXE = lean.packages.${system};
-          #buildInputs = [lean.packages.${system}.lake-dev];
-          buildInputs = [lean.packages.${system} lake.packages.${system}.cli];
-          #buildInputs = [lake.packages.${system}.cli];
-          buildPhase= ''
-            make prepare-projects
-            #make verify -j $NIX_BUILD_CORES
-            make verify
-          '';
-        };
         # Replay the HOL4 proofs
         #
         # Remark: we tried to have two targets, one for ./backends/hol4 and
@@ -170,11 +152,19 @@
           inherit aeneas;
           default = aeneas;
         };
+        devShells.default = pkgs.mkShell {
+          packages = [
+            pkgs.ocamlPackages.odoc
+          ];
+
+          inputsFrom = [
+            self.packages.${system}.aeneas
+          ];
+        };
         checks = {
           inherit aeneas aeneas-tests
                   aeneas-verify-fstar
                   aeneas-verify-coq
-                  aeneas-verify-lean
                   aeneas-verify-hol4; };
       });
 }

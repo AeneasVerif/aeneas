@@ -3,6 +3,7 @@
 open Pure
 open PureUtils
 open TranslateCore
+open Errors
 
 (** The local logger *)
 let log = Logging.pure_micro_passes_log
@@ -221,7 +222,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Register a variable for constraints propagation - used when an variable is
    * introduced (left-hand side of a left binding) *)
   let register_var (ctx : pn_ctx) (v : var) : pn_ctx =
-    assert (not (VarId.Map.mem v.id ctx.pure_vars));
+    sanity_check __FILE__ __LINE__
+      (not (VarId.Map.mem v.id ctx.pure_vars))
+      def.meta;
     match v.basename with
     | None -> ctx
     | Some name ->
@@ -334,6 +337,15 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx1 = obj#visit_typed_pattern () lv () in
     merge_ctxs ctx ctx1
   in
+  (* If we have [x = y] where x and y are variables, add a constraint linking
+     the names of x and y *)
+  let add_eq_var_constraint (lv : typed_pattern) (re : texpression)
+      (ctx : pn_ctx) : pn_ctx =
+    match (lv.value, re.e) with
+    | PatVar (lv, _), Var rv when Option.is_some lv.basename ->
+        add_pure_var_constraint rv (Option.get lv.basename) ctx
+    | _ -> ctx
+  in
 
   (* This is used to propagate constraint information about places in case of
    * variable reassignments: we try to propagate the information from the
@@ -428,6 +440,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx, re = update_texpression re ctx in
     let ctx, e = update_texpression e ctx in
     let lv = update_typed_pattern ctx lv in
+    let ctx = add_eq_var_constraint lv re ctx in
     (ctx, Let (monadic, lv, re, e))
   (* *)
   and update_switch_body (scrut : texpression) (body : switch_body)
@@ -524,8 +537,15 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             | _ -> ctx
           in
           ctx
-      | SymbolicAssignment (var_id, rvalue) ->
-          add_pure_var_value_constraint var_id rvalue ctx
+      | SymbolicAssignments infos ->
+          List.fold_left
+            (fun ctx (var_id, rvalue) ->
+              add_pure_var_value_constraint var_id rvalue ctx)
+            ctx infos
+      | SymbolicPlaces infos ->
+          List.fold_left
+            (fun ctx (var_id, name) -> add_pure_var_constraint var_id name ctx)
+            ctx infos
       | MPlace mp -> add_right_constraint mp e ctx
       | Tag _ -> ctx
     in
@@ -593,7 +613,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
         | App _ -> (
             let app, args = destruct_apps e in
             let ignore () =
-              mk_apps
+              mk_apps def.meta
                 (self#visit_texpression env app)
                 (List.map (self#visit_texpression env) args)
             in
@@ -738,7 +758,7 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
             else if variant_id = result_fail_id then
               (* Fail case *)
               self#visit_expression env rv.e
-            else raise (Failure "Unexpected")
+            else craise __FILE__ __LINE__ def.meta "Unexpected"
         | App _ ->
             (* This might be the tuple case *)
             if not monadic then
@@ -893,7 +913,7 @@ let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
               } ) ->
             (* Second case: we deconstruct a structure with one field that we will
                extract as tuple. *)
-            let adt_id, _ = PureUtils.ty_as_adt re.ty in
+            let adt_id, _ = PureUtils.ty_as_adt def.meta re.ty in
             (* Update the rhs (we may perform substitutions inside, and it is
              * better to do them *before* we inline it *)
             let re = self#visit_texpression env re in
@@ -1074,7 +1094,34 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       f y
     ]}
  *)
-let simplify_let_then_return _ctx def =
+let simplify_let_then_return _ctx (def : fun_decl) =
+  (* Match a pattern and an expression: evaluates to [true] if the expression
+     is actually exactly the pattern *)
+  let rec match_pattern_and_expr (pat : typed_pattern) (e : texpression) : bool
+      =
+    match (pat.value, e.e) with
+    | PatConstant plit, Const lit -> plit = lit
+    | PatVar (pv, _), Var vid -> pv.id = vid
+    | PatDummy, _ ->
+        (* It is ok only if we ignore the unit value *)
+        pat.ty = mk_unit_ty && e = mk_unit_rvalue
+    | PatAdt padt, _ -> (
+        let qualif, args = destruct_apps e in
+        match qualif.e with
+        | Qualif { id = AdtCons cons_id; generics = _ } ->
+            if
+              pat.ty = e.ty
+              && padt.variant_id = cons_id.variant_id
+              && List.length padt.field_values = List.length args
+            then
+              List.for_all
+                (fun (p, e) -> match_pattern_and_expr p e)
+                (List.combine padt.field_values args)
+            else false
+        | _ -> false)
+    | _ -> false
+  in
+
   let expr_visitor =
     object (self)
       inherit [_] map_expression
@@ -1090,13 +1137,24 @@ let simplify_let_then_return _ctx def =
             (* Small shortcut to avoid doing the check on every let-binding *)
             not_simpl_e
         | _ -> (
-            match typed_pattern_to_texpression lv with
-            | None -> not_simpl_e
-            | Some lv_v ->
-                let lv_v =
-                  if monadic then mk_result_ok_texpression lv_v else lv_v
-                in
-                if lv_v = next_e then rv.e else not_simpl_e)
+            if (* Do the check *)
+               monadic then
+              (* The first let-binding is monadic *)
+              match opt_destruct_ok next_e with
+              | Some e ->
+                  if match_pattern_and_expr lv e then rv.e else not_simpl_e
+              | None -> not_simpl_e
+            else
+              (* The first let-binding is not monadic *)
+              match opt_destruct_ok next_e with
+              | Some e ->
+                  if match_pattern_and_expr lv e then
+                    (* We need to wrap the right-value in a ret *)
+                    (mk_result_ok_texpression def.meta rv).e
+                  else not_simpl_e
+              | None ->
+                  if match_pattern_and_expr lv next_e then rv.e else not_simpl_e
+            )
     end
   in
 
@@ -1142,13 +1200,14 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 in
                 let fields =
                   match adt_decl.kind with
-                  | Enum _ | Opaque -> raise (Failure "Unreachable")
+                  | Enum _ | Opaque ->
+                      craise __FILE__ __LINE__ def.meta "Unreachable"
                   | Struct fields -> fields
                 in
                 let num_fields = List.length fields in
                 (* In order to simplify, there must be as many arguments as
                  * there are fields *)
-                assert (num_fields > 0);
+                sanity_check __FILE__ __LINE__ (num_fields > 0) def.meta;
                 if num_fields = List.length args then
                   (* We now need to check that all the arguments are of the form:
                    * [x.field] for some variable [x], and where the projection
@@ -1184,10 +1243,11 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     if List.for_all (fun (_, y) -> y = x) end_args then (
                       (* We can substitute *)
                       (* Sanity check: all types correct *)
-                      assert (
-                        List.for_all
-                          (fun (generics1, _) -> generics1 = generics)
-                          args);
+                      sanity_check __FILE__ __LINE__
+                        (List.for_all
+                           (fun (generics1, _) -> generics1 = generics)
+                           args)
+                        def.meta;
                       { e with e = Var x })
                     else super#visit_texpression env e
                   else super#visit_texpression env e
@@ -1342,7 +1402,9 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
 
               { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
             in
-            assert (fun_sig_info_is_wf loop_fwd_sig_info);
+            sanity_check __FILE__ __LINE__
+              (fun_sig_info_is_wf loop_fwd_sig_info)
+              def.meta;
 
             let inputs_tys =
               let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
@@ -1382,9 +1444,10 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
 
               (* Introduce the forward input state *)
               let fwd_state_var, fwd_state_lvs =
-                assert (
-                  loop_fwd_effect_info.stateful
-                  = Option.is_some loop.input_state);
+                sanity_check __FILE__ __LINE__
+                  (loop_fwd_effect_info.stateful
+                  = Option.is_some loop.input_state)
+                  def.meta;
                 match loop.input_state with
                 | None -> ([], [])
                 | Some input_state ->
@@ -1421,7 +1484,8 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               match fuel_vars with
               | None -> loop.loop_body
               | Some (fuel0, fuel) ->
-                  SymbolicToPure.wrap_in_match_fuel fuel0 fuel loop.loop_body
+                  SymbolicToPure.wrap_in_match_fuel def.meta fuel0 fuel
+                    loop.loop_body
             in
 
             let loop_body = { inputs; inputs_lvs; body = loop_body } in
@@ -1514,9 +1578,9 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 match aid with
                 | BoxNew ->
                     let arg, args = Collections.List.pop args in
-                    mk_apps arg args
+                    mk_apps def.meta arg args
                 | BoxFree ->
-                    assert (args = []);
+                    sanity_check __FILE__ __LINE__ (args = []) def.meta;
                     mk_unit_rvalue
                 | SliceIndexShared | SliceIndexMut | ArrayIndexShared
                 | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
@@ -1710,8 +1774,8 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               *)
               (* TODO: this information should be computed in SymbolicToPure and
                * store in an enum ("monadic" should be an enum, not a bool). *)
-              let re_ty = Option.get (opt_destruct_result re.ty) in
-              assert (lv.ty = re_ty);
+              let re_ty = Option.get (opt_destruct_result def.meta re.ty) in
+              sanity_check __FILE__ __LINE__ (lv.ty = re_ty) def.meta;
               let err_vid = fresh_id () in
               let err_var : var =
                 {
@@ -1723,7 +1787,7 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               let err_pat = mk_typed_pattern_from_var err_var None in
               let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
               let err_v = mk_texpression_from_var err_var in
-              let fail_value = mk_result_fail_texpression err_v e.ty in
+              let fail_value = mk_result_fail_texpression def.meta err_v e.ty in
               let fail_branch = { pat = fail_pat; branch = fail_value } in
               let success_pat = mk_result_ok_pattern lv in
               let success_branch = { pat = success_pat; branch = e } in
@@ -1823,6 +1887,14 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     (lazy
       ("inline_useless_var_assignments (pass 2):\n\n"
      ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Simplify the let-then return again (the lambda simplification may have
+     unlocked more simplifications here) *)
+  let def = simplify_let_then_return ctx def in
+  log#ldebug
+    (lazy
+      ("simplify_let_then_return (pass 2):\n\n" ^ fun_decl_to_string ctx def
+     ^ "\n"));
 
   (* Decompose the monadic let-bindings - used by Coq *)
   let def =
@@ -1957,7 +2029,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
         ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
         ^ "\n"));
     let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
-    assert (Option.is_some decl.loop_id);
+    sanity_check __FILE__ __LINE__ (Option.is_some decl.loop_id) decl.meta;
 
     let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
 
@@ -2109,7 +2181,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           in
 
           let fwd_info = { fwd_info; effect_info; ignore_output } in
-          assert (fun_sig_info_is_wf fwd_info);
+          sanity_check __FILE__ __LINE__ (fun_sig_info_is_wf fwd_info) decl.meta;
           let signature =
             {
               generics;
@@ -2175,17 +2247,17 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
                                 in
 
                                 (* Rebuild *)
-                                mk_apps e_app args)
+                                mk_apps decl.meta e_app args)
                         | _ ->
                             let e_app = self#visit_texpression env e_app in
                             let args =
                               List.map (self#visit_texpression env) args
                             in
-                            mk_apps e_app args)
+                            mk_apps decl.meta e_app args)
                     | _ ->
                         let e_app = self#visit_texpression env e_app in
                         let args = List.map (self#visit_texpression env) args in
-                        mk_apps e_app args)
+                        mk_apps decl.meta e_app args)
                 | _ -> super#visit_texpression env e
             end
           in

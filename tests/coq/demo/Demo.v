@@ -34,8 +34,14 @@ Definition use_mul2_add1 (x : u32) (y : u32) : result u32 :=
 Definition incr (x : u32) : result u32 :=
   u32_add x 1%u32.
 
+(** [demo::use_incr]:
+    Source: 'src/demo.rs', lines 25:0-25:17 *)
+Definition use_incr : result unit :=
+  x <- incr 0%u32; x1 <- incr x; _ <- incr x1; Return tt
+.
+
 (** [demo::CList]
-    Source: 'src/demo.rs', lines 27:0-27:17 *)
+    Source: 'src/demo.rs', lines 34:0-34:17 *)
 Inductive CList_t (T : Type) :=
 | CList_CCons : T -> CList_t T -> CList_t T
 | CList_CNil : CList_t T
@@ -45,7 +51,7 @@ Arguments CList_CCons { _ }.
 Arguments CList_CNil { _ }.
 
 (** [demo::list_nth]:
-    Source: 'src/demo.rs', lines 32:0-32:56 *)
+    Source: 'src/demo.rs', lines 39:0-39:56 *)
 Fixpoint list_nth (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
   match n with
   | O => Fail_ OutOfFuel
@@ -61,7 +67,7 @@ Fixpoint list_nth (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
 .
 
 (** [demo::list_nth_mut]:
-    Source: 'src/demo.rs', lines 47:0-47:68 *)
+    Source: 'src/demo.rs', lines 54:0-54:68 *)
 Fixpoint list_nth_mut
   (T : Type) (n : nat) (l : CList_t T) (i : u32) :
   result (T * (T -> result (CList_t T)))
@@ -89,7 +95,7 @@ Fixpoint list_nth_mut
 .
 
 (** [demo::list_nth_mut1]: loop 0:
-    Source: 'src/demo.rs', lines 62:0-71:1 *)
+    Source: 'src/demo.rs', lines 69:0-78:1 *)
 Fixpoint list_nth_mut1_loop
   (T : Type) (n : nat) (l : CList_t T) (i : u32) :
   result (T * (T -> result (CList_t T)))
@@ -116,16 +122,16 @@ Fixpoint list_nth_mut1_loop
 .
 
 (** [demo::list_nth_mut1]:
-    Source: 'src/demo.rs', lines 62:0-62:77 *)
+    Source: 'src/demo.rs', lines 69:0-69:77 *)
 Definition list_nth_mut1
   (T : Type) (n : nat) (l : CList_t T) (i : u32) :
   result (T * (T -> result (CList_t T)))
   :=
-  p <- list_nth_mut1_loop T n l i; let (t, back_'a) := p in Return (t, back_'a)
+  list_nth_mut1_loop T n l i
 .
 
 (** [demo::i32_id]:
-    Source: 'src/demo.rs', lines 73:0-73:28 *)
+    Source: 'src/demo.rs', lines 80:0-80:28 *)
 Fixpoint i32_id (n : nat) (i : i32) : result i32 :=
   match n with
   | O => Fail_ OutOfFuel
@@ -136,8 +142,30 @@ Fixpoint i32_id (n : nat) (i : i32) : result i32 :=
   end
 .
 
+(** [demo::list_tail]:
+    Source: 'src/demo.rs', lines 88:0-88:64 *)
+Fixpoint list_tail
+  (T : Type) (n : nat) (l : CList_t T) :
+  result ((CList_t T) * (CList_t T -> result (CList_t T)))
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match l with
+    | CList_CCons t tl =>
+      p <- list_tail T n1 tl;
+      let (c, list_tail_back) := p in
+      let back_'a :=
+        fun (ret : CList_t T) =>
+          tl1 <- list_tail_back ret; Return (CList_CCons t tl1) in
+      Return (c, back_'a)
+    | CList_CNil => Return (CList_CNil, Return)
+    end
+  end
+.
+
 (** Trait declaration: [demo::Counter]
-    Source: 'src/demo.rs', lines 83:0-83:17 *)
+    Source: 'src/demo.rs', lines 97:0-97:17 *)
 Record Counter_t (Self : Type) := mkCounter_t {
   Counter_t_incr : Self -> result (usize * Self);
 }.
@@ -146,19 +174,19 @@ Arguments mkCounter_t { _ }.
 Arguments Counter_t_incr { _ }.
 
 (** [demo::{(demo::Counter for usize)}::incr]:
-    Source: 'src/demo.rs', lines 88:4-88:31 *)
+    Source: 'src/demo.rs', lines 102:4-102:31 *)
 Definition counterUsize_incr (self : usize) : result (usize * usize) :=
   self1 <- usize_add self 1%usize; Return (self, self1)
 .
 
 (** Trait implementation: [demo::{(demo::Counter for usize)}]
-    Source: 'src/demo.rs', lines 87:0-87:22 *)
+    Source: 'src/demo.rs', lines 101:0-101:22 *)
 Definition CounterUsize : Counter_t usize := {|
   Counter_t_incr := counterUsize_incr;
 |}.
 
 (** [demo::use_counter]:
-    Source: 'src/demo.rs', lines 95:0-95:59 *)
+    Source: 'src/demo.rs', lines 109:0-109:59 *)
 Definition use_counter
   (T : Type) (counterInst : Counter_t T) (cnt : T) : result (usize * T) :=
   counterInst.(Counter_t_incr) cnt

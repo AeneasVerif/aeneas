@@ -11,12 +11,14 @@ open InterpreterLoopsMatchCtxs
 open InterpreterLoopsJoinCtxs
 open InterpreterLoopsFixedPoint
 module SA = SymbolicAst
+open Errors
 
 (** The local logger *)
 let log = Logging.loops_log
 
 (** Evaluate a loop in concrete mode *)
-let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
+let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : st_cm_fun) :
+    st_cm_fun =
  fun cf ctx ->
   (* Continuation for after we evaluate the loop body: depending the result
      of doing one loop iteration:
@@ -51,7 +53,7 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
          * {!Unit} would account for the first iteration of the loop.
          * We prefer to write it this way for consistency and sanity,
          * though. *)
-        raise (Failure "Unreachable")
+        craise __FILE__ __LINE__ meta "Unreachable"
   in
 
   (* Apply *)
@@ -62,9 +64,9 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
 
     For now, this is just the context that we get upon reaching the [return].
   *)
-let compute_loop_output_contexts (config : config) (loop_id : LoopId.id)
-    (eval_loop_body : st_cm_fun) (fp_ctx : eval_ctx) (fixed_ids : ids_sets) :
-    eval_ctx option * eval_ctx option =
+let compute_loop_output_contexts (config : config) (meta : Meta.meta)
+    (loop_id : LoopId.id) (eval_loop_body : st_cm_fun) (fp_ctx : eval_ctx)
+    (fixed_ids : ids_sets) : eval_ctx option * eval_ctx option =
   log#ldebug (lazy "compute_loop_output_contexts:\n");
   (* The environments at returns *)
   let return_ctxs = ref [] in
@@ -79,7 +81,7 @@ let compute_loop_output_contexts (config : config) (loop_id : LoopId.id)
     | Return ->
         (* Register the context *)
         let _ =
-          cleanup_fresh_values_and_abs config fixed_ids
+          cleanup_fresh_values_and_abs config meta fixed_ids
             (fun ctx ->
               register_return_ctx ctx;
               None)
@@ -107,7 +109,7 @@ let compute_loop_output_contexts (config : config) (loop_id : LoopId.id)
 
   (* A small utility to compute joined environments *)
   let compute_joined (kind : string) (ctxs : eval_ctx list) : eval_ctx option =
-    let ctxs = prepare_loop_join_with_ctxs loop_id fixed_ids ctxs in
+    let ctxs = prepare_loop_join_with_ctxs meta loop_id fixed_ids ctxs in
     match ctxs with
     | [] ->
         log#ldebug
@@ -115,7 +117,7 @@ let compute_loop_output_contexts (config : config) (loop_id : LoopId.id)
         None
     | ctx :: ctxl ->
         let _, joined_ctx =
-          loop_join_with_ctxs config loop_id fixed_ids ctx ctxl
+          loop_join_with_ctxs config meta loop_id fixed_ids ctx ctxl
         in
         log#ldebug
           (lazy
@@ -168,8 +170,9 @@ let loop_sig_to_string (sg : loop_sig) : string =
 
     End the loop input abstractions to synthesize the end of a function.
  *)
-let eval_loop_end (config : config) (loop_id : LoopId.id) (ctx : eval_ctx)
-    (cf : m_fun) : (RegionGroupId.id * SA.expression option) list =
+let eval_loop_end (config : config) (meta : Meta.meta) (loop_id : LoopId.id)
+    (ctx : eval_ctx) (cf : m_fun) :
+    (RegionGroupId.id * SA.expression option) list =
   log#ldebug
     (lazy
       ("eval_loop_end:" ^ "\n- loop_id: " ^ LoopId.to_string loop_id
@@ -226,7 +229,7 @@ let eval_loop_end (config : config) (loop_id : LoopId.id) (ctx : eval_ctx)
     in
 
     (* End the input abstraction *)
-    (rg_id, end_abstraction config abs_id cf ctx)
+    (rg_id, end_abstraction config meta abs_id cf ctx)
   in
   List.map end_one abs_ids
 
@@ -269,18 +272,18 @@ let compute_opt_loop_output_ctx_info (old_ctx : eval_ctx)
 (* Match a loop fixed-point context with a target, compute the resulting joined
    contexts at the breaks and continue, and call the continuation from there.
 *)
-let match_loop_fp_ctx_with_target (config : config) (loop_id : LoopId.id)
-    (eval_loop_body : st_cm_fun) (fp_bl_maps : borrow_loan_corresp)
-    (fp_input_svalues : symbolic_value list) (fixed_ids : ids_sets)
-    (fp_ctx : eval_ctx) (cf : loop_match_info -> eval_result)
-    (tgt_ctx : eval_ctx) : eval_result =
+let match_loop_fp_ctx_with_target (config : config) (meta : Meta.meta)
+    (loop_id : LoopId.id) (eval_loop_body : st_cm_fun)
+    (fp_bl_maps : borrow_loan_corresp) (fp_input_svalues : symbolic_value list)
+    (fixed_ids : ids_sets) (fp_ctx : eval_ctx)
+    (cf : loop_match_info -> eval_result) (tgt_ctx : eval_ctx) : eval_result =
   (* The continuation for after matching the contexts. *)
   let cf_after_match (input_values : typed_value SymbolicValueId.Map.t) _
       (ctx_after_match : eval_ctx) : eval_result =
     (* Compute the joined contexts at the break and the return *)
     let return_ctx, break_ctx =
-      compute_loop_output_contexts config loop_id eval_loop_body ctx_after_match
-        fixed_ids
+      compute_loop_output_contexts config meta loop_id eval_loop_body
+        ctx_after_match fixed_ids
     in
 
     let compute_info = compute_opt_loop_output_ctx_info tgt_ctx in
@@ -298,8 +301,8 @@ let match_loop_fp_ctx_with_target (config : config) (loop_id : LoopId.id)
   let abs_kind = LoopCall in
   let can_end = true in
   let fp_input_svalues = List.map (fun sv -> sv.sv_id) fp_input_svalues in
-  match_ctx_with_target config loop_id fp_bl_maps fp_input_svalues fixed_ids
-    fp_ctx abs_kind can_end cf_after_match tgt_ctx
+  match_ctx_with_target config meta loop_id fp_bl_maps fp_input_svalues
+    fixed_ids fp_ctx abs_kind can_end cf_after_match tgt_ctx
 
 (** Set all the regions introduced by a loop as endable *)
 let set_loop_regions_as_endable (loop_id : LoopId.id) (ctx : eval_ctx) :
@@ -319,7 +322,7 @@ let set_loop_regions_as_endable (loop_id : LoopId.id) (ctx : eval_ctx) :
   in
   visitor#visit_eval_ctx () ctx
 
-let compute_loop_body (config : config) (loop_id : LoopId.id)
+let compute_loop_body (config : config) (meta : Meta.meta) (loop_id : LoopId.id)
     (eval_loop_body : st_cm_fun) (fp_ctx : eval_ctx) (fixed_ids : ids_sets)
     (fp_input_svalues : symbolic_value list) (return_ctx : eval_ctx option)
     (break_ctx : eval_ctx option) : SA.expression option =
@@ -329,7 +332,8 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
       SA.expr_call option =
     (* Compute the backward functions *)
     let back_exprs =
-      eval_loop_end config loop_id ctx (fun ctx -> Some (SA.Return (ctx, None)))
+      eval_loop_end config meta loop_id ctx (fun ctx ->
+          Some (SA.Return (ctx, None)))
     in
     if List.exists (fun (_, e) -> Option.is_none e) back_exprs then None
     else
@@ -350,12 +354,12 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
         SA.expression option) =
     log#ldebug (lazy "compute_loop_body: cf_match_with_return_break_ctx\n\n");
     (* Simplify the context *)
-    let cf_cleanup = cleanup_fresh_values_and_abs config fixed_ids in
+    let cf_cleanup = cleanup_fresh_values_and_abs config meta fixed_ids in
     (* The target context must be present *)
     let tgt_ctx = Option.get tgt_ctx in
     (* Match the target context *)
     let fp_bl_corresp =
-      compute_fixed_point_id_correspondance fixed_ids ctx tgt_ctx
+      compute_fixed_point_id_correspondance meta fixed_ids ctx tgt_ctx
     in
     (* The continuation for after the match *)
     let cf (input_values : typed_value SymbolicValueId.Map.t)
@@ -376,8 +380,8 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
     let can_end = true in
     let fp_input_svalues_ids = List.map (fun sv -> sv.sv_id) fp_input_svalues in
     let cf_match =
-      match_ctx_with_target config loop_id fp_bl_corresp fp_input_svalues_ids
-        fixed_ids tgt_ctx fresh_abs_kind can_end cf
+      match_ctx_with_target config meta loop_id fp_bl_corresp
+        fp_input_svalues_ids fixed_ids tgt_ctx fresh_abs_kind can_end cf
     in
     cf_cleanup cf_match ctx
   in
@@ -408,17 +412,17 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
         (* Cleanup and prepare the context *)
         let cf_cleanup_prepare =
           (* Simplify the context *)
-          let cf_cleanup = cleanup_fresh_values_and_abs config fixed_ids in
+          let cf_cleanup = cleanup_fresh_values_and_abs config meta fixed_ids in
           (* Prepare the context *)
           let cf_prepare =
-            prepare_match_ctx_with_target config loop_id fixed_ids fp_ctx
+            prepare_match_ctx_with_target config meta loop_id fixed_ids fp_ctx
           in
           comp cf_cleanup cf_prepare
         in
         let cf_match ctx =
           (* Match with the loop entry context *)
           let fp_bl_corresp =
-            compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
+            compute_fixed_point_id_correspondance meta fixed_ids ctx fp_ctx
           in
           (* The continuation for after the match: we receive the (optional) joined
              contexts computed at the break/return statements that we reach.
@@ -482,7 +486,7 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
           in
           (* Match *)
           let cf_match =
-            match_loop_fp_ctx_with_target config loop_id eval_loop_body
+            match_loop_fp_ctx_with_target config meta loop_id eval_loop_body
               fp_bl_corresp fp_input_svalues fixed_ids fp_ctx cf
           in
           cf_match ctx
@@ -494,7 +498,7 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
   in
   eval_loop_body cf_loop fp_ctx
 
-let compute_loop_sig (config : config) (loop_id : LoopId.id)
+let compute_loop_sig (config : config) (meta : Meta.meta) (loop_id : LoopId.id)
     (eval_loop_body : st_cm_fun) (ctx0 : eval_ctx) : loop_sig =
   (* TODO: we recompute several times the same things below (in particular,
      we re-evaluate several times the loop body, and in particular
@@ -505,12 +509,13 @@ let compute_loop_sig (config : config) (loop_id : LoopId.id)
   log#ldebug (lazy "eval_loop_sig:\n\n");
   (* Compute the input context (the loop entry fixed-point) *)
   let fp_ctx, fixed_ids, _ =
-    compute_loop_entry_fixed_point config loop_id eval_loop_body ctx0
+    compute_loop_entry_fixed_point config meta loop_id eval_loop_body ctx0
   in
 
   (* Compute the output contexts (the joined environments at breaks and returns) *)
   let return_ctx, break_ctx =
-    compute_loop_output_contexts config loop_id eval_loop_body fp_ctx fixed_ids
+    compute_loop_output_contexts config meta loop_id eval_loop_body fp_ctx
+      fixed_ids
   in
   (* Debug *)
   log#ldebug
@@ -522,11 +527,11 @@ let compute_loop_sig (config : config) (loop_id : LoopId.id)
       ^ "\n\n"));
 
   (* Compute the loop input parameters *)
-  let _, input_svalues = compute_fp_ctx_symbolic_values ctx0 fp_ctx in
+  let _, input_svalues = compute_fp_ctx_symbolic_values meta ctx0 fp_ctx in
 
   (* Compute the loop body *)
   let body =
-    compute_loop_body config loop_id eval_loop_body fp_ctx fixed_ids
+    compute_loop_body config meta loop_id eval_loop_body fp_ctx fixed_ids
       input_svalues return_ctx break_ctx
   in
 
@@ -550,7 +555,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
 
   (* Compute the input context (the fixed point at the loop entrance) and the
      loop body. *)
-  let loop_sig = compute_loop_sig config loop_id eval_loop_body ctx in
+  let loop_sig = compute_loop_sig config meta loop_id eval_loop_body ctx in
   log#ldebug
     (lazy
       ("eval_loop_symbolic:\n- loop_sig:\n"
@@ -560,7 +565,8 @@ let eval_loop_symbolic (config : config) (meta : meta)
   (* Match with the loop entry context and apply the substitution
      to the joined contexts for the break and the return *)
   let fp_bl_corresp =
-    compute_fixed_point_id_correspondance loop_sig.fixed_ids ctx loop_sig.fp_ctx
+    compute_fixed_point_id_correspondance meta loop_sig.fixed_ids ctx
+      loop_sig.fp_ctx
   in
 
   (* The continuation for after the loop *)
@@ -612,18 +618,18 @@ let eval_loop_symbolic (config : config) (meta : meta)
   in
 
   (* Match *)
-  match_loop_fp_ctx_with_target config loop_id eval_loop_body fp_bl_corresp
+  match_loop_fp_ctx_with_target config meta loop_id eval_loop_body fp_bl_corresp
     loop_sig.input_svalues loop_sig.fixed_ids loop_sig.fp_ctx cf_after_loop ctx
 
 let eval_loop (config : config) (meta : meta) (loop_id : LlbcAst.LoopId.id)
     (eval_loop_body : st_cm_fun) : st_cm_fun =
  fun cf ctx ->
   match config.mode with
-  | ConcreteMode -> eval_loop_concrete eval_loop_body cf ctx
+  | ConcreteMode -> eval_loop_concrete meta eval_loop_body cf ctx
   | SymbolicMode ->
       (* Simplify the context by ending the unnecessary borrows/loans and getting
          rid of the useless symbolic values inside anonymous variables. *)
-      let cc = cleanup_fresh_values_and_abs config empty_ids_set in
+      let cc = cleanup_fresh_values_and_abs config meta empty_ids_set in
 
       (* We want to make sure the loop will *not* manipulate shared avalues
          containing themselves shared loans (i.e., nested shared loans in
@@ -643,5 +649,5 @@ let eval_loop (config : config) (meta : meta) (loop_id : LlbcAst.LoopId.id)
          introduce *fixed* abstractions, and again later to introduce
          *non-fixed* abstractions.
       *)
-      let cc = comp cc (prepare_ashared_loans None) in
+      let cc = comp cc (prepare_ashared_loans meta None) in
       comp cc (eval_loop_symbolic config meta loop_id eval_loop_body) cf ctx

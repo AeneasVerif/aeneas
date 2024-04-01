@@ -149,4 +149,19 @@ def S3 : Pair U32 U32 := eval_global S3_body
 def S4_body : Result (Pair U32 U32) := mk_pair1 7#u32 8#u32
 def S4 : Pair U32 U32 := eval_global S4_body
 
+/- [constants::V]
+   Source: 'src/constants.rs', lines 86:0-86:31 -/
+structure V (T : Type) (N : Usize) where
+  x : Array T N
+
+/- [constants::{constants::V<T, N>#1}::LEN]
+   Source: 'src/constants.rs', lines 91:4-91:24 -/
+def V.LEN_body (T : Type) (N : Usize) : Result Usize := Result.ok N
+def V.LEN (T : Type) (N : Usize) : Usize := eval_global (V.LEN_body T N)
+
+/- [constants::use_v]:
+   Source: 'src/constants.rs', lines 94:0-94:42 -/
+def use_v (T : Type) (N : Usize) : Result Usize :=
+  Result.ok (V.LEN T N)
+
 end constants

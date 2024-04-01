@@ -65,6 +65,9 @@ type call = {
 type emeta =
   | Assignment of Contexts.eval_ctx * mplace * typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
+  | Snapshot of Contexts.eval_ctx
+      (** Remember an environment snapshot - this is useful to check where the
+          symbolic values are, to compute proper names for instance *)
 [@@deriving show]
 
 type variant_id = VariantId.id [@@deriving show]
@@ -152,7 +155,7 @@ type expression =
           The context is the evaluation context from after evaluating the asserted
           value. It has the same purpose as for the {!Return} case.
        *)
-  | EvalGlobal of global_decl_id * symbolic_value * expression
+  | EvalGlobal of global_decl_id * generic_args * symbolic_value * expression
       (** Evaluate a global to a fresh symbolic value *)
   | Assertion of Contexts.eval_ctx * typed_value * expression
       (** An assertion.
@@ -282,8 +285,7 @@ and value_aggregate =
   | VaCgValue of const_generic_var_id
       (** This is used when evaluating a const generic value: in the interpreter,
           we introduce a fresh symbolic value. *)
-  | VaTraitConstValue of trait_ref * generic_args * string
-      (** A trait constant value *)
+  | VaTraitConstValue of trait_ref * string  (** A trait constant value *)
 [@@deriving
   show,
     visitors

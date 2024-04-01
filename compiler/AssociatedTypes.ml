@@ -11,6 +11,7 @@ open TypesUtils
 open Values
 open LlbcAst
 open Contexts
+open Errors
 module Subst = Substitute
 
 (** The local logger *)
@@ -33,7 +34,7 @@ end
 
 module TyMap = Collections.MakeMap (TyOrd)
 
-let compute_norm_trait_types_from_preds
+let compute_norm_trait_types_from_preds (meta : Meta.meta option)
     (trait_type_constraints : trait_type_constraint list) : ty TraitTypeRefMap.t
     =
   (* Compute a union-find structure by recursively exploring the predicates and clauses *)
@@ -50,10 +51,13 @@ let compute_norm_trait_types_from_preds
     (* Sanity check: the type constraint can't make use of regions - Remark
        that it would be enough to only visit the field [ty] of the trait type
        constraint, but for safety we visit all the fields *)
-    assert (trait_type_constraint_no_regions c);
-    let trait_ty = TTraitType (c.trait_ref, c.generics, c.type_name) in
+    sanity_check_opt_meta __FILE__ __LINE__
+      (trait_type_constraint_no_regions c)
+      meta;
+    let { trait_ref; type_name; ty } : trait_type_constraint = c in
+    let trait_ty = TTraitType (trait_ref, type_name) in
     let trait_ty_ref = get_ref trait_ty in
-    let ty_ref = get_ref c.ty in
+    let ty_ref = get_ref ty in
     let new_repr = UnionFind.get ty_ref in
     let merged = UnionFind.union trait_ty_ref ty_ref in
     (* Not sure the set operation is necessary, but I want to control which
@@ -72,18 +76,16 @@ let compute_norm_trait_types_from_preds
     List.filter_map
       (fun (k, v) ->
         match k with
-        | TTraitType (trait_ref, generics, type_name) ->
-            assert (generics = empty_generic_args);
-            Some ({ trait_ref; type_name }, v)
+        | TTraitType (trait_ref, type_name) -> Some ({ trait_ref; type_name }, v)
         | _ -> None)
       rbindings
   in
   TraitTypeRefMap.of_list rbindings
 
-let ctx_add_norm_trait_types_from_preds (ctx : eval_ctx)
+let ctx_add_norm_trait_types_from_preds (meta : Meta.meta) (ctx : eval_ctx)
     (trait_type_constraints : trait_type_constraint list) : eval_ctx =
   let norm_trait_types =
-    compute_norm_trait_types_from_preds trait_type_constraints
+    compute_norm_trait_types_from_preds (Some meta) trait_type_constraints
   in
   { ctx with norm_trait_types }
 
@@ -102,6 +104,7 @@ let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
     but they should be applied to types without regions.
  *)
 type norm_ctx = {
+  meta : Meta.meta option;
   norm_trait_types : ty TraitTypeRefMap.t;
   type_decls : type_decl TypeDeclId.Map.t;
   fun_decls : fun_decl FunDeclId.Map.t;
@@ -225,25 +228,22 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       let inputs = List.map (norm_ctx_normalize_ty ctx) inputs in
       let output = norm_ctx_normalize_ty ctx output in
       TArrow (regions, inputs, output)
-  | TTraitType (trait_ref, generics, type_name) -> (
+  | TTraitType (trait_ref, type_name) -> (
       log#ldebug
         (lazy
           ("norm_ctx_normalize_ty:\n- trait type: " ^ ty_to_string ctx ty
          ^ "\n- trait_ref: "
           ^ trait_ref_to_string ctx trait_ref
-          ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref
-          ^ "\n- generics:\n"
-          ^ generic_args_to_string ctx generics));
+          ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
       (* Normalize and attempt to project the type from the trait ref *)
       let trait_ref = norm_ctx_normalize_trait_ref ctx trait_ref in
-      let generics = norm_ctx_normalize_generic_args ctx generics in
-      (*  For now, we don't support higher order types *)
-      assert (generics = empty_generic_args);
       let ty : ty =
         match trait_ref.trait_id with
         | TraitRef { trait_id = TraitImpl impl_id; generics = ref_generics; _ }
           ->
-            assert (ref_generics = empty_generic_args);
+            cassert_opt_meta __FILE__ __LINE__
+              (ref_generics = empty_generic_args)
+              ctx.meta "Higher order trait types are not supported yet";
             log#ldebug
               (lazy
                 ("norm_ctx_normalize_ty: trait type: trait ref: "
@@ -283,8 +283,10 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
                 ^ trait_ref_to_string ctx trait_ref
                 ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
             (* We can't project *)
-            assert (trait_instance_id_is_local_clause trait_ref.trait_id);
-            TTraitType (trait_ref, generics, type_name)
+            sanity_check_opt_meta __FILE__ __LINE__
+              (trait_instance_id_is_local_clause trait_ref.trait_id)
+              ctx.meta;
+            TTraitType (trait_ref, type_name)
       in
       let tr : trait_type_ref = { trait_ref; type_name } in
       (* Lookup the representative, if there is *)
@@ -351,7 +353,9 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       match impl with
       | None ->
           (* This is actually a local clause *)
-          assert (trait_instance_id_is_local_clause inst_id);
+          sanity_check_opt_meta __FILE__ __LINE__
+            (trait_instance_id_is_local_clause inst_id)
+            ctx.meta;
           (ParentClause (inst_id, decl_id, clause_id), None)
       | Some impl ->
           (* We figure out the parent clause by doing the following:
@@ -382,7 +386,9 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       match impl with
       | None ->
           (* This is actually a local clause *)
-          assert (trait_instance_id_is_local_clause inst_id);
+          sanity_check_opt_meta __FILE__ __LINE__
+            (trait_instance_id_is_local_clause inst_id)
+            ctx.meta;
           (ItemClause (inst_id, decl_id, item_name, clause_id), None)
       | Some impl ->
           (* We figure out the item clause by doing the following:
@@ -422,8 +428,12 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | TraitRef trait_ref ->
       (* The trait instance id necessarily refers to a local sub-clause. We
          can't project over it and can only peel off the [TraitRef] wrapper *)
-      assert (trait_instance_id_is_local_clause trait_ref.trait_id);
-      assert (trait_ref.generics = empty_generic_args);
+      sanity_check_opt_meta __FILE__ __LINE__
+        (trait_instance_id_is_local_clause trait_ref.trait_id)
+        ctx.meta;
+      sanity_check_opt_meta __FILE__ __LINE__
+        (trait_ref.generics = empty_generic_args)
+        ctx.meta;
       (trait_ref.trait_id, None)
   | FnPointer ty ->
       let ty = norm_ctx_normalize_ty ctx ty in
@@ -472,7 +482,9 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
         (lazy
           ("norm_ctx_normalize_trait_ref: normalized to: "
           ^ trait_ref_to_string ctx trait_ref));
-      assert (generics = empty_generic_args);
+      sanity_check_opt_meta __FILE__ __LINE__
+        (generics = empty_generic_args)
+        ctx.meta;
       trait_ref
 
 (* Not sure this one is really necessary *)
@@ -484,14 +496,14 @@ and norm_ctx_normalize_trait_decl_ref (ctx : norm_ctx)
 
 let norm_ctx_normalize_trait_type_constraint (ctx : norm_ctx)
     (ttc : trait_type_constraint) : trait_type_constraint =
-  let { trait_ref; generics; type_name; ty } = ttc in
+  let { trait_ref; type_name; ty } : trait_type_constraint = ttc in
   let trait_ref = norm_ctx_normalize_trait_ref ctx trait_ref in
-  let generics = norm_ctx_normalize_generic_args ctx generics in
   let ty = norm_ctx_normalize_ty ctx ty in
-  { trait_ref; generics; type_name; ty }
+  { trait_ref; type_name; ty }
 
-let mk_norm_ctx (ctx : eval_ctx) : norm_ctx =
+let mk_norm_ctx (meta : Meta.meta) (ctx : eval_ctx) : norm_ctx =
   {
+    meta = Some meta;
     norm_trait_types = ctx.norm_trait_types;
     type_decls = ctx.type_ctx.type_decls;
     fun_decls = ctx.fun_ctx.fun_decls;
@@ -502,69 +514,72 @@ let mk_norm_ctx (ctx : eval_ctx) : norm_ctx =
     const_generic_vars = ctx.const_generic_vars;
   }
 
-let ctx_normalize_ty (ctx : eval_ctx) (ty : ty) : ty =
-  norm_ctx_normalize_ty (mk_norm_ctx ctx) ty
+let ctx_normalize_ty (meta : Meta.meta) (ctx : eval_ctx) (ty : ty) : ty =
+  norm_ctx_normalize_ty (mk_norm_ctx meta ctx) ty
 
 (** Normalize a type and erase the regions at the same time *)
-let ctx_normalize_erase_ty (ctx : eval_ctx) (ty : ty) : ty =
-  let ty = ctx_normalize_ty ctx ty in
+let ctx_normalize_erase_ty (meta : Meta.meta) (ctx : eval_ctx) (ty : ty) : ty =
+  let ty = ctx_normalize_ty meta ctx ty in
   Subst.erase_regions ty
 
-let ctx_normalize_trait_type_constraint (ctx : eval_ctx)
+let ctx_normalize_trait_type_constraint (meta : Meta.meta) (ctx : eval_ctx)
     (ttc : trait_type_constraint) : trait_type_constraint =
-  norm_ctx_normalize_trait_type_constraint (mk_norm_ctx ctx) ttc
+  norm_ctx_normalize_trait_type_constraint (mk_norm_ctx meta ctx) ttc
 
 (** Same as [type_decl_get_instantiated_variants_fields_types] but normalizes the types *)
-let type_decl_get_inst_norm_variants_fields_rtypes (ctx : eval_ctx)
-    (def : type_decl) (generics : generic_args) :
+let type_decl_get_inst_norm_variants_fields_rtypes (meta : Meta.meta)
+    (ctx : eval_ctx) (def : type_decl) (generics : generic_args) :
     (VariantId.id option * ty list) list =
   let res =
     Subst.type_decl_get_instantiated_variants_fields_types def generics
   in
   List.map
     (fun (variant_id, types) ->
-      (variant_id, List.map (ctx_normalize_ty ctx) types))
+      (variant_id, List.map (ctx_normalize_ty meta ctx) types))
     res
 
 (** Same as [type_decl_get_instantiated_field_types] but normalizes the types *)
-let type_decl_get_inst_norm_field_rtypes (ctx : eval_ctx) (def : type_decl)
-    (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
+let type_decl_get_inst_norm_field_rtypes (meta : Meta.meta) (ctx : eval_ctx)
+    (def : type_decl) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
   let types =
     Subst.type_decl_get_instantiated_field_types def opt_variant_id generics
   in
-  List.map (ctx_normalize_ty ctx) types
+  List.map (ctx_normalize_ty meta ctx) types
 
 (** Same as [ctx_adt_value_get_instantiated_field_rtypes] but normalizes the types *)
-let ctx_adt_value_get_inst_norm_field_rtypes (ctx : eval_ctx) (adt : adt_value)
-    (id : type_id) (generics : generic_args) : ty list =
+let ctx_adt_value_get_inst_norm_field_rtypes (meta : Meta.meta) (ctx : eval_ctx)
+    (adt : adt_value) (id : type_id) (generics : generic_args) : ty list =
   let types =
-    Subst.ctx_adt_value_get_instantiated_field_types ctx adt id generics
+    Subst.ctx_adt_value_get_instantiated_field_types meta ctx adt id generics
   in
-  List.map (ctx_normalize_ty ctx) types
+  List.map (ctx_normalize_ty meta ctx) types
 
 (** Same as [ctx_adt_value_get_instantiated_field_types] but normalizes the types
     and erases the regions. *)
-let type_decl_get_inst_norm_field_etypes (ctx : eval_ctx) (def : type_decl)
-    (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
+let type_decl_get_inst_norm_field_etypes (meta : Meta.meta) (ctx : eval_ctx)
+    (def : type_decl) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
   let types =
     Subst.type_decl_get_instantiated_field_types def opt_variant_id generics
   in
-  let types = List.map (ctx_normalize_ty ctx) types in
+  let types = List.map (ctx_normalize_ty meta ctx) types in
   List.map Subst.erase_regions types
 
 (** Same as [ctx_adt_get_instantiated_field_types] but normalizes the types and
     erases the regions. *)
-let ctx_adt_get_inst_norm_field_etypes (ctx : eval_ctx) (def_id : TypeDeclId.id)
-    (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
+let ctx_adt_get_inst_norm_field_etypes (meta : Meta.meta) (ctx : eval_ctx)
+    (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
   let types =
     Subst.ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id
       generics
   in
-  let types = List.map (ctx_normalize_ty ctx) types in
+  let types = List.map (ctx_normalize_ty meta ctx) types in
   List.map Subst.erase_regions types
 
 (** Same as [substitute_signature] but normalizes the types *)
-let ctx_subst_norm_signature (ctx : eval_ctx)
+let ctx_subst_norm_signature (meta : Meta.meta) (ctx : eval_ctx)
     (asubst : RegionGroupId.id -> AbstractionId.id)
     (r_subst : RegionVarId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
     (cg_subst : ConstGenericVarId.id -> const_generic)
@@ -576,9 +591,11 @@ let ctx_subst_norm_signature (ctx : eval_ctx)
       sg regions_hierarchy
   in
   let { regions_hierarchy; inputs; output; trait_type_constraints } = sg in
-  let inputs = List.map (ctx_normalize_ty ctx) inputs in
-  let output = ctx_normalize_ty ctx output in
+  let inputs = List.map (ctx_normalize_ty meta ctx) inputs in
+  let output = ctx_normalize_ty meta ctx output in
   let trait_type_constraints =
-    List.map (ctx_normalize_trait_type_constraint ctx) trait_type_constraints
+    List.map
+      (ctx_normalize_trait_type_constraint meta ctx)
+      trait_type_constraints
   in
   { regions_hierarchy; inputs; output; trait_type_constraints }

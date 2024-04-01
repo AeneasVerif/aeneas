@@ -38,9 +38,9 @@ def custom_swap
   Result (State × (T × (T → State → Result (State × (T × T)))))
   :=
   do
-  let (st1, (t, t1)) ← core.mem.swap T x y st
-  let back_'a := fun ret st2 => Result.ok (st2, (ret, t1))
-  Result.ok (st1, (t, back_'a))
+  let (st1, (x1, y1)) ← core.mem.swap T x y st
+  let back_'a := fun ret st2 => Result.ok (st2, (ret, y1))
+  Result.ok (st1, (x1, back_'a))
 
 /- [external::test_custom_swap]:
    Source: 'src/external.rs', lines 29:0-29:59 -/

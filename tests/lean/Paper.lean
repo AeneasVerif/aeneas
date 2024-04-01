@@ -14,8 +14,8 @@ def ref_incr (x : I32) : Result I32 :=
    Source: 'src/paper.rs', lines 8:0-8:18 -/
 def test_incr : Result Unit :=
   do
-  let i ← ref_incr 0#i32
-  if ¬ (i = 1#i32)
+  let x ← ref_incr 0#i32
+  if ¬ (x = 1#i32)
   then Result.fail .panic
   else Result.ok ()
 

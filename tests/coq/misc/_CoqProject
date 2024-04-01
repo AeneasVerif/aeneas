@@ -3,6 +3,7 @@
 -arg -w
 -arg all
 
+External_FunsExternal_Template.v
 Loops.v
 External_Types.v
 Primitives.v
@@ -10,9 +11,8 @@ External_Funs.v
 External_TypesExternal.v
 Constants.v
 PoloniusList.v
-Paper.v
 NoNestedBorrows.v
 External_FunsExternal.v
 Bitwise.v
 External_TypesExternal_Template.v
-External_FunsExternal_Template.v
+Paper.v

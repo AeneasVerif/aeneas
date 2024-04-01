@@ -34,12 +34,14 @@ open LlbcAst
 open LlbcAstUtils
 open Assumed
 open SCC
+open Errors
 module Subst = Substitute
 
 (** The local logger *)
 let log = Logging.regions_hierarchy_log
 
-let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
+let compute_regions_hierarchy_for_sig (meta : Meta.meta option)
+    (type_decls : type_decl TypeDeclId.Map.t)
     (fun_decls : fun_decl FunDeclId.Map.t)
     (global_decls : global_decl GlobalDeclId.Map.t)
     (trait_decls : trait_decl TraitDeclId.Map.t)
@@ -50,10 +52,11 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
      associated types) *)
   let norm_ctx : AssociatedTypes.norm_ctx =
     let norm_trait_types =
-      AssociatedTypes.compute_norm_trait_types_from_preds
+      AssociatedTypes.compute_norm_trait_types_from_preds meta
         sg.preds.trait_type_constraints
     in
     {
+      meta;
       norm_trait_types;
       type_decls;
       fun_decls;
@@ -105,8 +108,8 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
 
   let add_edge ~(short : region) ~(long : region) =
     (* Sanity checks *)
-    assert (short <> RErased);
-    assert (long <> RErased);
+    sanity_check_opt_meta __FILE__ __LINE__ (short <> RErased) meta;
+    sanity_check_opt_meta __FILE__ __LINE__ (long <> RErased) meta;
     (* Ignore the locally bound regions (at the level of arrow types for instance *)
     match (short, long) with
     | RBVar _, _ | _, RBVar _ -> ()
@@ -169,16 +172,18 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
         (* Continue *)
         explore_ty outer ty
     | TRawPtr (ty, _) -> explore_ty outer ty
-    | TTraitType (trait_ref, _generic_args, _) ->
+    | TTraitType (trait_ref, _) ->
         (* The trait should reference a clause, and not an implementation
            (otherwise it should have been normalized) *)
-        assert (
-          AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id);
+        sanity_check_opt_meta __FILE__ __LINE__
+          (AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id)
+          meta;
         (* We have nothing to do *)
         ()
     | TArrow (regions, inputs, output) ->
         (* TODO: *)
-        assert (regions = []);
+        cassert_opt_meta __FILE__ __LINE__ (regions = []) meta
+          "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
         List.iter (explore_ty []) (output :: inputs)
   and explore_generics (outer : region list) (generics : generic_args) =
@@ -221,7 +226,7 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
         (SccId.Map.bindings sccs.sccs)
     in
     (* The SCC should only contain the 'static *)
-    assert (static_scc = [ RStatic ]);
+    sanity_check_opt_meta __FILE__ __LINE__ (static_scc = [ RStatic ]) meta;
     (* Remove the group as well as references to this group from the
        other SCCs *)
     let { sccs; scc_deps } = sccs in
@@ -277,7 +282,7 @@ let compute_regions_hierarchy_for_sig (type_decls : type_decl TypeDeclId.Map.t)
           (fun r ->
             match r with
             | RFVar rid -> RegionId.Map.find rid region_id_to_var_map
-            | _ -> raise (Failure "Unreachable"))
+            | _ -> craise __FILE__ __LINE__ (Option.get meta) "Unreachable")
           scc
       in
 
@@ -317,19 +322,20 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
   let regular =
     List.map
       (fun ((fid, d) : FunDeclId.id * fun_decl) ->
-        (FRegular fid, (Types.name_to_string env d.name, d.signature)))
+        ( FRegular fid,
+          (Types.name_to_string env d.name, d.signature, Some d.meta) ))
       (FunDeclId.Map.bindings fun_decls)
   in
   let assumed =
     List.map
       (fun (info : assumed_fun_info) ->
-        (FAssumed info.fun_id, (info.name, info.fun_sig)))
+        (FAssumed info.fun_id, (info.name, info.fun_sig, None)))
       assumed_fun_infos
   in
   FunIdMap.of_list
     (List.map
-       (fun (fid, (name, sg)) ->
+       (fun (fid, (name, sg, meta)) ->
          ( fid,
-           compute_regions_hierarchy_for_sig type_decls fun_decls global_decls
-             trait_decls trait_impls name sg ))
+           compute_regions_hierarchy_for_sig meta type_decls fun_decls
+             global_decls trait_decls trait_impls name sg ))
        (regular @ assumed))

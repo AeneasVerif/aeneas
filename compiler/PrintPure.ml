@@ -2,6 +2,7 @@
 
 open Pure
 open PureUtils
+open Errors
 
 (** The formatting context for pure definitions uses non-pure definitions
     to lookup names. The main reason is that when building the pure definitions
@@ -165,14 +166,9 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
         ty_to_string env true arg_ty ^ " -> " ^ ty_to_string env false ret_ty
       in
       if inside then "(" ^ ty ^ ")" else ty
-  | TTraitType (trait_ref, generics, type_name) ->
+  | TTraitType (trait_ref, type_name) ->
       let trait_ref = trait_ref_to_string env false trait_ref in
-      let s =
-        if generics = empty_generic_args then trait_ref ^ "::" ^ type_name
-        else
-          let generics = generic_args_to_string env generics in
-          "(" ^ trait_ref ^ " " ^ generics ^ ")::" ^ type_name
-      in
+      let s = trait_ref ^ "::" ^ type_name in
       if inside then "(" ^ s ^ ")" else s
 
 and generic_args_to_strings (env : fmt_env) (inside : bool)
@@ -304,7 +300,7 @@ let mplace_to_string (env : fmt_env) (p : mplace) : string =
   let name = name ^ "^" ^ E.VarId.to_string p.var_id ^ "llbc" in
   mprojection_to_string env name p.projection
 
-let adt_variant_to_string (env : fmt_env) (adt_id : type_id)
+let adt_variant_to_string ?(meta = None) (env : fmt_env) (adt_id : type_id)
     (variant_id : VariantId.id option) : string =
   match adt_id with
   | TTuple -> "Tuple"
@@ -318,35 +314,41 @@ let adt_variant_to_string (env : fmt_env) (adt_id : type_id)
       match aty with
       | TState | TArray | TSlice | TStr | TRawPtr _ ->
           (* Those types are opaque: we can't get there *)
-          raise (Failure "Unreachable")
+          craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       | TResult ->
           let variant_id = Option.get variant_id in
           if variant_id = result_ok_id then "@Result::Ok"
           else if variant_id = result_fail_id then "@Result::Fail"
           else
-            raise (Failure "Unreachable: improper variant id for result type")
+            craise_opt_meta __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for result type"
       | TExprResult _ ->
           let variant_id = Option.get variant_id in
           if variant_id = result_ok_id then "@ExprResult::Ok"
           else if variant_id = result_fail_id then "@ExprResult::Fail"
           else
-            raise (Failure "Unreachable: improper variant id for result type")
+            craise_opt_meta __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for result type"
       | TError ->
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
-          else raise (Failure "Unreachable: improper variant id for error type")
+          else
+            craise_opt_meta __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for error type"
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then "@Fuel::Zero"
           else if variant_id = fuel_succ_id then "@Fuel::Succ"
-          else raise (Failure "Unreachable: improper variant id for fuel type"))
+          else
+            craise_opt_meta __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for fuel type")
 
-let adt_field_to_string (env : fmt_env) (adt_id : type_id)
+let adt_field_to_string ?(meta = None) (env : fmt_env) (adt_id : type_id)
     (field_id : FieldId.id) : string =
   match adt_id with
   | TTuple ->
-      raise (Failure "Unreachable")
+      craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       (* Tuples don't use the opaque field id for the field indices, but [int] *)
   | TAdtId def_id -> (
       (* "Regular" ADT *)
@@ -359,17 +361,17 @@ let adt_field_to_string (env : fmt_env) (adt_id : type_id)
       match aty with
       | TState | TFuel | TArray | TSlice | TStr ->
           (* Opaque types: we can't get there *)
-          raise (Failure "Unreachable")
+          craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       | TResult | TExprResult _ | TError | TRawPtr _ ->
           (* Enumerations: we can't get there *)
-          raise (Failure "Unreachable"))
+          craise_opt_meta __FILE__ __LINE__ meta "Unreachable")
 
 (** TODO: we don't need a general function anymore (it is now only used for
     patterns)
  *)
-let adt_g_value_to_string (env : fmt_env) (value_to_string : 'v -> string)
-    (variant_id : VariantId.id option) (field_values : 'v list) (ty : ty) :
-    string =
+let adt_g_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+    (value_to_string : 'v -> string) (variant_id : VariantId.id option)
+    (field_values : 'v list) (ty : ty) : string =
   let field_values = List.map value_to_string field_values in
   match ty with
   | TAdt (TTuple, _) ->
@@ -402,7 +404,7 @@ let adt_g_value_to_string (env : fmt_env) (value_to_string : 'v -> string)
       match aty with
       | TState | TRawPtr _ ->
           (* This type is opaque: we can't get there *)
-          raise (Failure "Unreachable")
+          craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       | TResult | TExprResult _ ->
           let prefix =
             match aty with
@@ -414,44 +416,58 @@ let adt_g_value_to_string (env : fmt_env) (value_to_string : 'v -> string)
           if variant_id = result_ok_id then
             match field_values with
             | [ v ] -> prefix ^ "::Ok " ^ v
-            | _ -> raise (Failure "Result::Ok takes exactly one value")
+            | _ ->
+                craise_opt_meta __FILE__ __LINE__ meta
+                  "Result::Ok takes exactly one value"
           else if variant_id = result_fail_id then
             match field_values with
             | [ v ] -> prefix ^ "::Fail " ^ v
-            | _ -> raise (Failure "Result::Fail takes exactly one value")
+            | _ ->
+                craise_opt_meta __FILE__ __LINE__ meta
+                  "Result::Fail takes exactly one value"
           else
-            raise (Failure "Unreachable: improper variant id for result type")
+            craise_opt_meta __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for result type"
       | TError ->
-          assert (field_values = []);
+          cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta
+            "Ill-formed error value";
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
-          else raise (Failure "Unreachable: improper variant id for error type")
+          else
+            craise_opt_meta __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for error type"
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then (
-            assert (field_values = []);
+            cassert_opt_meta __FILE__ __LINE__ (field_values = []) meta
+              "Ill-formed full value";
             "@Fuel::Zero")
           else if variant_id = fuel_succ_id then
             match field_values with
             | [ v ] -> "@Fuel::Succ " ^ v
-            | _ -> raise (Failure "@Fuel::Succ takes exactly one value")
-          else raise (Failure "Unreachable: improper variant id for fuel type")
+            | _ ->
+                craise_opt_meta __FILE__ __LINE__ meta
+                  "@Fuel::Succ takes exactly one value"
+          else
+            craise_opt_meta __FILE__ __LINE__ meta
+              "Unreachable: improper variant id for fuel type"
       | TArray | TSlice | TStr ->
-          assert (variant_id = None);
+          cassert_opt_meta __FILE__ __LINE__ (variant_id = None) meta
+            "Ill-formed value";
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in
           let id = assumed_ty_to_string aty in
           id ^ " [" ^ String.concat "; " field_values ^ "]")
   | _ ->
-      raise
-        (Failure
-           ("Inconsistently typed value: expected ADT type but found:"
-          ^ "\n- ty: " ^ ty_to_string env false ty ^ "\n- variant_id: "
-           ^ Print.option_to_string VariantId.to_string variant_id))
+      craise_opt_meta __FILE__ __LINE__ meta
+        ("Inconsistently typed value: expected ADT type but found:" ^ "\n- ty: "
+       ^ ty_to_string env false ty ^ "\n- variant_id: "
+        ^ Print.option_to_string VariantId.to_string variant_id)
 
-let rec typed_pattern_to_string (env : fmt_env) (v : typed_pattern) : string =
+let rec typed_pattern_to_string ?(meta : Meta.meta option = None)
+    (env : fmt_env) (v : typed_pattern) : string =
   match v.value with
   | PatConstant cv -> literal_to_string cv
   | PatVar (v, None) -> var_to_string env v
@@ -462,8 +478,8 @@ let rec typed_pattern_to_string (env : fmt_env) (v : typed_pattern) : string =
       ^ ")"
   | PatDummy -> "_"
   | PatAdt av ->
-      adt_g_value_to_string env
-        (typed_pattern_to_string env)
+      adt_g_value_to_string ~meta env
+        (typed_pattern_to_string ~meta env)
         av.variant_id av.field_values v.ty
 
 let fun_sig_to_string (env : fmt_env) (sg : fun_sig) : string =
@@ -544,8 +560,9 @@ let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
 
 (** [inside]: controls the introduction of parentheses *)
-let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
-    (indent_incr : string) (e : texpression) : string =
+let rec texpression_to_string ?(metadata : Meta.meta option = None)
+    (env : fmt_env) (inside : bool) (indent : string) (indent_incr : string)
+    (e : texpression) : string =
   match e.e with
   | Var var_id -> var_id_to_string env var_id
   | CVar cg_id -> const_generic_var_id_to_string env cg_id
@@ -554,22 +571,26 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
       let app, args = destruct_apps e in
       (* Convert to string *)
-      app_to_string env inside indent indent_incr app args
+      app_to_string ~meta:metadata env inside indent indent_incr app args
   | Lambda _ ->
       let xl, e = destruct_lambdas e in
-      let e = lambda_to_string env indent indent_incr xl e in
+      let e = lambda_to_string ~meta:metadata env indent indent_incr xl e in
       if inside then "(" ^ e ^ ")" else e
   | Qualif _ ->
       (* Qualifier without arguments *)
-      app_to_string env inside indent indent_incr e []
+      app_to_string ~meta:metadata env inside indent indent_incr e []
   | Let (monadic, lv, re, e) ->
-      let e = let_to_string env indent indent_incr monadic lv re e in
+      let e =
+        let_to_string ~meta:metadata env indent indent_incr monadic lv re e
+      in
       if inside then "(" ^ e ^ ")" else e
   | Switch (scrutinee, body) ->
-      let e = switch_to_string env indent indent_incr scrutinee body in
+      let e =
+        switch_to_string ~meta:metadata env indent indent_incr scrutinee body
+      in
       if inside then "(" ^ e ^ ")" else e
   | Loop loop ->
-      let e = loop_to_string env indent indent_incr loop in
+      let e = loop_to_string ~meta:metadata env indent indent_incr loop in
       if inside then "(" ^ e ^ ")" else e
   | StructUpdate supd -> (
       let s =
@@ -588,7 +609,8 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
               (fun (fid, fe) ->
                 let field = FieldId.nth field_names fid in
                 let fe =
-                  texpression_to_string env false indent2 indent_incr fe
+                  texpression_to_string ~metadata env false indent2 indent_incr
+                    fe
                 in
                 "\n" ^ indent1 ^ field ^ " := " ^ fe ^ ";")
               supd.updates
@@ -599,23 +621,23 @@ let rec texpression_to_string (env : fmt_env) (inside : bool) (indent : string)
           let fields =
             List.map
               (fun (_, fe) ->
-                texpression_to_string env false indent2 indent_incr fe)
+                texpression_to_string ~metadata env false indent2 indent_incr fe)
               supd.updates
           in
           "[ " ^ String.concat ", " fields ^ " ]"
-      | _ -> raise (Failure "Unexpected"))
+      | _ -> craise_opt_meta __FILE__ __LINE__ metadata "Unexpected")
   | Meta (meta, e) -> (
-      let meta_s = emeta_to_string env meta in
-      let e = texpression_to_string env inside indent indent_incr e in
+      let meta_s = emeta_to_string ~metadata env meta in
+      let e = texpression_to_string ~metadata env inside indent indent_incr e in
       match meta with
-      | Assignment _ | SymbolicAssignment _ | Tag _ ->
+      | Assignment _ | SymbolicAssignments _ | SymbolicPlaces _ | Tag _ ->
           let e = meta_s ^ "\n" ^ indent ^ e in
           if inside then "(" ^ e ^ ")" else e
       | MPlace _ -> "(" ^ meta_s ^ " " ^ e ^ ")")
 
-and app_to_string (env : fmt_env) (inside : bool) (indent : string)
-    (indent_incr : string) (app : texpression) (args : texpression list) :
-    string =
+and app_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+    (inside : bool) (indent : string) (indent_incr : string) (app : texpression)
+    (args : texpression list) : string =
   (* There are two possibilities: either the [app] is an instantiated,
    * top-level qualifier (function, ADT constructore...), or it is a "regular"
    * expression *)
@@ -633,28 +655,24 @@ and app_to_string (env : fmt_env) (inside : bool) (indent : string)
             (global_decl_id_to_string env global_id, generics)
         | AdtCons adt_cons_id ->
             let variant_s =
-              adt_variant_to_string env adt_cons_id.adt_id
+              adt_variant_to_string ~meta env adt_cons_id.adt_id
                 adt_cons_id.variant_id
             in
             (ConstStrings.constructor_prefix ^ variant_s, [])
         | Proj { adt_id; field_id } ->
-            let adt_s = adt_variant_to_string env adt_id None in
-            let field_s = adt_field_to_string env adt_id field_id in
+            let adt_s = adt_variant_to_string ~meta env adt_id None in
+            let field_s = adt_field_to_string ~meta env adt_id field_id in
             (* Adopting an F*-like syntax *)
             (ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s, [])
-        | TraitConst (trait_ref, generics, const_name) ->
+        | TraitConst (trait_ref, const_name) ->
             let trait_ref = trait_ref_to_string env true trait_ref in
-            let generics_s = generic_args_to_string env generics in
-            let qualif =
-              if generics <> empty_generic_args then
-                "(" ^ trait_ref ^ generics_s ^ ")." ^ const_name
-              else trait_ref ^ "." ^ const_name
-            in
+            let qualif = trait_ref ^ "." ^ const_name in
             (qualif, []))
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in
-        (texpression_to_string env inside indent indent_incr app, [])
+        ( texpression_to_string ~metadata:meta env inside indent indent_incr app,
+          [] )
   in
   (* Convert the arguments.
    * The arguments are expressions, so indentation might get weird... (though
@@ -662,7 +680,7 @@ and app_to_string (env : fmt_env) (inside : bool) (indent : string)
   let arg_to_string =
     let inside = true in
     let indent1 = indent ^ indent_incr in
-    texpression_to_string env inside indent1 indent_incr
+    texpression_to_string ~metadata:meta env inside indent1 indent_incr
   in
   let args = List.map arg_to_string args in
   let all_args = List.append generics args in
@@ -673,31 +691,41 @@ and app_to_string (env : fmt_env) (inside : bool) (indent : string)
   (* Add parentheses *)
   if all_args <> [] && inside then "(" ^ e ^ ")" else e
 
-and lambda_to_string (env : fmt_env) (indent : string) (indent_incr : string)
-    (xl : typed_pattern list) (e : texpression) : string =
-  let xl = List.map (typed_pattern_to_string env) xl in
-  let e = texpression_to_string env false indent indent_incr e in
+and lambda_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+    (indent : string) (indent_incr : string) (xl : typed_pattern list)
+    (e : texpression) : string =
+  let xl = List.map (typed_pattern_to_string ~meta env) xl in
+  let e = texpression_to_string ~metadata:meta env false indent indent_incr e in
   "λ " ^ String.concat " " xl ^ ". " ^ e
 
-and let_to_string (env : fmt_env) (indent : string) (indent_incr : string)
-    (monadic : bool) (lv : typed_pattern) (re : texpression) (e : texpression) :
-    string =
+and let_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+    (indent : string) (indent_incr : string) (monadic : bool)
+    (lv : typed_pattern) (re : texpression) (e : texpression) : string =
   let indent1 = indent ^ indent_incr in
   let inside = false in
-  let re = texpression_to_string env inside indent1 indent_incr re in
-  let e = texpression_to_string env inside indent indent_incr e in
-  let lv = typed_pattern_to_string env lv in
+  let re =
+    texpression_to_string ~metadata:meta env inside indent1 indent_incr re
+  in
+  let e =
+    texpression_to_string ~metadata:meta env inside indent indent_incr e
+  in
+  let lv = typed_pattern_to_string ~meta env lv in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
-and switch_to_string (env : fmt_env) (indent : string) (indent_incr : string)
-    (scrutinee : texpression) (body : switch_body) : string =
+and switch_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+    (indent : string) (indent_incr : string) (scrutinee : texpression)
+    (body : switch_body) : string =
   let indent1 = indent ^ indent_incr in
   (* Printing can mess up on the scrutinee, because it is an expression - but
    * in most situations it will be a value or a function call, so it should be
    * ok*)
-  let scrut = texpression_to_string env true indent1 indent_incr scrutinee in
-  let e_to_string = texpression_to_string env false indent1 indent_incr in
+  let scrut =
+    texpression_to_string ~metadata:meta env true indent1 indent_incr scrutinee
+  in
+  let e_to_string =
+    texpression_to_string ~metadata:meta env false indent1 indent_incr
+  in
   match body with
   | If (e_true, e_false) ->
       let e_true = e_to_string e_true in
@@ -706,14 +734,14 @@ and switch_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       ^ indent ^ "else\n" ^ indent1 ^ e_false
   | Match branches ->
       let branch_to_string (b : match_branch) : string =
-        let pat = typed_pattern_to_string env b.pat in
+        let pat = typed_pattern_to_string ~meta env b.pat in
         indent ^ "| " ^ pat ^ " ->\n" ^ indent1 ^ e_to_string b.branch
       in
       let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
 
-and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
-    (loop : loop) : string =
+and loop_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
+    (indent : string) (indent_incr : string) (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
   let indent2 = indent1 ^ indent_incr in
   let loop_inputs =
@@ -723,17 +751,20 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   in
   let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
   let fun_end =
-    texpression_to_string env false indent2 indent_incr loop.fun_end
+    texpression_to_string ~metadata:meta env false indent2 indent_incr
+      loop.fun_end
   in
   let loop_body =
-    texpression_to_string env false indent2 indent_incr loop.loop_body
+    texpression_to_string ~metadata:meta env false indent2 indent_incr
+      loop.loop_body
   in
   "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n"
   ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n"
   ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n"
   ^ indent ^ "}"
 
-and emeta_to_string (env : fmt_env) (meta : emeta) : string =
+and emeta_to_string ?(metadata : Meta.meta option = None) (env : fmt_env)
+    (meta : emeta) : string =
   let meta =
     match meta with
     | Assignment (lp, rv, rp) ->
@@ -743,12 +774,27 @@ and emeta_to_string (env : fmt_env) (meta : emeta) : string =
           | Some rp -> " [@src=" ^ mplace_to_string env rp ^ "]"
         in
         "@assign(" ^ mplace_to_string env lp ^ " := "
-        ^ texpression_to_string env false "" "" rv
+        ^ texpression_to_string ~metadata env false "" "" rv
         ^ rp ^ ")"
-    | SymbolicAssignment (var_id, rv) ->
-        "@symb_assign(" ^ VarId.to_string var_id ^ " := "
-        ^ texpression_to_string env false "" "" rv
-        ^ ")"
+    | SymbolicAssignments info ->
+        let infos =
+          List.map
+            (fun (var_id, rv) ->
+              VarId.to_string var_id ^ " == "
+              ^ texpression_to_string ~metadata env false "" "" rv)
+            info
+        in
+        let infos = String.concat ", " infos in
+        "@symb_assign(" ^ infos ^ ")"
+    | SymbolicPlaces info ->
+        let infos =
+          List.map
+            (fun (var_id, name) ->
+              VarId.to_string var_id ^ " == \"" ^ name ^ "\"")
+            info
+        in
+        let infos = String.concat ", " infos in
+        "@symb_places(" ^ infos ^ ")"
     | MPlace mp -> "@mplace=" ^ mplace_to_string env mp
     | Tag msg -> "@tag \"" ^ msg ^ "\""
   in
@@ -768,5 +814,8 @@ let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
         if inputs = [] then indent
         else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
       in
-      let body = texpression_to_string env inside indent indent body.body in
+      let body =
+        texpression_to_string ~metadata:(Some def.meta) env inside indent indent
+          body.body
+      in
       "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body

@@ -16,6 +16,7 @@ open InterpreterLoopsCore
     - [aid1]
  *)
 val merge_into_abstraction :
+  Meta.meta ->
   loop_id ->
   abs_kind ->
   bool ->
@@ -84,10 +85,11 @@ val merge_into_abstraction :
     - [ctx0]
     - [ctx1]
   *)
-val join_ctxs : loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
+val join_ctxs :
+  Meta.meta -> loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
 
 val prepare_loop_join_with_ctxs :
-  LoopId.id -> ids_sets -> eval_ctx list -> eval_ctx list
+  Meta.meta -> LoopId.id -> ids_sets -> eval_ctx list -> eval_ctx list
 
 (** Join the context at the entry of the loop with the contexts upon reentry
     (upon reaching the [Continue] statement - the goal is to compute a fixed
@@ -107,6 +109,7 @@ val prepare_loop_join_with_ctxs :
  *)
 val loop_join_with_ctxs :
   config ->
+  Meta.meta ->
   loop_id ->
   ids_sets ->
   eval_ctx ->

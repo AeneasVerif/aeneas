@@ -29,9 +29,9 @@ Fixpoint hashmap_HashMap_allocate_slots_loop
   | S n2 =>
     if n1 s> 0%usize
     then (
-      v <- alloc_vec_Vec_push (hashmap_List_t T) slots Hashmap_List_Nil;
+      slots1 <- alloc_vec_Vec_push (hashmap_List_t T) slots Hashmap_List_Nil;
       n3 <- usize_sub n1 1%usize;
-      hashmap_HashMap_allocate_slots_loop T n2 v n3)
+      hashmap_HashMap_allocate_slots_loop T n2 slots1 n3)
     else Return slots
   end
 .
@@ -204,8 +204,8 @@ Fixpoint hashmap_HashMap_move_elements_from_list_loop
   | S n1 =>
     match ls with
     | Hashmap_List_Cons k v tl =>
-      hm <- hashmap_HashMap_insert_no_resize T n1 ntable k v;
-      hashmap_HashMap_move_elements_from_list_loop T n1 hm tl
+      ntable1 <- hashmap_HashMap_insert_no_resize T n1 ntable k v;
+      hashmap_HashMap_move_elements_from_list_loop T n1 ntable1 tl
     | Hashmap_List_Nil => Return ntable
     end
   end
@@ -239,12 +239,10 @@ Fixpoint hashmap_HashMap_move_elements_loop
           i;
       let (l, index_mut_back) := p in
       let (ls, l1) := core_mem_replace (hashmap_List_t T) l Hashmap_List_Nil in
-      hm <- hashmap_HashMap_move_elements_from_list T n1 ntable ls;
+      ntable1 <- hashmap_HashMap_move_elements_from_list T n1 ntable ls;
       i2 <- usize_add i 1%usize;
       slots1 <- index_mut_back l1;
-      back_'a <- hashmap_HashMap_move_elements_loop T n1 hm slots1 i2;
-      let (hm1, v) := back_'a in
-      Return (hm1, v))
+      hashmap_HashMap_move_elements_loop T n1 ntable1 slots1 i2)
     else Return (ntable, slots)
   end
 .
@@ -256,9 +254,7 @@ Definition hashmap_HashMap_move_elements
   (slots : alloc_vec_Vec (hashmap_List_t T)) (i : usize) :
   result ((hashmap_HashMap_t T) * (alloc_vec_Vec (hashmap_List_t T)))
   :=
-  back_'a <- hashmap_HashMap_move_elements_loop T n ntable slots i;
-  let (hm, v) := back_'a in
-  Return (hm, v)
+  hashmap_HashMap_move_elements_loop T n ntable slots i
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::try_resize]:
@@ -304,11 +300,11 @@ Definition hashmap_HashMap_insert
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) (key : usize) (value : T) :
   result (hashmap_HashMap_t T)
   :=
-  hm <- hashmap_HashMap_insert_no_resize T n self key value;
-  i <- hashmap_HashMap_len T hm;
-  if i s> hm.(hashmap_HashMap_max_load)
-  then hashmap_HashMap_try_resize T n hm
-  else Return hm
+  self1 <- hashmap_HashMap_insert_no_resize T n self key value;
+  i <- hashmap_HashMap_len T self1;
+  if i s> self1.(hashmap_HashMap_max_load)
+  then hashmap_HashMap_try_resize T n self1
+  else Return self1
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
@@ -423,9 +419,7 @@ Definition hashmap_HashMap_get_mut_in_list
   (T : Type) (n : nat) (ls : hashmap_List_t T) (key : usize) :
   result (T * (T -> result (hashmap_List_t T)))
   :=
-  p <- hashmap_HashMap_get_mut_in_list_loop T n ls key;
-  let (t, back_'a) := p in
-  Return (t, back_'a)
+  hashmap_HashMap_get_mut_in_list_loop T n ls key
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]:
@@ -585,9 +579,7 @@ Definition insert_on_disk
   p <- hashmap_utils_deserialize st;
   let (st1, hm) := p in
   hm1 <- hashmap_HashMap_insert u64 n hm key value;
-  p1 <- hashmap_utils_serialize hm1 st1;
-  let (st2, _) := p1 in
-  Return (st2, tt)
+  hashmap_utils_serialize hm1 st1
 .
 
 (** [hashmap_main::main]:

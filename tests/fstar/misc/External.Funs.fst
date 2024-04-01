@@ -33,8 +33,8 @@ let custom_swap
   (t : Type0) (x : t) (y : t) (st : state) :
   result (state & (t & (t -> state -> result (state & (t & t)))))
   =
-  let* (st1, (x1, x2)) = core_mem_swap t x y st in
-  let back_'a = fun ret st2 -> Ok (st2, (ret, x2)) in
+  let* (st1, (x1, y1)) = core_mem_swap t x y st in
+  let back_'a = fun ret st2 -> Ok (st2, (ret, y1)) in
   Ok (st1, (x1, back_'a))
 
 (** [external::test_custom_swap]:

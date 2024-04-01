@@ -21,9 +21,9 @@ divergent def hashmap.HashMap.allocate_slots_loop
   if n > 0#usize
   then
     do
-    let v ← alloc.vec.Vec.push (hashmap.List T) slots hashmap.List.Nil
+    let slots1 ← alloc.vec.Vec.push (hashmap.List T) slots hashmap.List.Nil
     let n1 ← n - 1#usize
-    hashmap.HashMap.allocate_slots_loop T v n1
+    hashmap.HashMap.allocate_slots_loop T slots1 n1
   else Result.ret slots
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::allocate_slots]:
@@ -150,8 +150,8 @@ divergent def hashmap.HashMap.move_elements_from_list_loop
   match ls with
   | hashmap.List.Cons k v tl =>
     do
-    let hm ← hashmap.HashMap.insert_no_resize T ntable k v
-    hashmap.HashMap.move_elements_from_list_loop T hm tl
+    let ntable1 ← hashmap.HashMap.insert_no_resize T ntable k v
+    hashmap.HashMap.move_elements_from_list_loop T ntable1 tl
   | hashmap.List.Nil => Result.ret ntable
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements_from_list]:
@@ -177,12 +177,10 @@ divergent def hashmap.HashMap.move_elements_loop
       alloc.vec.Vec.index_mut (hashmap.List T) Usize
         (core.slice.index.SliceIndexUsizeSliceTInst (hashmap.List T)) slots i
     let (ls, l1) := core.mem.replace (hashmap.List T) l hashmap.List.Nil
-    let hm ← hashmap.HashMap.move_elements_from_list T ntable ls
+    let ntable1 ← hashmap.HashMap.move_elements_from_list T ntable ls
     let i2 ← i + 1#usize
     let slots1 ← index_mut_back l1
-    let back_'a ← hashmap.HashMap.move_elements_loop T hm slots1 i2
-    let (hm1, v) := back_'a
-    Result.ret (hm1, v)
+    hashmap.HashMap.move_elements_loop T ntable1 slots1 i2
   else Result.ret (ntable, slots)
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements]:
@@ -192,10 +190,7 @@ def hashmap.HashMap.move_elements
   (slots : alloc.vec.Vec (hashmap.List T)) (i : Usize) :
   Result ((hashmap.HashMap T) × (alloc.vec.Vec (hashmap.List T)))
   :=
-  do
-  let back_'a ← hashmap.HashMap.move_elements_loop T ntable slots i
-  let (hm, v) := back_'a
-  Result.ret (hm, v)
+  hashmap.HashMap.move_elements_loop T ntable slots i
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::try_resize]:
    Source: 'src/hashmap.rs', lines 140:4-140:28 -/
@@ -229,11 +224,11 @@ def hashmap.HashMap.insert
   Result (hashmap.HashMap T)
   :=
   do
-  let hm ← hashmap.HashMap.insert_no_resize T self key value
-  let i ← hashmap.HashMap.len T hm
-  if i > hm.max_load
-  then hashmap.HashMap.try_resize T hm
-  else Result.ret hm
+  let self1 ← hashmap.HashMap.insert_no_resize T self key value
+  let i ← hashmap.HashMap.len T self1
+  if i > self1.max_load
+  then hashmap.HashMap.try_resize T self1
+  else Result.ret self1
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
    Source: 'src/hashmap.rs', lines 206:4-219:5 -/
@@ -326,9 +321,7 @@ def hashmap.HashMap.get_mut_in_list
   (T : Type) (ls : hashmap.List T) (key : Usize) :
   Result (T × (T → Result (hashmap.List T)))
   :=
-  do
-  let (t, back_'a) ← hashmap.HashMap.get_mut_in_list_loop T ls key
-  Result.ret (t, back_'a)
+  hashmap.HashMap.get_mut_in_list_loop T ls key
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]:
    Source: 'src/hashmap.rs', lines 257:4-257:67 -/
@@ -460,8 +453,7 @@ def insert_on_disk
   do
   let (st1, hm) ← hashmap_utils.deserialize st
   let hm1 ← hashmap.HashMap.insert U64 hm key value
-  let (st2, _) ← hashmap_utils.serialize hm1 st1
-  Result.ret (st2, ())
+  hashmap_utils.serialize hm1 st1
 
 /- [hashmap_main::main]:
    Source: 'src/hashmap_main.rs', lines 16:0-16:13 -/

@@ -1,6 +1,7 @@
 (** Utilities for extracting names *)
 
 open Charon.NameMatcher
+open Errors
 
 let log = Logging.extract_log
 let match_with_trait_decl_refs = true
@@ -31,7 +32,8 @@ end
     For impl blocks, we simply use the name of the type (without its arguments)
     if all the arguments are variables.
  *)
-let pattern_to_extract_name (name : pattern) : string list =
+let pattern_to_extract_name (meta : Meta.meta option) (name : pattern) :
+    string list =
   let c = { tgt = TkName } in
   let all_vars =
     let check (g : generic_arg) : bool =
@@ -71,7 +73,7 @@ let pattern_to_extract_name (name : pattern) : string list =
             let id = Collections.List.last id in
             match id with
             | PIdent (_, _) -> super#visit_PImpl () (EComp [ id ])
-            | PImpl _ -> raise (Failure "Unreachable"))
+            | PImpl _ -> craise_opt_meta __FILE__ __LINE__ meta "Unreachable")
         | _ -> super#visit_PImpl () ty
 
       method! visit_EPrimAdt _ adt g =
@@ -91,9 +93,9 @@ let pattern_to_extract_name (name : pattern) : string list =
   let name = visitor#visit_pattern () name in
   List.map (pattern_elem_to_string c) name
 
-let pattern_to_type_extract_name = pattern_to_extract_name
-let pattern_to_fun_extract_name = pattern_to_extract_name
-let pattern_to_trait_impl_extract_name = pattern_to_extract_name
+let pattern_to_type_extract_name = pattern_to_extract_name None
+let pattern_to_fun_extract_name = pattern_to_extract_name None
+let pattern_to_trait_impl_extract_name = pattern_to_extract_name None
 
 (* TODO: this is provisional. We just want to make sure that the extraction
    names we derive from the patterns (for the builtin definitions) are
@@ -102,7 +104,7 @@ let name_to_simple_name (ctx : ctx) (n : Types.name) : string list =
   let c : to_pat_config =
     { tgt = TkName; use_trait_decl_refs = match_with_trait_decl_refs }
   in
-  pattern_to_extract_name (name_to_pattern ctx c n)
+  pattern_to_extract_name None (name_to_pattern ctx c n)
 
 (** If the [prefix] is Some, we attempt to remove the common prefix
     between [prefix] and [name] from [name] *)
@@ -124,4 +126,4 @@ let name_with_generics_to_simple_name (ctx : ctx)
         let _, _, name = pattern_common_prefix { equiv = true } prefix name in
         name
   in
-  pattern_to_extract_name name
+  pattern_to_extract_name None name
