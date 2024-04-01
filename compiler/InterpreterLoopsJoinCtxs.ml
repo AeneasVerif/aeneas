@@ -634,6 +634,35 @@ let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   in
   { ctx with env }
 
+let prepare_loop_join_with_ctxs (loop_id : LoopId.id) (fixed_ids : ids_sets)
+    (ctxl : eval_ctx list) : eval_ctx list =
+  let prepare_one (ctx : eval_ctx) : eval_ctx =
+    log#ldebug
+      (lazy
+        ("prepare_loop_join_with_ctxs:join_one: initial ctx:\n"
+       ^ eval_ctx_to_string ctx));
+
+    (* Destructure the abstractions introduced in the new context *)
+    let ctx = destructure_new_abs loop_id fixed_ids.aids ctx in
+    log#ldebug
+      (lazy
+        ("prepare_loop_join_with_ctxs:join_one: after destructure:\n"
+       ^ eval_ctx_to_string ctx));
+
+    (* Collapse the context we want to add to the join *)
+    let ctx = collapse_ctx loop_id None fixed_ids ctx in
+    log#ldebug
+      (lazy
+        ("prepare_loop_join_with_ctxs:join_one: after collapse:\n"
+       ^ eval_ctx_to_string ctx));
+
+    (* Refresh the fresh abstractions *)
+    let ctx = refresh_abs fixed_ids.aids ctx in
+
+    ctx
+  in
+  List.map prepare_one ctxl
+
 let loop_join_with_ctxs (config : config) (loop_id : LoopId.id)
     (fixed_ids : ids_sets) (old_ctx : eval_ctx) (ctxl : eval_ctx list) :
     (eval_ctx * eval_ctx list) * eval_ctx =
@@ -663,27 +692,13 @@ let loop_join_with_ctxs (config : config) (loop_id : LoopId.id)
         in
         join_one_aux ctx
   in
+  (* Prepare *)
+  let ctxl = prepare_loop_join_with_ctxs loop_id fixed_ids ctxl in
+
   let join_one (ctx : eval_ctx) : eval_ctx =
     log#ldebug
       (lazy
         ("loop_join_with_ctxs:join_one: initial ctx:\n" ^ eval_ctx_to_string ctx));
-
-    (* Destructure the abstractions introduced in the new context *)
-    let ctx = destructure_new_abs loop_id fixed_ids.aids ctx in
-    log#ldebug
-      (lazy
-        ("loop_join_with_ctxs:join_one: after destructure:\n"
-       ^ eval_ctx_to_string ctx));
-
-    (* Collapse the context we want to add to the join *)
-    let ctx = collapse_ctx loop_id None fixed_ids ctx in
-    log#ldebug
-      (lazy
-        ("loop_join_with_ctxs:join_one: after collapse:\n"
-       ^ eval_ctx_to_string ctx));
-
-    (* Refresh the fresh abstractions *)
-    let ctx = refresh_abs fixed_ids.aids ctx in
 
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
@@ -705,7 +720,7 @@ let loop_join_with_ctxs (config : config) (loop_id : LoopId.id)
     (* Return *)
     ctx1
   in
-
+  (* Actually join *)
   let ctxl = List.map join_one ctxl in
 
   (* # Return *)

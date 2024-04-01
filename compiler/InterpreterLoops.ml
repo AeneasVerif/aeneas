@@ -65,7 +65,7 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
 let compute_loop_output_contexts (config : config) (loop_id : LoopId.id)
     (eval_loop_body : st_cm_fun) (fp_ctx : eval_ctx) (fixed_ids : ids_sets) :
     eval_ctx option * eval_ctx option =
-  log#ldebug (lazy "compute_loop_output_context:\n");
+  log#ldebug (lazy "compute_loop_output_contexts:\n");
   (* The environments at returns *)
   let return_ctxs = ref [] in
   let register_return_ctx ctx = return_ctxs := ctx :: !return_ctxs in
@@ -74,7 +74,7 @@ let compute_loop_output_contexts (config : config) (loop_id : LoopId.id)
   let register_break_ctx ctx = break_ctxs := ctx :: !break_ctxs in
   let cf_loop : st_m_fun =
    fun res ctx ->
-    log#ldebug (lazy "eval_loop_symbolic: cf_loop");
+    log#ldebug (lazy "compute_loop_output_contexts: cf_loop");
     match res with
     | Return ->
         (* Register the context *)
@@ -107,10 +107,11 @@ let compute_loop_output_contexts (config : config) (loop_id : LoopId.id)
 
   (* A small utility to compute joined environments *)
   let compute_joined (kind : string) (ctxs : eval_ctx list) : eval_ctx option =
+    let ctxs = prepare_loop_join_with_ctxs loop_id fixed_ids ctxs in
     match ctxs with
     | [] ->
         log#ldebug
-          (lazy ("compute_loop_output_context: no " ^ kind ^ " context\n"));
+          (lazy ("compute_loop_output_contexts: no " ^ kind ^ " context\n"));
         None
     | ctx :: ctxl ->
         let _, joined_ctx =
@@ -118,7 +119,7 @@ let compute_loop_output_contexts (config : config) (loop_id : LoopId.id)
         in
         log#ldebug
           (lazy
-            ("compute_loop_output_context: " ^ kind ^ " context:"
+            ("compute_loop_output_contexts: " ^ kind ^ " context:"
            ^ "\n\n- fp_ctx:\n"
             ^ eval_ctx_to_string_no_filter fp_ctx
             ^ "\n\n- " ^ kind ^ "_ctx:\n"
@@ -158,11 +159,9 @@ type loop_sig = {
 }
 
 let loop_sig_to_string (sg : loop_sig) : string =
-  let { fp_ctx; fixed_ids; input_svalues = _; body; _ } = sg in
+  let { fp_ctx; fixed_ids; input_svalues = _; body = _; _ } = sg in
   "{" ^ "\n-fp_ctx\n" ^ eval_ctx_to_string fp_ctx ^ "\n\n- fixed_sids: "
   ^ SymbolicValueId.Set.show fixed_ids.sids
-  ^ "\n\n- body:\n"
-  ^ Print.option_to_string SA.show_expression body
   ^ "\n}"
 
 (** Small helper.
@@ -349,6 +348,7 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
         abs AbstractionId.Map.t ->
         SA.expr_call ->
         SA.expression option) =
+    log#ldebug (lazy "compute_loop_body: cf_match_with_return_break_ctx\n\n");
     (* Simplify the context *)
     let cf_cleanup = cleanup_fresh_values_and_abs config fixed_ids in
     (* The target context must be present *)
@@ -383,9 +383,10 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
   in
   let cf_loop : st_m_fun =
    fun res ctx ->
-    log#ldebug (lazy "compute_loop_body: cf_loop");
+    log#ldebug (lazy "compute_loop_body: cf_loop\n\n");
     match res with
     | Return ->
+        log#ldebug (lazy "compute_loop_body: cf_loop: return\n\n");
         cf_match_with_return_break_ctx ctx return_ctx LoopReturn
           (fun loop_id input_values _ loop_return ->
             Some (SA.LoopReturn (loop_id, input_values, loop_return)))
@@ -393,6 +394,7 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
         (* Nothing to do *)
         None
     | Break i ->
+        log#ldebug (lazy "compute_loop_body: cf_loop: break\n\n");
         (* We don't support breaks to outer loops for now *)
         if i <> 0 then raise (Failure "Breaks to outer loops not supported yet");
         (* Match with the return context *)
@@ -400,78 +402,92 @@ let compute_loop_body (config : config) (loop_id : LoopId.id)
           (fun loop_id input_values _ loop_return ->
             Some (SA.LoopBreak (loop_id, input_values, loop_return)))
     | Continue i ->
+        log#ldebug (lazy "compute_loop_body: cf_loop: continue\n\n");
         (* We don't support continues to outer loops for now *)
         if i <> 0 then raise (Failure "Breaks to outer loops not supported yet");
-        (* Simplify the context *)
-        let cf_cleanup = cleanup_fresh_values_and_abs config fixed_ids in
-        (* Match with the loop entry context *)
-        let fp_bl_corresp =
-          compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
+        (* Cleanup and prepare the context *)
+        let cf_cleanup_prepare =
+          (* Simplify the context *)
+          let cf_cleanup = cleanup_fresh_values_and_abs config fixed_ids in
+          (* Prepare the context *)
+          let cf_prepare =
+            prepare_match_ctx_with_target config loop_id fixed_ids fp_ctx
+          in
+          comp cf_cleanup cf_prepare
         in
-        (* The continuation for after the match: we receive the (optional) joined
-           contexts computed at the break/return statements that we reach.
-           We then need to resume the evaluation from there by propagating those
-           break/return statements. For now, all we have to do is to compute
-           the backward functions starting from those statements by ending the
-           input synthesis functions one by one.
-        *)
-        let cf (loop_match_info : loop_match_info) : eval_result =
-          let compute_opt_end_expr (ctx_info : loop_output_ctx_info option) :
-              SA.expr_call option option =
-            match ctx_info with
-            | None -> None
-            | Some ctx_info ->
-                (* There is a break/return *inside* the loop: we have to continue
-                   the execution from the joined environment resulting from reaching
-                   a break/return.
+        let cf_match ctx =
+          (* Match with the loop entry context *)
+          let fp_bl_corresp =
+            compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
+          in
+          (* The continuation for after the match: we receive the (optional) joined
+             contexts computed at the break/return statements that we reach.
+             We then need to resume the evaluation from there by propagating those
+             break/return statements. For now, all we have to do is to compute
+             the backward functions starting from those statements by ending the
+             input synthesis functions one by one.
+          *)
+          let cf (loop_match_info : loop_match_info) : eval_result =
+            let compute_opt_end_expr (ctx_info : loop_output_ctx_info option) :
+                SA.expr_call option option =
+              match ctx_info with
+              | None -> None
+              | Some ctx_info ->
+                  (* There is a break/return *inside* the loop: we have to continue
+                     the execution from the joined environment resulting from reaching
+                     a break/return.
 
-                   First set the region abstraction introduced by
-                   this loop as endable: we might need to end them. *)
-                let ctx_info =
-                  {
-                    ctx_info with
-                    ctx = set_loop_regions_as_endable loop_id ctx_info.ctx;
-                  }
-                in
+                     First set the region abstraction introduced by
+                     this loop as endable: we might need to end them. *)
+                  let ctx_info =
+                    {
+                      ctx_info with
+                      ctx = set_loop_regions_as_endable loop_id ctx_info.ctx;
+                    }
+                  in
 
-                (* Compute the end expression by ending the input abstractions
-                   of the loop *)
-                Some
-                  (compute_end_expr ctx_info.fresh_svalues ctx_info.fresh_abs
-                     ctx_info.ctx)
-          in
-          (* Compute the end expressions for the [return] and [break] tags *)
-          let loop_return = compute_opt_end_expr loop_match_info.return_info in
-          let loop_break = compute_opt_end_expr loop_match_info.break_info in
-          (* Do we need to generate an expression or not? *)
-          let compute_expr e =
-            match e with None | Some (Some _) -> true | Some None -> false
-          in
-          let compute_expr =
-            compute_expr loop_return && compute_expr loop_break
-          in
-          if compute_expr then
-            let get_expr e =
-              match e with Some e -> Some (Option.get e) | None -> None
+                  (* Compute the end expression by ending the input abstractions
+                     of the loop *)
+                  Some
+                    (compute_end_expr ctx_info.fresh_svalues ctx_info.fresh_abs
+                       ctx_info.ctx)
             in
-            let continue_return = get_expr loop_return in
-            let continue_break = get_expr loop_break in
-            Some
-              (SA.LoopContinue
-                 {
-                   loop_id;
-                   continue_input_values = loop_match_info.input_values;
-                   continue_return;
-                   continue_break;
-                 })
-          else None
+            (* Compute the end expressions for the [return] and [break] tags *)
+            let loop_return =
+              compute_opt_end_expr loop_match_info.return_info
+            in
+            let loop_break = compute_opt_end_expr loop_match_info.break_info in
+            (* Do we need to generate an expression or not? *)
+            let compute_expr e =
+              match e with None | Some (Some _) -> true | Some None -> false
+            in
+            let compute_expr =
+              compute_expr loop_return && compute_expr loop_break
+            in
+            if compute_expr then
+              let get_expr e =
+                match e with Some e -> Some (Option.get e) | None -> None
+              in
+              let continue_return = get_expr loop_return in
+              let continue_break = get_expr loop_break in
+              Some
+                (SA.LoopContinue
+                   {
+                     loop_id;
+                     continue_input_values = loop_match_info.input_values;
+                     continue_return;
+                     continue_break;
+                   })
+            else None
+          in
+          (* Match *)
+          let cf_match =
+            match_loop_fp_ctx_with_target config loop_id eval_loop_body
+              fp_bl_corresp fp_input_svalues fixed_ids fp_ctx cf
+          in
+          cf_match ctx
         in
-        (* Match *)
-        let cf_match =
-          match_loop_fp_ctx_with_target config loop_id eval_loop_body
-            fp_bl_corresp fp_input_svalues fixed_ids fp_ctx cf
-        in
-        cf_cleanup cf_match ctx
+        cf_cleanup_prepare cf_match ctx
     | Unit ->
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}. *)
         raise (Failure "Unreachable")
@@ -485,6 +501,8 @@ let compute_loop_sig (config : config) (loop_id : LoopId.id)
      recompute the fixed-points of the inner loops every time we evaluate
      this loop body - this is super inefficient)
   *)
+  (* Debug *)
+  log#ldebug (lazy "eval_loop_sig:\n\n");
   (* Compute the input context (the loop entry fixed-point) *)
   let fp_ctx, fixed_ids, _ =
     compute_loop_entry_fixed_point config loop_id eval_loop_body ctx0
@@ -494,6 +512,14 @@ let compute_loop_sig (config : config) (loop_id : LoopId.id)
   let return_ctx, break_ctx =
     compute_loop_output_contexts config loop_id eval_loop_body fp_ctx fixed_ids
   in
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("eval_loop_sig: computed loop output contexts:\n- return_ctx:\n"
+      ^ Print.option_to_string eval_ctx_to_string return_ctx
+      ^ "\n- break_ctx:\n"
+      ^ Print.option_to_string eval_ctx_to_string break_ctx
+      ^ "\n\n"));
 
   (* Compute the loop input parameters *)
   let _, input_svalues = compute_fp_ctx_symbolic_values ctx0 fp_ctx in
@@ -503,6 +529,9 @@ let compute_loop_sig (config : config) (loop_id : LoopId.id)
     compute_loop_body config loop_id eval_loop_body fp_ctx fixed_ids
       input_svalues return_ctx break_ctx
   in
+
+  (* Debug *)
+  log#ldebug (lazy "eval_loop_sig: computed loop body\n\n");
 
   (* Return *)
   { fp_ctx; fixed_ids; input_svalues; body }
@@ -536,6 +565,8 @@ let eval_loop_symbolic (config : config) (meta : meta)
 
   (* The continuation for after the loop *)
   let cf_after_loop (match_info : loop_match_info) : eval_result =
+    log#ldebug (lazy "eval_loop_symbolic: cf_after_loop");
+
     (* Call the continuation: we call it with [Return] starting with the
        joined return state and [Unit] starting with the joined break state,
        if there are.
@@ -546,6 +577,16 @@ let eval_loop_symbolic (config : config) (meta : meta)
       match ctx_info with
       | None -> None
       | Some info ->
+          (* We need to update the evaluation result *)
+          let res =
+            match res with
+            | Return -> Return
+            | Break i ->
+                assert (i = 0);
+                Unit
+            | _ -> raise (Failure "Unreachable")
+          in
+          (* Call the continuation *)
           let e = cf res info.ctx in
           Some (info.fresh_svalues, info.fresh_abs, Option.get e)
     in
@@ -569,6 +610,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
            meta;
          })
   in
+
   (* Match *)
   match_loop_fp_ctx_with_target config loop_id eval_loop_body fp_bl_corresp
     loop_sig.input_svalues loop_sig.fixed_ids loop_sig.fp_ctx cf_after_loop ctx

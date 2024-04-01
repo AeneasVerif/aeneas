@@ -86,6 +86,9 @@ val merge_into_abstraction :
   *)
 val join_ctxs : loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
 
+val prepare_loop_join_with_ctxs :
+  LoopId.id -> ids_sets -> eval_ctx list -> eval_ctx list
+
 (** Join the context at the entry of the loop with the contexts upon reentry
     (upon reaching the [Continue] statement - the goal is to compute a fixed
     point for the loop entry).
