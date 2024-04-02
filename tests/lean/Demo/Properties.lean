@@ -5,80 +5,85 @@ open Result
 
 namespace demo
 
-#check U32.add_spec
+/-
+pub fn mul3_add1(x: u32) -> u32 {
+    x + x + x + 1
+}
+-/
 
 -- @[pspec]
-theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
-  : ∃ y, mul2_add1 x = ret y ∧
-  ↑y = 2 * ↑x + (1 : Int)
+theorem mul3_add1_spec (x : U32) (h : 3 * ↑x + 1 ≤ U32.max)
+  : ∃ y, mul3_add1 x = ret y ∧
+  ↑y = 3 * ↑x + (1 : Int)
   := by
-  rw [mul2_add1]
-  progress with U32.add_spec as ⟨ i ⟩
+  rw [mul3_add1]
+  progress as ⟨ i ⟩
+  progress as ⟨ i1 ⟩
+  progress as ⟨ i2 ⟩
+  simp; scalar_tac
+
+/-
+pub fn use_mul3_add1(x: u32, y: u32) -> u32 {
+    mul3_add1(x) + y
+}
+-/
+
+theorem use_mul3_add1_spec (x : U32) (y : U32) (h : 3 * ↑x + 1 + ↑y ≤ U32.max) :
+  ∃ z, use_mul3_add1 x y = ret z ∧
+  ↑z = 3 * ↑x + (1 : Int) + ↑y := by
+  rw [use_mul3_add1]
+  progress with mul3_add1_spec as ⟨ i ⟩
   progress as ⟨ i' ⟩
   simp; scalar_tac
 
-theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
-  ∃ z, use_mul2_add1 x y = ret z ∧
-  ↑z = 2 * ↑x + (1 : Int) + ↑y := by
-  rw [use_mul2_add1]
-  progress with mul2_add1_spec as ⟨ i ⟩
-  progress as ⟨ i' ⟩
-  simp; scalar_tac
+/-
+pub fn use_counter<'a, T: Counter>(cnt: &'a mut T) -> usize {
+    let _ = cnt.incr();
+    cnt.incr()
+}
+-/
 
-open CList
+theorem use_counter_spec {T : Type} (counterInst : Counter T) (cnt : T)
+  /- Specifying Counter -/
+  (to_int : T → Int)
+  (incrSpec :
+    ∀ cnt,
+      to_int cnt < Usize.max →
+      ∃ v cnt',
+        counterInst.incr cnt = ret (v, cnt') ∧
+        to_int cnt = v ∧ to_int cnt' = to_int cnt + 1)
+  /- -/
+  (h : to_int cnt < Usize.max - 1) :
+  ∃ v cnt', use_counter T counterInst cnt = ret (v, cnt') := by
+  rw [use_counter]
+  progress
+  progress
+  simp
 
-@[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
-  match x with
-  | CNil => []
-  | CCons hd tl => hd :: tl.to_list
+theorem use_counter_spec1 {T : Type} (counterInst : Counter T) (cnt : T)
+  /- Specifying Counter -/
+  (incrSpec :
+    ∀ cnt,
+      ∃ v cnt',
+        counterInst.incr cnt = ret (v, cnt'))
+  /- -/ :
+  ∃ v cnt', use_counter T counterInst cnt = ret (v, cnt') := by
+  rw [use_counter]
+  progress
+  progress
+  simp
 
-theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : ↑i < l.to_list.len) :
-  ∃ x, list_nth T l i = ret x ∧
-  x = l.to_list.index ↑i
-  := by
-  rw [list_nth]
-  match l with
-  | CNil =>
-    simp_all; scalar_tac
-  | CCons hd tl =>
-    simp_all
-    if hi: i = 0#u32 then
-      simp_all
-    else
-      simp_all
-      progress as ⟨ i1 ⟩
-      progress as ⟨ x ⟩
-      simp_all
+/-
+pub fn use_vec_index(i: usize, v: &Vec<u32>) -> u32 {
+    *(v.index(i))
+}
+-/
 
-theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
-  ∃ y, i32_id x = ret y ∧ x.val = y.val := by
-  rw [i32_id]
-  if hx : x = 0#i32 then
-    simp_all
-  else
-    simp_all
-    progress as ⟨ x1 ⟩
-    progress as ⟨ x2 ⟩
-    progress
-    simp_all
-termination_by x.val.toNat
-decreasing_by scalar_decr_tac
-
-theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
-  ∃ back, list_tail T l = ret (CList.CNil, back) ∧
-  ∀ tl', ∃ l', back tl' = ret l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
-  rw [list_tail]
-  match l with
-  | CNil =>
-    simp_all
-  | CCons hd tl =>
-    simp_all
-    progress as ⟨ back ⟩
-    simp
-    -- Proving the backward function
-    intro tl'
-    progress
-    simp_all
+def use_vec_index_spec (i : Usize) (v : alloc.vec.Vec U32) (h : i < v.len) :
+  ∃ x, use_vec_index i v = ret x := by
+  rw [use_vec_index]
+  simp
+  progress
+  simp
 
 end demo

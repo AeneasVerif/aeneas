@@ -17,18 +17,19 @@ def choose
   else let back_'a := fun ret => Result.ret (x, ret)
        Result.ret (y, back_'a)
 
-/- [demo::mul2_add1]:
+/- [demo::mul3_add1]:
    Source: 'src/demo.rs', lines 13:0-13:31 -/
-def mul2_add1 (x : U32) : Result U32 :=
+def mul3_add1 (x : U32) : Result U32 :=
   do
   let i ← x + x
-  i + 1#u32
+  let i1 ← i + x
+  i1 + 1#u32
 
-/- [demo::use_mul2_add1]:
+/- [demo::use_mul3_add1]:
    Source: 'src/demo.rs', lines 17:0-17:43 -/
-def use_mul2_add1 (x : U32) (y : U32) : Result U32 :=
+def use_mul3_add1 (x : U32) (y : U32) : Result U32 :=
   do
-  let i ← mul2_add1 x
+  let i ← mul3_add1 x
   i + y
 
 /- [demo::incr]:
@@ -63,111 +64,53 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
          list_nth T tl i1
   | CList.CNil => Result.fail .panic
 
-/- [demo::list_nth_mut]:
-   Source: 'src/demo.rs', lines 54:0-54:68 -/
-divergent def list_nth_mut
-  (T : Type) (l : CList T) (i : U32) :
-  Result (T × (T → Result (CList T)))
-  :=
+/- [demo::list_nth1]: loop 0:
+   Source: 'src/demo.rs', lines 54:0-63:1 -/
+divergent def list_nth1_loop (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
-    then
-      let back_'a := fun ret => Result.ret (CList.CCons ret tl)
-      Result.ret (x, back_'a)
-    else
-      do
-      let i1 ← i - 1#u32
-      let (t, list_nth_mut_back) ← list_nth_mut T tl i1
-      let back_'a :=
-        fun ret =>
-          do
-          let tl1 ← list_nth_mut_back ret
-          Result.ret (CList.CCons x tl1)
-      Result.ret (t, back_'a)
+    then Result.ret x
+    else do
+         let i1 ← i - 1#u32
+         list_nth1_loop T tl i1
   | CList.CNil => Result.fail .panic
 
-/- [demo::list_nth_mut1]: loop 0:
-   Source: 'src/demo.rs', lines 69:0-78:1 -/
-divergent def list_nth_mut1_loop
-  (T : Type) (l : CList T) (i : U32) :
-  Result (T × (T → Result (CList T)))
-  :=
-  match l with
-  | CList.CCons x tl =>
-    if i = 0#u32
-    then
-      let back_'a := fun ret => Result.ret (CList.CCons ret tl)
-      Result.ret (x, back_'a)
-    else
-      do
-      let i1 ← i - 1#u32
-      let (t, back_'a) ← list_nth_mut1_loop T tl i1
-      let back_'a1 :=
-        fun ret => do
-                   let tl1 ← back_'a ret
-                   Result.ret (CList.CCons x tl1)
-      Result.ret (t, back_'a1)
-  | CList.CNil => Result.fail .panic
-
-/- [demo::list_nth_mut1]:
-   Source: 'src/demo.rs', lines 69:0-69:77 -/
-def list_nth_mut1
-  (T : Type) (l : CList T) (i : U32) :
-  Result (T × (T → Result (CList T)))
-  :=
-  list_nth_mut1_loop T l i
-
-/- [demo::i32_id]:
-   Source: 'src/demo.rs', lines 80:0-80:28 -/
-divergent def i32_id (i : I32) : Result I32 :=
-  if i = 0#i32
-  then Result.ret 0#i32
-  else do
-       let i1 ← i - 1#i32
-       let i2 ← i32_id i1
-       i2 + 1#i32
-
-/- [demo::list_tail]:
-   Source: 'src/demo.rs', lines 88:0-88:64 -/
-divergent def list_tail
-  (T : Type) (l : CList T) :
-  Result ((CList T) × (CList T → Result (CList T)))
-  :=
-  match l with
-  | CList.CCons t tl =>
-    do
-    let (c, list_tail_back) ← list_tail T tl
-    let back_'a :=
-      fun ret =>
-        do
-        let tl1 ← list_tail_back ret
-        Result.ret (CList.CCons t tl1)
-    Result.ret (c, back_'a)
-  | CList.CNil => Result.ret (CList.CNil, Result.ret)
+/- [demo::list_nth1]:
+   Source: 'src/demo.rs', lines 54:0-54:65 -/
+def list_nth1 (T : Type) (l : CList T) (i : U32) : Result T :=
+  list_nth1_loop T l i
 
 /- Trait declaration: [demo::Counter]
-   Source: 'src/demo.rs', lines 97:0-97:17 -/
+   Source: 'src/demo.rs', lines 67:0-67:17 -/
 structure Counter (Self : Type) where
   incr : Self → Result (Usize × Self)
 
 /- [demo::{(demo::Counter for usize)}::incr]:
-   Source: 'src/demo.rs', lines 102:4-102:31 -/
+   Source: 'src/demo.rs', lines 72:4-72:31 -/
 def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
   do
   let self1 ← self + 1#usize
   Result.ret (self, self1)
 
 /- Trait implementation: [demo::{(demo::Counter for usize)}]
-   Source: 'src/demo.rs', lines 101:0-101:22 -/
+   Source: 'src/demo.rs', lines 71:0-71:22 -/
 def CounterUsize : Counter Usize := {
   incr := CounterUsize.incr
 }
 
 /- [demo::use_counter]:
-   Source: 'src/demo.rs', lines 109:0-109:59 -/
+   Source: 'src/demo.rs', lines 79:0-79:59 -/
 def use_counter
   (T : Type) (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
-  CounterInst.incr cnt
+  do
+  let (_, cnt1) ← CounterInst.incr cnt
+  CounterInst.incr cnt1
+
+/- [demo::use_vec_index]:
+   Source: 'src/demo.rs', lines 86:0-86:51 -/
+def use_vec_index (i : Usize) (v : alloc.vec.Vec U32) : Result U32 :=
+  alloc.vec.Vec.index U32 Usize (core.slice.index.SliceIndexUsizeSliceTInst
+    U32) v i
 
 end demo
