@@ -254,7 +254,7 @@ let empty_names_map : names_map =
 
 (** Small helper to report name collision *)
 let report_name_collision (id_to_string : id -> string)
-    (id1, meta : id * Meta.meta option) (id2 : id) (name : string) : unit =
+    ((id1, meta) : id * Meta.meta option) (id2 : id) (name : string) : unit =
   let id1 = "\n- " ^ id_to_string id1 in
   let id2 = "\n- " ^ id_to_string id2 in
   let err =
@@ -278,16 +278,16 @@ let names_map_check_collision (id_to_string : id -> string) (id : id)
       report_name_collision id_to_string clash id name
 
 (** Insert bindings in a names map without checking for collisions *)
-let names_map_add_unchecked (id, meta : id * Meta.meta option) (name : string) (nm : names_map) :
-    names_map =
+let names_map_add_unchecked ((id, meta) : id * Meta.meta option) (name : string)
+    (nm : names_map) : names_map =
   (* Insert *)
   let id_to_name = IdMap.add id name nm.id_to_name in
-  let name_to_id= StringMap.add name (id, meta) nm.name_to_id in
+  let name_to_id = StringMap.add name (id, meta) nm.name_to_id in
   let names_set = StringSet.add name nm.names_set in
   { id_to_name; name_to_id; names_set }
 
-let names_map_add (id_to_string : id -> string) (id, meta : id * meta option) (name : string)
-    (nm : names_map) : names_map =
+let names_map_add (id_to_string : id -> string) ((id, meta) : id * meta option)
+    (name : string) (nm : names_map) : names_map =
   (* Check if there is a clash *)
   names_map_check_collision id_to_string id name nm;
   (* Sanity check *)
@@ -385,8 +385,8 @@ let allow_collisions (id : id) : bool =
 
 (** The [id_to_string] function to print nice debugging messages if there are
     collisions *)
-let names_maps_add (meta : Meta.meta option) (id_to_string : id -> string) (id : id) (name : string)
-    (nm : names_maps) : names_maps =
+let names_maps_add (meta : Meta.meta option) (id_to_string : id -> string)
+    (id : id) (name : string) (nm : names_maps) : names_maps =
   (* We do not use the same name map if we allow/disallow collisions.
      We notably use it for field names: some backends like Lean can use the
      type information to disambiguate field projections.
@@ -480,8 +480,9 @@ let names_maps_add_assumed_variant (id_to_string : id -> string)
     (nm : names_maps) : names_maps =
   names_maps_add None id_to_string (VariantId (TAssumed id, variant_id)) name nm
 
-let names_maps_add_function (id_to_string : id -> string) (fid, meta : fun_id * meta option)
-    (name : string) (nm : names_maps) : names_maps =
+let names_maps_add_function (id_to_string : id -> string)
+    ((fid, meta) : fun_id * meta option) (name : string) (nm : names_maps) :
+    names_maps =
   names_maps_add meta id_to_string (FunId fid) name nm
 
 let bool_name () = if !backend = Lean then "Bool" else "bool"
@@ -660,7 +661,9 @@ let id_to_string (meta : Meta.meta option) (id : id) (ctx : extraction_ctx) :
 let ctx_add (meta : Meta.meta) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
   let id_to_string (id : id) : string = id_to_string (Some meta) id ctx in
-  let names_maps = names_maps_add (Some meta) id_to_string id name ctx.names_maps in
+  let names_maps =
+    names_maps_add (Some meta) id_to_string id name ctx.names_maps
+  in
   { ctx with names_maps }
 
 let ctx_get (meta : Meta.meta option) (id : id) (ctx : extraction_ctx) : string
@@ -1156,9 +1159,12 @@ let initialize_names_maps () : names_maps =
   in
   let assumed_functions =
     List.map
-      (fun (fid, name) -> ((FromLlbc (Pure.FunId (FAssumed fid), None), None), name))
+      (fun (fid, name) ->
+        ((FromLlbc (Pure.FunId (FAssumed fid), None), None), name))
       init.assumed_llbc_functions
-    @ List.map (fun (fid, name) -> ((Pure fid, None), name)) init.assumed_pure_functions
+    @ List.map
+        (fun (fid, name) -> ((Pure fid, None), name))
+        init.assumed_pure_functions
   in
   let nm =
     List.fold_left
