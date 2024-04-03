@@ -1702,7 +1702,6 @@ let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx)
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
       | Error -> "x")
-(* TODO : Check*)
 
 (** Generates a type variable basename. *)
 let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :
