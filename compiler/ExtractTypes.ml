@@ -433,6 +433,13 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
       End
     ]}
  *)
+
+let extract_ty_errors (fmt : F.formatter) : unit =
+  match !Config.backend with
+  | FStar | Coq -> F.pp_print_string fmt "admit"
+  | Lean -> F.pp_print_string fmt "sorry"
+  | HOL4 -> F.pp_print_string fmt "(* ERROR: could not generate the code *)"
+
 let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (ty : ty) : unit =
   let extract_rec = extract_ty meta ctx fmt no_params_tys in
@@ -566,7 +573,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
               "Trait types are not supported yet when generating code for HOL4";
             extract_trait_ref meta ctx fmt no_params_tys false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
-  | Error -> craise __FILE__ __LINE__ meta "TODO: Error message?"
+  | Error -> extract_ty_errors fmt
 
 and extract_trait_ref (meta : Meta.meta) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
