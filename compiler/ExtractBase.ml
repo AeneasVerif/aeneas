@@ -1701,7 +1701,7 @@ let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx)
           match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
-      | Error -> "@Error")
+      | Error -> "x")
 (* TODO : Check*)
 
 (** Generates a type variable basename. *)

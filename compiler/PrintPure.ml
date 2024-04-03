@@ -616,9 +616,7 @@ let rec texpression_to_string ?(metadata : Meta.meta option = None)
           let e = meta_s ^ "\n" ^ indent ^ e in
           if inside then "(" ^ e ^ ")" else e
       | MPlace _ -> "(" ^ meta_s ^ " " ^ e ^ ")")
-  | EError (meta, msg) ->
-      if Option.is_none meta then msg
-      else meta_to_string (Option.get meta) ^ " " ^ msg (* TODO formatting *)
+  | EError (_, _) -> "@Error"
 
 and app_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
     (inside : bool) (indent : string) (indent_incr : string) (app : texpression)
