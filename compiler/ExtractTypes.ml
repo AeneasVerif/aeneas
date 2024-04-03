@@ -566,6 +566,7 @@ let rec extract_ty (meta : Meta.meta) (ctx : extraction_ctx) (fmt : F.formatter)
               "Trait types are not supported yet when generating code for HOL4";
             extract_trait_ref meta ctx fmt no_params_tys false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
+  | Error -> craise __FILE__ __LINE__ meta "TODO: Error message?"
 
 and extract_trait_ref (meta : Meta.meta) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)

@@ -238,3 +238,4 @@ let rec check_texpression (meta : Meta.meta) (ctx : tc_ctx) (e : texpression) :
   | Meta (_, e_next) ->
       sanity_check __FILE__ __LINE__ (e_next.ty = e.ty) meta;
       check_texpression meta ctx e_next
+  | EError (meta, msg) -> craise_opt_meta __FILE__ __LINE__ meta msg

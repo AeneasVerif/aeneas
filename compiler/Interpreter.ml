@@ -612,7 +612,8 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
 
   (* Evaluate the function *)
   let symbolic =
-    eval_function_body config (Option.get fdef.body).body cf_finish ctx
+    try eval_function_body config (Option.get fdef.body).body cf_finish ctx
+    with CFailure (meta, msg) -> Some (Error (meta, msg))
   in
 
   (* Return *)

@@ -1,6 +1,7 @@
 let log = Logging.errors_log
 
-let meta_to_string (span : Meta.span) =
+let meta_to_string (meta : Meta.meta) =
+  let span = meta.span in
   let file = match span.file with Virtual s | Local s -> s in
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
@@ -10,7 +11,7 @@ let meta_to_string (span : Meta.span) =
 
 let format_error_message (meta : Meta.meta option) (msg : string) =
   let meta =
-    match meta with None -> "" | Some meta -> "\n" ^ meta_to_string meta.span
+    match meta with None -> "" | Some meta -> "\n" ^ meta_to_string meta
   in
   msg ^ meta
 

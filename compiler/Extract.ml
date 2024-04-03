@@ -297,6 +297,13 @@ let lets_require_wrap_in_do (meta : Meta.meta)
     - application argument: [f (exp)]
     - match/if scrutinee: [if exp then _ else _]/[match exp | _ -> _]
  *)
+
+let extract_errors (fmt : F.formatter) =
+  match !Config.backend with
+  | FStar | Coq -> F.pp_print_string fmt "admit"
+  | Lean -> F.pp_print_string fmt "sorry"
+  | HOL4 -> F.pp_print_string fmt "(* ERROR: could not generate the code *)"
+
 let rec extract_texpression (meta : Meta.meta) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (e : texpression) : unit =
   match e.e with
@@ -323,6 +330,7 @@ let rec extract_texpression (meta : Meta.meta) (ctx : extraction_ctx)
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
       craise __FILE__ __LINE__ meta "Unreachable"
+  | EError (_, _) -> extract_errors fmt
 
 (* Extract an application *or* a top-level qualif (function extraction has
  * to handle top-level qualifiers, so it seemed more natural to merge the
