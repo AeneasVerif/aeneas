@@ -20,10 +20,6 @@ REGEN_LLBC ?=
 # The path to Charon
 CHARON_HOME ?= ../charon
 
-ifeq (,$(wildcard $(CHARON_HOME)))
-  $(error The directory $$CHARON_HOME does not exist$(newline)(CHARON_HOME=$(CHARON_HOME)).)
-endif
-
 # The paths to the test directories in Charon (Aeneas will look for the .llbc
 # files in there).
 CHARON_TESTS_REGULAR_DIR ?= $(CHARON_HOME)/tests
