@@ -89,7 +89,7 @@ clean:
 
 # Test the project by translating test files to F*
 .PHONY: test
-test: test-no_nested_borrows test-paper \
+test: build-dev test-no_nested_borrows test-paper \
 	test-hashmap test-hashmap_main \
 	test-external test-constants \
 	testp-polonius_list testp-betree_main \
