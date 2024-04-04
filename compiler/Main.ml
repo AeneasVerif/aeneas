@@ -274,12 +274,17 @@ let () =
 
          (* Translate the functions *)
          Aeneas.Translate.translate_crate filename dest_dir m
-       with Errors.CFailure (meta, msg) ->
+       with Errors.CFailure (_, _) ->
          (* In theory it shouldn't happen, but there may be uncaught errors -
             note that we let the [Failure] exceptions go through (they are
             send if we use the option [-abort-on-error] *)
-         log#serror (Errors.format_error_message meta msg);
-         exit 1);
+         ());
+
+      if !Errors.error_list <> [] then (
+        List.iter
+          (fun (meta, msg) -> log#serror (Errors.format_error_message meta msg))
+          !Errors.error_list;
+        exit 1);
 
       (* Print total elapsed time *)
       log#linfo

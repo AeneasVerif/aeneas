@@ -285,6 +285,7 @@ type ty =
   | TArrow of ty * ty
   | TTraitType of trait_ref * string
       (** The string is for the name of the associated type *)
+  | Error
 
 and trait_ref = {
   trait_id : trait_instance_id;
@@ -621,6 +622,7 @@ class ['self] iter_expression_base =
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
+    method visit_meta : 'env -> Meta.meta -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_expression} visitor *)
@@ -632,6 +634,7 @@ class ['self] map_expression_base =
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
+    method visit_meta : 'env -> Meta.meta -> Meta.meta = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_expression} visitor *)
@@ -643,6 +646,7 @@ class virtual ['self] reduce_expression_base =
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
+    method visit_meta : 'env -> Meta.meta -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_expression} visitor *)
@@ -661,6 +665,9 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
 
     method visit_field_id : 'env -> field_id -> field_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_meta : 'env -> Meta.meta -> Meta.meta * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -726,6 +733,7 @@ type expression =
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
   | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
+  | EError of Meta.meta option * string
 
 and switch_body = If of texpression * texpression | Match of match_branch list
 and match_branch = { pat : typed_pattern; branch : texpression }

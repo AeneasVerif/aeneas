@@ -1981,6 +1981,9 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
   (* Return the computed information *)
   !info
 
+let translate_error (meta : Meta.meta option) (msg : string) : texpression =
+  { e = EError (meta, msg); ty = Error }
+
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
   | S.Return (ectx, opt_v) ->
@@ -2007,6 +2010,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
       *)
       translate_forward_end ectx loop_input_values e back_e ctx
   | Loop loop -> translate_loop loop ctx
+  | Error (meta, msg) -> translate_error meta msg
 
 and translate_panic (ctx : bs_ctx) : texpression =
   (* Here we use the function return type - note that it is ok because

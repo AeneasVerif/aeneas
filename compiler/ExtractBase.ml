@@ -259,7 +259,7 @@ let report_name_collision (id_to_string : id -> string)
   let meta_to_string (meta : Meta.meta option) =
     match meta with
     | None -> ""
-    | Some meta -> "\n  " ^ Errors.meta_to_string meta.span
+    | Some meta -> "\n  " ^ Errors.meta_to_string meta
   in
   let id1 = "\n- " ^ id_to_string id1 ^ meta_to_string meta1 in
   let id2 = "\n- " ^ id_to_string id2 ^ meta_to_string meta2 in
@@ -1719,7 +1719,8 @@ let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx)
       | TLiteral lty -> (
           match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
       | TArrow _ -> "f"
-      | TTraitType (_, name) -> name_from_type_ident name)
+      | TTraitType (_, name) -> name_from_type_ident name
+      | Error -> "x")
 
 (** Generates a type variable basename. *)
 let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :
