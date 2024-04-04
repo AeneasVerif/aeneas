@@ -368,4 +368,4 @@ let backend_has_tuple_projectors () =
 let use_nested_tuple_projectors = ref false
 
 (** Generate name patterns for the external definitions we encounter *)
-let extract_external_name_patterns = ref false
+let extract_external_name_patterns = ref true
