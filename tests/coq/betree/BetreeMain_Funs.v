@@ -240,11 +240,11 @@ Fixpoint betree_Node_lookup_first_message_for_key
       else (
         p <- betree_Node_lookup_first_message_for_key n1 key next_msgs;
         let (l, lookup_first_message_for_key_back) := p in
-        let back_'a :=
+        let back :=
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
             next_msgs1 <- lookup_first_message_for_key_back ret;
             Return (Betree_List_Cons (i, m) next_msgs1) in
-        Return (l, back_'a))
+        Return (l, back))
     | Betree_List_Nil => Return (Betree_List_Nil, Return)
     end
   end
@@ -440,11 +440,11 @@ Fixpoint betree_Node_lookup_first_message_after_key
       then (
         p1 <- betree_Node_lookup_first_message_after_key n1 key next_msgs;
         let (l, lookup_first_message_after_key_back) := p1 in
-        let back_'a :=
+        let back :=
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
             next_msgs1 <- lookup_first_message_after_key_back ret;
             Return (Betree_List_Cons (k, m) next_msgs1) in
-        Return (l, back_'a))
+        Return (l, back))
       else Return (Betree_List_Cons (k, m) next_msgs, Return)
     | Betree_List_Nil => Return (Betree_List_Nil, Return)
     end
@@ -550,11 +550,11 @@ Fixpoint betree_Node_lookup_mut_in_bindings
       else (
         p <- betree_Node_lookup_mut_in_bindings n1 key tl;
         let (l, lookup_mut_in_bindings_back) := p in
-        let back_'a :=
+        let back :=
           fun (ret : betree_List_t (u64 * u64)) =>
             tl1 <- lookup_mut_in_bindings_back ret;
             Return (Betree_List_Cons (i, i1) tl1) in
-        Return (l, back_'a))
+        Return (l, back))
     | Betree_List_Nil => Return (Betree_List_Nil, Return)
     end
   end

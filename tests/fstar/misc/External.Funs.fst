@@ -34,8 +34,8 @@ let custom_swap
   result (state & (t & (t -> state -> result (state & (t & t)))))
   =
   let* (st1, (x1, y1)) = core_mem_swap t x y st in
-  let back_'a = fun ret st2 -> Return (st2, (ret, y1)) in
-  Return (st1, (x1, back_'a))
+  let back = fun ret st2 -> Return (st2, (ret, y1)) in
+  Return (st1, (x1, back))
 
 (** [external::test_custom_swap]:
     Source: 'src/external.rs', lines 29:0-29:59 *)
