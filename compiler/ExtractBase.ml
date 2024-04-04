@@ -259,7 +259,7 @@ let report_name_collision (id_to_string : id -> string)
   let meta_to_string (meta : Meta.meta option) =
     match meta with
     | None -> ""
-    | Some meta -> "\n  " ^ Errors.meta_to_string meta.span
+    | Some meta -> "\n  " ^ Errors.meta_to_string meta
   in
   let id1 = "\n- " ^ id_to_string id1 ^ meta_to_string meta1 in
   let id2 = "\n- " ^ id_to_string id2 ^ meta_to_string meta2 in
