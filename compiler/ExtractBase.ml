@@ -268,9 +268,11 @@ let report_name_collision (id_to_string : id -> string)
      \"" ^ name ^ "\":" ^ id1 ^ id2
     ^ "\nYou may want to rename some of your definitions, or report an issue."
   in
-  (* If we fail hard on errors, raise an exception - we don't link this error
-     to any meta information because we already put the span information about
-     the two problematic definitions in the error message above. *)
+  (* Register the error.
+
+     We don't link this error to any meta information because we already put
+     the span information about the two problematic definitions in the error
+     message above. *)
   save_error __FILE__ __LINE__ None err
 
 let names_map_get_id_from_name (name : string) (nm : names_map) :
