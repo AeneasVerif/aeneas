@@ -311,7 +311,7 @@ let adt_variant_to_string ?(meta = None) (env : fmt_env) (adt_id : type_id)
           craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       | TResult ->
           let variant_id = Option.get variant_id in
-          if variant_id = result_return_id then "@Result::Return"
+          if variant_id = result_ok_id then "@Result::Return"
           else if variant_id = result_fail_id then "@Result::Fail"
           else
             craise_opt_meta __FILE__ __LINE__ meta
@@ -394,7 +394,7 @@ let adt_g_value_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
           craise_opt_meta __FILE__ __LINE__ meta "Unreachable"
       | TResult ->
           let variant_id = Option.get variant_id in
-          if variant_id = result_return_id then
+          if variant_id = result_ok_id then
             match field_values with
             | [ v ] -> "@Result::Return " ^ v
             | _ ->

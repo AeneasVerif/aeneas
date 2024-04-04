@@ -2853,7 +2853,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "=";
         F.pp_print_space fmt ();
         let success =
-          ctx_get_variant def.meta (TAssumed TResult) result_return_id ctx
+          ctx_get_variant def.meta (TAssumed TResult) result_ok_id ctx
         in
         F.pp_print_string fmt (success ^ " ())")
     | Coq ->
@@ -2884,11 +2884,11 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
         let success =
-          ctx_get_variant def.meta (TAssumed TResult) result_return_id ctx
+          ctx_get_variant def.meta (TAssumed TResult) result_ok_id ctx
         in
         F.pp_print_string fmt (success ^ " ())")
     | HOL4 ->
-        F.pp_print_string fmt "val _ = assert_return (";
+        F.pp_print_string fmt "val _ = assert_ok (";
         F.pp_print_string fmt "“";
         let fun_name =
           ctx_get_local_function def.meta def.def_id def.loop_id ctx

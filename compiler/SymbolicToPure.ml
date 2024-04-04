@@ -2102,7 +2102,7 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
     else output
   in
   (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-  mk_result_return_texpression ctx.meta output
+  mk_result_ok_texpression ctx.meta output
 
 and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     (ctx : bs_ctx) : texpression =
@@ -2150,8 +2150,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     else output
   in
   (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-  mk_emeta (Tag "return_with_loop")
-    (mk_result_return_texpression ctx.meta output)
+  mk_emeta (Tag "return_with_loop") (mk_result_ok_texpression ctx.meta output)
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
@@ -3226,7 +3225,7 @@ and translate_forward_end (ectx : C.eval_ctx)
 
     let state_var = List.map mk_texpression_from_var state_var in
     let ret = mk_simpl_tuple_texpression ctx.meta (state_var @ [ ret ]) in
-    let ret = mk_result_return_texpression ctx.meta ret in
+    let ret = mk_result_ok_texpression ctx.meta ret in
 
     (* Introduce all the let-bindings *)
 

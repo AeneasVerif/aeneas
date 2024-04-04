@@ -583,12 +583,12 @@ let mk_result_fail_texpression_with_error_id (meta : Meta.meta)
   let error = mk_error error in
   mk_result_fail_texpression meta error ty
 
-let mk_result_return_texpression (meta : Meta.meta) (v : texpression) :
-    texpression =
+let mk_result_ok_texpression (meta : Meta.meta) (v : texpression) : texpression
+    =
   let type_args = [ v.ty ] in
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
   let id =
-    AdtCons { adt_id = TAssumed TResult; variant_id = Some result_return_id }
+    AdtCons { adt_id = TAssumed TResult; variant_id = Some result_ok_id }
   in
   let qualif = { id; generics = mk_generic_args_from_types type_args } in
   let cons_e = Qualif qualif in
@@ -610,11 +610,9 @@ let mk_result_fail_pattern_ignore_error (ty : ty) : typed_pattern =
   let error_pat : pattern = PatDummy in
   mk_result_fail_pattern error_pat ty
 
-let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
+let mk_result_ok_pattern (v : typed_pattern) : typed_pattern =
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types [ v.ty ]) in
-  let value =
-    PatAdt { variant_id = Some result_return_id; field_values = [ v ] }
-  in
+  let value = PatAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
   { value; ty }
 
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
@@ -788,6 +786,6 @@ let opt_destruct_ret (e : texpression) : texpression option =
           ty = _;
         },
         arg )
-    when variant_id = Some result_return_id ->
+    when variant_id = Some result_ok_id ->
       Some arg
   | _ -> None

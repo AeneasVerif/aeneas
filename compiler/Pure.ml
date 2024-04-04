@@ -92,7 +92,7 @@ type assumed_ty =
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather
  * the monadic functions [return] and [fail] (makes treatment of error and
  * state-error monads more uniform) *)
-let result_return_id = VariantId.of_int 0
+let result_ok_id = VariantId.of_int 0
 let result_fail_id = VariantId.of_int 1
 let option_some_id = T.option_some_id
 let option_none_id = T.option_none_id
