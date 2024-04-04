@@ -20,12 +20,6 @@ let format_error_message_with_file_line (file : string) (line : int)
   "In file " ^ file ^ ", line " ^ string_of_int line ^ ":\n"
   ^ format_error_message meta msg
 
-let error_list_to_string (error_list : (Meta.meta option * string) list) :
-    string =
-  List.fold_left
-    (fun errors (meta, msg) -> errors ^ "\n" ^ format_error_message meta msg)
-    "" error_list
-
 exception CFailure of (Meta.meta option * string)
 
 let error_list : (Meta.meta option * string) list ref = ref []
