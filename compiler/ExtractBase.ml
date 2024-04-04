@@ -1662,9 +1662,11 @@ let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx)
   in
   (* If there is a basename, we use it *)
   match basename with
-  | Some basename ->
+  | Some basename -> (
       (* This should be a no-op *)
-      to_snake_case basename
+      match !Config.backend with
+      | Lean -> basename
+      | FStar | Coq | HOL4 -> to_snake_case basename)
   | None -> (
       (* No basename: we use the first letter of the type *)
       match ty with

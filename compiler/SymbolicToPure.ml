@@ -1502,6 +1502,15 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
         match ty with None -> None | Some ty -> Some (name, ty))
       back_vars
   in
+  (* If there is one backward function or less, we use the name "back"
+     (there is no point in using the lifetime name, and it makes the
+     code generation more stable) *)
+  let num_back_vars = List.length (List.filter_map (fun x -> x) back_vars) in
+  let back_vars =
+    if num_back_vars = 1 then
+      List.map (Option.map (fun (_, ty) -> (Some "back", ty))) back_vars
+    else back_vars
+  in
   fresh_opt_vars back_vars ctx
 
 (** IMPORTANT: do not use this one directly, but rather {!symbolic_value_to_texpression} *)
