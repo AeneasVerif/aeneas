@@ -31,10 +31,10 @@ Fixpoint get_list_at_x
     else (
       p <- get_list_at_x tl x;
       let (l, get_list_at_x_back) := p in
-      let back_'a :=
+      let back :=
         fun (ret : List_t u32) =>
           tl1 <- get_list_at_x_back ret; Return (List_Cons hd tl1) in
-      Return (l, back_'a))
+      Return (l, back))
   | List_Nil => Return (List_Nil, Return)
   end
 .

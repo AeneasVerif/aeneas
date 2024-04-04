@@ -13,8 +13,8 @@ Module Demo.
 Definition choose
   (T : Type) (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
   if b
-  then let back_'a := fun (ret : T) => Return (ret, y) in Return (x, back_'a)
-  else let back_'a := fun (ret : T) => Return (x, ret) in Return (y, back_'a)
+  then let back := fun (ret : T) => Return (ret, y) in Return (x, back)
+  else let back := fun (ret : T) => Return (x, ret) in Return (y, back)
 .
 
 (** [demo::mul3_add1]:

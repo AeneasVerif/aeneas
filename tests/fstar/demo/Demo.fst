@@ -10,8 +10,8 @@ open Primitives
 let choose
   (t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> result (t & t))) =
   if b
-  then let back_'a = fun ret -> Return (ret, y) in Return (x, back_'a)
-  else let back_'a = fun ret -> Return (x, ret) in Return (y, back_'a)
+  then let back = fun ret -> Return (ret, y) in Return (x, back)
+  else let back = fun ret -> Return (x, ret) in Return (y, back)
 
 (** [demo::mul3_add1]:
     Source: 'src/demo.rs', lines 13:0-13:31 *)

@@ -10,7 +10,8 @@ Local Open Scope Primitives_scope.
 Module External_TypesExternal_Template.
 
 (** [core::num::nonzero::NonZeroU32]
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 50:12-50:33 *)
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 50:12-50:33
+    Name pattern: core::num::nonzero::NonZeroU32 *)
 Axiom core_num_nonzero_NonZeroU32_t : Type.
 
 (** The state type used in the state-error monad *)

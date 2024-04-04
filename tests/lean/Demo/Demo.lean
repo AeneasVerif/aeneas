@@ -12,10 +12,10 @@ def choose
   Result (T × (T → Result (T × T)))
   :=
   if b
-  then let back_'a := fun ret => Result.ret (ret, y)
-       Result.ret (x, back_'a)
-  else let back_'a := fun ret => Result.ret (x, ret)
-       Result.ret (y, back_'a)
+  then let back := fun ret => Result.ret (ret, y)
+       Result.ret (x, back)
+  else let back := fun ret => Result.ret (x, ret)
+       Result.ret (y, back)
 
 /- [demo::mul3_add1]:
    Source: 'src/demo.rs', lines 13:0-13:31 -/

@@ -192,12 +192,12 @@ divergent def betree.Node.lookup_first_message_for_key
       do
       let (l, lookup_first_message_for_key_back) ←
         betree.Node.lookup_first_message_for_key key next_msgs
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let next_msgs1 ← lookup_first_message_for_key_back ret
           Result.ret (betree.List.Cons (i, m) next_msgs1)
-      Result.ret (l, back_'a)
+      Result.ret (l, back)
   | betree.List.Nil => Result.ret (betree.List.Nil, Result.ret)
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::lookup_in_bindings]:
@@ -364,12 +364,12 @@ divergent def betree.Node.lookup_first_message_after_key
       do
       let (l, lookup_first_message_after_key_back) ←
         betree.Node.lookup_first_message_after_key key next_msgs
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let next_msgs1 ← lookup_first_message_after_key_back ret
           Result.ret (betree.List.Cons (k, m) next_msgs1)
-      Result.ret (l, back_'a)
+      Result.ret (l, back)
     else Result.ret (betree.List.Cons (k, m) next_msgs, Result.ret)
   | betree.List.Nil => Result.ret (betree.List.Nil, Result.ret)
 
@@ -468,12 +468,12 @@ divergent def betree.Node.lookup_mut_in_bindings
       do
       let (l, lookup_mut_in_bindings_back) ←
         betree.Node.lookup_mut_in_bindings key tl
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let tl1 ← lookup_mut_in_bindings_back ret
           Result.ret (betree.List.Cons (i, i1) tl1)
-      Result.ret (l, back_'a)
+      Result.ret (l, back)
   | betree.List.Nil => Result.ret (betree.List.Nil, Result.ret)
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::apply_to_leaf]:

@@ -195,11 +195,11 @@ let rec betree_Node_lookup_first_message_for_key
     else
       let* (l, lookup_first_message_for_key_back) =
         betree_Node_lookup_first_message_for_key key next_msgs in
-      let back_'a =
+      let back =
         fun ret ->
           let* next_msgs1 = lookup_first_message_for_key_back ret in
           Return (Betree_List_Cons (i, m) next_msgs1) in
-      Return (l, back_'a)
+      Return (l, back)
   | Betree_List_Nil -> Return (Betree_List_Nil, Return)
   end
 
@@ -352,11 +352,11 @@ let rec betree_Node_lookup_first_message_after_key
     then
       let* (l, lookup_first_message_after_key_back) =
         betree_Node_lookup_first_message_after_key key next_msgs in
-      let back_'a =
+      let back =
         fun ret ->
           let* next_msgs1 = lookup_first_message_after_key_back ret in
           Return (Betree_List_Cons (k, m) next_msgs1) in
-      Return (l, back_'a)
+      Return (l, back)
     else Return (Betree_List_Cons (k, m) next_msgs, Return)
   | Betree_List_Nil -> Return (Betree_List_Nil, Return)
   end
@@ -453,11 +453,11 @@ let rec betree_Node_lookup_mut_in_bindings
     else
       let* (l, lookup_mut_in_bindings_back) =
         betree_Node_lookup_mut_in_bindings key tl in
-      let back_'a =
+      let back =
         fun ret ->
           let* tl1 = lookup_mut_in_bindings_back ret in
           Return (Betree_List_Cons (i, i1) tl1) in
-      Return (l, back_'a)
+      Return (l, back)
   | Betree_List_Nil -> Return (Betree_List_Nil, Return)
   end
 
