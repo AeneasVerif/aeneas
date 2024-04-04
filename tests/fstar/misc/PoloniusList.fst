@@ -23,10 +23,10 @@ let rec get_list_at_x
     then Return (List_Cons hd tl, Return)
     else
       let* (l, get_list_at_x_back) = get_list_at_x tl x in
-      let back_'a =
+      let back =
         fun ret ->
           let* tl1 = get_list_at_x_back ret in Return (List_Cons hd tl1) in
-      Return (l, back_'a)
+      Return (l, back)
   | List_Nil -> Return (List_Nil, Return)
   end
 

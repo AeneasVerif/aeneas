@@ -287,14 +287,13 @@ let rec hashMap_get_mut_in_list_loop
   | List_Cons ckey cvalue tl ->
     if ckey = key
     then
-      let back_'a = fun ret -> Return (List_Cons ckey ret tl) in
-      Return (cvalue, back_'a)
+      let back = fun ret -> Return (List_Cons ckey ret tl) in
+      Return (cvalue, back)
     else
-      let* (x, back_'a) = hashMap_get_mut_in_list_loop t tl key in
-      let back_'a1 =
-        fun ret -> let* tl1 = back_'a ret in Return (List_Cons ckey cvalue tl1)
-        in
-      Return (x, back_'a1)
+      let* (x, back) = hashMap_get_mut_in_list_loop t tl key in
+      let back1 =
+        fun ret -> let* tl1 = back ret in Return (List_Cons ckey cvalue tl1) in
+      Return (x, back1)
   | List_Nil -> Fail Failure
   end
 
@@ -320,12 +319,12 @@ let hashMap_get_mut
       (core_slice_index_SliceIndexUsizeSliceTInst (list_t t)) self.slots
       hash_mod in
   let* (x, get_mut_in_list_back) = hashMap_get_mut_in_list t l key in
-  let back_'a =
+  let back =
     fun ret ->
       let* l1 = get_mut_in_list_back ret in
       let* v = index_mut_back l1 in
       Return { self with slots = v } in
-  Return (x, back_'a)
+  Return (x, back)
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
     Source: 'src/hashmap.rs', lines 265:4-291:5 *)

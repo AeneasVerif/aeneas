@@ -287,17 +287,17 @@ divergent def HashMap.get_mut_in_list_loop
   | List.Cons ckey cvalue tl =>
     if ckey = key
     then
-      let back_'a := fun ret => Result.ret (List.Cons ckey ret tl)
-      Result.ret (cvalue, back_'a)
+      let back := fun ret => Result.ret (List.Cons ckey ret tl)
+      Result.ret (cvalue, back)
     else
       do
-      let (t, back_'a) ← HashMap.get_mut_in_list_loop T tl key
-      let back_'a1 :=
+      let (t, back) ← HashMap.get_mut_in_list_loop T tl key
+      let back1 :=
         fun ret =>
           do
-          let tl1 ← back_'a ret
+          let tl1 ← back ret
           Result.ret (List.Cons ckey cvalue tl1)
-      Result.ret (t, back_'a1)
+      Result.ret (t, back1)
   | List.Nil => Result.fail .panic
 
 /- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
@@ -322,13 +322,13 @@ def HashMap.get_mut
     alloc.vec.Vec.index_mut (List T) Usize
       (core.slice.index.SliceIndexUsizeSliceTInst (List T)) self.slots hash_mod
   let (t, get_mut_in_list_back) ← HashMap.get_mut_in_list T l key
-  let back_'a :=
+  let back :=
     fun ret =>
       do
       let l1 ← get_mut_in_list_back ret
       let v ← index_mut_back l1
       Result.ret { self with slots := v }
-  Result.ret (t, back_'a)
+  Result.ret (t, back)
 
 /- [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
    Source: 'src/hashmap.rs', lines 265:4-291:5 -/

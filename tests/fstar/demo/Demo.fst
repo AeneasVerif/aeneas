@@ -10,8 +10,8 @@ open Primitives
 let choose
   (t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> result (t & t))) =
   if b
-  then let back_'a = fun ret -> Return (ret, y) in Return (x, back_'a)
-  else let back_'a = fun ret -> Return (x, ret) in Return (y, back_'a)
+  then let back = fun ret -> Return (ret, y) in Return (x, back)
+  else let back = fun ret -> Return (x, ret) in Return (y, back)
 
 (** [demo::mul2_add1]:
     Source: 'src/demo.rs', lines 13:0-13:31 *)
@@ -66,15 +66,14 @@ let rec list_nth_mut
     | CList_CCons x tl ->
       if i = 0
       then
-        let back_'a = fun ret -> Return (CList_CCons ret tl) in
-        Return (x, back_'a)
+        let back = fun ret -> Return (CList_CCons ret tl) in Return (x, back)
       else
         let* i1 = u32_sub i 1 in
         let* (x1, list_nth_mut_back) = list_nth_mut t n1 tl i1 in
-        let back_'a =
+        let back =
           fun ret ->
             let* tl1 = list_nth_mut_back ret in Return (CList_CCons x tl1) in
-        Return (x1, back_'a)
+        Return (x1, back)
     | CList_CNil -> Fail Failure
     end
 
@@ -92,14 +91,13 @@ let rec list_nth_mut1_loop
     | CList_CCons x tl ->
       if i = 0
       then
-        let back_'a = fun ret -> Return (CList_CCons ret tl) in
-        Return (x, back_'a)
+        let back = fun ret -> Return (CList_CCons ret tl) in Return (x, back)
       else
         let* i1 = u32_sub i 1 in
-        let* (x1, back_'a) = list_nth_mut1_loop t n1 tl i1 in
-        let back_'a1 =
-          fun ret -> let* tl1 = back_'a ret in Return (CList_CCons x tl1) in
-        Return (x1, back_'a1)
+        let* (x1, back) = list_nth_mut1_loop t n1 tl i1 in
+        let back1 =
+          fun ret -> let* tl1 = back ret in Return (CList_CCons x tl1) in
+        Return (x1, back1)
     | CList_CNil -> Fail Failure
     end
 
@@ -135,10 +133,10 @@ let rec list_tail
     begin match l with
     | CList_CCons x tl ->
       let* (c, list_tail_back) = list_tail t n1 tl in
-      let back_'a =
+      let back =
         fun ret -> let* tl1 = list_tail_back ret in Return (CList_CCons x tl1)
         in
-      Return (c, back_'a)
+      Return (c, back)
     | CList_CNil -> Return (CList_CNil, Return)
     end
 

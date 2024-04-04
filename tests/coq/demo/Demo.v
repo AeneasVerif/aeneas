@@ -13,8 +13,8 @@ Module Demo.
 Definition choose
   (T : Type) (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
   if b
-  then let back_'a := fun (ret : T) => Return (ret, y) in Return (x, back_'a)
-  else let back_'a := fun (ret : T) => Return (x, ret) in Return (y, back_'a)
+  then let back := fun (ret : T) => Return (ret, y) in Return (x, back)
+  else let back := fun (ret : T) => Return (x, ret) in Return (y, back)
 .
 
 (** [demo::mul2_add1]:
@@ -79,16 +79,16 @@ Fixpoint list_nth_mut
     | CList_CCons x tl =>
       if i s= 0%u32
       then
-        let back_'a := fun (ret : T) => Return (CList_CCons ret tl) in
-        Return (x, back_'a)
+        let back := fun (ret : T) => Return (CList_CCons ret tl) in
+        Return (x, back)
       else (
         i1 <- u32_sub i 1%u32;
         p <- list_nth_mut T n1 tl i1;
         let (t, list_nth_mut_back) := p in
-        let back_'a :=
+        let back :=
           fun (ret : T) =>
             tl1 <- list_nth_mut_back ret; Return (CList_CCons x tl1) in
-        Return (t, back_'a))
+        Return (t, back))
     | CList_CNil => Fail_ Failure
     end
   end
@@ -107,15 +107,15 @@ Fixpoint list_nth_mut1_loop
     | CList_CCons x tl =>
       if i s= 0%u32
       then
-        let back_'a := fun (ret : T) => Return (CList_CCons ret tl) in
-        Return (x, back_'a)
+        let back := fun (ret : T) => Return (CList_CCons ret tl) in
+        Return (x, back)
       else (
         i1 <- u32_sub i 1%u32;
         p <- list_nth_mut1_loop T n1 tl i1;
-        let (t, back_'a) := p in
-        let back_'a1 :=
-          fun (ret : T) => tl1 <- back_'a ret; Return (CList_CCons x tl1) in
-        Return (t, back_'a1))
+        let (t, back) := p in
+        let back1 :=
+          fun (ret : T) => tl1 <- back ret; Return (CList_CCons x tl1) in
+        Return (t, back1))
     | CList_CNil => Fail_ Failure
     end
   end
@@ -155,10 +155,10 @@ Fixpoint list_tail
     | CList_CCons t tl =>
       p <- list_tail T n1 tl;
       let (c, list_tail_back) := p in
-      let back_'a :=
+      let back :=
         fun (ret : CList_t T) =>
           tl1 <- list_tail_back ret; Return (CList_CCons t tl1) in
-      Return (c, back_'a)
+      Return (c, back)
     | CList_CNil => Return (CList_CNil, Return)
     end
   end

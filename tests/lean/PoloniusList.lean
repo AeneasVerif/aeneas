@@ -24,12 +24,12 @@ divergent def get_list_at_x
     else
       do
       let (l, get_list_at_x_back) ← get_list_at_x tl x
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let tl1 ← get_list_at_x_back ret
           Result.ret (List.Cons hd tl1)
-      Result.ret (l, back_'a)
+      Result.ret (l, back)
   | List.Nil => Result.ret (List.Nil, Result.ret)
 
 end polonius_list
