@@ -1499,8 +1499,26 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
   let back_vars =
     List.map
       (fun (name, ty) ->
-        match ty with None -> None | Some ty -> Some (name, ty))
+        match ty with
+        | None -> None
+        | Some ty ->
+            (* If the type is not an arrow type, don't use the name "back"
+               (it is a backward function with no inputs, that is to say a
+               value) *)
+            let name = if is_arrow_ty ty then name else None in
+            Some (name, ty))
       back_vars
+  in
+  (* If there is one backward function or less, we use the name "back"
+     (there is no point in using the lifetime name, and it makes the
+     code generation more stable) *)
+  let num_back_vars = List.length (List.filter_map (fun x -> x) back_vars) in
+  let back_vars =
+    if num_back_vars = 1 then
+      List.map
+        (Option.map (fun (name, ty) -> (Option.map (fun _ -> "back") name, ty)))
+        back_vars
+    else back_vars
   in
   fresh_opt_vars back_vars ctx
 
@@ -2244,15 +2262,14 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                  (fun ty ->
                    match ty with
                    | None -> None
-                   | Some (back_sg, ty) ->
-                       (* We insert a name for the variable only if the function
-                          can fail: if it can fail, it means the call returns a backward
-                          function. Otherwise, it directly returns the value given
-                          back by the backward function, which means we shouldn't
-                          give it a name like "back..." (it doesn't make sense) *)
+                   | Some (_back_sg, ty) ->
+                       (* We insert a name for the variable only if the type
+                          is an arrow type. If it is not, it means the backward
+                          function is degenerate (it takes no inputs) so it is
+                          not a function anymore but a value: it doesn't make
+                          sense to use a name like "back...". *)
                        let name =
-                         if back_sg.effect_info.can_fail then Some back_fun_name
-                         else None
+                         if is_arrow_ty ty then Some back_fun_name else None
                        in
                        Some (name, ty))
                  back_tys)

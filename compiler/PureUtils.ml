@@ -75,10 +75,15 @@ let inputs_info_is_wf (info : inputs_info) : bool =
 let fun_sig_info_is_wf (info : fun_sig_info) : bool =
   inputs_info_is_wf info.fwd_info
 
+let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
+  match ty with TArrow (arg_ty, ret_ty) -> Some (arg_ty, ret_ty) | _ -> None
+
+let is_arrow_ty (ty : ty) : bool = Option.is_some (opt_dest_arrow_ty ty)
+
 let dest_arrow_ty (meta : Meta.meta) (ty : ty) : ty * ty =
-  match ty with
-  | TArrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
-  | _ -> craise __FILE__ __LINE__ meta "Not an arrow type"
+  match opt_dest_arrow_ty ty with
+  | Some (arg_ty, ret_ty) -> (arg_ty, ret_ty)
+  | None -> craise __FILE__ __LINE__ meta "Not an arrow type"
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with

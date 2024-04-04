@@ -104,13 +104,13 @@ Definition hashmap_HashMap_clear
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) :
   result (hashmap_HashMap_t T)
   :=
-  back <- hashmap_HashMap_clear_loop T n self.(hashmap_HashMap_slots) 0%usize;
+  hm <- hashmap_HashMap_clear_loop T n self.(hashmap_HashMap_slots) 0%usize;
   Return
     {|
       hashmap_HashMap_num_entries := 0%usize;
       hashmap_HashMap_max_load_factor := self.(hashmap_HashMap_max_load_factor);
       hashmap_HashMap_max_load := self.(hashmap_HashMap_max_load);
-      hashmap_HashMap_slots := back
+      hashmap_HashMap_slots := hm
     |}
 .
 
@@ -136,8 +136,8 @@ Fixpoint hashmap_HashMap_insert_in_list_loop
       then Return (false, Hashmap_List_Cons ckey value tl)
       else (
         p <- hashmap_HashMap_insert_in_list_loop T n1 key value tl;
-        let (b, back) := p in
-        Return (b, Hashmap_List_Cons ckey cvalue back))
+        let (b, tl1) := p in
+        Return (b, Hashmap_List_Cons ckey cvalue tl1))
     | Hashmap_List_Nil =>
       Return (true, Hashmap_List_Cons key value Hashmap_List_Nil)
     end
@@ -398,16 +398,15 @@ Fixpoint hashmap_HashMap_get_mut_in_list_loop
     | Hashmap_List_Cons ckey cvalue tl =>
       if ckey s= key
       then
-        let back_'a := fun (ret : T) => Return (Hashmap_List_Cons ckey ret tl)
-          in
-        Return (cvalue, back_'a)
+        let back := fun (ret : T) => Return (Hashmap_List_Cons ckey ret tl) in
+        Return (cvalue, back)
       else (
         p <- hashmap_HashMap_get_mut_in_list_loop T n1 tl key;
-        let (t, back_'a) := p in
-        let back_'a1 :=
+        let (t, back) := p in
+        let back1 :=
           fun (ret : T) =>
-            tl1 <- back_'a ret; Return (Hashmap_List_Cons ckey cvalue tl1) in
-        Return (t, back_'a1))
+            tl1 <- back ret; Return (Hashmap_List_Cons ckey cvalue tl1) in
+        Return (t, back1))
     | Hashmap_List_Nil => Fail_ Failure
     end
   end
@@ -438,7 +437,7 @@ Definition hashmap_HashMap_get_mut
   let (l, index_mut_back) := p in
   p1 <- hashmap_HashMap_get_mut_in_list T n l key;
   let (t, get_mut_in_list_back) := p1 in
-  let back_'a :=
+  let back :=
     fun (ret : T) =>
       l1 <- get_mut_in_list_back ret;
       v <- index_mut_back l1;
@@ -450,7 +449,7 @@ Definition hashmap_HashMap_get_mut
           hashmap_HashMap_max_load := self.(hashmap_HashMap_max_load);
           hashmap_HashMap_slots := v
         |} in
-  Return (t, back_'a)
+  Return (t, back)
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]: loop 0:
@@ -475,8 +474,8 @@ Fixpoint hashmap_HashMap_remove_from_list_loop
         end
       else (
         p <- hashmap_HashMap_remove_from_list_loop T n1 key tl;
-        let (o, back) := p in
-        Return (o, Hashmap_List_Cons ckey t back))
+        let (o, tl1) := p in
+        Return (o, Hashmap_List_Cons ckey t tl1))
     | Hashmap_List_Nil => Return (None, Hashmap_List_Nil)
     end
   end

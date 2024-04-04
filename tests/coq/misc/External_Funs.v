@@ -46,8 +46,8 @@ Definition custom_swap
   p <- core_mem_swap T x y st;
   let (st1, p1) := p in
   let (x1, y1) := p1 in
-  let back_'a := fun (ret : T) (st2 : state) => Return (st2, (ret, y1)) in
-  Return (st1, (x1, back_'a))
+  let back := fun (ret : T) (st2 : state) => Return (st2, (ret, y1)) in
+  Return (st1, (x1, back))
 .
 
 (** [external::test_custom_swap]:

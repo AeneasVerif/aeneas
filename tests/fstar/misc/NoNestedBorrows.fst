@@ -291,8 +291,8 @@ let _ = assert_norm (test_split_list = Return ())
 let choose
   (t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> result (t & t))) =
   if b
-  then let back_'a = fun ret -> Return (ret, y) in Return (x, back_'a)
-  else let back_'a = fun ret -> Return (x, ret) in Return (y, back_'a)
+  then let back = fun ret -> Return (ret, y) in Return (x, back)
+  else let back = fun ret -> Return (x, ret) in Return (y, back)
 
 (** [no_nested_borrows::choose_test]:
     Source: 'src/no_nested_borrows.rs', lines 282:0-282:20 *)
@@ -355,15 +355,14 @@ let rec list_nth_mut
   begin match l with
   | List_Cons x tl ->
     if i = 0
-    then
-      let back_'a = fun ret -> Return (List_Cons ret tl) in Return (x, back_'a)
+    then let back = fun ret -> Return (List_Cons ret tl) in Return (x, back)
     else
       let* i1 = u32_sub i 1 in
       let* (x1, list_nth_mut_back) = list_nth_mut t tl i1 in
-      let back_'a =
+      let back =
         fun ret -> let* tl1 = list_nth_mut_back ret in Return (List_Cons x tl1)
         in
-      Return (x1, back_'a)
+      Return (x1, back)
   | List_Nil -> Fail Failure
   end
 

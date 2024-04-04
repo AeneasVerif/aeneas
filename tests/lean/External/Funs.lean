@@ -39,8 +39,8 @@ def custom_swap
   :=
   do
   let (st1, (x1, y1)) ← core.mem.swap T x y st
-  let back_'a := fun ret st2 => Result.ret (st2, (ret, y1))
-  Result.ret (st1, (x1, back_'a))
+  let back := fun ret st2 => Result.ret (st2, (ret, y1))
+  Result.ret (st1, (x1, back))
 
 /- [external::test_custom_swap]:
    Source: 'src/external.rs', lines 29:0-29:59 -/

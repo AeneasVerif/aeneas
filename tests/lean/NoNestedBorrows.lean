@@ -331,10 +331,10 @@ def choose
   Result (T × (T → Result (T × T)))
   :=
   if b
-  then let back_'a := fun ret => Result.ret (ret, y)
-       Result.ret (x, back_'a)
-  else let back_'a := fun ret => Result.ret (x, ret)
-       Result.ret (y, back_'a)
+  then let back := fun ret => Result.ret (ret, y)
+       Result.ret (x, back)
+  else let back := fun ret => Result.ret (x, ret)
+       Result.ret (y, back)
 
 /- [no_nested_borrows::choose_test]:
    Source: 'src/no_nested_borrows.rs', lines 282:0-282:20 -/
@@ -406,18 +406,18 @@ divergent def list_nth_mut
   | List.Cons x tl =>
     if i = 0#u32
     then
-      let back_'a := fun ret => Result.ret (List.Cons ret tl)
-      Result.ret (x, back_'a)
+      let back := fun ret => Result.ret (List.Cons ret tl)
+      Result.ret (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut T tl i1
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let tl1 ← list_nth_mut_back ret
           Result.ret (List.Cons x tl1)
-      Result.ret (t, back_'a)
+      Result.ret (t, back)
   | List.Nil => Result.fail .panic
 
 /- [no_nested_borrows::list_rev_aux]:

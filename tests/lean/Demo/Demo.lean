@@ -12,10 +12,10 @@ def choose
   Result (T × (T → Result (T × T)))
   :=
   if b
-  then let back_'a := fun ret => Result.ret (ret, y)
-       Result.ret (x, back_'a)
-  else let back_'a := fun ret => Result.ret (x, ret)
-       Result.ret (y, back_'a)
+  then let back := fun ret => Result.ret (ret, y)
+       Result.ret (x, back)
+  else let back := fun ret => Result.ret (x, ret)
+       Result.ret (y, back)
 
 /- [demo::mul2_add1]:
    Source: 'src/demo.rs', lines 13:0-13:31 -/
@@ -73,18 +73,18 @@ divergent def list_nth_mut
   | CList.CCons x tl =>
     if i = 0#u32
     then
-      let back_'a := fun ret => Result.ret (CList.CCons ret tl)
-      Result.ret (x, back_'a)
+      let back := fun ret => Result.ret (CList.CCons ret tl)
+      Result.ret (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut T tl i1
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let tl1 ← list_nth_mut_back ret
           Result.ret (CList.CCons x tl1)
-      Result.ret (t, back_'a)
+      Result.ret (t, back)
   | CList.CNil => Result.fail .panic
 
 /- [demo::list_nth_mut1]: loop 0:
@@ -97,17 +97,17 @@ divergent def list_nth_mut1_loop
   | CList.CCons x tl =>
     if i = 0#u32
     then
-      let back_'a := fun ret => Result.ret (CList.CCons ret tl)
-      Result.ret (x, back_'a)
+      let back := fun ret => Result.ret (CList.CCons ret tl)
+      Result.ret (x, back)
     else
       do
       let i1 ← i - 1#u32
-      let (t, back_'a) ← list_nth_mut1_loop T tl i1
-      let back_'a1 :=
+      let (t, back) ← list_nth_mut1_loop T tl i1
+      let back1 :=
         fun ret => do
-                   let tl1 ← back_'a ret
+                   let tl1 ← back ret
                    Result.ret (CList.CCons x tl1)
-      Result.ret (t, back_'a1)
+      Result.ret (t, back1)
   | CList.CNil => Result.fail .panic
 
 /- [demo::list_nth_mut1]:
@@ -138,12 +138,12 @@ divergent def list_tail
   | CList.CCons t tl =>
     do
     let (c, list_tail_back) ← list_tail T tl
-    let back_'a :=
+    let back :=
       fun ret =>
         do
         let tl1 ← list_tail_back ret
         Result.ret (CList.CCons t tl1)
-    Result.ret (c, back_'a)
+    Result.ret (c, back)
   | CList.CNil => Result.ret (CList.CNil, Result.ret)
 
 /- Trait declaration: [demo::Counter]

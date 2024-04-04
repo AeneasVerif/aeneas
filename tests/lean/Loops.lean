@@ -295,22 +295,22 @@ divergent def list_nth_mut_loop_pair_loop
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then
-        let back_'a := fun ret => Result.ret (List.Cons ret tl0)
-        let back_'b := fun ret => Result.ret (List.Cons ret tl1)
-        Result.ret ((x0, x1), back_'a, back_'b)
+        let back'a := fun ret => Result.ret (List.Cons ret tl0)
+        let back'b := fun ret => Result.ret (List.Cons ret tl1)
+        Result.ret ((x0, x1), back'a, back'b)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back_'a, back_'b) ← list_nth_mut_loop_pair_loop T tl0 tl1 i1
-        let back_'a1 :=
+        let (p, back'a, back'b) ← list_nth_mut_loop_pair_loop T tl0 tl1 i1
+        let back'a1 :=
           fun ret => do
-                     let tl01 ← back_'a ret
+                     let tl01 ← back'a ret
                      Result.ret (List.Cons x0 tl01)
-        let back_'b1 :=
+        let back'b1 :=
           fun ret => do
-                     let tl11 ← back_'b ret
+                     let tl11 ← back'b ret
                      Result.ret (List.Cons x1 tl11)
-        Result.ret (p, back_'a1, back_'b1)
+        Result.ret (p, back'a1, back'b1)
     | List.Nil => Result.fail .panic
   | List.Nil => Result.fail .panic
 
@@ -356,21 +356,21 @@ divergent def list_nth_mut_loop_pair_merge_loop
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then
-        let back_'a :=
+        let back :=
           fun ret =>
             let (t, t1) := ret
             Result.ret (List.Cons t tl0, List.Cons t1 tl1)
-        Result.ret ((x0, x1), back_'a)
+        Result.ret ((x0, x1), back)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back_'a) ← list_nth_mut_loop_pair_merge_loop T tl0 tl1 i1
-        let back_'a1 :=
+        let (p, back) ← list_nth_mut_loop_pair_merge_loop T tl0 tl1 i1
+        let back1 :=
           fun ret =>
             do
-            let (tl01, tl11) ← back_'a ret
+            let (tl01, tl11) ← back ret
             Result.ret (List.Cons x0 tl01, List.Cons x1 tl11)
-        Result.ret (p, back_'a1)
+        Result.ret (p, back1)
     | List.Nil => Result.fail .panic
   | List.Nil => Result.fail .panic
 
@@ -417,17 +417,17 @@ divergent def list_nth_mut_shared_loop_pair_loop
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then
-        let back_'a := fun ret => Result.ret (List.Cons ret tl0)
-        Result.ret ((x0, x1), back_'a)
+        let back := fun ret => Result.ret (List.Cons ret tl0)
+        Result.ret ((x0, x1), back)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back_'a) ← list_nth_mut_shared_loop_pair_loop T tl0 tl1 i1
-        let back_'a1 :=
+        let (p, back) ← list_nth_mut_shared_loop_pair_loop T tl0 tl1 i1
+        let back1 :=
           fun ret => do
-                     let tl01 ← back_'a ret
+                     let tl01 ← back ret
                      Result.ret (List.Cons x0 tl01)
-        Result.ret (p, back_'a1)
+        Result.ret (p, back1)
     | List.Nil => Result.fail .panic
   | List.Nil => Result.fail .panic
 
@@ -451,18 +451,17 @@ divergent def list_nth_mut_shared_loop_pair_merge_loop
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then
-        let back_'a := fun ret => Result.ret (List.Cons ret tl0)
-        Result.ret ((x0, x1), back_'a)
+        let back := fun ret => Result.ret (List.Cons ret tl0)
+        Result.ret ((x0, x1), back)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back_'a) ←
-          list_nth_mut_shared_loop_pair_merge_loop T tl0 tl1 i1
-        let back_'a1 :=
+        let (p, back) ← list_nth_mut_shared_loop_pair_merge_loop T tl0 tl1 i1
+        let back1 :=
           fun ret => do
-                     let tl01 ← back_'a ret
+                     let tl01 ← back ret
                      Result.ret (List.Cons x0 tl01)
-        Result.ret (p, back_'a1)
+        Result.ret (p, back1)
     | List.Nil => Result.fail .panic
   | List.Nil => Result.fail .panic
 
@@ -486,17 +485,17 @@ divergent def list_nth_shared_mut_loop_pair_loop
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then
-        let back_'b := fun ret => Result.ret (List.Cons ret tl1)
-        Result.ret ((x0, x1), back_'b)
+        let back := fun ret => Result.ret (List.Cons ret tl1)
+        Result.ret ((x0, x1), back)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back_'b) ← list_nth_shared_mut_loop_pair_loop T tl0 tl1 i1
-        let back_'b1 :=
+        let (p, back) ← list_nth_shared_mut_loop_pair_loop T tl0 tl1 i1
+        let back1 :=
           fun ret => do
-                     let tl11 ← back_'b ret
+                     let tl11 ← back ret
                      Result.ret (List.Cons x1 tl11)
-        Result.ret (p, back_'b1)
+        Result.ret (p, back1)
     | List.Nil => Result.fail .panic
   | List.Nil => Result.fail .panic
 
@@ -520,18 +519,17 @@ divergent def list_nth_shared_mut_loop_pair_merge_loop
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then
-        let back_'a := fun ret => Result.ret (List.Cons ret tl1)
-        Result.ret ((x0, x1), back_'a)
+        let back := fun ret => Result.ret (List.Cons ret tl1)
+        Result.ret ((x0, x1), back)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back_'a) ←
-          list_nth_shared_mut_loop_pair_merge_loop T tl0 tl1 i1
-        let back_'a1 :=
+        let (p, back) ← list_nth_shared_mut_loop_pair_merge_loop T tl0 tl1 i1
+        let back1 :=
           fun ret => do
-                     let tl11 ← back_'a ret
+                     let tl11 ← back ret
                      Result.ret (List.Cons x1 tl11)
-        Result.ret (p, back_'a1)
+        Result.ret (p, back1)
     | List.Nil => Result.fail .panic
   | List.Nil => Result.fail .panic
 
