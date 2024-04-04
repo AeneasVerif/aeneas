@@ -1499,7 +1499,14 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
   let back_vars =
     List.map
       (fun (name, ty) ->
-        match ty with None -> None | Some ty -> Some (name, ty))
+        match ty with
+        | None -> None
+        | Some ty ->
+            (* If the type is not an arrow type, don't use the name "back"
+               (it is a backward function with no inputs, that is to say a
+               value) *)
+            let name = if is_arrow_ty ty then name else None in
+            Some (name, ty))
       back_vars
   in
   (* If there is one backward function or less, we use the name "back"
@@ -1508,7 +1515,9 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
   let num_back_vars = List.length (List.filter_map (fun x -> x) back_vars) in
   let back_vars =
     if num_back_vars = 1 then
-      List.map (Option.map (fun (_, ty) -> (Some "back", ty))) back_vars
+      List.map
+        (Option.map (fun (name, ty) -> (Option.map (fun _ -> "back") name, ty)))
+        back_vars
     else back_vars
   in
   fresh_opt_vars back_vars ctx
