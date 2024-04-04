@@ -2258,15 +2258,14 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                  (fun ty ->
                    match ty with
                    | None -> None
-                   | Some (back_sg, ty) ->
-                       (* We insert a name for the variable only if the function
-                          can fail: if it can fail, it means the call returns a backward
-                          function. Otherwise, it directly returns the value given
-                          back by the backward function, which means we shouldn't
-                          give it a name like "back..." (it doesn't make sense) *)
+                   | Some (_back_sg, ty) ->
+                       (* We insert a name for the variable only if the type
+                          is an arrow type. If it is not, it means the backward
+                          function is degenerate (it takes no inputs) so it is
+                          not a function anymore but a value: it doesn't make
+                          sense to use a name like "back...". *)
                        let name =
-                         if back_sg.effect_info.can_fail then Some back_fun_name
-                         else None
+                         if is_arrow_ty ty then Some back_fun_name else None
                        in
                        Some (name, ty))
                  back_tys)
