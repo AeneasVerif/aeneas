@@ -254,28 +254,34 @@ let empty_names_map : names_map =
 
 (** Small helper to report name collision *)
 let report_name_collision (id_to_string : id -> string)
-    ((id1, meta) : id * Meta.meta option) (id2 : id) (name : string) : unit =
-  let id1 = "\n- " ^ id_to_string id1 in
-  let id2 = "\n- " ^ id_to_string id2 in
+    ((id1, meta1) : id * Meta.meta option) (id2 : id) (meta2 : Meta.meta option)
+    (name : string) : unit =
+  let meta_to_string (meta : Meta.meta option) =
+    match meta with
+    | None -> ""
+    | Some meta -> "\n  " ^ Errors.meta_to_string meta.span
+  in
+  let id1 = "\n- " ^ id_to_string id1 ^ meta_to_string meta1 in
+  let id2 = "\n- " ^ id_to_string id2 ^ meta_to_string meta2 in
   let err =
     "Name clash detected: the following identifiers are bound to the same name \
      \"" ^ name ^ "\":" ^ id1 ^ id2
     ^ "\nYou may want to rename some of your definitions, or report an issue."
   in
   (* If we fail hard on errors, raise an exception *)
-  save_error __FILE__ __LINE__ meta err
+  save_error __FILE__ __LINE__ meta1 err
 
 let names_map_get_id_from_name (name : string) (nm : names_map) :
     (id * Meta.meta option) option =
   StringMap.find_opt name nm.name_to_id
 
 let names_map_check_collision (id_to_string : id -> string) (id : id)
-    (name : string) (nm : names_map) : unit =
+    (meta : Meta.meta option) (name : string) (nm : names_map) : unit =
   match names_map_get_id_from_name name nm with
   | None -> () (* Ok *)
   | Some clash ->
       (* There is a clash: print a nice debugging message for the user *)
-      report_name_collision id_to_string clash id name
+      report_name_collision id_to_string clash id meta name
 
 (** Insert bindings in a names map without checking for collisions *)
 let names_map_add_unchecked ((id, meta) : id * Meta.meta option) (name : string)
@@ -289,7 +295,7 @@ let names_map_add_unchecked ((id, meta) : id * Meta.meta option) (name : string)
 let names_map_add (id_to_string : id -> string) ((id, meta) : id * meta option)
     (name : string) (nm : names_map) : names_map =
   (* Check if there is a clash *)
-  names_map_check_collision id_to_string id name nm;
+  names_map_check_collision id_to_string id meta name nm;
   (* Sanity check *)
   (if StringSet.mem name nm.names_set then
      let err =
@@ -385,8 +391,8 @@ let allow_collisions (id : id) : bool =
 
 (** The [id_to_string] function to print nice debugging messages if there are
     collisions *)
-let names_maps_add (meta : Meta.meta option) (id_to_string : id -> string)
-    (id : id) (name : string) (nm : names_maps) : names_maps =
+let names_maps_add (id_to_string : id -> string) (id : id)
+    (meta : Meta.meta option) (name : string) (nm : names_maps) : names_maps =
   (* We do not use the same name map if we allow/disallow collisions.
      We notably use it for field names: some backends like Lean can use the
      type information to disambiguate field projections.
@@ -401,7 +407,7 @@ let names_maps_add (meta : Meta.meta option) (id_to_string : id -> string)
   *)
   if allow_collisions id then (
     (* Check with the ids which are considered to be strict on collisions *)
-    names_map_check_collision id_to_string id name nm.strict_names_map;
+    names_map_check_collision id_to_string id meta name nm.strict_names_map;
     {
       nm with
       unsafe_names_map = unsafe_names_map_add id name nm.unsafe_names_map;
@@ -469,21 +475,21 @@ type names_map_init = {
 
 let names_maps_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
     (name : string) (nm : names_maps) : names_maps =
-  names_maps_add None id_to_string (TypeId (TAssumed id)) name nm
+  names_maps_add id_to_string (TypeId (TAssumed id)) None name nm
 
 let names_maps_add_assumed_struct (id_to_string : id -> string)
     (id : assumed_ty) (name : string) (nm : names_maps) : names_maps =
-  names_maps_add None id_to_string (StructId (TAssumed id)) name nm
+  names_maps_add id_to_string (StructId (TAssumed id)) None name nm
 
 let names_maps_add_assumed_variant (id_to_string : id -> string)
     (id : assumed_ty) (variant_id : VariantId.id) (name : string)
     (nm : names_maps) : names_maps =
-  names_maps_add None id_to_string (VariantId (TAssumed id, variant_id)) name nm
+  names_maps_add id_to_string (VariantId (TAssumed id, variant_id)) None name nm
 
 let names_maps_add_function (id_to_string : id -> string)
     ((fid, meta) : fun_id * meta option) (name : string) (nm : names_maps) :
     names_maps =
-  names_maps_add meta id_to_string (FunId fid) name nm
+  names_maps_add id_to_string (FunId fid) meta name nm
 
 let bool_name () = if !backend = Lean then "Bool" else "bool"
 let char_name () = if !backend = Lean then "Char" else "char"
@@ -662,7 +668,7 @@ let ctx_add (meta : Meta.meta) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
   let id_to_string (id : id) : string = id_to_string (Some meta) id ctx in
   let names_maps =
-    names_maps_add (Some meta) id_to_string id name ctx.names_maps
+    names_maps_add id_to_string id (Some meta) name ctx.names_maps
   in
   { ctx with names_maps }
 
