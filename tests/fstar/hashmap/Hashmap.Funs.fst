@@ -10,7 +10,7 @@ include Hashmap.Clauses
 (** [hashmap::hash_key]:
     Source: 'src/hashmap.rs', lines 27:0-27:32 *)
 let hash_key (k : usize) : result usize =
-  Return k
+  Ok k
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
     Source: 'src/hashmap.rs', lines 50:4-56:5 *)
@@ -24,7 +24,7 @@ let rec hashMap_allocate_slots_loop
     let* slots1 = alloc_vec_Vec_push (list_t t) slots List_Nil in
     let* n1 = usize_sub n 1 in
     hashMap_allocate_slots_loop t slots1 n1
-  else Return slots
+  else Ok slots
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]:
     Source: 'src/hashmap.rs', lines 50:4-50:76 *)
@@ -45,7 +45,7 @@ let hashMap_new_with_capacity
     in
   let* i = usize_mul capacity max_load_dividend in
   let* i1 = usize_div i max_load_divisor in
-  Return
+  Ok
     {
       num_entries = 0;
       max_load_factor = (max_load_dividend, max_load_divisor);
@@ -74,18 +74,18 @@ let rec hashMap_clear_loop
     let* i2 = usize_add i 1 in
     let* slots1 = index_mut_back List_Nil in
     hashMap_clear_loop t slots1 i2
-  else Return slots
+  else Ok slots
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]:
     Source: 'src/hashmap.rs', lines 80:4-80:27 *)
 let hashMap_clear (t : Type0) (self : hashMap_t t) : result (hashMap_t t) =
   let* hm = hashMap_clear_loop t self.slots 0 in
-  Return { self with num_entries = 0; slots = hm }
+  Ok { self with num_entries = 0; slots = hm }
 
 (** [hashmap::{hashmap::HashMap<T>}::len]:
     Source: 'src/hashmap.rs', lines 90:4-90:30 *)
 let hashMap_len (t : Type0) (self : hashMap_t t) : result usize =
-  Return self.num_entries
+  Ok self.num_entries
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
     Source: 'src/hashmap.rs', lines 97:4-114:5 *)
@@ -97,11 +97,11 @@ let rec hashMap_insert_in_list_loop
   begin match ls with
   | List_Cons ckey cvalue tl ->
     if ckey = key
-    then Return (false, List_Cons ckey value tl)
+    then Ok (false, List_Cons ckey value tl)
     else
       let* (b, tl1) = hashMap_insert_in_list_loop t key value tl in
-      Return (b, List_Cons ckey cvalue tl1)
-  | List_Nil -> Return (true, List_Cons key value List_Nil)
+      Ok (b, List_Cons ckey cvalue tl1)
+  | List_Nil -> Ok (true, List_Cons key value List_Nil)
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
@@ -130,8 +130,8 @@ let hashMap_insert_no_resize
   then
     let* i1 = usize_add self.num_entries 1 in
     let* v = index_mut_back l1 in
-    Return { self with num_entries = i1; slots = v }
-  else let* v = index_mut_back l1 in Return { self with slots = v }
+    Ok { self with num_entries = i1; slots = v }
+  else let* v = index_mut_back l1 in Ok { self with slots = v }
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
     Source: 'src/hashmap.rs', lines 183:4-196:5 *)
@@ -144,7 +144,7 @@ let rec hashMap_move_elements_from_list_loop
   | List_Cons k v tl ->
     let* ntable1 = hashMap_insert_no_resize t ntable k v in
     hashMap_move_elements_from_list_loop t ntable1 tl
-  | List_Nil -> Return ntable
+  | List_Nil -> Ok ntable
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]:
@@ -172,7 +172,7 @@ let rec hashMap_move_elements_loop
     let* i2 = usize_add i 1 in
     let* slots1 = index_mut_back l1 in
     hashMap_move_elements_loop t ntable1 slots1 i2
-  else Return (ntable, slots)
+  else Ok (ntable, slots)
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]:
     Source: 'src/hashmap.rs', lines 171:4-171:95 *)
@@ -198,10 +198,10 @@ let hashMap_try_resize
     let* ntable = hashMap_new_with_capacity t i3 i i1 in
     let* p = hashMap_move_elements t ntable self.slots 0 in
     let (ntable1, _) = p in
-    Return
+    Ok
       { ntable1 with num_entries = self.num_entries; max_load_factor = (i, i1)
       }
-  else Return { self with max_load_factor = (i, i1) }
+  else Ok { self with max_load_factor = (i, i1) }
 
 (** [hashmap::{hashmap::HashMap<T>}::insert]:
     Source: 'src/hashmap.rs', lines 129:4-129:48 *)
@@ -211,7 +211,7 @@ let hashMap_insert
   =
   let* self1 = hashMap_insert_no_resize t self key value in
   let* i = hashMap_len t self1 in
-  if i > self1.max_load then hashMap_try_resize t self1 else Return self1
+  if i > self1.max_load then hashMap_try_resize t self1 else Ok self1
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
     Source: 'src/hashmap.rs', lines 206:4-219:5 *)
@@ -222,10 +222,8 @@ let rec hashMap_contains_key_in_list_loop
   =
   begin match ls with
   | List_Cons ckey _ tl ->
-    if ckey = key
-    then Return true
-    else hashMap_contains_key_in_list_loop t key tl
-  | List_Nil -> Return false
+    if ckey = key then Ok true else hashMap_contains_key_in_list_loop t key tl
+  | List_Nil -> Ok false
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]:
@@ -255,7 +253,7 @@ let rec hashMap_get_in_list_loop
   =
   begin match ls with
   | List_Cons ckey cvalue tl ->
-    if ckey = key then Return cvalue else hashMap_get_in_list_loop t key tl
+    if ckey = key then Ok cvalue else hashMap_get_in_list_loop t key tl
   | List_Nil -> Fail Failure
   end
 
@@ -286,14 +284,12 @@ let rec hashMap_get_mut_in_list_loop
   begin match ls with
   | List_Cons ckey cvalue tl ->
     if ckey = key
-    then
-      let back = fun ret -> Return (List_Cons ckey ret tl) in
-      Return (cvalue, back)
+    then let back = fun ret -> Ok (List_Cons ckey ret tl) in Ok (cvalue, back)
     else
       let* (x, back) = hashMap_get_mut_in_list_loop t tl key in
       let back1 =
-        fun ret -> let* tl1 = back ret in Return (List_Cons ckey cvalue tl1) in
-      Return (x, back1)
+        fun ret -> let* tl1 = back ret in Ok (List_Cons ckey cvalue tl1) in
+      Ok (x, back1)
   | List_Nil -> Fail Failure
   end
 
@@ -323,8 +319,8 @@ let hashMap_get_mut
     fun ret ->
       let* l1 = get_mut_in_list_back ret in
       let* v = index_mut_back l1 in
-      Return { self with slots = v } in
-  Return (x, back)
+      Ok { self with slots = v } in
+  Ok (x, back)
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
     Source: 'src/hashmap.rs', lines 265:4-291:5 *)
@@ -340,13 +336,13 @@ let rec hashMap_remove_from_list_loop
       let (mv_ls, _) =
         core_mem_replace (list_t t) (List_Cons ckey x tl) List_Nil in
       begin match mv_ls with
-      | List_Cons _ cvalue tl1 -> Return (Some cvalue, tl1)
+      | List_Cons _ cvalue tl1 -> Ok (Some cvalue, tl1)
       | List_Nil -> Fail Failure
       end
     else
       let* (o, tl1) = hashMap_remove_from_list_loop t key tl in
-      Return (o, List_Cons ckey x tl1)
-  | List_Nil -> Return (None, List_Nil)
+      Ok (o, List_Cons ckey x tl1)
+  | List_Nil -> Ok (None, List_Nil)
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]:
@@ -372,12 +368,11 @@ let hashMap_remove
       hash_mod in
   let* (x, l1) = hashMap_remove_from_list t key l in
   begin match x with
-  | None ->
-    let* v = index_mut_back l1 in Return (None, { self with slots = v })
+  | None -> let* v = index_mut_back l1 in Ok (None, { self with slots = v })
   | Some x1 ->
     let* i1 = usize_sub self.num_entries 1 in
     let* v = index_mut_back l1 in
-    Return (Some x1, { self with num_entries = i1; slots = v })
+    Ok (Some x1, { self with num_entries = i1; slots = v })
   end
 
 (** [hashmap::test1]:
@@ -414,6 +409,6 @@ let test1 : result unit =
             then Fail Failure
             else
               let* i4 = hashMap_get u64 hm6 1056 in
-              if not (i4 = 256) then Fail Failure else Return ()
+              if not (i4 = 256) then Fail Failure else Ok ()
       end
 
