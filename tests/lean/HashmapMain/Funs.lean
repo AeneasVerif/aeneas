@@ -83,8 +83,8 @@ divergent def hashmap.HashMap.clear_loop
 def hashmap.HashMap.clear
   (T : Type) (self : hashmap.HashMap T) : Result (hashmap.HashMap T) :=
   do
-  let back ← hashmap.HashMap.clear_loop T self.slots 0#usize
-  Result.ret { self with num_entries := 0#usize, slots := back }
+  let hm ← hashmap.HashMap.clear_loop T self.slots 0#usize
+  Result.ret { self with num_entries := 0#usize, slots := hm }
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::len]:
    Source: 'src/hashmap.rs', lines 90:4-90:30 -/
@@ -103,8 +103,8 @@ divergent def hashmap.HashMap.insert_in_list_loop
     then Result.ret (false, hashmap.List.Cons ckey value tl)
     else
       do
-      let (b, back) ← hashmap.HashMap.insert_in_list_loop T key value tl
-      Result.ret (b, hashmap.List.Cons ckey cvalue back)
+      let (b, tl1) ← hashmap.HashMap.insert_in_list_loop T key value tl
+      Result.ret (b, hashmap.List.Cons ckey cvalue tl1)
   | hashmap.List.Nil =>
     Result.ret (true, hashmap.List.Cons key value hashmap.List.Nil)
 
@@ -364,8 +364,8 @@ divergent def hashmap.HashMap.remove_from_list_loop
       | hashmap.List.Nil => Result.fail .panic
     else
       do
-      let (o, back) ← hashmap.HashMap.remove_from_list_loop T key tl
-      Result.ret (o, hashmap.List.Cons ckey t back)
+      let (o, tl1) ← hashmap.HashMap.remove_from_list_loop T key tl
+      Result.ret (o, hashmap.List.Cons ckey t tl1)
   | hashmap.List.Nil => Result.ret (none, hashmap.List.Nil)
 
 /- [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]:

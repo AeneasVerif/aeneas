@@ -104,13 +104,13 @@ Definition hashmap_HashMap_clear
   (T : Type) (n : nat) (self : hashmap_HashMap_t T) :
   result (hashmap_HashMap_t T)
   :=
-  back <- hashmap_HashMap_clear_loop T n self.(hashmap_HashMap_slots) 0%usize;
+  hm <- hashmap_HashMap_clear_loop T n self.(hashmap_HashMap_slots) 0%usize;
   Return
     {|
       hashmap_HashMap_num_entries := 0%usize;
       hashmap_HashMap_max_load_factor := self.(hashmap_HashMap_max_load_factor);
       hashmap_HashMap_max_load := self.(hashmap_HashMap_max_load);
-      hashmap_HashMap_slots := back
+      hashmap_HashMap_slots := hm
     |}
 .
 
@@ -136,8 +136,8 @@ Fixpoint hashmap_HashMap_insert_in_list_loop
       then Return (false, Hashmap_List_Cons ckey value tl)
       else (
         p <- hashmap_HashMap_insert_in_list_loop T n1 key value tl;
-        let (b, back) := p in
-        Return (b, Hashmap_List_Cons ckey cvalue back))
+        let (b, tl1) := p in
+        Return (b, Hashmap_List_Cons ckey cvalue tl1))
     | Hashmap_List_Nil =>
       Return (true, Hashmap_List_Cons key value Hashmap_List_Nil)
     end
@@ -474,8 +474,8 @@ Fixpoint hashmap_HashMap_remove_from_list_loop
         end
       else (
         p <- hashmap_HashMap_remove_from_list_loop T n1 key tl;
-        let (o, back) := p in
-        Return (o, Hashmap_List_Cons ckey t back))
+        let (o, tl1) := p in
+        Return (o, Hashmap_List_Cons ckey t tl1))
     | Hashmap_List_Nil => Return (None, Hashmap_List_Nil)
     end
   end

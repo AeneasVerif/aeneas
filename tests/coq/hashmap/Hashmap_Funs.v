@@ -94,13 +94,13 @@ Fixpoint hashMap_clear_loop
     Source: 'src/hashmap.rs', lines 80:4-80:27 *)
 Definition hashMap_clear
   (T : Type) (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
-  back <- hashMap_clear_loop T n self.(hashMap_slots) 0%usize;
+  hm <- hashMap_clear_loop T n self.(hashMap_slots) 0%usize;
   Return
     {|
       hashMap_num_entries := 0%usize;
       hashMap_max_load_factor := self.(hashMap_max_load_factor);
       hashMap_max_load := self.(hashMap_max_load);
-      hashMap_slots := back
+      hashMap_slots := hm
     |}
 .
 
@@ -125,8 +125,8 @@ Fixpoint hashMap_insert_in_list_loop
       then Return (false, List_Cons ckey value tl)
       else (
         p <- hashMap_insert_in_list_loop T n1 key value tl;
-        let (b, back) := p in
-        Return (b, List_Cons ckey cvalue back))
+        let (b, tl1) := p in
+        Return (b, List_Cons ckey cvalue tl1))
     | List_Nil => Return (true, List_Cons key value List_Nil)
     end
   end
@@ -450,8 +450,8 @@ Fixpoint hashMap_remove_from_list_loop
         end
       else (
         p <- hashMap_remove_from_list_loop T n1 key tl;
-        let (o, back) := p in
-        Return (o, List_Cons ckey t back))
+        let (o, tl1) := p in
+        Return (o, List_Cons ckey t tl1))
     | List_Nil => Return (None, List_Nil)
     end
   end

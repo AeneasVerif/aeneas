@@ -79,8 +79,8 @@ let rec hashMap_clear_loop
 (** [hashmap::{hashmap::HashMap<T>}::clear]:
     Source: 'src/hashmap.rs', lines 80:4-80:27 *)
 let hashMap_clear (t : Type0) (self : hashMap_t t) : result (hashMap_t t) =
-  let* back = hashMap_clear_loop t self.slots 0 in
-  Return { self with num_entries = 0; slots = back }
+  let* hm = hashMap_clear_loop t self.slots 0 in
+  Return { self with num_entries = 0; slots = hm }
 
 (** [hashmap::{hashmap::HashMap<T>}::len]:
     Source: 'src/hashmap.rs', lines 90:4-90:30 *)
@@ -99,8 +99,8 @@ let rec hashMap_insert_in_list_loop
     if ckey = key
     then Return (false, List_Cons ckey value tl)
     else
-      let* (b, back) = hashMap_insert_in_list_loop t key value tl in
-      Return (b, List_Cons ckey cvalue back)
+      let* (b, tl1) = hashMap_insert_in_list_loop t key value tl in
+      Return (b, List_Cons ckey cvalue tl1)
   | List_Nil -> Return (true, List_Cons key value List_Nil)
   end
 
@@ -344,8 +344,8 @@ let rec hashMap_remove_from_list_loop
       | List_Nil -> Fail Failure
       end
     else
-      let* (o, back) = hashMap_remove_from_list_loop t key tl in
-      Return (o, List_Cons ckey x back)
+      let* (o, tl1) = hashMap_remove_from_list_loop t key tl in
+      Return (o, List_Cons ckey x tl1)
   | List_Nil -> Return (None, List_Nil)
   end
 
