@@ -568,6 +568,35 @@ instance {ty} : HOr (Scalar ty) (Scalar ty) (Scalar ty) where
 instance {ty} : HAnd (Scalar ty) (Scalar ty) (Scalar ty) where
   hAnd x y := Scalar.and x y
 
+-- core checked arithmetic operations
+
+/- A helper function that converts failure to none and success to some
+   TODO: move up to Base module? -/
+@[simp] abbrev Option.ofResult : Result (Scalar ty) → Result (Option (Scalar ty))
+  | Result.ret z => Result.ret (some z)
+  | Result.fail _ => Result.ret none
+  | Result.div => Result.div
+
+/- [core::num::{T}::checked_add] -/
+def core.num.checked_add (x y : Scalar ty) : Result (Option (Scalar ty)) :=
+  Option.ofResult (x + y)
+
+/- [core::num::{T}::checked_sub] -/
+def core.num.checked_sub (x y : Scalar ty) : Result (Option (Scalar ty)) :=
+  Option.ofResult (x - y)
+
+/- [core::num::{T}::checked_mul] -/
+def core.num.checked_mul (x y : Scalar ty) : Result (Option (Scalar ty)) :=
+  Option.ofResult (x * y)
+
+/- [core::num::{T}::checked_div] -/
+def core.num.checked_div (x y : Scalar ty) : Result (Option (Scalar ty)) :=
+  Option.ofResult (x / y)
+
+/- [core::num::{T}::checked_mod] -/
+def core.num.checked_mod (x y : Scalar ty) : Result (Option (Scalar ty)) :=
+  Option.ofResult (x % y)
+
 -- Generic theorem - shouldn't be used much
 @[pspec]
 theorem Scalar.add_spec {ty} {x y : Scalar ty}

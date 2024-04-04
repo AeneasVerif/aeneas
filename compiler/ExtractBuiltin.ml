@@ -240,6 +240,27 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
     let f = { extract_name = basename } in
     (rust_name, filter, f)
   in
+  let mk_scalar_fun (rust_name_prefix : string) (rust_name_suffix : string)
+      (extract_name : string option) (filter : bool list option) :
+      (pattern * bool list option * builtin_fun_info) list =
+    List.map
+      (fun ty ->
+        mk_fun (rust_name_prefix ^ ty ^ rust_name_suffix) extract_name filter)
+      [
+        "usize";
+        "u8";
+        "u16";
+        "u32";
+        "u64";
+        "u128";
+        "isize";
+        "i8";
+        "i16";
+        "i32";
+        "i64";
+        "i128";
+      ]
+  in
   [
     mk_fun "core::mem::replace" None None;
     mk_fun "core::slice::{[@T]}::len"
@@ -325,6 +346,16 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
        [@T]>}::index_mut"
       (Some "core_slice_index_Slice_index_mut") None;
   ]
+  @ mk_scalar_fun "core::num::{" "}::checked_add" (Some "core.num.checked_add")
+      None
+  @ mk_scalar_fun "core::num::{" "}::checked_sub" (Some "core.num.checked_sub")
+      None
+  @ mk_scalar_fun "core::num::{" "}::checked_mul" (Some "core.num.checked_mul")
+      None
+  @ mk_scalar_fun "core::num::{" "}::checked_div" (Some "core.num.checked_div")
+      None
+  @ mk_scalar_fun "core::num::{" "}::checked_rem" (Some "core.num.checked_rem")
+      None
 
 let mk_builtin_funs_map () =
   let m =
