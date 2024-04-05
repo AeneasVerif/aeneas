@@ -3861,7 +3861,12 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   def
 
 let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
-  List.map (translate_type_decl ctx)
+  List.filter_map
+    (fun a ->
+      try Some (translate_type_decl ctx a)
+      with CFailure (meta, _) ->
+        let () = save_error __FILE__ __LINE__ meta "Could not generate code, see previous error" in
+        None)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
