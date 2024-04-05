@@ -113,6 +113,10 @@ def inv (hm : HashMap α) : Prop :=
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
 
+-- The proof below is a bit expensive, so we need to increase the maximum number
+-- of heart beats
+set_option maxHeartbeats 1000000
+
 theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
@@ -232,7 +236,7 @@ set_option pp.coercions false -- do not print coercions with ↑ (this doesn't p
 
 -- The proof below is a bit expensive, so we need to increase the maximum number
 -- of heart beats
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 2000000
 
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
@@ -318,17 +322,21 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       simp_all
     have _ : 0 ≤ k_hash_mod := by
       -- TODO: we want to automate this
-      simp
+      simp only [k_hash_mod]
       apply Int.emod_nonneg k.val hvnz
     have _ : k_hash_mod < alloc.vec.Vec.length hm.slots := by
       -- TODO: we want to automate this
-      simp
+      simp only [k_hash_mod]
       have h := Int.emod_lt_of_pos k.val hvpos
-      simp_all
+      simp_all only [ret.injEq, exists_eq_left', List.len_update, gt_iff_lt,
+                     List.index_update_eq, ne_eq, not_false_eq_true, neq_imp]
     if h_hm : k_hash_mod = hash_mod.val then
-      simp_all
+      simp_all only [k_hash_mod, List.len_update, gt_iff_lt, List.index_update_eq,
+                     ne_eq, not_false_eq_true, neq_imp, alloc.vec.Vec.length]
     else
-      simp_all
+      simp_all only [k_hash_mod, List.len_update, gt_iff_lt, List.index_update_eq,
+                     ne_eq, not_false_eq_true, neq_imp, ge_iff_le,
+                     alloc.vec.Vec.length, List.index_update_ne]
   have _ :
     match hm.lookup key with
     | none => nhm.len_s = hm.len_s + 1

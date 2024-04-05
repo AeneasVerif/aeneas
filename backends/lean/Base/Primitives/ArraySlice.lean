@@ -2,7 +2,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 import Base.IList
 import Base.Primitives.Scalar
@@ -269,7 +268,7 @@ def Array.update_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range 
       . scalar_tac
       . scalar_tac
     let na := s_beg.append (s.val.append s_end)
-    have : na.len = a.val.len := by simp [*]
+    have : na.len = a.val.len := by simp [na, *]
     ret ⟨ na, by simp_all [← List.len_eq_length]; scalar_tac ⟩
   else
     fail panic
@@ -343,7 +342,7 @@ def Slice.update_subslice (α : Type u) (s : Slice α) (r : Range Usize) (ss : S
       . scalar_tac
       . scalar_tac
     let ns := s_beg.append (ss.val.append s_end)
-    have : ns.len = s.val.len := by simp [*]
+    have : ns.len = s.val.len := by simp [ns, *]
     ret ⟨ ns, by simp_all [← List.len_eq_length]; scalar_tac ⟩
   else
     fail panic

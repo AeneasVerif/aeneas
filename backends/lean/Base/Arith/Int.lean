@@ -3,7 +3,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 -- TODO: there is no Omega tactic for now - it seems it hasn't been ported yet
 --import Mathlib.Tactic.Omega
