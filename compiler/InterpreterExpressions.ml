@@ -26,24 +26,26 @@ let log = Logging.expressions_log
 *)
 let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
     (access : access_kind) (p : place) : cm_fun =
- fun cf ctx ->
+ fun ctx ->
   (* Small helper *)
   let rec expand : cm_fun =
-   fun cf ctx ->
+   fun ctx ->
     let v = read_place meta access p ctx in
     match
       find_first_primitively_copyable_sv_with_borrows ctx.type_ctx.type_infos v
     with
-    | None -> cf ctx
+    | None -> (ctx, fun e -> e)
     | Some sv ->
-        let cc =
+        let ctx, cf1 =
           expand_symbolic_value_no_branching config meta sv
             (Some (mk_mplace meta p ctx))
+            ctx
         in
-        comp cc expand cf ctx
+        let ctx, cf2 = expand ctx in
+        (ctx, comp cf1 cf2)
   in
   (* Apply *)
-  expand cf ctx
+  expand ctx
 
 (** Read a place (CPS-style function).
 
