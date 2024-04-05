@@ -4,7 +4,6 @@
 open Types
 open Values
 open Contexts
-open Cps
 open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
@@ -877,8 +876,9 @@ let check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
     check_symbolic_values meta ctx)
   else log#ldebug (lazy "Not checking invariants (check is not activated)")
 
-(** Same as {!check_invariants}, but written in CPS *)
-let cf_check_invariants (meta : Meta.meta) : cm_fun =
- fun cf ctx ->
-  check_invariants meta ctx;
-  cf ctx
+(** TODO: remove.
+    This function comes from the fact that the compiler was initially written in
+    continuation passing style. We should use {!check_invariants} instead.
+ *)
+let cf_check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
+  check_invariants meta ctx

@@ -17,7 +17,10 @@ open Cps
     continuation with [None].
  *)
 val pop_frame :
-  config -> Meta.meta -> bool -> (typed_value option -> m_fun) -> m_fun
+  config ->
+  Meta.meta ->
+  bool ->
+  typed_value * eval_ctx * (eval_result -> eval_result)
 
 (** Helper.
 

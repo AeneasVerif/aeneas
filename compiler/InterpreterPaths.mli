@@ -100,4 +100,8 @@ val end_loans_at_place : config -> Meta.meta -> access_kind -> place -> cm_fun
     case). Note that this value is very likely to contain ⊥ subvalues.
   *)
 val prepare_lplace :
-  config -> Meta.meta -> place -> (typed_value -> m_fun) -> m_fun
+  config ->
+  Meta.meta ->
+  place ->
+  eval_ctx ->
+  typed_value * eval_ctx * (eval_result -> eval_result)

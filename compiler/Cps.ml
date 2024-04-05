@@ -36,12 +36,34 @@ type statement_eval_res =
 
 type eval_result = SymbolicAst.expression option
 
-(** Continuation function *)
-type m_fun = eval_ctx -> eval_result
+(** Function which takes a context as input, evaluates to a new context and to
+    a continuation with which to build the execution trace, provided the trace
+    for the end of the execution.
+  *)
+type cm_fun = eval_ctx -> eval_ctx * (eval_result -> eval_result)
 
-(** Continuation taking another continuation as parameter *)
-type cm_fun = m_fun -> m_fun
+(* TODO:
+   {[
+     (typed_value -> m_fun) -> m_fun
+   ]}
+   becomes:
+   {[
+     eval_ctx -> typed_value * eval_ctx * (eval_result -> eval_result)
+   ]}
 
+   Ex.:
+   {[
+     val prepare_lplace :
+       config -> Meta.meta -> place -> (typed_value -> m_fun) -> m_fun
+   ]}
+   becomes:
+   {[
+     val prepare_lplace :
+       config -> Meta.meta -> place -> eval_ctx -> typed_value * eval_ctx * (eval_result -> eval_result)
+   ]}
+*)
+
+(*
 (** Continuation taking a typed value as parameter - TODO: use more *)
 type typed_value_m_fun = typed_value -> m_fun
 
@@ -52,10 +74,20 @@ type typed_value_cm_fun = typed_value -> cm_fun
 
 (** Type of a continuation used when evaluating a statement *)
 type st_m_fun = statement_eval_res -> m_fun
+ *)
 
-(** Type of a continuation used when evaluating a statement *)
-type st_cm_fun = st_m_fun -> m_fun
+(** Type of a function used when evaluating a statement *)
+type st_cm_fun =
+  eval_ctx ->
+  (eval_ctx * statement_eval_res) list
+  * (SymbolicAst.expression list option -> eval_result)
 
+(** Compose continuations that we use to compute execution traces *)
+let comp (f : eval_result -> eval_result) (g : eval_result -> eval_result) :
+    eval_result -> eval_result =
+ fun e -> f (g e)
+
+(*
 (** Convert a unit function to a cm function *)
 let unit_to_cm_fun (f : eval_ctx -> unit) : cm_fun =
  fun cf ctx ->
@@ -205,3 +237,4 @@ let comp_check_ctx (f : ('ctx -> 'a) -> 'ctx -> 'b) (g : 'ctx -> unit) :
   f (fun ctx ->
       g ctx;
       cf ctx)
+ *)

@@ -30,20 +30,14 @@ val expand_symbolic_value_no_branching :
     - [config]
     - [sv]
     - [sv_place]
-    - [cf_branches]: the continuation to evaluate the branches. This continuation
-      typically evaluates a [match] statement *after* we have performed the symbolic
-      expansion (in particular, we can have one continuation for all the branches).
-    - [cf_after_join]: the continuation for *after* the match (we perform a join
-      then call it).
  *)
 val expand_symbolic_adt :
   config ->
   Meta.meta ->
   symbolic_value ->
   SA.mplace option ->
-  st_cm_fun ->
-  st_m_fun ->
-  m_fun
+  eval_ctx ->
+  eval_ctx list * (SymbolicAst.expression list option -> eval_result)
 
 (** Expand a symbolic boolean.
 
@@ -56,10 +50,9 @@ val expand_symbolic_bool :
   Meta.meta ->
   symbolic_value ->
   SA.mplace option ->
-  st_cm_fun ->
-  st_cm_fun ->
-  st_m_fun ->
-  m_fun
+  eval_ctx ->
+  (eval_ctx * eval_ctx)
+  * ((SymbolicAst.expression * SymbolicAst.expression) option -> eval_result)
 
 (** Symbolic integers are expanded upon evaluating a [SwitchInt].
 
@@ -69,7 +62,13 @@ val expand_symbolic_bool :
     then retry evaluating the [if ... then ... else ...] or the [match]: as
     the scrutinee will then have a concrete value, the interpreter will switch
     to the proper branch.
-    
+
+    When expanding a "regular" integer for a switch there is always an *otherwise*
+    branch. We treat it separatly: for this reason we return a pair of a list
+    of evaluation contexts (for the branches which are not the otherwise branch)
+    and an additional evaluation context for the otherwise branch.
+
+    TODO: update comment
     However, when expanding a "regular" integer for a switch, there is always an
     *otherwise* branch that we can take, for which the integer must remain symbolic
     (because in this branch the scrutinee can take a range of values). We thus
@@ -87,9 +86,10 @@ val expand_symbolic_int :
   SA.mplace option ->
   integer_type ->
   (scalar_value * st_cm_fun) list ->
-  st_cm_fun ->
-  st_m_fun ->
-  m_fun
+  eval_ctx ->
+  (eval_ctx list * eval_ctx)
+  * ((SymbolicAst.expression list * SymbolicAst.expression) option ->
+    eval_result)
 
 (** If this mode is activated through the [config], greedily expand the symbolic
     values which need to be expanded. See {!type:Contexts.config} for more information.

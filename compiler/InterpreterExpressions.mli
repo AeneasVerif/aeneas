@@ -13,7 +13,11 @@ open InterpreterPaths
     the place. If needs be, you should call {!InterpreterPaths.update_ctx_along_read_place} first.
  *)
 val read_place :
-  Meta.meta -> access_kind -> place -> (typed_value -> m_fun) -> m_fun
+  Meta.meta ->
+  access_kind ->
+  place ->
+  eval_ctx ->
+  typed_value * eval_ctx * (eval_result -> eval_result)
 
 (** Auxiliary function.
 
@@ -37,8 +41,8 @@ val access_rplace_reorganize_and_read :
   bool ->
   access_kind ->
   place ->
-  (typed_value -> m_fun) ->
-  m_fun
+  eval_ctx ->
+  typed_value * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate an operand.
 
@@ -50,11 +54,19 @@ val access_rplace_reorganize_and_read :
     Use {!eval_operands} instead.
  *)
 val eval_operand :
-  config -> Meta.meta -> operand -> (typed_value -> m_fun) -> m_fun
+  config ->
+  Meta.meta ->
+  operand ->
+  eval_ctx ->
+  typed_value * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate several operands at once. *)
 val eval_operands :
-  config -> Meta.meta -> operand list -> (typed_value list -> m_fun) -> m_fun
+  config ->
+  Meta.meta ->
+  operand list ->
+  eval_ctx ->
+  typed_value * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate an rvalue which is not a global (globals are handled elsewhere).
 
@@ -67,8 +79,8 @@ val eval_rvalue_not_global :
   config ->
   Meta.meta ->
   rvalue ->
-  ((typed_value, eval_error) result -> m_fun) ->
-  m_fun
+  eval_ctx ->
+  (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate a fake read (update the context so that we can read a place) *)
 val eval_fake_read : config -> Meta.meta -> place -> cm_fun
