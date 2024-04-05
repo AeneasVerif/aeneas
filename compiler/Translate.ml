@@ -41,7 +41,7 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     of backward functions, we also provide names for the outputs.
     TODO: maybe we should introduce a record for this.
 *)
-let translate_function_to_pure_hook (trans_ctx : trans_ctx)
+let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
@@ -201,9 +201,12 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     pure_fun_translation_no_loops option =
   try
     Some
-      (translate_function_to_pure_hook trans_ctx pure_type_decls fun_dsigs fdef)
+      (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
   with CFailure (meta, _) ->
-    let () = save_error __FILE__ __LINE__ meta "Could not generate code, see previous error" in
+    let () =
+      save_error __FILE__ __LINE__ meta
+        "Could not translate function because of previous error"
+    in
     None
 
 (* TODO: factor out the return type *)
@@ -240,7 +243,8 @@ let translate_crate_to_pure (crate : crate) :
                    trans_ctx fdef )
            with CFailure (meta, _) ->
              let () =
-               save_error __FILE__ __LINE__ meta "Could not generate code, see previous error"
+               save_error __FILE__ __LINE__ meta
+                 "Could not translate function because of previous error"
              in
              None)
          (FunDeclId.Map.values crate.fun_decls))
@@ -260,7 +264,8 @@ let translate_crate_to_pure (crate : crate) :
         try Some (SymbolicToPure.translate_trait_decl trans_ctx a)
         with CFailure (meta, _) ->
           let () =
-            save_error __FILE__ __LINE__ meta "Could not generate code, see previous error"
+            save_error __FILE__ __LINE__ meta
+              "Could not translate trait decl because of previous error"
           in
           None)
       (TraitDeclId.Map.values trans_ctx.trait_decls_ctx.trait_decls)
@@ -273,7 +278,8 @@ let translate_crate_to_pure (crate : crate) :
         try Some (SymbolicToPure.translate_trait_impl trans_ctx a)
         with CFailure (meta, _) ->
           let () =
-            save_error __FILE__ __LINE__ meta "Could not generate code, see previous error"
+            save_error __FILE__ __LINE__ meta
+              "Could not translate trait impl because of previous error"
           in
           None)
       (TraitImplId.Map.values trans_ctx.trait_impls_ctx.trait_impls)
@@ -504,7 +510,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     let global =
       try Some (SymbolicToPure.translate_global ctx.trans_ctx global)
       with CFailure (meta, _) ->
-        let () = save_error __FILE__ __LINE__ meta "Could not generate code, see previous error" in
+        let () =
+          save_error __FILE__ __LINE__ meta
+            "Could not translate global because of previous error"
+        in
         None
     in
     Extract.extract_global_decl ctx fmt global body config.interface

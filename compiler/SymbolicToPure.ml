@@ -3865,7 +3865,10 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
     (fun a ->
       try Some (translate_type_decl ctx a)
       with CFailure (meta, _) ->
-        let () = save_error __FILE__ __LINE__ meta "Could not generate code, see previous error" in
+        let () =
+          save_error __FILE__ __LINE__ meta
+            "Could not generate code, see previous error"
+        in
         None)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 

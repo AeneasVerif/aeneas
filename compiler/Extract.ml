@@ -1879,102 +1879,104 @@ let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx)
     [{start,end}_gloabl_decl_group], contrary to {!extract_type_decl}
     and {!extract_fun_decl}.
  *)
-let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
-    (global : global_decl option) (body : fun_decl) (interface : bool) : unit =
+let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
+    (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   let meta = body.meta in
   sanity_check __FILE__ __LINE__ body.is_global_decl_body meta;
   sanity_check __FILE__ __LINE__ (body.signature.inputs = []) meta;
-  match global with
-  | Some global -> (
-      (* Add a break then the name of the corresponding LLBC declaration *)
-      F.pp_print_break fmt 0 0;
-      let name =
-        if !Config.extract_external_name_patterns && not global.is_local then
-          Some global.llbc_name
-        else None
-      in
-      extract_comment_with_span ctx fmt
-        [ "[" ^ name_to_string ctx global.llbc_name ^ "]" ]
-        name global.meta.span;
-      F.pp_print_space fmt ();
+  (* Add a break then the name of the corresponding LLBC declaration *)
+  F.pp_print_break fmt 0 0;
+  let name =
+    if !Config.extract_external_name_patterns && not global.is_local then
+      Some global.llbc_name
+    else None
+  in
+  extract_comment_with_span ctx fmt
+    [ "[" ^ name_to_string ctx global.llbc_name ^ "]" ]
+    name global.meta.span;
+  F.pp_print_space fmt ();
 
-      let decl_name = ctx_get_global meta global.def_id ctx in
-      let body_name =
-        ctx_get_function meta
-          (FromLlbc (Pure.FunId (FRegular global.body_id), None))
-          ctx
-      in
-      let decl_ty, body_ty =
-        let ty = body.signature.output in
-        if body.signature.fwd_info.effect_info.can_fail then
-          (unwrap_result_ty meta ty, ty)
-        else (ty, mk_result_ty ty)
-      in
-      (* Add the type parameters *)
-      let ctx, type_params, cg_params, trait_clauses =
-        ctx_add_generic_params meta global.llbc_name global.llbc_generics
-          global.generics ctx
-      in
-      match body.body with
-      | None ->
-          (* No body: only generate a [val x_c : u32] declaration *)
-          let kind = if interface then Declared else Assumed in
-          if !backend = HOL4 then
-            extract_global_decl_hol4_opaque meta ctx fmt decl_name
-              global.generics decl_ty
-          else
-            extract_global_decl_body_gen meta ctx fmt kind decl_name
-              global.generics type_params cg_params trait_clauses decl_ty None
-      | Some body ->
-          (* There is a body *)
-          (* Generate: [let x_body : result u32 = Return 3] *)
-          extract_global_decl_body_gen meta ctx fmt SingleNonRec body_name
-            global.generics type_params cg_params trait_clauses body_ty
-            (Some (fun fmt -> extract_texpression meta ctx fmt false body.body));
-          F.pp_print_break fmt 0 0;
-          (* Generate: [let x_c : u32 = eval_global x_body] *)
-          extract_global_decl_body_gen meta ctx fmt SingleNonRec decl_name
-            global.generics type_params cg_params trait_clauses decl_ty
-            (Some
-               (fun fmt ->
-                 let all_params =
-                   List.concat [ type_params; cg_params; trait_clauses ]
-                 in
-                 let extract_params () =
-                   List.iter
-                     (fun p ->
-                       F.pp_print_space fmt ();
-                       F.pp_print_string fmt p)
-                     all_params
-                 in
-                 let use_brackets = all_params <> [] in
-                 (* Extract the name *)
-                 let before, after =
-                   match !backend with
-                   | FStar | Lean ->
-                       ( (fun () ->
-                           F.pp_print_string fmt "eval_global";
-                           F.pp_print_space fmt ()),
-                         fun () -> () )
-                   | Coq ->
-                       ( (fun () -> ()),
-                         fun () -> F.pp_print_string fmt "%global" )
-                   | HOL4 ->
-                       ( (fun () ->
-                           F.pp_print_string fmt "get_return_value";
-                           F.pp_print_space fmt ()),
-                         fun () -> () )
-                 in
-                 before ();
-                 if use_brackets then F.pp_print_string fmt "(";
-                 F.pp_print_string fmt body_name;
-                 (* Extract the generic params *)
-                 extract_params ();
-                 if use_brackets then F.pp_print_string fmt ")";
-                 (* *)
-                 after ()));
-          (* Add a break to insert lines between declarations *)
-          F.pp_print_break fmt 0 0)
+  let decl_name = ctx_get_global meta global.def_id ctx in
+  let body_name =
+    ctx_get_function meta
+      (FromLlbc (Pure.FunId (FRegular global.body_id), None))
+      ctx
+  in
+  let decl_ty, body_ty =
+    let ty = body.signature.output in
+    if body.signature.fwd_info.effect_info.can_fail then
+      (unwrap_result_ty meta ty, ty)
+    else (ty, mk_result_ty ty)
+  in
+  (* Add the type parameters *)
+  let ctx, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params meta global.llbc_name global.llbc_generics
+      global.generics ctx
+  in
+  match body.body with
+  | None ->
+      (* No body: only generate a [val x_c : u32] declaration *)
+      let kind = if interface then Declared else Assumed in
+      if !backend = HOL4 then
+        extract_global_decl_hol4_opaque meta ctx fmt decl_name global.generics
+          decl_ty
+      else
+        extract_global_decl_body_gen meta ctx fmt kind decl_name global.generics
+          type_params cg_params trait_clauses decl_ty None
+  | Some body ->
+      (* There is a body *)
+      (* Generate: [let x_body : result u32 = Return 3] *)
+      extract_global_decl_body_gen meta ctx fmt SingleNonRec body_name
+        global.generics type_params cg_params trait_clauses body_ty
+        (Some (fun fmt -> extract_texpression meta ctx fmt false body.body));
+      F.pp_print_break fmt 0 0;
+      (* Generate: [let x_c : u32 = eval_global x_body] *)
+      extract_global_decl_body_gen meta ctx fmt SingleNonRec decl_name
+        global.generics type_params cg_params trait_clauses decl_ty
+        (Some
+           (fun fmt ->
+             let all_params =
+               List.concat [ type_params; cg_params; trait_clauses ]
+             in
+             let extract_params () =
+               List.iter
+                 (fun p ->
+                   F.pp_print_space fmt ();
+                   F.pp_print_string fmt p)
+                 all_params
+             in
+             let use_brackets = all_params <> [] in
+             (* Extract the name *)
+             let before, after =
+               match !backend with
+               | FStar | Lean ->
+                   ( (fun () ->
+                       F.pp_print_string fmt "eval_global";
+                       F.pp_print_space fmt ()),
+                     fun () -> () )
+               | Coq ->
+                   ((fun () -> ()), fun () -> F.pp_print_string fmt "%global")
+               | HOL4 ->
+                   ( (fun () ->
+                       F.pp_print_string fmt "get_return_value";
+                       F.pp_print_space fmt ()),
+                     fun () -> () )
+             in
+             before ();
+             if use_brackets then F.pp_print_string fmt "(";
+             F.pp_print_string fmt body_name;
+             (* Extract the generic params *)
+             extract_params ();
+             if use_brackets then F.pp_print_string fmt ")";
+             (* *)
+             after ()));
+      (* Add a break to insert lines between declarations *)
+      F.pp_print_break fmt 0 0
+
+let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (global : global_decl option) (body : fun_decl) (interface : bool) : unit =
+  match global with
+  | Some global -> extract_global_decl_aux ctx fmt global body interface
   | None -> ()
 
 (** Similar to {!extract_trait_decl_register_names} *)
