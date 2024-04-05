@@ -203,9 +203,10 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     Some
       (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
   with CFailure (meta, _) ->
+    let name = name_to_string trans_ctx fdef.name in
     let () =
       save_error __FILE__ __LINE__ meta
-        "Could not translate function because of previous error"
+        ("Could not translate function '" ^ name ^ "' because of previous error")
     in
     None
 
@@ -230,7 +231,6 @@ let translate_crate_to_pure (crate : crate) :
     Pure.TypeDeclId.Map.of_list
       (List.map (fun (def : Pure.type_decl) -> (def.def_id, def)) type_decls)
   in
-
   (* Compute the decomposed fun sigs for the whole crate *)
   let fun_dsigs =
     FunDeclId.Map.of_list
@@ -242,9 +242,11 @@ let translate_crate_to_pure (crate : crate) :
                  SymbolicToPure.translate_fun_sig_from_decl_to_decomposed
                    trans_ctx fdef )
            with CFailure (meta, _) ->
+             let name = name_to_string trans_ctx fdef.name in
              let () =
                save_error __FILE__ __LINE__ meta
-                 "Could not translate function because of previous error"
+                 ("Could not translate function signature '" ^ name
+                ^ "' because of previous error")
              in
              None)
          (FunDeclId.Map.values crate.fun_decls))
@@ -263,9 +265,11 @@ let translate_crate_to_pure (crate : crate) :
       (fun a ->
         try Some (SymbolicToPure.translate_trait_decl trans_ctx a)
         with CFailure (meta, _) ->
+          let name = name_to_string trans_ctx a.name in
           let () =
             save_error __FILE__ __LINE__ meta
-              "Could not translate trait decl because of previous error"
+              ("Could not translate trait decl '" ^ name
+             ^ "' because of previous error")
           in
           None)
       (TraitDeclId.Map.values trans_ctx.trait_decls_ctx.trait_decls)
@@ -277,9 +281,11 @@ let translate_crate_to_pure (crate : crate) :
       (fun a ->
         try Some (SymbolicToPure.translate_trait_impl trans_ctx a)
         with CFailure (meta, _) ->
+          let name = name_to_string trans_ctx a.name in
           let () =
             save_error __FILE__ __LINE__ meta
-              "Could not translate trait impl because of previous error"
+              ("Could not translate trait impl '" ^ name
+             ^ "' because of previous error")
           in
           None)
       (TraitImplId.Map.values trans_ctx.trait_impls_ctx.trait_impls)
@@ -511,8 +517,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
       try Some (SymbolicToPure.translate_global ctx.trans_ctx global)
       with CFailure (meta, _) ->
         let () =
+          let name = name_to_string ctx.trans_ctx global.name in
           save_error __FILE__ __LINE__ meta
-            "Could not translate global because of previous error"
+            ("Could not translate global '" ^ name
+           ^ "' because of previous error")
         in
         None
     in
