@@ -120,11 +120,4 @@ Definition use_counter
   counterInst.(Counter_t_incr) cnt1
 .
 
-(** [demo::use_vec_index]:
-    Source: 'src/demo.rs', lines 86:0-86:51 *)
-Definition use_vec_index (i : usize) (v : alloc_vec_Vec u32) : result u32 :=
-  alloc_vec_Vec_index u32 usize (core_slice_index_SliceIndexUsizeSliceTInst
-    u32) v i
-.
-
 End Demo.

@@ -107,10 +107,4 @@ def use_counter
   let (_, cnt1) ← CounterInst.incr cnt
   CounterInst.incr cnt1
 
-/- [demo::use_vec_index]:
-   Source: 'src/demo.rs', lines 86:0-86:51 -/
-def use_vec_index (i : Usize) (v : alloc.vec.Vec U32) : Result U32 :=
-  alloc.vec.Vec.index U32 Usize (core.slice.index.SliceIndexUsizeSliceTInst
-    U32) v i
-
 end demo

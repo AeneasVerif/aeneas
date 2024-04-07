@@ -92,9 +92,3 @@ let use_counter
   (t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
   let* (_, cnt1) = counterInst.incr cnt in counterInst.incr cnt1
 
-(** [demo::use_vec_index]:
-    Source: 'src/demo.rs', lines 86:0-86:51 *)
-let use_vec_index (i : usize) (v : alloc_vec_Vec u32) : result u32 =
-  alloc_vec_Vec_index u32 usize (core_slice_index_SliceIndexUsizeSliceTInst
-    u32) v i
-
