@@ -93,12 +93,11 @@ let rec check_typed_pattern (meta : Meta.meta) (ctx : tc_ctx)
         get_adt_field_types meta ctx.type_decls type_id av.variant_id generics
       in
       let check_value (ctx : tc_ctx) (ty : ty) (v : typed_pattern) : tc_ctx =
-        if ty <> v.ty then (
+        if ty <> v.ty then
           (* TODO: we need to normalize the types *)
-          log#serror
-            ("check_typed_pattern: not the same types:" ^ "\n- ty: "
-           ^ show_ty ty ^ "\n- v.ty: " ^ show_ty v.ty);
-          craise __FILE__ __LINE__ meta "Inconsistent types");
+          craise __FILE__ __LINE__ meta
+            ("Inconsistent types:" ^ "\n- ty: " ^ show_ty ty ^ "\n- v.ty: "
+           ^ show_ty v.ty);
         check_typed_pattern meta ctx v
       in
       (* Check the field types: check that the field patterns have the expected

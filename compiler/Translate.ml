@@ -204,10 +204,9 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
   with CFailure (meta, _) ->
     let name = name_to_string trans_ctx fdef.name in
-    let () =
-      save_error __FILE__ __LINE__ meta
-        ("Could not translate function '" ^ name ^ "' because of previous error")
-    in
+    save_error __FILE__ __LINE__ meta
+      ("Could not translate the function '" ^ name
+     ^ "' because of previous error");
     None
 
 (* TODO: factor out the return type *)
@@ -231,6 +230,7 @@ let translate_crate_to_pure (crate : crate) :
     Pure.TypeDeclId.Map.of_list
       (List.map (fun (def : Pure.type_decl) -> (def.def_id, def)) type_decls)
   in
+
   (* Compute the decomposed fun sigs for the whole crate *)
   let fun_dsigs =
     FunDeclId.Map.of_list
@@ -243,11 +243,9 @@ let translate_crate_to_pure (crate : crate) :
                    trans_ctx fdef )
            with CFailure (meta, _) ->
              let name = name_to_string trans_ctx fdef.name in
-             let () =
-               save_error __FILE__ __LINE__ meta
-                 ("Could not translate function signature '" ^ name
-                ^ "' because of previous error")
-             in
+             save_error __FILE__ __LINE__ meta
+               ("Could not translate the function signature of '" ^ name
+              ^ "' because of previous error");
              None)
          (FunDeclId.Map.values crate.fun_decls))
   in
@@ -266,11 +264,9 @@ let translate_crate_to_pure (crate : crate) :
         try Some (SymbolicToPure.translate_trait_decl trans_ctx a)
         with CFailure (meta, _) ->
           let name = name_to_string trans_ctx a.name in
-          let () =
-            save_error __FILE__ __LINE__ meta
-              ("Could not translate trait decl '" ^ name
-             ^ "' because of previous error")
-          in
+          save_error __FILE__ __LINE__ meta
+            ("Could not translate the trait declaration '" ^ name
+           ^ "' because of previous error");
           None)
       (TraitDeclId.Map.values trans_ctx.trait_decls_ctx.trait_decls)
   in
@@ -282,11 +278,9 @@ let translate_crate_to_pure (crate : crate) :
         try Some (SymbolicToPure.translate_trait_impl trans_ctx a)
         with CFailure (meta, _) ->
           let name = name_to_string trans_ctx a.name in
-          let () =
-            save_error __FILE__ __LINE__ meta
-              ("Could not translate trait impl '" ^ name
-             ^ "' because of previous error")
-          in
+          save_error __FILE__ __LINE__ meta
+            ("Could not translate the trait instance '" ^ name
+           ^ "' because of previous error");
           None)
       (TraitImplId.Map.values trans_ctx.trait_impls_ctx.trait_impls)
   in
@@ -516,12 +510,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     let global =
       try Some (SymbolicToPure.translate_global ctx.trans_ctx global)
       with CFailure (meta, _) ->
-        let () =
-          let name = name_to_string ctx.trans_ctx global.name in
-          save_error __FILE__ __LINE__ meta
-            ("Could not translate global '" ^ name
-           ^ "' because of previous error")
-        in
+        let name = name_to_string ctx.trans_ctx global.name in
+        save_error __FILE__ __LINE__ meta
+          ("Could not translate the global declaration '" ^ name
+         ^ "' because of previous error");
         None
     in
     Extract.extract_global_decl ctx fmt global body config.interface
@@ -778,22 +770,28 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | TypeGroup (RecGroup ids) ->
         if config.extract_types then export_types_group true ids
     | FunGroup (NonRecGroup id) -> (
-        (* Lookup *)
-        let pure_fun = FunDeclId.Map.find id ctx.trans_funs in
+        (* Lookup - the translated function may not be in the map if we had
+           to ignore it because of errors *)
+        let pure_fun = FunDeclId.Map.find_opt id ctx.trans_funs in
         (* Special case: we skip trait method *declarations* (we will
            extract their type directly in the records we generate for
            the trait declarations themselves, there is no point in having
            separate type definitions) *)
-        match pure_fun.f.Pure.kind with
-        | TraitItemDecl _ -> ()
-        | _ ->
-            (* Translate *)
-            export_functions_group [ pure_fun ])
+        match pure_fun with
+        | Some pure_fun -> (
+            match pure_fun.f.Pure.kind with
+            | TraitItemDecl _ -> ()
+            | _ ->
+                (* Translate *)
+                export_functions_group [ pure_fun ])
+        | None -> ())
     | FunGroup (RecGroup ids) ->
         (* General case of mutually recursive functions *)
         (* Lookup *)
         let pure_funs =
-          List.map (fun id -> FunDeclId.Map.find id ctx.trans_funs) ids
+          List.filter_map
+            (fun id -> FunDeclId.Map.find_opt id ctx.trans_funs)
+            ids
         in
         (* Translate *)
         export_functions_group pure_funs
@@ -951,7 +949,10 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   | Coq -> Printf.fprintf out "End %s.\n" fi.module_name);
 
   (* Some logging *)
-  log#linfo (lazy ("Generated: " ^ fi.filename));
+  if !Errors.error_list <> [] then
+    log#linfo
+      (lazy ("Generated the partial file (because of errors): " ^ fi.filename))
+  else log#linfo (lazy ("Generated: " ^ fi.filename));
 
   (* Flush and close the file *)
   close_out out

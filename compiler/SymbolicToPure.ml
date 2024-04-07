@@ -3867,11 +3867,9 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
       with CFailure (meta, _) ->
         let env = PrintPure.decls_ctx_to_fmt_env ctx in
         let name = PrintPure.name_to_string env a.name in
-        let () =
-          save_error __FILE__ __LINE__ meta
-            ("Could not translate type decl '" ^ name
-           ^ "' because of previous error")
-        in
+        save_error __FILE__ __LINE__ meta
+          ("Could not translate type decl '" ^ name
+         ^ "' because of previous error");
         None)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 

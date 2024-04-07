@@ -219,7 +219,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
           ^ string_of_int (List.length types)
           ^ " type arguments"
         in
-        log#serror err;
+        save_error __FILE__ __LINE__ None err;
         Result.Error (types, err))
       else
         let types = List.combine filter types in
@@ -1884,6 +1884,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   let meta = body.meta in
   sanity_check __FILE__ __LINE__ body.is_global_decl_body meta;
   sanity_check __FILE__ __LINE__ (body.signature.inputs = []) meta;
+
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
   let name =
