@@ -219,7 +219,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
           ^ string_of_int (List.length types)
           ^ " type arguments"
         in
-        log#serror err;
+        save_error __FILE__ __LINE__ None err;
         Result.Error (types, err))
       else
         let types = List.combine filter types in
@@ -1879,7 +1879,7 @@ let extract_global_decl_hol4_opaque (meta : Meta.meta) (ctx : extraction_ctx)
     [{start,end}_gloabl_decl_group], contrary to {!extract_type_decl}
     and {!extract_fun_decl}.
  *)
-let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   let meta = body.meta in
   sanity_check __FILE__ __LINE__ body.is_global_decl_body meta;
@@ -1973,6 +1973,12 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
              after ()));
       (* Add a break to insert lines between declarations *)
       F.pp_print_break fmt 0 0
+
+let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (global : global_decl option) (body : fun_decl) (interface : bool) : unit =
+  match global with
+  | Some global -> extract_global_decl_aux ctx fmt global body interface
+  | None -> ()
 
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)

@@ -1,4 +1,5 @@
 include Charon.PrintUtils
+include Charon.PrintTypes
 include Charon.PrintLlbcAst
 open Charon.PrintTypes
 open Charon.PrintExpressions

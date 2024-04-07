@@ -303,13 +303,11 @@ let give_back_value (config : config) (meta : Meta.meta) (bid : BorrowId.id)
             if bid' = bid then (
               (* Sanity check *)
               let expected_ty = ty in
-              if nv.ty <> expected_ty then (
-                log#serror
-                  ("give_back_value: improper type:\n- expected: "
-                 ^ ty_to_string ctx ty ^ "\n- received: "
-                 ^ ty_to_string ctx nv.ty);
+              if nv.ty <> expected_ty then
                 craise __FILE__ __LINE__ meta
-                  "Value given back doesn't have the proper type");
+                  ("Value given back doesn't have the proper type:\n\
+                    - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
+                 ^ ty_to_string ctx nv.ty);
               (* Replace *)
               set_replaced ();
               nv.value)
@@ -540,13 +538,11 @@ let give_back_avalue_to_same_abstraction (_config : config) (meta : Meta.meta)
                * see the comment at the level of the definition of
                * {!typed_avalue} *)
               let _, expected_ty, _ = ty_get_ref ty in
-              if nv.ty <> expected_ty then (
-                log#serror
-                  ("give_back_avalue_to_same_abstraction: improper type:\n\
+              if nv.ty <> expected_ty then
+                craise __FILE__ __LINE__ meta
+                  ("Value given back doesn't have the proper type:\n\
                     - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
                  ^ ty_to_string ctx nv.ty);
-                craise __FILE__ __LINE__ meta
-                  "Value given back doesn't have the proper type");
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
                * an ended loan *)
@@ -836,26 +832,26 @@ let check_borrow_disappeared (meta : Meta.meta) (fun_name : string)
       match lookup_borrow_opt ek_all l ctx with
       | None -> () (* Ok *)
       | Some _ ->
-          log#lerror
+          log#ltrace
             (lazy
               (fun_name ^ ": " ^ BorrowId.to_string l
              ^ ": borrow didn't disappear:\n- original context:\n"
               ^ eval_ctx_to_string ~meta:(Some meta) ctx0
               ^ "\n\n- new context:\n"
               ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-          craise __FILE__ __LINE__ meta "Borrow not eliminated"
+          internal_error __FILE__ __LINE__ meta
     in
     match lookup_loan_opt meta ek_all l ctx with
     | None -> () (* Ok *)
     | Some _ ->
-        log#lerror
+        log#ltrace
           (lazy
             (fun_name ^ ": " ^ BorrowId.to_string l
            ^ ": loan didn't disappear:\n- original context:\n"
             ^ eval_ctx_to_string ~meta:(Some meta) ctx0
             ^ "\n\n- new context:\n"
             ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-        craise __FILE__ __LINE__ meta "Loan not eliminated"
+        internal_error __FILE__ __LINE__ meta
   in
   unit_to_cm_fun check_disappeared
 

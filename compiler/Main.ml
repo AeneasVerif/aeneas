@@ -283,7 +283,9 @@ let () =
       if !Errors.error_list <> [] then (
         List.iter
           (fun (meta, msg) -> log#serror (Errors.format_error_message meta msg))
-          !Errors.error_list;
+          (* Reverse the list of error messages so that we print them from the
+             earliest to the latest. *)
+          (List.rev !Errors.error_list);
         exit 1);
 
       (* Print total elapsed time *)
