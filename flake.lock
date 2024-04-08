@@ -3,16 +3,17 @@
     "charon": {
       "inputs": {
         "crane": "crane",
+        "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1713364636,
-        "narHash": "sha256-+1qeUEzEz6wPc/0QaXQ6Co3tx8mckOggW8Hjx0qRFHc=",
+        "lastModified": 1713433954,
+        "narHash": "sha256-R3Pb/Z+V5s5neAwlTIhVJ/q3hDC65nLZ8d1ICotSdkM=",
         "owner": "aeneasverif",
         "repo": "charon",
-        "rev": "6267ea774c762a8ca47ce26e66acd6dcc6a0ac6b",
+        "rev": "80ceb481c90f3cda435d5a60944ea7516415b294",
         "type": "github"
       },
       "original": {
@@ -43,6 +44,21 @@
       }
     },
     "flake-compat": {
+      "locked": {
+        "lastModified": 1688025799,
+        "narHash": "sha256-ktpB4dRtnksm9F5WawoIkEneh1nrEvuxb5lJFt1iOyw=",
+        "owner": "nix-community",
+        "repo": "flake-compat",
+        "rev": "8bf105319d44f6b9f0d764efa4fdef9f1cc9ba1c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "flake-compat_2": {
       "locked": {
         "lastModified": 1688025799,
         "narHash": "sha256-ktpB4dRtnksm9F5WawoIkEneh1nrEvuxb5lJFt1iOyw=",
@@ -236,7 +252,7 @@
     "root": {
       "inputs": {
         "charon": "charon",
-        "flake-compat": "flake-compat",
+        "flake-compat": "flake-compat_2",
         "flake-utils": [
           "charon",
           "flake-utils"
