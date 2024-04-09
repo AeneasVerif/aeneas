@@ -53,8 +53,7 @@ let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
     borrows*.
  *)
 let read_place (meta : Meta.meta) (access : access_kind) (p : place)
-    (cf : typed_value -> m_fun) : m_fun =
- fun ctx ->
+  (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
   let v = read_place meta access p ctx in
   (* Check that there are no bottoms in the value *)
   cassert __FILE__ __LINE__
@@ -64,35 +63,36 @@ let read_place (meta : Meta.meta) (access : access_kind) (p : place)
   cassert __FILE__ __LINE__
     (not (reserved_in_value v))
     meta "There should be no reserved borrows in the value";
-  (* Call the continuation *)
-  cf v ctx
+  (* Return *)
+  v, ctx, (fun e -> e)
 
 let access_rplace_reorganize_and_read (config : config) (meta : Meta.meta)
     (expand_prim_copy : bool) (access : access_kind) (p : place)
-    (cf : typed_value -> m_fun) : m_fun =
- fun ctx ->
+    (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Make sure we can evaluate the path *)
-  let cc = update_ctx_along_read_place config meta access p in
+  let ctx, cc = update_ctx_along_read_place config meta access p ctx in
   (* End the proper loans at the place itself *)
-  let cc = comp cc (end_loans_at_place config meta access p) in
+  let ctx, cc1 = (end_loans_at_place config meta access p) ctx in
+  let cc = comp cc cc1 in
   (* Expand the copyable values which contain borrows (which are necessarily shared
    * borrows) *)
-  let cc =
+  let ctx, cc =
     if expand_prim_copy then
-      comp cc (expand_primitively_copyable_at_place config meta access p)
-    else cc
+      let ctx, cc1 = (expand_primitively_copyable_at_place config meta access p) ctx in
+      ctx, comp cc cc1
+    else ctx, cc
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
-  let read_place = read_place meta access p in
+  let ty_value, ctx, read_place = read_place meta access p ctx in
   (* Compose *)
-  comp cc read_place cf ctx
+  ty_value, ctx, comp cc read_place
 
 let access_rplace_reorganize (config : config) (meta : Meta.meta)
     (expand_prim_copy : bool) (access : access_kind) (p : place) : cm_fun =
- fun cf ctx ->
-  access_rplace_reorganize_and_read config meta expand_prim_copy access p
-    (fun _v -> cf)
-    ctx
+ fun ctx ->
+  let _, ctx, f = access_rplace_reorganize_and_read config meta expand_prim_copy access p 
+  ctx in
+  ctx, f
 
 (** Convert an operand constant operand value to a typed value *)
 let literal_to_typed_value (meta : Meta.meta) (ty : literal_type) (cv : literal)
@@ -244,32 +244,32 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
  *)
 let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta)
     (op : operand) : cm_fun =
- fun cf ctx ->
+ fun ctx ->
   let prepare : cm_fun =
-   fun cf ctx ->
+   fun ctx ->
     match op with
     | Constant _ ->
         (* No need to reorganize the context *)
-        cf ctx
+        ctx, fun e -> e
     | Copy p ->
         (* Access the value *)
         let access = Read in
         (* Expand the symbolic values, if necessary *)
         let expand_prim_copy = true in
-        access_rplace_reorganize config meta expand_prim_copy access p cf ctx
+        access_rplace_reorganize config meta expand_prim_copy access p ctx
     | Move p ->
         (* Access the value *)
         let access = Move in
         let expand_prim_copy = false in
-        access_rplace_reorganize config meta expand_prim_copy access p cf ctx
+        access_rplace_reorganize config meta expand_prim_copy access p ctx
   in
   (* Apply *)
-  prepare cf ctx
+  prepare ctx
 
 (** Evaluate an operand, without reorganizing the context before *)
 let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
-    (op : operand) (cf : typed_value -> m_fun) : m_fun =
- fun ctx ->
+    (op : operand) (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result)
+    =
   (* Debug *)
   log#ldebug
     (lazy
@@ -282,18 +282,18 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
   | Constant cv -> (
       match cv.value with
       | CLiteral lit ->
-          cf (literal_to_typed_value meta (ty_as_literal cv.ty) lit) ctx
+          (literal_to_typed_value meta (ty_as_literal cv.ty) lit), ctx, fun e -> e
       | CTraitConst (trait_ref, const_name) -> (
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value *)
           let ty = cv.ty in
           let v = mk_fresh_symbolic_typed_value meta ty in
           (* Continue the evaluation *)
-          let e = cf v ctx in
           (* Wrap the generated expression *)
-          match e with
-          | None -> None
-          | Some e ->
+          v, ctx, fun e ->
+            match e with
+            | None -> None
+            | Some e ->
               Some
                 (SymbolicAst.IntroSymbolic
                    ( ctx0,
@@ -322,35 +322,34 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
                 (ctx, v)
           in
           (* Continue *)
-          let e = cf cv ctx in
           (* If we are synthesizing a symbolic AST, it means that we are in symbolic
              mode: the value of the const generic is necessarily symbolic. *)
-          sanity_check __FILE__ __LINE__ (e = None || is_symbolic cv.value) meta;
           (* We have to wrap the generated expression *)
-          match e with
-          | None -> None
-          | Some e ->
-              (* If we are synthesizing a symbolic AST, it means that we are in symbolic
-                 mode: the value of the const generic is necessarily symbolic. *)
-              sanity_check __FILE__ __LINE__ (is_symbolic cv.value) meta;
-              (* *)
-              Some
-                (SymbolicAst.IntroSymbolic
-                   ( ctx0,
-                     None,
-                     value_as_symbolic meta cv.value,
-                     SymbolicAst.VaCgValue vid,
-                     e )))
+          cv, ctx, fun e ->
+            match e with
+            | None -> None
+            | Some e ->
+                (* If we are synthesizing a symbolic AST, it means that we are in symbolic
+                  mode: the value of the const generic is necessarily symbolic. *)
+                sanity_check __FILE__ __LINE__ (is_symbolic cv.value) meta;
+                (* *)
+                Some
+                  (SymbolicAst.IntroSymbolic
+                    ( ctx0,
+                      None,
+                      value_as_symbolic meta cv.value,
+                      SymbolicAst.VaCgValue vid,
+                      e )))
       | CFnPtr _ ->
           craise __FILE__ __LINE__ meta
             "Function pointers are not supported yet")
   | Copy p ->
       (* Access the value *)
       let access = Read in
-      let cc = read_place meta access p in
+      let v, ctx, cc = read_place meta access p ctx in
       (* Copy the value *)
-      let copy cf v : m_fun =
-       fun ctx ->
+(*       let copy cf v : m_fun =
+       fun ctx -> *)
         (* Sanity checks *)
         exec_assert __FILE__ __LINE__
           (not (bottom_in_value ctx.ended_regions v))
@@ -364,42 +363,41 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
         let allow_adt_copy = false in
         let ctx, v = copy_value meta allow_adt_copy config ctx v in
         (* Continue *)
-        cf v ctx
-      in
       (* Compose and apply *)
-      comp cc copy cf ctx
+      (* comp cc copy ctx *)
+      v, ctx, cc
   | Move p ->
       (* Access the value *)
       let access = Move in
-      let cc = read_place meta access p in
+      let v, ctx, cc = read_place meta access p ctx in
       (* Move the value *)
-      let move cf v : m_fun =
-       fun ctx ->
+(*       let move cf v : m_fun =
+       fun ctx -> *)
         (* Check that there are no bottoms in the value we are about to move *)
         exec_assert __FILE__ __LINE__
           (not (bottom_in_value ctx.ended_regions v))
           meta "There should be no bottoms in the value we are about to move";
         let bottom : typed_value = { value = VBottom; ty = v.ty } in
         let ctx = write_place meta access p bottom ctx in
-        cf v ctx
-      in
+        (* cf v ctx *)
+      (* in *)
       (* Compose and apply *)
-      comp cc move cf ctx
+      (* comp cc move cf ctx *)
+      bottom, ctx, cc
 
 let eval_operand (config : config) (meta : Meta.meta) (op : operand)
-    (cf : typed_value -> m_fun) : m_fun =
- fun ctx ->
+  (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Debug *)
   log#ldebug
     (lazy
       ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
       ^ eval_ctx_to_string ~meta:(Some meta) ctx
       ^ "\n"));
+  let ctx, cc = (prepare_eval_operand_reorganize config meta op) ctx in
+  let v, ctx, cc2 = (eval_operand_no_reorganize config meta op) ctx in
+
   (* We reorganize the context, then evaluate the operand *)
-  comp
-    (prepare_eval_operand_reorganize config meta op)
-    (eval_operand_no_reorganize config meta op)
-    cf ctx
+  v, ctx, comp cc cc2
 
 (** Small utility.
 
@@ -411,18 +409,17 @@ let prepare_eval_operands_reorganize (config : config) (meta : Meta.meta)
 
 (** Evaluate several operands. *)
 let eval_operands (config : config) (meta : Meta.meta) (ops : operand list)
-    (cf : typed_value list -> m_fun) : m_fun =
- fun ctx ->
+  (ctx : eval_ctx) : typed_value list * eval_ctx * (eval_result -> eval_result) =
   (* Prepare the operands *)
-  let prepare = prepare_eval_operands_reorganize config meta ops in
+  let ctx, prepare = prepare_eval_operands_reorganize config meta ops ctx in
   (* Evaluate the operands *)
-  let eval =
+  let v, ctx, eval =
     fold_left_list_apply_continuation
       (eval_operand_no_reorganize config meta)
-      ops
+      ops ctx
   in
   (* Compose and apply *)
-  comp prepare eval cf ctx
+  v, ctx, comp prepare eval
 
 let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand)
     (op2 : operand) (cf : typed_value * typed_value -> m_fun) : m_fun =

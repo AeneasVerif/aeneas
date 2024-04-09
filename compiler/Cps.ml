@@ -136,17 +136,19 @@ let id_cm_fun : cm_fun = fun cf ctx -> cf ctx
     of applying [f] to the first element of the inputs).
     
     See the unit test below for an illustration.
- *)
-let fold_left_apply_continuation (f : 'a -> ('c -> 'd) -> 'c -> 'd)
-    (inputs : 'a list) (cf : 'c -> 'd) : 'c -> 'd =
-  let rec eval_list (inputs : 'a list) (cf : 'c -> 'd) : 'c -> 'd =
+ *)*)
+
+let fold_left_apply_continuation (f : 'a -> (* ('c -> 'd) ->*) 'c -> 'd )
+    (inputs : 'a list) (* (cf : 'c -> 'd) *) : 'c -> 'd =
+  let rec eval_list (inputs : 'a list) (cc : 'e -> 'e) : 'c -> 'd =
    fun ctx ->
     match inputs with
-    | [] -> cf ctx
-    | x :: inputs -> comp (f x) (fun cf -> eval_list inputs cf) cf ctx
+    | [] -> ctx, cc
+    | x :: inputs -> let ctx, cc1 = (f x ctx) in
+    eval_list inputs (comp cc1 cc) ctx
   in
-  eval_list inputs cf
-
+  eval_list inputs (fun e -> e)
+(*
 (** Unit test/example for {!fold_left_apply_continuation} *)
 let _ =
   fold_left_apply_continuation
@@ -178,7 +180,18 @@ let fold_left_list_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
         comp (f x) (fun cf v -> eval_list inputs cf (v :: outputs)) cf ctx
   in
   eval_list inputs cf []
-
+*)
+let fold_left_list_apply_continuation (f : 'a -> (* ('c -> 'd) ->*) 'c -> 'd )
+    (inputs : 'a list) (* (cf : 'c -> 'd) *) : 'c -> 'f =
+  let rec eval_list (inputs : 'a list) (outputs : 'b list) (cc : 'e -> 'e) : 'c -> 'f =
+   fun ctx ->
+    match inputs with
+    | [] -> List.rev outputs, ctx, cc
+    | x :: inputs -> let v, ctx, cc1 = (f x ctx) in
+    eval_list inputs (v :: outputs) (comp cc1 cc) ctx
+  in
+  eval_list inputs [] (fun e -> e)
+(*
 (** Unit test/example for {!fold_left_list_apply_continuation} *)
 let _ =
   fold_left_list_apply_continuation
