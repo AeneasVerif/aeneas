@@ -160,7 +160,7 @@ let find_first_primitively_copyable_sv_with_borrows
 
       method! visit_VSymbolic _ sv =
         let ty = sv.sv_ty in
-        if ty_is_primitively_copyable ty && ty_has_borrows type_infos ty then
+        if ty_is_copyable ty && ty_has_borrows type_infos ty then
           raise (FoundSymbolicValue sv)
         else ()
     end

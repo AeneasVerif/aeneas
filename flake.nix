@@ -4,7 +4,7 @@
   inputs = {
     # Remark: when adding inputs here, don't forget to also add them in the list
     # of outputs below!
-    charon.url = "github:aeneasverif/charon";
+    charon.url = "github:aeneasverif/charon/generic-copy";
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
     hacl-nix.url = "github:hacl-star/hacl-nix";

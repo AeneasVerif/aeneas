@@ -827,7 +827,7 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
       sanity_check __FILE__ __LINE__ (info.env_count <= 1) meta;
     (* A duplicated symbolic value is necessarily primitively copyable *)
     sanity_check __FILE__ __LINE__
-      (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
+      (info.env_count <= 1 || ty_is_copyable info.ty)
       meta;
 
     sanity_check __FILE__ __LINE__
