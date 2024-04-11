@@ -13,7 +13,7 @@ Module External_FunsExternal.
 (** [core::mem::swap]:
     Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42 *)
 Definition core_mem_swap (T : Type) (x : T) (y : T) (s : state) :=
-  Return (s, (y, x))
+  Ok (s, (y, x))
 .
 
 (** [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]: forward function
