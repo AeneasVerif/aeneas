@@ -282,8 +282,8 @@ type bs_ctx = {
   mk_panic : texpression option;
       (** Small helper: translate a [fail] expression.
 
-      We initialize this at [None].
-  *)
+           We initialize this at [None].
+       *)
 }
 [@@deriving show]
 
