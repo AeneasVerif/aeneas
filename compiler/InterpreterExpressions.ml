@@ -157,9 +157,8 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
               const_generics = [];
               trait_refs = [];
             } ) ->
-          exec_assert __FILE__ __LINE__
-            (ty_is_copyable ty)
-            meta "The type is not primitively copyable"
+          exec_assert __FILE__ __LINE__ (ty_is_copyable ty) meta
+            "The type is not primitively copyable"
       | _ -> exec_raise __FILE__ __LINE__ meta "Unreachable");
       let ctx, fields =
         List.fold_left_map
@@ -528,9 +527,8 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
     exec_assert __FILE__ __LINE__ (v1.ty = v2.ty) meta
       "The arguments given to the binop don't have the same type";
     (* Equality/inequality check is primitive only for a subset of types *)
-    exec_assert __FILE__ __LINE__
-      (ty_is_copyable v1.ty)
-      meta "Type is not primitively copyable";
+    exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) meta
+      "Type is not primitively copyable";
     let b = v1 = v2 in
     Ok { value = VLiteral (VBool b); ty = TLiteral TBool })
   else
@@ -621,9 +619,8 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
         (* Equality operations *)
         sanity_check __FILE__ __LINE__ (v1.ty = v2.ty) meta;
         (* Equality/inequality check is primitive only for a subset of types *)
-        exec_assert __FILE__ __LINE__
-          (ty_is_copyable v1.ty)
-          meta "The type is not primitively copyable";
+        exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) meta
+          "The type is not primitively copyable";
         TLiteral TBool)
       else
         (* Other operations: input types are integers *)
