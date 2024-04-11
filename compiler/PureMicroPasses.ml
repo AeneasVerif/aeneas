@@ -752,7 +752,7 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               },
               x ) ->
             (* return/fail case *)
-            if variant_id = result_return_id then
+            if variant_id = result_ok_id then
               (* Return case - note that the simplification we just perform
                  might have unlocked the tuple simplification below *)
               self#visit_Let env false lv x next
@@ -1084,19 +1084,19 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = { body with body = body_exp; inputs_lvs } in
       { def with body = Some body }
 
-(** Simplify the lets immediately followed by a return.
+(** Simplify the lets immediately followed by an ok.
 
     Ex.:
     {[
       x <-- f y;
-      Return x
+      Ok x
 
         ~~>
 
       f y
     ]}
  *)
-let simplify_let_then_return _ctx (def : fun_decl) =
+let simplify_let_then_ok _ctx (def : fun_decl) =
   (* Match a pattern and an expression: evaluates to [true] if the expression
      is actually exactly the pattern *)
   let rec match_pattern_and_expr (pat : typed_pattern) (e : texpression) : bool
@@ -1152,7 +1152,7 @@ let simplify_let_then_return _ctx (def : fun_decl) =
               | Some e ->
                   if match_pattern_and_expr lv e then
                     (* We need to wrap the right-value in a ret *)
-                    (mk_result_return_texpression def.meta rv).e
+                    (mk_result_ok_texpression def.meta rv).e
                   else not_simpl_e
               | None ->
                   if match_pattern_and_expr lv next_e then rv.e else not_simpl_e
@@ -1791,7 +1791,7 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               let err_v = mk_texpression_from_var err_var in
               let fail_value = mk_result_fail_texpression def.meta err_v e.ty in
               let fail_branch = { pat = fail_pat; branch = fail_value } in
-              let success_pat = mk_result_return_pattern lv in
+              let success_pat = mk_result_ok_pattern lv in
               let success_branch = { pat = success_pat; branch = e } in
               let switch_body = Match [ fail_branch; success_branch ] in
               let e = Switch (re, switch_body) in
@@ -1854,9 +1854,9 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
        f y
      ]}
   *)
-  let def = simplify_let_then_return ctx def in
+  let def = simplify_let_then_ok ctx def in
   log#ldebug
-    (lazy ("simplify_let_then_return:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+    (lazy ("simplify_let_then_ok:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Simplify the aggregated ADTs.
 
@@ -1892,11 +1892,10 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
   (* Simplify the let-then return again (the lambda simplification may have
      unlocked more simplifications here) *)
-  let def = simplify_let_then_return ctx def in
+  let def = simplify_let_then_ok ctx def in
   log#ldebug
     (lazy
-      ("simplify_let_then_return (pass 2):\n\n" ^ fun_decl_to_string ctx def
-     ^ "\n"));
+      ("simplify_let_then_ok (pass 2):\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Decompose the monadic let-bindings - used by Coq *)
   let def =

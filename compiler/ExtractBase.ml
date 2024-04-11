@@ -1020,7 +1020,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
   match !backend with
   | FStar ->
       [
-        (TResult, result_return_id, "Return");
+        (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail");
         (TError, error_failure_id, "Failure");
         (TError, error_out_of_fuel_id, "OutOfFuel");
@@ -1029,7 +1029,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | Coq ->
       [
-        (TResult, result_return_id, "Return");
+        (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail_");
         (TError, error_failure_id, "Failure");
         (TError, error_out_of_fuel_id, "OutOfFuel");
@@ -1038,7 +1038,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | Lean ->
       [
-        (TResult, result_return_id, "Result.ret");
+        (TResult, result_ok_id, "Result.ok");
         (TResult, result_fail_id, "Result.fail");
         (* For panic: we omit the prefix "Error." because the type is always
            clear from the context. Also, "Error" is often used by user-defined
@@ -1049,7 +1049,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | HOL4 ->
       [
-        (TResult, result_return_id, "Return");
+        (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail");
         (TError, error_failure_id, "Failure");
         (* No Fuel::Zero on purpose *)

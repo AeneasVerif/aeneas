@@ -20,7 +20,7 @@ assume
 val serialize_lem (hm : hashmap_HashMap_t u64) (st : state) : Lemma (
   match hashmap_utils_serialize hm st with
   | Fail _ -> True
-  | Return (st', ()) -> state_v st' == hm)
+  | Ok (st', ()) -> state_v st' == hm)
   [SMTPat (hashmap_utils_serialize hm st)]
 
 /// [deserialize] gives us the hash map stored on disk, without updating it
@@ -28,7 +28,7 @@ assume
 val deserialize_lem (st : state) : Lemma (
   match hashmap_utils_deserialize st with
   | Fail _ -> True
-  | Return (st', hm) -> hm == state_v st /\ st' == st)
+  | Ok (st', hm) -> hm == state_v st /\ st' == st)
   [SMTPat (hashmap_utils_deserialize st)]
 
 (*** Lemmas *)
@@ -39,10 +39,10 @@ val deserialize_lem (st : state) : Lemma (
 val insert_on_disk_lem (key : usize) (value : u64) (st : state) : Lemma (
   match insert_on_disk key value st with
   | Fail _ -> True
-  | Return (st', ()) ->
+  | Ok (st', ()) ->
     let hm = state_v st in
     match hashmap_HashMap_insert u64 hm key value with
     | Fail _ -> False
-    | Return hm' -> hm' == state_v st')
+    | Ok hm' -> hm' == state_v st')
 
 let insert_on_disk_lem key value st = ()

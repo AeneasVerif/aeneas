@@ -15,7 +15,7 @@ Module HashmapMain_Funs.
 (** [hashmap_main::hashmap::hash_key]:
     Source: 'src/hashmap.rs', lines 27:0-27:32 *)
 Definition hashmap_hash_key (k : usize) : result usize :=
-  Return k.
+  Ok k.
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::allocate_slots]: loop 0:
     Source: 'src/hashmap.rs', lines 50:4-56:5 *)
@@ -32,7 +32,7 @@ Fixpoint hashmap_HashMap_allocate_slots_loop
       slots1 <- alloc_vec_Vec_push (hashmap_List_t T) slots Hashmap_List_Nil;
       n3 <- usize_sub n1 1%usize;
       hashmap_HashMap_allocate_slots_loop T n2 slots1 n3)
-    else Return slots
+    else Ok slots
   end
 .
 
@@ -58,7 +58,7 @@ Definition hashmap_HashMap_new_with_capacity
       capacity;
   i <- usize_mul capacity max_load_dividend;
   i1 <- usize_div i max_load_divisor;
-  Return
+  Ok
     {|
       hashmap_HashMap_num_entries := 0%usize;
       hashmap_HashMap_max_load_factor := (max_load_dividend, max_load_divisor);
@@ -94,7 +94,7 @@ Fixpoint hashmap_HashMap_clear_loop
       i2 <- usize_add i 1%usize;
       slots1 <- index_mut_back Hashmap_List_Nil;
       hashmap_HashMap_clear_loop T n1 slots1 i2)
-    else Return slots
+    else Ok slots
   end
 .
 
@@ -105,7 +105,7 @@ Definition hashmap_HashMap_clear
   result (hashmap_HashMap_t T)
   :=
   hm <- hashmap_HashMap_clear_loop T n self.(hashmap_HashMap_slots) 0%usize;
-  Return
+  Ok
     {|
       hashmap_HashMap_num_entries := 0%usize;
       hashmap_HashMap_max_load_factor := self.(hashmap_HashMap_max_load_factor);
@@ -118,7 +118,7 @@ Definition hashmap_HashMap_clear
     Source: 'src/hashmap.rs', lines 90:4-90:30 *)
 Definition hashmap_HashMap_len
   (T : Type) (self : hashmap_HashMap_t T) : result usize :=
-  Return self.(hashmap_HashMap_num_entries)
+  Ok self.(hashmap_HashMap_num_entries)
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]: loop 0:
@@ -133,13 +133,13 @@ Fixpoint hashmap_HashMap_insert_in_list_loop
     match ls with
     | Hashmap_List_Cons ckey cvalue tl =>
       if ckey s= key
-      then Return (false, Hashmap_List_Cons ckey value tl)
+      then Ok (false, Hashmap_List_Cons ckey value tl)
       else (
         p <- hashmap_HashMap_insert_in_list_loop T n1 key value tl;
         let (b, tl1) := p in
-        Return (b, Hashmap_List_Cons ckey cvalue tl1))
+        Ok (b, Hashmap_List_Cons ckey cvalue tl1))
     | Hashmap_List_Nil =>
-      Return (true, Hashmap_List_Cons key value Hashmap_List_Nil)
+      Ok (true, Hashmap_List_Cons key value Hashmap_List_Nil)
     end
   end
 .
@@ -173,7 +173,7 @@ Definition hashmap_HashMap_insert_no_resize
   then (
     i1 <- usize_add self.(hashmap_HashMap_num_entries) 1%usize;
     v <- index_mut_back l1;
-    Return
+    Ok
       {|
         hashmap_HashMap_num_entries := i1;
         hashmap_HashMap_max_load_factor :=
@@ -183,7 +183,7 @@ Definition hashmap_HashMap_insert_no_resize
       |})
   else (
     v <- index_mut_back l1;
-    Return
+    Ok
       {|
         hashmap_HashMap_num_entries := self.(hashmap_HashMap_num_entries);
         hashmap_HashMap_max_load_factor :=
@@ -206,7 +206,7 @@ Fixpoint hashmap_HashMap_move_elements_from_list_loop
     | Hashmap_List_Cons k v tl =>
       ntable1 <- hashmap_HashMap_insert_no_resize T n1 ntable k v;
       hashmap_HashMap_move_elements_from_list_loop T n1 ntable1 tl
-    | Hashmap_List_Nil => Return ntable
+    | Hashmap_List_Nil => Ok ntable
     end
   end
 .
@@ -243,7 +243,7 @@ Fixpoint hashmap_HashMap_move_elements_loop
       i2 <- usize_add i 1%usize;
       slots1 <- index_mut_back l1;
       hashmap_HashMap_move_elements_loop T n1 ntable1 slots1 i2)
-    else Return (ntable, slots)
+    else Ok (ntable, slots)
   end
 .
 
@@ -277,7 +277,7 @@ Definition hashmap_HashMap_try_resize
       hashmap_HashMap_move_elements T n ntable self.(hashmap_HashMap_slots)
         0%usize;
     let (ntable1, _) := p in
-    Return
+    Ok
       {|
         hashmap_HashMap_num_entries := self.(hashmap_HashMap_num_entries);
         hashmap_HashMap_max_load_factor := (i, i1);
@@ -285,7 +285,7 @@ Definition hashmap_HashMap_try_resize
         hashmap_HashMap_slots := ntable1.(hashmap_HashMap_slots)
       |})
   else
-    Return
+    Ok
       {|
         hashmap_HashMap_num_entries := self.(hashmap_HashMap_num_entries);
         hashmap_HashMap_max_load_factor := (i, i1);
@@ -304,7 +304,7 @@ Definition hashmap_HashMap_insert
   i <- hashmap_HashMap_len T self1;
   if i s> self1.(hashmap_HashMap_max_load)
   then hashmap_HashMap_try_resize T n self1
-  else Return self1
+  else Ok self1
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
@@ -317,9 +317,9 @@ Fixpoint hashmap_HashMap_contains_key_in_list_loop
     match ls with
     | Hashmap_List_Cons ckey _ tl =>
       if ckey s= key
-      then Return true
+      then Ok true
       else hashmap_HashMap_contains_key_in_list_loop T n1 key tl
-    | Hashmap_List_Nil => Return false
+    | Hashmap_List_Nil => Ok false
     end
   end
 .
@@ -357,7 +357,7 @@ Fixpoint hashmap_HashMap_get_in_list_loop
     match ls with
     | Hashmap_List_Cons ckey cvalue tl =>
       if ckey s= key
-      then Return cvalue
+      then Ok cvalue
       else hashmap_HashMap_get_in_list_loop T n1 key tl
     | Hashmap_List_Nil => Fail_ Failure
     end
@@ -398,15 +398,15 @@ Fixpoint hashmap_HashMap_get_mut_in_list_loop
     | Hashmap_List_Cons ckey cvalue tl =>
       if ckey s= key
       then
-        let back := fun (ret : T) => Return (Hashmap_List_Cons ckey ret tl) in
-        Return (cvalue, back)
+        let back := fun (ret : T) => Ok (Hashmap_List_Cons ckey ret tl) in
+        Ok (cvalue, back)
       else (
         p <- hashmap_HashMap_get_mut_in_list_loop T n1 tl key;
         let (t, back) := p in
         let back1 :=
           fun (ret : T) =>
-            tl1 <- back ret; Return (Hashmap_List_Cons ckey cvalue tl1) in
-        Return (t, back1))
+            tl1 <- back ret; Ok (Hashmap_List_Cons ckey cvalue tl1) in
+        Ok (t, back1))
     | Hashmap_List_Nil => Fail_ Failure
     end
   end
@@ -441,7 +441,7 @@ Definition hashmap_HashMap_get_mut
     fun (ret : T) =>
       l1 <- get_mut_in_list_back ret;
       v <- index_mut_back l1;
-      Return
+      Ok
         {|
           hashmap_HashMap_num_entries := self.(hashmap_HashMap_num_entries);
           hashmap_HashMap_max_load_factor :=
@@ -449,7 +449,7 @@ Definition hashmap_HashMap_get_mut
           hashmap_HashMap_max_load := self.(hashmap_HashMap_max_load);
           hashmap_HashMap_slots := v
         |} in
-  Return (t, back)
+  Ok (t, back)
 .
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]: loop 0:
@@ -469,14 +469,14 @@ Fixpoint hashmap_HashMap_remove_from_list_loop
           core_mem_replace (hashmap_List_t T) (Hashmap_List_Cons ckey t tl)
             Hashmap_List_Nil in
         match mv_ls with
-        | Hashmap_List_Cons _ cvalue tl1 => Return (Some cvalue, tl1)
+        | Hashmap_List_Cons _ cvalue tl1 => Ok (Some cvalue, tl1)
         | Hashmap_List_Nil => Fail_ Failure
         end
       else (
         p <- hashmap_HashMap_remove_from_list_loop T n1 key tl;
         let (o, tl1) := p in
-        Return (o, Hashmap_List_Cons ckey t tl1))
-    | Hashmap_List_Nil => Return (None, Hashmap_List_Nil)
+        Ok (o, Hashmap_List_Cons ckey t tl1))
+    | Hashmap_List_Nil => Ok (None, Hashmap_List_Nil)
     end
   end
 .
@@ -509,7 +509,7 @@ Definition hashmap_HashMap_remove
   match x with
   | None =>
     v <- index_mut_back l1;
-    Return (None,
+    Ok (None,
       {|
         hashmap_HashMap_num_entries := self.(hashmap_HashMap_num_entries);
         hashmap_HashMap_max_load_factor :=
@@ -520,7 +520,7 @@ Definition hashmap_HashMap_remove
   | Some x1 =>
     i1 <- usize_sub self.(hashmap_HashMap_num_entries) 1%usize;
     v <- index_mut_back l1;
-    Return (Some x1,
+    Ok (Some x1,
       {|
         hashmap_HashMap_num_entries := i1;
         hashmap_HashMap_max_load_factor :=
@@ -567,7 +567,7 @@ Definition hashmap_test1 (n : nat) : result unit :=
             then Fail_ Failure
             else (
               i4 <- hashmap_HashMap_get u64 n hm6 1056%usize;
-              if negb (i4 s= 256%u64) then Fail_ Failure else Return tt)))
+              if negb (i4 s= 256%u64) then Fail_ Failure else Ok tt)))
       end))
 .
 
@@ -584,6 +584,6 @@ Definition insert_on_disk
 (** [hashmap_main::main]:
     Source: 'src/hashmap_main.rs', lines 16:0-16:13 *)
 Definition main : result unit :=
-  Return tt.
+  Ok tt.
 
 End HashmapMain_Funs.

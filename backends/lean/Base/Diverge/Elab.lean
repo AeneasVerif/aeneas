@@ -35,7 +35,7 @@ def mkProd (x y : Expr) : MetaM Expr :=
 def mkInOutTy (x y z : Expr) : MetaM Expr := do
   mkAppM ``FixII.mk_in_out_ty #[x, y, z]
 
--- Return the `a` in `Return a`
+-- Return the `a` in `Result a`
 def getResultTy (ty : Expr) : MetaM Expr :=
   ty.withApp fun f args => do
   if ¬ f.isConstOf ``Result ∨ args.size ≠ 1 then
@@ -411,7 +411,7 @@ structure TypeInfo where
      For `list_nth`: `λ a => List a × Int`
    -/
   in_ty : Expr
-  /- The output type, without the `Return`. This is a function taking
+  /- The output type, without the `Result`. This is a function taking
      as input a value of type `params_ty`.
 
      For `list_nth`: `λ a => a`
@@ -1479,9 +1479,9 @@ namespace Tests
   divergent def list_nth {a: Type u} (ls : List a) (i : Int) : Result a :=
     match ls with
     | [] => .fail .panic
-    | x :: ls =>
-      if i = 0 then return x
-      else return (← list_nth ls (i - 1))
+    | x :: ls => do
+      if i = 0 then pure x
+      else pure (← list_nth ls (i - 1))
 
   --set_option trace.Diverge false
 
@@ -1490,7 +1490,7 @@ namespace Tests
   example {a: Type} (ls : List a) :
     ∀ (i : Int),
     0 ≤ i → i < ls.length →
-    ∃ x, list_nth ls i = .ret x := by
+    ∃ x, list_nth ls i = .ok x := by
     induction ls
     . intro i hpos h; simp at h; linarith
     . rename_i hd tl ih
@@ -1538,7 +1538,7 @@ namespace Tests
       if i > 10 then return (← foo (i / 10)) + (← bar i) else bar 10
 
     divergent def bar (i : Int) : Result Nat :=
-      if i > 20 then foo (i / 20) else .ret 42
+      if i > 20 then foo (i / 20) else .ok 42
   end
 
   #check foo.unfold
@@ -1557,8 +1557,8 @@ namespace Tests
   divergent def iInBounds {a : Type} (ls : List a) (i : Int) : Result Bool :=
     let i0 := ls.length
     if i < i0
-    then Result.ret True
-    else Result.ret False
+    then Result.ok True
+    else Result.ok False
 
   #check iInBounds.unfold
 
@@ -1566,8 +1566,8 @@ namespace Tests
     {a : Type} (ls : List a) : Result Bool :=
     let ls1 := ls
     match ls1 with
-    | [] => Result.ret False
-    | _ :: _ => Result.ret True
+    | [] => Result.ok False
+    | _ :: _ => Result.ok True
 
   #check isCons.unfold
 
@@ -1584,7 +1584,7 @@ namespace Tests
   divergent def infinite_loop : Result Unit :=
     do
     let _ ← infinite_loop
-    Result.ret ()
+    Result.ok ()
 
   #check infinite_loop.unfold
 
@@ -1604,51 +1604,51 @@ namespace Tests
 
     divergent def id {a : Type u} (t : Tree a) : Result (Tree a) :=
       match t with
-      | .leaf x => .ret (.leaf x)
+      | .leaf x => .ok (.leaf x)
       | .node tl =>
         do
           let tl ← map id tl
-          .ret (.node tl)
+          .ok (.node tl)
 
     #check id.unfold
 
     divergent def id1 {a : Type u} (t : Tree a) : Result (Tree a) :=
       match t with
-      | .leaf x => .ret (.leaf x)
+      | .leaf x => .ok (.leaf x)
       | .node tl =>
         do
           let tl ← map (fun x => id1 x) tl
-          .ret (.node tl)
+          .ok (.node tl)
 
     #check id1.unfold
 
     divergent def id2 {a : Type u} (t : Tree a) : Result (Tree a) :=
       match t with
-      | .leaf x => .ret (.leaf x)
+      | .leaf x => .ok (.leaf x)
       | .node tl =>
         do
           let tl ← map (fun x => do let _ ← id2 x; id2 x) tl
-          .ret (.node tl)
+          .ok (.node tl)
 
     #check id2.unfold
 
     divergent def incr (t : Tree Nat) : Result (Tree Nat) :=
       match t with
-      | .leaf x => .ret (.leaf (x + 1))
+      | .leaf x => .ok (.leaf (x + 1))
       | .node tl =>
         do
           let tl ← map incr tl
-          .ret (.node tl)
+          .ok (.node tl)
 
     -- We handle this by inlining the let-binding
     divergent def id3 (t : Tree Nat) : Result (Tree Nat) :=
       match t with
-      | .leaf x => .ret (.leaf (x + 1))
+      | .leaf x => .ok (.leaf (x + 1))
       | .node tl =>
         do
           let f := id3
           let tl ← map f tl
-          .ret (.node tl)
+          .ok (.node tl)
 
     #check id3.unfold
 
@@ -1658,12 +1658,12 @@ namespace Tests
     -- be parameterized by something).
     divergent def id4 (t : Tree Nat) : Result (Tree Nat) :=
       match t with
-      | .leaf x => .ret (.leaf (x + 1))
+      | .leaf x => .ok (.leaf (x + 1))
       | .node tl =>
         do
-          let f ← .ret id4
+          let f ← .ok id4
           let tl ← map f tl
-          .ret (.node tl)
+          .ok (.node tl)
 
     #check id4.unfold
     -/

@@ -16,7 +16,7 @@ Definition ref_incr (x : i32) : result i32 :=
 (** [paper::test_incr]:
     Source: 'src/paper.rs', lines 8:0-8:18 *)
 Definition test_incr : result unit :=
-  x <- ref_incr 0%i32; if negb (x s= 1%i32) then Fail_ Failure else Return tt
+  x <- ref_incr 0%i32; if negb (x s= 1%i32) then Fail_ Failure else Ok tt
 .
 
 (** Unit test for [paper::test_incr] *)
@@ -27,8 +27,8 @@ Check (test_incr )%return.
 Definition choose
   (T : Type) (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
   if b
-  then let back := fun (ret : T) => Return (ret, y) in Return (x, back)
-  else let back := fun (ret : T) => Return (x, ret) in Return (y, back)
+  then let back := fun (ret : T) => Ok (ret, y) in Ok (x, back)
+  else let back := fun (ret : T) => Ok (x, ret) in Ok (y, back)
 .
 
 (** [paper::test_choose]:
@@ -44,7 +44,7 @@ Definition test_choose : result unit :=
     let (x, y) := p1 in
     if negb (x s= 1%i32)
     then Fail_ Failure
-    else if negb (y s= 0%i32) then Fail_ Failure else Return tt)
+    else if negb (y s= 0%i32) then Fail_ Failure else Ok tt)
 .
 
 (** Unit test for [paper::test_choose] *)
@@ -69,17 +69,14 @@ Fixpoint list_nth_mut
   match l with
   | List_Cons x tl =>
     if i s= 0%u32
-    then
-      let back := fun (ret : T) => Return (List_Cons ret tl) in
-      Return (x, back)
+    then let back := fun (ret : T) => Ok (List_Cons ret tl) in Ok (x, back)
     else (
       i1 <- u32_sub i 1%u32;
       p <- list_nth_mut T tl i1;
       let (t, list_nth_mut_back) := p in
       let back :=
-        fun (ret : T) => tl1 <- list_nth_mut_back ret; Return (List_Cons x tl1)
-        in
-      Return (t, back))
+        fun (ret : T) => tl1 <- list_nth_mut_back ret; Ok (List_Cons x tl1) in
+      Ok (t, back))
   | List_Nil => Fail_ Failure
   end
 .
@@ -89,7 +86,7 @@ Fixpoint list_nth_mut
 Fixpoint sum (l : List_t i32) : result i32 :=
   match l with
   | List_Cons x tl => i <- sum tl; i32_add x i
-  | List_Nil => Return 0%i32
+  | List_Nil => Ok 0%i32
   end
 .
 
@@ -103,7 +100,7 @@ Definition test_nth : result unit :=
   x1 <- i32_add x 1%i32;
   l2 <- list_nth_mut_back x1;
   i <- sum l2;
-  if negb (i s= 7%i32) then Fail_ Failure else Return tt
+  if negb (i s= 7%i32) then Fail_ Failure else Ok tt
 .
 
 (** Unit test for [paper::test_nth] *)
@@ -118,7 +115,7 @@ Definition call_choose (p : (u32 * u32)) : result u32 :=
   pz1 <- u32_add pz 1%u32;
   p2 <- choose_back pz1;
   let (px1, _) := p2 in
-  Return px1
+  Ok px1
 .
 
 End Paper.

@@ -22,10 +22,10 @@ let test_new_non_zero_u32
 (** [external::test_vec]:
     Source: 'src/external.rs', lines 17:0-17:17 *)
 let test_vec : result unit =
-  let* _ = alloc_vec_Vec_push u32 (alloc_vec_Vec_new u32) 0 in Return ()
+  let* _ = alloc_vec_Vec_push u32 (alloc_vec_Vec_new u32) 0 in Ok ()
 
 (** Unit test for [external::test_vec] *)
-let _ = assert_norm (test_vec = Return ())
+let _ = assert_norm (test_vec = Ok ())
 
 (** [external::custom_swap]:
     Source: 'src/external.rs', lines 24:0-24:66 *)
@@ -34,8 +34,8 @@ let custom_swap
   result (state & (t & (t -> state -> result (state & (t & t)))))
   =
   let* (st1, (x1, y1)) = core_mem_swap t x y st in
-  let back = fun ret st2 -> Return (st2, (ret, y1)) in
-  Return (st1, (x1, back))
+  let back = fun ret st2 -> Ok (st2, (ret, y1)) in
+  Ok (st1, (x1, back))
 
 (** [external::test_custom_swap]:
     Source: 'src/external.rs', lines 29:0-29:59 *)
@@ -43,12 +43,12 @@ let test_custom_swap
   (x : u32) (y : u32) (st : state) : result (state & (u32 & u32)) =
   let* (st1, (_, custom_swap_back)) = custom_swap u32 x y st in
   let* (_, (x1, y1)) = custom_swap_back 1 st1 in
-  Return (st1, (x1, y1))
+  Ok (st1, (x1, y1))
 
 (** [external::test_swap_non_zero]:
     Source: 'src/external.rs', lines 35:0-35:44 *)
 let test_swap_non_zero (x : u32) (st : state) : result (state & u32) =
   let* (st1, p) = swap u32 x 0 st in
   let (x1, _) = p in
-  if x1 = 0 then Fail Failure else Return (st1, x1)
+  if x1 = 0 then Fail Failure else Ok (st1, x1)
 

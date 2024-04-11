@@ -60,34 +60,34 @@ def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
       simp [Usize.max] at *
       have hm := Usize.refined_max.property
       cases h <;> cases hm <;> simp [U32.max, U64.max] at * <;> try linarith
-    return ⟨ List.concat v.val x, by simp at *; assumption ⟩
+    ok ⟨ List.concat v.val x, by simp at *; assumption ⟩
   else
     fail maximumSizeExceeded
 
 -- This shouldn't be used
 def Vec.insert_fwd (α : Type u) (v: Vec α) (i: Usize) (_: α) : Result Unit :=
   if i.val < v.length then
-    .ret ()
+    ok ()
   else
-    .fail arrayOutOfBounds
+    fail arrayOutOfBounds
 
 -- This is actually the backward function
 def Vec.insert (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   if i.val < v.length then
-    .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
+    ok ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
   else
-    .fail arrayOutOfBounds
+    fail arrayOutOfBounds
 
 @[pspec]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.insert α i x = ret nv ∧ nv.val = v.val.update i.val x := by
+  ∃ nv, v.insert α i x = ok nv ∧ nv.val = v.val.update i.val x := by
   simp [insert, *]
 
 def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
-  | some x => ret x
+  | some x => ok x
 
 /- In the theorems below: we don't always need the `∃ ..`, but we use one
    so that `progress` introduces an opaque variable and an equality. This
@@ -97,7 +97,7 @@ def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
 @[pspec]
 theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_usize i = ret x ∧ x = v.val.index i.val := by
+  ∃ x, v.index_usize i = ok x ∧ x = v.val.index i.val := by
   simp only [index_usize]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
@@ -107,12 +107,12 @@ def Vec.update_usize {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec 
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
+    ok ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
 
 @[pspec]
 theorem Vec.update_usize_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.update_usize i x = ret nv ∧
+  ∃ nv, v.update_usize i x = ok nv ∧
   nv.val = v.val.update i.val x
   := by
   simp only [update_usize]
@@ -124,15 +124,15 @@ theorem Vec.update_usize_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
 def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
   Result (α × (α → Result (Vec α))) :=
   match Vec.index_usize v i with
-  | ret x =>
-    ret (x, Vec.update_usize v i)
+  | ok x =>
+    ok (x, Vec.update_usize v i)
   | fail e => fail e
   | div => div
 
 @[pspec]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x back, v.index_mut_usize i = ret (x, back) ∧
+  ∃ x back, v.index_mut_usize i = ok (x, back) ∧
   x = v.val.index i.val ∧
   -- Backward function
   back = v.update_usize i

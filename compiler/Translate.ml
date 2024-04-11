@@ -158,6 +158,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       inside_loop = false;
       loop_ids_map;
       loops = Pure.LoopId.Map.empty;
+      mk_return = None;
+      mk_panic = None;
     }
   in
 

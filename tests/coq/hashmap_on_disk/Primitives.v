@@ -19,19 +19,19 @@ Inductive error :=
   | OutOfFuel.
 
 Inductive result A :=
-  | Return : A -> result A
+  | Ok : A -> result A
   | Fail_ : error -> result A.
 
-Arguments Return {_} a.
+Arguments Ok {_} a.
 Arguments Fail_ {_}.
 
 Definition bind {A B} (m: result A) (f: A -> result B) : result B :=
   match m with
   | Fail_ e => Fail_ e
-  | Return x => f x
+  | Ok x => f x
   end.
 
-Definition return_ {A: Type} (x: A) : result A := Return x.
+Definition return_ {A: Type} (x: A) : result A := Ok x.
 Definition fail_ {A: Type} (e: error) : result A := Fail_ e.
 
 Notation "x <- c1 ; c2" := (bind c1 (fun x => c2))
@@ -39,27 +39,27 @@ Notation "x <- c1 ; c2" := (bind c1 (fun x => c2))
 
 (** Monadic assert *)
 Definition massert (b: bool) : result unit :=
-  if b then Return tt else Fail_ Failure.
+  if b then Ok tt else Fail_ Failure.
 
 (** Normalize and unwrap a successful result (used for globals) *)
-Definition eval_result_refl {A} {x} (a: result A) (p: a = Return x) : A :=
-  match a as r return (r = Return x -> A) with
-  | Return a' => fun _  => a'
+Definition eval_result_refl {A} {x} (a: result A) (p: a = Ok x) : A :=
+  match a as r return (r = Ok x -> A) with
+  | Ok a' => fun _  => a'
   | Fail_ e   => fun p' =>
       False_rect _ (eq_ind (Fail_ e)
           (fun e : result A =>
           match e with
-          | Return _ => False
+          | Ok _ => False
           | Fail_ e => True
           end)
-        I (Return x) p')
+        I (Ok x) p')
   end p.
 
 Notation "x %global" := (eval_result_refl x eq_refl) (at level 40).
 Notation "x %return" := (eval_result_refl x eq_refl) (at level 40).
 
 (* Sanity check *)
-Check (if true then Return (1 + 2) else Fail_ Failure)%global = 3.
+Check (if true then Ok (1 + 2) else Fail_ Failure)%global = 3.
 
 (*** Misc *)
 
@@ -236,7 +236,7 @@ Import Sumbool.
 
 Definition mk_scalar (ty: scalar_ty) (x: Z) : result (scalar ty) :=
   match sumbool_of_bool (scalar_in_bounds ty x) with
-  | left H => Return (exist _ x (scalar_in_bounds_valid _ _ H))
+  | left H => Ok (exist _ x (scalar_in_bounds_valid _ _ H))
   | right _ => Fail_ Failure
   end.
 
@@ -544,9 +544,9 @@ Arguments core_ops_range_Range_end_ {_}.
 
 (*** [alloc] *)
 
-Definition alloc_boxed_Box_deref (T : Type) (x : T) : result T := Return x.
+Definition alloc_boxed_Box_deref (T : Type) (x : T) : result T := Ok x.
 Definition alloc_boxed_Box_deref_mut (T : Type) (x : T) : result (T * (T -> result T)) :=
-  Return (x, fun x => Return x).
+  Ok (x, fun x => Ok x).
 
 (* Trait instance *)
 Definition alloc_boxed_Box_coreopsDerefInst (Self : Type) : core_ops_deref_Deref Self := {|
@@ -589,7 +589,7 @@ Definition array_index_mut_usize (T : Type) (n : usize) (a : array T n) (i : usi
   result (T * (T -> result (array T n))) :=
   match array_index_usize T n a i with
   | Fail_ e => Fail_ e
-  | Return x => Return (x, array_update_usize T n a i)
+  | Ok x => Ok (x, array_update_usize T n a i)
   end.
 
 (*** Slice *)
@@ -603,7 +603,7 @@ Definition slice_index_mut_usize (T : Type) (s : slice T) (i : usize) :
   result (T * (T -> result (slice T))) :=
   match slice_index_usize T s i with
   | Fail_ e => Fail_ e
-  | Return x => Return (x, slice_update_usize T s i)
+  | Ok x => Ok (x, slice_update_usize T s i)
   end.
 
 (*** Subslices *)
@@ -615,7 +615,7 @@ Definition array_to_slice_mut (T : Type) (n : usize) (a : array T n) :
   result (slice T * (slice T -> result (array T n))) :=
   match array_to_slice T n a with
   | Fail_ e => Fail_ e
-  | Return x => Return (x, array_from_slice T n a)
+  | Ok x => Ok (x, array_from_slice T n a)
   end.
 
 Axiom array_subslice: forall (T : Type) (n : usize) (x : array T n) (r : core_ops_range_Range usize), result (slice T).
@@ -657,17 +657,17 @@ end end.
 Definition alloc_vec_Vec_bind {A B} (v: alloc_vec_Vec A) (f: list A -> result (list B)) : result (alloc_vec_Vec B) :=
   l <- f (alloc_vec_Vec_to_list v) ;
   match sumbool_of_bool (scalar_le_max Usize (Z.of_nat (length l))) with
-  | left H => Return (exist _ l (scalar_le_max_valid _ _ H))
+  | left H => Ok (exist _ l (scalar_le_max_valid _ _ H))
   | right _ => Fail_ Failure
   end.
 
 Definition alloc_vec_Vec_push (T: Type) (v: alloc_vec_Vec T) (x: T) : result (alloc_vec_Vec T) :=
-  alloc_vec_Vec_bind v (fun l => Return (l ++ [x])).
+  alloc_vec_Vec_bind v (fun l => Ok (l ++ [x])).
 
 Definition alloc_vec_Vec_insert (T: Type) (v: alloc_vec_Vec T) (i: usize) (x: T) : result (alloc_vec_Vec T) :=
   alloc_vec_Vec_bind v (fun l =>
     if to_Z i <? Z.of_nat (length l)
-    then Return (list_update l (usize_to_nat i) x)
+    then Ok (list_update l (usize_to_nat i) x)
     else Fail_ Failure).
 
 (* Helper *)
@@ -679,8 +679,8 @@ Axiom alloc_vec_Vec_update_usize : forall {T : Type} (v : alloc_vec_Vec T) (i : 
 Definition alloc_vec_Vec_index_mut_usize {T : Type} (v: alloc_vec_Vec T) (i: usize) :
   result (T * (T -> result (alloc_vec_Vec T))) :=
   match alloc_vec_Vec_index_usize v i with
-  | Return x =>
-    Return (x, alloc_vec_Vec_update_usize v i)
+  | Ok x =>
+    Ok (x, alloc_vec_Vec_update_usize v i)
   | Fail_ e => Fail_ e
   end.
 
@@ -717,7 +717,7 @@ Definition core_slice_index_Slice_index
   x <- inst.(core_slice_index_SliceIndex_get) i s;
   match x with
   | None => Fail_ Failure
-  | Some x => Return x
+  | Some x => Ok x
   end.
 
 (* [core::slice::index::Range:::get]: forward function *)

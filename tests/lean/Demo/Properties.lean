@@ -9,7 +9,7 @@ namespace demo
 
 -- @[pspec]
 theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
-  : ∃ y, mul2_add1 x = ret y ∧
+  : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
   := by
   rw [mul2_add1]
@@ -18,7 +18,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   simp; scalar_tac
 
 theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
-  ∃ z, use_mul2_add1 x y = ret z ∧
+  ∃ z, use_mul2_add1 x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [use_mul2_add1]
   progress with mul2_add1_spec as ⟨ i ⟩
@@ -34,7 +34,7 @@ open CList
 
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : ↑i < l.to_list.len) :
-  ∃ x, list_nth T l i = ret x ∧
+  ∃ x, list_nth T l i = ok x ∧
   x = l.to_list.index ↑i
   := by
   rw [list_nth]
@@ -52,7 +52,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       simp_all
 
 theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
-  ∃ y, i32_id x = ret y ∧ x.val = y.val := by
+  ∃ y, i32_id x = ok y ∧ x.val = y.val := by
   rw [i32_id]
   if hx : x = 0#i32 then
     simp_all
@@ -66,8 +66,8 @@ termination_by x.val.toNat
 decreasing_by scalar_decr_tac
 
 theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
-  ∃ back, list_tail T l = ret (CList.CNil, back) ∧
-  ∀ tl', ∃ l', back tl' = ret l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
+  ∃ back, list_tail T l = ok (CList.CNil, back) ∧
+  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
   rw [list_tail]
   match l with
   | CNil =>

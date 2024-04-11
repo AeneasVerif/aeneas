@@ -7,17 +7,17 @@ namespace constants
 
 /- [constants::X0]
    Source: 'src/constants.rs', lines 5:0-5:17 -/
-def X0_body : Result U32 := Result.ret 0#u32
+def X0_body : Result U32 := Result.ok 0#u32
 def X0 : U32 := eval_global X0_body
 
 /- [constants::X1]
    Source: 'src/constants.rs', lines 7:0-7:17 -/
-def X1_body : Result U32 := Result.ret core_u32_max
+def X1_body : Result U32 := Result.ok core_u32_max
 def X1 : U32 := eval_global X1_body
 
 /- [constants::X2]
    Source: 'src/constants.rs', lines 10:0-10:17 -/
-def X2_body : Result U32 := Result.ret 3#u32
+def X2_body : Result U32 := Result.ok 3#u32
 def X2 : U32 := eval_global X2_body
 
 /- [constants::incr]:
@@ -33,7 +33,7 @@ def X3 : U32 := eval_global X3_body
 /- [constants::mk_pair0]:
    Source: 'src/constants.rs', lines 23:0-23:51 -/
 def mk_pair0 (x : U32) (y : U32) : Result (U32 × U32) :=
-  Result.ret (x, y)
+  Result.ok (x, y)
 
 /- [constants::Pair]
    Source: 'src/constants.rs', lines 36:0-36:23 -/
@@ -44,7 +44,7 @@ structure Pair (T1 T2 : Type) where
 /- [constants::mk_pair1]:
    Source: 'src/constants.rs', lines 27:0-27:55 -/
 def mk_pair1 (x : U32) (y : U32) : Result (Pair U32 U32) :=
-  Result.ret { x := x, y := y }
+  Result.ok { x := x, y := y }
 
 /- [constants::P0]
    Source: 'src/constants.rs', lines 31:0-31:24 -/
@@ -58,12 +58,12 @@ def P1 : Pair U32 U32 := eval_global P1_body
 
 /- [constants::P2]
    Source: 'src/constants.rs', lines 33:0-33:24 -/
-def P2_body : Result (U32 × U32) := Result.ret (0#u32, 1#u32)
+def P2_body : Result (U32 × U32) := Result.ok (0#u32, 1#u32)
 def P2 : (U32 × U32) := eval_global P2_body
 
 /- [constants::P3]
    Source: 'src/constants.rs', lines 34:0-34:28 -/
-def P3_body : Result (Pair U32 U32) := Result.ret { x := 0#u32, y := 1#u32 }
+def P3_body : Result (Pair U32 U32) := Result.ok { x := 0#u32, y := 1#u32 }
 def P3 : Pair U32 U32 := eval_global P3_body
 
 /- [constants::Wrap]
@@ -74,7 +74,7 @@ structure Wrap (T : Type) where
 /- [constants::{constants::Wrap<T>}::new]:
    Source: 'src/constants.rs', lines 54:4-54:41 -/
 def Wrap.new (T : Type) (value : T) : Result (Wrap T) :=
-  Result.ret { value := value }
+  Result.ok { value := value }
 
 /- [constants::Y]
    Source: 'src/constants.rs', lines 41:0-41:22 -/
@@ -84,7 +84,7 @@ def Y : Wrap I32 := eval_global Y_body
 /- [constants::unwrap_y]:
    Source: 'src/constants.rs', lines 43:0-43:30 -/
 def unwrap_y : Result I32 :=
-  Result.ret Y.value
+  Result.ok Y.value
 
 /- [constants::YVAL]
    Source: 'src/constants.rs', lines 47:0-47:19 -/
@@ -93,13 +93,13 @@ def YVAL : I32 := eval_global YVAL_body
 
 /- [constants::get_z1::Z1]
    Source: 'src/constants.rs', lines 62:4-62:17 -/
-def get_z1.Z1_body : Result I32 := Result.ret 3#i32
+def get_z1.Z1_body : Result I32 := Result.ok 3#i32
 def get_z1.Z1 : I32 := eval_global get_z1.Z1_body
 
 /- [constants::get_z1]:
    Source: 'src/constants.rs', lines 61:0-61:28 -/
 def get_z1 : Result I32 :=
-  Result.ret get_z1.Z1
+  Result.ok get_z1.Z1
 
 /- [constants::add]:
    Source: 'src/constants.rs', lines 66:0-66:39 -/
@@ -108,12 +108,12 @@ def add (a : I32) (b : I32) : Result I32 :=
 
 /- [constants::Q1]
    Source: 'src/constants.rs', lines 74:0-74:17 -/
-def Q1_body : Result I32 := Result.ret 5#i32
+def Q1_body : Result I32 := Result.ok 5#i32
 def Q1 : I32 := eval_global Q1_body
 
 /- [constants::Q2]
    Source: 'src/constants.rs', lines 75:0-75:17 -/
-def Q2_body : Result I32 := Result.ret Q1
+def Q2_body : Result I32 := Result.ok Q1
 def Q2 : I32 := eval_global Q2_body
 
 /- [constants::Q3]
@@ -131,7 +131,7 @@ def get_z2 : Result I32 :=
 
 /- [constants::S1]
    Source: 'src/constants.rs', lines 80:0-80:18 -/
-def S1_body : Result U32 := Result.ret 6#u32
+def S1_body : Result U32 := Result.ok 6#u32
 def S1 : U32 := eval_global S1_body
 
 /- [constants::S2]
@@ -141,7 +141,7 @@ def S2 : U32 := eval_global S2_body
 
 /- [constants::S3]
    Source: 'src/constants.rs', lines 82:0-82:29 -/
-def S3_body : Result (Pair U32 U32) := Result.ret P3
+def S3_body : Result (Pair U32 U32) := Result.ok P3
 def S3 : Pair U32 U32 := eval_global S3_body
 
 /- [constants::S4]
@@ -156,12 +156,12 @@ structure V (T : Type) (N : Usize) where
 
 /- [constants::{constants::V<T, N>#1}::LEN]
    Source: 'src/constants.rs', lines 91:4-91:24 -/
-def V.LEN_body (T : Type) (N : Usize) : Result Usize := Result.ret N
+def V.LEN_body (T : Type) (N : Usize) : Result Usize := Result.ok N
 def V.LEN (T : Type) (N : Usize) : Usize := eval_global (V.LEN_body T N)
 
 /- [constants::use_v]:
    Source: 'src/constants.rs', lines 94:0-94:42 -/
 def use_v (T : Type) (N : Usize) : Result Usize :=
-  Result.ret (V.LEN T N)
+  Result.ok (V.LEN T N)
 
 end constants

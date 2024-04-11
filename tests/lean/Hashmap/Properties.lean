@@ -59,7 +59,7 @@ def distinct_keys (ls : Core.List (Usize × α)) := ls.pairwise_rel (λ x y => x
 
 def hash_mod_key (k : Usize) (l : Int) : Int :=
   match hash_key k with
-  | .ret k => k.val % l
+  | .ok k => k.val % l
   | _ => 0
 
 @[simp]
@@ -121,7 +121,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ b l1,
-    insert_in_list α key value l0 = ret (b, l1) ∧
+    insert_in_list α key value l0 = ok (b, l1) ∧
     -- The boolean is true ↔ we inserted a new binding
     (b ↔ (l0.lookup key = none)) ∧
     -- We update the binding
@@ -183,7 +183,7 @@ theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: 
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ b l1,
-    insert_in_list α key value l0 = ret (b, l1) ∧
+    insert_in_list α key value l0 = ok (b, l1) ∧
     (b ↔ (l0.lookup key = none)) ∧
     -- We update the binding
     l1.lookup key = value ∧
@@ -240,7 +240,7 @@ set_option maxHeartbeats 2000000
 
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
-  ∃ nhm, hm.insert_no_resize α key value = ret nhm  ∧
+  ∃ nhm, hm.insert_no_resize α key value = ok nhm  ∧
   -- We preserve the invariant
   nhm.inv ∧
   -- We updated the binding for key
@@ -253,7 +253,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
    | some _ => nhm.len_s = hm.len_s) := by
   rw [insert_no_resize]
   -- Simplify. Note that this also simplifies some function calls, like array index
-  simp [hash_key, bind_tc_ret]
+  simp [hash_key, bind_tc_ok]
   have _ : (alloc.vec.Vec.len (List α) hm.slots).val ≠ 0 := by
    intro
    simp_all [inv]
@@ -281,7 +281,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   rw [if_update_eq] -- TODO: necessary because we don't have a join
   -- TODO: progress to ...
   have hipost :
-    ∃ i0, (if inserted = true then hm.num_entries + Usize.ofInt 1 else pure hm.num_entries) = ret i0 ∧
+    ∃ i0, (if inserted = true then hm.num_entries + Usize.ofInt 1 else pure hm.num_entries) = ok i0 ∧
     i0.val = if inserted then hm.num_entries.val + 1 else hm.num_entries.val
     := by
     if inserted then
@@ -328,7 +328,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       -- TODO: we want to automate this
       simp only [k_hash_mod]
       have h := Int.emod_lt_of_pos k.val hvpos
-      simp_all only [ret.injEq, exists_eq_left', List.len_update, gt_iff_lt,
+      simp_all only [ok.injEq, exists_eq_left', List.len_update, gt_iff_lt,
                      List.index_update_eq, ne_eq, not_false_eq_true, neq_imp]
     if h_hm : k_hash_mod = hash_mod.val then
       simp_all only [k_hash_mod, List.len_update, gt_iff_lt, List.index_update_eq,

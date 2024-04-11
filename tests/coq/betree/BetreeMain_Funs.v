@@ -49,13 +49,13 @@ Definition betree_store_leaf_node
 (** [betree_main::betree::fresh_node_id]:
     Source: 'src/betree.rs', lines 55:0-55:48 *)
 Definition betree_fresh_node_id (counter : u64) : result (u64 * u64) :=
-  counter1 <- u64_add counter 1%u64; Return (counter, counter1)
+  counter1 <- u64_add counter 1%u64; Ok (counter, counter1)
 .
 
 (** [betree_main::betree::{betree_main::betree::NodeIdCounter}::new]:
     Source: 'src/betree.rs', lines 206:4-206:20 *)
 Definition betree_NodeIdCounter_new : result betree_NodeIdCounter_t :=
-  Return {| betree_NodeIdCounter_next_node_id := 0%u64 |}
+  Ok {| betree_NodeIdCounter_next_node_id := 0%u64 |}
 .
 
 (** [betree_main::betree::{betree_main::betree::NodeIdCounter}::fresh_id]:
@@ -63,7 +63,7 @@ Definition betree_NodeIdCounter_new : result betree_NodeIdCounter_t :=
 Definition betree_NodeIdCounter_fresh_id
   (self : betree_NodeIdCounter_t) : result (u64 * betree_NodeIdCounter_t) :=
   i <- u64_add self.(betree_NodeIdCounter_next_node_id) 1%u64;
-  Return (self.(betree_NodeIdCounter_next_node_id),
+  Ok (self.(betree_NodeIdCounter_next_node_id),
     {| betree_NodeIdCounter_next_node_id := i |})
 .
 
@@ -74,16 +74,16 @@ Definition betree_upsert_update
   match prev with
   | None =>
     match st with
-    | Betree_UpsertFunState_Add v => Return v
-    | Betree_UpsertFunState_Sub _ => Return 0%u64
+    | Betree_UpsertFunState_Add v => Ok v
+    | Betree_UpsertFunState_Sub _ => Ok 0%u64
     end
   | Some prev1 =>
     match st with
     | Betree_UpsertFunState_Add v =>
       margin <- u64_sub core_u64_max prev1;
-      if margin s>= v then u64_add prev1 v else Return core_u64_max
+      if margin s>= v then u64_add prev1 v else Ok core_u64_max
     | Betree_UpsertFunState_Sub v =>
-      if prev1 s>= v then u64_sub prev1 v else Return 0%u64
+      if prev1 s>= v then u64_sub prev1 v else Ok 0%u64
     end
   end
 .
@@ -97,7 +97,7 @@ Fixpoint betree_List_len
   | S n1 =>
     match self with
     | Betree_List_Cons _ tl => i <- betree_List_len T n1 tl; u64_add 1%u64 i
-    | Betree_List_Nil => Return 0%u64
+    | Betree_List_Nil => Ok 0%u64
     end
   end
 .
@@ -112,14 +112,14 @@ Fixpoint betree_List_split_at
   | O => Fail_ OutOfFuel
   | S n2 =>
     if n1 s= 0%u64
-    then Return (Betree_List_Nil, self)
+    then Ok (Betree_List_Nil, self)
     else
       match self with
       | Betree_List_Cons hd tl =>
         i <- u64_sub n1 1%u64;
         p <- betree_List_split_at T n2 tl i;
         let (ls0, ls1) := p in
-        Return (Betree_List_Cons hd ls0, ls1)
+        Ok (Betree_List_Cons hd ls0, ls1)
       | Betree_List_Nil => Fail_ Failure
       end
   end
@@ -130,7 +130,7 @@ Fixpoint betree_List_split_at
 Definition betree_List_push_front
   (T : Type) (self : betree_List_t T) (x : T) : result (betree_List_t T) :=
   let (tl, _) := core_mem_replace (betree_List_t T) self Betree_List_Nil in
-  Return (Betree_List_Cons x tl)
+  Ok (Betree_List_Cons x tl)
 .
 
 (** [betree_main::betree::{betree_main::betree::List<T>#1}::pop_front]:
@@ -139,7 +139,7 @@ Definition betree_List_pop_front
   (T : Type) (self : betree_List_t T) : result (T * (betree_List_t T)) :=
   let (ls, _) := core_mem_replace (betree_List_t T) self Betree_List_Nil in
   match ls with
-  | Betree_List_Cons x tl => Return (x, tl)
+  | Betree_List_Cons x tl => Ok (x, tl)
   | Betree_List_Nil => Fail_ Failure
   end
 .
@@ -148,7 +148,7 @@ Definition betree_List_pop_front
     Source: 'src/betree.rs', lines 318:4-318:22 *)
 Definition betree_List_hd (T : Type) (self : betree_List_t T) : result T :=
   match self with
-  | Betree_List_Cons hd _ => Return hd
+  | Betree_List_Cons hd _ => Ok hd
   | Betree_List_Nil => Fail_ Failure
   end
 .
@@ -158,8 +158,8 @@ Definition betree_List_hd (T : Type) (self : betree_List_t T) : result T :=
 Definition betree_ListPairU64T_head_has_key
   (T : Type) (self : betree_List_t (u64 * T)) (key : u64) : result bool :=
   match self with
-  | Betree_List_Cons hd _ => let (i, _) := hd in Return (i s= key)
-  | Betree_List_Nil => Return false
+  | Betree_List_Cons hd _ => let (i, _) := hd in Ok (i s= key)
+  | Betree_List_Nil => Ok false
   end
 .
 
@@ -176,12 +176,12 @@ Fixpoint betree_ListPairU64T_partition_at_pivot
     | Betree_List_Cons hd tl =>
       let (i, t) := hd in
       if i s>= pivot
-      then Return (Betree_List_Nil, Betree_List_Cons (i, t) tl)
+      then Ok (Betree_List_Nil, Betree_List_Cons (i, t) tl)
       else (
         p <- betree_ListPairU64T_partition_at_pivot T n1 tl pivot;
         let (ls0, ls1) := p in
-        Return (Betree_List_Cons (i, t) ls0, ls1))
-    | Betree_List_Nil => Return (Betree_List_Nil, Betree_List_Nil)
+        Ok (Betree_List_Cons (i, t) ls0, ls1))
+    | Betree_List_Nil => Ok (Betree_List_Nil, Betree_List_Nil)
     end
   end
 .
@@ -218,7 +218,7 @@ Definition betree_Leaf_split
       betree_Leaf_id := id1;
       betree_Leaf_size := params.(betree_Params_split_size)
     |} in
-  Return (st2, (mkbetree_Internal_t self.(betree_Leaf_id) pivot n1 n2,
+  Ok (st2, (mkbetree_Internal_t self.(betree_Leaf_id) pivot n1 n2,
     node_id_cnt2))
 .
 
@@ -236,16 +236,16 @@ Fixpoint betree_Node_lookup_first_message_for_key
     | Betree_List_Cons x next_msgs =>
       let (i, m) := x in
       if i s>= key
-      then Return (Betree_List_Cons (i, m) next_msgs, Return)
+      then Ok (Betree_List_Cons (i, m) next_msgs, Ok)
       else (
         p <- betree_Node_lookup_first_message_for_key n1 key next_msgs;
         let (l, lookup_first_message_for_key_back) := p in
         let back :=
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
             next_msgs1 <- lookup_first_message_for_key_back ret;
-            Return (Betree_List_Cons (i, m) next_msgs1) in
-        Return (l, back))
-    | Betree_List_Nil => Return (Betree_List_Nil, Return)
+            Ok (Betree_List_Cons (i, m) next_msgs1) in
+        Ok (l, back))
+    | Betree_List_Nil => Ok (Betree_List_Nil, Ok)
     end
   end
 .
@@ -263,12 +263,10 @@ Fixpoint betree_Node_lookup_in_bindings
     | Betree_List_Cons hd tl =>
       let (i, i1) := hd in
       if i s= key
-      then Return (Some i1)
+      then Ok (Some i1)
       else
-        if i s> key
-        then Return None
-        else betree_Node_lookup_in_bindings n1 key tl
-    | Betree_List_Nil => Return None
+        if i s> key then Ok None else betree_Node_lookup_in_bindings n1 key tl
+    | Betree_List_Nil => Ok None
     end
   end
 .
@@ -302,7 +300,7 @@ Fixpoint betree_Node_apply_upserts
       msgs1 <-
         betree_List_push_front (u64 * betree_Message_t) msgs (key,
           Betree_Message_Insert v);
-      Return (st1, (v, msgs1)))
+      Ok (st1, (v, msgs1)))
   end
 .
 
@@ -320,13 +318,13 @@ Fixpoint betree_Internal_lookup_in_children
       p <- betree_Node_lookup n1 self.(betree_Internal_left) key st;
       let (st1, p1) := p in
       let (o, n2) := p1 in
-      Return (st1, (o, mkbetree_Internal_t self.(betree_Internal_id)
+      Ok (st1, (o, mkbetree_Internal_t self.(betree_Internal_id)
         self.(betree_Internal_pivot) n2 self.(betree_Internal_right))))
     else (
       p <- betree_Node_lookup n1 self.(betree_Internal_right) key st;
       let (st1, p1) := p in
       let (o, n2) := p1 in
-      Return (st1, (o, mkbetree_Internal_t self.(betree_Internal_id)
+      Ok (st1, (o, mkbetree_Internal_t self.(betree_Internal_id)
         self.(betree_Internal_pivot) self.(betree_Internal_left) n2)))
   end
 
@@ -354,19 +352,19 @@ with betree_Node_lookup
           let (st2, p4) := p3 in
           let (o, node1) := p4 in
           _ <- lookup_first_message_for_key_back (Betree_List_Cons (k, msg) l);
-          Return (st2, (o, Betree_Node_Internal node1)))
+          Ok (st2, (o, Betree_Node_Internal node1)))
         else
           match msg with
           | Betree_Message_Insert v =>
             _ <-
               lookup_first_message_for_key_back (Betree_List_Cons (k,
                 Betree_Message_Insert v) l);
-            Return (st1, (Some v, Betree_Node_Internal node))
+            Ok (st1, (Some v, Betree_Node_Internal node))
           | Betree_Message_Delete =>
             _ <-
               lookup_first_message_for_key_back (Betree_List_Cons (k,
                 Betree_Message_Delete) l);
-            Return (st1, (None, Betree_Node_Internal node))
+            Ok (st1, (None, Betree_Node_Internal node))
           | Betree_Message_Upsert ufs =>
             p3 <- betree_Internal_lookup_in_children n1 node key st1;
             let (st2, p4) := p3 in
@@ -380,20 +378,20 @@ with betree_Node_lookup
             p7 <-
               betree_store_internal_node node1.(betree_Internal_id) msgs1 st3;
             let (st4, _) := p7 in
-            Return (st4, (Some v1, Betree_Node_Internal node1))
+            Ok (st4, (Some v1, Betree_Node_Internal node1))
           end
       | Betree_List_Nil =>
         p2 <- betree_Internal_lookup_in_children n1 node key st1;
         let (st2, p3) := p2 in
         let (o, node1) := p3 in
         _ <- lookup_first_message_for_key_back Betree_List_Nil;
-        Return (st2, (o, Betree_Node_Internal node1))
+        Ok (st2, (o, Betree_Node_Internal node1))
       end
     | Betree_Node_Leaf node =>
       p <- betree_load_leaf_node node.(betree_Leaf_id) st;
       let (st1, bindings) := p in
       o <- betree_Node_lookup_in_bindings n1 key bindings;
-      Return (st1, (o, Betree_Node_Leaf node))
+      Ok (st1, (o, Betree_Node_Leaf node))
     end
   end
 .
@@ -417,8 +415,8 @@ Fixpoint betree_Node_filter_messages_for_key
             m) l);
         let (_, msgs1) := p1 in
         betree_Node_filter_messages_for_key n1 key msgs1)
-      else Return (Betree_List_Cons (k, m) l)
-    | Betree_List_Nil => Return Betree_List_Nil
+      else Ok (Betree_List_Cons (k, m) l)
+    | Betree_List_Nil => Ok Betree_List_Nil
     end
   end
 .
@@ -443,10 +441,10 @@ Fixpoint betree_Node_lookup_first_message_after_key
         let back :=
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
             next_msgs1 <- lookup_first_message_after_key_back ret;
-            Return (Betree_List_Cons (k, m) next_msgs1) in
-        Return (l, back))
-      else Return (Betree_List_Cons (k, m) next_msgs, Return)
-    | Betree_List_Nil => Return (Betree_List_Nil, Return)
+            Ok (Betree_List_Cons (k, m) next_msgs1) in
+        Ok (l, back))
+      else Ok (Betree_List_Cons (k, m) next_msgs, Ok)
+    | Betree_List_Nil => Ok (Betree_List_Nil, Ok)
     end
   end
 .
@@ -527,7 +525,7 @@ Fixpoint betree_Node_apply_messages_to_internal
       let (i, m) := new_msg in
       msgs1 <- betree_Node_apply_to_internal n1 msgs i m;
       betree_Node_apply_messages_to_internal n1 msgs1 new_msgs_tl
-    | Betree_List_Nil => Return msgs
+    | Betree_List_Nil => Ok msgs
     end
   end
 .
@@ -546,16 +544,16 @@ Fixpoint betree_Node_lookup_mut_in_bindings
     | Betree_List_Cons hd tl =>
       let (i, i1) := hd in
       if i s>= key
-      then Return (Betree_List_Cons (i, i1) tl, Return)
+      then Ok (Betree_List_Cons (i, i1) tl, Ok)
       else (
         p <- betree_Node_lookup_mut_in_bindings n1 key tl;
         let (l, lookup_mut_in_bindings_back) := p in
         let back :=
           fun (ret : betree_List_t (u64 * u64)) =>
             tl1 <- lookup_mut_in_bindings_back ret;
-            Return (Betree_List_Cons (i, i1) tl1) in
-        Return (l, back))
-    | Betree_List_Nil => Return (Betree_List_Nil, Return)
+            Ok (Betree_List_Cons (i, i1) tl1) in
+        Ok (l, back))
+    | Betree_List_Nil => Ok (Betree_List_Nil, Ok)
     end
   end
 .
@@ -613,7 +611,7 @@ Fixpoint betree_Node_apply_messages_to_leaf
       let (i, m) := new_msg in
       bindings1 <- betree_Node_apply_to_leaf n1 bindings i m;
       betree_Node_apply_messages_to_leaf n1 bindings1 new_msgs_tl
-    | Betree_List_Nil => Return bindings
+    | Betree_List_Nil => Ok bindings
     end
   end
 .
@@ -650,20 +648,20 @@ Fixpoint betree_Internal_flush
             node_id_cnt1 msgs_right st1;
         let (st2, p4) := p3 in
         let (n3, node_id_cnt2) := p4 in
-        Return (st2, (Betree_List_Nil, (mkbetree_Internal_t
+        Ok (st2, (Betree_List_Nil, (mkbetree_Internal_t
           self.(betree_Internal_id) self.(betree_Internal_pivot) n2 n3,
           node_id_cnt2))))
       else
-        Return (st1, (msgs_right, (mkbetree_Internal_t
-          self.(betree_Internal_id) self.(betree_Internal_pivot) n2
-          self.(betree_Internal_right), node_id_cnt1))))
+        Ok (st1, (msgs_right, (mkbetree_Internal_t self.(betree_Internal_id)
+          self.(betree_Internal_pivot) n2 self.(betree_Internal_right),
+          node_id_cnt1))))
     else (
       p1 <-
         betree_Node_apply_messages n1 self.(betree_Internal_right) params
           node_id_cnt msgs_right st;
       let (st1, p2) := p1 in
       let (n2, node_id_cnt1) := p2 in
-      Return (st1, (msgs_left, (mkbetree_Internal_t self.(betree_Internal_id)
+      Ok (st1, (msgs_left, (mkbetree_Internal_t self.(betree_Internal_id)
         self.(betree_Internal_pivot) self.(betree_Internal_left) n2,
         node_id_cnt1))))
   end
@@ -694,12 +692,12 @@ with betree_Node_apply_messages
         p4 <-
           betree_store_internal_node node1.(betree_Internal_id) content2 st2;
         let (st3, _) := p4 in
-        Return (st3, (Betree_Node_Internal node1, node_id_cnt1)))
+        Ok (st3, (Betree_Node_Internal node1, node_id_cnt1)))
       else (
         p1 <-
           betree_store_internal_node node.(betree_Internal_id) content1 st1;
         let (st2, _) := p1 in
-        Return (st2, (Betree_Node_Internal node, node_id_cnt)))
+        Ok (st2, (Betree_Node_Internal node, node_id_cnt)))
     | Betree_Node_Leaf node =>
       p <- betree_load_leaf_node node.(betree_Leaf_id) st;
       let (st1, content) := p in
@@ -713,11 +711,11 @@ with betree_Node_apply_messages
         let (new_node, node_id_cnt1) := p2 in
         p3 <- betree_store_leaf_node node.(betree_Leaf_id) Betree_List_Nil st2;
         let (st3, _) := p3 in
-        Return (st3, (Betree_Node_Internal new_node, node_id_cnt1)))
+        Ok (st3, (Betree_Node_Internal new_node, node_id_cnt1)))
       else (
         p1 <- betree_store_leaf_node node.(betree_Leaf_id) content1 st1;
         let (st2, _) := p1 in
-        Return (st2, (Betree_Node_Leaf
+        Ok (st2, (Betree_Node_Leaf
           {| betree_Leaf_id := node.(betree_Leaf_id); betree_Leaf_size := len
           |}, node_id_cnt)))
     end
@@ -737,7 +735,7 @@ Definition betree_Node_apply
       (key, new_msg) Betree_List_Nil) st;
   let (st1, p1) := p in
   let (self1, node_id_cnt1) := p1 in
-  Return (st1, (self1, node_id_cnt1))
+  Ok (st1, (self1, node_id_cnt1))
 .
 
 (** [betree_main::betree::{betree_main::betree::BeTree#6}::new]:
@@ -751,7 +749,7 @@ Definition betree_BeTree_new
   let (id, node_id_cnt1) := p in
   p1 <- betree_store_leaf_node id Betree_List_Nil st;
   let (st1, _) := p1 in
-  Return (st1,
+  Ok (st1,
     {|
       betree_BeTree_params :=
         {|
@@ -777,7 +775,7 @@ Definition betree_BeTree_apply
       self.(betree_BeTree_node_id_cnt) key msg st;
   let (st1, p1) := p in
   let (n1, nic) := p1 in
-  Return (st1,
+  Ok (st1,
     {|
       betree_BeTree_params := self.(betree_BeTree_params);
       betree_BeTree_node_id_cnt := nic;
@@ -822,7 +820,7 @@ Definition betree_BeTree_lookup
   p <- betree_Node_lookup n self.(betree_BeTree_root) key st;
   let (st1, p1) := p in
   let (o, n1) := p1 in
-  Return (st1, (o,
+  Ok (st1, (o,
     {|
       betree_BeTree_params := self.(betree_BeTree_params);
       betree_BeTree_node_id_cnt := self.(betree_BeTree_node_id_cnt);
@@ -833,7 +831,7 @@ Definition betree_BeTree_lookup
 (** [betree_main::main]:
     Source: 'src/betree_main.rs', lines 5:0-5:9 *)
 Definition main : result unit :=
-  Return tt.
+  Ok tt.
 
 (** Unit test for [betree_main::main] *)
 Check (main )%return.
