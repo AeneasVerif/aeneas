@@ -233,6 +233,9 @@ let rec let_group_requires_parentheses (meta : Meta.meta) (e : texpression) :
   | Loop _ ->
       (* Should have been eliminated *)
       craise __FILE__ __LINE__ meta "Unreachable"
+  | EError (meta, msg) ->
+      craise_opt_meta __FILE__ __LINE__ meta
+        msg (* TODO : check if true should'nt be returned instead ? *)
 
 let texpression_requires_parentheses meta e =
   match !Config.backend with

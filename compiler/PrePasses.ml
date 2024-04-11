@@ -238,9 +238,9 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_Sequence env st1 st2 =
         match st1.content with
         | Loop _ ->
-            sanity_check __FILE__ __LINE__
+            cassert __FILE__ __LINE__
               (statement_has_no_loop_break_continue st2)
-              st2.meta;
+              st2.meta "Sequences of loops are not supported yet";
             (replace_breaks_with st1 st2).content
         | _ -> super#visit_Sequence env st1 st2
     end
@@ -437,9 +437,22 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
 
 let apply_passes (crate : crate) : crate =
   let passes = [ remove_loop_breaks crate; remove_shallow_borrows crate ] in
+  (* Attempt to apply a pass: if it fails we replace the body by [None] *)
+  let apply_pass (pass : fun_decl -> fun_decl) (f : fun_decl) =
+    try pass f
+    with CFailure (_, _) ->
+      (* The error was already registered, we don't need to register it twice.
+         However, we replace the body of the function, and save an error to
+         report to the user the fact that we will ignore the function body *)
+      let fmt = Print.Crate.crate_to_fmt_env crate in
+      let name = Print.name_to_string fmt f.name in
+      save_error __FILE__ __LINE__ (Some f.meta)
+        ("Ignoring the body of '" ^ name ^ "' because of previous error");
+      { f with body = None }
+  in
   let fun_decls =
     List.fold_left
-      (fun fl pass -> FunDeclId.Map.map pass fl)
+      (fun fl pass -> FunDeclId.Map.map (apply_pass pass) fl)
       crate.fun_decls passes
   in
   let crate = { crate with fun_decls } in

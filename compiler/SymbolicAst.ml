@@ -212,6 +212,7 @@ type expression =
           TODO: merge this with Return.
        *)
   | Meta of emeta * expression  (** Meta information *)
+  | Error of Meta.meta option * string
 
 and loop = {
   loop_id : loop_id;

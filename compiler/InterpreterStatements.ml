@@ -1365,10 +1365,21 @@ and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
   let func, generics, trait_method_generics, def, regions_hierarchy, inst_sg =
     eval_transparent_function_call_symbolic_inst meta call ctx
   in
-  (* Sanity check *)
+  (* Sanity check: same number of inputs *)
   sanity_check __FILE__ __LINE__
     (List.length call.args = List.length def.signature.inputs)
     def.meta;
+  (* Sanity check: no nested borrows, borrows in ADTs, etc. *)
+  cassert __FILE__ __LINE__
+    (List.for_all
+       (fun ty -> not (ty_has_nested_borrows ctx.type_ctx.type_infos ty))
+       (inst_sg.output :: inst_sg.inputs))
+    meta "Nested borrows are not supported yet";
+  cassert __FILE__ __LINE__
+    (List.for_all
+       (fun ty -> not (ty_has_adt_with_borrows ctx.type_ctx.type_infos ty))
+       (inst_sg.output :: inst_sg.inputs))
+    meta "ADTs containing borrows are not supported yet";
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.meta func def.signature
     regions_hierarchy inst_sg generics trait_method_generics call.args call.dest

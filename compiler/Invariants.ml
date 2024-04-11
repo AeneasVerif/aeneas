@@ -185,7 +185,6 @@ let check_loans_borrows_relation_invariant (meta : Meta.meta) (ctx : eval_ctx) :
           "find_info: could not find the representant of borrow "
           ^ BorrowId.to_string bid ^ ":\nContext:\n" ^ context_to_string ()
         in
-        log#serror err;
         craise __FILE__ __LINE__ meta err
   in
 
@@ -706,13 +705,13 @@ let check_typing_invariant (meta : Meta.meta) (ctx : eval_ctx) : unit =
             | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
         | AIgnored, _ -> ()
         | _ ->
-            log#lerror
+            log#ltrace
               (lazy
                 ("Erroneous typing:" ^ "\n- raw value: " ^ show_typed_avalue atv
                ^ "\n- value: "
                 ^ typed_avalue_to_string ~meta:(Some meta) ctx atv
                 ^ "\n- type: " ^ ty_to_string ctx atv.ty));
-            craise __FILE__ __LINE__ meta "Erroneous typing");
+            internal_error __FILE__ __LINE__ meta);
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_avalue info atv
     end
@@ -826,9 +825,9 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
      * it must be expanded first *)
     if ty_has_borrows ctx.type_ctx.type_infos info.ty then
       sanity_check __FILE__ __LINE__ (info.env_count <= 1) meta;
-    (* A duplicated symbolic value is necessarily primitively copyable *)
+    (* A duplicated symbolic value is necessarily copyable *)
     sanity_check __FILE__ __LINE__
-      (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
+      (info.env_count <= 1 || ty_is_copyable info.ty)
       meta;
 
     sanity_check __FILE__ __LINE__

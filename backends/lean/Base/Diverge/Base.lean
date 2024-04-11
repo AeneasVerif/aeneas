@@ -1,7 +1,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 import Base.Primitives.Base
 import Base.Arith.Base
@@ -39,8 +38,7 @@ namespace Lemmas
     case zero =>
       simp_all
       intro m h1 h2
-      have h: n = m := by
-        linarith
+      have h: n = m := by omega
       unfold for_all_fin_aux; simp_all
       simp_all
       -- There is no i s.t. m ≤ i

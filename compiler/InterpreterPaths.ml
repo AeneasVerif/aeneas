@@ -83,7 +83,7 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
       let nv = update v in
       (* Type checking *)
       if nv.ty <> v.ty then (
-        log#lerror
+        log#ltrace
           (lazy
             ("Not the same type:\n- nv.ty: " ^ show_ety nv.ty ^ "\n- v.ty: "
            ^ show_ety v.ty));
@@ -252,8 +252,8 @@ let rec access_projection (meta : Meta.meta) (access : projection_access)
           let pe = "- pe: " ^ show_projection_elem pe in
           let v = "- v:\n" ^ show_value v in
           let ty = "- ty:\n" ^ show_ety ty in
-          log#serror ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty);
-          craise __FILE__ __LINE__ meta "Inconsistent projection")
+          craise __FILE__ __LINE__ meta
+            ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty))
 
 (** Generic function to access (read/write) the value at a given place.
 
@@ -319,14 +319,13 @@ let try_read_place (meta : Meta.meta) (access : access_kind) (p : place)
       (* Note that we ignore the new environment: it should be the same as the
          original one.
       *)
-      if !Config.sanity_checks then
-        if ctx1 <> ctx then (
-          let msg =
-            "Unexpected environment update:\nNew environment:\n"
-            ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
-          in
-          log#serror msg;
-          craise __FILE__ __LINE__ meta "Unexpected environment update");
+      (if !Config.sanity_checks then
+         if ctx1 <> ctx then
+           let msg =
+             "Unexpected environment update:\nNew environment:\n"
+             ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
+           in
+           craise __FILE__ __LINE__ meta msg);
       Ok read_value
 
 let read_place (meta : Meta.meta) (access : access_kind) (p : place)

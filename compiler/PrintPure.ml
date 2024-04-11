@@ -164,6 +164,7 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
       let trait_ref = trait_ref_to_string env false trait_ref in
       let s = trait_ref ^ "::" ^ type_name in
       if inside then "(" ^ s ^ ")" else s
+  | Error -> "@Error"
 
 and generic_args_to_strings (env : fmt_env) (inside : bool)
     (generics : generic_args) : string list =
@@ -615,6 +616,7 @@ let rec texpression_to_string ?(metadata : Meta.meta option = None)
           let e = meta_s ^ "\n" ^ indent ^ e in
           if inside then "(" ^ e ^ ")" else e
       | MPlace _ -> "(" ^ meta_s ^ " " ^ e ^ ")")
+  | EError (_, _) -> "@Error"
 
 and app_to_string ?(meta : Meta.meta option = None) (env : fmt_env)
     (inside : bool) (indent : string) (indent_incr : string) (app : texpression)

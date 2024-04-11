@@ -1997,6 +1997,9 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
   (* Return the computed information *)
   !info
 
+let translate_error (meta : Meta.meta option) (msg : string) : texpression =
+  { e = EError (meta, msg); ty = Error }
+
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
   | S.Return (ectx, opt_v) ->
@@ -2023,6 +2026,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
       *)
       translate_forward_end ectx loop_input_values e back_e ctx
   | Loop loop -> translate_loop loop ctx
+  | Error (meta, msg) -> translate_error meta msg
 
 and translate_panic (ctx : bs_ctx) : texpression = Option.get ctx.mk_panic
 
@@ -3916,7 +3920,16 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   def
 
 let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
-  List.map (translate_type_decl ctx)
+  List.filter_map
+    (fun a ->
+      try Some (translate_type_decl ctx a)
+      with CFailure (meta, _) ->
+        let env = PrintPure.decls_ctx_to_fmt_env ctx in
+        let name = PrintPure.name_to_string env a.name in
+        save_error __FILE__ __LINE__ meta
+          ("Could not translate type decl '" ^ name
+         ^ "' because of previous error");
+        None)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)

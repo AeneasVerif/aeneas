@@ -416,6 +416,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | StructUpdate supd -> update_struct_update supd ctx
       | Lambda (lb, e) -> update_lambda lb e ctx
       | Meta (meta, e) -> update_emeta meta e ctx
+      | EError (meta, msg) -> (ctx, EError (meta, msg))
     in
     (ctx, { e; ty })
   (* *)
@@ -1006,7 +1007,8 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         match e with
         | Var _ | CVar _ | Const _ | App _ | Qualif _
         | Meta (_, _)
-        | StructUpdate _ | Lambda _ ->
+        | StructUpdate _ | Lambda _
+        | EError (_, _) ->
             super#visit_expression env e
         | Switch (scrut, switch) -> (
             match switch with
