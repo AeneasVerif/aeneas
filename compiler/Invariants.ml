@@ -825,9 +825,9 @@ let check_symbolic_values (meta : Meta.meta) (ctx : eval_ctx) : unit =
      * it must be expanded first *)
     if ty_has_borrows ctx.type_ctx.type_infos info.ty then
       sanity_check __FILE__ __LINE__ (info.env_count <= 1) meta;
-    (* A duplicated symbolic value is necessarily primitively copyable *)
+    (* A duplicated symbolic value is necessarily copyable *)
     sanity_check __FILE__ __LINE__
-      (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
+      (info.env_count <= 1 || ty_is_copyable info.ty)
       meta;
 
     sanity_check __FILE__ __LINE__
