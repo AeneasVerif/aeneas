@@ -18,7 +18,7 @@ namespace Tutorial
 def mul2_add1 (x : U32) : Result U32 := do
   let x1 ← x + x
   let x2 ← x1 + 1#u32
-  ret x2
+  ok x2
 
 /- There are several things to note.
 
@@ -75,9 +75,9 @@ def mul2_add1 (x : U32) : Result U32 := do
  -/
 def mul2_add1_desugared (x : U32) : Result U32 :=
   match Scalar.add x x with
-  | ret x1 => -- Success case
+  | ok x1 => -- Success case
     match Scalar.add x1 (U32.ofInt 1) with
-    | ret x2 => ret x2
+    | ok x2 => ok x2
     | error => error
   | error => error -- Propagating the errors
 
@@ -105,7 +105,7 @@ theorem mul2_add1_spec
    -/
   (h : 2 * ↑x + 1 ≤ U32.max)
   /- The postcondition -/
-  : ∃ y, mul2_add1 x = ret y ∧  -- The call succeeds
+  : ∃ y, mul2_add1 x = ok y ∧  -- The call succeeds
   ↑ y = 2 * ↑x + (1 : Int)   -- The output has the expected value
   := by
   /- The proof -/
@@ -154,7 +154,7 @@ theorem mul2_add1_spec
  -/
 @[pspec] -- the [pspec] attribute saves the theorem in a database, for [progress] to use it
 theorem mul2_add1_spec2 (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
-  : ∃ y, mul2_add1 x = ret y ∧
+  : ∃ y, mul2_add1 x = ok y ∧
   ↑ y = 2 * ↑x + (1 : Int)
   := by
   rw [mul2_add1]
@@ -172,7 +172,7 @@ def use_mul2_add1 (x : U32) (y : U32) : Result U32 := do
 
 @[pspec]
 theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
-  ∃ z, use_mul2_add1 x y = ret z ∧
+  ∃ z, use_mul2_add1 x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [use_mul2_add1]
   -- Here we use [progress] on [mul2_add1]
@@ -230,7 +230,7 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CCons x tl =>
     if i = 0#u32
-    then ret x
+    then ok x
     else do
       let i1 ← i - 1#u32
       list_nth T tl i1
@@ -263,7 +263,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   -- Precondition: the index is in bounds
   (h : ↑i < l.to_list.len)
   -- Postcondition
-  : ∃ x, list_nth T l i = ret x ∧
+  : ∃ x, list_nth T l i = ok x ∧
   -- [x] is the ith element of [l] after conversion to [List]
   x = l.to_list.index ↑i
   := by
@@ -340,7 +340,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
 
    If in a theorem we state and prove that:
    ```
-   ∃ y, i32_id x = ret x
+   ∃ y, i32_id x = ok x
    ```
    we not only prove that the function doesn't fail, but also that it terminates.
 
@@ -348,7 +348,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
    annotates it with the [divergent] keyword.
  -/
 divergent def i32_id (x : I32) : Result I32 :=
-  if x = 0#i32 then ret 0#i32
+  if x = 0#i32 then ok 0#i32
   else do
     let x1 ← x - 1#i32
     let x2 ← i32_id x1
@@ -356,7 +356,7 @@ divergent def i32_id (x : I32) : Result I32 :=
 
 /- We can easily prove that [i32_id] behaves like the identity on positive inputs -/
 theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
-  ∃ y, i32_id x = ret y ∧ x.val = y.val := by
+  ∃ y, i32_id x = ok y ∧ x.val = y.val := by
   rw [i32_id]
   if hx : x = 0#i32 then
     simp_all
