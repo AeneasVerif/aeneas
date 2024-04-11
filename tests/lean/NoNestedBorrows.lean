@@ -159,24 +159,24 @@ def cast_bool_to_i32 (x : Bool) : Result I32 :=
 /- [no_nested_borrows::cast_bool_to_bool]:
    Source: 'src/no_nested_borrows.rs', lines 137:0-137:41 -/
 def cast_bool_to_bool (x : Bool) : Result Bool :=
-  Result.ret x
+  Result.ok x
 
 /- [no_nested_borrows::test2]:
    Source: 'src/no_nested_borrows.rs', lines 142:0-142:14 -/
 def test2 : Result Unit :=
   do
   let _ ← 23#u32 + 44#u32
-  Result.ret ()
+  Result.ok ()
 
 /- Unit test for [no_nested_borrows::test2] -/
-#assert (test2 == Result.ret ())
+#assert (test2 == Result.ok ())
 
 /- [no_nested_borrows::get_max]:
    Source: 'src/no_nested_borrows.rs', lines 154:0-154:37 -/
 def get_max (x : U32) (y : U32) : Result U32 :=
   if x >= y
-  then Result.ret x
-  else Result.ret y
+  then Result.ok x
+  else Result.ok y
 
 /- [no_nested_borrows::test3]:
    Source: 'src/no_nested_borrows.rs', lines 162:0-162:14 -/
@@ -187,10 +187,10 @@ def test3 : Result Unit :=
   let z ← x + y
   if ¬ (z = 15#u32)
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [no_nested_borrows::test3] -/
-#assert (test3 == Result.ret ())
+#assert (test3 == Result.ok ())
 
 /- [no_nested_borrows::test_neg1]:
    Source: 'src/no_nested_borrows.rs', lines 169:0-169:18 -/
@@ -199,20 +199,20 @@ def test_neg1 : Result Unit :=
   let y ← -. 3#i32
   if ¬ (y = (-3)#i32)
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_neg1] -/
-#assert (test_neg1 == Result.ret ())
+#assert (test_neg1 == Result.ok ())
 
 /- [no_nested_borrows::refs_test1]:
    Source: 'src/no_nested_borrows.rs', lines 176:0-176:19 -/
 def refs_test1 : Result Unit :=
   if ¬ (1#i32 = 1#i32)
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [no_nested_borrows::refs_test1] -/
-#assert (refs_test1 == Result.ret ())
+#assert (refs_test1 == Result.ok ())
 
 /- [no_nested_borrows::refs_test2]:
    Source: 'src/no_nested_borrows.rs', lines 187:0-187:19 -/
@@ -227,18 +227,18 @@ def refs_test2 : Result Unit :=
       then Result.fail .panic
       else if ¬ (2#i32 = 2#i32)
            then Result.fail .panic
-           else Result.ret ()
+           else Result.ok ()
 
 /- Unit test for [no_nested_borrows::refs_test2] -/
-#assert (refs_test2 == Result.ret ())
+#assert (refs_test2 == Result.ok ())
 
 /- [no_nested_borrows::test_list1]:
    Source: 'src/no_nested_borrows.rs', lines 203:0-203:19 -/
 def test_list1 : Result Unit :=
-  Result.ret ()
+  Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_list1] -/
-#assert (test_list1 == Result.ret ())
+#assert (test_list1 == Result.ok ())
 
 /- [no_nested_borrows::test_box1]:
    Source: 'src/no_nested_borrows.rs', lines 208:0-208:18 -/
@@ -249,29 +249,29 @@ def test_box1 : Result Unit :=
   let x ← alloc.boxed.Box.deref I32 b
   if ¬ (x = 1#i32)
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_box1] -/
-#assert (test_box1 == Result.ret ())
+#assert (test_box1 == Result.ok ())
 
 /- [no_nested_borrows::copy_int]:
    Source: 'src/no_nested_borrows.rs', lines 218:0-218:30 -/
 def copy_int (x : I32) : Result I32 :=
-  Result.ret x
+  Result.ok x
 
 /- [no_nested_borrows::test_unreachable]:
    Source: 'src/no_nested_borrows.rs', lines 224:0-224:32 -/
 def test_unreachable (b : Bool) : Result Unit :=
   if b
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- [no_nested_borrows::test_panic]:
    Source: 'src/no_nested_borrows.rs', lines 232:0-232:26 -/
 def test_panic (b : Bool) : Result Unit :=
   if b
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- [no_nested_borrows::test_copy_int]:
    Source: 'src/no_nested_borrows.rs', lines 239:0-239:22 -/
@@ -280,17 +280,17 @@ def test_copy_int : Result Unit :=
   let y ← copy_int 0#i32
   if ¬ (0#i32 = y)
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_copy_int] -/
-#assert (test_copy_int == Result.ret ())
+#assert (test_copy_int == Result.ok ())
 
 /- [no_nested_borrows::is_cons]:
    Source: 'src/no_nested_borrows.rs', lines 246:0-246:38 -/
 def is_cons (T : Type) (l : List T) : Result Bool :=
   match l with
-  | List.Cons _ _ => Result.ret true
-  | List.Nil => Result.ret false
+  | List.Cons _ _ => Result.ok true
+  | List.Nil => Result.ok false
 
 /- [no_nested_borrows::test_is_cons]:
    Source: 'src/no_nested_borrows.rs', lines 253:0-253:21 -/
@@ -299,16 +299,16 @@ def test_is_cons : Result Unit :=
   let b ← is_cons I32 (List.Cons 0#i32 List.Nil)
   if ¬ b
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_is_cons] -/
-#assert (test_is_cons == Result.ret ())
+#assert (test_is_cons == Result.ok ())
 
 /- [no_nested_borrows::split_list]:
    Source: 'src/no_nested_borrows.rs', lines 259:0-259:48 -/
 def split_list (T : Type) (l : List T) : Result (T × (List T)) :=
   match l with
-  | List.Cons hd tl => Result.ret (hd, tl)
+  | List.Cons hd tl => Result.ok (hd, tl)
   | List.Nil => Result.fail .panic
 
 /- [no_nested_borrows::test_split_list]:
@@ -319,10 +319,10 @@ def test_split_list : Result Unit :=
   let (hd, _) := p
   if ¬ (hd = 0#i32)
   then Result.fail .panic
-  else Result.ret ()
+  else Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_split_list] -/
-#assert (test_split_list == Result.ret ())
+#assert (test_split_list == Result.ok ())
 
 /- [no_nested_borrows::choose]:
    Source: 'src/no_nested_borrows.rs', lines 274:0-274:70 -/
@@ -331,10 +331,10 @@ def choose
   Result (T × (T → Result (T × T)))
   :=
   if b
-  then let back_'a := fun ret => Result.ret (ret, y)
-       Result.ret (x, back_'a)
-  else let back_'a := fun ret => Result.ret (x, ret)
-       Result.ret (y, back_'a)
+  then let back := fun ret => Result.ok (ret, y)
+       Result.ok (x, back)
+  else let back := fun ret => Result.ok (x, ret)
+       Result.ok (y, back)
 
 /- [no_nested_borrows::choose_test]:
    Source: 'src/no_nested_borrows.rs', lines 282:0-282:20 -/
@@ -351,15 +351,15 @@ def choose_test : Result Unit :=
     then Result.fail .panic
     else if ¬ (y = 0#i32)
          then Result.fail .panic
-         else Result.ret ()
+         else Result.ok ()
 
 /- Unit test for [no_nested_borrows::choose_test] -/
-#assert (choose_test == Result.ret ())
+#assert (choose_test == Result.ok ())
 
 /- [no_nested_borrows::test_char]:
    Source: 'src/no_nested_borrows.rs', lines 294:0-294:26 -/
 def test_char : Result Char :=
-  Result.ret 'a'
+  Result.ok 'a'
 
 mutual
 
@@ -384,7 +384,7 @@ divergent def list_length (T : Type) (l : List T) : Result U32 :=
   | List.Cons _ l1 => do
                       let i ← list_length T l1
                       1#u32 + i
-  | List.Nil => Result.ret 0#u32
+  | List.Nil => Result.ok 0#u32
 
 /- [no_nested_borrows::list_nth_shared]:
    Source: 'src/no_nested_borrows.rs', lines 347:0-347:62 -/
@@ -392,7 +392,7 @@ divergent def list_nth_shared (T : Type) (l : List T) (i : U32) : Result T :=
   match l with
   | List.Cons x tl =>
     if i = 0#u32
-    then Result.ret x
+    then Result.ok x
     else do
          let i1 ← i - 1#u32
          list_nth_shared T tl i1
@@ -406,18 +406,18 @@ divergent def list_nth_mut
   | List.Cons x tl =>
     if i = 0#u32
     then
-      let back_'a := fun ret => Result.ret (List.Cons ret tl)
-      Result.ret (x, back_'a)
+      let back := fun ret => Result.ok (List.Cons ret tl)
+      Result.ok (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut T tl i1
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let tl1 ← list_nth_mut_back ret
-          Result.ret (List.Cons x tl1)
-      Result.ret (t, back_'a)
+          Result.ok (List.Cons x tl1)
+      Result.ok (t, back)
   | List.Nil => Result.fail .panic
 
 /- [no_nested_borrows::list_rev_aux]:
@@ -426,7 +426,7 @@ divergent def list_rev_aux
   (T : Type) (li : List T) (lo : List T) : Result (List T) :=
   match li with
   | List.Cons hd tl => list_rev_aux T tl (List.Cons hd lo)
-  | List.Nil => Result.ret lo
+  | List.Nil => Result.ok lo
 
 /- [no_nested_borrows::list_rev]:
    Source: 'src/no_nested_borrows.rs', lines 393:0-393:42 -/
@@ -476,10 +476,10 @@ def test_list_functions : Result Unit :=
               let i6 ← list_nth_shared I32 ls 2#u32
               if ¬ (i6 = 2#i32)
               then Result.fail .panic
-              else Result.ret ()
+              else Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_list_functions] -/
-#assert (test_list_functions == Result.ret ())
+#assert (test_list_functions == Result.ok ())
 
 /- [no_nested_borrows::id_mut_pair1]:
    Source: 'src/no_nested_borrows.rs', lines 414:0-414:89 -/
@@ -487,7 +487,7 @@ def id_mut_pair1
   (T1 T2 : Type) (x : T1) (y : T2) :
   Result ((T1 × T2) × ((T1 × T2) → Result (T1 × T2)))
   :=
-  Result.ret ((x, y), Result.ret)
+  Result.ok ((x, y), Result.ok)
 
 /- [no_nested_borrows::id_mut_pair2]:
    Source: 'src/no_nested_borrows.rs', lines 418:0-418:88 -/
@@ -496,7 +496,7 @@ def id_mut_pair2
   Result ((T1 × T2) × ((T1 × T2) → Result (T1 × T2)))
   :=
   let (t, t1) := p
-  Result.ret ((t, t1), Result.ret)
+  Result.ok ((t, t1), Result.ok)
 
 /- [no_nested_borrows::id_mut_pair3]:
    Source: 'src/no_nested_borrows.rs', lines 422:0-422:93 -/
@@ -504,7 +504,7 @@ def id_mut_pair3
   (T1 T2 : Type) (x : T1) (y : T2) :
   Result ((T1 × T2) × (T1 → Result T1) × (T2 → Result T2))
   :=
-  Result.ret ((x, y), Result.ret, Result.ret)
+  Result.ok ((x, y), Result.ok, Result.ok)
 
 /- [no_nested_borrows::id_mut_pair4]:
    Source: 'src/no_nested_borrows.rs', lines 426:0-426:92 -/
@@ -513,7 +513,7 @@ def id_mut_pair4
   Result ((T1 × T2) × (T1 → Result T1) × (T2 → Result T2))
   :=
   let (t, t1) := p
-  Result.ret ((t, t1), Result.ret, Result.ret)
+  Result.ok ((t, t1), Result.ok, Result.ok)
 
 /- [no_nested_borrows::StructWithTuple]
    Source: 'src/no_nested_borrows.rs', lines 433:0-433:34 -/
@@ -523,17 +523,17 @@ structure StructWithTuple (T1 T2 : Type) where
 /- [no_nested_borrows::new_tuple1]:
    Source: 'src/no_nested_borrows.rs', lines 437:0-437:48 -/
 def new_tuple1 : Result (StructWithTuple U32 U32) :=
-  Result.ret { p := (1#u32, 2#u32) }
+  Result.ok { p := (1#u32, 2#u32) }
 
 /- [no_nested_borrows::new_tuple2]:
    Source: 'src/no_nested_borrows.rs', lines 441:0-441:48 -/
 def new_tuple2 : Result (StructWithTuple I16 I16) :=
-  Result.ret { p := (1#i16, 2#i16) }
+  Result.ok { p := (1#i16, 2#i16) }
 
 /- [no_nested_borrows::new_tuple3]:
    Source: 'src/no_nested_borrows.rs', lines 445:0-445:48 -/
 def new_tuple3 : Result (StructWithTuple U64 I64) :=
-  Result.ret { p := (1#u64, 2#i64) }
+  Result.ok { p := (1#u64, 2#i64) }
 
 /- [no_nested_borrows::StructWithPair]
    Source: 'src/no_nested_borrows.rs', lines 450:0-450:33 -/
@@ -543,7 +543,7 @@ structure StructWithPair (T1 T2 : Type) where
 /- [no_nested_borrows::new_pair1]:
    Source: 'src/no_nested_borrows.rs', lines 454:0-454:46 -/
 def new_pair1 : Result (StructWithPair U32 U32) :=
-  Result.ret { p := { x := 1#u32, y := 2#u32 } }
+  Result.ok { p := { x := 1#u32, y := 2#u32 } }
 
 /- [no_nested_borrows::test_constants]:
    Source: 'src/no_nested_borrows.rs', lines 462:0-462:23 -/
@@ -570,18 +570,18 @@ def test_constants : Result Unit :=
         let swp ← new_pair1
         if ¬ (swp.p.x = 1#u32)
         then Result.fail .panic
-        else Result.ret ()
+        else Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_constants] -/
-#assert (test_constants == Result.ret ())
+#assert (test_constants == Result.ok ())
 
 /- [no_nested_borrows::test_weird_borrows1]:
    Source: 'src/no_nested_borrows.rs', lines 471:0-471:28 -/
 def test_weird_borrows1 : Result Unit :=
-  Result.ret ()
+  Result.ok ()
 
 /- Unit test for [no_nested_borrows::test_weird_borrows1] -/
-#assert (test_weird_borrows1 == Result.ret ())
+#assert (test_weird_borrows1 == Result.ok ())
 
 /- [no_nested_borrows::test_mem_replace]:
    Source: 'src/no_nested_borrows.rs', lines 481:0-481:37 -/
@@ -589,31 +589,31 @@ def test_mem_replace (px : U32) : Result U32 :=
   let (y, _) := core.mem.replace U32 px 1#u32
   if ¬ (y = 0#u32)
   then Result.fail .panic
-  else Result.ret 2#u32
+  else Result.ok 2#u32
 
 /- [no_nested_borrows::test_shared_borrow_bool1]:
    Source: 'src/no_nested_borrows.rs', lines 488:0-488:47 -/
 def test_shared_borrow_bool1 (b : Bool) : Result U32 :=
   if b
-  then Result.ret 0#u32
-  else Result.ret 1#u32
+  then Result.ok 0#u32
+  else Result.ok 1#u32
 
 /- [no_nested_borrows::test_shared_borrow_bool2]:
    Source: 'src/no_nested_borrows.rs', lines 501:0-501:40 -/
 def test_shared_borrow_bool2 : Result U32 :=
-  Result.ret 0#u32
+  Result.ok 0#u32
 
 /- [no_nested_borrows::test_shared_borrow_enum1]:
    Source: 'src/no_nested_borrows.rs', lines 516:0-516:52 -/
 def test_shared_borrow_enum1 (l : List U32) : Result U32 :=
   match l with
-  | List.Cons _ _ => Result.ret 1#u32
-  | List.Nil => Result.ret 0#u32
+  | List.Cons _ _ => Result.ok 1#u32
+  | List.Nil => Result.ok 0#u32
 
 /- [no_nested_borrows::test_shared_borrow_enum2]:
    Source: 'src/no_nested_borrows.rs', lines 528:0-528:40 -/
 def test_shared_borrow_enum2 : Result U32 :=
-  Result.ret 0#u32
+  Result.ok 0#u32
 
 /- [no_nested_borrows::incr]:
    Source: 'src/no_nested_borrows.rs', lines 539:0-539:24 -/
@@ -630,7 +630,7 @@ def call_incr (x : U32) : Result U32 :=
 def read_then_incr (x : U32) : Result (U32 × U32) :=
   do
   let x1 ← x + 1#u32
-  Result.ret (x, x1)
+  Result.ok (x, x1)
 
 /- [no_nested_borrows::Tuple]
    Source: 'src/no_nested_borrows.rs', lines 554:0-554:24 -/
@@ -639,12 +639,12 @@ def Tuple (T1 T2 : Type) := T1 × T2
 /- [no_nested_borrows::use_tuple_struct]:
    Source: 'src/no_nested_borrows.rs', lines 556:0-556:48 -/
 def use_tuple_struct (x : Tuple U32 U32) : Result (Tuple U32 U32) :=
-  Result.ret (1#u32, x.#1)
+  Result.ok (1#u32, x.#1)
 
 /- [no_nested_borrows::create_tuple_struct]:
    Source: 'src/no_nested_borrows.rs', lines 560:0-560:61 -/
 def create_tuple_struct (x : U32) (y : U64) : Result (Tuple U32 U64) :=
-  Result.ret (x, y)
+  Result.ok (x, y)
 
 /- [no_nested_borrows::IdType]
    Source: 'src/no_nested_borrows.rs', lines 565:0-565:20 -/
@@ -653,11 +653,11 @@ def create_tuple_struct (x : U32) (y : U64) : Result (Tuple U32 U64) :=
 /- [no_nested_borrows::use_id_type]:
    Source: 'src/no_nested_borrows.rs', lines 567:0-567:40 -/
 def use_id_type (T : Type) (x : IdType T) : Result T :=
-  Result.ret x
+  Result.ok x
 
 /- [no_nested_borrows::create_id_type]:
    Source: 'src/no_nested_borrows.rs', lines 571:0-571:43 -/
 def create_id_type (T : Type) (x : T) : Result (IdType T) :=
-  Result.ret x
+  Result.ok x
 
 end no_nested_borrows

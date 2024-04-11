@@ -153,7 +153,14 @@
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {
+          # By default, tests run some sanity checks which are pretty slow.
+          # This disables these checks when developping locally.
+          OPTIONS = "";
+
           packages = [
+            pkgs.ocamlPackages.ocaml
+            pkgs.ocamlPackages.ocamlformat
+            pkgs.ocamlPackages.menhir
             pkgs.ocamlPackages.odoc
           ];
 

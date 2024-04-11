@@ -75,10 +75,15 @@ let inputs_info_is_wf (info : inputs_info) : bool =
 let fun_sig_info_is_wf (info : fun_sig_info) : bool =
   inputs_info_is_wf info.fwd_info
 
+let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
+  match ty with TArrow (arg_ty, ret_ty) -> Some (arg_ty, ret_ty) | _ -> None
+
+let is_arrow_ty (ty : ty) : bool = Option.is_some (opt_dest_arrow_ty ty)
+
 let dest_arrow_ty (meta : Meta.meta) (ty : ty) : ty * ty =
-  match ty with
-  | TArrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
-  | _ -> craise __FILE__ __LINE__ meta "Not an arrow type"
+  match opt_dest_arrow_ty ty with
+  | Some (arg_ty, ret_ty) -> (arg_ty, ret_ty)
+  | None -> craise __FILE__ __LINE__ meta "Not an arrow type"
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
@@ -228,6 +233,9 @@ let rec let_group_requires_parentheses (meta : Meta.meta) (e : texpression) :
   | Loop _ ->
       (* Should have been eliminated *)
       craise __FILE__ __LINE__ meta "Unreachable"
+  | EError (meta, msg) ->
+      craise_opt_meta __FILE__ __LINE__ meta
+        msg (* TODO : check if true should'nt be returned instead ? *)
 
 let texpression_requires_parentheses meta e =
   match !Config.backend with
@@ -578,12 +586,12 @@ let mk_result_fail_texpression_with_error_id (meta : Meta.meta)
   let error = mk_error error in
   mk_result_fail_texpression meta error ty
 
-let mk_result_return_texpression (meta : Meta.meta) (v : texpression) :
-    texpression =
+let mk_result_ok_texpression (meta : Meta.meta) (v : texpression) : texpression
+    =
   let type_args = [ v.ty ] in
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
   let id =
-    AdtCons { adt_id = TAssumed TResult; variant_id = Some result_return_id }
+    AdtCons { adt_id = TAssumed TResult; variant_id = Some result_ok_id }
   in
   let qualif = { id; generics = mk_generic_args_from_types type_args } in
   let cons_e = Qualif qualif in
@@ -605,11 +613,9 @@ let mk_result_fail_pattern_ignore_error (ty : ty) : typed_pattern =
   let error_pat : pattern = PatDummy in
   mk_result_fail_pattern error_pat ty
 
-let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
+let mk_result_ok_pattern (v : typed_pattern) : typed_pattern =
   let ty = TAdt (TAssumed TResult, mk_generic_args_from_types [ v.ty ]) in
-  let value =
-    PatAdt { variant_id = Some result_return_id; field_values = [ v ] }
-  in
+  let value = PatAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
   { value; ty }
 
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
@@ -783,6 +789,6 @@ let opt_destruct_ret (e : texpression) : texpression option =
           ty = _;
         },
         arg )
-    when variant_id = Some result_return_id ->
+    when variant_id = Some result_ok_id ->
       Some arg
   | _ -> None

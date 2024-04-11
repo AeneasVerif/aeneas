@@ -20,16 +20,16 @@ divergent def get_list_at_x
   match ls with
   | List.Cons hd tl =>
     if hd = x
-    then Result.ret (List.Cons hd tl, Result.ret)
+    then Result.ok (List.Cons hd tl, Result.ok)
     else
       do
       let (l, get_list_at_x_back) ← get_list_at_x tl x
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let tl1 ← get_list_at_x_back ret
-          Result.ret (List.Cons hd tl1)
-      Result.ret (l, back_'a)
-  | List.Nil => Result.ret (List.Nil, Result.ret)
+          Result.ok (List.Cons hd tl1)
+      Result.ok (l, back)
+  | List.Nil => Result.ok (List.Nil, Result.ok)
 
 end polonius_list

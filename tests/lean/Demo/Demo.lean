@@ -12,10 +12,10 @@ def choose
   Result (T × (T → Result (T × T)))
   :=
   if b
-  then let back_'a := fun ret => Result.ret (ret, y)
-       Result.ret (x, back_'a)
-  else let back_'a := fun ret => Result.ret (x, ret)
-       Result.ret (y, back_'a)
+  then let back := fun ret => Result.ok (ret, y)
+       Result.ok (x, back)
+  else let back := fun ret => Result.ok (x, ret)
+       Result.ok (y, back)
 
 /- [demo::mul2_add1]:
    Source: 'src/demo.rs', lines 13:0-13:31 -/
@@ -43,7 +43,7 @@ def use_incr : Result Unit :=
   let x ← incr 0#u32
   let x1 ← incr x
   let _ ← incr x1
-  Result.ret ()
+  Result.ok ()
 
 /- [demo::CList]
    Source: 'src/demo.rs', lines 34:0-34:17 -/
@@ -57,7 +57,7 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
-    then Result.ret x
+    then Result.ok x
     else do
          let i1 ← i - 1#u32
          list_nth T tl i1
@@ -73,18 +73,18 @@ divergent def list_nth_mut
   | CList.CCons x tl =>
     if i = 0#u32
     then
-      let back_'a := fun ret => Result.ret (CList.CCons ret tl)
-      Result.ret (x, back_'a)
+      let back := fun ret => Result.ok (CList.CCons ret tl)
+      Result.ok (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut T tl i1
-      let back_'a :=
+      let back :=
         fun ret =>
           do
           let tl1 ← list_nth_mut_back ret
-          Result.ret (CList.CCons x tl1)
-      Result.ret (t, back_'a)
+          Result.ok (CList.CCons x tl1)
+      Result.ok (t, back)
   | CList.CNil => Result.fail .panic
 
 /- [demo::list_nth_mut1]: loop 0:
@@ -97,17 +97,17 @@ divergent def list_nth_mut1_loop
   | CList.CCons x tl =>
     if i = 0#u32
     then
-      let back_'a := fun ret => Result.ret (CList.CCons ret tl)
-      Result.ret (x, back_'a)
+      let back := fun ret => Result.ok (CList.CCons ret tl)
+      Result.ok (x, back)
     else
       do
       let i1 ← i - 1#u32
-      let (t, back_'a) ← list_nth_mut1_loop T tl i1
-      let back_'a1 :=
+      let (t, back) ← list_nth_mut1_loop T tl i1
+      let back1 :=
         fun ret => do
-                   let tl1 ← back_'a ret
-                   Result.ret (CList.CCons x tl1)
-      Result.ret (t, back_'a1)
+                   let tl1 ← back ret
+                   Result.ok (CList.CCons x tl1)
+      Result.ok (t, back1)
   | CList.CNil => Result.fail .panic
 
 /- [demo::list_nth_mut1]:
@@ -122,7 +122,7 @@ def list_nth_mut1
    Source: 'src/demo.rs', lines 80:0-80:28 -/
 divergent def i32_id (i : I32) : Result I32 :=
   if i = 0#i32
-  then Result.ret 0#i32
+  then Result.ok 0#i32
   else do
        let i1 ← i - 1#i32
        let i2 ← i32_id i1
@@ -138,13 +138,13 @@ divergent def list_tail
   | CList.CCons t tl =>
     do
     let (c, list_tail_back) ← list_tail T tl
-    let back_'a :=
+    let back :=
       fun ret =>
         do
         let tl1 ← list_tail_back ret
-        Result.ret (CList.CCons t tl1)
-    Result.ret (c, back_'a)
-  | CList.CNil => Result.ret (CList.CNil, Result.ret)
+        Result.ok (CList.CCons t tl1)
+    Result.ok (c, back)
+  | CList.CNil => Result.ok (CList.CNil, Result.ok)
 
 /- Trait declaration: [demo::Counter]
    Source: 'src/demo.rs', lines 97:0-97:17 -/
@@ -156,7 +156,7 @@ structure Counter (Self : Type) where
 def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
   do
   let self1 ← self + 1#usize
-  Result.ret (self, self1)
+  Result.ok (self, self1)
 
 /- Trait implementation: [demo::{(demo::Counter for usize)}]
    Source: 'src/demo.rs', lines 101:0-101:22 -/

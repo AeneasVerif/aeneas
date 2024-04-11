@@ -23,11 +23,11 @@ type error : Type0 =
 | OutOfFuel
 
 type result (a : Type0) : Type0 =
-| Return : v:a -> result a
+| Ok : v:a -> result a
 | Fail : e:error -> result a
 
 // Monadic return operator
-unfold let return (#a : Type0) (x : a) : result a = Return x
+unfold let return (#a : Type0) (x : a) : result a = Ok x
 
 // Monadic bind operator.
 // Allows to use the notation:
@@ -36,17 +36,17 @@ unfold let return (#a : Type0) (x : a) : result a = Return x
 // ...
 // ```
 unfold let (let*) (#a #b : Type0) (m: result a)
-  (f: (x:a) -> Pure (result b) (requires (m == Return x)) (ensures fun _ -> True)) :
+  (f: (x:a) -> Pure (result b) (requires (m == Ok x)) (ensures fun _ -> True)) :
   result b =
   match m with
-  | Return x -> f x
+  | Ok x -> f x
   | Fail e   -> Fail e
 
 // Monadic assert(...)
-let massert (b:bool) : result unit = if b then Return () else Fail Failure
+let massert (b:bool) : result unit = if b then Ok () else Fail Failure
 
 // Normalize and unwrap a successful result (used for globals).
-let eval_global (#a : Type0) (x : result a{Return? (normalize_term x)}) : a = Return?.v x
+let eval_global (#a : Type0) (x : result a{Ok? (normalize_term x)}) : a = Ok?.v x
 
 (*** Misc *)
 type char = FStar.Char.char
@@ -144,7 +144,7 @@ let scalar_max (ty : scalar_ty) : int =
 type scalar (ty : scalar_ty) : eqtype = x:int{scalar_min ty <= x && x <= scalar_max ty}
 
 let mk_scalar (ty : scalar_ty) (x : int) : result (scalar ty) =
-  if scalar_min ty <= x && scalar_max ty >= x then Return x else Fail Failure
+  if scalar_min ty <= x && scalar_max ty >= x then Ok x else Fail Failure
 
 let scalar_neg (#ty : scalar_ty) (x : scalar ty) : result (scalar ty) = mk_scalar ty (-x)
 
@@ -498,9 +498,9 @@ type core_ops_range_Range (a : Type0) = {
 
 (*** [alloc] *)
 
-let alloc_boxed_Box_deref (t : Type0) (x : t) : result t = Return x
+let alloc_boxed_Box_deref (t : Type0) (x : t) : result t = Ok x
 let alloc_boxed_Box_deref_mut (t : Type0) (x : t) : result (t & (t -> result t)) =
-  Return (x, (fun x -> Return x))
+  Ok (x, (fun x -> Ok x))
 
 // Trait instance
 let alloc_boxed_Box_coreopsDerefInst (self : Type0) : core_ops_deref_Deref self = {
@@ -528,20 +528,20 @@ let mk_array (a : Type0) (n : usize)
   l
 
 let array_index_usize (a : Type0) (n : usize) (x : array a n) (i : usize) : result a =
-  if i < length x then Return (index x i)
+  if i < length x then Ok (index x i)
   else Fail Failure
 
 let array_update_usize (a : Type0) (n : usize) (x : array a n) (i : usize) (nx : a) :
   result (array a n) =
-  if i < length x then Return (list_update x i nx)
+  if i < length x then Ok (list_update x i nx)
   else Fail Failure
 
 let array_index_mut_usize (a : Type0) (n : usize) (x : array a n) (i : usize) :
   result (a & (a -> result (array a n))) =
   match array_index_usize a n x i with
   | Fail e -> Fail e
-  | Return v ->
-    Return (v, array_update_usize a n x i)
+  | Ok v ->
+    Ok (v, array_update_usize a n x i)
 
 (*** Slice *)
 type slice (a : Type0) = s:list a{length s <= usize_max}
@@ -549,30 +549,30 @@ type slice (a : Type0) = s:list a{length s <= usize_max}
 let slice_len (a : Type0) (s : slice a) : usize = length s
 
 let slice_index_usize (a : Type0) (x : slice a) (i : usize) : result a =
-  if i < length x then Return (index x i)
+  if i < length x then Ok (index x i)
   else Fail Failure
 
 let slice_update_usize (a : Type0) (x : slice a) (i : usize) (nx : a) : result (slice a) =
-  if i < length x then Return (list_update x i nx)
+  if i < length x then Ok (list_update x i nx)
   else Fail Failure
 
 let slice_index_mut_usize (a : Type0) (s : slice a) (i : usize) :
   result (a & (a -> result (slice a))) =
   match slice_index_usize a s i with
   | Fail e -> Fail e
-  | Return x ->
-    Return (x, slice_update_usize a s i)
+  | Ok x ->
+    Ok (x, slice_update_usize a s i)
 
 (*** Subslices *)
 
-let array_to_slice (a : Type0) (n : usize) (x : array a n) : result (slice a) = Return x
+let array_to_slice (a : Type0) (n : usize) (x : array a n) : result (slice a) = Ok x
 let array_from_slice (a : Type0) (n : usize) (x : array a n) (s : slice a) : result (array a n) =
-  if length s = n then Return s
+  if length s = n then Ok s
   else Fail Failure
 
 let array_to_slice_mut (a : Type0) (n : usize) (x : array a n) :
   result (slice a & (slice a -> result (array a n))) =
-  Return (x, array_from_slice a n x)
+  Ok (x, array_from_slice a n x)
 
 // TODO: finish the definitions below (there lacks [List.drop] and [List.take] in the standard library *)
 let array_subslice (a : Type0) (n : usize) (x : array a n) (r : core_ops_range_Range usize) : result (slice a) =
@@ -598,16 +598,16 @@ let alloc_vec_Vec_len (a : Type0) (v : alloc_vec_Vec a) : usize = length v
 
 // Helper
 let alloc_vec_Vec_index_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) : result a =
-  if i < length v then Return (index v i) else Fail Failure
+  if i < length v then Ok (index v i) else Fail Failure
 // Helper
 let alloc_vec_Vec_update_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : result (alloc_vec_Vec a) =
-  if i < length v then Return (list_update v i x) else Fail Failure
+  if i < length v then Ok (list_update v i x) else Fail Failure
 
 let alloc_vec_Vec_index_mut_usize (#a : Type0) (v: alloc_vec_Vec a) (i: usize) :
   result (a & (a → result (alloc_vec_Vec a))) =
   match alloc_vec_Vec_index_usize v i with
-  | Return x ->
-    Return (x, alloc_vec_Vec_update_usize v i)
+  | Ok x ->
+    Ok (x, alloc_vec_Vec_update_usize v i)
   | Fail e -> Fail e
 
 let alloc_vec_Vec_push (a  : Type0) (v : alloc_vec_Vec a) (x : a) :
@@ -616,17 +616,17 @@ let alloc_vec_Vec_push (a  : Type0) (v : alloc_vec_Vec a) (x : a) :
   (ensures (fun res ->
     match res with
     | Fail e -> e == Failure
-    | Return v' -> length v' = length v + 1)) =
+    | Ok v' -> length v' = length v + 1)) =
   if length v < usize_max then begin
     (**) assert_norm(length [x] == 1);
     (**) append_length v [x];
     (**) assert(length (append v [x]) = length v + 1);
-    Return (append v [x])
+    Ok (append v [x])
     end
   else Fail Failure
 
 let alloc_vec_Vec_insert (a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : result (alloc_vec_Vec a) =
-  if i < length v then Return (list_update v i x) else Fail Failure
+  if i < length v then Ok (list_update v i x) else Fail Failure
 
 // Trait declaration: [core::slice::index::private_slice_index::Sealed]
 type core_slice_index_private_slice_index_Sealed (self : Type0) = unit
@@ -650,7 +650,7 @@ let core_slice_index_Slice_index
   let* x = inst.get i s in
   match x with
   | None -> Fail Failure
-  | Some x -> Return x
+  | Some x -> Ok x
 
 // [core::slice::index::Range:::get]: forward function
 let core_slice_index_RangeUsize_get (t : Type0) (i : core_ops_range_Range usize) (s : slice t) :

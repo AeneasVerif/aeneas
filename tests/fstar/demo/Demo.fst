@@ -10,8 +10,8 @@ open Primitives
 let choose
   (t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> result (t & t))) =
   if b
-  then let back_'a = fun ret -> Return (ret, y) in Return (x, back_'a)
-  else let back_'a = fun ret -> Return (x, ret) in Return (y, back_'a)
+  then let back = fun ret -> Ok (ret, y) in Ok (x, back)
+  else let back = fun ret -> Ok (x, ret) in Ok (y, back)
 
 (** [demo::mul2_add1]:
     Source: 'src/demo.rs', lines 13:0-13:31 *)
@@ -31,7 +31,7 @@ let incr (x : u32) : result u32 =
 (** [demo::use_incr]:
     Source: 'src/demo.rs', lines 25:0-25:17 *)
 let use_incr : result unit =
-  let* x = incr 0 in let* x1 = incr x in let* _ = incr x1 in Return ()
+  let* x = incr 0 in let* x1 = incr x in let* _ = incr x1 in Ok ()
 
 (** [demo::CList]
     Source: 'src/demo.rs', lines 34:0-34:17 *)
@@ -48,7 +48,7 @@ let rec list_nth (t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
     let n1 = decrease n in
     begin match l with
     | CList_CCons x tl ->
-      if i = 0 then Return x else let* i1 = u32_sub i 1 in list_nth t n1 tl i1
+      if i = 0 then Ok x else let* i1 = u32_sub i 1 in list_nth t n1 tl i1
     | CList_CNil -> Fail Failure
     end
 
@@ -65,16 +65,14 @@ let rec list_nth_mut
     begin match l with
     | CList_CCons x tl ->
       if i = 0
-      then
-        let back_'a = fun ret -> Return (CList_CCons ret tl) in
-        Return (x, back_'a)
+      then let back = fun ret -> Ok (CList_CCons ret tl) in Ok (x, back)
       else
         let* i1 = u32_sub i 1 in
         let* (x1, list_nth_mut_back) = list_nth_mut t n1 tl i1 in
-        let back_'a =
-          fun ret ->
-            let* tl1 = list_nth_mut_back ret in Return (CList_CCons x tl1) in
-        Return (x1, back_'a)
+        let back =
+          fun ret -> let* tl1 = list_nth_mut_back ret in Ok (CList_CCons x tl1)
+          in
+        Ok (x1, back)
     | CList_CNil -> Fail Failure
     end
 
@@ -91,15 +89,12 @@ let rec list_nth_mut1_loop
     begin match l with
     | CList_CCons x tl ->
       if i = 0
-      then
-        let back_'a = fun ret -> Return (CList_CCons ret tl) in
-        Return (x, back_'a)
+      then let back = fun ret -> Ok (CList_CCons ret tl) in Ok (x, back)
       else
         let* i1 = u32_sub i 1 in
-        let* (x1, back_'a) = list_nth_mut1_loop t n1 tl i1 in
-        let back_'a1 =
-          fun ret -> let* tl1 = back_'a ret in Return (CList_CCons x tl1) in
-        Return (x1, back_'a1)
+        let* (x1, back) = list_nth_mut1_loop t n1 tl i1 in
+        let back1 = fun ret -> let* tl1 = back ret in Ok (CList_CCons x tl1) in
+        Ok (x1, back1)
     | CList_CNil -> Fail Failure
     end
 
@@ -119,7 +114,7 @@ let rec i32_id (n : nat) (i : i32) : result i32 =
   else
     let n1 = decrease n in
     if i = 0
-    then Return 0
+    then Ok 0
     else let* i1 = i32_sub i 1 in let* i2 = i32_id n1 i1 in i32_add i2 1
 
 (** [demo::list_tail]:
@@ -135,11 +130,10 @@ let rec list_tail
     begin match l with
     | CList_CCons x tl ->
       let* (c, list_tail_back) = list_tail t n1 tl in
-      let back_'a =
-        fun ret -> let* tl1 = list_tail_back ret in Return (CList_CCons x tl1)
-        in
-      Return (c, back_'a)
-    | CList_CNil -> Return (CList_CNil, Return)
+      let back =
+        fun ret -> let* tl1 = list_tail_back ret in Ok (CList_CCons x tl1) in
+      Ok (c, back)
+    | CList_CNil -> Ok (CList_CNil, Ok)
     end
 
 (** Trait declaration: [demo::Counter]
@@ -149,7 +143,7 @@ noeq type counter_t (self : Type0) = { incr : self -> result (usize & self); }
 (** [demo::{(demo::Counter for usize)}::incr]:
     Source: 'src/demo.rs', lines 102:4-102:31 *)
 let counterUsize_incr (self : usize) : result (usize & usize) =
-  let* self1 = usize_add self 1 in Return (self, self1)
+  let* self1 = usize_add self 1 in Ok (self, self1)
 
 (** Trait implementation: [demo::{(demo::Counter for usize)}]
     Source: 'src/demo.rs', lines 101:0-101:22 *)

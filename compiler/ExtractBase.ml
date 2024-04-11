@@ -237,7 +237,7 @@ module IdSet = Collections.MakeSet (IdOrderedType)
   *)
 type names_map = {
   id_to_name : string IdMap.t;
-  name_to_id : id StringMap.t;
+  name_to_id : (id * Meta.meta option) StringMap.t;
       (** The name to id map is used to look for name clashes, and generate nice
           debugging messages: if there is a name clash, it is useful to know
           precisely which identifiers are mapped to the same name...
@@ -253,42 +253,53 @@ let empty_names_map : names_map =
   }
 
 (** Small helper to report name collision *)
-let report_name_collision (id_to_string : id -> string) (id1 : id) (id2 : id)
+let report_name_collision (id_to_string : id -> string)
+    ((id1, meta1) : id * Meta.meta option) (id2 : id) (meta2 : Meta.meta option)
     (name : string) : unit =
-  let id1 = "\n- " ^ id_to_string id1 in
-  let id2 = "\n- " ^ id_to_string id2 in
+  let meta_to_string (meta : Meta.meta option) =
+    match meta with
+    | None -> ""
+    | Some meta -> "\n  " ^ Errors.meta_to_string meta
+  in
+  let id1 = "\n- " ^ id_to_string id1 ^ meta_to_string meta1 in
+  let id2 = "\n- " ^ id_to_string id2 ^ meta_to_string meta2 in
   let err =
     "Name clash detected: the following identifiers are bound to the same name \
      \"" ^ name ^ "\":" ^ id1 ^ id2
     ^ "\nYou may want to rename some of your definitions, or report an issue."
   in
-  (* If we fail hard on errors, raise an exception *)
+  (* Register the error.
+
+     We don't link this error to any meta information because we already put
+     the span information about the two problematic definitions in the error
+     message above. *)
   save_error __FILE__ __LINE__ None err
 
-let names_map_get_id_from_name (name : string) (nm : names_map) : id option =
+let names_map_get_id_from_name (name : string) (nm : names_map) :
+    (id * Meta.meta option) option =
   StringMap.find_opt name nm.name_to_id
 
 let names_map_check_collision (id_to_string : id -> string) (id : id)
-    (name : string) (nm : names_map) : unit =
+    (meta : Meta.meta option) (name : string) (nm : names_map) : unit =
   match names_map_get_id_from_name name nm with
   | None -> () (* Ok *)
   | Some clash ->
       (* There is a clash: print a nice debugging message for the user *)
-      report_name_collision id_to_string clash id name
+      report_name_collision id_to_string clash id meta name
 
 (** Insert bindings in a names map without checking for collisions *)
-let names_map_add_unchecked (id : id) (name : string) (nm : names_map) :
-    names_map =
+let names_map_add_unchecked ((id, meta) : id * Meta.meta option) (name : string)
+    (nm : names_map) : names_map =
   (* Insert *)
   let id_to_name = IdMap.add id name nm.id_to_name in
-  let name_to_id = StringMap.add name id nm.name_to_id in
+  let name_to_id = StringMap.add name (id, meta) nm.name_to_id in
   let names_set = StringSet.add name nm.names_set in
   { id_to_name; name_to_id; names_set }
 
-let names_map_add (id_to_string : id -> string) (id : id) (name : string)
-    (nm : names_map) : names_map =
+let names_map_add (id_to_string : id -> string) ((id, meta) : id * meta option)
+    (name : string) (nm : names_map) : names_map =
   (* Check if there is a clash *)
-  names_map_check_collision id_to_string id name nm;
+  names_map_check_collision id_to_string id meta name nm;
   (* Sanity check *)
   (if StringSet.mem name nm.names_set then
      let err =
@@ -296,9 +307,9 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
        ^ ":\nThe chosen name is already in the names set: " ^ name
      in
      (* If we fail hard on errors, raise an exception *)
-     save_error __FILE__ __LINE__ None err);
+     save_error __FILE__ __LINE__ meta err);
   (* Insert *)
-  names_map_add_unchecked id name nm
+  names_map_add_unchecked (id, meta) name nm
 
 (** The unsafe names map stores mappings from identifiers to names which might
     collide. For some backends and some names, it might be acceptable to have
@@ -384,8 +395,8 @@ let allow_collisions (id : id) : bool =
 
 (** The [id_to_string] function to print nice debugging messages if there are
     collisions *)
-let names_maps_add (id_to_string : id -> string) (id : id) (name : string)
-    (nm : names_maps) : names_maps =
+let names_maps_add (id_to_string : id -> string) (id : id)
+    (meta : Meta.meta option) (name : string) (nm : names_maps) : names_maps =
   (* We do not use the same name map if we allow/disallow collisions.
      We notably use it for field names: some backends like Lean can use the
      type information to disambiguate field projections.
@@ -400,7 +411,7 @@ let names_maps_add (id_to_string : id -> string) (id : id) (name : string)
   *)
   if allow_collisions id then (
     (* Check with the ids which are considered to be strict on collisions *)
-    names_map_check_collision id_to_string id name nm.strict_names_map;
+    names_map_check_collision id_to_string id meta name nm.strict_names_map;
     {
       nm with
       unsafe_names_map = unsafe_names_map_add id name nm.unsafe_names_map;
@@ -415,10 +426,10 @@ let names_maps_add (id_to_string : id -> string) (id : id) (name : string)
     *)
     let strict_names_map =
       if strict_collisions id then
-        names_map_add id_to_string id name nm.strict_names_map
+        names_map_add id_to_string (id, meta) name nm.strict_names_map
       else nm.strict_names_map
     in
-    let names_map = names_map_add id_to_string id name nm.names_map in
+    let names_map = names_map_add id_to_string (id, meta) name nm.names_map in
     { nm with strict_names_map; names_map }
 
 (** The [id_to_string] function to print nice debugging messages if there are
@@ -468,20 +479,21 @@ type names_map_init = {
 
 let names_maps_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
     (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (TypeId (TAssumed id)) name nm
+  names_maps_add id_to_string (TypeId (TAssumed id)) None name nm
 
 let names_maps_add_assumed_struct (id_to_string : id -> string)
     (id : assumed_ty) (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (StructId (TAssumed id)) name nm
+  names_maps_add id_to_string (StructId (TAssumed id)) None name nm
 
 let names_maps_add_assumed_variant (id_to_string : id -> string)
     (id : assumed_ty) (variant_id : VariantId.id) (name : string)
     (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (VariantId (TAssumed id, variant_id)) name nm
+  names_maps_add id_to_string (VariantId (TAssumed id, variant_id)) None name nm
 
-let names_maps_add_function (id_to_string : id -> string) (fid : fun_id)
-    (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (FunId fid) name nm
+let names_maps_add_function (id_to_string : id -> string)
+    ((fid, meta) : fun_id * meta option) (name : string) (nm : names_maps) :
+    names_maps =
+  names_maps_add id_to_string (FunId fid) meta name nm
 
 let bool_name () = if !backend = Lean then "Bool" else "bool"
 let char_name () = if !backend = Lean then "Char" else "char"
@@ -659,7 +671,9 @@ let id_to_string (meta : Meta.meta option) (id : id) (ctx : extraction_ctx) :
 let ctx_add (meta : Meta.meta) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
   let id_to_string (id : id) : string = id_to_string (Some meta) id ctx in
-  let names_maps = names_maps_add id_to_string id name ctx.names_maps in
+  let names_maps =
+    names_maps_add id_to_string id (Some meta) name ctx.names_maps
+  in
   { ctx with names_maps }
 
 let ctx_get (meta : Meta.meta option) (id : id) (ctx : extraction_ctx) : string
@@ -1006,7 +1020,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
   match !backend with
   | FStar ->
       [
-        (TResult, result_return_id, "Return");
+        (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail");
         (TError, error_failure_id, "Failure");
         (TError, error_out_of_fuel_id, "OutOfFuel");
@@ -1015,7 +1029,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | Coq ->
       [
-        (TResult, result_return_id, "Return");
+        (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail_");
         (TError, error_failure_id, "Failure");
         (TError, error_out_of_fuel_id, "OutOfFuel");
@@ -1024,7 +1038,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | Lean ->
       [
-        (TResult, result_return_id, "Result.ret");
+        (TResult, result_ok_id, "Result.ok");
         (TResult, result_fail_id, "Result.fail");
         (* For panic: we omit the prefix "Error." because the type is always
            clear from the context. Also, "Error" is often used by user-defined
@@ -1035,7 +1049,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | HOL4 ->
       [
-        (TResult, result_return_id, "Return");
+        (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail");
         (TError, error_failure_id, "Failure");
         (* No Fuel::Zero on purpose *)
@@ -1125,7 +1139,7 @@ let initialize_names_maps () : names_maps =
         (* There is duplication in the keywords so we don't check the collisions
            while registering them (what is important is that there are no collisions
            between keywords and user-defined identifiers) *)
-        names_map_add_unchecked UnknownId name nm)
+        names_map_add_unchecked (UnknownId, None) name nm)
       strict_names_map keywords
   in
   let nm = { names_map; unsafe_names_map; strict_names_map } in
@@ -1155,9 +1169,12 @@ let initialize_names_maps () : names_maps =
   in
   let assumed_functions =
     List.map
-      (fun (fid, name) -> (FromLlbc (Pure.FunId (FAssumed fid), None), name))
+      (fun (fid, name) ->
+        ((FromLlbc (Pure.FunId (FAssumed fid), None), None), name))
       init.assumed_llbc_functions
-    @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
+    @ List.map
+        (fun (fid, name) -> ((Pure fid, None), name))
+        init.assumed_pure_functions
   in
   let nm =
     List.fold_left
@@ -1662,9 +1679,11 @@ let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx)
   in
   (* If there is a basename, we use it *)
   match basename with
-  | Some basename ->
+  | Some basename -> (
       (* This should be a no-op *)
-      to_snake_case basename
+      match !Config.backend with
+      | Lean -> basename
+      | FStar | Coq | HOL4 -> to_snake_case basename)
   | None -> (
       (* No basename: we use the first letter of the type *)
       match ty with
@@ -1700,7 +1719,8 @@ let ctx_compute_var_basename (meta : Meta.meta) (ctx : extraction_ctx)
       | TLiteral lty -> (
           match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
       | TArrow _ -> "f"
-      | TTraitType (_, name) -> name_from_type_ident name)
+      | TTraitType (_, name) -> name_from_type_ident name
+      | Error -> "x")
 
 (** Generates a type variable basename. *)
 let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :

@@ -2,7 +2,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 import Base.IList
 import Base.Primitives.Scalar
@@ -50,7 +49,7 @@ abbrev Array.slice {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i 
 def Array.index_usize (α : Type u) (n : Usize) (v: Array α n) (i: Usize) : Result α :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
-  | some x => ret x
+  | some x => ok x
 
 -- For initialization
 def Array.repeat (α : Type u) (n : Usize) (x : α) : Array α n :=
@@ -69,7 +68,7 @@ theorem Array.repeat_spec {α : Type u} (n : Usize) (x : α) :
 @[pspec]
 theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_usize α n i = ret x ∧ x = v.val.index i.val := by
+  ∃ x, v.index_usize α n i = ok x ∧ x = v.val.index i.val := by
   simp only [index_usize]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
@@ -79,12 +78,12 @@ def Array.update_usize (α : Type u) (n : Usize) (v: Array α n) (i: Usize) (x: 
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
+    ok ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
 
 @[pspec]
 theorem Array.update_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.update_usize α n i x = ret nv ∧
+  ∃ nv, v.update_usize α n i x = ok nv ∧
   nv.val = v.val.update i.val x
   := by
   simp only [update_usize]
@@ -96,12 +95,12 @@ theorem Array.update_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Us
 def Array.index_mut_usize (α : Type u) (n : Usize) (v: Array α n) (i: Usize) :
   Result (α × (α -> Result (Array α n))) := do
   let x ← index_usize α n v i
-  ret (x, update_usize α n v i)
+  ok (x, update_usize α n v i)
 
 @[pspec]
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x back, v.index_mut_usize α n i = ret (x, back) ∧
+  ∃ x back, v.index_mut_usize α n i = ok (x, back) ∧
   x = v.val.index i.val ∧
   back = update_usize α n v i := by
   simp only [index_mut_usize, Bind.bind, bind]
@@ -148,7 +147,7 @@ abbrev Slice.slice {α : Type u} [Inhabited α] (s : Slice α) (i j : Int) : Lis
 def Slice.index_usize (α : Type u) (v: Slice α) (i: Usize) : Result α :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
-  | some x => ret x
+  | some x => ok x
 
 /- In the theorems below: we don't always need the `∃ ..`, but we use one
    so that `progress` introduces an opaque variable and an equality. This
@@ -158,7 +157,7 @@ def Slice.index_usize (α : Type u) (v: Slice α) (i: Usize) : Result α :=
 @[pspec]
 theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_usize α i = ret x ∧ x = v.val.index i.val := by
+  ∃ x, v.index_usize α i = ok x ∧ x = v.val.index i.val := by
   simp only [index_usize]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
@@ -168,12 +167,12 @@ def Slice.update_usize (α : Type u) (v: Slice α) (i: Usize) (x: α) : Result (
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
+    ok ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
 
 @[pspec]
 theorem Slice.update_usize_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.update_usize α i x = ret nv ∧
+  ∃ nv, v.update_usize α i x = ok nv ∧
   nv.val = v.val.update i.val x
   := by
   simp only [update_usize]
@@ -185,12 +184,12 @@ theorem Slice.update_usize_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
 def Slice.index_mut_usize (α : Type u) (v: Slice α) (i: Usize) :
   Result (α × (α → Result (Slice α))) := do
   let x ← Slice.index_usize α v i
-  ret (x, Slice.update_usize α v i)
+  ok (x, Slice.update_usize α v i)
 
 @[pspec]
 theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x back, v.index_mut_usize α i = ret (x, back) ∧
+  ∃ x back, v.index_mut_usize α i = ok (x, back) ∧
   x = v.val.index i.val ∧
   back = Slice.update_usize α v i := by
   simp only [index_mut_usize, Bind.bind, bind]
@@ -204,30 +203,30 @@ theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i
    `progress` tactic), meaning `Array.to_slice` should be considered as opaque.
    All what the spec theorem reveals is that the "representative" lists are the same. -/
 def Array.to_slice (α : Type u) (n : Usize) (v : Array α n) : Result (Slice α) :=
-  ret ⟨ v.val, by simp [← List.len_eq_length]; scalar_tac ⟩
+  ok ⟨ v.val, by simp [← List.len_eq_length]; scalar_tac ⟩
 
 @[pspec]
 theorem Array.to_slice_spec {α : Type u} {n : Usize} (v : Array α n) :
-  ∃ s, to_slice α n v = ret s ∧ v.val = s.val := by simp [to_slice]
+  ∃ s, to_slice α n v = ok s ∧ v.val = s.val := by simp [to_slice]
 
 def Array.from_slice (α : Type u) (n : Usize) (_ : Array α n) (s : Slice α) : Result (Array α n) :=
   if h: s.val.len = n.val then
-    ret ⟨ s.val, by simp [← List.len_eq_length, *] ⟩
+    ok ⟨ s.val, by simp [← List.len_eq_length, *] ⟩
   else fail panic
 
 @[pspec]
 theorem Array.from_slice_spec {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.len = n.val) :
-  ∃ na, from_slice α n a ns = ret na ∧ na.val = ns.val
+  ∃ na, from_slice α n a ns = ok na ∧ na.val = ns.val
   := by simp [from_slice, *]
 
 def Array.to_slice_mut (α : Type u) (n : Usize) (a : Array α n) :
   Result (Slice α × (Slice α → Result (Array α n))) := do
   let s ← Array.to_slice α n a
-  ret (s, Array.from_slice α n a)
+  ok (s, Array.from_slice α n a)
 
 @[pspec]
 theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (v : Array α n) :
-  ∃ s back, to_slice_mut α n v = ret (s, back) ∧
+  ∃ s back, to_slice_mut α n v = ok (s, back) ∧
   v.val = s.val ∧
   back = Array.from_slice α n v
   := by simp [to_slice_mut, to_slice]
@@ -235,7 +234,7 @@ theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (v : Array α n) :
 def Array.subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
   if r.start.val < r.end_.val ∧ r.end_.val ≤ a.val.len then
-    ret ⟨ a.val.slice r.start.val r.end_.val,
+    ok ⟨ a.val.slice r.start.val r.end_.val,
           by
             simp [← List.len_eq_length]
             have := a.val.slice_len_le r.start.val r.end_.val
@@ -246,7 +245,7 @@ def Array.subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) 
 @[pspec]
 theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
   (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ a.val.len) :
-  ∃ s, subslice α n a r = ret s ∧
+  ∃ s, subslice α n a r = ok s ∧
   s.val = a.val.slice r.start.val r.end_.val ∧
   (∀ i, 0 ≤ i → i + r.start.val < r.end_.val → s.val.index i = a.val.index (r.start.val + i))
   := by
@@ -269,8 +268,8 @@ def Array.update_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range 
       . scalar_tac
       . scalar_tac
     let na := s_beg.append (s.val.append s_end)
-    have : na.len = a.val.len := by simp [*]
-    ret ⟨ na, by simp_all [← List.len_eq_length]; scalar_tac ⟩
+    have : na.len = a.val.len := by simp [na, *]
+    ok ⟨ na, by simp_all [← List.len_eq_length]; scalar_tac ⟩
   else
     fail panic
 
@@ -282,7 +281,7 @@ def Array.update_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range 
 @[pspec]
 theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
   (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : s.length = r.end_.val - r.start.val) :
-  ∃ na, update_subslice α n a r s = ret na ∧
+  ∃ na, update_subslice α n a r s = ok na ∧
   (∀ i, 0 ≤ i → i < r.start.val → na.index_s i = a.index_s i) ∧
   (∀ i, r.start.val ≤ i → i < r.end_.val → na.index_s i = s.index_s (i - r.start.val)) ∧
   (∀ i, r.end_.val ≤ i → i < n.val → na.index_s i = a.index_s i) := by
@@ -306,7 +305,7 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
 def Slice.subslice (α : Type u) (s : Slice α) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
   if r.start.val < r.end_.val ∧ r.end_.val ≤ s.length then
-    ret ⟨ s.val.slice r.start.val r.end_.val,
+    ok ⟨ s.val.slice r.start.val r.end_.val,
           by
             simp [← List.len_eq_length]
             have := s.val.slice_len_le r.start.val r.end_.val
@@ -317,7 +316,7 @@ def Slice.subslice (α : Type u) (s : Slice α) (r : Range Usize) : Result (Slic
 @[pspec]
 theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
   (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ s.val.len) :
-  ∃ ns, subslice α s r = ret ns ∧
+  ∃ ns, subslice α s r = ok ns ∧
   ns.val = s.slice r.start.val r.end_.val ∧
   (∀ i, 0 ≤ i → i + r.start.val < r.end_.val → ns.index_s i = s.index_s (r.start.val + i))
   := by
@@ -343,15 +342,15 @@ def Slice.update_subslice (α : Type u) (s : Slice α) (r : Range Usize) (ss : S
       . scalar_tac
       . scalar_tac
     let ns := s_beg.append (ss.val.append s_end)
-    have : ns.len = s.val.len := by simp [*]
-    ret ⟨ ns, by simp_all [← List.len_eq_length]; scalar_tac ⟩
+    have : ns.len = s.val.len := by simp [ns, *]
+    ok ⟨ ns, by simp_all [← List.len_eq_length]; scalar_tac ⟩
   else
     fail panic
 
 @[pspec]
 theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (r : Range Usize) (ss : Slice α)
   (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : ss.length = r.end_.val - r.start.val) :
-  ∃ na, update_subslice α a r ss = ret na ∧
+  ∃ na, update_subslice α a r ss = ok na ∧
   (∀ i, 0 ≤ i → i < r.start.val → na.index_s i = a.index_s i) ∧
   (∀ i, r.start.val ≤ i → i < r.end_.val → na.index_s i = ss.index_s (i - r.start.val)) ∧
   (∀ i, r.end_.val ≤ i → i < a.length → na.index_s i = a.index_s i) := by
@@ -393,7 +392,7 @@ def core.slice.index.Slice.index
   let x ← inst.get i slice
   match x with
   | none => fail panic
-  | some x => ret x
+  | some x => ok x
 
 /- [core::slice::index::Range:::get]: forward function -/
 def core.slice.index.RangeUsize.get (T : Type) (i : Range Usize) (slice : Slice T) :

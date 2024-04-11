@@ -13,8 +13,8 @@ Module Demo.
 Definition choose
   (T : Type) (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
   if b
-  then let back_'a := fun (ret : T) => Return (ret, y) in Return (x, back_'a)
-  else let back_'a := fun (ret : T) => Return (x, ret) in Return (y, back_'a)
+  then let back := fun (ret : T) => Ok (ret, y) in Ok (x, back)
+  else let back := fun (ret : T) => Ok (x, ret) in Ok (y, back)
 .
 
 (** [demo::mul2_add1]:
@@ -37,7 +37,7 @@ Definition incr (x : u32) : result u32 :=
 (** [demo::use_incr]:
     Source: 'src/demo.rs', lines 25:0-25:17 *)
 Definition use_incr : result unit :=
-  x <- incr 0%u32; x1 <- incr x; _ <- incr x1; Return tt
+  x <- incr 0%u32; x1 <- incr x; _ <- incr x1; Ok tt
 .
 
 (** [demo::CList]
@@ -58,9 +58,7 @@ Fixpoint list_nth (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
   | S n1 =>
     match l with
     | CList_CCons x tl =>
-      if i s= 0%u32
-      then Return x
-      else (i1 <- u32_sub i 1%u32; list_nth T n1 tl i1)
+      if i s= 0%u32 then Ok x else (i1 <- u32_sub i 1%u32; list_nth T n1 tl i1)
     | CList_CNil => Fail_ Failure
     end
   end
@@ -78,17 +76,15 @@ Fixpoint list_nth_mut
     match l with
     | CList_CCons x tl =>
       if i s= 0%u32
-      then
-        let back_'a := fun (ret : T) => Return (CList_CCons ret tl) in
-        Return (x, back_'a)
+      then let back := fun (ret : T) => Ok (CList_CCons ret tl) in Ok (x, back)
       else (
         i1 <- u32_sub i 1%u32;
         p <- list_nth_mut T n1 tl i1;
         let (t, list_nth_mut_back) := p in
-        let back_'a :=
-          fun (ret : T) =>
-            tl1 <- list_nth_mut_back ret; Return (CList_CCons x tl1) in
-        Return (t, back_'a))
+        let back :=
+          fun (ret : T) => tl1 <- list_nth_mut_back ret; Ok (CList_CCons x tl1)
+          in
+        Ok (t, back))
     | CList_CNil => Fail_ Failure
     end
   end
@@ -106,16 +102,14 @@ Fixpoint list_nth_mut1_loop
     match l with
     | CList_CCons x tl =>
       if i s= 0%u32
-      then
-        let back_'a := fun (ret : T) => Return (CList_CCons ret tl) in
-        Return (x, back_'a)
+      then let back := fun (ret : T) => Ok (CList_CCons ret tl) in Ok (x, back)
       else (
         i1 <- u32_sub i 1%u32;
         p <- list_nth_mut1_loop T n1 tl i1;
-        let (t, back_'a) := p in
-        let back_'a1 :=
-          fun (ret : T) => tl1 <- back_'a ret; Return (CList_CCons x tl1) in
-        Return (t, back_'a1))
+        let (t, back) := p in
+        let back1 := fun (ret : T) => tl1 <- back ret; Ok (CList_CCons x tl1)
+          in
+        Ok (t, back1))
     | CList_CNil => Fail_ Failure
     end
   end
@@ -137,7 +131,7 @@ Fixpoint i32_id (n : nat) (i : i32) : result i32 :=
   | O => Fail_ OutOfFuel
   | S n1 =>
     if i s= 0%i32
-    then Return 0%i32
+    then Ok 0%i32
     else (i1 <- i32_sub i 1%i32; i2 <- i32_id n1 i1; i32_add i2 1%i32)
   end
 .
@@ -155,11 +149,11 @@ Fixpoint list_tail
     | CList_CCons t tl =>
       p <- list_tail T n1 tl;
       let (c, list_tail_back) := p in
-      let back_'a :=
+      let back :=
         fun (ret : CList_t T) =>
-          tl1 <- list_tail_back ret; Return (CList_CCons t tl1) in
-      Return (c, back_'a)
-    | CList_CNil => Return (CList_CNil, Return)
+          tl1 <- list_tail_back ret; Ok (CList_CCons t tl1) in
+      Ok (c, back)
+    | CList_CNil => Ok (CList_CNil, Ok)
     end
   end
 .
@@ -176,7 +170,7 @@ Arguments Counter_t_incr { _ }.
 (** [demo::{(demo::Counter for usize)}::incr]:
     Source: 'src/demo.rs', lines 102:4-102:31 *)
 Definition counterUsize_incr (self : usize) : result (usize * usize) :=
-  self1 <- usize_add self 1%usize; Return (self, self1)
+  self1 <- usize_add self 1%usize; Ok (self, self1)
 .
 
 (** Trait implementation: [demo::{(demo::Counter for usize)}]

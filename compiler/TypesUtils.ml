@@ -12,6 +12,26 @@ let ty_has_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
   let info = TypesAnalysis.analyze_ty infos ty in
   info.TypesAnalysis.contains_borrow
 
+let ty_has_adt_with_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool
+    =
+  let visitor =
+    object
+      inherit [_] iter_ty as super
+
+      method! visit_ty env ty =
+        match ty with
+        | TAdt (type_id, _) when type_id <> TTuple ->
+            let info = TypesAnalysis.analyze_ty infos ty in
+            if info.TypesAnalysis.contains_borrow then raise Found
+            else super#visit_ty env ty
+        | _ -> super#visit_ty env ty
+    end
+  in
+  try
+    visitor#visit_ty () ty;
+    false
+  with Found -> true
+
 (** Retuns true if the type contains nested borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes

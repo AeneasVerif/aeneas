@@ -9,7 +9,7 @@ open external
 /- [core::mem::swap] -/
 def core.mem.swap
   (T : Type) : T → T → State → Result (State × (T × T)) :=
-  fun x y s => .ret (s, (y, x))
+  fun x y s => .ok (s, (y, x))
 
 /- [core::num::nonzero::NonZeroU32::{14}::new] -/
 def core.num.nonzero.NonZeroU32.new :

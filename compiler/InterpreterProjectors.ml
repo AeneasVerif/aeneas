@@ -217,12 +217,12 @@ let rec apply_proj_borrows (meta : Meta.meta) (check_symbolic_no_ended : bool)
               meta);
           ASymbolic (AProjBorrows (s, ty))
       | _ ->
-          log#lerror
+          log#ltrace
             (lazy
               ("apply_proj_borrows: unexpected inputs:\n- input value: "
               ^ typed_value_to_string ~meta:(Some meta) ctx v
               ^ "\n- proj rty: " ^ ty_to_string ctx ty));
-          craise __FILE__ __LINE__ meta "Unreachable"
+          internal_error __FILE__ __LINE__ meta
     in
     { value; ty }
 

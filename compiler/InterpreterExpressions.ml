@@ -146,7 +146,7 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
             "Can't copy an assumed value other than Option"
       | TAdt (TAdtId _, _) as ty ->
           sanity_check __FILE__ __LINE__
-            (allow_adt_copy || ty_is_primitively_copyable ty)
+            (allow_adt_copy || ty_is_copyable ty)
             meta
       | TAdt (TTuple, _) -> () (* Ok *)
       | TAdt
@@ -157,9 +157,8 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
               const_generics = [];
               trait_refs = [];
             } ) ->
-          exec_assert __FILE__ __LINE__
-            (ty_is_primitively_copyable ty)
-            meta "The type is not primitively copyable"
+          exec_assert __FILE__ __LINE__ (ty_is_copyable ty) meta
+            "The type is not primitively copyable"
       | _ -> exec_raise __FILE__ __LINE__ meta "Unreachable");
       let ctx, fields =
         List.fold_left_map
@@ -195,7 +194,7 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
        * thus requires calling the proper function. Here, we copy values
        * for very simple types such as integers, shared borrows, etc. *)
       cassert __FILE__ __LINE__
-        (ty_is_primitively_copyable (Substitute.erase_regions sp.sv_ty))
+        (ty_is_copyable (Substitute.erase_regions sp.sv_ty))
         meta "Not primitively copyable";
       (* If the type is copyable, we simply return the current value. Side
        * remark: what is important to look at when copying symbolic values
@@ -528,9 +527,8 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
     exec_assert __FILE__ __LINE__ (v1.ty = v2.ty) meta
       "The arguments given to the binop don't have the same type";
     (* Equality/inequality check is primitive only for a subset of types *)
-    exec_assert __FILE__ __LINE__
-      (ty_is_primitively_copyable v1.ty)
-      meta "Type is not primitively copyable";
+    exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) meta
+      "Type is not primitively copyable";
     let b = v1 = v2 in
     Ok { value = VLiteral (VBool b); ty = TLiteral TBool })
   else
@@ -621,9 +619,8 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
         (* Equality operations *)
         sanity_check __FILE__ __LINE__ (v1.ty = v2.ty) meta;
         (* Equality/inequality check is primitive only for a subset of types *)
-        exec_assert __FILE__ __LINE__
-          (ty_is_primitively_copyable v1.ty)
-          meta "The type is not primitively copyable";
+        exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) meta
+          "The type is not primitively copyable";
         TLiteral TBool)
       else
         (* Other operations: input types are integers *)

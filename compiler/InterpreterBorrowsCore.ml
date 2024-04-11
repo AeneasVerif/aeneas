@@ -162,11 +162,11 @@ let rec compare_rtys (meta : Meta.meta) (default : bool)
       sanity_check __FILE__ __LINE__ (ty1 = ty2) meta;
       default
   | _ ->
-      log#lerror
+      log#ltrace
         (lazy
           ("compare_rtys: unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1
          ^ "\n- ty2: " ^ show_ty ty2));
-      craise __FILE__ __LINE__ meta "Unreachable"
+      internal_error __FILE__ __LINE__ meta
 
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that

@@ -22,16 +22,16 @@ def shift_i32 (a : I32) : Result I32 :=
 /- [bitwise::xor_u32]:
    Source: 'src/bitwise.rs', lines 17:0-17:37 -/
 def xor_u32 (a : U32) (b : U32) : Result U32 :=
-  Result.ret (a ^^^ b)
+  Result.ok (a ^^^ b)
 
 /- [bitwise::or_u32]:
    Source: 'src/bitwise.rs', lines 21:0-21:36 -/
 def or_u32 (a : U32) (b : U32) : Result U32 :=
-  Result.ret (a ||| b)
+  Result.ok (a ||| b)
 
 /- [bitwise::and_u32]:
    Source: 'src/bitwise.rs', lines 25:0-25:37 -/
 def and_u32 (a : U32) (b : U32) : Result U32 :=
-  Result.ret (a &&& b)
+  Result.ok (a &&& b)
 
 end bitwise
