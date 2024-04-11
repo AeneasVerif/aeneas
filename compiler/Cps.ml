@@ -49,6 +49,7 @@ type cm_fun = eval_ctx -> eval_ctx * (eval_result -> eval_result)
    becomes:
    {[
      eval_ctx -> typed_value * eval_ctx * (eval_result -> eval_result)
+     (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result)
    ]}
 
    Ex.:
@@ -87,30 +88,38 @@ let comp (f : eval_result -> eval_result) (g : eval_result -> eval_result) :
     eval_result -> eval_result =
  fun e -> f (g e)
 
-(*
 (** Convert a unit function to a cm function *)
 let unit_to_cm_fun (f : eval_ctx -> unit) : cm_fun =
- fun cf ctx ->
+ fun ctx ->
   f ctx;
-  cf ctx
+  (ctx, fun e -> e)
 
 (** *)
 let update_to_cm_fun (f : eval_ctx -> eval_ctx) : cm_fun =
- fun cf ctx ->
+ fun ctx ->
   let ctx = f ctx in
-  cf ctx
+  (ctx, fun e -> e)
 
+(*
 (** Composition of functions taking continuations as parameters.
     We tried to make this as general as possible. *)
 let comp (f : 'c -> 'd -> 'e) (g : ('a -> 'b) -> 'c) : ('a -> 'b) -> 'd -> 'e =
  fun cf ctx -> f (g cf) ctx
 
+*)
 let comp_unit (f : cm_fun) (g : eval_ctx -> unit) : cm_fun =
-  comp f (unit_to_cm_fun g)
+ fun ctx ->
+  let ctx, cc = f ctx in
+  let ctx, cc1 = unit_to_cm_fun g ctx in
+  (ctx, comp cc cc1)
 
 let comp_update (f : cm_fun) (g : eval_ctx -> eval_ctx) : cm_fun =
-  comp f (update_to_cm_fun g)
+ fun ctx ->
+  let ctx, cc = f ctx in
+  let ctx, cc1 = update_to_cm_fun g ctx in
+  (ctx, comp cc cc1)
 
+(*
 (** This is just a test, to check that {!comp} is general enough to handle a case
     where a function must compute a value and give it to the continuation.
     It happens for functions like {!val:InterpreterExpressions.eval_operand}.
@@ -138,16 +147,19 @@ let id_cm_fun : cm_fun = fun cf ctx -> cf ctx
     See the unit test below for an illustration.
  *)*)
 
-let fold_left_apply_continuation (f : 'a -> (* ('c -> 'd) ->*) 'c -> 'd )
-    (inputs : 'a list) (* (cf : 'c -> 'd) *) : 'c -> 'd =
+let fold_left_apply_continuation (f : 'a -> (* ('c -> 'd) ->*) 'c -> 'd)
+    (inputs : 'a list) : 'c -> 'd =
+  (* (cf : 'c -> 'd) *)
   let rec eval_list (inputs : 'a list) (cc : 'e -> 'e) : 'c -> 'd =
    fun ctx ->
     match inputs with
-    | [] -> ctx, cc
-    | x :: inputs -> let ctx, cc1 = (f x ctx) in
-    eval_list inputs (comp cc1 cc) ctx
+    | [] -> (ctx, cc)
+    | x :: inputs ->
+        let ctx, cc1 = f x ctx in
+        eval_list inputs (comp cc1 cc) ctx
   in
   eval_list inputs (fun e -> e)
+
 (*
 (** Unit test/example for {!fold_left_apply_continuation} *)
 let _ =
@@ -180,17 +192,18 @@ let fold_left_list_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
         comp (f x) (fun cf v -> eval_list inputs cf (v :: outputs)) cf ctx
   in
   eval_list inputs cf []
-*)
-let fold_left_list_apply_continuation (f : 'a -> (* ('c -> 'd) ->*) 'c -> 'd )
-    (inputs : 'a list) (* (cf : 'c -> 'd) *) : 'c -> 'f =
-  let rec eval_list (inputs : 'a list) (outputs : 'b list) (cc : 'e -> 'e) : 'c -> 'f =
-   fun ctx ->
+ *)
+let fold_left_list_apply_continuation (f : 'a -> 'c -> 'd * 'c * ('e -> 'e))
+    (inputs : 'a list) (ctx : 'c) : 'd list * 'c * ('e -> 'e) =
+  let rec eval_list (inputs : 'a list) (ctx : 'c) : 'd list * 'c * ('e -> 'e) =
     match inputs with
-    | [] -> List.rev outputs, ctx, cc
-    | x :: inputs -> let v, ctx, cc1 = (f x ctx) in
-    eval_list inputs (v :: outputs) (comp cc1 cc) ctx
+    | [] -> ([], ctx, fun e -> e)
+    | x :: inputs ->
+        let v, ctx, cc1 = f x ctx in
+        let vl, ctx, cc2 = eval_list inputs ctx in
+        (v :: vl, ctx, comp cc1 cc2)
   in
-  eval_list inputs [] (fun e -> e)
+  eval_list inputs ctx
 (*
 (** Unit test/example for {!fold_left_list_apply_continuation} *)
 let _ =

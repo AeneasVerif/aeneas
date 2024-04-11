@@ -66,7 +66,7 @@ val eval_operands :
   Meta.meta ->
   operand list ->
   eval_ctx ->
-  typed_value * eval_ctx * (eval_result -> eval_result)
+  typed_value list * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate an rvalue which is not a global (globals are handled elsewhere).
 

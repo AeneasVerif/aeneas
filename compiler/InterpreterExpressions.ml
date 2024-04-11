@@ -53,7 +53,7 @@ let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
     borrows*.
  *)
 let read_place (meta : Meta.meta) (access : access_kind) (p : place)
-  (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
+    (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
   let v = read_place meta access p ctx in
   (* Check that there are no bottoms in the value *)
   cassert __FILE__ __LINE__
@@ -64,7 +64,7 @@ let read_place (meta : Meta.meta) (access : access_kind) (p : place)
     (not (reserved_in_value v))
     meta "There should be no reserved borrows in the value";
   (* Return *)
-  v, ctx, (fun e -> e)
+  (v, ctx, fun e -> e)
 
 let access_rplace_reorganize_and_read (config : config) (meta : Meta.meta)
     (expand_prim_copy : bool) (access : access_kind) (p : place)
@@ -78,21 +78,24 @@ let access_rplace_reorganize_and_read (config : config) (meta : Meta.meta)
    * borrows) *)
   let ctx, cc =
     if expand_prim_copy then
-      let ctx, cc1 = (expand_primitively_copyable_at_place config meta access p) ctx in
-      ctx, comp cc cc1
-    else ctx, cc
+      let ctx, cc1 =
+        (expand_primitively_copyable_at_place config meta access p) ctx
+      in
+      (ctx, comp cc cc1)
+    else (ctx, cc)
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
   let ty_value, ctx, read_place = read_place meta access p ctx in
   (* Compose *)
-  ty_value, ctx, comp cc read_place
+  (ty_value, ctx, comp cc read_place)
 
 let access_rplace_reorganize (config : config) (meta : Meta.meta)
     (expand_prim_copy : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
-  let _, ctx, f = access_rplace_reorganize_and_read config meta expand_prim_copy access p 
-  ctx in
-  ctx, f
+  let _, ctx, f =
+    access_rplace_reorganize_and_read config meta expand_prim_copy access p ctx
+  in
+  (ctx, f)
 
 (** Convert an operand constant operand value to a typed value *)
 let literal_to_typed_value (meta : Meta.meta) (ty : literal_type) (cv : literal)
@@ -250,7 +253,7 @@ let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta)
     match op with
     | Constant _ ->
         (* No need to reorganize the context *)
-        ctx, fun e -> e
+        (ctx, fun e -> e)
     | Copy p ->
         (* Access the value *)
         let access = Read in
@@ -268,8 +271,8 @@ let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta)
 
 (** Evaluate an operand, without reorganizing the context before *)
 let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
-    (op : operand) (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result)
-    =
+    (op : operand) (ctx : eval_ctx) :
+    typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Debug *)
   log#ldebug
     (lazy
@@ -282,7 +285,9 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
   | Constant cv -> (
       match cv.value with
       | CLiteral lit ->
-          (literal_to_typed_value meta (ty_as_literal cv.ty) lit), ctx, fun e -> e
+          ( literal_to_typed_value meta (ty_as_literal cv.ty) lit,
+            ctx,
+            fun e -> e )
       | CTraitConst (trait_ref, const_name) -> (
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value *)
@@ -290,17 +295,19 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
           let v = mk_fresh_symbolic_typed_value meta ty in
           (* Continue the evaluation *)
           (* Wrap the generated expression *)
-          v, ctx, fun e ->
-            match e with
-            | None -> None
-            | Some e ->
-              Some
-                (SymbolicAst.IntroSymbolic
-                   ( ctx0,
-                     None,
-                     value_as_symbolic meta v.value,
-                     SymbolicAst.VaTraitConstValue (trait_ref, const_name),
-                     e )))
+          ( v,
+            ctx,
+            fun e ->
+              match e with
+              | None -> None
+              | Some e ->
+                  Some
+                    (SymbolicAst.IntroSymbolic
+                       ( ctx0,
+                         None,
+                         value_as_symbolic meta v.value,
+                         SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                         e )) ))
       | CVar vid -> (
           let ctx0 = ctx in
           (* In concrete mode: lookup the const generic value.
@@ -325,21 +332,23 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
           (* If we are synthesizing a symbolic AST, it means that we are in symbolic
              mode: the value of the const generic is necessarily symbolic. *)
           (* We have to wrap the generated expression *)
-          cv, ctx, fun e ->
-            match e with
-            | None -> None
-            | Some e ->
-                (* If we are synthesizing a symbolic AST, it means that we are in symbolic
-                  mode: the value of the const generic is necessarily symbolic. *)
-                sanity_check __FILE__ __LINE__ (is_symbolic cv.value) meta;
-                (* *)
-                Some
-                  (SymbolicAst.IntroSymbolic
-                    ( ctx0,
-                      None,
-                      value_as_symbolic meta cv.value,
-                      SymbolicAst.VaCgValue vid,
-                      e )))
+          ( cv,
+            ctx,
+            fun e ->
+              match e with
+              | None -> None
+              | Some e ->
+                  (* If we are synthesizing a symbolic AST, it means that we are in symbolic
+                     mode: the value of the const generic is necessarily symbolic. *)
+                  sanity_check __FILE__ __LINE__ (is_symbolic cv.value) meta;
+                  (* *)
+                  Some
+                    (SymbolicAst.IntroSymbolic
+                       ( ctx0,
+                         None,
+                         value_as_symbolic meta cv.value,
+                         SymbolicAst.VaCgValue vid,
+                         e )) ))
       | CFnPtr _ ->
           craise __FILE__ __LINE__ meta
             "Function pointers are not supported yet")
@@ -348,45 +357,45 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
       let access = Read in
       let v, ctx, cc = read_place meta access p ctx in
       (* Copy the value *)
-(*       let copy cf v : m_fun =
-       fun ctx -> *)
-        (* Sanity checks *)
-        exec_assert __FILE__ __LINE__
-          (not (bottom_in_value ctx.ended_regions v))
-          meta "Can not copy a value containing bottom";
-        sanity_check __FILE__ __LINE__
-          (Option.is_none
-             (find_first_primitively_copyable_sv_with_borrows
-                ctx.type_ctx.type_infos v))
-          meta;
-        (* Actually perform the copy *)
-        let allow_adt_copy = false in
-        let ctx, v = copy_value meta allow_adt_copy config ctx v in
-        (* Continue *)
+      (* let copy cf v : m_fun =
+         fun ctx -> *)
+      (* Sanity checks *)
+      exec_assert __FILE__ __LINE__
+        (not (bottom_in_value ctx.ended_regions v))
+        meta "Can not copy a value containing bottom";
+      sanity_check __FILE__ __LINE__
+        (Option.is_none
+           (find_first_primitively_copyable_sv_with_borrows
+              ctx.type_ctx.type_infos v))
+        meta;
+      (* Actually perform the copy *)
+      let allow_adt_copy = false in
+      let ctx, v = copy_value meta allow_adt_copy config ctx v in
+      (* Continue *)
       (* Compose and apply *)
       (* comp cc copy ctx *)
-      v, ctx, cc
+      (v, ctx, cc)
   | Move p ->
       (* Access the value *)
       let access = Move in
       let v, ctx, cc = read_place meta access p ctx in
       (* Move the value *)
-(*       let move cf v : m_fun =
-       fun ctx -> *)
-        (* Check that there are no bottoms in the value we are about to move *)
-        exec_assert __FILE__ __LINE__
-          (not (bottom_in_value ctx.ended_regions v))
-          meta "There should be no bottoms in the value we are about to move";
-        let bottom : typed_value = { value = VBottom; ty = v.ty } in
-        let ctx = write_place meta access p bottom ctx in
-        (* cf v ctx *)
+      (* let move cf v : m_fun =
+         fun ctx -> *)
+      (* Check that there are no bottoms in the value we are about to move *)
+      exec_assert __FILE__ __LINE__
+        (not (bottom_in_value ctx.ended_regions v))
+        meta "There should be no bottoms in the value we are about to move";
+      let bottom : typed_value = { value = VBottom; ty = v.ty } in
+      let ctx = write_place meta access p bottom ctx in
+      (* cf v ctx *)
       (* in *)
       (* Compose and apply *)
       (* comp cc move cf ctx *)
-      bottom, ctx, cc
+      (bottom, ctx, cc)
 
 let eval_operand (config : config) (meta : Meta.meta) (op : operand)
-  (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
+    (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Debug *)
   log#ldebug
     (lazy
@@ -397,7 +406,7 @@ let eval_operand (config : config) (meta : Meta.meta) (op : operand)
   let v, ctx, cc2 = (eval_operand_no_reorganize config meta op) ctx in
 
   (* We reorganize the context, then evaluate the operand *)
-  v, ctx, comp cc cc2
+  (v, ctx, comp cc cc2)
 
 (** Small utility.
 
@@ -409,7 +418,8 @@ let prepare_eval_operands_reorganize (config : config) (meta : Meta.meta)
 
 (** Evaluate several operands. *)
 let eval_operands (config : config) (meta : Meta.meta) (ops : operand list)
-  (ctx : eval_ctx) : typed_value list * eval_ctx * (eval_result -> eval_result) =
+    (ctx : eval_ctx) :
+    typed_value list * eval_ctx * (eval_result -> eval_result) =
   (* Prepare the operands *)
   let ctx, prepare = prepare_eval_operands_reorganize config meta ops ctx in
   (* Evaluate the operands *)
@@ -419,52 +429,58 @@ let eval_operands (config : config) (meta : Meta.meta) (ops : operand list)
       ops ctx
   in
   (* Compose and apply *)
-  v, ctx, comp prepare eval
+  (v, ctx, comp prepare eval)
 
 let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand)
-    (op2 : operand) (cf : typed_value * typed_value -> m_fun) : m_fun =
-  let eval_op = eval_operands config meta [ op1; op2 ] in
-  let use_res cf res =
+    (op2 : operand) (ctx : eval_ctx) :
+    (typed_value * typed_value) * eval_ctx * (eval_result -> eval_result) =
+  let res, ctx, eval_op = eval_operands config meta [ op1; op2 ] ctx in
+  let use_res =
     match res with
-    | [ v1; v2 ] -> cf (v1, v2)
+    | [ v1; v2 ] -> (v1, v2)
     | _ -> craise __FILE__ __LINE__ meta "Unreachable"
   in
-  comp eval_op use_res cf
+  (use_res, ctx, eval_op)
+(* comp eval_op use_res cf *)
 
 let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
-    (op : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+    (op : operand) (ctx : eval_ctx) :
+    (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operand *)
-  let eval_op = eval_operand config meta op in
+  let v, ctx, eval_op = eval_operand config meta op ctx in
   (* Apply the unop *)
-  let apply cf (v : typed_value) : m_fun =
+  let apply (v : typed_value) (ctx : eval_ctx) :
+      (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result)
+      =
     match (unop, v.value) with
     | Not, VLiteral (VBool b) ->
-        cf (Ok { v with value = VLiteral (VBool (not b)) })
+        (Ok { v with value = VLiteral (VBool (not b)) }, ctx, fun e -> e)
     | Neg, VLiteral (VScalar sv) -> (
         let i = Z.neg sv.value in
         match mk_scalar sv.int_ty i with
-        | Error _ -> cf (Error EPanic)
-        | Ok sv -> cf (Ok { v with value = VLiteral (VScalar sv) }))
+        | Error _ -> (Error EPanic, ctx, fun e -> e)
+        | Ok sv -> (Ok { v with value = VLiteral (VScalar sv) }, ctx, fun e -> e)
+        )
     | ( Cast (CastScalar (TInteger src_ty, TInteger tgt_ty)),
         VLiteral (VScalar sv) ) -> (
         (* Cast between integers *)
         sanity_check __FILE__ __LINE__ (src_ty = sv.int_ty) meta;
         let i = sv.value in
         match mk_scalar tgt_ty i with
-        | Error _ -> cf (Error EPanic)
+        | Error _ -> (Error EPanic, ctx, fun e -> e)
         | Ok sv ->
             let ty = TLiteral (TInteger tgt_ty) in
             let value = VLiteral (VScalar sv) in
-            cf (Ok { ty; value }))
+            (Ok { ty; value }, ctx, fun e -> e))
     | Cast (CastScalar (TBool, TInteger tgt_ty)), VLiteral (VBool sv) -> (
         (* Cast bool -> int *)
         let i = Z.of_int (if sv then 1 else 0) in
         match mk_scalar tgt_ty i with
-        | Error _ -> cf (Error EPanic)
+        | Error _ -> (Error EPanic, ctx, fun e -> e)
         | Ok sv ->
             let ty = TLiteral (TInteger tgt_ty) in
             let value = VLiteral (VScalar sv) in
-            cf (Ok { ty; value }))
+            (Ok { ty; value }, ctx, fun e -> e))
     | Cast (CastScalar (TInteger _, TBool)), VLiteral (VScalar sv) ->
         (* Cast int -> bool *)
         let b =
@@ -476,19 +492,21 @@ let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
         in
         let value = VLiteral (VBool b) in
         let ty = TLiteral TBool in
-        cf (Ok { ty; value })
+        (Ok { ty; value }, ctx, fun e -> e)
     | _ -> exec_raise __FILE__ __LINE__ meta "Invalid input for unop"
   in
-  comp eval_op apply cf
+  let r, ctx, apply = apply v ctx in
+  (r, ctx, comp eval_op apply)
 
 let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop)
-    (op : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
- fun ctx ->
+    (op : operand) (ctx : eval_ctx) :
+    (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operand *)
-  let eval_op = eval_operand config meta op in
+  let v, ctx, eval_op = eval_operand config meta op ctx in
   (* Generate a fresh symbolic value to store the result *)
-  let apply cf (v : typed_value) : m_fun =
-   fun ctx ->
+  let apply (v : typed_value) (ctx : eval_ctx) :
+      (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result)
+      =
     let res_sv_id = fresh_symbolic_value_id () in
     let res_sv_ty =
       match (unop, v.ty) with
@@ -499,20 +517,25 @@ let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop)
     in
     let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
     (* Call the continuation *)
-    let expr = cf (Ok (mk_typed_value_from_symbolic_value res_sv)) ctx in
+    let expr = Ok (mk_typed_value_from_symbolic_value res_sv) in
     (* Synthesize the symbolic AST *)
-    synthesize_unary_op ctx unop v
-      (mk_opt_place_from_op meta op ctx)
-      res_sv None expr
+    ( expr,
+      ctx,
+      fun e ->
+        synthesize_unary_op ctx unop v
+          (mk_opt_place_from_op meta op ctx)
+          res_sv None e )
   in
   (* Compose and apply *)
-  comp eval_op apply cf ctx
+  let r, ctx, apply = apply v ctx in
+  (r, ctx, comp eval_op apply)
 
 let eval_unary_op (config : config) (meta : Meta.meta) (unop : unop)
-    (op : operand) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+    (op : operand) (ctx : eval_ctx) :
+    (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   match config.mode with
-  | ConcreteMode -> eval_unary_op_concrete config meta unop op cf
-  | SymbolicMode -> eval_unary_op_symbolic config meta unop op cf
+  | ConcreteMode -> eval_unary_op_concrete config meta unop op ctx
+  | SymbolicMode -> eval_unary_op_symbolic config meta unop op ctx
 
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
     the binop *after* the operands have been successfully evaluated
@@ -590,27 +613,30 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
     | _ -> craise __FILE__ __LINE__ meta "Invalid inputs for binop"
 
 let eval_binary_op_concrete (config : config) (meta : Meta.meta) (binop : binop)
-    (op1 : operand) (op2 : operand)
-    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+    (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
+    (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operands *)
-  let eval_ops = eval_two_operands config meta op1 op2 in
+  let res, ctx, eval_ops = eval_two_operands config meta op1 op2 ctx in
   (* Compute the result of the binop *)
-  let compute cf (res : typed_value * typed_value) =
+  let compute (res : typed_value * typed_value) (ctx : eval_ctx) :
+      (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result)
+      =
     let v1, v2 = res in
-    cf (eval_binary_op_concrete_compute meta binop v1 v2)
+    (eval_binary_op_concrete_compute meta binop v1 v2, ctx, fun e -> e)
   in
+  let r, ctx, compute = compute res ctx in
   (* Compose and apply *)
-  comp eval_ops compute cf
+  (r, ctx, comp eval_ops compute)
 
 let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
-    (op1 : operand) (op2 : operand)
-    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
- fun ctx ->
+    (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
+    (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operands *)
-  let eval_ops = eval_two_operands config meta op1 op2 in
+  let res, ctx, eval_ops = eval_two_operands config meta op1 op2 ctx in
   (* Compute the result of applying the binop *)
-  let compute cf ((v1, v2) : typed_value * typed_value) : m_fun =
-   fun ctx ->
+  let compute ((v1, v2) : typed_value * typed_value) (ctx : eval_ctx) :
+      (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result)
+      =
     (* Generate a fresh symbolic value to store the result *)
     let res_sv_id = fresh_symbolic_value_id () in
     let res_sv_ty =
@@ -642,25 +668,28 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
     let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
     (* Call the continuattion *)
     let v = mk_typed_value_from_symbolic_value res_sv in
-    let expr = cf (Ok v) ctx in
+    let expr = Ok v in
     (* Synthesize the symbolic AST *)
     let p1 = mk_opt_place_from_op meta op1 ctx in
     let p2 = mk_opt_place_from_op meta op2 ctx in
-    synthesize_binary_op ctx binop v1 p1 v2 p2 res_sv None expr
+    ( expr,
+      ctx,
+      fun e -> synthesize_binary_op ctx binop v1 p1 v2 p2 res_sv None e )
   in
+  let r, ctx, compute = compute res ctx in
   (* Compose and apply *)
-  comp eval_ops compute cf ctx
+  (r, ctx, comp eval_ops compute)
 
 let eval_binary_op (config : config) (meta : Meta.meta) (binop : binop)
-    (op1 : operand) (op2 : operand)
-    (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
+    (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
+    (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   match config.mode with
-  | ConcreteMode -> eval_binary_op_concrete config meta binop op1 op2 cf
-  | SymbolicMode -> eval_binary_op_symbolic config meta binop op1 op2 cf
+  | ConcreteMode -> eval_binary_op_concrete config meta binop op1 op2 ctx
+  | SymbolicMode -> eval_binary_op_symbolic config meta binop op1 op2 ctx
 
 let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
-    (bkind : borrow_kind) (cf : typed_value -> m_fun) : m_fun =
- fun ctx ->
+    (bkind : borrow_kind) (ctx : eval_ctx) :
+    typed_value * eval_ctx * (eval_result -> eval_result) =
   match bkind with
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
@@ -678,12 +707,13 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
       in
 
       let expand_prim_copy = false in
-      let prepare =
+      let v, ctx, prepare =
         access_rplace_reorganize_and_read config meta expand_prim_copy access p
+          ctx
       in
       (* Evaluate the borrowing operation *)
-      let eval (cf : typed_value -> m_fun) (v : typed_value) : m_fun =
-       fun ctx ->
+      let eval (v : typed_value) (ctx : eval_ctx) :
+          typed_value * eval_ctx * (eval_result -> eval_result) =
         (* Generate the fresh borrow id *)
         let bid = fresh_borrow_id () in
         (* Compute the loan value, with which to replace the value at place p *)
@@ -720,20 +750,22 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
         in
         let rv : typed_value = { value = VBorrow bc; ty = rv_ty } in
         (* Continue *)
-        cf rv ctx
+        (rv, ctx, fun e -> e)
       in
       (* Compose and apply *)
-      comp prepare eval cf ctx
+      let v, ctx, eval = eval v ctx in
+      (v, ctx, comp prepare eval)
   | BMut ->
       (* Access the value *)
       let access = Write in
       let expand_prim_copy = false in
-      let prepare =
+      let v, ctx, prepare =
         access_rplace_reorganize_and_read config meta expand_prim_copy access p
+          ctx
       in
       (* Evaluate the borrowing operation *)
-      let eval (cf : typed_value -> m_fun) (v : typed_value) : m_fun =
-       fun ctx ->
+      let eval (v : typed_value) (ctx : eval_ctx) :
+          typed_value * eval_ctx * (eval_result -> eval_result) =
         (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
         let bid = fresh_borrow_id () in
         let rv_ty = TRef (RErased, v.ty, RMut) in
@@ -745,19 +777,20 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
         (* Update the value in the context *)
         let ctx = write_place meta access p nv ctx in
         (* Continue *)
-        cf rv ctx
+        (rv, ctx, fun e -> e)
       in
       (* Compose and apply *)
-      comp prepare eval cf ctx
+      let v, ctx, eval = eval v ctx in
+      (v, ctx, comp prepare eval)
 
 let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
-    (aggregate_kind : aggregate_kind) (ops : operand list)
-    (cf : typed_value -> m_fun) : m_fun =
+    (aggregate_kind : aggregate_kind) (ops : operand list) (ctx : eval_ctx) :
+    typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operands *)
-  let eval_ops = eval_operands config meta ops in
+  let values, ctx, eval_ops = eval_operands config meta ops ctx in
   (* Compute the value *)
-  let compute (cf : typed_value -> m_fun) (values : typed_value list) : m_fun =
-   fun ctx ->
+  let compute (values : typed_value list) (ctx : eval_ctx) :
+      typed_value * eval_ctx * (eval_result -> eval_result) =
     (* Match on the aggregate kind *)
     match aggregate_kind with
     | AggregatedAdt (type_id, opt_variant_id, generics) -> (
@@ -769,7 +802,7 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
             let ty = TAdt (TTuple, generics) in
             let aggregated : typed_value = { value = v; ty } in
             (* Call the continuation *)
-            cf aggregated ctx
+            (aggregated, ctx, fun e -> e)
         | TAdtId def_id ->
             (* Sanity checks *)
             let type_decl = ctx_lookup_type_decl ctx def_id in
@@ -792,7 +825,7 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
             let aty = TAdt (TAdtId def_id, generics) in
             let aggregated : typed_value = { value = VAdt av; ty = aty } in
             (* Call the continuation *)
-            cf aggregated ctx
+            (aggregated, ctx, fun e -> e)
         | TAssumed _ -> craise __FILE__ __LINE__ meta "Unreachable")
     | AggregatedArray (ety, cg) -> (
         (* Sanity check: all the values have the proper type *)
@@ -813,37 +846,51 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
            in the generated code. *)
         let saggregated = mk_fresh_symbolic_typed_value meta ty in
         (* Call the continuation *)
-        match cf saggregated ctx with
-        | None -> None
-        | Some e ->
-            (* Introduce the symbolic value in the AST *)
-            let sv = ValuesUtils.value_as_symbolic meta saggregated.value in
-            Some (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)))
+        ( saggregated,
+          ctx,
+          fun e ->
+            match e with
+            | None -> None
+            | Some e ->
+                (* Introduce the symbolic value in the AST *)
+                let sv = ValuesUtils.value_as_symbolic meta saggregated.value in
+                Some
+                  (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e))
+        ))
     | AggregatedClosure _ ->
         craise __FILE__ __LINE__ meta "Closures are not supported yet"
   in
   (* Compose and apply *)
-  comp eval_ops compute cf
+  let v, ctx, compute = compute values ctx in
+  (v, ctx, comp eval_ops compute)
 
 let eval_rvalue_not_global (config : config) (meta : Meta.meta)
-    (rvalue : rvalue) (cf : (typed_value, eval_error) result -> m_fun) : m_fun =
- fun ctx ->
+    (rvalue : rvalue) (ctx : eval_ctx) :
+    (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   log#ldebug (lazy "eval_rvalue");
   (* Small helpers *)
-  let wrap_in_result (cf : (typed_value, eval_error) result -> m_fun)
-      (v : typed_value) : m_fun =
-    cf (Ok v)
+  let wrap_in_result (v : typed_value) : (typed_value, eval_error) result =
+    Ok v
   in
-  let comp_wrap f = comp f wrap_in_result cf in
+  (* let comp_wrap f = comp f (fun e -> e) in *)
   (* Delegate to the proper auxiliary function *)
   match rvalue with
-  | Use op -> comp_wrap (eval_operand config meta op) ctx
-  | RvRef (p, bkind) -> comp_wrap (eval_rvalue_ref config meta p bkind) ctx
-  | UnaryOp (unop, op) -> eval_unary_op config meta unop op cf ctx
-  | BinaryOp (binop, op1, op2) ->
-      eval_binary_op config meta binop op1 op2 cf ctx
+  | Use op ->
+      (* comp_wrap *)
+      let v, ctx, eval_op = (eval_operand config meta op) ctx in
+      (wrap_in_result v, ctx, eval_op)
+  | RvRef (p, bkind) ->
+      (* comp_wrap *)
+      let v, ctx, eval = (eval_rvalue_ref config meta p bkind) ctx in
+      (wrap_in_result v, ctx, eval)
+  | UnaryOp (unop, op) -> eval_unary_op config meta unop op ctx
+  | BinaryOp (binop, op1, op2) -> eval_binary_op config meta binop op1 op2 ctx
   | Aggregate (aggregate_kind, ops) ->
-      comp_wrap (eval_rvalue_aggregate config meta aggregate_kind ops) ctx
+      (* comp_wrap  *)
+      let v, ctx, eval =
+        (eval_rvalue_aggregate config meta aggregate_kind ops) ctx
+      in
+      (wrap_in_result v, ctx, eval)
   | Discriminant _ ->
       craise __FILE__ __LINE__ meta
         "Unreachable: discriminant reads should have been eliminated from the \
@@ -851,16 +898,17 @@ let eval_rvalue_not_global (config : config) (meta : Meta.meta)
   | Global _ -> craise __FILE__ __LINE__ meta "Unreachable"
 
 let eval_fake_read (config : config) (meta : Meta.meta) (p : place) : cm_fun =
- fun cf ctx ->
+ fun ctx ->
   let expand_prim_copy = false in
-  let cf_prepare cf =
-    access_rplace_reorganize_and_read config meta expand_prim_copy Read p cf
+  let v, ctx, prepare =
+    access_rplace_reorganize_and_read config meta expand_prim_copy Read p ctx
   in
-  let cf_continue cf v : m_fun =
-   fun ctx ->
+  let continue v (ctx : eval_ctx) :
+      typed_value * eval_ctx * (eval_result -> eval_result) =
     cassert __FILE__ __LINE__
       (not (bottom_in_value ctx.ended_regions v))
       meta "Fake read: the value contains bottom";
-    cf ctx
+    (v, ctx, fun e -> e)
   in
-  comp cf_prepare cf_continue cf ctx
+  let _, ctx, continue = continue v ctx in
+  (ctx, comp prepare continue)
