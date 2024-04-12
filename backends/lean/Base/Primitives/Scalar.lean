@@ -1394,6 +1394,16 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
 @[simp] theorem Scalar.neq_to_neq_val {ty} : ∀ {i j : Scalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
   simp [eq_equiv]
 
+instance (ty: ScalarTy) : Preorder (Scalar ty) where
+  le_refl := fun a => by simp
+  le_trans := fun a b c => by
+    intro Hab Hbc
+    exact (le_trans ((Scalar.le_equiv _ _).1 Hab) ((Scalar.le_equiv _ _).1 Hbc))
+  lt_iff_le_not_le := fun a b => by
+    trans (a: Int) < (b: Int); exact (Scalar.lt_equiv _ _)
+    trans (a: Int) ≤ (b: Int) ∧ ¬ (b: Int) ≤ (a: Int); exact lt_iff_le_not_le
+    repeat rewrite [← Scalar.le_equiv]; rfl
+
 -- Leading zeros
 def core.num.Usize.leading_zeros (x : Usize) : U32 := sorry
 def core.num.U8.leading_zeros (x : U8) : U32 := sorry
