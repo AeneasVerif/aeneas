@@ -2644,14 +2644,19 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  (let name =
+  (let name, generics =
      if !Config.extract_external_name_patterns && not impl.is_local then
-       Some impl.llbc_name
-     else None
+       let decl_id = impl.impl_trait.trait_decl_id in
+       let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
+       let decl_ref = impl.llbc_impl_trait in
+       ( Some trait_decl.llbc_name,
+         Some (trait_decl.llbc_generics, decl_ref.decl_generics) )
+     else (None, None)
    in
    extract_comment_with_span ctx fmt
      [ "Trait implementation: [" ^ name_to_string ctx impl.llbc_name ^ "]" ]
-     name impl.meta.span);
+     (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
+     name ?generics:(Some generics) impl.meta.span);
   F.pp_print_break fmt 0 0;
 
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on

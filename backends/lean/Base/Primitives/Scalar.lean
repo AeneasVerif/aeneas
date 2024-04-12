@@ -2,6 +2,7 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Mathlib.Tactic.Linarith
 import Base.Primitives.Base
+import Base.Primitives.Core
 import Base.Diverge.Base
 import Base.Progress.Base
 import Base.Arith.Int
@@ -1392,5 +1393,83 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
 
 @[simp] theorem Scalar.neq_to_neq_val {ty} : ∀ {i j : Scalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
   simp [eq_equiv]
+
+-- Leading zeros
+def core.num.Usize.leading_zeros (x : Usize) : U32 := sorry
+def core.num.U8.leading_zeros (x : U8) : U32 := sorry
+def core.num.U16.leading_zeros (x : U16) : U32 := sorry
+def core.num.U32.leading_zeros (x : U32) : U32 := sorry
+def core.num.U64.leading_zeros (x : U64) : U32 := sorry
+def core.num.U128.leading_zeros (x : U128) : U32 := sorry
+
+def core.num.Isize.leading_zeros (x : Isize) : U32 := sorry
+def core.num.I8.leading_zeros (x : I8) : U32 := sorry
+def core.num.I16.leading_zeros (x : I16) : U32 := sorry
+def core.num.I32.leading_zeros (x : I32) : U32 := sorry
+def core.num.I64.leading_zeros (x : I64) : U32 := sorry
+def core.num.I128.leading_zeros (x : I128) : U32 := sorry
+
+-- Clone
+def core.clone.impls.CloneUsize.clone (x : Usize) : Usize := x
+def core.clone.impls.CloneU8.clone (x : U8) : U8 := x
+def core.clone.impls.CloneU16.clone (x : U16) : U16 := x
+def core.clone.impls.CloneU32.clone (x : U32) : U32 := x
+def core.clone.impls.CloneU64.clone (x : U64) : U64 := x
+def core.clone.impls.CloneU128.clone (x : U128) : U128 := x
+
+def core.clone.impls.CloneIsize.clone (x : Isize) : Isize := x
+def core.clone.impls.CloneI8.clone (x : I8) : I8 := x
+def core.clone.impls.CloneI16.clone (x : I16) : I16 := x
+def core.clone.impls.CloneI32.clone (x : I32) : I32 := x
+def core.clone.impls.CloneI64.clone (x : I64) : I64 := x
+def core.clone.impls.CloneI128.clone (x : I128) : I128 := x
+
+def core.clone.CloneUsize : core.clone.Clone Usize := {
+  clone := fun x => ok (core.clone.impls.CloneUsize.clone x)
+}
+
+def core.clone.CloneU8 : core.clone.Clone U8 := {
+  clone := fun x => ok (core.clone.impls.CloneU8.clone x)
+}
+
+def core.clone.CloneU16 : core.clone.Clone U16 := {
+  clone := fun x => ok (core.clone.impls.CloneU16.clone x)
+}
+
+def core.clone.CloneU32 : core.clone.Clone U32 := {
+  clone := fun x => ok (core.clone.impls.CloneU32.clone x)
+}
+
+def core.clone.CloneU64 : core.clone.Clone U64 := {
+  clone := fun x => ok (core.clone.impls.CloneU64.clone x)
+}
+
+def core.clone.CloneU128 : core.clone.Clone U128 := {
+  clone := fun x => ok (core.clone.impls.CloneU128.clone x)
+}
+
+def core.clone.CloneIsize : core.clone.Clone Isize := {
+  clone := fun x => ok (core.clone.impls.CloneIsize.clone x)
+}
+
+def core.clone.CloneI8 : core.clone.Clone I8 := {
+  clone := fun x => ok (core.clone.impls.CloneI8.clone x)
+}
+
+def core.clone.CloneI16 : core.clone.Clone I16 := {
+  clone := fun x => ok (core.clone.impls.CloneI16.clone x)
+}
+
+def core.clone.CloneI32 : core.clone.Clone I32 := {
+  clone := fun x => ok (core.clone.impls.CloneI32.clone x)
+}
+
+def core.clone.CloneI64 : core.clone.Clone I64 := {
+  clone := fun x => ok (core.clone.impls.CloneI64.clone x)
+}
+
+def core.clone.CloneI128 : core.clone.Clone I128 := {
+  clone := fun x => ok (core.clone.impls.CloneI128.clone x)
+}
 
 end Primitives

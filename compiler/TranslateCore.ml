@@ -91,3 +91,22 @@ let name_to_pattern_string (ctx : trans_ctx) (n : Types.name) : string =
   in
   let pat = Charon.NameMatcher.name_to_pattern mctx c n in
   Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
+
+let name_with_generics_to_pattern_string (ctx : trans_ctx) (n : Types.name)
+    (params : Types.generic_params) (args : Types.generic_args) : string =
+  let mctx : Charon.NameMatcher.ctx =
+    {
+      type_decls = ctx.type_ctx.type_decls;
+      global_decls = ctx.global_ctx.global_decls;
+      fun_decls = ctx.fun_ctx.fun_decls;
+      trait_decls = ctx.trait_decls_ctx.trait_decls;
+      trait_impls = ctx.trait_impls_ctx.trait_impls;
+    }
+  in
+  let c : Charon.NameMatcher.to_pat_config =
+    { tgt = TkPattern; use_trait_decl_refs = match_with_trait_decl_refs }
+  in
+  let pat =
+    Charon.NameMatcher.name_with_generics_to_pattern mctx c params n args
+  in
+  Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat

@@ -6,7 +6,7 @@ import Mathlib.Tactic.Linarith
 import Base.IList
 import Base.Primitives.Scalar
 import Base.Primitives.Range
-import Base.Primitives.CoreOps
+import Base.Primitives.Core
 import Base.Arith
 import Base.Progress.Base
 
