@@ -993,7 +993,6 @@ theorem core.num.checked_mul_spec {ty} {x y : Scalar ty} :
   simp only [checked_mul, Option.ofResult]
   have : Int.mul ↑x ↑y = ↑x * ↑y := by simp -- TODO: why do we need this??
   cases heq: x * y <;> simp_all <;> simp only [HMul.hMul, Scalar.mul, Mul.mul] at heq
-  <;> simp [add_neg_eq] at heq
   <;> simp_all
 
 theorem Scalar.div_equiv {ty} {x y : Scalar ty} :
