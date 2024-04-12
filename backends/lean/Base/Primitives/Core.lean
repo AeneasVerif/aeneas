@@ -4,7 +4,13 @@ import Base.Primitives.Base
 open Primitives
 open Result
 
-namespace core.ops
+namespace core
+
+/- Trait declaration: [core::convert::From] -/
+structure convert.From (Self T : Type) where
+  from_ : T → Result Self
+
+namespace ops -- core.ops
 
 namespace index -- core.ops.index
 
@@ -32,4 +38,6 @@ structure DerefMut (Self : Type) where
 
 end deref -- core.ops.deref
 
-end core.ops
+end ops -- core.ops
+
+end core

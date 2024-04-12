@@ -1141,7 +1141,9 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
   F.pp_close_box fmt ()
 
 let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
-    (sl : string list) (name : Types.name option) (span : Meta.span) : unit =
+    (sl : string list) (name : Types.name option)
+    ?(generics : (Types.generic_params * Types.generic_args) option = None)
+    (span : Meta.span) : unit =
   let file = match span.file with Virtual s | Local s -> s in
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
@@ -1151,10 +1153,15 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     ^ loc_to_string span.end_loc
   in
   let name =
-    match name with
-    | None -> []
-    | Some name ->
+    match (name, generics) with
+    | None, _ -> []
+    | Some name, None ->
         [ "Name pattern: " ^ name_to_pattern_string ctx.trans_ctx name ]
+    | Some name, Some (params, args) ->
+        [
+          "Name pattern: "
+          ^ name_with_generics_to_pattern_string ctx.trans_ctx name params args;
+        ]
   in
   extract_comment fmt (sl @ [ span ] @ name)
 
