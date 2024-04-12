@@ -51,4 +51,12 @@ def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
 }
 
+namespace option
+
+/- [core::option::{core::option::Option<T>}::unwrap] -/
+def Option.unwrap (T : Type) (x : Option T) : Result T :=
+  Result.ofOption x Error.panic
+
+end option -- core.option
+
 end core

@@ -383,6 +383,8 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
        @A>>}::deref_mut"
       (Some "alloc.vec.DerefMutVec.deref_mut")
       (Some [ true; false ]);
+    mk_fun "core::option::{core::option::Option<@T>}::unwrap"
+      (Some "core.option.Option.unwrap") None;
   ]
   @ List.flatten
       (List.map
