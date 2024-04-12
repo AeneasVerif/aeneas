@@ -258,6 +258,20 @@ def FromI128I128 : core.convert.From I128 I128 := {
   from_ := fun x => ok (num.FromI128I128.from x)
 }
 
+-- to_le_bytes
+def core.num.U8.to_le_bytes (x : U8) : Array U8 1#usize := sorry
+def core.num.U16.to_le_bytes (x : U16) : Array U8 2#usize := sorry
+def core.num.U32.to_le_bytes (x : U32) : Array U8 4#usize := sorry
+def core.num.U64.to_le_bytes (x : U64) : Array U8 8#usize := sorry
+def core.num.U128.to_le_bytes (x : U128) : Array U8 128#usize := sorry
+
+-- to_be_bytes
+def core.num.U8.to_be_bytes (x : U8) : Array U8 1#usize := sorry
+def core.num.U16.to_be_bytes (x : U16) : Array U8 2#usize := sorry
+def core.num.U32.to_be_bytes (x : U32) : Array U8 4#usize := sorry
+def core.num.U64.to_be_bytes (x : U64) : Array U8 8#usize := sorry
+def core.num.U128.to_be_bytes (x : U128) : Array U8 128#usize := sorry
+
 end core.convert
 
 end Primitives

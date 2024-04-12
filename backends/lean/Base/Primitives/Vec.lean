@@ -182,4 +182,43 @@ theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
 
 end alloc.vec
 
+/-- [alloc::slice::{@Slice<T>}::to_vec] -/
+def alloc.slice.Slice.to_vec
+  (T : Type) (cloneInst : core.clone.Clone T) (s : Slice T) : Result (alloc.vec.Vec T) :=
+  -- TODO: we need a monadic map
+  sorry
+
+/-- [core::slice::{@Slice<T>}::reverse] -/
+def core.slice.Slice.reverse (T : Type) (s : Slice T) : Slice T :=
+  ⟨ s.val.reverse, by sorry ⟩
+
+def alloc.vec.Vec.with_capacity (T : Type) (s : Usize) : alloc.vec.Vec T := Vec.new T
+
+/- [alloc::vec::{(core::ops::deref::Deref for alloc::vec::Vec<T, A>)#9}::deref]:
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2624:4-2624:27
+   Name pattern: alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>>}::deref -/
+def alloc.vec.DerefVec.deref (T : Type) (v : Vec T) : Slice T :=
+  ⟨ v.val, v.property ⟩
+
+def core.ops.deref.DerefVec (T : Type) : core.ops.deref.Deref (alloc.vec.Vec T) := {
+  Target := Slice T
+  deref := fun v => ok (alloc.vec.DerefVec.deref T v)
+}
+
+/- [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}::deref_mut]:
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2632:4-2632:39
+   Name pattern: alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>>}::deref_mut -/
+def alloc.vec.DerefMutVec.deref_mut (T : Type) (v :  alloc.vec.Vec T) :
+   Result ((Slice T) × (Slice T → Result (alloc.vec.Vec T))) :=
+   ok (⟨ v.val, v.property ⟩, λ s => ok ⟨ s.val, s.property ⟩)
+
+/- Trait implementation: [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}]
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2630:0-2630:49
+   Name pattern: core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>> -/
+def core.ops.deref.DerefMutVec (T : Type) :
+  core.ops.deref.DerefMut (alloc.vec.Vec T) := {
+  derefInst := core.ops.deref.DerefVec T
+  deref_mut := alloc.vec.DerefMutVec.deref_mut T
+}
+
 end Primitives

@@ -40,4 +40,15 @@ end deref -- core.ops.deref
 
 end ops -- core.ops
 
+/- Trait declaration: [core::clone::Clone] -/
+structure clone.Clone (Self : Type) where
+  clone : Self → Result Self
+
+/- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
+def clone.impls.CloneBool.clone (b : Bool) : Bool := b
+
+def clone.CloneBool : clone.Clone Bool := {
+  clone := fun b => ok (clone.impls.CloneBool.clone b)
+}
+
 end core

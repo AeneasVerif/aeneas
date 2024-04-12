@@ -369,6 +369,20 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       "core::slice::index::{core::slice::index::SliceIndex<usize, \
        [@T]>}::index_mut"
       (Some "core_slice_index_Slice_index_mut") None;
+    mk_fun "alloc::slice::{[@T]}::to_vec" (Some "alloc.slice.Slice.to_vec") None;
+    mk_fun
+      "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::with_capacity"
+      (Some "alloc.vec.Vec.with_capacity") None;
+    mk_fun "core::slice::{[@T]}::reverse" (Some "core.slice.Slice.reverse") None;
+    mk_fun
+      "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>>}::deref"
+      (Some "alloc.vec.DerefVec.deref")
+      (Some [ true; false ]);
+    mk_fun
+      "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, \
+       @A>>}::deref_mut"
+      (Some "alloc.vec.DerefMutVec.deref_mut")
+      (Some [ true; false ]);
   ]
   @ List.flatten
       (List.map
@@ -404,6 +418,26 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       (fun ty -> "core::num::{" ^ ty ^ "}::leading_zeros")
       (fun ty ->
         "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".leading_zeros")
+  (* to_le_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::to_le_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".to_le_bytes")
+  (* to_be_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::to_be_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".to_be_bytes")
+  (* Clone<bool> *)
+  @ [
+      mk_fun "core::clone::impls::{core::clone::Clone<bool>}::clone"
+        (Some "core.clone.CloneBool.clone") None;
+    ]
+  (* Clone<INT> *)
+  @ mk_scalar_fun
+      (fun ty -> "core::clone::impls::{core::clone::Clone<" ^ ty ^ ">}::clone")
+      (fun ty ->
+        "core.clone.Clone" ^ StringUtils.capitalize_first_letter ty ^ ".clone")
 
 let mk_builtin_funs_map () =
   let m =
@@ -457,6 +491,19 @@ let builtin_fun_effects =
           (fun ty -> "core::num::{" ^ ty ^ "}::leading_zeros")
           all_int_names;
       ]
+    (* to_{le,be}_bytes *)
+    @ List.map
+        (fun ty ->
+          let pre = "core::num::{" ^ ty ^ "}::" in
+          [ pre ^ "to_le_bytes"; pre ^ "to_be_bytes" ])
+        all_int_names
+    (* clone *)
+    @ [
+        List.map
+          (fun ty ->
+            "core::clone::impls::{core::clone::Clone<" ^ ty ^ ">}::clone")
+          all_int_names;
+      ]
   in
 
   let int_funs = List.concat int_funs in
@@ -468,6 +515,10 @@ let builtin_fun_effects =
       "alloc::vec::{alloc::vec::Vec<@T, @A>}::len";
       "core::mem::replace";
       "core::mem::take";
+      "core::clone::impls::{core::clone::Clone<bool>}::clone";
+      "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::with_capacity";
+      "core::slice::{[@T]}::reverse";
+      "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>>}::deref";
     ]
     @ int_funs
   in
@@ -602,6 +653,8 @@ let builtin_trait_decls_info () =
     mk_trait "core::convert::From"
       ~methods_with_extract:(Some [ ("from", "from_") ])
       ();
+    (* Clone *)
+    mk_trait "core::clone::Clone" ~methods:[ "clone" ] ();
   ]
 
 let mk_builtin_trait_decls_map () =
@@ -672,6 +725,17 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
       ~extract_name:(Some "alloc::vec::Vec::coreopsindexIndexMutInst")
       ~filter:(Some [ true; true; false ])
       ();
+    (* core::clone::impls::{core::clone::Clone for bool} *)
+    fmt "core::clone::Clone<bool>" ~extract_name:(Some "core::clone::CloneBool")
+      ();
+    fmt "core::ops::deref::Deref<alloc::vec::Vec<@Self, @>>"
+      ~extract_name:(Some "alloc.vec.DerefVec")
+      ~filter:(Some [ true; false ])
+      ();
+    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>>"
+      ~extract_name:(Some "alloc.vec.DerefMutVec")
+      ~filter:(Some [ true; false ])
+      ();
   ]
   (* From<INT, bool> *)
   @ List.map
@@ -697,6 +761,15 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
                ^ StringUtils.capitalize_first_letter small))
           ())
       int_and_smaller_list
+  (* Clone<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::clone::Clone<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.clone.Clone" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
 
 let mk_builtin_trait_impls_map () =
   let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
