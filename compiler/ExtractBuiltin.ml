@@ -240,12 +240,11 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
     let f = { extract_name = basename } in
     (rust_name, filter, f)
   in
-  let mk_scalar_fun (rust_name_prefix : string) (rust_name_suffix : string)
-      (extract_name : string option) (filter : bool list option) :
+  let mk_scalar_fun (rust_name : string -> string)
+      (extract_name : string -> string) :
       (pattern * bool list option * builtin_fun_info) list =
     List.map
-      (fun ty ->
-        mk_fun (rust_name_prefix ^ ty ^ rust_name_suffix) extract_name filter)
+      (fun ty -> mk_fun (rust_name ty) (Some (extract_name ty)) None)
       [
         "usize";
         "u8";
@@ -346,16 +345,14 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
        [@T]>}::index_mut"
       (Some "core_slice_index_Slice_index_mut") None;
   ]
-  @ mk_scalar_fun "core::num::{" "}::checked_add" (Some "core.num.checked_add")
-      None
-  @ mk_scalar_fun "core::num::{" "}::checked_sub" (Some "core.num.checked_sub")
-      None
-  @ mk_scalar_fun "core::num::{" "}::checked_mul" (Some "core.num.checked_mul")
-      None
-  @ mk_scalar_fun "core::num::{" "}::checked_div" (Some "core.num.checked_div")
-      None
-  @ mk_scalar_fun "core::num::{" "}::checked_rem" (Some "core.num.checked_rem")
-      None
+  @ List.flatten
+      (List.map
+         (fun op ->
+           mk_scalar_fun
+             (fun ty -> "core::num::{" ^ ty ^ "}::checked_" ^ op)
+             (fun ty ->
+               StringUtils.capitalize_first_letter ty ^ ".checked_" ^ op))
+         [ "add"; "sub"; "mul"; "div"; "rem" ])
 
 let mk_builtin_funs_map () =
   let m =
