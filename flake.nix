@@ -82,7 +82,7 @@
             # files like lakefile.lean, and the user hand-written files)
 
             # Run the tests - remark: we could remove the file
-            make tests -j $NIX_BUILD_CORES
+            make test-all -j $NIX_BUILD_CORES
 
             # Check that there are no differences between the generated tests
             # and the original tests
