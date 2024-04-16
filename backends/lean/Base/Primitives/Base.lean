@@ -130,6 +130,8 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ok x } :=
 ----------
 
 @[simp] def core.mem.replace (a : Type) (x : a) (_ : a) : a × a := (x, x)
+/- [core::mem::swap] -/
+@[simp] def core.mem.swap (T: Type) (a b: T): T × T := (b, a)
 
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.
  Use with `simp [ aeneas ]` -/
