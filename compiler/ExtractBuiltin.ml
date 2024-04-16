@@ -287,6 +287,7 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
   in
   [
     mk_fun "core::mem::replace" None None;
+    mk_fun "core::mem::swap" None None;
     mk_fun "core::slice::{[@T]}::len"
       (Some (backend_choice "slice::len" "Slice::len"))
       None;
@@ -517,6 +518,7 @@ let builtin_fun_effects =
       "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::new";
       "alloc::vec::{alloc::vec::Vec<@T, @A>}::len";
       "core::mem::replace";
+      "core::mem::swap";
       "core::mem::take";
       "core::option::{core::option::Option<@T>}::take";
       "core::clone::impls::{core::clone::Clone<bool>}::clone";
