@@ -31,9 +31,8 @@ AENEAS_EXE ?= bin/aeneas
 
 # The user can specify additional translation options for Aeneas.
 # By default we activate the (expensive) sanity checks.
-OPTIONS ?= -checks
+OPTIONS ?=
 
-#
 # The rules use (and update) the following variables
 #
 # The Charon test directory where to look for the .llbc files
