@@ -941,6 +941,7 @@ let keywords () =
           "simp";
           "structure";
           "syntax";
+          "from";
           "termination_by";
           "then";
           "Type";
