@@ -916,6 +916,8 @@ let keywords () =
     | Lean ->
         [
           "Pi";
+          "Prop";
+          "Sort";
           "Type";
           "abbrev";
           "alias";
