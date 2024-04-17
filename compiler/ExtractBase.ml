@@ -915,6 +915,7 @@ let keywords () =
         ]
     | Lean ->
         [
+          "Type";
           "as";
           "by";
           "class";
@@ -925,30 +926,29 @@ let keywords () =
           "else";
           "end";
           "for";
+          "from";
           "have";
           "if";
+          "import";
           "inductive";
           "instance";
-          "import";
           "let";
           "macro";
           "match";
           "namespace";
           "opaque";
+          "opaque_defs";
           "open";
           "run_cmd";
           "set_option";
           "simp";
           "structure";
           "syntax";
-          "from";
           "termination_by";
           "then";
-          "Type";
           "unsafe";
           "where";
           "with";
-          "opaque_defs";
         ]
     | HOL4 ->
         [
