@@ -915,6 +915,7 @@ let keywords () =
         ]
     | Lean ->
         [
+          "as";
           "by";
           "class";
           "decreasing_by";
