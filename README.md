@@ -116,6 +116,25 @@ and tactics specialized for monadic programs (see
 
 A tutorial for the Lean backend is available [here](./tests/lean/Tutorial.lean).
 
+## Quick start for Nix users
+
+Assuming Nix is installed, with a support for Flakes (`*`):
+
+```console
+$ # Run Charon with the exact same version required by Aeneas
+$ nix run github:aeneasverif/aeneas#charon -L
+$ nix run github:aeneasverif/aeneas -L -- -backend your_preferred_backend your_llbc.file
+```
+
+To regenerate the extraction, just run step 2 and step 3 again.
+
+`(*)` : Flakes are not necessary, here is an example of how to do similar steps without it:
+
+```console
+$ nix-shell '<aeneas>' -A packages.x86_64-linux.charon --run "charon" -I aeneas=https://github.com/AeneasVerif/aeneas/archive/main.tar.gz
+$ nix-shell '<aeneas>' -A packages.x86_64-linux.default --run "aeneas --backend your_preferred_backend your_llbc.file" -I aeneas=https://github.com/AeneasVerif/aeneas/archive/main.tar.gz
+```
+
 ## Formalization
 
 The translation has been formalized and published at ICFP2022: [Aeneas: Rust
