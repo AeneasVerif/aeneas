@@ -81,8 +81,9 @@
             # the files which are checked out (we have to be careful about
             # files like lakefile.lean, and the user hand-written files)
 
-            # Run the tests - remark: we could remove the file
-            make test-all -j $NIX_BUILD_CORES
+            # Run the tests with extra sanity checks enabled
+            # Remark: we could remove the file
+            OPTIONS=-checks make test-all -j $NIX_BUILD_CORES
 
             # Check that there are no differences between the generated tests
             # and the original tests
@@ -153,10 +154,6 @@
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {
-          # By default, tests run some sanity checks which are pretty slow.
-          # This disables these checks when developping locally.
-          OPTIONS = "";
-
           packages = [
             pkgs.ocamlPackages.ocaml
             pkgs.ocamlPackages.ocamlformat
