@@ -584,16 +584,16 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let name = Print.Types.name_to_string env def.name in
   let { T.regions; types; const_generics; trait_clauses } = def.generics in
   (* Can't translate types with regions for now *)
-  cassert __FILE__ __LINE__ (regions = []) def.meta
+  cassert __FILE__ __LINE__ (regions = []) def.item_meta.meta
     "ADTs containing borrows are not supported yet";
   let trait_clauses =
-    List.map (translate_trait_clause def.meta) trait_clauses
+    List.map (translate_trait_clause def.item_meta.meta) trait_clauses
   in
   let generics = { types; const_generics; trait_clauses } in
-  let kind = translate_type_decl_kind def.meta def.T.kind in
-  let preds = translate_predicates def.meta def.preds in
+  let kind = translate_type_decl_kind def.item_meta.meta def.T.kind in
+  let preds = translate_predicates def.item_meta.meta def.preds in
   let is_local = def.is_local in
-  let meta = def.meta in
+  let meta = def.item_meta.meta in
   {
     def_id;
     is_local;
@@ -1262,7 +1262,7 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   let regions_hierarchy =
     FunIdMap.find (FRegular fun_id) decls_ctx.fun_ctx.regions_hierarchies
   in
-  let meta = (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).meta in
+  let meta = (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).item_meta.meta in
   translate_fun_sig_with_regions_hierarchy_to_decomposed meta decls_ctx
     (FunId (FRegular fun_id)) regions_hierarchy sg input_names
 
@@ -2186,7 +2186,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                   | PeIdent (s, _) -> s
                   | PeImpl _ ->
                       (* We shouldn't get there *)
-                      craise __FILE__ __LINE__ decl.meta "Unexpected")
+                      craise __FILE__ __LINE__ decl.item_meta.meta "Unexpected")
             in
             name ^ "_back"
           in
@@ -3839,7 +3839,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         (* Add a match over the fuel, if necessary *)
         let body =
           if function_decreases_fuel effect_info then
-            wrap_in_match_fuel def.meta ctx.fuel0 ctx.fuel body
+            wrap_in_match_fuel def.item_meta.meta ctx.fuel0 ctx.fuel body
           else body
         in
         (* Sanity check *)
@@ -3884,7 +3884,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
             (List.for_all
                (fun (var, ty) -> (var : var).ty = ty)
                (List.combine inputs signature.inputs))
-            def.meta;
+            def.item_meta.meta;
         Some { inputs; inputs_lvs; body }
   in
 
@@ -3900,7 +3900,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     {
       def_id;
       is_local = def.is_local;
-      meta = def.meta;
+      meta = def.item_meta.meta;
       kind = def.kind;
       num_loops;
       loop_id;
@@ -3938,7 +3938,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     def_id;
     is_local;
     name = llbc_name;
-    meta;
+    item_meta;
     generics = llbc_generics;
     preds;
     parent_clauses = llbc_parent_clauses;
@@ -3955,23 +3955,23 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params trait_decl.meta llbc_generics in
-  let preds = translate_predicates trait_decl.meta preds in
+  let generics = translate_generic_params trait_decl.item_meta.meta llbc_generics in
+  let preds = translate_predicates trait_decl.item_meta.meta preds in
   let parent_clauses =
-    List.map (translate_trait_clause trait_decl.meta) llbc_parent_clauses
+    List.map (translate_trait_clause trait_decl.item_meta.meta) llbc_parent_clauses
   in
   let consts =
     List.map
       (fun (name, (ty, id)) ->
-        (name, (translate_fwd_ty trait_decl.meta type_infos ty, id)))
+        (name, (translate_fwd_ty trait_decl.item_meta.meta type_infos ty, id)))
       consts
   in
   let types =
     List.map
       (fun (name, (trait_clauses, ty)) ->
         ( name,
-          ( List.map (translate_trait_clause trait_decl.meta) trait_clauses,
-            Option.map (translate_fwd_ty trait_decl.meta type_infos) ty ) ))
+          ( List.map (translate_trait_clause trait_decl.item_meta.meta) trait_clauses,
+            Option.map (translate_fwd_ty trait_decl.item_meta.meta type_infos) ty ) ))
       types
   in
   {
@@ -3979,7 +3979,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     is_local;
     llbc_name;
     name;
-    meta;
+    meta = item_meta.meta;
     generics;
     llbc_generics;
     preds;
@@ -3997,7 +3997,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     A.def_id;
     is_local;
     name = llbc_name;
-    meta;
+    item_meta;
     impl_trait = llbc_impl_trait;
     generics = llbc_generics;
     preds;
@@ -4011,8 +4011,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   let type_infos = ctx.type_ctx.type_infos in
   let impl_trait =
-    translate_trait_decl_ref trait_impl.meta
-      (translate_fwd_ty trait_impl.meta type_infos)
+    translate_trait_decl_ref trait_impl.item_meta.meta
+      (translate_fwd_ty trait_impl.item_meta.meta type_infos)
       llbc_impl_trait
   in
   let name =
@@ -4020,15 +4020,15 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params trait_impl.meta llbc_generics in
-  let preds = translate_predicates trait_impl.meta preds in
+  let generics = translate_generic_params trait_impl.item_meta.meta llbc_generics in
+  let preds = translate_predicates trait_impl.item_meta.meta preds in
   let parent_trait_refs =
-    List.map (translate_strait_ref trait_impl.meta) parent_trait_refs
+    List.map (translate_strait_ref trait_impl.item_meta.meta) parent_trait_refs
   in
   let consts =
     List.map
       (fun (name, (ty, id)) ->
-        (name, (translate_fwd_ty trait_impl.meta type_infos ty, id)))
+        (name, (translate_fwd_ty trait_impl.item_meta.meta type_infos ty, id)))
       consts
   in
   let types =
@@ -4036,9 +4036,9 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       (fun (name, (trait_refs, ty)) ->
         ( name,
           ( List.map
-              (translate_fwd_trait_ref trait_impl.meta type_infos)
+              (translate_fwd_trait_ref trait_impl.item_meta.meta type_infos)
               trait_refs,
-            translate_fwd_ty trait_impl.meta type_infos ty ) ))
+            translate_fwd_ty trait_impl.item_meta.meta type_infos ty ) ))
       types
   in
   {
@@ -4046,7 +4046,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     is_local;
     llbc_name;
     name;
-    meta;
+    meta = item_meta.meta;
     impl_trait;
     llbc_impl_trait;
     generics;
@@ -4062,7 +4062,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
 let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     global_decl =
   let {
-    A.meta;
+    A.item_meta;
     def_id;
     is_local;
     name = llbc_name;
@@ -4079,11 +4079,11 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params decl.meta llbc_generics in
-  let preds = translate_predicates decl.meta preds in
-  let ty = translate_fwd_ty decl.meta ctx.type_ctx.type_infos ty in
+  let generics = translate_generic_params decl.item_meta.meta llbc_generics in
+  let preds = translate_predicates decl.item_meta.meta preds in
+  let ty = translate_fwd_ty decl.item_meta.meta ctx.type_ctx.type_infos ty in
   {
-    meta;
+    meta = item_meta.meta;
     def_id;
     is_local;
     llbc_name;
