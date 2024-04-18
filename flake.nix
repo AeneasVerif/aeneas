@@ -8,11 +8,12 @@
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
     hacl-nix.url = "github:hacl-star/hacl-nix";
+    flake-compat.url = "github:nix-community/flake-compat";
   };
 
   # Remark: keep the list of outputs in sync with the list of inputs above
   # (see above remark)
-  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix }:
+  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix, flake-compat }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
