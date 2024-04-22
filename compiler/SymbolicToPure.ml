@@ -1262,7 +1262,9 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   let regions_hierarchy =
     FunIdMap.find (FRegular fun_id) decls_ctx.fun_ctx.regions_hierarchies
   in
-  let meta = (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).item_meta.meta in
+  let meta =
+    (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).item_meta.meta
+  in
   translate_fun_sig_with_regions_hierarchy_to_decomposed meta decls_ctx
     (FunId (FRegular fun_id)) regions_hierarchy sg input_names
 
@@ -3955,10 +3957,14 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params trait_decl.item_meta.meta llbc_generics in
+  let generics =
+    translate_generic_params trait_decl.item_meta.meta llbc_generics
+  in
   let preds = translate_predicates trait_decl.item_meta.meta preds in
   let parent_clauses =
-    List.map (translate_trait_clause trait_decl.item_meta.meta) llbc_parent_clauses
+    List.map
+      (translate_trait_clause trait_decl.item_meta.meta)
+      llbc_parent_clauses
   in
   let consts =
     List.map
@@ -3970,8 +3976,12 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     List.map
       (fun (name, (trait_clauses, ty)) ->
         ( name,
-          ( List.map (translate_trait_clause trait_decl.item_meta.meta) trait_clauses,
-            Option.map (translate_fwd_ty trait_decl.item_meta.meta type_infos) ty ) ))
+          ( List.map
+              (translate_trait_clause trait_decl.item_meta.meta)
+              trait_clauses,
+            Option.map
+              (translate_fwd_ty trait_decl.item_meta.meta type_infos)
+              ty ) ))
       types
   in
   {
@@ -4020,7 +4030,9 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params trait_impl.item_meta.meta llbc_generics in
+  let generics =
+    translate_generic_params trait_impl.item_meta.meta llbc_generics
+  in
   let preds = translate_predicates trait_impl.item_meta.meta preds in
   let parent_trait_refs =
     List.map (translate_strait_ref trait_impl.item_meta.meta) parent_trait_refs

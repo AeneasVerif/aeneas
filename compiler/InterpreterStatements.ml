@@ -1063,8 +1063,8 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
       (* Treat the evaluation of the global as a call to the global body *)
       let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
-      (eval_transparent_function_call_concrete config global.item_meta.meta global.body
-         call)
+      (eval_transparent_function_call_concrete config global.item_meta.meta
+         global.body call)
         cf ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
@@ -1381,9 +1381,9 @@ and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
        (inst_sg.output :: inst_sg.inputs))
     meta "ADTs containing borrows are not supported yet";
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config def.item_meta.meta func def.signature
-    regions_hierarchy inst_sg generics trait_method_generics call.args call.dest
-    cf ctx
+  eval_function_call_symbolic_from_inst_sig config def.item_meta.meta func
+    def.signature regions_hierarchy inst_sg generics trait_method_generics
+    call.args call.dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
