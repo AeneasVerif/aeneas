@@ -618,7 +618,7 @@ let translate_type_id (meta : Meta.meta) (id : T.type_id) : type_id =
         | T.TBox ->
             (* Boxes have to be eliminated: this type id shouldn't
                be translated *)
-            craise __FILE__ __LINE__ meta "Unreachable"
+            craise __FILE__ __LINE__ meta "Unexpected box type"
       in
       TAssumed aty
   | TTuple -> TTuple
@@ -1626,7 +1626,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
             mk_apps ctx.meta cons field_values)
-    | VBottom -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
+    | VBottom -> craise __FILE__ __LINE__ ctx.meta "Unexpected bottom value"
     | VLoan lc -> (
         match lc with
         | VSharedLoan (_, v) -> translate v
