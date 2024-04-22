@@ -11,6 +11,7 @@ jobs:
     steps:
       #- uses: cachix/install-nix-action@v22
       - uses: actions/checkout@v4
+      - run: nix build -L .#checks.x86_64-linux.aeneas-check-tidiness
       - run: nix build -L .#aeneas
       - run: nix build -L .#checks.x86_64-linux.aeneas-tests
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-fstar

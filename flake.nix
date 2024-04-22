@@ -30,6 +30,23 @@
           };
           buildInputs = [ ocamlPackages.calendar ];
         };
+
+        aeneas-check-tidiness = pkgs.stdenv.mkDerivation {
+          name = "aeneas-check-tidiness";
+          src = ./compiler;
+          buildInputs = [
+            ocamlPackages.dune_3
+            ocamlPackages.ocaml
+            ocamlPackages.ocamlformat
+          ];
+          buildPhase = ''
+            if ! dune build @fmt; then
+              echo 'ERROR: Code is not fmrmatted. Run `make format` to format the project files'.
+              exit 1
+            fi
+          '';
+          installPhase = "touch $out";
+        };
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
@@ -167,6 +184,7 @@
           inherit aeneas aeneas-tests
                   aeneas-verify-fstar
                   aeneas-verify-coq
-                  aeneas-verify-hol4; };
+                  aeneas-verify-hol4
+                  aeneas-check-tidiness; };
       });
 }

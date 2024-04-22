@@ -113,7 +113,8 @@ verify:
 # Reformat the project
 .PHONY: format
 format:
-	cd compiler && dune build @fmt --auto-promote
+	@# `|| `true` because the command returns an error if it changed anything, which we don't care about.
+	cd compiler && dune fmt || true
 
 # The commands to run Charon to generate the .llbc files
 ifeq (, $(REGEN_LLBC))
