@@ -218,12 +218,14 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
      at the same time the normalization map for the associated types.
   *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig fdef.item_meta.meta ctx fdef.signature regions_hierarchy
-      fdef.kind
+    symbolic_instantiate_fun_sig fdef.item_meta.meta ctx fdef.signature
+      regions_hierarchy fdef.kind
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
-    List.map (fun ty -> mk_fresh_symbolic_value fdef.item_meta.meta ty) inst_sg.inputs
+    List.map
+      (fun ty -> mk_fresh_symbolic_value fdef.item_meta.meta ty)
+      inst_sg.inputs
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
@@ -299,8 +301,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig fdef.item_meta.meta ctx fdef.signature regions_hierarchy
-      fdef.kind
+    symbolic_instantiate_fun_sig fdef.item_meta.meta ctx fdef.signature
+      regions_hierarchy fdef.kind
   in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
@@ -333,8 +335,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
             eval_ctx * typed_avalue list =
           let ctx, avalue =
-            apply_proj_borrows_on_input_value config fdef.item_meta.meta ctx abs.regions
-              abs.ancestors_regions ret_value ret_rty
+            apply_proj_borrows_on_input_value config fdef.item_meta.meta ctx
+              abs.regions abs.ancestors_regions ret_value ret_rty
           in
           (ctx, [ avalue ])
         in
@@ -349,7 +351,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         let region_can_end rid =
           RegionGroupId.Set.mem rid parent_and_current_rgs
         in
-        sanity_check __FILE__ __LINE__ (region_can_end back_id) fdef.item_meta.meta;
+        sanity_check __FILE__ __LINE__ (region_can_end back_id)
+          fdef.item_meta.meta;
         let ctx =
           create_push_abstractions_from_abs_region_groups
             (fun rg_id -> SynthRet rg_id)
@@ -534,7 +537,9 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
           let fwd_e =
             (* Pop the frame and retrieve the returned value at the same time*)
             let pop_return_value = true in
-            let cf_pop = pop_frame config fdef.item_meta.meta pop_return_value in
+            let cf_pop =
+              pop_frame config fdef.item_meta.meta pop_return_value
+            in
             (* Generate the Return node *)
             let cf_return ret_value : m_fun =
              fun ctx -> Some (SA.Return (ctx, ret_value))
@@ -584,7 +589,9 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
             (* Pop the frame - there is no returned value to pop: in the
                translation we will simply call the loop function *)
             let pop_return_value = false in
-            let cf_pop = pop_frame config fdef.item_meta.meta pop_return_value in
+            let cf_pop =
+              pop_frame config fdef.item_meta.meta pop_return_value
+            in
             (* Generate the Return node *)
             let cf_return _ret_value : m_fun =
              fun _ctx -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
@@ -668,7 +675,9 @@ module Test = struct
       | Return ->
           (* Ok: drop the local variables and finish *)
           let pop_return_value = true in
-          pop_frame config fdef.item_meta.meta pop_return_value (fun _ _ -> None) ctx
+          pop_frame config fdef.item_meta.meta pop_return_value
+            (fun _ _ -> None)
+            ctx
       | _ ->
           craise __FILE__ __LINE__ fdef.item_meta.meta
             ("Unit test failed (concrete execution) on: "
