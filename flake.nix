@@ -52,6 +52,7 @@
           version = "0.1.0";
           duneVersion = "3";
           src = ./compiler;
+          OCAMLPARAM="_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = [
             easy_logging charon.packages.${system}.charon-ml
             ] ++ (with ocamlPackages; [
