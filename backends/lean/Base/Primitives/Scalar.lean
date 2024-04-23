@@ -1404,6 +1404,21 @@ instance (ty: ScalarTy) : Preorder (Scalar ty) where
     trans (a: Int) ≤ (b: Int) ∧ ¬ (b: Int) ≤ (a: Int); exact lt_iff_le_not_le
     repeat rewrite [← Scalar.le_equiv]; rfl
 
+instance (ty: ScalarTy) : PartialOrder (Scalar ty) where
+  le_antisymm := fun a b Hab Hba => Scalar.eq_imp _ _ ((@le_antisymm Int _ _ _ ((Scalar.le_equiv a b).1 Hab) ((Scalar.le_equiv b a).1 Hba)))
+
+instance ScalarDecidableLE (ty: ScalarTy) : DecidableRel (· ≤ · : Scalar ty -> Scalar ty -> Prop) := by
+  simp [instLEScalar]
+  -- Lift this to the decidability of the Int version.
+  infer_instance
+
+instance (ty: ScalarTy) : LinearOrder (Scalar ty) where
+  le_total := fun a b => by
+    rcases (Int.le_total a b) with H | H
+    left; exact (Scalar.le_equiv _ _).2 H
+    right; exact (Scalar.le_equiv _ _).2 H
+  decidableLE := ScalarDecidableLE ty
+
 -- Leading zeros
 def core.num.Usize.leading_zeros (x : Usize) : U32 := sorry
 def core.num.U8.leading_zeros (x : U8) : U32 := sorry
