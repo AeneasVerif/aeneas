@@ -41,7 +41,7 @@
           ];
           buildPhase = ''
             if ! dune build @fmt; then
-              echo 'ERROR: Code is not fmrmatted. Run `make format` to format the project files'.
+              echo 'ERROR: Code is not formatted. Run `make format` to format the project files'.
               exit 1
             fi
           '';
