@@ -1156,7 +1156,6 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
    * (and would thus floating in thin air...)!
    * *)
   (* Match on the targets *)
-  let ctx_resl, cf_match =
     match switch with
     | If (op, st1, st2) ->
         (* Evaluate the operand *)
@@ -1322,9 +1321,6 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
         in
         (* Compose *)
         ctx_resl, (fun el -> cf_read_p (cf_match el))
-  in
-  (* Compose the continuations *)
-  cf_match cf ctx
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : config) (meta : Meta.meta) (call : call) :
