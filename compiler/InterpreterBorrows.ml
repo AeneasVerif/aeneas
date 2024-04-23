@@ -1515,16 +1515,16 @@ let end_abstraction config meta = end_abstraction_aux config meta []
 let end_abstractions config meta = end_abstractions_aux config meta []
 
 let end_borrow_no_synth config meta id ctx =
-  get_cf_ctx_no_synth meta (end_borrow config meta id) ctx
+  let ctx, _ = end_borrow config meta id ctx in ctx
 
 let end_borrows_no_synth config meta ids ctx =
-  get_cf_ctx_no_synth meta (end_borrows config meta ids) ctx
+  let ctx, _ = end_borrows config meta ids ctx in ctx
 
 let end_abstraction_no_synth config meta id ctx =
-  get_cf_ctx_no_synth meta (end_abstraction config meta id) ctx
+  let ctx, _ = end_abstraction config meta id ctx in ctx
 
 let end_abstractions_no_synth config meta ids ctx =
-  get_cf_ctx_no_synth meta (end_abstractions config meta ids) ctx
+  let ctx, _ = end_abstractions config meta ids ctx in ctx
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
@@ -1636,15 +1636,16 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
       match get_first_loan_in_value sv with
       | Some lc ->
           (* End the loans *)
-          let cc =
+          let ctx, cc =
             match lc with
-            | VSharedLoan (bids, _) -> end_borrows config meta bids
-            | VMutLoan bid -> end_borrow config meta bid
+            | VSharedLoan (bids, _) -> end_borrows config meta bids ctx
+            | VMutLoan bid -> end_borrow config meta bid ctx
           in
           (* Recursive call *)
-          let cc = comp cc (promote_reserved_mut_borrow config meta l) in
+          let ctx, cc1 = (promote_reserved_mut_borrow config meta l) ctx in
+          let cc = comp cc cc1 in
           (* Continue *)
-          cc cf ctx
+          ctx, cc
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
@@ -1660,21 +1661,22 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = BorrowId.Set.remove l bids in
-          let cc = end_borrows config meta bids in
+          let ctx, cc = end_borrows config meta bids ctx in
           (* Promote the loan - TODO: this will fail if the value contains
            * any loans. In practice, it shouldn't, but we could also
            * look for loans inside the value and end them before promoting
            * the borrow. *)
-          let cc = comp cc (promote_shared_loan_to_mut_loan meta l) in
+          let v, ctx, cc1 = (promote_shared_loan_to_mut_loan meta l) ctx in
+          let cc = comp cc cc1 in
           (* Promote the borrow - the value should have been checked by
              {!promote_shared_loan_to_mut_loan}
           *)
+          let ctx, cc1 = replace_reserved_borrow_with_mut_borrow meta l v ctx in
           let cc =
-            comp cc (fun cf borrowed_value ->
-                replace_reserved_borrow_with_mut_borrow meta l cf borrowed_value)
+            comp cc cc1
           in
           (* Continue *)
-          cc cf ctx)
+          ctx, cc)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)

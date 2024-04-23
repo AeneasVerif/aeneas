@@ -85,7 +85,7 @@ val expand_symbolic_int :
   symbolic_value ->
   SA.mplace option ->
   integer_type ->
-  (scalar_value * st_cm_fun) list ->
+  (scalar_value (* * st_cm_fun *)) list ->
   eval_ctx ->
   (eval_ctx list * eval_ctx)
   * ((SymbolicAst.expression list * SymbolicAst.expression) option ->

@@ -301,13 +301,12 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
               match e with
               | None -> None
               | Some e ->
-                  Some
-                    (SymbolicAst.IntroSymbolic
+                  Some (SymbolicAst.IntroSymbolic
                        ( ctx0,
                          None,
                          value_as_symbolic meta v.value,
                          SymbolicAst.VaTraitConstValue (trait_ref, const_name),
-                         e )) ))
+                         e ))))
       | CVar vid -> (
           let ctx0 = ctx in
           (* In concrete mode: lookup the const generic value.
