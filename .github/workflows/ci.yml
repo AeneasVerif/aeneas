@@ -4,10 +4,29 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Minimum permissions required by skip-duplicate-actions
+permissions:
+  actions: write
+  contents: read
+
 jobs:
+  # Avoid `push` and `pull_request` running the same job twice
+  check_if_skip_duplicate_job:
+    runs-on: [self-hosted, linux, nix]
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          concurrent_skipping: 'same_content_newer'
+          skip_after_successful_duplicate: 'true'
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+
   nix:
     #runs-on: ubuntu-latest
     runs-on: [self-hosted, linux, nix]
+    needs: check_if_skip_duplicate_job
+    if: needs.check_if_skip_duplicate_job.outputs.should_skip != 'true'
     steps:
       #- uses: cachix/install-nix-action@v22
       - uses: actions/checkout@v4
@@ -18,8 +37,11 @@ jobs:
       - run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
       # Lean doesn't work with Nix
       #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-lean
+
   lean: # Lean isn't supported by Nix, so we put it in a different job
     runs-on: [ubuntu-latest]
+    needs: check_if_skip_duplicate_job
+    if: needs.check_if_skip_duplicate_job.outputs.should_skip != 'true'
     steps:
       # Install curl
       - run: sudo apt update && sudo apt install curl
