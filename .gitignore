@@ -76,3 +76,6 @@ nohup.out
 */.#*
 *.smt2
 .DS_Store
+
+# Automatically set by Nix
+/.pre-commit-config.yaml

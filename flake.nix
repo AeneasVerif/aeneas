@@ -9,11 +9,12 @@
     nixpkgs.follows = "charon/nixpkgs";
     hacl-nix.url = "github:hacl-star/hacl-nix";
     flake-compat.url = "github:nix-community/flake-compat";
+    pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
   };
 
   # Remark: keep the list of outputs in sync with the list of inputs above
   # (see above remark)
-  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix, flake-compat }:
+  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix, flake-compat, pre-commit-hooks }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -54,19 +55,20 @@
           src = ./compiler;
           OCAMLPARAM="_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = [
-            easy_logging charon.packages.${system}.charon-ml
-            ] ++ (with ocamlPackages; [
-              calendar
-              core_unix
-              ppx_deriving
-              visitors
-              yojson
-              zarith
-              ocamlgraph
-              unionFind
-            ]);
+            easy_logging
+            charon.packages.${system}.charon-ml
+          ] ++ (with ocamlPackages; [
+            calendar
+            core_unix
+            ppx_deriving
+            visitors
+            yojson
+            zarith
+            ocamlgraph
+            unionFind
+          ]);
           afterBuild = ''
-          echo charon.packages.${system}.tests
+            echo charon.packages.${system}.tests
           '';
         };
         # Run the translation on various files.
@@ -120,7 +122,7 @@
           name = "aeneas_verify_fstar";
           src = ./tests/fstar;
           FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
-          buildPhase= ''
+          buildPhase = ''
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
           '';
@@ -132,7 +134,7 @@
           name = "aeneas_verify_coq";
           src = ./tests/coq;
           buildInputs = [ pkgs.coq ];
-          buildPhase= ''
+          buildPhase = ''
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
           '';
@@ -156,7 +158,7 @@
           #     || pkgs.lib.hasPrefix (toString ./tests/hol4) path;
           # };
           buildInputs = [ pkgs.hol ];
-          buildPhase= ''
+          buildPhase = ''
             cd ./tests/hol4
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
@@ -164,12 +166,16 @@
           # The build doesn't generate anything
           installPhase = "touch $out";
         };
-      in {
+      in
+      {
         packages = {
           inherit aeneas;
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {
+          inherit (self.checks.${system}.pre-commit-check) shellHook;
+          buildInputs = self.checks.${system}.pre-commit-check.enabledPackages;
+
           packages = [
             pkgs.ocamlPackages.ocaml
             pkgs.ocamlPackages.ocamlformat
@@ -183,9 +189,26 @@
         };
         checks = {
           inherit aeneas aeneas-tests
-                  aeneas-verify-fstar
-                  aeneas-verify-coq
-                  aeneas-verify-hol4
-                  aeneas-check-tidiness; };
+            aeneas-verify-fstar
+            aeneas-verify-coq
+            aeneas-verify-hol4
+            aeneas-check-tidiness;
+
+          pre-commit-check = pre-commit-hooks.lib.${system}.run {
+            src = ./.;
+            hooks = {
+              nixpkgs-fmt.enable = true;
+              dune-fmt = {
+                enable = true;
+                settings = {
+                  auto-promote = true;
+                  extraRuntimeInputs = [
+                    pkgs.ocamlPackages.ocamlformat
+                  ];
+                };
+              };
+            };
+          };
+        };
       });
 }
