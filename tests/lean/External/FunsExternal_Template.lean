@@ -18,9 +18,3 @@ axiom core.mem.swap
 axiom core.num.nonzero.NonZeroU32.new
   : U32 → State → Result (State × (Option core.num.nonzero.NonZeroU32))
 
-/- [core::option::{core::option::Option<T>}::unwrap]:
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34
-   Name pattern: core::option::{core::option::Option<@T>}::unwrap -/
-axiom core.option.Option.unwrap
-  (T : Type) : Option T → State → Result (State × T)
-

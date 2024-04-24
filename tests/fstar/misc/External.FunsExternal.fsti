@@ -17,9 +17,3 @@ val core_mem_swap (t : Type0) : t -> t -> state -> result (state & (t & t))
 val core_num_nonzero_NonZeroU32_new
   : u32 -> state -> result (state & (option core_num_nonzero_NonZeroU32_t))
 
-(** [core::option::{core::option::Option<T>}::unwrap]:
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34
-    Name pattern: core::option::{core::option::Option<@T>}::unwrap *)
-val core_option_Option_unwrap
-  (t : Type0) : option t -> state -> result (state & t)
-

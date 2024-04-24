@@ -25,11 +25,4 @@ Axiom core_num_nonzero_NonZeroU32_new
   : u32 -> state -> result (state * (option core_num_nonzero_NonZeroU32_t))
 .
 
-(** [core::option::{core::option::Option<T>}::unwrap]:
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34
-    Name pattern: core::option::{core::option::Option<@T>}::unwrap *)
-Axiom core_option_Option_unwrap :
-  forall(T : Type), option T -> state -> result (state * T)
-.
-
 End External_FunsExternal_Template.
