@@ -15,8 +15,3 @@ def core.mem.swap
 def core.num.nonzero.NonZeroU32.new :
   U32 → State → Result (State × (Option core_num_nonzero_non_zero_u32_t)) :=
   fun _ _ => .fail .panic
-
-/- [core::option::Option::{0}::unwrap] -/
-def core.option.Option.unwrap
-  (T : Type) : Option T → State → Result (State × T) :=
-  fun _ _ => .fail .panic

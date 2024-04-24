@@ -19,7 +19,8 @@ def test_new_non_zero_u32
   (x : U32) (st : State) : Result (State × core.num.nonzero.NonZeroU32) :=
   do
   let (st1, o) ← core.num.nonzero.NonZeroU32.new x st
-  core.option.Option.unwrap core.num.nonzero.NonZeroU32 o st1
+  let o1 ← core.option.Option.unwrap core.num.nonzero.NonZeroU32 o
+  Result.ok (st1, o1)
 
 /- [external::test_vec]:
    Source: 'src/external.rs', lines 17:0-17:17 -/

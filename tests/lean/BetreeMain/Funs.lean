@@ -238,11 +238,11 @@ divergent def betree.Node.apply_upserts
       betree.Node.apply_upserts msgs1 (some v) key st
   else
     do
-    let (st1, v) ← core.option.Option.unwrap U64 prev st
+    let v ← core.option.Option.unwrap U64 prev
     let msgs1 ←
       betree.List.push_front (U64 × betree.Message) msgs (key,
         betree.Message.Insert v)
-    Result.ok (st1, (v, msgs1))
+    Result.ok (st, (v, msgs1))
 
 /- [betree_main::betree::{betree_main::betree::Internal#4}::lookup_in_children]:
    Source: 'src/betree.rs', lines 395:4-395:63 -/
