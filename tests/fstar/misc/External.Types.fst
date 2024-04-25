@@ -6,3 +6,10 @@ include External.TypesExternal
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
+(** Trait declaration: [core::marker::Copy]
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/marker.rs', lines 450:0-450:21
+    Name pattern: core::marker::Copy *)
+noeq type core_marker_Copy_t (self : Type0) = {
+  cloneCloneInst : core_clone_Clone self;
+}
+

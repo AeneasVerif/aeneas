@@ -47,6 +47,10 @@ let flatten_name (name : string list) : string =
   | FStar | Coq | HOL4 -> String.concat "_" name
   | Lean -> String.concat "." name
 
+(** Utility for Lean-only definitions **)
+let mk_lean_only (funs : 'a list) : 'a list =
+  match !backend with Lean -> funs | _ -> []
+
 let () =
   assert (split_on_separator "x::y::z" = [ "x"; "y"; "z" ]);
   assert (split_on_separator "x.y.z" = [ "x"; "y"; "z" ])
@@ -438,6 +442,21 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       (fun ty -> "core::clone::impls::{core::clone::Clone<" ^ ty ^ ">}::clone")
       (fun ty ->
         "core.clone.Clone" ^ StringUtils.capitalize_first_letter ty ^ ".clone")
+  (* Lean-only definitions *)
+  @ mk_lean_only
+      [
+        (* `backend_choice` first parameter is for non-Lean backends
+            By construction, we cannot write down that parameter in the output
+            in this list
+        *)
+        mk_fun "core::mem::swap" None None;
+        mk_fun "core::option::{core::option::Option<@T>}::take"
+          (Some (backend_choice "" "Option::take"))
+          None;
+        mk_fun "core::option::{core::option::Option<@T>}::is_none"
+          (Some (backend_choice "" "Option::isNone"))
+          (Some [ false ]);
+      ]
 
 let mk_builtin_funs_map () =
   let m =
@@ -521,6 +540,12 @@ let builtin_fun_effects =
       "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>>}::deref";
     ]
     @ int_funs
+    @ mk_lean_only
+        [
+          "core::mem::swap";
+          "core::option::{core::option::Option<@T>}::take";
+          "core::option::{core::option::Option<@T>}::is_none";
+        ]
   in
   let no_fail_no_state_funs =
     List.map
