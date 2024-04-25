@@ -7,58 +7,28 @@ open Primitives
 
 namespace external
 
-/- [external::swap]:
-   Source: 'src/external.rs', lines 6:0-6:46 -/
-def swap
-  (T : Type) (x : T) (y : T) (st : State) : Result (State × (T × T)) :=
-  core.mem.swap T x y st
+/- Trait implementation: [core::marker::{(core::marker::Copy for u32)#40}]
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/marker.rs', lines 47:29-47:65
+   Name pattern: core::marker::Copy<u32> -/
+def core.marker.CopyU32 : core.marker.Copy U32 := {
+  cloneCloneInst := core.clone.CloneU32
+}
 
-/- [external::test_new_non_zero_u32]:
-   Source: 'src/external.rs', lines 11:0-11:60 -/
-def test_new_non_zero_u32
-  (x : U32) (st : State) : Result (State × core.num.nonzero.NonZeroU32) :=
-  do
-  let (st1, o) ← core.num.nonzero.NonZeroU32.new x st
-  core.option.Option.unwrap core.num.nonzero.NonZeroU32 o st1
+/- [external::use_get]:
+   Source: 'src/external.rs', lines 5:0-5:37 -/
+def use_get (rc : core.cell.Cell U32) (st : State) : Result (State × U32) :=
+  core.cell.Cell.get U32 core.marker.CopyU32 rc st
 
-/- [external::test_vec]:
-   Source: 'src/external.rs', lines 17:0-17:17 -/
-def test_vec : Result Unit :=
-  do
-  let _ ← alloc.vec.Vec.push U32 (alloc.vec.Vec.new U32) 0#u32
-  Result.ok ()
-
-/- Unit test for [external::test_vec] -/
-#assert (test_vec == Result.ok ())
-
-/- [external::custom_swap]:
-   Source: 'src/external.rs', lines 24:0-24:66 -/
-def custom_swap
-  (T : Type) (x : T) (y : T) (st : State) :
-  Result (State × (T × (T → State → Result (State × (T × T)))))
+/- [external::incr]:
+   Source: 'src/external.rs', lines 9:0-9:31 -/
+def incr
+  (rc : core.cell.Cell U32) (st : State) :
+  Result (State × (core.cell.Cell U32))
   :=
   do
-  let (st1, (x1, y1)) ← core.mem.swap T x y st
-  let back := fun ret st2 => Result.ok (st2, (ret, y1))
-  Result.ok (st1, (x1, back))
-
-/- [external::test_custom_swap]:
-   Source: 'src/external.rs', lines 29:0-29:59 -/
-def test_custom_swap
-  (x : U32) (y : U32) (st : State) : Result (State × (U32 × U32)) :=
-  do
-  let (st1, (_, custom_swap_back)) ← custom_swap U32 x y st
-  let (_, (x1, y1)) ← custom_swap_back 1#u32 st1
-  Result.ok (st1, (x1, y1))
-
-/- [external::test_swap_non_zero]:
-   Source: 'src/external.rs', lines 35:0-35:44 -/
-def test_swap_non_zero (x : U32) (st : State) : Result (State × U32) :=
-  do
-  let (st1, p) ← swap U32 x 0#u32 st
-  let (x1, _) := p
-  if x1 = 0#u32
-  then Result.fail .panic
-  else Result.ok (st1, x1)
+  let (st1, (i, get_mut_back)) ← core.cell.Cell.get_mut U32 rc st
+  let i1 ← i + 1#u32
+  let (_, rc1) ← get_mut_back i1 st1
+  Result.ok (st1, rc1)
 
 end external

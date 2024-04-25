@@ -6,15 +6,18 @@ import External.Types
 open Primitives
 open external
 
-/- [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]:
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 79:16-79:57
-   Name pattern: core::num::nonzero::{core::num::nonzero::NonZeroU32}::new -/
-axiom core.num.nonzero.NonZeroU32.new
-  : U32 → State → Result (State × (Option core.num.nonzero.NonZeroU32))
+/- [core::cell::{core::cell::Cell<T>#10}::get]:
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/cell.rs', lines 497:4-497:26
+   Name pattern: core::cell::{core::cell::Cell<@T>}::get -/
+axiom core.cell.Cell.get
+  (T : Type) (markerCopyInst : core.marker.Copy T) :
+  core.cell.Cell T → State → Result (State × T)
 
-/- [core::option::{core::option::Option<T>}::unwrap]:
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34
-   Name pattern: core::option::{core::option::Option<@T>}::unwrap -/
-axiom core.option.Option.unwrap
-  (T : Type) : Option T → State → Result (State × T)
+/- [core::cell::{core::cell::Cell<T>#11}::get_mut]:
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/cell.rs', lines 574:4-574:39
+   Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut -/
+axiom core.cell.Cell.get_mut
+  (T : Type) :
+  core.cell.Cell T → State → Result (State × (T × (T → State → Result
+    (State × (core.cell.Cell T)))))
 
