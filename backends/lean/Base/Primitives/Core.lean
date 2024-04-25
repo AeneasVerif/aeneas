@@ -51,7 +51,7 @@ def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
 }
 
-namespace option
+namespace option -- core.option
 
 /- [core::option::{core::option::Option<T>}::unwrap] -/
 def Option.unwrap (T : Type) (x : Option T) : Result T :=
