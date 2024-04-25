@@ -5,10 +5,10 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [core::num::nonzero::NonZeroU32]
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 50:12-50:33
-    Name pattern: core::num::nonzero::NonZeroU32 *)
-val core_num_nonzero_NonZeroU32_t : Type0
+(** [core::cell::Cell]
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/cell.rs', lines 293:0-293:26
+    Name pattern: core::cell::Cell *)
+val core_cell_Cell_t (t : Type0) : Type0
 
 (** The state type used in the state-error monad *)
 val state : Type0
