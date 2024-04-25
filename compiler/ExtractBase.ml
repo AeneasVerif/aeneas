@@ -915,38 +915,104 @@ let keywords () =
         ]
     | Lean ->
         [
+          "Pi";
+          "Prop";
+          "Sort";
+          "Type";
+          "abbrev";
+          "alias";
+          "as";
+          "at";
+          "attribute";
+          "axiom";
+          "axioms";
+          "begin";
+          "break";
           "by";
+          "calc";
+          "catch";
           "class";
+          "const";
+          "constant";
+          "constants";
+          "continue";
           "decreasing_by";
           "def";
+          "definition";
           "deriving";
           "do";
           "else";
           "end";
+          "example";
+          "exists";
+          "export";
+          "extends";
           "for";
+          "forall";
+          "from";
+          "fun";
           "have";
+          "hiding";
           "if";
-          "inductive";
-          "instance";
           "import";
+          "in";
+          "include";
+          "inductive";
+          "infix";
+          "infixl";
+          "infixr";
+          "instance";
+          "lemma";
           "let";
+          "local";
           "macro";
+          "macro_rules";
           "match";
+          "mut";
+          "mutual";
           "namespace";
+          "noncomputable";
+          "notation";
+          "omit";
           "opaque";
+          "opaque_defs";
           "open";
+          "override";
+          "parameter";
+          "parameters";
+          "partial";
+          "postfix";
+          "precedence";
+          "prefix";
+          "prelude";
+          "private";
+          "protected";
+          "raw";
+          "record";
+          "reduce";
+          "renaming";
+          "replacing";
+          "reserve";
           "run_cmd";
+          "section";
           "set_option";
           "simp";
           "structure";
           "syntax";
           "termination_by";
           "then";
-          "Type";
+          "theorem";
+          "theory";
+          "universe";
+          "universes";
+          "unless";
           "unsafe";
+          "using";
+          "using_well_founded";
+          "variable";
+          "variables";
           "where";
           "with";
-          "opaque_defs";
         ]
     | HOL4 ->
         [
@@ -1932,10 +1998,11 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   match match_name_find_opt ctx.trans_ctx def.name builtin_globals_map with
   | Some name ->
       (* Yes: register the custom binding *)
-      ctx_add def.meta decl name ctx
+      ctx_add def.item_meta.meta decl name ctx
   | None ->
       (* Not the case: "standard" registration *)
-      let name = ctx_compute_global_name def.meta ctx def.name in
+      let name = ctx_compute_global_name def.item_meta.meta ctx def.name in
+
       let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
       (* If this is a provided constant (i.e., the default value for a constant
          in a trait declaration) we add a suffix. Otherwise there is a clash
@@ -1944,8 +2011,8 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       let suffix =
         match def.kind with TraitItemProvided _ -> "_default" | _ -> ""
       in
-      let ctx = ctx_add def.meta decl (name ^ suffix) ctx in
-      let ctx = ctx_add def.meta body (name ^ suffix ^ "_body") ctx in
+      let ctx = ctx_add def.item_meta.meta decl (name ^ suffix) ctx in
+      let ctx = ctx_add def.item_meta.meta body (name ^ suffix ^ "_body") ctx in
       ctx
 
 let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =

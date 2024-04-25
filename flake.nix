@@ -8,11 +8,12 @@
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
     hacl-nix.url = "github:hacl-star/hacl-nix";
+    flake-compat.url = "github:nix-community/flake-compat";
   };
 
   # Remark: keep the list of outputs in sync with the list of inputs above
   # (see above remark)
-  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix }:
+  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix, flake-compat }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -29,11 +30,29 @@
           };
           buildInputs = [ ocamlPackages.calendar ];
         };
+
+        aeneas-check-tidiness = pkgs.stdenv.mkDerivation {
+          name = "aeneas-check-tidiness";
+          src = ./compiler;
+          buildInputs = [
+            ocamlPackages.dune_3
+            ocamlPackages.ocaml
+            ocamlPackages.ocamlformat
+          ];
+          buildPhase = ''
+            if ! dune build @fmt; then
+              echo 'ERROR: Code is not formatted. Run `make format` to format the project files'.
+              exit 1
+            fi
+          '';
+          installPhase = "touch $out";
+        };
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
           duneVersion = "3";
           src = ./compiler;
+          OCAMLPARAM="_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = [
             easy_logging charon.packages.${system}.charon-ml
             ] ++ (with ocamlPackages; [
@@ -74,22 +93,20 @@
             export AENEAS_EXE=./aeneas
 
             # Copy the tests
-            mkdir tests-copy
             cp -r tests tests-copy
 
-            # TODO: remove the test files to make sure we regenerate exactly
-            # the files which are checked out (we have to be careful about
-            # files like lakefile.lean, and the user hand-written files)
-
-            # Run the tests - remark: we could remove the file
-            make test-all -j $NIX_BUILD_CORES
+            # Run the tests with extra sanity checks enabled
+            # Remark: we could remove the file
+            make clean-generated
+            OPTIONS=-checks make test-all -j $NIX_BUILD_CORES
 
             # Check that there are no differences between the generated tests
             # and the original tests
-            if [[ $(diff -rq tests tests-copy) ]]; then
+            if diff -rq tests tests-copy; then
               echo "Ok: the regenerated test files are the same as the checked out files"
             else
               echo "Error: the regenerated test files differ from the checked out files"
+              diff -ru tests tests-copy
               exit 1
             fi
           '';
@@ -153,10 +170,6 @@
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {
-          # By default, tests run some sanity checks which are pretty slow.
-          # This disables these checks when developping locally.
-          OPTIONS = "";
-
           packages = [
             pkgs.ocamlPackages.ocaml
             pkgs.ocamlPackages.ocamlformat
@@ -172,6 +185,7 @@
           inherit aeneas aeneas-tests
                   aeneas-verify-fstar
                   aeneas-verify-coq
-                  aeneas-verify-hol4; };
+                  aeneas-verify-hol4
+                  aeneas-check-tidiness; };
       });
 }

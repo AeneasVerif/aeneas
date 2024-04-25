@@ -147,7 +147,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       (* Sanity check: global bodies don't contain stateful calls *)
       cassert __FILE__ __LINE__
         ((not f.is_global_decl_body) || not !stateful)
-        f.meta "Global definition containing a stateful call in its body";
+        f.item_meta.meta
+        "Global definition containing a stateful call in its body";
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
@@ -171,11 +172,11 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
     cassert __FILE__ __LINE__
       ((not is_global_decl_body) || List.length d = 1)
-      (List.hd d).meta
+      (List.hd d).item_meta.meta
       "This global definition is in a group of mutually recursive definitions";
     cassert __FILE__ __LINE__
       ((not !group_has_builtin_info) || List.length d = 1)
-      (List.hd d).meta
+      (List.hd d).item_meta.meta
       "This builtin function belongs to a group of mutually recursive \
        definitions";
     (* We ignore on purpose functions that cannot fail and consider they *can*

@@ -714,7 +714,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          both borrows *)
       raise (ValueMatchFailure (LoanInLeft id0))
 
-  let match_symbolic_values (ctx0 : eval_ctx) (_ : eval_ctx)
+  let match_symbolic_values (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (sv0 : symbolic_value) (sv1 : symbolic_value) : symbolic_value =
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
@@ -729,11 +729,18 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       sanity_check __FILE__ __LINE__
         (not (ty_has_borrows ctx0.type_ctx.type_infos sv0.sv_ty))
         meta;
-      (* We simply introduce a fresh symbolic value *)
+      (* TODO: the symbolic values may contain bottoms: we're being conservatice,
+         and fail (for now) if part of a symbolic value contains a bottom.
+         A more general approach would be to introduce a symbolic value
+         with some ended regions. *)
+      sanity_check __FILE__ __LINE__
+        ((not (symbolic_value_has_ended_regions ctx0.ended_regions sv0))
+        && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1))
+        meta;
       mk_fresh_symbolic_value meta sv0.sv_ty)
 
-  let match_symbolic_with_other (ctx0 : eval_ctx) (_ : eval_ctx) (left : bool)
-      (sv : symbolic_value) (v : typed_value) : typed_value =
+  let match_symbolic_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+      (left : bool) (sv : symbolic_value) (v : typed_value) : typed_value =
     (* Check that:
        - there are no borrows in the symbolic value
        - there are no borrows in the "regular" value
@@ -763,8 +770,16 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     | Some (VMutLoan id) ->
         if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
         else raise (ValueMatchFailure (LoanInRight id)));
-    (* Return a fresh symbolic value *)
-    mk_fresh_symbolic_typed_value meta sv.sv_ty
+
+    (* There might be a bottom in the other value. We're being conservative:
+       if there is a bottom anywhere (it includes the case where part of the
+       value contains bottom) the result of the join is bottom. Otherwise,
+       we generate a fresh symbolic value. *)
+    if
+      symbolic_value_has_ended_regions ctx0.ended_regions sv
+      || bottom_in_value ctx1.ended_regions v
+    then mk_bottom meta sv.sv_ty
+    else mk_fresh_symbolic_typed_value meta sv.sv_ty
 
   let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx) (left : bool)
       (v : typed_value) : typed_value =
@@ -903,9 +918,16 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
       (sv1 : symbolic_value) : symbolic_value =
     sv1
 
-  let match_symbolic_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
-      (sv : symbolic_value) (v : typed_value) : typed_value =
-    if left then v else mk_typed_value_from_symbolic_value sv
+  let match_symbolic_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+      (left : bool) (sv : symbolic_value) (v : typed_value) : typed_value =
+    (* We're being conservative for now: if any of the two values contains
+       a bottom, the join is bottom *)
+    if
+      symbolic_value_has_ended_regions ctx0.ended_regions sv
+      || bottom_in_value ctx1.ended_regions v
+    then mk_bottom meta sv.sv_ty
+    else if left then v
+    else mk_typed_value_from_symbolic_value sv
 
   let match_bottom_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
       (v : typed_value) : typed_value =

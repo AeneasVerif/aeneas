@@ -323,7 +323,8 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
     List.map
       (fun ((fid, d) : FunDeclId.id * fun_decl) ->
         ( FRegular fid,
-          (Types.name_to_string env d.name, d.signature, Some d.meta) ))
+          (Types.name_to_string env d.name, d.signature, Some d.item_meta.meta)
+        ))
       (FunDeclId.Map.bindings fun_decls)
   in
   let assumed =

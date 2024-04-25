@@ -1063,13 +1063,13 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
       (* Treat the evaluation of the global as a call to the global body *)
       let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
-      (eval_transparent_function_call_concrete config global.meta global.body
-         call)
+      (eval_transparent_function_call_concrete config global.item_meta.meta
+         global.body call)
         cf ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      cassert __FILE__ __LINE__ (ty_no_regions global.ty) global.meta
+      cassert __FILE__ __LINE__ (ty_no_regions global.ty) global.item_meta.meta
         "Const globals should not contain regions";
       (* Instantiate the type  *)
       (* There shouldn't be any reference to Self *)
@@ -1082,9 +1082,9 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
         Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
           global.ty
       in
-      let sval = mk_fresh_symbolic_value global.meta ty in
+      let sval = mk_fresh_symbolic_value global.item_meta.meta ty in
       let cc =
-        assign_to_place config global.meta
+        assign_to_place config global.item_meta.meta
           (mk_typed_value_from_symbolic_value sval)
           dest
       in
@@ -1368,7 +1368,7 @@ and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
   (* Sanity check: same number of inputs *)
   sanity_check __FILE__ __LINE__
     (List.length call.args = List.length def.signature.inputs)
-    def.meta;
+    def.item_meta.meta;
   (* Sanity check: no nested borrows, borrows in ADTs, etc. *)
   cassert __FILE__ __LINE__
     (List.for_all
@@ -1381,9 +1381,9 @@ and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
        (inst_sg.output :: inst_sg.inputs))
     meta "ADTs containing borrows are not supported yet";
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config def.meta func def.signature
-    regions_hierarchy inst_sg generics trait_method_generics call.args call.dest
-    cf ctx
+  eval_function_call_symbolic_from_inst_sig config def.item_meta.meta func
+    def.signature regions_hierarchy inst_sg generics trait_method_generics
+    call.args call.dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 

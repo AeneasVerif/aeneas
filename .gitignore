@@ -72,7 +72,6 @@ tests/fstar/misc/obj/
 nohup.out
 .vscode
 *#
-*.lock
 *.txt
 */.#*
 *.smt2
