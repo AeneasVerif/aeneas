@@ -45,7 +45,7 @@ let betree_Node_lookup_in_bindings_decreases (key : u64)
 unfold
 let betree_Node_apply_upserts_decreases
   (msgs : betree_List_t (u64 & betree_Message_t)) (prev : option u64)
-  (key : u64) (st : state) : nat =
+  (key : u64) : nat =
   admit ()
 
 (** [betree_main::betree::{betree_main::betree::Internal#4}::lookup_in_children]: decreases clause
