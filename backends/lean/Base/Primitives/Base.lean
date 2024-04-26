@@ -76,6 +76,11 @@ def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) :
   | fail _ | div => by contradiction
   | ok x => x
 
+def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
+  match x with
+  | some x => ok x
+  | none => fail e
+
 /- DO-DSL SUPPORT -/
 
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=

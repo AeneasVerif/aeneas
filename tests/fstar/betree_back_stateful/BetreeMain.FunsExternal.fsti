@@ -28,9 +28,3 @@ val betree_utils_load_leaf_node
 val betree_utils_store_leaf_node
   : u64 -> betree_List_t (u64 & u64) -> state -> result (state & unit)
 
-(** [core::option::{core::option::Option<T>}::unwrap]:
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34
-    Name pattern: core::option::{core::option::Option<@T>}::unwrap *)
-val core_option_Option_unwrap
-  (t : Type0) : option t -> state -> result (state & t)
-

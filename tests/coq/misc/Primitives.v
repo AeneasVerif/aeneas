@@ -564,6 +564,13 @@ Definition core_clone_CloneI128 : core_clone_Clone i128 := {|
   clone := fun x => Ok (core_clone_impls_CloneI128_clone x)
 |}.
 
+(** [core::option::{core::option::Option<T>}::unwrap] *)
+Definition core_option_Option_unwrap (T : Type) (x : option T) : result T :=
+  match x with
+  | None => Fail_ Failure
+  | Some x => Ok x
+  end.
+
 (*** core::ops *)
 
 (* Trait declaration: [core::ops::index::Index] *)

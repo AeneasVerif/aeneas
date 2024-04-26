@@ -14,4 +14,3 @@ def core.cell.Cell.get
 def core.cell.Cell.get_mut (T : Type) (c : core.cell.Cell T) (s : State) :
   Result (State × (T × (T → State → Result (State × (core.cell.Cell T))))) :=
   sorry
-

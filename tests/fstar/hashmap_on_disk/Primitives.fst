@@ -540,6 +540,12 @@ let core_clone_CloneI128 : core_clone_Clone i128 = {
   clone = fun x -> Ok (core_clone_impls_CloneI128_clone x)
 }
 
+(** [core::option::{core::option::Option<T>}::unwrap] *)
+let core_option_Option_unwrap (t : Type0) (x : option t) : result t =
+  match x with
+  | None -> Fail Failure
+  | Some x -> Ok x
+
 (*** core::ops *)
 
 // Trait declaration: [core::ops::index::Index]

@@ -387,6 +387,8 @@ let builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
        @A>>}::deref_mut"
       (Some "alloc.vec.DerefMutVec.deref_mut")
       (Some [ true; false ]);
+    mk_fun "core::option::{core::option::Option<@T>}::unwrap"
+      (Some "core.option.Option.unwrap") None;
   ]
   @ List.flatten
       (List.map
@@ -552,14 +554,17 @@ let builtin_fun_effects =
       (fun n -> (n, { can_fail = false; stateful = false }))
       no_fail_no_state_funs
   in
+  (* TODO: all the functions registered in the [builtin_funs] above should
+     be considered as not using a state. There is a lot of redundancy
+     right now. *)
   let no_state_funs =
     [
-      (* TODO: redundancy with the funs information above *)
       "alloc::vec::{alloc::vec::Vec<@T, @A>}::push";
       "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T, @A>, \
        @I>}::index";
       "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, \
        @I>}::index_mut";
+      "core::option::{core::option::Option<@T>}::unwrap";
     ]
   in
   let no_state_funs =

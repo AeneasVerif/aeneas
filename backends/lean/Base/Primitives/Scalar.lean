@@ -364,11 +364,6 @@ def Scalar.tryMkOpt (ty : ScalarTy) (x : Int) : Option (Scalar ty) :=
     some (Scalar.ofIntCore x (Scalar.check_bounds_imp_in_bounds h))
   else none
 
-def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
-  match x with
-  | some x => ok x
-  | none => fail e
-
 def Scalar.tryMk (ty : ScalarTy) (x : Int) : Result (Scalar ty) :=
   Result.ofOption (tryMkOpt ty x) integerOverflow
 
