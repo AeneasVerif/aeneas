@@ -130,7 +130,6 @@ let betree_Node_lookup_first_message_for_key_decreases (key : u64)
   (msgs : betree_List_t (u64 & betree_Message_t)) : betree_List_t (u64 & betree_Message_t) =
   msgs
 
-
 let rec list_length (#a : Type0) (ls : betree_List_t a) : nat =
   match ls with
   | Betree_List_Cons _ ls -> 1 + list_length ls
@@ -140,7 +139,7 @@ let rec list_length (#a : Type0) (ls : betree_List_t a) : nat =
 unfold
 let betree_Node_apply_upserts_decreases
   (msgs : betree_List_t (u64 & betree_Message_t)) (prev : option u64)
-  (key : u64) : betree_List_t (u64 & betree_Message_t) =
+  (key : u64) : nat =
   list_length msgs
 
 (** [betree_main::betree::Internal::{4}::lookup_in_children]: decreases clause *)
