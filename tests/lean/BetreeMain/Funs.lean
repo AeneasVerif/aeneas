@@ -219,8 +219,8 @@ divergent def betree.Node.lookup_in_bindings
    Source: 'src/betree.rs', lines 819:4-819:90 -/
 divergent def betree.Node.apply_upserts
   (msgs : betree.List (U64 × betree.Message)) (prev : Option U64) (key : U64)
-  (st : State) :
-  Result (State × (U64 × (betree.List (U64 × betree.Message))))
+  :
+  Result (U64 × (betree.List (U64 × betree.Message)))
   :=
   do
   let b ← betree.ListPairU64T.head_has_key betree.Message msgs key
@@ -235,14 +235,14 @@ divergent def betree.Node.apply_upserts
     | betree.Message.Upsert s =>
       do
       let v ← betree.upsert_update prev s
-      betree.Node.apply_upserts msgs1 (some v) key st
+      betree.Node.apply_upserts msgs1 (some v) key
   else
     do
-    let (st1, v) ← core.option.Option.unwrap U64 prev st
+    let v ← core.option.Option.unwrap U64 prev
     let msgs1 ←
       betree.List.push_front (U64 × betree.Message) msgs (key,
         betree.Message.Insert v)
-    Result.ok (st1, (v, msgs1))
+    Result.ok (v, msgs1)
 
 /- [betree_main::betree::{betree_main::betree::Internal#4}::lookup_in_children]:
    Source: 'src/betree.rs', lines 395:4-395:63 -/
@@ -307,13 +307,13 @@ divergent def betree.Node.lookup
           let (st2, (v, node1)) ←
             betree.Internal.lookup_in_children (betree.Internal.mk i i1 n n1)
               key st1
-          let (st3, (v1, pending1)) ←
+          let (v1, pending1) ←
             betree.Node.apply_upserts (betree.List.Cons (k,
-              betree.Message.Upsert ufs) l) v key st2
+              betree.Message.Upsert ufs) l) v key
           let ⟨ i2, i3, n2, n3 ⟩ := node1
           let msgs1 ← lookup_first_message_for_key_back pending1
-          let (st4, _) ← betree.store_internal_node i2 msgs1 st3
-          Result.ok (st4, (some v1, betree.Node.Internal (betree.Internal.mk i2
+          let (st3, _) ← betree.store_internal_node i2 msgs1 st2
+          Result.ok (st3, (some v1, betree.Node.Internal (betree.Internal.mk i2
             i3 n2 n3)))
     | betree.List.Nil =>
       do

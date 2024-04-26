@@ -76,6 +76,11 @@ def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) :
   | fail _ | div => by contradiction
   | ok x => x
 
+def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
+  match x with
+  | some x => ok x
+  | none => fail e
+
 /- DO-DSL SUPPORT -/
 
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
@@ -130,6 +135,10 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ok x } :=
 ----------
 
 @[simp] def core.mem.replace (a : Type) (x : a) (_ : a) : a × a := (x, x)
+/- [core::option::Option::take] -/
+@[simp] def Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
+/- [core::mem::swap] -/
+@[simp] def core.mem.swap (T: Type) (a b: T): T × T := (b, a)
 
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.
  Use with `simp [ aeneas ]` -/

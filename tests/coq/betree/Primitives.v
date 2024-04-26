@@ -489,6 +489,88 @@ Definition core_i64_max   := i64_max %i64.
 Definition core_i128_max  := i64_max %i128.
 Axiom core_isize_max : isize. (** TODO *)
 
+(*** core *)
+
+(** Trait declaration: [core::clone::Clone] *)
+Record core_clone_Clone (self : Type) := {
+  clone : self -> result self
+}.
+
+Definition core_clone_impls_CloneBool_clone (b : bool) : bool := b.
+
+Definition core_clone_CloneBool : core_clone_Clone bool := {|
+  clone := fun b => Ok (core_clone_impls_CloneBool_clone b)
+|}.
+
+Definition core_clone_impls_CloneUsize_clone (x : usize) : usize := x.
+Definition core_clone_impls_CloneU8_clone (x : u8) : u8 := x.
+Definition core_clone_impls_CloneU16_clone (x : u16) : u16 := x.
+Definition core_clone_impls_CloneU32_clone (x : u32) : u32 := x.
+Definition core_clone_impls_CloneU64_clone (x : u64) : u64 := x.
+Definition core_clone_impls_CloneU128_clone (x : u128) : u128 := x.
+
+Definition core_clone_impls_CloneIsize_clone (x : isize) : isize := x.
+Definition core_clone_impls_CloneI8_clone (x : i8) : i8 := x.
+Definition core_clone_impls_CloneI16_clone (x : i16) : i16 := x.
+Definition core_clone_impls_CloneI32_clone (x : i32) : i32 := x.
+Definition core_clone_impls_CloneI64_clone (x : i64) : i64 := x.
+Definition core_clone_impls_CloneI128_clone (x : i128) : i128 := x.
+
+Definition core_clone_CloneUsize : core_clone_Clone usize := {|
+  clone := fun x => Ok (core_clone_impls_CloneUsize_clone x)
+|}.
+
+Definition core_clone_CloneU8 : core_clone_Clone u8 := {|
+  clone := fun x => Ok (core_clone_impls_CloneU8_clone x)
+|}.
+
+Definition core_clone_CloneU16 : core_clone_Clone u16 := {|
+  clone := fun x => Ok (core_clone_impls_CloneU16_clone x)
+|}.
+
+Definition core_clone_CloneU32 : core_clone_Clone u32 := {|
+  clone := fun x => Ok (core_clone_impls_CloneU32_clone x)
+|}.
+
+Definition core_clone_CloneU64 : core_clone_Clone u64 := {|
+  clone := fun x => Ok (core_clone_impls_CloneU64_clone x)
+|}.
+
+Definition core_clone_CloneU128 : core_clone_Clone u128 := {|
+  clone := fun x => Ok (core_clone_impls_CloneU128_clone x)
+|}.
+
+Definition core_clone_CloneIsize : core_clone_Clone isize := {|
+  clone := fun x => Ok (core_clone_impls_CloneIsize_clone x)
+|}.
+
+Definition core_clone_CloneI8 : core_clone_Clone i8 := {|
+  clone := fun x => Ok (core_clone_impls_CloneI8_clone x)
+|}.
+
+Definition core_clone_CloneI16 : core_clone_Clone i16 := {|
+  clone := fun x => Ok (core_clone_impls_CloneI16_clone x)
+|}.
+
+Definition core_clone_CloneI32 : core_clone_Clone i32 := {|
+  clone := fun x => Ok (core_clone_impls_CloneI32_clone x)
+|}.
+
+Definition core_clone_CloneI64 : core_clone_Clone i64 := {|
+  clone := fun x => Ok (core_clone_impls_CloneI64_clone x)
+|}.
+
+Definition core_clone_CloneI128 : core_clone_Clone i128 := {|
+  clone := fun x => Ok (core_clone_impls_CloneI128_clone x)
+|}.
+
+(** [core::option::{core::option::Option<T>}::unwrap] *)
+Definition core_option_Option_unwrap (T : Type) (x : option T) : result T :=
+  match x with
+  | None => Fail_ Failure
+  | Some x => Ok x
+  end.
+
 (*** core::ops *)
 
 (* Trait declaration: [core::ops::index::Index] *)

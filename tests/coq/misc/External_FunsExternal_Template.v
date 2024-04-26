@@ -11,25 +11,21 @@ Require Import External_Types.
 Include External_Types.
 Module External_FunsExternal_Template.
 
-(** [core::mem::swap]:
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/mem/mod.rs', lines 726:0-726:42
-    Name pattern: core::mem::swap *)
-Axiom core_mem_swap :
-  forall(T : Type), T -> T -> state -> result (state * (T * T))
+(** [core::cell::{core::cell::Cell<T>#10}::get]:
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/cell.rs', lines 497:4-497:26
+    Name pattern: core::cell::{core::cell::Cell<@T>}::get *)
+Axiom core_cell_Cell_get :
+  forall(T : Type) (markerCopyInst : core_marker_Copy_t T),
+        core_cell_Cell_t T -> state -> result (state * T)
 .
 
-(** [core::num::nonzero::{core::num::nonzero::NonZeroU32#14}::new]:
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 79:16-79:57
-    Name pattern: core::num::nonzero::{core::num::nonzero::NonZeroU32}::new *)
-Axiom core_num_nonzero_NonZeroU32_new
-  : u32 -> state -> result (state * (option core_num_nonzero_NonZeroU32_t))
-.
-
-(** [core::option::{core::option::Option<T>}::unwrap]:
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34
-    Name pattern: core::option::{core::option::Option<@T>}::unwrap *)
-Axiom core_option_Option_unwrap :
-  forall(T : Type), option T -> state -> result (state * T)
+(** [core::cell::{core::cell::Cell<T>#11}::get_mut]:
+    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/cell.rs', lines 574:4-574:39
+    Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut *)
+Axiom core_cell_Cell_get_mut :
+  forall(T : Type),
+        core_cell_Cell_t T -> state -> result (state * (T * (T -> state ->
+          result (state * (core_cell_Cell_t T)))))
 .
 
 End External_FunsExternal_Template.

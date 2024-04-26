@@ -223,9 +223,9 @@ let rec betree_Node_lookup_in_bindings
     Source: 'src/betree.rs', lines 819:4-819:90 *)
 let rec betree_Node_apply_upserts
   (msgs : betree_List_t (u64 & betree_Message_t)) (prev : option u64)
-  (key : u64) (st : state) :
-  Tot (result (state & (u64 & (betree_List_t (u64 & betree_Message_t)))))
-  (decreases (betree_Node_apply_upserts_decreases msgs prev key st))
+  (key : u64) :
+  Tot (result (u64 & (betree_List_t (u64 & betree_Message_t))))
+  (decreases (betree_Node_apply_upserts_decreases msgs prev key))
   =
   let* b = betree_ListPairU64T_head_has_key betree_Message_t msgs key in
   if b
@@ -237,14 +237,14 @@ let rec betree_Node_apply_upserts
     | Betree_Message_Delete -> Fail Failure
     | Betree_Message_Upsert s ->
       let* v = betree_upsert_update prev s in
-      betree_Node_apply_upserts msgs1 (Some v) key st
+      betree_Node_apply_upserts msgs1 (Some v) key
     end
   else
-    let* (st1, v) = core_option_Option_unwrap u64 prev st in
+    let* v = core_option_Option_unwrap u64 prev in
     let* msgs1 =
       betree_List_push_front (u64 & betree_Message_t) msgs (key,
         Betree_Message_Insert v) in
-    Ok (st1, (v, msgs1))
+    Ok (v, msgs1)
 
 (** [betree_main::betree::{betree_main::betree::Internal#4}::lookup_in_children]:
     Source: 'src/betree.rs', lines 395:4-395:63 *)
@@ -298,12 +298,12 @@ and betree_Node_lookup
         | Betree_Message_Upsert ufs ->
           let* (st2, (v, node1)) =
             betree_Internal_lookup_in_children node key st1 in
-          let* (st3, (v1, pending1)) =
+          let* (v1, pending1) =
             betree_Node_apply_upserts (Betree_List_Cons (k,
-              Betree_Message_Upsert ufs) l) v key st2 in
+              Betree_Message_Upsert ufs) l) v key in
           let* msgs1 = lookup_first_message_for_key_back pending1 in
-          let* (st4, _) = betree_store_internal_node node1.id msgs1 st3 in
-          Ok (st4, (Some v1, Betree_Node_Internal node1))
+          let* (st3, _) = betree_store_internal_node node1.id msgs1 st2 in
+          Ok (st3, (Some v1, Betree_Node_Internal node1))
         end
     | Betree_List_Nil ->
       let* (st2, (o, node1)) = betree_Internal_lookup_in_children node key st1

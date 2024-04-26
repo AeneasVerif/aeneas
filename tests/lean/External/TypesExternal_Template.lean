@@ -4,10 +4,10 @@
 import Base
 open Primitives
 
-/- [core::num::nonzero::NonZeroU32]
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 50:12-50:33
-   Name pattern: core::num::nonzero::NonZeroU32 -/
-axiom core.num.nonzero.NonZeroU32 : Type
+/- [core::cell::Cell]
+   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/cell.rs', lines 293:0-293:26
+   Name pattern: core::cell::Cell -/
+axiom core.cell.Cell (T : Type) : Type
 
 /- The state type used in the state-error monad -/
 axiom State : Type

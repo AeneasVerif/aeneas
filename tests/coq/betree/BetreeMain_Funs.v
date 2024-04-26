@@ -275,8 +275,8 @@ Fixpoint betree_Node_lookup_in_bindings
     Source: 'src/betree.rs', lines 819:4-819:90 *)
 Fixpoint betree_Node_apply_upserts
   (n : nat) (msgs : betree_List_t (u64 * betree_Message_t)) (prev : option u64)
-  (key : u64) (st : state) :
-  result (state * (u64 * (betree_List_t (u64 * betree_Message_t))))
+  (key : u64) :
+  result (u64 * (betree_List_t (u64 * betree_Message_t)))
   :=
   match n with
   | O => Fail_ OutOfFuel
@@ -292,15 +292,14 @@ Fixpoint betree_Node_apply_upserts
       | Betree_Message_Delete => Fail_ Failure
       | Betree_Message_Upsert s =>
         v <- betree_upsert_update prev s;
-        betree_Node_apply_upserts n1 msgs1 (Some v) key st
+        betree_Node_apply_upserts n1 msgs1 (Some v) key
       end)
     else (
-      p <- core_option_Option_unwrap u64 prev st;
-      let (st1, v) := p in
+      v <- core_option_Option_unwrap u64 prev;
       msgs1 <-
         betree_List_push_front (u64 * betree_Message_t) msgs (key,
           Betree_Message_Insert v);
-      Ok (st1, (v, msgs1)))
+      Ok (v, msgs1))
   end
 .
 
@@ -371,14 +370,13 @@ with betree_Node_lookup
             let (v, node1) := p4 in
             p5 <-
               betree_Node_apply_upserts n1 (Betree_List_Cons (k,
-                Betree_Message_Upsert ufs) l) v key st2;
-            let (st3, p6) := p5 in
-            let (v1, pending1) := p6 in
+                Betree_Message_Upsert ufs) l) v key;
+            let (v1, pending1) := p5 in
             msgs1 <- lookup_first_message_for_key_back pending1;
-            p7 <-
-              betree_store_internal_node node1.(betree_Internal_id) msgs1 st3;
-            let (st4, _) := p7 in
-            Ok (st4, (Some v1, Betree_Node_Internal node1))
+            p6 <-
+              betree_store_internal_node node1.(betree_Internal_id) msgs1 st2;
+            let (st3, _) := p6 in
+            Ok (st3, (Some v1, Betree_Node_Internal node1))
           end
       | Betree_List_Nil =>
         p2 <- betree_Internal_lookup_in_children n1 node key st1;

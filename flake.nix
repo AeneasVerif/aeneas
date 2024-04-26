@@ -171,6 +171,7 @@
         };
         devShells.default = pkgs.mkShell {
           packages = [
+            pkgs.elan
             pkgs.ocamlPackages.ocaml
             pkgs.ocamlPackages.ocamlformat
             pkgs.ocamlPackages.menhir

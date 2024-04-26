@@ -36,10 +36,4 @@ Axiom betree_utils_store_leaf_node
   : u64 -> betree_List_t (u64 * u64) -> state -> result (state * unit)
 .
 
-(** [core::option::{core::option::Option<T>}::unwrap]: forward function
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/option.rs', lines 932:4-932:34 *)
-Axiom core_option_Option_unwrap :
-  forall(T : Type), option T -> state -> result (state * T)
-.
-
 End BetreeMain_FunsExternal.

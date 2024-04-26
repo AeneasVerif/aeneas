@@ -134,7 +134,7 @@ let betree_Node_lookup_first_message_for_key_decreases (key : u64)
 unfold
 let betree_Node_apply_upserts_decreases
   (msgs : betree_List_t (u64 & betree_Message_t)) (prev : option u64)
-  (key : u64) (st : state) : betree_List_t (u64 & betree_Message_t) =
+  (key : u64) : betree_List_t (u64 & betree_Message_t) =
   msgs
 
 (** [betree_main::betree::Internal::{4}::lookup_in_children]: decreases clause *)
