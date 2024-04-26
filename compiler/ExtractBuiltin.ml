@@ -555,7 +555,7 @@ let builtin_fun_effects =
       no_fail_no_state_funs
   in
   (* TODO: all the functions registered in the [builtin_funs] above should
-     be considered a not using a state. There is a lot of redundancy
+     be considered as not using a state. There is a lot of redundancy
      right now. *)
   let no_state_funs =
     [
