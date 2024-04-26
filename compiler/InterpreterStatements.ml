@@ -984,11 +984,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
         match rvalue with
         | Global (gid, generics) ->
             (* Evaluate the global *)
-            let (ctx, res), cc = eval_global config p gid generics ctx in
-            [(ctx, res)], (fun el -> match el with
-            | Some [e] -> cc (Some e)
-            | _ -> None 
-            )
+            eval_global config p gid generics ctx
         | _ ->
             (* Evaluate the rvalue *)
             let v, ctx, cf_eval_rvalue = eval_rvalue_not_global config st.meta rvalue ctx in
@@ -1047,9 +1043,9 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
     | Assert assertion -> let (ctx, res), cc = eval_assertion config st.meta assertion ctx in [(ctx, res)], (fun el -> match el with 
     | Some [e] -> cc (Some e)
     | _ -> None)
-    | Call call -> let (ctx, res), cc = eval_function_call config st.meta call ctx in [(ctx, res)], (fun el -> match el with 
+    | Call call -> (* let (ctx, res), cc = *) eval_function_call config st.meta call ctx(*  in [(ctx, res)], (fun el -> match el with 
     | Some [e] -> cc (Some e)
-    | _ -> None)
+    | _ -> None) *)
     | Panic -> [(ctx, Panic)], (fun el -> match el with 
     | Some [e] -> (Some e)
     | _ -> None)
@@ -1106,7 +1102,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   stl, fun el -> cc (cf_eval_st el)
 
 and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
-    (generics : generic_args) : st_cm_fun =
+    (generics : generic_args) : stl_cm_fun =
  fun ctx ->
   let global = ctx_lookup_global_decl ctx gid in
   match config.mode with
@@ -1140,8 +1136,12 @@ and eval_global (config : config) (dest : place) (gid : GlobalDeclId.id)
           dest ctx
       in
       (* let e = cc (cf Unit) ctx in *)
-      (ctx, Unit), comp cc (fun e -> 
-      S.synthesize_global_eval gid generics sval e)
+      [(ctx, Unit)], (fun el -> match el with 
+      | Some [e] -> 
+        (comp cc (fun e -> 
+      S.synthesize_global_eval gid generics sval e)) (Some e)
+      | _ -> None
+      )
 
 (** Evaluate a switch *)
 and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
@@ -1247,33 +1247,52 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
                * by a pair (list of values, branch expression).
                * In order to do a symbolic evaluation, we make this "flat" by
                * de-grouping the branches. *)
-               let values, branches = List.split (
+              let values, branches = List.split (
                 List.concat
                   (List.map
                      (fun (vl, st) -> List.map (fun v -> (v, st)) vl)
                      stgts)
-               )
+              )
               in
               (* Expand the symbolic value *)
-              let (ctx_branches, ctx_otherwise), cc =
+              let (ctx_branches, ctx_otherwise), cc_int =
               expand_symbolic_int config meta sv
                 (S.mk_opt_place_from_op meta op ctx)
                 int_ty values ctx
               in
-              let resl, ccl = List.split (List.map (fun (ctx, branch) -> eval_statement config branch ctx) (List.combine ctx_branches branches))
+              let resll, cfl = List.split (List.map (fun (ctx, branch) -> eval_statement config branch ctx) (List.combine ctx_branches branches))
               in
               (* Expand the symbolic value and continue by evaluating the
                * proper branches *)
-              let stgts =
+(*               let stgts =
                 List.map
                   (fun (cv, tgt_st) -> (cv, eval_statement config tgt_st))
                   stgts
-              in
-              
-              let stgts, stl_cm_funl = List.split stgts in
+              in *)
               (* Translate the otherwise branch *)
-              let otherwise = eval_statement config otherwise ctx in
-              (* Expand and continue *) failwith ""
+              let ctx_otherwise, cc = eval_statement config otherwise ctx_otherwise in
+              (* Expand and continue *)
+              let rec apply_cf resll cfl el = 
+                match resll, cfl with
+                | (resl)::resll, cf::cfl -> 
+                  let cc_el, el = Collections.List.split_at el (List.length resl) in
+                  sanity_check __FILE__ __LINE__ (List.length el = List.length (List.flatten resll)) meta;
+                  let cc_el = cf (Some cc_el) in 
+                  cc_el::(apply_cf resll cfl el)
+                | [], [] -> [cc (Some el)]
+                | _, _ -> internal_error __FILE__ __LINE__ meta
+              in
+              (List.flatten resll) @ ctx_otherwise, (fun el -> match el with
+              | Some el -> 
+                let el = apply_cf resll cfl el in
+                let el, e_otherwise = Collections.List.split_at el (List.length el - 1) in
+                let el = List.map Option.get el in
+                (match e_otherwise with
+                | [Some e] -> cc_int (Some (el, e))
+                | _ -> None
+                )
+              | _ -> None
+                )
           | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
         in
         (* Compose *)
@@ -1311,10 +1330,21 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
               in
               (* Re-evaluate the switch - the value is not symbolic anymore,
                  which means we will go to the other branch *)
-              let ctx_resl, cc = (eval_switch config meta switch) ctx in
-              ctx_resl, (fun el -> 
-              match cf_expand el with
-              | Some e -> cc (Some [e])
+              let ctx_resl, cfl = List.split (List.map (fun ctx -> (eval_switch config meta switch) ctx) ctxl) in
+              let rec apply_cf resll cfl el = 
+                match resll, cfl with
+                | (resl)::resll, cf::cfl -> 
+                  let cc_el, el = Collections.List.split_at el (List.length resl) in
+                  sanity_check __FILE__ __LINE__ (List.length el = List.length (List.flatten resll)) meta;
+                  let cc_el = cf (Some cc_el) in 
+                  cc_el::(apply_cf resll cfl el)
+                | [], [] -> []
+                | _, _ -> internal_error __FILE__ __LINE__ meta
+              in
+              List.flatten ctx_resl, (fun el -> 
+              match el with
+              | Some el -> let el = List.map Option.get (apply_cf ctx_resl cfl el) in
+                 cf_expand (Some el)
               | None -> None
               )
           | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
@@ -1324,7 +1354,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : config) (meta : Meta.meta) (call : call) :
-    st_cm_fun =
+    stl_cm_fun =
   (* There are several cases:
      - this is a local function, in which case we execute its body
      - this is an assumed function, in which case there is a special treatment
@@ -1335,7 +1365,7 @@ and eval_function_call (config : config) (meta : Meta.meta) (call : call) :
   | SymbolicMode -> eval_function_call_symbolic config meta call
 
 and eval_function_call_concrete (config : config) (meta : Meta.meta)
-    (call : call) : st_cm_fun =
+    (call : call) : stl_cm_fun =
  fun ctx ->
   match call.func with
   | FnOpMove _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
@@ -1348,11 +1378,14 @@ and eval_function_call_concrete (config : config) (meta : Meta.meta)
            * by giving {!Unit} to the continuation, because we place us in the case
            * where we haven't panicked. Of course, the translation needs to take the
            * panic case into account... *)
-          eval_assumed_function_call_concrete config meta fid call (Unit) ctx
+          let ctx, cc = eval_assumed_function_call_concrete config meta fid call ctx in
+          [(ctx, Unit)], (fun el -> match el with
+          | Some [e] -> cc (Some e) 
+          | _ -> None)
       | TraitMethod _ -> craise __FILE__ __LINE__ meta "Unimplemented")
 
 and eval_function_call_symbolic (config : config) (meta : Meta.meta)
-    (call : call) : st_cm_fun =
+    (call : call) : stl_cm_fun =
   match call.func with
   | FnOpMove _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
   | FnOpRegular func -> (
@@ -1364,7 +1397,8 @@ and eval_function_call_symbolic (config : config) (meta : Meta.meta)
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
-    (fid : FunDeclId.id) (call : call) : st_cm_fun =
+    (fid : FunDeclId.id) (call : call) : stl_cm_fun =
+  fun ctx ->
   let args = call.args in
   let dest = call.dest in
   match call.func with
@@ -1374,7 +1408,6 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
       sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
-      fun cf ctx ->
         (* Retrieve the (correctly instantiated) body *)
         let def = ctx_lookup_fun_decl ctx fid in
         (* We can evaluate the function call only if it is not opaque *)
@@ -1400,12 +1433,14 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
         sanity_check __FILE__ __LINE__
           (List.length args = body.arg_count)
           body.meta;
-        let cc = eval_operands config body.meta args in
+        let vl, ctx, cc = eval_operands config body.meta args ctx in
 
         (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
          * of the operands evaluation from above to the functions afterwards, while
          * ignoring it in this function *)
-        let cc = comp_transmit cc push_frame in
+        let ctx, cc1 = push_frame ctx in
+        let cc = comp cc cc1 in 
+        (* let cc = comp_transmit cc push_frame in *)
 
         (* Compute the initial values for the local variables *)
         (* 1. Push the return value *)
@@ -1418,46 +1453,58 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
           Collections.List.split_at locals body.arg_count
         in
 
+        let ctx, cc1 = (push_var meta ret_var (mk_bottom meta ret_var.var_ty)) ctx
+        in
         let cc =
-          comp_transmit cc
-            (push_var meta ret_var (mk_bottom meta ret_var.var_ty))
+          comp cc cc1
         in
 
         (* 2. Push the input values *)
-        let cf_push_inputs cf args =
-          let inputs = List.combine input_locals args in
+        let ctx, cc1 =
+          let inputs = List.combine input_locals vl in
           (* Note that this function checks that the variables and their values
            * have the same type (this is important) *)
-          push_vars meta inputs cf
+          push_vars meta inputs ctx
         in
-        let cc = comp cc cf_push_inputs in
+        let cc = comp cc cc1 in
 
         (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
-        let cc = comp cc (push_uninitialized_vars meta locals) in
+        let ctx, cc1 = (push_uninitialized_vars meta locals) ctx in 
+        let cc = comp cc cc1 in
 
         (* Execute the function body *)
-        let cc = comp cc (eval_function_body config body_st) in
+        let ctx_resl, cf = (eval_function_body config body_st) ctx in
 
         (* Pop the stack frame and move the return value to its destination *)
-        let cf_finish cf res =
+        let ctx_res_cfl = List.map (fun (ctx, res) ->
           match res with
-          | Panic -> cf Panic
+          | Panic -> (ctx, Panic), fun e -> e
           | Return ->
               (* Pop the stack frame, retrieve the return value, move it to
                * its destination and continue *)
-              pop_frame_assign config meta dest (cf Unit)
+              let ctx, cc1 = pop_frame_assign config meta dest ctx in
+              (ctx, Unit), comp cc cc1
           | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
           | EndContinue _ ->
               craise __FILE__ __LINE__ meta "Unreachable"
+        ) ctx_resl
         in
-        let cc = comp cc cf_finish in
-
+        let ctx_resl, cfl = (List.split ctx_res_cfl) in  
+        let apply_cfl cfl el = 
+          (List.map Option.get 
+            (List.map2 (fun cc e -> 
+              cc (Some e)) cfl el))
+        in
         (* Continue *)
-        cc cf ctx
+        ctx_resl, (fun el -> match el with
+        | None -> None
+        | Some el -> cf (Some (apply_cfl cfl el))
+        )
+      
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
 and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
-    (call : call) : st_cm_fun =
+    (call : call) : stl_cm_fun =
  fun ctx ->
   let func, generics, trait_method_generics, def, regions_hierarchy, inst_sg =
     eval_transparent_function_call_symbolic_inst meta call ctx
@@ -1480,7 +1527,7 @@ and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.item_meta.meta func
     def.signature regions_hierarchy inst_sg generics trait_method_generics
-    call.args call.dest cf ctx
+    call.args call.dest ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -1498,7 +1545,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     (regions_hierarchy : region_var_groups) (inst_sg : inst_fun_sig)
     (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
-    (args : operand list) (dest : place) : st_cm_fun =
+    (args : operand list) (dest : place) : stl_cm_fun =
  fun ctx ->
   log#ldebug
     (lazy
@@ -1525,13 +1572,13 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let dest_place = Some (S.mk_mplace meta dest ctx) in
 
   (* Evaluate the input operands *)
-  let cc = eval_operands config meta args in
+  let vl, ctx, cc = eval_operands config meta args ctx in
 
   (* Generate the abstractions and insert them in the context *)
   let abs_ids = List.map (fun rg -> rg.id) inst_sg.regions_hierarchy in
-  let cf_call cf (args : typed_value list) : m_fun =
-   fun ctx ->
-    let args_with_rtypes = List.combine args inst_sg.inputs in
+  let ctx, cf_call (* cf (args : typed_value list) : m_fun *) =
+   (* fun ctx -> *)
+    let args_with_rtypes = List.combine vl inst_sg.inputs in
 
     (* Check the type of the input arguments *)
     cassert __FILE__ __LINE__
@@ -1548,7 +1595,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       (List.for_all
          (fun arg ->
            not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
-         args)
+         vl)
       meta;
 
     (* Initialize the abstractions and push them in the context.
@@ -1578,17 +1625,18 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     in
 
     (* Apply the continuation *)
-    let expr = cf ctx in
+    (* let expr = cf ctx in *)
 
     (* Synthesize the symbolic AST *)
-    S.synthesize_regular_function_call fid call_id ctx sg regions_hierarchy
-      abs_ids generics trait_method_generics args args_places ret_spc dest_place
-      expr
+    ctx, fun e -> S.synthesize_regular_function_call fid call_id ctx sg regions_hierarchy
+      abs_ids generics trait_method_generics vl args_places ret_spc dest_place
+      e
   in
   let cc = comp cc cf_call in
 
   (* Move the return value to its destination *)
-  let cc = comp cc (assign_to_place config meta ret_value dest) in
+  let ctx, cc1 = (assign_to_place config meta ret_value dest) ctx in
+  let cc = comp cc cc1 in
 
   (* End the abstractions which don't contain loans and don't have parent
    * abstractions.
@@ -1596,8 +1644,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * retry (because then we might end their children abstractions)
    *)
   let abs_ids = ref abs_ids in
-  let rec end_abs_with_no_loans cf : m_fun =
-   fun ctx ->
+  let rec end_abs_with_no_loans ctx cc =
+   (* fun ctx -> *)
     (* Find the abstractions which don't contain loans *)
     let no_loans_abs, with_loans_abs =
       List.partition
@@ -1618,34 +1666,40 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       abs_ids := with_loans_abs;
       (* End the abstractions which can be ended *)
       let no_loans_abs = AbstractionId.Set.of_list no_loans_abs in
-      let cc = InterpreterBorrows.end_abstractions config meta no_loans_abs in
+      let ctx, cc = InterpreterBorrows.end_abstractions config meta no_loans_abs ctx in
       (* Recursive call *)
-      let cc = comp cc end_abs_with_no_loans in
+      let ctx, cc1 = end_abs_with_no_loans ctx cc in
+      ctx, comp cc cc1
       (* Continue *)
-      cc cf ctx)
+      )
     else (* No abstractions to end: continue *)
-      cf ctx
+      ctx, cc
   in
   (* Try to end the abstractions with no loans if:
    * - the option is enabled
    * - the function returns unit
    * (see the documentation of {!config} for more information)
    *)
-  let cc =
+  let ctx, cc =
     if Config.return_unit_end_abs_with_no_loans && ty_is_unit inst_sg.output
-    then comp cc end_abs_with_no_loans
-    else cc
+      then
+      let ctx, cc1 = end_abs_with_no_loans ctx cc in
+      ctx, comp cc cc1
+    else ctx, cc
   in
 
   (* Continue - note that we do as if the function call has been successful,
    * by giving {!Unit} to the continuation, because we place us in the case
    * where we haven't panicked. Of course, the translation needs to take the
    * panic case into account... *)
-  cc (cf Unit) ctx
+  [(ctx, Unit)], (fun el -> match el with 
+  | Some [e] -> cc (Some e)
+  | _ -> None
+  )
 
 (** Evaluate a non-local function call in symbolic mode *)
 and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
-    (fid : assumed_fun_id) (call : call) (func : fn_ptr) : st_cm_fun =
+    (fid : assumed_fun_id) (call : call) (func : fn_ptr) : stl_cm_fun =
  fun ctx ->
   let generics = func.generics in
   let args = call.args in
@@ -1667,7 +1721,11 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
   | BoxFree ->
       (* Degenerate case: box_free - note that this is not really a function
        * call: no need to call a "synthesize_..." function *)
-      eval_box_free config meta generics args dest (cf Unit) ctx
+      let ctx, cc = eval_box_free config meta generics args dest ctx in
+      [(ctx, Unit)], (fun el -> match el with 
+      | Some [e] -> cc (Some e)
+      | _ -> None
+      )
   | _ ->
       (* "Normal" case: not box_free *)
       (* In symbolic mode, the behaviour of a function call is completely defined
@@ -1695,25 +1753,35 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
       (* Evaluate the function call *)
       eval_function_call_symbolic_from_inst_sig config meta
         (FunId (FAssumed fid)) sg regions_hierarchy inst_sig generics None args
-        dest cf ctx
+        dest ctx
 
 (** Evaluate a statement seen as a function body *)
-and eval_function_body (config : config) (body : statement) : st_cm_fun =
+and eval_function_body (config : config) (body : statement) : stl_cm_fun =
  fun ctx ->
   log#ldebug (lazy "eval_function_body:");
-  let cc = eval_statement config body in
-  let cf_finish cf res =
-    log#ldebug (lazy "eval_function_body: cf_finish");
-    (* Note that we *don't* check the result ({!Panic}, {!Return}, etc.): we
-     * delegate the check to the caller. *)
-    (* Expand the symbolic values if necessary - we need to do that before
-     * checking the invariants *)
-    let cc = greedy_expand_symbolic_values config body.meta in
-    (* Sanity check *)
-    let cc = comp_check_ctx cc (Invariants.check_invariants body.meta) in
-    (* Check if right meta *)
-    (* Continue *)
-    cc (cf res)
+  let ctx_resl, cc = eval_statement config body ctx in
+  let ctx_res_cfl = (List.map ( fun (ctx, res) ->
+      log#ldebug (lazy "eval_function_body: cf_finish");
+      (* Note that we *don't* check the result ({!Panic}, {!Return}, etc.): we
+      * delegate the check to the caller. *)
+      (* Expand the symbolic values if necessary - we need to do that before
+      * checking the invariants *)
+      let ctx, cc = greedy_expand_symbolic_values config body.meta ctx in
+      (* Sanity check *)
+      Invariants.check_invariants body.meta ctx;
+      (* Continue *)
+      (ctx, res), cc
+    ) ctx_resl)
+  in
+  let ctx_resl, cfl = (List.split ctx_res_cfl) in  
+  let apply_cfl cfl el = 
+    (List.map Option.get 
+      (List.map2 (fun cc e -> 
+        cc (Some e)) cfl el))
   in
   (* Compose and continue *)
-  comp cc cf_finish cf ctx
+  ctx_resl, (fun el -> match el with
+  | None -> None
+  | Some el -> cc (Some (apply_cfl cfl el))
+  )
+  

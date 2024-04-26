@@ -80,7 +80,7 @@ val compute_loop_entry_fixed_point :
   config ->
   Meta.meta ->
   loop_id ->
-  Cps.st_cm_fun ->
+  LlbcAst.statement ->
   eval_ctx ->
   eval_ctx * ids_sets * abs SymbolicAst.region_group_id_map
 

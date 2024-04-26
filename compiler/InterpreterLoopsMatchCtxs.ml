@@ -1500,7 +1500,7 @@ let ctxs_are_equivalent (meta : Meta.meta) (fixed_ids : ids_sets)
 
 let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
- fun cf tgt_ctx ->
+ fun tgt_ctx ->
   (* Debug *)
   log#ldebug
     (lazy
@@ -1511,7 +1511,7 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
       ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx));
   (* End the loans which lead to mismatches when joining *)
   let rec cf_reorganize_join_tgt : cm_fun =
-   fun cf tgt_ctx ->
+   fun tgt_ctx ->
     (* Collect fixed values in the source and target contexts: end the loans in the
        source context which don't appear in the target context *)
     let filt_src_env, _, _ = ctx_split_fixed_new meta fixed_ids src_ctx in
@@ -1625,27 +1625,30 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
           ^ "\n- tgt_ctx: "
           ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx));
 
-      cf tgt_ctx
+      (tgt_ctx, fun e -> e)
     with ValueMatchFailure e ->
       (* Exception: end the corresponding borrows, and continue *)
-      let cc =
+      let ctx, cc =
         match e with
-        | LoanInRight bid -> InterpreterBorrows.end_borrow config meta bid
-        | LoansInRight bids -> InterpreterBorrows.end_borrows config meta bids
+        | LoanInRight bid ->
+            InterpreterBorrows.end_borrow config meta bid tgt_ctx
+        | LoansInRight bids ->
+            InterpreterBorrows.end_borrows config meta bids tgt_ctx
         | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
             craise __FILE__ __LINE__ meta "Unexpected"
       in
-      comp cc cf_reorganize_join_tgt cf tgt_ctx
+      let ctx, cc1 = cf_reorganize_join_tgt ctx in
+      (ctx, comp cc cc1)
   in
   (* Apply the reorganization *)
-  cf_reorganize_join_tgt cf tgt_ctx
+  cf_reorganize_join_tgt tgt_ctx
 
 let match_ctx_with_target (config : config) (meta : Meta.meta)
     (loop_id : LoopId.id) (is_loop_entry : bool)
     (fp_bl_maps : borrow_loan_corresp)
     (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
     (src_ctx : eval_ctx) : st_cm_fun =
- fun cf tgt_ctx ->
+ fun tgt_ctx ->
   (* Debug *)
   log#ldebug
     (lazy
@@ -1679,8 +1682,7 @@ let match_ctx_with_target (config : config) (meta : Meta.meta)
      We should rely on a more primitive and safer function
      [add_identity_abs] to add the identity abstractions one by one.
   *)
-  let cf_introduce_loop_fp_abs : m_fun =
-   fun tgt_ctx ->
+  let cf_introduce_loop_fp_abs tgt_ctx =
     (* Match the source and target contexts *)
     log#ldebug
       (lazy
@@ -1945,7 +1947,9 @@ let match_ctx_with_target (config : config) (meta : Meta.meta)
       BorrowId.Set.of_list
         (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
     in
-    let cc = InterpreterBorrows.end_borrows config meta new_borrows in
+    let tgt_ctx, cc =
+      InterpreterBorrows.end_borrows config meta new_borrows tgt_ctx
+    in
 
     (* Compute the loop input values *)
     let input_values =
@@ -1957,12 +1961,14 @@ let match_ctx_with_target (config : config) (meta : Meta.meta)
     in
 
     (* Continue *)
-    cc
-      (cf
-         (if is_loop_entry then EndEnterLoop (loop_id, input_values)
-          else EndContinue (loop_id, input_values)))
-      tgt_ctx
+    let res =
+      if is_loop_entry then EndEnterLoop (loop_id, input_values)
+      else EndContinue (loop_id, input_values)
+    in
+    ((tgt_ctx, res), cc)
   in
 
   (* Compose and continue *)
-  cf_reorganize_join_tgt cf_introduce_loop_fp_abs tgt_ctx
+  let ctx, cc = cf_reorganize_join_tgt tgt_ctx in
+  let (ctx, res), cc1 = cf_introduce_loop_fp_abs ctx in
+  ((ctx, res), comp cc cc1)

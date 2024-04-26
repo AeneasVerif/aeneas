@@ -83,10 +83,8 @@ type stl_cm_fun =
   (eval_ctx * statement_eval_res) list
   * (SymbolicAst.expression list option -> eval_result)
 
-type st_cm_fun = 
-  eval_ctx ->
-  (eval_ctx * statement_eval_res)
-  * (eval_result -> eval_result)
+type st_cm_fun =
+  eval_ctx -> (eval_ctx * statement_eval_res) * (eval_result -> eval_result)
 
 (** Compose continuations that we use to compute execution traces *)
 let comp (f : eval_result -> eval_result) (g : eval_result -> eval_result) :
@@ -210,15 +208,15 @@ let fold_left_list_apply_continuation (f : 'a -> 'c -> 'd * 'c * ('e -> 'e))
   in
   eval_list inputs ctx
 
-let opt_list_to_list_opt (len : int) (el : ('a option) list) : 'a list option = 
-  let expr_list = List.rev (List.fold_left (fun acc a -> match a with 
-    | Some b -> b::acc
-    | None -> []
-  ) [] el)
-  in 
+let opt_list_to_list_opt (len : int) (el : 'a option list) : 'a list option =
+  let expr_list =
+    List.rev
+      (List.fold_left
+         (fun acc a -> match a with Some b -> b :: acc | None -> [])
+         [] el)
+  in
   let _ = assert (List.length expr_list = len) in
-  if Option.is_none (List.hd expr_list) then None
-  else Some expr_list
+  if Option.is_none (List.hd expr_list) then None else Some expr_list
 
 (*
 (** Unit test/example for {!fold_left_list_apply_continuation} *)
@@ -263,14 +261,15 @@ let () =
 (** Sometimes, we want to compose a function with a continuation which checks
     its computed value and its updated context, before transmitting them
  *)*)
-let comp_check_value (f : (* ('v -> 'ctx -> 'a) ->  *)'b -> 'b)
-    (g : 'v -> 'ctx -> unit) (v : 'v) (ctx : 'ctx) : ((* 'v ->  *)'b -> 'b) -> 'b -> 'b =
+let comp_check_value (f : (* ('v -> 'ctx -> 'a) ->  *) 'b -> 'b)
+    (g : 'v -> 'ctx -> unit) (v : 'v) (ctx : 'ctx) :
+    ((* 'v ->  *) 'b -> 'b) -> 'b -> 'b =
  fun cf ->
   let _ = g v ctx in
   comp f cf
-  (* f (fun v ctx ->
-      g v ctx;
-      cf v ctx) *)
+(* f (fun v ctx ->
+    g v ctx;
+    cf v ctx) *)
 
 (*
 (** This case is similar to {!comp_check_value}, but even simpler (we only check

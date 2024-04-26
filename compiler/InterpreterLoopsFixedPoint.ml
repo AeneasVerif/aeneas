@@ -12,6 +12,7 @@ open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsJoinCtxs
 open Errors
+open InterpreterStatements
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
@@ -25,7 +26,7 @@ exception FoundAbsId of AbstractionId.id
 *)
 let rec end_useless_fresh_borrows_and_abs (config : config) (meta : Meta.meta)
     (fixed_ids : ids_sets) : cm_fun =
- fun cf ctx ->
+ fun ctx ->
   let rec explore_env (env : env) : unit =
     match env with
     | [] -> () (* Done *)
@@ -66,24 +67,26 @@ let rec end_useless_fresh_borrows_and_abs (config : config) (meta : Meta.meta)
             explore_env env)
     | _ :: env -> explore_env env
   in
-  let rec_call = end_useless_fresh_borrows_and_abs config meta fixed_ids in
+  let ctx, rec_call =
+    end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
+  in
   try
     (* Explore the environment *)
     explore_env ctx.env;
     (* No exception raised: call the continuation *)
-    cf ctx
+    (ctx, rec_call)
   with
   | FoundAbsId abs_id ->
-      let cc = end_abstraction config meta abs_id in
-      comp cc rec_call cf ctx
+      let ctx, cc = end_abstraction config meta abs_id ctx in
+      (ctx, comp cc rec_call)
   | FoundBorrowId bid ->
-      let cc = end_borrow config meta bid in
-      comp cc rec_call cf ctx
+      let ctx, cc = end_borrow config meta bid ctx in
+      (ctx, comp cc rec_call)
 
 (* Explore the fresh anonymous values and replace all the values which are not
    borrows/loans with ⊥ *)
 let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
- fun cf ctx ->
+ fun ctx ->
   let rec explore_env (env : env) : env =
     match env with
     | [] -> [] (* Done *)
@@ -113,7 +116,7 @@ let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
     | x :: env -> x :: explore_env env
   in
   let ctx = { ctx with env = explore_env ctx.env } in
-  cf ctx
+  (ctx, fun e -> e)
 
 (* Repeat until we can't simplify the context anymore:
    - explore the fresh anonymous values and replace all the values which are not
@@ -123,11 +126,10 @@ let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
 *)
 let cleanup_fresh_values_and_abs (config : config) (meta : Meta.meta)
     (fixed_ids : ids_sets) : cm_fun =
- fun cf ctx ->
-  comp
-    (end_useless_fresh_borrows_and_abs config meta fixed_ids)
-    (cleanup_fresh_values fixed_ids)
-    cf ctx
+ fun ctx ->
+  let ctx, cc = (end_useless_fresh_borrows_and_abs config meta fixed_ids) ctx in
+  let ctx, cc1 = (cleanup_fresh_values fixed_ids) ctx in
+  (ctx, comp cc cc1)
 
 (** Reorder the loans and borrows in the fresh abstractions.
 
@@ -189,7 +191,7 @@ let reorder_loans_borrows_in_fresh_abs (meta : Meta.meta)
 
 let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) :
     cm_fun =
- fun cf ctx0 ->
+ fun ctx0 ->
   let ctx = ctx0 in
   (* Compute the set of borrows which appear in the abstractions, so that
      we can filter the borrows that we reborrow.
@@ -427,26 +429,29 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) :
   let _, new_ctx_ids_map = compute_ctx_ids ctx in
 
   (* Synthesize *)
-  match cf ctx with
-  | None -> None
-  | Some e ->
-      (* Add the let-bindings which introduce the fresh symbolic values *)
-      Some
-        (List.fold_left
-           (fun e (sid, v) ->
-             let v = mk_typed_value_from_symbolic_value v in
-             let sv =
-               SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values
-             in
-             SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
-           e !sid_subst)
+  ( ctx,
+    fun e ->
+      match e with
+      | None -> None
+      | Some e ->
+          (* Add the let-bindings which introduce the fresh symbolic values *)
+          Some
+            (List.fold_left
+               (fun e (sid, v) ->
+                 let v = mk_typed_value_from_symbolic_value v in
+                 let sv =
+                   SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values
+                 in
+                 SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
+               e !sid_subst) )
 
 let prepare_ashared_loans_no_synth (meta : Meta.meta) (loop_id : LoopId.id)
     (ctx : eval_ctx) : eval_ctx =
-  get_cf_ctx_no_synth meta (prepare_ashared_loans meta (Some loop_id)) ctx
+  let ctx, _ = (prepare_ashared_loans meta (Some loop_id)) ctx in
+  ctx
 
 let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
-    (loop_id : LoopId.id) (eval_loop_body : st_cm_fun) (ctx0 : eval_ctx) :
+    (loop_id : LoopId.id) (st : LlbcAst.statement) (ctx0 : eval_ctx) :
     eval_ctx * ids_sets * abs RegionGroupId.Map.t =
   (* The continuation for when we exit the loop - we register the
      environments upon loop *reentry*, and synthesize nothing by
@@ -474,11 +479,10 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
       ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx
       ^ "\n\n"));
 
-  let cf_exit_loop_body (res : statement_eval_res) : m_fun =
-   fun ctx ->
+  let cf_exit_loop_body (res : statement_eval_res) ctx =
     log#ldebug (lazy "compute_loop_entry_fixed_point: cf_exit_loop_body");
     match res with
-    | Return | Panic | Break _ -> None
+    | Return | Panic | Break _ -> ()
     | Unit ->
         (* See the comment in {!eval_loop} *)
         craise __FILE__ __LINE__ meta "Unreachable"
@@ -486,8 +490,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
         (* For now we don't support continues to outer loops *)
         cassert __FILE__ __LINE__ (i = 0) meta
           "Continues to outer loops not supported yet";
-        register_ctx ctx;
-        None
+        register_ctx ctx
     | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* We don't support nested loops for now *)
         craise __FILE__ __LINE__ meta "Nested loops are not supported for now"
@@ -559,7 +562,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
     ctxs := [];
     ctx2
   in
-  log#ldebug (lazy "compute_loop_entry_fixed_point: after join_ctxs");
+  log#ldebug (lazy "c ompute_loop_entry_fixed_point: after join_ctxs");
 
   (* Compute the set of fixed ids - for the symbolic ids, we compute the
      intersection of ids between the original environment and the list
@@ -597,9 +600,10 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
        ^ " iterations")
     else
       (* Evaluate the loop body to register the different contexts upon reentry *)
-      let _ = eval_loop_body cf_exit_loop_body ctx in
+      let ctx_resl, _ = eval_statement config st (* cf_exit_loop_body *) ctx in
       (* Compute the join between the original contexts and the contexts computed
          upon reentry *)
+      List.iter (fun (ctx, res) -> cf_exit_loop_body res ctx) ctx_resl;
       let ctx1 = join_ctxs ctx in
 
       (* Debug *)
@@ -670,13 +674,13 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
           let aids = AbstractionId.Set.union aids aids' in
           fp_ended_aids := RegionGroupId.Map.add rg_id aids !fp_ended_aids
     in
-    let cf_loop : st_m_fun =
-     fun res ctx ->
+    let cf_loop res ctx =
       log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop");
       match res with
       | Continue _ | Panic ->
           (* We don't want to generate anything *)
-          None
+          (* None *)
+          ()
       | Break _ ->
           (* We enforce that we can't get there: see {!PrePasses.remove_loop_breaks} *)
           craise __FILE__ __LINE__ meta "Unreachable"
@@ -692,36 +696,35 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
            * indeed the correct one, I think it is sound to under-approximate here
            * (and it shouldn't make any difference).
            *)
-          let _ =
-            List.iter
-              (fun rg_id ->
-                (* Lookup the input abstraction - we use the fact that the
-                   abstractions should have been introduced in a specific
-                   order (and we check that it is indeed the case) *)
-                let abs_id =
-                  AbstractionId.of_int (RegionGroupId.to_int rg_id)
-                in
-                (* By default, the [SynthInput] abs can't end *)
-                let ctx = ctx_set_abs_can_end meta ctx abs_id true in
-                sanity_check __FILE__ __LINE__
-                  (let abs = ctx_lookup_abs ctx abs_id in
-                   abs.kind = SynthInput rg_id)
-                  meta;
-                (* End this abstraction *)
-                let ctx =
-                  InterpreterBorrows.end_abstraction_no_synth config meta abs_id
-                    ctx
-                in
-                (* Explore the context, and check which abstractions are not there anymore *)
-                let ids, _ = compute_ctx_ids ctx in
-                let ended_ids = AbstractionId.Set.diff !fp_aids ids.aids in
-                add_ended_aids rg_id ended_ids)
-              ctx.region_groups
-          in
-          (* We don't want to generate anything *)
-          None
+          (* let _ = *)
+          List.iter
+            (fun rg_id ->
+              (* Lookup the input abstraction - we use the fact that the
+                 abstractions should have been introduced in a specific
+                 order (and we check that it is indeed the case) *)
+              let abs_id = AbstractionId.of_int (RegionGroupId.to_int rg_id) in
+              (* By default, the [SynthInput] abs can't end *)
+              let ctx = ctx_set_abs_can_end meta ctx abs_id true in
+              sanity_check __FILE__ __LINE__
+                (let abs = ctx_lookup_abs ctx abs_id in
+                 abs.kind = SynthInput rg_id)
+                meta;
+              (* End this abstraction *)
+              let ctx =
+                InterpreterBorrows.end_abstraction_no_synth config meta abs_id
+                  ctx
+              in
+              (* Explore the context, and check which abstractions are not there anymore *)
+              let ids, _ = compute_ctx_ids ctx in
+              let ended_ids = AbstractionId.Set.diff !fp_aids ids.aids in
+              add_ended_aids rg_id ended_ids)
+            ctx.region_groups
+      (* in
+         (* We don't want to generate anything *)
+         None *)
     in
-    let _ = eval_loop_body cf_loop fp in
+    let ctx_resl, _ = eval_statement config st (* cf_loop *) fp in
+    List.iter (fun (ctx, res) -> cf_loop res ctx) ctx_resl;
 
     (* Check that the sets of abstractions we need to end per region group are pairwise
      * disjoint *)

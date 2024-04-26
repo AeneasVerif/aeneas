@@ -10,14 +10,15 @@ open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsFixedPoint
 open Errors
+open InterpreterStatements
 
 (** The local logger *)
 let log = Logging.loops_log
 
 (** Evaluate a loop in concrete mode *)
-let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : st_cm_fun) :
-    st_cm_fun =
- fun cf ctx ->
+let eval_loop_concrete (config : config) (meta : Meta.meta)
+    (st : LlbcAst.statement) : stl_cm_fun =
+ fun ctx ->
   (* We need a loop id for the [LoopReturn]. In practice it won't be used
      (it is useful only for the symbolic execution *)
   let loop_id = fresh_loop_id () in
@@ -31,21 +32,66 @@ let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : st_cm_fun) :
      continue, we might have to reevaluate the current loop body with the
      new context (and repeat this an indefinite number of times).
   *)
-  let rec reeval_loop_body (res : statement_eval_res) : m_fun =
+  let rec apply_cf resll cfl el =
+    match (resll, cfl) with
+    | resl :: resll, cf :: cfl ->
+        let cc_el, el = Collections.List.split_at el (List.length resl) in
+        sanity_check __FILE__ __LINE__
+          (List.length el = List.length (List.flatten resll))
+          meta;
+        let cc_el = cf (Some cc_el) in
+        cc_el :: apply_cf resll cfl el
+    | [], [] -> []
+    | _, _ -> internal_error __FILE__ __LINE__ meta
+  in
+  let rec reeval_loop_body (ctx : eval_ctx) (res : statement_eval_res) =
     log#ldebug (lazy "eval_loop_concrete: reeval_loop_body");
     match res with
-    | Return -> cf (LoopReturn loop_id)
-    | Panic -> cf Panic
-    | Break i ->
+    | Return ->
+        ( [ (ctx, LoopReturn loop_id) ],
+          fun el ->
+            match el with
+            | Some [ e ] -> Some e
+            | None -> None
+            | _ -> internal_error __FILE__ __LINE__ st.meta )
+    | Panic ->
+        ( [ (ctx, Panic) ],
+          fun el ->
+            match el with
+            | Some [ e ] -> Some e
+            | None -> None
+            | _ -> internal_error __FILE__ __LINE__ st.meta )
+    | Break i -> (
         (* Break out of the loop by calling the continuation *)
         let res = if i = 0 then Unit else Break (i - 1) in
-        cf res
-    | Continue 0 ->
+        ( [ (ctx, res) ],
+          fun el ->
+            match el with
+            | Some [ e ] -> Some e
+            | None -> None
+            | _ -> internal_error __FILE__ __LINE__ st.meta ))
+    | Continue 0 -> (
         (* Re-evaluate the loop body *)
-        eval_loop_body reeval_loop_body
+        let ctx_resl, cc = eval_statement config st ctx in
+        let ctx_res_cfl =
+          List.map (fun (ctx, res) -> reeval_loop_body ctx res) ctx_resl
+        in
+        let ctx_resl, cfl = List.split ctx_res_cfl in
+        ( List.flatten ctx_resl,
+          fun el ->
+            match el with
+            | Some el ->
+                let el = List.map Option.get (apply_cf ctx_resl cfl el) in
+                cc (Some el)
+            | None -> None ))
     | Continue i ->
         (* Continue to an outer loop *)
-        cf (Continue (i - 1))
+        ( [ (ctx, Continue (i - 1)) ],
+          fun el ->
+            match el with
+            | Some [ e ] -> Some e
+            | None -> None
+            | _ -> internal_error __FILE__ __LINE__ st.meta )
     | Unit ->
         (* We can't get there.
          * Note that if we decide not to fail here but rather do
@@ -61,12 +107,23 @@ let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : st_cm_fun) :
   in
 
   (* Apply *)
-  eval_loop_body reeval_loop_body ctx
+  let ctx_resl, cc = eval_statement config st ctx in
+  let ctx_res_cfl =
+    List.map (fun (ctx, res) -> reeval_loop_body ctx res) ctx_resl
+  in
+  let ctx_resl, cfl = List.split ctx_res_cfl in
+  ( List.flatten ctx_resl,
+    fun el ->
+      match el with
+      | Some el ->
+          let el = List.map Option.get (apply_cf ctx_resl cfl el) in
+          cc (Some el)
+      | None -> None )
 
 (** Evaluate a loop in symbolic mode *)
-let eval_loop_symbolic (config : config) (meta : meta)
-    (eval_loop_body : st_cm_fun) : st_cm_fun =
- fun cf ctx ->
+let eval_loop_symbolic (config : config) (meta : meta) (st : LlbcAst.statement)
+    : stl_cm_fun =
+ fun ctx ->
   (* Debug *)
   log#ldebug
     (lazy
@@ -79,7 +136,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
 
   (* Compute the fixed point at the loop entrance *)
   let fp_ctx, fixed_ids, rg_to_abs =
-    compute_loop_entry_fixed_point config meta loop_id eval_loop_body ctx
+    compute_loop_entry_fixed_point config meta loop_id st ctx
   in
 
   (* Debug *)
@@ -102,7 +159,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
   *)
   (* First, preemptively end borrows/move values by matching the current
      context with the target context *)
-  let cf_prepare_ctx cf ctx =
+  let ctx, cf_prepare_ctx =
     log#ldebug
       (lazy
         ("eval_loop_symbolic: about to reorganize the original context to \
@@ -110,11 +167,11 @@ let eval_loop_symbolic (config : config) (meta : meta)
           - src ctx (fixed-point ctx):\n" ^ eval_ctx_to_string fp_ctx
        ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
 
-    prepare_match_ctx_with_target config meta loop_id fixed_ids fp_ctx cf ctx
+    prepare_match_ctx_with_target config meta loop_id fixed_ids fp_ctx ctx
   in
 
   (* Actually match *)
-  let cf_match_ctx cf ctx =
+  let ctx_resl, cf_match_ctx (* cf ctx *) =
     log#ldebug
       (lazy
         ("eval_loop_symbolic: about to compute the id correspondance between \
@@ -134,9 +191,12 @@ let eval_loop_symbolic (config : config) (meta : meta)
         ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
         ^ "\n\n-tgt ctx (original context):\n"
         ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-    let end_expr : SymbolicAst.expression option =
+    (* let end_expr : SymbolicAst.expression option = *)
+    let (ctx, res), end_expr =
       match_ctx_with_target config meta loop_id true fp_bl_corresp
-        fp_input_svalues fixed_ids fp_ctx cf ctx
+        fp_input_svalues fixed_ids fp_ctx ctx
+      (* in
+         (cc (cf res ctx)) *)
     in
     log#ldebug
       (lazy
@@ -146,18 +206,17 @@ let eval_loop_symbolic (config : config) (meta : meta)
     (* Synthesize the loop body by evaluating it, with the continuation for
        after the loop starting at the *fixed point*, but with a special
        treatment for the [Break] and [Continue] cases *)
-    let cf_loop : st_m_fun =
-     fun res ctx ->
+    let (ctx, res), cf_loop =
       log#ldebug (lazy "eval_loop_symbolic: cf_loop");
       match res with
       | Return ->
           (* We replace the [Return] with a [LoopReturn] *)
-          cf (LoopReturn loop_id) ctx
-      | Panic -> cf res ctx
+          ((ctx, LoopReturn loop_id), fun e -> e)
+      | Panic -> ((ctx, res), fun e -> e)
       | Break i ->
           (* Break out of the loop by calling the continuation *)
           let res = if i = 0 then Unit else Break (i - 1) in
-          cf res ctx
+          ((ctx, res), fun e -> e)
       | Continue i ->
           (* We don't support nested loops for now *)
           cassert __FILE__ __LINE__ (i = 0) meta
@@ -170,19 +229,19 @@ let eval_loop_symbolic (config : config) (meta : meta)
               ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
               ^ "\n\n-tgt ctx (ctx at continue):\n"
               ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-          let cc =
+          let (ctx, res), cc =
             match_ctx_with_target config meta loop_id false fp_bl_corresp
-              fp_input_svalues fixed_ids fp_ctx
+              fp_input_svalues fixed_ids fp_ctx ctx
           in
-          cc cf ctx
+          ((ctx, res), cc)
       | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
           (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
              For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
           *)
           craise __FILE__ __LINE__ meta "Unreachable"
     in
-    let loop_expr = eval_loop_body cf_loop fp_ctx in
-
+    let ctx_resl, loop_expr = eval_statement config st fp_ctx in
+    (*     let loop_expr = cc (Some (List.map Option.get (List.map (fun (ctx, res) -> cf_loop res ctx) ctx_resl))) in *)
     log#ldebug
       (lazy
         ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
@@ -263,21 +322,26 @@ let eval_loop_symbolic (config : config) (meta : meta)
     in
 
     (* Put together *)
-    S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back end_expr
-      loop_expr meta
+    ( ctx_resl @ [ (ctx, res) ],
+      fun el ->
+        let e = cf_loop (loop_expr el) in
+        S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back
+          (end_expr e) e meta )
   in
   (* Compose *)
-  comp cf_prepare_ctx cf_match_ctx cf ctx
+  (ctx_resl, fun el -> cf_prepare_ctx (cf_match_ctx el))
 
-let eval_loop (config : config) (meta : meta) (eval_loop_body : st_cm_fun) :
-    st_cm_fun =
- fun cf ctx ->
+let eval_loop (config : config) (meta : meta)
+    (eval_loop_body : LlbcAst.statement) : stl_cm_fun =
+ fun ctx ->
   match config.mode with
-  | ConcreteMode -> eval_loop_concrete meta eval_loop_body cf ctx
+  | ConcreteMode -> eval_loop_concrete config meta eval_loop_body ctx
   | SymbolicMode ->
       (* Simplify the context by ending the unnecessary borrows/loans and getting
          rid of the useless symbolic values (which are in anonymous variables) *)
-      let cc = cleanup_fresh_values_and_abs config meta empty_ids_set in
+      let ctx, cc =
+        cleanup_fresh_values_and_abs config meta empty_ids_set ctx
+      in
 
       (* We want to make sure the loop will *not* manipulate shared avalues
          containing themselves shared loans (i.e., nested shared loans in
@@ -297,5 +361,7 @@ let eval_loop (config : config) (meta : meta) (eval_loop_body : st_cm_fun) :
          introduce *fixed* abstractions, and again later to introduce
          *non-fixed* abstractions.
       *)
-      let cc = comp cc (prepare_ashared_loans meta None) in
-      comp cc (eval_loop_symbolic config meta eval_loop_body) cf ctx
+      let ctx, cc1 = (prepare_ashared_loans meta None) ctx in
+      let cc = comp cc cc1 in
+      let ctx_resl, ccl = (eval_loop_symbolic config meta eval_loop_body) ctx in
+      (ctx_resl, fun el -> (comp cc cc1) (ccl el))

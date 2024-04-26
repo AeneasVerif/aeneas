@@ -1515,16 +1515,20 @@ let end_abstraction config meta = end_abstraction_aux config meta []
 let end_abstractions config meta = end_abstractions_aux config meta []
 
 let end_borrow_no_synth config meta id ctx =
-  let ctx, _ = end_borrow config meta id ctx in ctx
+  let ctx, _ = end_borrow config meta id ctx in
+  ctx
 
 let end_borrows_no_synth config meta ids ctx =
-  let ctx, _ = end_borrows config meta ids ctx in ctx
+  let ctx, _ = end_borrows config meta ids ctx in
+  ctx
 
 let end_abstraction_no_synth config meta id ctx =
-  let ctx, _ = end_abstraction config meta id ctx in ctx
+  let ctx, _ = end_abstraction config meta id ctx in
+  ctx
 
 let end_abstractions_no_synth config meta ids ctx =
-  let ctx, _ = end_abstractions config meta ids ctx in ctx
+  let ctx, _ = end_abstractions config meta ids ctx in
+  ctx
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
@@ -1645,7 +1649,7 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
           let ctx, cc1 = (promote_reserved_mut_borrow config meta l) ctx in
           let cc = comp cc cc1 in
           (* Continue *)
-          ctx, cc
+          (ctx, cc)
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
@@ -1672,11 +1676,9 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
              {!promote_shared_loan_to_mut_loan}
           *)
           let ctx, cc1 = replace_reserved_borrow_with_mut_borrow meta l v ctx in
-          let cc =
-            comp cc cc1
-          in
+          let cc = comp cc cc1 in
           (* Continue *)
-          ctx, cc)
+          (ctx, cc))
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)

@@ -307,7 +307,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in
-  let cf_pop_frame = pop_frame config fdef.item_meta.meta pop_return_value in
+  let v, ctx, cf_pop_frame =
+    pop_frame config fdef.item_meta.meta pop_return_value ctx
+  in
 
   (* We need to find the parents regions/abstractions of the region we
    * will end - this will allow us to, first, mark the other return
@@ -469,22 +471,25 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       match current_abs_id with None -> [] | Some id -> [ id ]
     in
     let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
-    let cf_end_target_abs cf =
+    let cf_end_target_abs ctx =
       List.fold_left
-        (fun cf id -> end_abstraction config fdef.item_meta.meta id cf)
-        cf target_abs_ids
+        (fun (ctx, cf) id ->
+          let ctx, cc = end_abstraction config fdef.item_meta.meta id ctx in
+          (ctx, comp cc cf))
+        (ctx, fun e -> e)
+        target_abs_ids
     in
     (* Generate the Return node *)
-    let cf_return : m_fun =
-     fun ctx ->
+    let cf_return ctx =
       match loop_id with
       | None -> Some (SA.Return (ctx, None))
       | Some loop_id -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
     in
     (* Apply *)
-    cf_end_target_abs cf_return ctx
+    let ctx, cc = cf_end_target_abs ctx in
+    cc (cf_return ctx)
   in
-  cf_pop_frame cf_consume_ret ctx
+  cf_pop_frame (cf_consume_ret v ctx)
 
 (** Evaluate a function with the symbolic interpreter.
 
@@ -537,15 +542,13 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
           let fwd_e =
             (* Pop the frame and retrieve the returned value at the same time*)
             let pop_return_value = true in
-            let cf_pop =
-              pop_frame config fdef.item_meta.meta pop_return_value
+            let v, ctx, cf_pop =
+              pop_frame config fdef.item_meta.meta pop_return_value ctx
             in
             (* Generate the Return node *)
-            let cf_return ret_value : m_fun =
-             fun ctx -> Some (SA.Return (ctx, ret_value))
-            in
+            let cf_return ret_value ctx = Some (SA.Return (ctx, ret_value)) in
             (* Apply *)
-            cf_pop cf_return ctx
+            cf_pop (cf_return v ctx)
           in
           let fwd_e = Option.get fwd_e in
           (* Backward translation: introduce "return"
@@ -589,15 +592,15 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
             (* Pop the frame - there is no returned value to pop: in the
                translation we will simply call the loop function *)
             let pop_return_value = false in
-            let cf_pop =
-              pop_frame config fdef.item_meta.meta pop_return_value
+            let v, ctx, cf_pop =
+              pop_frame config fdef.item_meta.meta pop_return_value ctx
             in
             (* Generate the Return node *)
-            let cf_return _ret_value : m_fun =
-             fun _ctx -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
+            let cf_return _ret_value _ctx =
+              Some (SA.ReturnWithLoop (loop_id, inside_loop))
             in
             (* Apply *)
-            cf_pop cf_return ctx
+            cf_pop (cf_return v ctx)
           in
           let fwd_e = Option.get fwd_e in
           (* Backward translation: introduce "return"
@@ -631,10 +634,17 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
 
   (* Evaluate the function *)
   let symbolic =
-    try eval_function_body config (Option.get fdef.body).body cf_finish ctx
+    try
+      let ctx_resl, cc =
+        eval_function_body config (Option.get fdef.body).body ctx
+      in
+      let el =
+        List.map Option.get
+          (List.map (fun (ctx, res) -> cf_finish res ctx) ctx_resl)
+      in
+      cc (Some el)
     with CFailure (meta, msg) -> Some (Error (meta, msg))
   in
-
   (* Return *)
   (input_svs, symbolic)
 
@@ -676,7 +686,7 @@ module Test = struct
           (* Ok: drop the local variables and finish *)
           let pop_return_value = true in
           pop_frame config fdef.item_meta.meta pop_return_value
-            (fun _ _ -> None)
+            (* (fun _ _ -> None) *)
             ctx
       | _ ->
           craise __FILE__ __LINE__ fdef.item_meta.meta
@@ -685,9 +695,11 @@ module Test = struct
                 (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
                 fdef.name)
     in
-
     (* Evaluate the function *)
-    let _ = eval_function_body config body.body cf_check ctx in
+    let ctx_resl, (* cc *) _ = eval_function_body config body.body ctx in
+    let (* ty_st_cm_funl *) _ =
+      List.map (fun (ctx, res) -> cf_check res ctx) ctx_resl
+    in
     ()
 
   (** Small helper: return true if the function is a *transparent* unit function
