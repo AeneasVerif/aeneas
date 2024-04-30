@@ -14,7 +14,7 @@
   # Remark: keep the list of outputs in sync with the list of inputs above
   # (see above remark)
   outputs = { self, charon, flake-utils, nixpkgs, hacl-nix, flake-compat }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
+    flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
         ocamlPackages = pkgs.ocamlPackages;
