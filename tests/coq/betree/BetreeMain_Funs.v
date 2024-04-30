@@ -827,7 +827,7 @@ Definition betree_BeTree_lookup
 .
 
 (** [betree_main::main]:
-    Source: 'src/betree_main.rs', lines 5:0-5:9 *)
+    Source: 'src/main.rs', lines 4:0-4:9 *)
 Definition main : result unit :=
   Ok tt.
 

@@ -94,7 +94,7 @@ test: build-dev test-all
 test-all: test-no_nested_borrows test-paper \
 	test-hashmap test-hashmap_main \
 	test-external test-constants \
-	testp-polonius_list testp-betree_main \
+	test-polonius_list testp-betree_main \
 	ctest-testp-betree_main \
 	test-loops \
 	test-arrays test-traits test-bitwise test-demo
@@ -183,14 +183,14 @@ tcoq-hashmap_main: OPTIONS += -use-fuel
 tlean-hashmap_main: SUBDIR :=
 thol4-hashmap_main: OPTIONS +=
 
-testp-polonius_list: OPTIONS += -test-trans-units
-testp-polonius_list: SUBDIR := misc
-tfstarp-polonius_list: OPTIONS +=
-tcoqp-polonius_list: OPTIONS +=
-tleanp-polonius_list: SUBDIR :=
-tleanp-polonius_list: OPTIONS +=
-thol4p-polonius_list: SUBDIR := misc-polonius_list
-thol4p-polonius_list: OPTIONS +=
+test-polonius_list: OPTIONS += -test-trans-units
+test-polonius_list: SUBDIR := misc
+tfstar-polonius_list: OPTIONS +=
+tcoq-polonius_list: OPTIONS +=
+tlean-polonius_list: SUBDIR :=
+tlean-polonius_list: OPTIONS +=
+thol4-polonius_list: SUBDIR := misc-polonius_list
+thol4-polonius_list: OPTIONS +=
 
 test-constants: OPTIONS += -test-trans-units
 test-constants: SUBDIR := misc

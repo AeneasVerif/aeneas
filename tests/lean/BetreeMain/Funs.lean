@@ -702,7 +702,7 @@ def betree.BeTree.lookup
   Result.ok (st1, (o, { self with root := n }))
 
 /- [betree_main::main]:
-   Source: 'src/betree_main.rs', lines 5:0-5:9 -/
+   Source: 'src/main.rs', lines 4:0-4:9 -/
 def main : Result Unit :=
   Result.ok ()
 
