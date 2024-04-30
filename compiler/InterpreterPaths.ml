@@ -463,7 +463,7 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
  fun ctx ->
   (* Attempt to read the place: if it fails, update the environment and retry *)
   match try_read_place meta access p ctx with
-  | Ok _ -> ctx, fun e -> e
+  | Ok _ -> (ctx, fun e -> e)
   | Error err ->
       let ctx, cc =
         match err with
@@ -479,7 +479,8 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
             in
             let prefix = { p with projection = proj } in
             expand_symbolic_value_no_branching config meta sp
-              (Some (Synth.mk_mplace meta prefix ctx)) ctx
+              (Some (Synth.mk_mplace meta prefix ctx))
+              ctx
         | FailBottom (_, _, _) ->
             (* We can't expand {!Bottom} values while reading them *)
             craise __FILE__ __LINE__ meta "Found bottom while reading a place"
@@ -487,7 +488,7 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
             craise __FILE__ __LINE__ meta "Could not read a borrow"
       in
       let ctx, cc1 = (update_ctx_along_read_place config meta access p) ctx in
-      ctx, comp cc cc1
+      (ctx, comp cc cc1)
 
 let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
     (access : access_kind) (p : place) : cm_fun =
@@ -495,7 +496,7 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
   (* Attempt to *read* (yes, *read*: we check the access to the place, and
      write to it later) the place: if it fails, update the environment and retry *)
   match try_read_place meta access p ctx with
-  | Ok _ -> ctx, fun e -> e
+  | Ok _ -> (ctx, fun e -> e)
   | Error err ->
       (* Update the context *)
       let ctx, cc =
@@ -507,20 +508,22 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
             expand_symbolic_value_no_branching config meta sp
-              (Some (Synth.mk_mplace meta p ctx)) ctx
+              (Some (Synth.mk_mplace meta p ctx))
+              ctx
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the {!Bottom} value *)
-             let ctx =
-               expand_bottom_value_from_projection meta access p remaining_pes
-                 pe ty ctx
-             in
-             ctx, fun e -> e
+            let ctx =
+              expand_bottom_value_from_projection meta access p remaining_pes pe
+                ty ctx
+            in
+            (ctx, fun e -> e)
         | FailBorrow _ ->
             craise __FILE__ __LINE__ meta "Could not write to a borrow"
       in
       (* Retry *)
       let ctx, cc1 = (update_ctx_along_write_place config meta access p) ctx in
-      ctx, comp cc cc1
+      (ctx, comp cc cc1)
+
 (** Small utility used to break control-flow *)
 exception UpdateCtx of cm_fun
 
@@ -573,13 +576,13 @@ let rec end_loans_at_place (config : config) (meta : Meta.meta)
   try
     obj#visit_typed_value () v;
     (* No context update required: apply the continuation *)
-    ctx, fun e -> e
+    (ctx, fun e -> e)
   with UpdateCtx cc ->
     (* We need to update the context: compose the caugth continuation with
      * a recursive call to reinspect the value *)
     let ctx, cc = cc ctx in
     let ctx, cc1 = (end_loans_at_place config meta access p) ctx in
-    ctx, comp cc cc1
+    (ctx, comp cc cc1)
 
 let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
     : cm_fun =
@@ -601,18 +604,19 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
     match get_first_outer_loan_or_borrow_in_value with_borrows v with
     | None ->
         (* We are done: simply call the continuation *)
-        ctx, fun e -> e
+        (ctx, fun e -> e)
     | Some c ->
         (* There are: end them then retry *)
         let ctx, cc =
           match c with
-          | LoanContent (VSharedLoan (bids, _)) -> end_borrows config meta bids ctx
+          | LoanContent (VSharedLoan (bids, _)) ->
+              end_borrows config meta bids ctx
           | LoanContent (VMutLoan bid) -> end_borrow config meta bid ctx
           | BorrowContent _ -> craise __FILE__ __LINE__ meta "Unreachable"
         in
         (* Retry *)
         let ctx, cc1 = drop ctx in
-        ctx, comp cc cc1
+        (ctx, comp cc cc1)
   in
   (* Apply the drop function *)
   let ctx, cc = drop ctx in
@@ -624,14 +628,14 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
   (* Sanity check *)
   sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) meta;
   (* Continue *)
-(*   let cc =
-    comp cc cc1
-  in *)
+  (* let cc =
+       comp cc cc1
+     in *)
   (* Continue *)
-  ctx, cc
+  (ctx, cc)
 
 let prepare_lplace (config : config) (meta : Meta.meta) (p : place)
-(ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
+    (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
   log#ldebug
     (lazy
       ("prepare_lplace:" ^ "\n- p: " ^ place_to_string ctx p
@@ -644,13 +648,14 @@ let prepare_lplace (config : config) (meta : Meta.meta) (p : place)
   let ctx, cc1 = (drop_outer_loans_at_lplace config meta p) ctx in
   let cc = comp cc cc1 in
   (* Read the value and check it *)
-  let read_check (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
+  let read_check (ctx : eval_ctx) :
+      typed_value * eval_ctx * (eval_result -> eval_result) =
     let v = read_place meta access p ctx in
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) meta;
     (* Continue *)
-    v, ctx, fun e -> e
+    (v, ctx, fun e -> e)
   in
   (* Compose and apply the continuations *)
   let v, ctx, cc1 = read_check ctx in
-  v, ctx, comp cc cc1
+  (v, ctx, comp cc cc1)
