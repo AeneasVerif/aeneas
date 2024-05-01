@@ -798,7 +798,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Translate *)
         export_functions_group pure_funs
     | GlobalGroup id -> export_global id
-    | TraitDeclGroup id ->
+    | TraitDeclGroup (RecGroup _ids) ->
+        craise_opt_meta __FILE__ __LINE__ None
+          "Mutually recursive trait declarations are not supported"
+    | TraitDeclGroup (NonRecGroup id) ->
         (* TODO: update to extract groups *)
         if config.extract_trait_decls && config.extract_transparent then (
           export_trait_decl_group id;
