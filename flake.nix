@@ -85,8 +85,7 @@
           };
           buildPhase = ''
             # We need to provide the paths to the Charon tests derivations
-            export CHARON_TESTS_REGULAR_DIR=${charon.checks.${system}.tests}
-            export CHARON_TESTS_POLONIUS_DIR=${charon.checks.${system}.tests-polonius}
+            export CHARON_TEST_DIR=${charon.checks.${system}.tests}
 
             # Copy the Aeneas executable, and update the path to it
             cp ${aeneas}/bin/aeneas aeneas
