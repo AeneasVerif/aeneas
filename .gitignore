@@ -15,6 +15,9 @@ _build/
 *.byte
 *.native
 
+# Charon installation
+/charon
+
 # We group everything here
 bin
 
