@@ -77,6 +77,17 @@ build-bin-dir: build-bin build-lib
 doc:
 	cd compiler && dune build @doc
 
+# Fetches the latest commit from charon and updates `flake.lock` accordingly.
+.PHONY: update-charon-pin
+update-charon-pin:
+	nix flake lock --update-input charon
+	$(MAKE) charon-pin
+
+# Keep the commit revision in `./charon-pin` as well so that non-nix users can
+# know which commit to use.
+./charon-pin: flake.lock
+	nix-shell -p jq --run './scripts/update-charon-pin.sh' >> ./charon-pin
+
 .PHONY: clean
 clean: clean-generated
 	cd compiler && dune clean
