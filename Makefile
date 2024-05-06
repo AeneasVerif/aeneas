@@ -20,11 +20,6 @@ REGEN_LLBC ?=
 # The path to Charon
 CHARON_HOME ?= ../charon
 
-# The paths to the test directories in Charon (Aeneas will look for the .llbc
-# files in there).
-CHARON_TESTS_REGULAR_DIR ?= $(CHARON_HOME)/tests
-CHARON_TESTS_POLONIUS_DIR ?= $(CHARON_HOME)/tests-polonius
-
 # The path to the Aeneas executable to run the tests - we need the ability to
 # change this path for the Nix package.
 AENEAS_EXE ?= bin/aeneas
@@ -36,7 +31,7 @@ OPTIONS ?=
 # The rules use (and update) the following variables
 #
 # The Charon test directory where to look for the .llbc files
-CHARON_TEST_DIR =
+CHARON_TEST_DIR ?= $(CHARON_HOME)/tests
 # The options with which to call Charon
 CHARON_OPTIONS =
 # The backend sub-directory in which to generate the files
@@ -94,8 +89,8 @@ test: build-dev test-all
 test-all: test-no_nested_borrows test-paper \
 	test-hashmap test-hashmap_main \
 	test-external test-constants \
-	test-polonius_list testp-betree_main \
-	ctest-testp-betree_main \
+	test-polonius_list test-betree_main \
+	ctest-test-betree_main \
 	test-loops \
 	test-arrays test-traits test-bitwise test-demo
 
@@ -220,55 +215,37 @@ thol4-bitwise: SUBDIR := misc-bitwise
 thol4-bitwise: OPTIONS +=
 
 BETREE_FSTAR_OPTIONS = -decreases-clauses -template-clauses
-testp-betree_main: OPTIONS += -backward-no-state-update -test-trans-units -state -split-files
-testp-betree_main: SUBDIR:=betree
-tfstarp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
-tcoqp-betree_main: OPTIONS += -use-fuel
-tleanp-betree_main: SUBDIR :=
-tleanp-betree_main: OPTIONS +=
+test-betree_main: OPTIONS += -backward-no-state-update -test-trans-units -state -split-files
+test-betree_main: SUBDIR:=betree
+tfstar-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
+tcoq-betree_main: OPTIONS += -use-fuel
+tlean-betree_main: SUBDIR :=
+tlean-betree_main: OPTIONS +=
 thol4-betree_main: OPTIONS +=
 
 # Additional, *c*ustom test on the betree: translate it without `-backward-no-state-update`.
 # This generates very ugly code, but is good to test the translation.
-.PHONY: ctest-testp-betree_main
-ctest-testp-betree_main: testp-betree_main
-ctest-testp-betree_main: OPTIONS += -backend fstar -test-trans-units -state -split-files
-ctest-testp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
-ctest-testp-betree_main: BACKEND_SUBDIR := "fstar"
-ctest-testp-betree_main: SUBDIR:=betree_back_stateful
-ctest-testp-betree_main: CHARON_TEST_DIR = $(CHARON_TESTS_POLONIUS_DIR)
-ctest-testp-betree_main: FILE = betree_main
-ctest-testp-betree_main:
+.PHONY: ctest-test-betree_main
+ctest-test-betree_main: test-betree_main
+ctest-test-betree_main: OPTIONS += -backend fstar -test-trans-units -state -split-files
+ctest-test-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
+ctest-test-betree_main: BACKEND_SUBDIR := "fstar"
+ctest-test-betree_main: SUBDIR:=betree_back_stateful
+ctest-test-betree_main: FILE = betree_main
+ctest-test-betree_main:
 	$(AENEAS_CMD)
 
 # Generic rules to extract the LLBC from a rust file
 # We use the rules in Charon's Makefile to generate the .llbc files: the options
 # vary with the test files.
 .PHONY: gen-llbc-%
-gen-llbc-%: CHARON_TEST_DIR = $(CHARON_TESTS_REGULAR_DIR)
 gen-llbc-%:
 	$(CHARON_CMD)
 
-# "p" stands for "Polonius"
-.PHONY: gen-llbcp-%
-gen-llbcp-%: CHARON_TEST_DIR = $(CHARON_TESTS_POLONIUS_DIR)
-gen-llbcp-%:
-	$(CHARON_CMD)
-
-# Generic rules to test the testlation of an LLBC file.
-# Note that the files requiring the Polonius borrow-checker are generated
-# in the tests-polonius subdirectory.
+# Generic rules to test the translation of an LLBC file.
 .PHONY: test-%
-test-%: CHARON_TEST_DIR = $(CHARON_TESTS_REGULAR_DIR)
 test-%: FILE = $*
 test-%: gen-llbc-% tfstar-% tcoq-% tlean-% thol4-%
-	echo "# Test $* done"
-
-# "p" stands for "Polonius"
-.PHONY: testp-%
-testp-%: CHARON_TEST_DIR = $(CHARON_TESTS_POLONIUS_DIR)
-testp-%: FILE = $*
-testp-%: gen-llbcp-% tfstarp-% tcoqp-% tleanp-% thol4p-%
 	echo "# Test $* done"
 
 .PHONY: tfstar-%
@@ -277,38 +254,16 @@ tfstar-%: BACKEND_SUBDIR := fstar
 tfstar-%:
 	$(AENEAS_CMD)
 
-# "p" stands for "Polonius"
-.PHONY: tfstarp-%
-tfstarp-%: OPTIONS += -backend fstar
-tfstarp-%: BACKEND_SUBDIR := fstar
-tfstarp-%:
-	$(AENEAS_CMD)
-
 .PHONY: tcoq-%
 tcoq-%: OPTIONS += -backend coq
 tcoq-%: BACKEND_SUBDIR := coq
 tcoq-%:
 	$(AENEAS_CMD)
 
-# "p" stands for "Polonius"
-.PHONY: tcoqp-%
-tcoqp-%: OPTIONS += -backend coq
-tcoqp-%: BACKEND_SUBDIR := coq
-tcoqp-%:
-	$(AENEAS_CMD)
-
 .PHONY: tlean-%
 tlean-%: OPTIONS += -backend lean
 tlean-%: BACKEND_SUBDIR := lean
 tlean-%:
-	$(AENEAS_CMD)
-
-# "p" stands for "Polonius"
-.PHONY: tleanp-%
-
-tleanp-%: OPTIONS += -backend lean
-tleanp-%: BACKEND_SUBDIR := lean
-tleanp-%:
 	$(AENEAS_CMD)
 
 # TODO: reactivate HOL4 once traits are parameterized by their associated types
@@ -319,16 +274,6 @@ thol4-%:
 	echo Ignoring the $* test for HOL4
 
 #thol4-%:
-#	$(AENEAS_CMD)
-
-# TODO: reactivate HOL4 once traits are parameterized by their associated types
-.PHONY: thol4p-%
-thol4p-%: OPTIONS += -backend hol4
-thol4p-%: BACKEND_SUBDIR := hol4
-thol4p-%:
-	echo Ignoring the $* test for HOL4
-
-#thol4p-%:
 #	$(AENEAS_CMD)
 
 # Nix - TODO: add the lean tests

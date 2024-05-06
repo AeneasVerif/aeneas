@@ -1,7 +1,13 @@
 on:
+  # Run the checks on any push to any branch of the repo that doesn't start with `_`.
   push:
     branches-ignore: [ '_**' ]
+  # Run the check for any pull request. The check is run on a merge between the
+  # PR commit and the `main` branch at the time of running the check.
   pull_request:
+  # Runs the check when a PR is added to the merge queue.
+  merge_group:
+  # Makes it possible to run the forkflow by hand from GItHub's interface.
   workflow_dispatch:
 
 # Minimum permissions required by skip-duplicate-actions
