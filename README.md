@@ -41,7 +41,7 @@ The dependencies can then be installed with the following command:
 
 ```
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-  unionFind ocamlgraph
+  unionFind ocamlgraph menhir ocamlformat
 ```
 
 Moreover, Aeneas requires the Charon ML library, defined in the
