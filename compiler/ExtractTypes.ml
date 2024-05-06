@@ -212,6 +212,9 @@ let extract_binop (meta : Meta.meta)
         | Add -> "+"
         | Sub -> "-"
         | Mul -> "*"
+        | CheckedAdd | CheckedSub | CheckedMul ->
+            craise __FILE__ __LINE__ meta
+              "Checked operations are not implemented"
         | Shl -> "<<<"
         | Shr -> ">>>"
         | BitXor -> "^^^"

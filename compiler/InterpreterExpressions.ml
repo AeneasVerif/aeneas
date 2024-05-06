@@ -551,7 +551,7 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
               | Ge -> Z.geq sv1.value sv2.value
               | Gt -> Z.gt sv1.value sv2.value
               | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr | Shl
-              | Shr | Ne | Eq ->
+              | Shr | Ne | Eq | CheckedAdd | CheckedSub | CheckedMul ->
                   craise __FILE__ __LINE__ meta "Unreachable"
             in
             Ok
@@ -575,7 +575,8 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
               | BitOr -> raise Unimplemented
-              | Lt | Le | Ge | Gt | Shl | Shr | Ne | Eq ->
+              | Lt | Le | Ge | Gt | Shl | Shr | Ne | Eq | CheckedAdd
+              | CheckedSub | CheckedMul ->
                   craise __FILE__ __LINE__ meta "Unreachable"
             in
             match res with
@@ -586,7 +587,8 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
                     value = VLiteral (VScalar sv);
                     ty = TLiteral (TInteger sv1.int_ty);
                   })
-        | Shl | Shr -> raise Unimplemented
+        | Shl | Shr | CheckedAdd | CheckedSub | CheckedMul ->
+            craise __FILE__ __LINE__ meta "Unimplemented binary operation"
         | Ne | Eq -> craise __FILE__ __LINE__ meta "Unreachable")
     | _ -> craise __FILE__ __LINE__ meta "Invalid inputs for binop"
 
@@ -633,6 +635,10 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
             | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr ->
                 sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) meta;
                 TLiteral (TInteger int_ty1)
+            (* These return `(int, bool)` which isn't a literal type *)
+            | CheckedAdd | CheckedSub | CheckedMul ->
+                craise __FILE__ __LINE__ meta
+                  "Checked operations are not implemented"
             | Shl | Shr ->
                 (* The number of bits can be of a different integer type
                    than the operand *)
