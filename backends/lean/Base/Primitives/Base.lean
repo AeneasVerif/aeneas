@@ -134,7 +134,10 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ok x } :=
 -- MISC --
 ----------
 
-@[simp] def core.mem.replace (a : Type) (x : a) (_ : a) : a × a := (x, x)
+-- This acts like a swap effectively in a functional pure world.
+-- We return the old value of `dst`, i.e. `dst` itself.
+-- The new value of `dst` is `src`.
+@[simp] def core.mem.replace (a : Type) (dst : a) (src : a) : a × a := (dst, src)
 /- [core::option::Option::take] -/
 @[simp] def Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
 /- [core::mem::swap] -/
