@@ -2,8 +2,8 @@
   description = "Aeneas";
 
   inputs = {
-    # Remark: when adding inputs here, don't forget to also add them in the list
-    # of outputs below!
+    # Remark: when adding inputs here, don't forget to also add them in the
+    # arguments to `outputs` below!
     charon.url = "github:aeneasverif/charon";
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
@@ -41,7 +41,7 @@
           ];
           buildPhase = ''
             if ! dune build @fmt; then
-              echo 'ERROR: Code is not formatted. Run `make format` to format the project files'.
+              echo 'ERROR: Code is not formatted. Run `make format` to format the project files.'
               exit 1
             fi
           '';
@@ -163,6 +163,21 @@
           # The build doesn't generate anything
           installPhase = "touch $out";
         };
+
+        check-charon-pin = pkgs.runCommand "aeneas-check-charon-pin" {
+          buildInputs = [ pkgs.jq ];
+        } ''
+            CHARON_REV_FROM_FLAKE="$(jq -r .nodes.charon.locked.rev ${./flake.lock})"
+            CHARON_REV_FROM_PIN="$(tail -1 ${./charon-pin})"
+            if [[ "$CHARON_REV_FROM_FLAKE" != "$CHARON_REV_FROM_PIN" ]]; then
+              echo 'ERROR: The charon version in `flacke.lock` differs from the one in `charon-pin`.'
+              echo '  In `flake.lock`: '"$CHARON_REV_FROM_FLAKE"
+              echo '  In `charon-pin`: '"$CHARON_REV_FROM_PIN"
+              echo 'Use `make charon-pin` to update the `./charon-pin` file.'
+              exit 1
+            fi
+            touch $out
+        '';
       in {
         packages = {
           inherit aeneas;
@@ -186,6 +201,7 @@
                   aeneas-verify-fstar
                   aeneas-verify-coq
                   aeneas-verify-hol4
-                  aeneas-check-tidiness; };
+                  aeneas-check-tidiness
+                  check-charon-pin; };
       });
 }

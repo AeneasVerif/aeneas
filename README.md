@@ -44,27 +44,25 @@ opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
   unionFind ocamlgraph menhir ocamlformat
 ```
 
-Moreover, Aeneas requires the Charon ML library, defined in the
-[Charon](https://github.com/AeneasVerif/charon) project.
-The simplest way is to clone Charon, then go to [`compiler`](./compiler) and
-create a symbolic link to the Charon library:
-`cd AENEAS_REPO/compiler && ln -s PATH_TO_CHARON_REPO/charon-ml charon`
-(the symbolic link should be placed inside the `aeneas/compiler/` folder).
+Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.
+For Aeneas to work, `./charon` must contain a clone of the [Charon](https://github.com/AeneasVerif/charon)
+repository, at the commit specified in `./charon-pin`.  The easiest way to set this up is to call
+`make setup-charon`
+(this uses either [rustup](https://rustup.rs/) or [nix](https://nixos.org/download/) to build Charon, depending on which one is installed).
+In case of version mismatch, you will be instructed to update Charon.
 
-**Remark:** if you want to test if the symbolic link is valid, copy-paste the
-following script in your terminal (from the `compiler` directory):
-```bash
-if [ -e charon ]; then echo "valid"; else echo "invalid"; fi
-```
+If you're also developing on Charon, you can instead set up `./charon` to be a symlink to your local version:
+`ln -s PATH_TO_CHARON_REPO charon`. In this case, the scripts will not check that your Charon
+installation is on a compatible commit. When you pull a new version of Aeneas, you will occasionally
+need to update your Charon repository so that Aeneas builds and runs correctly.
 
-Finally, building the project simply requires to run `make` in the top
+Finally, building the project simply requires running `make` in the top
 directory.
 
 You can also use `make test` and `make verify` to run the tests, and check
 the generated files. As `make test` will run tests which use the Charon tests,
-you will need to regenerate the `.llbc` files. You have the following options:
-- run `make test` in the Charon repository
-- run `make test` in the Aeneas repository
+you will need to regenerate the `.llbc` files. To do this, run `make setup-charon` before `make
+test`. Alternatively, call `REGEN_LLBC=1 make test-...` to regenerate only the needed files.
 
 ## Documentation
 

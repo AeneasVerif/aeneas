@@ -18,7 +18,7 @@ all: build-tests-verify nix
 REGEN_LLBC ?=
 
 # The path to Charon
-CHARON_HOME ?= ../charon
+CHARON_HOME ?= ./charon
 
 # The path to the Aeneas executable to run the tests - we need the ability to
 # change this path for the Nix package.
@@ -56,11 +56,11 @@ build-test-verify: build test verify
 build-dev: build-bin build-lib build-bin-dir doc
 
 .PHONY: build-bin
-build-bin:
+build-bin: check-charon
 	cd compiler && dune build
 
 .PHONY: build-lib
-build-lib:
+build-lib: check-charon
 	cd compiler && dune build aeneas.cmxs
 
 .PHONY: build-bin-dir
@@ -76,6 +76,30 @@ build-bin-dir: build-bin build-lib
 .PHONY: doc
 doc:
 	cd compiler && dune build @doc
+
+# Fetches the latest commit from charon and updates `flake.lock` accordingly.
+.PHONY: update-charon-pin
+update-charon-pin:
+	nix flake lock --update-input charon
+	$(MAKE) charon-pin
+
+# Keep the commit revision in `./charon-pin` as well so that non-nix users can
+# know which commit to use.
+./charon-pin: flake.lock
+	nix-shell -p jq --run './scripts/update-charon-pin.sh' >> ./charon-pin
+
+# Checks that `./charon` contains a clone of charon at the required commit.
+# Also checks that `./charon/bin/charon` exists.
+.PHONY: check-charon
+check-charon: charon-pin
+	@echo "Checking the charon installation"
+	@./scripts/check-charon-install.sh
+
+# Sets up the charon repository on the right commit.
+.PHONY: setup-charon
+setup-charon:
+	@./scripts/check-charon-install.sh --force
+
 
 .PHONY: clean
 clean: clean-generated
@@ -114,7 +138,7 @@ format:
 # The commands to run Charon to generate the .llbc files
 ifeq (, $(REGEN_LLBC))
 else
-CHARON_CMD = cd $(CHARON_TEST_DIR) && NOT_ALL_TESTS=1 $(MAKE) test-$*
+CHARON_CMD = cd $(CHARON_TEST_DIR) && $(MAKE) test-$*
 endif
 
 # The command to run Aeneas on the proper llbc file
