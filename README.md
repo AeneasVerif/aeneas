@@ -48,15 +48,15 @@ Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) projec
 For Aeneas to work, `./charon` must contain a clone of the [Charon](https://github.com/AeneasVerif/charon)
 repository, at the commit specified in `./charon-pin`.  The easiest way to set this up is to call
 `make setup-charon`
-(this uses [rustup](https://rustup.rs/) or [nix](https://nixos.org/download/) to build Charon).
-In case of version mismatch, the various `make` scripts will instruct you to update.
+(this uses either [rustup](https://rustup.rs/) or [nix](https://nixos.org/download/) to build Charon, depending on which one is installed).
+In case of version mismatch, you will be instructed to update Charon.
 
 If you're also developing on Charon, you can instead set up `./charon` to be a symlink to your local version:
 `ln -s PATH_TO_CHARON_REPO charon`. In this case, the scripts will not check that your Charon
 installation is on a compatible commit. When you pull a new version of Aeneas, you will occasionally
 need to update your Charon repository so that Aeneas builds and runs correctly.
 
-Finally, building the project simply requires to run `make` in the top
+Finally, building the project simply requires running `make` in the top
 directory.
 
 You can also use `make test` and `make verify` to run the tests, and check
