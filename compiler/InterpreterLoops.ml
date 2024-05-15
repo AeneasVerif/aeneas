@@ -10,14 +10,14 @@ open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsFixedPoint
 open Errors
-open InterpreterStatements
 
 (** The local logger *)
 let log = Logging.loops_log
 
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (config : config) (meta : Meta.meta)
-    (st : LlbcAst.statement) : stl_cm_fun =
+    (st : LlbcAst.statement)
+    (eval_statement : config -> LlbcAst.statement -> stl_cm_fun) : stl_cm_fun =
  fun ctx ->
   (* We need a loop id for the [LoopReturn]. In practice it won't be used
      (it is useful only for the symbolic execution *)
@@ -122,7 +122,7 @@ let eval_loop_concrete (config : config) (meta : Meta.meta)
 
 (** Evaluate a loop in symbolic mode *)
 let eval_loop_symbolic (config : config) (meta : meta) (st : LlbcAst.statement)
-    : stl_cm_fun =
+    (eval_statement : config -> LlbcAst.statement -> stl_cm_fun) : stl_cm_fun =
  fun ctx ->
   (* Debug *)
   log#ldebug
@@ -136,7 +136,7 @@ let eval_loop_symbolic (config : config) (meta : meta) (st : LlbcAst.statement)
 
   (* Compute the fixed point at the loop entrance *)
   let fp_ctx, fixed_ids, rg_to_abs =
-    compute_loop_entry_fixed_point config meta loop_id st ctx
+    compute_loop_entry_fixed_point config meta loop_id st ctx eval_statement
   in
 
   (* Debug *)
@@ -332,10 +332,12 @@ let eval_loop_symbolic (config : config) (meta : meta) (st : LlbcAst.statement)
   (ctx_resl, fun el -> cf_prepare_ctx (cf_match_ctx el))
 
 let eval_loop (config : config) (meta : meta)
-    (eval_loop_body : LlbcAst.statement) : stl_cm_fun =
+    (eval_loop_body : LlbcAst.statement)
+    (eval_statement : config -> LlbcAst.statement -> stl_cm_fun) : stl_cm_fun =
  fun ctx ->
   match config.mode with
-  | ConcreteMode -> eval_loop_concrete config meta eval_loop_body ctx
+  | ConcreteMode ->
+      (eval_loop_concrete config meta eval_loop_body eval_statement) ctx
   | SymbolicMode ->
       (* Simplify the context by ending the unnecessary borrows/loans and getting
          rid of the useless symbolic values (which are in anonymous variables) *)
@@ -363,5 +365,7 @@ let eval_loop (config : config) (meta : meta)
       *)
       let ctx, cc1 = (prepare_ashared_loans meta None) ctx in
       let cc = comp cc cc1 in
-      let ctx_resl, ccl = (eval_loop_symbolic config meta eval_loop_body) ctx in
+      let ctx_resl, ccl =
+        (eval_loop_symbolic config meta eval_loop_body eval_statement) ctx
+      in
       (ctx_resl, fun el -> (comp cc cc1) (ccl el))

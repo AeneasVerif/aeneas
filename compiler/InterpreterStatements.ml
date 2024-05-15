@@ -1114,12 +1114,10 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
             match el with
             | None -> None
             | Some el -> cf_st1 (Some (seq_cf ctx_res_cfl el)) ))
-    | Loop _ (* loop_body *) ->
-        (* InterpreterLoops.eval_loop config st.meta
-           (eval_statement config loop_body)
-           cf ctx *)
+    | Loop loop_body ->
+        (InterpreterLoops.eval_loop config st.meta loop_body eval_statement) ctx
         (* sanity_check __FILE__ __LINE__ false meta *)
-        raise (Failure "Internal error, please raise an issue")
+        (* raise (Failure "Internal error, please raise an issue") *)
     | Switch switch -> eval_switch config st.meta switch ctx
   in
   (* Compose and apply *)

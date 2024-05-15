@@ -82,6 +82,7 @@ val compute_loop_entry_fixed_point :
   loop_id ->
   LlbcAst.statement ->
   eval_ctx ->
+  (config -> LlbcAst.statement -> Cps.stl_cm_fun) ->
   eval_ctx * ids_sets * abs SymbolicAst.region_group_id_map
 
 (** For the abstractions in the fixed point, compute the correspondance between

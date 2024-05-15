@@ -61,4 +61,9 @@ open Cps
 open Meta
 
 (** Evaluate a loop *)
-val eval_loop : config -> meta -> LlbcAst.statement -> stl_cm_fun
+val eval_loop :
+  config ->
+  meta ->
+  LlbcAst.statement ->
+  (config -> LlbcAst.statement -> stl_cm_fun) ->
+  stl_cm_fun

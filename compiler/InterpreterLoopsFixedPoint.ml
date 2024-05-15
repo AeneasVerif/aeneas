@@ -12,7 +12,6 @@ open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsJoinCtxs
 open Errors
-open InterpreterStatements
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
@@ -67,20 +66,26 @@ let rec end_useless_fresh_borrows_and_abs (config : config) (meta : Meta.meta)
             explore_env env)
     | _ :: env -> explore_env env
   in
-  let ctx, rec_call =
-    end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
-  in
+  (* let ctx, rec_call =
+       end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
+     in *)
   try
     (* Explore the environment *)
     explore_env ctx.env;
     (* No exception raised: call the continuation *)
-    (ctx, rec_call)
+    (ctx, fun e -> e)
   with
   | FoundAbsId abs_id ->
       let ctx, cc = end_abstraction config meta abs_id ctx in
+      let ctx, rec_call =
+        end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
+      in
       (ctx, comp cc rec_call)
   | FoundBorrowId bid ->
       let ctx, cc = end_borrow config meta bid ctx in
+      let ctx, rec_call =
+        end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
+      in
       (ctx, comp cc rec_call)
 
 (* Explore the fresh anonymous values and replace all the values which are not
@@ -451,7 +456,8 @@ let prepare_ashared_loans_no_synth (meta : Meta.meta) (loop_id : LoopId.id)
   ctx
 
 let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
-    (loop_id : LoopId.id) (st : LlbcAst.statement) (ctx0 : eval_ctx) :
+    (loop_id : LoopId.id) (st : LlbcAst.statement) (ctx0 : eval_ctx)
+    (eval_statement : config -> LlbcAst.statement -> stl_cm_fun) :
     eval_ctx * ids_sets * abs RegionGroupId.Map.t =
   (* The continuation for when we exit the loop - we register the
      environments upon loop *reentry*, and synthesize nothing by
