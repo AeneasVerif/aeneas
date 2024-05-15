@@ -91,7 +91,7 @@ update-charon-pin:
 # Checks that `./charon` contains a clone of charon at the required commit.
 # Also checks that `./charon/bin/charon` exists.
 .PHONY: check-charon
-check-charon: charon-pin
+check-charon:
 	@echo "Checking the charon installation"
 	@./scripts/check-charon-install.sh
 
