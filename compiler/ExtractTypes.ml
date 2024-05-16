@@ -70,6 +70,9 @@ let extract_literal (meta : Meta.meta) (fmt : F.formatter) (inside : bool)
           in
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
+  | VStr _ | VByteStr _ ->
+      craise __FILE__ __LINE__ meta
+        "String and byte string literals are unsupported"
 
 (** Format a unary operation
 
