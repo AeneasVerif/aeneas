@@ -551,8 +551,7 @@ let expand_symbolic_value_no_branching (config : config) (meta : Meta.meta)
   let original_sv = sv in
   let original_sv_place = sv_place in
   let rty = original_sv.sv_ty in
-  let cc : cm_fun =
-   fun ctx ->
+  let ctx, cc =
     match rty with
     (* ADTs *)
     | TAdt (adt_id, generics) ->
@@ -584,24 +583,21 @@ let expand_symbolic_value_no_branching (config : config) (meta : Meta.meta)
          ^ show_rty rty)
   in
   (* Debug *)
-  let cc =
-    comp_unit cc (fun ctx ->
-        log#ldebug
-          (lazy
-            ("expand_symbolic_value_no_branching: "
-            ^ symbolic_value_to_string ctx0 sv
-            ^ "\n\n- original context:\n"
-            ^ eval_ctx_to_string ~meta:(Some meta) ctx0
-            ^ "\n\n- new context:\n"
-            ^ eval_ctx_to_string ~meta:(Some meta) ctx
-            ^ "\n"));
-        (* Sanity check: the symbolic value has disappeared *)
-        sanity_check __FILE__ __LINE__
-          (not (symbolic_value_id_in_ctx original_sv.sv_id ctx))
-          meta)
-  in
-  (* Continue *)
-  cc ctx
+  log#ldebug
+    (lazy
+      ("expand_symbolic_value_no_branching: "
+      ^ symbolic_value_to_string ctx0 sv
+      ^ "\n\n- original context:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx0
+      ^ "\n\n- new context:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ "\n"));
+  (* Sanity check: the symbolic value has disappeared *)
+  sanity_check __FILE__ __LINE__
+    (not (symbolic_value_id_in_ctx original_sv.sv_id ctx))
+    meta;
+  (* Return *)
+  (ctx, cc)
 
 let expand_symbolic_adt (config : config) (meta : Meta.meta)
     (sv : symbolic_value) (sv_place : SA.mplace option) :
@@ -760,7 +756,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (meta : Meta.meta) :
       (* Compose and continue *)
       let ctx, cc = cc ctx in
       let ctx, cc1 = expand ctx in
-      (ctx, comp cc cc1)
+      (ctx, cc_comp cc cc1)
   in
   (* Apply *)
   expand ctx

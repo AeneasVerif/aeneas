@@ -42,7 +42,7 @@ let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
             ctx
         in
         let ctx, cf2 = expand ctx in
-        (ctx, comp cf1 cf2)
+        (ctx, cc_comp cf1 cf2)
   in
   (* Apply *)
   expand ctx
@@ -73,7 +73,7 @@ let access_rplace_reorganize_and_read (config : config) (meta : Meta.meta)
   let ctx, cc = update_ctx_along_read_place config meta access p ctx in
   (* End the proper loans at the place itself *)
   let ctx, cc1 = (end_loans_at_place config meta access p) ctx in
-  let cc = comp cc cc1 in
+  let cc = cc_comp cc cc1 in
   (* Expand the copyable values which contain borrows (which are necessarily shared
    * borrows) *)
   let ctx, cc =
@@ -81,13 +81,13 @@ let access_rplace_reorganize_and_read (config : config) (meta : Meta.meta)
       let ctx, cc1 =
         (expand_primitively_copyable_at_place config meta access p) ctx
       in
-      (ctx, comp cc cc1)
+      (ctx, cc_comp cc cc1)
     else (ctx, cc)
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
   let ty_value, ctx, read_place = read_place meta access p ctx in
   (* Compose *)
-  (ty_value, ctx, comp cc read_place)
+  (ty_value, ctx, cc_comp cc read_place)
 
 let access_rplace_reorganize (config : config) (meta : Meta.meta)
     (expand_prim_copy : bool) (access : access_kind) (p : place) : cm_fun =
@@ -373,7 +373,7 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
       let ctx, v = copy_value meta allow_adt_copy config ctx v in
       (* Continue *)
       (* Compose and apply *)
-      (* comp cc copy ctx *)
+      (* cc_comp cc copy ctx *)
       (v, ctx, cc)
   | Move p ->
       (* Access the value *)
@@ -391,7 +391,7 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
       (* cf v ctx *)
       (* in *)
       (* Compose and apply *)
-      (* comp cc move cf ctx *)
+      (* cc_comp cc move cf ctx *)
       (v, ctx, cc)
 
 let eval_operand (config : config) (meta : Meta.meta) (op : operand)
@@ -405,7 +405,7 @@ let eval_operand (config : config) (meta : Meta.meta) (op : operand)
   let ctx, cc = (prepare_eval_operand_reorganize config meta op) ctx in
   let v, ctx, cc2 = (eval_operand_no_reorganize config meta op) ctx in
   (* We reorganize the context, then evaluate the operand *)
-  (v, ctx, comp cc cc2)
+  (v, ctx, cc_comp cc cc2)
 
 (** Small utility.
 
@@ -422,13 +422,11 @@ let eval_operands (config : config) (meta : Meta.meta) (ops : operand list)
   (* Prepare the operands *)
   let ctx, prepare = prepare_eval_operands_reorganize config meta ops ctx in
   (* Evaluate the operands *)
-  let v, ctx, eval =
-    fold_left_list_apply_continuation
-      (eval_operand_no_reorganize config meta)
-      ops ctx
+  let vl, ctx, eval =
+    map_apply_continuation (eval_operand_no_reorganize config meta) ops ctx
   in
   (* Compose and apply *)
-  (v, ctx, comp prepare eval)
+  (vl, ctx, cc_comp prepare eval)
 
 let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand)
     (op2 : operand) (ctx : eval_ctx) :
@@ -440,7 +438,7 @@ let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand)
     | _ -> craise __FILE__ __LINE__ meta "Unreachable"
   in
   (use_res, ctx, eval_op)
-(* comp eval_op use_res cf *)
+(* cc_comp eval_op use_res cf *)
 
 let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
@@ -495,7 +493,7 @@ let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
     | _ -> exec_raise __FILE__ __LINE__ meta "Invalid input for unop"
   in
   let r, ctx, apply = apply v ctx in
-  (r, ctx, comp eval_op apply)
+  (r, ctx, cc_comp eval_op apply)
 
 let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
@@ -527,7 +525,7 @@ let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop)
   in
   (* Compose and apply *)
   let r, ctx, apply = apply v ctx in
-  (r, ctx, comp eval_op apply)
+  (r, ctx, cc_comp eval_op apply)
 
 let eval_unary_op (config : config) (meta : Meta.meta) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
@@ -627,7 +625,7 @@ let eval_binary_op_concrete (config : config) (meta : Meta.meta) (binop : binop)
   in
   let r, ctx, compute = compute res ctx in
   (* Compose and apply *)
-  (r, ctx, comp eval_ops compute)
+  (r, ctx, cc_comp eval_ops compute)
 
 let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
@@ -683,7 +681,7 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
   in
   let r, ctx, compute = compute res ctx in
   (* Compose and apply *)
-  (r, ctx, comp eval_ops compute)
+  (r, ctx, cc_comp eval_ops compute)
 
 let eval_binary_op (config : config) (meta : Meta.meta) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
@@ -759,7 +757,7 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
       in
       (* Compose and apply *)
       let v, ctx, eval = eval v ctx in
-      (v, ctx, comp prepare eval)
+      (v, ctx, cc_comp prepare eval)
   | BMut ->
       (* Access the value *)
       let access = Write in
@@ -786,7 +784,7 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
       in
       (* Compose and apply *)
       let v, ctx, eval = eval v ctx in
-      (v, ctx, comp prepare eval)
+      (v, ctx, cc_comp prepare eval)
 
 let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
     (aggregate_kind : aggregate_kind) (ops : operand list) (ctx : eval_ctx) :
@@ -867,7 +865,7 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
   in
   (* Compose and apply *)
   let v, ctx, compute = compute values ctx in
-  (v, ctx, comp eval_ops compute)
+  (v, ctx, cc_comp eval_ops compute)
 
 let eval_rvalue_not_global (config : config) (meta : Meta.meta)
     (rvalue : rvalue) (ctx : eval_ctx) :
@@ -877,7 +875,7 @@ let eval_rvalue_not_global (config : config) (meta : Meta.meta)
   let wrap_in_result (v : typed_value) : (typed_value, eval_error) result =
     Ok v
   in
-  (* let comp_wrap f = comp f (fun e -> e) in *)
+  (* let comp_wrap f = cc_comp f (fun e -> e) in *)
   (* Delegate to the proper auxiliary function *)
   match rvalue with
   | Use op ->
@@ -916,4 +914,4 @@ let eval_fake_read (config : config) (meta : Meta.meta) (p : place) : cm_fun =
     (v, ctx, fun e -> e)
   in
   let _, ctx, continue = continue v ctx in
-  (ctx, comp prepare continue)
+  (ctx, cc_comp prepare continue)

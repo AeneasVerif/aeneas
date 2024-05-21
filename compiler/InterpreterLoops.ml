@@ -364,8 +364,8 @@ let eval_loop (config : config) (meta : meta)
          *non-fixed* abstractions.
       *)
       let ctx, cc1 = (prepare_ashared_loans meta None) ctx in
-      let cc = comp cc cc1 in
+      let cc = cc_comp cc cc1 in
       let ctx_resl, ccl =
         (eval_loop_symbolic config meta eval_loop_body eval_statement) ctx
       in
-      (ctx_resl, fun el -> (comp cc cc1) (ccl el))
+      (ctx_resl, fun el -> (cc_comp cc cc1) (ccl el))

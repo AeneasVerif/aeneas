@@ -1638,7 +1638,7 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
             craise __FILE__ __LINE__ meta "Unexpected"
       in
       let ctx, cc1 = cf_reorganize_join_tgt ctx in
-      (ctx, comp cc cc1)
+      (ctx, cc_comp cc cc1)
   in
   (* Apply the reorganization *)
   cf_reorganize_join_tgt tgt_ctx
@@ -1971,4 +1971,4 @@ let match_ctx_with_target (config : config) (meta : Meta.meta)
   (* Compose and continue *)
   let ctx, cc = cf_reorganize_join_tgt tgt_ctx in
   let (ctx, res), cc1 = cf_introduce_loop_fp_abs ctx in
-  ((ctx, res), comp cc cc1)
+  ((ctx, res), cc_comp cc cc1)

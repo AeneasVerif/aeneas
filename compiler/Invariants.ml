@@ -875,10 +875,3 @@ let check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
     check_typing_invariant meta ctx;
     check_symbolic_values meta ctx)
   else log#ldebug (lazy "Not checking invariants (check is not activated)")
-
-(** TODO: remove.
-    This function comes from the fact that the compiler was initially written in
-    continuation passing style. We should use {!check_invariants} instead.
- *)
-let cf_check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
-  check_invariants meta ctx

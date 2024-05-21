@@ -488,7 +488,7 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
             craise __FILE__ __LINE__ meta "Could not read a borrow"
       in
       let ctx, cc1 = (update_ctx_along_read_place config meta access p) ctx in
-      (ctx, comp cc cc1)
+      (ctx, cc_comp cc cc1)
 
 let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
     (access : access_kind) (p : place) : cm_fun =
@@ -522,7 +522,7 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
       in
       (* Retry *)
       let ctx, cc1 = (update_ctx_along_write_place config meta access p) ctx in
-      (ctx, comp cc cc1)
+      (ctx, cc_comp cc cc1)
 
 (** Small utility used to break control-flow *)
 exception UpdateCtx of cm_fun
@@ -582,7 +582,7 @@ let rec end_loans_at_place (config : config) (meta : Meta.meta)
      * a recursive call to reinspect the value *)
     let ctx, cc = cc ctx in
     let ctx, cc1 = (end_loans_at_place config meta access p) ctx in
-    (ctx, comp cc cc1)
+    (ctx, cc_comp cc cc1)
 
 let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
     : cm_fun =
@@ -616,7 +616,7 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
         in
         (* Retry *)
         let ctx, cc1 = drop ctx in
-        (ctx, comp cc cc1)
+        (ctx, cc_comp cc cc1)
   in
   (* Apply the drop function *)
   let ctx, cc = drop ctx in
@@ -629,7 +629,7 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
   sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) meta;
   (* Continue *)
   (* let cc =
-       comp cc cc1
+       cc_comp cc cc1
      in *)
   (* Continue *)
   (ctx, cc)
@@ -646,7 +646,7 @@ let prepare_lplace (config : config) (meta : Meta.meta) (p : place)
   let ctx, cc = update_ctx_along_write_place config meta access p ctx in
   (* End the borrows and loans, starting with the borrows *)
   let ctx, cc1 = (drop_outer_loans_at_lplace config meta p) ctx in
-  let cc = comp cc cc1 in
+  let cc = cc_comp cc cc1 in
   (* Read the value and check it *)
   let read_check (ctx : eval_ctx) :
       typed_value * eval_ctx * (eval_result -> eval_result) =
@@ -658,4 +658,4 @@ let prepare_lplace (config : config) (meta : Meta.meta) (p : place)
   in
   (* Compose and apply the continuations *)
   let v, ctx, cc1 = read_check ctx in
-  (v, ctx, comp cc cc1)
+  (v, ctx, cc_comp cc cc1)

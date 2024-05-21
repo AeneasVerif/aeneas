@@ -475,7 +475,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       List.fold_left
         (fun (ctx, cf) id ->
           let ctx, cc = end_abstraction config fdef.item_meta.meta id ctx in
-          (ctx, comp cc cf))
+          (ctx, cc_comp cc cf))
         (ctx, fun e -> e)
         target_abs_ids
     in

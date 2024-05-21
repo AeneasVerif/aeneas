@@ -80,13 +80,13 @@ let rec end_useless_fresh_borrows_and_abs (config : config) (meta : Meta.meta)
       let ctx, rec_call =
         end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
       in
-      (ctx, comp cc rec_call)
+      (ctx, cc_comp cc rec_call)
   | FoundBorrowId bid ->
       let ctx, cc = end_borrow config meta bid ctx in
       let ctx, rec_call =
         end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
       in
-      (ctx, comp cc rec_call)
+      (ctx, cc_comp cc rec_call)
 
 (* Explore the fresh anonymous values and replace all the values which are not
    borrows/loans with ⊥ *)
@@ -134,7 +134,7 @@ let cleanup_fresh_values_and_abs (config : config) (meta : Meta.meta)
  fun ctx ->
   let ctx, cc = (end_useless_fresh_borrows_and_abs config meta fixed_ids) ctx in
   let ctx, cc1 = (cleanup_fresh_values fixed_ids) ctx in
-  (ctx, comp cc cc1)
+  (ctx, cc_comp cc cc1)
 
 (** Reorder the loans and borrows in the fresh abstractions.
 

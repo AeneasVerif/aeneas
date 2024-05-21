@@ -826,35 +826,29 @@ let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id)
       craise __FILE__ __LINE__ meta "Unreachable"
 
 let check_borrow_disappeared (meta : Meta.meta) (fun_name : string)
-    (l : BorrowId.id) (ctx0 : eval_ctx) : cm_fun =
- fun ctx ->
-  let check_disappeared (ctx : eval_ctx) : unit =
-    let _ =
-      match lookup_borrow_opt ek_all l ctx with
-      | None -> () (* Ok *)
-      | Some _ ->
-          log#ltrace
-            (lazy
-              (fun_name ^ ": " ^ BorrowId.to_string l
-             ^ ": borrow didn't disappear:\n- original context:\n"
-              ^ eval_ctx_to_string ~meta:(Some meta) ctx0
-              ^ "\n\n- new context:\n"
-              ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-          internal_error __FILE__ __LINE__ meta
-    in
-    match lookup_loan_opt meta ek_all l ctx with
-    | None -> () (* Ok *)
-    | Some _ ->
-        log#ltrace
-          (lazy
-            (fun_name ^ ": " ^ BorrowId.to_string l
-           ^ ": loan didn't disappear:\n- original context:\n"
-            ^ eval_ctx_to_string ~meta:(Some meta) ctx0
-            ^ "\n\n- new context:\n"
-            ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-        internal_error __FILE__ __LINE__ meta
-  in
-  unit_to_cm_fun check_disappeared ctx
+    (l : BorrowId.id) (ctx0 : eval_ctx) (ctx : eval_ctx) : unit =
+  (match lookup_borrow_opt ek_all l ctx with
+  | None -> () (* Ok *)
+  | Some _ ->
+      log#ltrace
+        (lazy
+          (fun_name ^ ": " ^ BorrowId.to_string l
+         ^ ": borrow didn't disappear:\n- original context:\n"
+          ^ eval_ctx_to_string ~meta:(Some meta) ctx0
+          ^ "\n\n- new context:\n"
+          ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      internal_error __FILE__ __LINE__ meta);
+  match lookup_loan_opt meta ek_all l ctx with
+  | None -> () (* Ok *)
+  | Some _ ->
+      log#ltrace
+        (lazy
+          (fun_name ^ ": " ^ BorrowId.to_string l
+         ^ ": loan didn't disappear:\n- original context:\n"
+          ^ eval_ctx_to_string ~meta:(Some meta) ctx0
+          ^ "\n\n- new context:\n"
+          ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      internal_error __FILE__ __LINE__ meta
 
 (** End a borrow identified by its borrow id in a context.
 
@@ -894,8 +888,8 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
   (* Utility function for the sanity checks: check that the borrow disappeared
    * from the context *)
   let ctx0 = ctx in
+  let check = check_borrow_disappeared meta "end borrow" l ctx0 in
   (* Start by ending the borrow itself (we lookup it up and replace it with [Bottom] *)
-  let cf_check : cm_fun = check_borrow_disappeared meta "end borrow" l ctx0 in
   let allow_inner_loans = false in
   match end_borrow_get_borrow meta allowed_abs allow_inner_loans l ctx with
   (* Two cases:
@@ -933,10 +927,10 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
             (end_borrow_aux config meta chain0 allowed_abs l) ctx
           in
           (* Retry to end the borrow *)
-          let cc = comp cc cc1 in
+          let cc = cc_comp cc cc1 in
           (* Check and apply *)
-          let ctx, check = cf_check ctx in
-          (ctx, comp cc check)
+          check ctx;
+          (ctx, cc)
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           let allowed_abs' = None in
           (* End the outer borrow *)
@@ -945,24 +939,24 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
             (end_borrow_aux config meta chain0 allowed_abs l) ctx
           in
           (* Retry to end the borrow *)
-          let cc = comp cc cc1 in
+          let cc = cc_comp cc cc1 in
           (* Check and apply *)
-          let ctx, check = cf_check ctx in
-          (ctx, comp cc check)
+          check ctx;
+          (ctx, cc)
       | OuterAbs abs_id ->
           (* The borrow is inside an abstraction: end the whole abstraction *)
           let ctx, end_abs = end_abstraction_aux config meta chain abs_id ctx in
           (* Compose with a sanity check *)
-          let ctx, check = cf_check ctx in
-          (ctx, comp end_abs check))
+          check ctx;
+          (ctx, end_abs))
   | Ok (ctx, None) ->
       log#ldebug (lazy "End borrow: borrow not found");
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) meta;
       (* Do a sanity check and continue *)
-      let ctx, check = cf_check ctx in
-      (ctx, check)
+      check ctx;
+      (ctx, fun e -> e)
   (* We found a borrow and replaced it with [Bottom]: give it back (i.e., update
      the corresponding loan) *)
   | Ok (ctx, Some (_, bc)) ->
@@ -976,10 +970,9 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
       (* Give back the value *)
       let ctx = give_back config meta l bc ctx in
       (* Do a sanity check and continue *)
-      let ctx, check = cf_check ctx in
-      let cc = check in
+      check ctx;
       (* Save a snapshot of the environment for the name generation *)
-      let cc = comp cc (SynthesizeSymbolic.cf_save_snapshot ctx) in
+      let cc = SynthesizeSymbolic.cf_save_snapshot ctx in
       (* Compose *)
       (ctx, cc)
 
@@ -994,7 +987,7 @@ and end_borrows_aux (config : config) (meta : Meta.meta)
   List.fold_left
     (fun (ctx, cc) id ->
       let ctx, cc1 = end_borrow_aux config meta chain allowed_abs id ctx in
-      (ctx, comp cc cc1))
+      (ctx, cc_comp cc cc1))
     (ctx, fun e -> e)
     ids
 
@@ -1037,51 +1030,35 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
           ^ " as it is set as non-endable");
 
       (* End the parent abstractions first *)
-      let cc = end_abstractions_aux config meta chain abs.parents in
-      let ctx, cc =
-        comp_unit cc
-          (fun ctx ->
-            log#ldebug
-              (lazy
-                ("end_abstraction_aux: "
-                ^ AbstractionId.to_string abs_id
-                ^ "\n- context after parent abstractions ended:\n"
-                ^ eval_ctx_to_string ~meta:(Some meta) ctx)))
-          ctx
-      in
+      let ctx, cc = end_abstractions_aux config meta chain abs.parents ctx in
+      log#ldebug
+        (lazy
+          ("end_abstraction_aux: "
+          ^ AbstractionId.to_string abs_id
+          ^ "\n- context after parent abstractions ended:\n"
+          ^ eval_ctx_to_string ~meta:(Some meta) ctx));
 
       (* End the loans inside the abstraction *)
-      let ctx, cc1 = (end_abstraction_loans config meta chain abs_id) ctx in
-      let cc = comp cc cc1 in
       let ctx, cc =
-        comp_unit
-          (fun ctx -> (ctx, cc))
-          (fun ctx ->
-            log#ldebug
-              (lazy
-                ("end_abstraction_aux: "
-                ^ AbstractionId.to_string abs_id
-                ^ "\n- context after loans ended:\n"
-                ^ eval_ctx_to_string ~meta:(Some meta) ctx)))
-          ctx
+        cf_comp cc (end_abstraction_loans config meta chain abs_id ctx)
       in
+      log#ldebug
+        (lazy
+          ("end_abstraction_aux: "
+          ^ AbstractionId.to_string abs_id
+          ^ "\n- context after loans ended:\n"
+          ^ eval_ctx_to_string ~meta:(Some meta) ctx));
 
       (* End the abstraction itself by redistributing the borrows it contains *)
-      let ctx, cc1 = (end_abstraction_borrows config meta chain abs_id) ctx in
-      let cc = comp cc cc1 in
+      let ctx, cc1 = end_abstraction_borrows config meta chain abs_id ctx in
+      let cc = cc_comp cc cc1 in
 
       (* End the regions owned by the abstraction - note that we don't need to
        * relookup the abstraction: the set of regions in an abstraction never
        * changes... *)
-      let ctx, cc =
-        comp_update
-          (fun ctx -> (ctx, cc))
-          (fun ctx ->
-            let ended_regions =
-              RegionId.Set.union ctx.ended_regions abs.regions
-            in
-            { ctx with ended_regions })
-          ctx
+      let ctx =
+        let ended_regions = RegionId.Set.union ctx.ended_regions abs.regions in
+        { ctx with ended_regions }
       in
 
       (* Remove all the references to the id of the current abstraction, and remove
@@ -1090,29 +1067,23 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
       let ctx, cc1 =
         (end_abstraction_remove_from_context config meta abs_id) ctx
       in
-      let cc = comp cc cc1 in
+      let cc = cc_comp cc cc1 in
 
       (* Debugging *)
-      let ctx, cc =
-        comp_unit
-          (fun ctx -> (ctx, cc))
-          (fun ctx ->
-            log#ldebug
-              (lazy
-                ("end_abstraction_aux: "
-                ^ AbstractionId.to_string abs_id
-                ^ "\n- original context:\n"
-                ^ eval_ctx_to_string ~meta:(Some meta) ctx0
-                ^ "\n\n- new context:\n"
-                ^ eval_ctx_to_string ~meta:(Some meta) ctx)))
-          ctx
-      in
+      log#ldebug
+        (lazy
+          ("end_abstraction_aux: "
+          ^ AbstractionId.to_string abs_id
+          ^ "\n- original context:\n"
+          ^ eval_ctx_to_string ~meta:(Some meta) ctx0
+          ^ "\n\n- new context:\n"
+          ^ eval_ctx_to_string ~meta:(Some meta) ctx));
 
       (* Sanity check: ending an abstraction must preserve the invariants *)
-      (* let cc = comp cc (Invariants.cf_check_invariants meta) in *)
-      let _ = (Invariants.cf_check_invariants meta) ctx in
+      (* let cc = cc_comp cc (Invariants.cf_check_invariants meta) in *)
+      Invariants.check_invariants meta ctx;
       (* Save a snapshot of the environment for the name generation *)
-      let cc = comp cc (SynthesizeSymbolic.cf_save_snapshot ctx) in
+      let cc = cc_comp cc (SynthesizeSymbolic.cf_save_snapshot ctx) in
 
       (* Apply the continuation *)
       (ctx, cc)
@@ -1127,7 +1098,7 @@ and end_abstractions_aux (config : config) (meta : Meta.meta)
   List.fold_left
     (fun (ctx, cc) id ->
       let ctx, cc1 = end_abstraction_aux config meta chain id ctx in
-      (ctx, comp cc cc1))
+      (ctx, cc_comp cc cc1))
     (ctx, fun e -> e)
     abs_ids
 
@@ -1154,7 +1125,7 @@ and end_abstraction_loans (config : config) (meta : Meta.meta)
       in
       (* Reexplore, looking for loans *)
       let ctx, cc1 = (end_abstraction_loans config meta chain abs_id) ctx in
-      let cc = comp cc cc1 in
+      let cc = cc_comp cc cc1 in
       (* Continue *)
       (ctx, cc)
   | Some (SymbolicValue sv) ->
@@ -1165,7 +1136,7 @@ and end_abstraction_loans (config : config) (meta : Meta.meta)
       in
       (* Reexplore, looking for loans *)
       let ctx, cc1 = (end_abstraction_loans config meta chain abs_id) ctx in
-      let cc = comp cc cc1 in
+      let cc = cc_comp cc cc1 in
       (* Continue *)
       (ctx, cc)
 
@@ -1451,7 +1422,7 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta)
       let ctx, end_external = f_end_external ctx in
       let ctx, end_internal = f_end_internal ctx in
       (* Compose and apply *)
-      let cc = comp end_external end_internal in
+      let cc = cc_comp end_external end_internal in
       (ctx, cc)
   | Some (NonSharedProj (abs_id', _proj_ty)) ->
       (* We found one projector of borrows in an abstraction: if it comes
@@ -1496,10 +1467,10 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta)
           (end_proj_loans_symbolic config meta chain abs_id regions sv) ctx
         in
         (* Retry ending the projector of loans *)
-        let cc = comp cc cc1 in
+        let cc = cc_comp cc cc1 in
         (* Sanity check *)
         let cc =
-          comp cc
+          cc_comp cc
             (let _, cc1 = cf_check ctx in
              cc1)
         in
@@ -1648,7 +1619,7 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
           in
           (* Recursive call *)
           let ctx, cc1 = (promote_reserved_mut_borrow config meta l) ctx in
-          let cc = comp cc cc1 in
+          let cc = cc_comp cc cc1 in
           (* Continue *)
           (ctx, cc)
       | None ->
@@ -1672,12 +1643,12 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
            * look for loans inside the value and end them before promoting
            * the borrow. *)
           let v, ctx, cc1 = (promote_shared_loan_to_mut_loan meta l) ctx in
-          let cc = comp cc cc1 in
+          let cc = cc_comp cc cc1 in
           (* Promote the borrow - the value should have been checked by
              {!promote_shared_loan_to_mut_loan}
           *)
           let ctx, cc1 = replace_reserved_borrow_with_mut_borrow meta l v ctx in
-          let cc = comp cc cc1 in
+          let cc = cc_comp cc cc1 in
           (* Continue *)
           (ctx, cc))
   | _, Abstract _ ->
