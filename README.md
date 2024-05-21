@@ -9,9 +9,9 @@ Wall in Pompei, digital image from Michael Lahanis.
 </figcaption>
 </div></p>
 
-# Aeneas [Ae-ne-as]
+# Aeneas [Ay-nay-as]
 
-Aeneas (pronunced [Ae-ne-as]) is a verification toolchain for Rust programs.  It relies on a translation from Rusts's MIR
+Aeneas (pronunced [Ay-nay-as]) is a verification toolchain for Rust programs.  It relies on a translation from Rusts's MIR
 internal language to a pure lamdba calculus.  It is intended to be used in combination with
 [Charon](https://github.com/AeneasVerif/charon), which compiles Rust programs to an intermediate
 representation called LLBC. It currently has backends for [F\*](https://www.fstar-lang.org),
