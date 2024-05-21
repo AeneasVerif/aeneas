@@ -392,7 +392,7 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
       (* in *)
       (* Compose and apply *)
       (* comp cc move cf ctx *)
-      (bottom, ctx, cc)
+      (v, ctx, cc)
 
 let eval_operand (config : config) (meta : Meta.meta) (op : operand)
     (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
@@ -404,7 +404,6 @@ let eval_operand (config : config) (meta : Meta.meta) (op : operand)
       ^ "\n"));
   let ctx, cc = (prepare_eval_operand_reorganize config meta op) ctx in
   let v, ctx, cc2 = (eval_operand_no_reorganize config meta op) ctx in
-
   (* We reorganize the context, then evaluate the operand *)
   (v, ctx, comp cc cc2)
 

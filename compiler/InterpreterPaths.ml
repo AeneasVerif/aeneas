@@ -611,7 +611,14 @@ let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
           match c with
           | LoanContent (VSharedLoan (bids, _)) ->
               end_borrows config meta bids ctx
-          | LoanContent (VMutLoan bid) -> end_borrow config meta bid ctx
+          | LoanContent (VMutLoan bid) -> 
+(*             let _ =
+              match lookup_borrow_opt ek_all bid ctx with
+              | None -> () (* Ok *)
+              | Some _ ->
+                  internal_error __FILE__ __LINE__ meta
+              in *)
+            end_borrow config meta bid ctx
           | BorrowContent _ -> craise __FILE__ __LINE__ meta "Unreachable"
         in
         (* Retry *)

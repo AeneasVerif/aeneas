@@ -115,8 +115,7 @@ let assign_to_place (config : config) (meta : Meta.meta) (rv : typed_value)
   let v, ctx, cc1 = remove_dummy_var meta rvalue_vid ctx in
   let cc = comp cc cc1 in
   (* Update the destination *)
-  let move_dest (rv : typed_value) (ctx : eval_ctx) :
-      typed_value * eval_ctx * (eval_result -> eval_result) =
+  let move_dest (rv : typed_value) (ctx : eval_ctx) : eval_ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows *)
     let mv = InterpreterPaths.read_place meta Write p ctx in
@@ -137,11 +136,11 @@ let assign_to_place (config : config) (meta : Meta.meta) (rv : typed_value)
         ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Final context:\n"
         ^ eval_ctx_to_string ~meta:(Some meta) ctx));
     (* Continue *)
-    (rv, ctx, fun e -> e)
+    ctx
   in
-  let _, ctx, move_dest = move_dest v ctx in
+  let ctx = move_dest v ctx in
   (* Compose and apply *)
-  (ctx, comp cc move_dest)
+  (ctx, cc)
 
 (** Evaluate an assertion, when the scrutinee is not symbolic *)
 let eval_assertion_concrete (config : config) (meta : Meta.meta)
