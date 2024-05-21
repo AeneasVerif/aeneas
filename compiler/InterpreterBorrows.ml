@@ -826,8 +826,8 @@ let give_back (config : config) (meta : Meta.meta) (l : BorrowId.id)
       craise __FILE__ __LINE__ meta "Unreachable"
 
 let check_borrow_disappeared (meta : Meta.meta) (fun_name : string)
-    (l : BorrowId.id) : cm_fun =
- fun ctx0 ->
+    (l : BorrowId.id) (ctx0 : eval_ctx) : cm_fun =
+ fun ctx ->
   let check_disappeared (ctx : eval_ctx) : unit =
     let _ =
       match lookup_borrow_opt ek_all l ctx with
@@ -854,7 +854,7 @@ let check_borrow_disappeared (meta : Meta.meta) (fun_name : string)
             ^ eval_ctx_to_string ~meta:(Some meta) ctx));
         internal_error __FILE__ __LINE__ meta
   in
-  unit_to_cm_fun check_disappeared ctx0
+  unit_to_cm_fun check_disappeared ctx
 
 (** End a borrow identified by its borrow id in a context.
 
@@ -895,6 +895,7 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
    * from the context *)
   let ctx0 = ctx in
   (* Start by ending the borrow itself (we lookup it up and replace it with [Bottom] *)
+  let cf_check : cm_fun = check_borrow_disappeared meta "end borrow" l ctx0 in
   let allow_inner_loans = false in
   match end_borrow_get_borrow meta allowed_abs allow_inner_loans l ctx with
   (* Two cases:
@@ -925,46 +926,42 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
            * inside another borrow *)
           let allowed_abs' = None in
           (* End the outer borrows *)
-          let ctx0, cc =
-            end_borrows_aux config meta chain allowed_abs' bids ctx0
+          let ctx, cc =
+            end_borrows_aux config meta chain allowed_abs' bids ctx
           in
-          let ctx0, cc1 =
-            (end_borrow_aux config meta chain0 allowed_abs l) ctx0
+          let ctx, cc1 =
+            (end_borrow_aux config meta chain0 allowed_abs l) ctx
           in
           (* Retry to end the borrow *)
           let cc = comp cc cc1 in
           (* Check and apply *)
-          let ctx0, check = check_borrow_disappeared meta "end borrow" l ctx0 in
-          (ctx0, comp cc check)
+          let ctx, check = cf_check ctx in
+          (ctx, comp cc check)
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           let allowed_abs' = None in
           (* End the outer borrow *)
-          let ctx0, cc =
-            end_borrow_aux config meta chain allowed_abs' bid ctx0
-          in
-          let ctx0, cc1 =
-            (end_borrow_aux config meta chain0 allowed_abs l) ctx0
+          let ctx, cc = end_borrow_aux config meta chain allowed_abs' bid ctx in
+          let ctx, cc1 =
+            (end_borrow_aux config meta chain0 allowed_abs l) ctx
           in
           (* Retry to end the borrow *)
           let cc = comp cc cc1 in
           (* Check and apply *)
-          let ctx0, check = check_borrow_disappeared meta "end borrow" l ctx0 in
-          (ctx0, comp cc check)
+          let ctx, check = cf_check ctx in
+          (ctx, comp cc check)
       | OuterAbs abs_id ->
           (* The borrow is inside an abstraction: end the whole abstraction *)
-          let ctx0, end_abs =
-            end_abstraction_aux config meta chain abs_id ctx0
-          in
+          let ctx, end_abs = end_abstraction_aux config meta chain abs_id ctx in
           (* Compose with a sanity check *)
-          let ctx0, check = check_borrow_disappeared meta "end borrow" l ctx0 in
-          (ctx0, comp end_abs check))
+          let ctx, check = cf_check ctx in
+          (ctx, comp end_abs check))
   | Ok (ctx, None) ->
       log#ldebug (lazy "End borrow: borrow not found");
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) meta;
       (* Do a sanity check and continue *)
-      let ctx, check = check_borrow_disappeared meta "end borrow" l ctx in
+      let ctx, check = cf_check ctx in
       (ctx, check)
   (* We found a borrow and replaced it with [Bottom]: give it back (i.e., update
      the corresponding loan) *)
@@ -979,7 +976,7 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
       (* Give back the value *)
       let ctx = give_back config meta l bc ctx in
       (* Do a sanity check and continue *)
-      let ctx, check = check_borrow_disappeared meta "end borrow" l ctx in
+      let ctx, check = cf_check ctx in
       let cc = check in
       (* Save a snapshot of the environment for the name generation *)
       let cc = comp cc (SynthesizeSymbolic.cf_save_snapshot ctx) in
