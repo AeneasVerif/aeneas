@@ -63,6 +63,12 @@ let cf_comp (f : eval_result -> eval_result)
   let x, g = g in
   (x, cc_comp f g)
 
+let cf_comp2 (f : eval_result -> eval_result)
+    (g : 'a * 'b * (eval_result -> eval_result)) :
+    'a * 'b * (eval_result -> eval_result) =
+  let x, y, g = g in
+  (x, y, cc_comp f g)
+
 (** [fold] operation for functions which thread a context and return a continuation *)
 let fold_left_apply_continuation (f : 'a -> 'c -> 'c * ('e -> 'e))
     (inputs : 'a list) (ctx : 'c) : 'c * ('e -> 'e) =
