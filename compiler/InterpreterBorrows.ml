@@ -923,30 +923,28 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
           let ctx, cc =
             end_borrows_aux config meta chain allowed_abs' bids ctx
           in
-          let ctx, cc1 =
-            (end_borrow_aux config meta chain0 allowed_abs l) ctx
-          in
           (* Retry to end the borrow *)
-          let cc = cc_comp cc cc1 in
-          (* Check and apply *)
+          let ctx, cc =
+            cf_comp cc (end_borrow_aux config meta chain0 allowed_abs l ctx)
+          in
+          (* Check and continue *)
           check ctx;
           (ctx, cc)
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           let allowed_abs' = None in
           (* End the outer borrow *)
           let ctx, cc = end_borrow_aux config meta chain allowed_abs' bid ctx in
-          let ctx, cc1 =
-            (end_borrow_aux config meta chain0 allowed_abs l) ctx
-          in
           (* Retry to end the borrow *)
-          let cc = cc_comp cc cc1 in
-          (* Check and apply *)
+          let ctx, cc =
+            cf_comp cc (end_borrow_aux config meta chain0 allowed_abs l ctx)
+          in
+          (* Check and continue *)
           check ctx;
           (ctx, cc)
       | OuterAbs abs_id ->
           (* The borrow is inside an abstraction: end the whole abstraction *)
           let ctx, end_abs = end_abstraction_aux config meta chain abs_id ctx in
-          (* Compose with a sanity check *)
+          (* Sanity check *)
           check ctx;
           (ctx, end_abs))
   | Ok (ctx, None) ->
@@ -981,15 +979,12 @@ and end_borrows_aux (config : config) (meta : Meta.meta)
     (lset : BorrowId.Set.t) : cm_fun =
  fun ctx ->
   (* This is not necessary, but we prefer to reorder the borrow ids,
-   * so that we actually end from the smallest id to the highest id - just
-   * a matter of taste, and may make debugging easier *)
+     so that we actually end from the smallest id to the highest id - just
+     a matter of taste, and may make debugging easier *)
   let ids = BorrowId.Set.fold (fun id ids -> id :: ids) lset [] in
-  List.fold_left
-    (fun (ctx, cc) id ->
-      let ctx, cc1 = end_borrow_aux config meta chain allowed_abs id ctx in
-      (ctx, cc_comp cc cc1))
-    (ctx, fun e -> e)
-    ids
+  fold_left_apply_continuation
+    (fun id ctx -> end_borrow_aux config meta chain allowed_abs id ctx)
+    ids ctx
 
 and end_abstraction_aux (config : config) (meta : Meta.meta)
     (chain : borrow_or_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
@@ -1050,24 +1045,24 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
           ^ eval_ctx_to_string ~meta:(Some meta) ctx));
 
       (* End the abstraction itself by redistributing the borrows it contains *)
-      let ctx, cc1 = end_abstraction_borrows config meta chain abs_id ctx in
-      let cc = cc_comp cc cc1 in
+      let ctx, cc =
+        cf_comp cc (end_abstraction_borrows config meta chain abs_id ctx)
+      in
 
       (* End the regions owned by the abstraction - note that we don't need to
-       * relookup the abstraction: the set of regions in an abstraction never
-       * changes... *)
+         relookup the abstraction: the set of regions in an abstraction never
+         changes... *)
       let ctx =
         let ended_regions = RegionId.Set.union ctx.ended_regions abs.regions in
         { ctx with ended_regions }
       in
 
       (* Remove all the references to the id of the current abstraction, and remove
-       * the abstraction itself.
-       * **Rk.**: this is where we synthesize the updated symbolic AST *)
-      let ctx, cc1 =
-        (end_abstraction_remove_from_context config meta abs_id) ctx
+         the abstraction itself.
+         **Rk.**: this is where we synthesize the updated symbolic AST *)
+      let ctx, cc =
+        cf_comp cc (end_abstraction_remove_from_context config meta abs_id ctx)
       in
-      let cc = cc_comp cc cc1 in
 
       (* Debugging *)
       log#ldebug
@@ -1080,12 +1075,12 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
           ^ eval_ctx_to_string ~meta:(Some meta) ctx));
 
       (* Sanity check: ending an abstraction must preserve the invariants *)
-      (* let cc = cc_comp cc (Invariants.cf_check_invariants meta) in *)
       Invariants.check_invariants meta ctx;
+
       (* Save a snapshot of the environment for the name generation *)
       let cc = cc_comp cc (SynthesizeSymbolic.cf_save_snapshot ctx) in
 
-      (* Apply the continuation *)
+      (* Return *)
       (ctx, cc)
 
 and end_abstractions_aux (config : config) (meta : Meta.meta)
@@ -1095,12 +1090,9 @@ and end_abstractions_aux (config : config) (meta : Meta.meta)
    * so that we actually end from the smallest id to the highest id - just
    * a matter of taste, and may make debugging easier *)
   let abs_ids = AbstractionId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
-  List.fold_left
-    (fun (ctx, cc) id ->
-      let ctx, cc1 = end_abstraction_aux config meta chain id ctx in
-      (ctx, cc_comp cc cc1))
-    (ctx, fun e -> e)
-    abs_ids
+  fold_left_apply_continuation
+    (fun id ctx -> end_abstraction_aux config meta chain id ctx)
+    abs_ids ctx
 
 and end_abstraction_loans (config : config) (meta : Meta.meta)
     (chain : borrow_or_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
@@ -1124,21 +1116,15 @@ and end_abstraction_loans (config : config) (meta : Meta.meta)
         | Borrows bids -> end_borrows_aux config meta chain None bids ctx
       in
       (* Reexplore, looking for loans *)
-      let ctx, cc1 = (end_abstraction_loans config meta chain abs_id) ctx in
-      let cc = cc_comp cc cc1 in
-      (* Continue *)
-      (ctx, cc)
+      cf_comp cc (end_abstraction_loans config meta chain abs_id ctx)
   | Some (SymbolicValue sv) ->
       (* There is a proj_loans over a symbolic value: end the proj_borrows
-       * which intersect this proj_loans, then end the proj_loans itself *)
+         which intersect this proj_loans, then end the proj_loans itself *)
       let ctx, cc =
         end_proj_loans_symbolic config meta chain abs_id abs.regions sv ctx
       in
       (* Reexplore, looking for loans *)
-      let ctx, cc1 = (end_abstraction_loans config meta chain abs_id) ctx in
-      let cc = cc_comp cc cc1 in
-      (* Continue *)
-      (ctx, cc)
+      cf_comp cc (end_abstraction_loans config meta chain abs_id ctx)
 
 and end_abstraction_borrows (config : config) (meta : Meta.meta)
     (chain : borrow_or_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
@@ -1321,9 +1307,8 @@ and end_abstraction_remove_from_context (_config : config) (meta : Meta.meta)
  fun ctx ->
   let ctx, abs = ctx_remove_abs meta ctx abs_id in
   let abs = Option.get abs in
-  (* Apply the continuation *)
   (* Synthesize the symbolic AST *)
-  (ctx, fun e -> SynthesizeSymbolic.synthesize_end_abstraction ctx abs e)
+  (ctx, SynthesizeSymbolic.synthesize_end_abstraction ctx abs)
 
 (** End a proj_loan over a symbolic value by ending the proj_borrows which
     intersect this proj_loans.
@@ -1345,10 +1330,6 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta)
  fun ctx ->
   (* Small helpers for sanity checks *)
   let check ctx = no_aproj_over_symbolic_in_context meta sv ctx in
-  let cf_check (ctx : eval_ctx) : eval_ctx * (eval_result -> eval_result) =
-    check ctx;
-    (ctx, fun e -> e)
-  in
   (* Find the first proj_borrows which intersects the proj_loans *)
   let explore_shared = true in
   match
@@ -1394,8 +1375,7 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta)
         List.partition (fun (abs_id', _) -> abs_id' = abs_id) projs
       in
       (* End the external borrow projectors (end their abstractions) *)
-      let f_end_external : cm_fun =
-       fun ctx ->
+      let ctx, cc =
         let abs_ids = List.map fst external_projs in
         let abs_ids =
           List.fold_left
@@ -1406,23 +1386,16 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta)
         end_abstractions_aux config meta chain abs_ids ctx
       in
       (* End the internal borrows projectors and the loans projector *)
-      let f_end_internal : cm_fun =
-       fun ctx ->
+      let ctx =
         (* All the proj_borrows are owned: simply erase them *)
         let ctx =
           remove_intersecting_aproj_borrows_shared meta regions sv ctx
         in
         (* End the loan itself *)
-        let ctx = update_aproj_loans_to_ended meta abs_id sv ctx in
-        (* Sanity check *)
-        check ctx;
-        (* Continue *)
-        (ctx, fun e -> e)
+        update_aproj_loans_to_ended meta abs_id sv ctx
       in
-      let ctx, end_external = f_end_external ctx in
-      let ctx, end_internal = f_end_internal ctx in
-      (* Compose and apply *)
-      let cc = cc_comp end_external end_internal in
+      (* Sanity check *)
+      check ctx;
       (ctx, cc)
   | Some (NonSharedProj (abs_id', _proj_ty)) ->
       (* We found one projector of borrows in an abstraction: if it comes
@@ -1463,18 +1436,14 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta)
       else
         (* The borrows proj comes from a different abstraction: end it. *)
         let ctx, cc = end_abstraction_aux config meta chain abs_id' ctx in
-        let ctx, cc1 =
-          (end_proj_loans_symbolic config meta chain abs_id regions sv) ctx
-        in
         (* Retry ending the projector of loans *)
-        let cc = cc_comp cc cc1 in
-        (* Sanity check *)
-        let cc =
-          cc_comp cc
-            (let _, cc1 = cf_check ctx in
-             cc1)
+        let ctx, cc =
+          cf_comp cc
+            (end_proj_loans_symbolic config meta chain abs_id regions sv ctx)
         in
-        (* Continue *)
+        (* Sanity check *)
+        check ctx;
+        (* Return *)
         (ctx, cc)
 
 let end_borrow config (meta : Meta.meta) : BorrowId.id -> cm_fun =
@@ -1485,22 +1454,16 @@ let end_borrows config (meta : Meta.meta) : BorrowId.Set.t -> cm_fun =
 
 let end_abstraction config meta = end_abstraction_aux config meta []
 let end_abstractions config meta = end_abstractions_aux config meta []
-
-let end_borrow_no_synth config meta id ctx =
-  let ctx, _ = end_borrow config meta id ctx in
-  ctx
+let end_borrow_no_synth config meta id ctx = fst (end_borrow config meta id ctx)
 
 let end_borrows_no_synth config meta ids ctx =
-  let ctx, _ = end_borrows config meta ids ctx in
-  ctx
+  fst (end_borrows config meta ids ctx)
 
 let end_abstraction_no_synth config meta id ctx =
-  let ctx, _ = end_abstraction config meta id ctx in
-  ctx
+  fst (end_abstraction config meta id ctx)
 
 let end_abstractions_no_synth config meta ids ctx =
-  let ctx, _ = end_abstractions config meta ids ctx in
-  ctx
+  fst (end_abstractions config meta ids ctx)
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
@@ -1519,7 +1482,7 @@ let end_abstractions_no_synth config meta ids ctx =
     The loan to update mustn't be a borrowed value.
  *)
 let promote_shared_loan_to_mut_loan (meta : Meta.meta) (l : BorrowId.id)
-    (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
+    (ctx : eval_ctx) : typed_value * eval_ctx =
   (* Debug *)
   log#ldebug
     (lazy
@@ -1556,11 +1519,11 @@ let promote_shared_loan_to_mut_loan (meta : Meta.meta) (l : BorrowId.id)
         meta "There shouldn't be reserved borrows";
       (* Update the loan content *)
       let ctx = update_loan meta ek l (VMutLoan l) ctx in
-      (* Continue *)
-      (sv, ctx, fun e -> e)
+      (* Return *)
+      (sv, ctx)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
-       * returned by abstractions. I'm not sure how we could handle that anyway. *)
+         returned by abstractions. I'm not sure how we could handle that anyway. *)
       craise __FILE__ __LINE__ meta
         "Can't promote a shared loan to a mutable loan if the loan is inside a \
          region abstraction"
@@ -1571,29 +1534,24 @@ let promote_shared_loan_to_mut_loan (meta : Meta.meta) (l : BorrowId.id)
     all: it doesn't touch the corresponding loan).
  *)
 let replace_reserved_borrow_with_mut_borrow (meta : Meta.meta) (l : BorrowId.id)
-    (borrowed_value : typed_value) (ctx : eval_ctx) :
-    eval_ctx * (eval_result -> eval_result) =
+    (borrowed_value : typed_value) (ctx : eval_ctx) : eval_ctx =
   (* Lookup the reserved borrow - note that we don't go inside borrows/loans:
      there can't be reserved borrows inside other borrows/loans
   *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = false; enter_abs = false }
   in
-  let ctx =
-    match lookup_borrow meta ek l ctx with
-    | Concrete (VSharedBorrow _ | VMutBorrow (_, _)) ->
-        craise __FILE__ __LINE__ meta "Expected a reserved mutable borrow"
-    | Concrete (VReservedMutBorrow _) ->
-        (* Update it *)
-        update_borrow meta ek l (VMutBorrow (l, borrowed_value)) ctx
-    | Abstract _ ->
-        (* This can't happen for sure *)
-        craise __FILE__ __LINE__ meta
-          "Can't promote a shared borrow to a mutable borrow if the borrow is \
-           inside a region abstraction"
-  in
-  (* Continue *)
-  (ctx, fun e -> e)
+  match lookup_borrow meta ek l ctx with
+  | Concrete (VSharedBorrow _ | VMutBorrow (_, _)) ->
+      craise __FILE__ __LINE__ meta "Expected a reserved mutable borrow"
+  | Concrete (VReservedMutBorrow _) ->
+      (* Update it *)
+      update_borrow meta ek l (VMutBorrow (l, borrowed_value)) ctx
+  | Abstract _ ->
+      (* This can't happen for sure *)
+      craise __FILE__ __LINE__ meta
+        "Can't promote a shared borrow to a mutable borrow if the borrow is \
+         inside a region abstraction"
 
 (** Promote a reserved mut borrow to a mut borrow. *)
 let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
@@ -1618,10 +1576,7 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
             | VMutLoan bid -> end_borrow config meta bid ctx
           in
           (* Recursive call *)
-          let ctx, cc1 = (promote_reserved_mut_borrow config meta l) ctx in
-          let cc = cc_comp cc cc1 in
-          (* Continue *)
-          (ctx, cc)
+          cf_comp cc (promote_reserved_mut_borrow config meta l ctx)
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
@@ -1642,14 +1597,12 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
            * any loans. In practice, it shouldn't, but we could also
            * look for loans inside the value and end them before promoting
            * the borrow. *)
-          let v, ctx, cc1 = (promote_shared_loan_to_mut_loan meta l) ctx in
-          let cc = cc_comp cc cc1 in
+          let v, ctx = promote_shared_loan_to_mut_loan meta l ctx in
           (* Promote the borrow - the value should have been checked by
              {!promote_shared_loan_to_mut_loan}
           *)
-          let ctx, cc1 = replace_reserved_borrow_with_mut_borrow meta l v ctx in
-          let cc = cc_comp cc cc1 in
-          (* Continue *)
+          let ctx = replace_reserved_borrow_with_mut_borrow meta l v ctx in
+          (* Return *)
           (ctx, cc))
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
