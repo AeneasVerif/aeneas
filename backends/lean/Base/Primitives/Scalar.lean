@@ -1419,6 +1419,18 @@ instance (ty: ScalarTy) : LinearOrder (Scalar ty) where
     right; exact (Scalar.le_equiv _ _).2 H
   decidableLE := ScalarDecidableLE ty
 
+-- Coercion theorems
+-- This is helpful whenever you want to "push" casts to the innermost nodes
+-- and make the cast normalization happen more magically.
+
+@[simp, norm_cast]
+theorem coe_max {ty: ScalarTy} (a b: Scalar ty): ↑(Max.max a b) = (Max.max (↑a) (↑b): ℤ) := by
+  -- TODO: there should be a shorter way to prove this.
+  rw [max_def, max_def]
+  split_ifs <;> simp_all
+  refine' absurd _ (lt_irrefl a)
+  exact lt_of_le_of_lt (by assumption) ((Scalar.lt_equiv _ _).2 (by assumption))
+
 -- Leading zeros
 def core.num.Usize.leading_zeros (x : Usize) : U32 := sorry
 def core.num.U8.leading_zeros (x : U8) : U32 := sorry
