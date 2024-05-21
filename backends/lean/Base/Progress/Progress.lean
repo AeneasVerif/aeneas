@@ -243,6 +243,9 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
   let goalTy ← mgoal.getType
+  -- There might be uninstantiated meta-variables in the goal that we need
+  -- to instantiate (otherwise we will get stuck).
+  let goalTy ← instantiateMVars goalTy
   trace[Progress] "goal: {goalTy}"
   -- Dive into the goal to lookup the theorem
   -- Remark: if we don't isolate the call to `withPSpec` to immediately "close"
@@ -457,6 +460,16 @@ namespace Test
     (f : U32 → Result Unit) (h : ∀ x, f x = .ok ()) :
     f x = ok () := by
     progress
+
+  /- The use of `right` introduces a meta-variable in the goal, that we
+     need to instantiate (otherwise `progress` gets stuck) -/
+  example {ty} {x y : Scalar ty}
+    (hmin : Scalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ Scalar.max ty) :
+    False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
+    right
+    progress keep _ as ⟨ z, h1 .. ⟩
+    simp [*, h1]
 
 end Test
 
