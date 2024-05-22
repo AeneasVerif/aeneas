@@ -108,13 +108,21 @@ clean: clean-generated
 test: build-dev test-all
 
 .PHONY: test-all
-test-all: test-no_nested_borrows test-paper \
-	test-hashmap test-hashmap_main \
-	test-external test-constants \
-	test-polonius_list test-betree_main \
+test-all: \
+	test-arrays \
+	test-betree_main \
 	ctest-test-betree_main \
+	test-bitwise \
+	test-constants \
+	test-demo \
+	test-external \
+	test-hashmap \
+	test-hashmap_main \
 	test-loops \
-	test-arrays test-traits test-bitwise test-demo
+	test-no_nested_borrows \
+	test-paper \
+	test-polonius_list \
+	test-traits
 
 .PHONY: clean-generated
 clean-generated:
@@ -142,120 +150,95 @@ endif
 # The command to run Aeneas on the proper llbc file
 AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/$(BACKEND)/$(SUBDIR) -backend $(BACKEND) $(OPTIONS)
 
-
-# Add specific options to some tests
-test-no_nested_borrows test-paper: \
-	OPTIONS += -test-trans-units
-test-no_nested_borrows test-paper: SUBDIR := misc
-tfstar-no_nested_borrows tfstar-paper:
-tlean-no_nested_borrows: SUBDIR :=
-tlean-paper: SUBDIR :=
-thol4-no_nested_borrows: SUBDIR := misc-no_nested_borrows
-thol4-paper: SUBDIR := misc-paper
-
-test-arrays: OPTIONS +=
+# Subdirs
 test-arrays: SUBDIR := arrays
-tfstar-arrays: OPTIONS += -decreases-clauses -template-clauses -split-files
-tcoq-arrays: OPTIONS += -use-fuel
 tlean-arrays: SUBDIR :=
-tlean-arrays: OPTIONS +=
-thol4-arrays: OPTIONS +=
 
-test-traits: OPTIONS +=
-test-traits: SUBDIR := traits
-tfstar-traits: OPTIONS += -decreases-clauses -template-clauses
-tcoq-traits: OPTIONS +=
-tlean-traits: SUBDIR :=
-tlean-traits: OPTIONS +=
-thol4-traits: OPTIONS +=
+test-betree_main: SUBDIR := betree
+tlean-betree_main: SUBDIR :=
 
-test-loops: OPTIONS +=
+ctest-test-betree_main: SUBDIR := betree_back_stateful
+
+test-bitwise: SUBDIR := misc
+tlean-bitwise: SUBDIR :=
+thol4-bitwise: SUBDIR := misc-bitwise
+
+test-constants: SUBDIR := misc
+tlean-constants: SUBDIR :=
+thol4-constants: SUBDIR := misc-constants
+
+test-demo: SUBDIR := demo
+tlean-demo: SUBDIR := Demo
+
+test-external: SUBDIR := misc
+tlean-external: SUBDIR :=
+thol4-external: SUBDIR := misc-external
+
+test-hashmap: SUBDIR := hashmap
+tlean-hashmap: SUBDIR :=
+
+test-hashmap_main: SUBDIR := hashmap_on_disk
+tlean-hashmap_main: SUBDIR :=
+
 test-loops: SUBDIR := misc
-tfstar-loops: OPTIONS += -decreases-clauses -template-clauses -split-files
-tcoq-loops: OPTIONS += -use-fuel
 tlean-loops: SUBDIR :=
 thol4-loops: SUBDIR := misc-loops
 
-test-demo: OPTIONS +=
-test-demo: SUBDIR := demo
-tfstar-demo: OPTIONS += -use-fuel
-tcoq-demo: OPTIONS += -use-fuel
-tlean-demo: SUBDIR := Demo
-thol4-demo: OPTIONS +=
+test-no_nested_borrows: SUBDIR := misc
+tlean-no_nested_borrows: SUBDIR :=
+thol4-no_nested_borrows: SUBDIR := misc-no_nested_borrows
 
-# TODO: reactivate -test-trans-units
-test-hashmap: OPTIONS += -split-files
-test-hashmap: SUBDIR := hashmap
-tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
-tcoq-hashmap: OPTIONS += -use-fuel
-tlean-hashmap: SUBDIR :=
-tlean-hashmap: OPTIONS += -no-gen-lib-entry # We add a custom import in the Hashmap.lean file: we do not want to overwrite it
-thol4-hashmap: OPTIONS +=
+test-paper: SUBDIR := misc
+tlean-paper: SUBDIR :=
+thol4-paper: SUBDIR := misc-paper
 
-# TODO: reactivate -test-trans-units
-test-hashmap_main: OPTIONS += -state -split-files
-test-hashmap_main: SUBDIR := hashmap_on_disk
-tfstar-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
-tcoq-hashmap_main: OPTIONS += -use-fuel
-tlean-hashmap_main: SUBDIR :=
-thol4-hashmap_main: OPTIONS +=
-
-test-polonius_list: OPTIONS += -test-trans-units
 test-polonius_list: SUBDIR := misc
-tfstar-polonius_list: OPTIONS +=
-tcoq-polonius_list: OPTIONS +=
 tlean-polonius_list: SUBDIR :=
-tlean-polonius_list: OPTIONS +=
 thol4-polonius_list: SUBDIR := misc-polonius_list
-thol4-polonius_list: OPTIONS +=
 
-test-constants: OPTIONS += -test-trans-units
-test-constants: SUBDIR := misc
-tfstar-constants: OPTIONS +=
-tcoq-constants: OPTIONS +=
-tlean-constants: SUBDIR :=
-tlean-constants: OPTIONS +=
-thol4-constants: SUBDIR := misc-constants
-thol4-constants: OPTIONS +=
+test-traits: SUBDIR := traits
+tlean-traits: SUBDIR :=
 
-test-external: OPTIONS += -test-trans-units -state -split-files
-test-external: SUBDIR := misc
-tfstar-external: OPTIONS +=
-tcoq-external: OPTIONS +=
-tlean-external: SUBDIR :=
-tlean-external: OPTIONS +=
-thol4-external: SUBDIR := misc-external
-thol4-external: OPTIONS +=
+# Add specific options to some tests
+# TODO: reactivate -test-trans-units for hashmap and hashmap_main
+tfstar-arrays: OPTIONS += -decreases-clauses -template-clauses -split-files
+tcoq-arrays: OPTIONS += -use-fuel
+
+test-betree_main: OPTIONS += -backward-no-state-update -test-trans-units -state -split-files
+tfstar-betree_main: OPTIONS += -decreases-clauses -template-clauses
+tcoq-betree_main: OPTIONS += -use-fuel
+
+ctest-test-betree_main: OPTIONS += -test-trans-units -state -split-files
+ctest-test-betree_main: OPTIONS += -decreases-clauses -template-clauses
 
 test-bitwise: OPTIONS += -test-trans-units
-test-bitwise: SUBDIR := misc
-tfstar-bitwise: OPTIONS +=
-tcoq-bitwise: OPTIONS +=
-tlean-bitwise: SUBDIR :=
-tlean-bitwise: OPTIONS +=
-thol4-bitwise: SUBDIR := misc-bitwise
-thol4-bitwise: OPTIONS +=
 
-BETREE_FSTAR_OPTIONS = -decreases-clauses -template-clauses
-test-betree_main: OPTIONS += -backward-no-state-update -test-trans-units -state -split-files
-test-betree_main: SUBDIR:=betree
-tfstar-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
-tcoq-betree_main: OPTIONS += -use-fuel
-tlean-betree_main: SUBDIR :=
-tlean-betree_main: OPTIONS +=
-thol4-betree_main: OPTIONS +=
+test-constants: OPTIONS += -test-trans-units
 
-# Additional, *c*ustom test on the betree: translate it without `-backward-no-state-update`.
-# This generates very ugly code, but is good to test the translation.
-.PHONY: ctest-test-betree_main
-ctest-test-betree_main: test-betree_main
-ctest-test-betree_main: OPTIONS += -test-trans-units -state -split-files
-ctest-test-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
-ctest-test-betree_main: BACKEND := fstar
-ctest-test-betree_main: SUBDIR:=betree_back_stateful
-ctest-test-betree_main: FILE = betree_main
-ctest-test-betree_main:
-	$(AENEAS_CMD)
+tfstar-demo: OPTIONS += -use-fuel
+tcoq-demo: OPTIONS += -use-fuel
+
+test-external: OPTIONS += -test-trans-units -state -split-files
+
+test-hashmap: OPTIONS += -split-files
+tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
+tcoq-hashmap: OPTIONS += -use-fuel
+tlean-hashmap: OPTIONS += -no-gen-lib-entry # We add a custom import in the Hashmap.lean file: we do not want to overwrite it
+
+test-hashmap_main: OPTIONS += -state -split-files
+tfstar-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
+tcoq-hashmap_main: OPTIONS += -use-fuel
+
+tfstar-loops: OPTIONS += -decreases-clauses -template-clauses -split-files
+tcoq-loops: OPTIONS += -use-fuel
+
+test-no_nested_borrows: OPTIONS += -test-trans-units
+
+test-paper: OPTIONS += -test-trans-units
+
+test-polonius_list: OPTIONS += -test-trans-units
+
+tfstar-traits: OPTIONS += -decreases-clauses -template-clauses
 
 # Generic rules to extract the LLBC from a rust file
 # We use the rules in Charon's Makefile to generate the .llbc files: the options
@@ -290,9 +273,16 @@ tlean-%:
 thol4-%: BACKEND := hol4
 thol4-%:
 	echo Ignoring the $* test for HOL4
-
-#thol4-%:
 #	$(AENEAS_CMD)
+
+# Additional, *c*ustom test on the betree: translate it without `-backward-no-state-update`.
+# This generates very ugly code, but is good to test the translation.
+.PHONY: ctest-test-betree_main
+ctest-test-betree_main: test-betree_main
+ctest-test-betree_main: FILE = betree_main
+ctest-test-betree_main: BACKEND := fstar
+ctest-test-betree_main:
+	$(AENEAS_CMD)
 
 # Nix - TODO: add the lean tests
 .PHONY: nix
