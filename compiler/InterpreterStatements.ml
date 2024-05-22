@@ -161,10 +161,10 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
     : st_cm_fun =
  fun ctx ->
   (* Evaluate the operand *)
-  let v, ctx, cc_eval_op = eval_operand config meta assertion.cond ctx in
+  let v, ctx, cf_eval_op = eval_operand config meta assertion.cond ctx in
   (* Evaluate the assertion *)
   sanity_check __FILE__ __LINE__ (v.ty = TLiteral TBool) meta;
-  let st, cc_eval_assert =
+  let st, cf_eval_assert =
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
      * know the concrete value of the boolean we test, we use this value
@@ -193,7 +193,7 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
           ^ typed_value_to_string ~meta:(Some meta) ctx v)
   in
   (* Compose and apply *)
-  (st, cc_comp cc_eval_op cc_eval_assert)
+  (st, cc_comp cf_eval_op cf_eval_assert)
 
 (** Updates the discriminant of a value at a given place.
 
@@ -532,7 +532,7 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
           (* "Execute" the function body. As the functions are assumed, here we call
            * custom functions to perform the proper manipulations: we don't have
            * access to a body. *)
-          let ctx, cc_eval_body =
+          let ctx, cf_eval_body =
             match fid with
             | BoxNew -> eval_box_new_concrete config meta generics ctx
             | BoxFree ->
@@ -543,7 +543,7 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
               ->
                 craise __FILE__ __LINE__ meta "Unimplemented"
           in
-          let cc = cc_comp cc cc_eval_body in
+          let cc = cc_comp cc cf_eval_body in
 
           (* Pop the frame *)
           cf_comp cc (pop_frame_assign config meta dest ctx))
@@ -920,7 +920,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   Invariants.check_invariants st.meta ctx;
 
   (* Evaluate *)
-  let stl, cc_eval_st =
+  let stl, cf_eval_st =
     log#ldebug
       (lazy
         ("\neval_statement: cf_eval_st: statement:\n"
@@ -944,7 +944,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
                 ("about to assign to place: " ^ place_to_string ctx p
                ^ "\n- Context:\n"
                 ^ eval_ctx_to_string ~meta:(Some st.meta) ctx));
-            let (ctx, res), cc_assign =
+            let (ctx, res), cf_assign =
               match res with
               | Error EPanic -> ((ctx, Panic), fun e -> e)
               | Ok rv ->
@@ -973,7 +973,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
                   in
                   ((ctx, Unit), cc)
             in
-            let cc = cc_comp cc cc_assign in
+            let cc = cc_comp cc cf_assign in
             (* Compose and apply *)
             ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.meta cc))
     | FakeRead p ->
@@ -1027,7 +1027,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
     | Switch switch -> eval_switch config st.meta switch ctx
   in
   (* Compose and apply *)
-  (stl, fun el -> cc (cc_eval_st el))
+  (stl, cc_comp cc cf_eval_st)
 
 and eval_global (config : config) (meta : Meta.meta) (dest : place)
     (gid : GlobalDeclId.id) (generics : generic_args) : stl_cm_fun =
@@ -1085,9 +1085,9 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
   match switch with
   | If (op, st1, st2) ->
       (* Evaluate the operand *)
-      let op_v, ctx, cc_eval_op = eval_operand config meta op ctx in
+      let op_v, ctx, cf_eval_op = eval_operand config meta op ctx in
       (* Switch on the value *)
-      let ctx_resl, cc_if =
+      let ctx_resl, cf_if =
         match op_v.value with
         | VLiteral (VBool b) ->
             (* Branch *)
@@ -1116,12 +1116,12 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
         | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
       in
       (* Compose *)
-      (ctx_resl, cc_comp cc_eval_op cc_if)
+      (ctx_resl, cc_comp cf_eval_op cf_if)
   | SwitchInt (op, int_ty, stgts, otherwise) ->
       (* Evaluate the operand *)
-      let op_v, ctx, cc_eval_op = eval_operand config meta op ctx in
+      let op_v, ctx, cf_eval_op = eval_operand config meta op ctx in
       (* Switch on the value *)
-      let ctx_resl, cc_switch =
+      let ctx_resl, cf_switch =
         match op_v.value with
         | VLiteral (VScalar sv) -> (
             (* Sanity check *)
@@ -1174,7 +1174,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
         | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
       in
       (* Compose *)
-      (ctx_resl, cc_comp cc_eval_op cc_switch)
+      (ctx_resl, cc_comp cf_eval_op cf_switch)
   | Match (p, stgts, otherwise) ->
       (* Access the place *)
       let access = Read in
