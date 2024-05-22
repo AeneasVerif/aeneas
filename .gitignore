@@ -19,7 +19,7 @@ _build/
 /charon
 
 # We group everything here
-bin
+/bin
 
 # oasis generated files
 setup.data

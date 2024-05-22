@@ -47,6 +47,7 @@
           '';
           installPhase = "touch $out";
         };
+
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
@@ -70,6 +71,15 @@
             echo charon.packages.${system}.tests
           '';
         };
+
+        test_runner = ocamlPackages.buildDunePackage {
+          pname = "aeneas_test_runner";
+          version = "0.1.0";
+          duneVersion = "3";
+          src = ./tests/test_runner;
+          OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
+        };
+
         # Run the translation on various files.
         # Make sure we don't need to recompile the package whenever we make
         # unnecessary changes - we list the exact files and folders the package
@@ -88,9 +98,8 @@
             # We need to provide the paths to the Charon tests derivations
             export CHARON_TEST_DIR=${charon.checks.${system}.tests}
 
-            # Copy the Aeneas executable, and update the path to it
-            cp ${aeneas}/bin/aeneas aeneas
-            export AENEAS_EXE=./aeneas
+            export AENEAS_EXE=${aeneas}/bin/aeneas
+            export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
 
             # Copy the tests
             cp -r tests tests-copy

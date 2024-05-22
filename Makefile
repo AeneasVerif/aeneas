@@ -24,6 +24,9 @@ CHARON_HOME ?= ./charon
 # change this path for the Nix package.
 AENEAS_EXE ?= bin/aeneas
 
+# The path to our test runner.
+TEST_RUNNER_EXE ?= bin/test_runner
+
 # The user can specify additional translation options for Aeneas.
 # By default we activate the (expensive) sanity checks.
 OPTIONS ?=
@@ -61,11 +64,16 @@ build-bin: check-charon
 build-lib: check-charon
 	cd compiler && dune build aeneas.cmxs
 
+.PHONY: build-runner
+build-runner: check-charon
+	cd tests/test_runner && dune build
+
 .PHONY: build-bin-dir
-build-bin-dir: build-bin build-lib
+build-bin-dir: build-bin build-lib build-runner
 	mkdir -p bin
 	cp -f compiler/_build/default/main.exe bin/aeneas
 	cp -f compiler/_build/default/main.exe bin/aeneas.cmxs
+	cp -f tests/test_runner/_build/default/run_test.exe bin/test_runner
 	mkdir -p bin/backends/fstar
 	mkdir -p bin/backends/coq
 	cp -rf backends/fstar/*.fst* bin/backends/fstar/
@@ -140,6 +148,7 @@ verify:
 format:
 	@# `|| `true` because the command returns an error if it changed anything, which we don't care about.
 	cd compiler && dune fmt || true
+	cd tests/test_runner && dune fmt || true
 
 # The commands to run Charon to generate the .llbc files
 ifeq (, $(REGEN_LLBC))
@@ -148,7 +157,7 @@ CHARON_CMD = cd $(CHARON_TEST_DIR) && $(MAKE) test-$*
 endif
 
 # The command to run Aeneas on the proper llbc file
-AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/$(BACKEND)/$(SUBDIR) -backend $(BACKEND) $(OPTIONS)
+AENEAS_CMD = $(TEST_RUNNER_EXE) $(AENEAS_EXE) $(CHARON_TEST_DIR) $(FILE) "$(SUBDIR)" $(BACKEND) $(OPTIONS)
 
 # Subdirs
 test-arrays: SUBDIR := arrays
