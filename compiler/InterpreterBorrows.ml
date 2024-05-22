@@ -925,7 +925,7 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
           in
           (* Retry to end the borrow *)
           let ctx, cc =
-            cf_comp cc (end_borrow_aux config meta chain0 allowed_abs l ctx)
+            comp cc (end_borrow_aux config meta chain0 allowed_abs l ctx)
           in
           (* Check and continue *)
           check ctx;
@@ -936,7 +936,7 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
           let ctx, cc = end_borrow_aux config meta chain allowed_abs' bid ctx in
           (* Retry to end the borrow *)
           let ctx, cc =
-            cf_comp cc (end_borrow_aux config meta chain0 allowed_abs l ctx)
+            comp cc (end_borrow_aux config meta chain0 allowed_abs l ctx)
           in
           (* Check and continue *)
           check ctx;
@@ -1035,7 +1035,7 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
 
       (* End the loans inside the abstraction *)
       let ctx, cc =
-        cf_comp cc (end_abstraction_loans config meta chain abs_id ctx)
+        comp cc (end_abstraction_loans config meta chain abs_id ctx)
       in
       log#ldebug
         (lazy
@@ -1046,7 +1046,7 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
 
       (* End the abstraction itself by redistributing the borrows it contains *)
       let ctx, cc =
-        cf_comp cc (end_abstraction_borrows config meta chain abs_id ctx)
+        comp cc (end_abstraction_borrows config meta chain abs_id ctx)
       in
 
       (* End the regions owned by the abstraction - note that we don't need to
@@ -1061,7 +1061,7 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
          the abstraction itself.
          **Rk.**: this is where we synthesize the updated symbolic AST *)
       let ctx, cc =
-        cf_comp cc (end_abstraction_remove_from_context config meta abs_id ctx)
+        comp cc (end_abstraction_remove_from_context config meta abs_id ctx)
       in
 
       (* Debugging *)
@@ -1116,7 +1116,7 @@ and end_abstraction_loans (config : config) (meta : Meta.meta)
         | Borrows bids -> end_borrows_aux config meta chain None bids ctx
       in
       (* Reexplore, looking for loans *)
-      cf_comp cc (end_abstraction_loans config meta chain abs_id ctx)
+      comp cc (end_abstraction_loans config meta chain abs_id ctx)
   | Some (SymbolicValue sv) ->
       (* There is a proj_loans over a symbolic value: end the proj_borrows
          which intersect this proj_loans, then end the proj_loans itself *)
@@ -1124,7 +1124,7 @@ and end_abstraction_loans (config : config) (meta : Meta.meta)
         end_proj_loans_symbolic config meta chain abs_id abs.regions sv ctx
       in
       (* Reexplore, looking for loans *)
-      cf_comp cc (end_abstraction_loans config meta chain abs_id ctx)
+      comp cc (end_abstraction_loans config meta chain abs_id ctx)
 
 and end_abstraction_borrows (config : config) (meta : Meta.meta)
     (chain : borrow_or_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
@@ -1438,7 +1438,7 @@ and end_proj_loans_symbolic (config : config) (meta : Meta.meta)
         let ctx, cc = end_abstraction_aux config meta chain abs_id' ctx in
         (* Retry ending the projector of loans *)
         let ctx, cc =
-          cf_comp cc
+          comp cc
             (end_proj_loans_symbolic config meta chain abs_id regions sv ctx)
         in
         (* Sanity check *)
@@ -1576,7 +1576,7 @@ let rec promote_reserved_mut_borrow (config : config) (meta : Meta.meta)
             | VMutLoan bid -> end_borrow config meta bid ctx
           in
           (* Recursive call *)
-          cf_comp cc (promote_reserved_mut_borrow config meta l ctx)
+          comp cc (promote_reserved_mut_borrow config meta l ctx)
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)

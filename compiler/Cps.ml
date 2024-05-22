@@ -56,11 +56,11 @@ type stl_cm_fun =
 (** Compose continuations that we use to compute execution traces *)
 let cc_comp (f : 'b -> 'c) (g : 'a -> 'b) : 'a -> 'c = fun e -> f (g e)
 
-let cf_comp (f : 'b -> 'c) (g : 'x * ('a -> 'b)) : 'x * ('a -> 'c) =
+let comp (f : 'b -> 'c) (g : 'x * ('a -> 'b)) : 'x * ('a -> 'c) =
   let x, g = g in
   (x, cc_comp f g)
 
-let cf_comp2 (f : 'b -> 'c) (g : 'x * 'y * ('a -> 'b)) : 'x * 'y * ('a -> 'c) =
+let comp2 (f : 'b -> 'c) (g : 'x * 'y * ('a -> 'b)) : 'x * 'y * ('a -> 'c) =
   let x, y, g = g in
   (x, y, cc_comp f g)
 
@@ -73,7 +73,7 @@ let fold_left_apply_continuation (f : 'a -> 'c -> 'c * ('e -> 'e))
     | [] -> (ctx, fun x -> x)
     | x :: inputs ->
         let ctx, cc = f x ctx in
-        cf_comp cc (eval_list inputs ctx)
+        comp cc (eval_list inputs ctx)
   in
   eval_list inputs ctx
 

@@ -469,7 +469,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
   let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
   let ctx, cc =
-    cf_comp cc
+    comp cc
       (fold_left_apply_continuation
          (fun id ctx -> end_abstraction config fdef.item_meta.meta id ctx)
          target_abs_ids ctx)

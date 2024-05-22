@@ -31,7 +31,7 @@ let drop_value (config : config) (meta : Meta.meta) (p : place) : cm_fun =
    * symbolic values along the path, for instance *)
   let ctx, cc = update_ctx_along_read_place config meta access p ctx in
   (* Prepare the place (by ending the outer loans *at* the place). *)
-  let v, ctx, cc = cf_comp2 cc (prepare_lplace config meta p ctx) in
+  let v, ctx, cc = comp2 cc (prepare_lplace config meta p ctx) in
   (* Replace the value with {!Bottom} *)
   let ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
@@ -219,7 +219,7 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
   (* Access the value *)
   let access = Write in
   let ctx, cc = update_ctx_along_read_place config meta access p ctx in
-  let v, ctx, cc = cf_comp2 cc (prepare_lplace config meta p ctx) in
+  let v, ctx, cc = comp2 cc (prepare_lplace config meta p ctx) in
   (* Update the value *)
   match (v.ty, v.value) with
   | TAdt ((TAdtId _ as type_id), generics), VAdt av -> (
@@ -246,7 +246,7 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
               | _ -> craise __FILE__ __LINE__ meta "Unreachable"
             in
             let ctx, cc =
-              cf_comp cc (assign_to_place config meta bottom_v p ctx)
+              comp cc (assign_to_place config meta bottom_v p ctx)
             in
             ((ctx, Unit), cc))
   | TAdt ((TAdtId _ as type_id), generics), VBottom ->
@@ -257,7 +257,7 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
               generics
         | _ -> craise __FILE__ __LINE__ meta "Unreachable"
       in
-      let ctx, cc = cf_comp cc (assign_to_place config meta bottom_v p ctx) in
+      let ctx, cc = comp cc (assign_to_place config meta bottom_v p ctx) in
       ((ctx, Unit), cc)
   | _, VSymbolic _ ->
       sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) meta;
@@ -359,7 +359,7 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
 
   (* Drop the outer *loans* we find in the local variables *)
   let ctx, cc =
-    cf_comp cc
+    comp cc
       ((* Drop the loans *)
        let locals = List.rev locals in
        fold_left_apply_continuation
@@ -395,7 +395,7 @@ let pop_frame_assign (config : config) (meta : Meta.meta) (dest : place) :
     cm_fun =
  fun ctx ->
   let v, ctx, cc = pop_frame config meta true ctx in
-  cf_comp cc (assign_to_place config meta (Option.get v) dest ctx)
+  comp cc (assign_to_place config meta (Option.get v) dest ctx)
 
 (** Auxiliary function - see {!eval_assumed_function_call} *)
 let eval_box_new_concrete (config : config) (meta : Meta.meta)
@@ -432,7 +432,7 @@ let eval_box_new_concrete (config : config) (meta : Meta.meta)
 
       (* Move this value to the return variable *)
       let dest = mk_place_from_var_id VarId.zero in
-      cf_comp cc (assign_to_place config meta box_v dest ctx)
+      comp cc (assign_to_place config meta box_v dest ctx)
   | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
 
 (** Auxiliary function - see {!eval_assumed_function_call}.
@@ -471,7 +471,7 @@ let eval_box_free (config : config) (meta : Meta.meta) (generics : generic_args)
       let ctx, cc = drop_value config meta input_box_place ctx in
 
       (* Update the destination by setting it to [()] *)
-      cf_comp cc (assign_to_place config meta mk_unit_value dest ctx)
+      comp cc (assign_to_place config meta mk_unit_value dest ctx)
   | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
 
 (** Evaluate a non-local function call in concrete mode *)
@@ -546,7 +546,7 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
           let cc = cc_comp cc cf_eval_body in
 
           (* Pop the frame *)
-          cf_comp cc (pop_frame_assign config meta dest ctx))
+          comp cc (pop_frame_assign config meta dest ctx))
 
 (** Helper
  
@@ -915,7 +915,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   let cc = S.cf_save_snapshot ctx in
   (* Expand the symbolic values if necessary - we need to do that before
      checking the invariants *)
-  let ctx, cc = cf_comp cc (greedy_expand_symbolic_values config st.meta ctx) in
+  let ctx, cc = comp cc (greedy_expand_symbolic_values config st.meta ctx) in
   (* Sanity check *)
   Invariants.check_invariants st.meta ctx;
 
@@ -969,7 +969,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
                           rv rp
                   in
                   let ctx, cc =
-                    cf_comp cc (assign_to_place config st.meta rv p ctx)
+                    comp cc (assign_to_place config st.meta rv p ctx)
                   in
                   ((ctx, Unit), cc)
             in
@@ -1338,7 +1338,7 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
       let ctx = push_uninitialized_vars meta locals ctx in
 
       (* Execute the function body *)
-      let ctx_resl, cc = cf_comp cc (eval_function_body config body_st ctx) in
+      let ctx_resl, cc = comp cc (eval_function_body config body_st ctx) in
 
       (* Pop the stack frame and move the return value to its destination *)
       let ctx_resl_cfl =
@@ -1495,7 +1495,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   in
 
   (* Move the return value to its destination *)
-  let ctx, cc = cf_comp cc (assign_to_place config meta ret_value dest ctx) in
+  let ctx, cc = comp cc (assign_to_place config meta ret_value dest ctx) in
 
   (* End the abstractions which don't contain loans and don't have parent
    * abstractions.
@@ -1528,7 +1528,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
         InterpreterBorrows.end_abstractions config meta no_loans_abs ctx
       in
       (* Recursive call *)
-      cf_comp cc (end_abs_with_no_loans ctx))
+      comp cc (end_abs_with_no_loans ctx))
     else (* No abstractions to end: continue *)
       (ctx, fun e -> e)
   in
@@ -1538,7 +1538,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * (see the documentation of {!config} for more information)
    *)
   let ctx, cc =
-    cf_comp cc
+    comp cc
       (if Config.return_unit_end_abs_with_no_loans && ty_is_unit inst_sg.output
        then end_abs_with_no_loans ctx
        else (ctx, fun e -> e))
