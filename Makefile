@@ -37,8 +37,6 @@ OPTIONS ?=
 CHARON_TEST_DIR ?= $(CHARON_HOME)/tests
 # The options with which to call Charon
 CHARON_OPTIONS =
-# The directory in which to extract the result of the translation
-SUBDIR :=
 
 ####################################
 # The rules
@@ -157,56 +155,7 @@ CHARON_CMD = cd $(CHARON_TEST_DIR) && $(MAKE) test-$*
 endif
 
 # The command to run Aeneas on the proper llbc file
-AENEAS_CMD = $(TEST_RUNNER_EXE) $(AENEAS_EXE) $(CHARON_TEST_DIR) $(FILE) "$(SUBDIR)" $(BACKEND) $(OPTIONS)
-
-# Subdirs
-test-arrays: SUBDIR := arrays
-tlean-arrays: SUBDIR :=
-
-test-betree_main: SUBDIR := betree
-tlean-betree_main: SUBDIR :=
-
-ctest-test-betree_main: SUBDIR := betree_back_stateful
-
-test-bitwise: SUBDIR := misc
-tlean-bitwise: SUBDIR :=
-thol4-bitwise: SUBDIR := misc-bitwise
-
-test-constants: SUBDIR := misc
-tlean-constants: SUBDIR :=
-thol4-constants: SUBDIR := misc-constants
-
-test-demo: SUBDIR := demo
-tlean-demo: SUBDIR := Demo
-
-test-external: SUBDIR := misc
-tlean-external: SUBDIR :=
-thol4-external: SUBDIR := misc-external
-
-test-hashmap: SUBDIR := hashmap
-tlean-hashmap: SUBDIR :=
-
-test-hashmap_main: SUBDIR := hashmap_on_disk
-tlean-hashmap_main: SUBDIR :=
-
-test-loops: SUBDIR := misc
-tlean-loops: SUBDIR :=
-thol4-loops: SUBDIR := misc-loops
-
-test-no_nested_borrows: SUBDIR := misc
-tlean-no_nested_borrows: SUBDIR :=
-thol4-no_nested_borrows: SUBDIR := misc-no_nested_borrows
-
-test-paper: SUBDIR := misc
-tlean-paper: SUBDIR :=
-thol4-paper: SUBDIR := misc-paper
-
-test-polonius_list: SUBDIR := misc
-tlean-polonius_list: SUBDIR :=
-thol4-polonius_list: SUBDIR := misc-polonius_list
-
-test-traits: SUBDIR := traits
-tlean-traits: SUBDIR :=
+AENEAS_CMD = $(TEST_RUNNER_EXE) $(AENEAS_EXE) $(CHARON_TEST_DIR) $(FILE) $(BACKEND) $(OPTIONS)
 
 # Add specific options to some tests
 # TODO: reactivate -test-trans-units for hashmap and hashmap_main
@@ -288,7 +237,7 @@ thol4-%:
 # This generates very ugly code, but is good to test the translation.
 .PHONY: ctest-test-betree_main
 ctest-test-betree_main: test-betree_main
-ctest-test-betree_main: FILE = betree_main
+ctest-test-betree_main: FILE = betree_main-special
 ctest-test-betree_main: BACKEND := fstar
 ctest-test-betree_main:
 	$(AENEAS_CMD)
