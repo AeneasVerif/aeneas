@@ -117,7 +117,7 @@ test: build-dev test-all
 test-all: \
 	test-arrays \
 	test-betree_main \
-	ctest-test-betree_main \
+	tfstar-betree_main-special \
 	test-bitwise \
 	test-constants \
 	test-demo \
@@ -157,47 +157,6 @@ endif
 # The command to run Aeneas on the proper llbc file
 AENEAS_CMD = $(TEST_RUNNER_EXE) $(AENEAS_EXE) $(CHARON_TEST_DIR) $(FILE) $(BACKEND) $(OPTIONS)
 
-# Add specific options to some tests
-# TODO: reactivate -test-trans-units for hashmap and hashmap_main
-tfstar-arrays: OPTIONS += -decreases-clauses -template-clauses -split-files
-tcoq-arrays: OPTIONS += -use-fuel
-
-test-betree_main: OPTIONS += -backward-no-state-update -test-trans-units -state -split-files
-tfstar-betree_main: OPTIONS += -decreases-clauses -template-clauses
-tcoq-betree_main: OPTIONS += -use-fuel
-
-ctest-test-betree_main: OPTIONS += -test-trans-units -state -split-files
-ctest-test-betree_main: OPTIONS += -decreases-clauses -template-clauses
-
-test-bitwise: OPTIONS += -test-trans-units
-
-test-constants: OPTIONS += -test-trans-units
-
-tfstar-demo: OPTIONS += -use-fuel
-tcoq-demo: OPTIONS += -use-fuel
-
-test-external: OPTIONS += -test-trans-units -state -split-files
-
-test-hashmap: OPTIONS += -split-files
-tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
-tcoq-hashmap: OPTIONS += -use-fuel
-tlean-hashmap: OPTIONS += -no-gen-lib-entry # We add a custom import in the Hashmap.lean file: we do not want to overwrite it
-
-test-hashmap_main: OPTIONS += -state -split-files
-tfstar-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
-tcoq-hashmap_main: OPTIONS += -use-fuel
-
-tfstar-loops: OPTIONS += -decreases-clauses -template-clauses -split-files
-tcoq-loops: OPTIONS += -use-fuel
-
-test-no_nested_borrows: OPTIONS += -test-trans-units
-
-test-paper: OPTIONS += -test-trans-units
-
-test-polonius_list: OPTIONS += -test-trans-units
-
-tfstar-traits: OPTIONS += -decreases-clauses -template-clauses
-
 # Generic rules to extract the LLBC from a rust file
 # We use the rules in Charon's Makefile to generate the .llbc files: the options
 # vary with the test files.
@@ -232,15 +191,6 @@ thol4-%: BACKEND := hol4
 thol4-%:
 	echo Ignoring the $* test for HOL4
 #	$(AENEAS_CMD)
-
-# Additional, *c*ustom test on the betree: translate it without `-backward-no-state-update`.
-# This generates very ugly code, but is good to test the translation.
-.PHONY: ctest-test-betree_main
-ctest-test-betree_main: test-betree_main
-ctest-test-betree_main: FILE = betree_main-special
-ctest-test-betree_main: BACKEND := fstar
-ctest-test-betree_main:
-	$(AENEAS_CMD)
 
 # Nix - TODO: add the lean tests
 .PHONY: nix
