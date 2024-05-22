@@ -200,8 +200,3 @@ let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
 let save_snapshot (ctx : Contexts.eval_ctx) (e : expression option) :
     expression option =
   match e with None -> None | Some e -> Some (Meta (Snapshot ctx, e))
-
-(** TODO: remove and use save_snapshot instead *)
-let cf_save_snapshot (ctx : Contexts.eval_ctx) :
-    Cps.eval_result -> Cps.eval_result =
- fun e -> save_snapshot ctx e

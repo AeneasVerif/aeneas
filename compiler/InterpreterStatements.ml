@@ -912,7 +912,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
       ^ "\n\n"));
 
   (* Take a snapshot of the current context for the purpose of generating pretty names *)
-  let cc = S.cf_save_snapshot ctx in
+  let cc = S.save_snapshot ctx in
   (* Expand the symbolic values if necessary - we need to do that before
      checking the invariants *)
   let ctx, cc = comp cc (greedy_expand_symbolic_values config st.meta ctx) in

@@ -970,7 +970,7 @@ let rec end_borrow_aux (config : config) (meta : Meta.meta)
       (* Do a sanity check and continue *)
       check ctx;
       (* Save a snapshot of the environment for the name generation *)
-      let cc = SynthesizeSymbolic.cf_save_snapshot ctx in
+      let cc = SynthesizeSymbolic.save_snapshot ctx in
       (* Compose *)
       (ctx, cc)
 
@@ -1078,7 +1078,7 @@ and end_abstraction_aux (config : config) (meta : Meta.meta)
       Invariants.check_invariants meta ctx;
 
       (* Save a snapshot of the environment for the name generation *)
-      let cc = cc_comp cc (SynthesizeSymbolic.cf_save_snapshot ctx) in
+      let cc = cc_comp cc (SynthesizeSymbolic.save_snapshot ctx) in
 
       (* Return *)
       (ctx, cc)
