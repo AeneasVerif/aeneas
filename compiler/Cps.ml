@@ -56,15 +56,11 @@ type stl_cm_fun =
 (** Compose continuations that we use to compute execution traces *)
 let cc_comp (f : 'b -> 'c) (g : 'a -> 'b) : 'a -> 'c = fun e -> f (g e)
 
-let cf_comp (f : eval_result -> eval_result)
-    (g : 'a * (eval_result -> eval_result)) : 'a * (eval_result -> eval_result)
-    =
+let cf_comp (f : 'b -> 'c) (g : 'x * ('a -> 'b)) : 'x * ('a -> 'c) =
   let x, g = g in
   (x, cc_comp f g)
 
-let cf_comp2 (f : eval_result -> eval_result)
-    (g : 'a * 'b * (eval_result -> eval_result)) :
-    'a * 'b * (eval_result -> eval_result) =
+let cf_comp2 (f : 'b -> 'c) (g : 'x * 'y * ('a -> 'b)) : 'x * 'y * ('a -> 'c) =
   let x, y, g = g in
   (x, y, cc_comp f g)
 
@@ -103,6 +99,12 @@ let opt_list_to_list_opt (len : int) (el : 'a option list) : 'a list option =
   in
   let _ = assert (List.length expr_list = len) in
   if Option.is_none (List.hd expr_list) then None else Some expr_list
+
+let cc_singleton file line meta cf el =
+  match el with
+  | Some [ e ] -> cf (Some e)
+  | Some _ -> internal_error file line meta
+  | _ -> None
 
 (** It happens that we need to concatenate lists of results, for
     instance when evaluating the branches of a match. When applying
