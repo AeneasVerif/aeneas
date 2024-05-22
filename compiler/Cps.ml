@@ -3,6 +3,7 @@
 
 open Values
 open Contexts
+open Errors
 
 (** TODO: change the name *)
 type eval_error = EPanic
@@ -43,19 +44,17 @@ type eval_result = SymbolicAst.expression option
   *)
 type cm_fun = eval_ctx -> eval_ctx * (eval_result -> eval_result)
 
+type st_cm_fun =
+  eval_ctx -> (eval_ctx * statement_eval_res) * (eval_result -> eval_result)
+
 (** Type of a function used when evaluating a statement *)
 type stl_cm_fun =
   eval_ctx ->
   (eval_ctx * statement_eval_res) list
   * (SymbolicAst.expression list option -> eval_result)
 
-type st_cm_fun =
-  eval_ctx -> (eval_ctx * statement_eval_res) * (eval_result -> eval_result)
-
 (** Compose continuations that we use to compute execution traces *)
-let cc_comp (f : eval_result -> eval_result) (g : eval_result -> eval_result) :
-    eval_result -> eval_result =
- fun e -> f (g e)
+let cc_comp (f : 'b -> 'c) (g : 'a -> 'b) : 'a -> 'c = fun e -> f (g e)
 
 let cf_comp (f : eval_result -> eval_result)
     (g : 'a * (eval_result -> eval_result)) : 'a * (eval_result -> eval_result)
@@ -104,3 +103,43 @@ let opt_list_to_list_opt (len : int) (el : 'a option list) : 'a list option =
   in
   let _ = assert (List.length expr_list = len) in
   if Option.is_none (List.hd expr_list) then None else Some expr_list
+
+(** It happens that we need to concatenate lists of results, for
+    instance when evaluating the branches of a match. When applying
+    the continuations to build the symbolic expressions, we need
+    to decompose the list of expressions we get to give it to the
+    individual continuations for the branches.
+ *)
+let comp_seqs (file : string) (line : int) (meta : Meta.meta)
+    (ls :
+      ('a list
+      * (SymbolicAst.expression list option -> SymbolicAst.expression option))
+      list) :
+    'a list
+    * (SymbolicAst.expression list option -> SymbolicAst.expression list option)
+    =
+  (* Auxiliary function: given a list of expressions el, build the expressions
+     corresponding to the different branches *)
+  let rec cc_aux ls el =
+    match ls with
+    | [] ->
+        (* End of the list of branches: there shouldn't be any expression remaining *)
+        sanity_check file line (el = []) meta;
+        []
+    | (resl, cf) :: ls ->
+        (* Split the list of expressions between:
+           - the expressions for the current branch
+           - the expressions for the remaining branches *)
+        let el0, el = Collections.List.split_at el (List.length resl) in
+        (* Compute the expression for the current branch *)
+        let e0 = cf (Some el0) in
+        let e0 =
+          match e0 with None -> internal_error file line meta | Some e -> e
+        in
+        (* Compute the expressions for the remaining branches *)
+        let e = cc_aux ls el in
+        (* Concatenate *)
+        e0 :: e
+  in
+  let cc el = match el with None -> None | Some el -> Some (cc_aux ls el) in
+  (List.flatten (fst (List.split ls)), cc)
