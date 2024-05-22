@@ -1002,7 +1002,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
     | Break i -> ([ (ctx, Break i) ], cc_list __FILE__ __LINE__ cc)
     | Continue i -> ([ (ctx, Continue i) ], cc_list __FILE__ __LINE__ cc)
     | Nop -> ([ (ctx, Unit) ], cc_list __FILE__ __LINE__ cc)
-    | Sequence (st1, st2) -> (
+    | Sequence (st1, st2) ->
         (* Evaluate the first statement *)
         let ctx_resl, cf_st1 = eval_statement config st1 ctx in
         (* Evaluate the sequence (evaluate the second statement if the first
@@ -1025,27 +1025,10 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
            - we need to build the continuation which will build the whole
              expression from the continuations for the individual branches
         *)
-        let ctx_resl = List.flatten (fst (List.split ctx_res_cfl)) in
-        let rec seq_cf ctx_res_cfl (el : SA.expression list) :
-            SA.expression list =
-          match ctx_res_cfl with
-          | [] ->
-              sanity_check __FILE__ __LINE__ (el = []) st.meta;
-              []
-          | (ctx_resl, cf) :: ctx_res_cfl -> (
-              let current_el, el =
-                Collections.List.split_at el (List.length ctx_resl)
-              in
-              let e = cf (Some current_el) in
-              match e with
-              | None -> internal_error __FILE__ __LINE__ st.meta
-              | Some e -> e :: seq_cf ctx_res_cfl el)
+        let ctx_resl, cf_st2 =
+          comp_seqs __FILE__ __LINE__ st.meta ctx_res_cfl
         in
-        ( ctx_resl,
-          fun el ->
-            match el with
-            | None -> None
-            | Some el -> cf_st1 (Some (seq_cf ctx_res_cfl el)) ))
+        (ctx_resl, cc_comp cf_st1 cf_st2)
     | Loop loop_body ->
         InterpreterLoops.eval_loop config st.meta loop_body eval_statement ctx
     | Switch switch -> eval_switch config st.meta switch ctx
@@ -1117,38 +1100,26 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
             (* Branch *)
             if b then eval_statement config st1 ctx
             else eval_statement config st2 ctx
-        | VSymbolic sv -> (
+        | VSymbolic sv ->
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
-            let (ctx_true, ctx_false), cc_bool =
+            let (ctx_true, ctx_false), cf_bool =
               expand_symbolic_bool config meta sv
                 (S.mk_opt_place_from_op meta op ctx)
                 ctx
             in
-            let ctx_resl_true, cc_true = eval_statement config st1 ctx_true in
-            let ctx_resl_false, cc_false =
-              eval_statement config st2 ctx_false
+            let resl_true = eval_statement config st1 ctx_true in
+            let resl_false = eval_statement config st2 ctx_false in
+            let ctx_resl, cf_branches =
+              comp_seqs __FILE__ __LINE__ meta [ resl_true; resl_false ]
             in
-            ( ctx_resl_true @ ctx_resl_false,
-              fun el ->
-                match el with
-                | Some el ->
-                    let el_true, el_false =
-                      Collections.List.split_at el (List.length ctx_resl_true)
-                    in
-                    sanity_check __FILE__ __LINE__
-                      (List.length el_false = List.length ctx_resl_false)
-                      meta;
-                    let e_true = cc_true (Some el_true) in
-                    let e_false = cc_false (Some el_false) in
-                    let e =
-                      match (e_true, e_false) with
-                      | Some e_true, Some e_false -> Some (e_true, e_false)
-                      | None, None -> None
-                      | _ -> internal_error __FILE__ __LINE__ meta
-                    in
-                    cc_bool e
-                | _ -> None ))
+            let cc el =
+              match cf_branches el with
+              | None -> None
+              | Some [ e_true; e_false ] -> cf_bool (Some (e_true, e_false))
+              | _ -> internal_error __FILE__ __LINE__ meta
+            in
+            (ctx_resl, cc)
         | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
       in
       (* Compose *)
@@ -1166,7 +1137,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
             match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
             | None -> eval_statement config otherwise ctx
             | Some (_, tgt) -> eval_statement config tgt ctx)
-        | VSymbolic sv -> (
+        | VSymbolic sv ->
             (* Several branches may be grouped together: every branch is described
                by a pair (list of values, branch expression).
                In order to do a symbolic evaluation, we make this "flat" by
@@ -1179,50 +1150,34 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
                       stgts))
             in
             (* Expand the symbolic value *)
-            let (ctx_branches, ctx_otherwise), cc_int =
+            let (ctx_branches, ctx_otherwise), cf_int =
               expand_symbolic_int config meta sv
                 (S.mk_opt_place_from_op meta op ctx)
                 int_ty values ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
-            let resll, cfl =
-              List.split
-                (List.map
-                   (fun (ctx, branch) -> eval_statement config branch ctx)
-                   (List.combine ctx_branches branches))
+            let resl_branches =
+              List.map
+                (fun (ctx, branch) -> eval_statement config branch ctx)
+                (List.combine ctx_branches branches)
             in
             (* Then evaluate the "otherwise" branch *)
-            let ctx_otherwise, cc =
+            let resl_otherwise =
               eval_statement config otherwise ctx_otherwise
             in
-            (* Expand and continue *)
-            let rec apply_cc resll cfl el =
-              match (resll, cfl) with
-              | resl :: resll, cf :: cfl ->
-                  let cc_el, el =
-                    Collections.List.split_at el (List.length resl)
-                  in
-                  sanity_check __FILE__ __LINE__
-                    (List.length el = List.length (List.flatten resll))
-                    meta;
-                  let cc_el = cf (Some cc_el) in
-                  cc_el :: apply_cc resll cfl el
-              | [], [] -> [ cc (Some el) ]
-              | _, _ -> internal_error __FILE__ __LINE__ meta
+            (* Compose the continuations *)
+            let resl, cf =
+              comp_seqs __FILE__ __LINE__ meta
+                (resl_branches @ [ resl_otherwise ])
             in
-            ( List.flatten resll @ ctx_otherwise,
-              fun el ->
-                match el with
-                | Some el -> (
-                    let el = apply_cc resll cfl el in
-                    let el, e_otherwise =
-                      Collections.List.split_at el (List.length el - 1)
-                    in
-                    let el = List.map Option.get el in
-                    match e_otherwise with
-                    | [ Some e ] -> cc_int (Some (el, e))
-                    | _ -> None)
-                | _ -> None ))
+            let cc el =
+              match el with
+              | None -> None
+              | Some el ->
+                  let el, e_otherwise = Collections.List.pop_last el in
+                  cf_int (Some (el, e_otherwise))
+            in
+            (resl, cc_comp cc cf)
         | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
       in
       (* Compose *)
