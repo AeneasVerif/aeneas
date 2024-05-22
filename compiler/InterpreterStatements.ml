@@ -1198,7 +1198,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
         (* Match *)
         match p_v.value with
         | VAdt adt -> (
-            (* E  valuate the discriminant *)
+            (* Evaluate the discriminant *)
             let dv = Option.get adt.variant_id in
             (* Find the branch, evaluate and continue *)
             match List.find_opt (fun (svl, _) -> List.mem dv svl) stgts with
@@ -1207,7 +1207,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
                 | None -> craise __FILE__ __LINE__ meta "No otherwise branch"
                 | Some otherwise -> eval_statement config otherwise ctx)
             | Some (_, tgt) -> eval_statement config tgt ctx)
-        | VSymbolic sv -> (
+        | VSymbolic sv ->
             (* Expand the symbolic value - may lead to branching *)
             let ctxl, cf_expand =
               expand_symbolic_adt config meta sv
@@ -1216,37 +1216,16 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
             in
             (* Re-evaluate the switch - the value is not symbolic anymore,
                which means we will go to the other branch *)
-            let ctx_resl, cfl =
-              List.split
-                (List.map
-                   (fun ctx -> (eval_switch config meta switch) ctx)
-                   ctxl)
+            let resl =
+              List.map (fun ctx -> (eval_switch config meta switch) ctx) ctxl
             in
-            let rec apply_cf resll cfl el =
-              match (resll, cfl) with
-              | resl :: resll, cf :: cfl ->
-                  let cc_el, el =
-                    Collections.List.split_at el (List.length resl)
-                  in
-                  sanity_check __FILE__ __LINE__
-                    (List.length el = List.length (List.flatten resll))
-                    meta;
-                  let cc_el = cf (Some cc_el) in
-                  cc_el :: apply_cf resll cfl el
-              | [], [] -> []
-              | _, _ -> internal_error __FILE__ __LINE__ meta
-            in
-            ( List.flatten ctx_resl,
-              fun el ->
-                match el with
-                | Some el ->
-                    let el = List.map Option.get (apply_cf ctx_resl cfl el) in
-                    cf_expand (Some el)
-                | None -> None ))
+            (* Compose the continuations *)
+            let ctx_resl, cf = comp_seqs __FILE__ __LINE__ meta resl in
+            (ctx_resl, cc_comp cf_expand cf)
         | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
       in
       (* Compose *)
-      (ctx_resl, fun el -> cf_read_p (cf_match el))
+      (ctx_resl, cc_comp cf_read_p cf_match)
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : config) (meta : Meta.meta) (call : call) :
