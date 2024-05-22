@@ -34,8 +34,6 @@ OPTIONS ?=
 CHARON_TEST_DIR ?= $(CHARON_HOME)/tests
 # The options with which to call Charon
 CHARON_OPTIONS =
-# The backend sub-directory in which to generate the files
-BACKEND_SUBDIR :=
 # The directory in which to extract the result of the translation
 SUBDIR :=
 
@@ -142,7 +140,7 @@ CHARON_CMD = cd $(CHARON_TEST_DIR) && $(MAKE) test-$*
 endif
 
 # The command to run Aeneas on the proper llbc file
-AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/$(BACKEND_SUBDIR)/$(SUBDIR) $(OPTIONS)
+AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/$(BACKEND)/$(SUBDIR) -backend $(BACKEND) $(OPTIONS)
 
 
 # Add specific options to some tests
@@ -251,9 +249,9 @@ thol4-betree_main: OPTIONS +=
 # This generates very ugly code, but is good to test the translation.
 .PHONY: ctest-test-betree_main
 ctest-test-betree_main: test-betree_main
-ctest-test-betree_main: OPTIONS += -backend fstar -test-trans-units -state -split-files
+ctest-test-betree_main: OPTIONS += -test-trans-units -state -split-files
 ctest-test-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
-ctest-test-betree_main: BACKEND_SUBDIR := "fstar"
+ctest-test-betree_main: BACKEND := fstar
 ctest-test-betree_main: SUBDIR:=betree_back_stateful
 ctest-test-betree_main: FILE = betree_main
 ctest-test-betree_main:
@@ -273,27 +271,23 @@ test-%: gen-llbc-% tfstar-% tcoq-% tlean-% thol4-%
 	echo "# Test $* done"
 
 .PHONY: tfstar-%
-tfstar-%: OPTIONS += -backend fstar
-tfstar-%: BACKEND_SUBDIR := fstar
+tfstar-%: BACKEND := fstar
 tfstar-%:
 	$(AENEAS_CMD)
 
 .PHONY: tcoq-%
-tcoq-%: OPTIONS += -backend coq
-tcoq-%: BACKEND_SUBDIR := coq
+tcoq-%: BACKEND := coq
 tcoq-%:
 	$(AENEAS_CMD)
 
 .PHONY: tlean-%
-tlean-%: OPTIONS += -backend lean
-tlean-%: BACKEND_SUBDIR := lean
+tlean-%: BACKEND := lean
 tlean-%:
 	$(AENEAS_CMD)
 
 # TODO: reactivate HOL4 once traits are parameterized by their associated types
 .PHONY: thol4-%
-thol4-%: OPTIONS += -backend hol4
-thol4-%: BACKEND_SUBDIR := hol4
+thol4-%: BACKEND := hol4
 thol4-%:
 	echo Ignoring the $* test for HOL4
 
