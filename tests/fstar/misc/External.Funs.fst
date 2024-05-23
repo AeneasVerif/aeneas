@@ -7,8 +7,8 @@ include External.FunsExternal
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** Trait implementation: [core::marker::{(core::marker::Copy for u32)#40}]
-    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/marker.rs', lines 47:29-47:65
+(** Trait implementation: [core::marker::{(core::marker::Copy for u32)#61}]
+    Source: '/rustc/ad963232d9b987d66a6f8e6ec4141f672b8b9900/library/core/src/marker.rs', lines 47:29-47:65
     Name pattern: core::marker::Copy<u32> *)
 let core_marker_CopyU32 : core_marker_Copy_t u32 = {
   cloneCloneInst = core_clone_CloneU32;
