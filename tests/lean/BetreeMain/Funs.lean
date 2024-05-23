@@ -250,16 +250,15 @@ mutual divergent def betree.Internal.lookup_in_children
   (self : betree.Internal) (key : U64) (st : State) :
   Result (State × ((Option U64) × betree.Internal))
   :=
-  let ⟨ i, i1, n, n1 ⟩ := self
-  if key < i1
+  if key < self.pivot
   then
     do
-    let (st1, (o, n2)) ← betree.Node.lookup n key st
-    Result.ok (st1, (o, betree.Internal.mk i i1 n2 n1))
+    let (st1, (o, n)) ← betree.Node.lookup self.left key st
+    Result.ok (st1, (o, betree.Internal.mk self.id self.pivot n self.right))
   else
     do
-    let (st1, (o, n2)) ← betree.Node.lookup n1 key st
-    Result.ok (st1, (o, betree.Internal.mk i i1 n n2))
+    let (st1, (o, n)) ← betree.Node.lookup self.right key st
+    Result.ok (st1, (o, betree.Internal.mk self.id self.pivot self.left n))
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::lookup]:
    Source: 'src/betree.rs', lines 709:4-709:58 -/
@@ -270,8 +269,7 @@ divergent def betree.Node.lookup
   match self with
   | betree.Node.Internal node =>
     do
-    let ⟨ i, i1, n, n1 ⟩ := node
-    let (st1, msgs) ← betree.load_internal_node i st
+    let (st1, msgs) ← betree.load_internal_node node.id st
     let (pending, lookup_first_message_for_key_back) ←
       betree.Node.lookup_first_message_for_key key msgs
     match pending with
@@ -281,8 +279,7 @@ divergent def betree.Node.lookup
       then
         do
         let (st2, (o, node1)) ←
-          betree.Internal.lookup_in_children (betree.Internal.mk i i1 n n1) key
-            st1
+          betree.Internal.lookup_in_children node key st1
         let _ ←
           lookup_first_message_for_key_back (betree.List.Cons (k, msg) l)
         Result.ok (st2, (o, betree.Node.Internal node1))
@@ -293,33 +290,26 @@ divergent def betree.Node.lookup
           let _ ←
             lookup_first_message_for_key_back (betree.List.Cons (k,
               betree.Message.Insert v) l)
-          Result.ok (st1, (some v, betree.Node.Internal (betree.Internal.mk i
-            i1 n n1)))
+          Result.ok (st1, (some v, betree.Node.Internal node))
         | betree.Message.Delete =>
           do
           let _ ←
             lookup_first_message_for_key_back (betree.List.Cons (k,
               betree.Message.Delete) l)
-          Result.ok (st1, (none, betree.Node.Internal (betree.Internal.mk i i1
-            n n1)))
+          Result.ok (st1, (none, betree.Node.Internal node))
         | betree.Message.Upsert ufs =>
           do
           let (st2, (v, node1)) ←
-            betree.Internal.lookup_in_children (betree.Internal.mk i i1 n n1)
-              key st1
+            betree.Internal.lookup_in_children node key st1
           let (v1, pending1) ←
             betree.Node.apply_upserts (betree.List.Cons (k,
               betree.Message.Upsert ufs) l) v key
-          let ⟨ i2, i3, n2, n3 ⟩ := node1
           let msgs1 ← lookup_first_message_for_key_back pending1
-          let (st3, _) ← betree.store_internal_node i2 msgs1 st2
-          Result.ok (st3, (some v1, betree.Node.Internal (betree.Internal.mk i2
-            i3 n2 n3)))
+          let (st3, _) ← betree.store_internal_node node1.id msgs1 st2
+          Result.ok (st3, (some v1, betree.Node.Internal node1))
     | betree.List.Nil =>
       do
-      let (st2, (o, node1)) ←
-        betree.Internal.lookup_in_children (betree.Internal.mk i i1 n n1) key
-          st1
+      let (st2, (o, node1)) ← betree.Internal.lookup_in_children node key st1
       let _ ← lookup_first_message_for_key_back betree.List.Nil
       Result.ok (st2, (o, betree.Node.Internal node1))
   | betree.Node.Leaf node =>
@@ -541,34 +531,36 @@ mutual divergent def betree.Internal.flush
     × betree.NodeIdCounter)))
   :=
   do
-  let ⟨ i, i1, n, n1 ⟩ := self
-  let p ← betree.ListPairU64T.partition_at_pivot betree.Message content i1
+  let p ←
+    betree.ListPairU64T.partition_at_pivot betree.Message content self.pivot
   let (msgs_left, msgs_right) := p
   let len_left ← betree.List.len (U64 × betree.Message) msgs_left
   if len_left >= params.min_flush_size
   then
     do
     let (st1, p1) ←
-      betree.Node.apply_messages n params node_id_cnt msgs_left st
-    let (n2, node_id_cnt1) := p1
+      betree.Node.apply_messages self.left params node_id_cnt msgs_left st
+    let (n, node_id_cnt1) := p1
     let len_right ← betree.List.len (U64 × betree.Message) msgs_right
     if len_right >= params.min_flush_size
     then
       do
       let (st2, p2) ←
-        betree.Node.apply_messages n1 params node_id_cnt1 msgs_right st1
-      let (n3, node_id_cnt2) := p2
-      Result.ok (st2, (betree.List.Nil, (betree.Internal.mk i i1 n2 n3,
-        node_id_cnt2)))
+        betree.Node.apply_messages self.right params node_id_cnt1 msgs_right
+          st1
+      let (n1, node_id_cnt2) := p2
+      Result.ok (st2, (betree.List.Nil, (betree.Internal.mk self.id self.pivot
+        n n1, node_id_cnt2)))
     else
-      Result.ok (st1, (msgs_right, (betree.Internal.mk i i1 n2 n1,
-        node_id_cnt1)))
+      Result.ok (st1, (msgs_right, (betree.Internal.mk self.id self.pivot n
+        self.right, node_id_cnt1)))
   else
     do
     let (st1, p1) ←
-      betree.Node.apply_messages n1 params node_id_cnt msgs_right st
-    let (n2, node_id_cnt1) := p1
-    Result.ok (st1, (msgs_left, (betree.Internal.mk i i1 n n2, node_id_cnt1)))
+      betree.Node.apply_messages self.right params node_id_cnt msgs_right st
+    let (n, node_id_cnt1) := p1
+    Result.ok (st1, (msgs_left, (betree.Internal.mk self.id self.pivot
+      self.left n, node_id_cnt1)))
 
 /- [betree_main::betree::{betree_main::betree::Node#5}::apply_messages]:
    Source: 'src/betree.rs', lines 588:4-593:5 -/
@@ -581,26 +573,21 @@ divergent def betree.Node.apply_messages
   match self with
   | betree.Node.Internal node =>
     do
-    let ⟨ i, i1, n, n1 ⟩ := node
-    let (st1, content) ← betree.load_internal_node i st
+    let (st1, content) ← betree.load_internal_node node.id st
     let content1 ← betree.Node.apply_messages_to_internal content msgs
     let num_msgs ← betree.List.len (U64 × betree.Message) content1
     if num_msgs >= params.min_flush_size
     then
       do
       let (st2, (content2, p)) ←
-        betree.Internal.flush (betree.Internal.mk i i1 n n1) params node_id_cnt
-          content1 st1
+        betree.Internal.flush node params node_id_cnt content1 st1
       let (node1, node_id_cnt1) := p
-      let ⟨ i2, i3, n2, n3 ⟩ := node1
-      let (st3, _) ← betree.store_internal_node i2 content2 st2
-      Result.ok (st3, (betree.Node.Internal (betree.Internal.mk i2 i3 n2 n3),
-        node_id_cnt1))
+      let (st3, _) ← betree.store_internal_node node1.id content2 st2
+      Result.ok (st3, (betree.Node.Internal node1, node_id_cnt1))
     else
       do
-      let (st2, _) ← betree.store_internal_node i content1 st1
-      Result.ok (st2, (betree.Node.Internal (betree.Internal.mk i i1 n n1),
-        node_id_cnt))
+      let (st2, _) ← betree.store_internal_node node.id content1 st1
+      Result.ok (st2, (betree.Node.Internal node, node_id_cnt))
   | betree.Node.Leaf node =>
     do
     let (st1, content) ← betree.load_leaf_node node.id st
