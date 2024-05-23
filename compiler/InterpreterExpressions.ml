@@ -585,57 +585,49 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operands *)
-  let res, ctx, eval_ops = eval_two_operands config meta op1 op2 ctx in
-  (* Compute the result of applying the binop *)
-  let compute ((v1, v2) : typed_value * typed_value) (ctx : eval_ctx) :
-      (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result)
-      =
-    (* Generate a fresh symbolic value to store the result *)
-    let res_sv_id = fresh_symbolic_value_id () in
-    let res_sv_ty =
-      if binop = Eq || binop = Ne then (
-        (* Equality operations *)
-        sanity_check __FILE__ __LINE__ (v1.ty = v2.ty) meta;
-        (* Equality/inequality check is primitive only for a subset of types *)
-        exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) meta
-          "The type is not primitively copyable";
-        TLiteral TBool)
-      else
-        (* Other operations: input types are integers *)
-        match (v1.ty, v2.ty) with
-        | TLiteral (TInteger int_ty1), TLiteral (TInteger int_ty2) -> (
-            match binop with
-            | Lt | Le | Ge | Gt ->
-                sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) meta;
-                TLiteral TBool
-            | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr ->
-                sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) meta;
-                TLiteral (TInteger int_ty1)
-            (* These return `(int, bool)` which isn't a literal type *)
-            | CheckedAdd | CheckedSub | CheckedMul ->
-                craise __FILE__ __LINE__ meta
-                  "Checked operations are not implemented"
-            | Shl | Shr ->
-                (* The number of bits can be of a different integer type
-                   than the operand *)
-                TLiteral (TInteger int_ty1)
-            | Ne | Eq -> craise __FILE__ __LINE__ meta "Unreachable")
-        | _ -> craise __FILE__ __LINE__ meta "Invalid inputs for binop"
-    in
-    let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
-    (* Call the continuattion *)
-    let v = mk_typed_value_from_symbolic_value res_sv in
-    let expr = Ok v in
-    (* Synthesize the symbolic AST *)
-    let p1 = mk_opt_place_from_op meta op1 ctx in
-    let p2 = mk_opt_place_from_op meta op2 ctx in
-    ( expr,
-      ctx,
-      fun e -> synthesize_binary_op ctx binop v1 p1 v2 p2 res_sv None e )
+  let (v1, v2), ctx, cc = eval_two_operands config meta op1 op2 ctx in
+  (* Generate a fresh symbolic value to store the result *)
+  let res_sv_id = fresh_symbolic_value_id () in
+  let res_sv_ty =
+    if binop = Eq || binop = Ne then (
+      (* Equality operations *)
+      sanity_check __FILE__ __LINE__ (v1.ty = v2.ty) meta;
+      (* Equality/inequality check is primitive only for a subset of types *)
+      exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) meta
+        "The type is not primitively copyable";
+      TLiteral TBool)
+    else
+      (* Other operations: input types are integers *)
+      match (v1.ty, v2.ty) with
+      | TLiteral (TInteger int_ty1), TLiteral (TInteger int_ty2) -> (
+          match binop with
+          | Lt | Le | Ge | Gt ->
+              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) meta;
+              TLiteral TBool
+          | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr ->
+              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) meta;
+              TLiteral (TInteger int_ty1)
+          (* These return `(int, bool)` which isn't a literal type *)
+          | CheckedAdd | CheckedSub | CheckedMul ->
+              craise __FILE__ __LINE__ meta
+                "Checked operations are not implemented"
+          | Shl | Shr ->
+              (* The number of bits can be of a different integer type
+                 than the operand *)
+              TLiteral (TInteger int_ty1)
+          | Ne | Eq -> craise __FILE__ __LINE__ meta "Unreachable")
+      | _ -> craise __FILE__ __LINE__ meta "Invalid inputs for binop"
   in
-  let r, ctx, compute = compute res ctx in
+  let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
+  let v = mk_typed_value_from_symbolic_value res_sv in
+  (* Synthesize the symbolic AST *)
+  let p1 = mk_opt_place_from_op meta op1 ctx in
+  let p2 = mk_opt_place_from_op meta op2 ctx in
+  let cc =
+    cc_comp cc (synthesize_binary_op ctx binop v1 p1 v2 p2 res_sv None)
+  in
   (* Compose and apply *)
-  (r, ctx, cc_comp eval_ops compute)
+  (Ok v, ctx, cc)
 
 let eval_binary_op (config : config) (meta : Meta.meta) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
@@ -644,6 +636,8 @@ let eval_binary_op (config : config) (meta : Meta.meta) (binop : binop)
   | ConcreteMode -> eval_binary_op_concrete config meta binop op1 op2 ctx
   | SymbolicMode -> eval_binary_op_symbolic config meta binop op1 op2 ctx
 
+(** Evaluate an rvalue which creates a reference (i.e., an rvalue which is
+    `&p` or `&mut p` or `&two-phase p`) *)
 let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
     (bkind : borrow_kind) (ctx : eval_ctx) :
     typed_value * eval_ctx * (eval_result -> eval_result) =
@@ -651,7 +645,8 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we
-         forbid them.
+         forbid them and remove them in the prepasses (see the comments there
+         as to why this is sound).
       *)
       sanity_check __FILE__ __LINE__ (bkind <> BShallow) meta;
 
@@ -664,90 +659,75 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
       in
 
       let expand_prim_copy = false in
-      let v, ctx, prepare =
+      let v, ctx, cc =
         access_rplace_reorganize_and_read config meta expand_prim_copy access p
           ctx
       in
-      (* Evaluate the borrowing operation *)
-      let eval (v : typed_value) (ctx : eval_ctx) :
-          typed_value * eval_ctx * (eval_result -> eval_result) =
-        (* Generate the fresh borrow id *)
-        let bid = fresh_borrow_id () in
-        (* Compute the loan value, with which to replace the value at place p *)
-        let nv =
-          match v.value with
-          | VLoan (VSharedLoan (bids, sv)) ->
-              (* Shared loan: insert the new borrow id *)
-              let bids1 = BorrowId.Set.add bid bids in
-              { v with value = VLoan (VSharedLoan (bids1, sv)) }
-          | _ ->
-              (* Not a shared loan: add a wrapper *)
-              let v' = VLoan (VSharedLoan (BorrowId.Set.singleton bid, v)) in
-              { v with value = v' }
-        in
-        (* Update the borrowed value in the context *)
-        let ctx = write_place meta access p nv ctx in
-        (* Compute the rvalue - simply a shared borrow with a the fresh id.
-         * Note that the reference is *mutable* if we do a two-phase borrow *)
-        let ref_kind =
-          match bkind with
-          | BShared | BShallow -> RShared
-          | BTwoPhaseMut -> RMut
-          | _ -> craise __FILE__ __LINE__ meta "Unreachable"
-        in
-        let rv_ty = TRef (RErased, v.ty, ref_kind) in
-        let bc =
-          match bkind with
-          | BShared | BShallow ->
-              (* See the remark at the beginning of the match branch: we
-                 handle shallow borrows like shared borrows *)
-              VSharedBorrow bid
-          | BTwoPhaseMut -> VReservedMutBorrow bid
-          | _ -> craise __FILE__ __LINE__ meta "Unreachable"
-        in
-        let rv : typed_value = { value = VBorrow bc; ty = rv_ty } in
-        (* Continue *)
-        (rv, ctx, fun e -> e)
+      (* Generate the fresh borrow id *)
+      let bid = fresh_borrow_id () in
+      (* Compute the loan value, with which to replace the value at place p *)
+      let nv =
+        match v.value with
+        | VLoan (VSharedLoan (bids, sv)) ->
+            (* Shared loan: insert the new borrow id *)
+            let bids1 = BorrowId.Set.add bid bids in
+            { v with value = VLoan (VSharedLoan (bids1, sv)) }
+        | _ ->
+            (* Not a shared loan: add a wrapper *)
+            let v' = VLoan (VSharedLoan (BorrowId.Set.singleton bid, v)) in
+            { v with value = v' }
       in
-      (* Compose and apply *)
-      let v, ctx, eval = eval v ctx in
-      (v, ctx, cc_comp prepare eval)
+      (* Update the value in the context to replace it with the loan *)
+      let ctx = write_place meta access p nv ctx in
+      (* Compute the rvalue - simply a shared borrow with the fresh id.
+       * Note that the reference is *mutable* if we do a two-phase borrow *)
+      let ref_kind =
+        match bkind with
+        | BShared | BShallow -> RShared
+        | BTwoPhaseMut -> RMut
+        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+      in
+      let rv_ty = TRef (RErased, v.ty, ref_kind) in
+      let bc =
+        match bkind with
+        | BShared | BShallow ->
+            (* See the remark at the beginning of the match branch: we
+               handle shallow borrows like shared borrows *)
+            VSharedBorrow bid
+        | BTwoPhaseMut -> VReservedMutBorrow bid
+        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+      in
+      let rv : typed_value = { value = VBorrow bc; ty = rv_ty } in
+      (* Return *)
+      (rv, ctx, cc)
   | BMut ->
       (* Access the value *)
       let access = Write in
       let expand_prim_copy = false in
-      let v, ctx, prepare =
+      let v, ctx, cc =
         access_rplace_reorganize_and_read config meta expand_prim_copy access p
           ctx
       in
-      (* Evaluate the borrowing operation *)
-      let eval (v : typed_value) (ctx : eval_ctx) :
-          typed_value * eval_ctx * (eval_result -> eval_result) =
-        (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
-        let bid = fresh_borrow_id () in
-        let rv_ty = TRef (RErased, v.ty, RMut) in
-        let rv : typed_value =
-          { value = VBorrow (VMutBorrow (bid, v)); ty = rv_ty }
-        in
-        (* Compute the value with which to replace the value at place p *)
-        let nv = { v with value = VLoan (VMutLoan bid) } in
-        (* Update the value in the context *)
-        let ctx = write_place meta access p nv ctx in
-        (* Continue *)
-        (rv, ctx, fun e -> e)
+      (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
+      let bid = fresh_borrow_id () in
+      let rv_ty = TRef (RErased, v.ty, RMut) in
+      let rv : typed_value =
+        { value = VBorrow (VMutBorrow (bid, v)); ty = rv_ty }
       in
-      (* Compose and apply *)
-      let v, ctx, eval = eval v ctx in
-      (v, ctx, cc_comp prepare eval)
+      (* Compute the loan value with which to replace the value at place p *)
+      let nv = { v with value = VLoan (VMutLoan bid) } in
+      (* Update the value in the context to replace it with the loan *)
+      let ctx = write_place meta access p nv ctx in
+      (* Return *)
+      (rv, ctx, cc)
 
 let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
     (aggregate_kind : aggregate_kind) (ops : operand list) (ctx : eval_ctx) :
     typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operands *)
-  let values, ctx, eval_ops = eval_operands config meta ops ctx in
+  let values, ctx, cc = eval_operands config meta ops ctx in
   (* Compute the value *)
-  let compute (values : typed_value list) (ctx : eval_ctx) :
-      typed_value * eval_ctx * (eval_result -> eval_result) =
+  let v, cf_compute =
     (* Match on the aggregate kind *)
     match aggregate_kind with
     | AggregatedAdt (type_id, opt_variant_id, generics) -> (
@@ -758,8 +738,7 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
             let generics = mk_generic_args [] tys [] [] in
             let ty = TAdt (TTuple, generics) in
             let aggregated : typed_value = { value = v; ty } in
-            (* Call the continuation *)
-            (aggregated, ctx, fun e -> e)
+            (aggregated, fun e -> e)
         | TAdtId def_id ->
             (* Sanity checks *)
             let type_decl = ctx_lookup_type_decl ctx def_id in
@@ -782,9 +761,9 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
             let aty = TAdt (TAdtId def_id, generics) in
             let aggregated : typed_value = { value = VAdt av; ty = aty } in
             (* Call the continuation *)
-            (aggregated, ctx, fun e -> e)
+            (aggregated, fun e -> e)
         | TAssumed _ -> craise __FILE__ __LINE__ meta "Unreachable")
-    | AggregatedArray (ety, cg) -> (
+    | AggregatedArray (ety, cg) ->
         (* Sanity check: all the values have the proper type *)
         sanity_check __FILE__ __LINE__
           (List.for_all (fun (v : typed_value) -> v.ty = ety) values)
@@ -802,52 +781,36 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
            code: by introducing a symbolic value we introduce a let-binding
            in the generated code. *)
         let saggregated = mk_fresh_symbolic_typed_value meta ty in
-        (* Call the continuation *)
-        ( saggregated,
-          ctx,
-          fun e ->
-            match e with
-            | None -> None
-            | Some e ->
-                (* Introduce the symbolic value in the AST *)
-                let sv = ValuesUtils.value_as_symbolic meta saggregated.value in
-                Some
-                  (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e))
-        ))
+        (* Update the symbolic ast *)
+        let cf e =
+          match e with
+          | None -> None
+          | Some e ->
+              (* Introduce the symbolic value in the AST *)
+              let sv = ValuesUtils.value_as_symbolic meta saggregated.value in
+              Some
+                (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e))
+        in
+        (saggregated, cf)
     | AggregatedClosure _ ->
         craise __FILE__ __LINE__ meta "Closures are not supported yet"
   in
-  (* Compose and apply *)
-  let v, ctx, compute = compute values ctx in
-  (v, ctx, cc_comp eval_ops compute)
+  (v, ctx, cc_comp cc cf_compute)
 
 let eval_rvalue_not_global (config : config) (meta : Meta.meta)
     (rvalue : rvalue) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   log#ldebug (lazy "eval_rvalue");
-  (* Small helpers *)
-  let wrap_in_result (v : typed_value) : (typed_value, eval_error) result =
-    Ok v
-  in
-  (* let comp_wrap f = cc_comp f (fun e -> e) in *)
+  (* Small helper *)
+  let wrap_in_result (v, ctx, cc) = (Ok v, ctx, cc) in
   (* Delegate to the proper auxiliary function *)
   match rvalue with
-  | Use op ->
-      (* comp_wrap *)
-      let v, ctx, eval_op = (eval_operand config meta op) ctx in
-      (wrap_in_result v, ctx, eval_op)
-  | RvRef (p, bkind) ->
-      (* comp_wrap *)
-      let v, ctx, eval = (eval_rvalue_ref config meta p bkind) ctx in
-      (wrap_in_result v, ctx, eval)
+  | Use op -> wrap_in_result (eval_operand config meta op ctx)
+  | RvRef (p, bkind) -> wrap_in_result (eval_rvalue_ref config meta p bkind ctx)
   | UnaryOp (unop, op) -> eval_unary_op config meta unop op ctx
   | BinaryOp (binop, op1, op2) -> eval_binary_op config meta binop op1 op2 ctx
   | Aggregate (aggregate_kind, ops) ->
-      (* comp_wrap  *)
-      let v, ctx, eval =
-        (eval_rvalue_aggregate config meta aggregate_kind ops) ctx
-      in
-      (wrap_in_result v, ctx, eval)
+      wrap_in_result (eval_rvalue_aggregate config meta aggregate_kind ops ctx)
   | Discriminant _ ->
       craise __FILE__ __LINE__ meta
         "Unreachable: discriminant reads should have been eliminated from the \
@@ -857,15 +820,10 @@ let eval_rvalue_not_global (config : config) (meta : Meta.meta)
 let eval_fake_read (config : config) (meta : Meta.meta) (p : place) : cm_fun =
  fun ctx ->
   let expand_prim_copy = false in
-  let v, ctx, prepare =
+  let v, ctx, cc =
     access_rplace_reorganize_and_read config meta expand_prim_copy Read p ctx
   in
-  let continue v (ctx : eval_ctx) :
-      typed_value * eval_ctx * (eval_result -> eval_result) =
-    cassert __FILE__ __LINE__
-      (not (bottom_in_value ctx.ended_regions v))
-      meta "Fake read: the value contains bottom";
-    (v, ctx, fun e -> e)
-  in
-  let _, ctx, continue = continue v ctx in
-  (ctx, cc_comp prepare continue)
+  cassert __FILE__ __LINE__
+    (not (bottom_in_value ctx.ended_regions v))
+    meta "Fake read: the value contains bottom";
+  (ctx, cc)
