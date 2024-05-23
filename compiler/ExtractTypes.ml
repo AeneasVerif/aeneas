@@ -1696,8 +1696,11 @@ let extract_type_decl_lean_record_field_projectors (ctx : extraction_ctx)
 
         let extract_field_proj (field_id : FieldId.id) (_ : field) : unit =
           F.pp_print_space fmt ();
-          (* Box for the projector definition *)
+          (* Outer box for the projector definition *)
           F.pp_open_hvbox fmt 0;
+          (* Inner box for the projector definition *)
+          F.pp_open_hvbox fmt ctx.indent_incr;
+
           (* Box for the [def ADT.proj ... :=] *)
           F.pp_open_hovbox fmt ctx.indent_incr;
           F.pp_print_string fmt "def";
@@ -1775,7 +1778,8 @@ let extract_type_decl_lean_record_field_projectors (ctx : extraction_ctx)
           (* Close the box for the whole match *)
           F.pp_close_box fmt ();
 
-          (* Close the box for projector definition *)
+          F.pp_close_box fmt ();
+          (* Close the outer box for projector definition *)
           F.pp_close_box fmt ();
           (* Add breaks to insert new lines between definitions *)
           F.pp_print_break fmt 0 0
