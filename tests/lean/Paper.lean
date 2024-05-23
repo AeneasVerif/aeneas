@@ -6,12 +6,12 @@ open Primitives
 namespace paper
 
 /- [paper::ref_incr]:
-   Source: 'src/paper.rs', lines 4:0-4:28 -/
+   Source: 'tests/src/paper.rs', lines 4:0-4:28 -/
 def ref_incr (x : I32) : Result I32 :=
   x + 1#i32
 
 /- [paper::test_incr]:
-   Source: 'src/paper.rs', lines 8:0-8:18 -/
+   Source: 'tests/src/paper.rs', lines 8:0-8:18 -/
 def test_incr : Result Unit :=
   do
   let x ← ref_incr 0#i32
@@ -23,7 +23,7 @@ def test_incr : Result Unit :=
 #assert (test_incr == Result.ok ())
 
 /- [paper::choose]:
-   Source: 'src/paper.rs', lines 15:0-15:70 -/
+   Source: 'tests/src/paper.rs', lines 15:0-15:70 -/
 def choose
   (T : Type) (b : Bool) (x : T) (y : T) :
   Result (T × (T → Result (T × T)))
@@ -35,7 +35,7 @@ def choose
        Result.ok (y, back)
 
 /- [paper::test_choose]:
-   Source: 'src/paper.rs', lines 23:0-23:20 -/
+   Source: 'tests/src/paper.rs', lines 23:0-23:20 -/
 def test_choose : Result Unit :=
   do
   let (z, choose_back) ← choose I32 true 0#i32 0#i32
@@ -55,13 +55,13 @@ def test_choose : Result Unit :=
 #assert (test_choose == Result.ok ())
 
 /- [paper::List]
-   Source: 'src/paper.rs', lines 35:0-35:16 -/
+   Source: 'tests/src/paper.rs', lines 35:0-35:16 -/
 inductive List (T : Type) :=
 | Cons : T → List T → List T
 | Nil : List T
 
 /- [paper::list_nth_mut]:
-   Source: 'src/paper.rs', lines 42:0-42:67 -/
+   Source: 'tests/src/paper.rs', lines 42:0-42:67 -/
 divergent def list_nth_mut
   (T : Type) (l : List T) (i : U32) : Result (T × (T → Result (List T))) :=
   match l with
@@ -83,7 +83,7 @@ divergent def list_nth_mut
   | List.Nil => Result.fail .panic
 
 /- [paper::sum]:
-   Source: 'src/paper.rs', lines 57:0-57:32 -/
+   Source: 'tests/src/paper.rs', lines 57:0-57:32 -/
 divergent def sum (l : List I32) : Result I32 :=
   match l with
   | List.Cons x tl => do
@@ -92,7 +92,7 @@ divergent def sum (l : List I32) : Result I32 :=
   | List.Nil => Result.ok 0#i32
 
 /- [paper::test_nth]:
-   Source: 'src/paper.rs', lines 68:0-68:17 -/
+   Source: 'tests/src/paper.rs', lines 68:0-68:17 -/
 def test_nth : Result Unit :=
   do
   let l := List.Cons 3#i32 List.Nil
@@ -109,7 +109,7 @@ def test_nth : Result Unit :=
 #assert (test_nth == Result.ok ())
 
 /- [paper::call_choose]:
-   Source: 'src/paper.rs', lines 76:0-76:44 -/
+   Source: 'tests/src/paper.rs', lines 76:0-76:44 -/
 def call_choose (p : (U32 × U32)) : Result U32 :=
   do
   let (px, py) := p

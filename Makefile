@@ -205,8 +205,7 @@ ifndef IN_CI
 $(LLBC_DIR)/%.llbc: check-charon
 
 $(LLBC_DIR)/%.llbc:
-	@# We do a `cd` dance to keep the exact same paths as before since that appears in the test outputs.
-	cd tests && $(CHARON_EXE) --no-cargo --input $(subst tests/,,$(INPUTS_DIR))/$*.rs --crate $* $(CHARON_OPTIONS) --dest $(LLBC_DIR)
+	$(CHARON_EXE) --no-cargo --input $(INPUTS_DIR)/$*.rs --crate $* $(CHARON_OPTIONS) --dest $(LLBC_DIR)
 # Special rule for the whole-crate test.
 $(LLBC_DIR)/betree_main.llbc:
 	cd $(INPUTS_DIR)/betree && $(CHARON_EXE) $(CHARON_OPTIONS) --dest $(LLBC_DIR)
