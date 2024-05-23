@@ -487,8 +487,7 @@ let rec update_ctx_along_read_place (config : config) (meta : Meta.meta)
         | FailBorrow _ ->
             craise __FILE__ __LINE__ meta "Could not read a borrow"
       in
-      let ctx, cc1 = (update_ctx_along_read_place config meta access p) ctx in
-      (ctx, cc_comp cc cc1)
+      comp cc (update_ctx_along_read_place config meta access p ctx)
 
 let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
     (access : access_kind) (p : place) : cm_fun =
@@ -521,11 +520,10 @@ let rec update_ctx_along_write_place (config : config) (meta : Meta.meta)
             craise __FILE__ __LINE__ meta "Could not write to a borrow"
       in
       (* Retry *)
-      let ctx, cc1 = (update_ctx_along_write_place config meta access p) ctx in
-      (ctx, cc_comp cc cc1)
+      comp cc (update_ctx_along_write_place config meta access p ctx)
 
 (** Small utility used to break control-flow *)
-exception UpdateCtx of cm_fun
+exception UpdateCtx of (eval_ctx * (eval_result -> eval_result))
 
 let rec end_loans_at_place (config : config) (meta : Meta.meta)
     (access : access_kind) (p : place) : cm_fun =
@@ -545,8 +543,8 @@ let rec end_loans_at_place (config : config) (meta : Meta.meta)
             (* Nothing special to do *) super#visit_borrow_content env bc
         | VReservedMutBorrow bid ->
             (* We need to activate reserved borrows *)
-            let cc = promote_reserved_mut_borrow config meta bid in
-            raise (UpdateCtx cc)
+            let res = promote_reserved_mut_borrow config meta bid ctx in
+            raise (UpdateCtx res)
 
       method! visit_loan_content env lc =
         match lc with
@@ -556,12 +554,12 @@ let rec end_loans_at_place (config : config) (meta : Meta.meta)
             match access with
             | Read -> super#visit_VSharedLoan env bids v
             | Write | Move ->
-                let cc = end_borrows config meta bids in
-                raise (UpdateCtx cc))
+                let res = end_borrows config meta bids ctx in
+                raise (UpdateCtx res))
         | VMutLoan bid ->
             (* We always need to end mutable borrows *)
-            let cc = end_borrow config meta bid in
-            raise (UpdateCtx cc)
+            let res = end_borrow config meta bid ctx in
+            raise (UpdateCtx res)
     end
   in
 
@@ -577,61 +575,57 @@ let rec end_loans_at_place (config : config) (meta : Meta.meta)
     obj#visit_typed_value () v;
     (* No context update required: apply the continuation *)
     (ctx, fun e -> e)
-  with UpdateCtx cc ->
+  with UpdateCtx (ctx, cc) ->
     (* We need to update the context: compose the caugth continuation with
      * a recursive call to reinspect the value *)
-    let ctx, cc = cc ctx in
-    let ctx, cc1 = (end_loans_at_place config meta access p) ctx in
-    (ctx, cc_comp cc cc1)
+    comp cc (end_loans_at_place config meta access p ctx)
 
 let drop_outer_loans_at_lplace (config : config) (meta : Meta.meta) (p : place)
     : cm_fun =
  fun ctx ->
   (* Move the current value in the place outside of this place and into
-   * a dummy variable *)
+   * a temporary dummy variable *)
   let access = Write in
   let v = read_place meta access p ctx in
   let ctx = write_place meta access p (mk_bottom meta v.ty) ctx in
   let dummy_id = fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dummy_id v in
-  (* Auxiliary function *)
+  (* Auxiliary function: while there are loans to end in the
+     temporary value, end them *)
   let rec drop : cm_fun =
    fun ctx ->
     (* Read the value *)
     let v = ctx_lookup_dummy_var meta ctx dummy_id in
-    (* Check if there are loans or borrows to end *)
+    (* Check if there are loans (and only loans) to end *)
     let with_borrows = false in
     match get_first_outer_loan_or_borrow_in_value with_borrows v with
     | None ->
-        (* We are done: simply call the continuation *)
+        (* We are done *)
         (ctx, fun e -> e)
     | Some c ->
-        (* There are: end them then retry *)
+        (* End the loans and retry *)
         let ctx, cc =
           match c with
           | LoanContent (VSharedLoan (bids, _)) ->
               end_borrows config meta bids ctx
           | LoanContent (VMutLoan bid) -> end_borrow config meta bid ctx
-          | BorrowContent _ -> craise __FILE__ __LINE__ meta "Unreachable"
+          | BorrowContent _ ->
+              (* Can't get there: we are only looking up the loans *)
+              craise __FILE__ __LINE__ meta "Unreachable"
         in
         (* Retry *)
-        let ctx, cc1 = drop ctx in
-        (ctx, cc_comp cc cc1)
+        comp cc (drop ctx)
   in
   (* Apply the drop function *)
   let ctx, cc = drop ctx in
   (* Pop the temporary value and reinsert it *)
   (* Pop *)
   let ctx, v = ctx_remove_dummy_var meta ctx dummy_id in
-  (* Reinsert *)
-  let ctx = write_place meta access p v ctx in
   (* Sanity check *)
   sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) meta;
-  (* Continue *)
-  (* let cc =
-       cc_comp cc cc1
-     in *)
-  (* Continue *)
+  (* Reinsert *)
+  let ctx = write_place meta access p v ctx in
+  (* Return *)
   (ctx, cc)
 
 let prepare_lplace (config : config) (meta : Meta.meta) (p : place)
@@ -644,18 +638,11 @@ let prepare_lplace (config : config) (meta : Meta.meta) (p : place)
   (* Access the place *)
   let access = Write in
   let ctx, cc = update_ctx_along_write_place config meta access p ctx in
-  (* End the borrows and loans, starting with the borrows *)
-  let ctx, cc1 = (drop_outer_loans_at_lplace config meta p) ctx in
-  let cc = cc_comp cc cc1 in
+  (* End the loans at the place we are about to overwrite *)
+  let ctx, cc = comp cc (drop_outer_loans_at_lplace config meta p ctx) in
   (* Read the value and check it *)
-  let read_check (ctx : eval_ctx) :
-      typed_value * eval_ctx * (eval_result -> eval_result) =
-    let v = read_place meta access p ctx in
-    (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) meta;
-    (* Continue *)
-    (v, ctx, fun e -> e)
-  in
-  (* Compose and apply the continuations *)
-  let v, ctx, cc1 = read_check ctx in
-  (v, ctx, cc_comp cc cc1)
+  let v = read_place meta access p ctx in
+  (* Sanity checks *)
+  sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) meta;
+  (* Return *)
+  (v, ctx, cc)

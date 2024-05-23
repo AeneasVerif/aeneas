@@ -191,8 +191,8 @@ let replace_symbolic_values (meta : Meta.meta) (at_most_once : bool)
   ctx
 
 let apply_symbolic_expansion_non_borrow (config : config) (meta : Meta.meta)
-    (original_sv : symbolic_value) (expansion : symbolic_expansion)
-    (ctx : eval_ctx) : eval_ctx =
+    (original_sv : symbolic_value) (ctx : eval_ctx)
+    (expansion : symbolic_expansion) : eval_ctx =
   (* Apply the expansion to non-abstraction values *)
   let nv = symbolic_expansion_non_borrow_to_value meta original_sv expansion in
   let at_most_once = false in
@@ -395,12 +395,10 @@ let expand_symbolic_value_shared_borrow (config : config) (meta : Meta.meta)
     apply_symbolic_expansion_to_avalues config meta allow_reborrows original_sv
       see ctx
   in
-  (* Call the continuation *)
   ( ctx,
-    fun e ->
-      (* Update the synthesized program *)
-      S.synthesize_symbolic_expansion_no_branching meta original_sv
-        original_sv_place see e )
+    (* Update the synthesized program *)
+    S.synthesize_symbolic_expansion_no_branching meta original_sv
+      original_sv_place see )
 
 (** TODO: simplify and merge with the other expansion function *)
 let expand_symbolic_value_borrow (config : config) (meta : Meta.meta)
@@ -445,70 +443,6 @@ let expand_symbolic_value_borrow (config : config) (meta : Meta.meta)
       expand_symbolic_value_shared_borrow config meta original_sv
         original_sv_place ref_ty ctx
 
-(** A small helper.
-
-    Apply a branching symbolic expansion to a context and execute all the
-    branches. Note that the expansion is optional for every branch (this is
-    used for integer expansion: see {!expand_symbolic_int}).
-    
-    [see_cf_l]: list of pairs (optional symbolic expansion, continuation).
-    We use [None] for the symbolic expansion for the [_] (default) case of the
-    integer expansions.
-    The continuation are used to execute the content of the branches, but not
-    what comes after.
-
-    [cf_after_join]: this continuation is called *after* the branches have been evaluated.
-    We need this continuation separately (i.e., we can't compose it with the
-    continuations in [see_cf_l]) because we perform a join *before* calling it.
-*)
-(*let apply_branching_symbolic_expansions_non_borrow (config : config)
-     (meta : Meta.meta) (sv : symbolic_value) (sv_place : SA.mplace option)
-     (see_cf_l : (symbolic_expansion option * st_cm_fun) list) =
-  fun ctx ->
-   sanity_check __FILE__ __LINE__ (see_cf_l <> []) meta;
-   (* Apply the symbolic expansion in the context and call the continuation *)
-   let resl =
-     List.map
-       (fun (see_opt, cf_br) ->
-         (* Remember the initial context for printing purposes *)
-         let ctx0 = ctx in
-         (* Expansion *)
-         let ctx =
-           match see_opt with
-           | None -> ctx
-           | Some see ->
-               apply_symbolic_expansion_non_borrow config meta sv see ctx
-         in
-         (* Debug *)
-         log#ldebug
-           (lazy
-             ("apply_branching_symbolic_expansions_non_borrow: "
-             ^ symbolic_value_to_string ctx0 sv
-             ^ "\n\n- original context:\n"
-             ^ eval_ctx_to_string ~meta:(Some meta) ctx0
-             ^ "\n\n- new context:\n"
-             ^ eval_ctx_to_string ~meta:(Some meta) ctx
-             ^ "\n"));
-         (* Continuation *)
-         cf_br ctx)
-       see_cf_l
-   in
-   (* Collect the result: either we computed no subterm, or we computed all
-    * of them *)
-   let subterms =
-     match resl with
-     | Some _ :: _ -> Some (List.map Option.get resl)
-     | None :: _ ->
-         List.iter
-           (fun res -> sanity_check __FILE__ __LINE__ (res = None) meta)
-           resl;
-         None
-     | _ -> craise __FILE__ __LINE__ meta "Unreachable"
-   in
-   (* Synthesize and return *)
-   let seel = List.map fst see_cf_l in
-   S.synthesize_symbolic_expansion meta sv sv_place seel see_cf_l*)
-
 let expand_symbolic_bool (config : config) (meta : Meta.meta)
     (sv : symbolic_value) (sv_place : SA.mplace option) :
     eval_ctx ->
@@ -518,24 +452,25 @@ let expand_symbolic_bool (config : config) (meta : Meta.meta)
  fun ctx ->
   (* Compute the expanded value *)
   let original_sv = sv in
-  (* let original_sv_place = sv_place in *)
   let rty = original_sv.sv_ty in
   sanity_check __FILE__ __LINE__ (rty = TLiteral TBool) meta;
   (* Expand the symbolic value to true or false and continue execution *)
   let see_true = SeLiteral (VBool true) in
   let see_false = SeLiteral (VBool false) in
   let seel = [ Some see_true; Some see_false ] in
-  (* Apply the symbolic expansion (this also outputs the updated symbolic AST) *)
-  let ctx_true =
-    apply_symbolic_expansion_non_borrow config meta sv see_true ctx
+  (* Apply the symbolic expansion *)
+  let apply_expansion =
+    apply_symbolic_expansion_non_borrow config meta sv ctx
   in
-  let ctx_false =
-    apply_symbolic_expansion_non_borrow config meta sv see_false ctx
+  let ctx_true = apply_expansion see_true in
+  let ctx_false = apply_expansion see_false in
+  (* Compute the continuation to build the expression *)
+  let cf e =
+    let el = match e with Some (a, b) -> Some [ a; b ] | None -> None in
+    S.synthesize_symbolic_expansion meta sv sv_place seel el
   in
-  ( (ctx_true, ctx_false),
-    fun a ->
-      let el = match a with Some (a, b) -> Some [ a; b ] | None -> None in
-      S.synthesize_symbolic_expansion meta sv sv_place seel el )
+  (* Return *)
+  ((ctx_true, ctx_false), cf)
 
 let expand_symbolic_value_no_branching (config : config) (meta : Meta.meta)
     (sv : symbolic_value) (sv_place : SA.mplace option) : cm_fun =
@@ -565,14 +500,13 @@ let expand_symbolic_value_no_branching (config : config) (meta : Meta.meta)
         let see = Collections.List.to_cons_nil seel in
         (* Apply in the context *)
         let ctx =
-          apply_symbolic_expansion_non_borrow config meta original_sv see ctx
+          apply_symbolic_expansion_non_borrow config meta original_sv ctx see
         in
-        (* Call the continuation *)
+        (* Return*)
         ( ctx,
-          fun e ->
-            (* Update the synthesized program *)
-            S.synthesize_symbolic_expansion_no_branching meta original_sv
-              original_sv_place see e )
+          (* Update the synthesized program *)
+          S.synthesize_symbolic_expansion_no_branching meta original_sv
+            original_sv_place see )
     (* Borrows *)
     | TRef (region, ref_ty, rkind) ->
         expand_symbolic_value_borrow config meta original_sv original_sv_place
@@ -622,18 +556,12 @@ let expand_symbolic_adt (config : config) (meta : Meta.meta)
           ctx
       in
       (* Apply *)
-      let seel = List.map (fun see -> Some see) seel in
       let ctx_branches =
-        List.map
-          (fun see ->
-            match see with
-            | Some see ->
-                apply_symbolic_expansion_non_borrow config meta sv see ctx
-            | None -> ctx)
-          seel
+        List.map (apply_symbolic_expansion_non_borrow config meta sv ctx) seel
       in
       ( ctx_branches,
-        S.synthesize_symbolic_expansion meta sv original_sv_place seel )
+        S.synthesize_symbolic_expansion meta sv original_sv_place
+          (List.map (fun el -> Some el) seel) )
   | _ ->
       craise __FILE__ __LINE__ meta
         ("expand_symbolic_adt: unexpected type: " ^ show_rty rty)
@@ -653,26 +581,19 @@ let expand_symbolic_int (config : config) (meta : Meta.meta)
    * For the otherwise branch, we leave the symbolic value as it is
    * (because this branch doesn't precisely define which should be the
    * value of the scrutinee...) and simply execute the otherwise statement.
-   *
-   * First, generate the list of pairs:
-   * (optional expansion, statement to execute)
    *)
-  let seel = List.map (fun v -> Some (SeLiteral (VScalar v))) tgts in
-  let seel = List.append seel [ None ] in
+  (* Substitute the symbolic values to generate the contexts in the branches *)
+  let seel = List.map (fun v -> SeLiteral (VScalar v)) tgts in
   let ctx_branches =
-    List.map
-      (fun see ->
-        match see with
-        | None -> ctx
-        | Some see -> apply_symbolic_expansion_non_borrow config meta sv see ctx)
-      seel
+    List.map (apply_symbolic_expansion_non_borrow config meta sv ctx) seel
   in
   let ctx_otherwise = ctx in
-  (* Then expand and evaluate - this generates the proper symbolic AST *)
+  (* Update the symbolic ast *)
   let cf e =
     match e with
     | None -> None
     | Some (el, e) ->
+        let seel = List.map (fun x -> Some x) seel in
         S.synthesize_symbolic_expansion meta sv sv_place (seel @ [ None ])
           (Some (el @ [ e ]))
   in
@@ -718,7 +639,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (meta : Meta.meta) :
         (lazy
           ("greedy_expand_symbolics_with_borrows: about to expand: "
           ^ symbolic_value_to_string ctx sv));
-      let cc : cm_fun =
+      let ctx, cc =
         match sv.sv_ty with
         | TAdt (TAdtId def_id, _) ->
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,
@@ -742,10 +663,10 @@ let greedy_expand_symbolics_with_borrows (config : config) (meta : Meta.meta) :
                 ("Attempted to greedily expand a recursive definition (option \
                   [greedy_expand_symbolics_with_borrows] of [config]): "
                 ^ name_to_string ctx def.name)
-            else expand_symbolic_value_no_branching config meta sv None
+            else expand_symbolic_value_no_branching config meta sv None ctx
         | TAdt ((TTuple | TAssumed TBox), _) | TRef (_, _, _) ->
             (* Ok *)
-            expand_symbolic_value_no_branching config meta sv None
+            expand_symbolic_value_no_branching config meta sv None ctx
         | TAdt (TAssumed (TArray | TSlice | TStr), _) ->
             (* We can't expand those *)
             craise __FILE__ __LINE__ meta
@@ -754,9 +675,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (meta : Meta.meta) :
             craise __FILE__ __LINE__ meta "Unreachable"
       in
       (* Compose and continue *)
-      let ctx, cc = cc ctx in
-      let ctx, cc1 = expand ctx in
-      (ctx, cc_comp cc cc1)
+      comp cc (expand ctx)
   in
   (* Apply *)
   expand ctx

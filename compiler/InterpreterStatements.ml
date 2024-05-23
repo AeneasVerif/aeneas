@@ -182,8 +182,8 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
          * We will of course synthesize an assertion in the generated code
          * (see below). *)
         let ctx =
-          apply_symbolic_expansion_non_borrow config meta sv
-            (SeLiteral (VBool true)) ctx
+          apply_symbolic_expansion_non_borrow config meta sv ctx
+            (SeLiteral (VBool true))
         in
         (* Add the synthesized assertion *)
         ((ctx, Unit), S.synthesize_assertion ctx v)
