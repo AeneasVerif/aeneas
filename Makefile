@@ -174,8 +174,7 @@ endif
 # which backends to use and sets test-specific options.
 .PHONY: test-%
 test-%:
-	$(TEST_RUNNER_EXE) charon $(CHARON_EXE) $(INPUTS_DIR) $(LLBC_DIR) "$*" $(CHARON_OPTIONS)
-	$(TEST_RUNNER_EXE) aeneas $(AENEAS_EXE) $(LLBC_DIR) "$*" $(AENEAS_OPTIONS)
+	$(TEST_RUNNER_EXE) $(CHARON_EXE) $(AENEAS_EXE) $(INPUTS_DIR) $(LLBC_DIR) "$*" $(AENEAS_OPTIONS)
 	echo "# Test $* done"
 
 # =============================================================================

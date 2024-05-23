@@ -1,8 +1,7 @@
 (* Paths to use for tests *)
-type aeneas_env = { aeneas_path : string; llbc_dir : string }
-
-type charon_env = {
+type runner_env = {
   charon_path : string;
+  aeneas_path : string;
   inputs_dir : string;
   llbc_dir : string;
 }
@@ -42,7 +41,7 @@ let run_command args =
   ()
 
 (* Run Aeneas on a specific input with the given options *)
-let run_aeneas (env : aeneas_env) (case : aeneas_test_case) =
+let run_aeneas (env : runner_env) (case : aeneas_test_case) =
   let input_file = concat_path [ env.llbc_dir; case.name ] ^ ".llbc" in
   let dest_dir = concat_path [ "tests"; case.backend; case.subdir ] in
   let args =
@@ -55,7 +54,7 @@ let run_aeneas (env : aeneas_env) (case : aeneas_test_case) =
   run_command args
 
 (* Run Charon on a specific input with the given options *)
-let run_charon (env : charon_env) (case : charon_test_case) =
+let run_charon (env : runner_env) (case : charon_test_case) =
   let input_path = concat_path [ env.inputs_dir; case.path ] in
   if Sys_unix.is_file_exn input_path then
     let args =
@@ -81,8 +80,10 @@ let run_charon (env : charon_env) (case : charon_test_case) =
           Array.append args (Array.of_list case.extra_charon_options)
         in
         (* Run Charon inside the crate *)
+        let old_pwd = Unix.getcwd () in
         Unix.chdir input_path;
-        run_command args
+        run_command args;
+        Unix.chdir old_pwd
     | Some _ ->
         (* Crates with dependencies must be generated separately in CI. We skip
            here and trust that CI takes care to generate the necessary llbc
@@ -185,9 +186,18 @@ let test_subdir backend test_name =
 let () =
   match Array.to_list Sys.argv with
   (* Ad-hoc argument passing for now. *)
-  | _exe_path :: "aeneas" :: aeneas_path :: llbc_dir :: test_path :: options ->
-      let tests_env = { aeneas_path; llbc_dir } in
+  | _exe_path :: charon_path :: aeneas_path :: inputs_dir :: llbc_dir
+    :: test_path :: aeneas_options ->
+      let runner_env = { charon_path; aeneas_path; inputs_dir; llbc_dir } in
       let test_name = Filename.remove_extension test_path in
+
+      let extra_charon_options = charon_options_for_test test_name in
+      let charon_case =
+        { name = test_name; path = test_path; extra_charon_options }
+      in
+      (* Generate the llbc file *)
+      run_charon runner_env charon_case;
+
       (* FIXME: remove this special case *)
       let test_name =
         if test_name = "betree" then "betree_main" else test_name
@@ -198,22 +208,14 @@ let () =
         (fun backend ->
           let subdir = test_subdir backend test_name in
           let extra_aeneas_options =
-            List.append (aeneas_options_for_test backend test_name) options
+            List.append
+              (aeneas_options_for_test backend test_name)
+              aeneas_options
           in
-          let test_case =
+          let aeneas_case =
             { name = test_name; backend; subdir; extra_aeneas_options }
           in
-          run_aeneas tests_env test_case)
+          (* Process the llbc file for the current backend *)
+          run_aeneas runner_env aeneas_case)
         backends
-  | _exe_path :: "charon" :: charon_path :: inputs_dir :: llbc_dir :: test_path
-    :: options ->
-      let tests_env = { charon_path; inputs_dir; llbc_dir } in
-      let test_name = Filename.remove_extension test_path in
-      let extra_charon_options =
-        List.append (charon_options_for_test test_name) options
-      in
-      let test_case =
-        { name = test_name; path = test_path; extra_charon_options }
-      in
-      run_charon tests_env test_case
   | _ -> failwith "Incorrect options passed to test runner"
