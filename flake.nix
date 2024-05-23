@@ -80,6 +80,9 @@
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
         };
 
+        # This test is a full crate with dependencies. We generate the
+        # corresponding llbc file here; this function takes care of cargo
+        # dependencies for us.
         betree-llbc = charon.extractCrateWithCharon.${system} {
           name = "betree";
           src = ./tests/src/betree;
@@ -89,22 +92,6 @@
             ./target/debug/betree
           '';
         };
-        input-llbcs = pkgs.runCommand "input-llbcs"
-          {
-            src = ./tests/src;
-            makefile = ./Makefile;
-            buildInputs = [ charon.packages.${system}.rustToolchain charon.packages.${system}.charon ];
-          } ''
-          # Copy the betree output file
-          mkdir -p $out
-          cp ${betree-llbc}/llbc/betree_main.llbc $out
-
-          mkdir tests
-          cp -r $src tests/src
-          cp $makefile Makefile
-          # Generate the llbc files
-          CHARON_EXE="charon" INPUTS_DIR="tests/src" LLBC_DIR="$out" make generate-llbc
-        '';
 
         # Run the translation on various files.
         # Make sure we don't need to recompile the package whenever we make
@@ -118,19 +105,25 @@
               path == toString ./Makefile
               || pkgs.lib.hasPrefix (toString ./compiler) path
               || pkgs.lib.hasPrefix (toString ./backends) path
-              || pkgs.lib.hasPrefix (toString ./tests) path;
+              || (pkgs.lib.hasPrefix (toString ./tests) path
+              && !pkgs.lib.hasSuffix ".llbc" path);
           };
+          buildInputs = [ charon.packages.${system}.rustToolchain ];
           buildPhase = ''
-            export LLBC_DIR=${input-llbcs}
             export AENEAS_EXE=${aeneas}/bin/aeneas
+            export CHARON_EXE=${charon.packages.${system}.charon}/bin/charon
             export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
+
+            mkdir llbc
+            export LLBC_DIR=llbc
+            # Copy over the llbc file we can't generate ourselves.
+            cp ${betree-llbc}/llbc/betree_main.llbc $LLBC_DIR
 
             # Copy the tests
             cp -r tests tests-copy
+            make clean-generated-aeneas
 
             # Run the tests with extra sanity checks enabled
-            # Remark: we could remove the file
-            make clean-generated-aeneas
             IN_CI=1 make test-all -j $NIX_BUILD_CORES
 
             # Check that there are no differences between the generated tests

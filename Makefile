@@ -19,8 +19,7 @@ TEST_RUNNER_EXE ?= $(PWD)/bin/test_runner
 CHARON_EXE ?= $(PWD)/charon/bin/charon
 
 # The user can specify additional translation options for Aeneas.
-# In CI we activate the (expensive) sanity checks.
-OPTIONS ?=
+AENEAS_OPTIONS ?=
 CHARON_OPTIONS ?=
 
 # The directory thta contains the rust source files for tests.
@@ -28,7 +27,7 @@ INPUTS_DIR ?= tests/src
 # The directory where to look for the .llbc files.
 LLBC_DIR ?= $(PWD)/tests/llbc
 
-# In CI, we enforce formatting and we don't regenerate llbc files.
+# In CI, we enforce formatting and activate the (expensive) sanity checks.
 IN_CI ?=
 
 ####################################
@@ -169,52 +168,18 @@ verify:
 
 ifdef IN_CI
 # In CI we do extra sanity checks.
-test-%: OPTIONS += -checks
+test-%: AENEAS_OPTIONS += -checks
+else
+test-%: check-charon
 endif
 
-# Translate the given llbc file to available backends. The test runner decides
+# Translate the given rust file to available backends. The test runner decides
 # which backends to use and sets test-specific options.
 .PHONY: test-%
-test-%: TEST_NAME = $*
-test-%: $(LLBC_DIR)/%.llbc
-	$(TEST_RUNNER_EXE) $(AENEAS_EXE) $(LLBC_DIR) $(TEST_NAME) $(OPTIONS)
+test-%:
+	$(TEST_RUNNER_EXE) charon $(CHARON_EXE) $(INPUTS_DIR) $(LLBC_DIR) "$*" $(CHARON_OPTIONS)
+	$(TEST_RUNNER_EXE) aeneas $(AENEAS_EXE) $(LLBC_DIR) "$*" $(AENEAS_OPTIONS)
 	echo "# Test $* done"
-
-#  List the `.rs` files in `$(INPUTS_DIR)/`
-INDIVIDUAL_RUST_SRCS = $(wildcard $(INPUTS_DIR)/*.rs)
-# We test all rust files except this one.
-INDIVIDUAL_RUST_SRCS := $(filter-out $(INPUTS_DIR)/hashmap_utils.rs, $(INDIVIDUAL_RUST_SRCS))
-# List the corresponding llbc files.
-INDIVIDUAL_LLBCS := $(subst $(INPUTS_DIR)/,$(LLBC_DIR)/,$(patsubst %.rs,%.llbc,$(INDIVIDUAL_RUST_SRCS)))
-
-.PHONY: generate-llbc
-# This depends on `llbc/<file>.llbc` for each `$(INPUTS_DIR)/<file>.rs` we care about, plus the whole-crate test.
-generate-llbc: $(INDIVIDUAL_LLBCS) $(LLBC_DIR)/betree_main.llbc
-
-$(LLBC_DIR)/hashmap_main.llbc: CHARON_OPTIONS += --opaque=hashmap_utils
-$(LLBC_DIR)/nested_borrows.llbc: CHARON_OPTIONS += --no-code-duplication
-$(LLBC_DIR)/no_nested_borrows.llbc: CHARON_OPTIONS += --no-code-duplication
-$(LLBC_DIR)/paper.llbc: CHARON_OPTIONS += --no-code-duplication
-$(LLBC_DIR)/constants.llbc: CHARON_OPTIONS += --no-code-duplication
-$(LLBC_DIR)/external.llbc: CHARON_OPTIONS += --no-code-duplication
-$(LLBC_DIR)/polonius_list.llbc: CHARON_OPTIONS += --polonius
-# Possible to add `--no-code-duplication` if we use the optimized MIR
-$(LLBC_DIR)/betree_main.llbc: CHARON_OPTIONS += --polonius --opaque=betree_utils --crate betree_main
-
-ifndef IN_CI
-$(LLBC_DIR)/%.llbc: check-charon
-
-$(LLBC_DIR)/%.llbc:
-	$(CHARON_EXE) --no-cargo --input $(INPUTS_DIR)/$*.rs --crate $* $(CHARON_OPTIONS) --dest $(LLBC_DIR)
-# Special rule for the whole-crate test.
-$(LLBC_DIR)/betree_main.llbc:
-	cd $(INPUTS_DIR)/betree && $(CHARON_EXE) $(CHARON_OPTIONS) --dest $(LLBC_DIR)
-else
-$(LLBC_DIR)/%.llbc:
-	@echo 'ERROR: llbc files should be built separately in CI'
-	@false
-endif
-
 
 # =============================================================================
 # Nix
