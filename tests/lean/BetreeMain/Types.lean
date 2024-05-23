@@ -46,15 +46,19 @@ inductive betree.Node :=
 
 end
 
+@[simp, reducible]
 def betree.Internal.id (x : betree.Internal) :=
   match x with | betree.Internal.mk x1 _ _ _ => x1
 
+@[simp, reducible]
 def betree.Internal.pivot (x : betree.Internal) :=
   match x with | betree.Internal.mk _ x1 _ _ => x1
 
+@[simp, reducible]
 def betree.Internal.left (x : betree.Internal) :=
   match x with | betree.Internal.mk _ _ x1 _ => x1
 
+@[simp, reducible]
 def betree.Internal.right (x : betree.Internal) :=
   match x with | betree.Internal.mk _ _ _ x1 => x1
 
