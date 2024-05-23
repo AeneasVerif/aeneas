@@ -1,4 +1,10 @@
 (executable
  (public_name test_runner)
  (libraries core_unix.sys_unix unix)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.ord ppx_sexp_conv))
  (name run_test))
+
+(env
+ (dev
+  (flags :standard -warn-error -5@8-11-14-32-33-20-21-26-27-39)))
