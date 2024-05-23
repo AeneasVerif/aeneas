@@ -1,0 +1,13 @@
+[package]
+name = "betree"
+version = "0.1.0"
+authors = ["Son Ho <hosonmarc@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+serde_json = "1.0.91"
+serde = { version = "1.0.152", features = ["derive"] }
+log = "0.4.17"
+env_logger = "0.8.4"
+
+# TODO: If we turn this package into a library, building the tests fails.

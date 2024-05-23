@@ -80,6 +80,32 @@
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
         };
 
+        betree-llbc = charon.extractCrateWithCharon.${system} {
+          name = "betree";
+          src = ./tests/src/betree;
+          charonFlags = "--polonius --opaque=betree_utils --crate betree_main";
+          craneExtraArgs.checkPhaseCargoCommand = ''
+            cargo rustc -- --test -Zpolonius
+            ./target/debug/betree
+          '';
+        };
+        input-llbcs = pkgs.runCommand "input-llbcs"
+          {
+            src = ./tests/src;
+            makefile = ./Makefile;
+            buildInputs = [ charon.packages.${system}.rustToolchain charon.packages.${system}.charon ];
+          } ''
+          # Copy the betree output file
+          mkdir -p $out
+          cp ${betree-llbc}/llbc/betree_main.llbc $out
+
+          mkdir tests
+          cp -r $src tests/src
+          cp $makefile Makefile
+          # Generate the llbc files
+          CHARON_EXE="charon" INPUTS_DIR="tests/src" LLBC_DIR="$out" make generate-llbc
+        '';
+
         # Run the translation on various files.
         # Make sure we don't need to recompile the package whenever we make
         # unnecessary changes - we list the exact files and folders the package
@@ -95,9 +121,7 @@
               || pkgs.lib.hasPrefix (toString ./tests) path;
           };
           buildPhase = ''
-            # We need to provide the paths to the Charon tests derivations
-            export CHARON_TEST_DIR=${charon.checks.${system}.tests}
-
+            export LLBC_DIR=${input-llbcs}
             export AENEAS_EXE=${aeneas}/bin/aeneas
             export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
 
@@ -106,8 +130,8 @@
 
             # Run the tests with extra sanity checks enabled
             # Remark: we could remove the file
-            make clean-generated
-            OPTIONS=-checks make test-all -j $NIX_BUILD_CORES
+            make clean-generated-aeneas
+            IN_CI=1 make test-all -j $NIX_BUILD_CORES
 
             # Check that there are no differences between the generated tests
             # and the original tests
@@ -124,6 +148,7 @@
           # something, otherwise Nix will consider the build has failed.
           installPhase = "touch $out";
         };
+
         # Replay the F* proofs.
         aeneas-verify-fstar = pkgs.stdenv.mkDerivation {
           name = "aeneas_verify_fstar";

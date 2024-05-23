@@ -12,7 +12,7 @@ type test_case = {
 (* Run Aeneas on a specific input with the given options *)
 let run_test env case =
   let concat_path = List.fold_left Filename.concat "" in
-  let input_file = concat_path [ env.llbc_dir; "llbc"; case.name ] ^ ".llbc" in
+  let input_file = concat_path [ env.llbc_dir; case.name ] ^ ".llbc" in
   let dest_dir = concat_path [ "tests"; case.backend; case.subdir ] in
   let args =
     [|
