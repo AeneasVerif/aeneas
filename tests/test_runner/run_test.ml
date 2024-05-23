@@ -2,7 +2,6 @@
 type runner_env = {
   charon_path : string;
   aeneas_path : string;
-  inputs_dir : string;
   llbc_dir : string;
 }
 
@@ -14,8 +13,11 @@ type aeneas_test_case = {
   extra_aeneas_options : string list;
 }
 
+type input_kind = SingleFile | Crate
+
 (* The data for a specific test to generate llbc for *)
 type charon_test_case = {
+  kind : input_kind;
   name : string;
   path : string;
   extra_charon_options : string list;
@@ -55,42 +57,42 @@ let run_aeneas (env : runner_env) (case : aeneas_test_case) =
 
 (* Run Charon on a specific input with the given options *)
 let run_charon (env : runner_env) (case : charon_test_case) =
-  let input_path = concat_path [ env.inputs_dir; case.path ] in
-  if Sys_unix.is_file_exn input_path then
-    let args =
-      [|
-        env.charon_path;
-        "--no-cargo";
-        "--input";
-        input_path;
-        "--crate";
-        case.name;
-        "--dest";
-        env.llbc_dir;
-      |]
-    in
-    let args = Array.append args (Array.of_list case.extra_charon_options) in
-    (* Run Charon on the rust file *)
-    run_command args
-  else if Sys.is_directory input_path then
-    match Sys.getenv_opt "IN_CI" with
-    | None ->
-        let args = [| env.charon_path; "--dest"; env.llbc_dir |] in
-        let args =
-          Array.append args (Array.of_list case.extra_charon_options)
-        in
-        (* Run Charon inside the crate *)
-        let old_pwd = Unix.getcwd () in
-        Unix.chdir input_path;
-        run_command args;
-        Unix.chdir old_pwd
-    | Some _ ->
-        (* Crates with dependencies must be generated separately in CI. We skip
-           here and trust that CI takes care to generate the necessary llbc
-           file. *)
-        print_endline
-          "Warn: IN_CI is set; we skip generating llbc files for whole crates"
-  else failwith ("`" ^ input_path ^ "` is not a file or a directory.")
+  match case.kind with
+  | SingleFile ->
+      let args =
+        [|
+          env.charon_path;
+          "--no-cargo";
+          "--input";
+          case.path;
+          "--crate";
+          case.name;
+          "--dest";
+          env.llbc_dir;
+        |]
+      in
+      let args = Array.append args (Array.of_list case.extra_charon_options) in
+      (* Run Charon on the rust file *)
+      run_command args
+  | Crate -> (
+      match Sys.getenv_opt "IN_CI" with
+      | None ->
+          let args = [| env.charon_path; "--dest"; env.llbc_dir |] in
+          let args =
+            Array.append args (Array.of_list case.extra_charon_options)
+          in
+          (* Run Charon inside the crate *)
+          let old_pwd = Unix.getcwd () in
+          Unix.chdir case.path;
+          run_command args;
+          Unix.chdir old_pwd
+      | Some _ ->
+          (* Crates with dependencies must be generated separately in CI. We skip
+             here and trust that CI takes care to generate the necessary llbc
+             file. *)
+          print_endline
+            "Warn: IN_CI is set; we skip generating llbc files for whole crates"
+      )
 
 (* File-specific options *)
 let aeneas_options_for_test backend test_name =
@@ -186,14 +188,24 @@ let test_subdir backend test_name =
 let () =
   match Array.to_list Sys.argv with
   (* Ad-hoc argument passing for now. *)
-  | _exe_path :: charon_path :: aeneas_path :: inputs_dir :: llbc_dir
-    :: test_path :: aeneas_options ->
-      let runner_env = { charon_path; aeneas_path; inputs_dir; llbc_dir } in
-      let test_name = Filename.remove_extension test_path in
+  | _exe_path :: charon_path :: aeneas_path :: llbc_dir :: test_path
+    :: aeneas_options ->
+      let runner_env = { charon_path; aeneas_path; llbc_dir } in
+      let test_name = Filename.remove_extension (Filename.basename test_path) in
 
+      let charon_kind =
+        if Sys_unix.is_file_exn test_path then SingleFile
+        else if Sys_unix.is_directory_exn test_path then Crate
+        else failwith ("`" ^ test_path ^ "` is not a file or a directory.")
+      in
       let extra_charon_options = charon_options_for_test test_name in
       let charon_case =
-        { name = test_name; path = test_path; extra_charon_options }
+        {
+          path = test_path;
+          name = test_name;
+          kind = charon_kind;
+          extra_charon_options;
+        }
       in
       (* Generate the llbc file *)
       run_charon runner_env charon_case;
