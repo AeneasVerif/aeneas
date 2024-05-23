@@ -5,7 +5,7 @@ import Base
 open Primitives
 
 /- [core::cell::Cell]
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/cell.rs', lines 293:0-293:26
+   Source: '/rustc/ad963232d9b987d66a6f8e6ec4141f672b8b9900/library/core/src/cell.rs', lines 293:0-293:26
    Name pattern: core::cell::Cell -/
 axiom core.cell.Cell (T : Type) : Type
 

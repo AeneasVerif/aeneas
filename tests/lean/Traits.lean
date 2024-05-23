@@ -512,7 +512,7 @@ structure Foo (T U : Type) where
   y : U
 
 /- [core::result::Result]
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/result.rs', lines 502:0-502:21
+   Source: '/rustc/ad963232d9b987d66a6f8e6ec4141f672b8b9900/library/core/src/result.rs', lines 502:0-502:21
    Name pattern: core::result::Result -/
 inductive core.result.Result (T E : Type) :=
 | Ok : T → core.result.Result T E
