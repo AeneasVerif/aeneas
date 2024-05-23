@@ -27,18 +27,6 @@ end
 
 module BackendMap = Map.Make (Backend)
 
-type input_kind = SingleFile | Crate
-
-(* The data for a specific test input *)
-type test_case = {
-  name : string;
-  path : string;
-  input_kind : input_kind;
-  charon_options : string list;
-  aeneas_options : string list BackendMap.t;
-  subdir : string BackendMap.t;
-}
-
 let concat_path = List.fold_left Filename.concat ""
 
 let run_command args =
@@ -57,61 +45,6 @@ let run_command args =
   in
   let _ = Unix.waitpid [] pid in
   ()
-
-(* Run Aeneas on a specific input with the given options *)
-let run_aeneas (env : runner_env) (case : test_case) (backend : Backend.t) =
-  (* FIXME: remove this special case *)
-  let test_name = if case.name = "betree" then "betree_main" else case.name in
-  let input_file = concat_path [ env.llbc_dir; test_name ] ^ ".llbc" in
-  let subdir = BackendMap.find backend case.subdir in
-  let aeneas_options = BackendMap.find backend case.aeneas_options in
-  let backend_str = Backend.to_string backend in
-  let dest_dir = concat_path [ "tests"; backend_str; subdir ] in
-  let args =
-    [|
-      env.aeneas_path; input_file; "-dest"; dest_dir; "-backend"; backend_str;
-    |]
-  in
-  let args = Array.append args (Array.of_list aeneas_options) in
-  (* Run Aeneas *)
-  run_command args
-
-(* Run Charon on a specific input with the given options *)
-let run_charon (env : runner_env) (case : test_case) =
-  match case.input_kind with
-  | SingleFile ->
-      let args =
-        [|
-          env.charon_path;
-          "--no-cargo";
-          "--input";
-          case.path;
-          "--crate";
-          case.name;
-          "--dest";
-          env.llbc_dir;
-        |]
-      in
-      let args = Array.append args (Array.of_list case.charon_options) in
-      (* Run Charon on the rust file *)
-      run_command args
-  | Crate -> (
-      match Sys.getenv_opt "IN_CI" with
-      | None ->
-          let args = [| env.charon_path; "--dest"; env.llbc_dir |] in
-          let args = Array.append args (Array.of_list case.charon_options) in
-          (* Run Charon inside the crate *)
-          let old_pwd = Unix.getcwd () in
-          Unix.chdir case.path;
-          run_command args;
-          Unix.chdir old_pwd
-      | Some _ ->
-          (* Crates with dependencies must be generated separately in CI. We skip
-             here and trust that CI takes care to generate the necessary llbc
-             file. *)
-          print_endline
-            "Warn: IN_CI is set; we skip generating llbc files for whole crates"
-      )
 
 (* File-specific options *)
 let aeneas_options_for_test backend test_name =
@@ -205,29 +138,98 @@ let test_subdir backend test_name =
       "misc"
   | _ -> test_name
 
-let build_test (path : string) : test_case =
-  let name = Filename.remove_extension (Filename.basename path) in
-  let input_kind =
-    if Sys_unix.is_file_exn path then SingleFile
-    else if Sys_unix.is_directory_exn path then Crate
-    else failwith ("`" ^ path ^ "` is not a file or a directory.")
+(* The data for a specific test input *)
+module Input = struct
+  type kind = SingleFile | Crate
+
+  type t = {
+    name : string;
+    path : string;
+    kind : kind;
+    charon_options : string list;
+    aeneas_options : string list BackendMap.t;
+    subdir : string BackendMap.t;
+  }
+
+  let build (path : string) : t =
+    let name = Filename.remove_extension (Filename.basename path) in
+    let kind =
+      if Sys_unix.is_file_exn path then SingleFile
+      else if Sys_unix.is_directory_exn path then Crate
+      else failwith ("`" ^ path ^ "` is not a file or a directory.")
+    in
+    let charon_options = charon_options_for_test name in
+    let subdir =
+      List.fold_left
+        (fun map backend ->
+          let subdir = test_subdir backend name in
+          BackendMap.add backend subdir map)
+        BackendMap.empty Backend.all
+    in
+    let aeneas_options =
+      List.fold_left
+        (fun map backend ->
+          let opts = aeneas_options_for_test backend name in
+          BackendMap.add backend opts map)
+        BackendMap.empty Backend.all
+    in
+    { path; name; kind; charon_options; subdir; aeneas_options }
+end
+
+(* Run Aeneas on a specific input with the given options *)
+let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
+  (* FIXME: remove this special case *)
+  let test_name = if case.name = "betree" then "betree_main" else case.name in
+  let input_file = concat_path [ env.llbc_dir; test_name ] ^ ".llbc" in
+  let subdir = BackendMap.find backend case.subdir in
+  let aeneas_options = BackendMap.find backend case.aeneas_options in
+  let backend_str = Backend.to_string backend in
+  let dest_dir = concat_path [ "tests"; backend_str; subdir ] in
+  let args =
+    [|
+      env.aeneas_path; input_file; "-dest"; dest_dir; "-backend"; backend_str;
+    |]
   in
-  let charon_options = charon_options_for_test name in
-  let subdir =
-    List.fold_left
-      (fun map backend ->
-        let subdir = test_subdir backend name in
-        BackendMap.add backend subdir map)
-      BackendMap.empty Backend.all
-  in
-  let aeneas_options =
-    List.fold_left
-      (fun map backend ->
-        let opts = aeneas_options_for_test backend name in
-        BackendMap.add backend opts map)
-      BackendMap.empty Backend.all
-  in
-  { path; name; input_kind; charon_options; subdir; aeneas_options }
+  let args = Array.append args (Array.of_list aeneas_options) in
+  (* Run Aeneas *)
+  run_command args
+
+(* Run Charon on a specific input with the given options *)
+let run_charon (env : runner_env) (case : Input.t) =
+  match case.kind with
+  | SingleFile ->
+      let args =
+        [|
+          env.charon_path;
+          "--no-cargo";
+          "--input";
+          case.path;
+          "--crate";
+          case.name;
+          "--dest";
+          env.llbc_dir;
+        |]
+      in
+      let args = Array.append args (Array.of_list case.charon_options) in
+      (* Run Charon on the rust file *)
+      run_command args
+  | Crate -> (
+      match Sys.getenv_opt "IN_CI" with
+      | None ->
+          let args = [| env.charon_path; "--dest"; env.llbc_dir |] in
+          let args = Array.append args (Array.of_list case.charon_options) in
+          (* Run Charon inside the crate *)
+          let old_pwd = Unix.getcwd () in
+          Unix.chdir case.path;
+          run_command args;
+          Unix.chdir old_pwd
+      | Some _ ->
+          (* Crates with dependencies must be generated separately in CI. We skip
+             here and trust that CI takes care to generate the necessary llbc
+             file. *)
+          print_endline
+            "Warn: IN_CI is set; we skip generating llbc files for whole crates"
+      )
 
 let () =
   match Array.to_list Sys.argv with
@@ -235,7 +237,7 @@ let () =
   | _exe_path :: charon_path :: aeneas_path :: llbc_dir :: test_path
     :: aeneas_options ->
       let runner_env = { charon_path; aeneas_path; llbc_dir } in
-      let test_case = build_test test_path in
+      let test_case = Input.build test_path in
       let test_case =
         {
           test_case with
