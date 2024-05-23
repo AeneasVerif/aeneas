@@ -105,30 +105,25 @@ let assign_to_place (config : config) (meta : Meta.meta) (rv : typed_value)
   let _, ctx, cc = prepare_lplace config meta p ctx in
   (* Retrieve the rvalue from the dummy variable *)
   let rv, ctx = remove_dummy_var meta rvalue_vid ctx in
+  (* Move the value at destination (that we will overwrite) to a dummy variable
+     to preserve the borrows *)
+  let mv = InterpreterPaths.read_place meta Write p ctx in
+  let dest_vid = fresh_dummy_var_id () in
+  let ctx = ctx_push_dummy_var ctx dest_vid mv in
+  (* Write to the destination *)
+  (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
+  exec_assert __FILE__ __LINE__
+    (not (bottom_in_value ctx.ended_regions rv))
+    meta "The value to move contains bottom";
   (* Update the destination *)
-  let ctx =
-    (* Move the value at destination (that we will overwrite) to a dummy variable
-       to preserve the borrows *)
-    let mv = InterpreterPaths.read_place meta Write p ctx in
-    let dest_vid = fresh_dummy_var_id () in
-    let ctx = ctx_push_dummy_var ctx dest_vid mv in
-    (* Write to the destination *)
-    (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
-    exec_assert __FILE__ __LINE__
-      (not (bottom_in_value ctx.ended_regions rv))
-      meta "The value to move contains bottom";
-    (* Update the destination *)
-    let ctx = write_place meta Write p rv ctx in
-    (* Debug *)
-    log#ldebug
-      (lazy
-        ("assign_to_place:" ^ "\n- rv: "
-        ^ typed_value_to_string ~meta:(Some meta) ctx rv
-        ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Final context:\n"
-        ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-    (* Continue *)
-    ctx
-  in
+  let ctx = write_place meta Write p rv ctx in
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("assign_to_place:" ^ "\n- rv: "
+      ^ typed_value_to_string ~meta:(Some meta) ctx rv
+      ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Final context:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
   (* Return *)
   (ctx, cc)
 
