@@ -1701,6 +1701,16 @@ let extract_type_decl_lean_record_field_projectors (ctx : extraction_ctx)
           (* Inner box for the projector definition *)
           F.pp_open_hvbox fmt ctx.indent_incr;
 
+          (* Box for the attributes *)
+          F.pp_open_vbox fmt 0;
+          (* Annotate the projectors with both simp and reducible.
+             The first one allows to automatically unfold when calling simp in proofs.
+             The second ensures that projectors will interact well with the unifier *)
+          F.pp_print_string fmt "@[simp, reducible]";
+          F.pp_print_break fmt 0 0;
+          (* Close box for the attributes *)
+          F.pp_close_box fmt ();
+
           (* Box for the [def ADT.proj ... :=] *)
           F.pp_open_hovbox fmt ctx.indent_incr;
           F.pp_print_string fmt "def";
