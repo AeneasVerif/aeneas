@@ -60,5 +60,9 @@ open Contexts
 open Cps
 open Meta
 
-(** Evaluate a loop *)
-val eval_loop : config -> meta -> st_cm_fun -> st_cm_fun
+(** Evaluate a loop.
+
+    The `stl_cm_fun` required as input must be the function to evaluate the
+    loop body (i.e., `eval_statement` applied to the loop body).
+ *)
+val eval_loop : config -> meta -> stl_cm_fun -> stl_cm_fun

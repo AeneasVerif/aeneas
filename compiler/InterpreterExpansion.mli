@@ -15,8 +15,8 @@ val apply_symbolic_expansion_non_borrow :
   config ->
   Meta.meta ->
   symbolic_value ->
-  symbolic_expansion ->
   eval_ctx ->
+  symbolic_expansion ->
   eval_ctx
 
 (** Expand a symhbolic value, without branching *)
@@ -28,38 +28,30 @@ val expand_symbolic_value_no_branching :
 
     Parameters:
     - [config]
+    - [meta]
     - [sv]
     - [sv_place]
-    - [cf_branches]: the continuation to evaluate the branches. This continuation
-      typically evaluates a [match] statement *after* we have performed the symbolic
-      expansion (in particular, we can have one continuation for all the branches).
-    - [cf_after_join]: the continuation for *after* the match (we perform a join
-      then call it).
  *)
 val expand_symbolic_adt :
   config ->
   Meta.meta ->
   symbolic_value ->
   SA.mplace option ->
-  st_cm_fun ->
-  st_m_fun ->
-  m_fun
+  eval_ctx ->
+  eval_ctx list * (SymbolicAst.expression list option -> eval_result)
 
 (** Expand a symbolic boolean.
 
     Parameters: see {!expand_symbolic_adt}.
-    The two parameters of type [st_cm_fun] correspond to the [cf_branches]
-    parameter (here, there are exactly two branches).
  *)
 val expand_symbolic_bool :
   config ->
   Meta.meta ->
   symbolic_value ->
   SA.mplace option ->
-  st_cm_fun ->
-  st_cm_fun ->
-  st_m_fun ->
-  m_fun
+  eval_ctx ->
+  (eval_ctx * eval_ctx)
+  * ((SymbolicAst.expression * SymbolicAst.expression) option -> eval_result)
 
 (** Symbolic integers are expanded upon evaluating a [SwitchInt].
 
@@ -69,16 +61,11 @@ val expand_symbolic_bool :
     then retry evaluating the [if ... then ... else ...] or the [match]: as
     the scrutinee will then have a concrete value, the interpreter will switch
     to the proper branch.
-    
-    However, when expanding a "regular" integer for a switch, there is always an
-    *otherwise* branch that we can take, for which the integer must remain symbolic
-    (because in this branch the scrutinee can take a range of values). We thus
-    can't simply expand then retry to evaluate the [switch], because then we
-    would loop...
-    
-    For this reason, we take the list of branches to execute as parameters, and
-    directly jump to those branches after the expansion, without reevaluating the
-    switch. The continuation is thus for the execution *after* the switch.
+
+    When expanding a "regular" integer for a switch there is always an *otherwise*
+    branch. We treat it separately: for this reason we return a pair of a list
+    of evaluation contexts (for the branches which are not the otherwise branch)
+    and an additional evaluation context for the otherwise branch.
  *)
 val expand_symbolic_int :
   config ->
@@ -86,10 +73,11 @@ val expand_symbolic_int :
   symbolic_value ->
   SA.mplace option ->
   integer_type ->
-  (scalar_value * st_cm_fun) list ->
-  st_cm_fun ->
-  st_m_fun ->
-  m_fun
+  scalar_value list ->
+  eval_ctx ->
+  (eval_ctx list * eval_ctx)
+  * ((SymbolicAst.expression list * SymbolicAst.expression) option ->
+    eval_result)
 
 (** If this mode is activated through the [config], greedily expand the symbolic
     values which need to be expanded. See {!type:Contexts.config} for more information.

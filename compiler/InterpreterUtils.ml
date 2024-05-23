@@ -5,7 +5,6 @@ open Contexts
 open LlbcAst
 open Utils
 open TypesUtils
-open Cps
 open Errors
 
 (* TODO: we should probably rename the file to ContextsUtils *)
@@ -14,19 +13,6 @@ open Errors
 let log = Logging.interpreter_log
 
 (** Some utilities *)
-
-(** Auxiliary function - call a function which requires a continuation,
-    and return the let context given to the continuation *)
-let get_cf_ctx_no_synth (meta : Meta.meta) (f : cm_fun) (ctx : eval_ctx) :
-    eval_ctx =
-  let nctx = ref None in
-  let cf ctx =
-    sanity_check __FILE__ __LINE__ (!nctx = None) meta;
-    nctx := Some ctx;
-    None
-  in
-  let _ = f cf ctx in
-  Option.get !nctx
 
 let eval_ctx_to_string_no_filter = Print.Contexts.eval_ctx_to_string_no_filter
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string

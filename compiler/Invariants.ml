@@ -4,7 +4,6 @@
 open Types
 open Values
 open Contexts
-open Cps
 open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
@@ -876,9 +875,3 @@ let check_invariants (meta : Meta.meta) (ctx : eval_ctx) : unit =
     check_typing_invariant meta ctx;
     check_symbolic_values meta ctx)
   else log#ldebug (lazy "Not checking invariants (check is not activated)")
-
-(** Same as {!check_invariants}, but written in CPS *)
-let cf_check_invariants (meta : Meta.meta) : cm_fun =
- fun cf ctx ->
-  check_invariants meta ctx;
-  cf ctx
