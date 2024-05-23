@@ -2902,14 +2902,9 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
          - if the ADT is an enumeration (which must have exactly one branch)
          - if we forbid using field projectors.
       *)
-      let is_rec_def =
-        T.TypeDeclId.Set.mem adt_id ctx.type_ctx.recursive_decls
-      in
       let use_let_with_cons =
         is_enum
         || !Config.dont_use_field_projectors
-        (* TODO: for now, we don't have field projectors over recursive ADTs in Lean. *)
-        || (!Config.backend = Lean && is_rec_def)
         (* Also, there is a special case when the ADT is to be extracted as
            a tuple, because it is a structure with unnamed fields. Some backends
            like Lean have projectors for tuples (like so: `x.3`), but others
