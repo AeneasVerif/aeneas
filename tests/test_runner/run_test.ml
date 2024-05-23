@@ -16,7 +16,11 @@ type aeneas_test_case = {
 }
 
 (* The data for a specific test to generate llbc for *)
-type charon_test_case = { name : string; extra_charon_options : string list }
+type charon_test_case = {
+  name : string;
+  path : string;
+  extra_charon_options : string list;
+}
 
 let concat_path = List.fold_left Filename.concat ""
 
@@ -52,15 +56,14 @@ let run_aeneas (env : aeneas_env) (case : aeneas_test_case) =
 
 (* Run Charon on a specific input with the given options *)
 let run_charon (env : charon_env) (case : charon_test_case) =
-  let input_crate = concat_path [ env.inputs_dir; case.name ] in
-  let input_file = input_crate ^ ".rs" in
-  if Sys.file_exists input_file then
+  let input_path = concat_path [ env.inputs_dir; case.path ] in
+  if Sys_unix.is_file_exn input_path then
     let args =
       [|
         env.charon_path;
         "--no-cargo";
         "--input";
-        input_file;
+        input_path;
         "--crate";
         case.name;
         "--dest";
@@ -70,7 +73,7 @@ let run_charon (env : charon_env) (case : charon_test_case) =
     let args = Array.append args (Array.of_list case.extra_charon_options) in
     (* Run Charon on the rust file *)
     run_command args
-  else if Sys.file_exists input_crate then
+  else if Sys.is_directory input_path then
     match Sys.getenv_opt "IN_CI" with
     | None ->
         let args = [| env.charon_path; "--dest"; env.llbc_dir |] in
@@ -78,7 +81,7 @@ let run_charon (env : charon_env) (case : charon_test_case) =
           Array.append args (Array.of_list case.extra_charon_options)
         in
         (* Run Charon inside the crate *)
-        Unix.chdir input_crate;
+        Unix.chdir input_path;
         run_command args
     | Some _ ->
         (* Crates with dependencies must be generated separately in CI. We skip
@@ -86,7 +89,7 @@ let run_charon (env : charon_env) (case : charon_test_case) =
            file. *)
         print_endline
           "Warn: IN_CI is set; we skip generating llbc files for whole crates"
-  else failwith ("Neither " ^ input_file ^ " nor " ^ input_crate ^ " exist.")
+  else failwith ("`" ^ input_path ^ "` is not a file or a directory.")
 
 (* File-specific options *)
 let aeneas_options_for_test backend test_name =
@@ -154,9 +157,8 @@ let charon_options_for_test test_name =
     | _ -> []
   in
   let extra_options =
-    (* $(LLBC_DIR)/betree_main.llbc: CHARON_OPTIONS += --polonius --opaque=betree_utils --crate betree_main *)
     match test_name with
-    | "betree_main" ->
+    | "betree" ->
         [ "--polonius"; "--opaque=betree_utils"; "--crate"; "betree_main" ]
     | "hashmap_main" -> [ "--opaque=hashmap_utils" ]
     | "polonius_list" -> [ "--polonius" ]
@@ -183,8 +185,13 @@ let test_subdir backend test_name =
 let () =
   match Array.to_list Sys.argv with
   (* Ad-hoc argument passing for now. *)
-  | _exe_path :: "aeneas" :: aeneas_path :: llbc_dir :: test_name :: options ->
+  | _exe_path :: "aeneas" :: aeneas_path :: llbc_dir :: test_path :: options ->
       let tests_env = { aeneas_path; llbc_dir } in
+      let test_name = Filename.remove_extension test_path in
+      (* FIXME: remove this special case *)
+      let test_name =
+        if test_name = "betree" then "betree_main" else test_name
+      in
       (* TODO: reactivate HOL4 once traits are parameterized by their associated types *)
       let backends = [ "coq"; "lean"; "fstar" ] in
       List.iter
@@ -198,16 +205,15 @@ let () =
           in
           run_aeneas tests_env test_case)
         backends
-  | _exe_path :: "charon" :: charon_path :: inputs_dir :: llbc_dir :: test_name
+  | _exe_path :: "charon" :: charon_path :: inputs_dir :: llbc_dir :: test_path
     :: options ->
       let tests_env = { charon_path; inputs_dir; llbc_dir } in
+      let test_name = Filename.remove_extension test_path in
       let extra_charon_options =
         List.append (charon_options_for_test test_name) options
       in
-      (* FIXME: remove this special case *)
-      let test_name =
-        if test_name = "betree_main" then "betree" else test_name
+      let test_case =
+        { name = test_name; path = test_path; extra_charon_options }
       in
-      let test_case = { name = test_name; extra_charon_options } in
       run_charon tests_env test_case
   | _ -> failwith "Incorrect options passed to test runner"

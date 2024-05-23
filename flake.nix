@@ -78,6 +78,9 @@
           duneVersion = "3";
           src = ./tests/test_runner;
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
+          propagatedBuildInputs = (with ocamlPackages; [
+            core_unix
+          ]);
         };
 
         # This test is a full crate with dependencies. We generate the
