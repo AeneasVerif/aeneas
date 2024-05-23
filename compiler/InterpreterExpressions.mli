@@ -4,33 +4,16 @@ open Contexts
 open Cps
 open InterpreterPaths
 
-(** Read a place (CPS-style function).
-
-    We also check that the value *doesn't contain bottoms or reserved
-    borrows*.
-
-    This function doesn't reorganize the context to make sure we can read
-    the place. If needs be, you should call {!InterpreterPaths.update_ctx_along_read_place} first.
- *)
-val read_place :
-  Meta.meta ->
-  access_kind ->
-  place ->
-  eval_ctx ->
-  typed_value * eval_ctx * (eval_result -> eval_result)
-
 (** Auxiliary function.
 
-    Prepare the access to a place in a right-value (typically an operand) by
-    reorganizing the environment.
+    Prepare the access to a place in a right-value (typically an operand) by reorganizing
+    the environment to end outer loans, then read the value and check that this value
+    *doesn't contain any bottom nor reserved borrows*.
 
     We reorganize the environment so that:
     - we can access the place (we prepare *along* the path)
     - the value at the place itself doesn't contain loans (the [access_kind]
       controls whether we only end mutable loans, or also shared loans).
-
-    We also check, after the reorganization, that the value at the place
-    *doesn't contain any bottom nor reserved borrows*.
 
     [expand_prim_copy]: if [true], expand the symbolic values which are
     primitively copyable and contain borrows.
