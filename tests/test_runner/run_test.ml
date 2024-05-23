@@ -116,20 +116,28 @@ let test_subdir backend test_name =
 let () =
   match Array.to_list Sys.argv with
   (* Ad-hoc argument passing for now. *)
-  | _exe_path :: aeneas_path :: llbc_dir :: test_name :: backend :: options ->
-      let subdir = test_subdir backend test_name in
-      let options = List.append (test_options backend test_name) options in
-
-      let test_file_name =
+  | _exe_path :: aeneas_path :: llbc_dir :: test_name :: options ->
+      let tests_env = { aeneas_path; llbc_dir } in
+      (* TODO: reactivate HOL4 once traits are parameterized by their associated types *)
+      let backends =
         match test_name with
-        | "betree_main-special" -> "betree_main"
-        | _ -> test_name
+        | "betree_main-special" -> [ "fstar" ]
+        | _ -> [ "coq"; "lean"; "fstar" ]
       in
-      run_test { aeneas_path; llbc_dir }
-        {
-          name = test_file_name;
-          backend;
-          subdir;
-          extra_aeneas_options = options;
-        }
-  | _ -> ()
+      List.iter
+        (fun backend ->
+          let subdir = test_subdir backend test_name in
+          let extra_aeneas_options =
+            List.append (test_options backend test_name) options
+          in
+          let test_file_name =
+            match test_name with
+            | "betree_main-special" -> "betree_main"
+            | _ -> test_name
+          in
+          let test_case =
+            { name = test_file_name; backend; subdir; extra_aeneas_options }
+          in
+          run_test tests_env test_case)
+        backends
+  | _ -> failwith "Incorrect options passed to test runner"

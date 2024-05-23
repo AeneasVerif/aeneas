@@ -117,7 +117,7 @@ test: build-dev test-all
 test-all: \
 	test-arrays \
 	test-betree_main \
-	tfstar-betree_main-special \
+	test-betree_main-special \
 	test-bitwise \
 	test-constants \
 	test-demo \
@@ -154,9 +154,6 @@ else
 CHARON_CMD = cd $(CHARON_TEST_DIR) && $(MAKE) test-$*
 endif
 
-# The command to run Aeneas on the proper llbc file
-AENEAS_CMD = $(TEST_RUNNER_EXE) $(AENEAS_EXE) $(CHARON_TEST_DIR) $(FILE) $(BACKEND) $(OPTIONS)
-
 # Generic rules to extract the LLBC from a rust file
 # We use the rules in Charon's Makefile to generate the .llbc files: the options
 # vary with the test files.
@@ -164,33 +161,13 @@ AENEAS_CMD = $(TEST_RUNNER_EXE) $(AENEAS_EXE) $(CHARON_TEST_DIR) $(FILE) $(BACKE
 gen-llbc-%:
 	$(CHARON_CMD)
 
-# Generic rules to test the translation of an LLBC file.
+# Translate the given llbc file to available backends. The test runner decides
+# which backends to use and sets test-specific options.
 .PHONY: test-%
 test-%: FILE = $*
-test-%: gen-llbc-% tfstar-% tcoq-% tlean-% thol4-%
+test-%: gen-llbc-%
+	$(TEST_RUNNER_EXE) $(AENEAS_EXE) $(CHARON_TEST_DIR) $(FILE) $(OPTIONS)
 	echo "# Test $* done"
-
-.PHONY: tfstar-%
-tfstar-%: BACKEND := fstar
-tfstar-%:
-	$(AENEAS_CMD)
-
-.PHONY: tcoq-%
-tcoq-%: BACKEND := coq
-tcoq-%:
-	$(AENEAS_CMD)
-
-.PHONY: tlean-%
-tlean-%: BACKEND := lean
-tlean-%:
-	$(AENEAS_CMD)
-
-# TODO: reactivate HOL4 once traits are parameterized by their associated types
-.PHONY: thol4-%
-thol4-%: BACKEND := hol4
-thol4-%:
-	echo Ignoring the $* test for HOL4
-#	$(AENEAS_CMD)
 
 # Nix - TODO: add the lean tests
 .PHONY: nix
