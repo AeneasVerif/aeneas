@@ -80,9 +80,10 @@ val compute_loop_entry_fixed_point :
   config ->
   Meta.meta ->
   loop_id ->
-  LlbcAst.statement ->
+  (* This function is the function to evaluate the loop body (eval_statement applied
+     to the proper arguments) *)
+  Cps.stl_cm_fun ->
   eval_ctx ->
-  (config -> LlbcAst.statement -> Cps.stl_cm_fun) ->
   eval_ctx * ids_sets * abs SymbolicAst.region_group_id_map
 
 (** For the abstractions in the fixed point, compute the correspondance between

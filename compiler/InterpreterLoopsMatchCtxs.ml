@@ -1510,7 +1510,7 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
       ^ "\n- tgt_ctx: "
       ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx));
   (* End the loans which lead to mismatches when joining *)
-  let rec cf_reorganize_join_tgt : cm_fun =
+  let rec reorganize_join_tgt : cm_fun =
    fun tgt_ctx ->
     (* Collect fixed values in the source and target contexts: end the loans in the
        source context which don't appear in the target context *)
@@ -1519,8 +1519,9 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
 
     log#ldebug
       (lazy
-        ("cf_reorganize_join_tgt: match_ctx_with_target:\n" ^ "\n- fixed_ids: "
-       ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- filt_src_ctx: "
+        ("prepare_match_ctx_with_target: reorganize_join_tgt:\n"
+       ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
+       ^ "\n- filt_src_ctx: "
         ^ env_to_string meta src_ctx filt_src_env
         ^ "\n- filt_tgt_ctx: "
         ^ env_to_string meta tgt_ctx filt_tgt_env));
@@ -1561,9 +1562,9 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
       (* No exception was thrown: continue *)
       log#ldebug
         (lazy
-          ("cf_reorganize_join_tgt: done with borrows/loans:\n"
-         ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
-         ^ "\n- filt_src_ctx: "
+          ("prepare_match_ctx_with_target: reorganize_join_tgt: done with \
+            borrows/loans:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
+         ^ "\n" ^ "\n- filt_src_ctx: "
           ^ env_to_string meta src_ctx filt_src_env
           ^ "\n- filt_tgt_ctx: "
           ^ env_to_string meta tgt_ctx filt_tgt_env));
@@ -1619,8 +1620,9 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
 
       log#ldebug
         (lazy
-          ("cf_reorganize_join_tgt: done with borrows/loans and moves:\n"
-         ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+          ("prepare_match_ctx_with_target: reorganize_join_tgt: done with \
+            borrows/loans and moves:\n" ^ "\n- fixed_ids: "
+         ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
           ^ eval_ctx_to_string ~meta:(Some meta) src_ctx
           ^ "\n- tgt_ctx: "
           ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx));
@@ -1637,11 +1639,10 @@ let prepare_match_ctx_with_target (config : config) (meta : Meta.meta)
         | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
             craise __FILE__ __LINE__ meta "Unexpected"
       in
-      let ctx, cc1 = cf_reorganize_join_tgt ctx in
-      (ctx, cc_comp cc cc1)
+      comp cc (reorganize_join_tgt ctx)
   in
   (* Apply the reorganization *)
-  cf_reorganize_join_tgt tgt_ctx
+  reorganize_join_tgt tgt_ctx
 
 let match_ctx_with_target (config : config) (meta : Meta.meta)
     (loop_id : LoopId.id) (is_loop_entry : bool)
@@ -1661,8 +1662,8 @@ let match_ctx_with_target (config : config) (meta : Meta.meta)
      context, which results from joins during which we ended the loans which
      were introduced during the loop iterations)
   *)
-  let cf_reorganize_join_tgt =
-    prepare_match_ctx_with_target config meta loop_id fixed_ids src_ctx
+  let tgt_ctx, cc =
+    prepare_match_ctx_with_target config meta loop_id fixed_ids src_ctx tgt_ctx
   in
 
   (* Introduce the "identity" abstractions for the loop re-entry.
@@ -1682,293 +1683,285 @@ let match_ctx_with_target (config : config) (meta : Meta.meta)
      We should rely on a more primitive and safer function
      [add_identity_abs] to add the identity abstractions one by one.
   *)
-  let cf_introduce_loop_fp_abs tgt_ctx =
-    (* Match the source and target contexts *)
-    log#ldebug
-      (lazy
-        ("cf_introduce_loop_fp_abs:\n" ^ "\n- fixed_ids: "
-       ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
-       ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
-       ^ eval_ctx_to_string tgt_ctx));
+  (* Match the source and target contexts *)
+  log#ldebug
+    (lazy
+      ("cf_introduce_loop_fp_abs:\n" ^ "\n- fixed_ids: "
+     ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx
+      ));
 
-    let filt_tgt_env, _, _ = ctx_split_fixed_new meta fixed_ids tgt_ctx in
-    let filt_src_env, new_absl, new_dummyl =
-      ctx_split_fixed_new meta fixed_ids src_ctx
+  let filt_tgt_env, _, _ = ctx_split_fixed_new meta fixed_ids tgt_ctx in
+  let filt_src_env, new_absl, new_dummyl =
+    ctx_split_fixed_new meta fixed_ids src_ctx
+  in
+  sanity_check __FILE__ __LINE__ (new_dummyl = []) meta;
+  let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
+  let filt_src_ctx = { src_ctx with env = filt_src_env } in
+
+  let src_to_tgt_maps =
+    let check_equiv = false in
+    let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
+    let open InterpreterBorrowsCore in
+    let lookup_shared_loan lid ctx : typed_value =
+      match snd (lookup_loan meta ek_all lid ctx) with
+      | Concrete (VSharedLoan (_, v)) -> v
+      | Abstract (ASharedLoan (_, v, _)) -> v
+      | _ -> craise __FILE__ __LINE__ meta "Unreachable"
     in
-    sanity_check __FILE__ __LINE__ (new_dummyl = []) meta;
-    let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
-    let filt_src_ctx = { src_ctx with env = filt_src_env } in
-
-    let src_to_tgt_maps =
-      let check_equiv = false in
-      let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
-      let open InterpreterBorrowsCore in
-      let lookup_shared_loan lid ctx : typed_value =
-        match snd (lookup_loan meta ek_all lid ctx) with
-        | Concrete (VSharedLoan (_, v)) -> v
-        | Abstract (ASharedLoan (_, v, _)) -> v
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
-      in
-      let lookup_in_src id = lookup_shared_loan id src_ctx in
-      let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
-      (* Match *)
-      Option.get
-        (match_ctxs meta check_equiv fixed_ids lookup_in_src lookup_in_tgt
-           filt_src_ctx filt_tgt_ctx)
-    in
-    let tgt_to_src_borrow_map =
-      BorrowId.Map.of_list
-        (List.map
-           (fun (x, y) -> (y, x))
-           (BorrowId.InjSubst.bindings src_to_tgt_maps.borrow_id_map))
-    in
-
-    (* Debug *)
-    log#ldebug
-      (lazy
-        ("match_ctx_with_target: cf_introduce_loop_fp_abs:" ^ "\n\n- src_ctx: "
-        ^ eval_ctx_to_string ~meta:(Some meta) src_ctx
-        ^ "\n\n- tgt_ctx: "
-        ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx
-        ^ "\n\n- filt_tgt_ctx: "
-        ^ eval_ctx_to_string_no_filter ~meta:(Some meta) filt_tgt_ctx
-        ^ "\n\n- filt_src_ctx: "
-        ^ eval_ctx_to_string_no_filter ~meta:(Some meta) filt_src_ctx
-        ^ "\n\n- new_absl:\n"
-        ^ eval_ctx_to_string ~meta:(Some meta)
-            { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }
-        ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
-        ^ show_borrow_loan_corresp fp_bl_maps
-        ^ "\n\n- src_to_tgt_maps: "
-        ^ show_ids_maps src_to_tgt_maps));
-
-    (* Update the borrows and symbolic ids in the source context.
-
-       Going back to the [list_nth_mut_example], the original environment upon
-       re-entering the loop is:
-
-       {[
-         abs@0 { ML l0 }
-         ls -> MB l5 (s@6 : loops::List<T>)
-         i -> s@7 : u32
-         _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
-         _@2 -> MB l2 (@Box (ML l4))                      // tail
-         _@3 -> MB l1 (s@3 : T)                           // hd
-         abs@1 { MB l4, ML l5 }
-       ]}
-
-       The fixed-point environment is:
-       {[
-         env_fp = {
-           abs@0 { ML l0 }
-           ls -> MB l1 (s3 : loops::List<T>)
-           i -> s4 : u32
-           abs@fp {
-             MB l0 // this borrow appears in [env0]
-             ML l1
-           }
-         }
-       ]}
-
-       Through matching, we detect that in [env_fp], [l1] is matched
-       to [l5]. We introduce a fresh borrow [l6] for [l1], and remember
-       in the map [src_fresh_borrows_map] that: [{ l1 -> l6}].
-
-       We get:
-       {[
-         abs@0 { ML l0 }
-         ls -> MB l6 (s@6 : loops::List<T>) // l6 is fresh and doesn't have a corresponding loan
-         i -> s@7 : u32
-         _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
-         _@2 -> MB l2 (@Box (ML l4))                      // tail
-         _@3 -> MB l1 (s@3 : T)                           // hd
-         abs@1 { MB l4, ML l5 }
-       ]}
-
-       Later, we will introduce the identity abstraction:
-       {[
-         abs@2 { MB l5, ML l6 }
-       ]}
-    *)
-    (* First, compute the set of borrows which appear in the fresh abstractions
-       of the fixed-point: we want to introduce fresh ids only for those. *)
-    let new_absl_ids, _ = compute_absl_ids new_absl in
-    let src_fresh_borrows_map = ref BorrowId.Map.empty in
-    let visit_tgt =
-      object
-        inherit [_] map_eval_ctx
-
-        method! visit_borrow_id _ id =
-          (* Map the borrow, if it needs to be mapped *)
-          if
-            (* We map the borrows for which we computed a mapping *)
-            BorrowId.InjSubst.Set.mem id
-              (BorrowId.InjSubst.elements src_to_tgt_maps.borrow_id_map)
-            (* And which have corresponding loans in the fresh fixed-point abstractions *)
-            && BorrowId.Set.mem
-                 (BorrowId.Map.find id tgt_to_src_borrow_map)
-                 new_absl_ids.loan_ids
-          then (
-            let src_id = BorrowId.Map.find id tgt_to_src_borrow_map in
-            let nid = fresh_borrow_id () in
-            src_fresh_borrows_map :=
-              BorrowId.Map.add src_id nid !src_fresh_borrows_map;
-            nid)
-          else id
-      end
-    in
-    let tgt_ctx = visit_tgt#visit_eval_ctx () tgt_ctx in
-
-    log#ldebug
-      (lazy
-        ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
-          src_fresh_borrows_map:\n"
-        ^ BorrowId.Map.show BorrowId.to_string !src_fresh_borrows_map
-        ^ "\n"));
-
-    (* Rem.: we don't update the symbolic values. It is not necessary
-       because there shouldn't be any symbolic value containing borrows.
-
-       Rem.: we will need to do something about the symbolic values in the
-       abstractions and in the *variable bindings* once we allow symbolic
-       values containing borrows to not be eagerly expanded.
-    *)
-    sanity_check __FILE__ __LINE__ Config.greedy_expand_symbolics_with_borrows
-      meta;
-
-    (* Update the borrows and loans in the abstractions of the target context.
-
-       Going back to the [list_nth_mut] example and by using [src_fresh_borrows_map],
-       we instantiate the fixed-point abstractions that we will insert into the
-       context.
-       The abstraction is [abs { MB l0, ML l1 }].
-       Because of [src_fresh_borrows_map], we substitute [l1] with [l6].
-       Because of the match between the contexts, we substitute [l0] with [l5].
-       We get:
-       {[
-         abs@2 { MB l5, ML l6 }
-       ]}
-    *)
-    let region_id_map = ref RegionId.Map.empty in
-    let get_rid rid =
-      match RegionId.Map.find_opt rid !region_id_map with
-      | Some rid -> rid
-      | None ->
-          let nid = fresh_region_id () in
-          region_id_map := RegionId.Map.add rid nid !region_id_map;
-          nid
-    in
-    let visit_src =
-      object
-        inherit [_] map_eval_ctx as super
-
-        method! visit_borrow_id _ bid =
-          log#ldebug
-            (lazy
-              ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
-                visit_borrow_id: " ^ BorrowId.to_string bid ^ "\n"));
-
-          (* Lookup the id of the loan corresponding to this borrow *)
-          let src_lid =
-            BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
-          in
-
-          log#ldebug
-            (lazy
-              ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
-                src_lid: " ^ BorrowId.to_string src_lid ^ "\n"));
-
-          (* Lookup the tgt borrow id to which this borrow was mapped *)
-          let tgt_bid =
-            BorrowId.InjSubst.find src_lid src_to_tgt_maps.borrow_id_map
-          in
-
-          log#ldebug
-            (lazy
-              ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
-                tgt_bid: " ^ BorrowId.to_string tgt_bid ^ "\n"));
-
-          tgt_bid
-
-        method! visit_loan_id _ id =
-          log#ldebug
-            (lazy
-              ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
-                visit_loan_id: " ^ BorrowId.to_string id ^ "\n"));
-          (* Map the borrow - rem.: we mapped the borrows *in the values*,
-             meaning we know how to map the *corresponding loans in the
-             abstractions* *)
-          match BorrowId.Map.find_opt id !src_fresh_borrows_map with
-          | None ->
-              (* No mapping: this means that the borrow was mapped when
-                 we matched values (it doesn't come from a fresh abstraction)
-                 and because of this, it should actually be mapped to itself *)
-              sanity_check __FILE__ __LINE__
-                (BorrowId.InjSubst.find id src_to_tgt_maps.borrow_id_map = id)
-                meta;
-              id
-          | Some id -> id
-
-        method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
-        method! visit_abstraction_id _ _ = fresh_abstraction_id ()
-        method! visit_region_id _ id = get_rid id
-
-        (** We also need to change the abstraction kind *)
-        method! visit_abs env abs =
-          match abs.kind with
-          | Loop (loop_id', rg_id, kind) ->
-              sanity_check __FILE__ __LINE__ (loop_id' = loop_id) meta;
-              sanity_check __FILE__ __LINE__ (kind = LoopSynthInput) meta;
-              let can_end = false in
-              let kind : abs_kind = Loop (loop_id, rg_id, LoopCall) in
-              let abs = { abs with kind; can_end } in
-              super#visit_abs env abs
-          | _ -> super#visit_abs env abs
-      end
-    in
-    let new_absl = List.map (visit_src#visit_abs ()) new_absl in
-    let new_absl = List.map (fun abs -> EAbs abs) new_absl in
-
-    (* Add the abstractions from the target context to the source context *)
-    let nenv = List.append new_absl tgt_ctx.env in
-    let tgt_ctx = { tgt_ctx with env = nenv } in
-
-    log#ldebug
-      (lazy
-        ("match_ctx_with_target: cf_introduce_loop_fp_abs: done:\n\
-          - result ctx:\n"
-        ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx));
-
-    (* Sanity check *)
-    if !Config.sanity_checks then
-      Invariants.check_borrowed_values_invariant meta tgt_ctx;
-    (* End all the borrows which appear in the *new* abstractions *)
-    let new_borrows =
-      BorrowId.Set.of_list
-        (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
-    in
-    let tgt_ctx, cc =
-      InterpreterBorrows.end_borrows config meta new_borrows tgt_ctx
-    in
-
-    (* Compute the loop input values *)
-    let input_values =
-      SymbolicValueId.Map.of_list
-        (List.map
-           (fun sid ->
-             (sid, SymbolicValueId.Map.find sid src_to_tgt_maps.sid_to_value_map))
-           fp_input_svalues)
-    in
-
-    (* Continue *)
-    let res =
-      if is_loop_entry then EndEnterLoop (loop_id, input_values)
-      else EndContinue (loop_id, input_values)
-    in
-    ((tgt_ctx, res), cc)
+    let lookup_in_src id = lookup_shared_loan id src_ctx in
+    let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
+    (* Match *)
+    Option.get
+      (match_ctxs meta check_equiv fixed_ids lookup_in_src lookup_in_tgt
+         filt_src_ctx filt_tgt_ctx)
+  in
+  let tgt_to_src_borrow_map =
+    BorrowId.Map.of_list
+      (List.map
+         (fun (x, y) -> (y, x))
+         (BorrowId.InjSubst.bindings src_to_tgt_maps.borrow_id_map))
   in
 
-  (* Compose and continue *)
-  let ctx, cc = cf_reorganize_join_tgt tgt_ctx in
-  let (ctx, res), cc1 = cf_introduce_loop_fp_abs ctx in
-  ((ctx, res), cc_comp cc cc1)
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("match_ctx_with_target: cf_introduce_loop_fp_abs:" ^ "\n\n- src_ctx: "
+      ^ eval_ctx_to_string ~meta:(Some meta) src_ctx
+      ^ "\n\n- tgt_ctx: "
+      ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx
+      ^ "\n\n- filt_tgt_ctx: "
+      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) filt_tgt_ctx
+      ^ "\n\n- filt_src_ctx: "
+      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) filt_src_ctx
+      ^ "\n\n- new_absl:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta)
+          { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }
+      ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
+      ^ show_borrow_loan_corresp fp_bl_maps
+      ^ "\n\n- src_to_tgt_maps: "
+      ^ show_ids_maps src_to_tgt_maps));
+
+  (* Update the borrows and symbolic ids in the source context.
+
+     Going back to the [list_nth_mut_example], the original environment upon
+     re-entering the loop is:
+
+     {[
+       abs@0 { ML l0 }
+       ls -> MB l5 (s@6 : loops::List<T>)
+       i -> s@7 : u32
+       _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
+       _@2 -> MB l2 (@Box (ML l4))                      // tail
+       _@3 -> MB l1 (s@3 : T)                           // hd
+       abs@1 { MB l4, ML l5 }
+     ]}
+
+     The fixed-point environment is:
+     {[
+       env_fp = {
+         abs@0 { ML l0 }
+         ls -> MB l1 (s3 : loops::List<T>)
+         i -> s4 : u32
+         abs@fp {
+           MB l0 // this borrow appears in [env0]
+           ML l1
+         }
+       }
+     ]}
+
+     Through matching, we detect that in [env_fp], [l1] is matched
+     to [l5]. We introduce a fresh borrow [l6] for [l1], and remember
+     in the map [src_fresh_borrows_map] that: [{ l1 -> l6}].
+
+     We get:
+     {[
+       abs@0 { ML l0 }
+       ls -> MB l6 (s@6 : loops::List<T>) // l6 is fresh and doesn't have a corresponding loan
+       i -> s@7 : u32
+       _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
+       _@2 -> MB l2 (@Box (ML l4))                      // tail
+       _@3 -> MB l1 (s@3 : T)                           // hd
+       abs@1 { MB l4, ML l5 }
+     ]}
+
+     Later, we will introduce the identity abstraction:
+     {[
+       abs@2 { MB l5, ML l6 }
+     ]}
+  *)
+  (* First, compute the set of borrows which appear in the fresh abstractions
+     of the fixed-point: we want to introduce fresh ids only for those. *)
+  let new_absl_ids, _ = compute_absl_ids new_absl in
+  let src_fresh_borrows_map = ref BorrowId.Map.empty in
+  let visit_tgt =
+    object
+      inherit [_] map_eval_ctx
+
+      method! visit_borrow_id _ id =
+        (* Map the borrow, if it needs to be mapped *)
+        if
+          (* We map the borrows for which we computed a mapping *)
+          BorrowId.InjSubst.Set.mem id
+            (BorrowId.InjSubst.elements src_to_tgt_maps.borrow_id_map)
+          (* And which have corresponding loans in the fresh fixed-point abstractions *)
+          && BorrowId.Set.mem
+               (BorrowId.Map.find id tgt_to_src_borrow_map)
+               new_absl_ids.loan_ids
+        then (
+          let src_id = BorrowId.Map.find id tgt_to_src_borrow_map in
+          let nid = fresh_borrow_id () in
+          src_fresh_borrows_map :=
+            BorrowId.Map.add src_id nid !src_fresh_borrows_map;
+          nid)
+        else id
+    end
+  in
+
+  let tgt_ctx = visit_tgt#visit_eval_ctx () tgt_ctx in
+
+  log#ldebug
+    (lazy
+      ("match_ctx_with_target: cf_introduce_loop_fp_abs: src_fresh_borrows_map:\n"
+      ^ BorrowId.Map.show BorrowId.to_string !src_fresh_borrows_map
+      ^ "\n"));
+
+  (* Rem.: we don't update the symbolic values. It is not necessary
+     because there shouldn't be any symbolic value containing borrows.
+
+     Rem.: we will need to do something about the symbolic values in the
+     abstractions and in the *variable bindings* once we allow symbolic
+     values containing borrows to not be eagerly expanded.
+  *)
+  sanity_check __FILE__ __LINE__ Config.greedy_expand_symbolics_with_borrows
+    meta;
+
+  (* Update the borrows and loans in the abstractions of the target context.
+
+     Going back to the [list_nth_mut] example and by using [src_fresh_borrows_map],
+     we instantiate the fixed-point abstractions that we will insert into the
+     context.
+     The abstraction is [abs { MB l0, ML l1 }].
+     Because of [src_fresh_borrows_map], we substitute [l1] with [l6].
+     Because of the match between the contexts, we substitute [l0] with [l5].
+     We get:
+     {[
+       abs@2 { MB l5, ML l6 }
+     ]}
+  *)
+  let region_id_map = ref RegionId.Map.empty in
+  let get_rid rid =
+    match RegionId.Map.find_opt rid !region_id_map with
+    | Some rid -> rid
+    | None ->
+        let nid = fresh_region_id () in
+        region_id_map := RegionId.Map.add rid nid !region_id_map;
+        nid
+  in
+  let visit_src =
+    object
+      inherit [_] map_eval_ctx as super
+
+      method! visit_borrow_id _ bid =
+        log#ldebug
+          (lazy
+            ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
+              visit_borrow_id: " ^ BorrowId.to_string bid ^ "\n"));
+
+        (* Lookup the id of the loan corresponding to this borrow *)
+        let src_lid =
+          BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
+        in
+
+        log#ldebug
+          (lazy
+            ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
+              src_lid: " ^ BorrowId.to_string src_lid ^ "\n"));
+
+        (* Lookup the tgt borrow id to which this borrow was mapped *)
+        let tgt_bid =
+          BorrowId.InjSubst.find src_lid src_to_tgt_maps.borrow_id_map
+        in
+
+        log#ldebug
+          (lazy
+            ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
+              tgt_bid: " ^ BorrowId.to_string tgt_bid ^ "\n"));
+
+        tgt_bid
+
+      method! visit_loan_id _ id =
+        log#ldebug
+          (lazy
+            ("match_ctx_with_target: cf_introduce_loop_fp_abs: visit_loan_id: "
+           ^ BorrowId.to_string id ^ "\n"));
+        (* Map the borrow - rem.: we mapped the borrows *in the values*,
+           meaning we know how to map the *corresponding loans in the
+           abstractions* *)
+        match BorrowId.Map.find_opt id !src_fresh_borrows_map with
+        | None ->
+            (* No mapping: this means that the borrow was mapped when
+               we matched values (it doesn't come from a fresh abstraction)
+               and because of this, it should actually be mapped to itself *)
+            sanity_check __FILE__ __LINE__
+              (BorrowId.InjSubst.find id src_to_tgt_maps.borrow_id_map = id)
+              meta;
+            id
+        | Some id -> id
+
+      method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
+      method! visit_abstraction_id _ _ = fresh_abstraction_id ()
+      method! visit_region_id _ id = get_rid id
+
+      (** We also need to change the abstraction kind *)
+      method! visit_abs env abs =
+        match abs.kind with
+        | Loop (loop_id', rg_id, kind) ->
+            sanity_check __FILE__ __LINE__ (loop_id' = loop_id) meta;
+            sanity_check __FILE__ __LINE__ (kind = LoopSynthInput) meta;
+            let can_end = false in
+            let kind : abs_kind = Loop (loop_id, rg_id, LoopCall) in
+            let abs = { abs with kind; can_end } in
+            super#visit_abs env abs
+        | _ -> super#visit_abs env abs
+    end
+  in
+  let new_absl = List.map (visit_src#visit_abs ()) new_absl in
+  let new_absl = List.map (fun abs -> EAbs abs) new_absl in
+
+  (* Add the abstractions from the target context to the source context *)
+  let nenv = List.append new_absl tgt_ctx.env in
+  let tgt_ctx = { tgt_ctx with env = nenv } in
+
+  log#ldebug
+    (lazy
+      ("match_ctx_with_target: cf_introduce_loop_fp_abs: done:\n- result ctx:\n"
+      ^ eval_ctx_to_string ~meta:(Some meta) tgt_ctx));
+
+  (* Sanity check *)
+  if !Config.sanity_checks then
+    Invariants.check_borrowed_values_invariant meta tgt_ctx;
+  (* End all the borrows which appear in the *new* abstractions *)
+  let new_borrows =
+    BorrowId.Set.of_list
+      (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
+  in
+  let tgt_ctx, cc =
+    comp cc (InterpreterBorrows.end_borrows config meta new_borrows tgt_ctx)
+  in
+
+  (* Compute the loop input values *)
+  let input_values =
+    SymbolicValueId.Map.of_list
+      (List.map
+         (fun sid ->
+           (sid, SymbolicValueId.Map.find sid src_to_tgt_maps.sid_to_value_map))
+         fp_input_svalues)
+  in
+
+  let res =
+    if is_loop_entry then EndEnterLoop (loop_id, input_values)
+    else EndContinue (loop_id, input_values)
+  in
+
+  ((tgt_ctx, res), cc)

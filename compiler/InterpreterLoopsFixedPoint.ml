@@ -66,32 +66,23 @@ let rec end_useless_fresh_borrows_and_abs (config : config) (meta : Meta.meta)
             explore_env env)
     | _ :: env -> explore_env env
   in
-  (* let ctx, rec_call =
-       end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
-     in *)
+  let rec_call = end_useless_fresh_borrows_and_abs config meta fixed_ids in
   try
     (* Explore the environment *)
     explore_env ctx.env;
-    (* No exception raised: call the continuation *)
+    (* No exception raised: simply continue *)
     (ctx, fun e -> e)
   with
   | FoundAbsId abs_id ->
       let ctx, cc = end_abstraction config meta abs_id ctx in
-      let ctx, rec_call =
-        end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
-      in
-      (ctx, cc_comp cc rec_call)
+      comp cc (rec_call ctx)
   | FoundBorrowId bid ->
       let ctx, cc = end_borrow config meta bid ctx in
-      let ctx, rec_call =
-        end_useless_fresh_borrows_and_abs config meta fixed_ids ctx
-      in
-      (ctx, cc_comp cc rec_call)
+      comp cc (rec_call ctx)
 
 (* Explore the fresh anonymous values and replace all the values which are not
    borrows/loans with ⊥ *)
-let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
- fun ctx ->
+let cleanup_fresh_values (fixed_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
   let rec explore_env (env : env) : env =
     match env with
     | [] -> [] (* Done *)
@@ -120,8 +111,7 @@ let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
           EBinding (BDummy vid, v) :: env
     | x :: env -> x :: explore_env env
   in
-  let ctx = { ctx with env = explore_env ctx.env } in
-  (ctx, fun e -> e)
+  { ctx with env = explore_env ctx.env }
 
 (* Repeat until we can't simplify the context anymore:
    - explore the fresh anonymous values and replace all the values which are not
@@ -132,9 +122,9 @@ let cleanup_fresh_values (fixed_ids : ids_sets) : cm_fun =
 let cleanup_fresh_values_and_abs (config : config) (meta : Meta.meta)
     (fixed_ids : ids_sets) : cm_fun =
  fun ctx ->
-  let ctx, cc = (end_useless_fresh_borrows_and_abs config meta fixed_ids) ctx in
-  let ctx, cc1 = (cleanup_fresh_values fixed_ids) ctx in
-  (ctx, cc_comp cc cc1)
+  let ctx, cc = end_useless_fresh_borrows_and_abs config meta fixed_ids ctx in
+  let ctx = cleanup_fresh_values fixed_ids ctx in
+  (ctx, cc)
 
 (** Reorder the loans and borrows in the fresh abstractions.
 
@@ -434,38 +424,30 @@ let prepare_ashared_loans (meta : Meta.meta) (loop_id : LoopId.id option) :
   let _, new_ctx_ids_map = compute_ctx_ids ctx in
 
   (* Synthesize *)
-  ( ctx,
-    fun e ->
-      match e with
-      | None -> None
-      | Some e ->
-          (* Add the let-bindings which introduce the fresh symbolic values *)
-          Some
-            (List.fold_left
-               (fun e (sid, v) ->
-                 let v = mk_typed_value_from_symbolic_value v in
-                 let sv =
-                   SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values
-                 in
-                 SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
-               e !sid_subst) )
+  let cf e =
+    match e with
+    | None -> None
+    | Some e ->
+        (* Add the let-bindings which introduce the fresh symbolic values *)
+        Some
+          (List.fold_left
+             (fun e (sid, v) ->
+               let v = mk_typed_value_from_symbolic_value v in
+               let sv =
+                 SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values
+               in
+               SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
+             e !sid_subst)
+  in
+  (ctx, cf)
 
 let prepare_ashared_loans_no_synth (meta : Meta.meta) (loop_id : LoopId.id)
     (ctx : eval_ctx) : eval_ctx =
-  let ctx, _ = (prepare_ashared_loans meta (Some loop_id)) ctx in
-  ctx
+  fst (prepare_ashared_loans meta (Some loop_id) ctx)
 
 let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
-    (loop_id : LoopId.id) (st : LlbcAst.statement) (ctx0 : eval_ctx)
-    (eval_statement : config -> LlbcAst.statement -> stl_cm_fun) :
+    (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (ctx0 : eval_ctx) :
     eval_ctx * ids_sets * abs RegionGroupId.Map.t =
-  (* The continuation for when we exit the loop - we register the
-     environments upon loop *reentry*, and synthesize nothing by
-     returning [None]
-  *)
-  let ctxs = ref [] in
-  let register_ctx ctx = ctxs := ctx :: !ctxs in
-
   (* Introduce "reborrows" for the shared values in the abstractions, so that
      the shared values in the fixed abstractions never get modified (technically,
      they are immutable, but in practice we can introduce more shared loans, or
@@ -485,8 +467,11 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
       ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx
       ^ "\n\n"));
 
-  let cf_exit_loop_body (res : statement_eval_res) ctx =
-    log#ldebug (lazy "compute_loop_entry_fixed_point: cf_exit_loop_body");
+  (* Register the contexts upon reaching a `continue`. *)
+  let ctxs = ref [] in
+  let register_ctx ctx = ctxs := ctx :: !ctxs in
+  let register_continue_ctx (ctx, res) =
+    log#ldebug (lazy "compute_loop_entry_fixed_point: register_continue_ctx");
     match res with
     | Return | Panic | Break _ -> ()
     | Unit ->
@@ -568,7 +553,7 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
     ctxs := [];
     ctx2
   in
-  log#ldebug (lazy "c ompute_loop_entry_fixed_point: after join_ctxs");
+  log#ldebug (lazy "compute_loop_entry_fixed_point: after join_ctxs");
 
   (* Compute the set of fixed ids - for the symbolic ids, we compute the
      intersection of ids between the original environment and the list
@@ -606,10 +591,10 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
        ^ " iterations")
     else
       (* Evaluate the loop body to register the different contexts upon reentry *)
-      let ctx_resl, _ = eval_statement config st (* cf_exit_loop_body *) ctx in
+      let ctx_resl, _ = eval_loop_body ctx in
       (* Compute the join between the original contexts and the contexts computed
          upon reentry *)
-      List.iter (fun (ctx, res) -> cf_exit_loop_body res ctx) ctx_resl;
+      List.iter register_continue_ctx ctx_resl;
       let ctx1 = join_ctxs ctx in
 
       (* Debug *)
@@ -680,13 +665,10 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
           let aids = AbstractionId.Set.union aids aids' in
           fp_ended_aids := RegionGroupId.Map.add rg_id aids !fp_ended_aids
     in
-    let cf_loop res ctx =
+    let end_at_return (ctx, res) =
       log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop");
       match res with
-      | Continue _ | Panic ->
-          (* We don't want to generate anything *)
-          (* None *)
-          ()
+      | Continue _ | Panic -> ()
       | Break _ ->
           (* We enforce that we can't get there: see {!PrePasses.remove_loop_breaks} *)
           craise __FILE__ __LINE__ meta "Unreachable"
@@ -702,7 +684,6 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
            * indeed the correct one, I think it is sound to under-approximate here
            * (and it shouldn't make any difference).
            *)
-          (* let _ = *)
           List.iter
             (fun rg_id ->
               (* Lookup the input abstraction - we use the fact that the
@@ -725,12 +706,8 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
               let ended_ids = AbstractionId.Set.diff !fp_aids ids.aids in
               add_ended_aids rg_id ended_ids)
             ctx.region_groups
-      (* in
-         (* We don't want to generate anything *)
-         None *)
     in
-    let ctx_resl, _ = eval_statement config st (* cf_loop *) fp in
-    List.iter (fun (ctx, res) -> cf_loop res ctx) ctx_resl;
+    List.iter end_at_return (fst (eval_loop_body fp));
 
     (* Check that the sets of abstractions we need to end per region group are pairwise
      * disjoint *)

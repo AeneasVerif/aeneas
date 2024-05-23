@@ -1023,7 +1023,8 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
         in
         (ctx_resl, cc_comp cf_st1 cf_st2)
     | Loop loop_body ->
-        InterpreterLoops.eval_loop config st.meta loop_body eval_statement ctx
+        let eval_loop_body = eval_statement config loop_body in
+        InterpreterLoops.eval_loop config st.meta eval_loop_body ctx
     | Switch switch -> eval_switch config st.meta switch ctx
   in
   (* Compose and apply *)
