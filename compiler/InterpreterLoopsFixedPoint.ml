@@ -467,26 +467,6 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
       ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx
       ^ "\n\n"));
 
-  (* Register the contexts upon reaching a `continue`. *)
-  let ctxs = ref [] in
-  let register_ctx ctx = ctxs := ctx :: !ctxs in
-  let register_continue_ctx (ctx, res) =
-    log#ldebug (lazy "compute_loop_entry_fixed_point: register_continue_ctx");
-    match res with
-    | Return | Panic | Break _ -> ()
-    | Unit ->
-        (* See the comment in {!eval_loop} *)
-        craise __FILE__ __LINE__ meta "Unreachable"
-    | Continue i ->
-        (* For now we don't support continues to outer loops *)
-        cassert __FILE__ __LINE__ (i = 0) meta
-          "Continues to outer loops not supported yet";
-        register_ctx ctx
-    | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
-        (* We don't support nested loops for now *)
-        craise __FILE__ __LINE__ meta "Nested loops are not supported for now"
-  in
-
   (* The fixed ids. They are the ids of the original ctx, after we ended
      the borrows/loans which end during the first loop iteration (we do
      one loop iteration, then set it to [Some]).
@@ -496,18 +476,21 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
   (* Join the contexts at the loop entry - ctx1 is the current joined
      context (the context at the loop entry, after we called
      {!prepare_ashared_loans}, if this is the first iteration) *)
-  let join_ctxs (ctx1 : eval_ctx) : eval_ctx =
+  let join_ctxs (ctx1 : eval_ctx) (ctxs : eval_ctx list) : eval_ctx =
     log#ldebug (lazy "compute_loop_entry_fixed_point: join_ctxs");
     (* If this is the first iteration, end the borrows/loans/abs which
        appear in ctx1 and not in the other contexts, then compute the
        set of fixed ids. This means those borrows/loans have to end
-       in the loop, and we rather end them *before* the loop. *)
-    let ctx1 =
+       in the loop, and we rather end them *before* the loop.
+
+       We also end those borrows in the collected contexts.
+    *)
+    let ctx1, ctxs =
       match !fixed_ids with
-      | Some _ -> ctx1
+      | Some _ -> (ctx1, ctxs)
       | None ->
           let old_ids, _ = compute_ctx_ids ctx1 in
-          let new_ids, _ = compute_ctxs_ids !ctxs in
+          let new_ids, _ = compute_ctxs_ids ctxs in
           let blids = BorrowId.Set.diff old_ids.blids new_ids.blids in
           let aids = AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those borrows and abstractions *)
@@ -536,11 +519,11 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
              others didn't. As we need to end those borrows anyway (the join
              will detect them and ask to end them) we do it preemptively.
           *)
-          ctxs := List.map (end_borrows_abs blids aids) !ctxs;
+          let ctxs = List.map (end_borrows_abs blids aids) ctxs in
           (* Note that the fixed ids are given by the original context, from *before*
              we introduce fresh abstractions/reborrows for the shared values *)
           fixed_ids := Some (fst (compute_ctx_ids ctx0));
-          ctx1
+          (ctx1, ctxs)
     in
 
     let fixed_ids = Option.get !fixed_ids in
@@ -548,9 +531,8 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
     (* Join the context with the context at the loop entry *)
     let (_, _), ctx2 =
       loop_join_origin_with_continue_ctxs config meta loop_id fixed_ids ctx1
-        !ctxs
+        ctxs
     in
-    ctxs := [];
     ctx2
   in
   log#ldebug (lazy "compute_loop_entry_fixed_point: after join_ctxs");
@@ -592,10 +574,29 @@ let compute_loop_entry_fixed_point (config : config) (meta : Meta.meta)
     else
       (* Evaluate the loop body to register the different contexts upon reentry *)
       let ctx_resl, _ = eval_loop_body ctx in
+      (* Keep only the contexts which reached a `continue`. *)
+      let keep_continue_ctx (ctx, res) =
+        log#ldebug
+          (lazy "compute_loop_entry_fixed_point: register_continue_ctx");
+        match res with
+        | Return | Panic | Break _ -> None
+        | Unit ->
+            (* See the comment in {!eval_loop} *)
+            craise __FILE__ __LINE__ meta "Unreachable"
+        | Continue i ->
+            (* For now we don't support continues to outer loops *)
+            cassert __FILE__ __LINE__ (i = 0) meta
+              "Continues to outer loops not supported yet";
+            Some ctx
+        | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
+            (* We don't support nested loops for now *)
+            craise __FILE__ __LINE__ meta
+              "Nested loops are not supported for now"
+      in
+      let continue_ctxs = List.filter_map keep_continue_ctx ctx_resl in
       (* Compute the join between the original contexts and the contexts computed
          upon reentry *)
-      List.iter register_continue_ctx ctx_resl;
-      let ctx1 = join_ctxs ctx in
+      let ctx1 = join_ctxs ctx continue_ctxs in
 
       (* Debug *)
       log#ldebug
