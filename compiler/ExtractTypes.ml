@@ -1664,12 +1664,133 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Auxiliary function.
 
+    Generate field projectors in Lean.
+
+    Recursive structs are defined as inductives in Lean.
+    Field projectors allow to retrieve the facilities provided by
+    Lean structures.
+ *)
+let extract_type_decl_lean_record_field_projectors (ctx : extraction_ctx)
+    (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
+  sanity_check __FILE__ __LINE__ (!backend = Lean) decl.meta;
+  match decl.kind with
+  | Opaque | Enum _ -> ()
+  | Struct fields ->
+      (* Records are extracted as inductives only if they are recursive *)
+      let is_rec = decl_is_from_rec_group kind in
+      if is_rec then
+        (* Add the type params *)
+        let ctx, type_params, cg_params, trait_clauses =
+          ctx_add_generic_params decl.meta decl.llbc_name decl.llbc_generics
+            decl.generics ctx
+        in
+        (* Record_var will be the ADT argument to the projector *)
+        let ctx, record_var = ctx_add_var decl.meta "x" (VarId.of_int 0) ctx in
+        (* Field_var will be the variable in the constructor that is returned by the projector *)
+        let ctx, field_var = ctx_add_var decl.meta "x" (VarId.of_int 1) ctx in
+        (* Name of the ADT *)
+        let def_name = ctx_get_local_type decl.meta decl.def_id ctx in
+        (* Name of the ADT constructor. As we are in the struct case, we only have
+           one constructor *)
+        let cons_name = ctx_get_struct decl.meta (TAdtId decl.def_id) ctx in
+
+        let extract_field_proj (field_id : FieldId.id) (_ : field) : unit =
+          F.pp_print_space fmt ();
+          (* Box for the projector definition *)
+          F.pp_open_hvbox fmt 0;
+          (* Box for the [def ADT.proj ... :=] *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          F.pp_print_string fmt "def";
+          F.pp_print_space fmt ();
+
+          (* Print the function name. In Lean, the syntax ADT.proj will
+             allow us to call x.proj for any x of type ADT *)
+          let field_name =
+            ctx_get_field decl.meta (TAdtId decl.def_id) field_id ctx
+          in
+          F.pp_print_string fmt def_name;
+          F.pp_print_string fmt ".";
+          F.pp_print_string fmt field_name;
+
+          (* Print the generics *)
+          let as_implicits = true in
+          extract_generic_params decl.meta ctx fmt TypeDeclId.Set.empty
+            ~as_implicits decl.generics type_params cg_params trait_clauses;
+
+          (* Print the record parameter as "(x : ADT)" *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "(";
+          F.pp_print_string fmt record_var;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt def_name;
+          List.iter
+            (fun p ->
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt p)
+            type_params;
+          F.pp_print_string fmt ")";
+
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":=";
+
+          (* Close the box for the [def ADT.proj ... :=] *)
+          F.pp_close_box fmt ();
+          F.pp_print_space fmt ();
+
+          (* Open a box for the whole match *)
+          F.pp_open_hvbox fmt 0;
+
+          (* Open a box for the [match ... with] *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          F.pp_print_string fmt "match";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt record_var;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "with";
+          (* Close the box for the [match ... with] *)
+          F.pp_close_box fmt ();
+
+          (* Open a box for the branch *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          (* Print the match branch *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "|";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt cons_name;
+          FieldId.iteri
+            (fun id _ ->
+              F.pp_print_space fmt ();
+              if field_id = id then F.pp_print_string fmt field_var
+              else F.pp_print_string fmt "_")
+            fields;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "=>";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt field_var;
+          (* Close the box for the branch *)
+          F.pp_close_box fmt ();
+
+          (* Close the box for the whole match *)
+          F.pp_close_box fmt ();
+
+          (* Close the box for projector definition *)
+          F.pp_close_box fmt ();
+          (* Add breaks to insert new lines between definitions *)
+          F.pp_print_break fmt 0 0
+        in
+
+        FieldId.iteri extract_field_proj fields
+
+(** Auxiliary function.
+
     Generate field projectors in Coq.
 
     Sometimes we extract records as inductives in Coq: when this happens we
     have to define the field projectors afterwards.
  *)
-let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
+let extract_type_decl_coq_record_field_projectors (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
   sanity_check __FILE__ __LINE__ (!backend = Coq) decl.meta;
   match decl.kind with
@@ -1826,7 +1947,13 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
 let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   match !backend with
-  | FStar | Lean | HOL4 -> ()
+  | FStar | HOL4 -> ()
+  | Lean ->
+      if
+        not
+          (TypesUtils.type_decl_from_decl_id_is_tuple_struct
+             ctx.trans_ctx.type_ctx.type_infos decl.def_id)
+      then extract_type_decl_lean_record_field_projectors ctx fmt kind decl
   | Coq ->
       if
         not
@@ -1834,7 +1961,7 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
              ctx.trans_ctx.type_ctx.type_infos decl.def_id)
       then (
         extract_type_decl_coq_arguments ctx fmt kind decl;
-        extract_type_decl_record_field_projectors ctx fmt kind decl)
+        extract_type_decl_coq_record_field_projectors ctx fmt kind decl)
 
 (** Extract the state type declaration. *)
 let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
