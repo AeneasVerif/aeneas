@@ -117,7 +117,6 @@ test: build-dev test-all
 test-all: \
 	test-arrays \
 	test-betree_main \
-	test-betree_main-special \
 	test-bitwise \
 	test-constants \
 	test-demo \

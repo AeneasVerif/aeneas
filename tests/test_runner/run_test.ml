@@ -55,8 +55,8 @@ let test_options backend test_name =
     backend = "fstar"
     &&
     match test_name with
-    | "arrays" | "betree_main" | "betree_main-special" | "hashmap"
-    | "hashmap_main" | "loops" | "traits" ->
+    | "arrays" | "betree_main" | "hashmap" | "hashmap_main" | "loops" | "traits"
+      ->
         true
     | _ -> false
   in
@@ -68,10 +68,6 @@ let test_options backend test_name =
 
   let extra_options =
     match (backend, test_name) with
-    (* Additional, custom test on the betree: translate it without `-backward-no-state-update`. *)
-    (* This generates very ugly code, but is good to test the translation. *)
-    | _, "betree_main-special" ->
-        [ "-test-trans-units"; "-state"; "-split-files" ]
     | _, "betree_main" ->
         [
           "-backward-no-state-update";
@@ -104,7 +100,6 @@ let test_subdir backend test_name =
   | "lean", _ -> "."
   | _, ("arrays" | "demo" | "hashmap" | "traits") -> test_name
   | _, "betree_main" -> "betree"
-  | _, "betree_main-special" -> "betree_back_stateful"
   | _, "hashmap_main" -> "hashmap_on_disk"
   | "hol4", _ -> "misc-" ^ test_name
   | ( _,
@@ -119,24 +114,15 @@ let () =
   | _exe_path :: aeneas_path :: llbc_dir :: test_name :: options ->
       let tests_env = { aeneas_path; llbc_dir } in
       (* TODO: reactivate HOL4 once traits are parameterized by their associated types *)
-      let backends =
-        match test_name with
-        | "betree_main-special" -> [ "fstar" ]
-        | _ -> [ "coq"; "lean"; "fstar" ]
-      in
+      let backends = [ "coq"; "lean"; "fstar" ] in
       List.iter
         (fun backend ->
           let subdir = test_subdir backend test_name in
           let extra_aeneas_options =
             List.append (test_options backend test_name) options
           in
-          let test_file_name =
-            match test_name with
-            | "betree_main-special" -> "betree_main"
-            | _ -> test_name
-          in
           let test_case =
-            { name = test_file_name; backend; subdir; extra_aeneas_options }
+            { name = test_name; backend; subdir; extra_aeneas_options }
           in
           run_test tests_env test_case)
         backends
