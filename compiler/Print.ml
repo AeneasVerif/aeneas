@@ -148,6 +148,12 @@ module Values = struct
     | AEndedProjBorrows _mv -> "_"
     | AIgnoredProjBorrows -> "_"
 
+  let add_proj_marker (pm : proj_marker) (s : string) : string =
+    match pm with
+    | PNone -> s
+    | PLeft -> "|" ^ s ^ "|"
+    | PRight -> "┊" ^ s ^ "┊"
+
   let rec typed_avalue_to_string ?(span : Meta.span option = None)
       (env : fmt_env) (v : typed_avalue) : string =
     match v.value with
@@ -197,17 +203,19 @@ module Values = struct
   and aloan_content_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (lc : aloan_content) : string =
     match lc with
-    | AMutLoan (bid, av) ->
+    | AMutLoan (pm, bid, av) ->
         "@mut_loan(" ^ BorrowId.to_string bid ^ ", "
         ^ typed_avalue_to_string ~span env av
         ^ ")"
-    | ASharedLoan (loans, v, av) ->
+        |> add_proj_marker pm
+    | ASharedLoan (pm, loans, v, av) ->
         let loans = BorrowId.Set.to_string None loans in
         "@shared_loan(" ^ loans ^ ", "
         ^ typed_value_to_string ~span env v
         ^ ", "
         ^ typed_avalue_to_string ~span env av
         ^ ")"
+        |> add_proj_marker pm
     | AEndedMutLoan ml ->
         "@ended_mut_loan{"
         ^ typed_avalue_to_string ~span env ml.child
@@ -238,11 +246,13 @@ module Values = struct
   and aborrow_content_to_string ?(span : Meta.span option = None)
       (env : fmt_env) (bc : aborrow_content) : string =
     match bc with
-    | AMutBorrow (bid, av) ->
+    | AMutBorrow (pm, bid, av) ->
         "mb@" ^ BorrowId.to_string bid ^ " ("
         ^ typed_avalue_to_string ~span env av
         ^ ")"
-    | ASharedBorrow bid -> "sb@" ^ BorrowId.to_string bid
+        |> add_proj_marker pm
+    | ASharedBorrow (pm, bid) ->
+        "sb@" ^ BorrowId.to_string bid |> add_proj_marker pm
     | AIgnoredMutBorrow (opt_bid, av) ->
         "@ignored_mut_borrow("
         ^ option_to_string BorrowId.to_string opt_bid

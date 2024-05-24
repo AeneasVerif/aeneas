@@ -176,6 +176,10 @@ type region_id_set = RegionId.Set.t [@@deriving show, ord]
 type abstraction_id = AbstractionId.id [@@deriving show, ord]
 type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 
+(** Projection markers: those are used in the joins.
+    For additional explanations see: https://arxiv.org/pdf/2404.02680#section.5 *)
+type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
+
 (** Ancestor for {!typed_avalue} iter visitor *)
 class ['self] iter_typed_avalue_base =
   object (self : 'self)
@@ -192,6 +196,8 @@ class ['self] iter_typed_avalue_base =
 
     method visit_abstraction_id_set : 'env -> abstraction_id_set -> unit =
       fun env ids -> AbstractionId.Set.iter (self#visit_abstraction_id env) ids
+
+    method visit_proj_marker : 'env -> proj_marker -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!typed_avalue} map visitor *)
@@ -212,6 +218,8 @@ class ['self] map_typed_avalue_base =
     method visit_abstraction_id_set
         : 'env -> abstraction_id_set -> abstraction_id_set =
       fun env ids -> AbstractionId.Set.map (self#visit_abstraction_id env) ids
+
+    method visit_proj_marker : 'env -> proj_marker -> proj_marker = fun _ x -> x
   end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
@@ -333,7 +341,7 @@ and adt_avalue = {
     contain other, independent loans.
 *)
 and aloan_content =
-  | AMutLoan of loan_id * typed_avalue
+  | AMutLoan of proj_marker * loan_id * typed_avalue
       (** A mutable loan owned by an abstraction.
 
           The avalue is the child avalue.
@@ -354,7 +362,7 @@ and aloan_content =
             px -> mut_borrow l0 (mut_borrow @s1)
           ]}
        *)
-  | ASharedLoan of loan_id_set * typed_value * typed_avalue
+  | ASharedLoan of proj_marker * loan_id_set * typed_value * typed_avalue
       (** A shared loan owned by an abstraction.
 
           The avalue is the child avalue.
@@ -507,7 +515,7 @@ and aloan_content =
     ids)?
 *)
 and aborrow_content =
-  | AMutBorrow of borrow_id * typed_avalue
+  | AMutBorrow of proj_marker * borrow_id * typed_avalue
       (** A mutable borrow owned by an abstraction.
       
           Is used when an abstraction "consumes" borrows, when giving borrows
@@ -528,7 +536,7 @@ and aborrow_content =
             > abs0 { a_mut_borrow l0 (U32 0) _ }
           ]}
      *)
-  | ASharedBorrow of borrow_id
+  | ASharedBorrow of proj_marker * borrow_id
       (** A shared borrow owned by an abstraction.
     
           Example:

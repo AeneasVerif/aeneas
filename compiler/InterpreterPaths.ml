@@ -187,7 +187,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                         Ok (ctx, { res with updated = v }))
                 | ( _,
                     Abstract
-                      ( AMutLoan (_, _)
+                      ( AMutLoan (_, _, _)
                       | AEndedMutLoan
                           { given_back = _; child = _; given_back_span = _ }
                       | AEndedSharedLoan (_, _)
@@ -197,7 +197,9 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                       | AIgnoredSharedLoan _ ) ) ->
                     craise __FILE__ __LINE__ span
                       "Expected a shared (abstraction) loan"
-                | _, Abstract (ASharedLoan (bids, sv, _av)) -> (
+                | _, Abstract (ASharedLoan (pm, bids, sv, _av)) -> (
+                    (* Sanity check: markers can only appear when we're doing a join *)
+                    sanity_check __FILE__ __LINE__ (pm = PNone) span;
                     (* Explore the shared value *)
                     match access_projection span access ctx update p' sv with
                     | Error err -> Error err
@@ -205,14 +207,14 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                         (* Relookup the child avalue *)
                         let av =
                           match lookup_loan span ek bid ctx with
-                          | _, Abstract (ASharedLoan (_, _, av)) -> av
+                          | _, Abstract (ASharedLoan (_, _, _, av)) -> av
                           | _ -> craise __FILE__ __LINE__ span "Unexpected"
                         in
                         (* Update the shared loan with the new value returned
                              by {!access_projection} *)
                         let ctx =
                           update_aloan span ek bid
-                            (ASharedLoan (bids, res.updated, av))
+                            (ASharedLoan (pm, bids, res.updated, av))
                             ctx
                         in
                         (* Return - note that we don't need to update the borrow itself *)

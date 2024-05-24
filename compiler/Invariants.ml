@@ -246,8 +246,8 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
       method! visit_aborrow_content env bc =
         let _ =
           match bc with
-          | AMutBorrow (bid, _) -> register_borrow BMut bid
-          | ASharedBorrow bid -> register_borrow BShared bid
+          | AMutBorrow (_, bid, _) -> register_borrow BMut bid
+          | ASharedBorrow (_, bid) -> register_borrow BShared bid
           | AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow RMut bid
           | AIgnoredMutBorrow (None, _)
           | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedSharedBorrow
@@ -341,8 +341,8 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         (* Update the info *)
         let info =
           match lc with
-          | AMutLoan (_, _) -> set_outer_mut info
-          | ASharedLoan (_, _, _) -> set_outer_shared info
+          | AMutLoan (_, _, _) -> set_outer_mut info
+          | ASharedLoan (_, _, _, _) -> set_outer_shared info
           | AEndedMutLoan { given_back = _; child = _; given_back_span = _ } ->
               set_outer_mut info
           | AEndedSharedLoan (_, _) -> set_outer_shared info
@@ -359,7 +359,7 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         (* Update the info *)
         let info =
           match bc with
-          | AMutBorrow (_, _) -> set_outer_mut info
+          | AMutBorrow (_, _, _) -> set_outer_mut info
           | ASharedBorrow _ | AEndedSharedBorrow -> set_outer_shared info
           | AIgnoredMutBorrow _ | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _
             ->
@@ -500,9 +500,11 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 (* Lookup the borrowed value to check it has the proper type *)
                 let _, glc = lookup_loan span ek_all bid ctx in
                 match glc with
-                | Concrete (VSharedLoan (_, sv))
-                | Abstract (ASharedLoan (_, sv, _)) ->
+                | Concrete (VSharedLoan (_, sv)) ->
                     sanity_check __FILE__ __LINE__ (sv.ty = ref_ty) span
+                | Abstract (ASharedLoan (pm, _, sv, _)) ->
+                    sanity_check __FILE__ __LINE__ (sv.ty = ref_ty) span;
+                    sanity_check __FILE__ __LINE__ (pm = PNone) span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
             | VMutBorrow (_, bv), RMut ->
                 sanity_check __FILE__ __LINE__
