@@ -104,21 +104,16 @@ let charon_options_for_test test_name =
       [ "--polonius"; "--opaque=betree_utils"; "--crate"; "betree_main" ]
   | _ -> []
 
-(* The subdirectory in which to store the outputs. *)
+(* The default subdirectory in which to store the outputs. *)
 (* This reproduces the file layout that was set by the old Makefile. FIXME: cleanup *)
 let test_subdir backend test_name =
-  let backend = Backend.to_string backend in
   match (backend, test_name) with
-  | "lean", "demo" -> "Demo"
-  | "lean", _ -> "."
-  | _, ("arrays" | "demo" | "hashmap" | "traits") -> test_name
-  | _, "betree" -> "betree"
+  | Backend.Lean, _ -> "."
   | _, "hashmap_main" -> "hashmap_on_disk"
-  | "hol4", _ -> "misc-" ^ test_name
-  | ( _,
-      ( "bitwise" | "constants" | "external" | "loops" | "no_nested_borrows"
-      | "paper" | "polonius_list" ) ) ->
-      "misc"
+  | ( Backend.HOL4,
+      ( "constants" | "external" | "loops" | "no_nested_borrows" | "paper"
+      | "polonius_list" ) ) ->
+      "misc-" ^ test_name
   | _ -> test_name
 
 (* The data for a specific test input *)
@@ -133,13 +128,15 @@ module Input = struct
     actions : action BackendMap.t;
     charon_options : string list;
     aeneas_options : string list BackendMap.t;
-    subdir : string BackendMap.t;
+    subdirs : string BackendMap.t;
   }
 
   (* Parse lines that start `//@`. Each of them modifies the options we use for the test.
      Supported comments:
        - `skip`: don't process the file;
        - `known-failure`: TODO;
+       - `subdir=...: set the subdirectory in which to store the outputs.
+            Defaults to nothing for lean and to the test name for other backends;
        - `charon-args=...`: extra arguments to pass to charon;
        - `aeneas-args=...`: extra arguments to pass to aeneas;
        - `[backend,..]...`: where each `backend` is the name of a backend supported by
@@ -162,6 +159,7 @@ module Input = struct
     (* Parse the other options *)
     let charon_args = Core.String.chop_prefix comment ~prefix:"charon-args=" in
     let aeneas_args = Core.String.chop_prefix comment ~prefix:"aeneas-args=" in
+    let subdir = Core.String.chop_prefix comment ~prefix:"subdir=" in
 
     if comment = "skip" then
       { input with actions = BackendMap.add_each backends Skip input.actions }
@@ -185,6 +183,9 @@ module Input = struct
         aeneas_options =
           BackendMap.update_each backends add_args input.aeneas_options;
       }
+    else if Option.is_some subdir then
+      let subdir = Option.get subdir in
+      { input with subdirs = BackendMap.add_each backends subdir input.subdirs }
     else failwith ("Unrecognized special comment: `" ^ comment ^ "`")
 
   (* Given a path to a rust file or crate, gather the details and options about how to build the test. *)
@@ -198,12 +199,12 @@ module Input = struct
     in
     let actions = BackendMap.make (fun _ -> Normal) in
     let charon_options = charon_options_for_test name in
-    let subdir = BackendMap.make (fun backend -> test_subdir backend name) in
+    let subdirs = BackendMap.make (fun backend -> test_subdir backend name) in
     let aeneas_options =
       BackendMap.make (fun backend -> aeneas_options_for_test backend name)
     in
     let input =
-      { path; name; kind; actions; charon_options; subdir; aeneas_options }
+      { path; name; kind; actions; charon_options; subdirs; aeneas_options }
     in
     match kind with
     | SingleFile ->
@@ -226,7 +227,7 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   (* FIXME: remove this special case *)
   let test_name = if case.name = "betree" then "betree_main" else case.name in
   let input_file = concat_path [ env.llbc_dir; test_name ] ^ ".llbc" in
-  let subdir = BackendMap.find backend case.subdir in
+  let subdir = BackendMap.find backend case.subdirs in
   let aeneas_options = BackendMap.find backend case.aeneas_options in
   let backend_str = Backend.to_string backend in
   let dest_dir = concat_path [ "tests"; backend_str; subdir ] in
