@@ -37,7 +37,26 @@ module Backend = struct
     | HOL4 -> "hol4"
 end
 
-module BackendMap = Map.Make (Backend)
+module BackendMap = struct
+  include Map.Make (Backend)
+
+  (* Make a new map with one entry per backend, given by `f` *)
+  let make (f : Backend.t -> 'a) : 'a t =
+    List.fold_left
+      (fun map backend -> add backend (f backend) map)
+      empty Backend.all
+
+  (* Set this value for all the backends in `backends` *)
+  let add_each (backends : Backend.t list) (v : 'a) (map : 'a t) : 'a t =
+    List.fold_left (fun map backend -> add backend v map) map backends
+
+  (* Updates all the backends in `backends` with `f` *)
+  let update_each (backends : Backend.t list) (f : 'a -> 'a) (map : 'a t) : 'a t
+      =
+    List.fold_left
+      (fun map backend -> update backend (Option.map f) map)
+      map backends
+end
 
 let concat_path = List.fold_left Filename.concat ""
 
@@ -145,20 +164,11 @@ module Input = struct
     let aeneas_args = Core.String.chop_prefix comment ~prefix:"aeneas-args=" in
 
     if comment = "skip" then
-      {
-        input with
-        actions =
-          List.fold_left
-            (fun map backend -> BackendMap.add backend Skip map)
-            input.actions backends;
-      }
+      { input with actions = BackendMap.add_each backends Skip input.actions }
     else if comment = "known-failure" then
       {
         input with
-        actions =
-          List.fold_left
-            (fun map backend -> BackendMap.add backend KnownFailure map)
-            input.actions backends;
+        actions = BackendMap.add_each backends KnownFailure input.actions;
       }
     else if Option.is_some charon_args then
       let args = Option.get charon_args in
@@ -173,10 +183,7 @@ module Input = struct
       {
         input with
         aeneas_options =
-          List.fold_left
-            (fun map backend ->
-              BackendMap.update backend (Option.map add_args) map)
-            input.aeneas_options backends;
+          BackendMap.update_each backends add_args input.aeneas_options;
       }
     else failwith ("Unrecognized special comment: `" ^ comment ^ "`")
 
@@ -189,25 +196,11 @@ module Input = struct
       else if Sys_unix.is_directory_exn path then Crate
       else failwith ("`" ^ path ^ "` is not a file or a directory.")
     in
-    let actions =
-      List.fold_left
-        (fun map backend -> BackendMap.add backend Normal map)
-        BackendMap.empty Backend.all
-    in
+    let actions = BackendMap.make (fun _ -> Normal) in
     let charon_options = charon_options_for_test name in
-    let subdir =
-      List.fold_left
-        (fun map backend ->
-          let subdir = test_subdir backend name in
-          BackendMap.add backend subdir map)
-        BackendMap.empty Backend.all
-    in
+    let subdir = BackendMap.make (fun backend -> test_subdir backend name) in
     let aeneas_options =
-      List.fold_left
-        (fun map backend ->
-          let opts = aeneas_options_for_test backend name in
-          BackendMap.add backend opts map)
-        BackendMap.empty Backend.all
+      BackendMap.make (fun backend -> aeneas_options_for_test backend name)
     in
     let input =
       { path; name; kind; actions; charon_options; subdir; aeneas_options }
