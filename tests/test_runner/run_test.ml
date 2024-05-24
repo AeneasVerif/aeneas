@@ -104,18 +104,6 @@ let charon_options_for_test test_name =
       [ "--polonius"; "--opaque=betree_utils"; "--crate"; "betree_main" ]
   | _ -> []
 
-(* The default subdirectory in which to store the outputs. *)
-(* This reproduces the file layout that was set by the old Makefile. FIXME: cleanup *)
-let test_subdir backend test_name =
-  match (backend, test_name) with
-  | Backend.Lean, _ -> "."
-  | _, "hashmap_main" -> "hashmap_on_disk"
-  | ( Backend.HOL4,
-      ( "constants" | "external" | "loops" | "no_nested_borrows" | "paper"
-      | "polonius_list" ) ) ->
-      "misc-" ^ test_name
-  | _ -> test_name
-
 (* The data for a specific test input *)
 module Input = struct
   type kind = SingleFile | Crate
@@ -130,6 +118,10 @@ module Input = struct
     aeneas_options : string list BackendMap.t;
     subdirs : string BackendMap.t;
   }
+
+  (* The default subdirectory in which to store the outputs. *)
+  let default_subdir backend test_name =
+    match backend with Backend.Lean -> "." | _ -> test_name
 
   (* Parse lines that start `//@`. Each of them modifies the options we use for the test.
      Supported comments:
@@ -199,7 +191,9 @@ module Input = struct
     in
     let actions = BackendMap.make (fun _ -> Normal) in
     let charon_options = charon_options_for_test name in
-    let subdirs = BackendMap.make (fun backend -> test_subdir backend name) in
+    let subdirs =
+      BackendMap.make (fun backend -> default_subdir backend name)
+    in
     let aeneas_options =
       BackendMap.make (fun backend -> aeneas_options_for_test backend name)
     in
