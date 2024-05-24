@@ -95,7 +95,7 @@ let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
   | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ | FnPointer _
-  | Closure _ ->
+  | Closure _ | Unsolved _ ->
       false
   | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
       trait_instance_id_is_local_clause id
@@ -443,7 +443,7 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | Closure (fid, generics) ->
       let generics = norm_ctx_normalize_generic_args ctx generics in
       (Closure (fid, generics), None)
-  | UnknownTrait _ ->
+  | Unsolved _ | UnknownTrait _ ->
       (* This is actually an error case *)
       (id, None)
 

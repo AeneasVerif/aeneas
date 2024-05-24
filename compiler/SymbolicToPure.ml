@@ -462,6 +462,7 @@ and translate_trait_instance_id (meta : Meta.meta) (translate_ty : T.ty -> ty)
   | TraitRef tr -> TraitRef (translate_trait_ref meta translate_ty tr)
   | FnPointer _ | Closure _ ->
       craise __FILE__ __LINE__ meta "Closures are not supported yet"
+  | Unsolved _ -> craise __FILE__ __LINE__ meta "Couldn't solve trait bound"
   | UnknownTrait s -> craise __FILE__ __LINE__ meta ("Unknown trait found: " ^ s)
 
 (** Translate a signature type - TODO: factor out the different translation functions *)
