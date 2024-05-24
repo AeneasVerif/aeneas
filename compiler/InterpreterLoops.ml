@@ -15,7 +15,7 @@ open Errors
 let log = Logging.loops_log
 
 (** Evaluate a loop in concrete mode *)
-let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : stl_cm_fun) :
+let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
     stl_cm_fun =
  fun ctx ->
   (* We need a loop id for the [LoopReturn]. In practice it won't be used
@@ -54,10 +54,10 @@ let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : stl_cm_fun) :
          * {!Unit} would account for the first iteration of the loop.
          * We prefer to write it this way for consistency and sanity,
          * though. *)
-        craise __FILE__ __LINE__ meta "Unreachable"
+        craise __FILE__ __LINE__ span "Unreachable"
     | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* We can't get there: this is only used in symbolic mode *)
-        craise __FILE__ __LINE__ meta "Unreachable"
+        craise __FILE__ __LINE__ span "Unreachable"
   in
 
   (* Apply - for the first iteration, we use the result `Continue 0` to evaluate
@@ -65,20 +65,20 @@ let eval_loop_concrete (meta : Meta.meta) (eval_loop_body : stl_cm_fun) :
   let ctx_resl = rec_eval_loop_body ctx (Continue 0) in
   (* If we evaluate in concrete mode, we shouldn't have to generate any symbolic expression *)
   let cf el =
-    sanity_check __FILE__ __LINE__ (el = None) meta;
+    sanity_check __FILE__ __LINE__ (el = None) span;
     None
   in
   (ctx_resl, cf)
 
 (** Evaluate a loop in symbolic mode *)
-let eval_loop_symbolic (config : config) (meta : meta)
+let eval_loop_symbolic (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) : stl_cm_fun =
  fun ctx ->
   (* Debug *)
   log#ldebug
     (lazy
       ("eval_loop_symbolic:\nContext:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
 
   (* Generate a fresh loop id *)
@@ -86,20 +86,20 @@ let eval_loop_symbolic (config : config) (meta : meta)
 
   (* Compute the fixed point at the loop entrance *)
   let fp_ctx, fixed_ids, rg_to_abs =
-    compute_loop_entry_fixed_point config meta loop_id eval_loop_body ctx
+    compute_loop_entry_fixed_point config span loop_id eval_loop_body ctx
   in
 
   (* Debug *)
   log#ldebug
     (lazy
       ("eval_loop_symbolic:\nInitial context:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\nFixed point:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx));
+      ^ eval_ctx_to_string ~span:(Some span) fp_ctx));
 
   (* Compute the loop input parameters *)
   let fresh_sids, input_svalues =
-    compute_fp_ctx_symbolic_values meta ctx fp_ctx
+    compute_fp_ctx_symbolic_values span ctx fp_ctx
   in
   let fp_input_svalues = List.map (fun sv -> sv.sv_id) input_svalues in
 
@@ -119,7 +119,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
             - src ctx (fixed-point ctx):\n" ^ eval_ctx_to_string fp_ctx
          ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
 
-      prepare_match_ctx_with_target config meta loop_id fixed_ids fp_ctx ctx
+      prepare_match_ctx_with_target config span loop_id fixed_ids fp_ctx ctx
     in
 
     (* Actually match *)
@@ -132,23 +132,23 @@ let eval_loop_symbolic (config : config) (meta : meta)
 
     (* Compute the id correspondance between the contexts *)
     let fp_bl_corresp =
-      compute_fixed_point_id_correspondance meta fixed_ids ctx fp_ctx
+      compute_fixed_point_id_correspondance span fixed_ids ctx fp_ctx
     in
     log#ldebug
       (lazy
         ("eval_loop_symbolic: about to match the fixed-point context with the \
           original context:\n\
           - src ctx (fixed-point ctx)"
-        ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
+        ^ eval_ctx_to_string ~span:(Some span) fp_ctx
         ^ "\n\n-tgt ctx (original context):\n"
-        ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+        ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Compute the end expression, that is the expresion corresponding to the
        end of the functin where we call the loop (for now, when calling a loop
        we never get out) *)
     let res_fun_end =
       comp cf_prepare
-        (match_ctx_with_target config meta loop_id true fp_bl_corresp
+        (match_ctx_with_target config span loop_id true fp_bl_corresp
            fp_input_svalues fixed_ids fp_ctx ctx)
     in
     (res_fun_end, fp_bl_corresp)
@@ -177,26 +177,26 @@ let eval_loop_symbolic (config : config) (meta : meta)
       | Panic -> ((ctx, res), fun e -> e)
       | Break _ ->
           (* Breaks should have been eliminated in the prepasses *)
-          craise __FILE__ __LINE__ meta "Unexpected break"
+          craise __FILE__ __LINE__ span "Unexpected break"
       | Continue i ->
           (* We don't support nested loops for now *)
-          cassert __FILE__ __LINE__ (i = 0) meta
+          cassert __FILE__ __LINE__ (i = 0) span
             "Nested loops are not supported yet";
           log#ldebug
             (lazy
               ("eval_loop_symbolic: about to match the fixed-point context \
                 with the context at a continue:\n\
                 - src ctx (fixed-point ctx)"
-              ^ eval_ctx_to_string ~meta:(Some meta) fp_ctx
+              ^ eval_ctx_to_string ~span:(Some span) fp_ctx
               ^ "\n\n-tgt ctx (ctx at continue):\n"
-              ^ eval_ctx_to_string ~meta:(Some meta) ctx));
-          match_ctx_with_target config meta loop_id false fp_bl_corresp
+              ^ eval_ctx_to_string ~span:(Some span) ctx));
+          match_ctx_with_target config span loop_id false fp_bl_corresp
             fp_input_svalues fixed_ids fp_ctx ctx
       | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
           (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
              For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
           *)
-          craise __FILE__ __LINE__ meta "Unreachable"
+          craise __FILE__ __LINE__ span "Unreachable"
     in
 
     (* Apply and compose *)
@@ -219,9 +219,9 @@ let eval_loop_symbolic (config : config) (meta : meta)
   log#ldebug
     (lazy
       ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) ctx
+      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
       ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string_no_filter ~meta:(Some meta) fp_ctx
+      ^ eval_ctx_to_string_no_filter ~span:(Some span) fp_ctx
       ^ "\n- fixed_sids: "
       ^ SymbolicValueId.Set.show fixed_ids.sids
       ^ "\n- fresh_sids: "
@@ -247,7 +247,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
         match av.value with
         | ABorrow _ -> true
         | ALoan _ -> false
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       let borrows, loans = List.partition is_borrow abs.avalues in
 
@@ -256,10 +256,10 @@ let eval_loop_symbolic (config : config) (meta : meta)
           (fun (av : typed_avalue) ->
             match av.value with
             | ABorrow (AMutBorrow (bid, child_av)) ->
-                sanity_check __FILE__ __LINE__ (is_aignored child_av.value) meta;
+                sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
                 Some (bid, child_av.ty)
             | ABorrow (ASharedBorrow _) -> None
-            | _ -> craise __FILE__ __LINE__ meta "Unreachable")
+            | _ -> craise __FILE__ __LINE__ span "Unreachable")
           borrows
       in
       let borrows = ref (BorrowId.Map.of_list borrows) in
@@ -269,10 +269,10 @@ let eval_loop_symbolic (config : config) (meta : meta)
           (fun (av : typed_avalue) ->
             match av.value with
             | ALoan (AMutLoan (bid, child_av)) ->
-                sanity_check __FILE__ __LINE__ (is_aignored child_av.value) meta;
+                sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
                 Some bid
             | ALoan (ASharedLoan _) -> None
-            | _ -> craise __FILE__ __LINE__ meta "Unreachable")
+            | _ -> craise __FILE__ __LINE__ span "Unreachable")
           loans
       in
 
@@ -288,7 +288,7 @@ let eval_loop_symbolic (config : config) (meta : meta)
             ty)
           loan_ids
       in
-      sanity_check __FILE__ __LINE__ (BorrowId.Map.is_empty !borrows) meta;
+      sanity_check __FILE__ __LINE__ (BorrowId.Map.is_empty !borrows) span;
 
       given_back_tys
     in
@@ -301,25 +301,25 @@ let eval_loop_symbolic (config : config) (meta : meta)
     | None -> None
     | Some el -> (
         match el with
-        | [] -> internal_error __FILE__ __LINE__ meta
+        | [] -> internal_error __FILE__ __LINE__ span
         | e :: el ->
             let fun_end_expr = cf_fun_end (Some e) in
             let loop_expr = cf_loop_body (Some el) in
             S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back
-              fun_end_expr loop_expr meta)
+              fun_end_expr loop_expr span)
   in
   (res_fun_end :: resl_loop_body, cc)
 
-let eval_loop (config : config) (meta : meta) (eval_loop_body : stl_cm_fun) :
+let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
     stl_cm_fun =
  fun ctx ->
   match config.mode with
-  | ConcreteMode -> (eval_loop_concrete meta eval_loop_body) ctx
+  | ConcreteMode -> (eval_loop_concrete span eval_loop_body) ctx
   | SymbolicMode ->
       (* Simplify the context by ending the unnecessary borrows/loans and getting
          rid of the useless symbolic values (which are in anonymous variables) *)
       let ctx, cc =
-        cleanup_fresh_values_and_abs config meta empty_ids_set ctx
+        cleanup_fresh_values_and_abs config span empty_ids_set ctx
       in
 
       (* We want to make sure the loop will *not* manipulate shared avalues
@@ -340,5 +340,5 @@ let eval_loop (config : config) (meta : meta) (eval_loop_body : stl_cm_fun) :
          introduce *fixed* abstractions, and again later to introduce
          *non-fixed* abstractions.
       *)
-      let ctx, cc = comp cc (prepare_ashared_loans meta None ctx) in
-      comp cc (eval_loop_symbolic config meta eval_loop_body ctx)
+      let ctx, cc = comp cc (prepare_ashared_loans span None ctx) in
+      comp cc (eval_loop_symbolic config span eval_loop_body ctx)

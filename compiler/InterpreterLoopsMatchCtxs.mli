@@ -19,7 +19,7 @@ open InterpreterLoopsCore
     - [env]
  *)
 val compute_abs_borrows_loans_maps :
-  Meta.meta -> bool -> (abs -> bool) -> env -> abs_borrows_loans_maps
+  Meta.span -> bool -> (abs -> bool) -> env -> abs_borrows_loans_maps
 
 (** Generic functor to implement matching functions between values, environments,
     etc.
@@ -91,7 +91,7 @@ module MakeCheckEquivMatcher : functor (_ : MatchCheckEquivState) ->
     We return an optional ids map: [Some] if the match succeeded, [None] otherwise.
  *)
 val match_ctxs :
-  Meta.meta ->
+  Meta.span ->
   bool ->
   ids_sets ->
   (loan_id -> typed_value) ->
@@ -136,7 +136,7 @@ val match_ctxs :
     - [ctx0]
     - [ctx1]
  *)
-val ctxs_are_equivalent : Meta.meta -> ids_sets -> eval_ctx -> eval_ctx -> bool
+val ctxs_are_equivalent : Meta.span -> ids_sets -> eval_ctx -> eval_ctx -> bool
 
 (** Reorganize a target context so that we can match it with a source context
     (remember that the source context is generally the fixed point context,
@@ -151,7 +151,7 @@ val ctxs_are_equivalent : Meta.meta -> ids_sets -> eval_ctx -> eval_ctx -> bool
 
  *)
 val prepare_match_ctx_with_target :
-  config -> Meta.meta -> LoopId.id -> ids_sets -> eval_ctx -> cm_fun
+  config -> Meta.span -> LoopId.id -> ids_sets -> eval_ctx -> cm_fun
 
 (** Match a context with a target context.
 
@@ -301,7 +301,7 @@ val prepare_match_ctx_with_target :
  *)
 val match_ctx_with_target :
   config ->
-  Meta.meta ->
+  Meta.span ->
   loop_id ->
   bool ->
   borrow_loan_corresp ->

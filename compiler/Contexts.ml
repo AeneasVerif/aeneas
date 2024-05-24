@@ -286,7 +286,7 @@ let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
   ConstGenericVarId.nth ctx.const_generic_vars vid
 
 (** Lookup a variable in the current frame *)
-let env_lookup_var (meta : Meta.meta) (env : env) (vid : VarId.id) :
+let env_lookup_var (span : Meta.span) (env : env) (vid : VarId.id) :
     var_binder * typed_value =
   (* We take care to stop at the end of current frame: different variables
      in different frames can have the same id!
@@ -298,13 +298,13 @@ let env_lookup_var (meta : Meta.meta) (env : env) (vid : VarId.id) :
     | EBinding (BVar var, v) :: env' ->
         if var.index = vid then (var, v) else lookup env'
     | (EBinding (BDummy _, _) | EAbs _) :: env' -> lookup env'
-    | EFrame :: _ -> craise __FILE__ __LINE__ meta "End of frame"
+    | EFrame :: _ -> craise __FILE__ __LINE__ span "End of frame"
   in
   lookup env
 
-let ctx_lookup_var_binder (meta : Meta.meta) (ctx : eval_ctx) (vid : VarId.id) :
+let ctx_lookup_var_binder (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id) :
     var_binder =
-  fst (env_lookup_var meta ctx.env vid)
+  fst (env_lookup_var span ctx.env vid)
 
 let ctx_lookup_type_decl (ctx : eval_ctx) (tid : TypeDeclId.id) : type_decl =
   TypeDeclId.Map.find tid ctx.type_ctx.type_decls
@@ -323,14 +323,14 @@ let ctx_lookup_trait_impl (ctx : eval_ctx) (id : TraitImplId.id) : trait_impl =
   TraitImplId.Map.find id ctx.trait_impls_ctx.trait_impls
 
 (** Retrieve a variable's value in the current frame *)
-let env_lookup_var_value (meta : Meta.meta) (env : env) (vid : VarId.id) :
+let env_lookup_var_value (span : Meta.span) (env : env) (vid : VarId.id) :
     typed_value =
-  snd (env_lookup_var meta env vid)
+  snd (env_lookup_var span env vid)
 
 (** Retrieve a variable's value in an evaluation context *)
-let ctx_lookup_var_value (meta : Meta.meta) (ctx : eval_ctx) (vid : VarId.id) :
+let ctx_lookup_var_value (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id) :
     typed_value =
-  env_lookup_var_value meta ctx.env vid
+  env_lookup_var_value span ctx.env vid
 
 (** Retrieve a const generic value in an evaluation context *)
 let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
@@ -342,19 +342,19 @@ let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
     This is a helper function: it can break invariants and doesn't perform
     any check.
 *)
-let env_update_var_value (meta : Meta.meta) (env : env) (vid : VarId.id)
+let env_update_var_value (span : Meta.span) (env : env) (vid : VarId.id)
     (nv : typed_value) : env =
   (* We take care to stop at the end of current frame: different variables
      in different frames can have the same id!
   *)
   let rec update env =
     match env with
-    | [] -> craise __FILE__ __LINE__ meta "Unexpected"
+    | [] -> craise __FILE__ __LINE__ span "Unexpected"
     | EBinding ((BVar b as var), v) :: env' ->
         if b.index = vid then EBinding (var, nv) :: env'
         else EBinding (var, v) :: update env'
     | ((EBinding (BDummy _, _) | EAbs _) as ee) :: env' -> ee :: update env'
-    | EFrame :: _ -> craise __FILE__ __LINE__ meta "End of frame"
+    | EFrame :: _ -> craise __FILE__ __LINE__ span "End of frame"
   in
   update env
 
@@ -366,20 +366,20 @@ let var_to_binder (var : var) : var_binder =
     This is a helper function: it can break invariants and doesn't perform
     any check.
 *)
-let ctx_update_var_value (meta : Meta.meta) (ctx : eval_ctx) (vid : VarId.id)
+let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id)
     (nv : typed_value) : eval_ctx =
-  { ctx with env = env_update_var_value meta ctx.env vid nv }
+  { ctx with env = env_update_var_value span ctx.env vid nv }
 
 (** Push a variable in the context's environment.
 
     Checks that the pushed variable and its value have the same type (this
     is important).
 *)
-let ctx_push_var (meta : Meta.meta) (ctx : eval_ctx) (var : var)
+let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : var)
     (v : typed_value) : eval_ctx =
   cassert __FILE__ __LINE__
     (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty)
-    meta "The pushed variables and their values do not have the same type";
+    span "The pushed variables and their values do not have the same type";
   let bv = var_to_binder var in
   { ctx with env = EBinding (BVar bv, v) :: ctx.env }
 
@@ -388,7 +388,7 @@ let ctx_push_var (meta : Meta.meta) (ctx : eval_ctx) (var : var)
     Checks that the pushed variables and their values have the same type (this
     is important).
 *)
-let ctx_push_vars (meta : Meta.meta) (ctx : eval_ctx)
+let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : (var * typed_value) list) : eval_ctx =
   log#ldebug
     (lazy
@@ -404,7 +404,7 @@ let ctx_push_vars (meta : Meta.meta) (ctx : eval_ctx)
        (fun (var, (value : typed_value)) ->
          TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
        vars)
-    meta "The pushed variables and their values do not have the same type";
+    span "The pushed variables and their values do not have the same type";
   let vars =
     List.map
       (fun (var, value) -> EBinding (BVar (var_to_binder var), value))
@@ -426,11 +426,11 @@ let ctx_push_fresh_dummy_vars (ctx : eval_ctx) (vl : typed_value list) :
   List.fold_left (fun ctx v -> ctx_push_fresh_dummy_var ctx v) ctx vl
 
 (** Remove a dummy variable from a context's environment. *)
-let ctx_remove_dummy_var meta (ctx : eval_ctx) (vid : DummyVarId.id) :
+let ctx_remove_dummy_var span (ctx : eval_ctx) (vid : DummyVarId.id) :
     eval_ctx * typed_value =
   let rec remove_var (env : env) : env * typed_value =
     match env with
-    | [] -> craise __FILE__ __LINE__ meta "Could not lookup a dummy variable"
+    | [] -> craise __FILE__ __LINE__ span "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: env when vid' = vid -> (env, v)
     | ee :: env ->
         let env, v = remove_var env in
@@ -440,11 +440,11 @@ let ctx_remove_dummy_var meta (ctx : eval_ctx) (vid : DummyVarId.id) :
   ({ ctx with env }, v)
 
 (** Lookup a dummy variable in a context's environment. *)
-let ctx_lookup_dummy_var (meta : Meta.meta) (ctx : eval_ctx)
+let ctx_lookup_dummy_var (span : Meta.span) (ctx : eval_ctx)
     (vid : DummyVarId.id) : typed_value =
   let rec lookup_var (env : env) : typed_value =
     match env with
-    | [] -> craise __FILE__ __LINE__ meta "Could not lookup a dummy variable"
+    | [] -> craise __FILE__ __LINE__ span "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: _env when vid' = vid -> v
     | _ :: env -> lookup_var env
   in
@@ -460,17 +460,17 @@ let erase_regions (ty : ty) : ty =
   v#visit_ty () ty
 
 (** Push an uninitialized variable (which thus maps to {!constructor:Values.value.VBottom}) *)
-let ctx_push_uninitialized_var (meta : Meta.meta) (ctx : eval_ctx) (var : var) :
+let ctx_push_uninitialized_var (span : Meta.span) (ctx : eval_ctx) (var : var) :
     eval_ctx =
-  ctx_push_var meta ctx var (mk_bottom meta (erase_regions var.var_ty))
+  ctx_push_var span ctx var (mk_bottom span (erase_regions var.var_ty))
 
 (** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.VBottom}) *)
-let ctx_push_uninitialized_vars (meta : Meta.meta) (ctx : eval_ctx)
+let ctx_push_uninitialized_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : var list) : eval_ctx =
   let vars =
-    List.map (fun v -> (v, mk_bottom meta (erase_regions v.var_ty))) vars
+    List.map (fun v -> (v, mk_bottom span (erase_regions v.var_ty))) vars
   in
-  ctx_push_vars meta ctx vars
+  ctx_push_vars span ctx vars
 
 let env_find_abs (env : env) (pred : abs -> bool) : abs option =
   let rec lookup env =
@@ -489,11 +489,11 @@ let env_lookup_abs_opt (env : env) (abs_id : AbstractionId.id) : abs option =
     this abstraction (for instance, remove the abs id from all the parent sets
     of all the other abstractions).
  *)
-let env_remove_abs (meta : Meta.meta) (env : env) (abs_id : AbstractionId.id) :
+let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id) :
     env * abs option =
   let rec remove (env : env) : env * abs option =
     match env with
-    | [] -> craise __FILE__ __LINE__ meta "Unreachable"
+    | [] -> craise __FILE__ __LINE__ span "Unreachable"
     | EFrame :: _ -> (env, None)
     | EBinding (bv, v) :: env ->
         let env, abs_opt = remove env in
@@ -515,11 +515,11 @@ let env_remove_abs (meta : Meta.meta) (env : env) (abs_id : AbstractionId.id) :
     we also substitute the abstraction id wherever it is used (i.e., in the
     parent sets of the other abstractions).
  *)
-let env_subst_abs (meta : Meta.meta) (env : env) (abs_id : AbstractionId.id)
+let env_subst_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id)
     (nabs : abs) : env * abs option =
   let rec update (env : env) : env * abs option =
     match env with
-    | [] -> craise __FILE__ __LINE__ meta "Unreachable"
+    | [] -> craise __FILE__ __LINE__ span "Unreachable"
     | EFrame :: _ -> (* We're done *) (env, None)
     | EBinding (bv, v) :: env ->
         let env, opt_abs = update env in
@@ -551,22 +551,22 @@ let ctx_find_abs (ctx : eval_ctx) (p : abs -> bool) : abs option =
   env_find_abs ctx.env p
 
 (** See the comments for {!env_remove_abs} *)
-let ctx_remove_abs (meta : Meta.meta) (ctx : eval_ctx)
+let ctx_remove_abs (span : Meta.span) (ctx : eval_ctx)
     (abs_id : AbstractionId.id) : eval_ctx * abs option =
-  let env, abs = env_remove_abs meta ctx.env abs_id in
+  let env, abs = env_remove_abs span ctx.env abs_id in
   ({ ctx with env }, abs)
 
 (** See the comments for {!env_subst_abs} *)
-let ctx_subst_abs (meta : Meta.meta) (ctx : eval_ctx)
+let ctx_subst_abs (span : Meta.span) (ctx : eval_ctx)
     (abs_id : AbstractionId.id) (nabs : abs) : eval_ctx * abs option =
-  let env, abs_opt = env_subst_abs meta ctx.env abs_id nabs in
+  let env, abs_opt = env_subst_abs span ctx.env abs_id nabs in
   ({ ctx with env }, abs_opt)
 
-let ctx_set_abs_can_end (meta : Meta.meta) (ctx : eval_ctx)
+let ctx_set_abs_can_end (span : Meta.span) (ctx : eval_ctx)
     (abs_id : AbstractionId.id) (can_end : bool) : eval_ctx =
   let abs = ctx_lookup_abs ctx abs_id in
   let abs = { abs with can_end } in
-  fst (ctx_subst_abs meta ctx abs_id abs)
+  fst (ctx_subst_abs span ctx abs_id abs)
 
 let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
   let decl_group = TypeDeclId.Map.find id ctx.type_ctx.type_decls_groups in

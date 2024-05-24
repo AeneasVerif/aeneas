@@ -36,7 +36,7 @@ let filter_drop_assigns (f : fun_decl) : fun_decl =
         | Drop p1, Assign (p2, _) ->
             if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
-        | Drop p1, Sequence ({ content = Assign (p2, _); meta = _ }, _) ->
+        | Drop p1, Sequence ({ content = Assign (p2, _); span = _ }, _) ->
             if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
         | _ -> super#visit_Sequence env st1 st2
@@ -217,11 +217,11 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
         method! visit_statement entered_loop st =
           match st.content with
           | Loop loop ->
-              cassert __FILE__ __LINE__ (not entered_loop) st.meta
+              cassert __FILE__ __LINE__ (not entered_loop) st.span
                 "Nested loops are not supported yet";
               { st with content = super#visit_Loop true loop }
           | Break i ->
-              cassert __FILE__ __LINE__ (i = 0) st.meta
+              cassert __FILE__ __LINE__ (i = 0) st.span
                 "Breaks to outer loops are not supported yet";
               { st with content = nst.content }
           | _ -> super#visit_statement entered_loop st
@@ -240,7 +240,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
         | Loop _ ->
             cassert __FILE__ __LINE__
               (statement_has_no_loop_break_continue st2)
-              st2.meta "Sequences of loops are not supported yet";
+              st2.span "Sequences of loops are not supported yet";
             (replace_breaks_with st1 st2).content
         | _ -> super#visit_Sequence env st1 st2
     end
@@ -404,17 +404,17 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
         inherit [_] iter_statement as super
 
         (* Remember the span of the statement we enter *)
-        method! visit_statement _ st = super#visit_statement st.meta st
+        method! visit_statement _ st = super#visit_statement st.span st
 
-        method! visit_var_id meta id =
+        method! visit_var_id span id =
           cassert __FILE__ __LINE__
             (not (VarId.Set.mem id !filtered))
-            meta
+            span
             "Filtered variables should have completely disappeared from the \
              body"
       end
     in
-    check_visitor#visit_statement body.meta body;
+    check_visitor#visit_statement body.span body;
 
     (* Return the updated body *)
     body
@@ -446,7 +446,7 @@ let apply_passes (crate : crate) : crate =
          report to the user the fact that we will ignore the function body *)
       let fmt = Print.Crate.crate_to_fmt_env crate in
       let name = Print.name_to_string fmt f.name in
-      save_error __FILE__ __LINE__ (Some f.item_meta.meta)
+      save_error __FILE__ __LINE__ (Some f.item_meta.span)
         ("Ignoring the body of '" ^ name ^ "' because of previous error");
       { f with body = None }
   in

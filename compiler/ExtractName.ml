@@ -32,7 +32,7 @@ end
     For impl blocks, we simply use the name of the type (without its arguments)
     if all the arguments are variables.
  *)
-let pattern_to_extract_name (meta : Meta.meta option) (name : pattern) :
+let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
     string list =
   let c = { tgt = TkName } in
   let all_vars =
@@ -73,7 +73,7 @@ let pattern_to_extract_name (meta : Meta.meta option) (name : pattern) :
             let id = Collections.List.last id in
             match id with
             | PIdent (_, _) -> super#visit_PImpl () (EComp [ id ])
-            | PImpl _ -> craise_opt_meta __FILE__ __LINE__ meta "Unreachable")
+            | PImpl _ -> craise_opt_span __FILE__ __LINE__ span "Unreachable")
         | _ -> super#visit_PImpl () ty
 
       method! visit_EPrimAdt _ adt g =

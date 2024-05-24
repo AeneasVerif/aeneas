@@ -8,7 +8,7 @@ open Expressions
 open Values
 open LlbcAst
 
-(** "Meta"-place: a place stored as meta-data.
+(** "Meta"-place: a place stored as span-data.
 
     Whenever we need to introduce new symbolic variables, for instance because
     of symbolic expansions, we try to store a "place", which gives information
@@ -62,7 +62,7 @@ type call = {
 (** Meta information for expressions, not necessary for synthesis but useful to
     guide it to generate a pretty output.
  *)
-type emeta =
+type espan =
   | Assignment of Contexts.eval_ctx * mplace * typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
   | Snapshot of Contexts.eval_ctx
@@ -92,8 +92,8 @@ class ['self] iter_expression_base =
       fun _ _ -> ()
 
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-    method visit_emeta : 'env -> emeta -> unit = fun _ _ -> ()
-    method visit_meta : 'env -> Meta.meta -> unit = fun _ _ -> ()
+    method visit_espan : 'env -> espan -> unit = fun _ _ -> ()
+    method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map
         : 'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
@@ -155,7 +155,7 @@ type expression =
   | Expansion of mplace option * symbolic_value * expansion
       (** Expansion of a symbolic value.
     
-          The place is "meta": it gives the path to the symbolic value (if available)
+          The place is "span": it gives the path to the symbolic value (if available)
           which got expanded (this path is available when the symbolic expansion
           comes from a path evaluation, during an assignment for instance).
           We use it to compute meaningful names for the variables we introduce,
@@ -211,8 +211,8 @@ type expression =
           The boolean is [true].
           TODO: merge this with Return.
        *)
-  | Meta of emeta * expression  (** Meta information *)
-  | Error of Meta.meta option * string
+  | Meta of espan * expression  (** Meta information *)
+  | Error of Meta.span option * string
 
 and loop = {
   loop_id : loop_id;
@@ -226,7 +226,7 @@ and loop = {
   end_expr : expression;
       (** The end of the function (upon the moment it enters the loop) *)
   loop_expr : expression;  (** The symbolically executed loop body *)
-  meta : Meta.meta;  (** Information about where the origin of the loop body *)
+  span : Meta.span;  (** Information about where the origin of the loop body *)
 }
 
 and expansion =

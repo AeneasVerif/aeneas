@@ -18,7 +18,7 @@ open Cps
  *)
 val pop_frame :
   config ->
-  Meta.meta ->
+  Meta.span ->
   bool ->
   eval_ctx ->
   typed_value option * eval_ctx * (eval_result -> eval_result)

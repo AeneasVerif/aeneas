@@ -144,7 +144,7 @@ type loop_info = {
 (** Body synthesis context *)
 type bs_ctx = {
   (* TODO: there are a lot of duplications with the various decls ctx *)
-  meta : Meta.meta;  (** The meta information about the current declaration *)
+  span : Meta.span;  (** The span information about the current declaration *)
   decls_ctx : C.decls_ctx;
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
@@ -342,7 +342,7 @@ let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
 
 let typed_value_to_string (ctx : bs_ctx) (v : V.typed_value) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Values.typed_value_to_string ~meta:(Some ctx.meta) env v
+  Print.Values.typed_value_to_string ~span:(Some ctx.span) env v
 
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
@@ -366,7 +366,7 @@ let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
 
 let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.texpression_to_string ~metadata:(Some ctx.meta) env false "" "  " e
+  PrintPure.texpression_to_string ~spandata:(Some ctx.span) env false "" "  " e
 
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
@@ -382,7 +382,7 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
 
 let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.typed_pattern_to_string ~meta:(Some ctx.meta) env p
+  PrintPure.typed_pattern_to_string ~span:(Some ctx.span) env p
 
 let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
     fun_effect_info =
@@ -401,7 +401,7 @@ let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let verbose = false in
   let indent = "" in
   let indent_incr = "  " in
-  Print.Values.abs_to_string ~meta:(Some ctx.meta) env verbose indent
+  Print.Values.abs_to_string ~span:(Some ctx.span) env verbose indent
     indent_incr abs
 
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
@@ -414,44 +414,44 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
 
 (* Some generic translation functions (we need to translate different "flavours"
    of types: forward types, backward types, etc.) *)
-let rec translate_generic_args (meta : Meta.meta) (translate_ty : T.ty -> ty)
+let rec translate_generic_args (span : Meta.span) (translate_ty : T.ty -> ty)
     (generics : T.generic_args) : generic_args =
   (* We ignore the regions: if they didn't cause trouble for the symbolic execution,
      then everything's fine *)
   let types = List.map translate_ty generics.types in
   let const_generics = generics.const_generics in
   let trait_refs =
-    List.map (translate_trait_ref meta translate_ty) generics.trait_refs
+    List.map (translate_trait_ref span translate_ty) generics.trait_refs
   in
   { types; const_generics; trait_refs }
 
-and translate_trait_ref (meta : Meta.meta) (translate_ty : T.ty -> ty)
+and translate_trait_ref (span : Meta.span) (translate_ty : T.ty -> ty)
     (tr : T.trait_ref) : trait_ref =
-  let trait_id = translate_trait_instance_id meta translate_ty tr.trait_id in
-  let generics = translate_generic_args meta translate_ty tr.generics in
+  let trait_id = translate_trait_instance_id span translate_ty tr.trait_id in
+  let generics = translate_generic_args span translate_ty tr.generics in
   let trait_decl_ref =
-    translate_trait_decl_ref meta translate_ty tr.trait_decl_ref
+    translate_trait_decl_ref span translate_ty tr.trait_decl_ref
   in
   { trait_id; generics; trait_decl_ref }
 
-and translate_trait_decl_ref (meta : Meta.meta) (translate_ty : T.ty -> ty)
+and translate_trait_decl_ref (span : Meta.span) (translate_ty : T.ty -> ty)
     (tr : T.trait_decl_ref) : trait_decl_ref =
   let decl_generics =
-    translate_generic_args meta translate_ty tr.decl_generics
+    translate_generic_args span translate_ty tr.decl_generics
   in
   { trait_decl_id = tr.trait_decl_id; decl_generics }
 
-and translate_trait_instance_id (meta : Meta.meta) (translate_ty : T.ty -> ty)
+and translate_trait_instance_id (span : Meta.span) (translate_ty : T.ty -> ty)
     (id : T.trait_instance_id) : trait_instance_id =
   let translate_trait_instance_id =
-    translate_trait_instance_id meta translate_ty
+    translate_trait_instance_id span translate_ty
   in
   match id with
   | T.Self -> Self
   | TraitImpl id -> TraitImpl id
   | BuiltinOrAuto _ ->
       (* We should have eliminated those in the prepasses *)
-      craise __FILE__ __LINE__ meta "Unreachable"
+      craise __FILE__ __LINE__ span "Unreachable"
   | Clause id -> Clause id
   | ParentClause (inst_id, decl_id, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
@@ -459,22 +459,22 @@ and translate_trait_instance_id (meta : Meta.meta) (translate_ty : T.ty -> ty)
   | ItemClause (inst_id, decl_id, item_name, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
       ItemClause (inst_id, decl_id, item_name, clause_id)
-  | TraitRef tr -> TraitRef (translate_trait_ref meta translate_ty tr)
+  | TraitRef tr -> TraitRef (translate_trait_ref span translate_ty tr)
   | FnPointer _ | Closure _ ->
-      craise __FILE__ __LINE__ meta "Closures are not supported yet"
-  | Unsolved _ -> craise __FILE__ __LINE__ meta "Couldn't solve trait bound"
-  | UnknownTrait s -> craise __FILE__ __LINE__ meta ("Unknown trait found: " ^ s)
+      craise __FILE__ __LINE__ span "Closures are not supported yet"
+  | Unsolved _ -> craise __FILE__ __LINE__ span "Couldn't solve trait bound"
+  | UnknownTrait s -> craise __FILE__ __LINE__ span ("Unknown trait found: " ^ s)
 
 (** Translate a signature type - TODO: factor out the different translation functions *)
-let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
+let rec translate_sty (span : Meta.span) (ty : T.ty) : ty =
   let translate = translate_sty in
   match ty with
   | T.TAdt (type_id, generics) -> (
-      let generics = translate_sgeneric_args meta generics in
+      let generics = translate_sgeneric_args span generics in
       match type_id with
       | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
       | T.TTuple ->
-          sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
+          sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
           mk_simpl_tuple_ty generics.types
       | T.TAssumed aty -> (
           match aty with
@@ -483,87 +483,87 @@ let rec translate_sty (meta : Meta.meta) (ty : T.ty) : ty =
               match generics.types with
               | [ ty ] -> ty
               | _ ->
-                  craise __FILE__ __LINE__ meta
+                  craise __FILE__ __LINE__ span
                     "Box/vec/option type with incorrect number of arguments")
           | T.TArray -> TAdt (TAssumed TArray, generics)
           | T.TSlice -> TAdt (TAssumed TSlice, generics)
           | T.TStr -> TAdt (TAssumed TStr, generics)))
   | TVar vid -> TVar vid
   | TLiteral ty -> TLiteral ty
-  | TNever -> craise __FILE__ __LINE__ meta "Unreachable"
-  | TRef (_, rty, _) -> translate meta rty
+  | TNever -> craise __FILE__ __LINE__ span "Unreachable"
+  | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
       let mut = match rkind with RMut -> Mut | RShared -> Const in
-      let ty = translate meta ty in
+      let ty = translate span ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
   | TTraitType (trait_ref, type_name) ->
-      let trait_ref = translate_strait_ref meta trait_ref in
+      let trait_ref = translate_strait_ref span trait_ref in
       TTraitType (trait_ref, type_name)
   | TArrow _ ->
-      craise __FILE__ __LINE__ meta "Arrow types are not supported yet"
+      craise __FILE__ __LINE__ span "Arrow types are not supported yet"
 
-and translate_sgeneric_args (meta : Meta.meta) (generics : T.generic_args) :
+and translate_sgeneric_args (span : Meta.span) (generics : T.generic_args) :
     generic_args =
-  translate_generic_args meta (translate_sty meta) generics
+  translate_generic_args span (translate_sty span) generics
 
-and translate_strait_ref (meta : Meta.meta) (tr : T.trait_ref) : trait_ref =
-  translate_trait_ref meta (translate_sty meta) tr
+and translate_strait_ref (span : Meta.span) (tr : T.trait_ref) : trait_ref =
+  translate_trait_ref span (translate_sty span) tr
 
-and translate_strait_instance_id (meta : Meta.meta) (id : T.trait_instance_id) :
+and translate_strait_instance_id (span : Meta.span) (id : T.trait_instance_id) :
     trait_instance_id =
-  translate_trait_instance_id meta (translate_sty meta) id
+  translate_trait_instance_id span (translate_sty span) id
 
-let translate_trait_clause (meta : Meta.meta) (clause : T.trait_clause) :
+let translate_trait_clause (span : Meta.span) (clause : T.trait_clause) :
     trait_clause =
-  let { T.clause_id; meta = _; trait_id; clause_generics } = clause in
-  let generics = translate_sgeneric_args meta clause_generics in
+  let { T.clause_id; span = _; trait_id; clause_generics } = clause in
+  let generics = translate_sgeneric_args span clause_generics in
   { clause_id; trait_id; generics }
 
-let translate_strait_type_constraint (meta : Meta.meta)
+let translate_strait_type_constraint (span : Meta.span)
     (ttc : T.trait_type_constraint) : trait_type_constraint =
   let { T.trait_ref; type_name; ty } = ttc in
-  let trait_ref = translate_strait_ref meta trait_ref in
-  let ty = translate_sty meta ty in
+  let trait_ref = translate_strait_ref span trait_ref in
+  let ty = translate_sty span ty in
   { trait_ref; type_name; ty }
 
-let translate_predicates (meta : Meta.meta) (preds : T.predicates) : predicates
+let translate_predicates (span : Meta.span) (preds : T.predicates) : predicates
     =
   let trait_type_constraints =
     List.map
-      (translate_strait_type_constraint meta)
+      (translate_strait_type_constraint span)
       preds.trait_type_constraints
   in
   { trait_type_constraints }
 
-let translate_generic_params (meta : Meta.meta) (generics : T.generic_params) :
+let translate_generic_params (span : Meta.span) (generics : T.generic_params) :
     generic_params =
   let { T.regions = _; types; const_generics; trait_clauses } = generics in
-  let trait_clauses = List.map (translate_trait_clause meta) trait_clauses in
+  let trait_clauses = List.map (translate_trait_clause span) trait_clauses in
   { types; const_generics; trait_clauses }
 
-let translate_field (meta : Meta.meta) (f : T.field) : field =
+let translate_field (span : Meta.span) (f : T.field) : field =
   let field_name = f.field_name in
-  let field_ty = translate_sty meta f.field_ty in
+  let field_ty = translate_sty span f.field_ty in
   { field_name; field_ty }
 
-let translate_fields (meta : Meta.meta) (fl : T.field list) : field list =
-  List.map (translate_field meta) fl
+let translate_fields (span : Meta.span) (fl : T.field list) : field list =
+  List.map (translate_field span) fl
 
-let translate_variant (meta : Meta.meta) (v : T.variant) : variant =
+let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_name = v.variant_name in
-  let fields = translate_fields meta v.fields in
+  let fields = translate_fields span v.fields in
   { variant_name; fields }
 
-let translate_variants (meta : Meta.meta) (vl : T.variant list) : variant list =
-  List.map (translate_variant meta) vl
+let translate_variants (span : Meta.span) (vl : T.variant list) : variant list =
+  List.map (translate_variant span) vl
 
 (** Translate a type def kind from LLBC *)
-let translate_type_decl_kind (meta : Meta.meta) (kind : T.type_decl_kind) :
+let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
     type_decl_kind =
   match kind with
-  | T.Struct fields -> Struct (translate_fields meta fields)
-  | T.Enum variants -> Enum (translate_variants meta variants)
+  | T.Struct fields -> Struct (translate_fields span fields)
+  | T.Enum variants -> Enum (translate_variants span variants)
   | T.Opaque -> Opaque
 
 (** Translate a type definition from LLBC
@@ -585,29 +585,29 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let name = Print.Types.name_to_string env def.name in
   let { T.regions; types; const_generics; trait_clauses } = def.generics in
   (* Can't translate types with regions for now *)
-  cassert __FILE__ __LINE__ (regions = []) def.item_meta.meta
+  cassert __FILE__ __LINE__ (regions = []) def.item_meta.span
     "ADTs containing borrows are not supported yet";
   let trait_clauses =
-    List.map (translate_trait_clause def.item_meta.meta) trait_clauses
+    List.map (translate_trait_clause def.item_meta.span) trait_clauses
   in
   let generics = { types; const_generics; trait_clauses } in
-  let kind = translate_type_decl_kind def.item_meta.meta def.T.kind in
-  let preds = translate_predicates def.item_meta.meta def.preds in
+  let kind = translate_type_decl_kind def.item_meta.span def.T.kind in
+  let preds = translate_predicates def.item_meta.span def.preds in
   let is_local = def.is_local in
-  let meta = def.item_meta.meta in
+  let span = def.item_meta.span in
   {
     def_id;
     is_local;
     llbc_name;
     name;
-    meta;
+    span;
     generics;
     llbc_generics = def.generics;
     kind;
     preds;
   }
 
-let translate_type_id (meta : Meta.meta) (id : T.type_id) : type_id =
+let translate_type_id (span : Meta.span) (id : T.type_id) : type_id =
   match id with
   | TAdtId adt_id -> TAdtId adt_id
   | TAssumed aty ->
@@ -619,7 +619,7 @@ let translate_type_id (meta : Meta.meta) (id : T.type_id) : type_id =
         | T.TBox ->
             (* Boxes have to be eliminated: this type id shouldn't
                be translated *)
-            craise __FILE__ __LINE__ meta "Unexpected box type"
+            craise __FILE__ __LINE__ span "Unexpected box type"
       in
       TAssumed aty
   | TTuple -> TTuple
@@ -632,16 +632,16 @@ let translate_type_id (meta : Meta.meta) (id : T.type_id) : type_id =
 
     TODO: factor out the various translation functions.
 *)
-let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos)
+let rec translate_fwd_ty (span : Meta.span) (type_infos : type_infos)
     (ty : T.ty) : ty =
-  let translate = translate_fwd_ty meta type_infos in
+  let translate = translate_fwd_ty span type_infos in
   match ty with
   | T.TAdt (type_id, generics) -> (
-      let t_generics = translate_fwd_generic_args meta type_infos generics in
+      let t_generics = translate_fwd_generic_args span type_infos generics in
       (* Eliminate boxes and simplify tuples *)
       match type_id with
       | TAdtId _ | TAssumed (TArray | TSlice | TStr) ->
-          let type_id = translate_type_id meta type_id in
+          let type_id = translate_type_id span type_id in
           TAdt (type_id, t_generics)
       | TTuple ->
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
@@ -655,15 +655,15 @@ let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos)
                (List.exists
                   (TypesUtils.ty_has_borrows type_infos)
                   generics.types))
-            meta "ADTs containing borrows are not supported yet";
+            span "ADTs containing borrows are not supported yet";
           match t_generics.types with
           | [ bty ] -> bty
           | _ ->
-              craise __FILE__ __LINE__ meta
+              craise __FILE__ __LINE__ span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
   | TVar vid -> TVar vid
-  | TNever -> craise __FILE__ __LINE__ meta "Unreachable"
+  | TNever -> craise __FILE__ __LINE__ span "Unreachable"
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
@@ -672,33 +672,33 @@ let rec translate_fwd_ty (meta : Meta.meta) (type_infos : type_infos)
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
   | TTraitType (trait_ref, type_name) ->
-      let trait_ref = translate_fwd_trait_ref meta type_infos trait_ref in
+      let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
       TTraitType (trait_ref, type_name)
   | TArrow _ ->
-      craise __FILE__ __LINE__ meta "Arrow types are not supported yet"
+      craise __FILE__ __LINE__ span "Arrow types are not supported yet"
 
-and translate_fwd_generic_args (meta : Meta.meta) (type_infos : type_infos)
+and translate_fwd_generic_args (span : Meta.span) (type_infos : type_infos)
     (generics : T.generic_args) : generic_args =
-  translate_generic_args meta (translate_fwd_ty meta type_infos) generics
+  translate_generic_args span (translate_fwd_ty span type_infos) generics
 
-and translate_fwd_trait_ref (meta : Meta.meta) (type_infos : type_infos)
+and translate_fwd_trait_ref (span : Meta.span) (type_infos : type_infos)
     (tr : T.trait_ref) : trait_ref =
-  translate_trait_ref meta (translate_fwd_ty meta type_infos) tr
+  translate_trait_ref span (translate_fwd_ty span type_infos) tr
 
-and translate_fwd_trait_instance_id (meta : Meta.meta) (type_infos : type_infos)
+and translate_fwd_trait_instance_id (span : Meta.span) (type_infos : type_infos)
     (id : T.trait_instance_id) : trait_instance_id =
-  translate_trait_instance_id meta (translate_fwd_ty meta type_infos) id
+  translate_trait_instance_id span (translate_fwd_ty span type_infos) id
 
 (** Simply calls [translate_fwd_ty] *)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
   let type_infos = ctx.type_ctx.type_infos in
-  translate_fwd_ty ctx.meta type_infos ty
+  translate_fwd_ty ctx.span type_infos ty
 
 (** Simply calls [translate_fwd_generic_args] *)
 let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
     generic_args =
   let type_infos = ctx.type_ctx.type_infos in
-  translate_fwd_generic_args ctx.meta type_infos generics
+  translate_fwd_generic_args ctx.span type_infos generics
 
 (** Translate a type, when some regions may have ended.
     
@@ -706,22 +706,22 @@ let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
     
     [inside_mut]: are we inside a mutable borrow?
  *)
-let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
+let rec translate_back_ty (span : Meta.span) (type_infos : type_infos)
     (keep_region : T.region -> bool) (inside_mut : bool) (ty : T.ty) : ty option
     =
-  let translate = translate_back_ty meta type_infos keep_region inside_mut in
+  let translate = translate_back_ty span type_infos keep_region inside_mut in
   (* A small helper for "leave" types *)
   let wrap ty = if inside_mut then Some ty else None in
   match ty with
   | T.TAdt (type_id, generics) -> (
       match type_id with
       | TAdtId _ | TAssumed (TArray | TSlice | TStr) ->
-          let type_id = translate_type_id meta type_id in
+          let type_id = translate_type_id span type_id in
           if inside_mut then
             (* We do not want to filter anything, so we translate the generics
                as "forward" types *)
             let generics =
-              translate_fwd_generic_args meta type_infos generics
+              translate_fwd_generic_args span type_infos generics
             in
             Some (TAdt (type_id, generics))
           else
@@ -734,7 +734,7 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
             let types = List.filter_map translate generics.types in
             if types <> [] then
               let generics =
-                translate_fwd_generic_args meta type_infos generics
+                translate_fwd_generic_args span type_infos generics
               in
               Some (TAdt (type_id, generics))
             else None
@@ -742,12 +742,12 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           cassert __FILE__ __LINE__
             (not (TypesUtils.ty_has_borrows type_infos ty))
-            meta "ADTs containing borrows are not supported yet";
+            span "ADTs containing borrows are not supported yet";
           (* Eliminate the box *)
           match generics.types with
           | [ bty ] -> translate bty
           | _ ->
-              craise __FILE__ __LINE__ meta
+              craise __FILE__ __LINE__ span
                 "Unreachable: boxes receive exactly one type parameter")
       | TTuple -> (
           (* Tuples can contain borrows (which we eliminate) *)
@@ -759,7 +759,7 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
                * is the identity *)
               Some (mk_simpl_tuple_ty tys_t)))
   | TVar vid -> wrap (TVar vid)
-  | TNever -> craise __FILE__ __LINE__ meta "Unreachable"
+  | TNever -> craise __FILE__ __LINE__ span "Unreachable"
   | TLiteral lty -> wrap (TLiteral lty)
   | TRef (r, rty, rkind) -> (
       match rkind with
@@ -770,7 +770,7 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
           (* Dive in, remembering the fact that we are inside a mutable borrow *)
           let inside_mut = true in
           if keep_region r then
-            translate_back_ty meta type_infos keep_region inside_mut rty
+            translate_back_ty span type_infos keep_region inside_mut rty
           else None)
   | TRawPtr _ ->
       (* TODO: not sure what to do here *)
@@ -781,17 +781,17 @@ let rec translate_back_ty (meta : Meta.meta) (type_infos : type_infos)
       if inside_mut then
         (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)
-        let trait_ref = translate_fwd_trait_ref meta type_infos trait_ref in
+        let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
         Some (TTraitType (trait_ref, type_name))
       else None
   | TArrow _ ->
-      craise __FILE__ __LINE__ meta "Arrow types are not supported yet"
+      craise __FILE__ __LINE__ span "Arrow types are not supported yet"
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
     (inside_mut : bool) (ty : T.ty) : ty option =
   let type_infos = ctx.type_ctx.type_infos in
-  translate_back_ty ctx.meta type_infos keep_region inside_mut ty
+  translate_back_ty ctx.span type_infos keep_region inside_mut ty
 
 let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let const_generics =
@@ -810,16 +810,16 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   }
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
-  let meta = ctx.meta in
+  let span = ctx.span in
   let ctx = mk_type_check_ctx ctx in
-  let _ = PureTypeCheck.check_typed_pattern meta ctx v in
+  let _ = PureTypeCheck.check_typed_pattern span ctx v in
   ()
 
 let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
   if !Config.type_check_pure_code then
-    let meta = ctx.meta in
+    let span = ctx.span in
     let ctx = mk_type_check_ctx ctx in
-    PureTypeCheck.check_texpression meta ctx e
+    PureTypeCheck.check_texpression span ctx e
 
 let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
     (id : A.fun_id_or_trait_method_ref) : fun_id_or_trait_method_ref =
@@ -827,7 +827,7 @@ let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
   | FunId fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_name, fun_decl_id) ->
       let type_infos = ctx.type_ctx.type_infos in
-      let trait_ref = translate_fwd_trait_ref ctx.meta type_infos trait_ref in
+      let trait_ref = translate_fwd_trait_ref ctx.span type_infos trait_ref in
       TraitMethod (trait_ref, method_name, fun_decl_id)
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
@@ -837,7 +837,7 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
   let calls = ctx.calls in
   sanity_check __FILE__ __LINE__
     (not (V.FunCallId.Map.mem call_id calls))
-    ctx.meta;
+    ctx.span;
   let info = { forward; forward_inputs = args; back_funs } in
   let calls = V.FunCallId.Map.add call_id info calls in
   { ctx with calls }
@@ -861,7 +861,7 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   let abstractions = ctx.abstractions in
   sanity_check __FILE__ __LINE__
     (not (V.AbstractionId.Map.mem abs.abs_id abstractions))
-    ctx.meta;
+    ctx.span;
   let abstractions =
     V.AbstractionId.Map.add abs.abs_id (abs, back_args) abstractions
   in
@@ -923,7 +923,7 @@ let mk_fuel_input_as_list (ctx : bs_ctx) (info : fun_effect_info) :
   if function_uses_fuel info then [ mk_fuel_texpression ctx.fuel ] else []
 
 (** Small utility. *)
-let compute_raw_fun_effect_info (meta : Meta.meta)
+let compute_raw_fun_effect_info (span : Meta.span)
     (fun_infos : fun_info A.FunDeclId.Map.t)
     (fun_id : A.fun_id_or_trait_method_ref) (lid : V.LoopId.id option)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
@@ -942,7 +942,7 @@ let compute_raw_fun_effect_info (meta : Meta.meta)
         is_rec = info.is_rec || Option.is_some lid;
       }
   | FunId (FAssumed aid) ->
-      sanity_check __FILE__ __LINE__ (lid = None) meta;
+      sanity_check __FILE__ __LINE__ (lid = None) span;
       {
         can_fail = Assumed.assumed_fun_can_fail aid;
         stateful_group = false;
@@ -967,20 +967,20 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           in
           { info with is_rec = info.is_rec || Option.is_some lid }
       | FunId (FAssumed _) ->
-          compute_raw_fun_effect_info ctx.meta ctx.fun_ctx.fun_infos fun_id lid
+          compute_raw_fun_effect_info ctx.span ctx.fun_ctx.fun_infos fun_id lid
             gid)
   | Some lid -> (
       (* This is necessarily for the current function *)
       match fun_id with
       | FunId (FRegular fid) -> (
-          sanity_check __FILE__ __LINE__ (fid = ctx.fun_decl.def_id) ctx.meta;
+          sanity_check __FILE__ __LINE__ (fid = ctx.fun_decl.def_id) ctx.span;
           (* Lookup the loop *)
           let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
           let loop_info = LoopId.Map.find lid ctx.loops in
           match gid with
           | None -> loop_info.fwd_effect_info
           | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
-      | _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable")
+      | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
 
 (** Translate a function signature to a decomposed function signature.
 
@@ -993,7 +993,7 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     We use [bid] ("backward function id") only if we split the forward
     and the backward functions.
  *)
-let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
+let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : Meta.span)
     (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
@@ -1009,18 +1009,18 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
       List.map (fun (g : T.region_var_group) -> g.id) regions_hierarchy
     in
     let ctx =
-      InterpreterUtils.initialize_eval_ctx meta decls_ctx region_groups
+      InterpreterUtils.initialize_eval_ctx span decls_ctx region_groups
         sg.generics.types sg.generics.const_generics
     in
     (* Compute the normalization map for the *sty* types and add it to the context *)
-    AssociatedTypes.ctx_add_norm_trait_types_from_preds meta ctx
+    AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
       sg.preds.trait_type_constraints
   in
 
   (* Normalize the signature *)
   let sg =
     let ({ A.inputs; output; _ } : A.fun_sig) = sg in
-    let norm = AssociatedTypes.ctx_normalize_ty meta ctx in
+    let norm = AssociatedTypes.ctx_normalize_ty span ctx in
     let inputs = List.map norm inputs in
     let output = norm output in
     { sg with A.inputs; output }
@@ -1028,12 +1028,12 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
 
   (* Is the forward function stateful, and can it fail? *)
   let fwd_effect_info =
-    compute_raw_fun_effect_info meta fun_infos fun_id None None
+    compute_raw_fun_effect_info span fun_infos fun_id None None
   in
   (* Compute the forward inputs *)
   let fwd_fuel = mk_fuel_input_ty_as_list fwd_effect_info in
   let fwd_inputs_no_fuel_no_state =
-    List.map (translate_fwd_ty meta type_infos) sg.inputs
+    List.map (translate_fwd_ty span type_infos) sg.inputs
   in
   (* State input for the forward function *)
   let fwd_state_ty =
@@ -1045,7 +1045,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
     List.concat [ fwd_fuel; fwd_inputs_no_fuel_no_state; fwd_state_ty ]
   in
   (* Compute the backward output, without the effect information *)
-  let fwd_output = translate_fwd_ty meta type_infos sg.output in
+  let fwd_output = translate_fwd_ty span type_infos sg.output in
 
   (* Compute the type information for the backward function *)
   (* Small helper to translate types for backward functions *)
@@ -1067,12 +1067,12 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
     let keep_region r =
       match r with
       | T.RStatic -> raise Unimplemented
-      | RErased -> craise __FILE__ __LINE__ meta "Unexpected erased region"
-      | RBVar _ -> craise __FILE__ __LINE__ meta "Unexpected bound region"
+      | RErased -> craise __FILE__ __LINE__ span "Unexpected erased region"
+      | RBVar _ -> craise __FILE__ __LINE__ span "Unexpected bound region"
       | RFVar rid -> T.RegionId.Set.mem rid gr_regions
     in
     let inside_mut = false in
-    translate_back_ty meta type_infos keep_region inside_mut ty
+    translate_back_ty span type_infos keep_region inside_mut ty
   in
   let translate_back_inputs_for_gid (gid : T.RegionGroupId.id) : ty list =
     (* For now we don't supported nested borrows, so we check that there
@@ -1080,7 +1080,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
     let parents = list_ancestor_region_groups regions_hierarchy gid in
     cassert __FILE__ __LINE__
       (T.RegionGroupId.Set.is_empty parents)
-      meta "Nested borrows are not supported yet";
+      span "Nested borrows are not supported yet";
     (* For now, we don't allow nested borrows, so the additional inputs to the
        backward function can only come from borrows that were returned like
        in (for the backward function we introduce for 'a):
@@ -1148,7 +1148,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
       RegionGroupId.id * back_sg_info =
     let gid = rg.id in
     let back_effect_info =
-      compute_raw_fun_effect_info meta fun_infos fun_id None (Some gid)
+      compute_raw_fun_effect_info span fun_infos fun_id None (Some gid)
     in
     let inputs_no_state = translate_back_inputs_for_gid gid in
     let inputs_no_state =
@@ -1237,15 +1237,15 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (meta : Meta.meta)
       else false
     in
     let info = { fwd_info; effect_info = fwd_effect_info; ignore_output } in
-    sanity_check __FILE__ __LINE__ (fun_sig_info_is_wf info) meta;
+    sanity_check __FILE__ __LINE__ (fun_sig_info_is_wf info) span;
     info
   in
 
   (* Generic parameters *)
-  let generics = translate_generic_params meta sg.generics in
+  let generics = translate_generic_params span sg.generics in
 
   (* Return *)
-  let preds = translate_predicates meta sg.preds in
+  let preds = translate_predicates span sg.preds in
   {
     generics;
     llbc_generics = sg.generics;
@@ -1263,10 +1263,10 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   let regions_hierarchy =
     FunIdMap.find (FRegular fun_id) decls_ctx.fun_ctx.regions_hierarchies
   in
-  let meta =
-    (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).item_meta.meta
+  let span =
+    (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).item_meta.span
   in
-  translate_fun_sig_with_regions_hierarchy_to_decomposed meta decls_ctx
+  translate_fun_sig_with_regions_hierarchy_to_decomposed span decls_ctx
     (FunId (FRegular fun_id)) regions_hierarchy sg input_names
 
 let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
@@ -1546,18 +1546,18 @@ let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   match V.SymbolicValueId.Map.find_opt sv.sv_id ctx.sv_to_var with
   | Some v -> v
   | None ->
-      craise __FILE__ __LINE__ ctx.meta
+      craise __FILE__ __LINE__ ctx.span
         ("Could not find var for symbolic value: "
         ^ V.SymbolicValueId.to_string sv.sv_id)
 
 (** Peel boxes as long as the value is of the form [Box<T>] *)
-let rec unbox_typed_value (meta : Meta.meta) (v : V.typed_value) : V.typed_value
+let rec unbox_typed_value (span : Meta.span) (v : V.typed_value) : V.typed_value
     =
   match (v.value, v.ty) with
   | V.VAdt av, T.TAdt (T.TAssumed T.TBox, _) -> (
       match av.field_values with
-      | [ bv ] -> unbox_typed_value meta bv
-      | _ -> craise __FILE__ __LINE__ meta "Unreachable")
+      | [ bv ] -> unbox_typed_value span bv
+      | _ -> craise __FILE__ __LINE__ span "Unreachable")
   | _ -> v
 
 (** Translate a symbolic value.
@@ -1596,7 +1596,7 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
 let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
     (v : V.typed_value) : texpression =
   (* We need to ignore boxes *)
-  let v = unbox_typed_value ctx.meta v in
+  let v = unbox_typed_value ctx.span v in
   let translate = typed_value_to_texpression ctx ectx in
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx v.ty in
@@ -1610,12 +1610,12 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
         | TAdt (TTuple, _) ->
-            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.meta;
-            mk_simpl_tuple_texpression ctx.meta field_values
+            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.span;
+            mk_simpl_tuple_texpression ctx.span field_values
         | _ ->
             (* Retrieve the type and the translated generics from the translated
                type (simpler this way) *)
-            let adt_id, generics = ty_as_adt ctx.meta ty in
+            let adt_id, generics = ty_as_adt ctx.span ty in
             (* Create the constructor *)
             let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
             let qualif = { id = qualif_id; generics } in
@@ -1626,26 +1626,26 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
             let cons_ty = mk_arrows field_tys ty in
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
-            mk_apps ctx.meta cons field_values)
-    | VBottom -> craise __FILE__ __LINE__ ctx.meta "Unexpected bottom value"
+            mk_apps ctx.span cons field_values)
+    | VBottom -> craise __FILE__ __LINE__ ctx.span "Unexpected bottom value"
     | VLoan lc -> (
         match lc with
         | VSharedLoan (_, v) -> translate v
-        | VMutLoan _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable")
+        | VMutLoan _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | VBorrow bc -> (
         match bc with
         | VSharedBorrow bid ->
             (* Lookup the shared value in the context, and continue *)
             let sv =
-              InterpreterBorrowsCore.lookup_shared_value ctx.meta ectx bid
+              InterpreterBorrowsCore.lookup_shared_value ctx.span ectx bid
             in
             translate sv
         | VReservedMutBorrow bid ->
             (* Same as for shared borrows. However, note that we use reserved borrows
-             * only in *meta-data*: a value *actually used* in the translation can't come
+             * only in *span-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
             let sv =
-              InterpreterBorrowsCore.lookup_shared_value ctx.meta ectx bid
+              InterpreterBorrowsCore.lookup_shared_value ctx.span ectx bid
             in
             translate sv
         | VMutBorrow (_, v) ->
@@ -1666,7 +1666,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
   value
 
 (** Explore an abstraction value and convert it to a consumed value
-    by collecting all the meta-values from the ended *loans*.
+    by collecting all the span-values from the ended *loans*.
 
     Consumed values are rvalues because when an abstraction ends we
     introduce a call to a backward function in the synthesized program,
@@ -1692,7 +1692,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert __FILE__ __LINE__ (field_values = []) ctx.meta
+            cassert __FILE__ __LINE__ (field_values = []) ctx.span
               "ADTs containing borrows are not supported yet";
             None
         | TTuple ->
@@ -1701,9 +1701,9 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
             else
               (* Note that if there is exactly one field value,
                * [mk_simpl_tuple_rvalue] is the identity *)
-              let rv = mk_simpl_tuple_texpression ctx.meta field_values in
+              let rv = mk_simpl_tuple_texpression ctx.span field_values in
               Some rv)
-    | ABottom -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
+    | ABottom -> craise __FILE__ __LINE__ ctx.span "Unreachable"
     | ALoan lc -> aloan_content_to_consumed ctx ectx lc
     | ABorrow bc -> aborrow_content_to_consumed ctx bc
     | ASymbolic aproj -> aproj_to_consumed ctx aproj
@@ -1721,10 +1721,10 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
     (lc : V.aloan_content) : texpression option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) ->
-      craise __FILE__ __LINE__ ctx.meta "Unreachable"
-  | AEndedMutLoan { child = _; given_back = _; given_back_meta } ->
-      (* Return the meta-value *)
-      Some (typed_value_to_texpression ctx ectx given_back_meta)
+      craise __FILE__ __LINE__ ctx.span "Unreachable"
+  | AEndedMutLoan { child = _; given_back = _; given_back_span } ->
+      (* Return the span-value *)
+      Some (typed_value_to_texpression ctx ectx given_back_span)
   | AEndedSharedLoan (_, _) ->
       (* We don't dive into shared loans: there is nothing to give back
        * inside (note that there could be a mutable borrow in the shared
@@ -1733,7 +1733,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
       None
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
-      craise __FILE__ __LINE__ ctx.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -1745,7 +1745,7 @@ and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
     texpression option =
   match bc with
   | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
-      craise __FILE__ __LINE__ _ctx.meta "Unreachable"
+      craise __FILE__ __LINE__ _ctx.span "Unreachable"
   | AEndedMutBorrow (_, _) ->
       (* We collect consumed values: ignore *)
       None
@@ -1764,7 +1764,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
       sanity_check __FILE__ __LINE__
         (child_aproj = AIgnoredProjBorrows)
-        ctx.meta;
+        ctx.span;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
@@ -1773,7 +1773,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
       raise Unimplemented
   | AEndedProjBorrows _ -> (* We consider consumed values *) None
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
-      craise __FILE__ __LINE__ ctx.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 (** Convert the abstraction values in an abstraction to consumed values.
 
@@ -1793,7 +1793,7 @@ let translate_mprojection_elem (pe : E.projection_elem) :
 let translate_mprojection (p : E.projection) : mprojection =
   List.filter_map translate_mprojection_elem p
 
-(** Translate a "meta"-place *)
+(** Translate a "span"-place *)
 let translate_mplace (p : S.mplace) : mplace =
   let var_id = p.bv.index in
   let name = p.bv.name in
@@ -1804,7 +1804,7 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
   match p with None -> None | Some p -> Some (translate_mplace p)
 
 (** Explore an abstraction value and convert it to a given back value
-    by collecting all the meta-values from the ended *borrows*.
+    by collecting all the span-values from the ended *borrows*.
 
     Given back values are patterns, because when an abstraction ends, we
     introduce a call to a backward function in the synthesized program,
@@ -1814,7 +1814,7 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
           ^^^^^^^^
     ]}
     
-    [mp]: it is possible to provide some meta-place information, to guide
+    [mp]: it is possible to provide some span-place information, to guide
     the heuristics which later find pretty names for the variables.
  *)
 let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
@@ -1823,7 +1823,7 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
     match av.value with
     | AAdt adt_v -> (
         (* Translate the field values *)
-        (* For now we forget the meta-place information so that it doesn't get used
+        (* For now we forget the span-place information so that it doesn't get used
          * by several fields (which would then all have the same name...), but we
          * might want to do something smarter *)
         let mp = None in
@@ -1839,20 +1839,20 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert __FILE__ __LINE__ (field_values = []) ctx.meta
+            cassert __FILE__ __LINE__ (field_values = []) ctx.span
               "ADTs with borrows are not supported yet";
             (ctx, None)
         | TTuple ->
             (* Return *)
             let variant_id = adt_v.variant_id in
-            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.meta;
+            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.span;
             if field_values = [] then (ctx, None)
             else
               (* Note that if there is exactly one field value, [mk_simpl_tuple_pattern]
                * is the identity *)
               let lv = mk_simpl_tuple_pattern field_values in
               (ctx, Some lv))
-    | ABottom -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
+    | ABottom -> craise __FILE__ __LINE__ ctx.span "Unreachable"
     | ALoan lc -> aloan_content_to_given_back mp lc ctx
     | ABorrow bc -> aborrow_content_to_given_back mp bc ctx
     | ASymbolic aproj -> aproj_to_given_back mp aproj ctx
@@ -1868,14 +1868,14 @@ and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) ->
-      craise __FILE__ __LINE__ ctx.meta "Unreachable"
-  | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
+      craise __FILE__ __LINE__ ctx.span "Unreachable"
+  | AEndedMutLoan { child = _; given_back = _; given_back_span = _ }
   | AEndedSharedLoan (_, _) ->
       (* We consider given back values, and thus ignore those *)
       (ctx, None)
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
-      craise __FILE__ __LINE__ ctx.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -1887,9 +1887,9 @@ and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match bc with
   | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
-      craise __FILE__ __LINE__ ctx.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutBorrow (msv, _) ->
-      (* Return the meta-symbolic-value *)
+      (* Return the span-symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
   | AEndedIgnoredMutBorrow _ ->
@@ -1909,14 +1909,14 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
         (List.for_all
            (fun (_, aproj) -> aproj = V.AIgnoredProjBorrows)
            child_projs)
-        ctx.meta "Nested borrows are not supported yet";
+        ctx.span "Nested borrows are not supported yet";
       (ctx, None)
   | AEndedProjBorrows mv ->
-      (* Return the meta-value *)
+      (* Return the span-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
-      craise __FILE__ __LINE__ ctx.meta "Unreachable"
+      craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 (** Convert the abstraction values in an abstraction to given back values.
 
@@ -1954,11 +1954,11 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
   let abs_ancestors = list_ancestor_abstractions ctx abs call_id in
   (call_info.forward, abs_ancestors)
 
-(** Add meta-information to an expression *)
-let mk_emeta_symbolic_assignments (vars : var list) (values : texpression list)
+(** Add span-information to an expression *)
+let mk_espan_symbolic_assignments (vars : var list) (values : texpression list)
     (e : texpression) : texpression =
   let var_values = List.combine (List.map var_get_id vars) values in
-  if var_values <> [] then mk_emeta (SymbolicAssignments var_values) e else e
+  if var_values <> [] then mk_espan (SymbolicAssignments var_values) e else e
 
 (** Derive naming information from a context.
 
@@ -2000,8 +2000,8 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
   (* Return the computed information *)
   !info
 
-let translate_error (meta : Meta.meta option) (msg : string) : texpression =
-  { e = EError (meta, msg); ty = Error }
+let translate_error (span : Meta.span option) (msg : string) : texpression =
+  { e = EError (span, msg); ty = Error }
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
@@ -2021,7 +2021,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
-  | Meta (meta, e) -> translate_emeta meta e ctx
+  | Meta (span, e) -> translate_espan span e ctx
   | ForwardEnd (ectx, loop_input_values, e, back_e) ->
       (* Translate the end of a function, or the end of a loop.
 
@@ -2029,7 +2029,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
       *)
       translate_forward_end ectx loop_input_values e back_e ctx
   | Loop loop -> translate_loop loop ctx
-  | Error (meta, msg) -> translate_error meta msg
+  | Error (span, msg) -> translate_error span msg
 
 and translate_panic (ctx : bs_ctx) : texpression = Option.get ctx.mk_panic
 
@@ -2048,9 +2048,9 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
 
 and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     (ctx : bs_ctx) : texpression =
-  sanity_check __FILE__ __LINE__ (is_continue = ctx.inside_loop) ctx.meta;
+  sanity_check __FILE__ __LINE__ (is_continue = ctx.inside_loop) ctx.span;
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.meta;
+  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.span;
 
   (* Lookup the loop information *)
   let loop_id = Option.get ctx.loop_id in
@@ -2074,7 +2074,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
           match ctx.backward_outputs with Some outputs -> outputs | None -> []
         in
         let field_values = List.map mk_texpression_from_var backward_outputs in
-        mk_simpl_tuple_texpression ctx.meta field_values
+        mk_simpl_tuple_texpression ctx.span field_values
   in
 
   (* We may need to return a state
@@ -2088,11 +2088,11 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
   let output =
     if effect_info.stateful then
       let state_rvalue = mk_state_texpression ctx.state_var in
-      mk_simpl_tuple_texpression ctx.meta [ state_rvalue; output ]
+      mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
     else output
   in
   (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-  mk_emeta (Tag "return_with_loop") (mk_result_ok_texpression ctx.meta output)
+  mk_espan (Tag "return_with_loop") (mk_result_ok_texpression ctx.span output)
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
@@ -2143,7 +2143,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           let sg = Option.get call.sg in
           let decls_ctx = ctx.decls_ctx in
           let dsg =
-            translate_fun_sig_with_regions_hierarchy_to_decomposed ctx.meta
+            translate_fun_sig_with_regions_hierarchy_to_decomposed ctx.span
               decls_ctx fid call.regions_hierarchy sg
               (List.map (fun _ -> None) sg.inputs)
           in
@@ -2157,7 +2157,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                   ctx_translate_fwd_generic_args ctx all_generics
                 in
                 let tr_self =
-                  translate_fwd_trait_instance_id ctx.meta
+                  translate_fwd_trait_instance_id ctx.span
                     ctx.type_ctx.type_infos tr_self
                 in
                 (tr_self, all_generics)
@@ -2189,7 +2189,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                   | PeIdent (s, _) -> s
                   | PeImpl _ ->
                       (* We shouldn't get there *)
-                      craise __FILE__ __LINE__ decl.item_meta.meta "Unexpected")
+                      craise __FILE__ __LINE__ decl.item_meta.span "Unexpected")
             in
             name ^ "_back"
           in
@@ -2277,7 +2277,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     | S.Unop E.Neg -> (
         match args with
         | [ arg ] ->
-            let int_ty = ty_as_integer ctx.meta arg.ty in
+            let int_ty = ty_as_integer ctx.span arg.ty in
             (* Note that negation can lead to an overflow and thus fail (it
              * is thus monadic) *)
             let effect_info =
@@ -2292,7 +2292,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Neg int_ty), effect_info, args, dest)
-        | _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable")
+        | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | S.Unop (E.Cast cast_kind) -> (
         match cast_kind with
         | CastScalar (src_ty, tgt_ty) ->
@@ -2310,16 +2310,16 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, dest)
         | CastFnPtr _ ->
-            craise __FILE__ __LINE__ ctx.meta "TODO: function casts")
+            craise __FILE__ __LINE__ ctx.span "TODO: function casts")
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
-            let int_ty0 = ty_as_integer ctx.meta arg0.ty in
-            let int_ty1 = ty_as_integer ctx.meta arg1.ty in
+            let int_ty0 = ty_as_integer ctx.span arg0.ty in
+            let int_ty1 = ty_as_integer ctx.span arg1.ty in
             (match binop with
             (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
             | E.Shl | E.Shr -> ()
-            | _ -> sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1) ctx.meta);
+            | _ -> sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1) ctx.span);
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -2332,7 +2332,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Binop (binop, int_ty0), effect_info, args, dest)
-        | _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable")
+        | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
   in
   let func = { id = FunOrOp fun_id; generics } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
@@ -2341,7 +2341,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   in
   let func_ty = mk_arrows input_tys ret_ty in
   let func = { e = Qualif func; ty = func_ty } in
-  let call = mk_apps ctx.meta func args in
+  let call = mk_apps ctx.span func args in
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Put together *)
@@ -2375,7 +2375,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
       ^ "\n- loop_id: "
       ^ Print.option_to_string Pure.LoopId.to_string ctx.loop_id
       ^ "\n- eval_ctx:\n"
-      ^ eval_ctx_to_string ~meta:(Some ctx.meta) ectx
+      ^ eval_ctx_to_string ~span:(Some ctx.span) ectx
       ^ "\n- abs:\n" ^ abs_to_string ctx abs ^ "\n"));
 
   (* When we end an input abstraction, this input abstraction gets back
@@ -2389,7 +2389,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      for a parent backward function.
   *)
   let bid = Option.get ctx.bid in
-  sanity_check __FILE__ __LINE__ (rg_id = bid) ctx.meta;
+  sanity_check __FILE__ __LINE__ (rg_id = bid) ctx.span;
 
   (* First, introduce the given back variables.
 
@@ -2439,7 +2439,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
       (fun (var, v) ->
         sanity_check __FILE__ __LINE__
           ((var : var).ty = (v : texpression).ty)
-          ctx.meta)
+          ctx.span)
       variables_values;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2460,7 +2460,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | S.Fun (fun_id, _) -> fun_id
     | Unop _ | Binop _ ->
         (* Those don't have backward functions *)
-        craise __FILE__ __LINE__ ctx.meta "Unreachable"
+        craise __FILE__ __LINE__ ctx.span "Unreachable"
   in
   let effect_info = get_fun_effect_info ctx fun_id None (Some rg_id) in
   (* Retrieve the values consumed upon ending the loans inside this
@@ -2480,7 +2480,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   let back_inputs = List.append back_inputs back_state in
   (* Retrieve the values given back by this function: those are the output
    * values. We rely on the fact that there are no nested borrows to use the
-   * meta-place information from the input values given to the forward function
+   * span-place information from the input values given to the forward function
    * (we need to add [None] for the return avalue) *)
   let output_mpl =
     List.append (List.map translate_opt_mplace call.args_places) [ None ]
@@ -2522,7 +2522,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
            ^ "\nfunc type: "
            ^ pure_ty_to_string ctx func.ty
            ^ "\n\nargs:\n" ^ String.concat "\n" args));
-      let call = mk_apps ctx.meta func args in
+      let call = mk_apps ctx.span func args in
       mk_let effect_info.can_fail output call next_e
 
 and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
@@ -2533,8 +2533,8 @@ and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
   (* We can do this simply by checking that it consumes and gives back nothing *)
   let inputs = abs_to_consumed ctx ectx abs in
   let ctx, outputs = abs_to_given_back None abs ctx in
-  sanity_check __FILE__ __LINE__ (inputs = []) ctx.meta;
-  sanity_check __FILE__ __LINE__ (outputs = []) ctx.meta;
+  sanity_check __FILE__ __LINE__ (inputs = []) ctx.span;
+  sanity_check __FILE__ __LINE__ (outputs = []) ctx.span;
 
   (* Translate the next expression *)
   translate_expression e ctx
@@ -2576,10 +2576,10 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: as there are no nested borrows, there should be none. *)
   let consumed = abs_to_consumed ctx ectx abs in
-  cassert __FILE__ __LINE__ (consumed = []) ctx.meta
+  cassert __FILE__ __LINE__ (consumed = []) ctx.span
     "Nested borrows are not supported yet";
   (* Retrieve the values given back upon ending this abstraction - note that
-   * we don't provide meta-place information, because those assignments will
+   * we don't provide span-place information, because those assignments will
    * be inlined anyway... *)
   log#ldebug (lazy ("abs: " ^ abs_to_string ctx abs));
   let ctx, given_back = abs_to_given_back_no_mp abs ctx in
@@ -2595,7 +2595,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
           ^ pure_ty_to_string ctx given_back.ty
           ^ "\n- sig input ty: "
           ^ pure_ty_to_string ctx input.ty));
-      sanity_check __FILE__ __LINE__ (given_back.ty = input.ty) ctx.meta)
+      sanity_check __FILE__ __LINE__ (given_back.ty = input.ty) ctx.span)
     given_back_inputs;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -2612,7 +2612,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     texpression =
   let vloop_id = loop_id in
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.meta;
+  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.span;
   let rg_id = Option.get rg_id in
   (* There are two cases depending on the [abs_kind] (whether this is a
      synth input or a regular loop call) *)
@@ -2682,8 +2682,8 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       match func with
       | None -> next_e
       | Some func ->
-          let call = mk_apps ctx.meta func args in
-          (* Add meta-information - this is slightly hacky: we look at the
+          let call = mk_apps ctx.span func args in
+          (* Add span-information - this is slightly hacky: we look at the
              values consumed by the abstraction (note that those come from
              *before* we applied the fixed-point context) and use them to
              guide the naming of the output vars.
@@ -2709,7 +2709,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
                   var_values
               in
               let vars, values = List.split var_values in
-              mk_emeta_symbolic_assignments vars values next_e
+              mk_espan_symbolic_assignments vars values next_e
             else next_e
           in
 
@@ -2739,7 +2739,7 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
   in
   let func_ty = mk_arrow (TLiteral TBool) mk_unit_ty in
   let func = { e = Qualif func; ty = func_ty } in
-  let assertion = mk_apps ctx.meta func args in
+  let assertion = mk_apps ctx.span func args in
   mk_let monadic (mk_dummy_pattern mk_unit_ty) assertion next_e
 
 and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
@@ -2754,7 +2754,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       | V.SeLiteral _ ->
           (* We do not *register* symbolic expansions to literal
              values in the symbolic ADT *)
-          craise __FILE__ __LINE__ ctx.meta "Unreachable"
+          craise __FILE__ __LINE__ ctx.span "Unreachable"
       | SeMutRef (_, nsv) | SeSharedRef (_, nsv) ->
           (* The (mut/shared) borrow type is extracted to identity: we thus simply
              introduce an reassignment *)
@@ -2767,11 +2767,11 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             next_e
       | SeAdt _ ->
           (* Should be in the [ExpandAdt] case *)
-          craise __FILE__ __LINE__ ctx.meta "Unreachable")
+          craise __FILE__ __LINE__ ctx.span "Unreachable")
   | ExpandAdt branches -> (
       (* We don't do the same thing if there is a branching or not *)
       match branches with
-      | [] -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
+      | [] -> craise __FILE__ __LINE__ ctx.span "Unreachable"
       | [ (variant_id, svl, branch) ]
         when not
                (TypesUtils.ty_is_custom_adt sv.V.sv_ty
@@ -2812,7 +2812,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           (* Sanity check *)
           sanity_check __FILE__ __LINE__
             (List.for_all (fun br -> br.branch.ty = ty) branches)
-            ctx.meta;
+            ctx.span;
           (* Return *)
           { e; ty })
   | ExpandBool (true_e, false_e) ->
@@ -2832,7 +2832,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           ^ pure_ty_to_string ctx true_e.ty
           ^ "\n\nfalse_e.ty: "
           ^ pure_ty_to_string ctx false_e.ty));
-      sanity_check __FILE__ __LINE__ (ty = false_e.ty) ctx.meta;
+      sanity_check __FILE__ __LINE__ (ty = false_e.ty) ctx.span;
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :
@@ -2859,7 +2859,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let ty = otherwise.branch.ty in
       sanity_check __FILE__ __LINE__
         (List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches)
-        ctx.meta;
+        ctx.span;
       { e; ty }
 
 (* Translate and [ExpandAdt] when there is no branching (i.e., one branch).
@@ -2934,14 +2934,14 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
          * field.
          * We use the [dest] variable in order not to have to recompute
          * the type of the result of the projection... *)
-        let adt_id, generics = ty_as_adt ctx.meta scrutinee.ty in
+        let adt_id, generics = ty_as_adt ctx.span scrutinee.ty in
         let gen_field_proj (field_id : FieldId.id) (dest : var) : texpression =
           let proj_kind = { adt_id; field_id } in
           let qualif = { id = Proj proj_kind; generics } in
           let proj_e = Qualif qualif in
           let proj_ty = mk_arrow scrutinee.ty dest.ty in
           let proj = { e = proj_e; ty = proj_ty } in
-          mk_app ctx.meta proj scrutinee
+          mk_app ctx.span proj scrutinee
         in
         let id_var_pairs = FieldId.mapi (fun fid v -> (fid, v)) vars in
         let monadic = false in
@@ -2962,7 +2962,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       let var =
         match vars with
         | [ v ] -> v
-        | _ -> craise __FILE__ __LINE__ ctx.meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
       in
       (* We simply introduce an assignment - the box type is the
        * identity when extracted ([box a = a]) *)
@@ -2976,7 +2976,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
-      craise __FILE__ __LINE__ ctx.meta
+      craise __FILE__ __LINE__ ctx.span
         "Attempt to expand a non-expandable value"
 
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
@@ -3014,7 +3014,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
     | VaTraitConstValue (trait_ref, const_name) ->
         let type_infos = ctx.type_ctx.type_infos in
-        let trait_ref = translate_fwd_trait_ref ctx.meta type_infos trait_ref in
+        let trait_ref = translate_fwd_trait_ref ctx.span type_infos trait_ref in
         let qualif_id = TraitConst (trait_ref, const_name) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         { e = Qualif qualif; ty = var.ty }
@@ -3071,16 +3071,16 @@ and translate_forward_end (ectx : C.eval_ctx)
                 let field_values =
                   List.map mk_texpression_from_var backward_outputs
                 in
-                mk_simpl_tuple_texpression ctx.meta field_values
+                mk_simpl_tuple_texpression ctx.span field_values
               in
               let output =
                 if effect_info.stateful then
                   let state_rvalue = mk_state_texpression ctx.state_var in
-                  mk_simpl_tuple_texpression ctx.meta [ state_rvalue; output ]
+                  mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
                 else output
               in
               (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-              mk_result_ok_texpression ctx.meta output
+              mk_result_ok_texpression ctx.span output
             in
             let mk_panic =
               (* TODO: we should use a [Fail] function *)
@@ -3089,12 +3089,12 @@ and translate_forward_end (ectx : C.eval_ctx)
                   (* Create the [Fail] value *)
                   let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
                   let ret_v =
-                    mk_result_fail_texpression_with_error_id ctx.meta
+                    mk_result_fail_texpression_with_error_id ctx.span
                       error_failure_id ret_ty
                   in
                   ret_v
                 else
-                  mk_result_fail_texpression_with_error_id ctx.meta
+                  mk_result_fail_texpression_with_error_id ctx.span
                     error_failure_id output_ty
               in
               let output =
@@ -3200,7 +3200,7 @@ and translate_forward_end (ectx : C.eval_ctx)
       else pure_fwd_var :: back_vars
     in
     let vars = List.map mk_texpression_from_var vars in
-    let ret = mk_simpl_tuple_texpression ctx.meta vars in
+    let ret = mk_simpl_tuple_texpression ctx.span vars in
 
     (* Introduce a fresh input state variable for the forward expression *)
     let _ctx, state_var, state_pat =
@@ -3211,8 +3211,8 @@ and translate_forward_end (ectx : C.eval_ctx)
     in
 
     let state_var = List.map mk_texpression_from_var state_var in
-    let ret = mk_simpl_tuple_texpression ctx.meta (state_var @ [ ret ]) in
-    let ret = mk_result_ok_texpression ctx.meta ret in
+    let ret = mk_simpl_tuple_texpression ctx.span (state_var @ [ ret ]) in
+    let ret = mk_result_ok_texpression ctx.span ret in
 
     (* Introduce all the let-bindings *)
 
@@ -3385,14 +3385,14 @@ and translate_forward_end (ectx : C.eval_ctx)
         in
         let func_ty = mk_arrows input_tys ret_ty in
         let func = { e = Qualif func; ty = func_ty } in
-        let call = mk_apps ctx.meta func args in
+        let call = mk_apps ctx.span func args in
         call
       in
 
       (* Create the let expression with the loop call *)
       let e = mk_let effect_info.can_fail out_pat loop_call next_e in
 
-      (* Add meta-information linking the loop input parameters and the
+      (* Add span-information linking the loop input parameters and the
          loop input values - we use this to derive proper names.
 
          There is something important here: as we group the end of the function
@@ -3402,10 +3402,10 @@ and translate_forward_end (ectx : C.eval_ctx)
          the function. It means it is ok to reference some variables which might
          actually be defined, in the end, in a different branch.
 
-         We then remove all the meta information from the body *before* calling
+         We then remove all the span information from the body *before* calling
          {!PureMicroPasses.decompose_loops}.
       *)
-      mk_emeta_symbolic_assignments loop_info.input_vars org_args e
+      mk_espan_symbolic_assignments loop_info.input_vars org_args e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
@@ -3444,7 +3444,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
        (fun (sv : V.symbolic_value) ->
          V.SymbolicValueId.Map.mem sv.sv_id ctx.sv_to_var)
        loop.input_svalues)
-    ctx.meta;
+    ctx.span;
 
   (* Translate the loop inputs *)
   let inputs =
@@ -3465,7 +3465,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
           (fun ty ->
             cassert __FILE__ __LINE__
               (not (TypesUtils.ty_has_borrows ctx.type_ctx.type_infos ty))
-              ctx.meta "The types shouldn't contain borrows";
+              ctx.span "The types shouldn't contain borrows";
             ctx_translate_fwd_ty ctx ty)
           tys)
       loop.rg_to_given_back_tys
@@ -3545,7 +3545,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let ctx =
     sanity_check __FILE__ __LINE__
       (not (LoopId.Map.mem loop_id ctx.loops))
-      ctx.meta;
+      ctx.span;
 
     (* Note that we will retrieve the input values later in the [ForwardEnd]
        (and will introduce the outputs at that moment, together with the actual
@@ -3589,12 +3589,12 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         (* Create the [Fail] value *)
         let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
         let ret_v =
-          mk_result_fail_texpression_with_error_id ctx.meta error_failure_id
+          mk_result_fail_texpression_with_error_id ctx.span error_failure_id
             ret_ty
         in
         ret_v
       else
-        mk_result_fail_texpression_with_error_id ctx.meta error_failure_id
+        mk_result_fail_texpression_with_error_id ctx.span error_failure_id
           output_ty
     in
     let mk_return ctx v =
@@ -3605,11 +3605,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
           let output =
             if effect_info.stateful then
               let state_rvalue = mk_state_texpression ctx.state_var in
-              mk_simpl_tuple_texpression ctx.meta [ state_rvalue; output ]
+              mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
             else output
           in
           (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-          mk_result_ok_texpression ctx.meta output
+          mk_result_ok_texpression ctx.span output
     in
 
     let loop_info =
@@ -3651,7 +3651,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       {
         fun_end;
         loop_id;
-        meta = loop.meta;
+        span = loop.span;
         fuel0 = ctx.fuel0;
         fuel = ctx.fuel;
         input_state;
@@ -3664,11 +3664,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let ty = fun_end.ty in
   { e = loop; ty }
 
-and translate_emeta (meta : S.emeta) (e : S.expression) (ctx : bs_ctx) :
+and translate_espan (span : S.espan) (e : S.expression) (ctx : bs_ctx) :
     texpression =
   let next_e = translate_expression e ctx in
-  let meta =
-    match meta with
+  let span =
+    match span with
     | S.Assignment (ectx, lp, rv, rp) ->
         let lp = translate_mplace lp in
         let rv = typed_value_to_texpression ctx ectx rv in
@@ -3678,28 +3678,28 @@ and translate_emeta (meta : S.emeta) (e : S.expression) (ctx : bs_ctx) :
         let infos = eval_ctx_to_symbolic_assignments_info ctx ectx in
         if infos <> [] then
           (* If often happens that the next expression contains exactly the
-             same meta information *)
+             same span information *)
           match next_e.e with
           | Meta (SymbolicPlaces infos1, _) when infos1 = infos -> None
           | _ -> Some (SymbolicPlaces infos)
         else None
   in
-  match meta with
-  | Some meta ->
-      let e = Meta (meta, next_e) in
+  match span with
+  | Some span ->
+      let e = Meta (span, next_e) in
       let ty = next_e.ty in
       { e; ty }
   | None -> next_e
 
 (** Wrap a function body in a match over the fuel to control termination. *)
-let wrap_in_match_fuel (meta : Meta.meta) (fuel0 : VarId.id) (fuel : VarId.id)
+let wrap_in_match_fuel (span : Meta.span) (fuel0 : VarId.id) (fuel : VarId.id)
     (body : texpression) : texpression =
   let fuel0_var : var = mk_fuel_var fuel0 in
   let fuel0 = mk_texpression_from_var fuel0_var in
   let nfuel_var : var = mk_fuel_var fuel in
   let nfuel_pat = mk_typed_pattern_from_var nfuel_var None in
   let fail_branch =
-    mk_result_fail_texpression_with_error_id meta error_out_of_fuel_id body.ty
+    mk_result_fail_texpression_with_error_id span error_out_of_fuel_id body.ty
   in
   match !Config.backend with
   | FStar ->
@@ -3721,7 +3721,7 @@ let wrap_in_match_fuel (meta : Meta.meta) (fuel0 : VarId.id) (fuel : VarId.id)
         in
         let func_ty = mk_arrow mk_fuel_ty mk_bool_ty in
         let func = { e = Qualif func; ty = func_ty } in
-        mk_app meta func fuel0
+        mk_app span func fuel0
       in
       (* Create the expression: [decrease fuel0] *)
       let decrease_fuel =
@@ -3733,7 +3733,7 @@ let wrap_in_match_fuel (meta : Meta.meta) (fuel0 : VarId.id) (fuel : VarId.id)
         in
         let func_ty = mk_arrow mk_fuel_ty mk_fuel_ty in
         let func = { e = Qualif func; ty = func_ty } in
-        mk_app meta func fuel0
+        mk_app span func fuel0
       in
 
       (* Create the success branch *)
@@ -3805,11 +3805,11 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
               let output =
                 if effect_info.stateful then
                   let state_rvalue = mk_state_texpression ctx.state_var in
-                  mk_simpl_tuple_texpression ctx.meta [ state_rvalue; output ]
+                  mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
                 else output
               in
               (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-              mk_result_ok_texpression ctx.meta output
+              mk_result_ok_texpression ctx.span output
         in
         let mk_panic =
           (* TODO: we should use a [Fail] function *)
@@ -3818,12 +3818,12 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
               (* Create the [Fail] value *)
               let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
               let ret_v =
-                mk_result_fail_texpression_with_error_id ctx.meta
+                mk_result_fail_texpression_with_error_id ctx.span
                   error_failure_id ret_ty
               in
               ret_v
             else
-              mk_result_fail_texpression_with_error_id ctx.meta error_failure_id
+              mk_result_fail_texpression_with_error_id ctx.span error_failure_id
                 output_ty
           in
           let back_tys = compute_back_tys ctx.sg None in
@@ -3842,7 +3842,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         (* Add a match over the fuel, if necessary *)
         let body =
           if function_decreases_fuel effect_info then
-            wrap_in_match_fuel def.item_meta.meta ctx.fuel0 ctx.fuel body
+            wrap_in_match_fuel def.item_meta.span ctx.fuel0 ctx.fuel body
           else body
         in
         (* Sanity check *)
@@ -3887,7 +3887,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
             (List.for_all
                (fun (var, ty) -> (var : var).ty = ty)
                (List.combine inputs signature.inputs))
-            def.item_meta.meta;
+            def.item_meta.span;
         Some { inputs; inputs_lvs; body }
   in
 
@@ -3903,7 +3903,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     {
       def_id;
       is_local = def.is_local;
-      meta = def.item_meta.meta;
+      span = def.item_meta.span;
       kind = def.kind;
       num_loops;
       loop_id;
@@ -3926,11 +3926,11 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
   List.filter_map
     (fun d ->
       try Some (translate_type_decl ctx d)
-      with CFailure (meta, _) ->
+      with CFailure (span, _) ->
         let env = PrintPure.decls_ctx_to_fmt_env ctx in
         let name = PrintPure.name_to_string env d.name in
         let name_pattern = TranslateCore.name_to_pattern_string ctx d.name in
-        save_error __FILE__ __LINE__ meta
+        save_error __FILE__ __LINE__ span
           ("Could not translate type decl '" ^ name
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
         None)
@@ -3960,18 +3960,18 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       llbc_name
   in
   let generics =
-    translate_generic_params trait_decl.item_meta.meta llbc_generics
+    translate_generic_params trait_decl.item_meta.span llbc_generics
   in
-  let preds = translate_predicates trait_decl.item_meta.meta preds in
+  let preds = translate_predicates trait_decl.item_meta.span preds in
   let parent_clauses =
     List.map
-      (translate_trait_clause trait_decl.item_meta.meta)
+      (translate_trait_clause trait_decl.item_meta.span)
       llbc_parent_clauses
   in
   let consts =
     List.map
       (fun (name, (ty, id)) ->
-        (name, (translate_fwd_ty trait_decl.item_meta.meta type_infos ty, id)))
+        (name, (translate_fwd_ty trait_decl.item_meta.span type_infos ty, id)))
       consts
   in
   let types =
@@ -3979,10 +3979,10 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       (fun (name, (trait_clauses, ty)) ->
         ( name,
           ( List.map
-              (translate_trait_clause trait_decl.item_meta.meta)
+              (translate_trait_clause trait_decl.item_meta.span)
               trait_clauses,
             Option.map
-              (translate_fwd_ty trait_decl.item_meta.meta type_infos)
+              (translate_fwd_ty trait_decl.item_meta.span type_infos)
               ty ) ))
       types
   in
@@ -3991,7 +3991,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     is_local;
     llbc_name;
     name;
-    meta = item_meta.meta;
+    span = item_meta.span;
     generics;
     llbc_generics;
     preds;
@@ -4023,8 +4023,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   let type_infos = ctx.type_ctx.type_infos in
   let impl_trait =
-    translate_trait_decl_ref trait_impl.item_meta.meta
-      (translate_fwd_ty trait_impl.item_meta.meta type_infos)
+    translate_trait_decl_ref trait_impl.item_meta.span
+      (translate_fwd_ty trait_impl.item_meta.span type_infos)
       llbc_impl_trait
   in
   let name =
@@ -4033,16 +4033,16 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       llbc_name
   in
   let generics =
-    translate_generic_params trait_impl.item_meta.meta llbc_generics
+    translate_generic_params trait_impl.item_meta.span llbc_generics
   in
-  let preds = translate_predicates trait_impl.item_meta.meta preds in
+  let preds = translate_predicates trait_impl.item_meta.span preds in
   let parent_trait_refs =
-    List.map (translate_strait_ref trait_impl.item_meta.meta) parent_trait_refs
+    List.map (translate_strait_ref trait_impl.item_meta.span) parent_trait_refs
   in
   let consts =
     List.map
       (fun (name, (ty, id)) ->
-        (name, (translate_fwd_ty trait_impl.item_meta.meta type_infos ty, id)))
+        (name, (translate_fwd_ty trait_impl.item_meta.span type_infos ty, id)))
       consts
   in
   let types =
@@ -4050,9 +4050,9 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       (fun (name, (trait_refs, ty)) ->
         ( name,
           ( List.map
-              (translate_fwd_trait_ref trait_impl.item_meta.meta type_infos)
+              (translate_fwd_trait_ref trait_impl.item_meta.span type_infos)
               trait_refs,
-            translate_fwd_ty trait_impl.item_meta.meta type_infos ty ) ))
+            translate_fwd_ty trait_impl.item_meta.span type_infos ty ) ))
       types
   in
   {
@@ -4060,7 +4060,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     is_local;
     llbc_name;
     name;
-    meta = item_meta.meta;
+    span = item_meta.span;
     impl_trait;
     llbc_impl_trait;
     generics;
@@ -4093,11 +4093,11 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params decl.item_meta.meta llbc_generics in
-  let preds = translate_predicates decl.item_meta.meta preds in
-  let ty = translate_fwd_ty decl.item_meta.meta ctx.type_ctx.type_infos ty in
+  let generics = translate_generic_params decl.item_meta.span llbc_generics in
+  let preds = translate_predicates decl.item_meta.span preds in
+  let ty = translate_fwd_ty decl.item_meta.span ctx.type_ctx.type_infos ty in
   {
-    meta = item_meta.meta;
+    span = item_meta.span;
     def_id;
     is_local;
     llbc_name;

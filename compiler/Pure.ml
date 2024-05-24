@@ -51,7 +51,7 @@ type mutability = Mut | Const [@@deriving show, ord]
 type loc = Meta.loc [@@deriving show, ord]
 type file_name = Meta.file_name [@@deriving show, ord]
 type raw_span = Meta.raw_span [@@deriving show, ord]
-type meta = Meta.meta [@@deriving show, ord]
+type span = Meta.span [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -393,7 +393,7 @@ type type_decl = {
           the name used at extraction time will be derived from the
           llbc_name.
        *)
-  meta : meta;
+  span : span;
   generics : generic_params;
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
@@ -426,7 +426,7 @@ type var = {
 (* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
  * on enumerations.
  * Also: tuples...
- * Rmk: projections are actually only used as meta-data.
+ * Rmk: projections are actually only used as span-data.
  * *)
 type mprojection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 [@@deriving show]
@@ -622,7 +622,7 @@ class ['self] iter_expression_base =
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
-    method visit_meta : 'env -> Meta.meta -> unit = fun _ _ -> ()
+    method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_expression} visitor *)
@@ -634,7 +634,7 @@ class ['self] map_expression_base =
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
-    method visit_meta : 'env -> Meta.meta -> Meta.meta = fun _ x -> x
+    method visit_span : 'env -> Meta.span -> Meta.span = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_expression} visitor *)
@@ -646,7 +646,7 @@ class virtual ['self] reduce_expression_base =
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
-    method visit_meta : 'env -> Meta.meta -> 'a = fun _ _ -> self#zero
+    method visit_span : 'env -> Meta.span -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_expression} visitor *)
@@ -667,7 +667,7 @@ class virtual ['self] mapreduce_expression_base =
     method visit_field_id : 'env -> field_id -> field_id * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_meta : 'env -> Meta.meta -> Meta.meta * 'a =
+    method visit_span : 'env -> Meta.span -> Meta.span * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -732,8 +732,8 @@ type expression =
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
-  | EError of Meta.meta option * string
+  | Meta of (espan[@opaque]) * texpression  (** Meta-information *)
+  | EError of Meta.span option * string
 
 and switch_body = If of texpression * texpression | Match of match_branch list
 and match_branch = { pat : typed_pattern; branch : texpression }
@@ -752,7 +752,7 @@ and match_branch = { pat : typed_pattern; branch : texpression }
 and loop = {
   fun_end : texpression;
   loop_id : loop_id;
-  meta : meta; [@opaque]
+  span : span; [@opaque]
   fuel0 : var_id;
   fuel : var_id;
   input_state : var_id option;
@@ -806,7 +806,7 @@ and texpression = { e : expression; ty : ty }
 and mvalue = (texpression[@opaque])
 
 (** Meta-information stored in the AST *)
-and emeta =
+and espan =
   | Assignment of mplace * mvalue * mplace option
       (** Information about an assignment which occured in LLBC.
           We use this to guide the heuristics which derive pretty names.
@@ -1012,7 +1012,7 @@ type decomposed_fun_sig = {
       ]}
 
     The function's type should be given by [mk_arrows sig.inputs sig.output].
-    We provide additional meta-information with {!fun_sig.info}:
+    We provide additional span-information with {!fun_sig.info}:
     - we divide between forward inputs and backward inputs (i.e., inputs specific
       to the forward functions, and additional inputs necessary if the signature is
       for a backward function)
@@ -1080,7 +1080,7 @@ type item_kind = A.item_kind [@@deriving show]
 type fun_decl = {
   def_id : FunDeclId.id;
   is_local : bool;
-  meta : meta;
+  span : span;
   kind : item_kind;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
@@ -1102,7 +1102,7 @@ type fun_decl = {
 [@@deriving show]
 
 type global_decl = {
-  meta : meta;
+  span : span;
   def_id : GlobalDeclId.id;
   is_local : bool;
   llbc_name : llbc_name;  (** The original LLBC name. *)
@@ -1126,7 +1126,7 @@ type trait_decl = {
   is_local : bool;
   llbc_name : llbc_name;
   name : string;
-  meta : meta;
+  span : span;
   generics : generic_params;
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
@@ -1149,7 +1149,7 @@ type trait_impl = {
   is_local : bool;
   llbc_name : llbc_name;
   name : string;
-  meta : meta;
+  span : span;
   impl_trait : trait_decl_ref;
   llbc_impl_trait : Types.trait_decl_ref;
       (** Same remark as for {!field:llbc_generics}. *)
