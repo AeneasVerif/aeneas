@@ -417,9 +417,12 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     else ExtractBase.MutRecInner
   in
 
-  (* Retrieve the declarations *)
+  (* Retrieve the declarations - note that some of them might have been ignored in
+     case of errors *)
   let defs =
-    List.map (fun id -> Pure.TypeDeclId.Map.find id ctx.trans_types) ids
+    List.filter_map
+      (fun id -> Pure.TypeDeclId.Map.find_opt id ctx.trans_types)
+      ids
   in
 
   (* Check if the definition are builtin - if yes they must be ignored.
