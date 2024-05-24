@@ -206,9 +206,10 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
   with CFailure (meta, _) ->
     let name = name_to_string trans_ctx fdef.name in
+    let name_pattern = name_to_pattern_string trans_ctx fdef.name in
     save_error __FILE__ __LINE__ meta
       ("Could not translate the function '" ^ name
-     ^ "' because of previous error");
+     ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
     None
 
 (* TODO: factor out the return type *)
@@ -245,9 +246,11 @@ let translate_crate_to_pure (crate : crate) :
                    trans_ctx fdef )
            with CFailure (meta, _) ->
              let name = name_to_string trans_ctx fdef.name in
+             let name_pattern = name_to_pattern_string trans_ctx fdef.name in
              save_error __FILE__ __LINE__ meta
                ("Could not translate the function signature of '" ^ name
-              ^ "' because of previous error");
+              ^ " because of previous error\nName pattern: '" ^ name_pattern
+              ^ "'");
              None)
          (FunDeclId.Map.values crate.fun_decls))
   in
@@ -262,13 +265,15 @@ let translate_crate_to_pure (crate : crate) :
   (* Translate the trait declarations *)
   let trait_decls =
     List.filter_map
-      (fun a ->
-        try Some (SymbolicToPure.translate_trait_decl trans_ctx a)
+      (fun d ->
+        try Some (SymbolicToPure.translate_trait_decl trans_ctx d)
         with CFailure (meta, _) ->
-          let name = name_to_string trans_ctx a.name in
+          let name = name_to_string trans_ctx d.name in
+          let name_pattern = name_to_pattern_string trans_ctx d.name in
           save_error __FILE__ __LINE__ meta
             ("Could not translate the trait declaration '" ^ name
-           ^ "' because of previous error");
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
           None)
       (TraitDeclId.Map.values trans_ctx.trait_decls_ctx.trait_decls)
   in
@@ -276,13 +281,15 @@ let translate_crate_to_pure (crate : crate) :
   (* Translate the trait implementations *)
   let trait_impls =
     List.filter_map
-      (fun a ->
-        try Some (SymbolicToPure.translate_trait_impl trans_ctx a)
+      (fun d ->
+        try Some (SymbolicToPure.translate_trait_impl trans_ctx d)
         with CFailure (meta, _) ->
-          let name = name_to_string trans_ctx a.name in
+          let name = name_to_string trans_ctx d.name in
+          let name_pattern = name_to_pattern_string trans_ctx d.name in
           save_error __FILE__ __LINE__ meta
             ("Could not translate the trait instance '" ^ name
-           ^ "' because of previous error");
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
           None)
       (TraitImplId.Map.values trans_ctx.trait_impls_ctx.trait_impls)
   in
@@ -410,9 +417,12 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     else ExtractBase.MutRecInner
   in
 
-  (* Retrieve the declarations *)
+  (* Retrieve the declarations - note that some of them might have been ignored in
+     case of errors *)
   let defs =
-    List.map (fun id -> Pure.TypeDeclId.Map.find id ctx.trans_types) ids
+    List.filter_map
+      (fun id -> Pure.TypeDeclId.Map.find_opt id ctx.trans_types)
+      ids
   in
 
   (* Check if the definition are builtin - if yes they must be ignored.
@@ -513,9 +523,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
       try Some (SymbolicToPure.translate_global ctx.trans_ctx global)
       with CFailure (meta, _) ->
         let name = name_to_string ctx.trans_ctx global.name in
+        let name_pattern = name_to_pattern_string ctx.trans_ctx global.name in
         save_error __FILE__ __LINE__ meta
           ("Could not translate the global declaration '" ^ name
-         ^ "' because of previous error");
+         ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
         None
     in
     Extract.extract_global_decl ctx fmt global body config.interface
