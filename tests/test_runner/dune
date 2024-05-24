@@ -1,6 +1,6 @@
 (executable
  (public_name test_runner)
- (libraries core_unix.sys_unix re unix)
+ (libraries core_unix.sys_unix re str unix)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.ord ppx_sexp_conv))
  (name run_test))

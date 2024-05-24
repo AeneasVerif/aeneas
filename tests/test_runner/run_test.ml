@@ -167,6 +167,7 @@ module Input = struct
   (* Given a path to a rust file or crate, gather the details and options about how to build the test. *)
   let build (path : string) : t =
     let name = Filename.remove_extension (Filename.basename path) in
+    let name = Str.global_replace (Str.regexp "-") "_" name in
     let kind =
       if Sys_unix.is_file_exn path then SingleFile
       else if Sys_unix.is_directory_exn path then Crate
