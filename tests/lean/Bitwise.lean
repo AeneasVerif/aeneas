@@ -6,31 +6,31 @@ open Primitives
 namespace bitwise
 
 /- [bitwise::shift_u32]:
-   Source: 'tests/src/bitwise.rs', lines 4:0-4:31 -/
+   Source: 'tests/src/bitwise.rs', lines 5:0-5:31 -/
 def shift_u32 (a : U32) : Result U32 :=
   do
   let t ← a >>> 16#usize
   t <<< 16#usize
 
 /- [bitwise::shift_i32]:
-   Source: 'tests/src/bitwise.rs', lines 11:0-11:31 -/
+   Source: 'tests/src/bitwise.rs', lines 12:0-12:31 -/
 def shift_i32 (a : I32) : Result I32 :=
   do
   let t ← a >>> 16#isize
   t <<< 16#isize
 
 /- [bitwise::xor_u32]:
-   Source: 'tests/src/bitwise.rs', lines 18:0-18:37 -/
+   Source: 'tests/src/bitwise.rs', lines 19:0-19:37 -/
 def xor_u32 (a : U32) (b : U32) : Result U32 :=
   Result.ok (a ^^^ b)
 
 /- [bitwise::or_u32]:
-   Source: 'tests/src/bitwise.rs', lines 22:0-22:36 -/
+   Source: 'tests/src/bitwise.rs', lines 23:0-23:36 -/
 def or_u32 (a : U32) (b : U32) : Result U32 :=
   Result.ok (a ||| b)
 
 /- [bitwise::and_u32]:
-   Source: 'tests/src/bitwise.rs', lines 26:0-26:37 -/
+   Source: 'tests/src/bitwise.rs', lines 27:0-27:37 -/
 def and_u32 (a : U32) (b : U32) : Result U32 :=
   Result.ok (a &&& b)
 
