@@ -111,7 +111,7 @@ module Input = struct
     name : string;
     path : string;
     kind : kind;
-    action : action;
+    actions : action BackendMap.t;
     charon_options : string list;
     aeneas_options : string list BackendMap.t;
     subdir : string BackendMap.t;
@@ -124,7 +124,7 @@ module Input = struct
        - `charon-args=...`: extra arguments to pass to charon;
        - `aeneas-args=...`: extra arguments to pass to aeneas;
        - `[backend,..]...`: where each `backend` is the name of a backend supported by
-            aeneas; this sets options for these backends only. Only supported for `aeneas-args`.
+            aeneas; this sets options for these backends only.
   *)
   let apply_special_comment comment input =
     let comment = String.trim comment in
@@ -144,12 +144,28 @@ module Input = struct
     let charon_args = Core.String.chop_prefix comment ~prefix:"charon-args=" in
     let aeneas_args = Core.String.chop_prefix comment ~prefix:"aeneas-args=" in
 
-    if comment = "skip" then { input with action = Skip }
-    else if comment = "known-failure" then { input with action = KnownFailure }
+    if comment = "skip" then
+      {
+        input with
+        actions =
+          List.fold_left
+            (fun map backend -> BackendMap.add backend Skip map)
+            input.actions backends;
+      }
+    else if comment = "known-failure" then
+      {
+        input with
+        actions =
+          List.fold_left
+            (fun map backend -> BackendMap.add backend KnownFailure map)
+            input.actions backends;
+      }
     else if Option.is_some charon_args then
       let args = Option.get charon_args in
       let args = String.split_on_char ' ' args in
-      { input with charon_options = List.append input.charon_options args }
+      if backends != Backend.all then
+        failwith "Cannot set per-backend charon-args"
+      else { input with charon_options = List.append input.charon_options args }
     else if Option.is_some aeneas_args then
       let args = Option.get aeneas_args in
       let args = String.split_on_char ' ' args in
@@ -173,7 +189,11 @@ module Input = struct
       else if Sys_unix.is_directory_exn path then Crate
       else failwith ("`" ^ path ^ "` is not a file or a directory.")
     in
-    let action = Normal in
+    let actions =
+      List.fold_left
+        (fun map backend -> BackendMap.add backend Normal map)
+        BackendMap.empty Backend.all
+    in
     let charon_options = charon_options_for_test name in
     let subdir =
       List.fold_left
@@ -190,7 +210,7 @@ module Input = struct
         BackendMap.empty Backend.all
     in
     let input =
-      { path; name; kind; action; charon_options; subdir; aeneas_options }
+      { path; name; kind; actions; charon_options; subdir; aeneas_options }
     in
     match kind with
     | SingleFile ->
@@ -267,7 +287,7 @@ let () =
   match Array.to_list Sys.argv with
   (* Ad-hoc argument passing for now. *)
   | _exe_path :: charon_path :: aeneas_path :: llbc_dir :: test_path
-    :: aeneas_options -> (
+    :: aeneas_options ->
       let runner_env = { charon_path; aeneas_path; llbc_dir } in
       let test_case = Input.build test_path in
       let test_case =
@@ -277,15 +297,22 @@ let () =
             BackendMap.map (List.append aeneas_options) test_case.aeneas_options;
         }
       in
-
-      match test_case.action with
-      | Skip -> ()
-      | Normal ->
-          (* Generate the llbc file *)
-          run_charon runner_env test_case;
-          (* Process the llbc file for the each backend *)
-          List.iter
-            (fun backend -> run_aeneas runner_env test_case backend)
-            Backend.all
-      | KnownFailure -> failwith "KnownFailure is unimplemented")
+      let skip_all =
+        List.for_all
+          (fun backend ->
+            BackendMap.find backend test_case.actions = Input.Skip)
+          Backend.all
+      in
+      if skip_all then ()
+      else (
+        (* Generate the llbc file *)
+        run_charon runner_env test_case;
+        (* Process the llbc file for the each backend *)
+        List.iter
+          (fun backend ->
+            match BackendMap.find backend test_case.actions with
+            | Skip -> ()
+            | Normal -> run_aeneas runner_env test_case backend
+            | KnownFailure -> failwith "KnownFailure is unimplemented")
+          Backend.all)
   | _ -> failwith "Incorrect options passed to test runner"
