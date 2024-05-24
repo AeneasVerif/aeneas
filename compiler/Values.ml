@@ -153,11 +153,11 @@ and typed_value = { value : value; ty : ty }
 
 (** "Meta"-value: information we store for the synthesis.
 
-     Note that we never automatically visit the meta-values with the
-     visitors: they really are meta information, and shouldn't be considered
+     Note that we never automatically visit the span-values with the
+     visitors: they really are span information, and shouldn't be considered
      as part of the environment during a symbolic execution.
 
-     TODO: we may want to create wrappers, to prevent accidently mixing meta
+     TODO: we may want to create wrappers, to prevent accidently mixing span
      values and regular values.
  *)
 type mvalue = typed_value [@@deriving show, ord]
@@ -166,7 +166,7 @@ type mvalue = typed_value [@@deriving show, ord]
 
      See the explanations for {!mvalue}
 
-     TODO: we may want to create wrappers, to prevent mixing meta values
+     TODO: we may want to create wrappers, to prevent mixing span values
      and regular values.
  *)
 type msymbolic_value = symbolic_value [@@deriving show, ord]
@@ -270,7 +270,7 @@ and aproj =
           'a and one for 'b.
           
           We accumulate those values in the list of projections (note that
-          the meta value stores the value which was given back).
+          the span value stores the value which was given back).
           
           We can later end the projector of loans if [s@0] is not referenced
           anywhere in the context below a projector of borrows which intersects
@@ -282,14 +282,14 @@ and aproj =
           
           Also note that once given to a borrow projection, a symbolic value
           can't get updated/expanded: this means that we don't need to save
-          any meta-value here.
+          any span-value here.
        *)
   | AEndedProjLoans of msymbolic_value * (msymbolic_value * aproj) list
       (** An ended projector of loans over a symbolic value.
       
           See the explanations for {!AProjLoans}
           
-          Note that we keep the original symbolic value as a meta-value.
+          Note that we keep the original symbolic value as a span-value.
        *)
   | AEndedProjBorrows of msymbolic_value
       (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
@@ -376,7 +376,7 @@ and aloan_content =
   | AEndedMutLoan of {
       child : typed_avalue;
       given_back : typed_avalue;
-      given_back_meta : mvalue;
+      given_back_span : mvalue;
     }
       (** An ended mutable loan in an abstraction.
           We need it because abstractions must keep track of the values
@@ -401,7 +401,7 @@ and aloan_content =
           After ending [l0]:
           
           {[
-            abs0 { a_ended_mut_loan { child = _; given_back = _; given_back_meta = U32 3; }
+            abs0 { a_ended_mut_loan { child = _; given_back = _; given_back_span = U32 3; }
             x -> ⊥
           ]}
 
@@ -420,7 +420,7 @@ and aloan_content =
               a_ended_mut_loan {
                 child = _;
                 given_back = a_mut_borrow l1 _;
-                given_back_meta = (mut_borrow l1 (U32 3));
+                given_back_span = (mut_borrow l1 (U32 3));
               }
             }
             ...
@@ -464,7 +464,7 @@ and aloan_content =
               a_ended_ignored_mut_loan {
                 child = a_mut_loan l1 _;
                 given_back = a_mut_borrow l1 _;
-                given_back_meta = mut_borrow l1 @s1
+                given_back_span = mut_borrow l1 @s1
               }
             }
             x -> ⊥
@@ -474,7 +474,7 @@ and aloan_content =
   | AEndedIgnoredMutLoan of {
       child : typed_avalue;
       given_back : typed_avalue;
-      given_back_meta : mvalue;
+      given_back_span : mvalue;
     }
       (** Similar to {!AEndedMutLoan}, for ignored loans.
           See the comments for {!AIgnoredMutLoan}.
@@ -613,7 +613,7 @@ and aborrow_content =
        *)
   | AEndedMutBorrow of msymbolic_value * typed_avalue
       (** The sole purpose of {!AEndedMutBorrow} is to store the (symbolic) value
-          that we gave back as a meta-value, to help with the synthesis.
+          that we gave back as a span-value, to help with the synthesis.
        *)
   | AEndedSharedBorrow
       (** We don't really need {!AEndedSharedBorrow}: we simply want to be
@@ -622,8 +622,8 @@ and aborrow_content =
   | AEndedIgnoredMutBorrow of {
       child : typed_avalue;
       given_back : typed_avalue;
-      given_back_meta : msymbolic_value;
-          (** [given_back_meta] is used to store the (symbolic) value we gave back
+      given_back_span : msymbolic_value;
+          (** [given_back_span] is used to store the (symbolic) value we gave back
               upon ending the borrow.
 
               Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan].

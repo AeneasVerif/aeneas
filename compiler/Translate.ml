@@ -127,7 +127,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
   let ctx =
     {
-      meta = fdef.item_meta.meta;
+      span = fdef.item_meta.span;
       decls_ctx = trans_ctx;
       SymbolicToPure.bid = None;
       sg;
@@ -179,7 +179,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
           SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
         in
         { ctx with forward_inputs }
-    | _ -> craise __FILE__ __LINE__ fdef.item_meta.meta "Unreachable"
+    | _ -> craise __FILE__ __LINE__ fdef.item_meta.span "Unreachable"
   in
 
   (* Add the backward inputs *)
@@ -204,11 +204,12 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   try
     Some
       (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
-  with CFailure (meta, _) ->
+  with CFailure (span, _) ->
     let name = name_to_string trans_ctx fdef.name in
-    save_error __FILE__ __LINE__ meta
+    let name_pattern = name_to_pattern_string trans_ctx fdef.name in
+    save_error __FILE__ __LINE__ span
       ("Could not translate the function '" ^ name
-     ^ "' because of previous error");
+     ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
     None
 
 (* TODO: factor out the return type *)
@@ -243,11 +244,13 @@ let translate_crate_to_pure (crate : crate) :
                ( fdef.def_id,
                  SymbolicToPure.translate_fun_sig_from_decl_to_decomposed
                    trans_ctx fdef )
-           with CFailure (meta, _) ->
+           with CFailure (span, _) ->
              let name = name_to_string trans_ctx fdef.name in
-             save_error __FILE__ __LINE__ meta
+             let name_pattern = name_to_pattern_string trans_ctx fdef.name in
+             save_error __FILE__ __LINE__ span
                ("Could not translate the function signature of '" ^ name
-              ^ "' because of previous error");
+              ^ " because of previous error\nName pattern: '" ^ name_pattern
+              ^ "'");
              None)
          (FunDeclId.Map.values crate.fun_decls))
   in
@@ -262,13 +265,15 @@ let translate_crate_to_pure (crate : crate) :
   (* Translate the trait declarations *)
   let trait_decls =
     List.filter_map
-      (fun a ->
-        try Some (SymbolicToPure.translate_trait_decl trans_ctx a)
-        with CFailure (meta, _) ->
-          let name = name_to_string trans_ctx a.name in
-          save_error __FILE__ __LINE__ meta
+      (fun d ->
+        try Some (SymbolicToPure.translate_trait_decl trans_ctx d)
+        with CFailure (span, _) ->
+          let name = name_to_string trans_ctx d.name in
+          let name_pattern = name_to_pattern_string trans_ctx d.name in
+          save_error __FILE__ __LINE__ span
             ("Could not translate the trait declaration '" ^ name
-           ^ "' because of previous error");
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
           None)
       (TraitDeclId.Map.values trans_ctx.trait_decls_ctx.trait_decls)
   in
@@ -276,13 +281,15 @@ let translate_crate_to_pure (crate : crate) :
   (* Translate the trait implementations *)
   let trait_impls =
     List.filter_map
-      (fun a ->
-        try Some (SymbolicToPure.translate_trait_impl trans_ctx a)
-        with CFailure (meta, _) ->
-          let name = name_to_string trans_ctx a.name in
-          save_error __FILE__ __LINE__ meta
+      (fun d ->
+        try Some (SymbolicToPure.translate_trait_impl trans_ctx d)
+        with CFailure (span, _) ->
+          let name = name_to_string trans_ctx d.name in
+          let name_pattern = name_to_pattern_string trans_ctx d.name in
+          save_error __FILE__ __LINE__ span
             ("Could not translate the trait instance '" ^ name
-           ^ "' because of previous error");
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
           None)
       (TraitImplId.Map.values trans_ctx.trait_impls_ctx.trait_impls)
   in
@@ -410,9 +417,12 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     else ExtractBase.MutRecInner
   in
 
-  (* Retrieve the declarations *)
+  (* Retrieve the declarations - note that some of them might have been ignored in
+     case of errors *)
   let defs =
-    List.map (fun id -> Pure.TypeDeclId.Map.find id ctx.trans_types) ids
+    List.filter_map
+      (fun id -> Pure.TypeDeclId.Map.find_opt id ctx.trans_types)
+      ids
   in
 
   (* Check if the definition are builtin - if yes they must be ignored.
@@ -486,7 +496,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
   let trans = FunDeclId.Map.find global.body ctx.trans_funs in
-  sanity_check __FILE__ __LINE__ (trans.loops = []) global.item_meta.meta;
+  sanity_check __FILE__ __LINE__ (trans.loops = []) global.item_meta.span;
   let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
@@ -511,11 +521,12 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     *)
     let global =
       try Some (SymbolicToPure.translate_global ctx.trans_ctx global)
-      with CFailure (meta, _) ->
+      with CFailure (span, _) ->
         let name = name_to_string ctx.trans_ctx global.name in
-        save_error __FILE__ __LINE__ meta
+        let name_pattern = name_to_pattern_string ctx.trans_ctx global.name in
+        save_error __FILE__ __LINE__ span
           ("Could not translate the global declaration '" ^ name
-         ^ "' because of previous error");
+         ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
         None
     in
     Extract.extract_global_decl ctx fmt global body config.interface
@@ -799,7 +810,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         export_functions_group pure_funs
     | GlobalGroup id -> export_global id
     | TraitDeclGroup (RecGroup _ids) ->
-        craise_opt_meta __FILE__ __LINE__ None
+        craise_opt_span __FILE__ __LINE__ None
           "Mutually recursive trait declarations are not supported"
     | TraitDeclGroup (NonRecGroup id) ->
         (* TODO: update to extract groups *)

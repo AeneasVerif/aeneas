@@ -38,7 +38,7 @@ elab "scalar_tac_preprocess" : tactic =>
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
 def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
-  intTac splitGoalConjs scalarTacExtraPreprocess
+  intTac "scalar_tac" splitGoalConjs scalarTacExtraPreprocess
 
 elab "scalar_tac" : tactic =>
   scalarTac false

@@ -6,13 +6,13 @@ open Primitives
 namespace polonius_list
 
 /- [polonius_list::List]
-   Source: 'src/polonius_list.rs', lines 3:0-3:16 -/
+   Source: 'tests/src/polonius_list.rs', lines 5:0-5:16 -/
 inductive List (T : Type) :=
 | Cons : T → List T → List T
 | Nil : List T
 
 /- [polonius_list::get_list_at_x]:
-   Source: 'src/polonius_list.rs', lines 13:0-13:76 -/
+   Source: 'tests/src/polonius_list.rs', lines 15:0-15:76 -/
 divergent def get_list_at_x
   (ls : List U32) (x : U32) :
   Result ((List U32) × (List U32 → Result (List U32)))

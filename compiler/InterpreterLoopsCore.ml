@@ -53,7 +53,7 @@ type abs_borrows_loans_maps = {
     regions.
  *)
 module type PrimMatcher = sig
-  val meta : Meta.meta
+  val span : Meta.span
   val match_etys : eval_ctx -> eval_ctx -> ety -> ety -> ety
   val match_rtys : eval_ctx -> eval_ctx -> rty -> rty -> rty
 
@@ -65,7 +65,7 @@ module type PrimMatcher = sig
   val match_distinct_adts :
     eval_ctx -> eval_ctx -> ety -> adt_value -> adt_value -> typed_value
 
-  (** The meta-value is the result of a match.
+  (** The span-value is the result of a match.
 
       We take an additional function as input, which acts as a matcher over
       typed values, to be able to lookup the shared values and match them.
@@ -256,7 +256,7 @@ module type PrimMatcher = sig
 end
 
 module type Matcher = sig
-  val meta : Meta.meta
+  val span : Meta.span
 
   (** Match two values.
 
@@ -279,7 +279,7 @@ end
     Very annoying: functors only take modules as inputs...
  *)
 module type MatchCheckEquivState = sig
-  val meta : Meta.meta
+  val span : Meta.span
 
   (** [true] if we check equivalence between contexts, [false] if we match
       a source context with a target context. *)
@@ -351,7 +351,7 @@ module type MatchJoinState = sig
   (** The abstractions introduced when performing the matches *)
   val nabs : abs list ref
 
-  val meta : Meta.meta
+  val span : Meta.span
 end
 
 (** Split an environment between the fixed abstractions, values, etc. and
@@ -359,7 +359,7 @@ end
 
     Returns: (fixed, new abs, new dummies)
  *)
-let ctx_split_fixed_new (meta : Meta.meta) (fixed_ids : ids_sets)
+let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
     (ctx : eval_ctx) : env * abs list * typed_value list =
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id fixed_ids.dids)
@@ -383,7 +383,7 @@ let ctx_split_fixed_new (meta : Meta.meta) (fixed_ids : ids_sets)
       (fun ee ->
         match ee with
         | EAbs abs -> abs
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable")
+        | _ -> craise __FILE__ __LINE__ span "Unreachable")
       new_absl
   in
   let new_dummyl =
@@ -391,7 +391,7 @@ let ctx_split_fixed_new (meta : Meta.meta) (fixed_ids : ids_sets)
       (fun ee ->
         match ee with
         | EBinding (BDummy _, v) -> v
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable")
+        | _ -> craise __FILE__ __LINE__ span "Unreachable")
       new_dummyl
   in
   (filt_env, new_absl, new_dummyl)

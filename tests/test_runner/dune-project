@@ -1,0 +1,25 @@
+(lang dune 3.7)
+
+(name aeneas_test_runner)
+
+(version 0.1)
+
+(generate_opam_files true)
+
+(source
+ (uri git+https://github.com/AeneasVerif/aeneas.git))
+
+(homepage "https://github.com/AeneasVerif/aeneas")
+
+(bug_reports "https://github.com/AeneasVerif/aeneas/issues")
+
+(authors
+  "Son Ho"
+  "Guillaume Boisseau")
+
+(license Apache-2.0)
+
+(package
+ (name aeneas_test_runner)
+ (depends ocaml dune)
+)

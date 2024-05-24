@@ -67,17 +67,17 @@ type pn_ctx = {
 }
 
 (** This function computes pretty names for the variables in the pure AST. It
-    relies on the "meta"-place information in the AST to generate naming
+    relies on the "span"-place information in the AST to generate naming
     constraints, and then uses those to compute the names.
     
     The way it works is as follows:
     - we only modify the names of the unnamed variables
     - whenever we see an rvalue/pattern which is exactly an unnamed variable,
-      and this value is linked to some meta-place information which contains
+      and this value is linked to some span-place information which contains
       a name and an empty path, we consider we should use this name
     - we try to propagate naming constraints on the pure variables use in the
       synthesized programs, and also on the LLBC variables from the original
-      program (information about the LLBC variables is stored in the meta-places)
+      program (information about the LLBC variables is stored in the span-places)
       
       
     Something important is that, for every variable we find, the name of this
@@ -118,7 +118,7 @@ type pn_ctx = {
         hd -> s2
       ]}
       
-      When generating the symbolic AST, we save as meta-information that we
+      When generating the symbolic AST, we save as span-information that we
       assign [s1] to the place [x] and [s2] to the place [hd]. This way,
       we learn we can use the names [x] and [hd] for the variables which are
       introduced by the match:
@@ -162,10 +162,10 @@ type pn_ctx = {
      so we should use "x" as the basename (hence the resulting name "x1"). However,
      this is non-trivial, because after desugaring the input argument given to [id]
      is not [&mut x] but [move ^0] (i.e., it comes from a temporary, anonymous
-     variable). For this reason, we use the meta-place [&mut x] as the meta-place
+     variable). For this reason, we use the span-place [&mut x] as the span-place
      for the given back value (this is done during the synthesis), and propagate
      naming information *also* on the LLBC variables (which are referenced by the
-     meta-places).
+     span-places).
 
      This way, because of [^0 = &mut x], we can propagate the name "x" to the place
      [^0], then to the given back variable across the function call.
@@ -213,7 +213,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    * - we explore the expressions
    * - we register the variables introduced by the let-bindings
    * - we use the naming information we find (through the variables and the
-   *   meta-places) to update our context (i.e., maps from variable ids to
+   *   span-places) to update our context (i.e., maps from variable ids to
    *   names)
    * - we use this information to update the names of the variables used in the
    *   expressions
@@ -224,7 +224,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   let register_var (ctx : pn_ctx) (v : var) : pn_ctx =
     sanity_check __FILE__ __LINE__
       (not (VarId.Map.mem v.id ctx.pure_vars))
-      def.meta;
+      def.span;
     match v.basename with
     | None -> ctx
     | Some name ->
@@ -286,8 +286,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     in
     { ctx with llbc_vars }
   in
-  (* Add a constraint: given a variable id and an associated meta-place, try to
-   * extract naming information from the meta-place and save it *)
+  (* Add a constraint: given a variable id and an associated span-place, try to
+   * extract naming information from the span-place and save it *)
   let add_constraint (mp : mplace) (var_id : VarId.id) (ctx : pn_ctx) : pn_ctx =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
@@ -306,12 +306,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
     (* Add the constraint *)
-    match (unmeta rv).e with Var vid -> add_constraint mp vid ctx | _ -> ctx
+    match (unspan rv).e with Var vid -> add_constraint mp vid ctx | _ -> ctx
   in
   let add_pure_var_value_constraint (var_id : VarId.id) (rv : texpression)
       (ctx : pn_ctx) : pn_ctx =
     (* Add the constraint *)
-    match (unmeta rv).e with
+    match (unspan rv).e with
     | Var vid -> (
         (* Try to find a name for the vid *)
         match VarId.Map.find_opt vid ctx.pure_vars with
@@ -361,8 +361,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           VarId.Map.mem lvar.id ctx.pure_vars
         then ctx
         else
-          (* We ignore the left meta-place information: it should have been taken
-           * care of by [add_left_constraint]. We try to use the right meta-place
+          (* We ignore the left span-place information: it should have been taken
+           * care of by [add_left_constraint]. We try to use the right span-place
            * information *)
           let add (name : string) (ctx : pn_ctx) : pn_ctx =
             (* Add the constraint for the pure variable *)
@@ -373,7 +373,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             | Some lmp -> add_llbc_var_constraint lmp.var_id name ctx
           in
           (* We try to use the right-place information *)
-          let rmp, re = opt_unmeta_mplace re in
+          let rmp, re = opt_unspan_mplace re in
           let ctx =
             match rmp with
             | Some { var_id; name; projection = [] } -> (
@@ -386,7 +386,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           in
           (* We try to use the rvalue information, if it is a variable *)
           let ctx =
-            match (unmeta re).e with
+            match (unspan re).e with
             | Var rvar_id -> (
                 match VarId.Map.find_opt rvar_id ctx.pure_vars with
                 | None -> ctx
@@ -415,8 +415,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Loop loop -> update_loop loop ctx
       | StructUpdate supd -> update_struct_update supd ctx
       | Lambda (lb, e) -> update_lambda lb e ctx
-      | Meta (meta, e) -> update_emeta meta e ctx
-      | EError (meta, msg) -> (ctx, EError (meta, msg))
+      | Meta (span, e) -> update_espan span e ctx
+      | EError (span, msg) -> (ctx, EError (span, msg))
     in
     (ctx, { e; ty })
   (* *)
@@ -475,7 +475,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let {
       fun_end;
       loop_id;
-      meta;
+      span;
       fuel0;
       fuel;
       input_state;
@@ -494,7 +494,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       {
         fun_end;
         loop_id;
-        meta;
+        span;
         fuel0;
         fuel;
         input_state;
@@ -518,10 +518,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let supd = { struct_id; init; updates } in
     (ctx, StructUpdate supd)
   (* *)
-  and update_emeta (meta : emeta) (e : texpression) (ctx : pn_ctx) :
+  and update_espan (span : espan) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
     let ctx =
-      match meta with
+      match span with
       | Assignment (mp, rvalue, rmp) ->
           let ctx = add_right_constraint mp rvalue ctx in
           let ctx =
@@ -551,7 +551,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Tag _ -> ctx
     in
     let ctx, e = update_texpression e ctx in
-    let e = mk_emeta meta e in
+    let e = mk_espan span e in
     (ctx, e.e)
   in
 
@@ -578,12 +578,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   in
   { def with body }
 
-(** Remove the meta-information *)
-let remove_meta (def : fun_decl) : fun_decl =
+(** Remove the span-information *)
+let remove_span (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
   | Some body ->
-      let body = { body with body = PureUtils.remove_meta body.body } in
+      let body = { body with body = PureUtils.remove_span body.body } in
       { def with body = Some body }
 
 (** Introduce the special structure create/update expressions.
@@ -614,7 +614,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
         | App _ -> (
             let app, args = destruct_apps e in
             let ignore () =
-              mk_apps def.meta
+              mk_apps def.span
                 (self#visit_texpression env app)
                 (List.map (self#visit_texpression env) args)
             in
@@ -759,7 +759,7 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
             else if variant_id = result_fail_id then
               (* Fail case *)
               self#visit_expression env rv.e
-            else craise __FILE__ __LINE__ def.meta "Unexpected"
+            else craise __FILE__ __LINE__ def.span "Unexpected"
         | App _ ->
             (* This might be the tuple case *)
             if not monadic then
@@ -914,7 +914,7 @@ let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
               } ) ->
             (* Second case: we deconstruct a structure with one field that we will
                extract as tuple. *)
-            let adt_id, _ = PureUtils.ty_as_adt def.meta re.ty in
+            let adt_id, _ = PureUtils.ty_as_adt def.span re.ty in
             (* Update the rhs (we may perform substitutions inside, and it is
              * better to do them *before* we inline it *)
             let re = self#visit_texpression env re in
@@ -1152,7 +1152,7 @@ let simplify_let_then_ok _ctx (def : fun_decl) =
               | Some e ->
                   if match_pattern_and_expr lv e then
                     (* We need to wrap the right-value in a ret *)
-                    (mk_result_ok_texpression def.meta rv).e
+                    (mk_result_ok_texpression def.span rv).e
                   else not_simpl_e
               | None ->
                   if match_pattern_and_expr lv next_e then rv.e else not_simpl_e
@@ -1203,13 +1203,13 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 let fields =
                   match adt_decl.kind with
                   | Enum _ | Opaque ->
-                      craise __FILE__ __LINE__ def.meta "Unreachable"
+                      craise __FILE__ __LINE__ def.span "Unreachable"
                   | Struct fields -> fields
                 in
                 let num_fields = List.length fields in
                 (* In order to simplify, there must be as many arguments as
                  * there are fields *)
-                sanity_check __FILE__ __LINE__ (num_fields > 0) def.meta;
+                sanity_check __FILE__ __LINE__ (num_fields > 0) def.span;
                 if num_fields = List.length args then
                   (* We now need to check that all the arguments are of the form:
                    * [x.field] for some variable [x], and where the projection
@@ -1249,7 +1249,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                         (List.for_all
                            (fun (generics1, _) -> generics1 = generics)
                            args)
-                        def.meta;
+                        def.span;
                       { e with e = Var x })
                     else super#visit_texpression env e
                   else super#visit_texpression env e
@@ -1406,7 +1406,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
             in
             sanity_check __FILE__ __LINE__
               (fun_sig_info_is_wf loop_fwd_sig_info)
-              def.meta;
+              def.span;
 
             let inputs_tys =
               let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
@@ -1449,7 +1449,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
                 sanity_check __FILE__ __LINE__
                   (loop_fwd_effect_info.stateful
                   = Option.is_some loop.input_state)
-                  def.meta;
+                  def.span;
                 match loop.input_state with
                 | None -> ([], [])
                 | Some input_state ->
@@ -1486,7 +1486,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               match fuel_vars with
               | None -> loop.loop_body
               | Some (fuel0, fuel) ->
-                  SymbolicToPure.wrap_in_match_fuel def.meta fuel0 fuel
+                  SymbolicToPure.wrap_in_match_fuel def.span fuel0 fuel
                     loop.loop_body
             in
 
@@ -1496,7 +1496,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               {
                 def_id = def.def_id;
                 is_local = def.is_local;
-                meta = loop.meta;
+                span = loop.span;
                 kind = def.kind;
                 num_loops;
                 loop_id = Some loop.loop_id;
@@ -1580,9 +1580,9 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 match aid with
                 | BoxNew ->
                     let arg, args = Collections.List.pop args in
-                    mk_apps def.meta arg args
+                    mk_apps def.span arg args
                 | BoxFree ->
-                    sanity_check __FILE__ __LINE__ (args = []) def.meta;
+                    sanity_check __FILE__ __LINE__ (args = []) def.span;
                     mk_unit_rvalue
                 | SliceIndexShared | SliceIndexMut | ArrayIndexShared
                 | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
@@ -1776,8 +1776,8 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               *)
               (* TODO: this information should be computed in SymbolicToPure and
                * store in an enum ("monadic" should be an enum, not a bool). *)
-              let re_ty = Option.get (opt_destruct_result def.meta re.ty) in
-              sanity_check __FILE__ __LINE__ (lv.ty = re_ty) def.meta;
+              let re_ty = Option.get (opt_destruct_result def.span re.ty) in
+              sanity_check __FILE__ __LINE__ (lv.ty = re_ty) def.span;
               let err_vid = fresh_id () in
               let err_var : var =
                 {
@@ -1789,7 +1789,7 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               let err_pat = mk_typed_pattern_from_var err_var None in
               let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
               let err_v = mk_texpression_from_var err_var in
-              let fail_value = mk_result_fail_texpression def.meta err_v e.ty in
+              let fail_value = mk_result_fail_texpression def.span err_v e.ty in
               let fail_branch = { pat = fail_pat; branch = fail_value } in
               let success_pat = mk_result_ok_pattern lv in
               let success_branch = { pat = success_pat; branch = e } in
@@ -2030,7 +2030,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
         ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
         ^ "\n"));
     let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
-    sanity_check __FILE__ __LINE__ (Option.is_some decl.loop_id) decl.meta;
+    sanity_check __FILE__ __LINE__ (Option.is_some decl.loop_id) decl.span;
 
     let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
 
@@ -2182,7 +2182,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           in
 
           let fwd_info = { fwd_info; effect_info; ignore_output } in
-          sanity_check __FILE__ __LINE__ (fun_sig_info_is_wf fwd_info) decl.meta;
+          sanity_check __FILE__ __LINE__ (fun_sig_info_is_wf fwd_info) decl.span;
           let signature =
             {
               generics;
@@ -2248,17 +2248,17 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
                                 in
 
                                 (* Rebuild *)
-                                mk_apps decl.meta e_app args)
+                                mk_apps decl.span e_app args)
                         | _ ->
                             let e_app = self#visit_texpression env e_app in
                             let args =
                               List.map (self#visit_texpression env) args
                             in
-                            mk_apps decl.meta e_app args)
+                            mk_apps decl.span e_app args)
                     | _ ->
                         let e_app = self#visit_texpression env e_app in
                         let args = List.map (self#visit_texpression env) args in
-                        mk_apps decl.meta e_app args)
+                        mk_apps decl.span e_app args)
                 | _ -> super#visit_texpression env e
             end
           in
@@ -2297,16 +2297,16 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_and_loops =
   log#ldebug
     (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
-  (* TODO: we might want to leverage more the assignment meta-data, for
+  (* TODO: we might want to leverage more the assignment span-data, for
    * aggregates for instance. *)
 
   (* TODO: reorder the branches of the matches/switches *)
 
-  (* The meta-information is now useless: remove it.
-   * Rk.: some passes below use the fact that we removed the meta-data
-   * (otherwise we would have to "unmeta" expressions before matching) *)
-  let def = remove_meta def in
-  log#ldebug (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  (* The span-information is now useless: remove it.
+   * Rk.: some passes below use the fact that we removed the span-data
+   * (otherwise we would have to "unspan" expressions before matching) *)
+  let def = remove_span def in
+  log#ldebug (lazy ("remove_span:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Extract the loop definitions by removing the {!Loop} node *)
   let def, loops = decompose_loops ctx def in

@@ -17,7 +17,11 @@ open Cps
     continuation with [None].
  *)
 val pop_frame :
-  config -> Meta.meta -> bool -> (typed_value option -> m_fun) -> m_fun
+  config ->
+  Meta.span ->
+  bool ->
+  eval_ctx ->
+  typed_value option * eval_ctx * (eval_result -> eval_result)
 
 (** Helper.
 
@@ -46,7 +50,7 @@ val create_push_abstractions_from_abs_region_groups :
   eval_ctx
 
 (** Evaluate a statement *)
-val eval_statement : config -> statement -> st_cm_fun
+val eval_statement : config -> statement -> stl_cm_fun
 
 (** Evaluate a statement seen as a function body *)
-val eval_function_body : config -> statement -> st_cm_fun
+val eval_function_body : config -> statement -> stl_cm_fun

@@ -4,41 +4,28 @@ open Contexts
 open Cps
 open InterpreterPaths
 
-(** Read a place (CPS-style function).
-
-    We also check that the value *doesn't contain bottoms or reserved
-    borrows*.
-
-    This function doesn't reorganize the context to make sure we can read
-    the place. If needs be, you should call {!InterpreterPaths.update_ctx_along_read_place} first.
- *)
-val read_place :
-  Meta.meta -> access_kind -> place -> (typed_value -> m_fun) -> m_fun
-
 (** Auxiliary function.
 
-    Prepare the access to a place in a right-value (typically an operand) by
-    reorganizing the environment.
+    Prepare the access to a place in a right-value (typically an operand) by reorganizing
+    the environment to end outer loans, then read the value and check that this value
+    *doesn't contain any bottom nor reserved borrows*.
 
     We reorganize the environment so that:
     - we can access the place (we prepare *along* the path)
     - the value at the place itself doesn't contain loans (the [access_kind]
       controls whether we only end mutable loans, or also shared loans).
 
-    We also check, after the reorganization, that the value at the place
-    *doesn't contain any bottom nor reserved borrows*.
-
     [expand_prim_copy]: if [true], expand the symbolic values which are
     primitively copyable and contain borrows.
  *)
 val access_rplace_reorganize_and_read :
   config ->
-  Meta.meta ->
+  Meta.span ->
   bool ->
   access_kind ->
   place ->
-  (typed_value -> m_fun) ->
-  m_fun
+  eval_ctx ->
+  typed_value * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate an operand.
 
@@ -50,11 +37,19 @@ val access_rplace_reorganize_and_read :
     Use {!eval_operands} instead.
  *)
 val eval_operand :
-  config -> Meta.meta -> operand -> (typed_value -> m_fun) -> m_fun
+  config ->
+  Meta.span ->
+  operand ->
+  eval_ctx ->
+  typed_value * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate several operands at once. *)
 val eval_operands :
-  config -> Meta.meta -> operand list -> (typed_value list -> m_fun) -> m_fun
+  config ->
+  Meta.span ->
+  operand list ->
+  eval_ctx ->
+  typed_value list * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate an rvalue which is not a global (globals are handled elsewhere).
 
@@ -65,10 +60,10 @@ val eval_operands :
  *)
 val eval_rvalue_not_global :
   config ->
-  Meta.meta ->
+  Meta.span ->
   rvalue ->
-  ((typed_value, eval_error) result -> m_fun) ->
-  m_fun
+  eval_ctx ->
+  (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate a fake read (update the context so that we can read a place) *)
-val eval_fake_read : config -> Meta.meta -> place -> cm_fun
+val eval_fake_read : config -> Meta.span -> place -> cm_fun

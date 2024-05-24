@@ -3,22 +3,25 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Mathlib.Tactic.Linarith
--- TODO: there is no Omega tactic for now - it seems it hasn't been ported yet
---import Mathlib.Tactic.Omega
 import Base.Utils
 import Base.Arith.Base
 
 namespace Arith
 
 open Utils
+open Lean Lean.Elab Lean.Meta
 
--- Remark: I tried a version of the shape `HasScalarProp {a : Type} (x : a)`
--- but the lookup didn't work
+/- We can introduce a term in the context.
+   For instance, if we find `x : U32` in the context we can introduce `0 ≤ x ∧ x ≤ U32.max`
+
+   Remark: I tried a version of the shape `HasScalarProp {a : Type} (x : a)`
+   but the lookup didn't work.
+ -/
 class HasIntProp (a : Sort u) where
   prop_ty : a → Prop
   prop : ∀ x:a, prop_ty x
 
+/- Proposition with implications: if we find P we can introduce Q in the context -/
 class PropHasImp (x : Prop) where
   concl : Prop
   prop : x → concl
@@ -27,14 +30,9 @@ instance (p : Int → Prop) : HasIntProp (Subtype p) where
   prop_ty := λ x => p x
   prop := λ x => x.property
 
--- This also works for `x ≠ y` because this expression reduces to `¬ x = y`
--- and `Ne` is marked as `reducible`
-instance (x y : Int) : PropHasImp (¬ x = y) where
-  concl := x < y ∨ x > y
-  prop := λ (h:x ≠ y) => ne_is_lt_or_gt h
-
--- Check if a proposition is a linear integer proposition.
--- We notably use this to check the goals.
+/- Check if a proposition is a linear integer proposition.
+   We notably use this to check the goals: this is useful to filter goals that
+   are unlikely to be solvable with arithmetic tactics. -/
 class IsLinearIntProp (x : Prop) where
 
 instance (x y : Int) : IsLinearIntProp (x < y) where
@@ -43,17 +41,35 @@ instance (x y : Int) : IsLinearIntProp (x ≤ y) where
 instance (x y : Int) : IsLinearIntProp (x ≥ y) where
 instance (x y : Int) : IsLinearIntProp (x ≥ y) where
 instance (x y : Int) : IsLinearIntProp (x = y) where
-/- It seems we don't need to do any special preprocessing when the *goal*
-   has the following shape - I guess `linarith` automatically calls `intro` -/
-instance (x y : Int) : IsLinearIntProp (¬ x = y) where
 
-open Lean Lean.Elab Lean.Meta
+instance (x y : Nat) : IsLinearIntProp (x < y) where
+instance (x y : Nat) : IsLinearIntProp (x > y) where
+instance (x y : Nat) : IsLinearIntProp (x ≤ y) where
+instance (x y : Nat) : IsLinearIntProp (x ≥ y) where
+instance (x y : Nat) : IsLinearIntProp (x ≥ y) where
+instance (x y : Nat) : IsLinearIntProp (x = y) where
 
--- Explore a term by decomposing the applications (we explore the applied
--- functions and their arguments, but ignore lambdas, forall, etc. -
--- should we go inside?).
--- Remark: we pretend projections are applications, and explore the projected
--- terms.
+instance : IsLinearIntProp False where
+instance (p : Prop) [IsLinearIntProp p] : IsLinearIntProp (¬ p) where
+instance (p q : Prop) [IsLinearIntProp p] [IsLinearIntProp q] : IsLinearIntProp (p ∨ q) where
+instance (p q : Prop) [IsLinearIntProp p] [IsLinearIntProp q] : IsLinearIntProp (p ∧ q) where
+-- We use the one below for goals
+instance (p q : Prop) [IsLinearIntProp p] [IsLinearIntProp q] : IsLinearIntProp (p → q) where
+
+-- Check if the goal is a linear arithmetic goal
+def goalIsLinearInt : Tactic.TacticM Bool := do
+  Tactic.withMainContext do
+  let gty ← Tactic.getMainTarget
+  match ← trySynthInstance (← mkAppM ``IsLinearIntProp #[gty]) with
+  | .some _ => pure true
+  | _ => pure false
+
+/- Explore a term by decomposing the applications (we explore the applied
+   functions and their arguments, but ignore lambdas, forall, etc. -
+   should we go inside?).
+
+   Remark: we pretend projections are applications, and explore the projected
+   terms. -/
 partial def foldTermApps (k : α → Expr → MetaM α) (s : α) (e : Expr) : MetaM α := do
   -- Explore the current expression
   let e := e.consumeMData
@@ -68,8 +84,8 @@ partial def foldTermApps (k : α → Expr → MetaM α) (s : α) (e : Expr) : Me
       args.foldlM (foldTermApps k) s
   | _ => pure s
 
--- Provided a function `k` which lookups type class instances on an expression,
--- collect all the instances lookuped by applying `k` on the sub-expressions of `e`.
+/- Provided a function `k` which lookups type class instances on an expression,
+   collect all the instances lookuped by applying `k` on the sub-expressions of `e`. -/
 def collectInstances
   (k : Expr → MetaM (Option Expr)) (s : HashSet Expr) (e : Expr) : MetaM (HashSet Expr) := do
   let k s e := do
@@ -78,8 +94,8 @@ def collectInstances
     | some i => pure (s.insert i)
   foldTermApps k s e
 
--- Similar to `collectInstances`, but explores all the local declarations in the
--- main context.
+/- Similar to `collectInstances`, but explores all the local declarations in the
+   main context. -/
 def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.TacticM (HashSet Expr) := do
   Tactic.withMainContext do
   -- Get the local context
@@ -152,6 +168,9 @@ example (x y : Int) (_ : x ≠ y) (_ : ¬ x = y) : True := by
   display_prop_has_imp_instances
   simp
 
+example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
+  omega
+
 -- Lookup instances in a context and introduce them with additional declarations.
 def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr)) : Tactic.TacticM (Array Expr) := do
   let hs ← collectInstancesFromMainCtx lookup
@@ -174,60 +193,33 @@ def introHasIntPropInstances : Tactic.TacticM (Array Expr) := do
 elab "intro_has_int_prop_instances" : tactic => do
   let _ ← introHasIntPropInstances
 
+def introPropHasImpInstances : Tactic.TacticM (Array Expr) := do
+  trace[Arith] "Introducing the PropHasImp instances"
+  introInstances ``PropHasImp.concl lookupPropHasImp
+
 -- Lookup the instances of `PropHasImp for all the sub-expressions in the context,
 -- and introduce the corresponding assumptions
 elab "intro_prop_has_imp_instances" : tactic => do
-  trace[Arith] "Introducing the PropHasImp instances"
-  let _ ← introInstances ``PropHasImp.concl lookupPropHasImp
+  let _ ← introPropHasImpInstances
 
-example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
-  intro_prop_has_imp_instances
-  rename_i h
-  split_disj h
-  . linarith
-  . linarith
-
-/- Boosting a bit the linarith tac.
-
-   We do the following:
-   - for all the assumptions of the shape `(x : Int) ≠ y` or `¬ (x = y), we
-     introduce two goals with the assumptions `x < y` and `x > y`
-     TODO: we could create a PR for mathlib.
+/- Boosting a bit the `omega` tac.
  -/
 def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
-  -- Lookup the instances of PropHasImp (this is how we detect assumptions
-  -- of the proper shape), introduce assumptions in the context and split
-  -- on those
-  -- TODO: get rid of the assumptions that we split
-  let rec splitOnAsms (asms : List Expr) : Tactic.TacticM Unit :=
-    match asms with
-    | [] => pure ()
-    | asm :: asms =>
-      let k := splitOnAsms asms
-      Utils.splitDisjTac asm k k
-  -- Introduce the scalar bounds
+  -- Introduce the instances of `HasIntProp`
   let _ ← introHasIntPropInstances
-  -- Extra preprocessing, before we split on the disjunctions
+  -- Introduce the instances of `PropHasImp`
+  let _ ← introPropHasImpInstances
+  -- Extra preprocessing
   extraPreprocess
-  -- Split - note that the extra-preprocessing step might actually have
-  -- proven the goal (by doing simplifications for instance)
-  Tactic.allGoals do
-    let asms ← introInstances ``PropHasImp.concl lookupPropHasImp
-    splitOnAsms asms.toList
+  -- Reduce all the terms in the goal - note that the extra preprocessing step
+  -- might have proven the goal, hence the `Tactic.allGoals`
+  Tactic.allGoals do tryTac (dsimpAt false [] [] [] Tactic.Location.wildcard)
 
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ())
 
--- Check if the goal is a linear arithmetic goal
-def goalIsLinearInt : Tactic.TacticM Bool := do
-  Tactic.withMainContext do
-  let gty ← Tactic.getMainTarget
-  match ← trySynthInstance (← mkAppM ``IsLinearIntProp #[gty]) with
-  | .some _ => pure true
-  | _ => pure false
-
-def intTac (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
   let g ← Tactic.getMainGoal
@@ -243,31 +235,15 @@ def intTac (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Ta
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call linarith
-  let linarith := do
-    let cfg : Linarith.LinarithConfig := {
-      -- We do this with our custom preprocessing
-      splitNe := false
-    }
-    Tactic.liftMetaFinishingTactic <| Linarith.linarith false [] cfg
   Tactic.allGoals do
-    -- We check if the goal is a linear arithmetic goal: if yes, we directly
-    -- call linarith, otherwise we first apply exfalso (we do this because
-    -- linarith is too general and sometimes fails to do this correctly).
-    if ← goalIsLinearInt then do
-      trace[Arith] "linarith goal: {← Tactic.getMainGoal}"
-      linarith
-    else do
+    try do Tactic.Omega.omegaTactic {}
+    catch _ =>
       let g ← Tactic.getMainGoal
-      let gs ← g.apply (Expr.const ``False.elim [.zero])
-      let goals ← Tactic.getGoals
-      Tactic.setGoals (gs ++ goals)
-      Tactic.allGoals do
-        trace[Arith] "linarith goal: {← Tactic.getMainGoal}"
-        linarith
+      throwError "{tacName} failed to prove the goal:\n{g}"
 
 elab "int_tac" args:(" split_goal"?): tactic =>
   let split := args.raw.getArgs.size > 0
-  intTac split (do pure ())
+  intTac "int_tac" split (do pure ())
 
 -- For termination proofs
 syntax "int_decr_tac" : tactic
@@ -280,19 +256,11 @@ macro_rules
              | apply Arith.to_int_sub_to_nat_lt) <;>
       simp_all <;> int_tac)
 
-example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
-  int_tac_preprocess
-  linarith
-  linarith
-
-example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
-  int_tac
-
--- Checking that things append correctly when there are several disjunctions
+-- Checking that things happen correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
   int_tac split_goal
 
--- Checking that things append correctly when there are several disjunctions
+-- Checking that things happen correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
   int_tac split_goal
 

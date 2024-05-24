@@ -15,12 +15,12 @@ def core.marker.CopyU32 : core.marker.Copy U32 := {
 }
 
 /- [external::use_get]:
-   Source: 'src/external.rs', lines 5:0-5:37 -/
+   Source: 'tests/src/external.rs', lines 8:0-8:37 -/
 def use_get (rc : core.cell.Cell U32) (st : State) : Result (State × U32) :=
   core.cell.Cell.get U32 core.marker.CopyU32 rc st
 
 /- [external::incr]:
-   Source: 'src/external.rs', lines 9:0-9:31 -/
+   Source: 'tests/src/external.rs', lines 12:0-12:31 -/
 def incr
   (rc : core.cell.Cell U32) (st : State) :
   Result (State × (core.cell.Cell U32))

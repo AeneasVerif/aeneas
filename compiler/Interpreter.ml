@@ -49,12 +49,12 @@ let compute_contexts (m : crate) : decls_ctx =
     to compute a normalization map (for the associated types) and that we added
     it in the context.
  *)
-let normalize_inst_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
+let normalize_inst_fun_sig (span : Meta.span) (ctx : eval_ctx)
     (sg : inst_fun_sig) : inst_fun_sig =
   let { regions_hierarchy = _; trait_type_constraints = _; inputs; output } =
     sg
   in
-  let norm = AssociatedTypes.ctx_normalize_ty meta ctx in
+  let norm = AssociatedTypes.ctx_normalize_ty span ctx in
   let inputs = List.map norm inputs in
   let output = norm output in
   { sg with inputs; output }
@@ -69,7 +69,7 @@ let normalize_inst_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
     clauses (we are not considering a function call, so we don't need to
     normalize because a trait clause was instantiated with a specific trait ref).
  *)
-let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
+let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     (sg : fun_sig) (regions_hierarchy : region_var_groups) (kind : item_kind) :
     eval_ctx * inst_fun_sig =
   let tr_self =
@@ -85,7 +85,7 @@ let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
       List.map (fun (v : const_generic_var) -> CgVar v.index) const_generics
     in
     (* Annoying that we have to generate this substitution here *)
-    let r_subst _ = craise __FILE__ __LINE__ meta "Unexpected region" in
+    let r_subst _ = craise __FILE__ __LINE__ span "Unexpected region" in
     let ty_subst =
       Substitute.make_type_subst_from_vars sg.generics.types types
     in
@@ -123,7 +123,7 @@ let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
         trait_instance_id =
       match TraitClauseId.Map.find_opt clause_id tr_map with
       | Some tr -> tr
-      | None -> craise __FILE__ __LINE__ meta "Local trait clause not found"
+      | None -> craise __FILE__ __LINE__ span "Local trait clause not found"
     in
     let mk_subst tr_map =
       let tr_subst = mk_tr_subst tr_map in
@@ -152,15 +152,15 @@ let symbolic_instantiate_fun_sig (meta : Meta.meta) (ctx : eval_ctx)
     { regions; types; const_generics; trait_refs }
   in
   let inst_sg =
-    instantiate_fun_sig meta ctx generics tr_self sg regions_hierarchy
+    instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
   in
   (* Compute the normalization maps *)
   let ctx =
-    AssociatedTypes.ctx_add_norm_trait_types_from_preds meta ctx
+    AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
       inst_sg.trait_type_constraints
   in
   (* Normalize the signature *)
-  let inst_sg = normalize_inst_fun_sig meta ctx inst_sg in
+  let inst_sg = normalize_inst_fun_sig span ctx inst_sg in
   (* Return *)
   (ctx, inst_sg)
 
@@ -196,12 +196,12 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     (List.for_all
        (fun ty -> not (ty_has_nested_borrows ctx.type_ctx.type_infos ty))
        (sg.output :: sg.inputs))
-    fdef.item_meta.meta "Nested borrows are not supported yet";
+    fdef.item_meta.span "Nested borrows are not supported yet";
   cassert __FILE__ __LINE__
     (List.for_all
        (fun ty -> not (ty_has_adt_with_borrows ctx.type_ctx.type_infos ty))
        (sg.output :: sg.inputs))
-    fdef.item_meta.meta "ADTs containing borrows are not supported yet";
+    fdef.item_meta.span "ADTs containing borrows are not supported yet";
 
   (* Create the context *)
   let regions_hierarchy =
@@ -211,25 +211,25 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
   in
   let ctx =
-    initialize_eval_ctx fdef.item_meta.meta ctx region_groups sg.generics.types
+    initialize_eval_ctx fdef.item_meta.span ctx region_groups sg.generics.types
       sg.generics.const_generics
   in
   (* Instantiate the signature. This updates the context because we compute
      at the same time the normalization map for the associated types.
   *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig fdef.item_meta.meta ctx fdef.signature
+    symbolic_instantiate_fun_sig fdef.item_meta.span ctx fdef.signature
       regions_hierarchy fdef.kind
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
     List.map
-      (fun ty -> mk_fresh_symbolic_value fdef.item_meta.meta ty)
+      (fun ty -> mk_fresh_symbolic_value fdef.item_meta.span ty)
       inst_sg.inputs
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
-  sanity_check __FILE__ __LINE__ (call_id = FunCallId.zero) fdef.item_meta.meta;
+  sanity_check __FILE__ __LINE__ (call_id = FunCallId.zero) fdef.item_meta.span;
   let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
       eval_ctx * typed_avalue list =
     (* Project over the values - we use *loan* projectors, as explained above *)
@@ -251,14 +251,14 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     Collections.List.split_at (List.tl body.locals) body.arg_count
   in
   (* Push the return variable (initialized with ⊥) *)
-  let ctx = ctx_push_uninitialized_var fdef.item_meta.meta ctx ret_var in
+  let ctx = ctx_push_uninitialized_var fdef.item_meta.span ctx ret_var in
   (* Push the input variables (initialized with symbolic values) *)
   let input_values = List.map mk_typed_value_from_symbolic_value input_svs in
   let ctx =
-    ctx_push_vars fdef.item_meta.meta ctx (List.combine input_vars input_values)
+    ctx_push_vars fdef.item_meta.span ctx (List.combine input_vars input_values)
   in
   (* Push the remaining local variables (initialized with ⊥) *)
-  let ctx = ctx_push_uninitialized_vars fdef.item_meta.meta ctx local_vars in
+  let ctx = ctx_push_uninitialized_vars fdef.item_meta.span ctx local_vars in
   (* Return *)
   (ctx, input_svs, inst_sg)
 
@@ -292,7 +292,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       ^ "\n- inside_loop: "
       ^ Print.bool_to_string inside_loop
       ^ "\n- ctx:\n"
-      ^ Print.Contexts.eval_ctx_to_string ~meta:(Some fdef.item_meta.meta) ctx));
+      ^ Print.Contexts.eval_ctx_to_string ~span:(Some fdef.item_meta.span) ctx));
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
@@ -301,13 +301,15 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig fdef.item_meta.meta ctx fdef.signature
+    symbolic_instantiate_fun_sig fdef.item_meta.span ctx fdef.signature
       regions_hierarchy fdef.kind
   in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in
-  let cf_pop_frame = pop_frame config fdef.item_meta.meta pop_return_value in
+  let ret_value, ctx, cc =
+    pop_frame config fdef.item_meta.span pop_return_value ctx
+  in
 
   (* We need to find the parents regions/abstractions of the region we
    * will end - this will allow us to, first, mark the other return
@@ -328,163 +330,158 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
-  let cf_consume_ret (ret_value : typed_value option) ctx =
-    let ctx =
-      if is_regular_return then (
-        let ret_value = Option.get ret_value in
-        let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
-            eval_ctx * typed_avalue list =
-          let ctx, avalue =
-            apply_proj_borrows_on_input_value config fdef.item_meta.meta ctx
-              abs.regions abs.ancestors_regions ret_value ret_rty
-          in
-          (ctx, [ avalue ])
+  let ctx =
+    if is_regular_return then (
+      let ret_value = Option.get ret_value in
+      let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
+          eval_ctx * typed_avalue list =
+        let ctx, avalue =
+          apply_proj_borrows_on_input_value config fdef.item_meta.span ctx
+            abs.regions abs.ancestors_regions ret_value ret_rty
         in
-
-        (* Initialize and insert the abstractions in the context.
-         *
-         * We take care of allowing to end only the regions which should end (note
-         * that this is important for soundness: this is part of the borrow checking).
-         * Also see the documentation of the [can_end] field of [abs] for more
-         * information. *)
-        let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
-        let region_can_end rid =
-          RegionGroupId.Set.mem rid parent_and_current_rgs
-        in
-        sanity_check __FILE__ __LINE__ (region_can_end back_id)
-          fdef.item_meta.meta;
-        let ctx =
-          create_push_abstractions_from_abs_region_groups
-            (fun rg_id -> SynthRet rg_id)
-            ret_inst_sg.regions_hierarchy region_can_end compute_abs_avalues ctx
-        in
-        ctx)
-      else ctx
-    in
-
-    (* We now need to end the proper *input* abstractions - pay attention
-     * to the fact that we end the *input* abstractions, not the *return*
-     * abstractions (of course, the corresponding return abstractions will
-     * automatically be ended, because they consumed values coming from the
-     * input abstractions...) *)
-    (* End the parent abstractions and the current abstraction - note that we
-     * end them in an order which follows the regions hierarchy: it should lead
-     * to generated code which has a better consistency between the parent
-     * and children backward functions.
-     *
-     * Note that we don't end the same abstraction if we are *inside* a loop (i.e.,
-     * we are evaluating an [EndContinue]) or not.
-     *)
-    let current_abs_id, end_fun_synth_input =
-      let fun_abs_id =
-        (RegionGroupId.nth inst_sg.regions_hierarchy back_id).id
+        (ctx, [ avalue ])
       in
-      if not inside_loop then (Some fun_abs_id, true)
-      else
-        (* We are inside a loop *)
-        let pred (abs : abs) =
-          match abs.kind with
-          | Loop (_, rg_id', kind) ->
-              let rg_id' = Option.get rg_id' in
-              let is_ret =
-                match kind with LoopSynthInput -> true | LoopCall -> false
-              in
-              rg_id' = back_id && is_ret
-          | _ -> false
-        in
-        (* There is not necessarily an input synthesis abstraction specifically
-           for the loop.
-           If there is none, the input synthesis abstraction is actually the
-           function input synthesis abstraction.
 
-           Example:
-           ========
-           {[
-             fn clear(v: &mut Vec<u32>) {
-                 let mut i = 0;
-                 while i < v.len() {
-                     v[i] = 0;
-                     i += 1;
-                 }
-             }
-           ]}
-        *)
-        match ctx_find_abs ctx pred with
-        | None ->
-            (* The loop gives back nothing for this region group.
-               Ex.:
-               {[
-                 pub fn ignore_input_mut_borrow(_a: &mut u32) {
-                     loop {}
-                 }
-               ]}
-            *)
-            (None, false)
-        | Some abs -> (Some abs.abs_id, false)
-    in
-    log#ldebug
-      (lazy
-        ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
-          input abstraction: "
-        ^ Print.option_to_string AbstractionId.to_string current_abs_id));
-
-    (* Set the proper abstractions as endable *)
-    let ctx =
-      let visit_loop_abs =
-        object
-          inherit [_] map_eval_ctx
-
-          method! visit_abs _ abs =
-            match abs.kind with
-            | Loop (loop_id', rg_id', LoopSynthInput) ->
-                (* We only allow to end the loop synth input abs for the region
-                   group [rg_id] *)
-                sanity_check __FILE__ __LINE__
-                  (if Option.is_some loop_id then loop_id = Some loop_id'
-                   else true)
-                  fdef.item_meta.meta;
-                (* Loop abstractions *)
-                let rg_id' = Option.get rg_id' in
-                if rg_id' = back_id && inside_loop then
-                  { abs with can_end = true }
-                else abs
-            | Loop (loop_id', _, LoopCall) ->
-                (* We can end all the loop call abstractions *)
-                sanity_check __FILE__ __LINE__ (loop_id = Some loop_id')
-                  fdef.item_meta.meta;
-                { abs with can_end = true }
-            | SynthInput rg_id' ->
-                if rg_id' = back_id && end_fun_synth_input then
-                  { abs with can_end = true }
-                else abs
-            | _ ->
-                (* Other abstractions *)
-                abs
-        end
+      (* Initialize and insert the abstractions in the context.
+       *
+       * We take care of allowing to end only the regions which should end (note
+       * that this is important for soundness: this is part of the borrow checking).
+       * Also see the documentation of the [can_end] field of [abs] for more
+       * information. *)
+      let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
+      let region_can_end rid =
+        RegionGroupId.Set.mem rid parent_and_current_rgs
       in
-      visit_loop_abs#visit_eval_ctx () ctx
-    in
-
-    let current_abs_id =
-      match current_abs_id with None -> [] | Some id -> [ id ]
-    in
-    let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
-    let cf_end_target_abs cf =
-      List.fold_left
-        (fun cf id -> end_abstraction config fdef.item_meta.meta id cf)
-        cf target_abs_ids
-    in
-    (* Generate the Return node *)
-    let cf_return : m_fun =
-     fun ctx ->
-      match loop_id with
-      | None -> Some (SA.Return (ctx, None))
-      | Some loop_id -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
-    in
-    (* Apply *)
-    cf_end_target_abs cf_return ctx
+      sanity_check __FILE__ __LINE__ (region_can_end back_id)
+        fdef.item_meta.span;
+      let ctx =
+        create_push_abstractions_from_abs_region_groups
+          (fun rg_id -> SynthRet rg_id)
+          ret_inst_sg.regions_hierarchy region_can_end compute_abs_avalues ctx
+      in
+      ctx)
+    else ctx
   in
-  cf_pop_frame cf_consume_ret ctx
+
+  (* We now need to end the proper *input* abstractions - pay attention
+   * to the fact that we end the *input* abstractions, not the *return*
+   * abstractions (of course, the corresponding return abstractions will
+   * automatically be ended, because they consumed values coming from the
+   * input abstractions...) *)
+  (* End the parent abstractions and the current abstraction - note that we
+   * end them in an order which follows the regions hierarchy: it should lead
+   * to generated code which has a better consistency between the parent
+   * and children backward functions.
+   *
+   * Note that we don't end the same abstraction if we are *inside* a loop (i.e.,
+   * we are evaluating an [EndContinue]) or not.
+   *)
+  let current_abs_id, end_fun_synth_input =
+    let fun_abs_id = (RegionGroupId.nth inst_sg.regions_hierarchy back_id).id in
+    if not inside_loop then (Some fun_abs_id, true)
+    else
+      (* We are inside a loop *)
+      let pred (abs : abs) =
+        match abs.kind with
+        | Loop (_, rg_id', kind) ->
+            let rg_id' = Option.get rg_id' in
+            let is_ret =
+              match kind with LoopSynthInput -> true | LoopCall -> false
+            in
+            rg_id' = back_id && is_ret
+        | _ -> false
+      in
+      (* There is not necessarily an input synthesis abstraction specifically
+         for the loop.
+         If there is none, the input synthesis abstraction is actually the
+         function input synthesis abstraction.
+
+         Example:
+         ========
+         {[
+           fn clear(v: &mut Vec<u32>) {
+               let mut i = 0;
+               while i < v.len() {
+                   v[i] = 0;
+                   i += 1;
+               }
+           }
+         ]}
+      *)
+      match ctx_find_abs ctx pred with
+      | None ->
+          (* The loop gives back nothing for this region group.
+             Ex.:
+             {[
+               pub fn ignore_input_mut_borrow(_a: &mut u32) {
+                   loop {}
+               }
+             ]}
+          *)
+          (None, false)
+      | Some abs -> (Some abs.abs_id, false)
+  in
+  log#ldebug
+    (lazy
+      ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
+        input abstraction: "
+      ^ Print.option_to_string AbstractionId.to_string current_abs_id));
+
+  (* Set the proper abstractions as endable *)
+  let ctx =
+    let visit_loop_abs =
+      object
+        inherit [_] map_eval_ctx
+
+        method! visit_abs _ abs =
+          match abs.kind with
+          | Loop (loop_id', rg_id', LoopSynthInput) ->
+              (* We only allow to end the loop synth input abs for the region
+                 group [rg_id] *)
+              sanity_check __FILE__ __LINE__
+                (if Option.is_some loop_id then loop_id = Some loop_id'
+                 else true)
+                fdef.item_meta.span;
+              (* Loop abstractions *)
+              let rg_id' = Option.get rg_id' in
+              if rg_id' = back_id && inside_loop then
+                { abs with can_end = true }
+              else abs
+          | Loop (loop_id', _, LoopCall) ->
+              (* We can end all the loop call abstractions *)
+              sanity_check __FILE__ __LINE__ (loop_id = Some loop_id')
+                fdef.item_meta.span;
+              { abs with can_end = true }
+          | SynthInput rg_id' ->
+              if rg_id' = back_id && end_fun_synth_input then
+                { abs with can_end = true }
+              else abs
+          | _ ->
+              (* Other abstractions *)
+              abs
+      end
+    in
+    visit_loop_abs#visit_eval_ctx () ctx
+  in
+
+  let current_abs_id =
+    match current_abs_id with None -> [] | Some id -> [ id ]
+  in
+  let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
+  let ctx, cc =
+    comp cc
+      (fold_left_apply_continuation
+         (fun id ctx -> end_abstraction config fdef.item_meta.span id ctx)
+         target_abs_ids ctx)
+  in
+  (* Generate the Return node *)
+  let return_expr =
+    match loop_id with
+    | None -> Some (SA.Return (ctx, None))
+    | Some loop_id -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
+  in
+  (* Apply *)
+  cc return_expr
 
 (** Evaluate a function with the symbolic interpreter.
 
@@ -512,7 +509,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
 
   (* Create the continuation to finish the evaluation *)
   let config = mk_config SymbolicMode in
-  let cf_finish (res : statement_eval_res) (ctx : eval_ctx) =
+  let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
     log#ldebug
       (lazy
@@ -535,17 +532,13 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
            *)
           (* Forward translation: retrieve the returned value *)
           let fwd_e =
-            (* Pop the frame and retrieve the returned value at the same time*)
+            (* Pop the frame and retrieve the returned value at the same time *)
             let pop_return_value = true in
-            let cf_pop =
-              pop_frame config fdef.item_meta.meta pop_return_value
+            let ret_value, ctx, cc_pop =
+              pop_frame config fdef.item_meta.span pop_return_value ctx
             in
             (* Generate the Return node *)
-            let cf_return ret_value : m_fun =
-             fun ctx -> Some (SA.Return (ctx, ret_value))
-            in
-            (* Apply *)
-            cf_pop cf_return ctx
+            cc_pop (Some (SA.Return (ctx, ret_value)))
           in
           let fwd_e = Option.get fwd_e in
           (* Backward translation: introduce "return"
@@ -556,7 +549,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
             match res with
             | Return -> None
             | LoopReturn loop_id -> Some loop_id
-            | _ -> craise __FILE__ __LINE__ fdef.item_meta.meta "Unreachable"
+            | _ -> craise __FILE__ __LINE__ fdef.item_meta.span "Unreachable"
           in
           let is_regular_return = true in
           let inside_loop = Option.is_some loop_id in
@@ -582,22 +575,18 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
             match res with
             | EndEnterLoop _ -> false
             | EndContinue _ -> true
-            | _ -> craise __FILE__ __LINE__ fdef.item_meta.meta "Unreachable"
+            | _ -> craise __FILE__ __LINE__ fdef.item_meta.span "Unreachable"
           in
           (* Forward translation *)
           let fwd_e =
             (* Pop the frame - there is no returned value to pop: in the
                translation we will simply call the loop function *)
             let pop_return_value = false in
-            let cf_pop =
-              pop_frame config fdef.item_meta.meta pop_return_value
+            let _ret_value, _ctx, cc_pop =
+              pop_frame config fdef.item_meta.span pop_return_value ctx
             in
             (* Generate the Return node *)
-            let cf_return _ret_value : m_fun =
-             fun _ctx -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
-            in
-            (* Apply *)
-            cf_pop cf_return ctx
+            cc_pop (Some (SA.ReturnWithLoop (loop_id, inside_loop)))
           in
           let fwd_e = Option.get fwd_e in
           (* Backward translation: introduce "return"
@@ -625,16 +614,23 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
          * the executions can lead to a panic *)
         if synthesize then Some SA.Panic else None
     | Unit | Break _ | Continue _ ->
-        craise __FILE__ __LINE__ fdef.item_meta.meta
+        craise __FILE__ __LINE__ fdef.item_meta.span
           ("evaluate_function_symbolic failed on: " ^ name_to_string ())
   in
 
   (* Evaluate the function *)
   let symbolic =
-    try eval_function_body config (Option.get fdef.body).body cf_finish ctx
-    with CFailure (meta, msg) -> Some (Error (meta, msg))
+    try
+      let ctx_resl, cc =
+        eval_function_body config (Option.get fdef.body).body ctx
+      in
+      let el =
+        List.map Option.get
+          (List.map (fun (ctx, res) -> finish res ctx) ctx_resl)
+      in
+      cc (Some el)
+    with CFailure (span, msg) -> Some (Error (span, msg))
   in
-
   (* Return *)
   (input_svs, symbolic)
 
@@ -659,35 +655,33 @@ module Test = struct
     (* Sanity check - *)
     sanity_check __FILE__ __LINE__
       (fdef.signature.generics = empty_generic_params)
-      fdef.item_meta.meta;
-    sanity_check __FILE__ __LINE__ (body.arg_count = 0) fdef.item_meta.meta;
+      fdef.item_meta.span;
+    sanity_check __FILE__ __LINE__ (body.arg_count = 0) fdef.item_meta.span;
 
     (* Create the evaluation context *)
-    let ctx = initialize_eval_ctx fdef.item_meta.meta decls_ctx [] [] [] in
+    let ctx = initialize_eval_ctx fdef.item_meta.span decls_ctx [] [] [] in
 
     (* Insert the (uninitialized) local variables *)
-    let ctx = ctx_push_uninitialized_vars fdef.item_meta.meta ctx body.locals in
+    let ctx = ctx_push_uninitialized_vars fdef.item_meta.span ctx body.locals in
 
     (* Create the continuation to check the function's result *)
     let config = mk_config ConcreteMode in
-    let cf_check (res : statement_eval_res) (ctx : eval_ctx) =
+    let check (res : statement_eval_res) (ctx : eval_ctx) =
       match res with
       | Return ->
           (* Ok: drop the local variables and finish *)
           let pop_return_value = true in
-          pop_frame config fdef.item_meta.meta pop_return_value
-            (fun _ _ -> None)
-            ctx
+          pop_frame config fdef.item_meta.span pop_return_value ctx
       | _ ->
-          craise __FILE__ __LINE__ fdef.item_meta.meta
+          craise __FILE__ __LINE__ fdef.item_meta.span
             ("Unit test failed (concrete execution) on: "
             ^ Print.Types.name_to_string
                 (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
                 fdef.name)
     in
-
     (* Evaluate the function *)
-    let _ = eval_function_body config body.body cf_check ctx in
+    let ctx_resl, _ = eval_function_body config body.body ctx in
+    let _ = List.map (fun (ctx, res) -> check res ctx) ctx_resl in
     ()
 
   (** Small helper: return true if the function is a *transparent* unit function

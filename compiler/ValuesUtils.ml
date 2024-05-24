@@ -11,37 +11,37 @@ exception FoundSymbolicValue of symbolic_value
 let mk_unit_value : typed_value =
   { value = VAdt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
-let mk_typed_value (meta : Meta.meta) (ty : ty) (value : value) : typed_value =
-  sanity_check __FILE__ __LINE__ (ty_is_ety ty) meta;
+let mk_typed_value (span : Meta.span) (ty : ty) (value : value) : typed_value =
+  sanity_check __FILE__ __LINE__ (ty_is_ety ty) span;
   { value; ty }
 
-let mk_typed_avalue (meta : Meta.meta) (ty : ty) (value : avalue) : typed_avalue
+let mk_typed_avalue (span : Meta.span) (ty : ty) (value : avalue) : typed_avalue
     =
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
   { value; ty }
 
-let mk_bottom (meta : Meta.meta) (ty : ty) : typed_value =
-  sanity_check __FILE__ __LINE__ (ty_is_ety ty) meta;
+let mk_bottom (span : Meta.span) (ty : ty) : typed_value =
+  sanity_check __FILE__ __LINE__ (ty_is_ety ty) span;
   { value = VBottom; ty }
 
-let mk_abottom (meta : Meta.meta) (ty : ty) : typed_avalue =
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
+let mk_abottom (span : Meta.span) (ty : ty) : typed_avalue =
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
   { value = ABottom; ty }
 
-let mk_aignored (meta : Meta.meta) (ty : ty) : typed_avalue =
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) meta;
+let mk_aignored (span : Meta.span) (ty : ty) : typed_avalue =
+  sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
   { value = AIgnored; ty }
 
-let value_as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
+let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
   | VSymbolic v -> v
-  | _ -> craise __FILE__ __LINE__ meta "Unexpected"
+  | _ -> craise __FILE__ __LINE__ span "Unexpected"
 
 (** Box a value *)
-let mk_box_value (meta : Meta.meta) (v : typed_value) : typed_value =
+let mk_box_value (span : Meta.span) (v : typed_value) : typed_value =
   let box_ty = mk_box_ty v.ty in
   let box_v = VAdt { variant_id = None; field_values = [ v ] } in
-  mk_typed_value meta box_ty box_v
+  mk_typed_value span box_ty box_v
 
 let is_bottom (v : value) : bool = match v with VBottom -> true | _ -> false
 
@@ -51,16 +51,16 @@ let is_aignored (v : avalue) : bool =
 let is_symbolic (v : value) : bool =
   match v with VSymbolic _ -> true | _ -> false
 
-let as_symbolic (meta : Meta.meta) (v : value) : symbolic_value =
+let as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
   | VSymbolic s -> s
-  | _ -> craise __FILE__ __LINE__ meta "Unexpected"
+  | _ -> craise __FILE__ __LINE__ span "Unexpected"
 
-let as_mut_borrow (meta : Meta.meta) (v : typed_value) :
+let as_mut_borrow (span : Meta.span) (v : typed_value) :
     BorrowId.id * typed_value =
   match v.value with
   | VBorrow (VMutBorrow (bid, bv)) -> (bid, bv)
-  | _ -> craise __FILE__ __LINE__ meta "Unexpected"
+  | _ -> craise __FILE__ __LINE__ span "Unexpected"
 
 let is_unit (v : typed_value) : bool =
   ty_is_unit v.ty
