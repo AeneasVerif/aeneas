@@ -1,3 +1,5 @@
+//@ charon-args=--no-code-duplication
+//@ aeneas-args=-test-trans-units
 //! Tests with constants
 
 // Integers

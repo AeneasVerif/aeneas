@@ -1,3 +1,15 @@
+(* Convenience functions *)
+let map_while (f : 'a -> 'b option) (input : 'a list) : 'b list =
+  let _, result =
+    List.fold_left
+      (fun (continue, out) a ->
+        if continue then
+          match f a with None -> (false, out) | Some b -> (true, b :: out)
+        else (continue, out))
+      (true, []) input
+  in
+  List.rev result
+
 (* Paths to use for tests *)
 type runner_env = {
   charon_path : string;
@@ -48,78 +60,30 @@ let run_command args =
 
 (* File-specific options *)
 let aeneas_options_for_test backend test_name =
-  let backend = Backend.to_string backend in
-  (* TODO: reactivate -test-trans-units for hashmap and hashmap_main *)
-  let use_fuel =
-    match (backend, test_name) with
-    | ( "coq",
-        ("arrays" | "betree" | "demo" | "hashmap" | "hashmap_main" | "loops") )
-      ->
-        true
-    | "fstar", "demo" -> true
-    | _ -> false
-  in
-  let options = if use_fuel then "-use-fuel" :: [] else [] in
-
-  let decrease_template_clauses =
-    backend = "fstar"
-    &&
-    match test_name with
-    | "arrays" | "betree" | "hashmap" | "hashmap_main" | "loops" | "traits" ->
-        true
-    | _ -> false
-  in
-  let options =
-    if decrease_template_clauses then
-      "-decreases-clauses" :: "-template-clauses" :: options
-    else options
-  in
-
-  let extra_options =
-    match (backend, test_name) with
-    | _, "betree" ->
-        [
-          "-backward-no-state-update";
-          "-test-trans-units";
-          "-state";
-          "-split-files";
-        ]
-    | _, "bitwise" -> [ "-test-trans-units" ]
-    | _, "constants" -> [ "-test-trans-units" ]
-    | _, "external" -> [ "-test-trans-units"; "-state"; "-split-files" ]
-    | _, "hashmap_main" -> [ "-state"; "-split-files" ]
-    | _, "no_nested_borrows" -> [ "-test-trans-units" ]
-    | _, "paper" -> [ "-test-trans-units" ]
-    | _, "polonius_list" -> [ "-test-trans-units" ]
-    | "fstar", "arrays" -> [ "-split-files" ]
-    | "fstar", "loops" -> [ "-split-files" ]
-    (* We add a custom import in the Hashmap.lean file: we do not want to overwrite it *)
-    | "lean", "hashmap" -> [ "-split-files"; "-no-gen-lib-entry" ]
-    | _, "hashmap" -> [ "-split-files" ]
-    | _ -> []
-  in
-  let options = List.append extra_options options in
-  options
+  if test_name = "betree" then
+    let options =
+      [
+        "-backward-no-state-update";
+        "-test-trans-units";
+        "-state";
+        "-split-files";
+      ]
+    in
+    let extra_options =
+      match backend with
+      | Backend.Coq -> [ "-use-fuel" ]
+      | Backend.FStar -> [ "-decreases-clauses"; "-template-clauses" ]
+      | _ -> []
+    in
+    List.append extra_options options
+  else []
 
 (* File-specific options *)
 let charon_options_for_test test_name =
-  (* Possible to add `--no-code-duplication` for `hashmap_main` if we use the optimized MIR *)
-  let no_code_dup =
-    match test_name with
-    | "constants" | "external" | "nested_borrows" | "no_nested_borrows"
-    | "paper" ->
-        [ "--no-code-duplication" ]
-    | _ -> []
-  in
-  let extra_options =
-    match test_name with
-    | "betree" ->
-        [ "--polonius"; "--opaque=betree_utils"; "--crate"; "betree_main" ]
-    | "hashmap_main" -> [ "--opaque=hashmap_utils" ]
-    | "polonius_list" -> [ "--polonius" ]
-    | _ -> []
-  in
-  List.append no_code_dup extra_options
+  match test_name with
+  | "betree" ->
+      [ "--polonius"; "--opaque=betree_utils"; "--crate"; "betree_main" ]
+  | _ -> []
 
 (* The subdirectory in which to store the outputs. *)
 (* This reproduces the file layout that was set by the old Makefile. FIXME: cleanup *)
@@ -141,16 +105,66 @@ let test_subdir backend test_name =
 (* The data for a specific test input *)
 module Input = struct
   type kind = SingleFile | Crate
+  type action = Normal | Skip | KnownFailure
 
   type t = {
     name : string;
     path : string;
     kind : kind;
+    action : action;
     charon_options : string list;
     aeneas_options : string list BackendMap.t;
     subdir : string BackendMap.t;
   }
 
+  (* Parse lines that start `//@`. Each of them modifies the options we use for the test.
+     Supported comments:
+       - `skip`: don't process the file;
+       - `known-failure`: TODO;
+       - `charon-args=...`: extra arguments to pass to charon;
+       - `aeneas-args=...`: extra arguments to pass to aeneas;
+       - `[backend,..]...`: where each `backend` is the name of a backend supported by
+            aeneas; this sets options for these backends only. Only supported for `aeneas-args`.
+  *)
+  let apply_special_comment comment input =
+    let comment = String.trim comment in
+    (* Parse the backends if any *)
+    let re = Re.compile (Re.Pcre.re "^\\[([a-zA-Z,]+)\\](.*)$") in
+    let comment, (backends : Backend.t list) =
+      match Re.exec_opt re comment with
+      | Some groups ->
+          let backends = Re.Group.get groups 1 in
+          let backends = String.split_on_char ',' backends in
+          let backends = List.map Backend.of_string backends in
+          let rest = Re.Group.get groups 2 in
+          (String.trim rest, backends)
+      | None -> (comment, Backend.all)
+    in
+    (* Parse the other options *)
+    let charon_args = Core.String.chop_prefix comment ~prefix:"charon-args=" in
+    let aeneas_args = Core.String.chop_prefix comment ~prefix:"aeneas-args=" in
+
+    if comment = "skip" then { input with action = Skip }
+    else if comment = "known-failure" then { input with action = KnownFailure }
+    else if Option.is_some charon_args then
+      let args = Option.get charon_args in
+      let args = String.split_on_char ' ' args in
+      { input with charon_options = List.append input.charon_options args }
+    else if Option.is_some aeneas_args then
+      let args = Option.get aeneas_args in
+      let args = String.split_on_char ' ' args in
+      let add_args opts = List.append opts args in
+      {
+        input with
+        aeneas_options =
+          List.fold_left
+            (fun map backend ->
+              BackendMap.update backend (Option.map add_args) map)
+            input.aeneas_options backends;
+      }
+    else failwith ("Unrecognized special comment: `" ^ comment ^ "`")
+
+  (* Given a path to a rust file or crate, gather the details and options about how to build the test. *)
   let build (path : string) : t =
     let name = Filename.remove_extension (Filename.basename path) in
     let kind =
@@ -158,6 +172,7 @@ module Input = struct
       else if Sys_unix.is_directory_exn path then Crate
       else failwith ("`" ^ path ^ "` is not a file or a directory.")
     in
+    let action = Normal in
     let charon_options = charon_options_for_test name in
     let subdir =
       List.fold_left
@@ -173,7 +188,23 @@ module Input = struct
           BackendMap.add backend opts map)
         BackendMap.empty Backend.all
     in
-    { path; name; kind; charon_options; subdir; aeneas_options }
+    let input =
+      { path; name; kind; action; charon_options; subdir; aeneas_options }
+    in
+    match kind with
+    | SingleFile ->
+        let file_lines = Core.In_channel.read_lines path in
+        (* Extract the special lines. Stop at the first non-special line. *)
+        let special_comments =
+          map_while
+            (fun line -> Core.String.chop_prefix line ~prefix:"//@")
+            file_lines
+        in
+        (* Apply the changes from the special lines to our input. *)
+        List.fold_left
+          (fun input comment -> apply_special_comment comment input)
+          input special_comments
+    | Crate -> input
 end
 
 (* Run Aeneas on a specific input with the given options *)
@@ -235,7 +266,7 @@ let () =
   match Array.to_list Sys.argv with
   (* Ad-hoc argument passing for now. *)
   | _exe_path :: charon_path :: aeneas_path :: llbc_dir :: test_path
-    :: aeneas_options ->
+    :: aeneas_options -> (
       let runner_env = { charon_path; aeneas_path; llbc_dir } in
       let test_case = Input.build test_path in
       let test_case =
@@ -246,10 +277,14 @@ let () =
         }
       in
 
-      (* Generate the llbc file *)
-      run_charon runner_env test_case;
-      (* Process the llbc file for the each backend *)
-      List.iter
-        (fun backend -> run_aeneas runner_env test_case backend)
-        Backend.all
+      match test_case.action with
+      | Skip -> ()
+      | Normal ->
+          (* Generate the llbc file *)
+          run_charon runner_env test_case;
+          (* Process the llbc file for the each backend *)
+          List.iter
+            (fun backend -> run_aeneas runner_env test_case backend)
+            Backend.all
+      | KnownFailure -> failwith "KnownFailure is unimplemented")
   | _ -> failwith "Incorrect options passed to test runner"

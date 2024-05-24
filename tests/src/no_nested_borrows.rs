@@ -1,3 +1,5 @@
+//@ charon-args=--no-code-duplication
+//@ aeneas-args=-test-trans-units
 //! This module doesn't contain **functions which use nested borrows in their
 //! signatures**, and doesn't contain functions with loops.
 

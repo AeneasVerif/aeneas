@@ -159,10 +159,6 @@ verify:
 INPUTS_LIST = $(wildcard $(INPUTS_DIR)/*)
 # Remove the directory prefix, replace with `test-`
 INPUTS_LIST := $(subst $(INPUTS_DIR)/,test-,$(INPUTS_LIST))
-# Remove some tests we don't want to run.
-# FIXME: move this information to the file itself
-INPUTS_LIST := $(filter-out test-hashmap_utils.rs,$(INPUTS_LIST))
-INPUTS_LIST := $(filter-out test-nested_borrows.rs,$(INPUTS_LIST))
 
 # Run all the tests we found.
 .PHONY: test-all
