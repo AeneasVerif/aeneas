@@ -47,28 +47,55 @@
           '';
           installPhase = "touch $out";
         };
+
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
           duneVersion = "3";
           src = ./compiler;
-          OCAMLPARAM="_,warn-error=+A"; # Turn all warnings into errors.
+          OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = [
-            easy_logging charon.packages.${system}.charon-ml
-            ] ++ (with ocamlPackages; [
-              calendar
-              core_unix
-              ppx_deriving
-              visitors
-              yojson
-              zarith
-              ocamlgraph
-              unionFind
-            ]);
+            easy_logging
+            charon.packages.${system}.charon-ml
+          ] ++ (with ocamlPackages; [
+            calendar
+            core_unix
+            ppx_deriving
+            visitors
+            yojson
+            zarith
+            ocamlgraph
+            unionFind
+          ]);
           afterBuild = ''
-          echo charon.packages.${system}.tests
+            echo charon.packages.${system}.tests
           '';
         };
+
+        test_runner = ocamlPackages.buildDunePackage {
+          pname = "aeneas_test_runner";
+          version = "0.1.0";
+          duneVersion = "3";
+          src = ./tests/test_runner;
+          OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
+          propagatedBuildInputs = (with ocamlPackages; [
+            core_unix
+          ]);
+        };
+
+        # This test is a full crate with dependencies. We generate the
+        # corresponding llbc file here; this function takes care of cargo
+        # dependencies for us.
+        betree-llbc = charon.extractCrateWithCharon.${system} {
+          name = "betree";
+          src = ./tests/src/betree;
+          charonFlags = "--polonius --opaque=betree_utils --crate betree_main";
+          craneExtraArgs.checkPhaseCargoCommand = ''
+            cargo rustc -- --test -Zpolonius
+            ./target/debug/betree
+          '';
+        };
+
         # Run the translation on various files.
         # Make sure we don't need to recompile the package whenever we make
         # unnecessary changes - we list the exact files and folders the package
@@ -81,23 +108,26 @@
               path == toString ./Makefile
               || pkgs.lib.hasPrefix (toString ./compiler) path
               || pkgs.lib.hasPrefix (toString ./backends) path
-              || pkgs.lib.hasPrefix (toString ./tests) path;
+              || (pkgs.lib.hasPrefix (toString ./tests) path
+              && !pkgs.lib.hasSuffix ".llbc" path);
           };
+          buildInputs = [ charon.packages.${system}.rustToolchain ];
           buildPhase = ''
-            # We need to provide the paths to the Charon tests derivations
-            export CHARON_TEST_DIR=${charon.checks.${system}.tests}
+            export AENEAS_EXE=${aeneas}/bin/aeneas
+            export CHARON_EXE=${charon.packages.${system}.charon}/bin/charon
+            export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
 
-            # Copy the Aeneas executable, and update the path to it
-            cp ${aeneas}/bin/aeneas aeneas
-            export AENEAS_EXE=./aeneas
+            mkdir llbc
+            export LLBC_DIR=llbc
+            # Copy over the llbc file we can't generate ourselves.
+            cp ${betree-llbc}/llbc/betree_main.llbc $LLBC_DIR
 
             # Copy the tests
             cp -r tests tests-copy
+            make clean-generated-aeneas
 
             # Run the tests with extra sanity checks enabled
-            # Remark: we could remove the file
-            make clean-generated
-            OPTIONS=-checks make test-all -j $NIX_BUILD_CORES
+            IN_CI=1 make test-all -j $NIX_BUILD_CORES
 
             # Check that there are no differences between the generated tests
             # and the original tests
@@ -114,12 +144,13 @@
           # something, otherwise Nix will consider the build has failed.
           installPhase = "touch $out";
         };
+
         # Replay the F* proofs.
         aeneas-verify-fstar = pkgs.stdenv.mkDerivation {
           name = "aeneas_verify_fstar";
           src = ./tests/fstar;
           FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
-          buildPhase= ''
+          buildPhase = ''
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
           '';
@@ -131,7 +162,7 @@
           name = "aeneas_verify_coq";
           src = ./tests/coq;
           buildInputs = [ pkgs.coq ];
-          buildPhase= ''
+          buildPhase = ''
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
           '';
@@ -155,7 +186,7 @@
           #     || pkgs.lib.hasPrefix (toString ./tests/hol4) path;
           # };
           buildInputs = [ pkgs.hol ];
-          buildPhase= ''
+          buildPhase = ''
             cd ./tests/hol4
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
@@ -164,21 +195,23 @@
           installPhase = "touch $out";
         };
 
-        check-charon-pin = pkgs.runCommand "aeneas-check-charon-pin" {
-          buildInputs = [ pkgs.jq ];
-        } ''
-            CHARON_REV_FROM_FLAKE="$(jq -r .nodes.charon.locked.rev ${./flake.lock})"
-            CHARON_REV_FROM_PIN="$(tail -1 ${./charon-pin})"
-            if [[ "$CHARON_REV_FROM_FLAKE" != "$CHARON_REV_FROM_PIN" ]]; then
-              echo 'ERROR: The charon version in `flacke.lock` differs from the one in `charon-pin`.'
-              echo '  In `flake.lock`: '"$CHARON_REV_FROM_FLAKE"
-              echo '  In `charon-pin`: '"$CHARON_REV_FROM_PIN"
-              echo 'Use `make charon-pin` to update the `./charon-pin` file.'
-              exit 1
-            fi
-            touch $out
+        check-charon-pin = pkgs.runCommand "aeneas-check-charon-pin"
+          {
+            buildInputs = [ pkgs.jq ];
+          } ''
+          CHARON_REV_FROM_FLAKE="$(jq -r .nodes.charon.locked.rev ${./flake.lock})"
+          CHARON_REV_FROM_PIN="$(tail -1 ${./charon-pin})"
+          if [[ "$CHARON_REV_FROM_FLAKE" != "$CHARON_REV_FROM_PIN" ]]; then
+            echo 'ERROR: The charon version in `flacke.lock` differs from the one in `charon-pin`.'
+            echo '  In `flake.lock`: '"$CHARON_REV_FROM_FLAKE"
+            echo '  In `charon-pin`: '"$CHARON_REV_FROM_PIN"
+            echo 'Use `make charon-pin` to update the `./charon-pin` file.'
+            exit 1
+          fi
+          touch $out
         '';
-      in {
+      in
+      {
         packages = {
           inherit aeneas;
           default = aeneas;
@@ -198,10 +231,11 @@
         };
         checks = {
           inherit aeneas aeneas-tests
-                  aeneas-verify-fstar
-                  aeneas-verify-coq
-                  aeneas-verify-hol4
-                  aeneas-check-tidiness
-                  check-charon-pin; };
+            aeneas-verify-fstar
+            aeneas-verify-coq
+            aeneas-verify-hol4
+            aeneas-check-tidiness
+            check-charon-pin;
+        };
       });
 }
