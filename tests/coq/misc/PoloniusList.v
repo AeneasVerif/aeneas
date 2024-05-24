@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module PoloniusList.
 
 (** [polonius_list::List]
-    Source: 'tests/src/polonius_list.rs', lines 5:0-5:16 *)
+    Source: 'tests/src/polonius_list.rs', lines 6:0-6:16 *)
 Inductive List_t (T : Type) :=
 | List_Cons : T -> List_t T -> List_t T
 | List_Nil : List_t T
@@ -19,7 +19,7 @@ Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
 (** [polonius_list::get_list_at_x]:
-    Source: 'tests/src/polonius_list.rs', lines 15:0-15:76 *)
+    Source: 'tests/src/polonius_list.rs', lines 16:0-16:76 *)
 Fixpoint get_list_at_x
   (ls : List_t u32) (x : u32) :
   result ((List_t u32) * (List_t u32 -> result (List_t u32)))

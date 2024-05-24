@@ -1,5 +1,6 @@
 //@ charon-args=--no-code-duplication
 //@ aeneas-args=-test-trans-units
+//@ [coq,fstar] subdir=misc
 //! Tests with constants
 
 // Integers

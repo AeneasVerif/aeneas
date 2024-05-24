@@ -1,4 +1,5 @@
 //@ aeneas-args=-test-trans-units
+//@ [coq,fstar] subdir=misc
 //! Exercise the bitwise operations
 
 pub fn shift_u32(a: u32) -> u32 {

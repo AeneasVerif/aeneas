@@ -37,7 +37,26 @@ module Backend = struct
     | HOL4 -> "hol4"
 end
 
-module BackendMap = Map.Make (Backend)
+module BackendMap = struct
+  include Map.Make (Backend)
+
+  (* Make a new map with one entry per backend, given by `f` *)
+  let make (f : Backend.t -> 'a) : 'a t =
+    List.fold_left
+      (fun map backend -> add backend (f backend) map)
+      empty Backend.all
+
+  (* Set this value for all the backends in `backends` *)
+  let add_each (backends : Backend.t list) (v : 'a) (map : 'a t) : 'a t =
+    List.fold_left (fun map backend -> add backend v map) map backends
+
+  (* Updates all the backends in `backends` with `f` *)
+  let update_each (backends : Backend.t list) (f : 'a -> 'a) (map : 'a t) : 'a t
+      =
+    List.fold_left
+      (fun map backend -> update backend (Option.map f) map)
+      map backends
+end
 
 let concat_path = List.fold_left Filename.concat ""
 
@@ -85,23 +104,6 @@ let charon_options_for_test test_name =
       [ "--polonius"; "--opaque=betree_utils"; "--crate"; "betree_main" ]
   | _ -> []
 
-(* The subdirectory in which to store the outputs. *)
-(* This reproduces the file layout that was set by the old Makefile. FIXME: cleanup *)
-let test_subdir backend test_name =
-  let backend = Backend.to_string backend in
-  match (backend, test_name) with
-  | "lean", "demo" -> "Demo"
-  | "lean", _ -> "."
-  | _, ("arrays" | "demo" | "hashmap" | "traits") -> test_name
-  | _, "betree" -> "betree"
-  | _, "hashmap_main" -> "hashmap_on_disk"
-  | "hol4", _ -> "misc-" ^ test_name
-  | ( _,
-      ( "bitwise" | "constants" | "external" | "loops" | "no_nested_borrows"
-      | "paper" | "polonius_list" ) ) ->
-      "misc"
-  | _ -> test_name
-
 (* The data for a specific test input *)
 module Input = struct
   type kind = SingleFile | Crate
@@ -111,20 +113,26 @@ module Input = struct
     name : string;
     path : string;
     kind : kind;
-    action : action;
+    actions : action BackendMap.t;
     charon_options : string list;
     aeneas_options : string list BackendMap.t;
-    subdir : string BackendMap.t;
+    subdirs : string BackendMap.t;
   }
+
+  (* The default subdirectory in which to store the outputs. *)
+  let default_subdir backend test_name =
+    match backend with Backend.Lean -> "." | _ -> test_name
 
   (* Parse lines that start `//@`. Each of them modifies the options we use for the test.
      Supported comments:
        - `skip`: don't process the file;
        - `known-failure`: TODO;
+       - `subdir=...: set the subdirectory in which to store the outputs.
+            Defaults to nothing for lean and to the test name for other backends;
        - `charon-args=...`: extra arguments to pass to charon;
        - `aeneas-args=...`: extra arguments to pass to aeneas;
        - `[backend,..]...`: where each `backend` is the name of a backend supported by
-            aeneas; this sets options for these backends only. Only supported for `aeneas-args`.
+            aeneas; this sets options for these backends only.
   *)
   let apply_special_comment comment input =
     let comment = String.trim comment in
@@ -143,13 +151,21 @@ module Input = struct
     (* Parse the other options *)
     let charon_args = Core.String.chop_prefix comment ~prefix:"charon-args=" in
     let aeneas_args = Core.String.chop_prefix comment ~prefix:"aeneas-args=" in
+    let subdir = Core.String.chop_prefix comment ~prefix:"subdir=" in
 
-    if comment = "skip" then { input with action = Skip }
-    else if comment = "known-failure" then { input with action = KnownFailure }
+    if comment = "skip" then
+      { input with actions = BackendMap.add_each backends Skip input.actions }
+    else if comment = "known-failure" then
+      {
+        input with
+        actions = BackendMap.add_each backends KnownFailure input.actions;
+      }
     else if Option.is_some charon_args then
       let args = Option.get charon_args in
       let args = String.split_on_char ' ' args in
-      { input with charon_options = List.append input.charon_options args }
+      if backends != Backend.all then
+        failwith "Cannot set per-backend charon-args"
+      else { input with charon_options = List.append input.charon_options args }
     else if Option.is_some aeneas_args then
       let args = Option.get aeneas_args in
       let args = String.split_on_char ' ' args in
@@ -157,39 +173,32 @@ module Input = struct
       {
         input with
         aeneas_options =
-          List.fold_left
-            (fun map backend ->
-              BackendMap.update backend (Option.map add_args) map)
-            input.aeneas_options backends;
+          BackendMap.update_each backends add_args input.aeneas_options;
       }
+    else if Option.is_some subdir then
+      let subdir = Option.get subdir in
+      { input with subdirs = BackendMap.add_each backends subdir input.subdirs }
     else failwith ("Unrecognized special comment: `" ^ comment ^ "`")
 
   (* Given a path to a rust file or crate, gather the details and options about how to build the test. *)
   let build (path : string) : t =
     let name = Filename.remove_extension (Filename.basename path) in
+    let name = Str.global_replace (Str.regexp "-") "_" name in
     let kind =
       if Sys_unix.is_file_exn path then SingleFile
       else if Sys_unix.is_directory_exn path then Crate
       else failwith ("`" ^ path ^ "` is not a file or a directory.")
     in
-    let action = Normal in
+    let actions = BackendMap.make (fun _ -> Normal) in
     let charon_options = charon_options_for_test name in
-    let subdir =
-      List.fold_left
-        (fun map backend ->
-          let subdir = test_subdir backend name in
-          BackendMap.add backend subdir map)
-        BackendMap.empty Backend.all
+    let subdirs =
+      BackendMap.make (fun backend -> default_subdir backend name)
     in
     let aeneas_options =
-      List.fold_left
-        (fun map backend ->
-          let opts = aeneas_options_for_test backend name in
-          BackendMap.add backend opts map)
-        BackendMap.empty Backend.all
+      BackendMap.make (fun backend -> aeneas_options_for_test backend name)
     in
     let input =
-      { path; name; kind; action; charon_options; subdir; aeneas_options }
+      { path; name; kind; actions; charon_options; subdirs; aeneas_options }
     in
     match kind with
     | SingleFile ->
@@ -212,7 +221,7 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   (* FIXME: remove this special case *)
   let test_name = if case.name = "betree" then "betree_main" else case.name in
   let input_file = concat_path [ env.llbc_dir; test_name ] ^ ".llbc" in
-  let subdir = BackendMap.find backend case.subdir in
+  let subdir = BackendMap.find backend case.subdirs in
   let aeneas_options = BackendMap.find backend case.aeneas_options in
   let backend_str = Backend.to_string backend in
   let dest_dir = concat_path [ "tests"; backend_str; subdir ] in
@@ -266,7 +275,7 @@ let () =
   match Array.to_list Sys.argv with
   (* Ad-hoc argument passing for now. *)
   | _exe_path :: charon_path :: aeneas_path :: llbc_dir :: test_path
-    :: aeneas_options -> (
+    :: aeneas_options ->
       let runner_env = { charon_path; aeneas_path; llbc_dir } in
       let test_case = Input.build test_path in
       let test_case =
@@ -276,15 +285,22 @@ let () =
             BackendMap.map (List.append aeneas_options) test_case.aeneas_options;
         }
       in
-
-      match test_case.action with
-      | Skip -> ()
-      | Normal ->
-          (* Generate the llbc file *)
-          run_charon runner_env test_case;
-          (* Process the llbc file for the each backend *)
-          List.iter
-            (fun backend -> run_aeneas runner_env test_case backend)
-            Backend.all
-      | KnownFailure -> failwith "KnownFailure is unimplemented")
+      let skip_all =
+        List.for_all
+          (fun backend ->
+            BackendMap.find backend test_case.actions = Input.Skip)
+          Backend.all
+      in
+      if skip_all then ()
+      else (
+        (* Generate the llbc file *)
+        run_charon runner_env test_case;
+        (* Process the llbc file for the each backend *)
+        List.iter
+          (fun backend ->
+            match BackendMap.find backend test_case.actions with
+            | Skip -> ()
+            | Normal -> run_aeneas runner_env test_case backend
+            | KnownFailure -> failwith "KnownFailure is unimplemented")
+          Backend.all)
   | _ -> failwith "Incorrect options passed to test runner"
