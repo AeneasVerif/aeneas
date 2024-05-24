@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module Hashmap_Types.
 
 (** [hashmap::List]
-    Source: 'src/hashmap.rs', lines 19:0-19:16 *)
+    Source: 'tests/src/hashmap.rs', lines 19:0-19:16 *)
 Inductive List_t (T : Type) :=
 | List_Cons : usize -> T -> List_t T -> List_t T
 | List_Nil : List_t T
@@ -19,7 +19,7 @@ Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
 (** [hashmap::HashMap]
-    Source: 'src/hashmap.rs', lines 35:0-35:21 *)
+    Source: 'tests/src/hashmap.rs', lines 35:0-35:21 *)
 Record HashMap_t (T : Type) :=
 mkHashMap_t {
   hashMap_num_entries : usize;

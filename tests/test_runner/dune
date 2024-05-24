@@ -1,0 +1,4 @@
+(executable
+ (public_name test_runner)
+ (libraries core_unix.sys_unix unix)
+ (name run_test))

@@ -9,12 +9,12 @@ include HashmapMain.Clauses
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap_main::hashmap::hash_key]:
-    Source: 'src/hashmap.rs', lines 27:0-27:32 *)
+    Source: 'tests/src/hashmap.rs', lines 27:0-27:32 *)
 let hashmap_hash_key (k : usize) : result usize =
   Ok k
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::allocate_slots]: loop 0:
-    Source: 'src/hashmap.rs', lines 50:4-56:5 *)
+    Source: 'tests/src/hashmap.rs', lines 50:4-56:5 *)
 let rec hashmap_HashMap_allocate_slots_loop
   (t : Type0) (slots : alloc_vec_Vec (hashmap_List_t t)) (n : usize) :
   Tot (result (alloc_vec_Vec (hashmap_List_t t)))
@@ -29,7 +29,7 @@ let rec hashmap_HashMap_allocate_slots_loop
   else Ok slots
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::allocate_slots]:
-    Source: 'src/hashmap.rs', lines 50:4-50:76 *)
+    Source: 'tests/src/hashmap.rs', lines 50:4-50:76 *)
 let hashmap_HashMap_allocate_slots
   (t : Type0) (slots : alloc_vec_Vec (hashmap_List_t t)) (n : usize) :
   result (alloc_vec_Vec (hashmap_List_t t))
@@ -37,7 +37,7 @@ let hashmap_HashMap_allocate_slots
   hashmap_HashMap_allocate_slots_loop t slots n
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::new_with_capacity]:
-    Source: 'src/hashmap.rs', lines 59:4-63:13 *)
+    Source: 'tests/src/hashmap.rs', lines 59:4-63:13 *)
 let hashmap_HashMap_new_with_capacity
   (t : Type0) (capacity : usize) (max_load_dividend : usize)
   (max_load_divisor : usize) :
@@ -57,12 +57,12 @@ let hashmap_HashMap_new_with_capacity
     }
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::new]:
-    Source: 'src/hashmap.rs', lines 75:4-75:24 *)
+    Source: 'tests/src/hashmap.rs', lines 75:4-75:24 *)
 let hashmap_HashMap_new (t : Type0) : result (hashmap_HashMap_t t) =
   hashmap_HashMap_new_with_capacity t 32 4 5
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'src/hashmap.rs', lines 80:4-88:5 *)
+    Source: 'tests/src/hashmap.rs', lines 80:4-88:5 *)
 let rec hashmap_HashMap_clear_loop
   (t : Type0) (slots : alloc_vec_Vec (hashmap_List_t t)) (i : usize) :
   Tot (result (alloc_vec_Vec (hashmap_List_t t)))
@@ -81,20 +81,20 @@ let rec hashmap_HashMap_clear_loop
   else Ok slots
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::clear]:
-    Source: 'src/hashmap.rs', lines 80:4-80:27 *)
+    Source: 'tests/src/hashmap.rs', lines 80:4-80:27 *)
 let hashmap_HashMap_clear
   (t : Type0) (self : hashmap_HashMap_t t) : result (hashmap_HashMap_t t) =
   let* hm = hashmap_HashMap_clear_loop t self.slots 0 in
   Ok { self with num_entries = 0; slots = hm }
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::len]:
-    Source: 'src/hashmap.rs', lines 90:4-90:30 *)
+    Source: 'tests/src/hashmap.rs', lines 90:4-90:30 *)
 let hashmap_HashMap_len
   (t : Type0) (self : hashmap_HashMap_t t) : result usize =
   Ok self.num_entries
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]: loop 0:
-    Source: 'src/hashmap.rs', lines 97:4-114:5 *)
+    Source: 'tests/src/hashmap.rs', lines 97:4-114:5 *)
 let rec hashmap_HashMap_insert_in_list_loop
   (t : Type0) (key : usize) (value : t) (ls : hashmap_List_t t) :
   Tot (result (bool & (hashmap_List_t t)))
@@ -111,7 +111,7 @@ let rec hashmap_HashMap_insert_in_list_loop
   end
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_in_list]:
-    Source: 'src/hashmap.rs', lines 97:4-97:71 *)
+    Source: 'tests/src/hashmap.rs', lines 97:4-97:71 *)
 let hashmap_HashMap_insert_in_list
   (t : Type0) (key : usize) (value : t) (ls : hashmap_List_t t) :
   result (bool & (hashmap_List_t t))
@@ -119,7 +119,7 @@ let hashmap_HashMap_insert_in_list
   hashmap_HashMap_insert_in_list_loop t key value ls
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert_no_resize]:
-    Source: 'src/hashmap.rs', lines 117:4-117:54 *)
+    Source: 'tests/src/hashmap.rs', lines 117:4-117:54 *)
 let hashmap_HashMap_insert_no_resize
   (t : Type0) (self : hashmap_HashMap_t t) (key : usize) (value : t) :
   result (hashmap_HashMap_t t)
@@ -140,7 +140,7 @@ let hashmap_HashMap_insert_no_resize
   else let* v = index_mut_back l1 in Ok { self with slots = v }
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
-    Source: 'src/hashmap.rs', lines 183:4-196:5 *)
+    Source: 'tests/src/hashmap.rs', lines 183:4-196:5 *)
 let rec hashmap_HashMap_move_elements_from_list_loop
   (t : Type0) (ntable : hashmap_HashMap_t t) (ls : hashmap_List_t t) :
   Tot (result (hashmap_HashMap_t t))
@@ -155,7 +155,7 @@ let rec hashmap_HashMap_move_elements_from_list_loop
   end
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements_from_list]:
-    Source: 'src/hashmap.rs', lines 183:4-183:72 *)
+    Source: 'tests/src/hashmap.rs', lines 183:4-183:72 *)
 let hashmap_HashMap_move_elements_from_list
   (t : Type0) (ntable : hashmap_HashMap_t t) (ls : hashmap_List_t t) :
   result (hashmap_HashMap_t t)
@@ -163,7 +163,7 @@ let hashmap_HashMap_move_elements_from_list
   hashmap_HashMap_move_elements_from_list_loop t ntable ls
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements]: loop 0:
-    Source: 'src/hashmap.rs', lines 171:4-180:5 *)
+    Source: 'tests/src/hashmap.rs', lines 171:4-180:5 *)
 let rec hashmap_HashMap_move_elements_loop
   (t : Type0) (ntable : hashmap_HashMap_t t)
   (slots : alloc_vec_Vec (hashmap_List_t t)) (i : usize) :
@@ -185,7 +185,7 @@ let rec hashmap_HashMap_move_elements_loop
   else Ok (ntable, slots)
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::move_elements]:
-    Source: 'src/hashmap.rs', lines 171:4-171:95 *)
+    Source: 'tests/src/hashmap.rs', lines 171:4-171:95 *)
 let hashmap_HashMap_move_elements
   (t : Type0) (ntable : hashmap_HashMap_t t)
   (slots : alloc_vec_Vec (hashmap_List_t t)) (i : usize) :
@@ -194,7 +194,7 @@ let hashmap_HashMap_move_elements
   hashmap_HashMap_move_elements_loop t ntable slots i
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::try_resize]:
-    Source: 'src/hashmap.rs', lines 140:4-140:28 *)
+    Source: 'tests/src/hashmap.rs', lines 140:4-140:28 *)
 let hashmap_HashMap_try_resize
   (t : Type0) (self : hashmap_HashMap_t t) : result (hashmap_HashMap_t t) =
   let* max_usize = scalar_cast U32 Usize core_u32_max in
@@ -214,7 +214,7 @@ let hashmap_HashMap_try_resize
   else Ok { self with max_load_factor = (i, i1) }
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::insert]:
-    Source: 'src/hashmap.rs', lines 129:4-129:48 *)
+    Source: 'tests/src/hashmap.rs', lines 129:4-129:48 *)
 let hashmap_HashMap_insert
   (t : Type0) (self : hashmap_HashMap_t t) (key : usize) (value : t) :
   result (hashmap_HashMap_t t)
@@ -224,7 +224,7 @@ let hashmap_HashMap_insert
   if i > self1.max_load then hashmap_HashMap_try_resize t self1 else Ok self1
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
-    Source: 'src/hashmap.rs', lines 206:4-219:5 *)
+    Source: 'tests/src/hashmap.rs', lines 206:4-219:5 *)
 let rec hashmap_HashMap_contains_key_in_list_loop
   (t : Type0) (key : usize) (ls : hashmap_List_t t) :
   Tot (result bool)
@@ -239,13 +239,13 @@ let rec hashmap_HashMap_contains_key_in_list_loop
   end
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key_in_list]:
-    Source: 'src/hashmap.rs', lines 206:4-206:68 *)
+    Source: 'tests/src/hashmap.rs', lines 206:4-206:68 *)
 let hashmap_HashMap_contains_key_in_list
   (t : Type0) (key : usize) (ls : hashmap_List_t t) : result bool =
   hashmap_HashMap_contains_key_in_list_loop t key ls
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::contains_key]:
-    Source: 'src/hashmap.rs', lines 199:4-199:49 *)
+    Source: 'tests/src/hashmap.rs', lines 199:4-199:49 *)
 let hashmap_HashMap_contains_key
   (t : Type0) (self : hashmap_HashMap_t t) (key : usize) : result bool =
   let* hash = hashmap_hash_key key in
@@ -258,7 +258,7 @@ let hashmap_HashMap_contains_key
   hashmap_HashMap_contains_key_in_list t key l
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_in_list]: loop 0:
-    Source: 'src/hashmap.rs', lines 224:4-237:5 *)
+    Source: 'tests/src/hashmap.rs', lines 224:4-237:5 *)
 let rec hashmap_HashMap_get_in_list_loop
   (t : Type0) (key : usize) (ls : hashmap_List_t t) :
   Tot (result t)
@@ -271,13 +271,13 @@ let rec hashmap_HashMap_get_in_list_loop
   end
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_in_list]:
-    Source: 'src/hashmap.rs', lines 224:4-224:70 *)
+    Source: 'tests/src/hashmap.rs', lines 224:4-224:70 *)
 let hashmap_HashMap_get_in_list
   (t : Type0) (key : usize) (ls : hashmap_List_t t) : result t =
   hashmap_HashMap_get_in_list_loop t key ls
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get]:
-    Source: 'src/hashmap.rs', lines 239:4-239:55 *)
+    Source: 'tests/src/hashmap.rs', lines 239:4-239:55 *)
 let hashmap_HashMap_get
   (t : Type0) (self : hashmap_HashMap_t t) (key : usize) : result t =
   let* hash = hashmap_hash_key key in
@@ -290,7 +290,7 @@ let hashmap_HashMap_get
   hashmap_HashMap_get_in_list t key l
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
-    Source: 'src/hashmap.rs', lines 245:4-254:5 *)
+    Source: 'tests/src/hashmap.rs', lines 245:4-254:5 *)
 let rec hashmap_HashMap_get_mut_in_list_loop
   (t : Type0) (ls : hashmap_List_t t) (key : usize) :
   Tot (result (t & (t -> result (hashmap_List_t t))))
@@ -312,7 +312,7 @@ let rec hashmap_HashMap_get_mut_in_list_loop
   end
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut_in_list]:
-    Source: 'src/hashmap.rs', lines 245:4-245:86 *)
+    Source: 'tests/src/hashmap.rs', lines 245:4-245:86 *)
 let hashmap_HashMap_get_mut_in_list
   (t : Type0) (ls : hashmap_List_t t) (key : usize) :
   result (t & (t -> result (hashmap_List_t t)))
@@ -320,7 +320,7 @@ let hashmap_HashMap_get_mut_in_list
   hashmap_HashMap_get_mut_in_list_loop t ls key
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::get_mut]:
-    Source: 'src/hashmap.rs', lines 257:4-257:67 *)
+    Source: 'tests/src/hashmap.rs', lines 257:4-257:67 *)
 let hashmap_HashMap_get_mut
   (t : Type0) (self : hashmap_HashMap_t t) (key : usize) :
   result (t & (t -> result (hashmap_HashMap_t t)))
@@ -341,7 +341,7 @@ let hashmap_HashMap_get_mut
   Ok (x, back)
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]: loop 0:
-    Source: 'src/hashmap.rs', lines 265:4-291:5 *)
+    Source: 'tests/src/hashmap.rs', lines 265:4-291:5 *)
 let rec hashmap_HashMap_remove_from_list_loop
   (t : Type0) (key : usize) (ls : hashmap_List_t t) :
   Tot (result ((option t) & (hashmap_List_t t)))
@@ -365,7 +365,7 @@ let rec hashmap_HashMap_remove_from_list_loop
   end
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove_from_list]:
-    Source: 'src/hashmap.rs', lines 265:4-265:69 *)
+    Source: 'tests/src/hashmap.rs', lines 265:4-265:69 *)
 let hashmap_HashMap_remove_from_list
   (t : Type0) (key : usize) (ls : hashmap_List_t t) :
   result ((option t) & (hashmap_List_t t))
@@ -373,7 +373,7 @@ let hashmap_HashMap_remove_from_list
   hashmap_HashMap_remove_from_list_loop t key ls
 
 (** [hashmap_main::hashmap::{hashmap_main::hashmap::HashMap<T>}::remove]:
-    Source: 'src/hashmap.rs', lines 294:4-294:52 *)
+    Source: 'tests/src/hashmap.rs', lines 294:4-294:52 *)
 let hashmap_HashMap_remove
   (t : Type0) (self : hashmap_HashMap_t t) (key : usize) :
   result ((option t) & (hashmap_HashMap_t t))
@@ -395,7 +395,7 @@ let hashmap_HashMap_remove
   end
 
 (** [hashmap_main::hashmap::test1]:
-    Source: 'src/hashmap.rs', lines 315:0-315:10 *)
+    Source: 'tests/src/hashmap.rs', lines 315:0-315:10 *)
 let hashmap_test1 : result unit =
   let* hm = hashmap_HashMap_new u64 in
   let* hm1 = hashmap_HashMap_insert u64 hm 0 42 in
@@ -432,7 +432,7 @@ let hashmap_test1 : result unit =
       end
 
 (** [hashmap_main::insert_on_disk]:
-    Source: 'src/hashmap_main.rs', lines 7:0-7:43 *)
+    Source: 'tests/src/hashmap_main.rs', lines 7:0-7:43 *)
 let insert_on_disk
   (key : usize) (value : u64) (st : state) : result (state & unit) =
   let* (st1, hm) = hashmap_utils_deserialize st in
@@ -440,7 +440,7 @@ let insert_on_disk
   hashmap_utils_serialize hm1 st1
 
 (** [hashmap_main::main]:
-    Source: 'src/hashmap_main.rs', lines 16:0-16:13 *)
+    Source: 'tests/src/hashmap_main.rs', lines 16:0-16:13 *)
 let main : result unit =
   Ok ()
 
