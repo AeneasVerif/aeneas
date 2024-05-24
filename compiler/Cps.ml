@@ -100,10 +100,10 @@ let opt_list_to_list_opt (len : int) (el : 'a option list) : 'a list option =
   let _ = assert (List.length expr_list = len) in
   if Option.is_none (List.hd expr_list) then None else Some expr_list
 
-let cc_singleton file line meta cf el =
+let cc_singleton file line span cf el =
   match el with
   | Some [ e ] -> cf (Some e)
-  | Some _ -> internal_error file line meta
+  | Some _ -> internal_error file line span
   | _ -> None
 
 (** It happens that we need to concatenate lists of results, for
@@ -112,7 +112,7 @@ let cc_singleton file line meta cf el =
     to decompose the list of expressions we get to give it to the
     individual continuations for the branches.
  *)
-let comp_seqs (file : string) (line : int) (meta : Meta.meta)
+let comp_seqs (file : string) (line : int) (span : Meta.span)
     (ls :
       ('a list
       * (SymbolicAst.expression list option -> SymbolicAst.expression option))
@@ -126,7 +126,7 @@ let comp_seqs (file : string) (line : int) (meta : Meta.meta)
     match ls with
     | [] ->
         (* End of the list of branches: there shouldn't be any expression remaining *)
-        sanity_check file line (el = []) meta;
+        sanity_check file line (el = []) span;
         []
     | (resl, cf) :: ls ->
         (* Split the list of expressions between:
@@ -136,7 +136,7 @@ let comp_seqs (file : string) (line : int) (meta : Meta.meta)
         (* Compute the expression for the current branch *)
         let e0 = cf (Some el0) in
         let e0 =
-          match e0 with None -> internal_error file line meta | Some e -> e
+          match e0 with None -> internal_error file line span | Some e -> e
         in
         (* Compute the expressions for the remaining branches *)
         let e = cc_aux ls el in

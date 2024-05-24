@@ -14,14 +14,14 @@ type access_kind = Read | Write | Move
     until it manages to fully access the provided place.
  *)
 val update_ctx_along_read_place :
-  config -> Meta.meta -> access_kind -> place -> cm_fun
+  config -> Meta.span -> access_kind -> place -> cm_fun
 
 (** Update the environment to be able to write to a place.
 
     See {!update_ctx_along_read_place}.
 *)
 val update_ctx_along_write_place :
-  config -> Meta.meta -> access_kind -> place -> cm_fun
+  config -> Meta.span -> access_kind -> place -> cm_fun
 
 (** Read the value at a given place.
 
@@ -31,7 +31,7 @@ val update_ctx_along_write_place :
     Note that we only access the value at the place, and do not check that
     the value is "well-formed" (for instance that it doesn't contain bottoms).
  *)
-val read_place : Meta.meta -> access_kind -> place -> eval_ctx -> typed_value
+val read_place : Meta.span -> access_kind -> place -> eval_ctx -> typed_value
 
 (** Update the value at a given place.
 
@@ -43,21 +43,21 @@ val read_place : Meta.meta -> access_kind -> place -> eval_ctx -> typed_value
     overwrite it.
  *)
 val write_place :
-  Meta.meta -> access_kind -> place -> typed_value -> eval_ctx -> eval_ctx
+  Meta.span -> access_kind -> place -> typed_value -> eval_ctx -> eval_ctx
 
 (** Compute an expanded tuple ⊥ value.
 
     [compute_expanded_bottom_tuple_value [ty0, ..., tyn]] returns
     [(⊥:ty0, ..., ⊥:tyn)]
  *)
-val compute_expanded_bottom_tuple_value : Meta.meta -> ety list -> typed_value
+val compute_expanded_bottom_tuple_value : Meta.span -> ety list -> typed_value
 
 (** Compute an expanded ADT ⊥ value.
 
     The types in the generics should use erased regions.
   *)
 val compute_expanded_bottom_adt_value :
-  Meta.meta ->
+  Meta.span ->
   eval_ctx ->
   TypeDeclId.id ->
   VariantId.id option ->
@@ -77,7 +77,7 @@ val compute_expanded_bottom_adt_value :
     that the place is *inside* a borrow, if we end the borrow, we won't be able
     to reinsert the value back).
  *)
-val drop_outer_loans_at_lplace : config -> Meta.meta -> place -> cm_fun
+val drop_outer_loans_at_lplace : config -> Meta.span -> place -> cm_fun
 
 (** End the loans at a given place: read the value, if it contains a loan,
     end this loan, repeat.
@@ -88,7 +88,7 @@ val drop_outer_loans_at_lplace : config -> Meta.meta -> place -> cm_fun
     when moving values, we can't move a value which contains loans and thus need
     to end them, etc.
  *)
-val end_loans_at_place : config -> Meta.meta -> access_kind -> place -> cm_fun
+val end_loans_at_place : config -> Meta.span -> access_kind -> place -> cm_fun
 
 (** Small utility.
 
@@ -101,7 +101,7 @@ val end_loans_at_place : config -> Meta.meta -> access_kind -> place -> cm_fun
   *)
 val prepare_lplace :
   config ->
-  Meta.meta ->
+  Meta.span ->
   place ->
   eval_ctx ->
   typed_value * eval_ctx * (eval_result -> eval_result)

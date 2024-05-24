@@ -19,33 +19,33 @@ module S = SynthesizeSymbolic
 let log = L.statements_log
 
 (** Drop a value at a given place - TODO: factorize this with [assign_to_place] *)
-let drop_value (config : config) (meta : Meta.meta) (p : place) : cm_fun =
+let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
   log#ldebug
     (lazy
       ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      ^ eval_ctx_to_string ~span:(Some span) ctx));
   (* Note that we use [Write], not [Move]: we allow to drop values *below* borrows *)
   let access = Write in
   (* First make sure we can access the place, by ending loans or expanding
    * symbolic values along the path, for instance *)
-  let ctx, cc = update_ctx_along_read_place config meta access p ctx in
+  let ctx, cc = update_ctx_along_read_place config span access p ctx in
   (* Prepare the place (by ending the outer loans *at* the place). *)
-  let v, ctx, cc = comp2 cc (prepare_lplace config meta p ctx) in
+  let v, ctx, cc = comp2 cc (prepare_lplace config span p ctx) in
   (* Replace the value with {!Bottom} *)
   let ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
-    let mv = InterpreterPaths.read_place meta access p ctx in
+    let mv = InterpreterPaths.read_place span access p ctx in
     let dummy_id = fresh_dummy_var_id () in
     let ctx = ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = VBottom } in
-    let ctx = write_place meta access p nv ctx in
+    let ctx = write_place span access p nv ctx in
     log#ldebug
       (lazy
         ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
-        ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+        ^ eval_ctx_to_string ~span:(Some span) ctx));
     ctx
   in
   (* Compose and apply *)
@@ -57,30 +57,30 @@ let push_dummy_var (vid : DummyVarId.id) (v : typed_value) (ctx : eval_ctx) :
   ctx_push_dummy_var ctx vid v
 
 (** Remove a dummy variable from the environment *)
-let remove_dummy_var (meta : Meta.meta) (vid : DummyVarId.id) (ctx : eval_ctx) :
+let remove_dummy_var (span : Meta.span) (vid : DummyVarId.id) (ctx : eval_ctx) :
     typed_value * eval_ctx =
-  let ctx, v = ctx_remove_dummy_var meta ctx vid in
+  let ctx, v = ctx_remove_dummy_var span ctx vid in
   (v, ctx)
 
 (** Push an uninitialized variable to the environment *)
-let push_uninitialized_var (meta : Meta.meta) (var : var) (ctx : eval_ctx) :
+let push_uninitialized_var (span : Meta.span) (var : var) (ctx : eval_ctx) :
     eval_ctx =
-  ctx_push_uninitialized_var meta ctx var
+  ctx_push_uninitialized_var span ctx var
 
 (** Push a list of uninitialized variables to the environment *)
-let push_uninitialized_vars (meta : Meta.meta) (vars : var list)
+let push_uninitialized_vars (span : Meta.span) (vars : var list)
     (ctx : eval_ctx) : eval_ctx =
-  ctx_push_uninitialized_vars meta ctx vars
+  ctx_push_uninitialized_vars span ctx vars
 
 (** Push a variable to the environment *)
-let push_var (meta : Meta.meta) (var : var) (v : typed_value) (ctx : eval_ctx) :
+let push_var (span : Meta.span) (var : var) (v : typed_value) (ctx : eval_ctx) :
     eval_ctx =
-  ctx_push_var meta ctx var v
+  ctx_push_var span ctx var v
 
 (** Push a list of variables to the environment *)
-let push_vars (meta : Meta.meta) (vars : (var * typed_value) list)
+let push_vars (span : Meta.span) (vars : (var * typed_value) list)
     (ctx : eval_ctx) : eval_ctx =
-  ctx_push_vars meta ctx vars
+  ctx_push_vars span ctx vars
 
 (** Assign a value to a given place.
 
@@ -89,59 +89,59 @@ let push_vars (meta : Meta.meta) (vars : (var * typed_value) list)
     dummy variable and putting in its destination (after having checked that
     preparing the destination didn't introduce ⊥).
  *)
-let assign_to_place (config : config) (meta : Meta.meta) (rv : typed_value)
+let assign_to_place (config : config) (span : Meta.span) (rv : typed_value)
     (p : place) : cm_fun =
  fun ctx ->
   log#ldebug
     (lazy
       ("assign_to_place:" ^ "\n- rv: "
-      ^ typed_value_to_string ~meta:(Some meta) ctx rv
+      ^ typed_value_to_string ~span:(Some span) ctx rv
       ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      ^ eval_ctx_to_string ~span:(Some span) ctx));
   (* Push the rvalue to a dummy variable, for bookkeeping *)
   let rvalue_vid = fresh_dummy_var_id () in
   let ctx = push_dummy_var rvalue_vid rv ctx in
   (* Prepare the destination *)
-  let _, ctx, cc = prepare_lplace config meta p ctx in
+  let _, ctx, cc = prepare_lplace config span p ctx in
   (* Retrieve the rvalue from the dummy variable *)
-  let rv, ctx = remove_dummy_var meta rvalue_vid ctx in
+  let rv, ctx = remove_dummy_var span rvalue_vid ctx in
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
-  let mv = InterpreterPaths.read_place meta Write p ctx in
+  let mv = InterpreterPaths.read_place span Write p ctx in
   let dest_vid = fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dest_vid mv in
   (* Write to the destination *)
   (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
   exec_assert __FILE__ __LINE__
     (not (bottom_in_value ctx.ended_regions rv))
-    meta "The value to move contains bottom";
+    span "The value to move contains bottom";
   (* Update the destination *)
-  let ctx = write_place meta Write p rv ctx in
+  let ctx = write_place span Write p rv ctx in
   (* Debug *)
   log#ldebug
     (lazy
       ("assign_to_place:" ^ "\n- rv: "
-      ^ typed_value_to_string ~meta:(Some meta) ctx rv
+      ^ typed_value_to_string ~span:(Some span) ctx rv
       ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Final context:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      ^ eval_ctx_to_string ~span:(Some span) ctx));
   (* Return *)
   (ctx, cc)
 
 (** Evaluate an assertion, when the scrutinee is not symbolic *)
-let eval_assertion_concrete (config : config) (meta : Meta.meta)
+let eval_assertion_concrete (config : config) (span : Meta.span)
     (assertion : assertion) : st_cm_fun =
  fun ctx ->
   (* There won't be any symbolic expansions: fully evaluate the operand *)
-  let v, ctx, eval_op = eval_operand config meta assertion.cond ctx in
+  let v, ctx, eval_op = eval_operand config span assertion.cond ctx in
   let st =
     match v.value with
     | VLiteral (VBool b) ->
         (* Branch *)
         if b = assertion.expected then Unit else Panic
     | _ ->
-        craise __FILE__ __LINE__ meta
+        craise __FILE__ __LINE__ span
           ("Expected a boolean, got: "
-          ^ typed_value_to_string ~meta:(Some meta) ctx v)
+          ^ typed_value_to_string ~span:(Some span) ctx v)
   in
   (* Compose and apply *)
   ((ctx, st), eval_op)
@@ -152,13 +152,13 @@ let eval_assertion_concrete (config : config) (meta : Meta.meta)
     a call to [assert ...] then continue in the success branch (and thus
     expand the boolean to [true]).
  *)
-let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
+let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
     : st_cm_fun =
  fun ctx ->
   (* Evaluate the operand *)
-  let v, ctx, cf_eval_op = eval_operand config meta assertion.cond ctx in
+  let v, ctx, cf_eval_op = eval_operand config span assertion.cond ctx in
   (* Evaluate the assertion *)
-  sanity_check __FILE__ __LINE__ (v.ty = TLiteral TBool) meta;
+  sanity_check __FILE__ __LINE__ (v.ty = TLiteral TBool) span;
   let st, cf_eval_assert =
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
@@ -168,24 +168,24 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
     match v.value with
     | VLiteral (VBool _) ->
         (* Delegate to the concrete evaluation function *)
-        eval_assertion_concrete config meta assertion ctx
+        eval_assertion_concrete config span assertion ctx
     | VSymbolic sv ->
-        sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) meta;
-        sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral TBool) meta;
+        sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) span;
+        sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral TBool) span;
         (* We continue the execution as if the test had succeeded, and thus
          * perform the symbolic expansion: sv ~~> true.
          * We will of course synthesize an assertion in the generated code
          * (see below). *)
         let ctx =
-          apply_symbolic_expansion_non_borrow config meta sv ctx
+          apply_symbolic_expansion_non_borrow config span sv ctx
             (SeLiteral (VBool true))
         in
         (* Add the synthesized assertion *)
         ((ctx, Unit), S.synthesize_assertion ctx v)
     | _ ->
-        craise __FILE__ __LINE__ meta
+        craise __FILE__ __LINE__ span
           ("Expected a boolean, got: "
-          ^ typed_value_to_string ~meta:(Some meta) ctx v)
+          ^ typed_value_to_string ~span:(Some span) ctx v)
   in
   (* Compose and apply *)
   (st, cc_comp cf_eval_op cf_eval_assert)
@@ -201,7 +201,7 @@ let eval_assertion (config : config) (meta : Meta.meta) (assertion : assertion)
       a variant with all its fields set to {!Bottom}.
       For instance, something like: [Cons Bottom Bottom].
  *)
-let set_discriminant (config : config) (meta : Meta.meta) (p : place)
+let set_discriminant (config : config) (span : Meta.span) (p : place)
     (variant_id : VariantId.id) : st_cm_fun =
  fun ctx ->
   log#ldebug
@@ -210,11 +210,11 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
      ^ "\n- variant id: "
       ^ VariantId.to_string variant_id
       ^ "\n- initial context:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      ^ eval_ctx_to_string ~span:(Some span) ctx));
   (* Access the value *)
   let access = Write in
-  let ctx, cc = update_ctx_along_read_place config meta access p ctx in
-  let v, ctx, cc = comp2 cc (prepare_lplace config meta p ctx) in
+  let ctx, cc = update_ctx_along_read_place config span access p ctx in
+  let v, ctx, cc = comp2 cc (prepare_lplace config span p ctx) in
   (* Update the value *)
   match (v.ty, v.value) with
   | TAdt ((TAdtId _ as type_id), generics), VAdt av -> (
@@ -226,7 +226,7 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
       *)
       match av.variant_id with
       | None ->
-          craise __FILE__ __LINE__ meta
+          craise __FILE__ __LINE__ span
             "Found a struct value while expecting an enum"
       | Some variant_id' ->
           if variant_id' = variant_id then (* Nothing to do *)
@@ -236,26 +236,26 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
             let bottom_v =
               match type_id with
               | TAdtId def_id ->
-                  compute_expanded_bottom_adt_value meta ctx def_id
+                  compute_expanded_bottom_adt_value span ctx def_id
                     (Some variant_id) generics
-              | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+              | _ -> craise __FILE__ __LINE__ span "Unreachable"
             in
             let ctx, cc =
-              comp cc (assign_to_place config meta bottom_v p ctx)
+              comp cc (assign_to_place config span bottom_v p ctx)
             in
             ((ctx, Unit), cc))
   | TAdt ((TAdtId _ as type_id), generics), VBottom ->
       let bottom_v =
         match type_id with
         | TAdtId def_id ->
-            compute_expanded_bottom_adt_value meta ctx def_id (Some variant_id)
+            compute_expanded_bottom_adt_value span ctx def_id (Some variant_id)
               generics
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
-      let ctx, cc = comp cc (assign_to_place config meta bottom_v p ctx) in
+      let ctx, cc = comp cc (assign_to_place config span bottom_v p ctx) in
       ((ctx, Unit), cc)
   | _, VSymbolic _ ->
-      sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) meta;
+      sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) span;
       (* This is a bit annoying: in theory we should expand the symbolic value
        * then set the discriminant, because in the case the discriminant is
        * exactly the one we set, the fields are left untouched, and in the
@@ -263,10 +263,10 @@ let set_discriminant (config : config) (meta : Meta.meta) (p : place)
        * For now, we forbid setting the discriminant of a symbolic value:
        * setting a discriminant should only be used to initialize a value,
        * or reset an already initialized value, really. *)
-      craise __FILE__ __LINE__ meta "Unexpected value"
-  | _, (VAdt _ | VBottom) -> craise __FILE__ __LINE__ meta "Inconsistent state"
+      craise __FILE__ __LINE__ span "Unexpected value"
+  | _, (VAdt _ | VBottom) -> craise __FILE__ __LINE__ span "Inconsistent state"
   | _, (VLiteral _ | VBorrow _ | VLoan _) ->
-      craise __FILE__ __LINE__ meta "Unexpected value"
+      craise __FILE__ __LINE__ span "Unexpected value"
 
 (** Push a frame delimiter in the context's environment *)
 let ctx_push_frame (ctx : eval_ctx) : eval_ctx =
@@ -278,15 +278,15 @@ let push_frame (ctx : eval_ctx) : eval_ctx = ctx_push_frame ctx
 (** Small helper: compute the type of the return value for a specific
     instantiation of an assumed function.
  *)
-let get_assumed_function_return_type (meta : Meta.meta) (ctx : eval_ctx)
+let get_assumed_function_return_type (span : Meta.span) (ctx : eval_ctx)
     (fid : assumed_fun_id) (generics : generic_args) : ety =
-  sanity_check __FILE__ __LINE__ (generics.trait_refs = []) meta;
+  sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
   (* [Box::free] has a special treatment *)
   match fid with
   | BoxFree ->
-      sanity_check __FILE__ __LINE__ (generics.regions = []) meta;
-      sanity_check __FILE__ __LINE__ (List.length generics.types = 1) meta;
-      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.regions = []) span;
+      sanity_check __FILE__ __LINE__ (List.length generics.types = 1) span;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
       mk_unit_ty
   | _ ->
       (* Retrieve the function's signature *)
@@ -302,30 +302,30 @@ let get_assumed_function_return_type (meta : Meta.meta) (ctx : eval_ctx)
         Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
           sg.output
       in
-      AssociatedTypes.ctx_normalize_erase_ty meta ctx ty
+      AssociatedTypes.ctx_normalize_erase_ty span ctx ty
 
-let move_return_value (config : config) (meta : Meta.meta)
+let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
     typed_value option * eval_ctx * (eval_result -> eval_result) =
   if pop_return_value then
     let ret_vid = VarId.zero in
     let v, ctx, cc =
-      eval_operand config meta (Move (mk_place_from_var_id ret_vid)) ctx
+      eval_operand config span (Move (mk_place_from_var_id ret_vid)) ctx
     in
     (Some v, ctx, cc)
   else (None, ctx, fun e -> e)
 
-let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
+let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     (ctx : eval_ctx) :
     typed_value option * eval_ctx * (eval_result -> eval_result) =
   (* Debug *)
-  log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+  log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
 
   (* List the local variables, but the return variable *)
   let ret_vid = VarId.zero in
   let rec list_locals env =
     match env with
-    | [] -> craise __FILE__ __LINE__ meta "Inconsistent environment"
+    | [] -> craise __FILE__ __LINE__ span "Inconsistent environment"
     | EAbs _ :: env -> list_locals env
     | EBinding (BDummy _, _) :: env -> list_locals env
     | EBinding (BVar var, _) :: env ->
@@ -342,14 +342,14 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
       ^ "]"));
 
   (* Move the return value out of the return variable *)
-  let v, ctx, cc = move_return_value config meta pop_return_value ctx in
+  let v, ctx, cc = move_return_value config span pop_return_value ctx in
   let _ =
     match v with
     | None -> ()
     | Some ret_value ->
         sanity_check __FILE__ __LINE__
           (not (bottom_in_value ctx.ended_regions ret_value))
-          meta
+          span
   in
 
   (* Drop the outer *loans* we find in the local variables *)
@@ -359,21 +359,21 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
        let locals = List.rev locals in
        fold_left_apply_continuation
          (fun lid ctx ->
-           drop_outer_loans_at_lplace config meta (mk_place_from_var_id lid) ctx)
+           drop_outer_loans_at_lplace config span (mk_place_from_var_id lid) ctx)
          locals ctx)
   in
   (* Debug *)
   log#ldebug
     (lazy
       ("pop_frame: after dropping outer loans in local variables:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      ^ eval_ctx_to_string ~span:(Some span) ctx));
 
   (* Pop the frame - we remove the [Frame] delimiter, and reintroduce all
    * the local variables (which may still contain borrow permissions - but
    * no outer loans) as dummy variables in the caller frame *)
   let rec pop env =
     match env with
-    | [] -> craise __FILE__ __LINE__ meta "Inconsistent environment"
+    | [] -> craise __FILE__ __LINE__ span "Inconsistent environment"
     | EAbs abs :: env -> EAbs abs :: pop env
     | EBinding (_, v) :: env ->
         let vid = fresh_dummy_var_id () in
@@ -386,14 +386,14 @@ let pop_frame (config : config) (meta : Meta.meta) (pop_return_value : bool)
   (v, ctx, cc)
 
 (** Pop the current frame and assign the returned value to its destination. *)
-let pop_frame_assign (config : config) (meta : Meta.meta) (dest : place) :
+let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
     cm_fun =
  fun ctx ->
-  let v, ctx, cc = pop_frame config meta true ctx in
-  comp cc (assign_to_place config meta (Option.get v) dest ctx)
+  let v, ctx, cc = pop_frame config span true ctx in
+  comp cc (assign_to_place config span (Option.get v) dest ctx)
 
 (** Auxiliary function - see {!eval_assumed_function_call} *)
-let eval_box_new_concrete (config : config) (meta : Meta.meta)
+let eval_box_new_concrete (config : config) (span : Meta.span)
     (generics : generic_args) : cm_fun =
  fun ctx ->
   (* Check and retrieve the arguments *)
@@ -409,11 +409,11 @@ let eval_box_new_concrete (config : config) (meta : Meta.meta)
       (* Required type checking *)
       cassert __FILE__ __LINE__
         (input_value.ty = boxed_ty)
-        meta "The input given to Box::new doesn't have the proper type";
+        span "The input given to Box::new doesn't have the proper type";
 
       (* Move the input value *)
       let v, ctx, cc =
-        eval_operand config meta
+        eval_operand config span
           (Move (mk_place_from_var_id input_var.index))
           ctx
       in
@@ -423,12 +423,12 @@ let eval_box_new_concrete (config : config) (meta : Meta.meta)
       let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
       let box_ty = TAdt (TAssumed TBox, generics) in
       let box_v = VAdt { variant_id = None; field_values = [ v ] } in
-      let box_v = mk_typed_value meta box_ty box_v in
+      let box_v = mk_typed_value span box_ty box_v in
 
       (* Move this value to the return variable *)
       let dest = mk_place_from_var_id VarId.zero in
-      comp cc (assign_to_place config meta box_v dest ctx)
-  | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
+      comp cc (assign_to_place config span box_v dest ctx)
+  | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
 
 (** Auxiliary function - see {!eval_assumed_function_call}.
 
@@ -449,28 +449,28 @@ let eval_box_new_concrete (config : config) (meta : Meta.meta)
     It thus updates the box value (by calling {!drop_value}) and updates
     the destination (by setting it to [()]).
 *)
-let eval_box_free (config : config) (meta : Meta.meta) (generics : generic_args)
+let eval_box_free (config : config) (span : Meta.span) (generics : generic_args)
     (args : operand list) (dest : place) : cm_fun =
  fun ctx ->
   match (generics.regions, generics.types, generics.const_generics, args) with
   | [], [ boxed_ty ], [], [ Move input_box_place ] ->
       (* Required type checking *)
       let input_box =
-        InterpreterPaths.read_place meta Write input_box_place ctx
+        InterpreterPaths.read_place span Write input_box_place ctx
       in
       (let input_ty = ty_get_box input_box.ty in
        sanity_check __FILE__ __LINE__ (input_ty = boxed_ty))
-        meta;
+        span;
 
       (* Drop the value *)
-      let ctx, cc = drop_value config meta input_box_place ctx in
+      let ctx, cc = drop_value config span input_box_place ctx in
 
       (* Update the destination by setting it to [()] *)
-      comp cc (assign_to_place config meta mk_unit_value dest ctx)
-  | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
+      comp cc (assign_to_place config span mk_unit_value dest ctx)
+  | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
 
 (** Evaluate a non-local function call in concrete mode *)
-let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
+let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
     (fid : assumed_fun_id) (call : call) : cm_fun =
  fun ctx ->
   let args = call.args in
@@ -478,12 +478,12 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
   match call.func with
   | FnOpMove _ ->
       (* Closure case: TODO *)
-      craise __FILE__ __LINE__ meta "Closures are not supported yet"
+      craise __FILE__ __LINE__ span "Closures are not supported yet"
   | FnOpRegular func -> (
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
-      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
       (* There are two cases (and this is extremely annoying):
          - the function is not box_free
          - the function is box_free
@@ -492,12 +492,12 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
       match fid with
       | BoxFree ->
           (* Degenerate case: box_free *)
-          eval_box_free config meta generics args dest ctx
+          eval_box_free config span generics args dest ctx
       | _ ->
           (* "Normal" case: not box_free *)
           (* Evaluate the operands *)
           (*      let ctx, args_vl = eval_operands config ctx args in *)
-          let args_vl, ctx, cc = eval_operands config meta args ctx in
+          let args_vl, ctx, cc = eval_operands config span args ctx in
 
           (* Evaluate the call
            *
@@ -512,9 +512,9 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
 
           (* Create and push the return variable *)
           let ret_vid = VarId.zero in
-          let ret_ty = get_assumed_function_return_type meta ctx fid generics in
+          let ret_ty = get_assumed_function_return_type span ctx fid generics in
           let ret_var = mk_var ret_vid (Some "@return") ret_ty in
-          let ctx = push_uninitialized_var meta ret_var ctx in
+          let ctx = push_uninitialized_var span ret_var ctx in
 
           (* Create and push the input variables *)
           let input_vars =
@@ -522,26 +522,26 @@ let eval_assumed_function_call_concrete (config : config) (meta : Meta.meta)
               (fun id (v : typed_value) -> (mk_var id None v.ty, v))
               args_vl
           in
-          let ctx = push_vars meta input_vars ctx in
+          let ctx = push_vars span input_vars ctx in
 
           (* "Execute" the function body. As the functions are assumed, here we call
            * custom functions to perform the proper manipulations: we don't have
            * access to a body. *)
           let ctx, cf_eval_body =
             match fid with
-            | BoxNew -> eval_box_new_concrete config meta generics ctx
+            | BoxNew -> eval_box_new_concrete config span generics ctx
             | BoxFree ->
                 (* Should have been treated above *)
-                craise __FILE__ __LINE__ meta "Unreachable"
+                craise __FILE__ __LINE__ span "Unreachable"
             | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
             | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
               ->
-                craise __FILE__ __LINE__ meta "Unimplemented"
+                craise __FILE__ __LINE__ span "Unimplemented"
           in
           let cc = cc_comp cc cf_eval_body in
 
           (* Pop the frame *)
-          comp cc (pop_frame_assign config meta dest ctx))
+          comp cc (pop_frame_assign config span dest ctx))
 
 (** Helper
  
@@ -698,7 +698,7 @@ let create_push_abstractions_from_abs_region_groups
     which means that whenever we call a provided trait method, we do not refer
     to a trait clause but directly to the method provided in the trait declaration.
  *)
-let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
+let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
     fun_id_or_trait_method_ref
     * generic_args
@@ -709,7 +709,7 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
   match call.func with
   | FnOpMove _ ->
       (* Closure case: TODO *)
-      craise __FILE__ __LINE__ meta "Closures are not supported yet"
+      craise __FILE__ __LINE__ span "Closures are not supported yet"
   | FnOpRegular func -> (
       match func.func with
       | FunId (FRegular fid) ->
@@ -727,13 +727,13 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
               ctx.fun_ctx.regions_hierarchies
           in
           let inst_sg =
-            instantiate_fun_sig meta ctx func.generics tr_self def.signature
+            instantiate_fun_sig span ctx func.generics tr_self def.signature
               regions_hierarchy
           in
           (func.func, func.generics, None, def, regions_hierarchy, inst_sg)
       | FunId (FAssumed _) ->
           (* Unreachable: must be a transparent function *)
-          craise __FILE__ __LINE__ meta "Unreachable"
+          craise __FILE__ __LINE__ span "Unreachable"
       | TraitMethod (trait_ref, method_name, _) -> (
           log#ldebug
             (lazy
@@ -774,7 +774,7 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
                       ctx.fun_ctx.regions_hierarchies
                   in
                   let inst_sg =
-                    instantiate_fun_sig meta ctx generics tr_self
+                    instantiate_fun_sig span ctx generics tr_self
                       method_def.signature regions_hierarchy
                   in
                   (* Also update the function identifier: we want to forget
@@ -795,7 +795,7 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
                      (remember: for now, we forbid overriding provided methods) *)
                   cassert __FILE__ __LINE__
                     (trait_impl.provided_methods = [])
-                    meta "Overriding provided methods is currently forbidden";
+                    span "Overriding provided methods is currently forbidden";
                   let trait_decl =
                     ctx_lookup_trait_decl ctx
                       trait_ref.trait_decl_ref.trait_decl_id
@@ -842,7 +842,7 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
                   in
                   let tr_self = TraitRef trait_ref in
                   let inst_sg =
-                    instantiate_fun_sig meta ctx all_generics tr_self
+                    instantiate_fun_sig span ctx all_generics tr_self
                       method_def.signature regions_hierarchy
                   in
                   ( func.func,
@@ -884,7 +884,7 @@ let eval_transparent_function_call_symbolic_inst (meta : Meta.meta)
               in
               let tr_self = TraitRef trait_ref in
               let inst_sg =
-                instantiate_fun_sig meta ctx generics tr_self
+                instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
               in
               ( func.func,
@@ -903,16 +903,16 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
       ("\n**About to evaluate statement**: [\n"
       ^ statement_to_string_with_tab ctx st
       ^ "\n]\n\n**Context**:\n"
-      ^ eval_ctx_to_string ~meta:(Some st.meta) ctx
+      ^ eval_ctx_to_string ~span:(Some st.span) ctx
       ^ "\n\n"));
 
   (* Take a snapshot of the current context for the purpose of generating pretty names *)
   let cc = S.save_snapshot ctx in
   (* Expand the symbolic values if necessary - we need to do that before
      checking the invariants *)
-  let ctx, cc = comp cc (greedy_expand_symbolic_values config st.meta ctx) in
+  let ctx, cc = comp cc (greedy_expand_symbolic_values config st.span ctx) in
   (* Sanity check *)
-  Invariants.check_invariants st.meta ctx;
+  Invariants.check_invariants st.span ctx;
 
   (* Evaluate *)
   let stl, cf_eval_st =
@@ -927,69 +927,69 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
         match rvalue with
         | Global (gid, generics) ->
             (* Evaluate the global *)
-            eval_global config st.meta p gid generics ctx
+            eval_global config st.span p gid generics ctx
         | _ ->
             (* Evaluate the rvalue *)
             let res, ctx, cc =
-              eval_rvalue_not_global config st.meta rvalue ctx
+              eval_rvalue_not_global config st.span rvalue ctx
             in
             (* Assign *)
             log#ldebug
               (lazy
                 ("about to assign to place: " ^ place_to_string ctx p
                ^ "\n- Context:\n"
-                ^ eval_ctx_to_string ~meta:(Some st.meta) ctx));
+                ^ eval_ctx_to_string ~span:(Some st.span) ctx));
             let (ctx, res), cf_assign =
               match res with
               | Error EPanic -> ((ctx, Panic), fun e -> e)
               | Ok rv ->
-                  (* Update the synthesized AST - here we store additional meta-information.
+                  (* Update the synthesized AST - here we store additional span-information.
                    * We do it only in specific cases (it is not always useful, and
                    * also it can lead to issues - for instance, if we borrow a
                    * reserved borrow, we later can't translate it to pure values...) *)
                   let cc =
                     match rvalue with
-                    | Global _ -> craise __FILE__ __LINE__ st.meta "Unreachable"
+                    | Global _ -> craise __FILE__ __LINE__ st.span "Unreachable"
                     | Use _
                     | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
                     | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ ->
                         let rp = rvalue_get_place rvalue in
                         let rp =
                           match rp with
-                          | Some rp -> Some (S.mk_mplace st.meta rp ctx)
+                          | Some rp -> Some (S.mk_mplace st.span rp ctx)
                           | None -> None
                         in
                         S.synthesize_assignment ctx
-                          (S.mk_mplace st.meta p ctx)
+                          (S.mk_mplace st.span p ctx)
                           rv rp
                   in
                   let ctx, cc =
-                    comp cc (assign_to_place config st.meta rv p ctx)
+                    comp cc (assign_to_place config st.span rv p ctx)
                   in
                   ((ctx, Unit), cc)
             in
             let cc = cc_comp cc cf_assign in
             (* Compose and apply *)
-            ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.meta cc))
+            ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
     | FakeRead p ->
-        let ctx, cc = eval_fake_read config st.meta p ctx in
-        ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.meta cc)
+        let ctx, cc = eval_fake_read config st.span p ctx in
+        ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
     | SetDiscriminant (p, variant_id) ->
-        let (ctx, res), cc = set_discriminant config st.meta p variant_id ctx in
-        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.meta cc)
+        let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
+        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
     | Drop p ->
-        let ctx, cc = drop_value config st.meta p ctx in
-        ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.meta cc)
+        let ctx, cc = drop_value config st.span p ctx in
+        ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
     | Assert assertion ->
-        let (ctx, res), cc = eval_assertion config st.meta assertion ctx in
-        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.meta cc)
-    | Call call -> eval_function_call config st.meta call ctx
-    | Panic -> ([ (ctx, Panic) ], cc_singleton __FILE__ __LINE__ st.meta cc)
-    | Return -> ([ (ctx, Return) ], cc_singleton __FILE__ __LINE__ st.meta cc)
-    | Break i -> ([ (ctx, Break i) ], cc_singleton __FILE__ __LINE__ st.meta cc)
+        let (ctx, res), cc = eval_assertion config st.span assertion ctx in
+        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
+    | Call call -> eval_function_call config st.span call ctx
+    | Panic -> ([ (ctx, Panic) ], cc_singleton __FILE__ __LINE__ st.span cc)
+    | Return -> ([ (ctx, Return) ], cc_singleton __FILE__ __LINE__ st.span cc)
+    | Break i -> ([ (ctx, Break i) ], cc_singleton __FILE__ __LINE__ st.span cc)
     | Continue i ->
-        ([ (ctx, Continue i) ], cc_singleton __FILE__ __LINE__ st.meta cc)
-    | Nop -> ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.meta cc)
+        ([ (ctx, Continue i) ], cc_singleton __FILE__ __LINE__ st.span cc)
+    | Nop -> ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
     | Sequence (st1, st2) ->
         (* Evaluate the first statement *)
         let ctx_resl, cf_st1 = eval_statement config st1 ctx in
@@ -1005,7 +1005,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
               (* Control-flow break: transmit. We enumerate the cases on purpose *)
               | Panic | Break _ | Continue _ | Return | LoopReturn _
               | EndEnterLoop _ | EndContinue _ ->
-                  ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.meta cc))
+                  ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
             ctx_resl
         in
         (* Put everything together:
@@ -1014,18 +1014,18 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
              expression from the continuations for the individual branches
         *)
         let ctx_resl, cf_st2 =
-          comp_seqs __FILE__ __LINE__ st.meta ctx_res_cfl
+          comp_seqs __FILE__ __LINE__ st.span ctx_res_cfl
         in
         (ctx_resl, cc_comp cf_st1 cf_st2)
     | Loop loop_body ->
         let eval_loop_body = eval_statement config loop_body in
-        InterpreterLoops.eval_loop config st.meta eval_loop_body ctx
-    | Switch switch -> eval_switch config st.meta switch ctx
+        InterpreterLoops.eval_loop config st.span eval_loop_body ctx
+    | Switch switch -> eval_switch config st.span switch ctx
   in
   (* Compose and apply *)
   (stl, cc_comp cc cf_eval_st)
 
-and eval_global (config : config) (meta : Meta.meta) (dest : place)
+and eval_global (config : config) (span : Meta.span) (dest : place)
     (gid : GlobalDeclId.id) (generics : generic_args) : stl_cm_fun =
  fun ctx ->
   let global = ctx_lookup_global_decl ctx gid in
@@ -1034,11 +1034,11 @@ and eval_global (config : config) (meta : Meta.meta) (dest : place)
       (* Treat the evaluation of the global as a call to the global body *)
       let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
-      eval_transparent_function_call_concrete config meta global.body call ctx
+      eval_transparent_function_call_concrete config span global.body call ctx
   | SymbolicMode -> (
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      cassert __FILE__ __LINE__ (ty_no_regions global.ty) meta
+      cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
         "Const globals should not contain regions";
       (* Instantiate the type  *)
       (* There shouldn't be any reference to Self *)
@@ -1051,9 +1051,9 @@ and eval_global (config : config) (meta : Meta.meta) (dest : place)
         Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
           global.ty
       in
-      let sval = mk_fresh_symbolic_value meta ty in
+      let sval = mk_fresh_symbolic_value span ty in
       let ctx, cc =
-        assign_to_place config meta
+        assign_to_place config span
           (mk_typed_value_from_symbolic_value sval)
           dest ctx
       in
@@ -1062,11 +1062,11 @@ and eval_global (config : config) (meta : Meta.meta) (dest : place)
           match el with
           | Some [ e ] ->
               (cc_comp (S.synthesize_global_eval gid generics sval) cc) (Some e)
-          | Some _ -> internal_error __FILE__ __LINE__ meta
+          | Some _ -> internal_error __FILE__ __LINE__ span
           | _ -> None ))
 
 (** Evaluate a switch *)
-and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
+and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =
  fun ctx ->
   (* We evaluate the operand in two steps:
@@ -1081,7 +1081,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
   match switch with
   | If (op, st1, st2) ->
       (* Evaluate the operand *)
-      let op_v, ctx, cf_eval_op = eval_operand config meta op ctx in
+      let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       (* Switch on the value *)
       let ctx_resl, cf_if =
         match op_v.value with
@@ -1093,35 +1093,35 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
             let (ctx_true, ctx_false), cf_bool =
-              expand_symbolic_bool config meta sv
-                (S.mk_opt_place_from_op meta op ctx)
+              expand_symbolic_bool config span sv
+                (S.mk_opt_place_from_op span op ctx)
                 ctx
             in
             let resl_true = eval_statement config st1 ctx_true in
             let resl_false = eval_statement config st2 ctx_false in
             let ctx_resl, cf_branches =
-              comp_seqs __FILE__ __LINE__ meta [ resl_true; resl_false ]
+              comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
             in
             let cc el =
               match cf_branches el with
               | None -> None
               | Some [ e_true; e_false ] -> cf_bool (Some (e_true, e_false))
-              | _ -> internal_error __FILE__ __LINE__ meta
+              | _ -> internal_error __FILE__ __LINE__ span
             in
             (ctx_resl, cc)
-        | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
+        | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_eval_op cf_if)
   | SwitchInt (op, int_ty, stgts, otherwise) ->
       (* Evaluate the operand *)
-      let op_v, ctx, cf_eval_op = eval_operand config meta op ctx in
+      let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       (* Switch on the value *)
       let ctx_resl, cf_switch =
         match op_v.value with
         | VLiteral (VScalar sv) -> (
             (* Sanity check *)
-            sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) meta;
+            sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) span;
             (* Find the branch *)
             match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
             | None -> eval_statement config otherwise ctx
@@ -1140,8 +1140,8 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
             in
             (* Expand the symbolic value *)
             let (ctx_branches, ctx_otherwise), cf_int =
-              expand_symbolic_int config meta sv
-                (S.mk_opt_place_from_op meta op ctx)
+              expand_symbolic_int config span sv
+                (S.mk_opt_place_from_op span op ctx)
                 int_ty values ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
@@ -1156,7 +1156,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
             in
             (* Compose the continuations *)
             let resl, cf =
-              comp_seqs __FILE__ __LINE__ meta
+              comp_seqs __FILE__ __LINE__ span
                 (resl_branches @ [ resl_otherwise ])
             in
             let cc el =
@@ -1167,7 +1167,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
                   cf_int (Some (el, e_otherwise))
             in
             (resl, cc_comp cc cf)
-        | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
+        | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_eval_op cf_switch)
@@ -1176,7 +1176,7 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
       let access = Read in
       let expand_prim_copy = false in
       let p_v, ctx, cf_read_p =
-        access_rplace_reorganize_and_read config meta expand_prim_copy access p
+        access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in
       (* Match on the value *)
@@ -1193,31 +1193,31 @@ and eval_switch (config : config) (meta : Meta.meta) (switch : switch) :
             match List.find_opt (fun (svl, _) -> List.mem dv svl) stgts with
             | None -> (
                 match otherwise with
-                | None -> craise __FILE__ __LINE__ meta "No otherwise branch"
+                | None -> craise __FILE__ __LINE__ span "No otherwise branch"
                 | Some otherwise -> eval_statement config otherwise ctx)
             | Some (_, tgt) -> eval_statement config tgt ctx)
         | VSymbolic sv ->
             (* Expand the symbolic value - may lead to branching *)
             let ctxl, cf_expand =
-              expand_symbolic_adt config meta sv
-                (Some (S.mk_mplace meta p ctx))
+              expand_symbolic_adt config span sv
+                (Some (S.mk_mplace span p ctx))
                 ctx
             in
             (* Re-evaluate the switch - the value is not symbolic anymore,
                which means we will go to the other branch *)
             let resl =
-              List.map (fun ctx -> (eval_switch config meta switch) ctx) ctxl
+              List.map (fun ctx -> (eval_switch config span switch) ctx) ctxl
             in
             (* Compose the continuations *)
-            let ctx_resl, cf = comp_seqs __FILE__ __LINE__ meta resl in
+            let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
             (ctx_resl, cc_comp cf_expand cf)
-        | _ -> craise __FILE__ __LINE__ meta "Inconsistent state"
+        | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_read_p cf_match)
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
-and eval_function_call (config : config) (meta : Meta.meta) (call : call) :
+and eval_function_call (config : config) (span : Meta.span) (call : call) :
     stl_cm_fun =
   (* There are several cases:
      - this is a local function, in which case we execute its body
@@ -1225,71 +1225,71 @@ and eval_function_call (config : config) (meta : Meta.meta) (call : call) :
      - this is a trait method
   *)
   match config.mode with
-  | ConcreteMode -> eval_function_call_concrete config meta call
-  | SymbolicMode -> eval_function_call_symbolic config meta call
+  | ConcreteMode -> eval_function_call_concrete config span call
+  | SymbolicMode -> eval_function_call_symbolic config span call
 
-and eval_function_call_concrete (config : config) (meta : Meta.meta)
+and eval_function_call_concrete (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
   match call.func with
-  | FnOpMove _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
+  | FnOpMove _ -> craise __FILE__ __LINE__ span "Closures are not supported yet"
   | FnOpRegular func -> (
       match func.func with
       | FunId (FRegular fid) ->
-          eval_transparent_function_call_concrete config meta fid call ctx
+          eval_transparent_function_call_concrete config span fid call ctx
       | FunId (FAssumed fid) -> (
           (* Continue - note that we do as if the function call has been successful,
            * by giving {!Unit} to the continuation, because we place us in the case
            * where we haven't panicked. Of course, the translation needs to take the
            * panic case into account... *)
           let ctx, cc =
-            eval_assumed_function_call_concrete config meta fid call ctx
+            eval_assumed_function_call_concrete config span fid call ctx
           in
           ( [ (ctx, Unit) ],
             fun el ->
               match el with
               | Some [ e ] -> cc (Some e)
-              | Some _ -> internal_error __FILE__ __LINE__ meta
+              | Some _ -> internal_error __FILE__ __LINE__ span
               | _ -> None ))
-      | TraitMethod _ -> craise __FILE__ __LINE__ meta "Unimplemented")
+      | TraitMethod _ -> craise __FILE__ __LINE__ span "Unimplemented")
 
-and eval_function_call_symbolic (config : config) (meta : Meta.meta)
+and eval_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
   match call.func with
-  | FnOpMove _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
+  | FnOpMove _ -> craise __FILE__ __LINE__ span "Closures are not supported yet"
   | FnOpRegular func -> (
       match func.func with
       | FunId (FRegular _) | TraitMethod _ ->
-          eval_transparent_function_call_symbolic config meta call
+          eval_transparent_function_call_symbolic config span call
       | FunId (FAssumed fid) ->
-          eval_assumed_function_call_symbolic config meta fid call func)
+          eval_assumed_function_call_symbolic config span fid call func)
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
-and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
+and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
     (fid : FunDeclId.id) (call : call) : stl_cm_fun =
  fun ctx ->
   let args = call.args in
   let dest = call.dest in
   match call.func with
-  | FnOpMove _ -> craise __FILE__ __LINE__ meta "Closures are not supported yet"
+  | FnOpMove _ -> craise __FILE__ __LINE__ span "Closures are not supported yet"
   | FnOpRegular func ->
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
-      sanity_check __FILE__ __LINE__ (generics.const_generics = []) meta;
+      sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
       (* Retrieve the (correctly instantiated) body *)
       let def = ctx_lookup_fun_decl ctx fid in
       (* We can evaluate the function call only if it is not opaque *)
       let body =
         match def.body with
         | None ->
-            craise __FILE__ __LINE__ meta
+            craise __FILE__ __LINE__ span
               ("Can't evaluate a call to an opaque function: "
               ^ name_to_string ctx def.name)
         | Some body -> body
       in
       (* TODO: we need to normalize the types if we want to correctly support traits *)
-      cassert __FILE__ __LINE__ (generics.trait_refs = []) body.meta
+      cassert __FILE__ __LINE__ (generics.trait_refs = []) body.span
         "Traits are not supported yet in concrete mode";
       (* There shouldn't be any reference to Self *)
       let tr_self = UnknownTrait __FUNCTION__ in
@@ -1301,8 +1301,8 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
       (* Evaluate the input operands *)
       sanity_check __FILE__ __LINE__
         (List.length args = body.arg_count)
-        body.meta;
-      let vl, ctx, cc = eval_operands config body.meta args ctx in
+        body.span;
+      let vl, ctx, cc = eval_operands config body.span args ctx in
 
       (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
        * of the operands evaluation from above to the functions afterwards, while
@@ -1314,24 +1314,24 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
       let ret_var, locals =
         match locals with
         | ret_ty :: locals -> (ret_ty, locals)
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       let input_locals, locals =
         Collections.List.split_at locals body.arg_count
       in
 
-      let ctx = push_var meta ret_var (mk_bottom meta ret_var.var_ty) ctx in
+      let ctx = push_var span ret_var (mk_bottom span ret_var.var_ty) ctx in
 
       (* 2. Push the input values *)
       let ctx =
         let inputs = List.combine input_locals vl in
         (* Note that this function checks that the variables and their values
          * have the same type (this is important) *)
-        push_vars meta inputs ctx
+        push_vars span inputs ctx
       in
 
       (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
-      let ctx = push_uninitialized_vars meta locals ctx in
+      let ctx = push_uninitialized_vars span locals ctx in
 
       (* Execute the function body *)
       let ctx_resl, cc = comp cc (eval_function_body config body_st ctx) in
@@ -1345,11 +1345,11 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
             | Return ->
                 (* Pop the stack frame, retrieve the return value, move it to
                    its destination and continue *)
-                let ctx, cf = pop_frame_assign config meta dest ctx in
+                let ctx, cf = pop_frame_assign config span dest ctx in
                 ((ctx, Unit), cf)
             | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
             | EndContinue _ ->
-                craise __FILE__ __LINE__ meta "Unreachable")
+                craise __FILE__ __LINE__ span "Unreachable")
           ctx_resl
       in
       let ctx_resl, cfl = List.split ctx_resl_cfl in
@@ -1364,29 +1364,29 @@ and eval_transparent_function_call_concrete (config : config) (meta : Meta.meta)
       (ctx_resl, cc_comp cc cf_pop)
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
-and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
+and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
   let func, generics, trait_method_generics, def, regions_hierarchy, inst_sg =
-    eval_transparent_function_call_symbolic_inst meta call ctx
+    eval_transparent_function_call_symbolic_inst span call ctx
   in
   (* Sanity check: same number of inputs *)
   sanity_check __FILE__ __LINE__
     (List.length call.args = List.length def.signature.inputs)
-    def.item_meta.meta;
+    def.item_meta.span;
   (* Sanity check: no nested borrows, borrows in ADTs, etc. *)
   cassert __FILE__ __LINE__
     (List.for_all
        (fun ty -> not (ty_has_nested_borrows ctx.type_ctx.type_infos ty))
        (inst_sg.output :: inst_sg.inputs))
-    meta "Nested borrows are not supported yet";
+    span "Nested borrows are not supported yet";
   cassert __FILE__ __LINE__
     (List.for_all
        (fun ty -> not (ty_has_adt_with_borrows ctx.type_ctx.type_infos ty))
        (inst_sg.output :: inst_sg.inputs))
-    meta "ADTs containing borrows are not supported yet";
+    span "ADTs containing borrows are not supported yet";
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config def.item_meta.meta func
+  eval_function_call_symbolic_from_inst_sig config def.item_meta.span func
     def.signature regions_hierarchy inst_sg generics trait_method_generics
     call.args call.dest ctx
 
@@ -1402,7 +1402,7 @@ and eval_transparent_function_call_symbolic (config : config) (meta : Meta.meta)
     trait ref as input.
  *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
-    (meta : Meta.meta) (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
+    (span : Meta.span) (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) (inst_sg : inst_fun_sig)
     (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
@@ -1422,18 +1422,18 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
-  let ret_spc = mk_fresh_symbolic_value meta ret_sv_ty in
+  let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
   let ret_av regions =
     mk_aproj_loans_value_from_symbolic_value regions ret_spc
   in
   let args_places =
-    List.map (fun p -> S.mk_opt_place_from_op meta p ctx) args
+    List.map (fun p -> S.mk_opt_place_from_op span p ctx) args
   in
-  let dest_place = Some (S.mk_mplace meta dest ctx) in
+  let dest_place = Some (S.mk_mplace span dest ctx) in
 
   (* Evaluate the input operands *)
-  let args, ctx, cc = eval_operands config meta args ctx in
+  let args, ctx, cc = eval_operands config span args ctx in
 
   (* Generate the abstractions and insert them in the context *)
   let abs_ids = List.map (fun rg -> rg.id) inst_sg.regions_hierarchy in
@@ -1445,7 +1445,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
        (fun ((arg, rty) : typed_value * rty) ->
          arg.ty = Subst.erase_regions rty)
        args_with_rtypes)
-    meta "The input arguments don't have the proper type";
+    span "The input arguments don't have the proper type";
   (* Check that the input arguments don't contain symbolic values that can't
    * be fed to functions (i.e., symbolic values output from function return
    * values and which contain borrows of borrows can't be used as function
@@ -1455,7 +1455,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
        (fun arg ->
          not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
        args)
-    meta;
+    span;
 
   (* Initialize the abstractions and push them in the context.
    * First, we define the function which, given an initialized, empty
@@ -1467,7 +1467,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     let ctx, args_projs =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_on_input_value config meta ctx abs.regions
+          apply_proj_borrows_on_input_value config span ctx abs.regions
             abs.ancestors_regions arg arg_rty)
         ctx args_with_rtypes
     in
@@ -1491,7 +1491,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   in
 
   (* Move the return value to its destination *)
-  let ctx, cc = comp cc (assign_to_place config meta ret_value dest ctx) in
+  let ctx, cc = comp cc (assign_to_place config span ret_value dest ctx) in
 
   (* End the abstractions which don't contain loans and don't have parent
    * abstractions.
@@ -1511,7 +1511,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
           (* Check if it contains non-ignored loans *)
           && Option.is_none
                (InterpreterBorrowsCore
-                .get_first_non_ignored_aloan_in_abstraction meta abs))
+                .get_first_non_ignored_aloan_in_abstraction span abs))
         !abs_ids
     in
     (* Check if there are abstractions to end *)
@@ -1521,7 +1521,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       (* End the abstractions which can be ended *)
       let no_loans_abs = AbstractionId.Set.of_list no_loans_abs in
       let ctx, cc =
-        InterpreterBorrows.end_abstractions config meta no_loans_abs ctx
+        InterpreterBorrows.end_abstractions config span no_loans_abs ctx
       in
       (* Recursive call *)
       comp cc (end_abs_with_no_loans ctx))
@@ -1544,10 +1544,10 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * by giving {!Unit} to the continuation, because we place us in the case
    * where we haven't panicked. Of course, the translation needs to take the
    * panic case into account... *)
-  ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ meta cc)
+  ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
 
 (** Evaluate a non-local function call in symbolic mode *)
-and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
+and eval_assumed_function_call_symbolic (config : config) (span : Meta.span)
     (fid : assumed_fun_id) (call : call) (func : fn_ptr) : stl_cm_fun =
  fun ctx ->
   let generics = func.generics in
@@ -1559,7 +1559,7 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
     (List.for_all
        (fun ty -> not (ty_has_borrows ctx.type_ctx.type_infos ty))
        generics.types)
-    meta;
+    span;
 
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
@@ -1570,8 +1570,8 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
   | BoxFree ->
       (* Degenerate case: box_free - note that this is not really a function
        * call: no need to call a "synthesize_..." function *)
-      let ctx, cc = eval_box_free config meta generics args dest ctx in
-      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ meta cc)
+      let ctx, cc = eval_box_free config span generics args dest ctx in
+      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
   | _ ->
       (* "Normal" case: not box_free *)
       (* In symbolic mode, the behaviour of a function call is completely defined
@@ -1581,7 +1581,7 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
         match fid with
         | BoxFree ->
             (* Should have been treated above *)
-            craise __FILE__ __LINE__ meta "Unreachable"
+            craise __FILE__ __LINE__ span "Unreachable"
         | _ ->
             let regions_hierarchy =
               LlbcAstUtils.FunIdMap.find (FAssumed fid)
@@ -1591,13 +1591,13 @@ and eval_assumed_function_call_symbolic (config : config) (meta : Meta.meta)
             let tr_self = UnknownTrait __FUNCTION__ in
             let sg = Assumed.get_assumed_fun_sig fid in
             let inst_sg =
-              instantiate_fun_sig meta ctx generics tr_self sg regions_hierarchy
+              instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
             in
             (sg, regions_hierarchy, inst_sg)
       in
 
       (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config meta
+      eval_function_call_symbolic_from_inst_sig config span
         (FunId (FAssumed fid)) sg regions_hierarchy inst_sig generics None args
         dest ctx
 
@@ -1614,9 +1614,9 @@ and eval_function_body (config : config) (body : statement) : stl_cm_fun =
            * delegate the check to the caller. *)
         (* Expand the symbolic values if necessary - we need to do that before
            * checking the invariants *)
-        let ctx, cf = greedy_expand_symbolic_values config body.meta ctx in
+        let ctx, cf = greedy_expand_symbolic_values config body.span ctx in
         (* Sanity check *)
-        Invariants.check_invariants body.meta ctx;
+        Invariants.check_invariants body.span ctx;
         (* Continue *)
         ((ctx, res), cf))
       ctx_resl

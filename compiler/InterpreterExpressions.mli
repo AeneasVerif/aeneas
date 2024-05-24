@@ -20,7 +20,7 @@ open InterpreterPaths
  *)
 val access_rplace_reorganize_and_read :
   config ->
-  Meta.meta ->
+  Meta.span ->
   bool ->
   access_kind ->
   place ->
@@ -38,7 +38,7 @@ val access_rplace_reorganize_and_read :
  *)
 val eval_operand :
   config ->
-  Meta.meta ->
+  Meta.span ->
   operand ->
   eval_ctx ->
   typed_value * eval_ctx * (eval_result -> eval_result)
@@ -46,7 +46,7 @@ val eval_operand :
 (** Evaluate several operands at once. *)
 val eval_operands :
   config ->
-  Meta.meta ->
+  Meta.span ->
   operand list ->
   eval_ctx ->
   typed_value list * eval_ctx * (eval_result -> eval_result)
@@ -60,10 +60,10 @@ val eval_operands :
  *)
 val eval_rvalue_not_global :
   config ->
-  Meta.meta ->
+  Meta.span ->
   rvalue ->
   eval_ctx ->
   (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result)
 
 (** Evaluate a fake read (update the context so that we can read a place) *)
-val eval_fake_read : config -> Meta.meta -> place -> cm_fun
+val eval_fake_read : config -> Meta.span -> place -> cm_fun

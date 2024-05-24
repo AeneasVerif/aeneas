@@ -65,4 +65,4 @@ open Meta
     The `stl_cm_fun` required as input must be the function to evaluate the
     loop body (i.e., `eval_statement` applied to the loop body).
  *)
-val eval_loop : config -> meta -> stl_cm_fun -> stl_cm_fun
+val eval_loop : config -> span -> stl_cm_fun -> stl_cm_fun

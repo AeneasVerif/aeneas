@@ -282,7 +282,7 @@ let () =
 
       if !Errors.error_list <> [] then (
         List.iter
-          (fun (meta, msg) -> log#serror (Errors.format_error_message meta msg))
+          (fun (span, msg) -> log#serror (Errors.format_error_message span msg))
           (* Reverse the list of error messages so that we print them from the
              earliest to the latest. *)
           (List.rev !Errors.error_list);

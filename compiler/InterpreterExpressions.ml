@@ -24,21 +24,21 @@ let log = Logging.expressions_log
     Note that the place should have been prepared so that there are no remaining
     loans.
 *)
-let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
+let expand_primitively_copyable_at_place (config : config) (span : Meta.span)
     (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   (* Small helper *)
   let rec expand : cm_fun =
    fun ctx ->
-    let v = read_place meta access p ctx in
+    let v = read_place span access p ctx in
     match
       find_first_primitively_copyable_sv_with_borrows ctx.type_ctx.type_infos v
     with
     | None -> (ctx, fun e -> e)
     | Some sv ->
         let ctx, cc =
-          expand_symbolic_value_no_branching config meta sv
-            (Some (mk_mplace meta p ctx))
+          expand_symbolic_value_no_branching config span sv
+            (Some (mk_mplace span p ctx))
             ctx
         in
         comp cc (expand ctx)
@@ -51,50 +51,50 @@ let expand_primitively_copyable_at_place (config : config) (meta : Meta.meta)
     We check that the value *doesn't contain bottoms or reserved
     borrows*.
  *)
-let read_place_check (meta : Meta.meta) (access : access_kind) (p : place)
+let read_place_check (span : Meta.span) (access : access_kind) (p : place)
     (ctx : eval_ctx) : typed_value =
-  let v = read_place meta access p ctx in
+  let v = read_place span access p ctx in
   (* Check that there are no bottoms in the value *)
   cassert __FILE__ __LINE__
     (not (bottom_in_value ctx.ended_regions v))
-    meta "There should be no bottoms in the value";
+    span "There should be no bottoms in the value";
   (* Check that there are no reserved borrows in the value *)
   cassert __FILE__ __LINE__
     (not (reserved_in_value v))
-    meta "There should be no reserved borrows in the value";
+    span "There should be no reserved borrows in the value";
   (* Return *)
   v
 
-let access_rplace_reorganize_and_read (config : config) (meta : Meta.meta)
+let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
     (expand_prim_copy : bool) (access : access_kind) (p : place)
     (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Make sure we can evaluate the path *)
-  let ctx, cc = update_ctx_along_read_place config meta access p ctx in
+  let ctx, cc = update_ctx_along_read_place config span access p ctx in
   (* End the proper loans at the place itself *)
-  let ctx, cc = comp cc (end_loans_at_place config meta access p ctx) in
+  let ctx, cc = comp cc (end_loans_at_place config span access p ctx) in
   (* Expand the copyable values which contain borrows (which are necessarily shared
    * borrows) *)
   let ctx, cc =
     comp cc
       (if expand_prim_copy then
-         expand_primitively_copyable_at_place config meta access p ctx
+         expand_primitively_copyable_at_place config span access p ctx
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
-  let ty_value = read_place_check meta access p ctx in
+  let ty_value = read_place_check span access p ctx in
   (* Compose *)
   (ty_value, ctx, cc)
 
-let access_rplace_reorganize (config : config) (meta : Meta.meta)
+let access_rplace_reorganize (config : config) (span : Meta.span)
     (expand_prim_copy : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   let _, ctx, f =
-    access_rplace_reorganize_and_read config meta expand_prim_copy access p ctx
+    access_rplace_reorganize_and_read config span expand_prim_copy access p ctx
   in
   (ctx, f)
 
 (** Convert an operand constant operand value to a typed value *)
-let literal_to_typed_value (meta : Meta.meta) (ty : literal_type) (cv : literal)
+let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     : typed_value =
   (* Check the type while converting - we actually need some information
      * contained in the type *)
@@ -108,11 +108,11 @@ let literal_to_typed_value (meta : Meta.meta) (ty : literal_type) (cv : literal)
   | TChar, VChar v -> { value = VLiteral (VChar v); ty = TLiteral ty }
   | TInteger int_ty, VScalar v ->
       (* Check the type and the ranges *)
-      sanity_check __FILE__ __LINE__ (int_ty = v.int_ty) meta;
-      sanity_check __FILE__ __LINE__ (check_scalar_value_in_range v) meta;
+      sanity_check __FILE__ __LINE__ (int_ty = v.int_ty) span;
+      sanity_check __FILE__ __LINE__ (check_scalar_value_in_range v) span;
       { value = VLiteral (VScalar v); ty = TLiteral ty }
   (* Remaining cases (invalid) *)
-  | _, _ -> craise __FILE__ __LINE__ meta "Improperly typed constant value"
+  | _, _ -> craise __FILE__ __LINE__ span "Improperly typed constant value"
 
 (** Copy a value, and return the resulting value.
 
@@ -125,14 +125,14 @@ let literal_to_typed_value (meta : Meta.meta) (ty : literal_type) (cv : literal)
     parameter to control this copy ([allow_adt_copy]). Note that here by ADT we
     mean the user-defined ADTs (not tuples or assumed types).
  *)
-let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
+let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     (ctx : eval_ctx) (v : typed_value) : eval_ctx * typed_value =
   log#ldebug
     (lazy
       ("copy_value: "
-      ^ typed_value_to_string ~meta:(Some meta) ctx v
+      ^ typed_value_to_string ~span:(Some span) ctx v
       ^ "\n- context:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx));
+      ^ eval_ctx_to_string ~span:(Some span) ctx));
   (* Remark: at some point we rewrote this function to use iterators, but then
    * we reverted the changes: the result was less clear actually. In particular,
    * the fact that we have exhaustive matches below makes very obvious the cases
@@ -143,12 +143,12 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
       (* Sanity check *)
       (match v.ty with
       | TAdt (TAssumed TBox, _) ->
-          exec_raise __FILE__ __LINE__ meta
+          exec_raise __FILE__ __LINE__ span
             "Can't copy an assumed value other than Option"
       | TAdt (TAdtId _, _) as ty ->
           sanity_check __FILE__ __LINE__
             (allow_adt_copy || ty_is_copyable ty)
-            meta
+            span
       | TAdt (TTuple, _) -> () (* Ok *)
       | TAdt
           ( TAssumed (TSlice | TArray),
@@ -158,16 +158,16 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
               const_generics = [];
               trait_refs = [];
             } ) ->
-          exec_assert __FILE__ __LINE__ (ty_is_copyable ty) meta
+          exec_assert __FILE__ __LINE__ (ty_is_copyable ty) span
             "The type is not primitively copyable"
-      | _ -> exec_raise __FILE__ __LINE__ meta "Unreachable");
+      | _ -> exec_raise __FILE__ __LINE__ span "Unreachable");
       let ctx, fields =
         List.fold_left_map
-          (copy_value meta allow_adt_copy config)
+          (copy_value span allow_adt_copy config)
           ctx av.field_values
       in
       (ctx, { v with value = VAdt { av with field_values = fields } })
-  | VBottom -> exec_raise __FILE__ __LINE__ meta "Can't copy ⊥"
+  | VBottom -> exec_raise __FILE__ __LINE__ span "Can't copy ⊥"
   | VBorrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
@@ -175,20 +175,20 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
           let bid' = fresh_borrow_id () in
-          let ctx = InterpreterBorrows.reborrow_shared meta bid bid' ctx in
+          let ctx = InterpreterBorrows.reborrow_shared span bid bid' ctx in
           (ctx, { v with value = VBorrow (VSharedBorrow bid') })
       | VMutBorrow (_, _) ->
-          exec_raise __FILE__ __LINE__ meta "Can't copy a mutable borrow"
+          exec_raise __FILE__ __LINE__ span "Can't copy a mutable borrow"
       | VReservedMutBorrow _ ->
-          exec_raise __FILE__ __LINE__ meta "Can't copy a reserved mut borrow")
+          exec_raise __FILE__ __LINE__ span "Can't copy a reserved mut borrow")
   | VLoan lc -> (
       (* We can only copy shared loans *)
       match lc with
       | VMutLoan _ ->
-          exec_raise __FILE__ __LINE__ meta "Can't copy a mutable loan"
+          exec_raise __FILE__ __LINE__ span "Can't copy a mutable loan"
       | VSharedLoan (_, sv) ->
           (* We don't copy the shared loan: only the shared value inside *)
-          copy_value meta allow_adt_copy config ctx sv)
+          copy_value span allow_adt_copy config ctx sv)
   | VSymbolic sp ->
       (* We can copy only if the type is "primitively" copyable.
        * Note that in the general case, copy is a trait: copying values
@@ -196,7 +196,7 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
        * for very simple types such as integers, shared borrows, etc. *)
       cassert __FILE__ __LINE__
         (ty_is_copyable (Substitute.erase_regions sp.sv_ty))
-        meta "Not primitively copyable";
+        span "Not primitively copyable";
       (* If the type is copyable, we simply return the current value. Side
        * remark: what is important to look at when copying symbolic values
        * is symbolic expansion. The important subcase is the expansion of shared
@@ -242,7 +242,7 @@ let rec copy_value (meta : Meta.meta) (allow_adt_copy : bool) (config : config)
     what we do in the formalization (because we don't enforce the same constraints
     as MIR in the formalization).
  *)
-let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta)
+let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
     (op : operand) : cm_fun =
  fun ctx ->
   match op with
@@ -254,15 +254,15 @@ let prepare_eval_operand_reorganize (config : config) (meta : Meta.meta)
       let access = Read in
       (* Expand the symbolic values, if necessary *)
       let expand_prim_copy = true in
-      access_rplace_reorganize config meta expand_prim_copy access p ctx
+      access_rplace_reorganize config span expand_prim_copy access p ctx
   | Move p ->
       (* Access the value *)
       let access = Move in
       let expand_prim_copy = false in
-      access_rplace_reorganize config meta expand_prim_copy access p ctx
+      access_rplace_reorganize config span expand_prim_copy access p ctx
 
 (** Evaluate an operand, without reorganizing the context before *)
-let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
+let eval_operand_no_reorganize (config : config) (span : Meta.span)
     (op : operand) (ctx : eval_ctx) :
     typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Debug *)
@@ -270,21 +270,21 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
     (lazy
       ("eval_operand_no_reorganize: op: " ^ operand_to_string ctx op
      ^ "\n- ctx:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n"));
   (* Evaluate *)
   match op with
   | Constant cv -> (
       match cv.value with
       | CLiteral lit ->
-          ( literal_to_typed_value meta (ty_as_literal cv.ty) lit,
+          ( literal_to_typed_value span (ty_as_literal cv.ty) lit,
             ctx,
             fun e -> e )
       | CTraitConst (trait_ref, const_name) ->
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value *)
           let ty = cv.ty in
-          let v = mk_fresh_symbolic_typed_value meta ty in
+          let v = mk_fresh_symbolic_typed_value span ty in
           (* Wrap the generated expression *)
           let cf e =
             match e with
@@ -294,7 +294,7 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
                   (SymbolicAst.IntroSymbolic
                      ( ctx0,
                        None,
-                       value_as_symbolic meta v.value,
+                       value_as_symbolic span v.value,
                        SymbolicAst.VaTraitConstValue (trait_ref, const_name),
                        e ))
           in
@@ -313,10 +313,10 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
             | ConcreteMode ->
                 (* Copy the value - this is more of a sanity check *)
                 let allow_adt_copy = false in
-                copy_value meta allow_adt_copy config ctx cv
+                copy_value span allow_adt_copy config ctx cv
             | SymbolicMode ->
                 (* We use the looked up value only for its type *)
-                let v = mk_fresh_symbolic_typed_value meta cv.ty in
+                let v = mk_fresh_symbolic_typed_value span cv.ty in
                 (ctx, v)
           in
           (* We have to wrap the generated expression *)
@@ -326,96 +326,96 @@ let eval_operand_no_reorganize (config : config) (meta : Meta.meta)
             | Some e ->
                 (* If we are synthesizing a symbolic AST, it means that we are in symbolic
                    mode: the value of the const generic is necessarily symbolic. *)
-                sanity_check __FILE__ __LINE__ (is_symbolic cv.value) meta;
+                sanity_check __FILE__ __LINE__ (is_symbolic cv.value) span;
                 (* *)
                 Some
                   (SymbolicAst.IntroSymbolic
                      ( ctx0,
                        None,
-                       value_as_symbolic meta cv.value,
+                       value_as_symbolic span cv.value,
                        SymbolicAst.VaCgValue vid,
                        e ))
           in
           (cv, ctx, cf)
       | CFnPtr _ ->
-          craise __FILE__ __LINE__ meta
+          craise __FILE__ __LINE__ span
             "Function pointers are not supported yet")
   | Copy p ->
       (* Access the value *)
       let access = Read in
-      let v = read_place_check meta access p ctx in
+      let v = read_place_check span access p ctx in
       (* Sanity checks *)
       exec_assert __FILE__ __LINE__
         (not (bottom_in_value ctx.ended_regions v))
-        meta "Can not copy a value containing bottom";
+        span "Can not copy a value containing bottom";
       sanity_check __FILE__ __LINE__
         (Option.is_none
            (find_first_primitively_copyable_sv_with_borrows
               ctx.type_ctx.type_infos v))
-        meta;
+        span;
       (* Copy the value *)
       let allow_adt_copy = false in
-      let ctx, v = copy_value meta allow_adt_copy config ctx v in
+      let ctx, v = copy_value span allow_adt_copy config ctx v in
       (v, ctx, fun e -> e)
   | Move p ->
       (* Access the value *)
       let access = Move in
-      let v = read_place_check meta access p ctx in
+      let v = read_place_check span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
       exec_assert __FILE__ __LINE__
         (not (bottom_in_value ctx.ended_regions v))
-        meta "There should be no bottoms in the value we are about to move";
+        span "There should be no bottoms in the value we are about to move";
       (* Move the value *)
       let bottom : typed_value = { value = VBottom; ty = v.ty } in
-      let ctx = write_place meta access p bottom ctx in
+      let ctx = write_place span access p bottom ctx in
       (v, ctx, fun e -> e)
 
-let eval_operand (config : config) (meta : Meta.meta) (op : operand)
+let eval_operand (config : config) (span : Meta.span) (op : operand)
     (ctx : eval_ctx) : typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Debug *)
   log#ldebug
     (lazy
       ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
-      ^ eval_ctx_to_string ~meta:(Some meta) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n"));
   (* We reorganize the context, then evaluate the operand *)
-  let ctx, cc = prepare_eval_operand_reorganize config meta op ctx in
-  comp2 cc (eval_operand_no_reorganize config meta op ctx)
+  let ctx, cc = prepare_eval_operand_reorganize config span op ctx in
+  comp2 cc (eval_operand_no_reorganize config span op ctx)
 
 (** Small utility.
 
     See [prepare_eval_operand_reorganize].
  *)
-let prepare_eval_operands_reorganize (config : config) (meta : Meta.meta)
+let prepare_eval_operands_reorganize (config : config) (span : Meta.span)
     (ops : operand list) : cm_fun =
-  fold_left_apply_continuation (prepare_eval_operand_reorganize config meta) ops
+  fold_left_apply_continuation (prepare_eval_operand_reorganize config span) ops
 
 (** Evaluate several operands. *)
-let eval_operands (config : config) (meta : Meta.meta) (ops : operand list)
+let eval_operands (config : config) (span : Meta.span) (ops : operand list)
     (ctx : eval_ctx) :
     typed_value list * eval_ctx * (eval_result -> eval_result) =
   (* Prepare the operands *)
-  let ctx, cc = prepare_eval_operands_reorganize config meta ops ctx in
+  let ctx, cc = prepare_eval_operands_reorganize config span ops ctx in
   (* Evaluate the operands *)
   comp2 cc
-    (map_apply_continuation (eval_operand_no_reorganize config meta) ops ctx)
+    (map_apply_continuation (eval_operand_no_reorganize config span) ops ctx)
 
-let eval_two_operands (config : config) (meta : Meta.meta) (op1 : operand)
+let eval_two_operands (config : config) (span : Meta.span) (op1 : operand)
     (op2 : operand) (ctx : eval_ctx) :
     (typed_value * typed_value) * eval_ctx * (eval_result -> eval_result) =
-  let res, ctx, cc = eval_operands config meta [ op1; op2 ] ctx in
+  let res, ctx, cc = eval_operands config span [ op1; op2 ] ctx in
   let res =
     match res with
     | [ v1; v2 ] -> (v1, v2)
-    | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+    | _ -> craise __FILE__ __LINE__ span "Unreachable"
   in
   (res, ctx, cc)
 
-let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
+let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operand *)
-  let v, ctx, cc = eval_operand config meta op ctx in
+  let v, ctx, cc = eval_operand config span op ctx in
   (* Apply the unop *)
   let r =
     match (unop, v.value) with
@@ -428,7 +428,7 @@ let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
     | ( Cast (CastScalar (TInteger src_ty, TInteger tgt_ty)),
         VLiteral (VScalar sv) ) -> (
         (* Cast between integers *)
-        sanity_check __FILE__ __LINE__ (src_ty = sv.int_ty) meta;
+        sanity_check __FILE__ __LINE__ (src_ty = sv.int_ty) span;
         let i = sv.value in
         match mk_scalar tgt_ty i with
         | Error _ -> Error EPanic
@@ -451,21 +451,21 @@ let eval_unary_op_concrete (config : config) (meta : Meta.meta) (unop : unop)
           if Z.of_int 0 = sv.value then false
           else if Z.of_int 1 = sv.value then true
           else
-            exec_raise __FILE__ __LINE__ meta
+            exec_raise __FILE__ __LINE__ span
               "Conversion from int to bool: out of range"
         in
         let value = VLiteral (VBool b) in
         let ty = TLiteral TBool in
         Ok { ty; value }
-    | _ -> exec_raise __FILE__ __LINE__ meta "Invalid input for unop"
+    | _ -> exec_raise __FILE__ __LINE__ span "Invalid input for unop"
   in
   (r, ctx, cc)
 
-let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop)
+let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operand *)
-  let v, ctx, cc = eval_operand config meta op ctx in
+  let v, ctx, cc = eval_operand config span op ctx in
   (* Generate a fresh symbolic value to store the result *)
   let res_sv_id = fresh_symbolic_value_id () in
   let res_sv_ty =
@@ -473,7 +473,7 @@ let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop)
     | Not, (TLiteral TBool as lty) -> lty
     | Neg, (TLiteral (TInteger _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
-    | _ -> exec_raise __FILE__ __LINE__ meta "Invalid input for unop"
+    | _ -> exec_raise __FILE__ __LINE__ span "Invalid input for unop"
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Compute the result *)
@@ -482,31 +482,31 @@ let eval_unary_op_symbolic (config : config) (meta : Meta.meta) (unop : unop)
   let cc =
     cc_comp cc
       (synthesize_unary_op ctx unop v
-         (mk_opt_place_from_op meta op ctx)
+         (mk_opt_place_from_op span op ctx)
          res_sv None)
   in
   (res, ctx, cc)
 
-let eval_unary_op (config : config) (meta : Meta.meta) (unop : unop)
+let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   match config.mode with
-  | ConcreteMode -> eval_unary_op_concrete config meta unop op ctx
-  | SymbolicMode -> eval_unary_op_symbolic config meta unop op ctx
+  | ConcreteMode -> eval_unary_op_concrete config span unop op ctx
+  | SymbolicMode -> eval_unary_op_symbolic config span unop op ctx
 
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
     the binop *after* the operands have been successfully evaluated
  *)
-let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
+let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
     (v1 : typed_value) (v2 : typed_value) : (typed_value, eval_error) result =
   (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
    * The remaining binops only operate on scalars. *)
   if binop = Eq || binop = Ne then (
     (* Equality operations *)
-    exec_assert __FILE__ __LINE__ (v1.ty = v2.ty) meta
+    exec_assert __FILE__ __LINE__ (v1.ty = v2.ty) span
       "The arguments given to the binop don't have the same type";
     (* Equality/inequality check is primitive only for a subset of types *)
-    exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) meta
+    exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) span
       "Type is not primitively copyable";
     let b = v1 = v2 in
     Ok { value = VLiteral (VBool b); ty = TLiteral TBool })
@@ -522,7 +522,7 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
         match binop with
         | Lt | Le | Ge | Gt ->
             (* The two operands must have the same type and the result is a boolean *)
-            sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) meta;
+            sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) span;
             let b =
               match binop with
               | Lt -> Z.lt sv1.value sv2.value
@@ -531,14 +531,14 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
               | Gt -> Z.gt sv1.value sv2.value
               | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr | Shl
               | Shr | Ne | Eq | CheckedAdd | CheckedSub | CheckedMul ->
-                  craise __FILE__ __LINE__ meta "Unreachable"
+                  craise __FILE__ __LINE__ span "Unreachable"
             in
             Ok
               ({ value = VLiteral (VBool b); ty = TLiteral TBool }
                 : typed_value)
         | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr -> (
             (* The two operands must have the same type and the result is an integer *)
-            sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) meta;
+            sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) span;
             let res =
               match binop with
               | Div ->
@@ -556,7 +556,7 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
               | BitOr -> raise Unimplemented
               | Lt | Le | Ge | Gt | Shl | Shr | Ne | Eq | CheckedAdd
               | CheckedSub | CheckedMul ->
-                  craise __FILE__ __LINE__ meta "Unreachable"
+                  craise __FILE__ __LINE__ span "Unreachable"
             in
             match res with
             | Error _ -> Error EPanic
@@ -567,33 +567,33 @@ let eval_binary_op_concrete_compute (meta : Meta.meta) (binop : binop)
                     ty = TLiteral (TInteger sv1.int_ty);
                   })
         | Shl | Shr | CheckedAdd | CheckedSub | CheckedMul ->
-            craise __FILE__ __LINE__ meta "Unimplemented binary operation"
-        | Ne | Eq -> craise __FILE__ __LINE__ meta "Unreachable")
-    | _ -> craise __FILE__ __LINE__ meta "Invalid inputs for binop"
+            craise __FILE__ __LINE__ span "Unimplemented binary operation"
+        | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable")
+    | _ -> craise __FILE__ __LINE__ span "Invalid inputs for binop"
 
-let eval_binary_op_concrete (config : config) (meta : Meta.meta) (binop : binop)
+let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operands *)
-  let (v1, v2), ctx, cc = eval_two_operands config meta op1 op2 ctx in
+  let (v1, v2), ctx, cc = eval_two_operands config span op1 op2 ctx in
   (* Compute the result of the binop *)
-  let r = eval_binary_op_concrete_compute meta binop v1 v2 in
+  let r = eval_binary_op_concrete_compute span binop v1 v2 in
   (* Return *)
   (r, ctx, cc)
 
-let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
+let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operands *)
-  let (v1, v2), ctx, cc = eval_two_operands config meta op1 op2 ctx in
+  let (v1, v2), ctx, cc = eval_two_operands config span op1 op2 ctx in
   (* Generate a fresh symbolic value to store the result *)
   let res_sv_id = fresh_symbolic_value_id () in
   let res_sv_ty =
     if binop = Eq || binop = Ne then (
       (* Equality operations *)
-      sanity_check __FILE__ __LINE__ (v1.ty = v2.ty) meta;
+      sanity_check __FILE__ __LINE__ (v1.ty = v2.ty) span;
       (* Equality/inequality check is primitive only for a subset of types *)
-      exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) meta
+      exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) span
         "The type is not primitively copyable";
       TLiteral TBool)
     else
@@ -602,43 +602,43 @@ let eval_binary_op_symbolic (config : config) (meta : Meta.meta) (binop : binop)
       | TLiteral (TInteger int_ty1), TLiteral (TInteger int_ty2) -> (
           match binop with
           | Lt | Le | Ge | Gt ->
-              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) meta;
+              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral TBool
           | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr ->
-              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) meta;
+              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral (TInteger int_ty1)
           (* These return `(int, bool)` which isn't a literal type *)
           | CheckedAdd | CheckedSub | CheckedMul ->
-              craise __FILE__ __LINE__ meta
+              craise __FILE__ __LINE__ span
                 "Checked operations are not implemented"
           | Shl | Shr ->
               (* The number of bits can be of a different integer type
                  than the operand *)
               TLiteral (TInteger int_ty1)
-          | Ne | Eq -> craise __FILE__ __LINE__ meta "Unreachable")
-      | _ -> craise __FILE__ __LINE__ meta "Invalid inputs for binop"
+          | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable")
+      | _ -> craise __FILE__ __LINE__ span "Invalid inputs for binop"
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   let v = mk_typed_value_from_symbolic_value res_sv in
   (* Synthesize the symbolic AST *)
-  let p1 = mk_opt_place_from_op meta op1 ctx in
-  let p2 = mk_opt_place_from_op meta op2 ctx in
+  let p1 = mk_opt_place_from_op span op1 ctx in
+  let p2 = mk_opt_place_from_op span op2 ctx in
   let cc =
     cc_comp cc (synthesize_binary_op ctx binop v1 p1 v2 p2 res_sv None)
   in
   (* Compose and apply *)
   (Ok v, ctx, cc)
 
-let eval_binary_op (config : config) (meta : Meta.meta) (binop : binop)
+let eval_binary_op (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   match config.mode with
-  | ConcreteMode -> eval_binary_op_concrete config meta binop op1 op2 ctx
-  | SymbolicMode -> eval_binary_op_symbolic config meta binop op1 op2 ctx
+  | ConcreteMode -> eval_binary_op_concrete config span binop op1 op2 ctx
+  | SymbolicMode -> eval_binary_op_symbolic config span binop op1 op2 ctx
 
 (** Evaluate an rvalue which creates a reference (i.e., an rvalue which is
     `&p` or `&mut p` or `&two-phase p`) *)
-let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
+let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     (bkind : borrow_kind) (ctx : eval_ctx) :
     typed_value * eval_ctx * (eval_result -> eval_result) =
   match bkind with
@@ -648,19 +648,19 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
          forbid them and remove them in the prepasses (see the comments there
          as to why this is sound).
       *)
-      sanity_check __FILE__ __LINE__ (bkind <> BShallow) meta;
+      sanity_check __FILE__ __LINE__ (bkind <> BShallow) span;
 
       (* Access the value *)
       let access =
         match bkind with
         | BShared | BShallow -> Read
         | BTwoPhaseMut -> Write
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
 
       let expand_prim_copy = false in
       let v, ctx, cc =
-        access_rplace_reorganize_and_read config meta expand_prim_copy access p
+        access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in
       (* Generate the fresh borrow id *)
@@ -678,14 +678,14 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
             { v with value = v' }
       in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place meta access p nv ctx in
+      let ctx = write_place span access p nv ctx in
       (* Compute the rvalue - simply a shared borrow with the fresh id.
        * Note that the reference is *mutable* if we do a two-phase borrow *)
       let ref_kind =
         match bkind with
         | BShared | BShallow -> RShared
         | BTwoPhaseMut -> RMut
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       let rv_ty = TRef (RErased, v.ty, ref_kind) in
       let bc =
@@ -695,7 +695,7 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
                handle shallow borrows like shared borrows *)
             VSharedBorrow bid
         | BTwoPhaseMut -> VReservedMutBorrow bid
-        | _ -> craise __FILE__ __LINE__ meta "Unreachable"
+        | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       let rv : typed_value = { value = VBorrow bc; ty = rv_ty } in
       (* Return *)
@@ -705,7 +705,7 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
       let access = Write in
       let expand_prim_copy = false in
       let v, ctx, cc =
-        access_rplace_reorganize_and_read config meta expand_prim_copy access p
+        access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
@@ -717,15 +717,15 @@ let eval_rvalue_ref (config : config) (meta : Meta.meta) (p : place)
       (* Compute the loan value with which to replace the value at place p *)
       let nv = { v with value = VLoan (VMutLoan bid) } in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place meta access p nv ctx in
+      let ctx = write_place span access p nv ctx in
       (* Return *)
       (rv, ctx, cc)
 
-let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
+let eval_rvalue_aggregate (config : config) (span : Meta.span)
     (aggregate_kind : aggregate_kind) (ops : operand list) (ctx : eval_ctx) :
     typed_value * eval_ctx * (eval_result -> eval_result) =
   (* Evaluate the operands *)
-  let values, ctx, cc = eval_operands config meta ops ctx in
+  let values, ctx, cc = eval_operands config span ops ctx in
   (* Compute the value *)
   let v, cf_compute =
     (* Match on the aggregate kind *)
@@ -745,15 +745,15 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
             sanity_check __FILE__ __LINE__
               (List.length type_decl.generics.regions
               = List.length generics.regions)
-              meta;
+              span;
             let expected_field_types =
-              AssociatedTypes.ctx_adt_get_inst_norm_field_etypes meta ctx def_id
+              AssociatedTypes.ctx_adt_get_inst_norm_field_etypes span ctx def_id
                 opt_variant_id generics
             in
             sanity_check __FILE__ __LINE__
               (expected_field_types
               = List.map (fun (v : typed_value) -> v.ty) values)
-              meta;
+              span;
             (* Construct the value *)
             let av : adt_value =
               { variant_id = opt_variant_id; field_values = values }
@@ -762,17 +762,17 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
             let aggregated : typed_value = { value = VAdt av; ty = aty } in
             (* Call the continuation *)
             (aggregated, fun e -> e)
-        | TAssumed _ -> craise __FILE__ __LINE__ meta "Unreachable")
+        | TAssumed _ -> craise __FILE__ __LINE__ span "Unreachable")
     | AggregatedArray (ety, cg) ->
         (* Sanity check: all the values have the proper type *)
         sanity_check __FILE__ __LINE__
           (List.for_all (fun (v : typed_value) -> v.ty = ety) values)
-          meta;
+          span;
         (* Sanity check: the number of values is consistent with the length *)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
         sanity_check __FILE__ __LINE__
           (len = Z.of_int (List.length values))
-          meta;
+          span;
         let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
         let ty = TAdt (TAssumed TArray, generics) in
         (* In order to generate a better AST, we introduce a symbolic
@@ -780,24 +780,24 @@ let eval_rvalue_aggregate (config : config) (meta : Meta.meta)
            array we introduce here might be duplicated in the generated
            code: by introducing a symbolic value we introduce a let-binding
            in the generated code. *)
-        let saggregated = mk_fresh_symbolic_typed_value meta ty in
+        let saggregated = mk_fresh_symbolic_typed_value span ty in
         (* Update the symbolic ast *)
         let cf e =
           match e with
           | None -> None
           | Some e ->
               (* Introduce the symbolic value in the AST *)
-              let sv = ValuesUtils.value_as_symbolic meta saggregated.value in
+              let sv = ValuesUtils.value_as_symbolic span saggregated.value in
               Some
                 (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e))
         in
         (saggregated, cf)
     | AggregatedClosure _ ->
-        craise __FILE__ __LINE__ meta "Closures are not supported yet"
+        craise __FILE__ __LINE__ span "Closures are not supported yet"
   in
   (v, ctx, cc_comp cc cf_compute)
 
-let eval_rvalue_not_global (config : config) (meta : Meta.meta)
+let eval_rvalue_not_global (config : config) (span : Meta.span)
     (rvalue : rvalue) (ctx : eval_ctx) :
     (typed_value, eval_error) result * eval_ctx * (eval_result -> eval_result) =
   log#ldebug (lazy "eval_rvalue");
@@ -805,25 +805,25 @@ let eval_rvalue_not_global (config : config) (meta : Meta.meta)
   let wrap_in_result (v, ctx, cc) = (Ok v, ctx, cc) in
   (* Delegate to the proper auxiliary function *)
   match rvalue with
-  | Use op -> wrap_in_result (eval_operand config meta op ctx)
-  | RvRef (p, bkind) -> wrap_in_result (eval_rvalue_ref config meta p bkind ctx)
-  | UnaryOp (unop, op) -> eval_unary_op config meta unop op ctx
-  | BinaryOp (binop, op1, op2) -> eval_binary_op config meta binop op1 op2 ctx
+  | Use op -> wrap_in_result (eval_operand config span op ctx)
+  | RvRef (p, bkind) -> wrap_in_result (eval_rvalue_ref config span p bkind ctx)
+  | UnaryOp (unop, op) -> eval_unary_op config span unop op ctx
+  | BinaryOp (binop, op1, op2) -> eval_binary_op config span binop op1 op2 ctx
   | Aggregate (aggregate_kind, ops) ->
-      wrap_in_result (eval_rvalue_aggregate config meta aggregate_kind ops ctx)
+      wrap_in_result (eval_rvalue_aggregate config span aggregate_kind ops ctx)
   | Discriminant _ ->
-      craise __FILE__ __LINE__ meta
+      craise __FILE__ __LINE__ span
         "Unreachable: discriminant reads should have been eliminated from the \
          AST"
-  | Global _ -> craise __FILE__ __LINE__ meta "Unreachable"
+  | Global _ -> craise __FILE__ __LINE__ span "Unreachable"
 
-let eval_fake_read (config : config) (meta : Meta.meta) (p : place) : cm_fun =
+let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
   let expand_prim_copy = false in
   let v, ctx, cc =
-    access_rplace_reorganize_and_read config meta expand_prim_copy Read p ctx
+    access_rplace_reorganize_and_read config span expand_prim_copy Read p ctx
   in
   cassert __FILE__ __LINE__
     (not (bottom_in_value ctx.ended_regions v))
-    meta "Fake read: the value contains bottom";
+    span "Fake read: the value contains bottom";
   (ctx, cc)
