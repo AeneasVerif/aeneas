@@ -3923,14 +3923,15 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
 
 let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
   List.filter_map
-    (fun a ->
-      try Some (translate_type_decl ctx a)
+    (fun d ->
+      try Some (translate_type_decl ctx d)
       with CFailure (meta, _) ->
         let env = PrintPure.decls_ctx_to_fmt_env ctx in
-        let name = PrintPure.name_to_string env a.name in
+        let name = PrintPure.name_to_string env d.name in
+        let name_pattern = TranslateCore.name_to_pattern_string ctx d.name in
         save_error __FILE__ __LINE__ meta
           ("Could not translate type decl '" ^ name
-         ^ "' because of previous error");
+         ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
         None)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 
