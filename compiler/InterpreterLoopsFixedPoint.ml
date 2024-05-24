@@ -594,6 +594,21 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
               "Nested loops are not supported for now"
       in
       let continue_ctxs = List.filter_map keep_continue_ctx ctx_resl in
+
+      log#ldebug
+        (lazy
+          ("compute_fixed_point: about to join with continue_ctx"
+         ^ "\n\n- ctx0:\n"
+          ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+          ^ "\n\n"
+          ^ String.concat "\n\n"
+              (List.map
+                 (fun ctx ->
+                   "- continue_ctx:\n"
+                   ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx)
+                 continue_ctxs)
+          ^ "\n\n"));
+
       (* Compute the join between the original contexts and the contexts computed
          upon reentry *)
       let ctx1 = join_ctxs ctx continue_ctxs in
@@ -601,7 +616,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       (* Debug *)
       log#ldebug
         (lazy
-          ("compute_fixed_point:" ^ "\n\n- ctx0:\n"
+          ("compute_fixed_point: after joining continue ctxs" ^ "\n\n- ctx0:\n"
           ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
           ^ "\n\n- ctx1:\n"
           ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx1
