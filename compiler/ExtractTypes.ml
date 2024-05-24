@@ -1146,17 +1146,17 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
   F.pp_print_string fmt rd;
   F.pp_close_box fmt ()
 
-let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_comment_with_raw_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
     ?(generics : (Types.generic_params * Types.generic_args) option = None)
-    (span : Meta.span) : unit =
-  let file = match span.file with Virtual s | Local s -> s in
+    (raw_span : Meta.raw_span) : unit =
+  let file = match raw_span.file with Virtual s | Local s -> s in
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
   in
-  let span =
-    "Source: '" ^ file ^ "', lines " ^ loc_to_string span.beg_loc ^ "-"
-    ^ loc_to_string span.end_loc
+  let raw_span =
+    "Source: '" ^ file ^ "', lines " ^ loc_to_string raw_span.beg_loc ^ "-"
+    ^ loc_to_string raw_span.end_loc
   in
   let name =
     match (name, generics) with
@@ -1169,7 +1169,7 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
           ^ name_with_generics_to_pattern_string ctx.trans_ctx name params args;
         ]
   in
-  extract_comment fmt (sl @ [ span ] @ name)
+  extract_comment fmt (sl @ [ raw_span ] @ name)
 
 let extract_trait_clause_type (meta : Meta.meta) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
@@ -1414,7 +1414,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
        Some def.llbc_name
      else None
    in
-   extract_comment_with_span ctx fmt
+   extract_comment_with_raw_span ctx fmt
      [ "[" ^ name_to_string ctx def.llbc_name ^ "]" ]
      name def.meta.span);
   F.pp_print_break fmt 0 0;

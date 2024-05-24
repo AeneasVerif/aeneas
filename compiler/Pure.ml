@@ -50,7 +50,7 @@ type region_group_id = T.region_group_id [@@deriving show, ord]
 type mutability = Mut | Const [@@deriving show, ord]
 type loc = Meta.loc [@@deriving show, ord]
 type file_name = Meta.file_name [@@deriving show, ord]
-type span = Meta.span [@@deriving show, ord]
+type raw_span = Meta.raw_span [@@deriving show, ord]
 type meta = Meta.meta [@@deriving show, ord]
 
 (** The assumed types for the pure AST.

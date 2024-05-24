@@ -1,13 +1,13 @@
 let log = Logging.errors_log
 
 let meta_to_string (meta : Meta.meta) =
-  let span = meta.span in
-  let file = match span.file with Virtual s | Local s -> s in
+  let raw_span = meta.span in
+  let file = match raw_span.file with Virtual s | Local s -> s in
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
   in
-  "Source: '" ^ file ^ "', lines " ^ loc_to_string span.beg_loc ^ "-"
-  ^ loc_to_string span.end_loc
+  "Source: '" ^ file ^ "', lines " ^ loc_to_string raw_span.beg_loc ^ "-"
+  ^ loc_to_string raw_span.end_loc
 
 let format_error_message (meta : Meta.meta option) (msg : string) =
   let meta =

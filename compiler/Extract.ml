@@ -1249,7 +1249,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
        Some def.llbc_name
      else None
    in
-   extract_comment_with_span ctx fmt
+   extract_comment_with_raw_span ctx fmt
      [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases clause" ]
      name def.meta.span);
   F.pp_print_space fmt ();
@@ -1316,7 +1316,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment_with_span ctx fmt
+  extract_comment_with_raw_span ctx fmt
     [ "[" ^ name_to_string ctx def.llbc_name ^ "]: termination measure" ]
     None def.meta.span;
   F.pp_print_space fmt ();
@@ -1371,7 +1371,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   let def_name = ctx_get_decreases_proof def.meta def.def_id def.loop_id ctx in
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
-  extract_comment_with_span ctx fmt
+  extract_comment_with_raw_span ctx fmt
     [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases_by tactic" ]
     None def.meta.span;
   F.pp_print_space fmt ();
@@ -1418,7 +1418,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
       Some def.llbc_name
     else None
   in
-  extract_comment_with_span ctx fmt comment name def.meta.span
+  extract_comment_with_raw_span ctx fmt comment name def.meta.span
 
 (** Extract a function declaration.
 
@@ -1892,7 +1892,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       Some global.llbc_name
     else None
   in
-  extract_comment_with_span ctx fmt
+  extract_comment_with_raw_span ctx fmt
     [ "[" ^ name_to_string ctx global.llbc_name ^ "]" ]
     name global.meta.span;
   F.pp_print_space fmt ();
@@ -2354,7 +2354,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
        Some decl.llbc_name
      else None
    in
-   extract_comment_with_span ctx fmt
+   extract_comment_with_raw_span ctx fmt
      [ "Trait declaration: [" ^ name_to_string ctx decl.llbc_name ^ "]" ]
      name decl.meta.span);
   F.pp_print_break fmt 0 0;
@@ -2653,7 +2653,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
          Some (trait_decl.llbc_generics, decl_ref.decl_generics) )
      else (None, None)
    in
-   extract_comment_with_span ctx fmt
+   extract_comment_with_raw_span ctx fmt
      [ "Trait implementation: [" ^ name_to_string ctx impl.llbc_name ^ "]" ]
      (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
      name ?generics:(Some generics) impl.meta.span);
