@@ -7,7 +7,7 @@ homepage: "https://github.com/AeneasVerif/aeneas"
 bug-reports: "https://github.com/AeneasVerif/aeneas/issues"
 depends: [
   "ocaml"
-  "dune" {>= "3.12"}
+  "dune" {>= "3.7"}
   "odoc" {with-doc}
 ]
 build: [
