@@ -8,7 +8,7 @@ include Loops.Clauses
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [loops::sum]: loop 0:
-    Source: 'tests/src/loops.rs', lines 4:0-14:1 *)
+    Source: 'tests/src/loops.rs', lines 7:0-17:1 *)
 let rec sum_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_loop_decreases max i s))
@@ -18,12 +18,12 @@ let rec sum_loop
   else u32_mul s 2
 
 (** [loops::sum]:
-    Source: 'tests/src/loops.rs', lines 4:0-4:27 *)
+    Source: 'tests/src/loops.rs', lines 7:0-7:27 *)
 let sum (max : u32) : result u32 =
   sum_loop max 0 0
 
 (** [loops::sum_with_mut_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 19:0-31:1 *)
+    Source: 'tests/src/loops.rs', lines 22:0-34:1 *)
 let rec sum_with_mut_borrows_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_with_mut_borrows_loop_decreases max i s))
@@ -36,12 +36,12 @@ let rec sum_with_mut_borrows_loop
   else u32_mul s 2
 
 (** [loops::sum_with_mut_borrows]:
-    Source: 'tests/src/loops.rs', lines 19:0-19:44 *)
+    Source: 'tests/src/loops.rs', lines 22:0-22:44 *)
 let sum_with_mut_borrows (max : u32) : result u32 =
   sum_with_mut_borrows_loop max 0 0
 
 (** [loops::sum_with_shared_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 34:0-48:1 *)
+    Source: 'tests/src/loops.rs', lines 37:0-51:1 *)
 let rec sum_with_shared_borrows_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_with_shared_borrows_loop_decreases max i s))
@@ -54,12 +54,12 @@ let rec sum_with_shared_borrows_loop
   else u32_mul s 2
 
 (** [loops::sum_with_shared_borrows]:
-    Source: 'tests/src/loops.rs', lines 34:0-34:47 *)
+    Source: 'tests/src/loops.rs', lines 37:0-37:47 *)
 let sum_with_shared_borrows (max : u32) : result u32 =
   sum_with_shared_borrows_loop max 0 0
 
 (** [loops::sum_array]: loop 0:
-    Source: 'tests/src/loops.rs', lines 50:0-58:1 *)
+    Source: 'tests/src/loops.rs', lines 53:0-61:1 *)
 let rec sum_array_loop
   (n : usize) (a : array u32 n) (i : usize) (s : u32) :
   Tot (result u32) (decreases (sum_array_loop_decreases n a i s))
@@ -73,12 +73,12 @@ let rec sum_array_loop
   else Ok s
 
 (** [loops::sum_array]:
-    Source: 'tests/src/loops.rs', lines 50:0-50:52 *)
+    Source: 'tests/src/loops.rs', lines 53:0-53:52 *)
 let sum_array (n : usize) (a : array u32 n) : result u32 =
   sum_array_loop n a 0 0
 
 (** [loops::clear]: loop 0:
-    Source: 'tests/src/loops.rs', lines 62:0-68:1 *)
+    Source: 'tests/src/loops.rs', lines 65:0-71:1 *)
 let rec clear_loop
   (v : alloc_vec_Vec u32) (i : usize) :
   Tot (result (alloc_vec_Vec u32)) (decreases (clear_loop_decreases v i))
@@ -95,12 +95,12 @@ let rec clear_loop
   else Ok v
 
 (** [loops::clear]:
-    Source: 'tests/src/loops.rs', lines 62:0-62:30 *)
+    Source: 'tests/src/loops.rs', lines 65:0-65:30 *)
 let clear (v : alloc_vec_Vec u32) : result (alloc_vec_Vec u32) =
   clear_loop v 0
 
 (** [loops::list_mem]: loop 0:
-    Source: 'tests/src/loops.rs', lines 76:0-85:1 *)
+    Source: 'tests/src/loops.rs', lines 79:0-88:1 *)
 let rec list_mem_loop
   (x : u32) (ls : list_t u32) :
   Tot (result bool) (decreases (list_mem_loop_decreases x ls))
@@ -111,12 +111,12 @@ let rec list_mem_loop
   end
 
 (** [loops::list_mem]:
-    Source: 'tests/src/loops.rs', lines 76:0-76:52 *)
+    Source: 'tests/src/loops.rs', lines 79:0-79:52 *)
 let list_mem (x : u32) (ls : list_t u32) : result bool =
   list_mem_loop x ls
 
 (** [loops::list_nth_mut_loop]: loop 0:
-    Source: 'tests/src/loops.rs', lines 88:0-98:1 *)
+    Source: 'tests/src/loops.rs', lines 91:0-101:1 *)
 let rec list_nth_mut_loop_loop
   (t : Type0) (ls : list_t t) (i : u32) :
   Tot (result (t & (t -> result (list_t t))))
@@ -135,7 +135,7 @@ let rec list_nth_mut_loop_loop
   end
 
 (** [loops::list_nth_mut_loop]:
-    Source: 'tests/src/loops.rs', lines 88:0-88:71 *)
+    Source: 'tests/src/loops.rs', lines 91:0-91:71 *)
 let list_nth_mut_loop
   (t : Type0) (ls : list_t t) (i : u32) :
   result (t & (t -> result (list_t t)))
@@ -143,7 +143,7 @@ let list_nth_mut_loop
   list_nth_mut_loop_loop t ls i
 
 (** [loops::list_nth_shared_loop]: loop 0:
-    Source: 'tests/src/loops.rs', lines 101:0-111:1 *)
+    Source: 'tests/src/loops.rs', lines 104:0-114:1 *)
 let rec list_nth_shared_loop_loop
   (t : Type0) (ls : list_t t) (i : u32) :
   Tot (result t) (decreases (list_nth_shared_loop_loop_decreases t ls i))
@@ -157,12 +157,12 @@ let rec list_nth_shared_loop_loop
   end
 
 (** [loops::list_nth_shared_loop]:
-    Source: 'tests/src/loops.rs', lines 101:0-101:66 *)
+    Source: 'tests/src/loops.rs', lines 104:0-104:66 *)
 let list_nth_shared_loop (t : Type0) (ls : list_t t) (i : u32) : result t =
   list_nth_shared_loop_loop t ls i
 
 (** [loops::get_elem_mut]: loop 0:
-    Source: 'tests/src/loops.rs', lines 113:0-127:1 *)
+    Source: 'tests/src/loops.rs', lines 116:0-130:1 *)
 let rec get_elem_mut_loop
   (x : usize) (ls : list_t usize) :
   Tot (result (usize & (usize -> result (list_t usize))))
@@ -180,7 +180,7 @@ let rec get_elem_mut_loop
   end
 
 (** [loops::get_elem_mut]:
-    Source: 'tests/src/loops.rs', lines 113:0-113:73 *)
+    Source: 'tests/src/loops.rs', lines 116:0-116:73 *)
 let get_elem_mut
   (slots : alloc_vec_Vec (list_t usize)) (x : usize) :
   result (usize & (usize -> result (alloc_vec_Vec (list_t usize))))
@@ -193,7 +193,7 @@ let get_elem_mut
   Ok (i, back1)
 
 (** [loops::get_elem_shared]: loop 0:
-    Source: 'tests/src/loops.rs', lines 129:0-143:1 *)
+    Source: 'tests/src/loops.rs', lines 132:0-146:1 *)
 let rec get_elem_shared_loop
   (x : usize) (ls : list_t usize) :
   Tot (result usize) (decreases (get_elem_shared_loop_decreases x ls))
@@ -204,7 +204,7 @@ let rec get_elem_shared_loop
   end
 
 (** [loops::get_elem_shared]:
-    Source: 'tests/src/loops.rs', lines 129:0-129:68 *)
+    Source: 'tests/src/loops.rs', lines 132:0-132:68 *)
 let get_elem_shared
   (slots : alloc_vec_Vec (list_t usize)) (x : usize) : result usize =
   let* ls =
@@ -213,7 +213,7 @@ let get_elem_shared
   get_elem_shared_loop x ls
 
 (** [loops::id_mut]:
-    Source: 'tests/src/loops.rs', lines 145:0-145:50 *)
+    Source: 'tests/src/loops.rs', lines 148:0-148:50 *)
 let id_mut
   (t : Type0) (ls : list_t t) :
   result ((list_t t) & (list_t t -> result (list_t t)))
@@ -221,12 +221,12 @@ let id_mut
   Ok (ls, Ok)
 
 (** [loops::id_shared]:
-    Source: 'tests/src/loops.rs', lines 149:0-149:45 *)
+    Source: 'tests/src/loops.rs', lines 152:0-152:45 *)
 let id_shared (t : Type0) (ls : list_t t) : result (list_t t) =
   Ok ls
 
 (** [loops::list_nth_mut_loop_with_id]: loop 0:
-    Source: 'tests/src/loops.rs', lines 154:0-165:1 *)
+    Source: 'tests/src/loops.rs', lines 157:0-168:1 *)
 let rec list_nth_mut_loop_with_id_loop
   (t : Type0) (i : u32) (ls : list_t t) :
   Tot (result (t & (t -> result (list_t t))))
@@ -245,7 +245,7 @@ let rec list_nth_mut_loop_with_id_loop
   end
 
 (** [loops::list_nth_mut_loop_with_id]:
-    Source: 'tests/src/loops.rs', lines 154:0-154:75 *)
+    Source: 'tests/src/loops.rs', lines 157:0-157:75 *)
 let list_nth_mut_loop_with_id
   (t : Type0) (ls : list_t t) (i : u32) :
   result (t & (t -> result (list_t t)))
@@ -256,7 +256,7 @@ let list_nth_mut_loop_with_id
   Ok (x, back1)
 
 (** [loops::list_nth_shared_loop_with_id]: loop 0:
-    Source: 'tests/src/loops.rs', lines 168:0-179:1 *)
+    Source: 'tests/src/loops.rs', lines 171:0-182:1 *)
 let rec list_nth_shared_loop_with_id_loop
   (t : Type0) (i : u32) (ls : list_t t) :
   Tot (result t)
@@ -271,13 +271,13 @@ let rec list_nth_shared_loop_with_id_loop
   end
 
 (** [loops::list_nth_shared_loop_with_id]:
-    Source: 'tests/src/loops.rs', lines 168:0-168:70 *)
+    Source: 'tests/src/loops.rs', lines 171:0-171:70 *)
 let list_nth_shared_loop_with_id
   (t : Type0) (ls : list_t t) (i : u32) : result t =
   let* ls1 = id_shared t ls in list_nth_shared_loop_with_id_loop t i ls1
 
 (** [loops::list_nth_mut_loop_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 184:0-205:1 *)
+    Source: 'tests/src/loops.rs', lines 187:0-208:1 *)
 let rec list_nth_mut_loop_pair_loop
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result ((t & t) & (t -> result (list_t t)) & (t -> result (list_t t))))
@@ -306,7 +306,7 @@ let rec list_nth_mut_loop_pair_loop
   end
 
 (** [loops::list_nth_mut_loop_pair]:
-    Source: 'tests/src/loops.rs', lines 184:0-188:27 *)
+    Source: 'tests/src/loops.rs', lines 187:0-191:27 *)
 let list_nth_mut_loop_pair
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   result ((t & t) & (t -> result (list_t t)) & (t -> result (list_t t)))
@@ -314,7 +314,7 @@ let list_nth_mut_loop_pair
   list_nth_mut_loop_pair_loop t ls0 ls1 i
 
 (** [loops::list_nth_shared_loop_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 208:0-229:1 *)
+    Source: 'tests/src/loops.rs', lines 211:0-232:1 *)
 let rec list_nth_shared_loop_pair_loop
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -333,13 +333,13 @@ let rec list_nth_shared_loop_pair_loop
   end
 
 (** [loops::list_nth_shared_loop_pair]:
-    Source: 'tests/src/loops.rs', lines 208:0-212:19 *)
+    Source: 'tests/src/loops.rs', lines 211:0-215:19 *)
 let list_nth_shared_loop_pair
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_shared_loop_pair_loop t ls0 ls1 i
 
 (** [loops::list_nth_mut_loop_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 233:0-248:1 *)
+    Source: 'tests/src/loops.rs', lines 236:0-251:1 *)
 let rec list_nth_mut_loop_pair_merge_loop
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result ((t & t) & ((t & t) -> result ((list_t t) & (list_t t)))))
@@ -369,7 +369,7 @@ let rec list_nth_mut_loop_pair_merge_loop
   end
 
 (** [loops::list_nth_mut_loop_pair_merge]:
-    Source: 'tests/src/loops.rs', lines 233:0-237:27 *)
+    Source: 'tests/src/loops.rs', lines 236:0-240:27 *)
 let list_nth_mut_loop_pair_merge
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   result ((t & t) & ((t & t) -> result ((list_t t) & (list_t t))))
@@ -377,7 +377,7 @@ let list_nth_mut_loop_pair_merge
   list_nth_mut_loop_pair_merge_loop t ls0 ls1 i
 
 (** [loops::list_nth_shared_loop_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 251:0-266:1 *)
+    Source: 'tests/src/loops.rs', lines 254:0-269:1 *)
 let rec list_nth_shared_loop_pair_merge_loop
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -398,13 +398,13 @@ let rec list_nth_shared_loop_pair_merge_loop
   end
 
 (** [loops::list_nth_shared_loop_pair_merge]:
-    Source: 'tests/src/loops.rs', lines 251:0-255:19 *)
+    Source: 'tests/src/loops.rs', lines 254:0-258:19 *)
 let list_nth_shared_loop_pair_merge
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_shared_loop_pair_merge_loop t ls0 ls1 i
 
 (** [loops::list_nth_mut_shared_loop_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 269:0-284:1 *)
+    Source: 'tests/src/loops.rs', lines 272:0-287:1 *)
 let rec list_nth_mut_shared_loop_pair_loop
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result ((t & t) & (t -> result (list_t t))))
@@ -428,7 +428,7 @@ let rec list_nth_mut_shared_loop_pair_loop
   end
 
 (** [loops::list_nth_mut_shared_loop_pair]:
-    Source: 'tests/src/loops.rs', lines 269:0-273:23 *)
+    Source: 'tests/src/loops.rs', lines 272:0-276:23 *)
 let list_nth_mut_shared_loop_pair
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   result ((t & t) & (t -> result (list_t t)))
@@ -436,7 +436,7 @@ let list_nth_mut_shared_loop_pair
   list_nth_mut_shared_loop_pair_loop t ls0 ls1 i
 
 (** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 288:0-303:1 *)
+    Source: 'tests/src/loops.rs', lines 291:0-306:1 *)
 let rec list_nth_mut_shared_loop_pair_merge_loop
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result ((t & t) & (t -> result (list_t t))))
@@ -461,7 +461,7 @@ let rec list_nth_mut_shared_loop_pair_merge_loop
   end
 
 (** [loops::list_nth_mut_shared_loop_pair_merge]:
-    Source: 'tests/src/loops.rs', lines 288:0-292:23 *)
+    Source: 'tests/src/loops.rs', lines 291:0-295:23 *)
 let list_nth_mut_shared_loop_pair_merge
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   result ((t & t) & (t -> result (list_t t)))
@@ -469,7 +469,7 @@ let list_nth_mut_shared_loop_pair_merge
   list_nth_mut_shared_loop_pair_merge_loop t ls0 ls1 i
 
 (** [loops::list_nth_shared_mut_loop_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 307:0-322:1 *)
+    Source: 'tests/src/loops.rs', lines 310:0-325:1 *)
 let rec list_nth_shared_mut_loop_pair_loop
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result ((t & t) & (t -> result (list_t t))))
@@ -493,7 +493,7 @@ let rec list_nth_shared_mut_loop_pair_loop
   end
 
 (** [loops::list_nth_shared_mut_loop_pair]:
-    Source: 'tests/src/loops.rs', lines 307:0-311:23 *)
+    Source: 'tests/src/loops.rs', lines 310:0-314:23 *)
 let list_nth_shared_mut_loop_pair
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   result ((t & t) & (t -> result (list_t t)))
@@ -501,7 +501,7 @@ let list_nth_shared_mut_loop_pair
   list_nth_shared_mut_loop_pair_loop t ls0 ls1 i
 
 (** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 326:0-341:1 *)
+    Source: 'tests/src/loops.rs', lines 329:0-344:1 *)
 let rec list_nth_shared_mut_loop_pair_merge_loop
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result ((t & t) & (t -> result (list_t t))))
@@ -526,7 +526,7 @@ let rec list_nth_shared_mut_loop_pair_merge_loop
   end
 
 (** [loops::list_nth_shared_mut_loop_pair_merge]:
-    Source: 'tests/src/loops.rs', lines 326:0-330:23 *)
+    Source: 'tests/src/loops.rs', lines 329:0-333:23 *)
 let list_nth_shared_mut_loop_pair_merge
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   result ((t & t) & (t -> result (list_t t)))
@@ -534,7 +534,7 @@ let list_nth_shared_mut_loop_pair_merge
   list_nth_shared_mut_loop_pair_merge_loop t ls0 ls1 i
 
 (** [loops::ignore_input_mut_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 345:0-349:1 *)
+    Source: 'tests/src/loops.rs', lines 348:0-352:1 *)
 let rec ignore_input_mut_borrow_loop
   (i : u32) :
   Tot (result unit) (decreases (ignore_input_mut_borrow_loop_decreases i))
@@ -544,12 +544,12 @@ let rec ignore_input_mut_borrow_loop
   else Ok ()
 
 (** [loops::ignore_input_mut_borrow]:
-    Source: 'tests/src/loops.rs', lines 345:0-345:56 *)
+    Source: 'tests/src/loops.rs', lines 348:0-348:56 *)
 let ignore_input_mut_borrow (_a : u32) (i : u32) : result u32 =
   let* _ = ignore_input_mut_borrow_loop i in Ok _a
 
 (** [loops::incr_ignore_input_mut_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 353:0-358:1 *)
+    Source: 'tests/src/loops.rs', lines 356:0-361:1 *)
 let rec incr_ignore_input_mut_borrow_loop
   (i : u32) :
   Tot (result unit) (decreases (incr_ignore_input_mut_borrow_loop_decreases i))
@@ -559,14 +559,14 @@ let rec incr_ignore_input_mut_borrow_loop
   else Ok ()
 
 (** [loops::incr_ignore_input_mut_borrow]:
-    Source: 'tests/src/loops.rs', lines 353:0-353:60 *)
+    Source: 'tests/src/loops.rs', lines 356:0-356:60 *)
 let incr_ignore_input_mut_borrow (a : u32) (i : u32) : result u32 =
   let* a1 = u32_add a 1 in
   let* _ = incr_ignore_input_mut_borrow_loop i in
   Ok a1
 
 (** [loops::ignore_input_shared_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 362:0-366:1 *)
+    Source: 'tests/src/loops.rs', lines 365:0-369:1 *)
 let rec ignore_input_shared_borrow_loop
   (i : u32) :
   Tot (result unit) (decreases (ignore_input_shared_borrow_loop_decreases i))
@@ -576,7 +576,7 @@ let rec ignore_input_shared_borrow_loop
   else Ok ()
 
 (** [loops::ignore_input_shared_borrow]:
-    Source: 'tests/src/loops.rs', lines 362:0-362:59 *)
+    Source: 'tests/src/loops.rs', lines 365:0-365:59 *)
 let ignore_input_shared_borrow (_a : u32) (i : u32) : result u32 =
   let* _ = ignore_input_shared_borrow_loop i in Ok _a
 

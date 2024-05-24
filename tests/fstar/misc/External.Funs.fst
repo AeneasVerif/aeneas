@@ -15,12 +15,12 @@ let core_marker_CopyU32 : core_marker_Copy_t u32 = {
 }
 
 (** [external::use_get]:
-    Source: 'tests/src/external.rs', lines 5:0-5:37 *)
+    Source: 'tests/src/external.rs', lines 8:0-8:37 *)
 let use_get (rc : core_cell_Cell_t u32) (st : state) : result (state & u32) =
   core_cell_Cell_get u32 core_marker_CopyU32 rc st
 
 (** [external::incr]:
-    Source: 'tests/src/external.rs', lines 9:0-9:31 *)
+    Source: 'tests/src/external.rs', lines 12:0-12:31 *)
 let incr
   (rc : core_cell_Cell_t u32) (st : state) :
   result (state & (core_cell_Cell_t u32))
