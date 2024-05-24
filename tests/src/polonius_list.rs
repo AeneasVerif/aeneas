@@ -1,3 +1,5 @@
+//@ charon-args=--polonius
+//@ aeneas-args=-test-trans-units
 #![allow(dead_code)]
 
 pub enum List<T> {

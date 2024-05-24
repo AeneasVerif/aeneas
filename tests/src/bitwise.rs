@@ -1,3 +1,4 @@
+//@ aeneas-args=-test-trans-units
 //! Exercise the bitwise operations
 
 pub fn shift_u32(a: u32) -> u32 {

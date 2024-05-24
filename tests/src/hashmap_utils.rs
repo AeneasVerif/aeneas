@@ -1,3 +1,4 @@
+//@ skip
 use crate::hashmap::*;
 
 /// Serialize a hash map - we don't have traits, so we fix the type of the

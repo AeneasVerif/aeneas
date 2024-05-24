@@ -1,3 +1,4 @@
+//@ [coq,fstar] aeneas-args=-use-fuel
 #![allow(clippy::needless_lifetimes)]
 
 /* Simple functions */

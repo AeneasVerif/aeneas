@@ -1,3 +1,9 @@
+//@ charon-args=--opaque=hashmap_utils
+//@ aeneas-args=-state -split-files
+//@ [coq] aeneas-args=-use-fuel
+//@ [fstar] aeneas-args=-decreases-clauses -template-clauses
+// Possible to add `--no-code-duplication` if we use the optimized MIR
+// TODO: reactivate -test-trans-units
 mod hashmap;
 mod hashmap_utils;
 

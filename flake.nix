@@ -80,6 +80,7 @@
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = (with ocamlPackages; [
             core_unix
+            ppx_deriving
           ]);
         };
 
