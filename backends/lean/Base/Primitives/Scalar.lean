@@ -146,6 +146,25 @@ def ScalarTy.isSigned (ty : ScalarTy) : Bool :=
   | U64
   | U128 => false
 
+-- FIXME(chore): bulk prove them via macro?
+instance : Fact (¬ ScalarTy.isSigned .Usize) where
+  out := by decide
+
+instance : Fact (¬ ScalarTy.isSigned .U8) where
+  out := by decide
+
+instance : Fact (¬ ScalarTy.isSigned .U16) where
+  out := by decide
+
+instance : Fact (¬ ScalarTy.isSigned .U32) where
+  out := by decide
+
+instance : Fact (¬ ScalarTy.isSigned .U64) where
+  out := by decide
+
+instance : Fact (¬ ScalarTy.isSigned .U128) where
+  out := by decide
+
 
 def Scalar.smin (ty : ScalarTy) : Int :=
   match ty with
@@ -385,6 +404,10 @@ theorem Scalar.tryMk_eq (ty : ScalarTy) (x : Int) :
   tryMk ty x = div ↔ False := by
   simp [tryMk, ofOption, tryMkOpt]
   split_ifs <;> simp
+
+instance (ty: ScalarTy) : InBounds ty 0 where
+  hInBounds := by
+    induction ty <;> simp [Scalar.cMax, Scalar.cMin, Scalar.max, Scalar.min] <;> decide
 
 def Scalar.neg {ty : ScalarTy} (x : Scalar ty) : Result (Scalar ty) := Scalar.tryMk ty (- x.val)
 
@@ -1430,6 +1453,22 @@ theorem coe_max {ty: ScalarTy} (a b: Scalar ty): ↑(Max.max a b) = (Max.max (�
   split_ifs <;> simp_all
   refine' absurd _ (lt_irrefl a)
   exact lt_of_le_of_lt (by assumption) ((Scalar.lt_equiv _ _).2 (by assumption))
+
+-- Max theory
+-- TODO: do the min theory later on.
+
+theorem Scalar.zero_le_unsigned {ty} (s: ¬ ty.isSigned) (x: Scalar ty): Scalar.ofInt 0 ≤ x := by
+  apply (Scalar.le_equiv _ _).2
+  convert x.hmin
+  cases ty <;> simp [ScalarTy.isSigned] at s <;> simp [Scalar.min]
+
+@[simp]
+theorem Scalar.max_unsigned_left_zero_eq {ty} [s: Fact (¬ ty.isSigned)] (x: Scalar ty):
+  Max.max (Scalar.ofInt 0) x = x := max_eq_right (Scalar.zero_le_unsigned s.out x)
+
+@[simp]
+theorem Scalar.max_unsigned_right_zero_eq {ty} [s: Fact (¬ ty.isSigned)] (x: Scalar ty):
+  Max.max x (Scalar.ofInt 0) = x := max_eq_left (Scalar.zero_le_unsigned s.out x)
 
 -- Leading zeros
 def core.num.Usize.leading_zeros (x : Usize) : U32 := sorry
