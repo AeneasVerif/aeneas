@@ -6,9 +6,9 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
-Require Export BetreeMain_Types.
-Import BetreeMain_Types.
-Module BetreeMain_FunsExternal.
+Require Export Betree_Types.
+Import Betree_Types.
+Module Betree_FunsExternal.
 
 (** [betree_main::betree_utils::load_internal_node]: forward function
     Source: 'src/betree_utils.rs', lines 98:0-98:63 *)
@@ -36,4 +36,4 @@ Axiom betree_utils_store_leaf_node
   : u64 -> betree_List_t (u64 * u64) -> state -> result (state * unit)
 .
 
-End BetreeMain_FunsExternal.
+End Betree_FunsExternal.

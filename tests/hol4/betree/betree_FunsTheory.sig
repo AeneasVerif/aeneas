@@ -1,4 +1,4 @@
-signature betreeMain_FunsTheory =
+signature betree_FunsTheory =
 sig
   type thm = Thm.thm
   
@@ -60,9 +60,9 @@ sig
     val betree_upsert_update_fwd_def : thm
     val main_fwd_def : thm
   
-  val betreeMain_Funs_grammars : type_grammar.grammar * term_grammar.grammar
+  val betree_Funs_grammars : type_grammar.grammar * term_grammar.grammar
 (*
-   [betreeMain_Opaque] Parent theory of "betreeMain_Funs"
+   [betree_Opaque] Parent theory of "betree_Funs"
    
    [betree_be_tree_apply_back_def]  Definition
       

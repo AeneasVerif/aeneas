@@ -122,8 +122,7 @@ let aeneas_options_for_test backend test_name =
 (* File-specific options *)
 let charon_options_for_test test_name =
   match test_name with
-  | "betree" ->
-      [ "--polonius"; "--opaque=betree_utils"; "--crate"; "betree_main" ]
+  | "betree" -> [ "--polonius"; "--opaque=betree_utils" ]
   | _ -> []
 
 (* The data for a specific test input *)
@@ -257,10 +256,8 @@ end
 
 (* Run Aeneas on a specific input with the given options *)
 let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
-  (* FIXME: remove this special case *)
   let backend_str = Backend.to_string backend in
-  let test_name = if case.name = "betree" then "betree_main" else case.name in
-  let input_file = concat_path [ env.llbc_dir; test_name ] ^ ".llbc" in
+  let input_file = concat_path [ env.llbc_dir; case.name ] ^ ".llbc" in
   let output_file =
     Filename.remove_extension case.path ^ "." ^ backend_str ^ ".out"
   in

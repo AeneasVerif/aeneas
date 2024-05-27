@@ -1,4 +1,4 @@
-signature betreeMain_TypesTheory =
+signature betree_TypesTheory =
 sig
   type thm = Thm.thm
   
@@ -185,9 +185,9 @@ sig
     val datatype_betree_params_t : thm
     val datatype_betree_upsert_fun_state_t : thm
   
-  val betreeMain_Types_grammars : type_grammar.grammar * term_grammar.grammar
+  val betree_Types_grammars : type_grammar.grammar * term_grammar.grammar
 (*
-   [divDef] Parent theory of "betreeMain_Types"
+   [divDef] Parent theory of "betree_Types"
    
    [betree_be_tree_t_TY_DEF]  Definition
       

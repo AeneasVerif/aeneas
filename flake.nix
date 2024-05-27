@@ -90,7 +90,7 @@
         betree-llbc = charon.extractCrateWithCharon.${system} {
           name = "betree";
           src = ./tests/src/betree;
-          charonFlags = "--polonius --opaque=betree_utils --crate betree_main";
+          charonFlags = "--polonius --opaque=betree_utils";
           craneExtraArgs.checkPhaseCargoCommand = ''
             cargo rustc -- --test -Zpolonius
             ./target/debug/betree
@@ -125,7 +125,7 @@
             mkdir tests/llbc
             export LLBC_DIR=tests/llbc
             # Copy over the llbc file we can't generate ourselves.
-            cp ${betree-llbc}/llbc/betree_main.llbc $LLBC_DIR
+            cp ${betree-llbc}/llbc/betree.llbc $LLBC_DIR
 
             # Run the tests with extra sanity checks enabled
             IN_CI=1 make test-all -j $NIX_BUILD_CORES

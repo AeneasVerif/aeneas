@@ -1,7 +1,7 @@
 (** [betree_main]: templates for the decreases clauses *)
-module BetreeMain.Clauses
+module Betree.Clauses
 open Primitives
-open BetreeMain.Types
+open Betree.Types
 
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 

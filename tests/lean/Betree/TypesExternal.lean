@@ -1,4 +1,4 @@
--- [betree_main]: external types.
+-- [betree]: external types.
 import Base
 open Primitives
 
