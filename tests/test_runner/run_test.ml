@@ -139,6 +139,8 @@ module Input = struct
     charon_options : string list;
     aeneas_options : string list BackendMap.t;
     subdirs : string BackendMap.t;
+    (* Whether to store the command output to a file. Only available for known-failure tests. *)
+    check_output : bool BackendMap.t;
   }
 
   (* The default subdirectory in which to store the outputs. *)
@@ -182,6 +184,11 @@ module Input = struct
         input with
         actions = BackendMap.add_each backends KnownFailure input.actions;
       }
+    else if comment = "no-check-output" then
+      {
+        input with
+        check_output = BackendMap.add_each backends false input.check_output;
+      }
     else if Option.is_some charon_args then
       let args = Option.get charon_args in
       let args = String.split_on_char ' ' args in
@@ -219,8 +226,18 @@ module Input = struct
     let aeneas_options =
       BackendMap.make (fun backend -> aeneas_options_for_test backend name)
     in
+    let check_output = BackendMap.make (fun _ -> true) in
     let input =
-      { path; name; kind; actions; charon_options; subdirs; aeneas_options }
+      {
+        path;
+        name;
+        kind;
+        actions;
+        charon_options;
+        subdirs;
+        aeneas_options;
+        check_output;
+      }
     in
     match kind with
     | SingleFile ->
@@ -251,6 +268,7 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   let dest_dir = concat_path [ env.dest_dir; backend_str; subdir ] in
   let aeneas_options = BackendMap.find backend case.aeneas_options in
   let action = BackendMap.find backend case.actions in
+  let check_output = BackendMap.find backend case.check_output in
 
   (* Build the command *)
   let args =
@@ -264,21 +282,27 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   let args = List.concat [ args; aeneas_options; abort_on_error ] in
   let cmd = Command.make args in
   (* Remove leftover files if they're not needed anymore *)
-  (match action with
-  | (Skip | Normal) when Sys.file_exists output_file -> Sys.remove output_file
-  | _ -> ());
+  if
+    Sys.file_exists output_file
+    &&
+    match action with
+    | Skip | Normal -> true
+    | KnownFailure when not check_output -> true
+    | _ -> false
+  then Sys.remove output_file;
   (* Run Aeneas *)
   match action with
   | Skip -> ()
   | Normal -> Command.run_command_expecting_success cmd
   | KnownFailure ->
       let out =
-        Core_unix.openfile ~mode:[ O_CREAT; O_TRUNC; O_WRONLY ] output_file
+        if check_output then
+          Core_unix.openfile ~mode:[ O_CREAT; O_TRUNC; O_WRONLY ] output_file
+        else Core_unix.openfile ~mode:[ O_WRONLY ] "/dev/null"
       in
       let cmd = { cmd with redirect_out = Some out } in
       Command.run_command_expecting_failure cmd;
       Unix.close out
-
 (* Run Charon on a specific input with the given options *)
 let run_charon (env : runner_env) (case : Input.t) =
   match case.kind with
