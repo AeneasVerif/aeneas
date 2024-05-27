@@ -467,6 +467,65 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
           (* This should have been eliminated *)
           craise __FILE__ __LINE__ span "Unreachable"
     in
+
+    (* Add a projection marker to a typed avalue *)
+    let add_marker_avalue (pm : proj_marker) (av : typed_avalue) : typed_avalue
+        =
+      let obj =
+        object
+          inherit [_] map_typed_avalue as super
+
+          method! visit_borrow_content _ _ =
+            craise __FILE__ __LINE__ span "Unexpected borrow"
+
+          method! visit_loan_content _ _ =
+            craise __FILE__ __LINE__ span "Unexpected loan"
+
+          method! visit_symbolic_value _ sv =
+            (* While ctx0 and ctx1 are different, we assume that the type info context is
+               the same in both. Hence, we can use ctx0's types wlog *)
+            sanity_check __FILE__ __LINE__
+              (not (symbolic_value_has_borrows ctx0 sv))
+              span;
+            sv
+
+          method! visit_aloan_content env lc =
+            match lc with
+            | AMutLoan (pm0, bid, av) ->
+                sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+                super#visit_aloan_content env (AMutLoan (pm, bid, av))
+            | ASharedLoan (pm0, bids, av, child) ->
+                sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+                super#visit_aloan_content env
+                  (ASharedLoan (pm, bids, av, child))
+            | _ -> craise __FILE__ __LINE__ span "Unsupported yet"
+
+          method! visit_aborrow_content env bc =
+            match bc with
+            | AMutBorrow (pm0, bid, av) ->
+                sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+                super#visit_aborrow_content env (AMutBorrow (pm, bid, av))
+            | ASharedBorrow (pm0, bid) ->
+                sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+                super#visit_aborrow_content env (ASharedBorrow (pm, bid))
+            | _ -> craise __FILE__ __LINE__ span "Unsupported yet"
+        end
+      in
+      obj#visit_typed_avalue () av
+    in
+
+    (* Add projection marker to all abstractions in the left and right environments *)
+    let add_marker (pm : proj_marker) (ee : env_elem) : env_elem =
+      match ee with
+      | EAbs abs ->
+          EAbs
+            { abs with avalues = List.map (add_marker_avalue pm) abs.avalues }
+      | x -> x
+    in
+
+    let env0 = List.map (add_marker PLeft) env0 in
+    let env1 = List.map (add_marker PRight) env1 in
+
     List.iter check_valid env0;
     List.iter check_valid env1;
     (* Concatenate the suffixes and append the abstractions introduced while
