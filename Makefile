@@ -25,7 +25,7 @@ CHARON_OPTIONS ?=
 # The directory thta contains the rust source files for tests.
 INPUTS_DIR ?= tests/src
 # The directory where to look for the .llbc files.
-LLBC_DIR ?= $(PWD)/tests/llbc
+LLBC_DIR ?= tests/llbc
 
 # In CI, we enforce formatting and activate the (expensive) sanity checks.
 IN_CI ?=
@@ -157,6 +157,8 @@ verify:
 
 # List the files and directories in `INPUTS_DIR`
 INPUTS_LIST = $(wildcard $(INPUTS_DIR)/*)
+# Remove the committed output files
+INPUTS_LIST := $(filter-out %.out,$(INPUTS_LIST))
 # Remove the directory prefix, replace with `test-`
 INPUTS_LIST := $(subst $(INPUTS_DIR)/,test-,$(INPUTS_LIST))
 
