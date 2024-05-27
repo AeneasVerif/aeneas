@@ -118,17 +118,19 @@
             export CHARON_EXE=${charon.packages.${system}.charon}/bin/charon
             export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
 
-            mkdir llbc
-            export LLBC_DIR=llbc
-            # Copy over the llbc file we can't generate ourselves.
-            cp ${betree-llbc}/llbc/betree_main.llbc $LLBC_DIR
-
             # Copy the tests
             cp -r tests tests-copy
             make clean-generated-aeneas
 
+            mkdir tests/llbc
+            export LLBC_DIR=tests/llbc
+            # Copy over the llbc file we can't generate ourselves.
+            cp ${betree-llbc}/llbc/betree_main.llbc $LLBC_DIR
+
             # Run the tests with extra sanity checks enabled
             IN_CI=1 make test-all -j $NIX_BUILD_CORES
+            # Clean generated llbc files so we don't compare them.
+            rm -r tests/llbc
 
             # Check that there are no differences between the generated tests
             # and the original tests
