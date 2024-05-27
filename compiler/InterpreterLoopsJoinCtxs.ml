@@ -122,15 +122,8 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
       i -> s@7 : u32
       abs@4 { MB l0, ML l4 }
     ]}
-
-    [merge_funs]: those are used to merge loans or borrows which appear in both
-    abstractions (rem.: here we mean that, for instance, both abstractions
-    contain a shared loan with id l0).
-    This can happen when merging environments (note that such environments are not well-formed -
-    they become well formed again after collapsing).
  *)
-let reduce_ctx (span : Meta.span) (loop_id : LoopId.id)
-    (merge_funs : merge_duplicates_funcs option) (old_ids : ids_sets)
+let reduce_ctx (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
     (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
   log#ldebug
@@ -185,9 +178,7 @@ let reduce_ctx (span : Meta.span) (loop_id : LoopId.id)
 
   (* Explore all the *new* abstractions, and compute various maps *)
   let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
-  let ids_maps =
-    compute_abs_borrows_loans_maps span (merge_funs = None) explore env
-  in
+  let ids_maps = compute_abs_borrows_loans_maps span true explore env in
   let {
     abs_ids;
     abs_to_borrows;
@@ -198,12 +189,6 @@ let reduce_ctx (span : Meta.span) (loop_id : LoopId.id)
     borrow_loan_to_abs;
   } =
     ids_maps
-  in
-
-  (* Change the merging behaviour depending on the input parameters *)
-  let abs_to_borrows, loan_to_abs =
-    if merge_funs <> None then (abs_to_borrows_loans, borrow_loan_to_abs)
-    else (abs_to_borrows, loan_to_abs)
   in
 
   (* Merge the abstractions together *)
@@ -261,8 +246,8 @@ let reduce_ctx (span : Meta.span) (loop_id : LoopId.id)
                     (* Update the environment - pay attention to the order: we
                        we merge [abs_id1] *into* [abs_id0] *)
                     let nctx, abs_id =
-                      merge_into_abstraction span abs_kind can_end merge_funs
-                        !ctx abs_id1 abs_id0
+                      merge_into_abstraction span abs_kind can_end None !ctx
+                        abs_id1 abs_id0
                     in
                     ctx := nctx;
 
@@ -943,7 +928,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Reduce the context we want to add to the join *)
-    let ctx = reduce_ctx span loop_id None fixed_ids ctx in
+    let ctx = reduce_ctx span loop_id fixed_ids ctx in
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after reduce:\n"
@@ -967,7 +952,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
 
     (* Reduce again to reach fixed point *)
-    joined_ctx := reduce_ctx span loop_id None fixed_ids !joined_ctx;
+    joined_ctx := reduce_ctx span loop_id fixed_ids !joined_ctx;
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after last reduce:\n"
