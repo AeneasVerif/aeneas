@@ -100,31 +100,6 @@ module Command = struct
     | Failure -> ()
 end
 
-let aeneas_options_for_test backend test_name =
-  if test_name = "betree" then
-    let options =
-      [
-        "-backward-no-state-update";
-        "-test-trans-units";
-        "-state";
-        "-split-files";
-      ]
-    in
-    let extra_options =
-      match backend with
-      | Backend.Coq -> [ "-use-fuel" ]
-      | Backend.FStar -> [ "-decreases-clauses"; "-template-clauses" ]
-      | _ -> []
-    in
-    List.append extra_options options
-  else []
-
-(* File-specific options *)
-let charon_options_for_test test_name =
-  match test_name with
-  | "betree" -> [ "--polonius"; "--opaque=betree_utils" ]
-  | _ -> []
-
 (* The data for a specific test input *)
 module Input = struct
   type kind = SingleFile | Crate
@@ -218,13 +193,10 @@ module Input = struct
       else failwith ("`" ^ path ^ "` is not a file or a directory.")
     in
     let actions = BackendMap.make (fun _ -> Normal) in
-    let charon_options = charon_options_for_test name in
     let subdirs =
       BackendMap.make (fun backend -> default_subdir backend name)
     in
-    let aeneas_options =
-      BackendMap.make (fun backend -> aeneas_options_for_test backend name)
-    in
+    let aeneas_options = BackendMap.make (fun _ -> []) in
     let check_output = BackendMap.make (fun _ -> true) in
     let input =
       {
@@ -232,12 +204,14 @@ module Input = struct
         name;
         kind;
         actions;
-        charon_options;
+        charon_options = [];
         subdirs;
         aeneas_options;
         check_output;
       }
     in
+    (* For crates, we store the special comments in a separate file. *)
+    let crate_config_file = Filename.concat path "aeneas-test-options" in
     match kind with
     | SingleFile ->
         let file_lines = Core.In_channel.read_lines path in
@@ -248,6 +222,11 @@ module Input = struct
             file_lines
         in
         (* Apply the changes from the special lines to our input. *)
+        List.fold_left
+          (fun input comment -> apply_special_comment comment input)
+          input special_comments
+    | Crate when Sys.file_exists crate_config_file ->
+        let special_comments = Core.In_channel.read_lines crate_config_file in
         List.fold_left
           (fun input comment -> apply_special_comment comment input)
           input special_comments
@@ -300,6 +279,7 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
       let cmd = { cmd with redirect_out = Some out } in
       Command.run_command_expecting_failure cmd;
       Unix.close out
+
 (* Run Charon on a specific input with the given options *)
 let run_charon (env : runner_env) (case : Input.t) =
   match case.kind with
