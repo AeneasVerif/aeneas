@@ -138,29 +138,50 @@ val convert_value_to_abstractions :
   *)
 type merge_duplicates_funcs = {
   merge_amut_borrows :
-    borrow_id -> rty -> typed_avalue -> rty -> typed_avalue -> typed_avalue;
+    borrow_id ->
+    rty ->
+    proj_marker ->
+    typed_avalue ->
+    rty ->
+    proj_marker ->
+    typed_avalue ->
+    typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
+          - [pm0]
           - [child0]
           - [ty1]
+          - [pm1]
           - [child1]
 
           The children should be [AIgnored].
        *)
-  merge_ashared_borrows : borrow_id -> rty -> rty -> typed_avalue;
+  merge_ashared_borrows :
+    borrow_id -> rty -> proj_marker -> rty -> proj_marker -> typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
+          - [pm0]
           - [ty1]
+          - [pm1]
        *)
   merge_amut_loans :
-    loan_id -> rty -> typed_avalue -> rty -> typed_avalue -> typed_avalue;
+    loan_id ->
+    rty ->
+    proj_marker ->
+    typed_avalue ->
+    rty ->
+    proj_marker ->
+    typed_avalue ->
+    typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
+          - [pm0]
           - [child0]
           - [ty1]
+          - [pm1]
           - [child1]
 
           The children should be [AIgnored].
@@ -168,18 +189,22 @@ type merge_duplicates_funcs = {
   merge_ashared_loans :
     loan_id_set ->
     rty ->
+    proj_marker ->
     typed_value ->
     typed_avalue ->
     rty ->
+    proj_marker ->
     typed_value ->
     typed_avalue ->
     typed_avalue;
       (** Parameters:
           - [ids]
           - [ty0]
+          - [pm0]
           - [sv0]
           - [child0]
           - [ty1]
+          - [pm1]
           - [sv1]
           - [child1]
        *)

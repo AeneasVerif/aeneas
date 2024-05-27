@@ -144,7 +144,7 @@ let eval_loop_symbolic (config : config) (span : span)
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Compute the end expression, that is the expresion corresponding to the
-       end of the functin where we call the loop (for now, when calling a loop
+       end of the function where we call the loop (for now, when calling a loop
        we never get out) *)
     let res_fun_end =
       comp cf_prepare
@@ -255,10 +255,13 @@ let eval_loop_symbolic (config : config) (span : span)
         List.filter_map
           (fun (av : typed_avalue) ->
             match av.value with
-            | ABorrow (AMutBorrow (bid, child_av)) ->
+            | ABorrow (AMutBorrow (pm, bid, child_av)) ->
+                sanity_check __FILE__ __LINE__ (pm = PNone) span;
                 sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
                 Some (bid, child_av.ty)
-            | ABorrow (ASharedBorrow _) -> None
+            | ABorrow (ASharedBorrow (pm, _)) ->
+                sanity_check __FILE__ __LINE__ (pm = PNone) span;
+                None
             | _ -> craise __FILE__ __LINE__ span "Unreachable")
           borrows
       in
@@ -268,10 +271,13 @@ let eval_loop_symbolic (config : config) (span : span)
         List.filter_map
           (fun (av : typed_avalue) ->
             match av.value with
-            | ALoan (AMutLoan (bid, child_av)) ->
+            | ALoan (AMutLoan (pm, bid, child_av)) ->
+                sanity_check __FILE__ __LINE__ (pm = PNone) span;
                 sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
                 Some bid
-            | ALoan (ASharedLoan _) -> None
+            | ALoan (ASharedLoan (pm, _, _, _)) ->
+                sanity_check __FILE__ __LINE__ (pm = PNone) span;
+                None
             | _ -> craise __FILE__ __LINE__ span "Unreachable")
           loans
       in

@@ -65,7 +65,7 @@ module type PrimMatcher = sig
   val match_distinct_adts :
     eval_ctx -> eval_ctx -> ety -> adt_value -> adt_value -> typed_value
 
-  (** The span-value is the result of a match.
+  (** The meta-value is the result of a match.
 
       We take an additional function as input, which acts as a matcher over
       typed values, to be able to lookup the shared values and match them.
@@ -158,8 +158,10 @@ module type PrimMatcher = sig
 
   (** Parameters:
       [ty0]
+      [pm0]
       [bid0]
       [ty1]
+      [pm1]
       [bid1]
       [ty]: result of matching ty0 and ty1
    *)
@@ -167,17 +169,21 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     rty ->
+    proj_marker ->
     borrow_id ->
     rty ->
+    proj_marker ->
     borrow_id ->
     rty ->
     typed_avalue
 
   (** Parameters:
       [ty0]
+      [pm0]
       [bid0]
       [av0]
       [ty1]
+      [pm1]
       [bid1]
       [av1]
       [ty]: result of matching ty0 and ty1
@@ -187,9 +193,11 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     rty ->
+    proj_marker ->
     borrow_id ->
     typed_avalue ->
     rty ->
+    proj_marker ->
     borrow_id ->
     typed_avalue ->
     rty ->
@@ -198,10 +206,12 @@ module type PrimMatcher = sig
 
   (** Parameters:
       [ty0]
+      [pm0]
       [ids0]
       [v0]
       [av0]
       [ty1]
+      [pm1]
       [ids1]
       [v1]
       [av1]
@@ -213,10 +223,12 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     rty ->
+    proj_marker ->
     loan_id_set ->
     typed_value ->
     typed_avalue ->
     rty ->
+    proj_marker ->
     loan_id_set ->
     typed_value ->
     typed_avalue ->
@@ -227,9 +239,11 @@ module type PrimMatcher = sig
 
   (** Parameters:
       [ty0]
+      [pm0]
       [id0]
       [av0]
       [ty1]
+      [pm1]
       [id1]
       [av1]
       [ty]: result of matching ty0 and ty1
@@ -239,9 +253,11 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     rty ->
+    proj_marker ->
     borrow_id ->
     typed_avalue ->
     rty ->
+    proj_marker ->
     borrow_id ->
     typed_avalue ->
     rty ->

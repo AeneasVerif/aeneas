@@ -353,10 +353,10 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     | ABorrow bc0, ABorrow bc1 -> (
         log#ldebug (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
-        | ASharedBorrow bid0, ASharedBorrow bid1 ->
+        | ASharedBorrow (pm0, bid0), ASharedBorrow (pm1, bid1) ->
             log#ldebug (lazy "match_typed_avalues: shared borrows");
-            M.match_ashared_borrows ctx0 ctx1 v0.ty bid0 v1.ty bid1 ty
-        | AMutBorrow (bid0, av0), AMutBorrow (bid1, av1) ->
+            M.match_ashared_borrows ctx0 ctx1 v0.ty pm0 bid0 v1.ty pm1 bid1 ty
+        | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
             log#ldebug (lazy "match_typed_avalues: mut borrows");
             log#ldebug
               (lazy
@@ -364,7 +364,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let av = match_arec av0 av1 in
             log#ldebug
               (lazy "match_typed_avalues: mut borrows: matched children values");
-            M.match_amut_borrows ctx0 ctx1 v0.ty bid0 av0 v1.ty bid1 av1 ty av
+            M.match_amut_borrows ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty pm1 bid1 av1
+              ty av
         | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
             (* The abstractions are destructured: we shouldn't get there *)
             craise __FILE__ __LINE__ M.span "Unexpected"
@@ -393,23 +394,25 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
-        | ASharedLoan (ids0, sv0, av0), ASharedLoan (ids1, sv1, av1) ->
+        | ASharedLoan (pm0, ids0, sv0, av0), ASharedLoan (pm1, ids1, sv1, av1)
+          ->
             log#ldebug (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             sanity_check __FILE__ __LINE__
               (not (value_has_borrows sv.value))
               M.span;
-            M.match_ashared_loans ctx0 ctx1 v0.ty ids0 sv0 av0 v1.ty ids1 sv1
-              av1 ty sv av
-        | AMutLoan (id0, av0), AMutLoan (id1, av1) ->
+            M.match_ashared_loans ctx0 ctx1 v0.ty pm0 ids0 sv0 av0 v1.ty pm1
+              ids1 sv1 av1 ty sv av
+        | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
             log#ldebug (lazy "match_typed_avalues: mut loans");
             log#ldebug
               (lazy "match_typed_avalues: mut loans: matching children values");
             let av = match_arec av0 av1 in
             log#ldebug
               (lazy "match_typed_avalues: mut loans: matched children values");
-            M.match_amut_loans ctx0 ctx1 v0.ty id0 av0 v1.ty id1 av1 ty av
+            M.match_amut_loans ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1 id1 av1 ty
+              av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
         | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
             (* Those should have been filtered when destructuring the abstractions -
@@ -504,13 +507,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (bid : borrow_id) : typed_avalue =
-        let value = ABorrow (ASharedBorrow bid) in
+        let value = ABorrow (ASharedBorrow (PNone, bid)) in
         { value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow bid0; mk_aborrow bid1 ] in
 
       let loan =
-        ASharedLoan (BorrowId.Set.singleton bid2, sv, mk_aignored span bv_ty)
+        ASharedLoan
+          (PNone, BorrowId.Set.singleton bid2, sv, mk_aignored span bv_ty)
       in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
@@ -604,13 +608,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let borrow_av =
           let ty = borrow_ty in
-          let value = ABorrow (AMutBorrow (bid0, mk_aignored span bv_ty)) in
+          let value =
+            ABorrow (AMutBorrow (PNone, bid0, mk_aignored span bv_ty))
+          in
           mk_typed_avalue span ty value
         in
 
         let loan_av =
           let ty = borrow_ty in
-          let value = ALoan (AMutLoan (nbid, mk_aignored span bv_ty)) in
+          let value = ALoan (AMutLoan (PNone, nbid, mk_aignored span bv_ty)) in
           mk_typed_avalue span ty value
         in
 
@@ -654,12 +660,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let bv_ty = bv.ty in
         cassert __FILE__ __LINE__ (ty_no_regions bv_ty) span
           "Nested borrows are not supported yet";
-        let value = ABorrow (AMutBorrow (bid, mk_aignored span bv_ty)) in
+        let value = ABorrow (AMutBorrow (PNone, bid, mk_aignored span bv_ty)) in
         { value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow bid0 bv0; mk_aborrow bid1 bv1 ] in
 
-      let loan = AMutLoan (bid2, mk_aignored span bv_ty) in
+      let loan = AMutLoan (PNone, bid2, mk_aignored span bv_ty) in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
 
@@ -1213,26 +1219,30 @@ struct
   let match_distinct_aadts _ _ _ _ _ _ _ =
     raise (Distinct "match_distinct_adts")
 
-  let match_ashared_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 bid0 _ty1 bid1 ty
-      =
+  let match_ashared_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 bid0 _ty1 pm1
+      bid1 ty =
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     let bid = match_borrow_id bid0 bid1 in
-    let value = ABorrow (ASharedBorrow bid) in
+    let value = ABorrow (ASharedBorrow (PNone, bid)) in
     { value; ty }
 
-  let match_amut_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 bid0 _av0 _ty1 bid1
-      _av1 ty av =
+  let match_amut_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 bid0 _av0 _ty1
+      pm1 bid1 _av1 ty av =
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     let bid = match_borrow_id bid0 bid1 in
-    let value = ABorrow (AMutBorrow (bid, av)) in
+    let value = ABorrow (AMutBorrow (PNone, bid, av)) in
     { value; ty }
 
-  let match_ashared_loans (_ : eval_ctx) (_ : eval_ctx) _ty0 ids0 _v0 _av0 _ty1
-      ids1 _v1 _av1 ty v av =
+  let match_ashared_loans (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 ids0 _v0 _av0
+      _ty1 pm1 ids1 _v1 _av1 ty v av =
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     let bids = match_loan_ids ids0 ids1 in
-    let value = ALoan (ASharedLoan (bids, v, av)) in
+    let value = ALoan (ASharedLoan (PNone, bids, v, av)) in
     { value; ty }
 
-  let match_amut_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 id0 _av0 _ty1
-      id1 _av1 ty av =
+  let match_amut_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 id0 _av0
+      _ty1 pm1 id1 _av1 ty av =
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher:match_amut_loans:" ^ "\n- id0: "
@@ -1241,7 +1251,7 @@ struct
         ^ typed_avalue_to_string ~span:(Some span) ctx1 av));
 
     let id = match_loan_id id0 id1 in
-    let value = ALoan (AMutLoan (id, av)) in
+    let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
   let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
@@ -1706,7 +1716,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     let lookup_shared_loan lid ctx : typed_value =
       match snd (lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
-      | Abstract (ASharedLoan (_, v, _)) -> v
+      | Abstract (ASharedLoan (pm, _, v, _)) ->
+          sanity_check __FILE__ __LINE__ (pm = PNone) span;
+          v
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
     let lookup_in_src id = lookup_shared_loan id src_ctx in

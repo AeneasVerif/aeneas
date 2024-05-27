@@ -39,13 +39,13 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
     *)
     let get_borrow_id (av : typed_avalue) : BorrowId.id =
       match av.value with
-      | ABorrow (AMutBorrow (bid, _) | ASharedBorrow bid) -> bid
+      | ABorrow (AMutBorrow (_, bid, _) | ASharedBorrow (_, bid)) -> bid
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
     let get_loan_id (av : typed_avalue) : BorrowId.id =
       match av.value with
-      | ALoan (AMutLoan (lid, _)) -> lid
-      | ALoan (ASharedLoan (lids, _, _)) -> BorrowId.Set.min_elt lids
+      | ALoan (AMutLoan (_, lid, _)) -> lid
+      | ALoan (ASharedLoan (_, lids, _, _)) -> BorrowId.Set.min_elt lids
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
     (* We use ordered maps to reorder the borrows and loans *)
@@ -314,10 +314,13 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
      Note that the join matcher doesn't implement match functions for avalues
      (see the comments in {!MakeJoinMatcher}.
   *)
-  let merge_amut_borrows id ty0 child0 _ty1 child1 =
+  let merge_amut_borrows id ty0 pm0 child0 _ty1 pm1 child1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
     sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+
+    (* TODO: Handle markers *)
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
 
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
@@ -326,11 +329,11 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     *)
     let ty = ty0 in
     let child = child0 in
-    let value = ABorrow (AMutBorrow (id, child)) in
+    let value = ABorrow (AMutBorrow (PNone, id, child)) in
     { value; ty }
   in
 
-  let merge_ashared_borrows id ty0 ty1 =
+  let merge_ashared_borrows id ty0 pm0 ty1 pm1 =
     (* Sanity checks *)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
@@ -343,23 +346,28 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
         span
     in
 
+    (* TODO: Handle markers *)
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
+
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
-    let value = ABorrow (ASharedBorrow id) in
+    let value = ABorrow (ASharedBorrow (PNone, id)) in
     { value; ty }
   in
 
-  let merge_amut_loans id ty0 child0 _ty1 child1 =
+  let merge_amut_loans id ty0 pm0 child0 _ty1 pm1 child1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
     sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+    (* TODO: Handle markers *)
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let child = child0 in
-    let value = ALoan (AMutLoan (id, child)) in
+    let value = ALoan (AMutLoan (PNone, id, child)) in
     { value; ty }
   in
-  let merge_ashared_loans ids ty0 (sv0 : typed_value) child0 _ty1
+  let merge_ashared_loans ids ty0 pm0 (sv0 : typed_value) child0 _ty1 pm1
       (sv1 : typed_value) child1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
@@ -375,10 +383,13 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     sanity_check __FILE__ __LINE__
       (not (value_has_loans_or_borrows ctx sv1.value))
       span;
+    (* TODO: Handle markers *)
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
+
     let ty = ty0 in
     let child = child0 in
     let sv = M.match_typed_values ctx ctx sv0 sv1 in
-    let value = ALoan (ASharedLoan (ids, sv, child)) in
+    let value = ALoan (ASharedLoan (PNone, ids, sv, child)) in
     { value; ty }
   in
   {

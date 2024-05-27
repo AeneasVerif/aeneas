@@ -153,13 +153,19 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
     *)
     let get_borrow_id (av : typed_avalue) : BorrowId.id =
       match av.value with
-      | ABorrow (AMutBorrow (bid, _) | ASharedBorrow bid) -> bid
+      | ABorrow (AMutBorrow (pm, bid, _) | ASharedBorrow (pm, bid)) ->
+          sanity_check __FILE__ __LINE__ (pm = PNone) span;
+          bid
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
     let get_loan_id (av : typed_avalue) : BorrowId.id =
       match av.value with
-      | ALoan (AMutLoan (lid, _)) -> lid
-      | ALoan (ASharedLoan (lids, _, _)) -> BorrowId.Set.min_elt lids
+      | ALoan (AMutLoan (pm, lid, _)) ->
+          sanity_check __FILE__ __LINE__ (pm = PNone) span;
+          lid
+      | ALoan (ASharedLoan (pm, lids, _, _)) ->
+          sanity_check __FILE__ __LINE__ (pm = PNone) span;
+          BorrowId.Set.min_elt lids
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
     (* We use ordered maps to reorder the borrows and loans *)
@@ -245,7 +251,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
        SL {l0, l1} s0
      ]}
 
-     and introduce the corresponding abstraction:
+     and introduce the corresponding abstraction for the borrow l0
+     (and we do something similar for l1):
      {[
        abs'2 { SB l0, SL {l2} s2 }
      ]}
@@ -283,13 +290,13 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     (* Create the shared loan *)
     let loan_rty = TRef (RFVar nrid, rty, RShared) in
     let loan_value =
-      ALoan (ASharedLoan (BorrowId.Set.singleton nlid, nsv, child_av))
+      ALoan (ASharedLoan (PNone, BorrowId.Set.singleton nlid, nsv, child_av))
     in
     let loan_value = mk_typed_avalue span loan_rty loan_value in
 
     (* Create the shared borrow *)
     let borrow_rty = loan_rty in
-    let borrow_value = ABorrow (ASharedBorrow lid) in
+    let borrow_value = ABorrow (ASharedBorrow (PNone, lid)) in
     let borrow_value = mk_typed_avalue span borrow_rty borrow_value in
 
     (* Create the abstraction *)
@@ -344,11 +351,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
           (* Continue the exploration *)
           super#visit_VSharedLoan env lids sv
 
-        method! visit_ASharedLoan env lids sv av =
+        method! visit_ASharedLoan env pm lids sv av =
           collect_shared_value lids sv;
 
           (* Continue the exploration *)
-          super#visit_ASharedLoan env lids sv av
+          super#visit_ASharedLoan env pm lids sv av
 
         (** Check that there are no symbolic values with *borrows* inside the
             abstraction - shouldn't happen if the symbolic values are greedily
@@ -905,7 +912,9 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
     let lookup_shared_loan lid ctx : typed_value =
       match snd (lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
-      | Abstract (ASharedLoan (_, v, _)) -> v
+      | Abstract (ASharedLoan (pm, _, v, _)) ->
+          sanity_check __FILE__ __LINE__ (pm = PNone) span;
+          v
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
@@ -1044,7 +1053,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
       object (self)
         inherit [_] iter_env
 
-        method! visit_ASharedLoan inside_shared _ sv child_av =
+        method! visit_ASharedLoan inside_shared _ _ sv child_av =
           self#visit_typed_value true sv;
           self#visit_typed_avalue inside_shared child_av
 
@@ -1094,7 +1103,9 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
           let v =
             match snd (lookup_loan span ek_all bid fp_ctx) with
             | Concrete (VSharedLoan (_, v)) -> v
-            | Abstract (ASharedLoan (_, v, _)) -> v
+            | Abstract (ASharedLoan (pm, _, v, _)) ->
+                sanity_check __FILE__ __LINE__ (pm = PNone) span;
+                v
             | _ -> craise __FILE__ __LINE__ span "Unreachable"
           in
           self#visit_typed_value env v
