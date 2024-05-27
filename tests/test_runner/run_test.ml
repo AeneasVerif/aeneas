@@ -60,24 +60,37 @@ end
 
 let concat_path = List.fold_left Filename.concat ""
 
-let run_command args =
-  (* Debug arguments *)
-  print_string "[test_runner] Running: ";
-  Array.iter
-    (fun x ->
-      print_string x;
-      print_string " ")
-    args;
-  print_endline "";
+module Command = struct
+  type t = { args : string array }
+  type status = Success | Failure
 
-  (* Run the command *)
-  let pid =
-    Unix.create_process args.(0) args Unix.stdin Unix.stdout Unix.stderr
-  in
-  let _ = Unix.waitpid [] pid in
-  ()
+  let make (args : string list) : t = { args = Array.of_list args }
+  let to_string (cmd : t) = Core.String.concat_array ~sep:" " cmd.args
 
-(* File-specific options *)
+  (* Run the command and returns its exit status. *)
+  let run (cmd : t) : status =
+    let command_str = to_string cmd in
+    print_endline ("[test_runner] Running: " ^ command_str);
+
+    (* Run the command *)
+    let pid =
+      Unix.create_process cmd.args.(0) cmd.args Unix.stdin Unix.stdout
+        Unix.stderr
+    in
+    let status = Core_unix.waitpid (Core.Pid.of_int pid) in
+    match status with
+    | Ok () -> Success
+    | Error (`Exit_non_zero _) -> Failure
+    | Error (`Signal _) ->
+        failwith ("Command `" ^ command_str ^ "` exited incorrectly.")
+
+  (* Run the command and aborts the program if the command failed. *)
+  let run_command_expecting_success cmd =
+    match run cmd with
+    | Success -> ()
+    | Failure -> failwith ("Command `" ^ to_string cmd ^ "` failed.")
+end
+
 let aeneas_options_for_test backend test_name =
   if test_name = "betree" then
     let options =
@@ -226,20 +239,18 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   let backend_str = Backend.to_string backend in
   let dest_dir = concat_path [ "tests"; backend_str; subdir ] in
   let args =
-    [|
-      env.aeneas_path; input_file; "-dest"; dest_dir; "-backend"; backend_str;
-    |]
+    [ env.aeneas_path; input_file; "-dest"; dest_dir; "-backend"; backend_str ]
   in
-  let args = Array.append args (Array.of_list aeneas_options) in
+  let args = List.append args aeneas_options in
   (* Run Aeneas *)
-  run_command args
+  Command.run_command_expecting_success (Command.make args)
 
 (* Run Charon on a specific input with the given options *)
 let run_charon (env : runner_env) (case : Input.t) =
   match case.kind with
   | SingleFile ->
       let args =
-        [|
+        [
           env.charon_path;
           "--no-cargo";
           "--input";
@@ -248,20 +259,20 @@ let run_charon (env : runner_env) (case : Input.t) =
           case.name;
           "--dest";
           env.llbc_dir;
-        |]
+        ]
       in
-      let args = Array.append args (Array.of_list case.charon_options) in
+      let args = List.append args case.charon_options in
       (* Run Charon on the rust file *)
-      run_command args
+      Command.run_command_expecting_success (Command.make args)
   | Crate -> (
       match Sys.getenv_opt "IN_CI" with
       | None ->
-          let args = [| env.charon_path; "--dest"; env.llbc_dir |] in
-          let args = Array.append args (Array.of_list case.charon_options) in
+          let args = [ env.charon_path; "--dest"; env.llbc_dir ] in
+          let args = List.append args case.charon_options in
           (* Run Charon inside the crate *)
           let old_pwd = Unix.getcwd () in
           Unix.chdir case.path;
-          run_command args;
+          Command.run_command_expecting_success (Command.make args);
           Unix.chdir old_pwd
       | Some _ ->
           (* Crates with dependencies must be generated separately in CI. We skip
