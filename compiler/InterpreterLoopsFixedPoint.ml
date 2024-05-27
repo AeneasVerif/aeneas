@@ -131,7 +131,7 @@ let cleanup_fresh_values_and_abs (config : config) (span : Meta.span)
     We do this in order to enforce some structure in the environments: this
     allows us to find fixed-points. Note that this function needs to be
     called typically after we merge abstractions together (see {!collapse_ctx}
-    for instance).
+    and {!reduce_ctx} for instance).
  *)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =

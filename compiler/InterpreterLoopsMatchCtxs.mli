@@ -188,7 +188,7 @@ val prepare_match_ctx_with_target :
 
    We want to introduce an abstraction [abs@2], which has the same shape as [abs@fp]
    above (the fixed-point abstraction), and which is actually the identity. If we do so,
-   we get an environment which is actually also a fixed point (we can collapse
+   we get an environment which is actually also a fixed point (we can reduce 
    the dummy variables and [abs@1] to actually retrieve the fixed point we
    computed, and we use the fact that those values and abstractions can't be
    *directly* manipulated unless we end this newly introduced [abs@2], which we

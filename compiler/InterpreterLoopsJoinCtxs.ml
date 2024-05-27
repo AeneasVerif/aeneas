@@ -17,7 +17,7 @@ let log = Logging.loops_join_ctxs_log
     We do this in order to enforce some structure in the environments: this
     allows us to find fixed-points. Note that this function needs to be
     called typically after we merge abstractions together (see {!collapse_ctx}
-    for instance).
+    and {!reduce_ctx} for instance).
  *)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
@@ -70,7 +70,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
 
   { ctx with env }
 
-(** Collapse an environment.
+(** Reduce an environment.
 
     We do this to simplify an environment, for the purpose of finding a loop
     fixed point.
@@ -129,6 +129,171 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
     This can happen when merging environments (note that such environments are not well-formed -
     they become well formed again after collapsing).
  *)
+let reduce_ctx (span : Meta.span) (loop_id : LoopId.id)
+    (merge_funs : merge_duplicates_funcs option) (old_ids : ids_sets)
+    (ctx0 : eval_ctx) : eval_ctx =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx0
+      ^ "\n\n"));
+
+  let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
+  let can_end = true in
+  let destructure_shared_values = true in
+  let is_fresh_abs_id (id : AbstractionId.id) : bool =
+    not (AbstractionId.Set.mem id old_ids.aids)
+  in
+  let is_fresh_did (id : DummyVarId.id) : bool =
+    not (DummyVarId.Set.mem id old_ids.dids)
+  in
+  (* Convert the dummy values to abstractions (note that when we convert
+     values to abstractions, the resulting abstraction should be destructured) *)
+  (* Note that we preserve the order of the dummy values: we replace them with
+     abstractions in place - this makes matching easier *)
+  let env =
+    List.concat
+      (List.map
+         (fun ee ->
+           match ee with
+           | EAbs _ | EFrame | EBinding (BVar _, _) -> [ ee ]
+           | EBinding (BDummy id, v) ->
+               if is_fresh_did id then
+                 let absl =
+                   convert_value_to_abstractions span abs_kind can_end
+                     destructure_shared_values ctx0 v
+                 in
+                 List.map (fun abs -> EAbs abs) absl
+               else [ ee ])
+         ctx0.env)
+  in
+  let ctx = { ctx0 with env } in
+  log#ldebug
+    (lazy
+      ("reduce_ctx: after converting values to abstractions:\n"
+     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx
+      ^ "\n\n"));
+
+  log#ldebug
+    (lazy
+      ("reduce_ctx: after decomposing the shared values in the abstractions:\n"
+     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx
+      ^ "\n\n"));
+
+  (* Explore all the *new* abstractions, and compute various maps *)
+  let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
+  let ids_maps =
+    compute_abs_borrows_loans_maps span (merge_funs = None) explore env
+  in
+  let {
+    abs_ids;
+    abs_to_borrows;
+    abs_to_loans = _;
+    abs_to_borrows_loans;
+    borrow_to_abs = _;
+    loan_to_abs;
+    borrow_loan_to_abs;
+  } =
+    ids_maps
+  in
+
+  (* Change the merging behaviour depending on the input parameters *)
+  let abs_to_borrows, loan_to_abs =
+    if merge_funs <> None then (abs_to_borrows_loans, borrow_loan_to_abs)
+    else (abs_to_borrows, loan_to_abs)
+  in
+
+  (* Merge the abstractions together *)
+  let merged_abs : AbstractionId.id UnionFind.elem AbstractionId.Map.t =
+    AbstractionId.Map.of_list
+      (List.map (fun id -> (id, UnionFind.make id)) abs_ids)
+  in
+
+  let ctx = ref ctx in
+
+  (* Merge all the mergeable abs.
+
+     We iterate over the abstractions, then over the borrows in the abstractions.
+     We do this because we want to control the order in which abstractions
+     are merged (the ids are iterated in increasing order). Otherwise, we
+     could simply iterate over all the borrows in [borrow_to_abs]...
+  *)
+  List.iter
+    (fun abs_id0 ->
+      let bids = AbstractionId.Map.find abs_id0 abs_to_borrows in
+      let bids = BorrowId.Set.elements bids in
+      List.iter
+        (fun bid ->
+          match BorrowId.Map.find_opt bid loan_to_abs with
+          | None -> (* Nothing to do *) ()
+          | Some abs_ids1 ->
+              AbstractionId.Set.iter
+                (fun abs_id1 ->
+                  (* We need to merge - unless we have already merged *)
+                  (* First, find the representatives for the two abstractions (the
+                     representative is the abstraction into which we merged) *)
+                  let abs_ref0 =
+                    UnionFind.find (AbstractionId.Map.find abs_id0 merged_abs)
+                  in
+                  let abs_id0 = UnionFind.get abs_ref0 in
+                  let abs_ref1 =
+                    UnionFind.find (AbstractionId.Map.find abs_id1 merged_abs)
+                  in
+                  let abs_id1 = UnionFind.get abs_ref1 in
+                  (* If the two ids are the same, it means the abstractions were already merged *)
+                  if abs_id0 = abs_id1 then ()
+                  else (
+                    (* We actually need to merge the abstractions *)
+
+                    (* Debug *)
+                    log#ldebug
+                      (lazy
+                        ("reduce_ctx: merging abstraction "
+                        ^ AbstractionId.to_string abs_id1
+                        ^ " into "
+                        ^ AbstractionId.to_string abs_id0
+                        ^ ":\n\n"
+                        ^ eval_ctx_to_string ~span:(Some span) !ctx));
+
+                    (* Update the environment - pay attention to the order: we
+                       we merge [abs_id1] *into* [abs_id0] *)
+                    let nctx, abs_id =
+                      merge_into_abstraction span abs_kind can_end merge_funs
+                        !ctx abs_id1 abs_id0
+                    in
+                    ctx := nctx;
+
+                    (* Update the union find *)
+                    let abs_ref_merged = UnionFind.union abs_ref0 abs_ref1 in
+                    UnionFind.set abs_ref_merged abs_id))
+                abs_ids1)
+        bids)
+    abs_ids;
+
+  log#ldebug
+    (lazy
+      ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+     ^ "\n\n- after reduce:\n"
+      ^ eval_ctx_to_string ~span:(Some span) !ctx
+      ^ "\n\n"));
+
+  (* Reorder the loans and borrows in the fresh abstractions *)
+  let ctx = reorder_loans_borrows_in_fresh_abs span old_ids.aids !ctx in
+
+  log#ldebug
+    (lazy
+      ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+     ^ "\n\n- after reduce and reorder borrows/loans:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx
+      ^ "\n\n"));
+
+  (* Return the new context *)
+  ctx
+
+(* TODO Adapt and comment *)
 let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs option) (old_ids : ids_sets)
     (ctx0 : eval_ctx) : eval_ctx =
@@ -523,9 +688,10 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       | x -> x
     in
 
-    let env0 = List.map (add_marker PLeft) env0 in
-    let env1 = List.map (add_marker PRight) env1 in
-
+    (* TODO: Readd this
+       let env0 = List.map (add_marker PLeft) env0 in
+       let env1 = List.map (add_marker PRight) env1 in
+    *)
     List.iter check_valid env0;
     List.iter check_valid env1;
     (* Concatenate the suffixes and append the abstractions introduced while
@@ -776,11 +942,11 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ("loop_join_origin_with_continue_ctxs:join_one: after destructure:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
-    (* Collapse the context we want to add to the join *)
-    let ctx = collapse_ctx span loop_id None fixed_ids ctx in
+    (* Reduce the context we want to add to the join *)
+    let ctx = reduce_ctx span loop_id None fixed_ids ctx in
     log#ldebug
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after collapse:\n"
+        ("loop_join_origin_with_continue_ctxs:join_one: after reduce:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Refresh the fresh abstractions *)
@@ -793,13 +959,18 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ("loop_join_origin_with_continue_ctxs:join_one: after join:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx1));
 
-    (* Collapse again - the join might have introduce abstractions we want
-       to merge with the others (note that those abstractions may actually
-       lead to borrows/loans duplications) *)
+    (* Collapse to eliminate the markers *)
     joined_ctx := collapse_ctx_with_merge span loop_id fixed_ids !joined_ctx;
     log#ldebug
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after join-collapse:\n"
+        ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
+
+    (* Reduce again to reach fixed point *)
+    joined_ctx := reduce_ctx span loop_id None fixed_ids !joined_ctx;
+    log#ldebug
+      (lazy
+        ("loop_join_origin_with_continue_ctxs:join_one: after last reduce:\n"
         ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
 
     (* Sanity check *)

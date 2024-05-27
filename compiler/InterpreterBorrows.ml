@@ -2291,6 +2291,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
   (* Sanity check: there is no loan/borrows which appears in both abstractions,
      unless we allow to merge duplicates *)
   if merge_funs = None then (
+    (* TODO: In this case, there should be no proj markers *)
     sanity_check __FILE__ __LINE__
       (BorrowId.Set.disjoint borrows0 borrows1)
       span;
