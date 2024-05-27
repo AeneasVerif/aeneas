@@ -1,3 +1,6 @@
+//@ charon-args=--polonius
+//@ aeneas-args=-test-trans-units
+//@ [coq,fstar] subdir=misc
 #![allow(dead_code)]
 
 pub enum List<T> {

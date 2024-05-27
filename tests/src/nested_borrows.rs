@@ -1,3 +1,5 @@
+//@ skip
+//@ charon-args=--no-code-duplication
 //! This module contains functions with nested borrows in their signatures.
 
 pub fn id_mut_mut<'a, 'b, T>(x: &'a mut &'b mut T) -> &'a mut &'b mut T {

@@ -1,3 +1,11 @@
+//@ [coq] aeneas-args=-use-fuel
+//@ aeneas-args=-split-files
+//@ [fstar] aeneas-args=-decreases-clauses -template-clauses
+//@ [lean] aeneas-args=-no-gen-lib-entry
+// ^ the `-no-gen-lib-entry` is because we add a custom import in the Hashmap.lean file: we do not
+// want to overwrite it.
+// TODO: reactivate -test-trans-units
+
 //! A hashmap implementation.
 //!
 //! Current limitations:

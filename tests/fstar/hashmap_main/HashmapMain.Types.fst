@@ -7,13 +7,13 @@ include HashmapMain.TypesExternal
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap_main::hashmap::List]
-    Source: 'tests/src/hashmap.rs', lines 19:0-19:16 *)
+    Source: 'tests/src/hashmap.rs', lines 27:0-27:16 *)
 type hashmap_List_t (t : Type0) =
 | Hashmap_List_Cons : usize -> t -> hashmap_List_t t -> hashmap_List_t t
 | Hashmap_List_Nil : hashmap_List_t t
 
 (** [hashmap_main::hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 35:0-35:21 *)
+    Source: 'tests/src/hashmap.rs', lines 43:0-43:21 *)
 type hashmap_HashMap_t (t : Type0) =
 {
   num_entries : usize;

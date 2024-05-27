@@ -47,7 +47,12 @@ build-test-verify: build test verify
 
 # Build the project, without formatting the code
 .PHONY: build-dev
+ifdef IN_CI
+build-dev:
+	@true
+else
 build-dev: build-bin build-lib build-bin-dir doc
+endif
 
 .PHONY: build-bin
 build-bin: check-charon
@@ -154,10 +159,6 @@ verify:
 INPUTS_LIST = $(wildcard $(INPUTS_DIR)/*)
 # Remove the directory prefix, replace with `test-`
 INPUTS_LIST := $(subst $(INPUTS_DIR)/,test-,$(INPUTS_LIST))
-# Remove some tests we don't want to run.
-# FIXME: move this information to the file itself
-INPUTS_LIST := $(filter-out test-hashmap_utils.rs,$(INPUTS_LIST))
-INPUTS_LIST := $(filter-out test-nested_borrows.rs,$(INPUTS_LIST))
 
 # Run all the tests we found.
 .PHONY: test-all
@@ -166,14 +167,13 @@ test-all: $(INPUTS_LIST)
 ifdef IN_CI
 # In CI we do extra sanity checks.
 test-%: AENEAS_OPTIONS += -checks
-else
-test-%: check-charon
 endif
 
 # Translate the given rust file to available backends. The test runner decides
 # which backends to use and sets test-specific options.
+# Note: the tests have the fulle file name: `test-arrays.rs`, `test-loops.rs`, `test-betree`.
 .PHONY: test-%
-test-%:
+test-%: build-dev
 	$(TEST_RUNNER_EXE) $(CHARON_EXE) $(AENEAS_EXE) $(LLBC_DIR) $(INPUTS_DIR)/"$*" $(AENEAS_OPTIONS)
 	echo "# Test $* done"
 
