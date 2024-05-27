@@ -1,7 +1,7 @@
 (** Properties about the hashmap written on disk *)
-module HashmapMain.Properties
+module Hashmap.Properties
 open Primitives
-open HashmapMain.Funs
+open Hashmap.Funs
 
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 
@@ -13,11 +13,11 @@ open HashmapMain.Funs
 
 /// [state_v] gives us the hash map currently stored on disk
 assume
-val state_v : state -> hashmap_HashMap_t u64
+val state_v : state -> hashMap_t u64
 
 /// [serialize] updates the hash map stored on disk
 assume
-val serialize_lem (hm : hashmap_HashMap_t u64) (st : state) : Lemma (
+val serialize_lem (hm : hashMap_t u64) (st : state) : Lemma (
   match hashmap_utils_serialize hm st with
   | Fail _ -> True
   | Ok (st', ()) -> state_v st' == hm)
@@ -41,7 +41,7 @@ val insert_on_disk_lem (key : usize) (value : u64) (st : state) : Lemma (
   | Fail _ -> True
   | Ok (st', ()) ->
     let hm = state_v st in
-    match hashmap_HashMap_insert u64 hm key value with
+    match hashMap_insert u64 hm key value with
     | Fail _ -> False
     | Ok hm' -> hm' == state_v st')
 

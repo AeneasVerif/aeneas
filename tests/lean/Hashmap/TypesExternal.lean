@@ -1,4 +1,4 @@
--- [hashmap_main]: external types.
+-- [hashmap]: external types.
 import Base
 open Primitives
 
