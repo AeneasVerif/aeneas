@@ -209,10 +209,10 @@ let reduce_ctx (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
   List.iter
     (fun abs_id0 ->
       let bids = AbstractionId.Map.find abs_id0 abs_to_borrows in
-      let bids = BorrowId.Set.elements bids in
+      let bids = MarkerBorrowId.Set.elements bids in
       List.iter
         (fun bid ->
-          match BorrowId.Map.find_opt bid loan_to_abs with
+          match MarkerBorrowId.Map.find_opt bid loan_to_abs with
           | None -> (* Nothing to do *) ()
           | Some abs_ids1 ->
               AbstractionId.Set.iter
@@ -372,10 +372,10 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
   List.iter
     (fun abs_id0 ->
       let bids = AbstractionId.Map.find abs_id0 abs_to_borrows in
-      let bids = BorrowId.Set.elements bids in
+      let bids = MarkerBorrowId.Set.elements bids in
       List.iter
         (fun bid ->
-          match BorrowId.Map.find_opt bid loan_to_abs with
+          match MarkerBorrowId.Map.find_opt bid loan_to_abs with
           | None -> (* Nothing to do *) ()
           | Some abs_ids1 ->
               AbstractionId.Set.iter

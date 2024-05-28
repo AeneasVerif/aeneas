@@ -26,59 +26,59 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (no_duplicates : bool)
   let abs_to_borrows = ref AbstractionId.Map.empty in
   let abs_to_loans = ref AbstractionId.Map.empty in
   let abs_to_borrows_loans = ref AbstractionId.Map.empty in
-  let borrow_to_abs = ref BorrowId.Map.empty in
-  let loan_to_abs = ref BorrowId.Map.empty in
-  let borrow_loan_to_abs = ref BorrowId.Map.empty in
+  let borrow_to_abs = ref MarkerBorrowId.Map.empty in
+  let loan_to_abs = ref MarkerBorrowId.Map.empty in
+  let borrow_loan_to_abs = ref MarkerBorrowId.Map.empty in
 
-  let module R (Id0 : Identifiers.Id) (Id1 : Identifiers.Id) = struct
+  let module R (M : Collections.Map) (S : Collections.Set) = struct
     (*
        [check_singleton_sets]: check that the mapping maps to a singleton.
        [check_not_already_registered]: check if the mapping was not already registered.
     *)
     let register_mapping (check_singleton_sets : bool)
-        (check_not_already_registered : bool) (map : Id1.Set.t Id0.Map.t ref)
-        (id0 : Id0.id) (id1 : Id1.id) : unit =
+        (check_not_already_registered : bool) (map : S.t M.t ref) (id0 : M.key)
+        (id1 : S.elt) : unit =
       (* Sanity check *)
       (if check_singleton_sets || check_not_already_registered then
-         match Id0.Map.find_opt id0 !map with
+         match M.find_opt id0 !map with
          | None -> ()
          | Some set ->
              sanity_check __FILE__ __LINE__
-               ((not check_not_already_registered) || not (Id1.Set.mem id1 set))
+               ((not check_not_already_registered) || not (S.mem id1 set))
                span);
       (* Update the mapping *)
       map :=
-        Id0.Map.update id0
+        M.update id0
           (fun ids ->
             match ids with
-            | None -> Some (Id1.Set.singleton id1)
+            | None -> Some (S.singleton id1)
             | Some ids ->
                 (* Sanity check *)
                 sanity_check __FILE__ __LINE__ (not check_singleton_sets) span;
                 sanity_check __FILE__ __LINE__
-                  ((not check_not_already_registered)
-                  || not (Id1.Set.mem id1 ids))
+                  ((not check_not_already_registered) || not (S.mem id1 ids))
                   span;
                 (* Update *)
-                Some (Id1.Set.add id1 ids))
+                Some (S.add id1 ids))
           !map
   end in
-  let module RAbsBorrow = R (AbstractionId) (BorrowId) in
-  let module RBorrowAbs = R (BorrowId) (AbstractionId) in
-  let register_borrow_id abs_id bid =
-    RAbsBorrow.register_mapping false no_duplicates abs_to_borrows abs_id bid;
-    RAbsBorrow.register_mapping false false abs_to_borrows_loans abs_id bid;
-    RBorrowAbs.register_mapping no_duplicates no_duplicates borrow_to_abs bid
-      abs_id;
-    RBorrowAbs.register_mapping false false borrow_loan_to_abs bid abs_id
+  let module RAbsBorrow = R (AbstractionId.Map) (MarkerBorrowId.Set) in
+  let module RBorrowAbs = R (MarkerBorrowId.Map) (AbstractionId.Set) in
+  let register_borrow_id abs_id pm bid =
+    RAbsBorrow.register_mapping false no_duplicates abs_to_borrows abs_id
+      (pm, bid);
+    RAbsBorrow.register_mapping false false abs_to_borrows_loans abs_id (pm, bid);
+    RBorrowAbs.register_mapping no_duplicates no_duplicates borrow_to_abs
+      (pm, bid) abs_id;
+    RBorrowAbs.register_mapping false false borrow_loan_to_abs (pm, bid) abs_id
   in
 
-  let register_loan_id abs_id bid =
-    RAbsBorrow.register_mapping false no_duplicates abs_to_loans abs_id bid;
-    RAbsBorrow.register_mapping false false abs_to_borrows_loans abs_id bid;
-    RBorrowAbs.register_mapping no_duplicates no_duplicates loan_to_abs bid
-      abs_id;
-    RBorrowAbs.register_mapping false false borrow_loan_to_abs bid abs_id
+  let register_loan_id abs_id pm bid =
+    RAbsBorrow.register_mapping false no_duplicates abs_to_loans abs_id (pm, bid);
+    RAbsBorrow.register_mapping false false abs_to_borrows_loans abs_id (pm, bid);
+    RBorrowAbs.register_mapping no_duplicates no_duplicates loan_to_abs
+      (pm, bid) abs_id;
+    RBorrowAbs.register_mapping false false borrow_loan_to_abs (pm, bid) abs_id
   in
 
   let explore_abs =
@@ -86,35 +86,43 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (no_duplicates : bool)
       inherit [_] iter_typed_avalue as super
 
       (** Make sure we don't register the ignored ids *)
-      method! visit_aloan_content abs_id lc =
+      method! visit_aloan_content (abs_id, pm) lc =
         match lc with
-        | AMutLoan _ | ASharedLoan _ ->
+        | AMutLoan (pm, _, _) | ASharedLoan (pm, _, _, _) ->
             (* Process those normally *)
-            super#visit_aloan_content abs_id lc
+            super#visit_aloan_content (abs_id, pm) lc
         | AIgnoredMutLoan (_, child)
         | AEndedIgnoredMutLoan { child; given_back = _; given_back_span = _ }
         | AIgnoredSharedLoan child ->
+            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the loan, if there is *)
-            self#visit_typed_avalue abs_id child
+            self#visit_typed_avalue (abs_id, pm) child
         | AEndedMutLoan _ | AEndedSharedLoan _ ->
             craise __FILE__ __LINE__ span "Unreachable"
 
       (** Make sure we don't register the ignored ids *)
-      method! visit_aborrow_content abs_id bc =
+      method! visit_aborrow_content (abs_id, pm) bc =
         match bc with
-        | AMutBorrow _ | ASharedBorrow _ | AProjSharedBorrow _ ->
+        | AMutBorrow (pm, _, _) | ASharedBorrow (pm, _) ->
+            (* Add the current marker, and process them recursively *)
+            super#visit_aborrow_content (abs_id, pm) bc
+        | AProjSharedBorrow _ ->
+            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Process those normally *)
-            super#visit_aborrow_content abs_id bc
+            super#visit_aborrow_content (abs_id, pm) bc
         | AIgnoredMutBorrow (_, child)
         | AEndedIgnoredMutBorrow { child; given_back = _; given_back_span = _ }
           ->
+            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the borrow, if there is *)
-            self#visit_typed_avalue abs_id child
+            self#visit_typed_avalue (abs_id, pm) child
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
             craise __FILE__ __LINE__ span "Unreachable"
 
-      method! visit_borrow_id abs_id bid = register_borrow_id abs_id bid
-      method! visit_loan_id abs_id lid = register_loan_id abs_id lid
+      method! visit_borrow_id (abs_id, pm) bid =
+        register_borrow_id abs_id pm bid
+
+      method! visit_loan_id (abs_id, pm) lid = register_loan_id abs_id pm lid
     end
   in
 
@@ -123,11 +131,13 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (no_duplicates : bool)
       let abs_id = abs.abs_id in
       if explore abs then (
         abs_to_borrows :=
-          AbstractionId.Map.add abs_id BorrowId.Set.empty !abs_to_borrows;
+          AbstractionId.Map.add abs_id MarkerBorrowId.Set.empty !abs_to_borrows;
         abs_to_loans :=
-          AbstractionId.Map.add abs_id BorrowId.Set.empty !abs_to_loans;
+          AbstractionId.Map.add abs_id MarkerBorrowId.Set.empty !abs_to_loans;
         abs_ids := abs.abs_id :: !abs_ids;
-        List.iter (explore_abs#visit_typed_avalue abs.abs_id) abs.avalues)
+        List.iter
+          (explore_abs#visit_typed_avalue (abs.abs_id, PNone))
+          abs.avalues)
       else ())
     env;
 

@@ -40,6 +40,19 @@ end
 module MarkerBorrowIdSet = Collections.MakeSet (MarkerBorrowIdOrd)
 module MarkerBorrowIdMap = Collections.MakeMap (MarkerBorrowIdOrd)
 
+module MarkerBorrowId : sig
+  type t
+
+  module Set : Collections.Set with type elt = t
+  module Map : Collections.Map with type key = t
+end
+with type t = marker_borrow_id = struct
+  type t = marker_borrow_id
+
+  module Set = MarkerBorrowIdSet
+  module Map = MarkerBorrowIdMap
+end
+
 (** A small utility -
 
     Rem.: some environments may be ill-formed (they may contain several times
@@ -49,12 +62,12 @@ module MarkerBorrowIdMap = Collections.MakeMap (MarkerBorrowIdOrd)
 *)
 type abs_borrows_loans_maps = {
   abs_ids : AbstractionId.id list;
-  abs_to_borrows : BorrowId.Set.t AbstractionId.Map.t;
-  abs_to_loans : BorrowId.Set.t AbstractionId.Map.t;
-  abs_to_borrows_loans : BorrowId.Set.t AbstractionId.Map.t;
-  borrow_to_abs : AbstractionId.Set.t BorrowId.Map.t;
-  loan_to_abs : AbstractionId.Set.t BorrowId.Map.t;
-  borrow_loan_to_abs : AbstractionId.Set.t BorrowId.Map.t;
+  abs_to_borrows : MarkerBorrowId.Set.t AbstractionId.Map.t;
+  abs_to_loans : MarkerBorrowId.Set.t AbstractionId.Map.t;
+  abs_to_borrows_loans : MarkerBorrowId.Set.t AbstractionId.Map.t;
+  borrow_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
+  loan_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
+  borrow_loan_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
 }
 
 (** See {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} and [Matcher].
