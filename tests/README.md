@@ -50,7 +50,7 @@ In both cases it supports the same options. Typical options are:
 - `[fstar] known-failure`: see below;
 - `[coq,fstar] subdir=misc`: store the output in the `misc` subdirectory for these two backends.
 
-For an up-to-date list of options, see comments in the test runner code.
+For an up-to-date list of options, see comments in `tests/test_runner/Input.ml`.
 
 # `known-failure` tests
 
