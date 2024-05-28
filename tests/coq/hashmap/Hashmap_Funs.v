@@ -508,10 +508,10 @@ Definition hashMap_remove
     Source: 'tests/src/hashmap.rs', lines 335:0-335:43 *)
 Definition insert_on_disk
   (n : nat) (key : usize) (value : u64) (st : state) : result (state * unit) :=
-  p <- hashmap_utils_deserialize st;
+  p <- utils_deserialize st;
   let (st1, hm) := p in
   hm1 <- hashMap_insert u64 n hm key value;
-  hashmap_utils_serialize hm1 st1
+  utils_serialize hm1 st1
 .
 
 (** [hashmap::test1]:

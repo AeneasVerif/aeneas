@@ -6,11 +6,11 @@ include Hashmap.Types
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [hashmap::hashmap_utils::deserialize]:
+(** [hashmap::utils::deserialize]:
     Source: 'tests/src/hashmap.rs', lines 330:4-330:47 *)
-val hashmap_utils_deserialize : state -> result (state & (hashMap_t u64))
+val utils_deserialize : state -> result (state & (hashMap_t u64))
 
-(** [hashmap::hashmap_utils::serialize]:
+(** [hashmap::utils::serialize]:
     Source: 'tests/src/hashmap.rs', lines 325:4-325:46 *)
-val hashmap_utils_serialize : hashMap_t u64 -> state -> result (state & unit)
+val utils_serialize : hashMap_t u64 -> state -> result (state & unit)
 

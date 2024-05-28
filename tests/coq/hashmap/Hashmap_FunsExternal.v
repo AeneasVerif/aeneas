@@ -9,13 +9,13 @@ Require Export Hashmap_Types.
 Import Hashmap_Types.
 Module Hashmap_FunsExternal.
 
-(** [hashmap::hashmap_utils::deserialize]:
+(** [hashmap::utils::deserialize]:
     Source: 'tests/src/hashmap.rs', lines 330:4-330:47 *)
-Axiom hashmap_utils_deserialize : state -> result (state * (HashMap_t u64)).
+Axiom utils_deserialize : state -> result (state * (HashMap_t u64)).
 
-(** [hashmap::hashmap_utils::serialize]:
+(** [hashmap::utils::serialize]:
     Source: 'tests/src/hashmap.rs', lines 325:4-325:46 *)
-Axiom hashmap_utils_serialize : HashMap_t u64 -> state -> result (state * unit)
+Axiom utils_serialize : HashMap_t u64 -> state -> result (state * unit)
 .
 
 End Hashmap_FunsExternal.

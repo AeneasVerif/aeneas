@@ -18,18 +18,18 @@ val state_v : state -> hashMap_t u64
 /// [serialize] updates the hash map stored on disk
 assume
 val serialize_lem (hm : hashMap_t u64) (st : state) : Lemma (
-  match hashmap_utils_serialize hm st with
+  match utils_serialize hm st with
   | Fail _ -> True
   | Ok (st', ()) -> state_v st' == hm)
-  [SMTPat (hashmap_utils_serialize hm st)]
+  [SMTPat (utils_serialize hm st)]
 
 /// [deserialize] gives us the hash map stored on disk, without updating it
 assume
 val deserialize_lem (st : state) : Lemma (
-  match hashmap_utils_deserialize st with
+  match utils_deserialize st with
   | Fail _ -> True
   | Ok (st', hm) -> hm == state_v st /\ st' == st)
-  [SMTPat (hashmap_utils_deserialize st)]
+  [SMTPat (utils_deserialize st)]
 
 (*** Lemmas *)
 

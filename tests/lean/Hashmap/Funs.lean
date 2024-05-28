@@ -386,9 +386,9 @@ def HashMap.remove
 def insert_on_disk
   (key : Usize) (value : U64) (st : State) : Result (State × Unit) :=
   do
-  let (st1, hm) ← hashmap_utils.deserialize st
+  let (st1, hm) ← utils.deserialize st
   let hm1 ← HashMap.insert U64 hm key value
-  hashmap_utils.serialize hm1 st1
+  utils.serialize hm1 st1
 
 /- [hashmap::test1]:
    Source: 'tests/src/hashmap.rs', lines 350:0-350:10 -/

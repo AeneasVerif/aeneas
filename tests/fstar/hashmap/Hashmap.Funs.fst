@@ -380,9 +380,9 @@ let hashMap_remove
     Source: 'tests/src/hashmap.rs', lines 335:0-335:43 *)
 let insert_on_disk
   (key : usize) (value : u64) (st : state) : result (state & unit) =
-  let* (st1, hm) = hashmap_utils_deserialize st in
+  let* (st1, hm) = utils_deserialize st in
   let* hm1 = hashMap_insert u64 hm key value in
-  hashmap_utils_serialize hm1 st1
+  utils_serialize hm1 st1
 
 (** [hashmap::test1]:
     Source: 'tests/src/hashmap.rs', lines 350:0-350:10 *)

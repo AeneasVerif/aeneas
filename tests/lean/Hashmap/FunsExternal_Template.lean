@@ -6,12 +6,11 @@ import Hashmap.Types
 open Primitives
 open hashmap
 
-/- [hashmap::hashmap_utils::deserialize]:
+/- [hashmap::utils::deserialize]:
    Source: 'tests/src/hashmap.rs', lines 330:4-330:47 -/
-axiom hashmap_utils.deserialize : State → Result (State × (HashMap U64))
+axiom utils.deserialize : State → Result (State × (HashMap U64))
 
-/- [hashmap::hashmap_utils::serialize]:
+/- [hashmap::utils::serialize]:
    Source: 'tests/src/hashmap.rs', lines 325:4-325:46 -/
-axiom hashmap_utils.serialize
-  : HashMap U64 → State → Result (State × Unit)
+axiom utils.serialize : HashMap U64 → State → Result (State × Unit)
 
