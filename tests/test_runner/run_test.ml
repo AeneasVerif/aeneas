@@ -36,27 +36,34 @@ module Backend = struct
     | Lean -> "lean"
     | FStar -> "fstar"
     | HOL4 -> "hol4"
-end
 
-module BackendMap = struct
-  include Map.Make (Backend)
+  module Map = struct
+    (* Hack to be able to include things from the parent module with the same names *)
+    type backend_t = t
 
-  (* Make a new map with one entry per backend, given by `f` *)
-  let make (f : Backend.t -> 'a) : 'a t =
-    List.fold_left
-      (fun map backend -> add backend (f backend) map)
-      empty Backend.all
+    let backend_compare = compare
 
-  (* Set this value for all the backends in `backends` *)
-  let add_each (backends : Backend.t list) (v : 'a) (map : 'a t) : 'a t =
-    List.fold_left (fun map backend -> add backend v map) map backends
+    include Map.Make (struct
+      type t = backend_t
 
-  (* Updates all the backends in `backends` with `f` *)
-  let update_each (backends : Backend.t list) (f : 'a -> 'a) (map : 'a t) : 'a t
-      =
-    List.fold_left
-      (fun map backend -> update backend (Option.map f) map)
-      map backends
+      let compare = backend_compare
+    end)
+
+    (* Make a new map with one entry per backend, given by `f` *)
+    let make (f : backend_t -> 'a) : 'a t =
+      List.fold_left (fun map backend -> add backend (f backend) map) empty all
+
+    (* Set this value for all the backends in `backends` *)
+    let add_each (backends : backend_t list) (v : 'a) (map : 'a t) : 'a t =
+      List.fold_left (fun map backend -> add backend v map) map backends
+
+    (* Updates all the backends in `backends` with `f` *)
+    let update_each (backends : backend_t list) (f : 'a -> 'a) (map : 'a t) :
+        'a t =
+      List.fold_left
+        (fun map backend -> update backend (Option.map f) map)
+        map backends
+  end
 end
 
 let concat_path = List.fold_left Filename.concat ""
@@ -109,12 +116,12 @@ module Input = struct
     name : string;
     path : string;
     kind : kind;
-    actions : action BackendMap.t;
+    actions : action Backend.Map.t;
     charon_options : string list;
-    aeneas_options : string list BackendMap.t;
-    subdirs : string BackendMap.t;
+    aeneas_options : string list Backend.Map.t;
+    subdirs : string Backend.Map.t;
     (* Whether to store the command output to a file. Only available for known-failure tests. *)
-    check_output : bool BackendMap.t;
+    check_output : bool Backend.Map.t;
   }
 
   (* The default subdirectory in which to store the outputs. *)
@@ -152,16 +159,16 @@ module Input = struct
     let subdir = Core.String.chop_prefix comment ~prefix:"subdir=" in
 
     if comment = "skip" then
-      { input with actions = BackendMap.add_each backends Skip input.actions }
+      { input with actions = Backend.Map.add_each backends Skip input.actions }
     else if comment = "known-failure" then
       {
         input with
-        actions = BackendMap.add_each backends KnownFailure input.actions;
+        actions = Backend.Map.add_each backends KnownFailure input.actions;
       }
     else if comment = "no-check-output" then
       {
         input with
-        check_output = BackendMap.add_each backends false input.check_output;
+        check_output = Backend.Map.add_each backends false input.check_output;
       }
     else if Option.is_some charon_args then
       let args = Option.get charon_args in
@@ -176,11 +183,14 @@ module Input = struct
       {
         input with
         aeneas_options =
-          BackendMap.update_each backends add_args input.aeneas_options;
+          Backend.Map.update_each backends add_args input.aeneas_options;
       }
     else if Option.is_some subdir then
       let subdir = Option.get subdir in
-      { input with subdirs = BackendMap.add_each backends subdir input.subdirs }
+      {
+        input with
+        subdirs = Backend.Map.add_each backends subdir input.subdirs;
+      }
     else failwith ("Unrecognized special comment: `" ^ comment ^ "`")
 
   (* Given a path to a rust file or crate, gather the details and options about how to build the test. *)
@@ -192,12 +202,12 @@ module Input = struct
       else if Sys_unix.is_directory_exn path then Crate
       else failwith ("`" ^ path ^ "` is not a file or a directory.")
     in
-    let actions = BackendMap.make (fun _ -> Normal) in
+    let actions = Backend.Map.make (fun _ -> Normal) in
     let subdirs =
-      BackendMap.make (fun backend -> default_subdir backend name)
+      Backend.Map.make (fun backend -> default_subdir backend name)
     in
-    let aeneas_options = BackendMap.make (fun _ -> []) in
-    let check_output = BackendMap.make (fun _ -> true) in
+    let aeneas_options = Backend.Map.make (fun _ -> []) in
+    let check_output = Backend.Map.make (fun _ -> true) in
     let input =
       {
         path;
@@ -240,11 +250,11 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   let output_file =
     Filename.remove_extension case.path ^ "." ^ backend_str ^ ".out"
   in
-  let subdir = BackendMap.find backend case.subdirs in
+  let subdir = Backend.Map.find backend case.subdirs in
   let dest_dir = concat_path [ env.dest_dir; backend_str; subdir ] in
-  let aeneas_options = BackendMap.find backend case.aeneas_options in
-  let action = BackendMap.find backend case.actions in
-  let check_output = BackendMap.find backend case.check_output in
+  let aeneas_options = Backend.Map.find backend case.aeneas_options in
+  let action = Backend.Map.find backend case.actions in
+  let check_output = Backend.Map.find backend case.check_output in
 
   (* Build the command *)
   let args =
@@ -332,13 +342,15 @@ let () =
         {
           test_case with
           aeneas_options =
-            BackendMap.map (List.append aeneas_options) test_case.aeneas_options;
+            Backend.Map.map
+              (List.append aeneas_options)
+              test_case.aeneas_options;
         }
       in
       let skip_all =
         List.for_all
           (fun backend ->
-            BackendMap.find backend test_case.actions = Input.Skip)
+            Backend.Map.find backend test_case.actions = Input.Skip)
           Backend.all
       in
       if skip_all then ()
