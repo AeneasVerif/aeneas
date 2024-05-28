@@ -3529,10 +3529,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; output ]
       else output
     in
-    let output =
-      if effect_info.can_fail && inputs <> [] then mk_result_ty output
-      else output
-    in
+    let output = if effect_info.can_fail then mk_result_ty output else output in
     (back_info, output)
   in
 
