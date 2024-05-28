@@ -3,16 +3,22 @@
 type kind = SingleFile | Crate
 type action = Normal | Skip | KnownFailure
 
+(* Options that can be set for a specific backend *)
+type per_backend = {
+  action : action;
+  aeneas_options : string list;
+  subdir : string;
+  (* Whether to store the command output to a file. Only available for known-failure tests. *)
+  check_output : bool;
+}
+
+(* The data for a specific test input *)
 type t = {
   name : string;
   path : string;
   kind : kind;
-  actions : action Backend.Map.t;
   charon_options : string list;
-  aeneas_options : string list Backend.Map.t;
-  subdirs : string Backend.Map.t;
-  (* Whether to store the command output to a file. Only available for known-failure tests. *)
-  check_output : bool Backend.Map.t;
+  per_backend : per_backend Backend.Map.t;
 }
 
 (* The default subdirectory in which to store the outputs. *)
@@ -44,41 +50,42 @@ let apply_special_comment comment input =
         (String.trim rest, backends)
     | None -> (comment, Backend.all)
   in
+  (* Apply `f` to the selected backends *)
+  let per_backend f =
+    {
+      input with
+      per_backend = Backend.Map.update_each backends f input.per_backend;
+    }
+  in
+  (* Assert that this option is not available to be set per-backend *)
+  let assert_no_backend option_name =
+    if backends != Backend.all then
+      failwith ("Cannot set the `" ^ option_name ^ "` option per-backend")
+  in
+
   (* Parse the other options *)
   let charon_args = Core.String.chop_prefix comment ~prefix:"charon-args=" in
   let aeneas_args = Core.String.chop_prefix comment ~prefix:"aeneas-args=" in
   let subdir = Core.String.chop_prefix comment ~prefix:"subdir=" in
 
-  if comment = "skip" then
-    { input with actions = Backend.Map.add_each backends Skip input.actions }
+  if comment = "skip" then per_backend (fun x -> { x with action = Skip })
   else if comment = "known-failure" then
-    {
-      input with
-      actions = Backend.Map.add_each backends KnownFailure input.actions;
-    }
+    per_backend (fun x -> { x with action = KnownFailure })
   else if comment = "no-check-output" then
-    {
-      input with
-      check_output = Backend.Map.add_each backends false input.check_output;
-    }
-  else if Option.is_some charon_args then
+    per_backend (fun x -> { x with check_output = false })
+  else if Option.is_some charon_args then (
     let args = Option.get charon_args in
     let args = String.split_on_char ' ' args in
-    if backends != Backend.all then
-      failwith "Cannot set per-backend charon-args"
-    else { input with charon_options = List.append input.charon_options args }
+    assert_no_backend "charon-args";
+    { input with charon_options = List.append input.charon_options args })
   else if Option.is_some aeneas_args then
     let args = Option.get aeneas_args in
     let args = String.split_on_char ' ' args in
-    let add_args opts = List.append opts args in
-    {
-      input with
-      aeneas_options =
-        Backend.Map.update_each backends add_args input.aeneas_options;
-    }
+    per_backend (fun x ->
+        { x with aeneas_options = List.append x.aeneas_options args })
   else if Option.is_some subdir then
     let subdir = Option.get subdir in
-    { input with subdirs = Backend.Map.add_each backends subdir input.subdirs }
+    per_backend (fun x -> { x with subdir })
   else failwith ("Unrecognized special comment: `" ^ comment ^ "`")
 
 (* Given a path to a rust file or crate, gather the details and options about how to build the test. *)
@@ -90,22 +97,16 @@ let build (path : string) : t =
     else if Sys_unix.is_directory_exn path then Crate
     else failwith ("`" ^ path ^ "` is not a file or a directory.")
   in
-  let actions = Backend.Map.make (fun _ -> Normal) in
-  let subdirs = Backend.Map.make (fun backend -> default_subdir backend name) in
-  let aeneas_options = Backend.Map.make (fun _ -> []) in
-  let check_output = Backend.Map.make (fun _ -> true) in
-  let input =
-    {
-      path;
-      name;
-      kind;
-      actions;
-      charon_options = [];
-      subdirs;
-      aeneas_options;
-      check_output;
-    }
+  let per_backend =
+    Backend.Map.make (fun backend ->
+        {
+          action = Normal;
+          subdir = default_subdir backend name;
+          aeneas_options = [];
+          check_output = true;
+        })
   in
+  let input = { path; name; kind; charon_options = []; per_backend } in
   (* For crates, we store the special comments in a separate file. *)
   let crate_config_file = Filename.concat path "aeneas-test-options" in
   match kind with

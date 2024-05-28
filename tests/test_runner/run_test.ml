@@ -54,11 +54,12 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   let output_file =
     Filename.remove_extension case.path ^ "." ^ backend_str ^ ".out"
   in
-  let subdir = Backend.Map.find backend case.subdirs in
+  let per_backend = Backend.Map.find backend case.per_backend in
+  let subdir = per_backend.subdir in
+  let check_output = per_backend.check_output in
+  let aeneas_options = per_backend.aeneas_options in
+  let action = per_backend.action in
   let dest_dir = concat_path [ env.dest_dir; backend_str; subdir ] in
-  let aeneas_options = Backend.Map.find backend case.aeneas_options in
-  let action = Backend.Map.find backend case.actions in
-  let check_output = Backend.Map.find backend case.check_output in
 
   (* Build the command *)
   let args =
@@ -145,16 +146,21 @@ let () =
       let test_case =
         {
           test_case with
-          aeneas_options =
+          per_backend =
             Backend.Map.map
-              (List.append aeneas_options)
-              test_case.aeneas_options;
+              (fun x ->
+                {
+                  x with
+                  Input.aeneas_options =
+                    List.append aeneas_options x.Input.aeneas_options;
+                })
+              test_case.per_backend;
         }
       in
       let skip_all =
         List.for_all
           (fun backend ->
-            Backend.Map.find backend test_case.actions = Input.Skip)
+            (Backend.Map.find backend test_case.per_backend).action = Input.Skip)
           Backend.all
       in
       if skip_all then ()
