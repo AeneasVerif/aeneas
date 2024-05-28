@@ -241,9 +241,9 @@ let index_all : result u32 =
   let* (s1, to_slice_mut_back) =
     array_to_slice_mut u32 2 (mk_array u32 2 [ 0; 0 ]) in
   let* (i7, s2) = index_mut_slice_u32_0 s1 in
-  let* i8 = u32_add i6 i7 in
+  let* i9 = u32_add i6 i7 in
   let* _ = to_slice_mut_back s2 in
-  Ok i8
+  Ok i9
 
 (** [arrays::update_array]:
     Source: 'tests/src/arrays.rs', lines 187:0-187:36 *)
