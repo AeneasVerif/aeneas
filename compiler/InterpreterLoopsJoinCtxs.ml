@@ -280,8 +280,8 @@ let reduce_ctx (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
 
 (* TODO Adapt and comment *)
 let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
-    (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets)
-    (ctx0 : eval_ctx) : eval_ctx =
+    (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
+    : eval_ctx =
   (* Debug *)
   log#ldebug
     (lazy
@@ -336,9 +336,7 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
 
   (* Explore all the *new* abstractions, and compute various maps *)
   let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
-  let ids_maps =
-    compute_abs_borrows_loans_maps span false explore env
-  in
+  let ids_maps = compute_abs_borrows_loans_maps span false explore env in
   let {
     abs_ids;
     abs_to_borrows;
@@ -353,7 +351,7 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
 
   (* Change the merging behaviour depending on the input parameters *)
   let abs_to_borrows, loan_to_abs =
- (abs_to_borrows_loans, borrow_loan_to_abs)
+    (abs_to_borrows_loans, borrow_loan_to_abs)
   in
 
   (* Merge the abstractions together *)
@@ -411,8 +409,8 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
                     (* Update the environment - pay attention to the order: we
                        we merge [abs_id1] *into* [abs_id0] *)
                     let nctx, abs_id =
-                      merge_into_abstraction span abs_kind can_end (Some merge_funs)
-                        !ctx abs_id1 abs_id0
+                      merge_into_abstraction span abs_kind can_end
+                        (Some merge_funs) !ctx abs_id1 abs_id0
                     in
                     ctx := nctx;
 

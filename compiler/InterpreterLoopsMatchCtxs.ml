@@ -32,7 +32,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (no_duplicates : bool)
 
   let module R (Id0 : Identifiers.Id) (Id1 : Identifiers.Id) = struct
     (*
-       [check_singleton_sets]: check that the mapping maps to a singletong.
+       [check_singleton_sets]: check that the mapping maps to a singleton.
        [check_not_already_registered]: check if the mapping was not already registered.
     *)
     let register_mapping (check_singleton_sets : bool)

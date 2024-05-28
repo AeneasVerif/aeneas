@@ -26,6 +26,20 @@ type ctx_or_update = (eval_ctx, updt_env_kind) result
 (** Union Find *)
 module UF = UnionFind.Make (UnionFind.StoreMap)
 
+type marker_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
+
+module MarkerBorrowIdOrd = struct
+  type t = marker_borrow_id
+
+  let compare = compare_marker_borrow_id
+  let to_string = show_marker_borrow_id
+  let pp_t = pp_marker_borrow_id
+  let show_t = show_marker_borrow_id
+end
+
+module MarkerBorrowIdSet = Collections.MakeSet (MarkerBorrowIdOrd)
+module MarkerBorrowIdMap = Collections.MakeMap (MarkerBorrowIdOrd)
+
 (** A small utility -
 
     Rem.: some environments may be ill-formed (they may contain several times
