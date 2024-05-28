@@ -289,9 +289,9 @@ Definition index_all : result u32 :=
   let (s1, to_slice_mut_back) := p in
   p1 <- index_mut_slice_u32_0 s1;
   let (i7, s2) := p1 in
-  i8 <- u32_add i6 i7;
+  i9 <- u32_add i6 i7;
   _ <- to_slice_mut_back s2;
-  Ok i8
+  Ok i9
 .
 
 (** [arrays::update_array]:
