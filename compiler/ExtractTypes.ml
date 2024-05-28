@@ -393,6 +393,37 @@ let end_type_decl_group (fmt : F.formatter) (is_rec : bool)
         (* Add breaks to insert new lines between definitions *)
         F.pp_print_break fmt 0 0)
 
+(** See {!start_fun_decl_group}: similar usage, but for the type declarations. *)
+let start_trait_decl_group (_ctx : extraction_ctx) (fmt : F.formatter)
+    (is_rec : bool) (dg : Pure.trait_decl list) =
+  match !backend with
+  | FStar | Coq -> ()
+  | Lean ->
+      if is_rec && List.length dg > 1 then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "mutual";
+        F.pp_print_space fmt ())
+  | HOL4 -> craise_opt_span __FILE__ __LINE__ None "Not implemented"
+
+(** See {!start_fun_decl_group}. *)
+let end_trait_decl_group (fmt : F.formatter) (is_rec : bool)
+    (dg : Pure.trait_decl list) =
+  match !backend with
+  | FStar -> ()
+  | Coq ->
+      (* For aesthetic reasons, we print the Coq end group delimiter directly
+         in {!extract_fun_decl}. *)
+      ()
+  | Lean ->
+      (* We must add the "end" keyword to groups of mutually recursive functions *)
+      if is_rec && List.length dg > 1 then (
+        F.pp_print_cut fmt ();
+        F.pp_print_string fmt "end";
+        (* Add breaks to insert new lines between definitions *)
+        F.pp_print_break fmt 0 0)
+      else ()
+  | HOL4 -> craise_opt_span __FILE__ __LINE__ None "Not implemented"
+
 let unit_name () =
   match !backend with Lean -> "Unit" | Coq | FStar | HOL4 -> "unit"
 
@@ -1106,10 +1137,9 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     else (
       (* We extract for Coq or Lean, and we have a recursive record, or a record in
          a group of mutually recursive types: we extract it as an inductive type *)
-      cassert __FILE__ __LINE__
+      sanity_check __FILE__ __LINE__
         (is_rec && (!backend = Coq || !backend = Lean))
-        def.span
-        "Constant generics are not supported yet when generating code for HOL4";
+        def.span;
       (* Small trick: in Lean we use namespaces, meaning we don't need to prefix
          the constructor name with the name of the type at definition site,
          i.e., instead of generating `inductive Foo := | MkFoo ...` like in Coq

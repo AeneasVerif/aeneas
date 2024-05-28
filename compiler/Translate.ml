@@ -706,23 +706,76 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
         (fun trans -> Extract.extract_unit_test_if_unit_fun ctx fmt trans.f)
         pure_ls
 
-(** Export a trait declaration. *)
-let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
-    (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
-    (extract_extra_info : bool) : unit =
-  let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls in
-  (* Check if the trait declaration is builtin, in which case we ignore it *)
-  let open ExtractBuiltin in
-  if
-    match_name_find_opt ctx.trans_ctx trait_decl.llbc_name
-      (builtin_trait_decls_map ())
-    = None
-  then (
-    let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
-    if extract_decl then Extract.extract_trait_decl ctx fmt trait_decl;
+(** Export a trait declaration group. *)
+let export_trait_decl_group (fmt : Format.formatter) (_config : gen_config)
+    (ctx : gen_ctx) (extract_decl : bool) (extract_extra_info : bool)
+    (is_rec : bool) (ids : Pure.trait_decl_id list) : unit =
+  let num_decls = List.length ids in
+  let is_mut_rec = num_decls > 1 in
+  let kind_from_index i =
+    if not is_mut_rec then
+      if is_rec then ExtractBase.SingleRec else ExtractBase.SingleNonRec
+    else if i = 0 then ExtractBase.MutRecFirst
+    else if i = num_decls - 1 then ExtractBase.MutRecLast
+    else ExtractBase.MutRecInner
+  in
+
+  (* Retrieve the declarations - note that some of them might have been ignored in
+     case of errors *)
+  let decls =
+    List.filter_map
+      (fun id -> TraitDeclId.Map.find_opt id ctx.trans_trait_decls)
+      ids
+  in
+
+  (* Check if the declarations are builtin - if yes they must be ignored.
+     Note that if one definition in the group is builtin, then all the
+     definitions must be builtin *)
+  let builtin =
+    let open ExtractBuiltin in
+    let trait_decls_map = builtin_trait_decls_map () in
+    List.map
+      (fun (def : Pure.trait_decl) ->
+        match_name_find_opt ctx.trans_ctx def.llbc_name trait_decls_map <> None)
+      decls
+  in
+
+  if List.exists (fun b -> b) builtin then
+    (* Sanity check *)
+    assert (List.for_all (fun b -> b) builtin)
+  else (
+    (* Extract the trait declarations.
+
+       Because some declaration groups are delimited, we wrap the declarations
+       between [{start,end}_trait_decl_group].
+
+       Ex.:
+       ====
+       In case of mutually recursive definitions in Lean, we must wrap the
+       definitions between the "mutual" and "end" keywords.
+
+       {[
+         mutual
+
+           inductive Tree := ...
+
+           inductive Node := ...
+
+         end
+       ]}
+    *)
+    if extract_decl then (
+      Extract.start_trait_decl_group ctx fmt is_rec decls;
+      List.iteri
+        (fun i d ->
+          let kind = kind_from_index i in
+          Extract.extract_trait_decl ctx fmt kind d)
+        decls;
+      Extract.end_trait_decl_group fmt is_rec decls);
+
+    (* Export the extra information (e.g.: [Arguments] instructions in Coq) *)
     if extract_extra_info then
-      Extract.extract_trait_decl_extra_info ctx fmt trait_decl)
-  else ()
+      List.iter (fun d -> Extract.extract_trait_decl_extra_info ctx fmt d) decls)
 
 (** Export a trait implementation. *)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
@@ -761,11 +814,11 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_functions_group = export_functions_group fmt config ctx in
   let export_global = export_global fmt config ctx in
   let export_types_group = export_types_group fmt config ctx in
-  let export_trait_decl_group id =
-    export_trait_decl fmt config ctx id true false
-  in
-  let export_trait_decl_group_extra_info id =
-    export_trait_decl fmt config ctx id false true
+  let export_trait_decl_group is_rec ids =
+    (* Export the trait declarations *)
+    export_trait_decl_group fmt config ctx true false is_rec ids;
+    (* Export the additional information *)
+    export_trait_decl_group fmt config ctx false true is_rec ids
   in
   let export_trait_impl = export_trait_impl fmt config ctx in
 
@@ -809,14 +862,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Translate *)
         export_functions_group pure_funs
     | GlobalGroup id -> export_global id
-    | TraitDeclGroup (RecGroup _ids) ->
-        craise_opt_span __FILE__ __LINE__ None
-          "Mutually recursive trait declarations are not supported"
     | TraitDeclGroup (NonRecGroup id) ->
-        (* TODO: update to extract groups *)
-        if config.extract_trait_decls && config.extract_transparent then (
-          export_trait_decl_group id;
-          export_trait_decl_group_extra_info id)
+        if config.extract_trait_decls && config.extract_transparent then
+          export_trait_decl_group false [ id ]
+    | TraitDeclGroup (RecGroup ids) ->
+        if config.extract_trait_decls && config.extract_transparent then
+          export_trait_decl_group true ids
     | TraitImplGroup id ->
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl id

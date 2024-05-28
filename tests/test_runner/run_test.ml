@@ -303,6 +303,7 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
       let cmd = { cmd with redirect_out = Some out } in
       Command.run_command_expecting_failure cmd;
       Unix.close out
+
 (* Run Charon on a specific input with the given options *)
 let run_charon (env : runner_env) (case : Input.t) =
   match case.kind with
