@@ -226,6 +226,7 @@
             pkgs.ocamlPackages.ocamlformat
             pkgs.ocamlPackages.menhir
             pkgs.ocamlPackages.odoc
+            pkgs.jq
           ];
 
           inputsFrom = [

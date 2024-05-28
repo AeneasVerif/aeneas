@@ -90,7 +90,7 @@ update-charon-pin:
 # Keep the commit revision in `./charon-pin` as well so that non-nix users can
 # know which commit to use.
 ./charon-pin: flake.lock
-	nix-shell -p jq --run './scripts/update-charon-pin.sh' >> ./charon-pin
+	./scripts/update-charon-pin.sh >> ./charon-pin
 
 # Checks that `./charon` contains a clone of charon at the required commit.
 # Also checks that `./charon/bin/charon` exists.

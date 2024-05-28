@@ -54,3 +54,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v26
       - run: nix develop --command bash -c "cd tests/lean && make"
+
+  check-charon-pin:
+    runs-on: [self-hosted, linux, nix]
+    steps:
+      - uses: actions/checkout@v4
+      - run: nix develop --command ./scripts/ci-check-charon-pin.sh
