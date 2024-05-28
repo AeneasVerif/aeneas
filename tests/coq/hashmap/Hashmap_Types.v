@@ -6,10 +6,12 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
+Require Import Hashmap_TypesExternal.
+Include Hashmap_TypesExternal.
 Module Hashmap_Types.
 
 (** [hashmap::List]
-    Source: 'tests/src/hashmap.rs', lines 27:0-27:16 *)
+    Source: 'tests/src/hashmap.rs', lines 29:0-29:16 *)
 Inductive List_t (T : Type) :=
 | List_Cons : usize -> T -> List_t T -> List_t T
 | List_Nil : List_t T
@@ -19,7 +21,7 @@ Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 43:0-43:21 *)
+    Source: 'tests/src/hashmap.rs', lines 45:0-45:21 *)
 Record HashMap_t (T : Type) :=
 mkHashMap_t {
   hashMap_num_entries : usize;

@@ -583,9 +583,9 @@ sig
       ⊢ ∀key value st.
           insert_on_disk_fwd key value st =
           do
-            (st0,hm) <- hashmap_utils_deserialize_fwd st;
+            (st0,hm) <- utils_deserialize_fwd st;
             hm0 <- hashmap_hash_map_insert_fwd_back hm key value;
-            (st1,_) <- hashmap_utils_serialize_fwd hm0 st0;
+            (st1,_) <- utils_serialize_fwd hm0 st0;
             Return (st1,())
           od
    
