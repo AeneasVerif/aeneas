@@ -217,6 +217,7 @@
       {
         packages = {
           inherit aeneas;
+          inherit (charon.packages.${system}) charon-ml charon;
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {
