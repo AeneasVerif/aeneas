@@ -94,13 +94,11 @@ design a mechanism to allow using Aeneas in combination with tools targeting uns
 We have the following limitations, that we plan to address one by one:
 
 - **loops**: no nested loops for now. We are working on lifting this limitation.
-- **no functions pointers/closures/traits**: ongoing work. We are actively working on this
-  and plan to have support soon.
+- **no functions pointers/closures**: ongoing work. We have support for traits and
+  will have support for function pointers and closures soon.
 - **limited type parametricity**: it is not possible for now to instantiate a type
   parameter with a type containing a borrow. This is mostly an engineering
-  issue. We intend to quickly address the issue for types (i.e., allow `Option<&mut T>`),
-  and later address it for functions (i.e., allow `f<&mut T>` - we consider this to
-  be less urgent).
+  issue.
 - **no nested borrows in function signatures**: ongoing work.
 - **interior mutability**: ongoing work. We are thinking of modeling the effects of
   interior mutability by using ghost states.
@@ -123,4 +121,7 @@ A tutorial for the Lean backend is available [here](./tests/lean/Tutorial.lean).
 The translation has been formalized and published at ICFP2022: [Aeneas: Rust
 verification by functional
 translation](https://dl.acm.org/doi/abs/10.1145/3547647)
-([long version](https://arxiv.org/abs/2206.07185)).
+([long version](https://arxiv.org/abs/2206.07185)). We also have a proof that
+the symbolic execution performed by Aeneas during its translation correctly
+implements a borrow checker, and published it in a
+[preprint](https://arxiv.org/abs/2404.02680).
