@@ -180,6 +180,37 @@ type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
     For additional explanations see: https://arxiv.org/pdf/2404.02680#section.5 *)
 type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
 
+type marker_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
+
+module MarkerBorrowIdOrd = struct
+  type t = marker_borrow_id
+
+  let compare = compare_marker_borrow_id
+  let to_string = show_marker_borrow_id
+  let pp_t = pp_marker_borrow_id
+  let show_t = show_marker_borrow_id
+end
+
+module MarkerBorrowIdSet = Collections.MakeSet (MarkerBorrowIdOrd)
+module MarkerBorrowIdMap = Collections.MakeMap (MarkerBorrowIdOrd)
+
+module MarkerBorrowId : sig
+  type t
+
+  val to_string : t -> string
+
+  module Set : Collections.Set with type elt = t
+  module Map : Collections.Map with type key = t
+end
+with type t = marker_borrow_id = struct
+  type t = marker_borrow_id
+
+  let to_string = show_marker_borrow_id
+
+  module Set = MarkerBorrowIdSet
+  module Map = MarkerBorrowIdMap
+end
+
 (** Ancestor for {!typed_avalue} iter visitor *)
 class ['self] iter_typed_avalue_base =
   object (self : 'self)

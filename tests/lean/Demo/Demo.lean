@@ -87,36 +87,13 @@ divergent def list_nth_mut
       Result.ok (t, back)
   | CList.CNil => Result.fail .panic
 
-/- [demo::list_nth_mut1]: loop 0:
-   Source: 'tests/src/demo.rs', lines 69:0-78:1 -/
-divergent def list_nth_mut1_loop
-  (T : Type) (l : CList T) (i : U32) :
-  Result (T × (T → Result (CList T)))
-  :=
-  match l with
-  | CList.CCons x tl =>
-    if i = 0#u32
-    then
-      let back := fun ret => Result.ok (CList.CCons ret tl)
-      Result.ok (x, back)
-    else
-      do
-      let i1 ← i - 1#u32
-      let (t, back) ← list_nth_mut1_loop T tl i1
-      let back1 :=
-        fun ret => do
-                   let tl1 ← back ret
-                   Result.ok (CList.CCons x tl1)
-      Result.ok (t, back1)
-  | CList.CNil => Result.fail .panic
-
 /- [demo::list_nth_mut1]:
    Source: 'tests/src/demo.rs', lines 69:0-69:77 -/
 def list_nth_mut1
   (T : Type) (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))
   :=
-  list_nth_mut1_loop T l i
+  sorry
 
 /- [demo::i32_id]:
    Source: 'tests/src/demo.rs', lines 80:0-80:28 -/

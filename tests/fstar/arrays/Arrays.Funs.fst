@@ -306,49 +306,15 @@ let take_array_t (a : array aB_t 2) : result unit =
 let non_copyable_array : result unit =
   take_array_t (mk_array aB_t 2 [ AB_A; AB_B ])
 
-(** [arrays::sum]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 242:0-250:1 *)
-let rec sum_loop
-  (s : slice u32) (sum1 : u32) (i : usize) :
-  Tot (result u32) (decreases (sum_loop_decreases s sum1 i))
-  =
-  let i1 = slice_len u32 s in
-  if i < i1
-  then
-    let* i2 = slice_index_usize u32 s i in
-    let* sum3 = u32_add sum1 i2 in
-    let* i3 = usize_add i 1 in
-    sum_loop s sum3 i3
-  else Ok sum1
-
 (** [arrays::sum]:
     Source: 'tests/src/arrays.rs', lines 242:0-242:28 *)
 let sum (s : slice u32) : result u32 =
-  sum_loop s 0 0
-
-(** [arrays::sum2]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 252:0-261:1 *)
-let rec sum2_loop
-  (s : slice u32) (s2 : slice u32) (sum1 : u32) (i : usize) :
-  Tot (result u32) (decreases (sum2_loop_decreases s s2 sum1 i))
-  =
-  let i1 = slice_len u32 s in
-  if i < i1
-  then
-    let* i2 = slice_index_usize u32 s i in
-    let* i3 = slice_index_usize u32 s2 i in
-    let* i4 = u32_add i2 i3 in
-    let* sum3 = u32_add sum1 i4 in
-    let* i5 = usize_add i 1 in
-    sum2_loop s s2 sum3 i5
-  else Ok sum1
+  admit
 
 (** [arrays::sum2]:
     Source: 'tests/src/arrays.rs', lines 252:0-252:41 *)
 let sum2 (s : slice u32) (s2 : slice u32) : result u32 =
-  let i = slice_len u32 s in
-  let i1 = slice_len u32 s2 in
-  if not (i = i1) then Fail Failure else sum2_loop s s2 0 0
+  admit
 
 (** [arrays::f0]:
     Source: 'tests/src/arrays.rs', lines 263:0-263:11 *)
@@ -414,24 +380,10 @@ let ite : result unit =
   let* _ = to_slice_mut_back s1 in
   Ok ()
 
-(** [arrays::zero_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 303:0-310:1 *)
-let rec zero_slice_loop
-  (a : slice u8) (i : usize) (len : usize) :
-  Tot (result (slice u8)) (decreases (zero_slice_loop_decreases a i len))
-  =
-  if i < len
-  then
-    let* (_, index_mut_back) = slice_index_mut_usize u8 a i in
-    let* i1 = usize_add i 1 in
-    let* a1 = index_mut_back 0 in
-    zero_slice_loop a1 i1 len
-  else Ok a
-
 (** [arrays::zero_slice]:
     Source: 'tests/src/arrays.rs', lines 303:0-303:31 *)
 let zero_slice (a : slice u8) : result (slice u8) =
-  let len = slice_len u8 a in zero_slice_loop a 0 len
+  admit
 
 (** [arrays::iter_mut_slice]: loop 0:
     Source: 'tests/src/arrays.rs', lines 312:0-318:1 *)

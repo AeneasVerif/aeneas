@@ -72,26 +72,10 @@ divergent def sum_array_loop
 def sum_array (N : Usize) (a : Array U32 N) : Result U32 :=
   sum_array_loop N a 0#usize 0#u32
 
-/- [loops::clear]: loop 0:
-   Source: 'tests/src/loops.rs', lines 62:0-68:1 -/
-divergent def clear_loop
-  (v : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
-  let i1 := alloc.vec.Vec.len U32 v
-  if i < i1
-  then
-    do
-    let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut U32 Usize
-        (core.slice.index.SliceIndexUsizeSliceTInst U32) v i
-    let i2 ← i + 1#usize
-    let v1 ← index_mut_back 0#u32
-    clear_loop v1 i2
-  else Result.ok v
-
 /- [loops::clear]:
    Source: 'tests/src/loops.rs', lines 62:0-62:30 -/
 def clear (v : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
-  clear_loop v 0#usize
+  sorry
 
 /- [loops::List]
    Source: 'tests/src/loops.rs', lines 70:0-70:16 -/
@@ -99,86 +83,21 @@ inductive List (T : Type) :=
 | Cons : T → List T → List T
 | Nil : List T
 
-/- [loops::list_mem]: loop 0:
-   Source: 'tests/src/loops.rs', lines 76:0-85:1 -/
-divergent def list_mem_loop (x : U32) (ls : List U32) : Result Bool :=
-  match ls with
-  | List.Cons y tl => if y = x
-                      then Result.ok true
-                      else list_mem_loop x tl
-  | List.Nil => Result.ok false
-
 /- [loops::list_mem]:
    Source: 'tests/src/loops.rs', lines 76:0-76:52 -/
 def list_mem (x : U32) (ls : List U32) : Result Bool :=
-  list_mem_loop x ls
-
-/- [loops::list_nth_mut_loop]: loop 0:
-   Source: 'tests/src/loops.rs', lines 88:0-98:1 -/
-divergent def list_nth_mut_loop_loop
-  (T : Type) (ls : List T) (i : U32) : Result (T × (T → Result (List T))) :=
-  match ls with
-  | List.Cons x tl =>
-    if i = 0#u32
-    then
-      let back := fun ret => Result.ok (List.Cons ret tl)
-      Result.ok (x, back)
-    else
-      do
-      let i1 ← i - 1#u32
-      let (t, back) ← list_nth_mut_loop_loop T tl i1
-      let back1 :=
-        fun ret => do
-                   let tl1 ← back ret
-                   Result.ok (List.Cons x tl1)
-      Result.ok (t, back1)
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_mut_loop]:
    Source: 'tests/src/loops.rs', lines 88:0-88:71 -/
 def list_nth_mut_loop
   (T : Type) (ls : List T) (i : U32) : Result (T × (T → Result (List T))) :=
-  list_nth_mut_loop_loop T ls i
-
-/- [loops::list_nth_shared_loop]: loop 0:
-   Source: 'tests/src/loops.rs', lines 101:0-111:1 -/
-divergent def list_nth_shared_loop_loop
-  (T : Type) (ls : List T) (i : U32) : Result T :=
-  match ls with
-  | List.Cons x tl =>
-    if i = 0#u32
-    then Result.ok x
-    else do
-         let i1 ← i - 1#u32
-         list_nth_shared_loop_loop T tl i1
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_shared_loop]:
    Source: 'tests/src/loops.rs', lines 101:0-101:66 -/
 def list_nth_shared_loop (T : Type) (ls : List T) (i : U32) : Result T :=
-  list_nth_shared_loop_loop T ls i
-
-/- [loops::get_elem_mut]: loop 0:
-   Source: 'tests/src/loops.rs', lines 113:0-127:1 -/
-divergent def get_elem_mut_loop
-  (x : Usize) (ls : List Usize) :
-  Result (Usize × (Usize → Result (List Usize)))
-  :=
-  match ls with
-  | List.Cons y tl =>
-    if y = x
-    then
-      let back := fun ret => Result.ok (List.Cons ret tl)
-      Result.ok (y, back)
-    else
-      do
-      let (i, back) ← get_elem_mut_loop x tl
-      let back1 :=
-        fun ret => do
-                   let tl1 ← back ret
-                   Result.ok (List.Cons y tl1)
-      Result.ok (i, back1)
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::get_elem_mut]:
    Source: 'tests/src/loops.rs', lines 113:0-113:73 -/
@@ -186,35 +105,13 @@ def get_elem_mut
   (slots : alloc.vec.Vec (List Usize)) (x : Usize) :
   Result (Usize × (Usize → Result (alloc.vec.Vec (List Usize))))
   :=
-  do
-  let (ls, index_mut_back) ←
-    alloc.vec.Vec.index_mut (List Usize) Usize
-      (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
-  let (i, back) ← get_elem_mut_loop x ls
-  let back1 := fun ret => do
-                          let l ← back ret
-                          index_mut_back l
-  Result.ok (i, back1)
-
-/- [loops::get_elem_shared]: loop 0:
-   Source: 'tests/src/loops.rs', lines 129:0-143:1 -/
-divergent def get_elem_shared_loop
-  (x : Usize) (ls : List Usize) : Result Usize :=
-  match ls with
-  | List.Cons y tl => if y = x
-                      then Result.ok y
-                      else get_elem_shared_loop x tl
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::get_elem_shared]:
    Source: 'tests/src/loops.rs', lines 129:0-129:68 -/
 def get_elem_shared
   (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize :=
-  do
-  let ls ←
-    alloc.vec.Vec.index (List Usize) Usize
-      (core.slice.index.SliceIndexUsizeSliceTInst (List Usize)) slots 0#usize
-  get_elem_shared_loop x ls
+  sorry
 
 /- [loops::id_mut]:
    Source: 'tests/src/loops.rs', lines 145:0-145:50 -/
@@ -229,90 +126,17 @@ def id_mut
 def id_shared (T : Type) (ls : List T) : Result (List T) :=
   Result.ok ls
 
-/- [loops::list_nth_mut_loop_with_id]: loop 0:
-   Source: 'tests/src/loops.rs', lines 154:0-165:1 -/
-divergent def list_nth_mut_loop_with_id_loop
-  (T : Type) (i : U32) (ls : List T) : Result (T × (T → Result (List T))) :=
-  match ls with
-  | List.Cons x tl =>
-    if i = 0#u32
-    then
-      let back := fun ret => Result.ok (List.Cons ret tl)
-      Result.ok (x, back)
-    else
-      do
-      let i1 ← i - 1#u32
-      let (t, back) ← list_nth_mut_loop_with_id_loop T i1 tl
-      let back1 :=
-        fun ret => do
-                   let tl1 ← back ret
-                   Result.ok (List.Cons x tl1)
-      Result.ok (t, back1)
-  | List.Nil => Result.fail .panic
-
 /- [loops::list_nth_mut_loop_with_id]:
    Source: 'tests/src/loops.rs', lines 154:0-154:75 -/
 def list_nth_mut_loop_with_id
   (T : Type) (ls : List T) (i : U32) : Result (T × (T → Result (List T))) :=
-  do
-  let (ls1, id_mut_back) ← id_mut T ls
-  let (t, back) ← list_nth_mut_loop_with_id_loop T i ls1
-  let back1 := fun ret => do
-                          let l ← back ret
-                          id_mut_back l
-  Result.ok (t, back1)
-
-/- [loops::list_nth_shared_loop_with_id]: loop 0:
-   Source: 'tests/src/loops.rs', lines 168:0-179:1 -/
-divergent def list_nth_shared_loop_with_id_loop
-  (T : Type) (i : U32) (ls : List T) : Result T :=
-  match ls with
-  | List.Cons x tl =>
-    if i = 0#u32
-    then Result.ok x
-    else do
-         let i1 ← i - 1#u32
-         list_nth_shared_loop_with_id_loop T i1 tl
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_shared_loop_with_id]:
    Source: 'tests/src/loops.rs', lines 168:0-168:70 -/
 def list_nth_shared_loop_with_id
   (T : Type) (ls : List T) (i : U32) : Result T :=
-  do
-  let ls1 ← id_shared T ls
-  list_nth_shared_loop_with_id_loop T i ls1
-
-/- [loops::list_nth_mut_loop_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 184:0-205:1 -/
-divergent def list_nth_mut_loop_pair_loop
-  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → Result (List T)) × (T → Result (List T)))
-  :=
-  match ls0 with
-  | List.Cons x0 tl0 =>
-    match ls1 with
-    | List.Cons x1 tl1 =>
-      if i = 0#u32
-      then
-        let back'a := fun ret => Result.ok (List.Cons ret tl0)
-        let back'b := fun ret => Result.ok (List.Cons ret tl1)
-        Result.ok ((x0, x1), back'a, back'b)
-      else
-        do
-        let i1 ← i - 1#u32
-        let (p, back'a, back'b) ← list_nth_mut_loop_pair_loop T tl0 tl1 i1
-        let back'a1 :=
-          fun ret => do
-                     let tl01 ← back'a ret
-                     Result.ok (List.Cons x0 tl01)
-        let back'b1 :=
-          fun ret => do
-                     let tl11 ← back'b ret
-                     Result.ok (List.Cons x1 tl11)
-        Result.ok (p, back'a1, back'b1)
-    | List.Nil => Result.fail .panic
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_mut_loop_pair]:
    Source: 'tests/src/loops.rs', lines 184:0-188:27 -/
@@ -320,59 +144,13 @@ def list_nth_mut_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)) × (T → Result (List T)))
   :=
-  list_nth_mut_loop_pair_loop T ls0 ls1 i
-
-/- [loops::list_nth_shared_loop_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 208:0-229:1 -/
-divergent def list_nth_shared_loop_pair_loop
-  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
-  match ls0 with
-  | List.Cons x0 tl0 =>
-    match ls1 with
-    | List.Cons x1 tl1 =>
-      if i = 0#u32
-      then Result.ok (x0, x1)
-      else do
-           let i1 ← i - 1#u32
-           list_nth_shared_loop_pair_loop T tl0 tl1 i1
-    | List.Nil => Result.fail .panic
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_shared_loop_pair]:
    Source: 'tests/src/loops.rs', lines 208:0-212:19 -/
 def list_nth_shared_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
-  list_nth_shared_loop_pair_loop T ls0 ls1 i
-
-/- [loops::list_nth_mut_loop_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 233:0-248:1 -/
-divergent def list_nth_mut_loop_pair_merge_loop
-  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × ((T × T) → Result ((List T) × (List T))))
-  :=
-  match ls0 with
-  | List.Cons x0 tl0 =>
-    match ls1 with
-    | List.Cons x1 tl1 =>
-      if i = 0#u32
-      then
-        let back :=
-          fun ret =>
-            let (t, t1) := ret
-            Result.ok (List.Cons t tl0, List.Cons t1 tl1)
-        Result.ok ((x0, x1), back)
-      else
-        do
-        let i1 ← i - 1#u32
-        let (p, back) ← list_nth_mut_loop_pair_merge_loop T tl0 tl1 i1
-        let back1 :=
-          fun ret =>
-            do
-            let (tl01, tl11) ← back ret
-            Result.ok (List.Cons x0 tl01, List.Cons x1 tl11)
-        Result.ok (p, back1)
-    | List.Nil => Result.fail .panic
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_mut_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 233:0-237:27 -/
@@ -380,56 +158,13 @@ def list_nth_mut_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × ((T × T) → Result ((List T) × (List T))))
   :=
-  list_nth_mut_loop_pair_merge_loop T ls0 ls1 i
-
-/- [loops::list_nth_shared_loop_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 251:0-266:1 -/
-divergent def list_nth_shared_loop_pair_merge_loop
-  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
-  match ls0 with
-  | List.Cons x0 tl0 =>
-    match ls1 with
-    | List.Cons x1 tl1 =>
-      if i = 0#u32
-      then Result.ok (x0, x1)
-      else
-        do
-        let i1 ← i - 1#u32
-        list_nth_shared_loop_pair_merge_loop T tl0 tl1 i1
-    | List.Nil => Result.fail .panic
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_shared_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 251:0-255:19 -/
 def list_nth_shared_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
-  list_nth_shared_loop_pair_merge_loop T ls0 ls1 i
-
-/- [loops::list_nth_mut_shared_loop_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 269:0-284:1 -/
-divergent def list_nth_mut_shared_loop_pair_loop
-  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → Result (List T)))
-  :=
-  match ls0 with
-  | List.Cons x0 tl0 =>
-    match ls1 with
-    | List.Cons x1 tl1 =>
-      if i = 0#u32
-      then
-        let back := fun ret => Result.ok (List.Cons ret tl0)
-        Result.ok ((x0, x1), back)
-      else
-        do
-        let i1 ← i - 1#u32
-        let (p, back) ← list_nth_mut_shared_loop_pair_loop T tl0 tl1 i1
-        let back1 :=
-          fun ret => do
-                     let tl01 ← back ret
-                     Result.ok (List.Cons x0 tl01)
-        Result.ok (p, back1)
-    | List.Nil => Result.fail .panic
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_mut_shared_loop_pair]:
    Source: 'tests/src/loops.rs', lines 269:0-273:23 -/
@@ -437,33 +172,7 @@ def list_nth_mut_shared_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
   :=
-  list_nth_mut_shared_loop_pair_loop T ls0 ls1 i
-
-/- [loops::list_nth_mut_shared_loop_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 288:0-303:1 -/
-divergent def list_nth_mut_shared_loop_pair_merge_loop
-  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → Result (List T)))
-  :=
-  match ls0 with
-  | List.Cons x0 tl0 =>
-    match ls1 with
-    | List.Cons x1 tl1 =>
-      if i = 0#u32
-      then
-        let back := fun ret => Result.ok (List.Cons ret tl0)
-        Result.ok ((x0, x1), back)
-      else
-        do
-        let i1 ← i - 1#u32
-        let (p, back) ← list_nth_mut_shared_loop_pair_merge_loop T tl0 tl1 i1
-        let back1 :=
-          fun ret => do
-                     let tl01 ← back ret
-                     Result.ok (List.Cons x0 tl01)
-        Result.ok (p, back1)
-    | List.Nil => Result.fail .panic
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_mut_shared_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 288:0-292:23 -/
@@ -471,33 +180,7 @@ def list_nth_mut_shared_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
   :=
-  list_nth_mut_shared_loop_pair_merge_loop T ls0 ls1 i
-
-/- [loops::list_nth_shared_mut_loop_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 307:0-322:1 -/
-divergent def list_nth_shared_mut_loop_pair_loop
-  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → Result (List T)))
-  :=
-  match ls0 with
-  | List.Cons x0 tl0 =>
-    match ls1 with
-    | List.Cons x1 tl1 =>
-      if i = 0#u32
-      then
-        let back := fun ret => Result.ok (List.Cons ret tl1)
-        Result.ok ((x0, x1), back)
-      else
-        do
-        let i1 ← i - 1#u32
-        let (p, back) ← list_nth_shared_mut_loop_pair_loop T tl0 tl1 i1
-        let back1 :=
-          fun ret => do
-                     let tl11 ← back ret
-                     Result.ok (List.Cons x1 tl11)
-        Result.ok (p, back1)
-    | List.Nil => Result.fail .panic
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_shared_mut_loop_pair]:
    Source: 'tests/src/loops.rs', lines 307:0-311:23 -/
@@ -505,33 +188,7 @@ def list_nth_shared_mut_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
   :=
-  list_nth_shared_mut_loop_pair_loop T ls0 ls1 i
-
-/- [loops::list_nth_shared_mut_loop_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 326:0-341:1 -/
-divergent def list_nth_shared_mut_loop_pair_merge_loop
-  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → Result (List T)))
-  :=
-  match ls0 with
-  | List.Cons x0 tl0 =>
-    match ls1 with
-    | List.Cons x1 tl1 =>
-      if i = 0#u32
-      then
-        let back := fun ret => Result.ok (List.Cons ret tl1)
-        Result.ok ((x0, x1), back)
-      else
-        do
-        let i1 ← i - 1#u32
-        let (p, back) ← list_nth_shared_mut_loop_pair_merge_loop T tl0 tl1 i1
-        let back1 :=
-          fun ret => do
-                     let tl11 ← back ret
-                     Result.ok (List.Cons x1 tl11)
-        Result.ok (p, back1)
-    | List.Nil => Result.fail .panic
-  | List.Nil => Result.fail .panic
+  sorry
 
 /- [loops::list_nth_shared_mut_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 326:0-330:23 -/
@@ -539,7 +196,7 @@ def list_nth_shared_mut_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
   :=
-  list_nth_shared_mut_loop_pair_merge_loop T ls0 ls1 i
+  sorry
 
 /- [loops::ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 345:0-349:1 -/

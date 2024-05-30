@@ -76,35 +76,13 @@ let rec list_nth_mut
     | CList_CNil -> Fail Failure
     end
 
-(** [demo::list_nth_mut1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 69:0-78:1 *)
-let rec list_nth_mut1_loop
-  (t : Type0) (n : nat) (l : cList_t t) (i : u32) :
-  result (t & (t -> result (cList_t t)))
-  =
-  if is_zero n
-  then Fail OutOfFuel
-  else
-    let n1 = decrease n in
-    begin match l with
-    | CList_CCons x tl ->
-      if i = 0
-      then let back = fun ret -> Ok (CList_CCons ret tl) in Ok (x, back)
-      else
-        let* i1 = u32_sub i 1 in
-        let* (x1, back) = list_nth_mut1_loop t n1 tl i1 in
-        let back1 = fun ret -> let* tl1 = back ret in Ok (CList_CCons x tl1) in
-        Ok (x1, back1)
-    | CList_CNil -> Fail Failure
-    end
-
 (** [demo::list_nth_mut1]:
     Source: 'tests/src/demo.rs', lines 69:0-69:77 *)
 let list_nth_mut1
   (t : Type0) (n : nat) (l : cList_t t) (i : u32) :
   result (t & (t -> result (cList_t t)))
   =
-  list_nth_mut1_loop t n l i
+  admit
 
 (** [demo::i32_id]:
     Source: 'tests/src/demo.rs', lines 80:0-80:28 *)

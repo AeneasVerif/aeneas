@@ -375,58 +375,15 @@ Definition non_copyable_array : result unit :=
   take_array_t (mk_array AB_t 2%usize [ AB_A; AB_B ])
 .
 
-(** [arrays::sum]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 242:0-250:1 *)
-Fixpoint sum_loop
-  (n : nat) (s : slice u32) (sum1 : u32) (i : usize) : result u32 :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n1 =>
-    let i1 := slice_len u32 s in
-    if i s< i1
-    then (
-      i2 <- slice_index_usize u32 s i;
-      sum3 <- u32_add sum1 i2;
-      i3 <- usize_add i 1%usize;
-      sum_loop n1 s sum3 i3)
-    else Ok sum1
-  end
-.
-
 (** [arrays::sum]:
     Source: 'tests/src/arrays.rs', lines 242:0-242:28 *)
 Definition sum (n : nat) (s : slice u32) : result u32 :=
-  sum_loop n s 0%u32 0%usize
-.
-
-(** [arrays::sum2]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 252:0-261:1 *)
-Fixpoint sum2_loop
-  (n : nat) (s : slice u32) (s2 : slice u32) (sum1 : u32) (i : usize) :
-  result u32
-  :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n1 =>
-    let i1 := slice_len u32 s in
-    if i s< i1
-    then (
-      i2 <- slice_index_usize u32 s i;
-      i3 <- slice_index_usize u32 s2 i;
-      i4 <- u32_add i2 i3;
-      sum3 <- u32_add sum1 i4;
-      i5 <- usize_add i 1%usize;
-      sum2_loop n1 s s2 sum3 i5)
-    else Ok sum1
-  end
-.
+  admit.
 
 (** [arrays::sum2]:
     Source: 'tests/src/arrays.rs', lines 252:0-252:41 *)
 Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
-  let i := slice_len u32 s in
-  let i1 := slice_len u32 s2 in
-  if negb (i s= i1) then Fail_ Failure else sum2_loop n s s2 0%u32 0%usize
+  admit
 .
 
 (** [arrays::f0]:
@@ -507,29 +464,10 @@ Definition ite : result unit :=
   Ok tt
 .
 
-(** [arrays::zero_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 303:0-310:1 *)
-Fixpoint zero_slice_loop
-  (n : nat) (a : slice u8) (i : usize) (len : usize) : result (slice u8) :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n1 =>
-    if i s< len
-    then (
-      p <- slice_index_mut_usize u8 a i;
-      let (_, index_mut_back) := p in
-      i1 <- usize_add i 1%usize;
-      a1 <- index_mut_back 0%u8;
-      zero_slice_loop n1 a1 i1 len)
-    else Ok a
-  end
-.
-
 (** [arrays::zero_slice]:
     Source: 'tests/src/arrays.rs', lines 303:0-303:31 *)
 Definition zero_slice (n : nat) (a : slice u8) : result (slice u8) :=
-  let len := slice_len u8 a in zero_slice_loop n a 0%usize len
-.
+  admit.
 
 (** [arrays::iter_mut_slice]: loop 0:
     Source: 'tests/src/arrays.rs', lines 312:0-318:1 *)

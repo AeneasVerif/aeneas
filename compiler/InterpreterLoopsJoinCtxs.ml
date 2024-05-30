@@ -122,8 +122,13 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
       i -> s@7 : u32
       abs@4 { MB l0, ML l4 }
     ]}
+
+    If [merge_funs] is None, we ensure that there are no markers in the environments.
+    If [merge_funs] is Some _, we merge environments that contain borrow/loan pairs with the same markers, omitting
+    pairs with the PNone marker (i.e., no marker)
  *)
-let reduce_ctx (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
+let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
+    (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
     (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
   log#ldebug
@@ -131,6 +136,8 @@ let reduce_ctx (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
       ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- ctx0:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx0
       ^ "\n\n"));
+
+  let allow_markers = merge_funs <> None in
 
   let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
@@ -212,49 +219,53 @@ let reduce_ctx (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
       let bids = MarkerBorrowId.Set.elements bids in
       List.iter
         (fun bid ->
+          if not allow_markers then
+            sanity_check __FILE__ __LINE__ (fst bid = PNone) span;
           match MarkerBorrowId.Map.find_opt bid loan_to_abs with
           | None -> (* Nothing to do *) ()
           | Some abs_ids1 ->
-              AbstractionId.Set.iter
-                (fun abs_id1 ->
-                  (* We need to merge - unless we have already merged *)
-                  (* First, find the representatives for the two abstractions (the
-                     representative is the abstraction into which we merged) *)
-                  let abs_ref0 =
-                    UnionFind.find (AbstractionId.Map.find abs_id0 merged_abs)
-                  in
-                  let abs_id0 = UnionFind.get abs_ref0 in
-                  let abs_ref1 =
-                    UnionFind.find (AbstractionId.Map.find abs_id1 merged_abs)
-                  in
-                  let abs_id1 = UnionFind.get abs_ref1 in
-                  (* If the two ids are the same, it means the abstractions were already merged *)
-                  if abs_id0 = abs_id1 then ()
-                  else (
-                    (* We actually need to merge the abstractions *)
-
-                    (* Debug *)
-                    log#ldebug
-                      (lazy
-                        ("reduce_ctx: merging abstraction "
-                        ^ AbstractionId.to_string abs_id1
-                        ^ " into "
-                        ^ AbstractionId.to_string abs_id0
-                        ^ ":\n\n"
-                        ^ eval_ctx_to_string ~span:(Some span) !ctx));
-
-                    (* Update the environment - pay attention to the order: we
-                       we merge [abs_id1] *into* [abs_id0] *)
-                    let nctx, abs_id =
-                      merge_into_abstraction span abs_kind can_end None !ctx
-                        abs_id1 abs_id0
+              if allow_markers && fst bid = PNone then ()
+              else
+                AbstractionId.Set.iter
+                  (fun abs_id1 ->
+                    (* We need to merge - unless we have already merged *)
+                    (* First, find the representatives for the two abstractions (the
+                       representative is the abstraction into which we merged) *)
+                    let abs_ref0 =
+                      UnionFind.find (AbstractionId.Map.find abs_id0 merged_abs)
                     in
-                    ctx := nctx;
+                    let abs_id0 = UnionFind.get abs_ref0 in
+                    let abs_ref1 =
+                      UnionFind.find (AbstractionId.Map.find abs_id1 merged_abs)
+                    in
+                    let abs_id1 = UnionFind.get abs_ref1 in
+                    (* If the two ids are the same, it means the abstractions were already merged *)
+                    if abs_id0 = abs_id1 then ()
+                    else (
+                      (* We actually need to merge the abstractions *)
 
-                    (* Update the union find *)
-                    let abs_ref_merged = UnionFind.union abs_ref0 abs_ref1 in
-                    UnionFind.set abs_ref_merged abs_id))
-                abs_ids1)
+                      (* Debug *)
+                      log#ldebug
+                        (lazy
+                          ("reduce_ctx: merging abstraction "
+                          ^ AbstractionId.to_string abs_id1
+                          ^ " into "
+                          ^ AbstractionId.to_string abs_id0
+                          ^ ":\n\n"
+                          ^ eval_ctx_to_string ~span:(Some span) !ctx));
+
+                      (* Update the environment - pay attention to the order: we
+                         we merge [abs_id1] *into* [abs_id0] *)
+                      let nctx, abs_id =
+                        merge_into_abstraction span abs_kind can_end merge_funs
+                          !ctx abs_id1 abs_id0
+                      in
+                      ctx := nctx;
+
+                      (* Update the union find *)
+                      let abs_ref_merged = UnionFind.union abs_ref0 abs_ref1 in
+                      UnionFind.set abs_ref_merged abs_id))
+                  abs_ids1)
         bids)
     abs_ids;
 
@@ -278,8 +289,11 @@ let reduce_ctx (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
   (* Return the new context *)
   ctx
 
+(* Reduce_ctx can only be called in a context with no markers *)
+let reduce_ctx = reduce_ctx_with_markers None
+
 (* TODO Adapt and comment *)
-let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
+let collapse_ctx_markers (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
     : eval_ctx =
   (* Debug *)
@@ -296,62 +310,20 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
   let is_fresh_abs_id (id : AbstractionId.id) : bool =
     not (AbstractionId.Set.mem id old_ids.aids)
   in
-  let is_fresh_did (id : DummyVarId.id) : bool =
-    not (DummyVarId.Set.mem id old_ids.dids)
-  in
-  (* Convert the dummy values to abstractions (note that when we convert
-     values to abstractions, the resulting abstraction should be destructured) *)
-  (* Note that we preserve the order of the dummy values: we replace them with
-     abstractions in place - this makes matching easier *)
-  let env =
-    List.concat
-      (List.map
-         (fun ee ->
-           match ee with
-           | EAbs _ | EFrame | EBinding (BVar _, _) -> [ ee ]
-           | EBinding (BDummy id, v) ->
-               if is_fresh_did id then
-                 let absl =
-                   convert_value_to_abstractions span abs_kind can_end
-                     destructure_shared_values ctx0 v
-                 in
-                 List.map (fun abs -> EAbs abs) absl
-               else [ ee ])
-         ctx0.env)
-  in
-  let ctx = { ctx0 with env } in
-  log#ldebug
-    (lazy
-      ("collapse_ctx: after converting values to abstractions:\n"
-     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
-
-  log#ldebug
-    (lazy
-      ("collapse_ctx: after decomposing the shared values in the abstractions:\n"
-     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
 
   (* Explore all the *new* abstractions, and compute various maps *)
   let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
-  let ids_maps = compute_abs_borrows_loans_maps span false explore env in
+  let ids_maps = compute_abs_borrows_loans_maps span false explore ctx0.env in
   let {
     abs_ids;
     abs_to_borrows;
-    abs_to_loans = _;
+    abs_to_loans;
     abs_to_borrows_loans;
-    borrow_to_abs = _;
+    borrow_to_abs;
     loan_to_abs;
     borrow_loan_to_abs;
   } =
     ids_maps
-  in
-
-  (* Change the merging behaviour depending on the input parameters *)
-  let abs_to_borrows, loan_to_abs =
-    (abs_to_borrows_loans, borrow_loan_to_abs)
   in
 
   (* Merge the abstractions together *)
@@ -360,64 +332,131 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
       (List.map (fun id -> (id, UnionFind.make id)) abs_ids)
   in
 
-  let ctx = ref ctx in
+  let ctx = ref ctx0 in
 
-  (* Merge all the mergeable abs.
+  let invert_proj_marker = function
+    | PNone -> craise __FILE__ __LINE__ span "Unreachable"
+    | PLeft -> PRight
+    | PRight -> PLeft
+  in
 
-     We iterate over the abstractions, then over the borrows in the abstractions.
-     We do this because we want to control the order in which abstractions
-     are merged (the ids are iterated in increasing order). Otherwise, we
-     could simply iterate over all the borrows in [borrow_to_abs]...
+  (* Merge all the mergeable abs where the same element in present in both abs,
+     but with left and right markers respectively.
+
+     We first check all borrows, then all loans
   *)
   List.iter
     (fun abs_id0 ->
       let bids = AbstractionId.Map.find abs_id0 abs_to_borrows in
       let bids = MarkerBorrowId.Set.elements bids in
       List.iter
-        (fun bid ->
-          match MarkerBorrowId.Map.find_opt bid loan_to_abs with
-          | None -> (* Nothing to do *) ()
-          | Some abs_ids1 ->
-              AbstractionId.Set.iter
-                (fun abs_id1 ->
-                  (* We need to merge - unless we have already merged *)
-                  (* First, find the representatives for the two abstractions (the
-                     representative is the abstraction into which we merged) *)
-                  let abs_ref0 =
-                    UnionFind.find (AbstractionId.Map.find abs_id0 merged_abs)
-                  in
-                  let abs_id0 = UnionFind.get abs_ref0 in
-                  let abs_ref1 =
-                    UnionFind.find (AbstractionId.Map.find abs_id1 merged_abs)
-                  in
-                  let abs_id1 = UnionFind.get abs_ref1 in
-                  (* If the two ids are the same, it means the abstractions were already merged *)
-                  if abs_id0 = abs_id1 then ()
-                  else (
-                    (* We actually need to merge the abstractions *)
-
-                    (* Debug *)
-                    log#ldebug
-                      (lazy
-                        ("collapse_ctx: merging abstraction "
-                        ^ AbstractionId.to_string abs_id1
-                        ^ " into "
-                        ^ AbstractionId.to_string abs_id0
-                        ^ ":\n\n"
-                        ^ eval_ctx_to_string ~span:(Some span) !ctx));
-
-                    (* Update the environment - pay attention to the order: we
-                       we merge [abs_id1] *into* [abs_id0] *)
-                    let nctx, abs_id =
-                      merge_into_abstraction span abs_kind can_end
-                        (Some merge_funs) !ctx abs_id1 abs_id0
+        (fun (pm, bid) ->
+          if pm = PNone then ()
+          else
+            (* We are looking for an element with the same borrow_id, but with the dual marker *)
+            match
+              MarkerBorrowId.Map.find_opt
+                (invert_proj_marker pm, bid)
+                borrow_to_abs
+            with
+            | None -> (* Nothing to do *) ()
+            | Some abs_ids1 ->
+                AbstractionId.Set.iter
+                  (fun abs_id1 ->
+                    (* We need to merge - unless we have already merged *)
+                    (* First, find the representatives for the two abstractions (the
+                       representative is the abstraction into which we merged) *)
+                    let abs_ref0 =
+                      UnionFind.find (AbstractionId.Map.find abs_id0 merged_abs)
                     in
-                    ctx := nctx;
+                    let abs_id0 = UnionFind.get abs_ref0 in
+                    let abs_ref1 =
+                      UnionFind.find (AbstractionId.Map.find abs_id1 merged_abs)
+                    in
+                    let abs_id1 = UnionFind.get abs_ref1 in
+                    (* If the two ids are the same, it means the abstractions were already merged *)
+                    if abs_id0 = abs_id1 then ()
+                    else (
+                      (* We actually need to merge the abstractions *)
 
-                    (* Update the union find *)
-                    let abs_ref_merged = UnionFind.union abs_ref0 abs_ref1 in
-                    UnionFind.set abs_ref_merged abs_id))
-                abs_ids1)
+                      (* Debug *)
+                      log#ldebug
+                        (lazy
+                          ("collapse_ctx: merging abstraction "
+                          ^ AbstractionId.to_string abs_id1
+                          ^ " into "
+                          ^ AbstractionId.to_string abs_id0
+                          ^ ":\n\n"
+                          ^ eval_ctx_to_string ~span:(Some span) !ctx));
+
+                      (* Update the environment - pay attention to the order: we
+                         we merge [abs_id1] *into* [abs_id0] *)
+                      let nctx, abs_id =
+                        merge_into_abstraction span abs_kind can_end
+                          (Some merge_funs) !ctx abs_id1 abs_id0
+                      in
+                      ctx := nctx;
+
+                      (* Update the union find *)
+                      let abs_ref_merged = UnionFind.union abs_ref0 abs_ref1 in
+                      UnionFind.set abs_ref_merged abs_id))
+                  abs_ids1)
+        bids;
+      (* We now traverse the loans *)
+      let bids = AbstractionId.Map.find abs_id0 abs_to_loans in
+      let bids = MarkerBorrowId.Set.elements bids in
+      List.iter
+        (fun (pm, bid) ->
+          if pm = PNone then ()
+          else
+            (* We are looking for an element with the same borrow_id, but with the dual marker *)
+            match
+              MarkerBorrowId.Map.find_opt
+                (invert_proj_marker pm, bid)
+                loan_to_abs
+            with
+            | None -> (* Nothing to do *) ()
+            | Some abs_ids1 ->
+                AbstractionId.Set.iter
+                  (fun abs_id1 ->
+                    (* We need to merge - unless we have already merged *)
+                    (* First, find the representatives for the two abstractions (the
+                       representative is the abstraction into which we merged) *)
+                    let abs_ref0 =
+                      UnionFind.find (AbstractionId.Map.find abs_id0 merged_abs)
+                    in
+                    let abs_id0 = UnionFind.get abs_ref0 in
+                    let abs_ref1 =
+                      UnionFind.find (AbstractionId.Map.find abs_id1 merged_abs)
+                    in
+                    let abs_id1 = UnionFind.get abs_ref1 in
+                    (* If the two ids are the same, it means the abstractions were already merged *)
+                    if abs_id0 = abs_id1 then ()
+                    else (
+                      (* We actually need to merge the abstractions *)
+
+                      (* Debug *)
+                      log#ldebug
+                        (lazy
+                          ("collapse_ctx: merging abstraction "
+                          ^ AbstractionId.to_string abs_id1
+                          ^ " into "
+                          ^ AbstractionId.to_string abs_id0
+                          ^ ":\n\n"
+                          ^ eval_ctx_to_string ~span:(Some span) !ctx));
+
+                      (* Update the environment - pay attention to the order: we
+                         we merge [abs_id1] *into* [abs_id0] *)
+                      let nctx, abs_id =
+                        merge_into_abstraction span abs_kind can_end
+                          (Some merge_funs) !ctx abs_id1 abs_id0
+                      in
+                      ctx := nctx;
+
+                      (* Update the union find *)
+                      let abs_ref_merged = UnionFind.union abs_ref0 abs_ref1 in
+                      UnionFind.set abs_ref_merged abs_id))
+                  abs_ids1)
         bids)
     abs_ids;
 
@@ -440,6 +479,25 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
 
   (* Return the new context *)
   ctx
+
+(* Collapse two environments containing projection markers; this function is called after
+   joining environments.
+
+   The collapse is done in two steps.
+   First, we reduce the environment, merging for instance abstractions containing MB l0 _ and ML l0,
+   when both elements have the same marker, e.g., PNone, PLeft, or PRight.
+
+   Second, we merge abstractions containing the same element with left and right markers respectively.
+
+   At the end of the second step, all markers should have been removed from the resulting environment.
+*)
+let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
+    (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
+    : eval_ctx =
+  let ctx =
+    reduce_ctx_with_markers (Some merge_funs) span loop_id old_ids ctx0
+  in
+  collapse_ctx_markers span loop_id merge_funs old_ids ctx
 
 let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     (loop_id : LoopId.id) (ctx : eval_ctx) : merge_duplicates_funcs =
@@ -466,9 +524,6 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
     sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
 
-    (* TODO: Handle markers *)
-    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
        the one from the left), because we will merge those regions together
@@ -493,9 +548,6 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
         span
     in
 
-    (* TODO: Handle markers *)
-    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let value = ABorrow (ASharedBorrow (PNone, id)) in
@@ -506,8 +558,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
     sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
-    (* TODO: Handle markers *)
-    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
+
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let child = child0 in
@@ -530,8 +581,6 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     sanity_check __FILE__ __LINE__
       (not (value_has_loans_or_borrows ctx sv1.value))
       span;
-    (* TODO: Handle markers *)
-    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
 
     let ty = ty0 in
     let child = child0 in
@@ -670,10 +719,9 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       | x -> x
     in
 
-    (* TODO: Readd this
-       let env0 = List.map (add_marker PLeft) env0 in
-       let env1 = List.map (add_marker PRight) env1 in
-    *)
+    let env0 = List.map (add_marker PLeft) env0 in
+    let env1 = List.map (add_marker PRight) env1 in
+
     List.iter check_valid env0;
     List.iter check_valid env1;
     (* Concatenate the suffixes and append the abstractions introduced while
