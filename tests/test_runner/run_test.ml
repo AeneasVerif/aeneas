@@ -1,15 +1,3 @@
-(* Convenience functions *)
-let map_while (f : 'a -> 'b option) (input : 'a list) : 'b list =
-  let _, result =
-    List.fold_left
-      (fun (continue, out) a ->
-        if continue then
-          match f a with None -> (false, out) | Some b -> (true, b :: out)
-        else (continue, out))
-      (true, []) input
-  in
-  List.rev result
-
 (* Paths to use for tests *)
 type runner_env = {
   charon_path : string;
@@ -17,47 +5,6 @@ type runner_env = {
   llbc_dir : string;
   dest_dir : string;
 }
-
-module Backend = struct
-  type t = Coq | Lean | FStar | HOL4 [@@deriving ord, sexp]
-
-  (* TODO: reactivate HOL4 once traits are parameterized by their associated types *)
-  let all = [ Coq; Lean; FStar ]
-
-  let of_string = function
-    | "coq" -> Coq
-    | "lean" -> Lean
-    | "fstar" -> FStar
-    | "hol4" -> HOL4
-    | backend -> failwith ("Unknown backend: `" ^ backend ^ "`")
-
-  let to_string = function
-    | Coq -> "coq"
-    | Lean -> "lean"
-    | FStar -> "fstar"
-    | HOL4 -> "hol4"
-end
-
-module BackendMap = struct
-  include Map.Make (Backend)
-
-  (* Make a new map with one entry per backend, given by `f` *)
-  let make (f : Backend.t -> 'a) : 'a t =
-    List.fold_left
-      (fun map backend -> add backend (f backend) map)
-      empty Backend.all
-
-  (* Set this value for all the backends in `backends` *)
-  let add_each (backends : Backend.t list) (v : 'a) (map : 'a t) : 'a t =
-    List.fold_left (fun map backend -> add backend v map) map backends
-
-  (* Updates all the backends in `backends` with `f` *)
-  let update_each (backends : Backend.t list) (f : 'a -> 'a) (map : 'a t) : 'a t
-      =
-    List.fold_left
-      (fun map backend -> update backend (Option.map f) map)
-      map backends
-end
 
 let concat_path = List.fold_left Filename.concat ""
 
@@ -100,139 +47,6 @@ module Command = struct
     | Failure -> ()
 end
 
-(* The data for a specific test input *)
-module Input = struct
-  type kind = SingleFile | Crate
-  type action = Normal | Skip | KnownFailure
-
-  type t = {
-    name : string;
-    path : string;
-    kind : kind;
-    actions : action BackendMap.t;
-    charon_options : string list;
-    aeneas_options : string list BackendMap.t;
-    subdirs : string BackendMap.t;
-    (* Whether to store the command output to a file. Only available for known-failure tests. *)
-    check_output : bool BackendMap.t;
-  }
-
-  (* The default subdirectory in which to store the outputs. *)
-  let default_subdir backend test_name =
-    match backend with Backend.Lean -> "." | _ -> test_name
-
-  (* Parse lines that start `//@`. Each of them modifies the options we use for the test.
-     Supported comments:
-       - `skip`: don't process the file;
-       - `known-failure`: TODO;
-       - `subdir=...: set the subdirectory in which to store the outputs.
-            Defaults to nothing for lean and to the test name for other backends;
-       - `charon-args=...`: extra arguments to pass to charon;
-       - `aeneas-args=...`: extra arguments to pass to aeneas;
-       - `[backend,..]...`: where each `backend` is the name of a backend supported by
-            aeneas; this sets options for these backends only.
-  *)
-  let apply_special_comment comment input =
-    let comment = String.trim comment in
-    (* Parse the backends if any *)
-    let re = Re.compile (Re.Pcre.re "^\\[([a-zA-Z,]+)\\](.*)$") in
-    let comment, (backends : Backend.t list) =
-      match Re.exec_opt re comment with
-      | Some groups ->
-          let backends = Re.Group.get groups 1 in
-          let backends = String.split_on_char ',' backends in
-          let backends = List.map Backend.of_string backends in
-          let rest = Re.Group.get groups 2 in
-          (String.trim rest, backends)
-      | None -> (comment, Backend.all)
-    in
-    (* Parse the other options *)
-    let charon_args = Core.String.chop_prefix comment ~prefix:"charon-args=" in
-    let aeneas_args = Core.String.chop_prefix comment ~prefix:"aeneas-args=" in
-    let subdir = Core.String.chop_prefix comment ~prefix:"subdir=" in
-
-    if comment = "skip" then
-      { input with actions = BackendMap.add_each backends Skip input.actions }
-    else if comment = "known-failure" then
-      {
-        input with
-        actions = BackendMap.add_each backends KnownFailure input.actions;
-      }
-    else if comment = "no-check-output" then
-      {
-        input with
-        check_output = BackendMap.add_each backends false input.check_output;
-      }
-    else if Option.is_some charon_args then
-      let args = Option.get charon_args in
-      let args = String.split_on_char ' ' args in
-      if backends != Backend.all then
-        failwith "Cannot set per-backend charon-args"
-      else { input with charon_options = List.append input.charon_options args }
-    else if Option.is_some aeneas_args then
-      let args = Option.get aeneas_args in
-      let args = String.split_on_char ' ' args in
-      let add_args opts = List.append opts args in
-      {
-        input with
-        aeneas_options =
-          BackendMap.update_each backends add_args input.aeneas_options;
-      }
-    else if Option.is_some subdir then
-      let subdir = Option.get subdir in
-      { input with subdirs = BackendMap.add_each backends subdir input.subdirs }
-    else failwith ("Unrecognized special comment: `" ^ comment ^ "`")
-
-  (* Given a path to a rust file or crate, gather the details and options about how to build the test. *)
-  let build (path : string) : t =
-    let name = Filename.remove_extension (Filename.basename path) in
-    let name = Str.global_replace (Str.regexp "-") "_" name in
-    let kind =
-      if Sys_unix.is_file_exn path then SingleFile
-      else if Sys_unix.is_directory_exn path then Crate
-      else failwith ("`" ^ path ^ "` is not a file or a directory.")
-    in
-    let actions = BackendMap.make (fun _ -> Normal) in
-    let subdirs =
-      BackendMap.make (fun backend -> default_subdir backend name)
-    in
-    let aeneas_options = BackendMap.make (fun _ -> []) in
-    let check_output = BackendMap.make (fun _ -> true) in
-    let input =
-      {
-        path;
-        name;
-        kind;
-        actions;
-        charon_options = [];
-        subdirs;
-        aeneas_options;
-        check_output;
-      }
-    in
-    (* For crates, we store the special comments in a separate file. *)
-    let crate_config_file = Filename.concat path "aeneas-test-options" in
-    match kind with
-    | SingleFile ->
-        let file_lines = Core.In_channel.read_lines path in
-        (* Extract the special lines. Stop at the first non-special line. *)
-        let special_comments =
-          map_while
-            (fun line -> Core.String.chop_prefix line ~prefix:"//@")
-            file_lines
-        in
-        (* Apply the changes from the special lines to our input. *)
-        List.fold_left
-          (fun input comment -> apply_special_comment comment input)
-          input special_comments
-    | Crate when Sys.file_exists crate_config_file ->
-        let special_comments = Core.In_channel.read_lines crate_config_file in
-        List.fold_left
-          (fun input comment -> apply_special_comment comment input)
-          input special_comments
-    | Crate -> input
-end
-
 (* Run Aeneas on a specific input with the given options *)
 let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   let backend_str = Backend.to_string backend in
@@ -240,11 +54,12 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   let output_file =
     Filename.remove_extension case.path ^ "." ^ backend_str ^ ".out"
   in
-  let subdir = BackendMap.find backend case.subdirs in
+  let per_backend = Backend.Map.find backend case.per_backend in
+  let subdir = per_backend.subdir in
+  let check_output = per_backend.check_output in
+  let aeneas_options = per_backend.aeneas_options in
+  let action = per_backend.action in
   let dest_dir = concat_path [ env.dest_dir; backend_str; subdir ] in
-  let aeneas_options = BackendMap.find backend case.aeneas_options in
-  let action = BackendMap.find backend case.actions in
-  let check_output = BackendMap.find backend case.check_output in
 
   (* Build the command *)
   let args =
@@ -331,14 +146,21 @@ let () =
       let test_case =
         {
           test_case with
-          aeneas_options =
-            BackendMap.map (List.append aeneas_options) test_case.aeneas_options;
+          per_backend =
+            Backend.Map.map
+              (fun x ->
+                {
+                  x with
+                  Input.aeneas_options =
+                    List.append aeneas_options x.Input.aeneas_options;
+                })
+              test_case.per_backend;
         }
       in
       let skip_all =
         List.for_all
           (fun backend ->
-            BackendMap.find backend test_case.actions = Input.Skip)
+            (Backend.Map.find backend test_case.per_backend).action = Input.Skip)
           Backend.all
       in
       if skip_all then ()
