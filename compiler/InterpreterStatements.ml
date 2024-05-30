@@ -306,7 +306,9 @@ let get_assumed_function_return_type (span : Meta.span) (ctx : eval_ctx)
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
-    typed_value option * eval_ctx * (eval_result -> eval_result) =
+    typed_value option
+    * eval_ctx
+    * (SymbolicAst.expression -> SymbolicAst.expression) =
   if pop_return_value then
     let ret_vid = VarId.zero in
     let v, ctx, cc =
@@ -317,7 +319,9 @@ let move_return_value (config : config) (span : Meta.span)
 
 let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     (ctx : eval_ctx) :
-    typed_value option * eval_ctx * (eval_result -> eval_result) =
+    typed_value option
+    * eval_ctx
+    * (SymbolicAst.expression -> SymbolicAst.expression) =
   (* Debug *)
   log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
 

@@ -105,7 +105,9 @@ let eval_loop_symbolic (config : config) (span : span)
      will end with a call to the loop translation
   *)
   let ((res_fun_end, cf_fun_end), fp_bl_corresp) :
-      ((eval_ctx * statement_eval_res) * (eval_result -> eval_result)) * _ =
+      ((eval_ctx * statement_eval_res)
+      * (SymbolicAst.expression -> SymbolicAst.expression))
+      * _ =
     (* First, preemptively end borrows/move values by matching the current
        context with the target context *)
     let ctx, cf_prepare =
@@ -158,7 +160,7 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Synthesize the loop body *)
   let (resl_loop_body, cf_loop_body) :
       (eval_ctx * statement_eval_res) list
-      * (SymbolicAst.expression list -> eval_result) =
+      * (SymbolicAst.expression list -> SymbolicAst.expression) =
     (* First, evaluate the loop body starting from the **fixed-point** context *)
     let ctx_resl, cf_loop = eval_loop_body fp_ctx in
 
@@ -198,7 +200,7 @@ let eval_loop_symbolic (config : config) (span : span)
 
     (* Apply and compose *)
     let ctx_resl, cfl = List.split (List.map eval_after_loop_iter ctx_resl) in
-    let cc (el : SymbolicAst.expression list) : eval_result =
+    let cc (el : SymbolicAst.expression list) : SymbolicAst.expression =
       let el = List.map (fun (cf, e) -> cf e) (List.combine cfl el) in
       cf_loop el
     in

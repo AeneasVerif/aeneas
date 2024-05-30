@@ -446,8 +446,7 @@ let expand_symbolic_value_borrow (config : config) (span : Meta.span)
 let expand_symbolic_bool (config : config) (span : Meta.span)
     (sv : symbolic_value) (sv_place : SA.mplace option) :
     eval_ctx ->
-    (eval_ctx * eval_ctx)
-    * (SymbolicAst.expression * SymbolicAst.expression -> eval_result) =
+    (eval_ctx * eval_ctx) * (SA.expression * SA.expression -> SA.expression) =
  fun ctx ->
   (* Compute the expanded value *)
   let original_sv = sv in
@@ -533,7 +532,7 @@ let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
 
 let expand_symbolic_adt (config : config) (span : Meta.span)
     (sv : symbolic_value) (sv_place : SA.mplace option) :
-    eval_ctx -> eval_ctx list * (SymbolicAst.expression list -> eval_result) =
+    eval_ctx -> eval_ctx list * (SA.expression list -> SA.expression) =
  fun ctx ->
   (* Debug *)
   log#ldebug (lazy ("expand_symbolic_adt:" ^ symbolic_value_to_string ctx sv));
@@ -568,7 +567,7 @@ let expand_symbolic_int (config : config) (span : Meta.span)
     (int_type : integer_type) (tgts : scalar_value list) :
     eval_ctx ->
     (eval_ctx list * eval_ctx)
-    * (SymbolicAst.expression list * SymbolicAst.expression -> eval_result) =
+    * (SA.expression list * SA.expression -> SA.expression) =
  fun ctx ->
   (* Sanity check *)
   sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TInteger int_type)) span;

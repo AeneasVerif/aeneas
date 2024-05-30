@@ -35,9 +35,6 @@ type statement_eval_res =
        *)
 [@@deriving show]
 
-(* TODO: remove *)
-type eval_result = SymbolicAst.expression
-
 (** Function which takes a context as input, and evaluates to:
     - a new context
     - a continuation with which to build the execution trace, provided the

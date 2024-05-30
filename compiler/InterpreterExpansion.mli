@@ -38,7 +38,7 @@ val expand_symbolic_adt :
   symbolic_value ->
   SA.mplace option ->
   eval_ctx ->
-  eval_ctx list * (SymbolicAst.expression list -> eval_result)
+  eval_ctx list * (SA.expression list -> SA.expression)
 
 (** Expand a symbolic boolean.
 
@@ -50,8 +50,7 @@ val expand_symbolic_bool :
   symbolic_value ->
   SA.mplace option ->
   eval_ctx ->
-  (eval_ctx * eval_ctx)
-  * (SymbolicAst.expression * SymbolicAst.expression -> eval_result)
+  (eval_ctx * eval_ctx) * (SA.expression * SA.expression -> SA.expression)
 
 (** Symbolic integers are expanded upon evaluating a [SwitchInt].
 
@@ -76,7 +75,7 @@ val expand_symbolic_int :
   scalar_value list ->
   eval_ctx ->
   (eval_ctx list * eval_ctx)
-  * (SymbolicAst.expression list * SymbolicAst.expression -> eval_result)
+  * (SA.expression list * SA.expression -> SA.expression)
 
 (** If this mode is activated through the [config], greedily expand the symbolic
     values which need to be expanded. See {!type:Contexts.config} for more information.
