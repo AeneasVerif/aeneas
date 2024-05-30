@@ -1653,7 +1653,6 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         (* Explore the loan content *)
         match lc with
         | ASharedLoan (pm, bids, sv, child_av) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
               (not (value_has_borrows ctx sv.value))
@@ -1676,7 +1675,6 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                signature) *)
             List.iter push avl
         | AMutLoan (pm, bid, child_av) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the whole loan *)
@@ -1709,7 +1707,6 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         (* Explore the borrow content *)
         match bc with
         | AMutBorrow (pm, bid, child_av) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the borrow *)
@@ -1717,7 +1714,6 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             let value = ABorrow (AMutBorrow (pm, bid, ignored)) in
             push { value; ty }
         | ASharedBorrow (pm, _) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Nothing specific to do: keep the value as it is *)
             push av
         | AIgnoredMutBorrow (opt_bid, child_av) ->
