@@ -152,7 +152,7 @@ module Values = struct
     match pm with
     | PNone -> s
     | PLeft -> "|" ^ s ^ "|"
-    | PRight -> "┊" ^ s ^ "┊"
+    | PRight -> "︙" ^ s ^ "︙"
 
   let rec typed_avalue_to_string ?(span : Meta.span option = None)
       (env : fmt_env) (v : typed_avalue) : string =
