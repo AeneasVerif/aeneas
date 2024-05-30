@@ -1021,7 +1021,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
         let eval_loop_body = eval_statement config loop_body in
         InterpreterLoops.eval_loop config st.span eval_loop_body ctx
     | Switch switch -> eval_switch config st.span switch ctx
-    | Error -> internal_error __FILE__ __LINE__ st.span
+    | Error s -> craise __FILE__ __LINE__ st.span s
   in
   (* Compose and apply *)
   (stl, cc_comp cc cf_eval_st)
