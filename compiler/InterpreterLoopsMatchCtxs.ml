@@ -666,14 +666,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
-      let mk_aborrow (bid : borrow_id) (bv : typed_value) : typed_avalue =
+      let mk_aborrow (pm : proj_marker) (bid : borrow_id) (bv : typed_value) :
+          typed_avalue =
         let bv_ty = bv.ty in
         cassert __FILE__ __LINE__ (ty_no_regions bv_ty) span
           "Nested borrows are not supported yet";
-        let value = ABorrow (AMutBorrow (PNone, bid, mk_aignored span bv_ty)) in
+        let value = ABorrow (AMutBorrow (pm, bid, mk_aignored span bv_ty)) in
         { value; ty = borrow_ty }
       in
-      let borrows = [ mk_aborrow bid0 bv0; mk_aborrow bid1 bv1 ] in
+      let borrows = [ mk_aborrow PLeft bid0 bv0; mk_aborrow PRight bid1 bv1 ] in
 
       let loan = AMutLoan (PNone, bid2, mk_aignored span bv_ty) in
       (* Note that an aloan has a borrow type *)
