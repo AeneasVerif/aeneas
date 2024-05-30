@@ -81,16 +81,11 @@ build-bin-dir: build-bin build-lib build-runner
 doc:
 	cd compiler && dune build @doc
 
-# Fetches the latest commit from charon and updates `flake.lock` accordingly.
+# Updates `flake.lock` and `charon-pin` with the latest commit from Charon. If
+# we're using a symlink, this takes the commit from our local charon.
 .PHONY: update-charon-pin
 update-charon-pin:
-	nix flake lock --update-input charon
-	$(MAKE) charon-pin
-
-# Keep the commit revision in `./charon-pin` as well so that non-nix users can
-# know which commit to use.
-./charon-pin: flake.lock
-	./scripts/update-charon-pin.sh >> ./charon-pin
+	./scripts/update-charon-pin.sh
 
 # Checks that `./charon` contains a clone of charon at the required commit.
 # Also checks that `./charon/bin/charon` exists.
