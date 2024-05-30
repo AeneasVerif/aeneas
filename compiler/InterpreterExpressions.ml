@@ -287,16 +287,12 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           let v = mk_fresh_symbolic_typed_value span ty in
           (* Wrap the generated expression *)
           let cf e =
-            match e with
-            | None -> None
-            | Some e ->
-                Some
-                  (SymbolicAst.IntroSymbolic
-                     ( ctx0,
-                       None,
-                       value_as_symbolic span v.value,
-                       SymbolicAst.VaTraitConstValue (trait_ref, const_name),
-                       e ))
+            SymbolicAst.IntroSymbolic
+              ( ctx0,
+                None,
+                value_as_symbolic span v.value,
+                SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                e )
           in
           (v, ctx, cf)
       | CVar vid ->
@@ -321,20 +317,16 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           in
           (* We have to wrap the generated expression *)
           let cf e =
-            match e with
-            | None -> None
-            | Some e ->
-                (* If we are synthesizing a symbolic AST, it means that we are in symbolic
-                   mode: the value of the const generic is necessarily symbolic. *)
-                sanity_check __FILE__ __LINE__ (is_symbolic cv.value) span;
-                (* *)
-                Some
-                  (SymbolicAst.IntroSymbolic
-                     ( ctx0,
-                       None,
-                       value_as_symbolic span cv.value,
-                       SymbolicAst.VaCgValue vid,
-                       e ))
+            (* If we are synthesizing a symbolic AST, it means that we are in symbolic
+               mode: the value of the const generic is necessarily symbolic. *)
+            sanity_check __FILE__ __LINE__ (is_symbolic cv.value) span;
+            (* *)
+            SymbolicAst.IntroSymbolic
+              ( ctx0,
+                None,
+                value_as_symbolic span cv.value,
+                SymbolicAst.VaCgValue vid,
+                e )
           in
           (cv, ctx, cf)
       | CFnPtr _ ->
@@ -783,13 +775,9 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         let saggregated = mk_fresh_symbolic_typed_value span ty in
         (* Update the symbolic ast *)
         let cf e =
-          match e with
-          | None -> None
-          | Some e ->
-              (* Introduce the symbolic value in the AST *)
-              let sv = ValuesUtils.value_as_symbolic span saggregated.value in
-              Some
-                (SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e))
+          (* Introduce the symbolic value in the AST *)
+          let sv = ValuesUtils.value_as_symbolic span saggregated.value in
+          SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)
         in
         (saggregated, cf)
     | AggregatedClosure _ ->

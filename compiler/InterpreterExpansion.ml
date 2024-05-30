@@ -447,8 +447,7 @@ let expand_symbolic_bool (config : config) (span : Meta.span)
     (sv : symbolic_value) (sv_place : SA.mplace option) :
     eval_ctx ->
     (eval_ctx * eval_ctx)
-    * ((SymbolicAst.expression * SymbolicAst.expression) option -> eval_result)
-    =
+    * (SymbolicAst.expression * SymbolicAst.expression -> eval_result) =
  fun ctx ->
   (* Compute the expanded value *)
   let original_sv = sv in
@@ -465,9 +464,8 @@ let expand_symbolic_bool (config : config) (span : Meta.span)
   let ctx_true = apply_expansion see_true in
   let ctx_false = apply_expansion see_false in
   (* Compute the continuation to build the expression *)
-  let cf e =
-    let el = match e with Some (a, b) -> Some [ a; b ] | None -> None in
-    S.synthesize_symbolic_expansion span sv sv_place seel el
+  let cf (e0, e1) =
+    S.synthesize_symbolic_expansion span sv sv_place seel [ e0; e1 ]
   in
   (* Return *)
   ((ctx_true, ctx_false), cf)
@@ -535,8 +533,7 @@ let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
 
 let expand_symbolic_adt (config : config) (span : Meta.span)
     (sv : symbolic_value) (sv_place : SA.mplace option) :
-    eval_ctx ->
-    eval_ctx list * (SymbolicAst.expression list option -> eval_result) =
+    eval_ctx -> eval_ctx list * (SymbolicAst.expression list -> eval_result) =
  fun ctx ->
   (* Debug *)
   log#ldebug (lazy ("expand_symbolic_adt:" ^ symbolic_value_to_string ctx sv));
@@ -571,8 +568,7 @@ let expand_symbolic_int (config : config) (span : Meta.span)
     (int_type : integer_type) (tgts : scalar_value list) :
     eval_ctx ->
     (eval_ctx list * eval_ctx)
-    * ((SymbolicAst.expression list * SymbolicAst.expression) option ->
-      eval_result) =
+    * (SymbolicAst.expression list * SymbolicAst.expression -> eval_result) =
  fun ctx ->
   (* Sanity check *)
   sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TInteger int_type)) span;
@@ -589,13 +585,10 @@ let expand_symbolic_int (config : config) (span : Meta.span)
   in
   let ctx_otherwise = ctx in
   (* Update the symbolic ast *)
-  let cf e =
-    match e with
-    | None -> None
-    | Some (el, e) ->
-        let seel = List.map (fun x -> Some x) seel in
-        S.synthesize_symbolic_expansion span sv sv_place (seel @ [ None ])
-          (Some (el @ [ e ]))
+  let cf (el, e) =
+    let seel = List.map (fun x -> Some x) seel in
+    S.synthesize_symbolic_expansion span sv sv_place (seel @ [ None ])
+      (el @ [ e ])
   in
   ((ctx_branches, ctx_otherwise), cf)
 

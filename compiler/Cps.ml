@@ -35,23 +35,27 @@ type statement_eval_res =
        *)
 [@@deriving show]
 
-type eval_result = SymbolicAst.expression option
+(* TODO: remove *)
+type eval_result = SymbolicAst.expression
 
 (** Function which takes a context as input, and evaluates to:
     - a new context
     - a continuation with which to build the execution trace, provided the
       trace for the end of the execution.
   *)
-type cm_fun = eval_ctx -> eval_ctx * (eval_result -> eval_result)
+type cm_fun =
+  eval_ctx -> eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
 
 type st_cm_fun =
-  eval_ctx -> (eval_ctx * statement_eval_res) * (eval_result -> eval_result)
+  eval_ctx ->
+  (eval_ctx * statement_eval_res)
+  * (SymbolicAst.expression -> SymbolicAst.expression)
 
 (** Type of a function used when evaluating a statement *)
 type stl_cm_fun =
   eval_ctx ->
   (eval_ctx * statement_eval_res) list
-  * (SymbolicAst.expression list option -> eval_result)
+  * (SymbolicAst.expression list -> SymbolicAst.expression)
 
 (** Compose continuations that we use to compute execution traces *)
 let cc_comp (f : 'b -> 'c) (g : 'a -> 'b) : 'a -> 'c = fun e -> f (g e)
@@ -90,21 +94,8 @@ let map_apply_continuation (f : 'a -> 'c -> 'b * 'c * ('e -> 'e))
   in
   eval_list inputs ctx
 
-let opt_list_to_list_opt (len : int) (el : 'a option list) : 'a list option =
-  let expr_list =
-    List.rev
-      (List.fold_left
-         (fun acc a -> match a with Some b -> b :: acc | None -> [])
-         [] el)
-  in
-  let _ = assert (List.length expr_list = len) in
-  if Option.is_none (List.hd expr_list) then None else Some expr_list
-
 let cc_singleton file line span cf el =
-  match el with
-  | Some [ e ] -> cf (Some e)
-  | Some _ -> internal_error file line span
-  | _ -> None
+  match el with [ e ] -> cf e | _ -> internal_error file line span
 
 (** It happens that we need to concatenate lists of results, for
     instance when evaluating the branches of a match. When applying
@@ -114,15 +105,11 @@ let cc_singleton file line span cf el =
  *)
 let comp_seqs (file : string) (line : int) (span : Meta.span)
     (ls :
-      ('a list
-      * (SymbolicAst.expression list option -> SymbolicAst.expression option))
-      list) :
-    'a list
-    * (SymbolicAst.expression list option -> SymbolicAst.expression list option)
-    =
+      ('a list * (SymbolicAst.expression list -> SymbolicAst.expression)) list)
+    : 'a list * (SymbolicAst.expression list -> SymbolicAst.expression list) =
   (* Auxiliary function: given a list of expressions el, build the expressions
      corresponding to the different branches *)
-  let rec cc_aux ls el =
+  let rec cc ls el =
     match ls with
     | [] ->
         (* End of the list of branches: there shouldn't be any expression remaining *)
@@ -134,14 +121,10 @@ let comp_seqs (file : string) (line : int) (span : Meta.span)
            - the expressions for the remaining branches *)
         let el0, el = Collections.List.split_at el (List.length resl) in
         (* Compute the expression for the current branch *)
-        let e0 = cf (Some el0) in
-        let e0 =
-          match e0 with None -> internal_error file line span | Some e -> e
-        in
+        let e0 = cf el0 in
         (* Compute the expressions for the remaining branches *)
-        let e = cc_aux ls el in
+        let e = cc ls el in
         (* Concatenate *)
         e0 :: e
   in
-  let cc el = match el with None -> None | Some el -> Some (cc_aux ls el) in
-  (List.flatten (fst (List.split ls)), cc)
+  (List.flatten (fst (List.split ls)), cc ls)
