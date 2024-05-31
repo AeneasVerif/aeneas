@@ -2720,8 +2720,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
             | Some lc1 -> push_avalue (merge_g_loan_contents lc0 lc1)))
     borrows_loans;
 
-  (* We traversed and pushed elements in the same order as the traversal, so we do not need to reverse the list *)
-  let avalues = !avalues in
+  let avalues = List.rev !avalues in
 
   (* Reorder the avalues. We want the avalues to have the borrows first, then
      the loans (this structure is more stable when we merge abstractions together,
