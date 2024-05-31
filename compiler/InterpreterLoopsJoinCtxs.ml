@@ -294,30 +294,30 @@ let reduce_ctx = reduce_ctx_with_markers None
 
 (* Collapse an environment
 
-  This is the second part of a join, where we attempt to simplify and remove all projection markers.
-  This function is called after reducing the environments, and attempting to simplify all the pairs
-  of borrows and loans.
+   This is the second part of a join, where we attempt to simplify and remove all projection markers.
+   This function is called after reducing the environments, and attempting to simplify all the pairs
+   of borrows and loans.
 
-  We traverse all abstractions, and merge abstractions when they contain the same element,
-  but with dual markers (i.e., PLeft and PRight).
+   We traverse all abstractions, and merge abstractions when they contain the same element,
+   but with dual markers (i.e., PLeft and PRight).
 
-  For instance, if we have the abstractions
+   For instance, if we have the abstractions
 
-  abs@0 { | MB l0 _ |, ML l1 }
-  abs@1 { ︙MB l0 _ ︙, ML l2 }
+   abs@0 { | MB l0 _ |, ML l1 }
+   abs@1 { ︙MB l0 _ ︙, ML l2 }
 
-  we will merge abs@0 and abs@1 into a new abstraction abs@2, removing the marker for duplicated elements,
-  and taking the join of the remaining elements
+   we will merge abs@0 and abs@1 into a new abstraction abs@2, removing the marker for duplicated elements,
+   and taking the join of the remaining elements
 
-  abs@2 { MB l0 _, ML l1, ML l2 }
+   abs@2 { MB l0 _, ML l1, ML l2 }
 
-  Rem.: Doing this might introduce new pairs of borrow/loans to be merged in different abstractions: in the example above,
-  this could occur if there was another abstraction in the context containing ML l0, which would need to be simplified through
-  a further reduce.
-  It is unclear whether this can happen in practice. If so, a solution would be to preprocess the environments when doing
-  a join: while not in the current formalism, it is sound to split an element with no markers into a duplicated pair of the
-  same element with left and right markers. Doing this before reduce would allow to reduce all possible pairs of borrow/loans,
-  before finally collapsing and removing all markers.
+   Rem.: Doing this might introduce new pairs of borrow/loans to be merged in different abstractions: in the example above,
+   this could occur if there was another abstraction in the context containing ML l0, which would need to be simplified through
+   a further reduce.
+   It is unclear whether this can happen in practice. If so, a solution would be to preprocess the environments when doing
+   a join: while not in the current formalism, it is sound to split an element with no markers into a duplicated pair of the
+   same element with left and right markers. Doing this before reduce would allow to reduce all possible pairs of borrow/loans,
+   before finally collapsing and removing all markers.
 *)
 let collapse_ctx_markers (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
