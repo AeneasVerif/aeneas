@@ -516,11 +516,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
-      let mk_aborrow (bid : borrow_id) : typed_avalue =
-        let value = ABorrow (ASharedBorrow (PNone, bid)) in
+      let mk_aborrow (pm: proj_marker) (bid : borrow_id) : typed_avalue =
+        let value = ABorrow (ASharedBorrow (pm, bid)) in
         { value; ty = borrow_ty }
       in
-      let borrows = [ mk_aborrow bid0; mk_aborrow bid1 ] in
+      let borrows = [ mk_aborrow PLeft bid0; mk_aborrow PRight bid1 ] in
 
       let loan =
         ASharedLoan
