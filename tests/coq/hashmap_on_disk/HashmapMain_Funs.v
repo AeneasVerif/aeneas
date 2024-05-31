@@ -225,7 +225,7 @@ Definition hashmap_HashMap_move_elements_from_list
 Fixpoint hashmap_HashMap_move_elements_loop
   (T : Type) (n : nat) (ntable : hashmap_HashMap_t T)
   (slots : alloc_vec_Vec (hashmap_List_t T)) (i : usize) :
-  result ((alloc_vec_Vec (hashmap_List_t T)) * (hashmap_HashMap_t T))
+  result ((hashmap_HashMap_t T) * (alloc_vec_Vec (hashmap_List_t T)))
   :=
   match n with
   | O => Fail_ OutOfFuel

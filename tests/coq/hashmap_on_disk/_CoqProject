@@ -3,10 +3,10 @@
 -arg -w
 -arg all
 
-HashmapMain_Types.v
-HashmapMain_FunsExternal_Template.v
+HashmapMain_Funs.v 
+HashmapMain_FunsExternal.v 
+HashmapMain_FunsExternal_Template.v 
+HashmapMain_Types.v 
+HashmapMain_TypesExternal.v 
+HashmapMain_TypesExternal_Template.v 
 Primitives.v
-HashmapMain_Funs.v
-HashmapMain_TypesExternal.v
-HashmapMain_FunsExternal.v
-HashmapMain_TypesExternal_Template.v

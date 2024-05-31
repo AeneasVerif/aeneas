@@ -158,7 +158,7 @@ let hashMap_move_elements_from_list
 let rec hashMap_move_elements_loop
   (t : Type0) (ntable : hashMap_t t) (slots : alloc_vec_Vec (list_t t))
   (i : usize) :
-  Tot (result ((alloc_vec_Vec (list_t t)) & (hashMap_t t)))
+  Tot (result ((hashMap_t t) & (alloc_vec_Vec (list_t t))))
   (decreases (hashMap_move_elements_loop_decreases t ntable slots i))
   =
   let i1 = alloc_vec_Vec_len (list_t t) slots in

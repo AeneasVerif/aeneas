@@ -157,7 +157,7 @@ def HashMap.move_elements_from_list
 divergent def HashMap.move_elements_loop
   (T : Type) (ntable : HashMap T) (slots : alloc.vec.Vec (List T)) (i : Usize)
   :
-  Result ((alloc.vec.Vec (List T)) × (HashMap T))
+  Result ((HashMap T) × (alloc.vec.Vec (List T)))
   :=
   let i1 := alloc.vec.Vec.len (List T) slots
   if i < i1
