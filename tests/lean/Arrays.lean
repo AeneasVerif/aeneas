@@ -345,15 +345,48 @@ def take_array_t (a : Array AB 2#usize) : Result Unit :=
 def non_copyable_array : Result Unit :=
   take_array_t (Array.make AB 2#usize [ AB.A, AB.B ])
 
+/- [arrays::sum]: loop 0:
+   Source: 'tests/src/arrays.rs', lines 242:0-250:1 -/
+divergent def sum_loop (s : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
+  let i1 := Slice.len U32 s
+  if i < i1
+  then
+    do
+    let i2 ← Slice.index_usize U32 s i
+    let sum3 ← sum1 + i2
+    let i3 ← i + 1#usize
+    sum_loop s sum3 i3
+  else Result.ok sum1
+
 /- [arrays::sum]:
    Source: 'tests/src/arrays.rs', lines 242:0-242:28 -/
 def sum (s : Slice U32) : Result U32 :=
-  sorry
+  sum_loop s 0#u32 0#usize
+
+/- [arrays::sum2]: loop 0:
+   Source: 'tests/src/arrays.rs', lines 252:0-261:1 -/
+divergent def sum2_loop
+  (s : Slice U32) (s2 : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
+  let i1 := Slice.len U32 s
+  if i < i1
+  then
+    do
+    let i2 ← Slice.index_usize U32 s i
+    let i3 ← Slice.index_usize U32 s2 i
+    let i4 ← i2 + i3
+    let sum3 ← sum1 + i4
+    let i5 ← i + 1#usize
+    sum2_loop s s2 sum3 i5
+  else Result.ok sum1
 
 /- [arrays::sum2]:
    Source: 'tests/src/arrays.rs', lines 252:0-252:41 -/
 def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
-  sorry
+  let i := Slice.len U32 s
+  let i1 := Slice.len U32 s2
+  if ¬ (i = i1)
+  then Result.fail .panic
+  else sum2_loop s s2 0#u32 0#usize
 
 /- [arrays::f0]:
    Source: 'tests/src/arrays.rs', lines 263:0-263:11 -/
@@ -427,10 +460,24 @@ def ite : Result Unit :=
   let _ ← to_slice_mut_back s1
   Result.ok ()
 
+/- [arrays::zero_slice]: loop 0:
+   Source: 'tests/src/arrays.rs', lines 303:0-310:1 -/
+divergent def zero_slice_loop
+  (a : Slice U8) (i : Usize) (len : Usize) : Result (Slice U8) :=
+  if i < len
+  then
+    do
+    let (_, index_mut_back) ← Slice.index_mut_usize U8 a i
+    let i1 ← i + 1#usize
+    let a1 ← index_mut_back 0#u8
+    zero_slice_loop a1 i1 len
+  else Result.ok a
+
 /- [arrays::zero_slice]:
    Source: 'tests/src/arrays.rs', lines 303:0-303:31 -/
 def zero_slice (a : Slice U8) : Result (Slice U8) :=
-  sorry
+  let len := Slice.len U8 a
+  zero_slice_loop a 0#usize len
 
 /- [arrays::iter_mut_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 312:0-318:1 -/

@@ -67,11 +67,41 @@ Definition hashMap_new (T : Type) (n : nat) : result (HashMap_t T) :=
   hashMap_new_with_capacity T n 32%usize 4%usize 5%usize
 .
 
+(** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
+    Source: 'tests/src/hashmap.rs', lines 80:4-88:5 *)
+Fixpoint hashMap_clear_loop
+  (T : Type) (n : nat) (slots : alloc_vec_Vec (List_t T)) (i : usize) :
+  result (alloc_vec_Vec (List_t T))
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    let i1 := alloc_vec_Vec_len (List_t T) slots in
+    if i s< i1
+    then (
+      p <-
+        alloc_vec_Vec_index_mut (List_t T) usize
+          (core_slice_index_SliceIndexUsizeSliceTInst (List_t T)) slots i;
+      let (_, index_mut_back) := p in
+      i2 <- usize_add i 1%usize;
+      slots1 <- index_mut_back List_Nil;
+      hashMap_clear_loop T n1 slots1 i2)
+    else Ok slots
+  end
+.
+
 (** [hashmap::{hashmap::HashMap<T>}::clear]:
     Source: 'tests/src/hashmap.rs', lines 80:4-80:27 *)
 Definition hashMap_clear
   (T : Type) (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
-  admit
+  hm <- hashMap_clear_loop T n self.(hashMap_slots) 0%usize;
+  Ok
+    {|
+      hashMap_num_entries := 0%usize;
+      hashMap_max_load_factor := self.(hashMap_max_load_factor);
+      hashMap_max_load := self.(hashMap_max_load);
+      hashMap_slots := hm
+    |}
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::len]:
@@ -80,13 +110,35 @@ Definition hashMap_len (T : Type) (self : HashMap_t T) : result usize :=
   Ok self.(hashMap_num_entries)
 .
 
+(** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
+    Source: 'tests/src/hashmap.rs', lines 97:4-114:5 *)
+Fixpoint hashMap_insert_in_list_loop
+  (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
+  result (bool * (List_t T))
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match ls with
+    | List_Cons ckey cvalue tl =>
+      if ckey s= key
+      then Ok (false, List_Cons ckey value tl)
+      else (
+        p <- hashMap_insert_in_list_loop T n1 key value tl;
+        let (b, tl1) := p in
+        Ok (b, List_Cons ckey cvalue tl1))
+    | List_Nil => Ok (true, List_Cons key value List_Nil)
+    end
+  end
+.
+
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
     Source: 'tests/src/hashmap.rs', lines 97:4-97:71 *)
 Definition hashMap_insert_in_list
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result (bool * (List_t T))
   :=
-  admit
+  hashMap_insert_in_list_loop T n key value ls
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_no_resize]:
@@ -127,13 +179,57 @@ Definition hashMap_insert_no_resize
       |})
 .
 
+(** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
+    Source: 'tests/src/hashmap.rs', lines 183:4-196:5 *)
+Fixpoint hashMap_move_elements_from_list_loop
+  (T : Type) (n : nat) (ntable : HashMap_t T) (ls : List_t T) :
+  result (HashMap_t T)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match ls with
+    | List_Cons k v tl =>
+      ntable1 <- hashMap_insert_no_resize T n1 ntable k v;
+      hashMap_move_elements_from_list_loop T n1 ntable1 tl
+    | List_Nil => Ok ntable
+    end
+  end
+.
+
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]:
     Source: 'tests/src/hashmap.rs', lines 183:4-183:72 *)
 Definition hashMap_move_elements_from_list
   (T : Type) (n : nat) (ntable : HashMap_t T) (ls : List_t T) :
   result (HashMap_t T)
   :=
-  admit
+  hashMap_move_elements_from_list_loop T n ntable ls
+.
+
+(** [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
+    Source: 'tests/src/hashmap.rs', lines 171:4-180:5 *)
+Fixpoint hashMap_move_elements_loop
+  (T : Type) (n : nat) (ntable : HashMap_t T)
+  (slots : alloc_vec_Vec (List_t T)) (i : usize) :
+  result ((alloc_vec_Vec (List_t T)) * (HashMap_t T))
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    let i1 := alloc_vec_Vec_len (List_t T) slots in
+    if i s< i1
+    then (
+      p <-
+        alloc_vec_Vec_index_mut (List_t T) usize
+          (core_slice_index_SliceIndexUsizeSliceTInst (List_t T)) slots i;
+      let (l, index_mut_back) := p in
+      let (ls, l1) := core_mem_replace (List_t T) l List_Nil in
+      ntable1 <- hashMap_move_elements_from_list T n1 ntable ls;
+      i2 <- usize_add i 1%usize;
+      slots1 <- index_mut_back l1;
+      hashMap_move_elements_loop T n1 ntable1 slots1 i2)
+    else Ok (ntable, slots)
+  end
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]:
@@ -143,7 +239,7 @@ Definition hashMap_move_elements
   (slots : alloc_vec_Vec (List_t T)) (i : usize) :
   result ((HashMap_t T) * (alloc_vec_Vec (List_t T)))
   :=
-  admit
+  hashMap_move_elements_loop T n ntable slots i
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::try_resize]:
@@ -191,11 +287,28 @@ Definition hashMap_insert
   else Ok self1
 .
 
+(** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
+    Source: 'tests/src/hashmap.rs', lines 206:4-219:5 *)
+Fixpoint hashMap_contains_key_in_list_loop
+  (T : Type) (n : nat) (key : usize) (ls : List_t T) : result bool :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match ls with
+    | List_Cons ckey _ tl =>
+      if ckey s= key
+      then Ok true
+      else hashMap_contains_key_in_list_loop T n1 key tl
+    | List_Nil => Ok false
+    end
+  end
+.
+
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]:
     Source: 'tests/src/hashmap.rs', lines 206:4-206:68 *)
 Definition hashMap_contains_key_in_list
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result bool :=
-  admit
+  hashMap_contains_key_in_list_loop T n key ls
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key]:
@@ -212,11 +325,26 @@ Definition hashMap_contains_key
   hashMap_contains_key_in_list T n key l
 .
 
+(** [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
+    Source: 'tests/src/hashmap.rs', lines 224:4-237:5 *)
+Fixpoint hashMap_get_in_list_loop
+  (T : Type) (n : nat) (key : usize) (ls : List_t T) : result T :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match ls with
+    | List_Cons ckey cvalue tl =>
+      if ckey s= key then Ok cvalue else hashMap_get_in_list_loop T n1 key tl
+    | List_Nil => Fail_ Failure
+    end
+  end
+.
+
 (** [hashmap::{hashmap::HashMap<T>}::get_in_list]:
     Source: 'tests/src/hashmap.rs', lines 224:4-224:70 *)
 Definition hashMap_get_in_list
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result T :=
-  admit
+  hashMap_get_in_list_loop T n key ls
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::get]:
@@ -233,13 +361,39 @@ Definition hashMap_get
   hashMap_get_in_list T n key l
 .
 
+(** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
+    Source: 'tests/src/hashmap.rs', lines 245:4-254:5 *)
+Fixpoint hashMap_get_mut_in_list_loop
+  (T : Type) (n : nat) (ls : List_t T) (key : usize) :
+  result (T * (T -> result (List_t T)))
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match ls with
+    | List_Cons ckey cvalue tl =>
+      if ckey s= key
+      then
+        let back := fun (ret : T) => Ok (List_Cons ckey ret tl) in
+        Ok (cvalue, back)
+      else (
+        p <- hashMap_get_mut_in_list_loop T n1 tl key;
+        let (t, back) := p in
+        let back1 :=
+          fun (ret : T) => tl1 <- back ret; Ok (List_Cons ckey cvalue tl1) in
+        Ok (t, back1))
+    | List_Nil => Fail_ Failure
+    end
+  end
+.
+
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
     Source: 'tests/src/hashmap.rs', lines 245:4-245:86 *)
 Definition hashMap_get_mut_in_list
   (T : Type) (n : nat) (ls : List_t T) (key : usize) :
   result (T * (T -> result (List_t T)))
   :=
-  admit
+  hashMap_get_mut_in_list_loop T n ls key
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut]:
@@ -272,13 +426,41 @@ Definition hashMap_get_mut
   Ok (t, back)
 .
 
+(** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
+    Source: 'tests/src/hashmap.rs', lines 265:4-291:5 *)
+Fixpoint hashMap_remove_from_list_loop
+  (T : Type) (n : nat) (key : usize) (ls : List_t T) :
+  result ((option T) * (List_t T))
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match ls with
+    | List_Cons ckey t tl =>
+      if ckey s= key
+      then
+        let (mv_ls, _) :=
+          core_mem_replace (List_t T) (List_Cons ckey t tl) List_Nil in
+        match mv_ls with
+        | List_Cons _ cvalue tl1 => Ok (Some cvalue, tl1)
+        | List_Nil => Fail_ Failure
+        end
+      else (
+        p <- hashMap_remove_from_list_loop T n1 key tl;
+        let (o, tl1) := p in
+        Ok (o, List_Cons ckey t tl1))
+    | List_Nil => Ok (None, List_Nil)
+    end
+  end
+.
+
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]:
     Source: 'tests/src/hashmap.rs', lines 265:4-265:69 *)
 Definition hashMap_remove_from_list
   (T : Type) (n : nat) (key : usize) (ls : List_t T) :
   result ((option T) * (List_t T))
   :=
-  admit
+  hashMap_remove_from_list_loop T n key ls
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::remove]:
