@@ -2494,6 +2494,10 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
 
   (* Phase 2: We now remove markers, by replacing pairs of the same element with left/right markers into one element
      with only one marker. To do so, we linearly traverse the abstraction created through the first phase *)
+  log#ldebug
+    (lazy
+      ("merge_into_abstraction_aux: starting phase 2\n- abs:\n"
+      ^ abs_to_string span ctx { abs0 with avalues = abs_values }));
 
   (* We first reset the list of avalues, and will construct avalues similarly to the previous phase *)
   avalues := [];
@@ -2528,12 +2532,18 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
     | Abstract (ty, bc) -> { value = ABorrow bc; ty }
   in
 
-  (* Recreates an avalue from a loan_content *)
+  (* Recreates an avalue from a loan_content, and adds the set of loan ids as merged.
+     See the comment in the loop below for a detailed explanation *)
   let avalue_from_lc = function
     | Concrete (_, _) ->
         (* This can happen only in case of nested borrows, and should have been filtered during phase 1 *)
         craise __FILE__ __LINE__ span "Unreachable"
-    | Abstract (ty, bc) -> { value = ALoan bc; ty }
+    | Abstract (ty, bc) ->
+        (match bc with
+        | AMutLoan (_, id, _) -> set_loan_as_merged id
+        | ASharedLoan (_, ids, _, _) -> set_loans_as_merged ids
+        | _ -> craise __FILE__ __LINE__ span "Unreachable");
+        { value = ALoan bc; ty }
   in
 
   (* Some utility functions *)
@@ -2669,9 +2679,22 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
                    We merge their values, and push the result to the list of avalues. The merge will also remove the projection marker *)
                 push_avalue (merge_g_borrow_contents bc0 bc1))
       | LoanId (PNone, bid) ->
-          (* Same as BorrowId PNone above. We do not filter this element *)
-          let lc = MarkerBorrowId.Map.find (PNone, bid) loan_to_content in
-          push_avalue (avalue_from_lc lc)
+          (* Since we currently have a set of loan ids associated to a shared_borrow, we can
+             have several loan ids associated to the same element. Hence, we need to ensure
+             that we did not add the corresponding element previously.
+
+             To do so, we use the loan id merged set for both marked and unmarked values.
+             The assumption is that we should not have the same loan id for both an unmarked
+             element and a marked element. It might better to sanity-check this.
+
+             Adding the loan id to the merged set will be done inside avalue_from_lc.
+
+             Rem: Once we move to a single loan id per shared_loan, this should not be needed anymore
+          *)
+          if loan_is_merged bid then ()
+          else
+            let lc = MarkerBorrowId.Map.find (PNone, bid) loan_to_content in
+            push_avalue (avalue_from_lc lc)
       | LoanId (pm, bid) -> (
           if
             (* Check if the loan has already been merged. If so, we skip it *)
