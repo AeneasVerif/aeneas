@@ -516,7 +516,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
-      let mk_aborrow (pm: proj_marker) (bid : borrow_id) : typed_avalue =
+      let mk_aborrow (pm : proj_marker) (bid : borrow_id) : typed_avalue =
         let value = ABorrow (ASharedBorrow (pm, bid)) in
         { value; ty = borrow_ty }
       in
@@ -831,6 +831,20 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let absl =
           convert_value_to_abstractions span abs_kind can_end
             destructure_shared_values ctx v
+        in
+        (* Add a marker to the abstraction indicating the provenance of the value *)
+        let absl =
+          List.map
+            (fun abs ->
+              {
+                abs with
+                avalues =
+                  List.map
+                    (add_marker_avalue span ctx0
+                       (if value_is_left then PLeft else PRight))
+                    abs.avalues;
+              })
+            absl
         in
         push_absl absl;
         (* Return [Bottom] *)

@@ -429,3 +429,47 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
     }
   in
   ids
+
+(* Small utility: Add a projection marker to a typed avalue.
+   This can be used in combination with List.map to add markers to an entire abstraction
+*)
+let add_marker_avalue (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
+    (av : typed_avalue) : typed_avalue =
+  let obj =
+    object
+      inherit [_] map_typed_avalue as super
+
+      method! visit_borrow_content _ _ =
+        craise __FILE__ __LINE__ span "Unexpected borrow"
+
+      method! visit_loan_content _ _ =
+        craise __FILE__ __LINE__ span "Unexpected loan"
+
+      method! visit_symbolic_value _ sv =
+        sanity_check __FILE__ __LINE__
+          (not (symbolic_value_has_borrows ctx sv))
+          span;
+        sv
+
+      method! visit_aloan_content env lc =
+        match lc with
+        | AMutLoan (pm0, bid, av) ->
+            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            super#visit_aloan_content env (AMutLoan (pm, bid, av))
+        | ASharedLoan (pm0, bids, av, child) ->
+            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            super#visit_aloan_content env (ASharedLoan (pm, bids, av, child))
+        | _ -> craise __FILE__ __LINE__ span "Unsupported yet"
+
+      method! visit_aborrow_content env bc =
+        match bc with
+        | AMutBorrow (pm0, bid, av) ->
+            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            super#visit_aborrow_content env (AMutBorrow (pm, bid, av))
+        | ASharedBorrow (pm0, bid) ->
+            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            super#visit_aborrow_content env (ASharedBorrow (pm, bid))
+        | _ -> craise __FILE__ __LINE__ span "Unsupported yet"
+    end
+  in
+  obj#visit_typed_avalue () av
