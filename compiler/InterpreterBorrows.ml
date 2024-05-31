@@ -1713,7 +1713,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             let ignored = mk_aignored span child_av.ty in
             let value = ABorrow (AMutBorrow (pm, bid, ignored)) in
             push { value; ty }
-        | ASharedBorrow (pm, _) ->
+        | ASharedBorrow _ ->
             (* Nothing specific to do: keep the value as it is *)
             push av
         | AIgnoredMutBorrow (opt_bid, child_av) ->
@@ -2417,7 +2417,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
                           *)
                           craise __FILE__ __LINE__ span "Unreachable"
                       | Abstract (ty, bc) -> { value = ABorrow bc; ty })
-                  | Some bc0, Some bc1 ->
+                  | Some _, Some _ ->
                       (* With markers, the case where the same borrow is duplicated should now be unreachable.
                          Note, this is due to all shared borrows currently taking different ids, this will
                          not be the case anymore when shared loans will take a unique id instead of a set *)
@@ -2480,7 +2480,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
                           | AIgnoredSharedLoan _ ->
                               (* The abstraction has been destructured, so those shouldn't appear *)
                               craise __FILE__ __LINE__ span "Unreachable"))
-                  | Some lc0, Some lc1 ->
+                  | Some _, Some _ ->
                       (* With projection markers, shared loans should not be duplicated *)
                       craise __FILE__ __LINE__ span "Unreachable"
                   | None, None -> craise __FILE__ __LINE__ span "Unreachable"
@@ -2503,7 +2503,13 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
   avalues := [];
 
   (* We recompute the relevant information on the abstraction after phase 1 *)
-  let { loans; borrows; borrows_loans; loan_to_content; borrow_to_content } =
+  let {
+    loans = _;
+    borrows = _;
+    borrows_loans;
+    loan_to_content;
+    borrow_to_content;
+  } =
     compute_merge_abstraction_info span ctx abs_values
   in
 

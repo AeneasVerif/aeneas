@@ -190,10 +190,10 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     abs_ids;
     abs_to_borrows;
     abs_to_loans = _;
-    abs_to_borrows_loans;
+    abs_to_borrows_loans = _;
     borrow_to_abs = _;
     loan_to_abs;
-    borrow_loan_to_abs;
+    borrow_loan_to_abs = _;
   } =
     ids_maps
   in
@@ -306,7 +306,6 @@ let collapse_ctx_markers (span : Meta.span) (loop_id : LoopId.id)
 
   let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
-  let destructure_shared_values = true in
   let is_fresh_abs_id (id : AbstractionId.id) : bool =
     not (AbstractionId.Set.mem id old_ids.aids)
   in
@@ -318,10 +317,10 @@ let collapse_ctx_markers (span : Meta.span) (loop_id : LoopId.id)
     abs_ids;
     abs_to_borrows;
     abs_to_loans;
-    abs_to_borrows_loans;
+    abs_to_borrows_loans = _;
     borrow_to_abs;
     loan_to_abs;
-    borrow_loan_to_abs;
+    borrow_loan_to_abs = _;
   } =
     ids_maps
   in
@@ -519,7 +518,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
      Note that the join matcher doesn't implement match functions for avalues
      (see the comments in {!MakeJoinMatcher}.
   *)
-  let merge_amut_borrows id ty0 pm0 child0 _ty1 pm1 child1 =
+  let merge_amut_borrows id ty0 _pm0 child0 _ty1 _pm1 child1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
     sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
@@ -535,7 +534,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
 
-  let merge_ashared_borrows id ty0 pm0 ty1 pm1 =
+  let merge_ashared_borrows id ty0 _pm0 ty1 _pm1 =
     (* Sanity checks *)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
@@ -554,7 +553,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
 
-  let merge_amut_loans id ty0 pm0 child0 _ty1 pm1 child1 =
+  let merge_amut_loans id ty0 _pm0 child0 _ty1 _pm1 child1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
     sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
@@ -565,7 +564,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let value = ALoan (AMutLoan (PNone, id, child)) in
     { value; ty }
   in
-  let merge_ashared_loans ids ty0 pm0 (sv0 : typed_value) child0 _ty1 pm1
+  let merge_ashared_loans ids ty0 _pm0 (sv0 : typed_value) child0 _ty1 _pm1
       (sv1 : typed_value) child1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
