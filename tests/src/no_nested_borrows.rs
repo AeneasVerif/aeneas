@@ -213,6 +213,11 @@ pub fn test_char() -> char {
     'a'
 }
 
+/// This triggered a bug at some point
+pub fn panic_mut_borrow(_: &mut u32) {
+    panic!()
+}
+
 /// Mutually recursive types
 pub enum Tree<T> {
     Leaf(T),
@@ -225,7 +230,7 @@ pub enum NodeElem<T> {
 }
 
 /*
-// TODO: those definitions requires semantic termination (breaks the Coq backend
+// TODO: those definitions require semantic termination (breaks the Coq backend
 // because we don't use fuel in this case).
 
 /// Mutually recursive functions
