@@ -198,7 +198,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                     craise __FILE__ __LINE__ span
                       "Expected a shared (abstraction) loan"
                 | _, Abstract (ASharedLoan (pm, bids, sv, _av)) -> (
-                    (* Sanity check: markers can only appear when we're doing a join *)
+                    (* Sanity check: projection markers can only appear when we're doing a join *)
                     sanity_check __FILE__ __LINE__ (pm = PNone) span;
                     (* Explore the shared value *)
                     match access_projection span access ctx update p' sv with

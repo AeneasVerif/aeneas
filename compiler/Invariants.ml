@@ -497,14 +497,14 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         | VBorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | VSharedBorrow bid, RShared | VReservedMutBorrow bid, RMut -> (
-                (* Lookup the borrowed value to check it has the proper type *)
+                (* Lookup the borrowed value to check it has the proper type.
+                   Note that we ignore the marker: we will check it when
+                   checking the loan itself. *)
                 let _, glc = lookup_loan span ek_all bid ctx in
                 match glc with
-                | Concrete (VSharedLoan (_, sv)) ->
+                | Concrete (VSharedLoan (_, sv))
+                | Abstract (ASharedLoan (_, _, sv, _)) ->
                     sanity_check __FILE__ __LINE__ (sv.ty = ref_ty) span
-                | Abstract (ASharedLoan (pm, _, sv, _)) ->
-                    sanity_check __FILE__ __LINE__ (sv.ty = ref_ty) span;
-                    sanity_check __FILE__ __LINE__ (pm = PNone) span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
             | VMutBorrow (_, bv), RMut ->
                 sanity_check __FILE__ __LINE__
@@ -517,12 +517,13 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
             | VSharedLoan (_, sv) ->
                 sanity_check __FILE__ __LINE__ (sv.ty = ty) span
             | VMutLoan bid -> (
-                (* Lookup the borrowed value to check it has the proper type *)
+                (* Lookup the borrowed value to check it has the proper type. *)
                 let glc = lookup_borrow span ek_all bid ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) ->
                     sanity_check __FILE__ __LINE__ (bv.ty = ty) span
                 | Abstract (AMutBorrow (pm, _, sv)) ->
+                    (* The marker check is redundant, but doesn't cost much *)
                     sanity_check __FILE__ __LINE__ (pm = PNone) span;
                     sanity_check __FILE__ __LINE__
                       (Substitute.erase_regions sv.ty = ty)
@@ -655,7 +656,9 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                       = Substitute.erase_regions borrowed_aty)
                       span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
-            | AMutLoan (_, _, _) -> internal_error __FILE__ __LINE__ span
+            | AMutLoan (_, _, _) ->
+                (* We get there if the projection marker is not [PNone] *)
+                internal_error __FILE__ __LINE__ span
             | AIgnoredMutLoan (None, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) span
@@ -667,7 +670,9 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                   span;
                 (* TODO: the type of aloans doesn't make sense, see above *)
                 sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) span
-            | ASharedLoan (_, _, _, _) -> internal_error __FILE__ __LINE__ span
+            | ASharedLoan (_, _, _, _) ->
+                (* We get there if the projection marker is not [PNone] *)
+                internal_error __FILE__ __LINE__ span
             | AEndedMutLoan { given_back; child; given_back_span = _ }
             | AEndedIgnoredMutLoan { given_back; child; given_back_span = _ } ->
                 let borrowed_aty = aloan_get_expected_child_type aty in

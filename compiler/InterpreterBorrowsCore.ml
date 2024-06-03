@@ -256,12 +256,12 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
       method! visit_aloan_content env lc =
         match lc with
         | AMutLoan (pm, bid, av) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then raise (FoundGLoanContent (Abstract lc))
             else super#visit_AMutLoan env pm bid av
         | ASharedLoan (pm, bids, v, av) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if BorrowId.Set.mem l bids then
               raise (FoundGLoanContent (Abstract lc))
@@ -401,11 +401,11 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
       method! visit_aloan_content env lc =
         match lc with
         | AMutLoan (pm, bid, av) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then update () else super#visit_AMutLoan env pm bid av
         | ASharedLoan (pm, bids, v, av) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if BorrowId.Set.mem l bids then update ()
             else super#visit_ASharedLoan env pm bids v av
@@ -462,12 +462,12 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
       method! visit_aborrow_content env bc =
         match bc with
         | AMutBorrow (pm, bid, av) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_AMutBorrow env pm bid av
         | ASharedBorrow (pm, bid) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env pm bid
@@ -584,12 +584,12 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
       method! visit_ABorrow env bc =
         match bc with
         | AMutBorrow (pm, bid, av) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then update ()
             else ABorrow (super#visit_AMutBorrow env pm bid av)
         | ASharedBorrow (pm, bid) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then update ()
             else ABorrow (super#visit_ASharedBorrow env pm bid)
@@ -1199,11 +1199,11 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
       method! visit_aloan_content env lc =
         match lc with
         | AMutLoan (pm, bid, _) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             raise (FoundBorrowIds (Borrow bid))
         | ASharedLoan (pm, bids, _, _) ->
-            (* Sanity check: markers can only appear when we're doing a join *)
+            (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             raise (FoundBorrowIds (Borrows bids))
         | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }

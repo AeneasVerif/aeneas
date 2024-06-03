@@ -148,6 +148,7 @@ module Values = struct
     | AEndedProjBorrows _mv -> "_"
     | AIgnoredProjBorrows -> "_"
 
+  (** Wrap a value inside its marker, if there is one *)
   let add_proj_marker (pm : proj_marker) (s : string) : string =
     match pm with
     | PNone -> s
