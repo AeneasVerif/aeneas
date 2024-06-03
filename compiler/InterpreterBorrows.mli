@@ -269,3 +269,20 @@ val merge_into_abstraction :
   AbstractionId.id ->
   AbstractionId.id ->
   eval_ctx * AbstractionId.id
+
+(** Reorder the loans and borrows in the fresh abstractions.
+
+    We do this in order to enforce some structure in the environments: this
+    allows us to find fixed-points. Note that this function needs to be
+    called typically after we merge abstractions together (see {!reduce_ctx}
+    and {!collapse_ctx} for instance).
+
+    Inputs:
+    - [span]
+    - [allow_markers]: disables some sanity checks (which check that projection
+      markers don't appear).
+    - [old_abs_ids]
+    - [eval_ctx]
+ *)
+val reorder_loans_borrows_in_fresh_abs :
+  Meta.span -> bool -> AbstractionId.Set.t -> eval_ctx -> eval_ctx

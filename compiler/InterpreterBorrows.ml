@@ -2814,3 +2814,63 @@ let merge_into_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
   (* Return *)
   (ctx, nabs.abs_id)
+
+let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
+    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+  let reorder_in_fresh_abs (abs : abs) : abs =
+    (* Split between the loans and borrows *)
+    let is_borrow (av : typed_avalue) : bool =
+      match av.value with
+      | ABorrow _ -> true
+      | ALoan _ -> false
+      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+    in
+    let aborrows, aloans = List.partition is_borrow abs.avalues in
+
+    (* Reoder the borrows, and the loans.
+
+       After experimenting, it seems that a good way of reordering the loans
+       and the borrows to find fixed points is simply to sort them by increasing
+       order of id (taking the smallest id of a set of ids, in case of sets).
+
+       This is actually not as arbitrary as it might seem, because the ids give
+       us the order in which we introduced those borrows/loans.
+    *)
+    let get_borrow_id (av : typed_avalue) : BorrowId.id =
+      match av.value with
+      | ABorrow (AMutBorrow (pm, bid, _) | ASharedBorrow (pm, bid)) ->
+          sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
+          bid
+      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+    in
+    let get_loan_id (av : typed_avalue) : BorrowId.id =
+      match av.value with
+      | ALoan (AMutLoan (pm, lid, _)) ->
+          sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
+          lid
+      | ALoan (ASharedLoan (pm, lids, _, _)) ->
+          sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
+          BorrowId.Set.min_elt lids
+      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+    in
+    (* We use ordered maps to reorder the borrows and loans *)
+    let reorder (get_bid : typed_avalue -> BorrowId.id)
+        (values : typed_avalue list) : typed_avalue list =
+      List.map snd
+        (BorrowId.Map.bindings
+           (BorrowId.Map.of_list (List.map (fun v -> (get_bid v, v)) values)))
+    in
+    let aborrows = reorder get_borrow_id aborrows in
+    let aloans = reorder get_loan_id aloans in
+    let avalues = List.append aborrows aloans in
+    { abs with avalues }
+  in
+
+  let reorder_in_abs (abs : abs) =
+    if AbstractionId.Set.mem abs.abs_id old_abs_ids then abs
+    else reorder_in_fresh_abs abs
+  in
+
+  let env = env_map_abs reorder_in_abs ctx.env in
+
+  { ctx with env }
