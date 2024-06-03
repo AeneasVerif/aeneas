@@ -146,10 +146,10 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   let ids_maps = compute_abs_borrows_loans_maps span explore env in
   let {
     abs_ids;
-    abs_to_borrows;
-    abs_to_loans = _;
-    borrow_to_abs = _;
-    loan_to_abs;
+    abs_to_borrows = _;
+    abs_to_loans;
+    borrow_to_abs;
+    loan_to_abs = _;
   } =
     ids_maps
   in
@@ -164,27 +164,28 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
   (* Merge all the mergeable abs.
 
-     We iterate over the abstractions, then over the borrows in the abstractions.
+     We iterate over the abstractions, then over the loans in the abstractions.
      We do this because we want to control the order in which abstractions
      are merged (the ids are iterated in increasing order). Otherwise, we
-     could simply iterate over all the borrows in [borrow_to_abs]...
+     could simply iterate over all the borrows in [loan_to_abs]...
   *)
   List.iter
     (fun abs_id0 ->
-      let bids = AbstractionId.Map.find abs_id0 abs_to_borrows in
-      let bids = MarkerBorrowId.Set.elements bids in
+      let lids = AbstractionId.Map.find abs_id0 abs_to_loans in
+      let lids = MarkerBorrowId.Set.elements lids in
       List.iter
-        (fun bid ->
+        (fun lid ->
           if not with_markers then
-            sanity_check __FILE__ __LINE__ (fst bid = PNone) span;
+            sanity_check __FILE__ __LINE__ (fst lid = PNone) span;
           (* If we use markers: we are doing a collapse, which means we attempt
              to eliminate markers (and this is the only goal of the operation).
              We thus ignore the non-marked values (we merge non-marked values
              when doing a "real" reduce, to simplify the environment in order
              to converge to a fixed-point, for instance). *)
-          if with_markers && fst bid = PNone then ()
+          if with_markers && fst lid = PNone then ()
           else
-            match MarkerBorrowId.Map.find_opt bid loan_to_abs with
+            (* Find the borrow corresponding to the loan we want to eliminate *)
+            match MarkerBorrowId.Map.find_opt lid borrow_to_abs with
             | None -> (* Nothing to do *) ()
             | Some abs_ids1 ->
                 AbstractionId.Set.iter
@@ -220,10 +221,12 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
                           ^ eval_ctx_to_string ~span:(Some span) !ctx));
 
                       (* Update the environment - pay attention to the order:
-                         we merge [abs_id1] *into* [abs_id0] *)
+                         we merge [abs_id1] *into* [abs_id0].
+                         In particular, as [abs_id0] contains the loan, it has
+                         to be on the left. *)
                       let nctx, abs_id =
-                        merge_into_abstraction span abs_kind can_end merge_funs
-                          !ctx abs_id1 abs_id0
+                        merge_into_first_abstraction span abs_kind can_end
+                          merge_funs !ctx abs_id0 abs_id1
                       in
                       ctx := nctx;
 
@@ -231,7 +234,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
                       let abs_ref_merged = UnionFind.union abs_ref0 abs_ref1 in
                       UnionFind.set abs_ref_merged abs_id))
                   abs_ids1)
-        bids)
+        lids)
     abs_ids;
 
   log#ldebug
@@ -366,8 +369,8 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
                       (* Update the environment - pay attention to the order: we
                          we merge [abs_id1] *into* [abs_id0] *)
                       let nctx, abs_id =
-                        merge_into_abstraction span abs_kind can_end
-                          (Some merge_funs) !ctx abs_id1 abs_id0
+                        merge_into_first_abstraction span abs_kind can_end
+                          (Some merge_funs) !ctx abs_id0 abs_id1
                       in
                       ctx := nctx;
 
@@ -422,8 +425,8 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
                       (* Update the environment - pay attention to the order: we
                          we merge [abs_id1] *into* [abs_id0] *)
                       let nctx, abs_id =
-                        merge_into_abstraction span abs_kind can_end
-                          (Some merge_funs) !ctx abs_id1 abs_id0
+                        merge_into_first_abstraction span abs_kind can_end
+                          (Some merge_funs) !ctx abs_id0 abs_id1
                       in
                       ctx := nctx;
 
@@ -544,7 +547,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
        the one from the left), because we will merge those regions together
-       anyway (see the comments for {!merge_into_abstraction}).
+       anyway (see the comments for {!merge_into_first_abstraction}).
     *)
     let ty = ty0 in
     let child = child0 in
@@ -612,12 +615,13 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     merge_ashared_loans;
   }
 
-let merge_into_abstraction (span : Meta.span) (loop_id : LoopId.id)
+let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
     (abs_kind : abs_kind) (can_end : bool) (ctx : eval_ctx)
     (aid0 : AbstractionId.id) (aid1 : AbstractionId.id) :
     eval_ctx * AbstractionId.id =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
-  merge_into_abstraction span abs_kind can_end (Some merge_funs) ctx aid0 aid1
+  merge_into_first_abstraction span abs_kind can_end (Some merge_funs) ctx aid0
+    aid1
 
 (** Collapse an environment, merging the duplicated borrows/loans.
 
@@ -965,7 +969,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ("loop_join_origin_with_continue_ctxs:join_one: after join-collapse:\n"
         ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
 
-    (* Reduce again to reach fixed point *)
+    (* Reduce again to reach a fixed point *)
     joined_ctx := reduce_ctx span loop_id fixed_ids !joined_ctx;
     log#ldebug
       (lazy

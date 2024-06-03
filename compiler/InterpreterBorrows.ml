@@ -566,7 +566,9 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
         | AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
-        | ASharedLoan (_, _, _, _) -> internal_error __FILE__ __LINE__ span
+        | ASharedLoan (_, _, _, _) ->
+            (* We get there if the projection marker is not [PNone] *)
+            internal_error __FILE__ __LINE__ span
         | AIgnoredMutLoan (bid_opt, child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
@@ -2013,7 +2015,7 @@ type merge_abstraction_info = {
     We compute the list of loan/borrow contents, maps from borrow/loan ids
     to borrow/loan contents, etc.
 
-    Note that this function is very specific to [merge_into_abstraction]: we
+    Note that this function is very specific to [merge_into_first_abstraction]: we
     have strong assumptions about the shape of the abstraction, and in
     particular that:
     - its values don't contain nested borrows
@@ -2032,25 +2034,6 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
     ref MarkerBorrowId.Map.empty
   in
 
-  let push_loans pm ids (lc : g_loan_content_with_ty) : unit =
-    let pm_ids =
-      BorrowId.Set.to_seq ids
-      |> Seq.map (fun x -> (pm, x))
-      |> MarkerBorrowId.Set.of_seq
-    in
-    sanity_check __FILE__ __LINE__
-      (MarkerBorrowId.Set.disjoint !loans pm_ids)
-      span;
-    loans := MarkerBorrowId.Set.union !loans pm_ids;
-    MarkerBorrowId.Set.iter
-      (fun (pm, id) ->
-        sanity_check __FILE__ __LINE__
-          (not (MarkerBorrowId.Map.mem (pm, id) !loan_to_content))
-          span;
-        loan_to_content := MarkerBorrowId.Map.add (pm, id) lc !loan_to_content;
-        borrows_loans := LoanId (pm, id) :: !borrows_loans)
-      pm_ids
-  in
   let push_loan pm id (lc : g_loan_content_with_ty) : unit =
     sanity_check __FILE__ __LINE__
       (not (MarkerBorrowId.Set.mem (pm, id) !loans))
@@ -2061,6 +2044,9 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
       span;
     loan_to_content := MarkerBorrowId.Map.add (pm, id) lc !loan_to_content;
     borrows_loans := LoanId (pm, id) :: !borrows_loans
+  in
+  let push_loans pm ids lc : unit =
+    BorrowId.Set.iter (fun id -> push_loan pm id lc) ids
   in
   let push_borrow pm id (bc : g_borrow_content_with_ty) : unit =
     sanity_check __FILE__ __LINE__
@@ -2086,19 +2072,11 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
       method! visit_typed_value _ (v : typed_value) =
         super#visit_typed_value (Some (Concrete v.ty)) v
 
-      method! visit_loan_content env lc =
-        (* Can happen if we explore shared values whose sub-values are
-           reborrowed *)
-        let ty =
-          match Option.get env with
-          | Concrete ty -> ty
-          | Abstract _ -> craise __FILE__ __LINE__ span "Unreachable"
-        in
-        (match lc with
-        | VSharedLoan (bids, _) -> push_loans PNone bids (Concrete (ty, lc))
-        | VMutLoan _ -> craise __FILE__ __LINE__ span "Unreachable");
-        (* Continue *)
-        super#visit_loan_content env lc
+      method! visit_loan_content _ _ =
+        (* Could happen if we explore shared values whose sub-values are
+           reborrowed. We use the fact that we destructure the nested shared
+           loans before reducing a context or computing a join. *)
+        craise __FILE__ __LINE__ span "Unreachable"
 
       method! visit_borrow_content _ _ =
         (* Can happen if we explore shared values which contain borrows -
@@ -2244,12 +2222,12 @@ type merge_duplicates_funcs = {
 
     Merge two abstractions into one, without updating the context.
  *)
-let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
+let merge_into_first_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
     (can_end : bool) (merge_funs : merge_duplicates_funcs option)
     (ctx : eval_ctx) (abs0 : abs) (abs1 : abs) : abs =
   log#ldebug
     (lazy
-      ("merge_into_abstraction_aux:\n- abs0:\n"
+      ("merge_into_first_abstraction_aux:\n- abs0:\n"
       ^ abs_to_string span ctx abs0
       ^ "\n\n- abs1:\n"
       ^ abs_to_string span ctx abs1));
@@ -2285,8 +2263,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
     compute_merge_abstraction_info span ctx abs1.avalues
   in
 
-  (* Sanity check: there is no loan/borrows which appears in both abstractions,
-     unless we allow to merge duplicates *)
+  (* Sanity check: no markers appear unless we allow merging duplicates *)
   if merge_funs = None then (
     sanity_check __FILE__ __LINE__
       (List.for_all
@@ -2313,7 +2290,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
      - if a borrow/loan is present in both abstractions, we need to merge its
        content.
 
-     Note that it is possible that we may need to merge strictly more than 2 avalues,
+     Note that it is possible that we may need to merge strictly more than two avalues,
      because of shared loans. For instance, if we have:
      {[
        abs'0 { shared_loan { l0, l1 } ... }
@@ -2329,7 +2306,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
   let push_avalue av =
     log#ldebug
       (lazy
-        ("merge_into_abstraction_aux: push_avalue: "
+        ("merge_into_first_abstraction_aux: push_avalue: "
         ^ typed_avalue_to_string ~span:(Some span) ctx av));
     avalues := av :: !avalues
   in
@@ -2337,14 +2314,14 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
     match av with None -> () | Some av -> push_avalue av
   in
 
-  (* Phase 1 of the merge: We want to simplify all loan/borrow pairs. *)
+  (* Phase 1 of the merge: we simplify all loan/borrow pairs. *)
 
-  (* There is an asymetry in the merge: We only simplify a loan/borrow pair if the loan is in
-     the abstraction on the left *)
+  (* There is an asymetry in the merge: we only simplify a loan/borrow pair
+     if the loan is in the abstraction on the left *)
   let intersect = MarkerBorrowId.Set.inter loans0 borrows1 in
 
-  (* This function is called when handling shared loans, where the projection marker is global to a set of borrow ids.
-     Tracking this requires some set transformations *)
+  (* This function is called when handling shared loans: we have to apply a projection
+     marker to a set of borrow ids. *)
   let filter_bids (pm : proj_marker) (bids : BorrowId.Set.t) : BorrowId.Set.t =
     let bids =
       BorrowId.Set.to_seq bids
@@ -2388,7 +2365,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
           let bid = (pm, bid) in
           log#ldebug
             (lazy
-              ("merge_into_abstraction_aux: merging borrow "
+              ("merge_into_first_abstraction_aux: merging borrow "
               ^ MarkerBorrowId.to_string bid));
 
           (* Check if the borrow has already been merged - this can happen
@@ -2438,7 +2415,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
           else (
             log#ldebug
               (lazy
-                ("merge_into_abstraction_aux: merging loan "
+                ("merge_into_first_abstraction_aux: merging loan "
                 ^ MarkerBorrowId.to_string bid));
 
             (* Check if we need to filter it *)
@@ -2496,7 +2473,7 @@ let merge_into_abstraction_aux (span : Meta.span) (abs_kind : abs_kind)
      with only one marker. To do so, we linearly traverse the abstraction created through the first phase *)
   log#ldebug
     (lazy
-      ("merge_into_abstraction_aux: starting phase 2\n- abs:\n"
+      ("merge_into_first_abstraction_aux: starting phase 2\n- abs:\n"
       ^ abs_to_string span ctx { abs0 with avalues = abs_values }));
 
   (* We first reset the list of avalues, and will construct avalues similarly to the previous phase *)
@@ -2777,7 +2754,7 @@ let ctx_merge_regions (ctx : eval_ctx) (rid : RegionId.id)
   let env = Substitute.env_subst_rids rsubst ctx.env in
   { ctx with env }
 
-let merge_into_abstraction (span : Meta.span) (abs_kind : abs_kind)
+let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     (can_end : bool) (merge_funs : merge_duplicates_funcs option)
     (ctx : eval_ctx) (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
     eval_ctx * AbstractionId.id =
@@ -2787,13 +2764,14 @@ let merge_into_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
   (* Merge them *)
   let nabs =
-    merge_into_abstraction_aux span abs_kind can_end merge_funs ctx abs0 abs1
+    merge_into_first_abstraction_aux span abs_kind can_end merge_funs ctx abs0
+      abs1
   in
 
-  (* Update the environment: replace the abstraction 1 with the result of the merge,
-     remove the abstraction 0 *)
-  let ctx = fst (ctx_subst_abs span ctx abs_id1 nabs) in
-  let ctx = fst (ctx_remove_abs span ctx abs_id0) in
+  (* Update the environment: replace the abstraction 0 with the result of the merge,
+     remove the abstraction 1 *)
+  let ctx = fst (ctx_subst_abs span ctx abs_id0 nabs) in
+  let ctx = fst (ctx_remove_abs span ctx abs_id1) in
 
   (* Merge all the regions from the abstraction into one (the first - i.e., the
      one with the smallest id). Note that we need to do this in the whole

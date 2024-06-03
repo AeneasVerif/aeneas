@@ -696,10 +696,22 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        region id to abstraction id *)
     let fp = ref fp in
     let rg_to_abs = ref RegionGroupId.Map.empty in
+    (* List the ids of all the abstractions in the context, in the order in
+       which they appear (this is important to preserve some structure:
+       we will explore them in this order) *)
+    let all_abs_ids =
+      List.filter_map
+        (function EAbs abs -> Some abs.abs_id | _ -> None)
+        !fp.env
+    in
     let _ =
       RegionGroupId.Map.iter
         (fun rg_id ids ->
-          let ids = AbstractionId.Set.elements ids in
+          (* Make sure we explore the ids in the order in which they appear
+             in the context *)
+          let ids =
+            List.filter (fun id -> AbstractionId.Set.mem id ids) all_abs_ids
+          in
           (* Retrieve the first id of the group *)
           match ids with
           | [] ->
@@ -742,8 +754,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                         ^ AbstractionId.to_string !id0));
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
-                      merge_into_abstraction span loop_id abs_kind false !fp id
-                        !id0
+                      merge_into_first_abstraction span loop_id abs_kind false
+                        !fp !id0 id
                     in
                     fp := fp';
                     id0 := id0';

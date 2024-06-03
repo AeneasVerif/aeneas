@@ -212,24 +212,36 @@ type merge_duplicates_funcs = {
 
 (** Merge an abstraction into another abstraction.
 
-    We insert the result of the merge in place of the second abstraction (and in
+    We insert the result of the merge in place of the first abstraction (and in
     particular, we don't simply push the merged abstraction at the end of the
     environment: this helps preserving the structure of the environment, when
     computing loop fixed points for instance).
 
-    When we merge two abstractions together, we remove the loans/borrows
-    which appear in one and whose associated loans/borrows appear in the
-    other. For instance:
+    When we merge two abstractions together, we remove the loans which appear
+    in the *left* abstraction and whose corresponding borrows appear in the
+    **right** abstraction.
+    For instance:
     {[
       abs'0 { mut_borrow l0, mut_loan l1 }   // Rem.: mut_loan l1
       abs'1 { mut_borrow l1, mut_borrow l2 } // Rem.: mut_borrow l1
 
           ~~>
 
-      abs'01 { mut_borrow l0, mut_borrow l2 }
+      abs'2 { mut_borrow l0, mut_borrow l2 }
     ]}
 
-    Also, we merge all their regions together. For instance, if [abs'0] projects
+    We also simplify the markers, when the same value appears in both abstractions
+    but with different markers. For instance:
+    {[
+      abs'0 { |mut_borrow l0|, mut_loan l1 }
+      abs'1 { ︙mut_borrow l0︙, mut_borrow l1 }
+
+          ~~>
+
+      abs'2 { mut_borrow l0 }
+    ]}
+
+    Finally, we merge all their regions together. For instance, if [abs'0] projects
     region [r0] and [abs'1] projects region [r1], we pick one of the two, say [r0]
     (the one with the smallest index in practice) and substitute [r1] with [r0]
     in the whole context.
@@ -237,22 +249,10 @@ type merge_duplicates_funcs = {
     Parameters:
     - [kind]
     - [can_end]
-    - [merge_funs]: Those functions are used to merge borrows/loans with the
-      *same ids*. For instance, when performing environment joins we may introduce
-      abstractions which both contain loans/borrows with the same ids. When we
-      later merge those abstractions together, we need to call a merge function
-      to reconcile the borrows/loans. For instance, if both abstractions contain
-      the same shared loan [l0], we will call {!merge_ashared_borrows} to derive
-      a shared value for the merged shared loans.
-
-      For instance, this happens for the following abstractions:
-      {[
-        abs'0 { mut_borrow l0, mut_loan l1 } // mut_borrow l0 !
-        abs'1 { mut_borrow l0, mut_loan l2 } // mut_borrow l0 !
-      ]}
-      If you want to forbid this, provide [None]. In that case, [merge_into_abstraction]
-      actually simply performs some sort of a union.
-
+    - [merge_funs]: those functions are used to merge borrows/loans with the
+      *same ids* but different markers. This is necessary when doing a collapse
+      (see the computation of joins).
+      If [merge_funs] are not provided, we check that there are no markers.
     - [ctx]
     - [abs_id0]
     - [abs_id1]
@@ -260,7 +260,7 @@ type merge_duplicates_funcs = {
     We return the updated context as well as the id of the new abstraction which
     results from the merge.
  *)
-val merge_into_abstraction :
+val merge_into_first_abstraction :
   Meta.span ->
   abs_kind ->
   bool ->
