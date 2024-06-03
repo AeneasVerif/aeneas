@@ -393,7 +393,7 @@ let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
 
 let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (ctx0 : eval_ctx) :
-    eval_ctx * ids_sets * abs RegionGroupId.Map.t =
+    eval_ctx * ids_sets * AbstractionId.id RegionGroupId.Map.t =
   (* Introduce "reborrows" for the shared values in the abstractions, so that
      the shared values in the fixed abstractions never get modified (technically,
      they are immutable, but in practice we can introduce more shared loans, or
@@ -702,7 +702,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     let all_abs_ids =
       List.filter_map
         (function EAbs abs -> Some abs.abs_id | _ -> None)
-        !fp.env
+        (* TODO: we may want to use a different order, for instance the order
+           in which the regions were ended. *)
+        (List.rev !fp.env)
     in
     let _ =
       RegionGroupId.Map.iter
@@ -764,8 +766,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                     craise __FILE__ __LINE__ span "Unexpected")
                 ids;
               (* Register the mapping *)
-              let abs = ctx_lookup_abs !fp !id0 in
-              rg_to_abs := RegionGroupId.Map.add_strict rg_id abs !rg_to_abs)
+              rg_to_abs := RegionGroupId.Map.add_strict rg_id !id0 !rg_to_abs)
         !fp_ended_aids
     in
     let rg_to_abs = !rg_to_abs in

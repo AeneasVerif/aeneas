@@ -81,10 +81,11 @@ val compute_loop_entry_fixed_point :
   Meta.span ->
   loop_id ->
   (* This function is the function to evaluate the loop body (eval_statement applied
-     to the proper arguments) *)
+     to the proper arguments). We need to take it as input because [compute_loop_entry_fixed_point]
+     is mutually recursive with [eval_statement], but doesn't live in the same module. *)
   Cps.stl_cm_fun ->
   eval_ctx ->
-  eval_ctx * ids_sets * abs SymbolicAst.region_group_id_map
+  eval_ctx * ids_sets * AbstractionId.id SymbolicAst.region_group_id_map
 
 (** For the abstractions in the fixed point, compute the correspondance between
     the borrows ids and the loans ids, if we want to introduce equivalent
