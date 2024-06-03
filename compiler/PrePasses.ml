@@ -100,7 +100,7 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
   let rec can_be_moved_aux (must_end_with_exit : bool) (st : statement) : bool =
     match st.content with
     | SetDiscriminant _ | Assert _ | Call _ | Break _ | Continue _ | Switch _
-    | Loop _ ->
+    | Loop _ | Error _ ->
         false
     | Assign (_, rv) -> (
         match rv with
@@ -108,7 +108,7 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
         | Aggregate (AggregatedAdt (TTuple, _, _), []) -> not must_end_with_exit
         | _ -> false)
     | FakeRead _ | Drop _ | Nop -> not must_end_with_exit
-    | Panic | Return | Error _ -> true
+    | Panic | Return -> true
     | Sequence (st1, st2) ->
         can_be_moved_aux false st1 && can_be_moved_aux must_end_with_exit st2
   in
