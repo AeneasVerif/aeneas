@@ -67,20 +67,23 @@ let log = Logging.loops_join_ctxs_log
       abs@4 { MB l0, ML l4 }
     ]}
 
-    If [merge_funs] is [None], we check that there are no markers in the environments.
-    This is the "reduce" operation.
-    If [merge_funs] is [Some _], when merging abstractions together, we merge the pairs
-    of borrows and the pairs of loans with complementary markers. This is useful to
-    reuse the reduce operation to implement the collapse.
-    For instance, when merging:
-    {[
-      abs@0 { ML l0, |MB l1| }
-      abs@1 { MB l0, ︙MB l1︙ }
-    ]}
-    We get:
-    {[
-      abs@2 { MB l1 }
-    ]}
+    - If [merge_funs] is [None], we check that there are no markers in the environments.
+      This is the "reduce" operation.
+    - If [merge_funs] is [Some _], when merging abstractions together, we merge the pairs
+      of borrows and the pairs of loans with the same markers **if this marker is not**
+      [PNone]. This is useful to reuse the reduce operation to implement the collapse.
+      Note that we ignore borrows/loans with the [PNone] marker: the goal of the collapse
+      operation is to *eliminate* markers, not to simplify the environment.
+
+      For instance, when merging:
+      {[
+        abs@0 { ML l0, |MB l1| }
+        abs@1 { MB l0, ︙MB l1︙ }
+      ]}
+      We get:
+      {[
+        abs@2 { MB l1 }
+      ]}
  *)
 let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
@@ -92,7 +95,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
       ^ eval_ctx_to_string ~span:(Some span) ctx0
       ^ "\n\n"));
 
-  let allow_markers = merge_funs <> None in
+  let with_markers = merge_funs <> None in
 
   let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
@@ -172,18 +175,27 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
       let bids = MarkerBorrowId.Set.elements bids in
       List.iter
         (fun bid ->
-          if not allow_markers then
+          if not with_markers then
             sanity_check __FILE__ __LINE__ (fst bid = PNone) span;
-          match MarkerBorrowId.Map.find_opt bid loan_to_abs with
-          | None -> (* Nothing to do *) ()
-          | Some abs_ids1 ->
-              if allow_markers && fst bid = PNone then ()
-              else
+          (* If we use markers: we are doing a collapse, which means we attempt
+             to eliminate markers (and this is the only goal of the operation).
+             We thus ignore the non-marked values (we merge non-marked values
+             when doing a "real" reduce, to simplify the environment in order
+             to converge to a fixed-point, for instance). *)
+          if with_markers && fst bid = PNone then ()
+          else
+            match MarkerBorrowId.Map.find_opt bid loan_to_abs with
+            | None -> (* Nothing to do *) ()
+            | Some abs_ids1 ->
                 AbstractionId.Set.iter
                   (fun abs_id1 ->
                     (* We need to merge - unless we have already merged *)
-                    (* First, find the representatives for the two abstractions (the
-                       representative is the abstraction into which we merged) *)
+                    (* First, find the representatives for the two abstractions.
+
+                       We may have merged some abstractions already, so maybe abs_id0
+                       and abs_id1 don't exist anymore, because they may have been
+                       merged into other abstractions: we look for the abstractions
+                       resulting from such merged. *)
                     let abs_ref0 =
                       UnionFind.find (AbstractionId.Map.find abs_id0 merged_abs)
                     in
@@ -207,7 +219,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
                           ^ ":\n\n"
                           ^ eval_ctx_to_string ~span:(Some span) !ctx));
 
-                      (* Update the environment - pay attention to the order: we
+                      (* Update the environment - pay attention to the order:
                          we merge [abs_id1] *into* [abs_id0] *)
                       let nctx, abs_id =
                         merge_into_abstraction span abs_kind can_end merge_funs
@@ -672,12 +684,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     (* Add projection marker to all abstractions in the left and right environments *)
     let add_marker (pm : proj_marker) (ee : env_elem) : env_elem =
       match ee with
-      | EAbs abs ->
-          EAbs
-            {
-              abs with
-              avalues = List.map (add_marker_avalue span ctx0 pm) abs.avalues;
-            }
+      | EAbs abs -> EAbs (abs_add_marker span ctx0 pm abs)
       | x -> x
     in
 

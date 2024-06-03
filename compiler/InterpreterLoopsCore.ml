@@ -430,11 +430,11 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
   in
   ids
 
-(* Small utility: Add a projection marker to a typed avalue.
-   This can be used in combination with List.map to add markers to an entire abstraction
-*)
-let add_marker_avalue (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
-    (av : typed_avalue) : typed_avalue =
+(** Small utility: add a projection marker to a typed avalue.
+    This can be used in combination with List.map to add markers to an entire abstraction
+ *)
+let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
+    (pm : proj_marker) (av : typed_avalue) : typed_avalue =
   let obj =
     object
       inherit [_] map_typed_avalue as super
@@ -473,3 +473,13 @@ let add_marker_avalue (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
     end
   in
   obj#visit_typed_avalue () av
+
+(** Small utility: add a projection marker to an abstraction.
+    This can be used in combination with List.map to add markers to an entire abstraction
+ *)
+let abs_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
+    (abs : abs) : abs =
+  {
+    abs with
+    avalues = List.map (typed_avalue_add_marker span ctx pm) abs.avalues;
+  }

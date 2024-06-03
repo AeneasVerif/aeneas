@@ -837,15 +837,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         in
         (* Add a marker to the abstraction indicating the provenance of the value *)
         let pm = if value_is_left then PLeft else PRight in
-        let absl =
-          List.map
-            (fun abs ->
-              {
-                abs with
-                avalues = List.map (add_marker_avalue span ctx0 pm) abs.avalues;
-              })
-            absl
-        in
+        let absl = List.map (abs_add_marker span ctx0 pm) absl in
         push_absl absl;
         (* Return [Bottom] *)
         mk_bottom span v.ty
