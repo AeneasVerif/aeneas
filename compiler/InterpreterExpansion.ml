@@ -478,7 +478,7 @@ let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
   (* Debug *)
   log#ldebug
     (lazy
-      ("expand_symbolic_value_no_branching:" ^ symbolic_value_to_string ctx sv));
+      ("expand_symbolic_value_no_branching: " ^ symbolic_value_to_string ctx sv));
   (* Remember the initial context for printing purposes *)
   let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
@@ -631,6 +631,8 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
       (* We reverse the environment before exploring it - this way the values
          get expanded in a more "logical" order (this is only for convenience) *)
       obj#visit_env () (List.rev ctx.env);
+      log#ldebug
+        (lazy "greedy_expand_symbolics_with_borrows: no value to expand\n");
       (* Nothing to expand: continue *)
       (ctx, fun e -> e)
     with FoundSymbolicValue sv ->
@@ -674,6 +676,12 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
         | TVar _ | TLiteral _ | TNever | TTraitType _ | TArrow _ | TRawPtr _ ->
             craise __FILE__ __LINE__ span "Unreachable"
       in
+      (* *)
+      log#ldebug
+        (lazy
+          ("\ngreedy_expand_symbolics_with_borrows: after expansion:\n"
+          ^ eval_ctx_to_string ~span:(Some span) ctx
+          ^ "\n\n"));
       (* Compose and continue *)
       comp cc (expand ctx)
   in

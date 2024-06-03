@@ -106,6 +106,12 @@ let cc_singleton file line span cf el =
   | Some _ -> internal_error file line span
   | _ -> None
 
+let cf_singleton file line span el =
+  match el with
+  | Some [ e ] -> Some e
+  | Some _ -> internal_error file line span
+  | _ -> None
+
 (** It happens that we need to concatenate lists of results, for
     instance when evaluating the branches of a match. When applying
     the continuations to build the symbolic expressions, we need
