@@ -13,13 +13,11 @@ open InterpreterLoopsCore
 (** Compute various maps linking the abstractions and the borrows/loans they contain.
 
     Parameters:
-    - [no_duplicates]: checks that borrows/loans are not referenced more than once
-      (see the documentation for {!type:InterpreterLoopsCore.abs_borrows_loans_maps}).
     - [explore]: this function is used to filter abstractions.
     - [env]
  *)
 val compute_abs_borrows_loans_maps :
-  Meta.span -> bool -> (abs -> bool) -> env -> abs_borrows_loans_maps
+  Meta.span -> (abs -> bool) -> env -> abs_borrows_loans_maps
 
 (** Generic functor to implement matching functions between values, environments,
     etc.

@@ -26,21 +26,21 @@ type ctx_or_update = (eval_ctx, updt_env_kind) result
 (** Union Find *)
 module UF = UnionFind.Make (UnionFind.StoreMap)
 
-(** A small utility -
+(** A small utility.
 
-    Rem.: some environments may be ill-formed (they may contain several times
-    the same loan or borrow - this happens for instance when merging
-    environments). This is the reason why we use sets in some places (for
-    instance, [borrow_to_abs] maps to a *set* of ids).
+    Remark: we use projection markers, meaning we compute maps from/to
+    pairs of (projection marker, borrow/loan id). This allows us to use
+    this utility during a reduce phase (when we simplify the environment
+    and all markers should be [PNone]) as well as during a collapse (where
+    we actually have markers because we performed a join and are progressively
+    transforming the environment to get rid of those markers).
 *)
 type abs_borrows_loans_maps = {
   abs_ids : AbstractionId.id list;
   abs_to_borrows : MarkerBorrowId.Set.t AbstractionId.Map.t;
   abs_to_loans : MarkerBorrowId.Set.t AbstractionId.Map.t;
-  abs_to_borrows_loans : MarkerBorrowId.Set.t AbstractionId.Map.t;
   borrow_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
   loan_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
-  borrow_loan_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
 }
 
 (** See {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} and [Matcher].

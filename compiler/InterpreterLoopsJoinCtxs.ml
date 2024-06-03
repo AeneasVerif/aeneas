@@ -185,15 +185,13 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
   (* Explore all the *new* abstractions, and compute various maps *)
   let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
-  let ids_maps = compute_abs_borrows_loans_maps span true explore env in
+  let ids_maps = compute_abs_borrows_loans_maps span explore env in
   let {
     abs_ids;
     abs_to_borrows;
     abs_to_loans = _;
-    abs_to_borrows_loans = _;
     borrow_to_abs = _;
     loan_to_abs;
-    borrow_loan_to_abs = _;
   } =
     ids_maps
   in
@@ -338,16 +336,8 @@ let collapse_ctx_markers (span : Meta.span) (loop_id : LoopId.id)
 
   (* Explore all the *new* abstractions, and compute various maps *)
   let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
-  let ids_maps = compute_abs_borrows_loans_maps span false explore ctx0.env in
-  let {
-    abs_ids;
-    abs_to_borrows;
-    abs_to_loans;
-    abs_to_borrows_loans = _;
-    borrow_to_abs;
-    loan_to_abs;
-    borrow_loan_to_abs = _;
-  } =
+  let ids_maps = compute_abs_borrows_loans_maps span explore ctx0.env in
+  let { abs_ids; abs_to_borrows; abs_to_loans; borrow_to_abs; loan_to_abs } =
     ids_maps
   in
 
