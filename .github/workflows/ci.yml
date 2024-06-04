@@ -59,4 +59,6 @@ jobs:
     runs-on: [self-hosted, linux, nix]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # deep clone in order to get access to other commits
       - run: nix develop --command ./scripts/ci-check-charon-pin.sh
