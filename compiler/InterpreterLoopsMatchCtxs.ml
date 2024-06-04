@@ -20,65 +20,54 @@ module S = SynthesizeSymbolic
 (** The local logger *)
 let log = Logging.loops_match_ctxs_log
 
-let compute_abs_borrows_loans_maps (span : Meta.span) (no_duplicates : bool)
-    (explore : abs -> bool) (env : env) : abs_borrows_loans_maps =
+let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
+    (env : env) : abs_borrows_loans_maps =
   let abs_ids = ref [] in
   let abs_to_borrows = ref AbstractionId.Map.empty in
   let abs_to_loans = ref AbstractionId.Map.empty in
-  let abs_to_borrows_loans = ref AbstractionId.Map.empty in
-  let borrow_to_abs = ref BorrowId.Map.empty in
-  let loan_to_abs = ref BorrowId.Map.empty in
-  let borrow_loan_to_abs = ref BorrowId.Map.empty in
+  let borrow_to_abs = ref MarkerBorrowId.Map.empty in
+  let loan_to_abs = ref MarkerBorrowId.Map.empty in
 
-  let module R (Id0 : Identifiers.Id) (Id1 : Identifiers.Id) = struct
+  let module R (M : Collections.Map) (S : Collections.Set) = struct
     (*
-       [check_singleton_sets]: check that the mapping maps to a singletong.
-       [check_not_already_registered]: check if the mapping was not already registered.
+       [check_singleton_sets]: check that the mapping maps to a singleton.
+       We need this because to tweak the behavior of the sanity checks because
+       of the following cases:
+       - when computing the map from borrow ids (with marker) to the region
+         abstractions they belong to, the marked borrow ids can map to a single
+         region abstraction, i.e., to a singleton set of region abstraction ids
+       - however, when computing the mapping from region abstractions to
+         the borrow ids they contain, this time we do map abstraction ids
+         to sets which can compute strictly more than one value
     *)
-    let register_mapping (check_singleton_sets : bool)
-        (check_not_already_registered : bool) (map : Id1.Set.t Id0.Map.t ref)
-        (id0 : Id0.id) (id1 : Id1.id) : unit =
-      (* Sanity check *)
-      (if check_singleton_sets || check_not_already_registered then
-         match Id0.Map.find_opt id0 !map with
-         | None -> ()
-         | Some set ->
-             sanity_check __FILE__ __LINE__
-               ((not check_not_already_registered) || not (Id1.Set.mem id1 set))
-               span);
+    let register_mapping (check_singleton_sets : bool) (map : S.t M.t ref)
+        (id0 : M.key) (id1 : S.elt) : unit =
       (* Update the mapping *)
       map :=
-        Id0.Map.update id0
+        M.update id0
           (fun ids ->
             match ids with
-            | None -> Some (Id1.Set.singleton id1)
+            | None -> Some (S.singleton id1)
             | Some ids ->
-                (* Sanity check *)
+                (* Check that we are allowed to map id0 to a set which is not
+                   a singleton *)
                 sanity_check __FILE__ __LINE__ (not check_singleton_sets) span;
-                sanity_check __FILE__ __LINE__
-                  ((not check_not_already_registered)
-                  || not (Id1.Set.mem id1 ids))
-                  span;
+                (* Check that the mapping was not already registered *)
+                sanity_check __FILE__ __LINE__ (not (S.mem id1 ids)) span;
                 (* Update *)
-                Some (Id1.Set.add id1 ids))
+                Some (S.add id1 ids))
           !map
   end in
-  let module RAbsBorrow = R (AbstractionId) (BorrowId) in
-  let module RBorrowAbs = R (BorrowId) (AbstractionId) in
-  let register_borrow_id abs_id bid =
-    RAbsBorrow.register_mapping false no_duplicates abs_to_borrows abs_id bid;
-    RAbsBorrow.register_mapping false false abs_to_borrows_loans abs_id bid;
-    RBorrowAbs.register_mapping no_duplicates no_duplicates borrow_to_abs bid
-      abs_id;
-    RBorrowAbs.register_mapping false false borrow_loan_to_abs bid abs_id
+  let module RAbsBorrow = R (AbstractionId.Map) (MarkerBorrowId.Set) in
+  let module RBorrowAbs = R (MarkerBorrowId.Map) (AbstractionId.Set) in
+  let register_borrow_id abs_id pm bid =
+    RAbsBorrow.register_mapping false abs_to_borrows abs_id (pm, bid);
+    RBorrowAbs.register_mapping true borrow_to_abs (pm, bid) abs_id
   in
 
-  let register_loan_id abs_id bid =
-    RAbsBorrow.register_mapping false no_duplicates abs_to_loans abs_id bid;
-    RAbsBorrow.register_mapping false false abs_to_borrows_loans abs_id bid;
-    RBorrowAbs.register_mapping no_duplicates no_duplicates loan_to_abs bid
-      abs_id;
-    RBorrowAbs.register_mapping false false borrow_loan_to_abs bid abs_id
+  let register_loan_id abs_id pm bid =
+    RAbsBorrow.register_mapping false abs_to_loans abs_id (pm, bid);
+    RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs_id
   in
 
   let explore_abs =
@@ -86,35 +75,58 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (no_duplicates : bool)
       inherit [_] iter_typed_avalue as super
 
       (** Make sure we don't register the ignored ids *)
-      method! visit_aloan_content abs_id lc =
+      method! visit_aloan_content (abs_id, pm) lc =
+        sanity_check __FILE__ __LINE__ (pm = PNone) span;
         match lc with
-        | AMutLoan _ | ASharedLoan _ ->
-            (* Process those normally *)
-            super#visit_aloan_content abs_id lc
+        | AMutLoan (npm, lid, child) ->
+            (* Add the current marker when visiting the loan id *)
+            self#visit_loan_id (abs_id, npm) lid;
+            (* Recurse with the old marker *)
+            super#visit_typed_avalue (abs_id, pm) child
+        | ASharedLoan (npm, lids, sv, child) ->
+            (* Add the current marker when visiting the loan ids and the shared value *)
+            self#visit_loan_id_set (abs_id, npm) lids;
+            self#visit_typed_value (abs_id, npm) sv;
+            (* Recurse with the old marker *)
+            self#visit_typed_avalue (abs_id, pm) child
         | AIgnoredMutLoan (_, child)
         | AEndedIgnoredMutLoan { child; given_back = _; given_back_span = _ }
         | AIgnoredSharedLoan child ->
+            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the loan, if there is *)
-            self#visit_typed_avalue abs_id child
+            self#visit_typed_avalue (abs_id, pm) child
         | AEndedMutLoan _ | AEndedSharedLoan _ ->
             craise __FILE__ __LINE__ span "Unreachable"
 
       (** Make sure we don't register the ignored ids *)
-      method! visit_aborrow_content abs_id bc =
+      method! visit_aborrow_content (abs_id, pm) bc =
+        sanity_check __FILE__ __LINE__ (pm = PNone) span;
         match bc with
-        | AMutBorrow _ | ASharedBorrow _ | AProjSharedBorrow _ ->
+        | AMutBorrow (npm, bid, child) ->
+            (* Add the current marker when visiting the borrow id *)
+            self#visit_borrow_id (abs_id, npm) bid;
+            (* Recurse with the old marker *)
+            self#visit_typed_avalue (abs_id, pm) child
+        | ASharedBorrow (npm, bid) ->
+            (* Add the current marker when visiting the borrow id *)
+            self#visit_borrow_id (abs_id, npm) bid
+        | AProjSharedBorrow _ ->
+            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Process those normally *)
-            super#visit_aborrow_content abs_id bc
+            super#visit_aborrow_content (abs_id, pm) bc
         | AIgnoredMutBorrow (_, child)
         | AEndedIgnoredMutBorrow { child; given_back = _; given_back_span = _ }
           ->
+            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the borrow, if there is *)
-            self#visit_typed_avalue abs_id child
+            self#visit_typed_avalue (abs_id, pm) child
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
             craise __FILE__ __LINE__ span "Unreachable"
 
-      method! visit_borrow_id abs_id bid = register_borrow_id abs_id bid
-      method! visit_loan_id abs_id lid = register_loan_id abs_id lid
+      method! visit_borrow_id (abs_id, pm) bid =
+        register_borrow_id abs_id pm bid
+
+      method! visit_loan_id (abs_id, pm) lid = register_loan_id abs_id pm lid
     end
   in
 
@@ -123,11 +135,13 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (no_duplicates : bool)
       let abs_id = abs.abs_id in
       if explore abs then (
         abs_to_borrows :=
-          AbstractionId.Map.add abs_id BorrowId.Set.empty !abs_to_borrows;
+          AbstractionId.Map.add abs_id MarkerBorrowId.Set.empty !abs_to_borrows;
         abs_to_loans :=
-          AbstractionId.Map.add abs_id BorrowId.Set.empty !abs_to_loans;
+          AbstractionId.Map.add abs_id MarkerBorrowId.Set.empty !abs_to_loans;
         abs_ids := abs.abs_id :: !abs_ids;
-        List.iter (explore_abs#visit_typed_avalue abs.abs_id) abs.avalues)
+        List.iter
+          (explore_abs#visit_typed_avalue (abs.abs_id, PNone))
+          abs.avalues)
       else ())
     env;
 
@@ -137,10 +151,8 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (no_duplicates : bool)
     abs_ids = !abs_ids;
     abs_to_borrows = !abs_to_borrows;
     abs_to_loans = !abs_to_loans;
-    abs_to_borrows_loans = !abs_to_borrows_loans;
     borrow_to_abs = !borrow_to_abs;
     loan_to_abs = !loan_to_abs;
-    borrow_loan_to_abs = !borrow_loan_to_abs;
   }
 
 (** Match two types during a join.
@@ -353,10 +365,10 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     | ABorrow bc0, ABorrow bc1 -> (
         log#ldebug (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
-        | ASharedBorrow bid0, ASharedBorrow bid1 ->
+        | ASharedBorrow (pm0, bid0), ASharedBorrow (pm1, bid1) ->
             log#ldebug (lazy "match_typed_avalues: shared borrows");
-            M.match_ashared_borrows ctx0 ctx1 v0.ty bid0 v1.ty bid1 ty
-        | AMutBorrow (bid0, av0), AMutBorrow (bid1, av1) ->
+            M.match_ashared_borrows ctx0 ctx1 v0.ty pm0 bid0 v1.ty pm1 bid1 ty
+        | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
             log#ldebug (lazy "match_typed_avalues: mut borrows");
             log#ldebug
               (lazy
@@ -364,7 +376,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let av = match_arec av0 av1 in
             log#ldebug
               (lazy "match_typed_avalues: mut borrows: matched children values");
-            M.match_amut_borrows ctx0 ctx1 v0.ty bid0 av0 v1.ty bid1 av1 ty av
+            M.match_amut_borrows ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty pm1 bid1 av1
+              ty av
         | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
             (* The abstractions are destructured: we shouldn't get there *)
             craise __FILE__ __LINE__ M.span "Unexpected"
@@ -393,23 +406,25 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
-        | ASharedLoan (ids0, sv0, av0), ASharedLoan (ids1, sv1, av1) ->
+        | ASharedLoan (pm0, ids0, sv0, av0), ASharedLoan (pm1, ids1, sv1, av1)
+          ->
             log#ldebug (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             sanity_check __FILE__ __LINE__
               (not (value_has_borrows sv.value))
               M.span;
-            M.match_ashared_loans ctx0 ctx1 v0.ty ids0 sv0 av0 v1.ty ids1 sv1
-              av1 ty sv av
-        | AMutLoan (id0, av0), AMutLoan (id1, av1) ->
+            M.match_ashared_loans ctx0 ctx1 v0.ty pm0 ids0 sv0 av0 v1.ty pm1
+              ids1 sv1 av1 ty sv av
+        | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
             log#ldebug (lazy "match_typed_avalues: mut loans");
             log#ldebug
               (lazy "match_typed_avalues: mut loans: matching children values");
             let av = match_arec av0 av1 in
             log#ldebug
               (lazy "match_typed_avalues: mut loans: matched children values");
-            M.match_amut_loans ctx0 ctx1 v0.ty id0 av0 v1.ty id1 av1 ty av
+            M.match_amut_loans ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1 id1 av1 ty
+              av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
         | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
             (* Those should have been filtered when destructuring the abstractions -
@@ -503,14 +518,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
-      let mk_aborrow (bid : borrow_id) : typed_avalue =
-        let value = ABorrow (ASharedBorrow bid) in
+      let mk_aborrow (pm : proj_marker) (bid : borrow_id) : typed_avalue =
+        let value = ABorrow (ASharedBorrow (pm, bid)) in
         { value; ty = borrow_ty }
       in
-      let borrows = [ mk_aborrow bid0; mk_aborrow bid1 ] in
+      let borrows = [ mk_aborrow PLeft bid0; mk_aborrow PRight bid1 ] in
 
       let loan =
-        ASharedLoan (BorrowId.Set.singleton bid2, sv, mk_aignored span bv_ty)
+        ASharedLoan
+          (PNone, BorrowId.Set.singleton bid2, sv, mk_aignored span bv_ty)
       in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
@@ -543,7 +559,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          an abstraction:
 
          {[
-           { MB bid0, ML nbid }  // where nbid fresh
+           { MB bid0, ML bid' }  // where bid' fresh
          ]}
 
          and we use bid' for the borrow id that we return.
@@ -551,7 +567,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          We do this because we want to make sure that, whenever a mutably
          borrowed value is modified in a loop iteration, then there is
          a fresh abstraction between this borrowed value and the fixed
-         abstractions.
+         abstractions (this is tantamount to introducing a reborrow).
 
          Example:
          ========
@@ -582,6 +598,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          to say [unit]) while the backward loop function gives back a new value
          for [v] (i.e., a new symbolic value which will replace [s0]).
 
+         By introducing the fresh region abstraction wet get:
+         {[
+           abs'0 { ML l0 } // input abstraction
+           abs'1 { MB l0, ML l1 } // fresh abstraction
+           v -> MB l1 s1
+           i -> 0
+         ]}
+
+
          In the future, we will also compute joins at the *loop exits*: when we
          do so, we won't introduce reborrows like above: the forward loop function
          will update [v], while the backward loop function will return nothing.
@@ -599,18 +624,21 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let kind = RMut in
         let bv_ty = bv.ty in
-        sanity_check __FILE__ __LINE__ (ty_no_regions bv_ty) span;
+        cassert __FILE__ __LINE__ (ty_no_regions bv_ty) span
+          "Nested borrows are not supported yet";
         let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
         let borrow_av =
           let ty = borrow_ty in
-          let value = ABorrow (AMutBorrow (bid0, mk_aignored span bv_ty)) in
+          let value =
+            ABorrow (AMutBorrow (PNone, bid0, mk_aignored span bv_ty))
+          in
           mk_typed_avalue span ty value
         in
 
         let loan_av =
           let ty = borrow_ty in
-          let value = ALoan (AMutLoan (nbid, mk_aignored span bv_ty)) in
+          let value = ALoan (AMutLoan (PNone, nbid, mk_aignored span bv_ty)) in
           mk_typed_avalue span ty value
         in
 
@@ -635,9 +663,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         (nbid, bv))
     else
       (* We replace bid0 and bid1 with a fresh borrow id, and introduce
-         an abstraction which links all of them:
+         an abstraction which links all of them. This time we have to introduce
+         markers:
          {[
-           { MB bid0, MB bid1, ML bid2 }
+           { |MB bid0|, ︙MB bid1︙, ML bid2 }
          ]}
       *)
       let rid = fresh_region_id () in
@@ -650,16 +679,17 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
-      let mk_aborrow (bid : borrow_id) (bv : typed_value) : typed_avalue =
+      let mk_aborrow (pm : proj_marker) (bid : borrow_id) (bv : typed_value) :
+          typed_avalue =
         let bv_ty = bv.ty in
         cassert __FILE__ __LINE__ (ty_no_regions bv_ty) span
           "Nested borrows are not supported yet";
-        let value = ABorrow (AMutBorrow (bid, mk_aignored span bv_ty)) in
+        let value = ABorrow (AMutBorrow (pm, bid, mk_aignored span bv_ty)) in
         { value; ty = borrow_ty }
       in
-      let borrows = [ mk_aborrow bid0 bv0; mk_aborrow bid1 bv1 ] in
+      let borrows = [ mk_aborrow PLeft bid0 bv0; mk_aborrow PRight bid1 bv1 ] in
 
-      let loan = AMutLoan (bid2, mk_aignored span bv_ty) in
+      let loan = AMutLoan (PNone, bid2, mk_aignored span bv_ty) in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
 
@@ -744,24 +774,16 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Check that:
        - there are no borrows in the symbolic value
        - there are no borrows in the "regular" value
-       If there are loans in the regular value, raise an exception.
     *)
     let type_infos = ctx0.type_ctx.type_infos in
-    cassert __FILE__ __LINE__
+    sanity_check __FILE__ __LINE__
       (not (ty_has_borrows type_infos sv.sv_ty))
-      span
-      "Check that:\n\
-      \    - there are no borrows in the symbolic value\n\
-      \    - there are no borrows in the \"regular\" value\n\
-      \    If there are loans in the regular value, raise an exception.";
-    cassert __FILE__ __LINE__
+      span;
+    sanity_check __FILE__ __LINE__
       (not (ValuesUtils.value_has_borrows type_infos v.value))
-      span
-      "Check that:\n\
-      \    - there are no borrows in the symbolic value\n\
-      \    - there are no borrows in the \"regular\" value\n\
-      \    If there are loans in the regular value, raise an exception.";
+      span;
     let value_is_left = not left in
+    (* If there are loans in the regular value, raise an exception. *)
     (match InterpreterBorrowsCore.get_first_loan_in_value v with
     | None -> ()
     | Some (VSharedLoan (ids, _)) ->
@@ -781,13 +803,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     then mk_bottom span sv.sv_ty
     else mk_fresh_symbolic_typed_value span sv.sv_ty
 
-  let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx) (left : bool)
-      (v : typed_value) : typed_value =
+  let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+      (bottom_is_left : bool) (v : typed_value) : typed_value =
+    let value_is_left = not bottom_is_left in
     (* If there are outer loans in the non-bottom value, raise an exception.
        Otherwise, convert it to an abstraction and return [Bottom].
     *)
     let with_borrows = false in
-    let value_is_left = not left in
     match
       InterpreterBorrowsCore.get_first_outer_loan_or_borrow_in_value
         with_borrows v
@@ -804,8 +826,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
-        (*   *)
-
         (* Convert the value to an abstraction *)
         let abs_kind : abs_kind = Loop (S.loop_id, None, LoopSynthInput) in
         let can_end = true in
@@ -815,6 +835,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           convert_value_to_abstractions span abs_kind can_end
             destructure_shared_values ctx v
         in
+        (* Add a marker to the abstraction indicating the provenance of the value *)
+        let pm = if value_is_left then PLeft else PRight in
+        let absl = List.map (abs_add_marker span ctx0 pm) absl in
         push_absl absl;
         (* Return [Bottom] *)
         mk_bottom span v.ty
@@ -1213,26 +1236,38 @@ struct
   let match_distinct_aadts _ _ _ _ _ _ _ =
     raise (Distinct "match_distinct_adts")
 
-  let match_ashared_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 bid0 _ty1 bid1 ty
-      =
+  let match_ashared_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 bid0 _ty1 pm1
+      bid1 ty =
+    (* We are checking whether that two environments are equivalent:
+       there shouldn't be any projection markers *)
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     let bid = match_borrow_id bid0 bid1 in
-    let value = ABorrow (ASharedBorrow bid) in
+    let value = ABorrow (ASharedBorrow (PNone, bid)) in
     { value; ty }
 
-  let match_amut_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 bid0 _av0 _ty1 bid1
-      _av1 ty av =
+  let match_amut_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 bid0 _av0 _ty1
+      pm1 bid1 _av1 ty av =
+    (* We are checking whether that two environments are equivalent:
+       there shouldn't be any projection markers *)
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     let bid = match_borrow_id bid0 bid1 in
-    let value = ABorrow (AMutBorrow (bid, av)) in
+    let value = ABorrow (AMutBorrow (PNone, bid, av)) in
     { value; ty }
 
-  let match_ashared_loans (_ : eval_ctx) (_ : eval_ctx) _ty0 ids0 _v0 _av0 _ty1
-      ids1 _v1 _av1 ty v av =
+  let match_ashared_loans (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 ids0 _v0 _av0
+      _ty1 pm1 ids1 _v1 _av1 ty v av =
+    (* We are checking whether that two environments are equivalent:
+       there shouldn't be any projection markers *)
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     let bids = match_loan_ids ids0 ids1 in
-    let value = ALoan (ASharedLoan (bids, v, av)) in
+    let value = ALoan (ASharedLoan (PNone, bids, v, av)) in
     { value; ty }
 
-  let match_amut_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 id0 _av0 _ty1
-      id1 _av1 ty av =
+  let match_amut_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 id0 _av0
+      _ty1 pm1 id1 _av1 ty av =
+    (* We are checking whether that two environments are equivalent:
+       there shouldn't be any projection markers *)
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher:match_amut_loans:" ^ "\n- id0: "
@@ -1241,7 +1276,7 @@ struct
         ^ typed_avalue_to_string ~span:(Some span) ctx1 av));
 
     let id = match_loan_id id0 id1 in
-    let value = ALoan (AMutLoan (id, av)) in
+    let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
   let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
@@ -1706,7 +1741,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     let lookup_shared_loan lid ctx : typed_value =
       match snd (lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
-      | Abstract (ASharedLoan (_, v, _)) -> v
+      | Abstract (ASharedLoan (pm, _, v, _)) ->
+          sanity_check __FILE__ __LINE__ (pm = PNone) span;
+          v
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
     let lookup_in_src id = lookup_shared_loan id src_ctx in

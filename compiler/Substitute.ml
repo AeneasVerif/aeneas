@@ -138,10 +138,10 @@ let subst_ids_visitor (r_subst : RegionId.id -> RegionId.id)
     method! visit_loan_id _ bid = bsubst bid
     method! visit_symbolic_value_id _ id = ssubst id
 
-    (** We *do* visit span-values *)
+    (** We *do* visit meta-values *)
     method! visit_msymbolic_value env sv = self#visit_symbolic_value env sv
 
-    (** We *do* visit span-values *)
+    (** We *do* visit meta-values *)
     method! visit_mvalue env v = self#visit_typed_value env v
 
     method! visit_abstraction_id _ id = asubst id

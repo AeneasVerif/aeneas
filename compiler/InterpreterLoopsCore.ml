@@ -26,21 +26,21 @@ type ctx_or_update = (eval_ctx, updt_env_kind) result
 (** Union Find *)
 module UF = UnionFind.Make (UnionFind.StoreMap)
 
-(** A small utility -
+(** A small utility.
 
-    Rem.: some environments may be ill-formed (they may contain several times
-    the same loan or borrow - this happens for instance when merging
-    environments). This is the reason why we use sets in some places (for
-    instance, [borrow_to_abs] maps to a *set* of ids).
+    Remark: we use projection markers, meaning we compute maps from/to
+    pairs of (projection marker, borrow/loan id). This allows us to use
+    this utility during a reduce phase (when we simplify the environment
+    and all markers should be [PNone]) as well as during a collapse (where
+    we actually have markers because we performed a join and are progressively
+    transforming the environment to get rid of those markers).
 *)
 type abs_borrows_loans_maps = {
   abs_ids : AbstractionId.id list;
-  abs_to_borrows : BorrowId.Set.t AbstractionId.Map.t;
-  abs_to_loans : BorrowId.Set.t AbstractionId.Map.t;
-  abs_to_borrows_loans : BorrowId.Set.t AbstractionId.Map.t;
-  borrow_to_abs : AbstractionId.Set.t BorrowId.Map.t;
-  loan_to_abs : AbstractionId.Set.t BorrowId.Map.t;
-  borrow_loan_to_abs : AbstractionId.Set.t BorrowId.Map.t;
+  abs_to_borrows : MarkerBorrowId.Set.t AbstractionId.Map.t;
+  abs_to_loans : MarkerBorrowId.Set.t AbstractionId.Map.t;
+  borrow_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
+  loan_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
 }
 
 (** See {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} and [Matcher].
@@ -65,7 +65,7 @@ module type PrimMatcher = sig
   val match_distinct_adts :
     eval_ctx -> eval_ctx -> ety -> adt_value -> adt_value -> typed_value
 
-  (** The span-value is the result of a match.
+  (** The meta-value is the result of a match.
 
       We take an additional function as input, which acts as a matcher over
       typed values, to be able to lookup the shared values and match them.
@@ -158,8 +158,10 @@ module type PrimMatcher = sig
 
   (** Parameters:
       [ty0]
+      [pm0]
       [bid0]
       [ty1]
+      [pm1]
       [bid1]
       [ty]: result of matching ty0 and ty1
    *)
@@ -167,17 +169,21 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     rty ->
+    proj_marker ->
     borrow_id ->
     rty ->
+    proj_marker ->
     borrow_id ->
     rty ->
     typed_avalue
 
   (** Parameters:
       [ty0]
+      [pm0]
       [bid0]
       [av0]
       [ty1]
+      [pm1]
       [bid1]
       [av1]
       [ty]: result of matching ty0 and ty1
@@ -187,9 +193,11 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     rty ->
+    proj_marker ->
     borrow_id ->
     typed_avalue ->
     rty ->
+    proj_marker ->
     borrow_id ->
     typed_avalue ->
     rty ->
@@ -198,10 +206,12 @@ module type PrimMatcher = sig
 
   (** Parameters:
       [ty0]
+      [pm0]
       [ids0]
       [v0]
       [av0]
       [ty1]
+      [pm1]
       [ids1]
       [v1]
       [av1]
@@ -213,10 +223,12 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     rty ->
+    proj_marker ->
     loan_id_set ->
     typed_value ->
     typed_avalue ->
     rty ->
+    proj_marker ->
     loan_id_set ->
     typed_value ->
     typed_avalue ->
@@ -227,9 +239,11 @@ module type PrimMatcher = sig
 
   (** Parameters:
       [ty0]
+      [pm0]
       [id0]
       [av0]
       [ty1]
+      [pm1]
       [id1]
       [av1]
       [ty]: result of matching ty0 and ty1
@@ -239,9 +253,11 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     rty ->
+    proj_marker ->
     borrow_id ->
     typed_avalue ->
     rty ->
+    proj_marker ->
     borrow_id ->
     typed_avalue ->
     rty ->
@@ -413,3 +429,57 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
     }
   in
   ids
+
+(** Small utility: add a projection marker to a typed avalue.
+    This can be used in combination with List.map to add markers to an entire abstraction
+ *)
+let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
+    (pm : proj_marker) (av : typed_avalue) : typed_avalue =
+  let obj =
+    object
+      inherit [_] map_typed_avalue as super
+
+      method! visit_borrow_content _ _ =
+        craise __FILE__ __LINE__ span "Unexpected borrow"
+
+      method! visit_loan_content _ _ =
+        craise __FILE__ __LINE__ span "Unexpected loan"
+
+      method! visit_symbolic_value _ sv =
+        sanity_check __FILE__ __LINE__
+          (not (symbolic_value_has_borrows ctx sv))
+          span;
+        sv
+
+      method! visit_aloan_content env lc =
+        match lc with
+        | AMutLoan (pm0, bid, av) ->
+            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            super#visit_aloan_content env (AMutLoan (pm, bid, av))
+        | ASharedLoan (pm0, bids, av, child) ->
+            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            super#visit_aloan_content env (ASharedLoan (pm, bids, av, child))
+        | _ -> craise __FILE__ __LINE__ span "Unsupported yet"
+
+      method! visit_aborrow_content env bc =
+        match bc with
+        | AMutBorrow (pm0, bid, av) ->
+            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            super#visit_aborrow_content env (AMutBorrow (pm, bid, av))
+        | ASharedBorrow (pm0, bid) ->
+            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            super#visit_aborrow_content env (ASharedBorrow (pm, bid))
+        | _ -> craise __FILE__ __LINE__ span "Unsupported yet"
+    end
+  in
+  obj#visit_typed_avalue () av
+
+(** Small utility: add a projection marker to an abstraction.
+    This can be used in combination with List.map to add markers to an entire abstraction
+ *)
+let abs_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
+    (abs : abs) : abs =
+  {
+    abs with
+    avalues = List.map (typed_avalue_add_marker span ctx pm) abs.avalues;
+  }
