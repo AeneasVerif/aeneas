@@ -2856,6 +2856,8 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       ^ abs_to_string span ctx abs0
       ^ "\n\n- abs1:\n"
       ^ abs_to_string span ctx abs1));
+  (* Sanity check: we can't merge an abstraction with itself *)
+  sanity_check __FILE__ __LINE__ (abs0.abs_id <> abs1.abs_id) span;
 
   (* Check that the abstractions are destructured (i.e., there are no nested
      values, etc.) *)
