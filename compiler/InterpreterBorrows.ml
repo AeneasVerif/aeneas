@@ -2218,6 +2218,60 @@ type merge_duplicates_funcs = {
        *)
 }
 
+(** Small utility: if a value doesn't have any marker, split it into two values
+    with complementary markers. We use this for {!merge_abstractions}.
+
+    We assume the value has been destructured (there are no nested loans,
+    adts, the children are ignored, etc.).
+ *)
+let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
+    (av : typed_avalue) : typed_avalue list =
+  let mk_split pm mk_value =
+    if pm = PNone then [ mk_value PLeft; mk_value PRight ] else [ av ]
+  in
+  match av.value with
+  | AAdt _ | ABottom | ASymbolic _ | AIgnored ->
+      craise __FILE__ __LINE__ span "Unexpected"
+  | ABorrow bc -> (
+      match bc with
+      | AMutBorrow (pm, bid, child) ->
+          sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+          let mk_value pm =
+            { av with value = ABorrow (AMutBorrow (pm, bid, child)) }
+          in
+          mk_split pm mk_value
+      | ASharedBorrow (pm, bid) ->
+          let mk_value pm =
+            { av with value = ABorrow (ASharedBorrow (pm, bid)) }
+          in
+          mk_split pm mk_value
+      | _ -> craise __FILE__ __LINE__ span "Unsupported yet")
+  | ALoan lc -> (
+      match lc with
+      | AMutLoan (pm, bid, child) ->
+          sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+          let mk_value pm =
+            { av with value = ALoan (AMutLoan (pm, bid, child)) }
+          in
+          mk_split pm mk_value
+      | ASharedLoan (pm, bids, sv, child) ->
+          sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+          sanity_check __FILE__ __LINE__
+            (not (value_has_borrows ctx sv.value))
+            span;
+          let mk_value pm =
+            { av with value = ALoan (ASharedLoan (pm, bids, sv, child)) }
+          in
+          mk_split pm mk_value
+      | _ -> craise __FILE__ __LINE__ span "Unsupported yet")
+
+let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
+  {
+    abs with
+    avalues =
+      List.concat (List.map (typed_avalue_split_marker span ctx) abs.avalues);
+  }
+
 (** Auxiliary function for {!merge_abstractions}.
 
     Phase 1 of the merge: we simplify all loan/borrow pairs, if a loan is
@@ -2244,6 +2298,27 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
     (abs1 : abs) : typed_avalue list =
   log#ldebug (lazy "merge_abstractions_merge_loan_borrow_pairs");
+
+  (* Split the markers inside the abstractions (if we allow using markers).
+
+     We do so because it enables simplification later when we are in the following case:
+     {[
+       abs0 { ML l0 } |><| abs1 { |MB l0|, MB l1 }
+     ]}
+
+     If we split before merging we get:
+     {[
+       abs0 { |ML l0|, ︙ML l0︙ } |><| abs1 { |MB l0|, |MB l1|, ︙MB l1︙ }
+           ~~> merge
+       abs2 { ︙ML l0︙, |MB l1|, ︙MB l1︙ }
+           ~~> simplify the complementary markers
+       abs2 { ︙ML l0︙, MB l1 }
+     ]}
+  *)
+  let abs0, abs1 =
+    if merge_funs = None then (abs0, abs1)
+    else (abs_split_markers span ctx abs0, abs_split_markers span ctx abs1)
+  in
 
   (* Compute the relevant information *)
   let {
