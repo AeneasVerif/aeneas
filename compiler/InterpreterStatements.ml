@@ -1021,6 +1021,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let eval_loop_body = eval_statement config loop_body in
       InterpreterLoops.eval_loop config st.span eval_loop_body ctx
   | Switch switch -> eval_switch config st.span switch ctx
+  | Error s -> craise __FILE__ __LINE__ st.span s
 
 and eval_global (config : config) (span : Meta.span) (dest : place)
     (gid : GlobalDeclId.id) (generics : generic_args) : stl_cm_fun =
