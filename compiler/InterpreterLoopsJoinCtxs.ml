@@ -256,49 +256,53 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
 
-  (* Merge all the mergeable abs.
-
-     We iterate over the *new* abstractions, then over the loans in the abstractions.
+  (*
+   * Merge all the mergeable abs.
+   *)
+  (* We iterate over the *new* abstractions, then over the loans in the abstractions.
      We do this because we want to control the order in which abstractions
      are merged (the ids are iterated in increasing order). Otherwise, we
-     could simply iterate over all the borrows in [loan_to_abs]...
-  *)
+     could simply iterate over all the borrows in [loan_to_abs]... *)
+  let iterate ctx f =
+    List.iter
+      (fun abs_id0 ->
+        let lids = AbstractionId.Map.find abs_id0 ctx.info.abs_to_loans in
+        MarkerBorrowId.Set.iter (fun lid -> f (abs_id0, lid)) lids)
+      ctx.info.abs_ids
+  in
+  (* Given a loan, check if there is a fresh abstraction with the corresponding borrow *)
+  let merge_policy ctx (abs_id0, lid) =
+    if not with_markers then
+      sanity_check __FILE__ __LINE__ (fst lid = PNone) span;
+    (* If we use markers: we are doing a collapse, which means we attempt
+       to eliminate markers (and this is the only goal of the operation).
+       We thus ignore the non-marked values (we merge non-marked values
+       when doing a "real" reduce, to simplify the environment in order
+       to converge to a fixed-point, for instance). *)
+    if with_markers && fst lid = PNone then None
+    else
+      (* Find the borrow corresponding to the loan we want to eliminate *)
+      match MarkerBorrowId.Map.find_opt lid ctx.info.borrow_to_abs with
+      | None -> (* Nothing to to *) None
+      | Some abs_ids1 -> (
+          (* We need to merge *)
+          match AbstractionId.Set.elements abs_ids1 with
+          | [] -> None
+          | abs_id1 :: _ ->
+              log#ldebug
+                (lazy
+                  ("reduce_ctx: merging abstraction "
+                  ^ AbstractionId.to_string abs_id1
+                  ^ " into "
+                  ^ AbstractionId.to_string abs_id0
+                  ^ ":\n\n"
+                  ^ eval_ctx_to_string ~span:(Some span) ctx.ctx));
+              Some (abs_id0, abs_id1))
+  in
+  (* Iterate and merge *)
   let ctx =
-    repeat_iter_borrows_merge span old_ids abs_kind can_end merge_funs
-      (fun ctx f ->
-        List.iter
-          (fun abs_id0 ->
-            let lids = AbstractionId.Map.find abs_id0 ctx.info.abs_to_loans in
-            MarkerBorrowId.Set.iter (fun lid -> f (abs_id0, lid)) lids)
-          ctx.info.abs_ids)
-      (fun ctx (abs_id0, lid) ->
-        if not with_markers then
-          sanity_check __FILE__ __LINE__ (fst lid = PNone) span;
-        (* If we use markers: we are doing a collapse, which means we attempt
-           to eliminate markers (and this is the only goal of the operation).
-           We thus ignore the non-marked values (we merge non-marked values
-           when doing a "real" reduce, to simplify the environment in order
-           to converge to a fixed-point, for instance). *)
-        if with_markers && fst lid = PNone then None
-        else
-          (* Find the borrow corresponding to the loan we want to eliminate *)
-          match MarkerBorrowId.Map.find_opt lid ctx.info.borrow_to_abs with
-          | None -> (* Nothing to to *) None
-          | Some abs_ids1 -> (
-              (* We need to merge *)
-              match AbstractionId.Set.elements abs_ids1 with
-              | [] -> None
-              | abs_id1 :: _ ->
-                  log#ldebug
-                    (lazy
-                      ("reduce_ctx: merging abstraction "
-                      ^ AbstractionId.to_string abs_id1
-                      ^ " into "
-                      ^ AbstractionId.to_string abs_id0
-                      ^ ":\n\n"
-                      ^ eval_ctx_to_string ~span:(Some span) ctx.ctx));
-                  Some (abs_id0, abs_id1)))
-      ctx
+    repeat_iter_borrows_merge span old_ids abs_kind can_end merge_funs iterate
+      merge_policy ctx
   in
 
   log#ldebug
