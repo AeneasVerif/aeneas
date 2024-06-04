@@ -89,7 +89,7 @@ Definition test3 : result unit :=
   x <- get_max 4%u32 3%u32;
   y <- get_max 10%u32 11%u32;
   z <- u32_add x y;
-  if negb (z s= 15%u32) then Fail_ Failure else Ok tt
+  if z s= 15%u32 then Ok tt else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test3] *)
@@ -98,7 +98,7 @@ Check (test3 )%return.
 (** [no_nested_borrows::test_neg1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 90:0-90:18 *)
 Definition test_neg1 : result unit :=
-  y <- i32_neg 3%i32; if negb (y s= (-3)%i32) then Fail_ Failure else Ok tt
+  y <- i32_neg 3%i32; if y s= (-3)%i32 then Ok tt else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test_neg1] *)
@@ -107,7 +107,7 @@ Check (test_neg1 )%return.
 (** [no_nested_borrows::refs_test1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 97:0-97:19 *)
 Definition refs_test1 : result unit :=
-  if negb (1%i32 s= 1%i32) then Fail_ Failure else Ok tt
+  if 1%i32 s= 1%i32 then Ok tt else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::refs_test1] *)
@@ -116,15 +116,15 @@ Check (refs_test1 )%return.
 (** [no_nested_borrows::refs_test2]:
     Source: 'tests/src/no_nested_borrows.rs', lines 108:0-108:19 *)
 Definition refs_test2 : result unit :=
-  if negb (2%i32 s= 2%i32)
-  then Fail_ Failure
-  else
-    if negb (0%i32 s= 0%i32)
-    then Fail_ Failure
-    else
-      if negb (2%i32 s= 2%i32)
-      then Fail_ Failure
-      else if negb (2%i32 s= 2%i32) then Fail_ Failure else Ok tt
+  if 2%i32 s= 2%i32
+  then
+    if 0%i32 s= 0%i32
+    then
+      if 2%i32 s= 2%i32
+      then if 2%i32 s= 2%i32 then Ok tt else Fail_ Failure
+      else Fail_ Failure
+    else Fail_ Failure
+  else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::refs_test2] *)
@@ -145,7 +145,7 @@ Definition test_box1 : result unit :=
   let (_, deref_mut_back) := p in
   b <- deref_mut_back 1%i32;
   x <- alloc_boxed_Box_deref i32 b;
-  if negb (x s= 1%i32) then Fail_ Failure else Ok tt
+  if x s= 1%i32 then Ok tt else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test_box1] *)
@@ -171,7 +171,7 @@ Definition test_panic (b : bool) : result unit :=
 (** [no_nested_borrows::test_copy_int]:
     Source: 'tests/src/no_nested_borrows.rs', lines 160:0-160:22 *)
 Definition test_copy_int : result unit :=
-  y <- copy_int 0%i32; if negb (0%i32 s= y) then Fail_ Failure else Ok tt
+  y <- copy_int 0%i32; if 0%i32 s= y then Ok tt else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test_copy_int] *)
@@ -187,7 +187,7 @@ Definition is_cons (T : Type) (l : List_t T) : result bool :=
     Source: 'tests/src/no_nested_borrows.rs', lines 174:0-174:21 *)
 Definition test_is_cons : result unit :=
   b <- is_cons i32 (List_Cons 0%i32 List_Nil);
-  if negb b then Fail_ Failure else Ok tt
+  if b then Ok tt else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test_is_cons] *)
@@ -204,7 +204,7 @@ Definition split_list (T : Type) (l : List_t T) : result (T * (List_t T)) :=
 Definition test_split_list : result unit :=
   p <- split_list i32 (List_Cons 0%i32 List_Nil);
   let (hd, _) := p in
-  if negb (hd s= 0%i32) then Fail_ Failure else Ok tt
+  if hd s= 0%i32 then Ok tt else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test_split_list] *)
@@ -225,14 +225,14 @@ Definition choose_test : result unit :=
   p <- choose i32 true 0%i32 0%i32;
   let (z, choose_back) := p in
   z1 <- i32_add z 1%i32;
-  if negb (z1 s= 1%i32)
-  then Fail_ Failure
-  else (
+  if z1 s= 1%i32
+  then (
     p1 <- choose_back z1;
     let (x, y) := p1 in
-    if negb (x s= 1%i32)
-    then Fail_ Failure
-    else if negb (y s= 0%i32) then Fail_ Failure else Ok tt)
+    if x s= 1%i32
+    then if y s= 0%i32 then Ok tt else Fail_ Failure
+    else Fail_ Failure)
+  else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::choose_test] *)
@@ -332,34 +332,34 @@ Definition test_list_functions : result unit :=
   let l := List_Cons 2%i32 List_Nil in
   let l1 := List_Cons 1%i32 l in
   i <- list_length i32 (List_Cons 0%i32 l1);
-  if negb (i s= 3%u32)
-  then Fail_ Failure
-  else (
+  if i s= 3%u32
+  then (
     i1 <- list_nth_shared i32 (List_Cons 0%i32 l1) 0%u32;
-    if negb (i1 s= 0%i32)
-    then Fail_ Failure
-    else (
+    if i1 s= 0%i32
+    then (
       i2 <- list_nth_shared i32 (List_Cons 0%i32 l1) 1%u32;
-      if negb (i2 s= 1%i32)
-      then Fail_ Failure
-      else (
+      if i2 s= 1%i32
+      then (
         i3 <- list_nth_shared i32 (List_Cons 0%i32 l1) 2%u32;
-        if negb (i3 s= 2%i32)
-        then Fail_ Failure
-        else (
+        if i3 s= 2%i32
+        then (
           p <- list_nth_mut i32 (List_Cons 0%i32 l1) 1%u32;
           let (_, list_nth_mut_back) := p in
           ls <- list_nth_mut_back 3%i32;
           i4 <- list_nth_shared i32 ls 0%u32;
-          if negb (i4 s= 0%i32)
-          then Fail_ Failure
-          else (
+          if i4 s= 0%i32
+          then (
             i5 <- list_nth_shared i32 ls 1%u32;
-            if negb (i5 s= 3%i32)
-            then Fail_ Failure
-            else (
+            if i5 s= 3%i32
+            then (
               i6 <- list_nth_shared i32 ls 2%u32;
-              if negb (i6 s= 2%i32) then Fail_ Failure else Ok tt))))))
+              if i6 s= 2%i32 then Ok tt else Fail_ Failure)
+            else Fail_ Failure)
+          else Fail_ Failure)
+        else Fail_ Failure)
+      else Fail_ Failure)
+    else Fail_ Failure)
+  else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test_list_functions] *)
@@ -452,23 +452,23 @@ Definition new_pair1 : result (StructWithPair_t u32 u32) :=
 Definition test_constants : result unit :=
   swt <- new_tuple1;
   let (i, _) := swt.(structWithTuple_p) in
-  if negb (i s= 1%u32)
-  then Fail_ Failure
-  else (
+  if i s= 1%u32
+  then (
     swt1 <- new_tuple2;
     let (i1, _) := swt1.(structWithTuple_p) in
-    if negb (i1 s= 1%i16)
-    then Fail_ Failure
-    else (
+    if i1 s= 1%i16
+    then (
       swt2 <- new_tuple3;
       let (i2, _) := swt2.(structWithTuple_p) in
-      if negb (i2 s= 1%u64)
-      then Fail_ Failure
-      else (
+      if i2 s= 1%u64
+      then (
         swp <- new_pair1;
-        if negb (swp.(structWithPair_p).(pair_x) s= 1%u32)
-        then Fail_ Failure
-        else Ok tt)))
+        if swp.(structWithPair_p).(pair_x) s= 1%u32
+        then Ok tt
+        else Fail_ Failure)
+      else Fail_ Failure)
+    else Fail_ Failure)
+  else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test_constants] *)
@@ -486,7 +486,7 @@ Check (test_weird_borrows1 )%return.
     Source: 'tests/src/no_nested_borrows.rs', lines 407:0-407:37 *)
 Definition test_mem_replace (px : u32) : result u32 :=
   let (y, _) := core_mem_replace u32 px 1%u32 in
-  if negb (y s= 0%u32) then Fail_ Failure else Ok 2%u32
+  if y s= 0%u32 then Ok 2%u32 else Fail_ Failure
 .
 
 (** [no_nested_borrows::test_shared_borrow_bool1]:

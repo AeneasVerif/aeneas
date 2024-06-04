@@ -393,31 +393,31 @@ let test1 : result unit =
   let* hm3 = hashMap_insert u64 hm2 1024 138 in
   let* hm4 = hashMap_insert u64 hm3 1056 256 in
   let* i = hashMap_get u64 hm4 128 in
-  if not (i = 18)
-  then Fail Failure
-  else
+  if i = 18
+  then
     let* (_, get_mut_back) = hashMap_get_mut u64 hm4 1024 in
     let* hm5 = get_mut_back 56 in
     let* i1 = hashMap_get u64 hm5 1024 in
-    if not (i1 = 56)
-    then Fail Failure
-    else
+    if i1 = 56
+    then
       let* (x, hm6) = hashMap_remove u64 hm5 1024 in
       begin match x with
       | None -> Fail Failure
       | Some x1 ->
-        if not (x1 = 56)
-        then Fail Failure
-        else
+        if x1 = 56
+        then
           let* i2 = hashMap_get u64 hm6 0 in
-          if not (i2 = 42)
-          then Fail Failure
-          else
+          if i2 = 42
+          then
             let* i3 = hashMap_get u64 hm6 128 in
-            if not (i3 = 18)
-            then Fail Failure
-            else
+            if i3 = 18
+            then
               let* i4 = hashMap_get u64 hm6 1056 in
-              if not (i4 = 256) then Fail Failure else Ok ()
+              if i4 = 256 then Ok () else Fail Failure
+            else Fail Failure
+          else Fail Failure
+        else Fail Failure
       end
+    else Fail Failure
+  else Fail Failure
 

@@ -71,7 +71,7 @@ let test3 : result unit =
   let* x = get_max 4 3 in
   let* y = get_max 10 11 in
   let* z = u32_add x y in
-  if not (z = 15) then Fail Failure else Ok ()
+  if z = 15 then Ok () else Fail Failure
 
 (** Unit test for [no_nested_borrows::test3] *)
 let _ = assert_norm (test3 = Ok ())
@@ -79,7 +79,7 @@ let _ = assert_norm (test3 = Ok ())
 (** [no_nested_borrows::test_neg1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 90:0-90:18 *)
 let test_neg1 : result unit =
-  let* y = i32_neg 3 in if not (y = -3) then Fail Failure else Ok ()
+  let* y = i32_neg 3 in if y = -3 then Ok () else Fail Failure
 
 (** Unit test for [no_nested_borrows::test_neg1] *)
 let _ = assert_norm (test_neg1 = Ok ())
@@ -87,7 +87,7 @@ let _ = assert_norm (test_neg1 = Ok ())
 (** [no_nested_borrows::refs_test1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 97:0-97:19 *)
 let refs_test1 : result unit =
-  if not (1 = 1) then Fail Failure else Ok ()
+  if 1 = 1 then Ok () else Fail Failure
 
 (** Unit test for [no_nested_borrows::refs_test1] *)
 let _ = assert_norm (refs_test1 = Ok ())
@@ -95,15 +95,12 @@ let _ = assert_norm (refs_test1 = Ok ())
 (** [no_nested_borrows::refs_test2]:
     Source: 'tests/src/no_nested_borrows.rs', lines 108:0-108:19 *)
 let refs_test2 : result unit =
-  if not (2 = 2)
-  then Fail Failure
-  else
-    if not (0 = 0)
-    then Fail Failure
-    else
-      if not (2 = 2)
-      then Fail Failure
-      else if not (2 = 2) then Fail Failure else Ok ()
+  if 2 = 2
+  then
+    if 0 = 0
+    then if 2 = 2 then if 2 = 2 then Ok () else Fail Failure else Fail Failure
+    else Fail Failure
+  else Fail Failure
 
 (** Unit test for [no_nested_borrows::refs_test2] *)
 let _ = assert_norm (refs_test2 = Ok ())
@@ -122,7 +119,7 @@ let test_box1 : result unit =
   let* (_, deref_mut_back) = alloc_boxed_Box_deref_mut i32 0 in
   let* b = deref_mut_back 1 in
   let* x = alloc_boxed_Box_deref i32 b in
-  if not (x = 1) then Fail Failure else Ok ()
+  if x = 1 then Ok () else Fail Failure
 
 (** Unit test for [no_nested_borrows::test_box1] *)
 let _ = assert_norm (test_box1 = Ok ())
@@ -145,7 +142,7 @@ let test_panic (b : bool) : result unit =
 (** [no_nested_borrows::test_copy_int]:
     Source: 'tests/src/no_nested_borrows.rs', lines 160:0-160:22 *)
 let test_copy_int : result unit =
-  let* y = copy_int 0 in if not (0 = y) then Fail Failure else Ok ()
+  let* y = copy_int 0 in if 0 = y then Ok () else Fail Failure
 
 (** Unit test for [no_nested_borrows::test_copy_int] *)
 let _ = assert_norm (test_copy_int = Ok ())
@@ -159,7 +156,7 @@ let is_cons (t : Type0) (l : list_t t) : result bool =
     Source: 'tests/src/no_nested_borrows.rs', lines 174:0-174:21 *)
 let test_is_cons : result unit =
   let* b = is_cons i32 (List_Cons 0 List_Nil) in
-  if not b then Fail Failure else Ok ()
+  if b then Ok () else Fail Failure
 
 (** Unit test for [no_nested_borrows::test_is_cons] *)
 let _ = assert_norm (test_is_cons = Ok ())
@@ -177,7 +174,7 @@ let split_list (t : Type0) (l : list_t t) : result (t & (list_t t)) =
 let test_split_list : result unit =
   let* p = split_list i32 (List_Cons 0 List_Nil) in
   let (hd, _) = p in
-  if not (hd = 0) then Fail Failure else Ok ()
+  if hd = 0 then Ok () else Fail Failure
 
 (** Unit test for [no_nested_borrows::test_split_list] *)
 let _ = assert_norm (test_split_list = Ok ())
@@ -195,13 +192,11 @@ let choose
 let choose_test : result unit =
   let* (z, choose_back) = choose i32 true 0 0 in
   let* z1 = i32_add z 1 in
-  if not (z1 = 1)
-  then Fail Failure
-  else
+  if z1 = 1
+  then
     let* (x, y) = choose_back z1 in
-    if not (x = 1)
-    then Fail Failure
-    else if not (y = 0) then Fail Failure else Ok ()
+    if x = 1 then if y = 0 then Ok () else Fail Failure else Fail Failure
+  else Fail Failure
 
 (** Unit test for [no_nested_borrows::choose_test] *)
 let _ = assert_norm (choose_test = Ok ())
@@ -285,33 +280,33 @@ let test_list_functions : result unit =
   let l = List_Cons 2 List_Nil in
   let l1 = List_Cons 1 l in
   let* i = list_length i32 (List_Cons 0 l1) in
-  if not (i = 3)
-  then Fail Failure
-  else
+  if i = 3
+  then
     let* i1 = list_nth_shared i32 (List_Cons 0 l1) 0 in
-    if not (i1 = 0)
-    then Fail Failure
-    else
+    if i1 = 0
+    then
       let* i2 = list_nth_shared i32 (List_Cons 0 l1) 1 in
-      if not (i2 = 1)
-      then Fail Failure
-      else
+      if i2 = 1
+      then
         let* i3 = list_nth_shared i32 (List_Cons 0 l1) 2 in
-        if not (i3 = 2)
-        then Fail Failure
-        else
+        if i3 = 2
+        then
           let* (_, list_nth_mut_back) = list_nth_mut i32 (List_Cons 0 l1) 1 in
           let* ls = list_nth_mut_back 3 in
           let* i4 = list_nth_shared i32 ls 0 in
-          if not (i4 = 0)
-          then Fail Failure
-          else
+          if i4 = 0
+          then
             let* i5 = list_nth_shared i32 ls 1 in
-            if not (i5 = 3)
-            then Fail Failure
-            else
+            if i5 = 3
+            then
               let* i6 = list_nth_shared i32 ls 2 in
-              if not (i6 = 2) then Fail Failure else Ok ()
+              if i6 = 2 then Ok () else Fail Failure
+            else Fail Failure
+          else Fail Failure
+        else Fail Failure
+      else Fail Failure
+    else Fail Failure
+  else Fail Failure
 
 (** Unit test for [no_nested_borrows::test_list_functions] *)
 let _ = assert_norm (test_list_functions = Ok ())
@@ -381,21 +376,19 @@ let new_pair1 : result (structWithPair_t u32 u32) =
 let test_constants : result unit =
   let* swt = new_tuple1 in
   let (i, _) = swt.p in
-  if not (i = 1)
-  then Fail Failure
-  else
+  if i = 1
+  then
     let* swt1 = new_tuple2 in
     let (i1, _) = swt1.p in
-    if not (i1 = 1)
-    then Fail Failure
-    else
+    if i1 = 1
+    then
       let* swt2 = new_tuple3 in
       let (i2, _) = swt2.p in
-      if not (i2 = 1)
-      then Fail Failure
-      else
-        let* swp = new_pair1 in
-        if not (swp.p.x = 1) then Fail Failure else Ok ()
+      if i2 = 1
+      then let* swp = new_pair1 in if swp.p.x = 1 then Ok () else Fail Failure
+      else Fail Failure
+    else Fail Failure
+  else Fail Failure
 
 (** Unit test for [no_nested_borrows::test_constants] *)
 let _ = assert_norm (test_constants = Ok ())
@@ -412,7 +405,7 @@ let _ = assert_norm (test_weird_borrows1 = Ok ())
     Source: 'tests/src/no_nested_borrows.rs', lines 407:0-407:37 *)
 let test_mem_replace (px : u32) : result u32 =
   let (y, _) = core_mem_replace u32 px 1 in
-  if not (y = 0) then Fail Failure else Ok 2
+  if y = 0 then Ok 2 else Fail Failure
 
 (** [no_nested_borrows::test_shared_borrow_bool1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 414:0-414:47 *)
