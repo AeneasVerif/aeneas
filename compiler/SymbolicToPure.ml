@@ -1666,7 +1666,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
   value
 
 (** Explore an abstraction value and convert it to a consumed value
-    by collecting all the span-values from the ended *loans*.
+    by collecting all the meta-values from the ended *loans*.
 
     Consumed values are rvalues because when an abstraction ends we
     introduce a call to a backward function in the synthesized program,
@@ -1720,10 +1720,10 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
     (lc : V.aloan_content) : texpression option =
   match lc with
-  | AMutLoan (_, _) | ASharedLoan (_, _, _) ->
+  | AMutLoan (_, _, _) | ASharedLoan (_, _, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutLoan { child = _; given_back = _; given_back_span } ->
-      (* Return the span-value *)
+      (* Return the meta-value *)
       Some (typed_value_to_texpression ctx ectx given_back_span)
   | AEndedSharedLoan (_, _) ->
       (* We don't dive into shared loans: there is nothing to give back
@@ -1744,7 +1744,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
     texpression option =
   match bc with
-  | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
+  | V.AMutBorrow (_, _, _) | ASharedBorrow (_, _) | AIgnoredMutBorrow (_, _) ->
       craise __FILE__ __LINE__ _ctx.span "Unreachable"
   | AEndedMutBorrow (_, _) ->
       (* We collect consumed values: ignore *)
@@ -1804,7 +1804,7 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
   match p with None -> None | Some p -> Some (translate_mplace p)
 
 (** Explore an abstraction value and convert it to a given back value
-    by collecting all the span-values from the ended *borrows*.
+    by collecting all the meta-values from the ended *borrows*.
 
     Given back values are patterns, because when an abstraction ends, we
     introduce a call to a backward function in the synthesized program,
@@ -1867,7 +1867,7 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
 and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match lc with
-  | AMutLoan (_, _) | ASharedLoan (_, _, _) ->
+  | AMutLoan (_, _, _) | ASharedLoan (_, _, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutLoan { child = _; given_back = _; given_back_span = _ }
   | AEndedSharedLoan (_, _) ->
@@ -1886,7 +1886,7 @@ and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
 and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match bc with
-  | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
+  | V.AMutBorrow (_, _, _) | ASharedBorrow (_, _) | AIgnoredMutBorrow (_, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutBorrow (msv, _) ->
       (* Return the span-symbolic-value *)
@@ -1912,7 +1912,7 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
         ctx.span "Nested borrows are not supported yet";
       (ctx, None)
   | AEndedProjBorrows mv ->
-      (* Return the span-value *)
+      (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->

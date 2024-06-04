@@ -15,7 +15,7 @@ open InterpreterLoopsCore
     - [aid0]
     - [aid1]
  *)
-val merge_into_abstraction :
+val merge_into_first_abstraction :
   Meta.span ->
   loop_id ->
   abs_kind ->

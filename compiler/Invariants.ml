@@ -150,8 +150,8 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
       method! visit_aloan_content inside_abs lc =
         let _ =
           match lc with
-          | AMutLoan (bid, _) -> register_mut_loan inside_abs bid
-          | ASharedLoan (bids, _, _) -> register_shared_loan inside_abs bids
+          | AMutLoan (_, bid, _) -> register_mut_loan inside_abs bid
+          | ASharedLoan (_, bids, _, _) -> register_shared_loan inside_abs bids
           | AIgnoredMutLoan (Some bid, _) -> register_ignored_loan RMut bid
           | AIgnoredMutLoan (None, _)
           | AIgnoredSharedLoan _
@@ -246,8 +246,8 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
       method! visit_aborrow_content env bc =
         let _ =
           match bc with
-          | AMutBorrow (bid, _) -> register_borrow BMut bid
-          | ASharedBorrow bid -> register_borrow BShared bid
+          | AMutBorrow (_, bid, _) -> register_borrow BMut bid
+          | ASharedBorrow (_, bid) -> register_borrow BShared bid
           | AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow RMut bid
           | AIgnoredMutBorrow (None, _)
           | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedSharedBorrow
@@ -341,8 +341,8 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         (* Update the info *)
         let info =
           match lc with
-          | AMutLoan (_, _) -> set_outer_mut info
-          | ASharedLoan (_, _, _) -> set_outer_shared info
+          | AMutLoan (_, _, _) -> set_outer_mut info
+          | ASharedLoan (_, _, _, _) -> set_outer_shared info
           | AEndedMutLoan { given_back = _; child = _; given_back_span = _ } ->
               set_outer_mut info
           | AEndedSharedLoan (_, _) -> set_outer_shared info
@@ -359,7 +359,7 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         (* Update the info *)
         let info =
           match bc with
-          | AMutBorrow (_, _) -> set_outer_mut info
+          | AMutBorrow (_, _, _) -> set_outer_mut info
           | ASharedBorrow _ | AEndedSharedBorrow -> set_outer_shared info
           | AIgnoredMutBorrow _ | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _
             ->
@@ -497,11 +497,13 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         | VBorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | VSharedBorrow bid, RShared | VReservedMutBorrow bid, RMut -> (
-                (* Lookup the borrowed value to check it has the proper type *)
+                (* Lookup the borrowed value to check it has the proper type.
+                   Note that we ignore the marker: we will check it when
+                   checking the loan itself. *)
                 let _, glc = lookup_loan span ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
-                | Abstract (ASharedLoan (_, sv, _)) ->
+                | Abstract (ASharedLoan (_, _, sv, _)) ->
                     sanity_check __FILE__ __LINE__ (sv.ty = ref_ty) span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
             | VMutBorrow (_, bv), RMut ->
@@ -515,12 +517,14 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
             | VSharedLoan (_, sv) ->
                 sanity_check __FILE__ __LINE__ (sv.ty = ty) span
             | VMutLoan bid -> (
-                (* Lookup the borrowed value to check it has the proper type *)
+                (* Lookup the borrowed value to check it has the proper type. *)
                 let glc = lookup_borrow span ek_all bid ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) ->
                     sanity_check __FILE__ __LINE__ (bv.ty = ty) span
-                | Abstract (AMutBorrow (_, sv)) ->
+                | Abstract (AMutBorrow (pm, _, sv)) ->
+                    (* The marker check is redundant, but doesn't cost much *)
+                    sanity_check __FILE__ __LINE__ (pm = PNone) span;
                     sanity_check __FILE__ __LINE__
                       (Substitute.erase_regions sv.ty = ty)
                       span
@@ -610,15 +614,17 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         | ABottom, _ -> (* Nothing to check *) ()
         | ABorrow bc, TRef (_, ref_ty, rkind) -> (
             match (bc, rkind) with
-            | AMutBorrow (_, av), RMut ->
+            | AMutBorrow (pm, _, av), RMut ->
+                sanity_check __FILE__ __LINE__ (pm = PNone) span;
                 (* Check that the child value has the proper type *)
                 sanity_check __FILE__ __LINE__ (av.ty = ref_ty) span
-            | ASharedBorrow bid, RShared -> (
+            | ASharedBorrow (pm, bid), RShared -> (
+                sanity_check __FILE__ __LINE__ (pm = PNone) span;
                 (* Lookup the borrowed value to check it has the proper type *)
                 let _, glc = lookup_loan span ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
-                | Abstract (ASharedLoan (_, sv, _)) ->
+                | Abstract (ASharedLoan (_, _, sv, _)) ->
                     sanity_check __FILE__ __LINE__
                       (sv.ty = Substitute.erase_regions ref_ty)
                       span
@@ -633,8 +639,8 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
             | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
         | ALoan lc, aty -> (
             match lc with
-            | AMutLoan (bid, child_av) | AIgnoredMutLoan (Some bid, child_av)
-              -> (
+            | AMutLoan (PNone, bid, child_av)
+            | AIgnoredMutLoan (Some bid, child_av) -> (
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) span;
                 (* Lookup the borrowed value to check it has the proper type *)
@@ -644,22 +650,29 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                     sanity_check __FILE__ __LINE__
                       (bv.ty = Substitute.erase_regions borrowed_aty)
                       span
-                | Abstract (AMutBorrow (_, sv)) ->
+                | Abstract (AMutBorrow (_, _, sv)) ->
                     sanity_check __FILE__ __LINE__
                       (Substitute.erase_regions sv.ty
                       = Substitute.erase_regions borrowed_aty)
                       span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
+            | AMutLoan (_, _, _) ->
+                (* We get there if the projection marker is not [PNone] *)
+                internal_error __FILE__ __LINE__ span
             | AIgnoredMutLoan (None, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) span
-            | ASharedLoan (_, sv, child_av) | AEndedSharedLoan (sv, child_av) ->
+            | ASharedLoan (PNone, _, sv, child_av)
+            | AEndedSharedLoan (sv, child_av) ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 sanity_check __FILE__ __LINE__
                   (sv.ty = Substitute.erase_regions borrowed_aty)
                   span;
                 (* TODO: the type of aloans doesn't make sense, see above *)
                 sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) span
+            | ASharedLoan (_, _, _, _) ->
+                (* We get there if the projection marker is not [PNone] *)
+                internal_error __FILE__ __LINE__ span
             | AEndedMutLoan { given_back; child; given_back_span = _ }
             | AEndedIgnoredMutLoan { given_back; child; given_back_span = _ } ->
                 let borrowed_aty = aloan_get_expected_child_type aty in

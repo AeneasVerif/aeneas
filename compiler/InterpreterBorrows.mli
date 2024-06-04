@@ -138,29 +138,50 @@ val convert_value_to_abstractions :
   *)
 type merge_duplicates_funcs = {
   merge_amut_borrows :
-    borrow_id -> rty -> typed_avalue -> rty -> typed_avalue -> typed_avalue;
+    borrow_id ->
+    rty ->
+    proj_marker ->
+    typed_avalue ->
+    rty ->
+    proj_marker ->
+    typed_avalue ->
+    typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
+          - [pm0]
           - [child0]
           - [ty1]
+          - [pm1]
           - [child1]
 
           The children should be [AIgnored].
        *)
-  merge_ashared_borrows : borrow_id -> rty -> rty -> typed_avalue;
+  merge_ashared_borrows :
+    borrow_id -> rty -> proj_marker -> rty -> proj_marker -> typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
+          - [pm0]
           - [ty1]
+          - [pm1]
        *)
   merge_amut_loans :
-    loan_id -> rty -> typed_avalue -> rty -> typed_avalue -> typed_avalue;
+    loan_id ->
+    rty ->
+    proj_marker ->
+    typed_avalue ->
+    rty ->
+    proj_marker ->
+    typed_avalue ->
+    typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
+          - [pm0]
           - [child0]
           - [ty1]
+          - [pm1]
           - [child1]
 
           The children should be [AIgnored].
@@ -168,18 +189,22 @@ type merge_duplicates_funcs = {
   merge_ashared_loans :
     loan_id_set ->
     rty ->
+    proj_marker ->
     typed_value ->
     typed_avalue ->
     rty ->
+    proj_marker ->
     typed_value ->
     typed_avalue ->
     typed_avalue;
       (** Parameters:
           - [ids]
           - [ty0]
+          - [pm0]
           - [sv0]
           - [child0]
           - [ty1]
+          - [pm1]
           - [sv1]
           - [child1]
        *)
@@ -187,24 +212,36 @@ type merge_duplicates_funcs = {
 
 (** Merge an abstraction into another abstraction.
 
-    We insert the result of the merge in place of the second abstraction (and in
+    We insert the result of the merge in place of the first abstraction (and in
     particular, we don't simply push the merged abstraction at the end of the
     environment: this helps preserving the structure of the environment, when
     computing loop fixed points for instance).
 
-    When we merge two abstractions together, we remove the loans/borrows
-    which appear in one and whose associated loans/borrows appear in the
-    other. For instance:
+    When we merge two abstractions together, we remove the loans which appear
+    in the *left* abstraction and whose corresponding borrows appear in the
+    **right** abstraction.
+    For instance:
     {[
       abs'0 { mut_borrow l0, mut_loan l1 }   // Rem.: mut_loan l1
       abs'1 { mut_borrow l1, mut_borrow l2 } // Rem.: mut_borrow l1
 
           ~~>
 
-      abs'01 { mut_borrow l0, mut_borrow l2 }
+      abs'2 { mut_borrow l0, mut_borrow l2 }
     ]}
 
-    Also, we merge all their regions together. For instance, if [abs'0] projects
+    We also simplify the markers, when the same value appears in both abstractions
+    but with different markers. For instance:
+    {[
+      abs'0 { |mut_borrow l0|, mut_loan l1 }
+      abs'1 { ︙mut_borrow l0︙, mut_borrow l1 }
+
+          ~~>
+
+      abs'2 { mut_borrow l0 }
+    ]}
+
+    Finally, we merge all their regions together. For instance, if [abs'0] projects
     region [r0] and [abs'1] projects region [r1], we pick one of the two, say [r0]
     (the one with the smallest index in practice) and substitute [r1] with [r0]
     in the whole context.
@@ -212,22 +249,10 @@ type merge_duplicates_funcs = {
     Parameters:
     - [kind]
     - [can_end]
-    - [merge_funs]: Those functions are used to merge borrows/loans with the
-      *same ids*. For instance, when performing environment joins we may introduce
-      abstractions which both contain loans/borrows with the same ids. When we
-      later merge those abstractions together, we need to call a merge function
-      to reconcile the borrows/loans. For instance, if both abstractions contain
-      the same shared loan [l0], we will call {!merge_ashared_borrows} to derive
-      a shared value for the merged shared loans.
-
-      For instance, this happens for the following abstractions:
-      {[
-        abs'0 { mut_borrow l0, mut_loan l1 } // mut_borrow l0 !
-        abs'1 { mut_borrow l0, mut_loan l2 } // mut_borrow l0 !
-      ]}
-      If you want to forbid this, provide [None]. In that case, [merge_into_abstraction]
-      actually simply performs some sort of a union.
-
+    - [merge_funs]: those functions are used to merge borrows/loans with the
+      *same ids* but different markers. This is necessary when doing a collapse
+      (see the computation of joins).
+      If [merge_funs] are not provided, we check that there are no markers.
     - [ctx]
     - [abs_id0]
     - [abs_id1]
@@ -235,7 +260,7 @@ type merge_duplicates_funcs = {
     We return the updated context as well as the id of the new abstraction which
     results from the merge.
  *)
-val merge_into_abstraction :
+val merge_into_first_abstraction :
   Meta.span ->
   abs_kind ->
   bool ->
@@ -244,3 +269,20 @@ val merge_into_abstraction :
   AbstractionId.id ->
   AbstractionId.id ->
   eval_ctx * AbstractionId.id
+
+(** Reorder the loans and borrows in the fresh abstractions.
+
+    We do this in order to enforce some structure in the environments: this
+    allows us to find fixed-points. Note that this function needs to be
+    called typically after we merge abstractions together (see {!reduce_ctx}
+    and {!collapse_ctx} for instance).
+
+    Inputs:
+    - [span]
+    - [allow_markers]: disables some sanity checks (which check that projection
+      markers don't appear).
+    - [old_abs_ids]
+    - [eval_ctx]
+ *)
+val reorder_loans_borrows_in_fresh_abs :
+  Meta.span -> bool -> AbstractionId.Set.t -> eval_ctx -> eval_ctx

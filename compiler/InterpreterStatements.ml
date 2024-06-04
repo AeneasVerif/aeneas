@@ -914,117 +914,114 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
-  (* Evaluate *)
-  let stl, cf_eval_st =
-    log#ldebug
-      (lazy
-        ("\neval_statement: cf_eval_st: statement:\n"
-        ^ statement_to_string_with_tab ctx st
-        ^ "\n\n"));
-    match st.content with
-    | Assign (p, rvalue) -> (
-        (* We handle global assignments separately *)
-        match rvalue with
-        | Global (gid, generics) ->
-            (* Evaluate the global *)
-            eval_global config st.span p gid generics ctx
-        | _ ->
-            (* Evaluate the rvalue *)
-            let res, ctx, cc =
-              eval_rvalue_not_global config st.span rvalue ctx
-            in
-            (* Assign *)
-            log#ldebug
-              (lazy
-                ("about to assign to place: " ^ place_to_string ctx p
-               ^ "\n- Context:\n"
-                ^ eval_ctx_to_string ~span:(Some st.span) ctx));
-            let (ctx, res), cf_assign =
-              match res with
-              | Error EPanic -> ((ctx, Panic), fun e -> e)
-              | Ok rv ->
-                  (* Update the synthesized AST - here we store additional span-information.
-                   * We do it only in specific cases (it is not always useful, and
-                   * also it can lead to issues - for instance, if we borrow a
-                   * reserved borrow, we later can't translate it to pure values...) *)
-                  let cc =
-                    match rvalue with
-                    | Global _ -> craise __FILE__ __LINE__ st.span "Unreachable"
-                    | Use _
-                    | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
-                    | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ ->
-                        let rp = rvalue_get_place rvalue in
-                        let rp =
-                          match rp with
-                          | Some rp -> Some (S.mk_mplace st.span rp ctx)
-                          | None -> None
-                        in
-                        S.synthesize_assignment ctx
-                          (S.mk_mplace st.span p ctx)
-                          rv rp
-                  in
-                  let ctx, cc =
-                    comp cc (assign_to_place config st.span rv p ctx)
-                  in
-                  ((ctx, Unit), cc)
-            in
-            let cc = cc_comp cc cf_assign in
-            (* Compose and apply *)
-            ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
-    | FakeRead p ->
-        let ctx, cc = eval_fake_read config st.span p ctx in
-        ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | SetDiscriminant (p, variant_id) ->
-        let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
-        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | Drop p ->
-        let ctx, cc = drop_value config st.span p ctx in
-        ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | Assert assertion ->
-        let (ctx, res), cc = eval_assertion config st.span assertion ctx in
-        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | Call call -> eval_function_call config st.span call ctx
-    | Panic -> ([ (ctx, Panic) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | Return -> ([ (ctx, Return) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | Break i -> ([ (ctx, Break i) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | Continue i ->
-        ([ (ctx, Continue i) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | Nop -> ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
-    | Sequence (st1, st2) ->
-        (* Evaluate the first statement *)
-        let ctx_resl, cf_st1 = eval_statement config st1 ctx in
-        (* Evaluate the sequence (evaluate the second statement if the first
-           statement successfully evaluated, otherwise transfmit the control-flow
-           break) *)
-        let ctx_res_cfl =
-          List.map
-            (fun (ctx, res) ->
-              match res with
-              (* Evaluation successful: evaluate the second statement *)
-              | Unit -> eval_statement config st2 ctx
-              (* Control-flow break: transmit. We enumerate the cases on purpose *)
-              | Panic | Break _ | Continue _ | Return | LoopReturn _
-              | EndEnterLoop _ | EndContinue _ ->
-                  ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
-            ctx_resl
-        in
-        (* Put everything together:
-           - we return the flattened list of contexts and results
-           - we need to build the continuation which will build the whole
-             expression from the continuations for the individual branches
-        *)
-        let ctx_resl, cf_st2 =
-          comp_seqs __FILE__ __LINE__ st.span ctx_res_cfl
-        in
-        (ctx_resl, cc_comp cf_st1 cf_st2)
-    | Loop loop_body ->
-        let eval_loop_body = eval_statement config loop_body in
-        InterpreterLoops.eval_loop config st.span eval_loop_body ctx
-    | Switch switch -> eval_switch config st.span switch ctx
-    | Error s -> craise __FILE__ __LINE__ st.span s
-  in
-  (* Compose and apply *)
-  (stl, cc_comp cc cf_eval_st)
+  (* Evaluate the statement *)
+  comp cc (eval_statement_raw config st ctx)
+
+and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
+ fun ctx ->
+  log#ldebug
+    (lazy
+      ("\neval_statement_raw: statement:\n"
+      ^ statement_to_string_with_tab ctx st
+      ^ "\n\n"));
+  match st.content with
+  | Assign (p, rvalue) -> (
+      (* We handle global assignments separately *)
+      match rvalue with
+      | Global (gid, generics) ->
+          (* Evaluate the global *)
+          eval_global config st.span p gid generics ctx
+      | _ ->
+          (* Evaluate the rvalue *)
+          let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
+          (* Assign *)
+          log#ldebug
+            (lazy
+              ("about to assign to place: " ^ place_to_string ctx p
+             ^ "\n- Context:\n"
+              ^ eval_ctx_to_string ~span:(Some st.span) ctx));
+          let (ctx, res), cf_assign =
+            match res with
+            | Error EPanic -> ((ctx, Panic), fun e -> e)
+            | Ok rv ->
+                (* Update the synthesized AST - here we store additional span-information.
+                 * We do it only in specific cases (it is not always useful, and
+                 * also it can lead to issues - for instance, if we borrow a
+                 * reserved borrow, we later can't translate it to pure values...) *)
+                let cc =
+                  match rvalue with
+                  | Global _ -> craise __FILE__ __LINE__ st.span "Unreachable"
+                  | Len _ ->
+                      craise __FILE__ __LINE__ st.span "Len is not handled yet"
+                  | Use _
+                  | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
+                  | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ ->
+                      let rp = rvalue_get_place rvalue in
+                      let rp =
+                        match rp with
+                        | Some rp -> Some (S.mk_mplace st.span rp ctx)
+                        | None -> None
+                      in
+                      S.synthesize_assignment ctx
+                        (S.mk_mplace st.span p ctx)
+                        rv rp
+                in
+                let ctx, cc =
+                  comp cc (assign_to_place config st.span rv p ctx)
+                in
+                ((ctx, Unit), cc)
+          in
+          let cc = cc_comp cc cf_assign in
+          (* Compose and apply *)
+          ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
+  | FakeRead p ->
+      let ctx, cc = eval_fake_read config st.span p ctx in
+      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
+  | SetDiscriminant (p, variant_id) ->
+      let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
+      ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
+  | Drop p ->
+      let ctx, cc = drop_value config st.span p ctx in
+      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
+  | Assert assertion ->
+      let (ctx, res), cc = eval_assertion config st.span assertion ctx in
+      ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
+  | Call call -> eval_function_call config st.span call ctx
+  | Panic -> ([ (ctx, Panic) ], cf_singleton __FILE__ __LINE__ st.span)
+  | Return -> ([ (ctx, Return) ], cf_singleton __FILE__ __LINE__ st.span)
+  | Break i -> ([ (ctx, Break i) ], cf_singleton __FILE__ __LINE__ st.span)
+  | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)
+  | Nop -> ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
+  | Sequence (st1, st2) ->
+      (* Evaluate the first statement *)
+      let ctx_resl, cf_st1 = eval_statement config st1 ctx in
+      (* Evaluate the sequence (evaluate the second statement if the first
+         statement successfully evaluated, otherwise transfmit the control-flow
+         break) *)
+      let ctx_res_cfl =
+        List.map
+          (fun (ctx, res) ->
+            match res with
+            (* Evaluation successful: evaluate the second statement *)
+            | Unit -> eval_statement config st2 ctx
+            (* Control-flow break: transmit. We enumerate the cases on purpose *)
+            | Panic | Break _ | Continue _ | Return | LoopReturn _
+            | EndEnterLoop _ | EndContinue _ ->
+                ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ st.span))
+          ctx_resl
+      in
+      (* Put everything together:
+         - we return the flattened list of contexts and results
+         - we need to build the continuation which will build the whole
+           expression from the continuations for the individual branches
+      *)
+      let ctx_resl, cf_st2 = comp_seqs __FILE__ __LINE__ st.span ctx_res_cfl in
+      (ctx_resl, cc_comp cf_st1 cf_st2)
+  | Loop loop_body ->
+      let eval_loop_body = eval_statement config loop_body in
+      InterpreterLoops.eval_loop config st.span eval_loop_body ctx
+  | Switch switch -> eval_switch config st.span switch ctx
+  | Error s -> craise __FILE__ __LINE__ st.span s
 
 and eval_global (config : config) (span : Meta.span) (dest : place)
     (gid : GlobalDeclId.id) (generics : generic_args) : stl_cm_fun =
@@ -1610,11 +1607,11 @@ and eval_function_body (config : config) (body : statement) : stl_cm_fun =
   let ctx_res_cfl =
     List.map
       (fun (ctx, res) ->
-        log#ldebug (lazy "eval_function_body: cf_finish");
         (* Note that we *don't* check the result ({!Panic}, {!Return}, etc.): we
-           * delegate the check to the caller. *)
+           delegate the check to the caller. *)
+        log#ldebug (lazy "eval_function_body: cf_finish");
         (* Expand the symbolic values if necessary - we need to do that before
-           * checking the invariants *)
+           checking the invariants *)
         let ctx, cf = greedy_expand_symbolic_values config body.span ctx in
         (* Sanity check *)
         Invariants.check_invariants body.span ctx;
