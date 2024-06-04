@@ -389,6 +389,43 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
         iterate false)
       ctx.info.abs_ids
   in
+  (* Small utility: check if we need to swap two region abstractions before
+     merging them.
+
+     We might have to swap the order to make sure that if there
+     are loans in one abstraction and the corresponding borrows
+     in the other they get properly merged (if we merge them in the wrong
+     order, we might introduce borrowing cycles).
+
+     Example:
+     If we are merging abs0 and abs1 because of the marked value
+     [MB l0]:
+     {[
+       abs0 { |MB l0|, MB l1 }
+       abs1 { ︙MB l0︙, ML l1 }
+     ]}
+     we want to make sure that we swap them (abs1 goes to the
+     left) to make sure [MB l1] and [ML l1] get properly eliminated.
+
+     Remark: in case there is a borrowing cycle between the two abstractions
+     (which shouldn't happen) then there isn't much we can do, and whatever
+     the order in which we merge, we will preserve the cycle.
+  *)
+  let swap_abs info abs_id0 abs_id1 =
+    let abs0_borrows =
+      BorrowId.Set.of_list
+        (List.map snd
+           (MarkerBorrowId.Set.elements
+              (AbstractionId.Map.find abs_id0 info.abs_to_borrows)))
+    in
+    let abs1_loans =
+      BorrowId.Set.of_list
+        (List.map snd
+           (MarkerBorrowId.Set.elements
+              (AbstractionId.Map.find abs_id1 info.abs_to_loans)))
+    in
+    not (BorrowId.Set.disjoint abs0_borrows abs1_loans)
+  in
   (* Check if there is an abstraction with the same borrow/loan id and the dual
      marker, and merge them if it is the case. *)
   let merge_policy ctx (abs_id0, is_borrow, (pm, bid)) =
@@ -405,7 +442,11 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
           (* We need to merge *)
           match AbstractionId.Set.elements abs_ids1 with
           | [] -> None
-          | abs_id1 :: _ -> Some (abs_id0, abs_id1))
+          | abs_id1 :: _ ->
+              (* Check if we need to swap *)
+              Some
+                (if swap_abs ctx.info abs_id0 abs_id1 then (abs_id1, abs_id0)
+                 else (abs_id0, abs_id1)))
   in
   (* Iterate and merge *)
   let ctx =
