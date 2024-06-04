@@ -291,7 +291,7 @@ let rvalue_get_place (rv : rvalue) : place option =
   match rv with
   | Use (Copy p | Move p) -> Some p
   | Use (Constant _) -> None
-  | RvRef (p, _) -> Some p
+  | Len (p, _, _) | RvRef (p, _) -> Some p
   | UnaryOp _ | BinaryOp _ | Global _ | Discriminant _ | Aggregate _ -> None
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)

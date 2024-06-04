@@ -20,14 +20,14 @@ Definition core_marker_CopyU32 : core_marker_Copy_t u32 := {|
 |}.
 
 (** [external::use_get]:
-    Source: 'tests/src/external.rs', lines 5:0-5:37 *)
+    Source: 'tests/src/external.rs', lines 9:0-9:37 *)
 Definition use_get
   (rc : core_cell_Cell_t u32) (st : state) : result (state * u32) :=
   core_cell_Cell_get u32 core_marker_CopyU32 rc st
 .
 
 (** [external::incr]:
-    Source: 'tests/src/external.rs', lines 9:0-9:31 *)
+    Source: 'tests/src/external.rs', lines 13:0-13:31 *)
 Definition incr
   (rc : core_cell_Cell_t u32) (st : state) :
   result (state * (core_cell_Cell_t u32))

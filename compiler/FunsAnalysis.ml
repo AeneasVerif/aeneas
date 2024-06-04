@@ -74,7 +74,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
        way. *)
     let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
       let open ExtractBuiltin in
-      NameMatcherMap.find_opt name_matcher_ctx f.name builtin_fun_effects_map
+      NameMatcherMap.find_opt name_matcher_ctx f.name
+        (builtin_fun_effects_map ())
     in
 
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
@@ -102,7 +103,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
           method! visit_rvalue _env rv =
             match rv with
-            | Use _ | RvRef _ | Global _ | Discriminant _ | Aggregate _ -> ()
+            | Use _ | RvRef _ | Global _ | Discriminant _ | Aggregate _ | Len _
+              ->
+                ()
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail

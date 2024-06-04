@@ -351,13 +351,13 @@ let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
 
     [append]: function to append an index to a string
  *)
-let basename_to_unique (names_set : StringSet.t)
+let basename_to_unique_aux (collision : string -> bool)
     (append : string -> int -> string) (basename : string) : string =
   let rec gen (i : int) : string =
     let s = append basename i in
-    if StringSet.mem s names_set then gen (i + 1) else s
+    if collision s then gen (i + 1) else s
   in
-  if StringSet.mem basename names_set then gen 1 else basename
+  if collision basename then gen 1 else basename
 
 type names_maps = {
   names_map : names_map;
@@ -1841,13 +1841,22 @@ let trait_self_clause_basename = "self_clause"
 let name_append_index (basename : string) (i : int) : string =
   basename ^ string_of_int i
 
+let basename_to_unique (ctx : extraction_ctx) (name : string) =
+  let collision s =
+    (* Note that we ignore the "unsafe" names which contain in particular
+       field names: we want to allow using field names for variables if
+       the backend allows such collisions *)
+    StringSet.mem s ctx.names_maps.names_map.names_set
+    || StringSet.mem s ctx.names_maps.strict_names_map.names_set
+  in
+
+  basename_to_unique_aux collision name_append_index name
+
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (span : Meta.span) (basename : string) (id : TypeVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name = ctx_compute_type_var_basename ctx basename in
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set name_append_index name
-  in
+  let name = basename_to_unique ctx name in
   let ctx = ctx_add span (TypeVarId id) name ctx in
   (ctx, name)
 
@@ -1856,9 +1865,7 @@ let ctx_add_const_generic_var (span : Meta.span) (basename : string)
     (id : ConstGenericVarId.id) (ctx : extraction_ctx) : extraction_ctx * string
     =
   let name = ctx_compute_const_generic_var_basename ctx basename in
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set name_append_index name
-  in
+  let name = basename_to_unique ctx name in
   let ctx = ctx_add span (ConstGenericVarId id) name ctx in
   (ctx, name)
 
@@ -1872,10 +1879,7 @@ let ctx_add_type_vars (span : Meta.span) (vars : (string * TypeVarId.id) list)
 (** Generate a unique variable name and add it to the context *)
 let ctx_add_var (span : Meta.span) (basename : string) (id : VarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set name_append_index
-      basename
-  in
+  let name = basename_to_unique ctx basename in
   let ctx = ctx_add span (VarId id) name ctx in
   (ctx, name)
 
@@ -1883,20 +1887,14 @@ let ctx_add_var (span : Meta.span) (basename : string) (id : VarId.id)
 let ctx_add_trait_self_clause (span : Meta.span) (ctx : extraction_ctx) :
     extraction_ctx * string =
   let basename = trait_self_clause_basename in
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set name_append_index
-      basename
-  in
+  let name = basename_to_unique ctx basename in
   let ctx = ctx_add span TraitSelfClauseId name ctx in
   (ctx, name)
 
 (** Generate a unique trait clause name and add it to the context *)
 let ctx_add_local_trait_clause (span : Meta.span) (basename : string)
     (id : TraitClauseId.id) (ctx : extraction_ctx) : extraction_ctx * string =
-  let name =
-    basename_to_unique ctx.names_maps.names_map.names_set name_append_index
-      basename
-  in
+  let name = basename_to_unique ctx basename in
   let ctx = ctx_add span (LocalTraitClauseId id) name ctx in
   (ctx, name)
 

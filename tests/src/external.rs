@@ -1,3 +1,7 @@
+//@ charon-args=--no-code-duplication
+//@ aeneas-args=-state -split-files
+//@ aeneas-args=-test-trans-units
+//@ [coq,fstar] subdir=misc
 //! This module uses external types and functions
 
 use std::cell::Cell;

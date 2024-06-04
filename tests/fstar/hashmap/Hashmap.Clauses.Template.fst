@@ -7,63 +7,63 @@ open Hashmap.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 50:4-56:5 *)
+    Source: 'tests/src/hashmap.rs', lines 60:4-66:5 *)
 unfold
 let hashMap_allocate_slots_loop_decreases (t : Type0)
   (slots : alloc_vec_Vec (list_t t)) (n : usize) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 80:4-88:5 *)
+    Source: 'tests/src/hashmap.rs', lines 90:4-98:5 *)
 unfold
 let hashMap_clear_loop_decreases (t : Type0) (slots : alloc_vec_Vec (list_t t))
   (i : usize) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 97:4-114:5 *)
+    Source: 'tests/src/hashmap.rs', lines 107:4-124:5 *)
 unfold
 let hashMap_insert_in_list_loop_decreases (t : Type0) (key : usize) (value : t)
   (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 183:4-196:5 *)
+    Source: 'tests/src/hashmap.rs', lines 193:4-206:5 *)
 unfold
 let hashMap_move_elements_from_list_loop_decreases (t : Type0)
   (ntable : hashMap_t t) (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 171:4-180:5 *)
+    Source: 'tests/src/hashmap.rs', lines 181:4-190:5 *)
 unfold
 let hashMap_move_elements_loop_decreases (t : Type0) (ntable : hashMap_t t)
   (slots : alloc_vec_Vec (list_t t)) (i : usize) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 206:4-219:5 *)
+    Source: 'tests/src/hashmap.rs', lines 216:4-229:5 *)
 unfold
 let hashMap_contains_key_in_list_loop_decreases (t : Type0) (key : usize)
   (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::get_in_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 224:4-237:5 *)
+    Source: 'tests/src/hashmap.rs', lines 234:4-247:5 *)
 unfold
 let hashMap_get_in_list_loop_decreases (t : Type0) (key : usize)
   (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 245:4-254:5 *)
+    Source: 'tests/src/hashmap.rs', lines 255:4-264:5 *)
 unfold
 let hashMap_get_mut_in_list_loop_decreases (t : Type0) (ls : list_t t)
   (key : usize) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 265:4-291:5 *)
+    Source: 'tests/src/hashmap.rs', lines 275:4-301:5 *)
 unfold
 let hashMap_remove_from_list_loop_decreases (t : Type0) (key : usize)
   (ls : list_t t) : nat =

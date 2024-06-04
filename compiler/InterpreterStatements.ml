@@ -951,6 +951,8 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                 let cc =
                   match rvalue with
                   | Global _ -> craise __FILE__ __LINE__ st.span "Unreachable"
+                  | Len _ ->
+                      craise __FILE__ __LINE__ st.span "Len is not handled yet"
                   | Use _
                   | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
                   | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ ->

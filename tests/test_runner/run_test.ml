@@ -3,64 +3,104 @@ type runner_env = {
   charon_path : string;
   aeneas_path : string;
   llbc_dir : string;
-}
-
-(* The data for a specific test to run aeneas on *)
-type aeneas_test_case = {
-  name : string;
-  backend : string;
-  subdir : string;
-  extra_aeneas_options : string list;
-}
-
-type input_kind = SingleFile | Crate
-
-(* The data for a specific test to generate llbc for *)
-type charon_test_case = {
-  kind : input_kind;
-  name : string;
-  path : string;
-  extra_charon_options : string list;
+  dest_dir : string;
 }
 
 let concat_path = List.fold_left Filename.concat ""
 
-let run_command args =
-  (* Debug arguments *)
-  print_string "[test_runner] Running: ";
-  Array.iter
-    (fun x ->
-      print_string x;
-      print_string " ")
-    args;
-  print_endline "";
+module Command = struct
+  type t = { args : string array; redirect_out : Unix.file_descr option }
+  type status = Success | Failure
 
-  (* Run the command *)
-  let pid =
-    Unix.create_process args.(0) args Unix.stdin Unix.stdout Unix.stderr
-  in
-  let _ = Unix.waitpid [] pid in
-  ()
+  let make (args : string list) : t =
+    { args = Array.of_list args; redirect_out = None }
+
+  let to_string (cmd : t) = Core.String.concat_array ~sep:" " cmd.args
+
+  (* Run the command and returns its exit status. *)
+  let run (cmd : t) : status =
+    let command_str = to_string cmd in
+    print_endline ("[test_runner] Running: " ^ command_str);
+
+    (* Run the command *)
+    let out = Option.value cmd.redirect_out ~default:Unix.stdout in
+    let pid = Unix.create_process cmd.args.(0) cmd.args Unix.stdin out out in
+    let status = Core_unix.waitpid (Core.Pid.of_int pid) in
+    match status with
+    | Ok () -> Success
+    | Error (`Exit_non_zero _) -> Failure
+    | Error (`Signal _) ->
+        failwith ("Command `" ^ command_str ^ "` exited incorrectly.")
+
+  (* Run the command and aborts the program if the command failed. *)
+  let run_command_expecting_success cmd =
+    match run cmd with
+    | Success -> ()
+    | Failure -> failwith ("Command `" ^ to_string cmd ^ "` failed.")
+
+  (* Run the command and aborts the program if the command succeeded. *)
+  let run_command_expecting_failure cmd =
+    match run cmd with
+    | Success ->
+        failwith
+          ("Command `" ^ to_string cmd ^ "` succeeded but was expected to fail.")
+    | Failure -> ()
+end
 
 (* Run Aeneas on a specific input with the given options *)
-let run_aeneas (env : runner_env) (case : aeneas_test_case) =
+let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
+  let backend_str = Backend.to_string backend in
   let input_file = concat_path [ env.llbc_dir; case.name ] ^ ".llbc" in
-  let dest_dir = concat_path [ "tests"; case.backend; case.subdir ] in
-  let args =
-    [|
-      env.aeneas_path; input_file; "-dest"; dest_dir; "-backend"; case.backend;
-    |]
+  let output_file =
+    Filename.remove_extension case.path ^ "." ^ backend_str ^ ".out"
   in
-  let args = Array.append args (Array.of_list case.extra_aeneas_options) in
+  let per_backend = Backend.Map.find backend case.per_backend in
+  let subdir = per_backend.subdir in
+  let check_output = per_backend.check_output in
+  let aeneas_options = per_backend.aeneas_options in
+  let action = per_backend.action in
+  let dest_dir = concat_path [ env.dest_dir; backend_str; subdir ] in
+
+  (* Build the command *)
+  let args =
+    [ env.aeneas_path; input_file; "-dest"; dest_dir; "-backend"; backend_str ]
+  in
+  let abort_on_error =
+    match action with
+    | Skip | Normal -> []
+    | KnownFailure -> [ "-abort-on-error" ]
+  in
+  let args = List.concat [ args; aeneas_options; abort_on_error ] in
+  let cmd = Command.make args in
+  (* Remove leftover files if they're not needed anymore *)
+  if
+    Sys.file_exists output_file
+    &&
+    match action with
+    | Skip | Normal -> true
+    | KnownFailure when not check_output -> true
+    | _ -> false
+  then Sys.remove output_file;
   (* Run Aeneas *)
-  run_command args
+  match action with
+  | Skip -> ()
+  | Normal -> Command.run_command_expecting_success cmd
+  | KnownFailure ->
+      let out =
+        if check_output then
+          Core_unix.openfile ~mode:[ O_CREAT; O_TRUNC; O_WRONLY ] output_file
+        else Core_unix.openfile ~mode:[ O_WRONLY ] "/dev/null"
+      in
+      let cmd = { cmd with redirect_out = Some out } in
+      Command.run_command_expecting_failure cmd;
+      Unix.close out
 
 (* Run Charon on a specific input with the given options *)
-let run_charon (env : runner_env) (case : charon_test_case) =
+let run_charon (env : runner_env) (case : Input.t) =
   match case.kind with
   | SingleFile ->
       let args =
-        [|
+        [
           env.charon_path;
           "--no-cargo";
           "--input";
@@ -69,22 +109,22 @@ let run_charon (env : runner_env) (case : charon_test_case) =
           case.name;
           "--dest";
           env.llbc_dir;
-        |]
+        ]
       in
-      let args = Array.append args (Array.of_list case.extra_charon_options) in
+      let args = List.append args case.charon_options in
       (* Run Charon on the rust file *)
-      run_command args
+      Command.run_command_expecting_success (Command.make args)
   | Crate -> (
       match Sys.getenv_opt "IN_CI" with
       | None ->
-          let args = [| env.charon_path; "--dest"; env.llbc_dir |] in
           let args =
-            Array.append args (Array.of_list case.extra_charon_options)
+            [ env.charon_path; "--dest"; Filename_unix.realpath env.llbc_dir ]
           in
+          let args = List.append args case.charon_options in
           (* Run Charon inside the crate *)
           let old_pwd = Unix.getcwd () in
           Unix.chdir case.path;
-          run_command args;
+          Command.run_command_expecting_success (Command.make args);
           Unix.chdir old_pwd
       | Some _ ->
           (* Crates with dependencies must be generated separately in CI. We skip
@@ -94,140 +134,39 @@ let run_charon (env : runner_env) (case : charon_test_case) =
             "Warn: IN_CI is set; we skip generating llbc files for whole crates"
       )
 
-(* File-specific options *)
-let aeneas_options_for_test backend test_name =
-  (* TODO: reactivate -test-trans-units for hashmap and hashmap_main *)
-  let use_fuel =
-    match (backend, test_name) with
-    | ( "coq",
-        ( "arrays" | "betree_main" | "demo" | "hashmap" | "hashmap_main"
-        | "loops" ) ) ->
-        true
-    | "fstar", "demo" -> true
-    | _ -> false
-  in
-  let options = if use_fuel then "-use-fuel" :: [] else [] in
-
-  let decrease_template_clauses =
-    backend = "fstar"
-    &&
-    match test_name with
-    | "arrays" | "betree_main" | "hashmap" | "hashmap_main" | "loops" | "traits"
-      ->
-        true
-    | _ -> false
-  in
-  let options =
-    if decrease_template_clauses then
-      "-decreases-clauses" :: "-template-clauses" :: options
-    else options
-  in
-
-  let extra_options =
-    match (backend, test_name) with
-    | _, "betree_main" ->
-        [
-          "-backward-no-state-update";
-          "-test-trans-units";
-          "-state";
-          "-split-files";
-        ]
-    | _, "bitwise" -> [ "-test-trans-units" ]
-    | _, "constants" -> [ "-test-trans-units" ]
-    | _, "external" -> [ "-test-trans-units"; "-state"; "-split-files" ]
-    | _, "hashmap_main" -> [ "-state"; "-split-files" ]
-    | _, "no_nested_borrows" -> [ "-test-trans-units" ]
-    | _, "paper" -> [ "-test-trans-units" ]
-    | _, "polonius_list" -> [ "-test-trans-units" ]
-    | "fstar", "arrays" -> [ "-split-files" ]
-    | "fstar", "loops" -> [ "-split-files" ]
-    (* We add a custom import in the Hashmap.lean file: we do not want to overwrite it *)
-    | "lean", "hashmap" -> [ "-split-files"; "-no-gen-lib-entry" ]
-    | _, "hashmap" -> [ "-split-files" ]
-    | _ -> []
-  in
-  let options = List.append extra_options options in
-  options
-
-(* File-specific options *)
-let charon_options_for_test test_name =
-  (* Possible to add `--no-code-duplication` for `hashmap_main` if we use the optimized MIR *)
-  let no_code_dup =
-    match test_name with
-    | "constants" | "external" | "nested_borrows" | "no_nested_borrows"
-    | "paper" ->
-        [ "--no-code-duplication" ]
-    | _ -> []
-  in
-  let extra_options =
-    match test_name with
-    | "betree" ->
-        [ "--polonius"; "--opaque=betree_utils"; "--crate"; "betree_main" ]
-    | "hashmap_main" -> [ "--opaque=hashmap_utils" ]
-    | "polonius_list" -> [ "--polonius" ]
-    | _ -> []
-  in
-  List.append no_code_dup extra_options
-
-(* The subdirectory in which to store the outputs. *)
-(* This reproduces the file layout that was set by the old Makefile. FIXME: cleanup *)
-let test_subdir backend test_name =
-  match (backend, test_name) with
-  | "lean", "demo" -> "Demo"
-  | "lean", _ -> "."
-  | _, ("arrays" | "demo" | "hashmap" | "traits") -> test_name
-  | _, "betree_main" -> "betree"
-  | _, "hashmap_main" -> "hashmap_on_disk"
-  | "hol4", _ -> "misc-" ^ test_name
-  | ( _,
-      ( "bitwise" | "constants" | "external" | "loops" | "no_nested_borrows"
-      | "paper" | "polonius_list" ) ) ->
-      "misc"
-  | _ -> test_name
-
 let () =
   match Array.to_list Sys.argv with
   (* Ad-hoc argument passing for now. *)
   | _exe_path :: charon_path :: aeneas_path :: llbc_dir :: test_path
     :: aeneas_options ->
-      let runner_env = { charon_path; aeneas_path; llbc_dir } in
-      let test_name = Filename.remove_extension (Filename.basename test_path) in
-
-      let charon_kind =
-        if Sys_unix.is_file_exn test_path then SingleFile
-        else if Sys_unix.is_directory_exn test_path then Crate
-        else failwith ("`" ^ test_path ^ "` is not a file or a directory.")
+      let runner_env =
+        { charon_path; aeneas_path; llbc_dir; dest_dir = "tests" }
       in
-      let extra_charon_options = charon_options_for_test test_name in
-      let charon_case =
+      let test_case = Input.build test_path in
+      let test_case =
         {
-          path = test_path;
-          name = test_name;
-          kind = charon_kind;
-          extra_charon_options;
+          test_case with
+          per_backend =
+            Backend.Map.map
+              (fun x ->
+                {
+                  x with
+                  Input.aeneas_options =
+                    List.append aeneas_options x.Input.aeneas_options;
+                })
+              test_case.per_backend;
         }
       in
-      (* Generate the llbc file *)
-      run_charon runner_env charon_case;
-
-      (* FIXME: remove this special case *)
-      let test_name =
-        if test_name = "betree" then "betree_main" else test_name
+      let skip_all =
+        List.for_all
+          (fun backend ->
+            (Backend.Map.find backend test_case.per_backend).action = Input.Skip)
+          Backend.all
       in
-      (* TODO: reactivate HOL4 once traits are parameterized by their associated types *)
-      let backends = [ "coq"; "lean"; "fstar" ] in
-      List.iter
-        (fun backend ->
-          let subdir = test_subdir backend test_name in
-          let extra_aeneas_options =
-            List.append
-              (aeneas_options_for_test backend test_name)
-              aeneas_options
-          in
-          let aeneas_case =
-            { name = test_name; backend; subdir; extra_aeneas_options }
-          in
-          (* Process the llbc file for the current backend *)
-          run_aeneas runner_env aeneas_case)
-        backends
+      if skip_all then ()
+      else (
+        (* Generate the llbc file *)
+        run_charon runner_env test_case;
+        (* Process the llbc file for the each backend *)
+        List.iter (run_aeneas runner_env test_case) Backend.all)
   | _ -> failwith "Incorrect options passed to test runner"

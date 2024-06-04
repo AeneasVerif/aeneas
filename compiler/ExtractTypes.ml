@@ -1666,14 +1666,15 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Auxiliary function.
 
-    Generate field projectors in Coq.
+    Generate field projectors for Lean and Coq.
 
-    Sometimes we extract records as inductives in Coq: when this happens we
-    have to define the field projectors afterwards.
+    Recursive structs are defined as inductives in Lean and Coq.
+    Field projectors allow to retrieve the facilities provided by
+    Lean structures.
  *)
 let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
-  sanity_check __FILE__ __LINE__ (!backend = Coq) decl.span;
+  sanity_check __FILE__ __LINE__ (!backend = Coq || !backend = Lean) decl.span;
   match decl.kind with
   | Opaque | Enum _ -> ()
   | Struct fields ->
@@ -1685,29 +1686,60 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           ctx_add_generic_params decl.span decl.llbc_name decl.llbc_generics
             decl.generics ctx
         in
+        (* Record_var will be the ADT argument to the projector *)
         let ctx, record_var = ctx_add_var decl.span "x" (VarId.of_int 0) ctx in
+        (* Field_var will be the variable in the constructor that is returned by the projector *)
         let ctx, field_var = ctx_add_var decl.span "x" (VarId.of_int 1) ctx in
+        (* Name of the ADT *)
         let def_name = ctx_get_local_type decl.span decl.def_id ctx in
+        (* Name of the ADT constructor. As we are in the struct case, we only have
+           one constructor *)
         let cons_name = ctx_get_struct decl.span (TAdtId decl.def_id) ctx in
+
         let extract_field_proj (field_id : FieldId.id) (_ : field) : unit =
           F.pp_print_space fmt ();
           (* Outer box for the projector definition *)
           F.pp_open_hvbox fmt 0;
           (* Inner box for the projector definition *)
           F.pp_open_hvbox fmt ctx.indent_incr;
-          (* Open a box for the [Definition PROJ ... :=] *)
+
+          (* For Lean: add some attributes *)
+          if !backend = Lean then (
+            (* Box for the attributes *)
+            F.pp_open_vbox fmt 0;
+            (* Annotate the projectors with both simp and reducible.
+               The first one allows to automatically unfold when calling simp in proofs.
+               The second ensures that projectors will interact well with the unifier *)
+            F.pp_print_string fmt "@[simp, reducible]";
+            F.pp_print_break fmt 0 0;
+            (* Close box for the attributes *)
+            F.pp_close_box fmt ());
+
+          (* Box for the [def ADT.proj ... :=] *)
           F.pp_open_hovbox fmt ctx.indent_incr;
-          F.pp_print_string fmt "Definition";
+          (match !backend with
+          | Lean -> F.pp_print_string fmt "def"
+          | Coq -> F.pp_print_string fmt "Definition"
+          | _ -> internal_error __FILE__ __LINE__ decl.span);
           F.pp_print_space fmt ();
+
+          (* Print the function name. In Lean, the syntax ADT.proj will
+             allow us to call x.proj for any x of type ADT. In Coq,
+             we will have to introduce a notation for the projector. *)
           let field_name =
             ctx_get_field decl.span (TAdtId decl.def_id) field_id ctx
           in
+          if !backend = Lean then (
+            F.pp_print_string fmt def_name;
+            F.pp_print_string fmt ".");
           F.pp_print_string fmt field_name;
+
           (* Print the generics *)
           let as_implicits = true in
           extract_generic_params decl.span ctx fmt TypeDeclId.Set.empty
             ~as_implicits decl.generics type_params cg_params trait_clauses;
-          (* Print the record parameter *)
+
+          (* Print the record parameter as "(x : ADT)" *)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "(";
           F.pp_print_string fmt record_var;
@@ -1721,14 +1753,17 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
               F.pp_print_string fmt p)
             type_params;
           F.pp_print_string fmt ")";
-          (* *)
+
           F.pp_print_space fmt ();
           F.pp_print_string fmt ":=";
-          (* Close the box for the [Definition PROJ ... :=] *)
+
+          (* Close the box for the [def ADT.proj ... :=] *)
           F.pp_close_box fmt ();
           F.pp_print_space fmt ();
+
           (* Open a box for the whole match *)
           F.pp_open_hvbox fmt 0;
+
           (* Open a box for the [match ... with] *)
           F.pp_open_hovbox fmt ctx.indent_incr;
           F.pp_print_string fmt "match";
@@ -1758,9 +1793,12 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           F.pp_print_string fmt field_var;
           (* Close the box for the branch *)
           F.pp_close_box fmt ();
+
           (* Print the [end] *)
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "end";
+          if !backend = Coq then (
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "end");
+
           (* Close the box for the whole match *)
           F.pp_close_box fmt ();
           (* Close the inner box projector *)
@@ -1769,12 +1807,13 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           if !backend = Coq then (
             F.pp_print_cut fmt ();
             F.pp_print_string fmt ".");
-          (* Close the outer box projector  *)
+          (* Close the outer box for projector definition *)
           F.pp_close_box fmt ();
           (* Add breaks to insert new lines between definitions *)
           F.pp_print_break fmt 0 0
         in
 
+        (* Only for Coq: we need to define a notation for the projector *)
         let extract_proj_notation (field_id : FieldId.id) (_ : field) : unit =
           F.pp_print_space fmt ();
           (* Outer box for the projector definition *)
@@ -1815,7 +1854,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
         let extract_field_proj_and_notation (field_id : FieldId.id)
             (field : field) : unit =
           extract_field_proj field_id field;
-          extract_proj_notation field_id field
+          if !backend = Coq then extract_proj_notation field_id field
         in
 
         FieldId.iteri extract_field_proj_and_notation fields
@@ -1828,14 +1867,14 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
 let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   match !backend with
-  | FStar | Lean | HOL4 -> ()
-  | Coq ->
+  | FStar | HOL4 -> ()
+  | Lean | Coq ->
       if
         not
           (TypesUtils.type_decl_from_decl_id_is_tuple_struct
              ctx.trans_ctx.type_ctx.type_infos decl.def_id)
       then (
-        extract_type_decl_coq_arguments ctx fmt kind decl;
+        if !backend = Coq then extract_type_decl_coq_arguments ctx fmt kind decl;
         extract_type_decl_record_field_projectors ctx fmt kind decl)
 
 (** Extract the state type declaration. *)

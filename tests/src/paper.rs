@@ -1,3 +1,6 @@
+//@ charon-args=--no-code-duplication
+//@ aeneas-args=-test-trans-units
+//@ [coq,fstar] subdir=misc
 //! The examples from the ICFP submission, all in one place.
 
 // 2.1

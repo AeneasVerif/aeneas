@@ -816,6 +816,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
         "Unreachable: discriminant reads should have been eliminated from the \
          AST"
   | Global _ -> craise __FILE__ __LINE__ span "Unreachable"
+  | Len _ -> craise __FILE__ __LINE__ span "Unhandled Len"
 
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->

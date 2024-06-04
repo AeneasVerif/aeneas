@@ -1,3 +1,7 @@
+//@ [coq] aeneas-args=-use-fuel
+//@ [fstar] aeneas-args=-decreases-clauses -template-clauses
+//@ [fstar] aeneas-args=-split-files
+//@ [coq,fstar] subdir=misc
 use std::vec::Vec;
 
 /// No borrows

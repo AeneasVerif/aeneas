@@ -1,6 +1,6 @@
 .PHONY: all
-all: test-fstar test-coq test-lean test-hol4
+all: verify-fstar verify-coq verify-lean verify-hol4
 
-.PHONY: test-%
-test-%:
+.PHONY: verify-%
+verify-%:
 	cd $* && $(MAKE) all

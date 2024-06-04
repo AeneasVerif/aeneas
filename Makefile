@@ -25,7 +25,7 @@ CHARON_OPTIONS ?=
 # The directory thta contains the rust source files for tests.
 INPUTS_DIR ?= tests/src
 # The directory where to look for the .llbc files.
-LLBC_DIR ?= $(PWD)/tests/llbc
+LLBC_DIR ?= tests/llbc
 
 # In CI, we enforce formatting and activate the (expensive) sanity checks.
 IN_CI ?=
@@ -47,7 +47,12 @@ build-test-verify: build test verify
 
 # Build the project, without formatting the code
 .PHONY: build-dev
+ifdef IN_CI
+build-dev:
+	@true
+else
 build-dev: build-bin build-lib build-bin-dir doc
+endif
 
 .PHONY: build-bin
 build-bin: check-charon
@@ -76,16 +81,11 @@ build-bin-dir: build-bin build-lib build-runner
 doc:
 	cd compiler && dune build @doc
 
-# Fetches the latest commit from charon and updates `flake.lock` accordingly.
+# Updates `flake.lock` and `charon-pin` with the latest commit from Charon. If
+# we're using a symlink, this takes the commit from our local charon.
 .PHONY: update-charon-pin
 update-charon-pin:
-	nix flake lock --update-input charon
-	$(MAKE) charon-pin
-
-# Keep the commit revision in `./charon-pin` as well so that non-nix users can
-# know which commit to use.
-./charon-pin: flake.lock
-	nix-shell -p jq --run './scripts/update-charon-pin.sh' >> ./charon-pin
+	./scripts/update-charon-pin.sh
 
 # Checks that `./charon` contains a clone of charon at the required commit.
 # Also checks that `./charon/bin/charon` exists.
@@ -152,12 +152,10 @@ verify:
 
 # List the files and directories in `INPUTS_DIR`
 INPUTS_LIST = $(wildcard $(INPUTS_DIR)/*)
+# Remove the committed output files
+INPUTS_LIST := $(filter-out %.out,$(INPUTS_LIST))
 # Remove the directory prefix, replace with `test-`
 INPUTS_LIST := $(subst $(INPUTS_DIR)/,test-,$(INPUTS_LIST))
-# Remove some tests we don't want to run.
-# FIXME: move this information to the file itself
-INPUTS_LIST := $(filter-out test-hashmap_utils.rs,$(INPUTS_LIST))
-INPUTS_LIST := $(filter-out test-nested_borrows.rs,$(INPUTS_LIST))
 
 # Run all the tests we found.
 .PHONY: test-all
@@ -166,14 +164,13 @@ test-all: $(INPUTS_LIST)
 ifdef IN_CI
 # In CI we do extra sanity checks.
 test-%: AENEAS_OPTIONS += -checks
-else
-test-%: check-charon
 endif
 
 # Translate the given rust file to available backends. The test runner decides
 # which backends to use and sets test-specific options.
+# Note: the tests have the fulle file name: `test-arrays.rs`, `test-loops.rs`, `test-betree`.
 .PHONY: test-%
-test-%:
+test-%: build-dev
 	$(TEST_RUNNER_EXE) $(CHARON_EXE) $(AENEAS_EXE) $(LLBC_DIR) $(INPUTS_DIR)/"$*" $(AENEAS_OPTIONS)
 	echo "# Test $* done"
 

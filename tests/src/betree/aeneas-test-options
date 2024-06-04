@@ -1,0 +1,4 @@
+charon-args=--polonius --opaque=betree_utils
+aeneas-args=-backward-no-state-update -test-trans-units -state -split-files
+[coq] aeneas-args=-use-fuel
+[fstar] aeneas-args=-decreases-clauses -template-clauses

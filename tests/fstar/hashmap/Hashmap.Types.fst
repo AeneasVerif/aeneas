@@ -2,17 +2,18 @@
 (** [hashmap]: type definitions *)
 module Hashmap.Types
 open Primitives
+include Hashmap.TypesExternal
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap::List]
-    Source: 'tests/src/hashmap.rs', lines 19:0-19:16 *)
+    Source: 'tests/src/hashmap.rs', lines 29:0-29:16 *)
 type list_t (t : Type0) =
 | List_Cons : usize -> t -> list_t t -> list_t t
 | List_Nil : list_t t
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 35:0-35:21 *)
+    Source: 'tests/src/hashmap.rs', lines 45:0-45:21 *)
 type hashMap_t (t : Type0) =
 {
   num_entries : usize;

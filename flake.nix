@@ -80,6 +80,7 @@
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = (with ocamlPackages; [
             core_unix
+            ppx_deriving
           ]);
         };
 
@@ -89,7 +90,7 @@
         betree-llbc = charon.extractCrateWithCharon.${system} {
           name = "betree";
           src = ./tests/src/betree;
-          charonFlags = "--polonius --opaque=betree_utils --crate betree_main";
+          charonFlags = "--polonius --opaque=betree_utils";
           craneExtraArgs.checkPhaseCargoCommand = ''
             cargo rustc -- --test -Zpolonius
             ./target/debug/betree
@@ -117,17 +118,19 @@
             export CHARON_EXE=${charon.packages.${system}.charon}/bin/charon
             export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
 
-            mkdir llbc
-            export LLBC_DIR=llbc
-            # Copy over the llbc file we can't generate ourselves.
-            cp ${betree-llbc}/llbc/betree_main.llbc $LLBC_DIR
-
             # Copy the tests
             cp -r tests tests-copy
             make clean-generated-aeneas
 
+            mkdir tests/llbc
+            export LLBC_DIR=tests/llbc
+            # Copy over the llbc file we can't generate ourselves.
+            cp ${betree-llbc}/llbc/betree.llbc $LLBC_DIR
+
             # Run the tests with extra sanity checks enabled
             IN_CI=1 make test-all -j $NIX_BUILD_CORES
+            # Clean generated llbc files so we don't compare them.
+            rm -r tests/llbc
 
             # Check that there are no differences between the generated tests
             # and the original tests
@@ -214,6 +217,7 @@
       {
         packages = {
           inherit aeneas;
+          inherit (charon.packages.${system}) charon-ml charon;
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {
@@ -223,6 +227,7 @@
             pkgs.ocamlPackages.ocamlformat
             pkgs.ocamlPackages.menhir
             pkgs.ocamlPackages.odoc
+            pkgs.jq
           ];
 
           inputsFrom = [
