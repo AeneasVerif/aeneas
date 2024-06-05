@@ -250,12 +250,16 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                     Ok (ctx, { res with updated = nv })
               else Error (FailSharedLoan bids))
       | (_, (VLiteral _ | VAdt _ | VBottom | VBorrow _), _) as r ->
-          let pe, v, ty = r in
-          let pe = "- pe: " ^ show_projection_elem pe in
-          let v = "- v:\n" ^ show_value v in
-          let ty = "- ty:\n" ^ show_ety ty in
-          craise __FILE__ __LINE__ span
-            ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty))
+          if v.value = VBottom then
+            craise __FILE__ __LINE__ span
+              "Can not apply a projection to the ⊥ value"
+          else
+            let pe, v, ty = r in
+            let pe = "- pe: " ^ show_projection_elem pe in
+            let v = "- v:\n" ^ show_value v in
+            let ty = "- ty:\n" ^ show_ety ty in
+            craise __FILE__ __LINE__ span
+              ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty))
 
 (** Generic function to access (read/write) the value at a given place.
 
