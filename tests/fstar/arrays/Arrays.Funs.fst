@@ -348,7 +348,7 @@ let rec sum2_loop
 let sum2 (s : slice u32) (s2 : slice u32) : result u32 =
   let i = slice_len u32 s in
   let i1 = slice_len u32 s2 in
-  if not (i = i1) then Fail Failure else sum2_loop s s2 0 0
+  if i = i1 then sum2_loop s s2 0 0 else Fail Failure
 
 (** [arrays::f0]:
     Source: 'tests/src/arrays.rs', lines 266:0-266:11 *)

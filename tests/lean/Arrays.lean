@@ -384,9 +384,9 @@ divergent def sum2_loop
 def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
   let i := Slice.len U32 s
   let i1 := Slice.len U32 s2
-  if ¬ (i = i1)
-  then Result.fail .panic
-  else sum2_loop s s2 0#u32 0#usize
+  if i = i1
+  then sum2_loop s s2 0#u32 0#usize
+  else Result.fail .panic
 
 /- [arrays::f0]:
    Source: 'tests/src/arrays.rs', lines 266:0-266:11 -/

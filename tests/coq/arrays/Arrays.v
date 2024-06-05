@@ -426,7 +426,7 @@ Fixpoint sum2_loop
 Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
   let i := slice_len u32 s in
   let i1 := slice_len u32 s2 in
-  if negb (i s= i1) then Fail_ Failure else sum2_loop n s s2 0%u32 0%usize
+  if i s= i1 then sum2_loop n s s2 0%u32 0%usize else Fail_ Failure
 .
 
 (** [arrays::f0]:

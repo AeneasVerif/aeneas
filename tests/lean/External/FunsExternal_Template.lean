@@ -7,14 +7,14 @@ open Primitives
 open external
 
 /- [core::cell::{core::cell::Cell<T>#10}::get]:
-   Source: '/rustc/ad963232d9b987d66a6f8e6ec4141f672b8b9900/library/core/src/cell.rs', lines 497:4-497:26
+   Source: '/rustc/65ea825f4021eaf77f1b25139969712d65b435a4/library/core/src/cell.rs', lines 510:4-510:26
    Name pattern: core::cell::{core::cell::Cell<@T>}::get -/
 axiom core.cell.Cell.get
   (T : Type) (markerCopyInst : core.marker.Copy T) :
   core.cell.Cell T → State → Result (State × T)
 
 /- [core::cell::{core::cell::Cell<T>#11}::get_mut]:
-   Source: '/rustc/ad963232d9b987d66a6f8e6ec4141f672b8b9900/library/core/src/cell.rs', lines 574:4-574:39
+   Source: '/rustc/65ea825f4021eaf77f1b25139969712d65b435a4/library/core/src/cell.rs', lines 588:4-588:39
    Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut -/
 axiom core.cell.Cell.get_mut
   (T : Type) :
