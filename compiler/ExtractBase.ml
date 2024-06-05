@@ -850,6 +850,7 @@ let keywords () =
           "assert_norm";
           "assume";
           "else";
+          "end";
           "fun";
           "fn";
           "FStar";
