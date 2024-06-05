@@ -61,7 +61,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
               let asb =
                 match sv with
                 | _, Concrete (VSharedLoan (_, sv))
-                | _, Abstract (ASharedLoan (_, sv, _)) ->
+                | _, Abstract (ASharedLoan (_, _, sv, _)) ->
                     apply_proj_borrows_on_shared_borrow span ctx fresh_reborrow
                       regions sv ref_ty
                 | _ -> craise __FILE__ __LINE__ span "Unexpected"
@@ -137,7 +137,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                     apply_proj_borrows span check_symbolic_no_ended ctx
                       fresh_reborrow regions ancestors_regions bv ref_ty
                   in
-                  AMutBorrow (bid, bv)
+                  AMutBorrow (PNone, bid, bv)
               | VSharedBorrow bid, RShared ->
                   (* Rem.: we don't need to also apply the projection on the
                      borrowed value, because for as long as the abstraction
@@ -150,7 +150,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                      need to lookup the shared value and project it (see the
                      other branch of the [if then else]).
                   *)
-                  ASharedBorrow bid
+                  ASharedBorrow (PNone, bid)
               | VReservedMutBorrow _, _ ->
                   craise __FILE__ __LINE__ span
                     "Can't apply a proj_borrow over a reserved mutable borrow"
@@ -183,7 +183,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   let asb =
                     match sv with
                     | _, Concrete (VSharedLoan (_, sv))
-                    | _, Abstract (ASharedLoan (_, sv, _)) ->
+                    | _, Abstract (ASharedLoan (_, _, sv, _)) ->
                         apply_proj_borrows_on_shared_borrow span ctx
                           fresh_reborrow regions sv ref_ty
                     | _ -> craise __FILE__ __LINE__ span "Unexpected"
@@ -288,7 +288,7 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
          * we never project over static regions) *)
         if region_in_set r regions then
           (* In the set: keep *)
-          (ALoan (AMutLoan (bid, child_av)), ref_ty)
+          (ALoan (AMutLoan (PNone, bid, child_av)), ref_ty)
         else
           (* Not in the set: ignore *)
           (* If the borrow id is in the ancestor's regions, we still need
@@ -307,7 +307,7 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
         if region_in_set r regions then
           (* In the set: keep *)
           let shared_value = mk_typed_value_from_symbolic_value spc in
-          (ALoan (ASharedLoan (bids, shared_value, child_av)), ref_ty)
+          (ALoan (ASharedLoan (PNone, bids, shared_value, child_av)), ref_ty)
         else
           (* Not in the set: ignore *)
           (ALoan (AIgnoredSharedLoan child_av), ref_ty)
@@ -441,7 +441,7 @@ let apply_reborrows (span : Meta.span)
 
       method! visit_aloan_content env lc =
         match lc with
-        | ASharedLoan (bids, sv, av) ->
+        | ASharedLoan (pm, bids, sv, av) ->
             (* Insert the reborrows *)
             let bids = insert_reborrows bids in
             (* Similarly to the non-abstraction case: check if the shared
@@ -453,9 +453,9 @@ let apply_reborrows (span : Meta.span)
               | Some bid -> insert_reborrows_for_bid bids bid
             in
             (* Update and explore *)
-            super#visit_ASharedLoan env bids sv av
+            super#visit_ASharedLoan env pm bids sv av
         | AIgnoredSharedLoan _
-        | AMutLoan (_, _)
+        | AMutLoan (_, _, _)
         | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
         | AEndedSharedLoan (_, _)
         | AIgnoredMutLoan (_, _)

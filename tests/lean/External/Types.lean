@@ -7,7 +7,7 @@ open Primitives
 namespace external
 
 /- Trait declaration: [core::marker::Copy]
-   Source: '/rustc/ad963232d9b987d66a6f8e6ec4141f672b8b9900/library/core/src/marker.rs', lines 465:0-465:21
+   Source: '/rustc/65ea825f4021eaf77f1b25139969712d65b435a4/library/core/src/marker.rs', lines 465:0-465:21
    Name pattern: core::marker::Copy -/
 structure core.marker.Copy (Self : Type) where
   cloneCloneInst : core.clone.Clone Self

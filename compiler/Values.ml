@@ -153,7 +153,7 @@ and typed_value = { value : value; ty : ty }
 
 (** "Meta"-value: information we store for the synthesis.
 
-     Note that we never automatically visit the span-values with the
+     Note that we never automatically visit the meta-values with the
      visitors: they really are span information, and shouldn't be considered
      as part of the environment during a symbolic execution.
 
@@ -166,7 +166,7 @@ type mvalue = typed_value [@@deriving show, ord]
 
      See the explanations for {!mvalue}
 
-     TODO: we may want to create wrappers, to prevent mixing span values
+     TODO: we may want to create wrappers, to prevent mixing meta values
      and regular values.
  *)
 type msymbolic_value = symbolic_value [@@deriving show, ord]
@@ -175,6 +175,41 @@ type region_id = RegionId.id [@@deriving show, ord]
 type region_id_set = RegionId.Set.t [@@deriving show, ord]
 type abstraction_id = AbstractionId.id [@@deriving show, ord]
 type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
+
+(** Projection markers: those are used in the joins.
+    For additional explanations see: https://arxiv.org/pdf/2404.02680#section.5 *)
+type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
+
+type marker_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
+
+module MarkerBorrowIdOrd = struct
+  type t = marker_borrow_id
+
+  let compare = compare_marker_borrow_id
+  let to_string = show_marker_borrow_id
+  let pp_t = pp_marker_borrow_id
+  let show_t = show_marker_borrow_id
+end
+
+module MarkerBorrowIdSet = Collections.MakeSet (MarkerBorrowIdOrd)
+module MarkerBorrowIdMap = Collections.MakeMap (MarkerBorrowIdOrd)
+
+module MarkerBorrowId : sig
+  type t
+
+  val to_string : t -> string
+
+  module Set : Collections.Set with type elt = t
+  module Map : Collections.Map with type key = t
+end
+with type t = marker_borrow_id = struct
+  type t = marker_borrow_id
+
+  let to_string = show_marker_borrow_id
+
+  module Set = MarkerBorrowIdSet
+  module Map = MarkerBorrowIdMap
+end
 
 (** Ancestor for {!typed_avalue} iter visitor *)
 class ['self] iter_typed_avalue_base =
@@ -192,6 +227,8 @@ class ['self] iter_typed_avalue_base =
 
     method visit_abstraction_id_set : 'env -> abstraction_id_set -> unit =
       fun env ids -> AbstractionId.Set.iter (self#visit_abstraction_id env) ids
+
+    method visit_proj_marker : 'env -> proj_marker -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!typed_avalue} map visitor *)
@@ -212,6 +249,8 @@ class ['self] map_typed_avalue_base =
     method visit_abstraction_id_set
         : 'env -> abstraction_id_set -> abstraction_id_set =
       fun env ids -> AbstractionId.Set.map (self#visit_abstraction_id env) ids
+
+    method visit_proj_marker : 'env -> proj_marker -> proj_marker = fun _ x -> x
   end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
@@ -270,7 +309,7 @@ and aproj =
           'a and one for 'b.
           
           We accumulate those values in the list of projections (note that
-          the span value stores the value which was given back).
+          the meta value stores the value which was given back).
           
           We can later end the projector of loans if [s@0] is not referenced
           anywhere in the context below a projector of borrows which intersects
@@ -282,14 +321,14 @@ and aproj =
           
           Also note that once given to a borrow projection, a symbolic value
           can't get updated/expanded: this means that we don't need to save
-          any span-value here.
+          any meta-value here.
        *)
   | AEndedProjLoans of msymbolic_value * (msymbolic_value * aproj) list
       (** An ended projector of loans over a symbolic value.
       
           See the explanations for {!AProjLoans}
           
-          Note that we keep the original symbolic value as a span-value.
+          Note that we keep the original symbolic value as a meta-value.
        *)
   | AEndedProjBorrows of msymbolic_value
       (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
@@ -333,7 +372,7 @@ and adt_avalue = {
     contain other, independent loans.
 *)
 and aloan_content =
-  | AMutLoan of loan_id * typed_avalue
+  | AMutLoan of proj_marker * loan_id * typed_avalue
       (** A mutable loan owned by an abstraction.
 
           The avalue is the child avalue.
@@ -354,7 +393,7 @@ and aloan_content =
             px -> mut_borrow l0 (mut_borrow @s1)
           ]}
        *)
-  | ASharedLoan of loan_id_set * typed_value * typed_avalue
+  | ASharedLoan of proj_marker * loan_id_set * typed_value * typed_avalue
       (** A shared loan owned by an abstraction.
 
           The avalue is the child avalue.
@@ -507,7 +546,7 @@ and aloan_content =
     ids)?
 *)
 and aborrow_content =
-  | AMutBorrow of borrow_id * typed_avalue
+  | AMutBorrow of proj_marker * borrow_id * typed_avalue
       (** A mutable borrow owned by an abstraction.
       
           Is used when an abstraction "consumes" borrows, when giving borrows
@@ -528,7 +567,7 @@ and aborrow_content =
             > abs0 { a_mut_borrow l0 (U32 0) _ }
           ]}
      *)
-  | ASharedBorrow of borrow_id
+  | ASharedBorrow of proj_marker * borrow_id
       (** A shared borrow owned by an abstraction.
     
           Example:
@@ -613,7 +652,7 @@ and aborrow_content =
        *)
   | AEndedMutBorrow of msymbolic_value * typed_avalue
       (** The sole purpose of {!AEndedMutBorrow} is to store the (symbolic) value
-          that we gave back as a span-value, to help with the synthesis.
+          that we gave back as a meta-value, to help with the synthesis.
        *)
   | AEndedSharedBorrow
       (** We don't really need {!AEndedSharedBorrow}: we simply want to be

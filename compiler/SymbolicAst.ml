@@ -37,7 +37,7 @@ type call_id =
 
 type call = {
   call_id : call_id;
-  ctx : Contexts.eval_ctx;
+  ctx : (Contexts.eval_ctx[@opaque]);
       (** The context upon calling the function (after the operands have been
           evaluated). We need it to compute the translated values for shared
           borrows (we need to perform lookups).
@@ -123,9 +123,9 @@ class ['self] iter_expression_base =
 (** **Rem.:** here, {!expression} is not at all equivalent to the expressions
     used in LLBC or in lambda-calculus: they are simply a first step towards
     lambda-calculus expressions.
- *)
+*)
 type expression =
-  | Return of Contexts.eval_ctx * typed_value option
+  | Return of (Contexts.eval_ctx[@opaque]) * typed_value option
       (** There are two cases:
           - the AST is for a forward function: the typed value should contain
             the value which was in the return variable
@@ -137,7 +137,7 @@ type expression =
        *)
   | Panic
   | FunCall of call * expression
-  | EndAbstraction of Contexts.eval_ctx * abs * expression
+  | EndAbstraction of (Contexts.eval_ctx[@opaque]) * abs * expression
       (** The context is the evaluation context upon ending the abstraction,
           just after we removed the abstraction from the context.
 
@@ -146,7 +146,7 @@ type expression =
        *)
   | EvalGlobal of global_decl_id * generic_args * symbolic_value * expression
       (** Evaluate a global to a fresh symbolic value *)
-  | Assertion of Contexts.eval_ctx * typed_value * expression
+  | Assertion of (Contexts.eval_ctx[@opaque]) * typed_value * expression
       (** An assertion.
 
           The context is the evaluation context from after evaluating the asserted
@@ -162,7 +162,7 @@ type expression =
           to prettify the generated code.
        *)
   | IntroSymbolic of
-      Contexts.eval_ctx
+      (Contexts.eval_ctx[@opaque])
       * mplace option
       * symbolic_value
       * value_aggregate
@@ -179,7 +179,7 @@ type expression =
           value. It has the same purpose as for the {!Return} case.
        *)
   | ForwardEnd of
-      Contexts.eval_ctx
+      (Contexts.eval_ctx[@opaque])
       * typed_value symbolic_value_id_map option
       * expression
       * expression region_group_id_map
@@ -211,7 +211,7 @@ type expression =
           The boolean is [true].
           TODO: merge this with Return.
        *)
-  | Meta of espan * expression  (** Meta information *)
+  | Meta of (espan[@opaque]) * expression  (** Meta information *)
   | Error of Meta.span option * string
 
 and loop = {

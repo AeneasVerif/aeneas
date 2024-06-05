@@ -523,35 +523,35 @@ Definition test1 (n : nat) : result unit :=
   hm3 <- hashMap_insert u64 n hm2 1024%usize 138%u64;
   hm4 <- hashMap_insert u64 n hm3 1056%usize 256%u64;
   i <- hashMap_get u64 n hm4 128%usize;
-  if negb (i s= 18%u64)
-  then Fail_ Failure
-  else (
+  if i s= 18%u64
+  then (
     p <- hashMap_get_mut u64 n hm4 1024%usize;
     let (_, get_mut_back) := p in
     hm5 <- get_mut_back 56%u64;
     i1 <- hashMap_get u64 n hm5 1024%usize;
-    if negb (i1 s= 56%u64)
-    then Fail_ Failure
-    else (
+    if i1 s= 56%u64
+    then (
       p1 <- hashMap_remove u64 n hm5 1024%usize;
       let (x, hm6) := p1 in
       match x with
       | None => Fail_ Failure
       | Some x1 =>
-        if negb (x1 s= 56%u64)
-        then Fail_ Failure
-        else (
+        if x1 s= 56%u64
+        then (
           i2 <- hashMap_get u64 n hm6 0%usize;
-          if negb (i2 s= 42%u64)
-          then Fail_ Failure
-          else (
+          if i2 s= 42%u64
+          then (
             i3 <- hashMap_get u64 n hm6 128%usize;
-            if negb (i3 s= 18%u64)
-            then Fail_ Failure
-            else (
+            if i3 s= 18%u64
+            then (
               i4 <- hashMap_get u64 n hm6 1056%usize;
-              if negb (i4 s= 256%u64) then Fail_ Failure else Ok tt)))
-      end))
+              if i4 s= 256%u64 then Ok tt else Fail_ Failure)
+            else Fail_ Failure)
+          else Fail_ Failure)
+        else Fail_ Failure
+      end)
+    else Fail_ Failure)
+  else Fail_ Failure
 .
 
 End Hashmap_Funs.

@@ -94,6 +94,9 @@ let map_apply_continuation (f : 'a -> 'c -> 'b * 'c * ('e -> 'e))
 let cc_singleton file line span cf el =
   match el with [ e ] -> cf e | _ -> internal_error file line span
 
+let cf_singleton file line span el =
+  match el with [ e ] -> e | _ -> internal_error file line span
+
 (** It happens that we need to concatenate lists of results, for
     instance when evaluating the branches of a match. When applying
     the continuations to build the symbolic expressions, we need

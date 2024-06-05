@@ -3,5 +3,5 @@
 -arg -w
 -arg all
 
+Primitives.v 
 Traits.v
-Primitives.v

@@ -3,6 +3,6 @@
 -arg -w
 -arg all
 
-Hashmap_Types.v
+Hashmap_Funs.v 
+Hashmap_Types.v 
 Primitives.v
-Hashmap_Funs.v

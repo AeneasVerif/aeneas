@@ -126,64 +126,6 @@ let cleanup_fresh_values_and_abs (config : config) (span : Meta.span)
   let ctx = cleanup_fresh_values fixed_ids ctx in
   (ctx, cc)
 
-(** Reorder the loans and borrows in the fresh abstractions.
-
-    We do this in order to enforce some structure in the environments: this
-    allows us to find fixed-points. Note that this function needs to be
-    called typically after we merge abstractions together (see {!collapse_ctx}
-    for instance).
- *)
-let reorder_loans_borrows_in_fresh_abs (span : Meta.span)
-    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
-  let reorder_in_fresh_abs (abs : abs) : abs =
-    (* Split between the loans and borrows *)
-    let is_borrow (av : typed_avalue) : bool =
-      match av.value with
-      | ABorrow _ -> true
-      | ALoan _ -> false
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
-    in
-    let aborrows, aloans = List.partition is_borrow abs.avalues in
-
-    (* Reoder the borrows, and the loans.
-
-       After experimenting, it seems that a good way of reordering the loans
-       and the borrows to find fixed points is simply to sort them by increasing
-       order of id (taking the smallest id of a set of ids, in case of sets).
-    *)
-    let get_borrow_id (av : typed_avalue) : BorrowId.id =
-      match av.value with
-      | ABorrow (AMutBorrow (bid, _) | ASharedBorrow bid) -> bid
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
-    in
-    let get_loan_id (av : typed_avalue) : BorrowId.id =
-      match av.value with
-      | ALoan (AMutLoan (lid, _)) -> lid
-      | ALoan (ASharedLoan (lids, _, _)) -> BorrowId.Set.min_elt lids
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
-    in
-    (* We use ordered maps to reorder the borrows and loans *)
-    let reorder (get_bid : typed_avalue -> BorrowId.id)
-        (values : typed_avalue list) : typed_avalue list =
-      List.map snd
-        (BorrowId.Map.bindings
-           (BorrowId.Map.of_list (List.map (fun v -> (get_bid v, v)) values)))
-    in
-    let aborrows = reorder get_borrow_id aborrows in
-    let aloans = reorder get_loan_id aloans in
-    let avalues = List.append aborrows aloans in
-    { abs with avalues }
-  in
-
-  let reorder_in_abs (abs : abs) =
-    if AbstractionId.Set.mem abs.abs_id old_abs_ids then abs
-    else reorder_in_fresh_abs abs
-  in
-
-  let env = env_map_abs reorder_in_abs ctx.env in
-
-  { ctx with env }
-
 let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     cm_fun =
  fun ctx0 ->
@@ -245,10 +187,14 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
        SL {l0, l1} s0
      ]}
 
-     and introduce the corresponding abstraction:
+     and introduce the corresponding abstractions for the borrows l0 and l1:
      {[
-       abs'2 { SB l0, SL {l2} s2 }
+       abs'2 { SB l0, SL {l0'} s1 } // Reborrow for l0
+       abs'3 { SB l1, SL {l1'} s2 } // Reborrow for l1
      ]}
+
+     Remark: of course we also need to replace the [SB l0] and the [SB l1]
+     values we find in the environments with [SB l0'] and [SB l1'].
   *)
   let push_abs_for_shared_value (abs : abs) (sv : typed_value)
       (lid : BorrowId.id) : unit =
@@ -283,13 +229,13 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     (* Create the shared loan *)
     let loan_rty = TRef (RFVar nrid, rty, RShared) in
     let loan_value =
-      ALoan (ASharedLoan (BorrowId.Set.singleton nlid, nsv, child_av))
+      ALoan (ASharedLoan (PNone, BorrowId.Set.singleton nlid, nsv, child_av))
     in
     let loan_value = mk_typed_avalue span loan_rty loan_value in
 
     (* Create the shared borrow *)
     let borrow_rty = loan_rty in
-    let borrow_value = ABorrow (ASharedBorrow lid) in
+    let borrow_value = ABorrow (ASharedBorrow (PNone, lid)) in
     let borrow_value = mk_typed_avalue span borrow_rty borrow_value in
 
     (* Create the abstraction *)
@@ -344,11 +290,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
           (* Continue the exploration *)
           super#visit_VSharedLoan env lids sv
 
-        method! visit_ASharedLoan env lids sv av =
+        method! visit_ASharedLoan env pm lids sv av =
           collect_shared_value lids sv;
 
           (* Continue the exploration *)
-          super#visit_ASharedLoan env lids sv av
+          super#visit_ASharedLoan env pm lids sv av
 
         (** Check that there are no symbolic values with *borrows* inside the
             abstraction - shouldn't happen if the symbolic values are greedily
@@ -441,7 +387,7 @@ let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
 
 let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (ctx0 : eval_ctx) :
-    eval_ctx * ids_sets * abs RegionGroupId.Map.t =
+    eval_ctx * ids_sets * AbstractionId.id RegionGroupId.Map.t =
   (* Introduce "reborrows" for the shared values in the abstractions, so that
      the shared values in the fixed abstractions never get modified (technically,
      they are immutable, but in practice we can introduce more shared loans, or
@@ -744,10 +690,24 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        region id to abstraction id *)
     let fp = ref fp in
     let rg_to_abs = ref RegionGroupId.Map.empty in
+    (* List the ids of all the abstractions in the context, in the order in
+       which they appear (this is important to preserve some structure:
+       we will explore them in this order) *)
+    let all_abs_ids =
+      List.filter_map
+        (function EAbs abs -> Some abs.abs_id | _ -> None)
+        (* TODO: we may want to use a different order, for instance the order
+           in which the regions were ended. *)
+        (List.rev !fp.env)
+    in
     let _ =
       RegionGroupId.Map.iter
         (fun rg_id ids ->
-          let ids = AbstractionId.Set.elements ids in
+          (* Make sure we explore the ids in the order in which they appear
+             in the context *)
+          let ids =
+            List.filter (fun id -> AbstractionId.Set.mem id ids) all_abs_ids
+          in
           (* Retrieve the first id of the group *)
           match ids with
           | [] ->
@@ -790,8 +750,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                         ^ AbstractionId.to_string !id0));
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
-                      merge_into_abstraction span loop_id abs_kind false !fp id
-                        !id0
+                      merge_into_first_abstraction span loop_id abs_kind false
+                        !fp !id0 id
                     in
                     fp := fp';
                     id0 := id0';
@@ -800,15 +760,15 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                     craise __FILE__ __LINE__ span "Unexpected")
                 ids;
               (* Register the mapping *)
-              let abs = ctx_lookup_abs !fp !id0 in
-              rg_to_abs := RegionGroupId.Map.add_strict rg_id abs !rg_to_abs)
+              rg_to_abs := RegionGroupId.Map.add_strict rg_id !id0 !rg_to_abs)
         !fp_ended_aids
     in
     let rg_to_abs = !rg_to_abs in
 
     (* Reorder the loans and borrows in the fresh abstractions in the fixed-point *)
     let fp =
-      reorder_loans_borrows_in_fresh_abs span (Option.get !fixed_ids).aids !fp
+      reorder_loans_borrows_in_fresh_abs span false (Option.get !fixed_ids).aids
+        !fp
     in
 
     (* Update the abstraction's [can_end] field and their kinds.
@@ -899,7 +859,9 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
     let lookup_shared_loan lid ctx : typed_value =
       match snd (lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
-      | Abstract (ASharedLoan (_, v, _)) -> v
+      | Abstract (ASharedLoan (pm, _, v, _)) ->
+          sanity_check __FILE__ __LINE__ (pm = PNone) span;
+          v
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
@@ -1038,7 +1000,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
       object (self)
         inherit [_] iter_env
 
-        method! visit_ASharedLoan inside_shared _ sv child_av =
+        method! visit_ASharedLoan inside_shared _ _ sv child_av =
           self#visit_typed_value true sv;
           self#visit_typed_avalue inside_shared child_av
 
@@ -1088,7 +1050,9 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
           let v =
             match snd (lookup_loan span ek_all bid fp_ctx) with
             | Concrete (VSharedLoan (_, v)) -> v
-            | Abstract (ASharedLoan (_, v, _)) -> v
+            | Abstract (ASharedLoan (pm, _, v, _)) ->
+                sanity_check __FILE__ __LINE__ (pm = PNone) span;
+                v
             | _ -> craise __FILE__ __LINE__ span "Unreachable"
           in
           self#visit_typed_value env v
