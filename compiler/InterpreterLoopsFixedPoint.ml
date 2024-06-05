@@ -683,9 +683,10 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (* If we generate a translation, we check that all the regions need to end
        - this is not necessary per se, but if it doesn't happen it is bizarre and worth investigating...
        We need this check for now for technical reasons to make the translation work.
+       If we only borrow-check, we can ignore this.
     *)
     sanity_check __FILE__ __LINE__
-      (AbstractionId.Set.equal !aids_union !fp_aids)
+      (!Config.borrow_check || AbstractionId.Set.equal !aids_union !fp_aids)
       span;
 
     (* Merge the abstractions which need to be merged, and compute the map from
