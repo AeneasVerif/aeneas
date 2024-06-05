@@ -1,0 +1,17 @@
+[[92mInfo[39m ] Imported: tests/llbc/loops_borrow_check_fail.llbc
+[[91mError[39m] Inconsistent projection:
+- pe: Expressions.Deref
+- v:
+Values.VBottom
+- ty:
+(Types.TRef (Types.RErased, (Types.TLiteral (Values.TInteger Values.I32)),
+   Types.RMut))
+Source: 'tests/src/loops-borrow-check-fail.rs', lines 7:4-12:1
+[[91mError[39m] Inconsistent projection:
+- pe: Expressions.Deref
+- v:
+Values.VBottom
+- ty:
+(Types.TRef (Types.RErased, (Types.TLiteral (Values.TInteger Values.I32)),
+   Types.RShared))
+Source: 'tests/src/loops-borrow-check-fail.rs', lines 17:4-21:1
