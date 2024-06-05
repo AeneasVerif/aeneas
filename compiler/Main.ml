@@ -309,8 +309,9 @@ let () =
          (* Test the unit functions with the concrete interpreter *)
          if !test_unit_functions then Test.test_unit_functions m;
 
-         (* Translate the functions *)
-         Aeneas.Translate.translate_crate filename dest_dir m
+         (* Translate or borrow-check the crate *)
+         if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
+         else Aeneas.Translate.translate_crate filename dest_dir m
        with Errors.CFailure (_, _) ->
          (* In theory it shouldn't happen, but there may be uncaught errors -
             note that we let the [Failure] exceptions go through (they are
@@ -323,7 +324,9 @@ let () =
           (* Reverse the list of error messages so that we print them from the
              earliest to the latest. *)
           (List.rev !Errors.error_list);
-        exit 1);
+        exit 1)
+      else if !borrow_check then
+        log#linfo (lazy "Crate successfully borrow-checked");
 
       (* Print total elapsed time *)
       log#linfo

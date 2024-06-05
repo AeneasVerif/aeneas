@@ -15,6 +15,9 @@ let regions_hierarchy_log = L.get_logger "MainLogger.RegionsHierarchy"
 (** Logger for Translate *)
 let translate_log = L.get_logger "MainLogger.Translate"
 
+(** Logger for BorrowCheck *)
+let borrow_check_log = L.get_logger "MainLogger.BorrowCheck"
+
 (** Logger for Contexts *)
 let contexts_log = L.get_logger "MainLogger.Contexts"
 
