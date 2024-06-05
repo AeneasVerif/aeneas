@@ -3693,7 +3693,7 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : VarId.id) (fuel : VarId.id)
   let fail_branch =
     mk_result_fail_texpression_with_error_id span error_out_of_fuel_id body.ty
   in
-  match !Config.backend with
+  match Config.backend () with
   | FStar ->
       (* Generate an expression:
          {[

@@ -241,7 +241,7 @@ let rec let_group_requires_parentheses (span : Meta.span) (e : texpression) :
         msg (* TODO : check if true should'nt be returned instead ? *)
 
 let texpression_requires_parentheses span e =
-  match !Config.backend with
+  match Config.backend () with
   | FStar | Lean -> false
   | Coq | HOL4 -> let_group_requires_parentheses span e
 

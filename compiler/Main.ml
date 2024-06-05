@@ -68,9 +68,13 @@ let () =
 
   let spec_ls =
     [
+      ( "-borrow-check",
+        Arg.Set borrow_check,
+        " Only borrow-check the program and do not generate any translation" );
       ( "-backend",
         Arg.Symbol (backend_names, set_backend),
-        " Specify the target backend" );
+        " Specify the target backend (" ^ String.concat ", " backend_names ^ ")"
+      );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
       ( "-test-units",
         Arg.Set test_unit_functions,
@@ -137,6 +141,12 @@ let () =
   let check_arg_name name =
     assert (List.exists (fun (n, _, _) -> n = name) spec_ls)
   in
+
+  let fail_with_error (msg : string) =
+    log#serror msg;
+    fail ()
+  in
+
   let check_arg_implies (arg0 : bool) (name0 : string) (arg1 : bool)
       (name1 : string) : unit =
     check_arg_name name0;
@@ -160,6 +170,14 @@ let () =
       fail ())
   in
 
+  let check (cond : bool) (msg : string) =
+    if not cond then fail_with_error msg
+  in
+
+  let check_not (cond : bool) (msg : string) =
+    if cond then fail_with_error msg
+  in
+
   if !print_llbc then main_log#set_level EL.Debug;
 
   (* Sanity check (now that the arguments are parsed!): -template-clauses ==> decrease-clauses *)
@@ -176,44 +194,63 @@ let () =
   check_arg_implies
     (not !generate_lib_entry_point)
     "-no-gen-lib-entry" !split_files "-split-files";
-  if !lean_gen_lakefile && not (!backend = Lean) then
-    log#error
+  if !lean_gen_lakefile && not (backend () = Lean) then
+    fail_with_error
       "The -lean-default-lakefile option is valid only for the Lean backend";
+
+  if !borrow_check then (
+    check (!dest_dir = "") "Options -borrow-check and -dest are not compatible";
+    check_not !split_files
+      "Options -borrow-check and -split-files are not compatible";
+    check_not !test_unit_functions
+      "Options -borrow-check and -test-unit-functions are not compatible";
+    check_not !test_trans_unit_functions
+      "Options -borrow-check and -test-trans-units are not compatible";
+    check_not !extract_decreases_clauses
+      "Options -borrow-check and -decreases-clauses are not compatible";
+    check_not !use_state
+      "Options -borrow-check and -use-state are not compatible";
+    check_not !use_fuel "Options -borrow-check and -use-fuel are not compatible";
+    check_not !split_files
+      "Options -borrow-check and -split-files are not compatible");
 
   (* Check that the user specified a backend *)
   let _ =
     match !opt_backend with
-    | Some b -> backend := b
+    | Some _ ->
+        check_not !borrow_check
+          "Arguments `-backend` and `-borrow-check` are not compatible"
     | None ->
-        log#error "Backend not specified (use the `-backend` argument)";
-        fail ()
+        check !borrow_check "Missing `-backend` or `-borrow-check` argument"
   in
 
   (* Set some options depending on the backend *)
   let _ =
-    match !backend with
-    | FStar ->
-        (* F* can disambiguate the field names *)
-        record_fields_short_names := true
-    | Coq ->
-        (* Some patterns are not supported *)
-        decompose_monadic_let_bindings := true;
-        decompose_nested_let_patterns := true
-    | Lean ->
-        (* We don't support fuel for the Lean backend *)
-        if !use_fuel then (
-          log#error "The Lean backend doesn't support the -use-fuel option";
-          fail ());
-        (* Lean can disambiguate the field names *)
-        record_fields_short_names := true;
-        (* We exploit the fact that the variant name should always be
-           prefixed with the type name to prevent collisions *)
-        variant_concatenate_type_name := false
-    | HOL4 ->
-        (* We don't support fuel for the HOL4 backend *)
-        if !use_fuel then (
-          log#error "The HOL4 backend doesn't support the -use-fuel option";
-          fail ())
+    match !opt_backend with
+    | None -> ()
+    | Some backend -> (
+        match backend with
+        | FStar ->
+            (* F* can disambiguate the field names *)
+            record_fields_short_names := true
+        | Coq ->
+            (* Some patterns are not supported *)
+            decompose_monadic_let_bindings := true;
+            decompose_nested_let_patterns := true
+        | Lean ->
+            (* We don't support fuel for the Lean backend *)
+            check_not !use_fuel
+              "The Lean backend doesn't support the -use-fuel option";
+            (* Lean can disambiguate the field names *)
+            record_fields_short_names := true;
+            (* We exploit the fact that the variant name should always be
+               prefixed with the type name to prevent collisions *)
+            variant_concatenate_type_name := false
+        | HOL4 ->
+            (* We don't support fuel for the HOL4 backend *)
+            if !use_fuel then (
+              log#error "The HOL4 backend doesn't support the -use-fuel option";
+              fail ()))
   in
 
   (* Retrieve and check the filename *)
@@ -251,7 +288,7 @@ let () =
 
       (* We don't support mutually recursive definitions with decreases clauses in Lean *)
       if
-        !backend = Lean && !extract_decreases_clauses
+        !opt_backend = Some Lean && !extract_decreases_clauses
         && List.exists
              (function
                | Aeneas.LlbcAst.FunGroup (RecGroup (_ :: _)) -> true
