@@ -564,6 +564,9 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
   match kind with
   | T.Struct fields -> Struct (translate_fields span fields)
   | T.Enum variants -> Enum (translate_variants span variants)
+  | Alias _ ->
+      craise __FILE__ __LINE__ span
+        "type aliases should have been removed earlier"
   | T.Opaque -> Opaque
 
 (** Translate a type definition from LLBC

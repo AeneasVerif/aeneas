@@ -435,10 +435,47 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
       ^ "\n"));
   f
 
+(* Remove the type aliases from the type declarations and declaration groups *)
+let filter_type_aliases (crate : crate) : crate =
+  let type_decl_is_alias (ty : type_decl) =
+    match ty.kind with Alias _ -> true | _ -> false
+  in
+  (* Whether the declaration group has a single entry that is a type alias.
+     Type aliases should not be in recursive groups so we also ensure this doesn't
+     happen. *)
+  let decl_group_is_single_alias = function
+    | TypeGroup (NonRecGroup id) ->
+        type_decl_is_alias (TypeDeclId.Map.find id crate.type_decls)
+    | TypeGroup (RecGroup ids) ->
+        List.iter
+          (fun id ->
+            let ty = TypeDeclId.Map.find id crate.type_decls in
+            if type_decl_is_alias ty then
+              craise __FILE__ __LINE__ ty.item_meta.span
+                "found a type alias within a recursive group; this is \
+                 unexpected")
+          ids;
+        false
+    | _ -> false
+  in
+  {
+    crate with
+    type_decls =
+      TypeDeclId.Map.filter
+        (fun _id ty -> not (type_decl_is_alias ty))
+        crate.type_decls;
+    declarations =
+      List.filter
+        (fun decl -> not (decl_group_is_single_alias decl))
+        crate.declarations;
+  }
+
 let apply_passes (crate : crate) : crate =
-  let passes = [ remove_loop_breaks crate; remove_shallow_borrows crate ] in
+  let function_passes =
+    [ remove_loop_breaks crate; remove_shallow_borrows crate ]
+  in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)
-  let apply_pass (pass : fun_decl -> fun_decl) (f : fun_decl) =
+  let apply_function_pass (pass : fun_decl -> fun_decl) (f : fun_decl) =
     try pass f
     with CFailure (_, _) ->
       (* The error was already registered, we don't need to register it twice.
@@ -452,10 +489,11 @@ let apply_passes (crate : crate) : crate =
   in
   let fun_decls =
     List.fold_left
-      (fun fl pass -> FunDeclId.Map.map (apply_pass pass) fl)
-      crate.fun_decls passes
+      (fun fl pass -> FunDeclId.Map.map (apply_function_pass pass) fl)
+      crate.fun_decls function_passes
   in
   let crate = { crate with fun_decls } in
+  let crate = filter_type_aliases crate in
   log#ldebug
     (lazy ("After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"));
   crate

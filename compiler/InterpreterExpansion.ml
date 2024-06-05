@@ -648,9 +648,9 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
                     1 variants (option [greedy_expand_symbolics_with_borrows] \
                     of [config]): "
                   ^ name_to_string ctx def.name)
-            | Opaque ->
+            | Alias _ | Opaque ->
                 craise __FILE__ __LINE__ span
-                  "Attempted to greedily expand an opaque type");
+                  "Attempted to greedily expand an alias or opaque type");
             (* Also, we need to check if the definition is recursive *)
             if ctx_type_decl_is_rec ctx def_id then
               craise __FILE__ __LINE__ span
