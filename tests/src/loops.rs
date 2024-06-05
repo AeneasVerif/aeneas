@@ -1,4 +1,3 @@
-//@ [coq] aeneas-args=-use-fuel
 //@ [fstar] aeneas-args=-decreases-clauses -template-clauses
 //@ [fstar] aeneas-args=-split-files
 //@ [coq,fstar] subdir=misc
@@ -367,4 +366,54 @@ pub fn ignore_input_shared_borrow(_a: &mut u32, mut i: u32) {
     while i > 0 {
         i -= 1;
     }
+}
+
+// Some tests with arrays
+
+pub fn sum1(s: &[u32]) -> u32 {
+    let mut sum = 0;
+    let mut i = 0;
+    while i < s.len() {
+        sum += s[i];
+        i += 1;
+    }
+    sum
+}
+
+pub fn sum2(s: &[u32], s2: &[u32]) -> u32 {
+    let mut sum = 0;
+    assert!(s.len() == s2.len());
+    let mut i = 0;
+    while i < s.len() {
+        sum += s[i] + s2[i];
+        i += 1;
+    }
+    sum
+}
+
+pub fn zero_slice(a: &mut [u8]) {
+    let mut i: usize = 0;
+    let len = a.len();
+    while i < len {
+        a[i] = 0;
+        i += 1;
+    }
+}
+
+pub fn iter_mut_slice(a: &mut [u8]) {
+    let len = a.len();
+    let mut i = 0;
+    while i < len {
+        i += 1;
+    }
+}
+
+pub fn sum_mut_slice(a: &mut [u32]) -> u32 {
+    let mut i = 0;
+    let mut s = 0;
+    while i < a.len() {
+        s += a[i];
+        i += 1;
+    }
+    s
 }

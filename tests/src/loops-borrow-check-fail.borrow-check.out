@@ -1,5 +1,0 @@
-[[92mInfo[39m ] Imported: tests/llbc/loops_borrow_check_fail.llbc
-[[91mError[39m] Can not apply a projection to the ⊥ value
-Source: 'tests/src/loops-borrow-check-fail.rs', lines 7:4-12:1
-[[91mError[39m] Can not apply a projection to the ⊥ value
-Source: 'tests/src/loops-borrow-check-fail.rs', lines 17:4-21:1
