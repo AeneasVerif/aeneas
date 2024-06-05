@@ -1,4 +1,4 @@
-//@ aeneas-args=-test-trans-units
+//@ [!borrow-check] aeneas-args=-test-trans-units
 //@ [coq,fstar] subdir=misc
 //! Exercise the bitwise operations
 

@@ -1,6 +1,6 @@
 //@ [lean] known-failure
-//@ [coq,fstar] skip
-//@ subdir=misc
+//@ [!lean] skip
+//@ [lean] subdir=misc
 pub trait Trait1 {
     type T: Trait2;
 }

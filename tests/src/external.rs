@@ -1,6 +1,6 @@
 //@ charon-args=--no-code-duplication
-//@ aeneas-args=-state -split-files
-//@ aeneas-args=-test-trans-units
+//@ [!borrow-check] aeneas-args=-state -split-files
+//@ [!borrow-check] aeneas-args=-test-trans-units
 //@ [coq,fstar] subdir=misc
 //! This module uses external types and functions
 

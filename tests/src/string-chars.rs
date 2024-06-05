@@ -1,5 +1,5 @@
 //@ [lean] known-failure
-//@ [coq,fstar] skip
+//@ [!lean] skip
 //@ no-check-output
 fn main() {
     let s = "hello";
