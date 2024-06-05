@@ -309,13 +309,14 @@ module Values = struct
     let kind =
       if verbose then "[kind:" ^ abs_kind_to_string abs.kind ^ "]" else ""
     in
+    let can_end = if abs.can_end then "{endable}" else "{frozen}" in
     indent ^ "abs@"
     ^ AbstractionId.to_string abs.abs_id
     ^ kind ^ "{parents="
     ^ AbstractionId.Set.to_string None abs.parents
     ^ "}" ^ "{regions="
     ^ RegionId.Set.to_string None abs.regions
-    ^ "}" ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
+    ^ "}" ^ can_end ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
 
   let inst_fun_sig_to_string (env : fmt_env) (sg : LlbcAst.inst_fun_sig) :
       string =

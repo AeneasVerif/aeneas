@@ -1956,7 +1956,10 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         | Loop (loop_id', rg_id, kind) ->
             sanity_check __FILE__ __LINE__ (loop_id' = loop_id) span;
             sanity_check __FILE__ __LINE__ (kind = LoopSynthInput) span;
-            let can_end = false in
+            (* If we borrow-check: we can set the abstractions as endable.
+               If we synthesize we have to constrain the region abstractions
+               a bit. *)
+            let can_end = !Config.borrow_check in
             let kind : abs_kind = Loop (loop_id, rg_id, LoopCall) in
             let abs = { abs with kind; can_end } in
             super#visit_abs env abs

@@ -665,8 +665,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     in
     List.iter end_at_return (fst (eval_loop_body fp));
 
-    (* Check that the sets of abstractions we need to end per region group are pairwise
-     * disjoint *)
+    (* Check that the sets of abstractions we need to end per region group are
+       pairwise disjoint *)
     let aids_union = ref AbstractionId.Set.empty in
     let _ =
       RegionGroupId.Map.iter
@@ -680,8 +680,10 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         !fp_ended_aids
     in
 
-    (* We also check that all the regions need to end - this is not necessary per
-       se, but if it doesn't happen it is bizarre and worth investigating... *)
+    (* If we generate a translation, we check that all the regions need to end
+       - this is not necessary per se, but if it doesn't happen it is bizarre and worth investigating...
+       We need this check for now for technical reasons to make the translation work.
+    *)
     sanity_check __FILE__ __LINE__
       (AbstractionId.Set.equal !aids_union !fp_aids)
       span;
@@ -779,9 +781,11 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        no region group, and we set them as endable just above).
 
        If [remove_rg_id] is [false], we simply set the abstractions as non-endable
-       to freeze them (we will use the fixed point as starting point for the
-       symbolic execution of the loop body, and we have to make sure the input
-       abstractions are frozen).
+       **when generating a pure translation** to freeze them (we will use the
+       fixed point as starting point for the symbolic execution of the loop body,
+       and we have to make sure the input abstractions are frozen).
+       If we are simply borrow-checking the program, we can set the abstraction
+       as endable.
     *)
     let update_loop_abstractions (remove_rg_id : bool) =
       object
@@ -796,7 +800,13 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                 if remove_rg_id then Loop (loop_id, None, LoopSynthInput)
                 else abs.kind
               in
-              { abs with can_end = remove_rg_id; kind }
+              (* If we borrow check we can always set the abstraction as
+                 endable. If we generate a pure translation we have a few
+                 more constraints. *)
+              let can_end =
+                if !Config.borrow_check then true else remove_rg_id
+              in
+              { abs with can_end; kind }
           | _ -> abs
       end
     in

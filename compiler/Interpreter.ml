@@ -362,6 +362,11 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       ctx)
     else ctx
   in
+  log#ldebug
+    (lazy
+      ("evaluate_function_symbolic_synthesize_backward_from_return: (after \
+        putting the return value in the proper abstraction)\n" ^ "\n- ctx:\n"
+      ^ Print.Contexts.eval_ctx_to_string ~span:(Some fdef.item_meta.span) ctx));
 
   (* We now need to end the proper *input* abstractions - pay attention
    * to the fact that we end the *input* abstractions, not the *return*
@@ -418,7 +423,28 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
                }
              ]}
           *)
-          (None, false)
+          (* If we are borrow-checking: end the synth input abstraction to
+             check there is no borrow-checking issue.
+             Otherwise, do nothing.
+
+             We need this check because of the following:
+             {[
+               fn loop_reborrow_mut1<'a, 'b>(a: &'a mut u32, b: &'b mut u32) -> &'a mut u32 {
+                   let mut x = 0;
+                   while x > 0 {
+                       x += 1;
+                   }
+                   if x > 0 {
+                       a
+                   } else {
+                       b // Failure
+                   }
+               }
+             ]}
+             (remark: this is slightly ad-hoc, and we won't need to do that
+              once we make the handling of loops more general).
+          *)
+          if !Config.borrow_check then (Some fun_abs_id, true) else (None, false)
       | Some abs -> (Some abs.abs_id, false)
   in
   log#ldebug
@@ -619,11 +645,9 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
       let ctx_resl, cc =
         eval_function_body config (Option.get fdef.body).body ctx
       in
-      if synthesize then
-        (* Finish synthesizing *)
-        let el = List.map (fun (ctx, res) -> finish res ctx) ctx_resl in
-        Some (cc el)
-      else None
+      let el = List.map (fun (ctx, res) -> finish res ctx) ctx_resl in
+      (* Finish synthesizing *)
+      if synthesize then Some (cc el) else None
     with CFailure (span, msg) ->
       if synthesize then Some (Error (span, msg)) else None
   in
