@@ -883,6 +883,7 @@ let keywords () =
           "Declare";
           "Definition";
           "else";
+          "end";
           "End";
           "fun";
           "Fixpoint";
