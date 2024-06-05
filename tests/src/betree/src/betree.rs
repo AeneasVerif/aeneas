@@ -274,25 +274,41 @@ pub fn upsert_update(prev: Option<Value>, st: UpsertFunState) -> Value {
 
 impl<T> List<T> {
     fn len(&self) -> u64 {
-        match self {
-            List::Nil => 0,
-            List::Cons(_, tl) => 1 + tl.len(),
+        let mut l = self;
+        let mut len = 0;
+        while let List::Cons(_, tl) = l {
+            len += 1;
+            l = tl;
         }
+        len
     }
 
     /// Split a list at a given length
-    fn split_at(self, n: u64) -> (List<T>, List<T>) {
-        if n == 0 {
-            (List::Nil, self)
-        } else {
-            match self {
+    fn split_at(self, mut n: u64) -> (List<T>, List<T>) {
+        let mut beg = List::Nil;
+        let mut end = self;
+        while n > 0 {
+            match end {
                 List::Nil => unreachable!(),
-                List::Cons(hd, tl) => {
-                    let (ls0, ls1) = tl.split_at(n - 1);
-                    (List::Cons(hd, Box::new(ls0)), ls1)
+                List::Cons(hd, mut tl) => {
+                    n -= 1;
+                    end = *tl;
+                    *tl = beg;
+                    beg = List::Cons(hd, tl);
                 }
             }
         }
+        (beg.reverse(), end)
+    }
+
+    fn reverse(mut self) -> Self {
+        let mut out = List::Nil;
+        while let List::Cons(hd, mut tl) = self {
+            self = *tl;
+            *tl = out;
+            out = List::Cons(hd, tl);
+        }
+        out
     }
 
     /// Push an element at the front of the list.
@@ -337,17 +353,20 @@ impl<T> Map<Key, T> {
     /// Note that the bindings in the map are supposed to be sorted in
     /// order of increasing keys.
     fn partition_at_pivot(self, pivot: Key) -> (Map<Key, T>, Map<Key, T>) {
-        match self {
-            List::Nil => (List::Nil, List::Nil),
-            List::Cons(hd, tl) => {
-                if hd.0 >= pivot {
-                    (List::Nil, List::Cons(hd, tl))
-                } else {
-                    let (ls0, ls1) = tl.partition_at_pivot(pivot);
-                    (List::Cons(hd, Box::new(ls0)), ls1)
-                }
+        let mut beg = List::Nil;
+        let mut end = List::Nil;
+        let mut curr = self;
+        while let List::Cons(hd, mut tl) = curr {
+            curr = *tl;
+            if hd.0 >= pivot {
+                *tl = end;
+                end = List::Cons(hd, tl);
+            } else {
+                *tl = beg;
+                beg = List::Cons(hd, tl);
             }
         }
+        (beg.reverse(), end.reverse())
     }
 }
 
@@ -443,14 +462,11 @@ impl Node {
     /// Apply a list of message to ourselves: leaf node case
     fn apply_messages_to_leaf<'a>(
         bindings: &'a mut Map<Key, Value>,
-        new_msgs: List<(Key, Message)>,
+        mut new_msgs: List<(Key, Message)>,
     ) {
-        match new_msgs {
-            List::Nil => (),
-            List::Cons(new_msg, new_msgs_tl) => {
-                Node::apply_to_leaf(bindings, new_msg.0, new_msg.1);
-                Node::apply_messages_to_leaf(bindings, *new_msgs_tl);
-            }
+        while let List::Cons(new_msg, new_msgs_tl) = new_msgs {
+            Node::apply_to_leaf(bindings, new_msg.0, new_msg.1);
+            new_msgs = *new_msgs_tl;
         }
     }
 
@@ -501,14 +517,11 @@ impl Node {
     /// Apply a list of message to ourselves: internal node case
     fn apply_messages_to_internal<'a>(
         msgs: &'a mut Map<Key, Message>,
-        new_msgs: List<(Key, Message)>,
+        mut new_msgs: List<(Key, Message)>,
     ) {
-        match new_msgs {
-            List::Nil => (),
-            List::Cons(new_msg, new_msgs_tl) => {
-                Node::apply_to_internal(msgs, new_msg.0, new_msg.1);
-                Node::apply_messages_to_internal(msgs, *new_msgs_tl);
-            }
+        while let List::Cons(new_msg, new_msgs_tl) = new_msgs {
+            Node::apply_to_internal(msgs, new_msg.0, new_msg.1);
+            new_msgs = *new_msgs_tl;
         }
     }
 
@@ -633,38 +646,34 @@ impl Node {
 
     /// Lookup a value in a list of bindings.
     /// Note that the values should be stored in order of increasing key.
-    fn lookup_in_bindings(key: Key, bindings: &Map<Key, Value>) -> Option<Value> {
-        match bindings {
-            List::Nil => Option::None,
-            List::Cons(hd, tl) => {
-                if hd.0 == key {
-                    Option::Some(hd.1)
-                } else if hd.0 > key {
-                    Option::None
-                } else {
-                    Node::lookup_in_bindings(key, tl)
-                }
+    fn lookup_in_bindings(key: Key, mut bindings: &Map<Key, Value>) -> Option<Value> {
+        while let List::Cons(hd, tl) = bindings {
+            if hd.0 == key {
+                return Option::Some(hd.1);
+            } else if hd.0 > key {
+                return Option::None;
+            } else {
+                bindings = tl;
             }
         }
+        Option::None
     }
 
     /// Lookup a value in a list of bindings, and return a borrow to the position
     /// where the value is (or should be inserted, if the key is not in the bindings).
     fn lookup_mut_in_bindings<'a>(
         key: Key,
-        bindings: &'a mut Map<Key, Value>,
+        mut bindings: &'a mut Map<Key, Value>,
     ) -> &'a mut Map<Key, Value> {
-        match bindings {
-            List::Nil => bindings,
-            List::Cons(hd, tl) => {
-                // This requires Polonius
-                if hd.0 >= key {
-                    bindings
-                } else {
-                    Node::lookup_mut_in_bindings(key, tl)
-                }
+        while let List::Cons(hd, tl) = bindings {
+            // This requires Polonius
+            if hd.0 >= key {
+                break;
+            } else {
+                bindings = tl;
             }
         }
+        bindings
     }
 
     /// Filter all the messages which concern [key].
@@ -672,34 +681,28 @@ impl Node {
     /// Note that the stack of messages must start with a message for [key]:
     /// we stop filtering at the first message which is not about [key].
     fn filter_messages_for_key<'a>(key: Key, msgs: &'a mut Map<Key, Message>) {
-        match msgs {
-            List::Nil => (),
-            List::Cons((k, _), _) => {
-                if *k == key {
-                    msgs.pop_front();
-                    Node::filter_messages_for_key(key, msgs);
-                } else {
-                    // Stop
-                    ()
-                }
+        while let List::Cons((k, _), _) = msgs {
+            if *k == key {
+                msgs.pop_front();
+            } else {
+                // Stop
+                break;
             }
         }
     }
 
     fn lookup_first_message_after_key<'a>(
         key: Key,
-        msgs: &'a mut Map<Key, Message>,
+        mut msgs: &'a mut Map<Key, Message>,
     ) -> &'a mut Map<Key, Message> {
-        match msgs {
-            List::Nil => msgs,
-            List::Cons((k, _), next_msgs) => {
-                if *k == key {
-                    Node::lookup_first_message_after_key(key, next_msgs)
-                } else {
-                    msgs
-                }
+        while let List::Cons((k, _), next_msgs) = msgs {
+            if *k == key {
+                msgs = next_msgs;
+            } else {
+                break;
             }
         }
+        return msgs;
     }
 
     /// Returns the value bound to a key.
@@ -788,24 +791,22 @@ impl Node {
     /// of the list).
     fn lookup_first_message_for_key<'a>(
         key: Key,
-        msgs: &'a mut Map<Key, Message>,
+        mut msgs: &'a mut Map<Key, Message>,
     ) -> &'a mut Map<Key, Message> {
-        match msgs {
-            List::Nil => msgs,
-            List::Cons(x, next_msgs) => {
-                // Rk.: we need Polonius here
-                // We wouldn't need Polonius if directly called the proper
-                // function to make the modifications here (because we wouldn't
-                // need to return anything). However, it would not be very
-                // idiomatic, especially with regards to the fact that we will
-                // rewrite everything with loops at some point.
-                if x.0 >= key {
-                    msgs
-                } else {
-                    Node::lookup_first_message_for_key(key, next_msgs)
-                }
+        while let List::Cons(x, next_msgs) = msgs {
+            // Rk.: we need Polonius here
+            // We wouldn't need Polonius if directly called the proper
+            // function to make the modifications here (because we wouldn't
+            // need to return anything). However, it would not be very
+            // idiomatic, especially with regards to the fact that we will
+            // rewrite everything with loops at some point.
+            if x.0 >= key {
+                return msgs;
+            } else {
+                msgs = next_msgs;
             }
         }
+        msgs
     }
 
     /// Apply the upserts from the current messages stack to a looked up value.
@@ -816,8 +817,8 @@ impl Node {
     /// Note that if there are no more upserts to apply, then the value must be
     /// `Some`. Also note that we use the invariant that in the message stack,
     /// upsert messages are sorted from the first to the last to apply.
-    fn apply_upserts(msgs: &mut Map<Key, Message>, prev: Option<Value>, key: Key) -> Value {
-        if msgs.head_has_key(key) {
+    fn apply_upserts(msgs: &mut Map<Key, Message>, mut prev: Option<Value>, key: Key) -> Value {
+        while msgs.head_has_key(key) {
             // Pop the front message.
             // Note that it *must* be an upsert.
             let msg = msgs.pop_front();
@@ -825,9 +826,8 @@ impl Node {
                 Message::Upsert(s) => {
                     // Apply the update
                     let v = upsert_update(prev, s);
-                    let prev = Option::Some(v);
+                    prev = Option::Some(v);
                     // Continue
-                    Node::apply_upserts(msgs, prev, key)
                 }
                 _ => {
                     // Unreachable: we can only have [Upsert] messages
@@ -835,13 +835,12 @@ impl Node {
                     unreachable!();
                 }
             }
-        } else {
-            // We applied all the upsert messages: simply put an [Insert]
-            // message and return the value.
-            let v = prev.unwrap();
-            msgs.push_front((key, Message::Insert(v)));
-            return v;
         }
+        // We applied all the upsert messages: simply put an [Insert]
+        // message and return the value.
+        let v = prev.unwrap();
+        msgs.push_front((key, Message::Insert(v)));
+        v
     }
 }
 
