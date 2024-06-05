@@ -72,10 +72,13 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
 
   (* Build the command *)
   let args = [ env.aeneas_path; input_file ] @ dest_command @ backend_command in
+  (* If we target a specific backend and the test is known to fail, we abort
+     on error so as not to generate any files *)
   let abort_on_error =
     match action with
     | Skip | Normal -> []
-    | KnownFailure -> [ "-abort-on-error" ]
+    | KnownFailure ->
+        if backend = Backend.BorrowCheck then [] else [ "-abort-on-error" ]
   in
   let args = List.concat [ args; aeneas_options; abort_on_error ] in
   let cmd = Command.make args in
