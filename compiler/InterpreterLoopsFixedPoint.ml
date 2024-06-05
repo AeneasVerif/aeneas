@@ -371,19 +371,13 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
 
   (* Synthesize *)
   let cf e =
-    match e with
-    | None -> None
-    | Some e ->
-        (* Add the let-bindings which introduce the fresh symbolic values *)
-        Some
-          (List.fold_left
-             (fun e (sid, v) ->
-               let v = mk_typed_value_from_symbolic_value v in
-               let sv =
-                 SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values
-               in
-               SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
-             e !sid_subst)
+    (* Add the let-bindings which introduce the fresh symbolic values *)
+    List.fold_left
+      (fun e (sid, v) ->
+        let v = mk_typed_value_from_symbolic_value v in
+        let sv = SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values in
+        SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
+      e !sid_subst
   in
   (ctx, cf)
 

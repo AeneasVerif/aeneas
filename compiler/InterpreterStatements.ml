@@ -306,7 +306,9 @@ let get_assumed_function_return_type (span : Meta.span) (ctx : eval_ctx)
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
-    typed_value option * eval_ctx * (eval_result -> eval_result) =
+    typed_value option
+    * eval_ctx
+    * (SymbolicAst.expression -> SymbolicAst.expression) =
   if pop_return_value then
     let ret_vid = VarId.zero in
     let v, ctx, cc =
@@ -317,7 +319,9 @@ let move_return_value (config : config) (span : Meta.span)
 
 let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     (ctx : eval_ctx) :
-    typed_value option * eval_ctx * (eval_result -> eval_result) =
+    typed_value option
+    * eval_ctx
+    * (SymbolicAst.expression -> SymbolicAst.expression) =
   (* Debug *)
   log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
 
@@ -1033,7 +1037,7 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
       let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
       eval_transparent_function_call_concrete config span global.body call ctx
-  | SymbolicMode -> (
+  | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
       cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
@@ -1056,12 +1060,8 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
           dest ctx
       in
       ( [ (ctx, Unit) ],
-        fun el ->
-          match el with
-          | Some [ e ] ->
-              (cc_comp (S.synthesize_global_eval gid generics sval) cc) (Some e)
-          | Some _ -> internal_error __FILE__ __LINE__ span
-          | _ -> None ))
+        cc_singleton __FILE__ __LINE__ span
+          (cc_comp (S.synthesize_global_eval gid generics sval) cc) )
 
 (** Evaluate a switch *)
 and eval_switch (config : config) (span : Meta.span) (switch : switch) :
@@ -1102,8 +1102,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             in
             let cc el =
               match cf_branches el with
-              | None -> None
-              | Some [ e_true; e_false ] -> cf_bool (Some (e_true, e_false))
+              | [ e_true; e_false ] -> cf_bool (e_true, e_false)
               | _ -> internal_error __FILE__ __LINE__ span
             in
             (ctx_resl, cc)
@@ -1158,11 +1157,8 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
                 (resl_branches @ [ resl_otherwise ])
             in
             let cc el =
-              match el with
-              | None -> None
-              | Some el ->
-                  let el, e_otherwise = Collections.List.pop_last el in
-                  cf_int (Some (el, e_otherwise))
+              let el, e_otherwise = Collections.List.pop_last el in
+              cf_int (el, e_otherwise)
             in
             (resl, cc_comp cc cf)
         | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
@@ -1235,7 +1231,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
       match func.func with
       | FunId (FRegular fid) ->
           eval_transparent_function_call_concrete config span fid call ctx
-      | FunId (FAssumed fid) -> (
+      | FunId (FAssumed fid) ->
           (* Continue - note that we do as if the function call has been successful,
            * by giving {!Unit} to the continuation, because we place us in the case
            * where we haven't panicked. Of course, the translation needs to take the
@@ -1243,12 +1239,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
           let ctx, cc =
             eval_assumed_function_call_concrete config span fid call ctx
           in
-          ( [ (ctx, Unit) ],
-            fun el ->
-              match el with
-              | Some [ e ] -> cc (Some e)
-              | Some _ -> internal_error __FILE__ __LINE__ span
-              | _ -> None ))
+          ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
       | TraitMethod _ -> craise __FILE__ __LINE__ span "Unimplemented")
 
 and eval_function_call_symbolic (config : config) (span : Meta.span)
@@ -1351,13 +1342,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
           ctx_resl
       in
       let ctx_resl, cfl = List.split ctx_resl_cfl in
-      let cf_pop el =
-        match el with
-        | None -> None
-        | Some el ->
-            Some
-              (List.map Option.get (List.map2 (fun cf e -> cf (Some e)) cfl el))
-      in
+      let cf_pop el = List.map2 (fun cf e -> cf e) cfl el in
       (* Continue *)
       (ctx_resl, cc_comp cc cf_pop)
 
@@ -1620,11 +1605,6 @@ and eval_function_body (config : config) (body : statement) : stl_cm_fun =
       ctx_resl
   in
   let ctx_resl, cfl = List.split ctx_res_cfl in
-  let cf_end el =
-    match el with
-    | None -> None
-    | Some el ->
-        Some (List.map Option.get (List.map2 (fun cf e -> cf (Some e)) cfl el))
-  in
+  let cf_end el = List.map2 (fun cf e -> cf e) cfl el in
   (* Compose and continue *)
   (ctx_resl, cc_comp cf_body cf_end)

@@ -31,9 +31,8 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
   | None -> None
   | Some _ ->
       (* Evaluate *)
-      let synthesize = true in
-      let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
-      Some (inputs, Option.get symb)
+      let inputs, symb = evaluate_function_symbolic trans_ctx fdef in
+      Some (inputs, symb)
 
 (** Translate a function, by generating its forward and backward translations.
 

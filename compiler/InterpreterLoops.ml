@@ -64,10 +64,7 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
      the loop body at least once *)
   let ctx_resl = rec_eval_loop_body ctx (Continue 0) in
   (* If we evaluate in concrete mode, we shouldn't have to generate any symbolic expression *)
-  let cf el =
-    sanity_check __FILE__ __LINE__ (el = None) span;
-    None
-  in
+  let cf _ = internal_error __FILE__ __LINE__ span in
   (ctx_resl, cf)
 
 (** Auxiliary function for {!eval_loop_symbolic}.
@@ -92,7 +89,8 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     (loop_id : LoopId.id) (init_ctx : eval_ctx) (fixed_ids : ids_sets)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
     (rg_to_abs : AbstractionId.id RegionGroupId.Map.t) :
-    ((eval_ctx * statement_eval_res) * (eval_result -> eval_result))
+    ((eval_ctx * statement_eval_res)
+    * (SymbolicAst.expression -> SymbolicAst.expression))
     * borrow_loan_corresp =
   (* First, preemptively end borrows/move values by matching the current
      context with the target context *)
@@ -212,7 +210,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
     (fp_bl_corresp : borrow_loan_corresp) :
     (eval_ctx * statement_eval_res) list
-    * (SymbolicAst.expression list option -> eval_result) =
+    * (SymbolicAst.expression list -> SymbolicAst.expression) =
   (* First, evaluate the loop body starting from the **fixed-point** context *)
   let ctx_resl, cf_loop = eval_loop_body fp_ctx in
 
@@ -252,16 +250,9 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
   (* Apply and compose *)
   let ctx_resl, cfl = List.split (List.map eval_after_loop_iter ctx_resl) in
-  let cc (el : SymbolicAst.expression list option) : eval_result =
-    match el with
-    | None -> None
-    | Some el ->
-        let el =
-          List.map
-            (fun (cf, e) -> Option.get (cf (Some e)))
-            (List.combine cfl el)
-        in
-        cf_loop (Some el)
+  let cc (el : SymbolicAst.expression list) : SymbolicAst.expression =
+    let el = List.map (fun (cf, e) -> cf e) (List.combine cfl el) in
+    cf_loop el
   in
 
   (ctx_resl, cc)
@@ -380,17 +371,14 @@ let eval_loop_symbolic (config : config) (span : span)
   in
 
   (* Put everything together *)
-  let cc (el : SymbolicAst.expression list option) =
+  let cc (el : SymbolicAst.expression list) =
     match el with
-    | None -> None
-    | Some el -> (
-        match el with
-        | [] -> internal_error __FILE__ __LINE__ span
-        | e :: el ->
-            let fun_end_expr = cf_fun_end (Some e) in
-            let loop_expr = cf_loop_body (Some el) in
-            S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back
-              fun_end_expr loop_expr span)
+    | [] -> internal_error __FILE__ __LINE__ span
+    | e :: el ->
+        let fun_end_expr = cf_fun_end e in
+        let loop_expr = cf_loop_body el in
+        S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back
+          fun_end_expr loop_expr span
   in
   (res_fun_end :: resl_loop_body, cc)
 
