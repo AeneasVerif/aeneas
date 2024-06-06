@@ -649,7 +649,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     (* Convert, if possible - note that for now for Lean and Coq
                        we don't support the structure syntax on recursive structures *)
                     if
-                      (!Config.backend <> Lean && !Config.backend <> Coq)
+                      (Config.backend () <> Lean && Config.backend () <> Coq)
                       || not is_rec
                     then
                       let struct_id = TAdtId adt_id in
@@ -1295,7 +1295,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                    the shape [{ x with f := v }]).
 
                    This is not supported by Coq *)
-                !Config.backend <> Coq
+                Config.backend () <> Coq
               then (
                 (* Compute the number of occurrences of each variable *)
                 let occurs = ref VarId.Map.empty in

@@ -26,12 +26,22 @@ let set_backend (b : string) : unit =
          belonging to the proper set *)
       raise (Failure "Unexpected")
 
-(** The backend to which to extract.
+(** If [true], we do not generate code and simply borrow-check the program instead.
+    This allows us to relax some sanity checks which are present in the symbolic
+    execution only to make sure we will be able to generate the pure translation.
 
-    We initialize it with a default value, but it always gets overwritten:
-    we check that the user provides a backend argument.
- *)
-let backend = ref FStar
+    Remark: when checking if we are borrow-checking a program, checking this
+    boolean or checking if [opt_backend] is [None] are equivalent. We need to
+    have different variables for the purpose of implementing the parsing of
+    the CI arguments.
+  *)
+let borrow_check = ref false
+
+(** Get the target backend *)
+let backend () : backend = Option.get !opt_backend
+
+let if_backend (f : unit -> 'a) (default : 'a) : 'a =
+  match !opt_backend with None -> default | Some _ -> f ()
 
 (** {1 Interpreter} *)
 
@@ -361,7 +371,7 @@ let variant_concatenate_type_name = ref true
 let use_tuple_structs = ref true
 
 let backend_has_tuple_projectors () =
-  match !backend with Lean -> true | Coq | FStar | HOL4 -> false
+  match backend () with Lean -> true | Coq | FStar | HOL4 -> false
 
 (** We we use nested projectors for tuple (like: [(0, 1).snd.fst]) or do
     we use better projector syntax? *)

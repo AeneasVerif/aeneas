@@ -1,5 +1,5 @@
 //@ charon-args=--opaque=utils
-//@ aeneas-args=-state -split-files
+//@ [!borrow-check] aeneas-args=-state -split-files
 //@ [coq] aeneas-args=-use-fuel
 //@ [fstar] aeneas-args=-decreases-clauses -template-clauses
 //@ [lean] aeneas-args=-no-gen-lib-entry

@@ -50,25 +50,35 @@ end
 (* Run Aeneas on a specific input with the given options *)
 let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   let backend_str = Backend.to_string backend in
+  let backend_command = Backend.to_command backend in
   let input_file = concat_path [ env.llbc_dir; case.name ] ^ ".llbc" in
   let output_file =
     Filename.remove_extension case.path ^ "." ^ backend_str ^ ".out"
   in
+
   let per_backend = Backend.Map.find backend case.per_backend in
   let subdir = per_backend.subdir in
   let check_output = per_backend.check_output in
   let aeneas_options = per_backend.aeneas_options in
   let action = per_backend.action in
-  let dest_dir = concat_path [ env.dest_dir; backend_str; subdir ] in
+  (* No destination directory if we borrow-check *)
+  let dest_command =
+    match backend with
+    | Backend.BorrowCheck -> []
+    | _ ->
+        let subdir = match subdir with None -> [] | Some x -> [ x ] in
+        [ "-dest"; concat_path ([ env.dest_dir; backend_str ] @ subdir) ]
+  in
 
   (* Build the command *)
-  let args =
-    [ env.aeneas_path; input_file; "-dest"; dest_dir; "-backend"; backend_str ]
-  in
+  let args = [ env.aeneas_path; input_file ] @ dest_command @ backend_command in
+  (* If we target a specific backend and the test is known to fail, we abort
+     on error so as not to generate any files *)
   let abort_on_error =
     match action with
     | Skip | Normal -> []
-    | KnownFailure -> [ "-abort-on-error" ]
+    | KnownFailure ->
+        if backend = Backend.BorrowCheck then [] else [ "-abort-on-error" ]
   in
   let args = List.concat [ args; aeneas_options; abort_on_error ] in
   let cmd = Command.make args in

@@ -7,7 +7,7 @@ type action = Normal | Skip | KnownFailure
 type per_backend = {
   action : action;
   aeneas_options : string list;
-  subdir : string;
+  subdir : string option;
   (* Whether to store the command output to a file. Only available for known-failure tests. *)
   check_output : bool;
 }
@@ -22,8 +22,11 @@ type t = {
 }
 
 (* The default subdirectory in which to store the outputs. *)
-let default_subdir backend test_name =
-  match backend with Backend.Lean -> "." | _ -> test_name
+let default_subdir backend test_name : string option =
+  match backend with
+  | Backend.Lean -> Some "."
+  | Backend.BorrowCheck -> None
+  | _ -> Some test_name
 
 (* Parse lines that start `//@`. Each of them modifies the options we use for the test.
    Supported comments:
@@ -39,14 +42,21 @@ let default_subdir backend test_name =
 let apply_special_comment comment input =
   let comment = String.trim comment in
   (* Parse the backends if any *)
-  let re = Re.compile (Re.Pcre.re "^\\[([a-zA-Z,]+)\\](.*)$") in
+  let re = Re.compile (Re.Pcre.re "^\\[(!)?([a-zA-Z,-]+)\\](.*)$") in
   let comment, (backends : Backend.t list) =
     match Re.exec_opt re comment with
     | Some groups ->
-        let backends = Re.Group.get groups 1 in
+        let exclude = Re.Group.get_opt groups 1 <> None in
+        let backends = Re.Group.get groups 2 in
         let backends = String.split_on_char ',' backends in
         let backends = List.map Backend.of_string backends in
-        let rest = Re.Group.get groups 2 in
+        let rest = Re.Group.get groups 3 in
+        (* If [exclude]: we take all the backends *but* the list provided. *)
+        let backends =
+          if exclude then
+            List.filter (fun x -> not (List.mem x backends)) Backend.all
+          else backends
+        in
         (String.trim rest, backends)
     | None -> (comment, Backend.all)
   in
@@ -83,9 +93,9 @@ let apply_special_comment comment input =
     let args = String.split_on_char ' ' args in
     per_backend (fun x ->
         { x with aeneas_options = List.append x.aeneas_options args })
-  else if Option.is_some subdir then
-    let subdir = Option.get subdir in
-    per_backend (fun x -> { x with subdir })
+  else if Option.is_some subdir then (
+    assert (not (List.mem Backend.BorrowCheck backends));
+    per_backend (fun x -> { x with subdir }))
   else failwith ("Unrecognized special comment: `" ^ comment ^ "`")
 
 (* Given a path to a rust file or crate, gather the details and options about how to build the test. *)
