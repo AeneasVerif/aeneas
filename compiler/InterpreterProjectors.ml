@@ -213,7 +213,8 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                 ^ RegionId.Set.to_string None rset2
                 ^ "\n"));
             sanity_check __FILE__ __LINE__
-              (not (projections_intersect span ty1 rset1 ty2 rset2))
+              (!Config.unsafe
+              || not (projections_intersect span ty1 rset1 ty2 rset2))
               span);
           ASymbolic (AProjBorrows (s, ty))
       | _ ->

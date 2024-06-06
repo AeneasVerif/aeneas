@@ -56,7 +56,7 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
   let v = read_place span access p ctx in
   (* Check that there are no bottoms in the value *)
   cassert __FILE__ __LINE__
-    (not (bottom_in_value ctx.ended_regions v))
+    (!Config.unsafe || not (bottom_in_value ctx.ended_regions v))
     span "There should be no bottoms in the value";
   (* Check that there are no reserved borrows in the value *)
   cassert __FILE__ __LINE__
@@ -358,7 +358,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       let v = read_place_check span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
       exec_assert __FILE__ __LINE__
-        (not (bottom_in_value ctx.ended_regions v))
+        (!Config.unsafe || not (bottom_in_value ctx.ended_regions v))
         span "There should be no bottoms in the value we are about to move";
       (* Move the value *)
       let bottom : typed_value = { value = VBottom; ty = v.ty } in

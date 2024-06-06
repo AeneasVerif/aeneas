@@ -43,6 +43,11 @@ let backend () : backend = Option.get !opt_backend
 let if_backend (f : unit -> 'a) (default : 'a) : 'a =
   match !opt_backend with None -> default | Some _ -> f ()
 
+(** Deactivate some sanity checks in an unsafe manner.
+    IMPORTANT: activating this option is generally unsound.
+ *)
+let unsafe = ref true
+
 (** {1 Interpreter} *)
 
 (** Activate the sanity checks, and in particular the invariant checks

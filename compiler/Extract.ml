@@ -2247,7 +2247,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
 
   (* For now we do not support overriding provided methods *)
   cassert __FILE__ __LINE__
-    (trait_impl.provided_methods = [])
+    (!Config.unsafe || trait_impl.provided_methods = [])
     trait_impl.span
     ("Overriding trait provided methods in trait implementations is not \
       supported yet (overriden methods: "

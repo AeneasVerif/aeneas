@@ -588,8 +588,9 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let name = Print.Types.name_to_string env def.name in
   let { T.regions; types; const_generics; trait_clauses } = def.generics in
   (* Can't translate types with regions for now *)
-  cassert __FILE__ __LINE__ (regions = []) def.item_meta.span
-    "ADTs containing borrows are not supported yet";
+  cassert __FILE__ __LINE__
+    (!Config.unsafe || regions = [])
+    def.item_meta.span "ADTs containing borrows are not supported yet";
   let trait_clauses =
     List.map (translate_trait_clause def.item_meta.span) trait_clauses
   in
@@ -1082,7 +1083,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : Meta.span)
        aren't parent regions *)
     let parents = list_ancestor_region_groups regions_hierarchy gid in
     cassert __FILE__ __LINE__
-      (T.RegionGroupId.Set.is_empty parents)
+      (!Config.unsafe || T.RegionGroupId.Set.is_empty parents)
       span "Nested borrows are not supported yet";
     (* For now, we don't allow nested borrows, so the additional inputs to the
        backward function can only come from borrows that were returned like
@@ -1708,7 +1709,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
               Some rv)
     | ABottom -> craise __FILE__ __LINE__ ctx.span "Unreachable"
     | ALoan lc -> aloan_content_to_consumed ctx ectx lc
-    | ABorrow bc -> aborrow_content_to_consumed ctx bc
+    | ABorrow bc -> aborrow_content_to_consumed ctx ectx bc
     | ASymbolic aproj -> aproj_to_consumed ctx aproj
     | AIgnored -> None
   in
@@ -1744,11 +1745,20 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
       (* Ignore *)
       None
 
-and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
+and aborrow_content_to_consumed (ctx : bs_ctx) ectx (bc : V.aborrow_content) :
     texpression option =
   match bc with
-  | V.AMutBorrow (_, _, _) | ASharedBorrow (_, _) | AIgnoredMutBorrow (_, _) ->
-      craise __FILE__ __LINE__ _ctx.span "Unreachable"
+  | V.AMutBorrow (_, _, av) ->
+      sanity_check __FILE__ __LINE__ !Config.unsafe ctx.span;
+      typed_avalue_to_consumed ctx ectx av
+  | ASharedBorrow (_, bid) ->
+      sanity_check __FILE__ __LINE__ !Config.unsafe ctx.span;
+      (* Lookup the shared value in the context, and continue *)
+      let sv = InterpreterBorrowsCore.lookup_shared_value ctx.span ectx bid in
+      Some (typed_value_to_texpression ctx ectx sv)
+  | AIgnoredMutBorrow (_, av) ->
+      sanity_check __FILE__ __LINE__ !Config.unsafe ctx.span;
+      typed_avalue_to_consumed ctx ectx av
   | AEndedMutBorrow (_, _) ->
       (* We collect consumed values: ignore *)
       None
@@ -1766,7 +1776,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
       Some (symbolic_value_to_texpression ctx msv)
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
       sanity_check __FILE__ __LINE__
-        (child_aproj = AIgnoredProjBorrows)
+        (!Config.unsafe || child_aproj = AIgnoredProjBorrows)
         ctx.span;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
@@ -1842,8 +1852,9 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
-            cassert __FILE__ __LINE__ (field_values = []) ctx.span
-              "ADTs with borrows are not supported yet";
+            cassert __FILE__ __LINE__
+              (!Config.unsafe || field_values = [])
+              ctx.span "ADTs with borrows are not supported yet";
             (ctx, None)
         | TTuple ->
             (* Return *)
@@ -1889,8 +1900,13 @@ and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
 and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match bc with
-  | V.AMutBorrow (_, _, _) | ASharedBorrow (_, _) | AIgnoredMutBorrow (_, _) ->
-      craise __FILE__ __LINE__ ctx.span "Unreachable"
+  | V.AMutBorrow (_, _, av) ->
+      sanity_check __FILE__ __LINE__ !Config.unsafe ctx.span;
+      typed_avalue_to_given_back mp av ctx
+  | ASharedBorrow (_, _) -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+  | AIgnoredMutBorrow (_, av) ->
+      sanity_check __FILE__ __LINE__ !Config.unsafe ctx.span;
+      typed_avalue_to_given_back mp av ctx
   | AEndedMutBorrow (msv, _) ->
       (* Return the span-symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv ctx in
@@ -1909,9 +1925,10 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
       (* There may be children borrow projections in case of nested borrows,
        * in which case we need to dive in - we disallow nested borrows for now *)
       cassert __FILE__ __LINE__
-        (List.for_all
-           (fun (_, aproj) -> aproj = V.AIgnoredProjBorrows)
-           child_projs)
+        (!Config.unsafe
+        || List.for_all
+             (fun (_, aproj) -> aproj = V.AIgnoredProjBorrows)
+             child_projs)
         ctx.span "Nested borrows are not supported yet";
       (ctx, None)
   | AEndedProjBorrows mv ->

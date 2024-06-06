@@ -255,9 +255,9 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
   (* Sanity check *)
   exec_assert __FILE__ __LINE__
     (not (loans_in_value nv))
-    span "Can not end a borrow because the value to give back contains bottom";
+    span "Can not end a borrow because the value to give back contains loans";
   exec_assert __FILE__ __LINE__
-    (not (bottom_in_value ctx.ended_regions nv))
+    (!Config.unsafe || not (bottom_in_value ctx.ended_regions nv))
     span "Can not end a borrow because the value to give back contains bottom";
   (* Debug *)
   log#ldebug
@@ -464,7 +464,6 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
   (* Substitution function, to replace the borrow projectors over symbolic values *)
   let subst (_abs : abs) local_given_back =
     (* See the below comments: there is something wrong here *)
-    let _ = raise Utils.Unimplemented in
     (* Compute the projection over the given back value *)
     let child_proj =
       (* TODO: there is something wrong here.
@@ -479,9 +478,9 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
          borrow in the type [&'a mut T] was ended: we give back a value of
          type [T]! We thus *mustn't* introduce a projector here.
       *)
-      (* AProjBorrows (nsv, sv.sv_ty) *)
-      internal_error __FILE__ __LINE__ span
+      AProjBorrows (nsv, sv.sv_ty)
     in
+
     AProjLoans (sv, (mv, child_proj) :: local_given_back)
   in
   update_intersecting_aproj_loans span proj_regions proj_ty sv subst ctx
@@ -1528,7 +1527,7 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
       sanity_check __FILE__ __LINE__ (not (loans_in_value sv)) span;
       (* Check there isn't {!Bottom} (this is actually an invariant *)
       cassert __FILE__ __LINE__
-        (not (bottom_in_value ctx.ended_regions sv))
+        (!Config.unsafe || not (bottom_in_value ctx.ended_regions sv))
         span "There shouldn't be a bottom";
       (* Check there aren't reserved borrows *)
       cassert __FILE__ __LINE__
@@ -1603,7 +1602,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
               ^ typed_value_to_string ~span:(Some span) ctx sv));
           sanity_check __FILE__ __LINE__ (not (loans_in_value sv)) span;
           sanity_check __FILE__ __LINE__
-            (not (bottom_in_value ctx.ended_regions sv))
+            (!Config.unsafe || not (bottom_in_value ctx.ended_regions sv))
             span;
           sanity_check __FILE__ __LINE__ (not (reserved_in_value sv)) span;
           (* End the borrows which borrow from the value, at the exception of

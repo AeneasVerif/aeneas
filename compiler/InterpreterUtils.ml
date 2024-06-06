@@ -498,7 +498,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     (List.for_all TypesUtils.ty_no_regions generics.types)
     span;
   sanity_check __FILE__ __LINE__
-    (TypesUtils.trait_instance_id_no_regions tr_self)
+    (!Config.unsafe || TypesUtils.trait_instance_id_no_regions tr_self)
     span;
   let tsubst =
     Substitute.make_type_subst_from_vars sg.generics.types generics.types

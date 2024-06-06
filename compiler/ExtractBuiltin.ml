@@ -179,6 +179,7 @@ let builtin_types () : builtin_type_info list =
   in
 
   [
+    mk_type "core::str::iter::Chars" ~custom_name:(Some "core.str.Chars") ();
     (* Alloc *)
     mk_type "alloc::alloc::Global" ();
     (* String *)
@@ -301,6 +302,16 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       all_int_names
   in
   [
+    mk_fun "core::str::{str}::chars" ~extract_name:(Some "core.str.chars")
+      ~can_fail:false ();
+    mk_fun
+      "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<@A>>}::next"
+      ~extract_name:(Some "core.iter.traits.iterator.next") ~can_fail:false ();
+    mk_fun
+      "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<@A>>}::size_hint"
+      ~extract_name:(Some "core.iter.traits.iterator.size_hint") ~can_fail:false
+      ();
+    (* *)
     mk_fun "core::mem::replace" ~can_fail:false ();
     mk_fun "core::mem::take" ~can_fail:false ();
     mk_fun "core::slice::{[@T]}::len"

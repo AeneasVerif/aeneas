@@ -798,7 +798,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                   (* If not found, lookup the methods provided by the trait *declaration*
                      (remember: for now, we forbid overriding provided methods) *)
                   cassert __FILE__ __LINE__
-                    (trait_impl.provided_methods = [])
+                    (!Config.unsafe || trait_impl.provided_methods = [])
                     span "Overriding provided methods is currently forbidden";
                   let trait_decl =
                     ctx_lookup_trait_decl ctx

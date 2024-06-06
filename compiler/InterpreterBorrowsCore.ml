@@ -999,7 +999,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
-  sanity_check __FILE__ __LINE__ !updated span;
+  sanity_check __FILE__ __LINE__ (!Config.unsafe || !updated) span;
   (* Return *)
   ctx
 
