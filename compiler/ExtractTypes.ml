@@ -778,8 +778,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   FieldId.mapi
                     (fun fid (field : field) ->
                       ( fid,
-                        ctx_compute_field_name def.item_meta.span ctx
-                          def.llbc_name fid field.field_name ))
+                        ctx_compute_field_name def ctx def.llbc_name fid
+                          field.field_name ))
                     fields
                 in
                 let cons_name =
