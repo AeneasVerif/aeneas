@@ -446,27 +446,42 @@ let read_then_incr (x : u32) : result (u32 & u32) =
     Source: 'tests/src/no_nested_borrows.rs', lines 480:0-480:24 *)
 type tuple_t (t1 t2 : Type0) = t1 * t2
 
-(** [no_nested_borrows::use_tuple_struct]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 482:0-482:48 *)
-let use_tuple_struct (x : tuple_t u32 u32) : result (tuple_t u32 u32) =
+(** [no_nested_borrows::read_tuple]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 482:0-482:40 *)
+let read_tuple (x : (u32 & u32)) : result u32 =
+  let (i, _) = x in Ok i
+
+(** [no_nested_borrows::update_tuple]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 486:0-486:39 *)
+let update_tuple (x : (u32 & u32)) : result (u32 & u32) =
+  let (_, i) = x in Ok (1, i)
+
+(** [no_nested_borrows::read_tuple_struct]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 490:0-490:52 *)
+let read_tuple_struct (x : tuple_t u32 u32) : result u32 =
+  let (i, _) = x in Ok i
+
+(** [no_nested_borrows::update_tuple_struct]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 494:0-494:51 *)
+let update_tuple_struct (x : tuple_t u32 u32) : result (tuple_t u32 u32) =
   let (_, i) = x in Ok (1, i)
 
 (** [no_nested_borrows::create_tuple_struct]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 486:0-486:61 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 498:0-498:61 *)
 let create_tuple_struct (x : u32) (y : u64) : result (tuple_t u32 u64) =
   Ok (x, y)
 
 (** [no_nested_borrows::IdType]
-    Source: 'tests/src/no_nested_borrows.rs', lines 491:0-491:20 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 503:0-503:20 *)
 type idType_t (t : Type0) = t
 
 (** [no_nested_borrows::use_id_type]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 493:0-493:40 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 505:0-505:40 *)
 let use_id_type (t : Type0) (x : idType_t t) : result t =
   Ok x
 
 (** [no_nested_borrows::create_id_type]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 497:0-497:43 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 509:0-509:43 *)
 let create_id_type (t : Type0) (x : t) : result (idType_t t) =
   Ok x
 
