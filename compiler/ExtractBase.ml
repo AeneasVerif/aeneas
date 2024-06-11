@@ -2013,7 +2013,8 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       ctx_add def.item_meta.span decl name ctx
   | None ->
       (* Not the case: "standard" registration *)
-      let name = ctx_compute_global_name def.item_meta.span ctx def.name in
+      let name = rename_llbc def.item_meta def.name in
+      let name = ctx_compute_global_name def.item_meta.span ctx name in
 
       let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
       (* If this is a provided constant (i.e., the default value for a constant
