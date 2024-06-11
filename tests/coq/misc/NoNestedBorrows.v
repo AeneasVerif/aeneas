@@ -531,30 +531,49 @@ Definition read_then_incr (x : u32) : result (u32 * u32) :=
     Source: 'tests/src/no_nested_borrows.rs', lines 480:0-480:24 *)
 Definition Tuple_t (T1 T2 : Type) : Type := T1 * T2.
 
-(** [no_nested_borrows::use_tuple_struct]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 482:0-482:48 *)
-Definition use_tuple_struct (x : Tuple_t u32 u32) : result (Tuple_t u32 u32) :=
+(** [no_nested_borrows::read_tuple]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 482:0-482:40 *)
+Definition read_tuple (x : (u32 * u32)) : result u32 :=
+  let (i, _) := x in Ok i
+.
+
+(** [no_nested_borrows::update_tuple]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 486:0-486:39 *)
+Definition update_tuple (x : (u32 * u32)) : result (u32 * u32) :=
+  let (_, i) := x in Ok (1%u32, i)
+.
+
+(** [no_nested_borrows::read_tuple_struct]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 490:0-490:52 *)
+Definition read_tuple_struct (x : Tuple_t u32 u32) : result u32 :=
+  let (i, _) := x in Ok i
+.
+
+(** [no_nested_borrows::update_tuple_struct]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 494:0-494:51 *)
+Definition update_tuple_struct
+  (x : Tuple_t u32 u32) : result (Tuple_t u32 u32) :=
   let (_, i) := x in Ok (1%u32, i)
 .
 
 (** [no_nested_borrows::create_tuple_struct]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 486:0-486:61 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 498:0-498:61 *)
 Definition create_tuple_struct
   (x : u32) (y : u64) : result (Tuple_t u32 u64) :=
   Ok (x, y)
 .
 
 (** [no_nested_borrows::IdType]
-    Source: 'tests/src/no_nested_borrows.rs', lines 491:0-491:20 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 503:0-503:20 *)
 Definition IdType_t (T : Type) : Type := T.
 
 (** [no_nested_borrows::use_id_type]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 493:0-493:40 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 505:0-505:40 *)
 Definition use_id_type (T : Type) (x : IdType_t T) : result T :=
   Ok x.
 
 (** [no_nested_borrows::create_id_type]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 497:0-497:43 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 509:0-509:43 *)
 Definition create_id_type (T : Type) (x : T) : result (IdType_t T) :=
   Ok x.
 
