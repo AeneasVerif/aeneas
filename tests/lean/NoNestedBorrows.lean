@@ -538,27 +538,44 @@ def read_then_incr (x : U32) : Result (U32 × U32) :=
    Source: 'tests/src/no_nested_borrows.rs', lines 480:0-480:24 -/
 def Tuple (T1 T2 : Type) := T1 × T2
 
-/- [no_nested_borrows::use_tuple_struct]:
-   Source: 'tests/src/no_nested_borrows.rs', lines 482:0-482:48 -/
-def use_tuple_struct (x : Tuple U32 U32) : Result (Tuple U32 U32) :=
+/- [no_nested_borrows::read_tuple]:
+   Source: 'tests/src/no_nested_borrows.rs', lines 482:0-482:40 -/
+def read_tuple (x : (U32 × U32)) : Result U32 :=
+  let (i, _) := x
+  Result.ok i
+
+/- [no_nested_borrows::update_tuple]:
+   Source: 'tests/src/no_nested_borrows.rs', lines 486:0-486:39 -/
+def update_tuple (x : (U32 × U32)) : Result (U32 × U32) :=
+  let (_, i) := x
+  Result.ok (1#u32, i)
+
+/- [no_nested_borrows::read_tuple_struct]:
+   Source: 'tests/src/no_nested_borrows.rs', lines 490:0-490:52 -/
+def read_tuple_struct (x : Tuple U32 U32) : Result U32 :=
+  Result.ok x.#0
+
+/- [no_nested_borrows::update_tuple_struct]:
+   Source: 'tests/src/no_nested_borrows.rs', lines 494:0-494:51 -/
+def update_tuple_struct (x : Tuple U32 U32) : Result (Tuple U32 U32) :=
   Result.ok (1#u32, x.#1)
 
 /- [no_nested_borrows::create_tuple_struct]:
-   Source: 'tests/src/no_nested_borrows.rs', lines 486:0-486:61 -/
+   Source: 'tests/src/no_nested_borrows.rs', lines 498:0-498:61 -/
 def create_tuple_struct (x : U32) (y : U64) : Result (Tuple U32 U64) :=
   Result.ok (x, y)
 
 /- [no_nested_borrows::IdType]
-   Source: 'tests/src/no_nested_borrows.rs', lines 491:0-491:20 -/
+   Source: 'tests/src/no_nested_borrows.rs', lines 503:0-503:20 -/
 @[reducible] def IdType (T : Type) := T
 
 /- [no_nested_borrows::use_id_type]:
-   Source: 'tests/src/no_nested_borrows.rs', lines 493:0-493:40 -/
+   Source: 'tests/src/no_nested_borrows.rs', lines 505:0-505:40 -/
 def use_id_type (T : Type) (x : IdType T) : Result T :=
   Result.ok x
 
 /- [no_nested_borrows::create_id_type]:
-   Source: 'tests/src/no_nested_borrows.rs', lines 497:0-497:43 -/
+   Source: 'tests/src/no_nested_borrows.rs', lines 509:0-509:43 -/
 def create_id_type (T : Type) (x : T) : Result (IdType T) :=
   Result.ok x
 

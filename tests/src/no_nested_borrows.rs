@@ -479,7 +479,19 @@ pub fn read_then_incr(x: &mut u32) -> u32 {
 
 pub struct Tuple<T1, T2>(T1, T2);
 
-pub fn use_tuple_struct(x: &mut Tuple<u32, u32>) {
+pub fn read_tuple(x: &(u32, u32)) -> u32 {
+    x.0
+}
+
+pub fn update_tuple(x: &mut (u32, u32)) {
+    x.0 = 1;
+}
+
+pub fn read_tuple_struct(x: &Tuple<u32, u32>) -> u32 {
+    x.0
+}
+
+pub fn update_tuple_struct(x: &mut Tuple<u32, u32>) {
     x.0 = 1;
 }
 
