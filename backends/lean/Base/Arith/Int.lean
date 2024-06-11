@@ -22,7 +22,7 @@ class HasIntProp (a : Sort u) where
   prop : ∀ x:a, prop_ty x
 
 /- Proposition with implications: if we find P we can introduce Q in the context -/
-class PropHasImp (x : Prop) where
+class PropHasImp (x : Sort u) where
   concl : Prop
   prop : x → concl
 
