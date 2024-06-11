@@ -362,16 +362,19 @@ let variant_concatenate_type_name = ref true
     ex.:
     {[
       // Rust
-      struct Foo(u32)
+      struct Foo(u32, u32)
 
       // OCaml
-      type Foo = (u32)
+      type Foo = u32 * u32
     ]}
  *)
 let use_tuple_structs = ref true
 
-let backend_has_tuple_projectors () =
-  match backend () with Lean -> true | Coq | FStar | HOL4 -> false
+let backend_has_tuple_projectors backend =
+  match backend with Lean -> true | Coq | FStar | HOL4 -> false
+
+(** Toggle the use of tuple projectors *)
+let use_tuple_projectors = ref false
 
 (** We we use nested projectors for tuple (like: [(0, 1).snd.fst]) or do
     we use better projector syntax? *)

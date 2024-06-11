@@ -553,12 +553,14 @@ def update_tuple (x : (U32 × U32)) : Result (U32 × U32) :=
 /- [no_nested_borrows::read_tuple_struct]:
    Source: 'tests/src/no_nested_borrows.rs', lines 490:0-490:52 -/
 def read_tuple_struct (x : Tuple U32 U32) : Result U32 :=
-  Result.ok x.#0
+  let (i, _) := x
+  Result.ok i
 
 /- [no_nested_borrows::update_tuple_struct]:
    Source: 'tests/src/no_nested_borrows.rs', lines 494:0-494:51 -/
 def update_tuple_struct (x : Tuple U32 U32) : Result (Tuple U32 U32) :=
-  Result.ok (1#u32, x.#1)
+  let (_, i) := x
+  Result.ok (1#u32, i)
 
 /- [no_nested_borrows::create_tuple_struct]:
    Source: 'tests/src/no_nested_borrows.rs', lines 498:0-498:61 -/

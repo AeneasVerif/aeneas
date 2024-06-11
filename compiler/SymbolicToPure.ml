@@ -2916,7 +2916,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
            at once (`let (a, b, c) = x in`) *)
         || TypesUtils.type_decl_from_type_id_is_tuple_struct
              ctx.type_ctx.type_infos type_id
-           && not (Config.backend_has_tuple_projectors ())
+           && not !Config.use_tuple_projectors
       in
       if use_let_with_cons then
         (* Introduce a let binding which expands the ADT *)
