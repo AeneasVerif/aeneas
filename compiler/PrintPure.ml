@@ -798,7 +798,7 @@ let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
         else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
       in
       let body =
-        texpression_to_string ~spandata:(Some def.span) env inside indent indent
-          body.body
+        texpression_to_string ~spandata:(Some def.item_meta.span) env inside
+          indent indent body.body
       in
       "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body

@@ -1,4 +1,5 @@
 open Identifiers
+open Meta
 module T = Types
 module V = Values
 module E = Expressions
@@ -393,7 +394,7 @@ type type_decl = {
           the name used at extraction time will be derived from the
           llbc_name.
        *)
-  span : span;
+  item_meta : item_meta;
   generics : generic_params;
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
@@ -1080,7 +1081,7 @@ type item_kind = A.item_kind [@@deriving show]
 type fun_decl = {
   def_id : FunDeclId.id;
   is_local : bool;
-  span : span;
+  item_meta : item_meta;
   kind : item_kind;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
@@ -1126,7 +1127,7 @@ type trait_decl = {
   is_local : bool;
   llbc_name : llbc_name;
   name : string;
-  span : span;
+  item_meta : item_meta;
   generics : generic_params;
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
@@ -1149,7 +1150,7 @@ type trait_impl = {
   is_local : bool;
   llbc_name : llbc_name;
   name : string;
-  span : span;
+  item_meta : item_meta;
   impl_trait : trait_decl_ref;
   llbc_impl_trait : Types.trait_decl_ref;
       (** Same remark as for {!field:llbc_generics}. *)

@@ -597,13 +597,13 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let kind = translate_type_decl_kind def.item_meta.span def.T.kind in
   let preds = translate_predicates def.item_meta.span def.preds in
   let is_local = def.is_local in
-  let span = def.item_meta.span in
+  let item_meta = def.item_meta in
   {
     def_id;
     is_local;
     llbc_name;
     name;
-    span;
+    item_meta;
     generics;
     llbc_generics = def.generics;
     kind;
@@ -3898,7 +3898,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     {
       def_id;
       is_local = def.is_local;
-      span = def.item_meta.span;
+      item_meta = def.item_meta;
       kind = def.kind;
       num_loops;
       loop_id;
@@ -3986,7 +3986,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     is_local;
     llbc_name;
     name;
-    span = item_meta.span;
+    item_meta;
     generics;
     llbc_generics;
     preds;
@@ -4055,7 +4055,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     is_local;
     llbc_name;
     name;
-    span = item_meta.span;
+    item_meta;
     impl_trait;
     llbc_impl_trait;
     generics;

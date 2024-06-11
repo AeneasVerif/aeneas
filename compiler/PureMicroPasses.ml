@@ -224,7 +224,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   let register_var (ctx : pn_ctx) (v : var) : pn_ctx =
     sanity_check __FILE__ __LINE__
       (not (VarId.Map.mem v.id ctx.pure_vars))
-      def.span;
+      def.item_meta.span;
     match v.basename with
     | None -> ctx
     | Some name ->
@@ -614,7 +614,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
         | App _ -> (
             let app, args = destruct_apps e in
             let ignore () =
-              mk_apps def.span
+              mk_apps def.item_meta.span
                 (self#visit_texpression env app)
                 (List.map (self#visit_texpression env) args)
             in
@@ -759,7 +759,7 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
             else if variant_id = result_fail_id then
               (* Fail case *)
               self#visit_expression env rv.e
-            else craise __FILE__ __LINE__ def.span "Unexpected"
+            else craise __FILE__ __LINE__ def.item_meta.span "Unexpected"
         | App _ ->
             (* This might be the tuple case *)
             if not monadic then
@@ -914,7 +914,7 @@ let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
               } ) ->
             (* Second case: we deconstruct a structure with one field that we will
                extract as tuple. *)
-            let adt_id, _ = PureUtils.ty_as_adt def.span re.ty in
+            let adt_id, _ = PureUtils.ty_as_adt def.item_meta.span re.ty in
             (* Update the rhs (we may perform substitutions inside, and it is
              * better to do them *before* we inline it *)
             let re = self#visit_texpression env re in
@@ -1152,7 +1152,7 @@ let simplify_let_then_ok _ctx (def : fun_decl) =
               | Some e ->
                   if match_pattern_and_expr lv e then
                     (* We need to wrap the right-value in a ret *)
-                    (mk_result_ok_texpression def.span rv).e
+                    (mk_result_ok_texpression def.item_meta.span rv).e
                   else not_simpl_e
               | None ->
                   if match_pattern_and_expr lv next_e then rv.e else not_simpl_e
@@ -1203,13 +1203,14 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 let fields =
                   match adt_decl.kind with
                   | Enum _ | Alias _ | Opaque ->
-                      craise __FILE__ __LINE__ def.span "Unreachable"
+                      craise __FILE__ __LINE__ def.item_meta.span "Unreachable"
                   | Struct fields -> fields
                 in
                 let num_fields = List.length fields in
                 (* In order to simplify, there must be as many arguments as
                  * there are fields *)
-                sanity_check __FILE__ __LINE__ (num_fields > 0) def.span;
+                sanity_check __FILE__ __LINE__ (num_fields > 0)
+                  def.item_meta.span;
                 if num_fields = List.length args then
                   (* We now need to check that all the arguments are of the form:
                    * [x.field] for some variable [x], and where the projection
@@ -1249,7 +1250,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                         (List.for_all
                            (fun (generics1, _) -> generics1 = generics)
                            args)
-                        def.span;
+                        def.item_meta.span;
                       { e with e = Var x })
                     else super#visit_texpression env e
                   else super#visit_texpression env e
@@ -1406,7 +1407,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
             in
             sanity_check __FILE__ __LINE__
               (fun_sig_info_is_wf loop_fwd_sig_info)
-              def.span;
+              def.item_meta.span;
 
             let inputs_tys =
               let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
@@ -1449,7 +1450,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
                 sanity_check __FILE__ __LINE__
                   (loop_fwd_effect_info.stateful
                   = Option.is_some loop.input_state)
-                  def.span;
+                  def.item_meta.span;
                 match loop.input_state with
                 | None -> ([], [])
                 | Some input_state ->
@@ -1486,8 +1487,8 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               match fuel_vars with
               | None -> loop.loop_body
               | Some (fuel0, fuel) ->
-                  SymbolicToPure.wrap_in_match_fuel def.span fuel0 fuel
-                    loop.loop_body
+                  SymbolicToPure.wrap_in_match_fuel def.item_meta.span fuel0
+                    fuel loop.loop_body
             in
 
             let loop_body = { inputs; inputs_lvs; body = loop_body } in
@@ -1496,7 +1497,8 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               {
                 def_id = def.def_id;
                 is_local = def.is_local;
-                span = loop.span;
+                item_meta = def.item_meta;
+                (*TODO check is right item_meta*)
                 kind = def.kind;
                 num_loops;
                 loop_id = Some loop.loop_id;
@@ -1580,9 +1582,10 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 match aid with
                 | BoxNew ->
                     let arg, args = Collections.List.pop args in
-                    mk_apps def.span arg args
+                    mk_apps def.item_meta.span arg args
                 | BoxFree ->
-                    sanity_check __FILE__ __LINE__ (args = []) def.span;
+                    sanity_check __FILE__ __LINE__ (args = [])
+                      def.item_meta.span;
                     mk_unit_rvalue
                 | SliceIndexShared | SliceIndexMut | ArrayIndexShared
                 | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
@@ -1776,8 +1779,10 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               *)
               (* TODO: this information should be computed in SymbolicToPure and
                * store in an enum ("monadic" should be an enum, not a bool). *)
-              let re_ty = Option.get (opt_destruct_result def.span re.ty) in
-              sanity_check __FILE__ __LINE__ (lv.ty = re_ty) def.span;
+              let re_ty =
+                Option.get (opt_destruct_result def.item_meta.span re.ty)
+              in
+              sanity_check __FILE__ __LINE__ (lv.ty = re_ty) def.item_meta.span;
               let err_vid = fresh_id () in
               let err_var : var =
                 {
@@ -1789,7 +1794,9 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               let err_pat = mk_typed_pattern_from_var err_var None in
               let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
               let err_v = mk_texpression_from_var err_var in
-              let fail_value = mk_result_fail_texpression def.span err_v e.ty in
+              let fail_value =
+                mk_result_fail_texpression def.item_meta.span err_v e.ty
+              in
               let fail_branch = { pat = fail_pat; branch = fail_value } in
               let success_pat = mk_result_ok_pattern lv in
               let success_branch = { pat = success_pat; branch = e } in
@@ -2030,7 +2037,9 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
         ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
         ^ "\n"));
     let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
-    sanity_check __FILE__ __LINE__ (Option.is_some decl.loop_id) decl.span;
+    sanity_check __FILE__ __LINE__
+      (Option.is_some decl.loop_id)
+      decl.item_meta.span;
 
     let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
 
@@ -2182,7 +2191,9 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           in
 
           let fwd_info = { fwd_info; effect_info; ignore_output } in
-          sanity_check __FILE__ __LINE__ (fun_sig_info_is_wf fwd_info) decl.span;
+          sanity_check __FILE__ __LINE__
+            (fun_sig_info_is_wf fwd_info)
+            decl.item_meta.span;
           let signature =
             {
               generics;
@@ -2248,17 +2259,17 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
                                 in
 
                                 (* Rebuild *)
-                                mk_apps decl.span e_app args)
+                                mk_apps decl.item_meta.span e_app args)
                         | _ ->
                             let e_app = self#visit_texpression env e_app in
                             let args =
                               List.map (self#visit_texpression env) args
                             in
-                            mk_apps decl.span e_app args)
+                            mk_apps decl.item_meta.span e_app args)
                     | _ ->
                         let e_app = self#visit_texpression env e_app in
                         let args = List.map (self#visit_texpression env) args in
-                        mk_apps decl.span e_app args)
+                        mk_apps decl.item_meta.span e_app args)
                 | _ -> super#visit_texpression env e
             end
           in

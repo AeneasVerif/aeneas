@@ -252,6 +252,14 @@ let empty_names_map : names_map =
     names_set = StringSet.empty;
   }
 
+(** Small helper to rename a llbc_name if the rename attribute has been set *)
+let rename_llbc (item_meta : Meta.item_meta) (llbc_name : llbc_name) =
+  match item_meta.rename with
+  | Some rename ->
+      let remove_last = List.tl (List.rev llbc_name) in
+      List.rev (T.PeIdent (rename, Disambiguator.zero) :: remove_last)
+  | None -> llbc_name
+
 (** Small helper to report name collision *)
 let report_name_collision (id_to_string : id -> string)
     ((id1, span1) : id * Meta.span option) (id2 : id) (span2 : Meta.span option)
@@ -1390,7 +1398,7 @@ let ctx_compute_type_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
   flatten_name (ctx_compute_simple_type_name span ctx name)
 
 (** Provided a basename, compute a type name. *)
-let ctx_compute_type_name (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_type_decl_name (span : Meta.span) (ctx : extraction_ctx)
     (name : llbc_name) =
   let name = ctx_compute_type_name_no_suffix span ctx name in
   match backend () with
@@ -1459,7 +1467,7 @@ let ctx_compute_variant_name (span : Meta.span) (ctx : extraction_ctx)
 *)
 let ctx_compute_struct_constructor (span : Meta.span) (ctx : extraction_ctx)
     (basename : llbc_name) : string =
-  let tname = ctx_compute_type_name span ctx basename in
+  let tname = ctx_compute_type_decl_name span ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
 let ctx_compute_fun_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
@@ -1522,7 +1530,8 @@ let ctx_compute_fun_name (span : Meta.span) (ctx : extraction_ctx)
 
 let ctx_compute_trait_decl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     : string =
-  ctx_compute_type_name trait_decl.span ctx trait_decl.llbc_name
+  let llbc_name = rename_llbc trait_decl.item_meta trait_decl.llbc_name in
+  ctx_compute_type_decl_name trait_decl.item_meta.span ctx llbc_name
 
 let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (trait_impl : trait_impl) : string =
@@ -1535,7 +1544,10 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
   let name =
     let params = trait_impl.llbc_generics in
     let args = trait_impl.llbc_impl_trait.decl_generics in
-    let name = ctx_prepare_name trait_impl.span ctx trait_decl.llbc_name in
+    let name =
+      ctx_prepare_name trait_impl.item_meta.span ctx trait_decl.llbc_name
+    in
+    (* let name = rename_llbc trait_impl.item_meta name in  *)
     trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
   in
   let name = flatten_name name in
@@ -1970,20 +1982,20 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name =
-    ctx_compute_decreases_proof_name def.span ctx def.def_id def.llbc_name
-      def.num_loops def.loop_id
+    ctx_compute_decreases_proof_name def.item_meta.span ctx def.def_id
+      def.llbc_name def.num_loops def.loop_id
   in
-  ctx_add def.span
+  ctx_add def.item_meta.span
     (DecreasesProofId (FRegular def.def_id, def.loop_id))
     name ctx
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name =
-    ctx_compute_termination_measure_name def.span ctx def.def_id def.llbc_name
-      def.num_loops def.loop_id
+    ctx_compute_termination_measure_name def.item_meta.span ctx def.def_id
+      def.llbc_name def.num_loops def.loop_id
   in
-  ctx_add def.span
+  ctx_add def.item_meta.span
     (TerminationMeasureId (FRegular def.def_id, def.loop_id))
     name ctx
 
@@ -2017,20 +2029,25 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
 
 let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
   (* Add the function name *)
-  ctx_compute_fun_name def.span ctx def.llbc_name def.num_loops def.loop_id
+  let llbc_name = rename_llbc def.item_meta def.llbc_name in
+  ctx_compute_fun_name def.item_meta.span ctx llbc_name def.num_loops
+    def.loop_id
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Sanity check: the function should not be a global body - those are handled
    * separately *)
-  sanity_check __FILE__ __LINE__ (not def.is_global_decl_body) def.span;
+  sanity_check __FILE__ __LINE__
+    (not def.is_global_decl_body)
+    def.item_meta.span;
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
   (* Add the function name *)
   let def_name = ctx_compute_fun_name def ctx in
   let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
-  ctx_add def.span (FunId (FromLlbc fun_id)) def_name ctx
+  ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =
-  ctx_compute_type_name def.span ctx def.llbc_name
+  let llbc_name = rename_llbc def.item_meta def.llbc_name in
+  ctx_compute_type_decl_name def.item_meta.span ctx llbc_name
