@@ -822,11 +822,12 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
-                    let variant_name = 
-                      (match variant.item_meta.rename with
-                        | Some(name) -> name
-                        | None -> variant.variant_name)
+                    let variant_name =
+                      match variant.item_meta.rename with
+                      | Some name -> name
+                      | None -> variant.variant_name
                     in
+                    let name =
                       ctx_compute_variant_name def.item_meta.span ctx
                         def.llbc_name variant_name
                     in
