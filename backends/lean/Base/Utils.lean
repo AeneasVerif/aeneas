@@ -664,7 +664,7 @@ example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
    Something very annoying is that there is no function which allows to
    initialize a simp context without doing an elaboration - as a consequence
    we write our own here. -/
-def mkSimpCtx (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM Simp.Context := do
   -- Initialize either with the builtin simp theorems or with all the simp theorems
   let simpThms ←
@@ -693,7 +693,7 @@ def mkSimpCtx (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (
         throwError "Not a proposition: {thmName}"
       ) simpThms
   let congrTheorems ← getSimpCongrTheorems
-  pure { simpTheorems := #[simpThms], congrTheorems }
+  pure { config, simpTheorems := #[simpThms], congrTheorems }
 
 inductive Location where
   /-- Apply the tactic everywhere. Same as `Tactic.Location.wildcard` -/
@@ -731,28 +731,28 @@ where
     return usedSimps
 
 /- Call the simp tactic. -/
-def simpAt (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
+def simpAt (simpOnly : Bool) (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
   (loc : Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let ctx ← mkSimpCtx simpOnly declsToUnfold thms hypsToUse
+  let ctx ← mkSimpCtx simpOnly config declsToUnfold thms hypsToUse
   -- Apply the simplifier
   let _ ← customSimpLocation ctx (discharge? := .none) loc
 
 /- Call the dsimp tactic. -/
-def dsimpAt (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
+def dsimpAt (simpOnly : Bool) (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
   (loc : Tactic.Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let ctx ← mkSimpCtx simpOnly declsToUnfold thms hypsToUse
+  let ctx ← mkSimpCtx simpOnly config declsToUnfold thms hypsToUse
   -- Apply the simplifier
   dsimpLocation ctx loc
 
 -- Call the simpAll tactic
-def simpAll (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def simpAll (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let ctx ← mkSimpCtx false declsToUnfold thms hypsToUse
+  let ctx ← mkSimpCtx false config declsToUnfold thms hypsToUse
   -- Apply the simplifier
   let _ ← Lean.Meta.simpAll (← getMainGoal) ctx
 
