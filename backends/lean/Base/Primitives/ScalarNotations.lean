@@ -84,4 +84,7 @@ example {ty} (x : Scalar ty) : Bool :=
 -- Testing the notations
 example : Result Usize := 0#usize + 1#usize
 
+-- More complex expressions
+example (x y : Int) (h : 0 ≤ x + y ∧ x + y ≤ 1000) : U32 := (x + y)#u32
+
 end Primitives
