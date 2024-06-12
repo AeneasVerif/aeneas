@@ -40,7 +40,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (inside : bool)
               F.pp_print_string fmt ("%" ^ iname)
           | Lean ->
               let iname = String.lowercase_ascii (int_name sv.int_ty) in
-              F.pp_print_string fmt ("#" ^ iname)
+              F.pp_print_string fmt iname
           | HOL4 -> ()
           | _ -> craise __FILE__ __LINE__ span "Unreachable");
           if print_brackets then F.pp_print_string fmt ")")
