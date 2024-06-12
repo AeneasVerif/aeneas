@@ -756,4 +756,65 @@ def simpAll (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name
   -- Apply the simplifier
   let _ ← Lean.Meta.simpAll (← getMainGoal) ctx
 
+/- Adapted from Elab.Tactic.Rewrite -/
+def rewriteTarget (eqThm : Expr) (symm : Bool) (config : Rewrite.Config := {}) : TacticM Unit := do
+  Term.withSynthesize <| withMainContext do
+    let r ← (← getMainGoal).rewrite (← getMainTarget) eqThm symm (config := config)
+    let mvarId' ← (← getMainGoal).replaceTargetEq r.eNew r.eqProof
+    replaceMainGoal (mvarId' :: r.mvarIds)
+
+/- Adapted from Elab.Tactic.Rewrite -/
+def rewriteLocalDecl (eqThm : Expr) (symm : Bool) (fvarId : FVarId) (config : Rewrite.Config := {}) :
+    TacticM Unit := withMainContext do
+  -- Note: we cannot execute `replaceLocalDecl` inside `Term.withSynthesize`.
+  -- See issues #2711 and #2727.
+  let rwResult ← Term.withSynthesize <| withMainContext do
+    let localDecl ← fvarId.getDecl
+    (← getMainGoal).rewrite localDecl.type eqThm symm (config := config)
+  let replaceResult ← (← getMainGoal).replaceLocalDecl fvarId rwResult.eNew rwResult.eqProof
+  replaceMainGoal (replaceResult.mvarId :: rwResult.mvarIds)
+
+/- Adapted from Elab.Tactic.Rewrite -/
+def rewriteWithThms
+  (thms : List (Bool × Expr))
+  (rewrite : (symm : Bool) → (thm : Expr) → TacticM Unit)
+  : TacticM Unit := do
+  let rec go thms :=
+    match thms with
+    | [] => throwError "Failed to rewrite with any theorem"
+    | (symm, eqThm)::thms =>
+      rewrite symm eqThm <|> go thms
+  go thms
+
+/- Adapted from Elab.Tactic.Rewrite -/
+def evalRewriteSeqAux (cfg : Rewrite.Config) (thms : List (Bool × Expr)) (loc : Tactic.Location) : TacticM Unit :=
+  rewriteWithThms thms fun symm term => do
+    withLocation loc
+      (rewriteLocalDecl term symm · cfg)
+      (rewriteTarget term symm cfg)
+      (throwTacticEx `rewrite · "did not find instance of the pattern in the current goal")
+
+/-- `rpt`: if `true`, repeatedly rewrite -/
+def rewriteAt (cfg : Rewrite.Config) (rpt : Bool)
+  (thms : List (Bool × Name)) (loc : Tactic.Location) : TacticM Unit := do
+  -- Lookup the theorems
+  let lookupThm (x : Bool × Name) : TacticM (List (Bool × Expr)) := do
+    let thName := x.snd
+    let lookupOne (thName : Name) : TacticM (Bool × Expr) := do
+      -- Lookup the theorem and introduce fresh meta-variables for the universes
+      let th ← mkConstWithFreshMVarLevels thName
+      pure (x.fst, th)
+    match ← getEqnsFor? thName (nonRec := true) with
+    | some eqThms => do
+      eqThms.data.mapM lookupOne
+    | none => do
+      pure [← lookupOne thName]
+  let thms ← List.mapM lookupThm thms
+  let thms := thms.flatten
+  -- Rewrite
+  if rpt then
+    Utils.repeatTac (evalRewriteSeqAux cfg thms loc)
+  else
+    evalRewriteSeqAux cfg thms loc
+
 end Utils
