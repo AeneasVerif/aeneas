@@ -21,6 +21,11 @@ class HasIntProp (a : Sort u) where
   prop_ty : a → Prop
   prop : ∀ x:a, prop_ty x
 
+/- Terms that induces predicates: if we can find the term `x`, we can introduce `concl` in the context. -/
+class HasIntPred {a: Sort u} (x: a) where
+  concl : Prop
+  prop : concl
+
 /- Proposition with implications: if we find P we can introduce Q in the context -/
 class PropHasImp (x : Prop) where
   concl : Prop
@@ -106,12 +111,18 @@ def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.Tact
   let hs := HashSet.empty
   -- Explore the declarations
   let decls ← ctx.getDecls
-  let hs ← decls.foldlM (fun hs d => collectInstances k hs d.toExpr) hs
+  let hs ← decls.foldlM (fun hs d => do 
+    -- Collect instances over all subexpressions
+    -- of the inferred type rather than the declaration expression
+    -- which is often just a name.
+    let ty ← Lean.Meta.inferType d.toExpr
+    collectInstances k hs ty
+  ) hs
   -- Also explore the goal
   collectInstances k hs (← Tactic.getMainTarget)
 
 -- Helper
-def lookupProp (fName : String) (className : Name) (e : Expr) : MetaM (Option Expr) := do
+def lookupProp (fName : String) (className : Name) (e : Expr) (instantiateClassFn : Expr → Expr → Array Expr) (instantiateProjectionFn : Expr → Array Expr) : MetaM (Option Expr) := do
   trace[Arith] fName
   -- TODO: do we need Lean.observing?
   -- This actually eliminates the error messages
@@ -119,22 +130,30 @@ def lookupProp (fName : String) (className : Name) (e : Expr) : MetaM (Option Ex
   Lean.observing? do
     trace[Arith] m!"{fName}: observing: {e}"
     let ty ← Lean.Meta.inferType e
-    let hasProp ← mkAppM className #[ty]
+    let hasProp ← mkAppM className (instantiateClassFn ty e)
     let hasPropInst ← trySynthInstance hasProp
     match hasPropInst with
     | LOption.some i =>
       trace[Arith] "Found {fName} instance"
       let i_prop ← mkProjection i (Name.mkSimple "prop")
-      some (← mkAppM' i_prop #[e])
+      some (← mkAppM' i_prop (instantiateProjectionFn e))
     | _ => none
 
 -- Return an instance of `HasIntProp` for `e` if it has some
 def lookupHasIntProp (e : Expr) : MetaM (Option Expr) :=
-  lookupProp "lookupHasIntProp" ``HasIntProp e
+  lookupProp "lookupHasIntProp" ``HasIntProp e (fun ty _ => #[ty]) (fun e => #[e])
 
 -- Collect the instances of `HasIntProp` for the subexpressions in the context
 def collectHasIntPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
   collectInstancesFromMainCtx lookupHasIntProp
+
+-- Return an instance of `HasIntPred` for `e` if it has some
+def lookupHasIntPred (e : Expr) : MetaM (Option Expr) :=
+  lookupProp "lookupHasIntPred" ``HasIntPred e (fun _ term => #[term]) (fun _ => #[])
+
+-- Collect the instances of `HasIntPred` for the subexpressions in the context
+def collectHasIntPredInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do 
+  collectInstancesFromMainCtx lookupHasIntPred
 
 -- Return an instance of `PropHasImp` for `e` if it has some
 def lookupPropHasImp (e : Expr) : MetaM (Option Expr) := do
@@ -193,6 +212,13 @@ def introHasIntPropInstances : Tactic.TacticM (Array Expr) := do
 elab "intro_has_int_prop_instances" : tactic => do
   let _ ← introHasIntPropInstances
 
+def introHasIntPredInstances : Tactic.TacticM (Array Expr) := do 
+  trace[Arith] "Introducing the HasIntPred instances"
+  introInstances ``HasIntPred.concl lookupHasIntPred
+
+elab "intro_has_int_pred_instances" : tactic => do
+  let _ ← introHasIntPredInstances
+
 def introPropHasImpInstances : Tactic.TacticM (Array Expr) := do
   trace[Arith] "Introducing the PropHasImp instances"
   introInstances ``PropHasImp.concl lookupPropHasImp
@@ -208,6 +234,8 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   Tactic.withMainContext do
   -- Introduce the instances of `HasIntProp`
   let _ ← introHasIntPropInstances
+  -- Introduce the instances of `HasIntPred`
+  let _ ← introHasIntPredInstances
   -- Introduce the instances of `PropHasImp`
   let _ ← introPropHasImpInstances
   -- Extra preprocessing

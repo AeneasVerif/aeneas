@@ -19,9 +19,11 @@ theorem len_pos : 0 ≤ (ls : List α).len := by
   induction ls <;> simp [*]
   linarith
 
-instance (a : Type u) : Arith.HasIntProp (List a) where
-  prop_ty := λ ls => 0 ≤ ls.len
-  prop := λ ls => ls.len_pos
+instance (l: List a) : Arith.HasIntPred (l.len) where
+   concl := 0 ≤ l.len
+   prop := l.len_pos
+
+example (l: List a): 0 ≤ l.len := by scalar_tac
 
 -- Remark: if i < 0, then the result is none
 def indexOpt (ls : List α) (i : Int) : Option α :=
