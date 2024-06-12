@@ -58,17 +58,13 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
      We also make sure that all the meta variables which appear in the
      function arguments have been instantiated
    -/
-  let env ← getEnv
   let thTy ← do
     match th with
     | .Theorem thName =>
-      let thDecl := env.constants.find! thName
-      -- We have to introduce fresh meta-variables for the universes already
-      let ul : List (Name × Level) ←
-        thDecl.levelParams.mapM (λ x => do pure (x, ← mkFreshLevelMVar))
-      let ulMap : HashMap Name Level := HashMap.ofList ul
-      let thTy := thDecl.type.instantiateLevelParamsCore (λ x => ulMap.find! x)
-      pure thTy
+      -- Lookup the theorem and introduce fresh meta-variables for the universes
+      let th ← mkConstWithFreshMVarLevels thName
+      -- Retrieve the type
+      inferType th
     | .Local asmDecl => pure asmDecl.type
   trace[Progress] "Looked up theorem/assumption type: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
@@ -135,7 +131,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     Tactic.focus do
     let _ ←
       tryTac
-        (simpAt true []
+        (simpAt true {} []
                [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
@@ -144,7 +140,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     else
        trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
        -- TODO: remove this (some types get unfolded too much: we "fold" them back)
-       let _ ← tryTac (simpAt true [] scalar_eqs [] .wildcard_dep)
+       let _ ← tryTac (simpAt true {} [] scalar_eqs [] .wildcard_dep)
        trace[Progress] "goal after folding back scalar types: {← getMainGoal}"
        -- Clear the equality, unless the user requests not to do so
        let mgoal ← do
