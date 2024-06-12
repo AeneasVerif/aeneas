@@ -352,8 +352,19 @@ and trait_instance_id =
         polymorphic = false;
       }]
 
-type field = { field_name : string option; field_ty : ty } [@@deriving show]
-type variant = { variant_name : string; fields : field list } [@@deriving show]
+type field = {
+  field_name : string option;
+  field_ty : ty;
+  item_meta : item_meta;
+}
+[@@deriving show]
+
+type variant = {
+  variant_name : string;
+  fields : field list;
+  item_meta : item_meta;
+}
+[@@deriving show]
 
 type type_decl_kind = Struct of field list | Enum of variant list | Opaque
 [@@deriving show]

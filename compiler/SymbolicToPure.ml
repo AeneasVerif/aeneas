@@ -545,7 +545,8 @@ let translate_generic_params (span : Meta.span) (generics : T.generic_params) :
 let translate_field (span : Meta.span) (f : T.field) : field =
   let field_name = f.field_name in
   let field_ty = translate_sty span f.field_ty in
-  { field_name; field_ty }
+  let item_meta = f.item_meta in
+  { field_name; field_ty; item_meta }
 
 let translate_fields (span : Meta.span) (fl : T.field list) : field list =
   List.map (translate_field span) fl
@@ -553,7 +554,8 @@ let translate_fields (span : Meta.span) (fl : T.field list) : field list =
 let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_name = v.variant_name in
   let fields = translate_fields span v.fields in
-  { variant_name; fields }
+  let item_meta = v.item_meta in
+  { variant_name; fields; item_meta }
 
 let translate_variants (span : Meta.span) (vl : T.variant list) : variant list =
   List.map (translate_variant span) vl

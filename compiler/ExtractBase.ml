@@ -252,12 +252,12 @@ let empty_names_map : names_map =
     names_set = StringSet.empty;
   }
 
-(** Small helper to rename a llbc_name if the rename attribute has been set *)
+(** Small helper to rename an llbc_name if the rename attribute has been set *)
 let rename_llbc_name (item_meta : Meta.item_meta) (llbc_name : llbc_name) =
   match item_meta.rename with
   | Some rename ->
-      let remove_last = List.tl (List.rev llbc_name) in
-      List.rev (T.PeIdent (rename, Disambiguator.zero) :: remove_last)
+      let name_prefix = List.tl (List.rev llbc_name) in
+      List.rev (T.PeIdent (rename, Disambiguator.zero) :: name_prefix)
   | None -> llbc_name
 
 (** Small helper to report name collision *)
@@ -1398,7 +1398,7 @@ let ctx_compute_type_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
   flatten_name (ctx_compute_simple_type_name span ctx name)
 
 (** Provided a basename, compute a type name. *)
-let ctx_compute_type_decl_name (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_type_decl_name_aux (span : Meta.span) (ctx : extraction_ctx)
     (name : llbc_name) =
   let name = ctx_compute_type_name_no_suffix span ctx name in
   match backend () with
@@ -1417,9 +1417,9 @@ let ctx_compute_type_decl_name (span : Meta.span) (ctx : extraction_ctx)
     access then causes trouble because not all provers accept syntax like
     [x.3] where [x] is a tuple.
  *)
-let ctx_compute_field_name (def : type_decl) (ctx : extraction_ctx)
-    (def_name : llbc_name) (field_id : FieldId.id) (field_name : string option)
-    : string =
+let ctx_compute_field_name (def : type_decl) (item_meta : Meta.item_meta)
+    (ctx : extraction_ctx) (def_name : llbc_name) (field_id : FieldId.id)
+    (field_name : string option) : string =
   let field_name_s =
     match field_name with
     | Some field_name -> field_name
@@ -1432,9 +1432,9 @@ let ctx_compute_field_name (def : type_decl) (ctx : extraction_ctx)
       "_" ^ field_name_s
     else field_name_s
   else
-    let name = rename_llbc_name def.item_meta def_name in
+    let def_name = rename_llbc_name item_meta def_name in
     let def_name =
-      ctx_compute_type_name_no_suffix def.item_meta.span ctx name
+      ctx_compute_type_name_no_suffix def.item_meta.span ctx def_name
       ^ "_" ^ field_name_s
     in
     match backend () with
@@ -1469,7 +1469,7 @@ let ctx_compute_variant_name (span : Meta.span) (ctx : extraction_ctx)
 *)
 let ctx_compute_struct_constructor (span : Meta.span) (ctx : extraction_ctx)
     (basename : llbc_name) : string =
-  let tname = ctx_compute_type_decl_name span ctx basename in
+  let tname = ctx_compute_type_decl_name_aux span ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
 let ctx_compute_fun_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
@@ -1533,7 +1533,7 @@ let ctx_compute_fun_name (span : Meta.span) (ctx : extraction_ctx)
 let ctx_compute_trait_decl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     : string =
   let llbc_name = rename_llbc_name trait_decl.item_meta trait_decl.llbc_name in
-  ctx_compute_type_decl_name trait_decl.item_meta.span ctx llbc_name
+  ctx_compute_type_decl_name_aux trait_decl.item_meta.span ctx llbc_name
 
 let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (trait_impl : trait_impl) : string =
@@ -1549,7 +1549,7 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     let name =
       ctx_prepare_name trait_impl.item_meta.span ctx trait_decl.llbc_name
     in
-    (* let name = rename_llbc_name trait_impl.item_meta name in  *)
+    let name = rename_llbc_name trait_impl.item_meta name in
     trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
   in
   let name = flatten_name name in
@@ -1983,9 +1983,10 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
 
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
+  let name = rename_llbc_name def.item_meta def.llbc_name in
   let name =
-    ctx_compute_decreases_proof_name def.item_meta.span ctx def.def_id
-      def.llbc_name def.num_loops def.loop_id
+    ctx_compute_decreases_proof_name def.item_meta.span ctx def.def_id name
+      def.num_loops def.loop_id
   in
   ctx_add def.item_meta.span
     (DecreasesProofId (FRegular def.def_id, def.loop_id))
@@ -1993,9 +1994,10 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
+  let name = rename_llbc_name def.item_meta def.llbc_name in
   let name =
-    ctx_compute_termination_measure_name def.item_meta.span ctx def.def_id
-      def.llbc_name def.num_loops def.loop_id
+    ctx_compute_termination_measure_name def.item_meta.span ctx def.def_id name
+      def.num_loops def.loop_id
   in
   ctx_add def.item_meta.span
     (TerminationMeasureId (FRegular def.def_id, def.loop_id))
@@ -2053,4 +2055,4 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =
   let llbc_name = rename_llbc_name def.item_meta def.llbc_name in
-  ctx_compute_type_decl_name def.item_meta.span ctx llbc_name
+  ctx_compute_type_decl_name_aux def.item_meta.span ctx llbc_name

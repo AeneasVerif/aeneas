@@ -778,8 +778,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   FieldId.mapi
                     (fun fid (field : field) ->
                       ( fid,
-                        ctx_compute_field_name def ctx def.llbc_name fid
-                          field.field_name ))
+                        ctx_compute_field_name def field.item_meta ctx
+                          def.llbc_name fid field.field_name ))
                     fields
                 in
                 let cons_name =
@@ -822,9 +822,13 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
-                    let name =
+                    let variant_name = 
+                      (match variant.item_meta.rename with
+                        | Some(name) -> name
+                        | None -> variant.variant_name)
+                    in
                       ctx_compute_variant_name def.item_meta.span ctx
-                        def.llbc_name variant.variant_name
+                        def.llbc_name variant_name
                     in
                     (* Add the type name prefix for Lean *)
                     let name =
