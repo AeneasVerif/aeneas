@@ -43,7 +43,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
     simp_all; scalar_tac
   | CCons hd tl =>
     simp_all
-    if hi: i = 0u32 then
+    if hi: i = 0#u32 then
       simp_all
     else
       simp_all
@@ -54,7 +54,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
 theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
   ∃ y, i32_id x = ok y ∧ x.val = y.val := by
   rw [i32_id]
-  if hx : x = 0i32 then
+  if hx : x = 0#i32 then
     simp_all
   else
     simp_all

@@ -266,9 +266,9 @@ def index_all : Result U32 :=
   let (s1, to_slice_mut_back) ←
     Array.to_slice_mut U32 2usize (Array.make U32 2usize [ 0u32, 0u32 ])
   let (i7, s2) ← index_mut_slice_u32_0 s1
-  let i9 ← i6 + i7
+  let i8 ← i6 + i7
   let _ ← to_slice_mut_back s2
-  Result.ok i9
+  Result.ok i8
 
 /- [arrays::update_array]:
    Source: 'tests/src/arrays.rs', lines 187:0-187:36 -/
