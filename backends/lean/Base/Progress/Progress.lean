@@ -58,17 +58,13 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
      We also make sure that all the meta variables which appear in the
      function arguments have been instantiated
    -/
-  let env ← getEnv
   let thTy ← do
     match th with
     | .Theorem thName =>
-      let thDecl := env.constants.find! thName
-      -- We have to introduce fresh meta-variables for the universes already
-      let ul : List (Name × Level) ←
-        thDecl.levelParams.mapM (λ x => do pure (x, ← mkFreshLevelMVar))
-      let ulMap : HashMap Name Level := HashMap.ofList ul
-      let thTy := thDecl.type.instantiateLevelParamsCore (λ x => ulMap.find! x)
-      pure thTy
+      -- Lookup the theorem and introduce fresh meta-variables for the universes
+      let th ← mkConstWithFreshMVarLevels thName
+      -- Retrieve the type
+      inferType th
     | .Local asmDecl => pure asmDecl.type
   trace[Progress] "Looked up theorem/assumption type: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
