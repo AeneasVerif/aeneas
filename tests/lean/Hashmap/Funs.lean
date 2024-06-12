@@ -18,11 +18,11 @@ divergent def HashMap.allocate_slots_loop
   (T : Type) (slots : alloc.vec.Vec (List T)) (n : Usize) :
   Result (alloc.vec.Vec (List T))
   :=
-  if n > 0#usize
+  if n > 0usize
   then
     do
     let slots1 ← alloc.vec.Vec.push (List T) slots List.Nil
-    let n1 ← n - 1#usize
+    let n1 ← n - 1usize
     HashMap.allocate_slots_loop T slots1 n1
   else Result.ok slots
 
@@ -47,7 +47,7 @@ def HashMap.new_with_capacity
   let i1 ← i / max_load_divisor
   Result.ok
     {
-      num_entries := 0#usize,
+      num_entries := 0usize,
       max_load_factor := (max_load_dividend, max_load_divisor),
       max_load := i1,
       slots := slots
@@ -56,7 +56,7 @@ def HashMap.new_with_capacity
 /- [hashmap::{hashmap::HashMap<T>}::new]:
    Source: 'tests/src/hashmap.rs', lines 85:4-85:24 -/
 def HashMap.new (T : Type) : Result (HashMap T) :=
-  HashMap.new_with_capacity T 32#usize 4#usize 5#usize
+  HashMap.new_with_capacity T 32usize 4usize 5usize
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 90:4-98:5 -/
@@ -71,7 +71,7 @@ divergent def HashMap.clear_loop
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (List T) Usize
         (core.slice.index.SliceIndexUsizeSliceTInst (List T)) slots i
-    let i2 ← i + 1#usize
+    let i2 ← i + 1usize
     let slots1 ← index_mut_back List.Nil
     HashMap.clear_loop T slots1 i2
   else Result.ok slots
@@ -80,8 +80,8 @@ divergent def HashMap.clear_loop
    Source: 'tests/src/hashmap.rs', lines 90:4-90:27 -/
 def HashMap.clear (T : Type) (self : HashMap T) : Result (HashMap T) :=
   do
-  let hm ← HashMap.clear_loop T self.slots 0#usize
-  Result.ok { self with num_entries := 0#usize, slots := hm }
+  let hm ← HashMap.clear_loop T self.slots 0usize
+  Result.ok { self with num_entries := 0usize, slots := hm }
 
 /- [hashmap::{hashmap::HashMap<T>}::len]:
    Source: 'tests/src/hashmap.rs', lines 100:4-100:30 -/
@@ -129,7 +129,7 @@ def HashMap.insert_no_resize
   if inserted
   then
     do
-    let i1 ← self.num_entries + 1#usize
+    let i1 ← self.num_entries + 1usize
     let v ← index_mut_back l1
     Result.ok { self with num_entries := i1, slots := v }
   else do
@@ -169,7 +169,7 @@ divergent def HashMap.move_elements_loop
         (core.slice.index.SliceIndexUsizeSliceTInst (List T)) slots i
     let (ls, l1) := core.mem.replace (List T) l List.Nil
     let ntable1 ← HashMap.move_elements_from_list T ntable ls
-    let i2 ← i + 1#usize
+    let i2 ← i + 1usize
     let slots1 ← index_mut_back l1
     HashMap.move_elements_loop T ntable1 slots1 i2
   else Result.ok (ntable, slots)
@@ -189,15 +189,15 @@ def HashMap.try_resize (T : Type) (self : HashMap T) : Result (HashMap T) :=
   do
   let max_usize ← Scalar.cast .Usize core_u32_max
   let capacity := alloc.vec.Vec.len (List T) self.slots
-  let n1 ← max_usize / 2#usize
+  let n1 ← max_usize / 2usize
   let (i, i1) := self.max_load_factor
   let i2 ← n1 / i
   if capacity <= i2
   then
     do
-    let i3 ← capacity * 2#usize
+    let i3 ← capacity * 2usize
     let ntable ← HashMap.new_with_capacity T i3 i i1
-    let p ← HashMap.move_elements T ntable self.slots 0#usize
+    let p ← HashMap.move_elements T ntable self.slots 0usize
     let (ntable1, _) := p
     Result.ok
       {
@@ -377,7 +377,7 @@ def HashMap.remove
     Result.ok (none, { self with slots := v })
   | some x1 =>
     do
-    let i1 ← self.num_entries - 1#usize
+    let i1 ← self.num_entries - 1usize
     let v ← index_mut_back l1
     Result.ok (some x1, { self with num_entries := i1, slots := v })
 
@@ -395,37 +395,37 @@ def insert_on_disk
 def test1 : Result Unit :=
   do
   let hm ← HashMap.new U64
-  let hm1 ← HashMap.insert U64 hm 0#usize 42#u64
-  let hm2 ← HashMap.insert U64 hm1 128#usize 18#u64
-  let hm3 ← HashMap.insert U64 hm2 1024#usize 138#u64
-  let hm4 ← HashMap.insert U64 hm3 1056#usize 256#u64
-  let i ← HashMap.get U64 hm4 128#usize
-  if i = 18#u64
+  let hm1 ← HashMap.insert U64 hm 0usize 42u64
+  let hm2 ← HashMap.insert U64 hm1 128usize 18u64
+  let hm3 ← HashMap.insert U64 hm2 1024usize 138u64
+  let hm4 ← HashMap.insert U64 hm3 1056usize 256u64
+  let i ← HashMap.get U64 hm4 128usize
+  if i = 18u64
   then
     do
-    let (_, get_mut_back) ← HashMap.get_mut U64 hm4 1024#usize
-    let hm5 ← get_mut_back 56#u64
-    let i1 ← HashMap.get U64 hm5 1024#usize
-    if i1 = 56#u64
+    let (_, get_mut_back) ← HashMap.get_mut U64 hm4 1024usize
+    let hm5 ← get_mut_back 56u64
+    let i1 ← HashMap.get U64 hm5 1024usize
+    if i1 = 56u64
     then
       do
-      let (x, hm6) ← HashMap.remove U64 hm5 1024#usize
+      let (x, hm6) ← HashMap.remove U64 hm5 1024usize
       match x with
       | none => Result.fail .panic
       | some x1 =>
-        if x1 = 56#u64
+        if x1 = 56u64
         then
           do
-          let i2 ← HashMap.get U64 hm6 0#usize
-          if i2 = 42#u64
+          let i2 ← HashMap.get U64 hm6 0usize
+          if i2 = 42u64
           then
             do
-            let i3 ← HashMap.get U64 hm6 128#usize
-            if i3 = 18#u64
+            let i3 ← HashMap.get U64 hm6 128usize
+            if i3 = 18u64
             then
               do
-              let i4 ← HashMap.get U64 hm6 1056#usize
-              if i4 = 256#u64
+              let i4 ← HashMap.get U64 hm6 1056usize
+              if i4 = 256u64
               then Result.ok ()
               else Result.fail .panic
             else Result.fail .panic

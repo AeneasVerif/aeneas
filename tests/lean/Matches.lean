@@ -9,8 +9,8 @@ namespace matches
    Source: 'tests/src/matches.rs', lines 4:0-4:27 -/
 def match_u32 (x : U32) : Result U32 :=
   match x with
-  | 0#u32 => Result.ok 0#u32
-  | 1#u32 => Result.ok 1#u32
-  | _ => Result.ok 2#u32
+  | 0u32 => Result.ok 0u32
+  | 1u32 => Result.ok 1u32
+  | _ => Result.ok 2u32
 
 end matches

@@ -7,7 +7,7 @@ namespace constants
 
 /- [constants::X0]
    Source: 'tests/src/constants.rs', lines 8:0-8:17 -/
-def X0_body : Result U32 := Result.ok 0#u32
+def X0_body : Result U32 := Result.ok 0u32
 def X0 : U32 := eval_global X0_body
 
 /- [constants::X1]
@@ -17,17 +17,17 @@ def X1 : U32 := eval_global X1_body
 
 /- [constants::X2]
    Source: 'tests/src/constants.rs', lines 13:0-13:17 -/
-def X2_body : Result U32 := Result.ok 3#u32
+def X2_body : Result U32 := Result.ok 3u32
 def X2 : U32 := eval_global X2_body
 
 /- [constants::incr]:
    Source: 'tests/src/constants.rs', lines 20:0-20:32 -/
 def incr (n : U32) : Result U32 :=
-  n + 1#u32
+  n + 1u32
 
 /- [constants::X3]
    Source: 'tests/src/constants.rs', lines 18:0-18:17 -/
-def X3_body : Result U32 := incr 32#u32
+def X3_body : Result U32 := incr 32u32
 def X3 : U32 := eval_global X3_body
 
 /- [constants::mk_pair0]:
@@ -48,22 +48,22 @@ def mk_pair1 (x : U32) (y : U32) : Result (Pair U32 U32) :=
 
 /- [constants::P0]
    Source: 'tests/src/constants.rs', lines 34:0-34:24 -/
-def P0_body : Result (U32 × U32) := mk_pair0 0#u32 1#u32
+def P0_body : Result (U32 × U32) := mk_pair0 0u32 1u32
 def P0 : (U32 × U32) := eval_global P0_body
 
 /- [constants::P1]
    Source: 'tests/src/constants.rs', lines 35:0-35:28 -/
-def P1_body : Result (Pair U32 U32) := mk_pair1 0#u32 1#u32
+def P1_body : Result (Pair U32 U32) := mk_pair1 0u32 1u32
 def P1 : Pair U32 U32 := eval_global P1_body
 
 /- [constants::P2]
    Source: 'tests/src/constants.rs', lines 36:0-36:24 -/
-def P2_body : Result (U32 × U32) := Result.ok (0#u32, 1#u32)
+def P2_body : Result (U32 × U32) := Result.ok (0u32, 1u32)
 def P2 : (U32 × U32) := eval_global P2_body
 
 /- [constants::P3]
    Source: 'tests/src/constants.rs', lines 37:0-37:28 -/
-def P3_body : Result (Pair U32 U32) := Result.ok { x := 0#u32, y := 1#u32 }
+def P3_body : Result (Pair U32 U32) := Result.ok { x := 0u32, y := 1u32 }
 def P3 : Pair U32 U32 := eval_global P3_body
 
 /- [constants::Wrap]
@@ -78,7 +78,7 @@ def Wrap.new (T : Type) (value : T) : Result (Wrap T) :=
 
 /- [constants::Y]
    Source: 'tests/src/constants.rs', lines 44:0-44:22 -/
-def Y_body : Result (Wrap I32) := Wrap.new I32 2#i32
+def Y_body : Result (Wrap I32) := Wrap.new I32 2i32
 def Y : Wrap I32 := eval_global Y_body
 
 /- [constants::unwrap_y]:
@@ -93,7 +93,7 @@ def YVAL : I32 := eval_global YVAL_body
 
 /- [constants::get_z1::Z1]
    Source: 'tests/src/constants.rs', lines 65:4-65:17 -/
-def get_z1.Z1_body : Result I32 := Result.ok 3#i32
+def get_z1.Z1_body : Result I32 := Result.ok 3i32
 def get_z1.Z1 : I32 := eval_global get_z1.Z1_body
 
 /- [constants::get_z1]:
@@ -108,7 +108,7 @@ def add (a : I32) (b : I32) : Result I32 :=
 
 /- [constants::Q1]
    Source: 'tests/src/constants.rs', lines 77:0-77:17 -/
-def Q1_body : Result I32 := Result.ok 5#i32
+def Q1_body : Result I32 := Result.ok 5i32
 def Q1 : I32 := eval_global Q1_body
 
 /- [constants::Q2]
@@ -118,7 +118,7 @@ def Q2 : I32 := eval_global Q2_body
 
 /- [constants::Q3]
    Source: 'tests/src/constants.rs', lines 79:0-79:17 -/
-def Q3_body : Result I32 := add Q2 3#i32
+def Q3_body : Result I32 := add Q2 3i32
 def Q3 : I32 := eval_global Q3_body
 
 /- [constants::get_z2]:
@@ -131,7 +131,7 @@ def get_z2 : Result I32 :=
 
 /- [constants::S1]
    Source: 'tests/src/constants.rs', lines 83:0-83:18 -/
-def S1_body : Result U32 := Result.ok 6#u32
+def S1_body : Result U32 := Result.ok 6u32
 def S1 : U32 := eval_global S1_body
 
 /- [constants::S2]
@@ -146,7 +146,7 @@ def S3 : Pair U32 U32 := eval_global S3_body
 
 /- [constants::S4]
    Source: 'tests/src/constants.rs', lines 86:0-86:29 -/
-def S4_body : Result (Pair U32 U32) := mk_pair1 7#u32 8#u32
+def S4_body : Result (Pair U32 U32) := mk_pair1 7u32 8u32
 def S4 : Pair U32 U32 := eval_global S4_body
 
 /- [constants::V]

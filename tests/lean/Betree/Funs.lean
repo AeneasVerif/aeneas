@@ -41,20 +41,20 @@ def betree.store_leaf_node
    Source: 'src/betree.rs', lines 55:0-55:48 -/
 def betree.fresh_node_id (counter : U64) : Result (U64 × U64) :=
   do
-  let counter1 ← counter + 1#u64
+  let counter1 ← counter + 1u64
   Result.ok (counter, counter1)
 
 /- [betree::betree::{betree::betree::NodeIdCounter}::new]:
    Source: 'src/betree.rs', lines 206:4-206:20 -/
 def betree.NodeIdCounter.new : Result betree.NodeIdCounter :=
-  Result.ok { next_node_id := 0#u64 }
+  Result.ok { next_node_id := 0u64 }
 
 /- [betree::betree::{betree::betree::NodeIdCounter}::fresh_id]:
    Source: 'src/betree.rs', lines 210:4-210:36 -/
 def betree.NodeIdCounter.fresh_id
   (self : betree.NodeIdCounter) : Result (U64 × betree.NodeIdCounter) :=
   do
-  let i ← self.next_node_id + 1#u64
+  let i ← self.next_node_id + 1u64
   Result.ok (self.next_node_id, { next_node_id := i })
 
 /- [betree::betree::upsert_update]:
@@ -65,7 +65,7 @@ def betree.upsert_update
   | none =>
     match st with
     | betree.UpsertFunState.Add v => Result.ok v
-    | betree.UpsertFunState.Sub _ => Result.ok 0#u64
+    | betree.UpsertFunState.Sub _ => Result.ok 0u64
   | some prev1 =>
     match st with
     | betree.UpsertFunState.Add v =>
@@ -77,7 +77,7 @@ def betree.upsert_update
     | betree.UpsertFunState.Sub v =>
       if prev1 >= v
       then prev1 - v
-      else Result.ok 0#u64
+      else Result.ok 0u64
 
 /- [betree::betree::{betree::betree::List<T>#1}::len]: loop 0:
    Source: 'src/betree.rs', lines 276:4-284:5 -/
@@ -86,14 +86,14 @@ divergent def betree.List.len_loop
   match self with
   | betree.List.Cons _ tl =>
     do
-    let len1 ← len + 1#u64
+    let len1 ← len + 1u64
     betree.List.len_loop T tl len1
   | betree.List.Nil => Result.ok len
 
 /- [betree::betree::{betree::betree::List<T>#1}::len]:
    Source: 'src/betree.rs', lines 276:4-276:24 -/
 def betree.List.len (T : Type) (self : betree.List T) : Result U64 :=
-  betree.List.len_loop T self 0#u64
+  betree.List.len_loop T self 0u64
 
 /- [betree::betree::{betree::betree::List<T>#1}::reverse]: loop 0:
    Source: 'src/betree.rs', lines 304:4-312:5 -/
@@ -118,12 +118,12 @@ divergent def betree.List.split_at_loop
   (T : Type) (n : U64) (beg : betree.List T) (self : betree.List T) :
   Result ((betree.List T) × (betree.List T))
   :=
-  if n > 0#u64
+  if n > 0u64
   then
     match self with
     | betree.List.Cons hd tl =>
       do
-      let n1 ← n - 1#u64
+      let n1 ← n - 1u64
       betree.List.split_at_loop T n1 (betree.List.Cons hd beg) tl
     | betree.List.Nil => Result.fail .panic
   else do
@@ -706,7 +706,7 @@ divergent def betree.Node.apply_messages
     let (st1, content) ← betree.load_leaf_node node.id st
     let content1 ← betree.Node.apply_messages_to_leaf content msgs
     let len ← betree.List.len (U64 × U64) content1
-    let i ← 2#u64 * params.split_size
+    let i ← 2u64 * params.split_size
     if len >= i
     then
       do
@@ -751,7 +751,7 @@ def betree.BeTree.new
     {
       params := { min_flush_size := min_flush_size, split_size := split_size },
       node_id_cnt := node_id_cnt1,
-      root := (betree.Node.Leaf { id := id, size := 0#u64 })
+      root := (betree.Node.Leaf { id := id, size := 0u64 })
     })
 
 /- [betree::betree::{betree::betree::BeTree#6}::apply]:
