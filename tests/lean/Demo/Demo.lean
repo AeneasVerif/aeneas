@@ -22,7 +22,7 @@ def choose
 def mul2_add1 (x : U32) : Result U32 :=
   do
   let i ← x + x
-  i + 1u32
+  i + 1#u32
 
 /- [demo::use_mul2_add1]:
    Source: 'tests/src/demo.rs', lines 19:0-19:43 -/
@@ -34,13 +34,13 @@ def use_mul2_add1 (x : U32) (y : U32) : Result U32 :=
 /- [demo::incr]:
    Source: 'tests/src/demo.rs', lines 23:0-23:31 -/
 def incr (x : U32) : Result U32 :=
-  x + 1u32
+  x + 1#u32
 
 /- [demo::use_incr]:
    Source: 'tests/src/demo.rs', lines 27:0-27:17 -/
 def use_incr : Result Unit :=
   do
-  let x ← incr 0u32
+  let x ← incr 0#u32
   let x1 ← incr x
   let _ ← incr x1
   Result.ok ()
@@ -56,10 +56,10 @@ inductive CList (T : Type) :=
 divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
-    if i = 0u32
+    if i = 0#u32
     then Result.ok x
     else do
-         let i1 ← i - 1u32
+         let i1 ← i - 1#u32
          list_nth T tl i1
   | CList.CNil => Result.fail .panic
 
@@ -71,13 +71,13 @@ divergent def list_nth_mut
   :=
   match l with
   | CList.CCons x tl =>
-    if i = 0u32
+    if i = 0#u32
     then
       let back := fun ret => Result.ok (CList.CCons ret tl)
       Result.ok (x, back)
     else
       do
-      let i1 ← i - 1u32
+      let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut T tl i1
       let back :=
         fun ret =>
@@ -95,13 +95,13 @@ divergent def list_nth_mut1_loop
   :=
   match l with
   | CList.CCons x tl =>
-    if i = 0u32
+    if i = 0#u32
     then
       let back := fun ret => Result.ok (CList.CCons ret tl)
       Result.ok (x, back)
     else
       do
-      let i1 ← i - 1u32
+      let i1 ← i - 1#u32
       let (t, back) ← list_nth_mut1_loop T tl i1
       let back1 :=
         fun ret => do
@@ -121,12 +121,12 @@ def list_nth_mut1
 /- [demo::i32_id]:
    Source: 'tests/src/demo.rs', lines 82:0-82:28 -/
 divergent def i32_id (i : I32) : Result I32 :=
-  if i = 0i32
-  then Result.ok 0i32
+  if i = 0#i32
+  then Result.ok 0#i32
   else do
-       let i1 ← i - 1i32
+       let i1 ← i - 1#i32
        let i2 ← i32_id i1
-       i2 + 1i32
+       i2 + 1#i32
 
 /- [demo::list_tail]:
    Source: 'tests/src/demo.rs', lines 90:0-90:64 -/
@@ -155,7 +155,7 @@ structure Counter (Self : Type) where
    Source: 'tests/src/demo.rs', lines 104:4-104:31 -/
 def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
   do
-  let self1 ← self + 1usize
+  let self1 ← self + 1#usize
   Result.ok (self, self1)
 
 /- Trait implementation: [demo::{(demo::Counter for usize)}]

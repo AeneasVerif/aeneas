@@ -8,14 +8,14 @@ namespace paper
 /- [paper::ref_incr]:
    Source: 'tests/src/paper.rs', lines 7:0-7:28 -/
 def ref_incr (x : I32) : Result I32 :=
-  x + 1i32
+  x + 1#i32
 
 /- [paper::test_incr]:
    Source: 'tests/src/paper.rs', lines 11:0-11:18 -/
 def test_incr : Result Unit :=
   do
-  let x ← ref_incr 0i32
-  if x = 1i32
+  let x ← ref_incr 0#i32
+  if x = 1#i32
   then Result.ok ()
   else Result.fail .panic
 
@@ -38,14 +38,14 @@ def choose
    Source: 'tests/src/paper.rs', lines 26:0-26:20 -/
 def test_choose : Result Unit :=
   do
-  let (z, choose_back) ← choose I32 true 0i32 0i32
-  let z1 ← z + 1i32
-  if z1 = 1i32
+  let (z, choose_back) ← choose I32 true 0#i32 0#i32
+  let z1 ← z + 1#i32
+  if z1 = 1#i32
   then
     do
     let (x, y) ← choose_back z1
-    if x = 1i32
-    then if y = 0i32
+    if x = 1#i32
+    then if y = 0#i32
          then Result.ok ()
          else Result.fail .panic
     else Result.fail .panic
@@ -66,13 +66,13 @@ divergent def list_nth_mut
   (T : Type) (l : List T) (i : U32) : Result (T × (T → Result (List T))) :=
   match l with
   | List.Cons x tl =>
-    if i = 0u32
+    if i = 0#u32
     then
       let back := fun ret => Result.ok (List.Cons ret tl)
       Result.ok (x, back)
     else
       do
-      let i1 ← i - 1u32
+      let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut T tl i1
       let back :=
         fun ret =>
@@ -89,19 +89,19 @@ divergent def sum (l : List I32) : Result I32 :=
   | List.Cons x tl => do
                       let i ← sum tl
                       x + i
-  | List.Nil => Result.ok 0i32
+  | List.Nil => Result.ok 0#i32
 
 /- [paper::test_nth]:
    Source: 'tests/src/paper.rs', lines 71:0-71:17 -/
 def test_nth : Result Unit :=
   do
-  let l := List.Cons 3i32 List.Nil
-  let l1 := List.Cons 2i32 l
-  let (x, list_nth_mut_back) ← list_nth_mut I32 (List.Cons 1i32 l1) 2u32
-  let x1 ← x + 1i32
+  let l := List.Cons 3#i32 List.Nil
+  let l1 := List.Cons 2#i32 l
+  let (x, list_nth_mut_back) ← list_nth_mut I32 (List.Cons 1#i32 l1) 2#u32
+  let x1 ← x + 1#i32
   let l2 ← list_nth_mut_back x1
   let i ← sum l2
-  if i = 7i32
+  if i = 7#i32
   then Result.ok ()
   else Result.fail .panic
 
@@ -114,7 +114,7 @@ def call_choose (p : (U32 × U32)) : Result U32 :=
   do
   let (px, py) := p
   let (pz, choose_back) ← choose U32 true px py
-  let pz1 ← pz + 1u32
+  let pz1 ← pz + 1#u32
   let (px1, _) ← choose_back pz1
   Result.ok px1
 

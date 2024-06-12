@@ -148,7 +148,7 @@ structure ToType (Self T : Type) where
 /- [traits::{(traits::ToType<bool> for u64)#5}::to_type]:
    Source: 'tests/src/traits.rs', lines 94:4-94:28 -/
 def ToTypeU64Bool.to_type (self : U64) : Result Bool :=
-  Result.ok (self > 0u64)
+  Result.ok (self > 0#u64)
 
 /- Trait implementation: [traits::{(traits::ToType<bool> for u64)#5}]
    Source: 'tests/src/traits.rs', lines 93:0-93:25 -/
@@ -202,7 +202,7 @@ structure TestType.test.TestTrait (Self : Type) where
    Source: 'tests/src/traits.rs', lines 140:12-140:34 -/
 def TestType.test.TestTraittraitsTestTypetestTestType1.test
   (self : TestType.test.TestType1) : Result Bool :=
-  Result.ok (self > 1u64)
+  Result.ok (self > 1#u64)
 
 /- Trait implementation: [traits::{traits::TestType<T>#6}::test::{(traits::{traits::TestType<T>#6}::test::TestTrait for traits::{traits::TestType<T>#6}::test::TestType1)}]
    Source: 'tests/src/traits.rs', lines 139:8-139:36 -/
@@ -217,8 +217,8 @@ def TestType.test
   (T : Type) (ToU64Inst : ToU64 T) (self : TestType T) (x : T) : Result Bool :=
   do
   let x1 ← ToU64Inst.to_u64 x
-  if x1 > 0u64
-  then TestType.test.TestTraittraitsTestTypetestTestType1.test 0u64
+  if x1 > 0#u64
+  then TestType.test.TestTraittraitsTestTypetestTestType1.test 0#u64
   else Result.ok false
 
 /- [traits::BoolWrapper]
@@ -243,7 +243,7 @@ def ToTypetraitsBoolWrapperT (T : Type) (ToTypeBoolTInst : ToType Bool T) :
 /- [traits::WithConstTy::LEN2]
    Source: 'tests/src/traits.rs', lines 165:4-165:21 -/
 def WithConstTy.LEN2_default_body (Self : Type) (LEN : Usize) : Result Usize :=
-  Result.ok 32usize
+  Result.ok 32#usize
 def WithConstTy.LEN2_default (Self : Type) (LEN : Usize) : Usize :=
   eval_global (WithConstTy.LEN2_default_body Self LEN)
 
@@ -259,19 +259,19 @@ structure WithConstTy (Self : Type) (LEN : Usize) where
 
 /- [traits::{(traits::WithConstTy<32: usize> for bool)#8}::LEN1]
    Source: 'tests/src/traits.rs', lines 176:4-176:21 -/
-def WithConstTyBool32.LEN1_body : Result Usize := Result.ok 12usize
+def WithConstTyBool32.LEN1_body : Result Usize := Result.ok 12#usize
 def WithConstTyBool32.LEN1 : Usize := eval_global WithConstTyBool32.LEN1_body
 
 /- [traits::{(traits::WithConstTy<32: usize> for bool)#8}::f]:
    Source: 'tests/src/traits.rs', lines 181:4-181:39 -/
-def WithConstTyBool32.f (i : U64) (a : Array U8 32usize) : Result U64 :=
+def WithConstTyBool32.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
   Result.ok i
 
 /- Trait implementation: [traits::{(traits::WithConstTy<32: usize> for bool)#8}]
    Source: 'tests/src/traits.rs', lines 175:0-175:29 -/
-def WithConstTyBool32 : WithConstTy Bool 32usize := {
+def WithConstTyBool32 : WithConstTy Bool 32#usize := {
   LEN1 := WithConstTyBool32.LEN1
-  LEN2 := WithConstTy.LEN2_default Bool 32usize
+  LEN2 := WithConstTy.LEN2_default Bool 32#usize
   V := U8
   W := U64
   W_clause_0 := ToU64U64
@@ -312,7 +312,7 @@ def test_where1 (T : Type) (_x : T) : Result Unit :=
 /- [traits::test_where2]:
    Source: 'tests/src/traits.rs', lines 195:0-195:57 -/
 def test_where2
-  (T : Type) (WithConstTyT32Inst : WithConstTy T 32usize) (_x : U32) :
+  (T : Type) (WithConstTyT32Inst : WithConstTy T 32#usize) (_x : U32) :
   Result Unit
   :=
   Result.ok ()
@@ -489,7 +489,7 @@ def TraitArray (T : Type) (N : Usize) : Trait (Array T N) := {
    Source: 'tests/src/traits.rs', lines 320:4-320:20 -/
 def TraittraitsWrapper.LEN_body (T : Type) (TraitInst : Trait T)
   : Result Usize :=
-  Result.ok 0usize
+  Result.ok 0#usize
 def TraittraitsWrapper.LEN (T : Type) (TraitInst : Trait T) : Usize :=
   eval_global (TraittraitsWrapper.LEN_body T TraitInst)
 
@@ -522,7 +522,7 @@ inductive core.result.Result (T E : Type) :=
    Source: 'tests/src/traits.rs', lines 333:4-333:33 -/
 def Foo.FOO_body (T U : Type) (TraitInst : Trait T)
   : Result (core.result.Result T I32) :=
-  Result.ok (core.result.Result.Err 0i32)
+  Result.ok (core.result.Result.Err 0#i32)
 def Foo.FOO (T U : Type) (TraitInst : Trait T) : core.result.Result T I32 :=
   eval_global (Foo.FOO_body T U TraitInst)
 
