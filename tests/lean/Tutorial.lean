@@ -17,7 +17,7 @@ namespace Tutorial
 
 def mul2_add1 (x : U32) : Result U32 := do
   let x1 ← x + x
-  let x2 ← x1 + 1#u32
+  let x2 ← x1 + 1u32
   ok x2
 
 /- There are several things to note.
@@ -27,7 +27,7 @@ def mul2_add1 (x : U32) : Result U32 := do
    Because Rust programs manipulate machine integers which occupy a fixed
    size in memory, we model integers by using types like [U32], which is
    the type of integers which take their values between 0 and 2^32 - 1 (inclusive).
-   [1#u32] is simply the constant 1 (seen as a [U32]).
+   [1u32] is simply the constant 1 (seen as a [U32]).
 
    You can see a definition or its type by using the [#print] and [#check] commands.
    It is also possible to jump to definitions (right-click + "Go to Definition"
@@ -229,10 +229,10 @@ open CList
 divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CCons x tl =>
-    if i = 0#u32
+    if i = 0u32
     then ok x
     else do
-      let i1 ← i - 1#u32
+      let i1 ← i - 1u32
       list_nth T tl i1
   | CNil => fail Error.panic
 
@@ -285,9 +285,9 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
     simp only []
     -- Perform a case disjunction on [i].
     -- The notation [hi : ...] allows us to introduce an assumption in the
-    -- context, to remember the fact that in the branches we have [i = 0#u32]
-    -- and [¬ i = 0#u32].
-    if hi: i = 0#u32 then
+    -- context, to remember the fact that in the branches we have [i = 0u32]
+    -- and [¬ i = 0u32].
+    if hi: i = 0u32 then
       -- We can finish the proof simply by using the simplifier.
       -- We decompose the proof into several calls on purpose, so that it is
       -- easier to understand what is going on.
@@ -348,17 +348,17 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
    annotates it with the [divergent] keyword.
  -/
 divergent def i32_id (x : I32) : Result I32 :=
-  if x = 0#i32 then ok 0#i32
+  if x = 0i32 then ok 0i32
   else do
-    let x1 ← x - 1#i32
+    let x1 ← x - 1i32
     let x2 ← i32_id x1
-    x2 + 1#i32
+    x2 + 1i32
 
 /- We can easily prove that [i32_id] behaves like the identity on positive inputs -/
 theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
   ∃ y, i32_id x = ok y ∧ x.val = y.val := by
   rw [i32_id]
-  if hx : x = 0#i32 then
+  if hx : x = 0i32 then
     simp_all
   else
     simp [hx]

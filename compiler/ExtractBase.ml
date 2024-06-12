@@ -1016,6 +1016,8 @@ let keywords () =
           "where";
           "with";
         ]
+        @ (* This comes from the scalar notations: `1u32`, etc. *)
+        List.map StringUtils.lowercase_first_letter all_int_names
     | HOL4 ->
         [
           "Axiom";
