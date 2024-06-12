@@ -313,13 +313,13 @@ theorem Scalar.bound_suffices (ty : ScalarTy) (x : Int) :
   apply And.intro <;> have hmin := Scalar.cMin_bound ty <;> have hmax := Scalar.cMax_bound ty <;> linarith
 
 /- [match_pattern] attribute: allows to us `Scalar.ofIntCore` inside of patterns.
-   This is particularly useful once we introduce notations like `u32` (which
+   This is particularly useful once we introduce notations like `#u32` (which
    desugards to `Scalar.ofIntCore`) as it allows to write expressions like this:
    Example:
    ```
    match x with
-   | 0u32 => ...
-   | 1u32 => ...
+   | 0#u32 => ...
+   | 1#u32 => ...
    | ...
    ```
  -/
@@ -328,7 +328,7 @@ theorem Scalar.bound_suffices (ty : ScalarTy) (x : Int) :
   { val := x, hmin := h.left, hmax := h.right }
 
 -- The definitions below are used later to introduce nice syntax for constants,
--- like `1u32`. We are reusing the technique described here: https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/Different.20elaboration.20inside.2Foutside.20of.20match.20patterns/near/425455284
+-- like `1#u32`. We are reusing the technique described here: https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/Different.20elaboration.20inside.2Foutside.20of.20match.20patterns/near/425455284
 
 class InBounds (ty : ScalarTy) (x : Int) :=
   hInBounds : Scalar.cMin ty ≤ x ∧ x ≤ Scalar.cMax ty
@@ -1281,38 +1281,38 @@ def U128.ofIntCore  := @Scalar.ofIntCore .U128
 @[match_pattern] abbrev U64.ofInt   := @Scalar.ofInt .U64
 @[match_pattern] abbrev U128.ofInt  := @Scalar.ofInt .U128
 
-postfix:max "isize" => Isize.ofInt
-postfix:max "i8"    => I8.ofInt
-postfix:max "i16"   => I16.ofInt
-postfix:max "i32"   => I32.ofInt
-postfix:max "i64"   => I64.ofInt
-postfix:max "i128"  => I128.ofInt
-postfix:max "usize" => Usize.ofInt
-postfix:max "u8"    => U8.ofInt
-postfix:max "u16"   => U16.ofInt
-postfix:max "u32"   => U32.ofInt
-postfix:max "u64"   => U64.ofInt
-postfix:max "u128"  => U128.ofInt
+postfix:max "#isize" => Isize.ofInt
+postfix:max "#i8"    => I8.ofInt
+postfix:max "#i16"   => I16.ofInt
+postfix:max "#i32"   => I32.ofInt
+postfix:max "#i64"   => I64.ofInt
+postfix:max "#i128"  => I128.ofInt
+postfix:max "#usize" => Usize.ofInt
+postfix:max "#u8"    => U8.ofInt
+postfix:max "#u16"   => U16.ofInt
+postfix:max "#u32"   => U32.ofInt
+postfix:max "#u64"   => U64.ofInt
+postfix:max "#u128"  => U128.ofInt
 
 /- Testing the notations -/
-example := 0u32
-example := 1u32
-example := 1i32
-example := 0isize
-example := (-1)isize
+example := 0#u32
+example := 1#u32
+example := 1#i32
+example := 0#isize
+example := (-1)#isize
 example (x : U32) : Bool :=
   match x with
-  | 0u32 => true
+  | 0#u32 => true
   | _ => false
 
 example (x : U32) : Bool :=
   match x with
-  | 1u32 => true
+  | 1#u32 => true
   | _ => false
 
 example (x : I32) : Bool :=
   match x with
-  | (-1)i32 => true
+  | (-1)#i32 => true
   | _ => false
 
 -- Notation for pattern matching
@@ -1334,7 +1334,7 @@ example {ty} (x : Scalar ty) : Bool :=
   | _ => false
 
 -- Testing the notations
-example : Result Usize := 0usize + 1usize
+example : Result Usize := 0#usize + 1#usize
 
 -- TODO: factor those lemmas out
 @[simp] theorem Scalar.ofInt_val_eq {ty} (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : (Scalar.ofIntCore x h).val = x := by
