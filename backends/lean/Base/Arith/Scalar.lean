@@ -80,4 +80,14 @@ example (x : Int) (h0 : 0 ≤ x) (h1 : x ≤ U32.max) :
 example (x : U32) (h0 : ¬ x = U32.ofInt 0) : 0 < x.val := by
   scalar_tac
 
+/- See this: https://aeneas-verif.zulipchat.com/#narrow/stream/349819-general/topic/U64.20trouble/near/444049757
+
+   We solved it by removing the instance `OfNat` for `Scalar`.
+   Note however that we could also solve it with a simplification lemma.
+   However, after testing, we noticed we could only apply such a lemma with
+   the rewriting tactic (not the simplifier), probably because of the use
+   of typeclasses. -/
+example {u: U64} (h1: (u : Int) < 2): (u : Int) = 0 ∨ (u : Int) = 1 := by
+  scalar_tac
+
 end Arith

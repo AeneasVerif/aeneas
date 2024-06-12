@@ -351,10 +351,17 @@ instance [Decide (Scalar.cMin ty ≤ v ∧ v ≤ Scalar.cMax ty)] : InBounds ty 
 @[simp] abbrev Scalar.check_bounds (ty : ScalarTy) (x : Int) : Bool :=
   (Scalar.cMin ty ≤ x || Scalar.min ty ≤ x) ∧ (x ≤ Scalar.cMax ty || x ≤ Scalar.max ty)
 
+/- Discussion:
+   This coercion can be slightly annoying at times, because if we write
+   something like `u = 3` (where `u` is, for instance, as `U32`), then instead of
+   coercing `u` to `Int`, Lean will lift `3` to `U32`).
+   For now we deactivate it.
+
 -- TODO(raitobezarius): the inbounds constraint is a bit ugly as we can pretty trivially
 -- discharge the lhs on ≥ 0.
 instance {ty: ScalarTy} [InBounds ty (Int.ofNat n)]: OfNat (Scalar ty) (n: ℕ) where
   ofNat := Scalar.ofInt n
+-/
 
 theorem Scalar.check_bounds_imp_in_bounds {ty : ScalarTy} {x : Int}
   (h: Scalar.check_bounds ty x) :
