@@ -783,8 +783,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     fields
                 in
                 let cons_name =
-                  ctx_compute_struct_constructor def.item_meta.span ctx
-                    def.llbc_name
+                  ctx_compute_struct_constructor def ctx def.llbc_name
                 in
                 (field_names, cons_name)
             | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
@@ -823,9 +822,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
                     let variant_name =
-                      match variant.item_meta.rename with
-                      | Some name -> name
-                      | None -> variant.variant_name
+                      Option.value variant.item_meta.rename
+                        ~default:variant.variant_name
                     in
                     let name =
                       ctx_compute_variant_name def.item_meta.span ctx

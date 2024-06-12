@@ -1398,9 +1398,10 @@ let ctx_compute_type_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
   flatten_name (ctx_compute_simple_type_name span ctx name)
 
 (** Provided a basename, compute a type name. *)
-let ctx_compute_type_decl_name_aux (span : Meta.span) (ctx : extraction_ctx)
-    (name : llbc_name) =
-  let name = ctx_compute_type_name_no_suffix span ctx name in
+let ctx_compute_type_decl_name_aux (item_meta : Meta.item_meta)
+    (ctx : extraction_ctx) (name : llbc_name) =
+  let name = rename_llbc_name item_meta name in
+  let name = ctx_compute_type_name_no_suffix item_meta.span ctx name in
   match backend () with
   | FStar -> StringUtils.lowercase_first_letter (name ^ "_t")
   | Coq | HOL4 -> name ^ "_t"
@@ -1417,7 +1418,7 @@ let ctx_compute_type_decl_name_aux (span : Meta.span) (ctx : extraction_ctx)
     access then causes trouble because not all provers accept syntax like
     [x.3] where [x] is a tuple.
  *)
-let ctx_compute_field_name (def : type_decl) (item_meta : Meta.item_meta)
+let ctx_compute_field_name (def : type_decl) (field_meta : Meta.item_meta)
     (ctx : extraction_ctx) (def_name : llbc_name) (field_id : FieldId.id)
     (field_name : string option) : string =
   let field_name_s =
@@ -1427,12 +1428,12 @@ let ctx_compute_field_name (def : type_decl) (item_meta : Meta.item_meta)
         (* TODO: extract structs with no field names to tuples *)
         FieldId.to_string field_id
   in
+  let field_name_s = Option.value field_meta.rename ~default:field_name_s in
   if !Config.record_fields_short_names then
     if field_name = None then (* TODO: this is a bit ugly *)
       "_" ^ field_name_s
     else field_name_s
   else
-    let def_name = rename_llbc_name item_meta def_name in
     let def_name =
       ctx_compute_type_name_no_suffix def.item_meta.span ctx def_name
       ^ "_" ^ field_name_s
@@ -1467,9 +1468,9 @@ let ctx_compute_variant_name (span : Meta.span) (ctx : extraction_ctx)
     Inputs:
     - type name
 *)
-let ctx_compute_struct_constructor (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
     (basename : llbc_name) : string =
-  let tname = ctx_compute_type_decl_name_aux span ctx basename in
+  let tname = ctx_compute_type_decl_name_aux def.item_meta ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
 let ctx_compute_fun_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
@@ -1533,7 +1534,7 @@ let ctx_compute_fun_name (span : Meta.span) (ctx : extraction_ctx)
 let ctx_compute_trait_decl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     : string =
   let llbc_name = rename_llbc_name trait_decl.item_meta trait_decl.llbc_name in
-  ctx_compute_type_decl_name_aux trait_decl.item_meta.span ctx llbc_name
+  ctx_compute_type_decl_name_aux trait_decl.item_meta ctx llbc_name
 
 let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (trait_impl : trait_impl) : string =
@@ -2054,5 +2055,4 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =
-  let llbc_name = rename_llbc_name def.item_meta def.llbc_name in
-  ctx_compute_type_decl_name_aux def.item_meta.span ctx llbc_name
+  ctx_compute_type_decl_name_aux def.item_meta ctx def.llbc_name
