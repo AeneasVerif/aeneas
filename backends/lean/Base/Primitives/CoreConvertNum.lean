@@ -18,40 +18,40 @@ namespace num -- core.convert.num
 
 -- Conversions
 def FromUsizeBool.from (b : Bool) : Usize :=
-  if b then 1#usize else 0#usize
+  if b then 1usize else 0usize
 
 def FromU8Bool.from (b : Bool) : U8 :=
-  if b then 1#u8 else 0#u8
+  if b then 1u8 else 0u8
 
 def FromU16Bool.from (b : Bool) : U16 :=
-  if b then 1#u16 else 0#u16
+  if b then 1u16 else 0u16
 
 def FromU32Bool.from (b : Bool) : U32 :=
-  if b then 1#u32 else 0#u32
+  if b then 1u32 else 0u32
 
 def FromU64Bool.from (b : Bool) : U64 :=
-  if b then 1#u64 else 0#u64
+  if b then 1u64 else 0u64
 
 def FromU128Bool.from (b : Bool) : U128 :=
-  if b then 1#u128 else 0#u128
+  if b then 1u128 else 0u128
 
 def FromIsizeBool.from (b : Bool) : Isize :=
-  if b then 1#isize else 0#isize
+  if b then 1isize else 0isize
 
 def FromI8Bool.from (b : Bool) : I8 :=
-  if b then 1#i8 else 0#i8
+  if b then 1i8 else 0i8
 
 def FromI16Bool.from (b : Bool) : I16 :=
-  if b then 1#i16 else 0#i16
+  if b then 1i16 else 0i16
 
 def FromI32Bool.from (b : Bool) : I32 :=
-  if b then 1#i32 else 0#i32
+  if b then 1i32 else 0i32
 
 def FromI64Bool.from (b : Bool) : I64 :=
-  if b then 1#i64 else 0#i64
+  if b then 1i64 else 0i64
 
 def FromI128Bool.from (b : Bool) : I128 :=
-  if b then 1#i128 else 0#i128
+  if b then 1i128 else 0i128
 
 def FromUsizeU8.from (x : U8) : Usize := ⟨ x.val, by scalar_tac, by scalar_tac ⟩
 
@@ -259,18 +259,18 @@ def FromI128I128 : core.convert.From I128 I128 := {
 }
 
 -- to_le_bytes
-def core.num.U8.to_le_bytes (x : U8) : Array U8 1#usize := sorry
-def core.num.U16.to_le_bytes (x : U16) : Array U8 2#usize := sorry
-def core.num.U32.to_le_bytes (x : U32) : Array U8 4#usize := sorry
-def core.num.U64.to_le_bytes (x : U64) : Array U8 8#usize := sorry
-def core.num.U128.to_le_bytes (x : U128) : Array U8 128#usize := sorry
+def core.num.U8.to_le_bytes (x : U8) : Array U8 1usize := sorry
+def core.num.U16.to_le_bytes (x : U16) : Array U8 2usize := sorry
+def core.num.U32.to_le_bytes (x : U32) : Array U8 4usize := sorry
+def core.num.U64.to_le_bytes (x : U64) : Array U8 8usize := sorry
+def core.num.U128.to_le_bytes (x : U128) : Array U8 128usize := sorry
 
 -- to_be_bytes
-def core.num.U8.to_be_bytes (x : U8) : Array U8 1#usize := sorry
-def core.num.U16.to_be_bytes (x : U16) : Array U8 2#usize := sorry
-def core.num.U32.to_be_bytes (x : U32) : Array U8 4#usize := sorry
-def core.num.U64.to_be_bytes (x : U64) : Array U8 8#usize := sorry
-def core.num.U128.to_be_bytes (x : U128) : Array U8 128#usize := sorry
+def core.num.U8.to_be_bytes (x : U8) : Array U8 1usize := sorry
+def core.num.U16.to_be_bytes (x : U16) : Array U8 2usize := sorry
+def core.num.U32.to_be_bytes (x : U32) : Array U8 4usize := sorry
+def core.num.U64.to_be_bytes (x : U64) : Array U8 8usize := sorry
+def core.num.U128.to_be_bytes (x : U128) : Array U8 128usize := sorry
 
 end core.convert
 
