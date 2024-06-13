@@ -12,12 +12,13 @@ module T = Types
 
     Inputs:
     - formatter
+    - [is_pattern]: if [true], it means we are generating a (match) pattern
     - [inside]: if [true], the value should be wrapped in parentheses
       if it is made of an application (ex.: [U32 3])
     - the constant value
  *)
-let extract_literal (span : Meta.span) (fmt : F.formatter) (inside : bool)
-    (cv : literal) : unit =
+let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
+    (inside : bool) (cv : literal) : unit =
   match cv with
   | VScalar sv -> (
       match backend () with
@@ -40,8 +41,11 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (inside : bool)
               let iname = int_name sv.int_ty in
               F.pp_print_string fmt ("%" ^ iname)
           | Lean ->
-              let iname = String.lowercase_ascii (int_name sv.int_ty) in
-              F.pp_print_string fmt ("#" ^ iname)
+              (* We don't use the same notation for patterns and regular literals *)
+              if is_pattern then F.pp_print_string fmt "#scalar"
+              else
+                let iname = String.lowercase_ascii (int_name sv.int_ty) in
+                F.pp_print_string fmt ("#" ^ iname)
           | HOL4 -> ()
           | _ -> craise __FILE__ __LINE__ span "Unreachable");
           if print_brackets then F.pp_print_string fmt ")")
@@ -411,7 +415,7 @@ let extract_const_generic (span : Meta.span) (ctx : extraction_ctx)
   | CgGlobal id ->
       let s = ctx_get_global span id ctx in
       F.pp_print_string fmt s
-  | CgValue v -> extract_literal span fmt inside v
+  | CgValue v -> extract_literal span fmt false inside v
   | CgVar id ->
       let s = ctx_get_const_generic_var span id ctx in
       F.pp_print_string fmt s

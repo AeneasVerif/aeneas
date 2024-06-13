@@ -312,38 +312,13 @@ theorem Scalar.bound_suffices (ty : ScalarTy) (x : Int) :
   λ h => by
   apply And.intro <;> have hmin := Scalar.cMin_bound ty <;> have hmax := Scalar.cMax_bound ty <;> linarith
 
-/- [match_pattern] attribute: allows to us `Scalar.ofIntCore` inside of patterns.
-   This is particularly useful once we introduce notations like `#u32` (which
-   desugards to `Scalar.ofIntCore`) as it allows to write expressions like this:
-   Example:
-   ```
-   match x with
-   | 0#u32 => ...
-   | 1#u32 => ...
-   | ...
-   ```
- -/
-@[match_pattern] def Scalar.ofIntCore {ty : ScalarTy} (x : Int)
+def Scalar.ofIntCore {ty : ScalarTy} (x : Int)
   (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : Scalar ty :=
   { val := x, hmin := h.left, hmax := h.right }
 
--- The definitions below are used later to introduce nice syntax for constants,
--- like `1#u32`. We are reusing the technique described here: https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/Different.20elaboration.20inside.2Foutside.20of.20match.20patterns/near/425455284
-
-class InBounds (ty : ScalarTy) (x : Int) :=
-  hInBounds : Scalar.cMin ty ≤ x ∧ x ≤ Scalar.cMax ty
-
--- This trick to trigger reduction for decidable propositions comes from
--- here: https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/instance.20with.20tactic.20autoparam/near/343495807
-class Decide (p : Prop) [Decidable p] : Prop where
-  isTrue : p
-instance : @Decide p (.isTrue h) := @Decide.mk p (_) h
-
-instance [Decide (Scalar.cMin ty ≤ v ∧ v ≤ Scalar.cMax ty)] : InBounds ty v where
-  hInBounds := Decide.isTrue
-
-@[reducible, match_pattern] def Scalar.ofInt {ty : ScalarTy} (x : Int) [InBounds ty x] : Scalar ty :=
-  Scalar.ofIntCore x (Scalar.bound_suffices ty x InBounds.hInBounds)
+@[reducible] def Scalar.ofInt {ty : ScalarTy} (x : Int)
+  (hInBounds : Scalar.cMin ty ≤ x ∧ x ≤ Scalar.cMax ty := by decide) : Scalar ty :=
+  Scalar.ofIntCore x (Scalar.bound_suffices ty x hInBounds)
 
 @[simp] abbrev Scalar.in_bounds (ty : ScalarTy) (x : Int) : Prop :=
   Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty
@@ -351,10 +326,17 @@ instance [Decide (Scalar.cMin ty ≤ v ∧ v ≤ Scalar.cMax ty)] : InBounds ty 
 @[simp] abbrev Scalar.check_bounds (ty : ScalarTy) (x : Int) : Bool :=
   (Scalar.cMin ty ≤ x || Scalar.min ty ≤ x) ∧ (x ≤ Scalar.cMax ty || x ≤ Scalar.max ty)
 
+/- Discussion:
+   This coercion can be slightly annoying at times, because if we write
+   something like `u = 3` (where `u` is, for instance, as `U32`), then instead of
+   coercing `u` to `Int`, Lean will lift `3` to `U32`).
+   For now we deactivate it.
+
 -- TODO(raitobezarius): the inbounds constraint is a bit ugly as we can pretty trivially
 -- discharge the lhs on ≥ 0.
 instance {ty: ScalarTy} [InBounds ty (Int.ofNat n)]: OfNat (Scalar ty) (n: ℕ) where
   ofNat := Scalar.ofInt n
+-/
 
 theorem Scalar.check_bounds_imp_in_bounds {ty : ScalarTy} {x : Int}
   (h: Scalar.check_bounds ty x) :
@@ -405,9 +387,8 @@ theorem Scalar.tryMk_eq (ty : ScalarTy) (x : Int) :
   simp [tryMk, ofOption, tryMkOpt]
   split_ifs <;> simp
 
-instance (ty: ScalarTy) : InBounds ty 0 where
-  hInBounds := by
-    induction ty <;> simp [Scalar.cMax, Scalar.cMin, Scalar.max, Scalar.min] <;> decide
+@[simp] theorem zero_in_cbounds {ty : ScalarTy} : Scalar.cMin ty ≤ 0 ∧ 0 ≤ Scalar.cMax ty := by
+  cases ty <;> simp [Scalar.cMax, Scalar.cMin, Scalar.max, Scalar.min] <;> decide
 
 def Scalar.neg {ty : ScalarTy} (x : Scalar ty) : Result (Scalar ty) := Scalar.tryMk ty (- x.val)
 
@@ -1261,73 +1242,18 @@ def U128.ofIntCore  := @Scalar.ofIntCore .U128
 
 --  ofInt
 -- TODO: typeclass?
-@[match_pattern] abbrev Isize.ofInt := @Scalar.ofInt .Isize
-@[match_pattern] abbrev I8.ofInt    := @Scalar.ofInt .I8
-@[match_pattern] abbrev I16.ofInt   := @Scalar.ofInt .I16
-@[match_pattern] abbrev I32.ofInt   := @Scalar.ofInt .I32
-@[match_pattern] abbrev I64.ofInt   := @Scalar.ofInt .I64
-@[match_pattern] abbrev I128.ofInt  := @Scalar.ofInt .I128
-@[match_pattern] abbrev Usize.ofInt := @Scalar.ofInt .Usize
-@[match_pattern] abbrev U8.ofInt    := @Scalar.ofInt .U8
-@[match_pattern] abbrev U16.ofInt   := @Scalar.ofInt .U16
-@[match_pattern] abbrev U32.ofInt   := @Scalar.ofInt .U32
-@[match_pattern] abbrev U64.ofInt   := @Scalar.ofInt .U64
-@[match_pattern] abbrev U128.ofInt  := @Scalar.ofInt .U128
-
-postfix:max "#isize" => Isize.ofInt
-postfix:max "#i8"    => I8.ofInt
-postfix:max "#i16"   => I16.ofInt
-postfix:max "#i32"   => I32.ofInt
-postfix:max "#i64"   => I64.ofInt
-postfix:max "#i128"  => I128.ofInt
-postfix:max "#usize" => Usize.ofInt
-postfix:max "#u8"    => U8.ofInt
-postfix:max "#u16"   => U16.ofInt
-postfix:max "#u32"   => U32.ofInt
-postfix:max "#u64"   => U64.ofInt
-postfix:max "#u128"  => U128.ofInt
-
-/- Testing the notations -/
-example := 0#u32
-example := 1#u32
-example := 1#i32
-example := 0#isize
-example := (-1)#isize
-example (x : U32) : Bool :=
-  match x with
-  | 0#u32 => true
-  | _ => false
-
-example (x : U32) : Bool :=
-  match x with
-  | 1#u32 => true
-  | _ => false
-
-example (x : I32) : Bool :=
-  match x with
-  | (-1)#i32 => true
-  | _ => false
-
--- Notation for pattern matching
--- We make the precedence looser than the negation.
-notation:70 a:70 "#scalar" => Scalar.mk (a) _ _
-
-example {ty} (x : Scalar ty) : ℤ :=
-  match x with
-  | v#scalar => v
-
-example {ty} (x : Scalar ty) : Bool :=
-  match x with
-  | 1#scalar => true
-  | _ => false
-
-example {ty} (x : Scalar ty) : Bool :=
-  match x with
-  | -(1 : Int)#scalar => true
-  | _ => false
-
--- Testing the notations
-example : Result Usize := 0#usize + 1#usize
+abbrev Isize.ofInt := @Scalar.ofInt .Isize
+abbrev I8.ofInt    := @Scalar.ofInt .I8
+abbrev I16.ofInt   := @Scalar.ofInt .I16
+abbrev I32.ofInt   := @Scalar.ofInt .I32
+abbrev I64.ofInt   := @Scalar.ofInt .I64
+abbrev I128.ofInt  := @Scalar.ofInt .I128
+abbrev Usize.ofInt := @Scalar.ofInt .Usize
+abbrev U8.ofInt    := @Scalar.ofInt .U8
+abbrev U16.ofInt   := @Scalar.ofInt .U16
+abbrev U32.ofInt   := @Scalar.ofInt .U32
+abbrev U64.ofInt   := @Scalar.ofInt .U64
+abbrev U128.ofInt  := @Scalar.ofInt .U128
 
 -- TODO: factor those lemmas out
 @[simp] theorem Scalar.ofInt_val_eq {ty} (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : (Scalar.ofIntCore x h).val = x := by
@@ -1457,18 +1383,18 @@ theorem coe_max {ty: ScalarTy} (a b: Scalar ty): ↑(Max.max a b) = (Max.max (�
 -- Max theory
 -- TODO: do the min theory later on.
 
-theorem Scalar.zero_le_unsigned {ty} (s: ¬ ty.isSigned) (x: Scalar ty): Scalar.ofInt 0 ≤ x := by
+theorem Scalar.zero_le_unsigned {ty} (s: ¬ ty.isSigned) (x: Scalar ty): Scalar.ofInt 0 (by simp) ≤ x := by
   apply (Scalar.le_equiv _ _).2
   convert x.hmin
   cases ty <;> simp [ScalarTy.isSigned] at s <;> simp [Scalar.min]
 
 @[simp]
 theorem Scalar.max_unsigned_left_zero_eq {ty} [s: Fact (¬ ty.isSigned)] (x: Scalar ty):
-  Max.max (Scalar.ofInt 0) x = x := max_eq_right (Scalar.zero_le_unsigned s.out x)
+  Max.max (Scalar.ofInt 0 (by simp)) x = x := max_eq_right (Scalar.zero_le_unsigned s.out x)
 
 @[simp]
 theorem Scalar.max_unsigned_right_zero_eq {ty} [s: Fact (¬ ty.isSigned)] (x: Scalar ty):
-  Max.max x (Scalar.ofInt 0) = x := max_eq_left (Scalar.zero_le_unsigned s.out x)
+  Max.max x (Scalar.ofInt 0 (by simp)) = x := max_eq_left (Scalar.zero_le_unsigned s.out x)
 
 -- Leading zeros
 def core.num.Usize.leading_zeros (x : Usize) : U32 := sorry

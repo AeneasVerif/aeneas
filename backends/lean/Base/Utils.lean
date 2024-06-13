@@ -664,7 +664,7 @@ example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
    Something very annoying is that there is no function which allows to
    initialize a simp context without doing an elaboration - as a consequence
    we write our own here. -/
-def mkSimpCtx (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM Simp.Context := do
   -- Initialize either with the builtin simp theorems or with all the simp theorems
   let simpThms ←
@@ -693,7 +693,7 @@ def mkSimpCtx (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (
         throwError "Not a proposition: {thmName}"
       ) simpThms
   let congrTheorems ← getSimpCongrTheorems
-  pure { simpTheorems := #[simpThms], congrTheorems }
+  pure { config, simpTheorems := #[simpThms], congrTheorems }
 
 inductive Location where
   /-- Apply the tactic everywhere. Same as `Tactic.Location.wildcard` -/
@@ -731,29 +731,90 @@ where
     return usedSimps
 
 /- Call the simp tactic. -/
-def simpAt (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
+def simpAt (simpOnly : Bool) (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
   (loc : Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let ctx ← mkSimpCtx simpOnly declsToUnfold thms hypsToUse
+  let ctx ← mkSimpCtx simpOnly config declsToUnfold thms hypsToUse
   -- Apply the simplifier
   let _ ← customSimpLocation ctx (discharge? := .none) loc
 
 /- Call the dsimp tactic. -/
-def dsimpAt (simpOnly : Bool) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
+def dsimpAt (simpOnly : Bool) (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
   (loc : Tactic.Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let ctx ← mkSimpCtx simpOnly declsToUnfold thms hypsToUse
+  let ctx ← mkSimpCtx simpOnly config declsToUnfold thms hypsToUse
   -- Apply the simplifier
   dsimpLocation ctx loc
 
 -- Call the simpAll tactic
-def simpAll (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def simpAll (config : Simp.Config) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let ctx ← mkSimpCtx false declsToUnfold thms hypsToUse
+  let ctx ← mkSimpCtx false config declsToUnfold thms hypsToUse
   -- Apply the simplifier
   let _ ← Lean.Meta.simpAll (← getMainGoal) ctx
+
+/- Adapted from Elab.Tactic.Rewrite -/
+def rewriteTarget (eqThm : Expr) (symm : Bool) (config : Rewrite.Config := {}) : TacticM Unit := do
+  Term.withSynthesize <| withMainContext do
+    let r ← (← getMainGoal).rewrite (← getMainTarget) eqThm symm (config := config)
+    let mvarId' ← (← getMainGoal).replaceTargetEq r.eNew r.eqProof
+    replaceMainGoal (mvarId' :: r.mvarIds)
+
+/- Adapted from Elab.Tactic.Rewrite -/
+def rewriteLocalDecl (eqThm : Expr) (symm : Bool) (fvarId : FVarId) (config : Rewrite.Config := {}) :
+    TacticM Unit := withMainContext do
+  -- Note: we cannot execute `replaceLocalDecl` inside `Term.withSynthesize`.
+  -- See issues #2711 and #2727.
+  let rwResult ← Term.withSynthesize <| withMainContext do
+    let localDecl ← fvarId.getDecl
+    (← getMainGoal).rewrite localDecl.type eqThm symm (config := config)
+  let replaceResult ← (← getMainGoal).replaceLocalDecl fvarId rwResult.eNew rwResult.eqProof
+  replaceMainGoal (replaceResult.mvarId :: rwResult.mvarIds)
+
+/- Adapted from Elab.Tactic.Rewrite -/
+def rewriteWithThms
+  (thms : List (Bool × Expr))
+  (rewrite : (symm : Bool) → (thm : Expr) → TacticM Unit)
+  : TacticM Unit := do
+  let rec go thms :=
+    match thms with
+    | [] => throwError "Failed to rewrite with any theorem"
+    | (symm, eqThm)::thms =>
+      rewrite symm eqThm <|> go thms
+  go thms
+
+/- Adapted from Elab.Tactic.Rewrite -/
+def evalRewriteSeqAux (cfg : Rewrite.Config) (thms : List (Bool × Expr)) (loc : Tactic.Location) : TacticM Unit :=
+  rewriteWithThms thms fun symm term => do
+    withLocation loc
+      (rewriteLocalDecl term symm · cfg)
+      (rewriteTarget term symm cfg)
+      (throwTacticEx `rewrite · "did not find instance of the pattern in the current goal")
+
+/-- `rpt`: if `true`, repeatedly rewrite -/
+def rewriteAt (cfg : Rewrite.Config) (rpt : Bool)
+  (thms : List (Bool × Name)) (loc : Tactic.Location) : TacticM Unit := do
+  -- Lookup the theorems
+  let lookupThm (x : Bool × Name) : TacticM (List (Bool × Expr)) := do
+    let thName := x.snd
+    let lookupOne (thName : Name) : TacticM (Bool × Expr) := do
+      -- Lookup the theorem and introduce fresh meta-variables for the universes
+      let th ← mkConstWithFreshMVarLevels thName
+      pure (x.fst, th)
+    match ← getEqnsFor? thName (nonRec := true) with
+    | some eqThms => do
+      eqThms.data.mapM lookupOne
+    | none => do
+      pure [← lookupOne thName]
+  let thms ← List.mapM lookupThm thms
+  let thms := thms.flatten
+  -- Rewrite
+  if rpt then
+    Utils.repeatTac (evalRewriteSeqAux cfg thms loc)
+  else
+    evalRewriteSeqAux cfg thms loc
 
 end Utils
