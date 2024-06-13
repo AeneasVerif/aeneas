@@ -8,18 +8,24 @@ namespace Primitives
 
 open Lean Meta Elab Term
 
-macro:max x:term:max noWs "#isize" : term => `(Isize.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#i8"    : term => `(I8.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#i16"   : term => `(I16.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#i32"   : term => `(I32.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#i64"   : term => `(I64.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#i128"  : term => `(I128.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#usize" : term => `(Usize.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#u8"    : term => `(U8.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#u16"   : term => `(U16.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#u32"   : term => `(U32.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#u64"   : term => `(U64.ofInt $x (by scalar_tac))
-macro:max x:term:max noWs "#u128"  : term => `(U128.ofInt $x (by scalar_tac))
+/- Something strange happens here: when we solve the goal with scalar_tac, it
+   sometimes leaves meta-variables in place, which then causes issues when
+   type-checking functions. For instance, it happens when we have const-generics
+   in the translation: the constants contain meta-variables, which are then
+   used in the types, which cause issues later. An example is given below:
+ -/
+macro:max x:term:max noWs "#isize" : term => `(Isize.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#i8"    : term => `(I8.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#i16"   : term => `(I16.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#i32"   : term => `(I32.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#i64"   : term => `(I64.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#i128"  : term => `(I128.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#usize" : term => `(Usize.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#u8"    : term => `(U8.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#u16"   : term => `(U16.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#u32"   : term => `(U32.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#u64"   : term => `(U64.ofInt $x (by first | decide | scalar_tac))
+macro:max x:term:max noWs "#u128"  : term => `(U128.ofInt $x (by first | decide | scalar_tac))
 
 -- Notation for pattern matching
 -- We make the precedence looser than the negation.
@@ -31,6 +37,8 @@ example := 1#u32
 example := 1#i32
 example := 0#isize
 example := (-1)#isize
+
+example := 1#u32
 
 /-
 -- This doesn't work anymore
@@ -85,10 +93,16 @@ example : Result Usize := 0#usize + 1#usize
 -- More complex expressions
 example (x y : Int) (h : 0 ≤ x + y ∧ x + y ≤ 1000) : U32 := (x + y)#u32
 
-section Scalar.Examples
-abbrev NList (a : Type) (x : U32) := { l : List a // l.length = x.val }
+namespace Scalar.Examples
 
-example : NList Int 0#u32 := ⟨ [], by simp ⟩
+  abbrev Array (a : Type) (len : U32) := { l : List a // l.length = len.val }
+
+  -- Checking the syntax
+  example : Array Int 0#u32 := ⟨ [], by simp ⟩
+
+  /- The example below fails if we don't use `decide` in the elaboration
+     of the scalar notation -/
+  example (a : Array (Array Int 32#u32) 32#u32) := a
 
 end Scalar.Examples
 
