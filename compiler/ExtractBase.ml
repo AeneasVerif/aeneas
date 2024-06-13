@@ -1429,6 +1429,7 @@ let ctx_compute_field_name (def : type_decl) (field_meta : Meta.item_meta)
         FieldId.to_string field_id
   in
   let field_name_s = Option.value field_meta.rename ~default:field_name_s in
+  let def_name = rename_llbc_name def.item_meta def_name in
   if !Config.record_fields_short_names then
     if field_name = None then (* TODO: this is a bit ugly *)
       "_" ^ field_name_s

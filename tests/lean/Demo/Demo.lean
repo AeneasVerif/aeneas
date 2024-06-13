@@ -88,7 +88,7 @@ divergent def list_nth_mut
   | CList.CNil => Result.fail .panic
 
 /- [demo::list_nth_mut1]: loop 0:
-   Source: 'tests/src/demo.rs', lines 71:0-80:1 -/
+   Source: 'tests/src/demo.rs', lines 71:0-71:77 -/
 divergent def list_nth_mut1_loop
   (T : Type) (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))

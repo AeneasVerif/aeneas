@@ -18,7 +18,7 @@ Definition hash_key (k : usize) : result usize :=
   Ok k.
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 60:4-66:5 *)
+    Source: 'tests/src/hashmap.rs', lines 60:4-60:76 *)
 Fixpoint hashMap_allocate_slots_loop
   (T : Type) (n : nat) (slots : alloc_vec_Vec (List_t T)) (n1 : usize) :
   result (alloc_vec_Vec (List_t T))
@@ -70,7 +70,7 @@ Definition hashMap_new (T : Type) (n : nat) : result (HashMap_t T) :=
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 90:4-98:5 *)
+    Source: 'tests/src/hashmap.rs', lines 90:4-90:27 *)
 Fixpoint hashMap_clear_loop
   (T : Type) (n : nat) (slots : alloc_vec_Vec (List_t T)) (i : usize) :
   result (alloc_vec_Vec (List_t T))
@@ -113,7 +113,7 @@ Definition hashMap_len (T : Type) (self : HashMap_t T) : result usize :=
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 107:4-124:5 *)
+    Source: 'tests/src/hashmap.rs', lines 107:4-107:71 *)
 Fixpoint hashMap_insert_in_list_loop
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result (bool * (List_t T))
@@ -182,7 +182,7 @@ Definition hashMap_insert_no_resize
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 193:4-206:5 *)
+    Source: 'tests/src/hashmap.rs', lines 193:4-193:72 *)
 Fixpoint hashMap_move_elements_from_list_loop
   (T : Type) (n : nat) (ntable : HashMap_t T) (ls : List_t T) :
   result (HashMap_t T)
@@ -209,7 +209,7 @@ Definition hashMap_move_elements_from_list
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 181:4-190:5 *)
+    Source: 'tests/src/hashmap.rs', lines 181:4-181:95 *)
 Fixpoint hashMap_move_elements_loop
   (T : Type) (n : nat) (ntable : HashMap_t T)
   (slots : alloc_vec_Vec (List_t T)) (i : usize) :
@@ -290,7 +290,7 @@ Definition hashMap_insert
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 216:4-229:5 *)
+    Source: 'tests/src/hashmap.rs', lines 216:4-216:68 *)
 Fixpoint hashMap_contains_key_in_list_loop
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result bool :=
   match n with
@@ -328,7 +328,7 @@ Definition hashMap_contains_key
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 234:4-247:5 *)
+    Source: 'tests/src/hashmap.rs', lines 234:4-234:70 *)
 Fixpoint hashMap_get_in_list_loop
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result T :=
   match n with
@@ -364,7 +364,7 @@ Definition hashMap_get
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 255:4-264:5 *)
+    Source: 'tests/src/hashmap.rs', lines 255:4-255:86 *)
 Fixpoint hashMap_get_mut_in_list_loop
   (T : Type) (n : nat) (ls : List_t T) (key : usize) :
   result (T * (T -> result (List_t T)))
@@ -429,7 +429,7 @@ Definition hashMap_get_mut
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 275:4-301:5 *)
+    Source: 'tests/src/hashmap.rs', lines 275:4-275:69 *)
 Fixpoint hashMap_remove_from_list_loop
   (T : Type) (n : nat) (key : usize) (ls : List_t T) :
   result ((option T) * (List_t T))

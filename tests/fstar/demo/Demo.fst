@@ -77,7 +77,7 @@ let rec list_nth_mut
     end
 
 (** [demo::list_nth_mut1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 71:0-80:1 *)
+    Source: 'tests/src/demo.rs', lines 71:0-71:77 *)
 let rec list_nth_mut1_loop
   (t : Type0) (n : nat) (l : cList_t t) (i : u32) :
   result (t & (t -> result (cList_t t)))

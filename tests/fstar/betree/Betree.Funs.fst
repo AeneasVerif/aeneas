@@ -76,7 +76,7 @@ let betree_upsert_update
   end
 
 (** [betree::betree::{betree::betree::List<T>#1}::len]: loop 0:
-    Source: 'src/betree.rs', lines 276:4-284:5 *)
+    Source: 'src/betree.rs', lines 276:4-276:24 *)
 let rec betree_List_len_loop
   (t : Type0) (self : betree_List_t t) (len : u64) :
   Tot (result u64) (decreases (betree_List_len_loop_decreases t self len))
@@ -93,7 +93,7 @@ let betree_List_len (t : Type0) (self : betree_List_t t) : result u64 =
   betree_List_len_loop t self 0
 
 (** [betree::betree::{betree::betree::List<T>#1}::reverse]: loop 0:
-    Source: 'src/betree.rs', lines 304:4-312:5 *)
+    Source: 'src/betree.rs', lines 304:4-304:32 *)
 let rec betree_List_reverse_loop
   (t : Type0) (self : betree_List_t t) (out : betree_List_t t) :
   Tot (result (betree_List_t t))
@@ -112,7 +112,7 @@ let betree_List_reverse
   betree_List_reverse_loop t self Betree_List_Nil
 
 (** [betree::betree::{betree::betree::List<T>#1}::split_at]: loop 0:
-    Source: 'src/betree.rs', lines 287:4-302:5 *)
+    Source: 'src/betree.rs', lines 287:4-287:55 *)
 let rec betree_List_split_at_loop
   (t : Type0) (n : u64) (beg : betree_List_t t) (self : betree_List_t t) :
   Tot (result ((betree_List_t t) & (betree_List_t t)))
@@ -171,7 +171,7 @@ let betree_ListPairU64T_head_has_key
   end
 
 (** [betree::betree::{betree::betree::List<(u64, T)>#2}::partition_at_pivot]: loop 0:
-    Source: 'src/betree.rs', lines 355:4-370:5 *)
+    Source: 'src/betree.rs', lines 355:4-355:73 *)
 let rec betree_ListPairU64T_partition_at_pivot_loop
   (t : Type0) (pivot : u64) (beg : betree_List_t (u64 & t))
   (end1 : betree_List_t (u64 & t)) (self : betree_List_t (u64 & t)) :
@@ -227,7 +227,7 @@ let betree_Leaf_split
     node_id_cnt2))
 
 (** [betree::betree::{betree::betree::Node#5}::lookup_first_message_for_key]: loop 0:
-    Source: 'src/betree.rs', lines 792:4-810:5 *)
+    Source: 'src/betree.rs', lines 792:4-795:34 *)
 let rec betree_Node_lookup_first_message_for_key_loop
   (key : u64) (msgs : betree_List_t (u64 & betree_Message_t)) :
   Tot (result ((betree_List_t (u64 & betree_Message_t)) & (betree_List_t (u64 &
@@ -261,7 +261,7 @@ let betree_Node_lookup_first_message_for_key
   betree_Node_lookup_first_message_for_key_loop key msgs
 
 (** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]: loop 0:
-    Source: 'src/betree.rs', lines 649:4-660:5 *)
+    Source: 'src/betree.rs', lines 649:4-649:84 *)
 let rec betree_Node_lookup_in_bindings_loop
   (key : u64) (bindings : betree_List_t (u64 & u64)) :
   Tot (result (option u64))
@@ -284,7 +284,7 @@ let betree_Node_lookup_in_bindings
   betree_Node_lookup_in_bindings_loop key bindings
 
 (** [betree::betree::{betree::betree::Node#5}::apply_upserts]: loop 0:
-    Source: 'src/betree.rs', lines 820:4-844:5 *)
+    Source: 'src/betree.rs', lines 820:4-820:94 *)
 let rec betree_Node_apply_upserts_loop
   (msgs : betree_List_t (u64 & betree_Message_t)) (prev : option u64)
   (key : u64) :
@@ -391,7 +391,7 @@ and betree_Node_lookup
   end
 
 (** [betree::betree::{betree::betree::Node#5}::filter_messages_for_key]: loop 0:
-    Source: 'src/betree.rs', lines 683:4-692:5 *)
+    Source: 'src/betree.rs', lines 683:4-683:77 *)
 let rec betree_Node_filter_messages_for_key_loop
   (key : u64) (msgs : betree_List_t (u64 & betree_Message_t)) :
   Tot (result (betree_List_t (u64 & betree_Message_t)))
@@ -419,7 +419,7 @@ let betree_Node_filter_messages_for_key
   betree_Node_filter_messages_for_key_loop key msgs
 
 (** [betree::betree::{betree::betree::Node#5}::lookup_first_message_after_key]: loop 0:
-    Source: 'src/betree.rs', lines 694:4-706:5 *)
+    Source: 'src/betree.rs', lines 694:4-697:34 *)
 let rec betree_Node_lookup_first_message_after_key_loop
   (key : u64) (msgs : betree_List_t (u64 & betree_Message_t)) :
   Tot (result ((betree_List_t (u64 & betree_Message_t)) & (betree_List_t (u64 &
@@ -513,7 +513,7 @@ let betree_Node_apply_to_internal
     lookup_first_message_for_key_back msgs2
 
 (** [betree::betree::{betree::betree::Node#5}::apply_messages_to_internal]: loop 0:
-    Source: 'src/betree.rs', lines 518:4-526:5 *)
+    Source: 'src/betree.rs', lines 518:4-521:5 *)
 let rec betree_Node_apply_messages_to_internal_loop
   (msgs : betree_List_t (u64 & betree_Message_t))
   (new_msgs : betree_List_t (u64 & betree_Message_t)) :
@@ -539,7 +539,7 @@ let betree_Node_apply_messages_to_internal
   betree_Node_apply_messages_to_internal_loop msgs new_msgs
 
 (** [betree::betree::{betree::betree::Node#5}::lookup_mut_in_bindings]: loop 0:
-    Source: 'src/betree.rs', lines 664:4-677:5 *)
+    Source: 'src/betree.rs', lines 664:4-667:32 *)
 let rec betree_Node_lookup_mut_in_bindings_loop
   (key : u64) (bindings : betree_List_t (u64 & u64)) :
   Tot (result ((betree_List_t (u64 & u64)) & (betree_List_t (u64 & u64) ->
@@ -605,7 +605,7 @@ let betree_Node_apply_to_leaf
     end
 
 (** [betree::betree::{betree::betree::Node#5}::apply_messages_to_leaf]: loop 0:
-    Source: 'src/betree.rs', lines 463:4-471:5 *)
+    Source: 'src/betree.rs', lines 463:4-466:5 *)
 let rec betree_Node_apply_messages_to_leaf_loop
   (bindings : betree_List_t (u64 & u64))
   (new_msgs : betree_List_t (u64 & betree_Message_t)) :

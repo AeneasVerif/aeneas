@@ -14,7 +14,7 @@ let hash_key (k : usize) : result usize =
   Ok k
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 60:4-66:5 *)
+    Source: 'tests/src/hashmap.rs', lines 60:4-60:76 *)
 let rec hashMap_allocate_slots_loop
   (t : Type0) (slots : alloc_vec_Vec (list_t t)) (n : usize) :
   Tot (result (alloc_vec_Vec (list_t t)))
@@ -60,7 +60,7 @@ let hashMap_new (t : Type0) : result (hashMap_t t) =
   hashMap_new_with_capacity t 32 4 5
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 90:4-98:5 *)
+    Source: 'tests/src/hashmap.rs', lines 90:4-90:27 *)
 let rec hashMap_clear_loop
   (t : Type0) (slots : alloc_vec_Vec (list_t t)) (i : usize) :
   Tot (result (alloc_vec_Vec (list_t t)))
@@ -89,7 +89,7 @@ let hashMap_len (t : Type0) (self : hashMap_t t) : result usize =
   Ok self.num_entries
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 107:4-124:5 *)
+    Source: 'tests/src/hashmap.rs', lines 107:4-107:71 *)
 let rec hashMap_insert_in_list_loop
   (t : Type0) (key : usize) (value : t) (ls : list_t t) :
   Tot (result (bool & (list_t t)))
@@ -135,7 +135,7 @@ let hashMap_insert_no_resize
   else let* v = index_mut_back l1 in Ok { self with slots = v }
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 193:4-206:5 *)
+    Source: 'tests/src/hashmap.rs', lines 193:4-193:72 *)
 let rec hashMap_move_elements_from_list_loop
   (t : Type0) (ntable : hashMap_t t) (ls : list_t t) :
   Tot (result (hashMap_t t))
@@ -155,7 +155,7 @@ let hashMap_move_elements_from_list
   hashMap_move_elements_from_list_loop t ntable ls
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 181:4-190:5 *)
+    Source: 'tests/src/hashmap.rs', lines 181:4-181:95 *)
 let rec hashMap_move_elements_loop
   (t : Type0) (ntable : hashMap_t t) (slots : alloc_vec_Vec (list_t t))
   (i : usize) :
@@ -215,7 +215,7 @@ let hashMap_insert
   if i > self1.max_load then hashMap_try_resize t self1 else Ok self1
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 216:4-229:5 *)
+    Source: 'tests/src/hashmap.rs', lines 216:4-216:68 *)
 let rec hashMap_contains_key_in_list_loop
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result bool)
@@ -247,7 +247,7 @@ let hashMap_contains_key
   hashMap_contains_key_in_list t key l
 
 (** [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 234:4-247:5 *)
+    Source: 'tests/src/hashmap.rs', lines 234:4-234:70 *)
 let rec hashMap_get_in_list_loop
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result t) (decreases (hashMap_get_in_list_loop_decreases t key ls))
@@ -276,7 +276,7 @@ let hashMap_get (t : Type0) (self : hashMap_t t) (key : usize) : result t =
   hashMap_get_in_list t key l
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 255:4-264:5 *)
+    Source: 'tests/src/hashmap.rs', lines 255:4-255:86 *)
 let rec hashMap_get_mut_in_list_loop
   (t : Type0) (ls : list_t t) (key : usize) :
   Tot (result (t & (t -> result (list_t t))))
@@ -324,7 +324,7 @@ let hashMap_get_mut
   Ok (x, back)
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 275:4-301:5 *)
+    Source: 'tests/src/hashmap.rs', lines 275:4-275:69 *)
 let rec hashMap_remove_from_list_loop
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result ((option t) & (list_t t)))
