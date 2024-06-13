@@ -1,6 +1,5 @@
 import Lean
 import Lean.Meta.Tactic.Simp
-import Mathlib.Tactic.Linarith
 import Base.Primitives.Base
 import Base.Primitives.Core
 import Base.Diverge.Base
@@ -8,6 +7,9 @@ import Base.Progress.Base
 import Base.Arith.Int
 
 namespace Primitives
+
+-- Deactivate the warnings which appear when we use `#assert`
+set_option linter.hashCommand false
 
 ----------------------
 -- MACHINE INTEGERS --
@@ -279,11 +281,11 @@ theorem Scalar.cMax_bound ty : Scalar.cMax ty ≤ Scalar.max ty := by
 
 theorem Scalar.cMin_suffices ty (h : Scalar.cMin ty ≤ x) : Scalar.min ty ≤ x := by
   have := Scalar.cMin_bound ty
-  linarith
+  omega
 
 theorem Scalar.cMax_suffices ty (h : x ≤ Scalar.cMax ty) : x ≤ Scalar.max ty := by
   have := Scalar.cMax_bound ty
-  linarith
+  omega
 
 /-- The scalar type.
 
@@ -310,7 +312,7 @@ theorem Scalar.bound_suffices (ty : ScalarTy) (x : Int) :
   Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty
   :=
   λ h => by
-  apply And.intro <;> have hmin := Scalar.cMin_bound ty <;> have hmax := Scalar.cMax_bound ty <;> linarith
+  apply And.intro <;> have hmin := Scalar.cMin_bound ty <;> have hmax := Scalar.cMax_bound ty <;> omega
 
 def Scalar.ofIntCore {ty : ScalarTy} (x : Int)
   (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : Scalar ty :=
@@ -345,7 +347,7 @@ theorem Scalar.check_bounds_imp_in_bounds {ty : ScalarTy} {x : Int}
   have ⟨ hmin, hmax ⟩ := h
   have hbmin := Scalar.cMin_bound ty
   have hbmax := Scalar.cMax_bound ty
-  cases hmin <;> cases hmax <;> apply And.intro <;> linarith
+  cases hmin <;> cases hmax <;> apply And.intro <;> omega
 
 theorem Scalar.check_bounds_eq_in_bounds (ty : ScalarTy) (x : Int) :
   Scalar.check_bounds ty x ↔ Scalar.in_bounds ty x := by
@@ -730,7 +732,6 @@ theorem Scalar.add_spec {ty} {x y : Scalar ty}
   (∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y) := by
   have h := @add_equiv ty x y
   split at h <;> simp_all
-  apply h
 
 theorem Scalar.add_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   (hmax : ↑x + ↑y ≤ Scalar.max ty) :
@@ -738,7 +739,7 @@ theorem Scalar.add_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   have hmin : Scalar.min ty ≤ ↑x + ↑y := by
     have hx := x.hmin
     have hy := y.hmin
-    cases ty <;> simp [min, ScalarTy.isSigned] at * <;> linarith
+    cases ty <;> simp [min, ScalarTy.isSigned] at * <;> omega
   apply add_spec <;> assumption
 
 /- Fine-grained theorems -/
@@ -825,7 +826,6 @@ theorem Scalar.sub_spec {ty} {x y : Scalar ty}
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
   have h := @sub_equiv ty x y
   split at h <;> simp_all
-  apply h
 
 theorem Scalar.sub_unsigned_spec {ty : ScalarTy} (s : ¬ ty.isSigned)
   {x y : Scalar ty} (hmin : Scalar.min ty ≤ ↑x - ↑y) :
@@ -834,7 +834,7 @@ theorem Scalar.sub_unsigned_spec {ty : ScalarTy} (s : ¬ ty.isSigned)
     have hx := x.hmin
     have hxm := x.hmax
     have hy := y.hmin
-    cases ty <;> simp [min, max, ScalarTy.isSigned] at * <;> linarith
+    cases ty <;> simp [min, max, ScalarTy.isSigned] at * <;> omega
   intros
   apply sub_spec <;> assumption
 
@@ -1030,11 +1030,11 @@ theorem Scalar.div_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   have hx := x.hmin
   have hy := y.hmin
   simp [h] at hx hy
-  have hmin : 0 ≤ ↑x / ↑y := Int.ediv_nonneg hx hy
+  have hmin : 0 ≤ x.val / y.val := Int.ediv_nonneg hx hy
   have hmax : ↑x / ↑y ≤ Scalar.max ty := by
     have := Int.ediv_le_self ↑y hx
     have := x.hmax
-    linarith
+    omega
   have hs := @div_spec ty x y hnz
   simp [*] at hs
   apply hs
@@ -1151,7 +1151,7 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
     have h : (0 : Int) < y := by int_tac
     have h := Int.emod_lt_of_pos ↑x h
     have := y.hmax
-    linarith
+    omega
   have hs := @rem_spec ty x y hnz
   simp [*] at hs
   simp [*]

@@ -1,7 +1,6 @@
 /- Complementary list functions and lemmas which operate on integers rather
    than natural numbers. -/
 
-import Std.Data.Int.Lemmas
 import Base.Arith
 import Base.Utils
 
@@ -17,7 +16,7 @@ def len (ls : List α) : Int :=
 
 theorem len_pos : 0 ≤ (ls : List α).len := by
   induction ls <;> simp [*]
-  linarith
+  omega
 
 instance (a : Type u) : Arith.HasIntProp (List a) where
   prop_ty := λ ls => 0 ≤ ls.len
@@ -169,6 +168,7 @@ theorem ireplicate_replicate {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
     have hl : l.toNat = .succ (l.toNat - 1) := by
       cases hl: l.toNat <;> simp_all
     conv => rhs; rw[hl]
+    rfl
 termination_by l.toNat
 decreasing_by int_decr_tac
 
@@ -277,12 +277,12 @@ open Arith in
   if heq: i = 0 then
     simp [*] at *
     have := tl.len_pos
-    linarith
+    omega
   else
     have : 0 < i := by int_tac
     simp [*]
     apply hi
-    linarith
+    omega
 
 theorem idrop_len_le (i : Int) (ls : List α) : (ls.idrop i).len ≤ ls.len :=
   match ls with
@@ -291,13 +291,13 @@ theorem idrop_len_le (i : Int) (ls : List α) : (ls.idrop i).len ≤ ls.len :=
     if h: i = 0 then by simp [*]
     else
       have := idrop_len_le (i - 1) tl
-      by simp [*]; linarith
+      by simp [*]; omega
 
 @[simp]
 theorem idrop_len (i : Int) (ls : List α) (_ : 0 ≤ i) (_ : i ≤ ls.len) :
   (ls.idrop i).len = ls.len - i :=
   match ls with
-  | [] => by simp_all; linarith
+  | [] => by simp_all; omega
   | hd :: tl =>
     if h: i = 0 then by simp [*]
     else

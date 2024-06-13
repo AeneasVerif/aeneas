@@ -1,5 +1,4 @@
 import Lean
-import Std.Lean.HashSet
 import Base.Utils
 import Base.Primitives.Base
 import Base.Extensions
@@ -111,7 +110,7 @@ section Methods
       -- Collect all the free variables in the arguments
       let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
       -- Check if they intersect the fvars we introduced for the existentially quantified variables
-      let evarsSet : HashSet FVarId := HashSet.ofArray (evars.map (fun (x : Expr) => x.fvarId!))
+      let evarsSet : HashSet FVarId := HashSet.empty.insertMany (evars.map (fun (x : Expr) => x.fvarId!))
       let filtArgsFVars := allArgsFVars.toArray.filter (fun var => evarsSet.contains var)
       if filtArgsFVars.isEmpty then pure ()
       else
