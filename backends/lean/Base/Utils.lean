@@ -704,11 +704,6 @@ inductive Location where
   /-- Same as Tactic.Location -/
   | targets (hypotheses : Array Syntax) (type : Bool)
 
-#check Tactic.simpLocation
-#check Tactic.Location
-#check MVarId.getNondepPropHyps
-#check simpLocation
-
 -- Adapted from Tactic.simpLocation
 def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray) (discharge? : Option Simp.Discharge := none)
   (loc : Location) : TacticM Simp.Stats := do
