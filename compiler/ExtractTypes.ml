@@ -825,13 +825,9 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
-                    let variant_name =
-                      Option.value variant.item_meta.rename
-                        ~default:variant.variant_name
-                    in
                     let name =
                       ctx_compute_variant_name def.item_meta.span ctx
-                        def.llbc_name variant_name
+                        def.llbc_name variant
                     in
                     (* Add the type name prefix for Lean *)
                     let name =
@@ -984,8 +980,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     (* We don't lookup the name, because it may have a prefix for the type
        id (in the case of Lean) *)
     let cons_name =
-      ctx_compute_variant_name def.item_meta.span ctx def.llbc_name
-        v.variant_name
+      ctx_compute_variant_name def.item_meta.span ctx def.llbc_name v
     in
     let fields = v.fields in
     extract_type_decl_variant def.item_meta.span ctx fmt type_decl_group

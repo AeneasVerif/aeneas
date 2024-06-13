@@ -45,7 +45,7 @@ Definition boolFn (T : Type) (x : bool) : result bool :=
 (** [rename_attribute::SimpleEnum]
     Source: 'tests/src/rename_attribute.rs', lines 35:0-35:15 *)
 Inductive VariantsTest_t :=
-| SimpleEnum_FirstVariant : VariantsTest_t
+| SimpleEnum_Variant1 : VariantsTest_t
 | SimpleEnum_SecondVariant : VariantsTest_t
 | SimpleEnum_ThirdVariant : VariantsTest_t
 .

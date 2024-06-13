@@ -1448,7 +1448,10 @@ let ctx_compute_field_name (def : type_decl) (field_meta : Meta.item_meta)
     - variant name
  *)
 let ctx_compute_variant_name (span : Meta.span) (ctx : extraction_ctx)
-    (def_name : llbc_name) (variant : string) : string =
+    (def_name : llbc_name) (variant : variant) : string =
+  let variant =
+    Option.value variant.item_meta.rename ~default:variant.variant_name
+  in
   match backend () with
   | FStar | Coq | HOL4 ->
       let variant = to_camel_case variant in
