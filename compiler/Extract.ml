@@ -241,11 +241,12 @@ let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (is_let : bool) (inside : bool) ?(with_type = false)
     (v : typed_pattern) : extraction_ctx =
   if with_type then F.pp_print_string fmt "(";
+  let is_pattern = true in
   let inside = inside && not with_type in
   let ctx =
     match v.value with
     | PatConstant cv ->
-        extract_literal span fmt inside cv;
+        extract_literal span fmt is_pattern inside cv;
         ctx
     | PatVar (v, _) ->
         let vname = ctx_compute_var_basename span ctx v.basename v.ty in
@@ -307,6 +308,7 @@ let extract_texpression_errors (fmt : F.formatter) =
 
 let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (e : texpression) : unit =
+  let is_pattern = false in
   match e.e with
   | Var var_id ->
       let var_name = ctx_get_var span var_id ctx in
@@ -314,7 +316,7 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
   | CVar var_id ->
       let var_name = ctx_get_const_generic_var span var_id ctx in
       F.pp_print_string fmt var_name
-  | Const cv -> extract_literal span fmt inside cv
+  | Const cv -> extract_literal span fmt is_pattern inside cv
   | App _ ->
       let app, args = destruct_apps e in
       extract_App span ctx fmt inside app args
