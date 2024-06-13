@@ -18,6 +18,8 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
   add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
   -- Reveal the concrete bounds, simplify calls to [ofInt]
   Utils.simpAt true {}
+               -- Simprocs
+               #[]
                -- Unfoldings
                [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
                 ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,

@@ -1,6 +1,5 @@
 import Lean
-import Std.Data.Int.Lemmas
-import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.Linarith -- Introduces a lot of useful lemmas
 
 namespace Arith
 
@@ -21,12 +20,12 @@ theorem ne_is_lt_or_gt {x y : Int} (hne : x ≠ y) : x < y ∨ x > y := by
   have hne : x - y ≠ 0 := by
     simp
     intro h
-    have: x = y := by linarith
+    have: x = y := by omega
     simp_all
   have h := ne_zero_is_lt_or_gt hne
   match h with
-  | .inl _ => left; linarith
-  | .inr _ => right; linarith
+  | .inl _ => left; omega
+  | .inr _ => right; omega
 
 -- TODO: move?
 theorem add_one_le_iff_le_ne (n m : Nat) (h1 : m ≤ n) (h2 : m ≠ n) : m + 1 ≤ n := by
@@ -66,7 +65,7 @@ theorem to_int_to_nat_lt (x y : ℤ) (h0 : 0 ≤ x) (h1 : x < y) :
 theorem to_int_sub_to_nat_lt (x y : ℤ) (x' : ℕ)
   (h0 : ↑x' ≤ x) (h1 : x - ↑x' < y) :
   ↑(x.toNat - x') < y := by
-  have : 0 ≤ x := by linarith
+  have : 0 ≤ x := by omega
   simp [Int.toNat_sub_of_le, *]
 
 end Arith

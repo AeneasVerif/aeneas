@@ -325,8 +325,7 @@ theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Ran
   have := List.index_slice r.start.val r.end_.val i s.val (by scalar_tac) (by scalar_tac) (by trivial) (by scalar_tac)
   simp [*]
 
-attribute [pp_dot] List.len List.length List.index -- use the dot notation when printing
-set_option pp.coercions false -- do not print coercions with ↑ (this doesn't parse)
+set_option pp.fieldNotation.generalized true
 
 def Slice.update_subslice (α : Type u) (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
   -- TODO: not completely sure here
