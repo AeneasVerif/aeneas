@@ -8,20 +8,18 @@ namespace Primitives
 
 open Lean Meta Elab Term
 
-macro x:term:max "#isize" : term => `(Isize.ofInt $x (by scalar_tac))
-macro x:term:max "#i8"    : term => `(I8.ofInt $x (by scalar_tac))
-macro x:term:max "#i16"   : term => `(I16.ofInt $x (by scalar_tac))
-macro x:term:max "#i32"   : term => `(I32.ofInt $x (by scalar_tac))
-macro x:term:max "#i64"   : term => `(I64.ofInt $x (by scalar_tac))
-macro x:term:max "#i128"  : term => `(I128.ofInt $x (by scalar_tac))
-macro x:term:max "#usize" : term => `(Usize.ofInt $x (by scalar_tac))
-macro x:term:max "#u8"    : term => `(U8.ofInt $x (by scalar_tac))
-macro x:term:max "#u16"   : term => `(U16.ofInt $x (by scalar_tac))
-macro x:term:max "#u32"   : term => `(U32.ofInt $x (by scalar_tac))
-macro x:term:max "#u64"   : term => `(U64.ofInt $x (by scalar_tac))
-macro x:term:max "#u128"  : term => `(U128.ofInt $x (by scalar_tac))
-
-macro x:term:max noWs "u32"   : term => `(U32.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#isize" : term => `(Isize.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#i8"    : term => `(I8.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#i16"   : term => `(I16.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#i32"   : term => `(I32.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#i64"   : term => `(I64.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#i128"  : term => `(I128.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#usize" : term => `(Usize.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#u8"    : term => `(U8.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#u16"   : term => `(U16.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#u32"   : term => `(U32.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#u64"   : term => `(U64.ofInt $x (by scalar_tac))
+macro:max x:term:max noWs "#u128"  : term => `(U128.ofInt $x (by scalar_tac))
 
 -- Notation for pattern matching
 -- We make the precedence looser than the negation.
@@ -86,5 +84,12 @@ example : Result Usize := 0#usize + 1#usize
 
 -- More complex expressions
 example (x y : Int) (h : 0 ≤ x + y ∧ x + y ≤ 1000) : U32 := (x + y)#u32
+
+section Scalar.Examples
+abbrev NList (a : Type) (x : U32) := { l : List a // l.length = x.val }
+
+example : NList Int 0#u32 := ⟨ [], by simp ⟩
+
+end Scalar.Examples
 
 end Primitives
