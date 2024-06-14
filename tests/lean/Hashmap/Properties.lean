@@ -473,7 +473,53 @@ theorem Spec.HashMap.insert_no_resize_length {α : Type} (hm : HashMap α)
   split <;> simp_all (config := {zetaDelta := true, arith := true}) [Spec.HashMap.inv] <;>
   split <;> simp_all [List.len_flatten_update_eq, lookup]
 
+def Spec.HashMap.move_elements_from_list (ntable : HashMap α) (ls : List (Usize × α)) : HashMap α :=
+  match ls with
+  | [] => ntable
+  | (k, v) :: tl =>
+    let ntable1 := insert_no_resize ntable k v
+    move_elements_from_list ntable1 tl
 
+def Spec.HashMap.move_elements (ntable : HashMap α) (slots : Spec.Slots α) (i : Int) : HashMap α × Slots α :=
+  let len := slots.len
+  if i < len
+  then
+    let slot := slots.index i
+    let ntable1 := move_elements_from_list ntable slot
+    let i' := i + 1
+    let slots1 := slots.update i []
+    move_elements ntable1 slots1 i'
+  else (ntable, slots)
+termination_by (slots.len - i).toNat
+decreasing_by scalar_decr_tac
+
+theorem HashMap.move_elements_from_list_spec [Inhabited α] (ntable : HashMap α) (ls : AList α) :
+  ∃ ntable1, move_elements_from_list α ntable ls = .ok ntable1 ∧
+  ntable1.v = ntable.v.move_elements_from_list ls.v := by
+  rw [move_elements_from_list]
+  rw [move_elements_from_list_loop]
+  cases ls with
+  | Nil =>
+    simp [Spec.HashMap.move_elements_from_list]
+  | Cons k v tl =>
+    simp [Spec.HashMap.move_elements_from_list]
+    have : k ∉ ntable → ntable.v.num_entries < Usize.max := by sorry
+    have : (ntable.slots).v.len ≠ 0 := by sorry
+    progress as ⟨ ntable1 ⟩
+    progress keep heq as ⟨ ntable2 ⟩
+    rw [move_elements_from_list] at heq; simp [heq]
+    simp [*]
+
+theorem HashMap.move_elements_spec [Inhabited α] (ntable : HashMap α) (slots : Slots α) (i : Usize) :
+  ∃ ntable1 slots1, move_elements α ntable slots i = .ok (ntable1, slots1) ∧
+  (ntable1.v, Slots.v slots1) = ntable.v.move_elements slots.v i.val
+  := by
+  rw [move_elements]
+  rw [move_elements_loop]
+  let len := slots.len
+  if hi : i.val < len.val then sorry
+  else sorry
+  
 
 /-
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
