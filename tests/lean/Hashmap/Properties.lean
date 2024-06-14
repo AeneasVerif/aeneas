@@ -36,6 +36,9 @@ abbrev lookup {α : Type} (ls: AList α) (key: Usize) : Option α :=
 @[simp]
 abbrev len {α : Type} (ls : AList α) : Int := ls.v.len
 
+instance : Inhabited (AList α) where
+  default := .Nil
+
 end AList
 
 -- TODO: move
@@ -70,6 +73,7 @@ def slots_s_inv (s : List (List (Usize × α))) : Prop :=
 abbrev Slots α := alloc.vec.Vec (AList α)
 abbrev Spec.Slots α := List (List (Usize × α))
 
+@[simp] -- TODO: redcible doesn't work
 def Slots.v (s : Slots α) := s.val.map AList.v
 
 @[simp]
@@ -82,7 +86,7 @@ structure Spec.HashMap (T : Type) where
   slots : List (List (Usize × T))
   num_entries : Int
 
-def HashMap.v {α : Type} (hm : HashMap α) : Spec.HashMap α :=
+abbrev HashMap.v {α : Type} (hm : HashMap α) : Spec.HashMap α :=
   { slots := Slots.v hm.slots,
     num_entries := hm.num_entries.val }
 
@@ -91,8 +95,8 @@ def Spec.HashMap.lookup (hm : Spec.HashMap α) (k : Usize) : Option α :=
 
 --instance Membership 
 
-instance : Coe (Slots α) (Spec.Slots α) where
-  coe := λ v => v.v
+/-instance : Coe (Slots α) (Spec.Slots α) where
+  coe := λ v => v.v -/
 
 instance : Coe (HashMap α) (Spec.HashMap α) where
   coe := λ v => v.v
@@ -104,7 +108,7 @@ instance : Membership Usize (HashMap α) where
   mem k hm := k ∈ hm.v
 
 /- Activate the ↑ notation -/
-attribute [coe] Slots.v HashMap.v
+attribute [coe] HashMap.v
 
 def Spec.HashMap.inv (hm : Spec.HashMap α) : Prop :=
   -- [num_entries] correctly tracks the number of entries
@@ -117,6 +121,10 @@ def Spec.HashMap.inv (hm : Spec.HashMap α) : Prop :=
 
 def HashMap.inv (hm : HashMap α) : Prop :=
   hm.v.inv
+
+@[simp]
+theorem HashMap.v_slots_v_eq (hm : HashMap α) : hm.v.slots = Slots.v hm.slots := by
+  cases hm; simp
 
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
@@ -139,7 +147,7 @@ def Spec.insert_in_list
   | [] => (true, [(key, value)])
 
 @[pspec]
-theorem HashMap.insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: AList α) :
+theorem HashMap.insert_in_list_spec {α : Type} (key: Usize) (value: α) (l0: AList α) :
   ∃ b l1,
     HashMap.insert_in_list α key value l0 = ok (b, l1) ∧
     (b, l1.v) = Spec.insert_in_list key value l0.v
@@ -273,12 +281,52 @@ def Spec.HashMap.insert_no_resize
   else
     { self with slots := List.update self.slots hash_mod slot1}
 
+-- TODO: move
+@[simp]
+theorem List.map_index [Inhabited α] [Inhabited β] (l : List α) (f : α → β) (i : Int) :
+  (l.map f).index i = f (l.index i) := by sorry
+
+@[simp]
+theorem List.map_update (l : List α) (f : α → β) (i : Int) :
+  (l.update i x).map f = (l.map f).update i (f x) := by sorry
+
+/-@[simp]
+def Spec.Slots.index_v_eq (slots : Spec.Slots α) (i : Int) :
+  (slots.val.index i).v = slots.v.index i
+  := by sorry -/
+
 @[pspec]
-theorem HashMap.insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
+theorem HashMap.insert_no_resize_spec {α : Type} [Inhabited α]
+  (hm : HashMap α) (key : Usize) (value : α)
   (hnsat : key ∉ hm → hm.v.num_entries < Usize.max) :
   ∃ nhm, hm.insert_no_resize α key value = ok nhm  ∧
   ↑nhm = hm.v.insert_no_resize key value := by
-  sorry
+  rw [insert_no_resize]
+  simp [hash_key]
+  have : (alloc.vec.Vec.len (AList α) hm.slots).val ≠ 0 := by
+    sorry
+  progress as ⟨ hash_mod, hHashModEq ⟩
+  have : hash_mod.val < hm.slots.length := by sorry
+  progress as ⟨ slot0, index_back, hSlot0Eq, hInsertBack ⟩
+  rw [hInsertBack]
+  progress as ⟨ inserted, slot1, hInsPost ⟩
+  replace hInsPost := Eq.symm hInsPost
+  cases hInserted : inserted == true with
+  | true =>
+    simp at hInserted; simp [hInserted]
+    have : ↑hm.num_entries + 1 ≤ Usize.max := by
+      sorry
+    progress as ⟨ num_entries1 ⟩
+    progress as ⟨ slots1, hSlots1Eq ⟩
+    simp [Spec.HashMap.insert_no_resize]
+    simp_all
+  | false =>
+    simp at hInserted; simp [hInserted]
+    progress as ⟨ slots1, hSlots1Eq ⟩
+    simp [Spec.HashMap.insert_no_resize]
+    simp_all
+
+
 
 /-
 #exit
