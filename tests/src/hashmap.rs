@@ -26,8 +26,9 @@ use std::vec::Vec;
 pub type Key = usize; // TODO: make this generic
 pub type Hash = usize;
 
-pub enum List<T> {
-    Cons(Key, T, Box<List<T>>),
+/// Associative list
+pub enum AList<T> {
+    Cons(Key, T, Box<AList<T>>),
     Nil,
 }
 
@@ -51,15 +52,15 @@ pub struct HashMap<T> {
     /// gives the threshold at which to resize the table.
     max_load: usize,
     /// The table itself
-    slots: Vec<List<T>>,
+    slots: Vec<AList<T>>,
 }
 
 impl<T> HashMap<T> {
     /// Allocate a vector of slots of a given size.
     /// We would need a loop, but can't use loops for now...
-    fn allocate_slots(mut slots: Vec<List<T>>, mut n: usize) -> Vec<List<T>> {
+    fn allocate_slots(mut slots: Vec<AList<T>>, mut n: usize) -> Vec<AList<T>> {
         while n > 0 {
-            slots.push(List::Nil);
+            slots.push(AList::Nil);
             n -= 1;
         }
         slots
@@ -92,7 +93,7 @@ impl<T> HashMap<T> {
         let slots = &mut self.slots;
         let mut i = 0;
         while i < slots.len() {
-            slots[i] = List::Nil;
+            slots[i] = AList::Nil;
             i += 1;
         }
     }
@@ -104,14 +105,14 @@ impl<T> HashMap<T> {
     /// Insert in a list.
     /// Return `true` if we inserted an element, `false` if we simply updated
     /// a value.
-    fn insert_in_list(key: Key, value: T, mut ls: &mut List<T>) -> bool {
+    fn insert_in_list(key: Key, value: T, mut ls: &mut AList<T>) -> bool {
         loop {
             match ls {
-                List::Nil => {
-                    *ls = List::Cons(key, value, Box::new(List::Nil));
+                AList::Nil => {
+                    *ls = AList::Cons(key, value, Box::new(AList::Nil));
                     return true;
                 }
-                List::Cons(ckey, cvalue, tl) => {
+                AList::Cons(ckey, cvalue, tl) => {
                     if *ckey == key {
                         *cvalue = value;
                         return false;
@@ -178,10 +179,10 @@ impl<T> HashMap<T> {
 
     /// Auxiliary function called by [try_resize] to move all the elements
     /// from the table to a new table
-    fn move_elements<'a>(ntable: &'a mut HashMap<T>, slots: &'a mut Vec<List<T>>, mut i: usize) {
+    fn move_elements<'a>(ntable: &'a mut HashMap<T>, slots: &'a mut Vec<AList<T>>, mut i: usize) {
         while i < slots.len() {
             // Move the elements out of the slot i
-            let ls = std::mem::replace(&mut slots[i], List::Nil);
+            let ls = std::mem::replace(&mut slots[i], AList::Nil);
             // Move all those elements to the new table
             HashMap::move_elements_from_list(ntable, ls);
             // Do the same for slot i+1
@@ -190,12 +191,12 @@ impl<T> HashMap<T> {
     }
 
     /// Auxiliary function.
-    fn move_elements_from_list(ntable: &mut HashMap<T>, mut ls: List<T>) {
+    fn move_elements_from_list(ntable: &mut HashMap<T>, mut ls: AList<T>) {
         // As long as there are elements in the list, move them
         loop {
             match ls {
-                List::Nil => return, // We're done
-                List::Cons(k, v, tl) => {
+                AList::Nil => return, // We're done
+                AList::Cons(k, v, tl) => {
                     // Insert the element in the new table
                     ntable.insert_no_resize(k, v);
                     // Move the elements out of the tail
@@ -213,11 +214,11 @@ impl<T> HashMap<T> {
     }
 
     /// Returns `true` if the list contains a value for the specified key.
-    pub fn contains_key_in_list(key: &Key, mut ls: &List<T>) -> bool {
+    pub fn contains_key_in_list(key: &Key, mut ls: &AList<T>) -> bool {
         loop {
             match ls {
-                List::Nil => return false,
-                List::Cons(ckey, _, tl) => {
+                AList::Nil => return false,
+                AList::Cons(ckey, _, tl) => {
                     if *ckey == *key {
                         return true;
                     } else {
@@ -231,11 +232,11 @@ impl<T> HashMap<T> {
     /// We don't support borrows inside of enumerations for now, so we
     /// can't return an option...
     /// TODO: add support for that
-    fn get_in_list<'a, 'k>(key: &'k Key, mut ls: &'a List<T>) -> &'a T {
+    fn get_in_list<'a, 'k>(key: &'k Key, mut ls: &'a AList<T>) -> &'a T {
         loop {
             match ls {
-                List::Nil => panic!(),
-                List::Cons(ckey, cvalue, tl) => {
+                AList::Nil => panic!(),
+                AList::Cons(ckey, cvalue, tl) => {
                     if *ckey == *key {
                         return cvalue;
                     } else {
@@ -252,8 +253,8 @@ impl<T> HashMap<T> {
         HashMap::get_in_list(key, &self.slots[hash_mod])
     }
 
-    pub fn get_mut_in_list<'a, 'k>(mut ls: &'a mut List<T>, key: &'k Key) -> &'a mut T {
-        while let List::Cons(ckey, cvalue, tl) = ls {
+    pub fn get_mut_in_list<'a, 'k>(mut ls: &'a mut AList<T>, key: &'k Key) -> &'a mut T {
+        while let AList::Cons(ckey, cvalue, tl) = ls {
             if *ckey == *key {
                 return cvalue;
             } else {
@@ -272,20 +273,20 @@ impl<T> HashMap<T> {
 
     /// Remove an element from the list.
     /// Return the removed element.
-    fn remove_from_list(key: &Key, mut ls: &mut List<T>) -> Option<T> {
+    fn remove_from_list(key: &Key, mut ls: &mut AList<T>) -> Option<T> {
         loop {
             match ls {
-                List::Nil => return None,
+                AList::Nil => return None,
                 // We have to use a guard and split the Cons case into two
                 // branches, otherwise the borrow checker is not happy.
-                List::Cons(ckey, _, _) if *ckey == *key => {
+                AList::Cons(ckey, _, _) if *ckey == *key => {
                     // We have to move under borrows, so we need to use
                     // [std::mem::replace] in several steps.
                     // Retrieve the tail
-                    let mv_ls = std::mem::replace(ls, List::Nil);
+                    let mv_ls = std::mem::replace(ls, AList::Nil);
                     match mv_ls {
-                        List::Nil => unreachable!(),
-                        List::Cons(_, cvalue, tl) => {
+                        AList::Nil => unreachable!(),
+                        AList::Cons(_, cvalue, tl) => {
                             // Make the list equal to its tail
                             *ls = *tl;
                             // Return the dropped value
@@ -293,7 +294,7 @@ impl<T> HashMap<T> {
                         }
                     }
                 }
-                List::Cons(_, _, tl) => {
+                AList::Cons(_, _, tl) => {
                     ls = tl;
                 }
             }
