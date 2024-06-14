@@ -9,7 +9,7 @@ namespace List
 -- TODO: rewrite rule: match x == y with ... -> if x = y then ... else ... ? (actually doesn't work because of sugar)
 -- TODO: move?
 @[simp]
-def lookup' {α : Type} (ls: _root_.List (Usize × α)) (key: Usize) : Option α :=
+def lookup' {α : Type} (ls: List (Usize × α)) (key: Usize) : Option α :=
   match ls with
   | [] => none
   | (k, x) :: tl => if k = key then some x else lookup' tl key
@@ -18,44 +18,32 @@ end List
 
 namespace hashmap
 
-namespace List
+namespace AList
 
-def v {α : Type} (ls: List α) : _root_.List (Usize × α) :=
+@[simp]
+def v {α : Type} (ls: AList α) : _root_.List (Usize × α) :=
   match ls with
   | Nil => []
   | Cons k x tl => (k, x) :: v tl
 
-@[simp] theorem v_nil (α : Type) : (Nil : List α).v = [] := by rfl
-@[simp] theorem v_cons {α : Type} k x (tl: List α) : (Cons k x tl).v = (k, x) :: v tl := by rfl
+--@[simp] theorem v_nil (α : Type) : (Nil : AList α).v = [] := by rfl
+--@[simp] theorem v_cons {α : Type} k x (tl: AList α) : (Cons k x tl).v = (k, x) :: v tl := by rfl
 
 @[simp]
-abbrev lookup {α : Type} (ls: List α) (key: Usize) : Option α :=
+abbrev lookup {α : Type} (ls: AList α) (key: Usize) : Option α :=
   ls.v.lookup' key
 
 @[simp]
-abbrev len {α : Type} (ls : List α) : Int := ls.v.len
+abbrev len {α : Type} (ls : AList α) : Int := ls.v.len
 
-end List
-
-namespace HashMap
-
-abbrev Core.List := _root_.List
-
-namespace List
-
-end List
+end AList
 
 -- TODO: move
+-- TODO: remove?
 @[simp] theorem neq_imp_nbeq [BEq α] [LawfulBEq α] (x y : α) (heq : ¬ x = y) : ¬ x == y := by simp [*]
 @[simp] theorem neq_imp_nbeq_rev [BEq α] [LawfulBEq α] (x y : α) (heq : ¬ x = y) : ¬ y == x := by simp [*]
 
--- TODO: move
--- TODO: this doesn't work because of sugar
-theorem match_lawful_beq [BEq α] [LawfulBEq α] [DecidableEq α] (x y : α) :
-  (x == y) = (if x = y then true else false) := by
-  split <;> simp_all
-
-def distinct_keys (ls : Core.List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
+def distinct_keys (ls : List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
 
 def hash_mod_key (k : Usize) (l : Int) : Int :=
   match hash_key k with
@@ -66,58 +54,327 @@ def hash_mod_key (k : Usize) (l : Int) : Int :=
 theorem hash_mod_key_eq : hash_mod_key k l = k.val % l := by
   simp [hash_mod_key, hash_key]
 
-def slot_s_inv_hash (l i : Int) (ls : Core.List (Usize × α)) : Prop :=
+def slot_s_inv_hash (l i : Int) (ls : List (Usize × α)) : Prop :=
   ls.allP (λ (k, _) => hash_mod_key k l = i)
 
 @[simp]
-def slot_s_inv (l i : Int) (ls : Core.List (Usize × α)) : Prop :=
+def slot_s_inv (l i : Int) (ls : List (Usize × α)) : Prop :=
   distinct_keys ls ∧
   slot_s_inv_hash l i ls
 
-def slot_t_inv (l i : Int) (s : List α) : Prop := slot_s_inv l i s.v
+def slots_s_inv (s : List (List (Usize × α))) : Prop :=
+  ∀ (i : Int), 0 ≤ i → i < s.len → slot_s_inv s.len i (s.index i)
 
--- Interpret the hashmap as a list of lists
-def v (hm : HashMap α) : Core.List (Core.List (Usize × α)) :=
-  hm.slots.val.map List.v
+--def slot_t_inv (l i : Int) (s : AList α) : Prop := slot_s_inv l i s.v
 
--- Interpret the hashmap as an associative list
-def al_v (hm : HashMap α) : Core.List (Usize × α) :=
-  hm.v.flatten
+abbrev Slots α := alloc.vec.Vec (AList α)
+abbrev Spec.Slots α := List (List (Usize × α))
 
--- TODO: automatic derivation
-instance : Inhabited (List α) where
-  default := .Nil
+def Slots.v (s : Slots α) := s.val.map AList.v
 
 @[simp]
-def slots_s_inv (s : Core.List (List α)) : Prop :=
-  ∀ (i : Int), 0 ≤ i → i < s.len → slot_t_inv s.len i (s.index i)
+def Spec.Slots.lookup (s : Spec.Slots α) (k : Usize) : Option α :=
+  let i := hash_mod_key k s.len
+  let slot := s.index i
+  slot.lookup k
 
-def slots_t_inv (s : alloc.vec.Vec (List α)) : Prop :=
-  slots_s_inv s.v
+structure Spec.HashMap (T : Type) where
+  slots : List (List (Usize × T))
+  num_entries : Int
 
-@[simp]
-def base_inv (hm : HashMap α) : Prop :=
+def HashMap.v {α : Type} (hm : HashMap α) : Spec.HashMap α :=
+  { slots := Slots.v hm.slots,
+    num_entries := hm.num_entries.val }
+
+def Spec.HashMap.lookup (hm : Spec.HashMap α) (k : Usize) : Option α :=
+  Spec.Slots.lookup hm.slots k
+
+--instance Membership 
+
+instance : Coe (Slots α) (Spec.Slots α) where
+  coe := λ v => v.v
+
+instance : Coe (HashMap α) (Spec.HashMap α) where
+  coe := λ v => v.v
+
+instance : Membership Usize (Spec.HashMap α) where
+  mem k hm := hm.lookup k ≠ none
+
+instance : Membership Usize (HashMap α) where
+  mem k hm := k ∈ hm.v
+
+/- Activate the ↑ notation -/
+attribute [coe] Slots.v HashMap.v
+
+def Spec.HashMap.inv (hm : Spec.HashMap α) : Prop :=
   -- [num_entries] correctly tracks the number of entries
-  hm.num_entries.val = hm.al_v.len ∧
+  hm.num_entries = hm.slots.flatten.len ∧
   -- Slots invariant
-  slots_t_inv hm.slots ∧
+  slots_s_inv hm.slots ∧
   -- The capacity must be > 0 (otherwise we can't resize)
-  0 < hm.slots.length
+  0 < hm.slots.len
   -- TODO: load computation
 
-def inv (hm : HashMap α) : Prop :=
-  -- Base invariant
-  base_inv hm
-  -- TODO: either the hashmap is not overloaded, or we can't resize it
+def HashMap.inv (hm : HashMap α) : Prop :=
+  hm.v.inv
 
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
 
--- The proof below is a bit expensive, so we need to increase the maximum number
+-- The proofs below are a bit expensive, so we need to increase the maximum number
 -- of heart beats
 set_option maxHeartbeats 1000000
 
-theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
+def Spec.insert_in_list
+  {T : Type} (key : Usize) (value : T) (ls : List (Usize × T)) :
+  Bool × (List (Usize × T))
+  :=
+  match ls with
+  | (ckey, cvalue) :: tl =>
+    if ckey = key
+    then (false, (ckey, value) :: tl)
+    else
+      let (b, tl1) := insert_in_list key value tl
+      (b, (ckey, cvalue) :: tl1)
+  | [] => (true, [(key, value)])
+
+@[pspec]
+theorem HashMap.insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: AList α) :
+  ∃ b l1,
+    HashMap.insert_in_list α key value l0 = ok (b, l1) ∧
+    (b, l1.v) = Spec.insert_in_list key value l0.v
+  := by
+  simp [insert_in_list]
+  rw [insert_in_list_loop]    
+  cases l0 with
+  | Nil =>
+    exists true -- TODO: why do we need to do this?
+    simp (config := {contextual := true})
+      [AList.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel, Spec.insert_in_list]
+  | Cons k v tl0 =>
+     cases h: k == key with
+     | true =>
+       simp at h; simp [h]
+       exists false; simp -- TODO: why do we need to do this?
+       simp [Spec.insert_in_list]
+     | false =>
+       simp at h; simp [h]
+       progress keep heq as ⟨ b, tl1, hpost ⟩
+       simp only [insert_in_list] at heq
+       simp [heq]
+       exists b
+       simp [Spec.insert_in_list, *]
+       rw [← hpost]
+       simp
+
+theorem Spec.insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α)
+  (l0: List (Usize × α))
+  (hinv : slot_s_inv_hash l (hash_mod_key key l) l0)
+  (hdk : distinct_keys l0) :
+  let (b, l1) := insert_in_list key value l0
+  -- The boolean is true ↔ we inserted a new binding
+  (b ↔ (l0.lookup key = none)) ∧
+  -- We update the binding
+  l1.lookup key = value ∧
+  (∀ k, k ≠ key → l1.lookup k = l0.lookup k) ∧
+  -- We preserve part of the key invariant
+  slot_s_inv_hash l (hash_mod_key key l) l1 ∧
+  -- Reasoning about the length
+  (match l0.lookup key with
+   | none => l1.len = l0.len + 1
+   | some _ => l1.len = l0.len) ∧
+  -- The keys are distinct
+  distinct_keys l1 ∧
+  -- We need this auxiliary property to prove that the keys distinct properties is preserved
+  (∀ k, k ≠ key → l0.allP (λ (k1, _) => k ≠ k1) → l1.allP (λ (k1, _) => k ≠ k1))
+  := by
+  cases l0 with
+  | nil =>
+    simp (config := {contextual := true})
+      [insert_in_list, slot_s_inv_hash, distinct_keys, List.pairwise_rel, List.lookup]
+  | cons kv tl0 =>
+    cases kv with
+    | mk k v =>
+      simp [insert_in_list]
+      cases h: k == key with
+      | true =>
+        simp at h; simp [h]
+        split_conjs
+        . intros; simp [List.lookup, *]
+        . simp [AList.v, slot_s_inv_hash] at *
+          simp [*]
+        . simp [*, distinct_keys] at *
+          apply hdk
+        . tauto
+      | false =>
+        simp at h; simp [h]
+        have : slot_s_inv_hash l (hash_mod_key key l) tl0 := by simp_all [AList.v, slot_s_inv_hash]
+        have : distinct_keys tl0 := by
+          simp [distinct_keys] at hdk
+          simp [hdk, distinct_keys]
+        have ⟨ hInd0, hInd1, hInd2, hInd3, hInd4, hInd5, hInd6 ⟩ :=
+          insert_in_list_spec_aux l key value tl0 (by assumption) (by assumption)
+        simp at hInd6
+        have : slot_s_inv_hash l (↑key % l) ((k, v) :: (insert_in_list key value tl0).2) := by
+          simp [hash_mod_key, hash_key, slot_s_inv_hash] at *
+          simp [*]
+        have : distinct_keys ((k, v) :: (insert_in_list key value tl0).2) := by
+          simp [distinct_keys] at *
+          simp [*]
+        split_conjs
+        . simp [List.lookup, *]
+        . simp [List.lookup, *]
+        . simp (config := {contextual := true}) [List.lookup, *]
+        . assumption
+        . -- TODO: canonize addition by default?
+          simp_all [List.lookup, Int.add_assoc, Int.add_comm, Int.add_left_comm]
+        . assumption
+        . tauto
+
+theorem Spec.insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α)
+  (l0: List (Usize × α))
+  (hinv : slot_s_inv_hash l (hash_mod_key key l) l0)
+  (hdk : distinct_keys l0) :
+  let (b, l1) := insert_in_list key value l0
+  -- The boolean is true ↔ we inserted a new binding
+  (b ↔ (l0.lookup key = none)) ∧
+  -- We update the binding
+  l1.lookup key = value ∧
+  (∀ k, k ≠ key → l1.lookup k = l0.lookup k) ∧
+  -- We preserve part of the key invariant
+  slot_s_inv_hash l (hash_mod_key key l) l1 ∧
+  -- Reasoning about the length
+  (match l0.lookup key with
+   | none => l1.len = l0.len + 1
+   | some _ => l1.len = l0.len) ∧
+  -- The keys are distinct
+  distinct_keys l1
+  := by
+  have := insert_in_list_spec_aux l key value l0 hinv hdk
+  simp_all
+
+#check HashMap.insert_no_resize
+#check List
+
+#check hash_key
+def Spec.HashMap.insert_no_resize
+  {T : Type} (self : Spec.HashMap T) (key : Usize) (value : T) :
+  Spec.HashMap T
+  :=
+  let hash := key
+  let i := self.slots.len
+  let hash_mod := hash % i
+  let slot := List.index self.slots hash_mod
+  let (b, slot1) := insert_in_list key value slot
+  if b then
+    let num_entries := self.num_entries + 1
+    let slots := List.update self.slots hash_mod slot1
+    { self with slots, num_entries }
+  else
+    { self with slots := List.update self.slots hash_mod slot1}
+
+@[pspec]
+theorem HashMap.insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
+  (hnsat : key ∉ hm → hm.v.num_entries < Usize.max) :
+  ∃ nhm, hm.insert_no_resize α key value = ok nhm  ∧
+  ↑nhm = hm.v.insert_no_resize key value := by
+  sorry
+
+/-
+#exit
+
+theorem Spec.insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α)
+  (l0: List (Usize × α))
+  (hinv : slot_s_inv_hash l (hash_mod_key key l) l0)
+  (hdk : distinct_keys l0) :
+  let (b, l1) := insert_in_list key value l0
+  -- The boolean is true ↔ we inserted a new binding
+  (b ↔ (l0.lookup key = none)) ∧
+  -- We update the binding
+  l1.lookup key = value ∧
+  (∀ k, k ≠ key → l1.lookup k = l0.lookup k) ∧
+  -- We preserve part of the key invariant
+  slot_s_inv_hash l (hash_mod_key key l) l1 ∧
+  -- Reasoning about the length
+  (match l0.lookup key with
+   | none => l1.len = l0.len + 1
+   | some _ => l1.len = l0.len) ∧
+  -- The keys are distinct
+  distinct_keys l1 ∧
+  -- We need this auxiliary property to prove that the keys distinct properties is preserved
+  (∀ k, k ≠ key → l0.allP (λ (k1, _) => k ≠ k1) → l1.allP (λ (k1, _) => k ≠ k1))
+  := by
+  match l0 with
+  | [] =>
+    stop
+    simp (config := {contextual := true})
+      [insert_in_list, slot_s_inv_hash, distinct_keys, List.pairwise_rel, List.lookup]
+  | (k, v)::tl0 =>
+    simp [insert_in_list]
+    if h: k = key then
+      stop
+      simp [h]
+      split_conjs
+      . intros; simp [List.lookup, *]
+      . simp [AList.v, slot_s_inv_hash] at *
+        simp [*]
+      . simp [*, distinct_keys] at *
+        apply hdk
+      . tauto
+    else
+      have hInd :=
+        insert_in_list_spec l key value tl0 (by simp_all [AList.v, slot_s_inv_hash])
+                                            (by simp [distinct_keys] at hdk
+                                                simp [hdk, distinct_keys])
+      simp at hInd
+      next =>
+      have : slot_s_inv_hash l (↑key % l) ((k, v) :: (insert_in_list key value tl0).2) := by
+        simp [distinct_keys] at *
+        simp [*]
+      simp (config := {contextual := true}) [insert_in_list, List.lookup, *]
+      simp [distinct_keys, *]
+      -- TODO: canonize addition by default?
+      simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
+      stop
+      have : slot_s_inv_hash l (hash_mod_key key l) (AList.v tl0) := by
+        simp_all [AList.v, slot_s_inv_hash]
+      have : distinct_keys (AList.v tl0) := by
+        simp [distinct_keys] at hdk
+        simp [hdk, distinct_keys]
+      progress keep heq as ⟨ b, tl1 .. ⟩
+      simp only [insert_in_list] at heq
+      have : slot_s_inv_hash l (hash_mod_key key l) (AList.v (AList.Cons k v tl1)) := by
+        simp [AList.v, slot_s_inv_hash] at *
+        simp [*]
+      have : distinct_keys ((k, v) :: AList.v tl1) := by
+        simp [distinct_keys] at *
+        simp [*]
+      -- TODO: canonize addition by default?
+      exists b
+      simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
+
+theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: AList α)
+  (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
+  (hdk : distinct_keys l0.v) :
+  ∃ b l1,
+    insert_in_list α key value l0 = ok (b, l1) ∧
+    (b ↔ (l0.lookup key = none)) ∧
+    -- We update the binding
+    l1.lookup key = value ∧
+    (∀ k, k ≠ key → l1.lookup k = l0.lookup k) ∧
+    -- We preserve part of the key invariant
+    slot_s_inv_hash l (hash_mod_key key l) l1.v ∧
+    -- Reasoning about the length
+    (match l0.lookup key with
+     | none => l1.len = l0.len + 1
+     | some _ => l1.len = l0.len) ∧
+    -- The keys are distinct
+    distinct_keys l1.v
+  := by
+
+#exit
+
+theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: AList α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ b l1,
@@ -138,13 +395,13 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
     -- We need this auxiliary property to prove that the keys distinct properties is preserved
     (∀ k, k ≠ key → l0.v.allP (λ (k1, _) => k ≠ k1) → l1.v.allP (λ (k1, _) => k ≠ k1))
   := by
-  cases l0 with
+  match l0 with
   | Nil =>
     exists true -- TODO: why do we need to do this?
     simp [insert_in_list]
     rw [insert_in_list_loop]
     simp (config := {contextual := true})
-      [List.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
+      [AList.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
   | Cons k v tl0 =>
      if h: k = key then
        rw [insert_in_list]
@@ -153,7 +410,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        exists false; simp -- TODO: why do we need to do this?
        split_conjs
        . intros; simp [*]
-       . simp [List.v, slot_s_inv_hash] at *
+       . simp [AList.v, slot_s_inv_hash] at *
          simp [*]
        . simp [*, distinct_keys] at *
          apply hdk
@@ -162,17 +419,17 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        rw [insert_in_list]
        rw [insert_in_list_loop]
        simp [h]
-       have : slot_s_inv_hash l (hash_mod_key key l) (List.v tl0) := by
-         simp_all [List.v, slot_s_inv_hash]
-       have : distinct_keys (List.v tl0) := by
+       have : slot_s_inv_hash l (hash_mod_key key l) (AList.v tl0) := by
+         simp_all [AList.v, slot_s_inv_hash]
+       have : distinct_keys (AList.v tl0) := by
          simp [distinct_keys] at hdk
          simp [hdk, distinct_keys]
        progress keep heq as ⟨ b, tl1 .. ⟩
        simp only [insert_in_list] at heq
-       have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by
-         simp [List.v, slot_s_inv_hash] at *
+       have : slot_s_inv_hash l (hash_mod_key key l) (AList.v (AList.Cons k v tl1)) := by
+         simp [AList.v, slot_s_inv_hash] at *
          simp [*]
-       have : distinct_keys ((k, v) :: List.v tl1) := by
+       have : distinct_keys ((k, v) :: AList.v tl1) := by
          simp [distinct_keys] at *
          simp [*]
        -- TODO: canonize addition by default?
@@ -180,7 +437,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
 
 @[pspec]
-theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
+theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: AList α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ b l1,
@@ -203,7 +460,7 @@ theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: 
   exists l1
 
 @[simp]
-def slots_t_lookup (s : Core.List (List α)) (k : Usize) : Option α :=
+def slots_t_lookup (s : List (AList α)) (k : Usize) : Option α :=
   let i := hash_mod_key k s.len
   let slot := s.index i
   slot.lookup k
@@ -254,7 +511,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   rw [insert_no_resize]
   -- Simplify. Note that this also simplifies some function calls, like array index
   simp [hash_key, bind_tc_ok]
-  have _ : (alloc.vec.Vec.len (List α) hm.slots).val ≠ 0 := by
+  have _ : (alloc.vec.Vec.len (AList α) hm.slots).val ≠ 0 := by
    intro
    simp_all [inv]
   progress as ⟨ hash_mod, hhm ⟩
@@ -346,7 +603,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     simp_all
     simp [_root_.List.update_map_eq]
     -- TODO: dependent rewrites
-    have _ : key.val % hm.slots.val.len < (List.map List.v hm.slots.val).len := by
+    have _ : key.val % hm.slots.val.len < (List.map AList.v hm.slots.val).len := by
       simp [*]
     simp [_root_.List.len_flatten_update_eq, *]
     split <;>
@@ -384,6 +641,6 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     . simp [hinv, h_veq, nhm_eq]
   simp_all
 
-end HashMap
+end HashMap-/
 
 end hashmap
