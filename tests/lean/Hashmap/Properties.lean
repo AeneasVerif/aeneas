@@ -111,7 +111,7 @@ abbrev HashMap.v {α : Type} (hm : HashMap α) : Spec.HashMap α :=
 def Spec.HashMap.lookup (hm : Spec.HashMap α) (k : Usize) : Option α :=
   Spec.Slots.lookup hm.slots k
 
---instance Membership 
+--instance Membership
 
 /-instance : Coe (Slots α) (Spec.Slots α) where
   coe := λ v => v.v -/
@@ -171,7 +171,7 @@ theorem HashMap.insert_in_list_spec {α : Type} (key: Usize) (value: α) (l0: AL
     (b, l1.v) = Spec.HashMap.insert_in_list key value l0.v
   := by
   simp [insert_in_list]
-  rw [insert_in_list_loop]    
+  rw [insert_in_list_loop]
   cases l0 with
   | Nil =>
     exists true -- TODO: why do we need to do this?
@@ -448,13 +448,14 @@ theorem Spec.HashMap.insert_no_resize_inv {α : Type} (hm : HashMap α)
     simp [slots_s_inv]
     intro i h0 h1
     cases heq : i == (↑key % hm.slots.len) <;> simp at heq <;> simp [*]
-    simp [slots_s_inv] at hinv; tauto
+    simp [slots_s_inv] at hinv
+    have := hinv.right i; tauto
   . split_conjs
     . cases h: (List.lookup key (hm.slots.index (↑key % hm.slots.len))) <;> simp_all
     . simp [slots_s_inv]
       intro i h0 h1
       cases heq : i == (↑key % hm.slots.len) <;> simp at heq <;> simp [*]
-      simp [slots_s_inv] at hinv; tauto
+      simp [slots_s_inv] at hinv; have := hinv.right i; tauto
 
 /- The bindings are updated -/
 theorem Spec.HashMap.insert_no_resize_lookup {α : Type} (hm : HashMap α)
@@ -514,7 +515,9 @@ def Spec.HashMap.move_elements (ntable : HashMap α) (slots : Spec.Slots α) (i 
 termination_by (slots.len - i).toNat
 decreasing_by scalar_decr_tac
 
-theorem HashMap.move_elements_from_list_spec [Inhabited α] (ntable : HashMap α) (ls : AList α) :
+@[pspec]
+theorem HashMap.move_elements_from_list_spec [Inhabited α]
+  (ntable : HashMap α) (ls : AList α) :
   ∃ ntable1, move_elements_from_list α ntable ls = .ok ntable1 ∧
   ntable1.v = ntable.v.move_elements_from_list ls.v := by
   rw [move_elements_from_list]
@@ -539,12 +542,24 @@ theorem HashMap.move_elements_spec [Inhabited α] (ntable : HashMap α) (slots :
   rw [move_elements_loop]
   if hi : i < alloc.vec.Vec.len (AList α) slots then
     simp [hi]
-    sorry
+    rw [Spec.HashMap.move_elements]; simp
+    have : ↑i < (alloc.vec.Vec.v slots).len := by scalar_tac
+    simp [*]
+    progress as ⟨ slot, index_back, hIndex ⟩; simp [hIndex]
+    progress as ⟨ ntable1 ⟩
+    progress as ⟨ i' ⟩
+    progress as ⟨ slots1 ⟩
+    progress keep hEq as ⟨ ntable2, slots2 ⟩; rw [move_elements] at hEq; simp [hEq]; clear hEq
+    simp [and_assoc]
+    simp_all
   else
     simp [hi]
     simp [and_assoc]
-    simp [Spec.HashMap.move_elements]
-
+    rw [Spec.HashMap.move_elements]; simp
+    have : ¬ i < (alloc.vec.Vec.v slots).len := by scalar_tac -- TODO: annoying conversions
+    simp [*]
+termination_by (slots.v.len - i.val).toNat
+decreasing_by scalar_decr_tac
 
 /-
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
