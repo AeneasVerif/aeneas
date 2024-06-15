@@ -516,10 +516,14 @@ theorem HashMap.move_elements_spec [Inhabited α] (ntable : HashMap α) (slots :
   := by
   rw [move_elements]
   rw [move_elements_loop]
-  let len := slots.len
-  if hi : i.val < len.val then sorry
-  else sorry
-  
+  if hi : i < alloc.vec.Vec.len (AList α) slots then
+    simp [hi]
+    sorry
+  else
+    simp [hi]
+    simp [and_assoc]
+    simp [Spec.HashMap.move_elements]
+
 
 /-
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
