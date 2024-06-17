@@ -112,9 +112,10 @@ def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.Tact
   -- Explore the declarations
   let decls ← ctx.getDecls
   let hs ← decls.foldlM (fun hs d => do 
-    -- Collect instances over all subexpressions
-    -- of the inferred type rather than the declaration expression
-    -- which is often just a name.
+    -- Collect instances over all subexpressions in the context.
+    -- Note that we explore the *type* of the local declarations: if we have
+    -- for instance `h : A ∧ B` in the context, the expression itself is simply
+    -- `h`; the information we are interested in is its type.
     let ty ← Lean.Meta.inferType d.toExpr
     collectInstances k hs ty
   ) hs
@@ -122,26 +123,27 @@ def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.Tact
   collectInstances k hs (← Tactic.getMainTarget)
 
 -- Helper
-def lookupProp (fName : String) (className : Name) (e : Expr) (instantiateClassFn : Expr → Expr → Array Expr) (instantiateProjectionFn : Expr → Array Expr) : MetaM (Option Expr) := do
+def lookupProp (fName : String) (className : Name) (e : Expr)
+  (instantiateClassFn : Expr → MetaM (Array Expr))
+  (instantiateProjectionFn : Expr → MetaM (Array Expr)) : MetaM (Option Expr) := do
   trace[Arith] fName
   -- TODO: do we need Lean.observing?
   -- This actually eliminates the error messages
   trace[Arith] m!"{fName}: {e}"
   Lean.observing? do
     trace[Arith] m!"{fName}: observing: {e}"
-    let ty ← Lean.Meta.inferType e
-    let hasProp ← mkAppM className (instantiateClassFn ty e)
+    let hasProp ← mkAppM className (← instantiateClassFn e)
     let hasPropInst ← trySynthInstance hasProp
     match hasPropInst with
     | LOption.some i =>
       trace[Arith] "Found {fName} instance"
       let i_prop ← mkProjection i (Name.mkSimple "prop")
-      some (← mkAppM' i_prop (instantiateProjectionFn e))
+      some (← mkAppM' i_prop (← instantiateProjectionFn e))
     | _ => none
 
 -- Return an instance of `HasIntProp` for `e` if it has some
 def lookupHasIntProp (e : Expr) : MetaM (Option Expr) :=
-  lookupProp "lookupHasIntProp" ``HasIntProp e (fun ty _ => #[ty]) (fun e => #[e])
+  lookupProp "lookupHasIntProp" ``HasIntProp e (fun e => do pure #[← Lean.Meta.inferType e]) (fun e => pure #[e])
 
 -- Collect the instances of `HasIntProp` for the subexpressions in the context
 def collectHasIntPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
@@ -149,7 +151,7 @@ def collectHasIntPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
 
 -- Return an instance of `HasIntPred` for `e` if it has some
 def lookupHasIntPred (e : Expr) : MetaM (Option Expr) :=
-  lookupProp "lookupHasIntPred" ``HasIntPred e (fun _ term => #[term]) (fun _ => #[])
+  lookupProp "lookupHasIntPred" ``HasIntPred e (fun term => pure #[term]) (fun _ => pure #[])
 
 -- Collect the instances of `HasIntPred` for the subexpressions in the context
 def collectHasIntPredInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do 
