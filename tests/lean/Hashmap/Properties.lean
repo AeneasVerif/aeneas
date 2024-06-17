@@ -468,14 +468,20 @@ theorem move_elements_from_list_spec
       move_elements_from_list_spec ntable1 slot1 (by assumption) (by assumption)
           hTable1LookupImp hSlot1LookupImp (by assumption)
     simp [hEq]; clear hEq
+    -- The conclusion
     split_conjs
     . simp [*]
     . intro key' v hLookup
-      have := hLookup12 key' v
       have := hLookup21 key' v
       if h: key = key' then
-        simp_all
-      else simp_all
+        have := hLookup22 key' v
+        have := hLookup23 key' v
+        have := hDisjoint1 key' v
+        have := hDisjoint2 key' v
+        have := hTable1LookupImp key' v
+        have := hSlot1LookupImp key' v
+        simp_all [Slots.lookup]
+      else have := hLookup12 key'; simp_all
     . intro key' v hLookup1
       if h: key' = key then
         simp_all
