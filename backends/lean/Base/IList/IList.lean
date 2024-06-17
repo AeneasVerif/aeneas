@@ -43,6 +43,9 @@ def index [Inhabited α] (ls : List α) (i : Int) : α :=
 
 @[simp] theorem index_zero_cons [Inhabited α] : index ((x :: tl) : List α) 0 = x := by simp [index]
 @[simp] theorem index_nzero_cons [Inhabited α] (hne : i ≠ 0) : index ((x :: tl) : List α) i = index tl (i - 1) := by simp [*, index]
+@[simp] theorem index_zero_lt_cons [Inhabited α] (hne : 0 < i) : index ((x :: tl) : List α) i = index tl (i - 1) := by
+  have : i ≠ 0 := by scalar_tac
+  simp [*, index]
 
 theorem indexOpt_bounds (ls : List α) (i : Int) :
   ls.indexOpt i = none ↔ i < 0 ∨ ls.len ≤ i :=
