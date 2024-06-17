@@ -187,7 +187,8 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
     have ⟨ slots1, hEq, _ ⟩ := alloc.vec.Vec.push_spec slots Nil (by scalar_tac)
     simp [hEq]; clear hEq
     progress as ⟨ n1 ⟩
-    have : ∀ (i : ℤ), 0 ≤ i → i < ↑(alloc.vec.Vec.len (AList α) slots1) → slots1.val.index i = Nil := by
+    have Hslots1Nil :
+      ∀ (i : ℤ), 0 ≤ i → i < ↑(alloc.vec.Vec.len (AList α) slots1) → slots1.val.index i = Nil := by
       intro i h0 h1
       simp [*]
       if hi : i < slots.val.len then
@@ -196,7 +197,7 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
         simp_all
         have : i - slots.val.len = 0 := by scalar_tac
         simp [*]
-    have : alloc.vec.Vec.len (AList α) slots1 + n1.val ≤ Usize.max := by
+    have Hslots1Len : alloc.vec.Vec.len (AList α) slots1 + n1.val ≤ Usize.max := by
       simp_all
     -- TODO: progress fails here (maximum recursion depth reached)
     -- This probably comes from the fact that allocate_slots is reducible and applied an infinite number
@@ -790,7 +791,7 @@ theorem move_elements_loop_spec
   := by
   rw [move_elements_loop]
   simp
-  if hi: i < alloc.vec.Vec.len (AList α) slots then
+  if hi: i.val < slots.val.len then
     -- Proof of termination: eliminate the case: n = 0
     cases n; scalar_tac
     rename ℕ => n
