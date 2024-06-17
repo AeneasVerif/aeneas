@@ -631,11 +631,12 @@ theorem slot_lookup_not_none_imp_slots_lookup_not_none
   have := slots_lookup_none_imp_slot_lookup_none slots hInv i hi key hNone
   apply hLookup this
 
-set_option maxHeartbeats 10000000
-
 theorem move_elements_loop_spec
+  (n : Nat) -- We need this, otherwise we can't prove termination (the termination_by clauses can be expensive)
   {α : Type} (ntable : HashMap α) (slots : Slots α)
-  (i : Usize) (hi : i ≤ alloc.vec.Vec.len (AList α) slots)
+  (i : Usize)
+  (hn : n = slots.val.len - i.val) -- Condition for termination
+  (hi : i ≤ alloc.vec.Vec.len (AList α) slots)
   (hinv : ntable.inv)
   (hSlotsNonZero : slots.val.len ≠ 0)
   (hSlotsInv : slots_t_inv slots)
@@ -655,6 +656,10 @@ theorem move_elements_loop_spec
   rw [move_elements_loop]
   simp
   if hi: i < alloc.vec.Vec.len (AList α) slots then
+    -- Proof of termination: eliminate the case: n = 0
+    cases n; scalar_tac
+    rename ℕ => n
+    -- Continue the proof
     have hIneq : 0 ≤ i.val ∧ i.val < slots.val.len := by scalar_tac
     simp [hi]
     progress as ⟨ slot, index_back, hSlotEq, hIndexBack ⟩
@@ -724,6 +729,8 @@ theorem move_elements_loop_spec
       have : i.val < (List.map AList.v slots.val).len := by simp; scalar_tac
       simp_all [Slots.al_v, List.len_flatten_update_eq, List.update_map_eq]
 
+    have : n = slots.val.len - i'.val := by scalar_tac
+
     progress as ⟨ ntable2, slots2, _, _, hLookup2Rev, hLookup21, hLookup22, hIndexNil ⟩
 
     simp [and_assoc]
@@ -744,7 +751,6 @@ theorem move_elements_loop_spec
     simp_all [alloc.vec.Vec.len, or_assoc]
     apply hLookupPreserve
   else
-    stop
     simp [hi, and_assoc, *]
     simp_all
     have hi : i = alloc.vec.Vec.len (AList α) slots := by scalar_tac
@@ -755,8 +761,37 @@ theorem move_elements_loop_spec
     have hLookupEmpty := slots_forall_nil_imp_lookup_none slots hLenNonZero hEmpty
     simp [hLookupEmpty]
     apply hEmpty
---termination_by (slots.val.len - i.val).toNat
---decreasing_by scalar_decr_tac
+
+@[pspec]
+theorem move_elements_spec
+  {α : Type} (ntable : HashMap α) (slots : Slots α)
+  (hinv : ntable.inv)
+  (hslotsNempty : 0 < slots.val.len)
+  (hSlotsInv : slots_t_inv slots)
+  -- The initial table is empty
+  (hEmpty : ∀ key, ntable.lookup key = none)
+  (hTableLen : ntable.al_v.len = 0)
+  (hSlotsLen : slots.al_v.len ≤ Usize.max)
+  :
+  ∃ ntable1 slots1, ntable.move_elements_loop α slots i = ok (ntable1, slots1) ∧
+  ntable1.inv ∧
+  slots1.len = slots.len ∧
+  (∀ key v, ntable1.lookup key = some v ↔ slots.lookup key = some v)
+  := by
+  let n := (slots.val.len - 0).toNat
+  have hn : n = slots.val.len - 0 := by
+    -- TODO: scalar_tac should succeed here
+    scalar_tac_preprocess
+    simp [n] at *
+    norm_cast at *
+    have := @Int.le_toNat n (slots.val.len - OfNat.ofNat 0) (by simp; scalar_tac)
+    simp_all
+  have h := move_elements_loop_spec (slots.val.len - 0).toNat ntable slots 0#usize hn (by scalar_tac) hinv
+    (by scalar_tac)
+    hSlotsInv
+    (by intro j h0 h1;)
+
+
 
 
 end HashMap
