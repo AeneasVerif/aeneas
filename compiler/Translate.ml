@@ -927,6 +927,15 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_includes;
       (* Always open the Primitives namespace *)
       Printf.fprintf out "open Primitives\n";
+      (* It happens that we generate duplicated namespaces, like `betree.betree`.
+         We deactivate the linter for this, because otherwise it leads to too much
+         noise. *)
+      Printf.fprintf out "set_option linter.dupNamespace false\n";
+      (* The mathlib linter generates warnings when we use hash commands like `#assert`:
+         we deactivate this linter. *)
+      Printf.fprintf out "set_option linter.hashCommand false\n";
+      (* Definitions often contain unused variables: deactivate the corresponding linter *)
+      Printf.fprintf out "set_option linter.unusedVariables false\n";
       (* If we are inside the namespace: declare it *)
       if fi.in_namespace then Printf.fprintf out "\nnamespace %s\n" fi.namespace;
       (* We might need to open the namespace *)
