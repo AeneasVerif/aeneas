@@ -729,7 +729,7 @@ theorem move_elements_loop_spec
       have : i.val < (List.map AList.v slots.val).len := by simp; scalar_tac
       simp_all [Slots.al_v, List.len_flatten_update_eq, List.update_map_eq]
 
-    have : n = slots.val.len - i'.val := by scalar_tac
+    have : n = slots1.val.len - i'.val := by simp_all; scalar_tac
 
     progress as ⟨ ntable2, slots2, _, _, hLookup2Rev, hLookup21, hLookup22, hIndexNil ⟩
 
@@ -773,7 +773,7 @@ theorem move_elements_spec
   (hTableLen : ntable.al_v.len = 0)
   (hSlotsLen : slots.al_v.len ≤ Usize.max)
   :
-  ∃ ntable1 slots1, ntable.move_elements_loop α slots i = ok (ntable1, slots1) ∧
+  ∃ ntable1 slots1, ntable.move_elements_loop α slots 0#usize = ok (ntable1, slots1) ∧
   ntable1.inv ∧
   slots1.len = slots.len ∧
   (∀ key v, ntable1.lookup key = some v ↔ slots.lookup key = some v)
@@ -786,13 +786,30 @@ theorem move_elements_spec
     norm_cast at *
     have := @Int.le_toNat n (slots.val.len - OfNat.ofNat 0) (by simp; scalar_tac)
     simp_all
-  have h := move_elements_loop_spec (slots.val.len - 0).toNat ntable slots 0#usize hn (by scalar_tac) hinv
+  have ⟨ ntable1, slots1, hEq, _, _, ntable1Lookup, slotsLookup, _, _ ⟩ :=
+    move_elements_loop_spec (slots.val.len - 0).toNat ntable slots 0#usize hn (by scalar_tac) hinv
     (by scalar_tac)
     hSlotsInv
-    (by intro j h0 h1;)
+    (by intro j h0 h1; scalar_tac)
+    (by simp [*])
+    (by simp [*])
+    (by scalar_tac)
+  simp [hEq]; clear hEq
+  simp [and_assoc]
+  split_conjs <;> try assumption
+  intro key v
+  have := ntable1Lookup key v
+  have := slotsLookup key v
+  constructor <;> simp_all
 
+@[pspec]
+theorem try_resize_spec {α : Type} (hm : HashMap α) :
+  ∃ hm', hm.try_resize α = ok hm' ∧
+  (∀ key, hm'.lookup key = hm.lookup key) ∧
+  hm'.al_v.len = hm.al_v.len := by
+  rw [try_resize]
 
-
+  sorry
 
 end HashMap
 
