@@ -54,7 +54,8 @@ inductive CList (T : Type) :=
 
 /- [demo::list_nth]:
    Source: 'src/demo.rs', lines 39:0-39:56 -/
-divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
+divergent def list_nth (T : Type) (l : CList T) (i : U32)
+  : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -66,7 +67,8 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
 
 /- [demo::list_nth1]: loop 0:
    Source: 'src/demo.rs', lines 54:0-63:1 -/
-divergent def list_nth1_loop (T : Type) (l : CList T) (i : U32) : Result T :=
+divergent def list_nth1_loop
+  (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -78,7 +80,8 @@ divergent def list_nth1_loop (T : Type) (l : CList T) (i : U32) : Result T :=
 
 /- [demo::list_nth1]:
    Source: 'src/demo.rs', lines 54:0-54:65 -/
-def list_nth1 (T : Type) (l : CList T) (i : U32) : Result T :=
+def list_nth1 (T : Type) (l : CList T) (i : U32) :
+  Result T :=
   list_nth1_loop T l i
 
 /- Trait declaration: [demo::Counter]
@@ -88,7 +91,8 @@ structure Counter (Self : Type) where
 
 /- [demo::{(demo::Counter for usize)}::incr]:
    Source: 'src/demo.rs', lines 72:4-72:31 -/
-def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
+def CounterUsize.incr (self : Usize) :
+  Result (Usize × Usize) :=
   do
   let self1 ← self + 1#usize
   Result.ret (self, self1)
@@ -102,7 +106,8 @@ def CounterUsize : Counter Usize := {
 /- [demo::use_counter]:
    Source: 'src/demo.rs', lines 79:0-79:59 -/
 def use_counter
-  (T : Type) (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
+  (T : Type) (CounterInst : Counter T) (cnt : T) :
+  Result (Usize × T) :=
   do
   let (_, cnt1) ← CounterInst.incr cnt
   CounterInst.incr cnt1
