@@ -9,7 +9,7 @@ namespace List
 -- TODO: rewrite rule: match x == y with ... -> if x = y then ... else ... ? (actually doesn't work because of sugar)
 -- TODO: move?
 @[simp]
-def lookup' {α : Type} (ls: _root_.List (Usize × α)) (key: Usize) : Option α :=
+def lookup' {α : Type} (ls: List (Usize × α)) (key: Usize) : Option α :=
   match ls with
   | [] => none
   | (k, x) :: tl => if k = key then some x else lookup' tl key
@@ -18,28 +18,26 @@ end List
 
 namespace hashmap
 
-namespace List
+namespace AList
 
-def v {α : Type} (ls: List α) : _root_.List (Usize × α) :=
+def v {α : Type} (ls: AList α) : List (Usize × α) :=
   match ls with
   | Nil => []
   | Cons k x tl => (k, x) :: v tl
 
-@[simp] theorem v_nil (α : Type) : (Nil : List α).v = [] := by rfl
-@[simp] theorem v_cons {α : Type} k x (tl: List α) : (Cons k x tl).v = (k, x) :: v tl := by rfl
+@[simp] theorem v_nil (α : Type) : (Nil : AList α).v = [] := by rfl
+@[simp] theorem v_cons {α : Type} k x (tl: AList α) : (Cons k x tl).v = (k, x) :: v tl := by rfl
 
 @[simp]
-abbrev lookup {α : Type} (ls: List α) (key: Usize) : Option α :=
+abbrev lookup {α : Type} (ls: AList α) (key: Usize) : Option α :=
   ls.v.lookup' key
 
 @[simp]
-abbrev len {α : Type} (ls : List α) : Int := ls.v.len
+abbrev len {α : Type} (ls : AList α) : Int := ls.v.len
 
-end List
+end AList
 
 namespace HashMap
-
-abbrev Core.List := _root_.List
 
 namespace List
 
@@ -55,7 +53,7 @@ theorem match_lawful_beq [BEq α] [LawfulBEq α] [DecidableEq α] (x y : α) :
   (x == y) = (if x = y then true else false) := by
   split <;> simp_all
 
-def distinct_keys (ls : Core.List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
+def distinct_keys (ls : List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
 
 def hash_mod_key (k : Usize) (l : Int) : Int :=
   match hash_key k with
@@ -66,33 +64,33 @@ def hash_mod_key (k : Usize) (l : Int) : Int :=
 theorem hash_mod_key_eq : hash_mod_key k l = k.val % l := by
   simp [hash_mod_key, hash_key]
 
-def slot_s_inv_hash (l i : Int) (ls : Core.List (Usize × α)) : Prop :=
+def slot_s_inv_hash (l i : Int) (ls : List (Usize × α)) : Prop :=
   ls.allP (λ (k, _) => hash_mod_key k l = i)
 
 @[simp]
-def slot_s_inv (l i : Int) (ls : Core.List (Usize × α)) : Prop :=
+def slot_s_inv (l i : Int) (ls : List (Usize × α)) : Prop :=
   distinct_keys ls ∧
   slot_s_inv_hash l i ls
 
-def slot_t_inv (l i : Int) (s : List α) : Prop := slot_s_inv l i s.v
+def slot_t_inv (l i : Int) (s : AList α) : Prop := slot_s_inv l i s.v
 
 -- Interpret the hashmap as a list of lists
-def v (hm : HashMap α) : Core.List (Core.List (Usize × α)) :=
-  hm.slots.val.map List.v
+def v (hm : HashMap α) : List (List (Usize × α)) :=
+  hm.slots.val.map AList.v
 
 -- Interpret the hashmap as an associative list
-def al_v (hm : HashMap α) : Core.List (Usize × α) :=
+def al_v (hm : HashMap α) : List (Usize × α) :=
   hm.v.flatten
 
 -- TODO: automatic derivation
-instance : Inhabited (List α) where
+instance : Inhabited (AList α) where
   default := .Nil
 
 @[simp]
-def slots_s_inv (s : Core.List (List α)) : Prop :=
+def slots_s_inv (s : List (AList α)) : Prop :=
   ∀ (i : Int), 0 ≤ i → i < s.len → slot_t_inv s.len i (s.index i)
 
-def slots_t_inv (s : alloc.vec.Vec (List α)) : Prop :=
+def slots_t_inv (s : alloc.vec.Vec (AList α)) : Prop :=
   slots_s_inv s.v
 
 @[simp]
@@ -117,7 +115,7 @@ attribute [-simp] Bool.exists_bool
 -- of heart beats
 set_option maxHeartbeats 1000000
 
-theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
+theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: AList α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ b l1,
@@ -144,7 +142,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
     simp [insert_in_list]
     rw [insert_in_list_loop]
     simp (config := {contextual := true})
-      [List.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
+      [AList.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
   | Cons k v tl0 =>
      if h: k = key then
        rw [insert_in_list]
@@ -153,7 +151,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        exists false; simp -- TODO: why do we need to do this?
        split_conjs
        . intros; simp [*]
-       . simp [List.v, slot_s_inv_hash] at *
+       . simp [AList.v, slot_s_inv_hash] at *
          simp [*]
        . simp [*, distinct_keys] at *
          apply hdk
@@ -162,17 +160,17 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        rw [insert_in_list]
        rw [insert_in_list_loop]
        simp [h]
-       have : slot_s_inv_hash l (hash_mod_key key l) (List.v tl0) := by
-         simp_all [List.v, slot_s_inv_hash]
-       have : distinct_keys (List.v tl0) := by
+       have : slot_s_inv_hash l (hash_mod_key key l) (AList.v tl0) := by
+         simp_all [AList.v, slot_s_inv_hash]
+       have : distinct_keys (AList.v tl0) := by
          simp [distinct_keys] at hdk
          simp [hdk, distinct_keys]
        progress keep heq as ⟨ b, tl1 .. ⟩
        simp only [insert_in_list] at heq
-       have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by
-         simp [List.v, slot_s_inv_hash] at *
+       have : slot_s_inv_hash l (hash_mod_key key l) (AList.v (AList.Cons k v tl1)) := by
+         simp [AList.v, slot_s_inv_hash] at *
          simp [*]
-       have : distinct_keys ((k, v) :: List.v tl1) := by
+       have : distinct_keys ((k, v) :: AList.v tl1) := by
          simp [distinct_keys] at *
          simp [*]
        -- TODO: canonize addition by default?
@@ -180,7 +178,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
 
 @[pspec]
-theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
+theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: AList α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ b l1,
@@ -203,7 +201,7 @@ theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: 
   exists l1
 
 @[simp]
-def slots_t_lookup (s : Core.List (List α)) (k : Usize) : Option α :=
+def slots_t_lookup (s : List (AList α)) (k : Usize) : Option α :=
   let i := hash_mod_key k s.len
   let slot := s.index i
   slot.lookup k
@@ -254,7 +252,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   rw [insert_no_resize]
   -- Simplify. Note that this also simplifies some function calls, like array index
   simp [hash_key, bind_tc_ok]
-  have _ : (alloc.vec.Vec.len (List α) hm.slots).val ≠ 0 := by
+  have _ : (alloc.vec.Vec.len (AList α) hm.slots).val ≠ 0 := by
    intro
    simp_all [inv]
   progress as ⟨ hash_mod, hhm ⟩
@@ -344,11 +342,11 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     simp only [lookup, List.lookup, len_s, al_v, HashMap.v, slots_t_lookup] at *
     -- We have to do a case disjunction
     simp_all
-    simp [_root_.List.update_map_eq]
+    simp [List.update_map_eq]
     -- TODO: dependent rewrites
-    have _ : key.val % hm.slots.val.len < (List.map List.v hm.slots.val).len := by
+    have _ : key.val % hm.slots.val.len < (List.map AList.v hm.slots.val).len := by
       simp [*]
-    simp [_root_.List.len_flatten_update_eq, *]
+    simp [List.len_flatten_update_eq, *]
     split <;>
     rename_i heq <;>
     simp [heq] at hlen <;>
@@ -371,7 +369,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       have _ := hinv.right.left i hipos (by simp_all)
       simp [hhm, h_veq, nhm_eq] at * -- TODO: annoying, we do that because simp_all fails below
       -- We need a case disjunction
-      if h_ieq : i = key.val % _root_.List.len hm.slots.val then
+      if h_ieq : i = key.val % List.len hm.slots.val then
         -- TODO: simp_all fails: "(deterministic) timeout at 'whnf'"
         -- Also, it is annoying to do this kind
         -- of rewritings by hand. We could have a different simp
