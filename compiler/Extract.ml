@@ -1448,6 +1448,10 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open two boxes for the definition, so that whenever possible it gets printed on
    * one line and indents are correct *)
   F.pp_open_hvbox fmt 0;
+  (* Print the attributes *)
+  if def.backend_attributes.reducible && backend () = Lean then (
+    F.pp_print_string fmt "@[reducible]";
+    F.pp_print_space fmt ());
   F.pp_open_vbox fmt ctx.indent_incr;
   (* For HOL4: we may need to put parentheses around the definition *)
   let parenthesize = backend () = HOL4 && decl_is_not_last_from_group kind in

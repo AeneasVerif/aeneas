@@ -1498,6 +1498,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
                 is_local = def.is_local;
                 span = loop.span;
                 kind = def.kind;
+                backend_attributes = def.backend_attributes;
                 num_loops;
                 loop_id = Some loop.loop_id;
                 llbc_name = def.llbc_name;
@@ -2277,6 +2278,52 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
   (* Return *)
   transl
 
+(** Update the [reducible] attribute.
+
+    For now we mark a function as reducible when its body is only a call to a loop
+    function. This situation often happens for simple functions whose body contains
+    a loop: we introduce an intermediate function for the loop body, and the
+    translation of the function itself simply calls the loop body. By marking
+    the function as reducible, we allow tactics like [simp] or [progress] to
+    see through the definition.
+ *)
+let compute_reducible (_ctx : trans_ctx) (transl : pure_fun_translation list) :
+    pure_fun_translation list =
+  let update_one (trans : pure_fun_translation) : pure_fun_translation =
+    match trans.f.body with
+    | None -> trans
+    | Some body -> (
+        (* Check if the body is exactly a call to a loop function.
+           Note that we check that the arguments are exactly the input
+           variables - otherwise we may not want the call to be reducible;
+           for instance when using the [progress] tactic we might want to
+           use a more specialized specification theorem. *)
+        let app, args = destruct_apps body.body in
+        match app.e with
+        | Qualif
+            {
+              id = FunOrOp (Fun (FromLlbc (FunId fid, Some _lp_id)));
+              generics = _;
+            }
+          when fid = FRegular trans.f.def_id ->
+            if
+              List.length body.inputs = List.length args
+              && List.for_all
+                   (fun ((var, arg) : var * texpression) ->
+                     match arg.e with
+                     | Var var_id -> var_id = var.id
+                     | _ -> false)
+                   (List.combine body.inputs args)
+            then
+              let f =
+                { trans.f with backend_attributes = { reducible = true } }
+              in
+              { trans with f }
+            else trans
+        | _ -> trans)
+  in
+  List.map update_one transl
+
 (** Apply all the micro-passes to a function.
 
     As loops are initially directly integrated into the function definition,
@@ -2337,4 +2384,7 @@ let apply_passes_to_pure_fun_translations (ctx : trans_ctx)
   (* Filter the useless inputs in the loop functions (loops are initially
      parameterized by *all* the symbolic values in the context, because
      they may access any of them). *)
-  filter_loop_inputs ctx transl
+  let transl = filter_loop_inputs ctx transl in
+
+  (* Update the "reducible" attribute *)
+  compute_reducible ctx transl
