@@ -110,6 +110,7 @@ divergent def list_mem_loop (x : U32) (ls : List U32) : Result Bool :=
 
 /- [loops::list_mem]:
    Source: 'tests/src/loops.rs', lines 80:0-80:52 -/
+@[reducible]
 def list_mem (x : U32) (ls : List U32) : Result Bool :=
   list_mem_loop x ls
 
@@ -136,6 +137,7 @@ divergent def list_nth_mut_loop_loop
 
 /- [loops::list_nth_mut_loop]:
    Source: 'tests/src/loops.rs', lines 92:0-92:71 -/
+@[reducible]
 def list_nth_mut_loop
   (T : Type) (ls : List T) (i : U32) : Result (T × (T → Result (List T))) :=
   list_nth_mut_loop_loop T ls i
@@ -155,6 +157,7 @@ divergent def list_nth_shared_loop_loop
 
 /- [loops::list_nth_shared_loop]:
    Source: 'tests/src/loops.rs', lines 105:0-105:66 -/
+@[reducible]
 def list_nth_shared_loop (T : Type) (ls : List T) (i : U32) : Result T :=
   list_nth_shared_loop_loop T ls i
 
@@ -316,6 +319,7 @@ divergent def list_nth_mut_loop_pair_loop
 
 /- [loops::list_nth_mut_loop_pair]:
    Source: 'tests/src/loops.rs', lines 188:0-192:27 -/
+@[reducible]
 def list_nth_mut_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)) × (T → Result (List T)))
@@ -340,6 +344,7 @@ divergent def list_nth_shared_loop_pair_loop
 
 /- [loops::list_nth_shared_loop_pair]:
    Source: 'tests/src/loops.rs', lines 212:0-216:19 -/
+@[reducible]
 def list_nth_shared_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_shared_loop_pair_loop T ls0 ls1 i
@@ -376,6 +381,7 @@ divergent def list_nth_mut_loop_pair_merge_loop
 
 /- [loops::list_nth_mut_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 237:0-241:27 -/
+@[reducible]
 def list_nth_mut_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × ((T × T) → Result ((List T) × (List T))))
@@ -401,6 +407,7 @@ divergent def list_nth_shared_loop_pair_merge_loop
 
 /- [loops::list_nth_shared_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 255:0-259:19 -/
+@[reducible]
 def list_nth_shared_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_shared_loop_pair_merge_loop T ls0 ls1 i
@@ -433,6 +440,7 @@ divergent def list_nth_mut_shared_loop_pair_loop
 
 /- [loops::list_nth_mut_shared_loop_pair]:
    Source: 'tests/src/loops.rs', lines 273:0-277:23 -/
+@[reducible]
 def list_nth_mut_shared_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
@@ -467,6 +475,7 @@ divergent def list_nth_mut_shared_loop_pair_merge_loop
 
 /- [loops::list_nth_mut_shared_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 292:0-296:23 -/
+@[reducible]
 def list_nth_mut_shared_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
@@ -501,6 +510,7 @@ divergent def list_nth_shared_mut_loop_pair_loop
 
 /- [loops::list_nth_shared_mut_loop_pair]:
    Source: 'tests/src/loops.rs', lines 311:0-315:23 -/
+@[reducible]
 def list_nth_shared_mut_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))
@@ -535,6 +545,7 @@ divergent def list_nth_shared_mut_loop_pair_merge_loop
 
 /- [loops::list_nth_shared_mut_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 330:0-334:23 -/
+@[reducible]
 def list_nth_shared_mut_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → Result (List T)))

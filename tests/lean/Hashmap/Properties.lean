@@ -165,8 +165,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        have : distinct_keys (AList.v tl0) := by
          simp [distinct_keys] at hdk
          simp [hdk, distinct_keys]
-       progress keep heq as ⟨ b, tl1 .. ⟩
-       simp only [insert_in_list] at heq
+       progress as ⟨ b, tl1 .. ⟩
        have : slot_s_inv_hash l (hash_mod_key key l) (AList.v (AList.Cons k v tl1)) := by
          simp [AList.v, slot_s_inv_hash] at *
          simp [*]

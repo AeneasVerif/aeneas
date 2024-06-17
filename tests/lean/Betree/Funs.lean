@@ -248,6 +248,7 @@ divergent def betree.Node.lookup_first_message_for_key_loop
 
 /- [betree::betree::{betree::betree::Node#5}::lookup_first_message_for_key]:
    Source: 'src/betree.rs', lines 792:4-795:34 -/
+@[reducible]
 def betree.Node.lookup_first_message_for_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result ((betree.List (U64 × betree.Message)) × (betree.List (U64 ×
@@ -272,6 +273,7 @@ divergent def betree.Node.lookup_in_bindings_loop
 
 /- [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]:
    Source: 'src/betree.rs', lines 649:4-649:84 -/
+@[reducible]
 def betree.Node.lookup_in_bindings
   (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
   betree.Node.lookup_in_bindings_loop key bindings
@@ -307,6 +309,7 @@ divergent def betree.Node.apply_upserts_loop
 
 /- [betree::betree::{betree::betree::Node#5}::apply_upserts]:
    Source: 'src/betree.rs', lines 820:4-820:94 -/
+@[reducible]
 def betree.Node.apply_upserts
   (msgs : betree.List (U64 × betree.Message)) (prev : Option U64) (key : U64)
   :
@@ -411,6 +414,7 @@ divergent def betree.Node.filter_messages_for_key_loop
 
 /- [betree::betree::{betree::betree::Node#5}::filter_messages_for_key]:
    Source: 'src/betree.rs', lines 683:4-683:77 -/
+@[reducible]
 def betree.Node.filter_messages_for_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × betree.Message))
@@ -443,6 +447,7 @@ divergent def betree.Node.lookup_first_message_after_key_loop
 
 /- [betree::betree::{betree::betree::Node#5}::lookup_first_message_after_key]:
    Source: 'src/betree.rs', lines 694:4-697:34 -/
+@[reducible]
 def betree.Node.lookup_first_message_after_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result ((betree.List (U64 × betree.Message)) × (betree.List (U64 ×
@@ -531,6 +536,7 @@ divergent def betree.Node.apply_messages_to_internal_loop
 
 /- [betree::betree::{betree::betree::Node#5}::apply_messages_to_internal]:
    Source: 'src/betree.rs', lines 518:4-521:5 -/
+@[reducible]
 def betree.Node.apply_messages_to_internal
   (msgs : betree.List (U64 × betree.Message))
   (new_msgs : betree.List (U64 × betree.Message)) :
@@ -563,6 +569,7 @@ divergent def betree.Node.lookup_mut_in_bindings_loop
 
 /- [betree::betree::{betree::betree::Node#5}::lookup_mut_in_bindings]:
    Source: 'src/betree.rs', lines 664:4-667:32 -/
+@[reducible]
 def betree.Node.lookup_mut_in_bindings
   (key : U64) (bindings : betree.List (U64 × U64)) :
   Result ((betree.List (U64 × U64)) × (betree.List (U64 × U64) → Result
@@ -627,6 +634,7 @@ divergent def betree.Node.apply_messages_to_leaf_loop
 
 /- [betree::betree::{betree::betree::Node#5}::apply_messages_to_leaf]:
    Source: 'src/betree.rs', lines 463:4-466:5 -/
+@[reducible]
 def betree.Node.apply_messages_to_leaf
   (bindings : betree.List (U64 × U64))
   (new_msgs : betree.List (U64 × betree.Message)) :

@@ -19,7 +19,7 @@ divergent def foo_loop : Result Unit :=
 
 /- [infinite_loop::foo]:
    Source: 'tests/src/infinite-loop.rs', lines 6:0-6:8 -/
-def foo : Result Unit :=
-  foo_loop
+@[reducible] def foo : Result Unit :=
+               foo_loop
 
 end infinite_loop
