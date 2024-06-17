@@ -169,7 +169,7 @@ impl<T> HashMap<T> {
             );
 
             // Move the elements to the new table
-            HashMap::move_elements(&mut ntable, &mut self.slots, 0);
+            HashMap::move_elements(&mut ntable, &mut self.slots);
 
             // Replace the current table with the new table
             self.slots = ntable.slots;
@@ -179,7 +179,8 @@ impl<T> HashMap<T> {
 
     /// Auxiliary function called by [try_resize] to move all the elements
     /// from the table to a new table
-    fn move_elements<'a>(ntable: &'a mut HashMap<T>, slots: &'a mut Vec<AList<T>>, mut i: usize) {
+    fn move_elements<'a>(ntable: &'a mut HashMap<T>, slots: &'a mut Vec<AList<T>>) {
+        let mut i = 0;
         while i < slots.len() {
             // Move the elements out of the slot i
             let ls = std::mem::replace(&mut slots[i], AList::Nil);
