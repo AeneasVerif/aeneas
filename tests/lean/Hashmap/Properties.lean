@@ -67,12 +67,29 @@ theorem hash_mod_key_eq : hash_mod_key k l = k.val % l := by
 def slot_s_inv_hash (l i : Int) (ls : List (Usize × α)) : Prop :=
   ls.allP (λ (k, _) => hash_mod_key k l = i)
 
-@[simp]
 def slot_s_inv (l i : Int) (ls : List (Usize × α)) : Prop :=
   distinct_keys ls ∧
   slot_s_inv_hash l i ls
 
 def slot_t_inv (l i : Int) (s : AList α) : Prop := slot_s_inv l i s.v
+
+@[simp] theorem distinct_keys_nil : @distinct_keys α [] := by simp [distinct_keys]
+@[simp] theorem slot_s_inv_hash_nil : @slot_s_inv_hash l i α [] := by simp [slot_s_inv_hash]
+@[simp] theorem slot_s_inv_nil : @slot_s_inv α l i [] := by simp [slot_s_inv]
+
+@[simp] theorem distinct_keys_cons k (v : α) (tl : List (Usize × α)) :
+  distinct_keys ((k, v) :: tl) ↔ ((tl.allP fun (k', _) => ¬↑k = ↑k') ∧ distinct_keys tl) := by simp [distinct_keys]
+
+@[simp] theorem slot_s_inv_hash_cons k (v : α) (tl : List (Usize × α)) :
+  slot_s_inv_hash l i ((k, v) :: tl) ↔
+    (hash_mod_key k l = i ∧ tl.allP (λ (k, _) => hash_mod_key k l = i) ∧ slot_s_inv_hash l i tl) :=
+  by simp [slot_s_inv_hash]
+
+@[simp] theorem slot_s_inv_cons k (v : α) (tl : List (Usize × α)) :
+  slot_s_inv l i ((k, v) :: tl) ↔
+    ((tl.allP fun (k', _) => ¬↑k = ↑k') ∧ distinct_keys tl ∧
+     hash_mod_key k l = i ∧ tl.allP (λ (k, _) => hash_mod_key k l = i) ∧ slot_s_inv l i tl) := by
+    simp [slot_s_inv]; tauto
 
 -- Interpret the hashmap as a list of lists
 def v (hm : HashMap α) : List (List (Usize × α)) :=
@@ -108,6 +125,30 @@ def inv (hm : HashMap α) : Prop :=
   base_inv hm
   -- TODO: either the hashmap is not overloaded, or we can't resize it
 
+@[simp]
+def slots_s_lookup (s : List (AList α)) (k : Usize) : Option α :=
+  let i := hash_mod_key k s.len
+  let slot := s.index i
+  slot.lookup k
+
+abbrev Slots α := alloc.vec.Vec (AList α)
+
+abbrev Slots.lookup (s : Slots α) (k : Usize) := slots_s_lookup s.val k
+
+abbrev Slots.al_v (s : Slots α) := (s.val.map AList.v).flatten
+
+def lookup (hm : HashMap α) (k : Usize) : Option α :=
+  slots_s_lookup hm.slots.val k
+
+@[simp]
+abbrev len_s (hm : HashMap α) : Int := hm.al_v.len
+
+instance : Membership Usize (HashMap α) where
+  mem k hm := hm.lookup k ≠ none
+
+/- Activate the ↑ notation -/
+attribute [coe] HashMap.v
+
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
 
@@ -141,21 +182,19 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
     exists true -- TODO: why do we need to do this?
     simp [insert_in_list]
     rw [insert_in_list_loop]
-    simp (config := {contextual := true})
-      [AList.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
+    simp (config := {contextual := true}) [AList.v]
   | Cons k v tl0 =>
      if h: k = key then
        rw [insert_in_list]
        rw [insert_in_list_loop]
        simp [h]
-       exists false; simp -- TODO: why do we need to do this?
+       exists false; simp only [true_and, exists_eq_left', List.lookup', ↓reduceIte, AList.v_cons] -- TODO: why do we need to do this?
        split_conjs
        . intros; simp [*]
-       . simp [AList.v, slot_s_inv_hash] at *
-         simp [*]
-       . simp [*, distinct_keys] at *
-         apply hdk
-       . tauto
+       . simp_all [slot_s_inv_hash]
+       . simp at hinv; tauto
+       . simp_all [slot_s_inv_hash]
+       . simp_all
      else
        rw [insert_in_list]
        rw [insert_in_list_loop]
@@ -199,18 +238,6 @@ theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: 
   exists b
   exists l1
 
-@[simp]
-def slots_t_lookup (s : List (AList α)) (k : Usize) : Option α :=
-  let i := hash_mod_key k s.len
-  let slot := s.index i
-  slot.lookup k
-
-def lookup (hm : HashMap α) (k : Usize) : Option α :=
-  slots_t_lookup hm.slots.val k
-
-@[simp]
-abbrev len_s (hm : HashMap α) : Int := hm.al_v.len
-
 -- Remark: α and β must live in the same universe, otherwise the
 -- bind doesn't work
 theorem if_update_eq
@@ -235,6 +262,7 @@ set_option pp.coercions false -- do not print coercions with ↑ (this doesn't p
 -- of heart beats
 set_option maxHeartbeats 2000000
 
+@[pspec]
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
   ∃ nhm, hm.insert_no_resize α key value = ok nhm  ∧
@@ -271,7 +299,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     simp [slot_t_inv, hhm] at h
     simp [h, hhm, h_leq]
   have hd : distinct_keys l.v := by
-    simp [inv, slots_t_inv, slot_t_inv] at hinv
+    simp [inv, slots_t_inv, slot_t_inv, slot_s_inv] at hinv
     have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
     simp [h, h_leq]
   progress as ⟨ inserted, l0, _, _, _, _, hlen .. ⟩
@@ -338,7 +366,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     match hm.lookup key with
     | none => nhm.len_s = hm.len_s + 1
     | some _ => nhm.len_s = hm.len_s := by
-    simp only [lookup, List.lookup, len_s, al_v, HashMap.v, slots_t_lookup] at *
+    simp only [lookup, List.lookup, len_s, al_v, HashMap.v, slots_s_lookup] at *
     -- We have to do a case disjunction
     simp_all
     simp [List.update_map_eq]
@@ -366,20 +394,103 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     . simp [slots_t_inv, slot_t_inv] at *
       intro i hipos _
       have _ := hinv.right.left i hipos (by simp_all)
-      simp [hhm, h_veq, nhm_eq] at * -- TODO: annoying, we do that because simp_all fails below
       -- We need a case disjunction
-      if h_ieq : i = key.val % List.len hm.slots.val then
-        -- TODO: simp_all fails: "(deterministic) timeout at 'whnf'"
-        -- Also, it is annoying to do this kind
-        -- of rewritings by hand. We could have a different simp
-        -- which safely substitutes variables when we have an
-        -- equality `x = ...` and `x` doesn't appear in the rhs
-        simp [h_ieq] at *
-        simp [*]
-      else
-        simp [*]
+      cases h_ieq : i == key.val % List.len hm.slots.val <;> simp_all [slot_s_inv]
     . simp [hinv, h_veq, nhm_eq]
   simp_all
+
+theorem slot_allP_not_key_lookup (slot : AList T) (h : slot.v.allP fun (k', _) => ¬k = k') :
+  slot.lookup k = none := by
+  induction slot <;> simp_all
+
+@[pspec]
+theorem move_elements_from_list_spec
+  {T : Type} (ntable : HashMap T) (slot : AList T)
+  (hinv : ntable.inv)
+  {l i : Int} (hSlotInv : slot_t_inv l i slot)
+  (hDisjoint1 : ∀ key, ntable.lookup key ≠ none → slot.lookup key = none)
+  (hDisjoint2 : ∀ key, slot.lookup key ≠ none → ntable.lookup key = none)
+  (hLen : ntable.al_v.len + slot.v.len ≤ Usize.max)
+  :
+  ∃ ntable1, ntable.move_elements_from_list T slot = ok ntable1 ∧
+  ntable1.inv ∧
+  (∀ key, ntable1.lookup key ≠ none ↔
+    (ntable.lookup key ≠ none ∨ slot.lookup key ≠ none)) ∧
+  (∀ key, ntable1.lookup key = ntable.lookup key ∨
+          ntable1.lookup key = slot.lookup key)
+  := by
+  rw [move_elements_from_list]; rw [move_elements_from_list_loop]
+  cases slot with
+  | Nil =>
+    simp [hinv]
+  | Cons key value slot1 =>
+    simp
+    have hLookupKey : ntable.lookup key = none := by simp_all
+    have : ntable.lookup key = none → ntable.len_s < Usize.max := by simp_all; scalar_tac
+    progress as ⟨ ntable1, _, _, hLookup12, hLength1 ⟩
+    simp [hLookupKey] at hLength1
+    have : ∀ (key : Usize), ntable1.lookup key ≠ none → slot1.lookup key = none := by
+      intro key' hLookup
+      if h: key = key' then
+        simp_all [slot_t_inv]
+        apply slot_allP_not_key_lookup
+        simp_all
+      else
+        simp_all
+        have := hDisjoint1 key' hLookup
+        simp_all
+    have : ∀ (key : Usize), slot1.lookup key ≠ none → ntable1.lookup key = none := by
+      intro key' hLookup
+      if h: key = key' then simp_all
+      else
+        simp [*] -- TODO: simplification (simp_all)
+    have : ntable1.al_v.len + slot1.v.len ≤ Usize.max := by simp_all; scalar_tac
+    have : slot_t_inv l i slot1 := by
+      simp [slot_t_inv] at hSlotInv
+      simp [slot_t_inv, hSlotInv]
+    -- TODO: progress leads to: slot_t_inv i i slot1
+    -- progress as ⟨ ntable2 ⟩
+    have  ⟨ ntable2, hEq, hInv2, hLookup21, hLookup22 ⟩ := move_elements_from_list_spec ntable1 slot1 (by assumption) (by assumption)
+      (by assumption) (by assumption) (by assumption)
+    simp [hEq]; clear hEq
+    split_conjs
+    . simp [*]
+    . intro key'
+      if h: key = key' then simp_all
+      else simp_all
+    . intro key'
+      have hLookup3 := hLookup22 key'
+      if h: key = key' then
+        simp_all
+      else
+        cases hLookup3 with
+        | inl =>
+          left
+          have := hLookup12 key' (by simp [*])
+          simp_all
+        | inr =>
+          simp_all
+
+@[pspec]
+theorem move_elements_spec
+  {T : Type} (ntable : HashMap T) (slots : Slots T)
+  (i : Usize) (hinv : ntable.inv)
+  (hSlotsInv : slots_t_inv slots)
+  (hEmpty : ∀ j, 0 ≤ j → j < i.val → slots.val.index j = AList.Nil)
+  (hDisjoint1 : ∀ key, ntable.lookup key ≠ none → slots.lookup key = none)
+  (hDisjoint2 : ∀ key, slots.lookup key ≠ none → ntable.lookup key = none)
+  (hLen : ntable.al_v.len + slots.al_v.len ≤ Usize.max)
+  :
+  ∃ ntable1 slots1, ntable.move_elements T slot i = ok (ntable1, slots1) ∧
+  ntable1.inv ∧
+  (∀ key, ntable1.lookup key ≠ none ↔
+    (ntable.lookup key ≠ none ∨ slots.lookup key ≠ none)) ∧
+  (∀ key, ntable1.lookup key = ntable.lookup key ∨
+          ntable1.lookup key = slots.lookup key) ∧
+  (∀ (j : Int), 0 ≤ j → j < slots1.len → slots1.val.index j = AList.Nil)
+  := by
+  rw [move_elements]
+
 
 end HashMap
 
