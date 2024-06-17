@@ -27,7 +27,7 @@ class HasIntPred {a: Sort u} (x: a) where
   prop : concl
 
 /- Proposition with implications: if we find P we can introduce Q in the context -/
-class PropHasImp (x : Prop) where
+class PropHasImp (x : Sort u) where
   concl : Prop
   prop : x → concl
 
@@ -199,7 +199,7 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     -- Add a declaration
     let nval ← Utils.addDeclTac name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
-    Utils.simpAt true [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
+    Utils.simpAt true {} #[] [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
     -- Return the new value
     pure nval
 
@@ -242,7 +242,7 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   extraPreprocess
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `Tactic.allGoals`
-  Tactic.allGoals do tryTac (dsimpAt false [] [] [] Tactic.Location.wildcard)
+  Tactic.allGoals do tryTac (dsimpAt false {} #[] [] [] [] Tactic.Location.wildcard)
 
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ())
@@ -259,10 +259,10 @@ def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic
   -- the goal. I think before leads to a smaller proof term?
   Tactic.allGoals (intTacPreprocess extraPreprocess)
   -- More preprocessing
-  Tactic.allGoals (Utils.tryTac (Utils.simpAt true [] [``nat_zero_eq_int_zero] [] .wildcard))
+  Tactic.allGoals (Utils.tryTac (Utils.simpAt true {} #[] [] [``nat_zero_eq_int_zero] [] .wildcard))
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
-  -- Call linarith
+  -- Call omega
   Tactic.allGoals do
     try do Tactic.Omega.omegaTactic {}
     catch _ =>

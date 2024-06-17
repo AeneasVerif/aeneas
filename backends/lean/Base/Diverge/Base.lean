@@ -1,7 +1,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Mathlib.Tactic.Linarith
 import Base.Primitives.Base
 import Base.Arith.Base
 import Base.Diverge.ElabBase
@@ -36,20 +35,19 @@ namespace Lemmas
     revert m
     induction k -- TODO: induction h rather?
     case zero =>
-      simp_all
       intro m h1 h2
       have h: n = m := by omega
       unfold for_all_fin_aux; simp_all
       simp_all
       -- There is no i s.t. m ≤ i
       intro i h3; cases i; simp_all
-      linarith
+      omega
     case succ k hi =>
       intro m hk hmn
       intro hf i hmi
       have hne: m ≠ n := by
         have hineq := Nat.lt_of_sub_eq_succ hk
-        linarith
+        omega
       -- m = i?
       if heq: m = i then
         -- Yes: simply use the `for_all_fin_aux` hyp
@@ -64,7 +62,7 @@ namespace Lemmas
         have heq1: n - (m + 1) = k := by
           -- TODO: very annoying arithmetic proof
           simp [Nat.sub_eq_iff_eq_add hineq]
-          have hineq1: m ≤ n := by linarith
+          have hineq1: m ≤ n := by omega
           simp [Nat.sub_eq_iff_eq_add hineq1] at hk
           simp_arith [hk]
         have hi := hi (m + 1) heq1 hineq
@@ -199,7 +197,7 @@ namespace Fix
       | 0 =>
         exfalso
         zify at *
-        linarith
+        omega
       | Nat.succ m1 =>
         simp_arith at Hle
         simp [fix_fuel]
@@ -407,7 +405,7 @@ namespace Fix
         . simp at Hl
           -- Make a case disjunction on `h y (fix_fuel m k)`: if it is not equal
           -- to div, use the monotonicity of `h y`
-          have Hle : m ≤ n := by linarith
+          have Hle : m ≤ n := by omega
           have Hffmono := fix_fuel_mono Hkmono Hle
           have Hmono := Hhmono y Hffmono
           simp [result_rel] at Hmono
@@ -568,6 +566,7 @@ namespace FixI
     have Heq := Fix.is_valid_fix_fixed_eq Hvalid'
     simp [fix]
     conv => lhs; rw [Heq]
+    rfl
 
   /- Some utilities to define the mutually recursive functions -/
 
@@ -778,6 +777,7 @@ namespace FixII
     have Heq := Fix.is_valid_fix_fixed_eq Hvalid'
     simp [fix]
     conv => lhs; rw [Heq]
+    rfl
 
   /- Some utilities to define the mutually recursive functions -/
 
@@ -966,6 +966,7 @@ namespace Ex1
     have Heq := is_valid_fix_fixed_eq (@list_nth_body_is_valid a)
     simp [list_nth]
     conv => lhs; rw [Heq]
+    rfl
 
 end Ex1
 
@@ -1011,6 +1012,7 @@ namespace Ex2
     have Heq := is_valid_fix_fixed_eq (@list_nth_body_is_valid a)
     simp [list_nth]
     conv => lhs; rw [Heq]
+    rfl
 
 end Ex2
 
@@ -1183,6 +1185,7 @@ namespace Ex4
        .ok b) := by
     simp [is_even, is_odd];
     conv => lhs; rw [body_fix_eq]
+    rfl
 
   theorem is_odd_eq (i : Int) : is_odd i =
     (if i = 0
@@ -1192,6 +1195,7 @@ namespace Ex4
        .ok b) := by
     simp [is_even, is_odd];
     conv => lhs; rw [body_fix_eq]
+    rfl
 end Ex4
 
 namespace Ex5
@@ -1263,6 +1267,7 @@ namespace Ex5
     have Heq := is_valid_fix_fixed_eq (@id_body_is_valid a)
     simp [id]
     conv => lhs; rw [Heq]; simp; rw [id_body]
+    rfl
 
 end Ex5
 
@@ -1336,6 +1341,7 @@ namespace Ex6
     have Heq := is_valid_fix_fixed_eq body_is_valid
     simp [list_nth]
     conv => lhs; rw [Heq]
+    rfl
 
   -- Write the proof term explicitly: the generation of the proof term (without tactics)
   -- is automatable, and the proof term is actually a lot simpler and smaller when we
@@ -1429,6 +1435,7 @@ namespace Ex7
     have Heq := is_valid_fix_fixed_eq body_is_valid
     simp [list_nth]
     conv => lhs; rw [Heq]
+    rfl
 
   -- Write the proof term explicitly: the generation of the proof term (without tactics)
   -- is automatable, and the proof term is actually a lot simpler and smaller when we

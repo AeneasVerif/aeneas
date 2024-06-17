@@ -137,15 +137,16 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
     distinct_keys l1.v ∧
     -- We need this auxiliary property to prove that the keys distinct properties is preserved
     (∀ k, k ≠ key → l0.v.allP (λ (k1, _) => k ≠ k1) → l1.v.allP (λ (k1, _) => k ≠ k1))
-  :=
-  match l0 with
-  | .Nil => by
+  := by
+  cases l0 with
+  | Nil =>
     exists true -- TODO: why do we need to do this?
+    simp [insert_in_list]
+    rw [insert_in_list_loop]
     simp (config := {contextual := true})
-      [insert_in_list, insert_in_list_loop,
-       List.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
-  | .Cons k v tl0 =>
-     if h: k = key then by
+      [List.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
+  | Cons k v tl0 =>
+     if h: k = key then
        rw [insert_in_list]
        rw [insert_in_list_loop]
        simp [h]
@@ -157,21 +158,21 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        . simp [*, distinct_keys] at *
          apply hdk
        . tauto
-     else by
+     else
        rw [insert_in_list]
        rw [insert_in_list_loop]
        simp [h]
-       have : slot_s_inv_hash l (hash_mod_key key l) (List.v tl0) := by checkpoint
+       have : slot_s_inv_hash l (hash_mod_key key l) (List.v tl0) := by
          simp_all [List.v, slot_s_inv_hash]
-       have : distinct_keys (List.v tl0) := by checkpoint
+       have : distinct_keys (List.v tl0) := by
          simp [distinct_keys] at hdk
          simp [hdk, distinct_keys]
        progress keep heq as ⟨ b, tl1 .. ⟩
        simp only [insert_in_list] at heq
-       have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by checkpoint
+       have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by
          simp [List.v, slot_s_inv_hash] at *
          simp [*]
-       have : distinct_keys ((k, v) :: List.v tl1) := by checkpoint
+       have : distinct_keys ((k, v) :: List.v tl1) := by
          simp [distinct_keys] at *
          simp [*]
        -- TODO: canonize addition by default?
@@ -231,7 +232,6 @@ def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
 --set_option trace.profiler true
 
 -- For pretty printing (useful when copy-pasting goals)
-attribute [pp_dot] List.length -- use the dot notation when printing
 set_option pp.coercions false -- do not print coercions with ↑ (this doesn't parse)
 
 -- The proof below is a bit expensive, so we need to increase the maximum number
@@ -305,7 +305,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   -- zeta reduction? For now I have to do this peculiar manipulation
   have ⟨ nhm, nhm_eq ⟩ := @mk_opaque (HashMap α) { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
   exists nhm
-  have hupdt : lookup nhm key = some value := by checkpoint
+  have hupdt : lookup nhm key = some value := by
     simp [lookup, List.lookup] at *
     simp_all
   have hlkp : ∀ k, ¬ k = key → nhm.lookup k = hm.lookup k := by
@@ -340,7 +340,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   have _ :
     match hm.lookup key with
     | none => nhm.len_s = hm.len_s + 1
-    | some _ => nhm.len_s = hm.len_s := by checkpoint
+    | some _ => nhm.len_s = hm.len_s := by
     simp only [lookup, List.lookup, len_s, al_v, HashMap.v, slots_t_lookup] at *
     -- We have to do a case disjunction
     simp_all

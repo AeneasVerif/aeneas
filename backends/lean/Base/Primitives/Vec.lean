@@ -2,7 +2,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Mathlib.Tactic.Linarith
 import Base.IList
 import Base.Primitives.Scalar
 import Base.Primitives.ArraySlice
@@ -34,7 +33,7 @@ abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
 example {a: Type u} (v : Vec a) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
-def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp; decide ⟩
+def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
 
 instance (α : Type u) : Inhabited (Vec α) := by
   constructor
@@ -59,7 +58,7 @@ def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
     have h : nlen ≤ Usize.max := by
       simp [Usize.max] at *
       have hm := Usize.refined_max.property
-      cases h <;> cases hm <;> simp [U32.max, U64.max] at * <;> try linarith
+      cases h <;> cases hm <;> simp [U32.max, U64.max] at * <;> try omega
     ok ⟨ List.concat v.val x, by simp at *; assumption ⟩
   else
     fail maximumSizeExceeded
@@ -192,7 +191,7 @@ def alloc.slice.Slice.to_vec
 def core.slice.Slice.reverse (T : Type) (s : Slice T) : Slice T :=
   ⟨ s.val.reverse, by sorry ⟩
 
-def alloc.vec.Vec.with_capacity (T : Type) (s : Usize) : alloc.vec.Vec T := Vec.new T
+def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.new T
 
 /- [alloc::vec::{(core::ops::deref::Deref for alloc::vec::Vec<T, A>)#9}::deref]:
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2624:4-2624:27
