@@ -11,7 +11,7 @@ Include External_TypesExternal.
 Module External_Types.
 
 (** Trait declaration: [core::marker::Copy]
-    Source: '/rustc/65ea825f4021eaf77f1b25139969712d65b435a4/library/core/src/marker.rs', lines 465:0-465:21
+    Source: '/rustc/library/core/src/marker.rs', lines 465:0-465:21
     Name pattern: core::marker::Copy *)
 Record core_marker_Copy_t (Self : Type) := mkcore_marker_Copy_t {
   core_marker_Copy_tcore_marker_Copy_t_cloneCloneInst : core_clone_Clone Self;
