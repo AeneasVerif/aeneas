@@ -51,6 +51,8 @@ pub struct HashMap<T> {
     /// The max load factor applied to the current table length:
     /// gives the threshold at which to resize the table.
     max_load: usize,
+    /// [true] if we can't increase the size anymore.
+    saturated: bool,
     /// The table itself
     slots: Vec<AList<T>>,
 }
@@ -79,6 +81,7 @@ impl<T> HashMap<T> {
             num_entries: 0,
             max_load_factor: (max_load_dividend, max_load_divisor),
             max_load: (capacity * max_load_dividend) / max_load_divisor,
+            saturated: false,
             slots,
         }
     }
@@ -149,13 +152,12 @@ impl<T> HashMap<T> {
     /// The resize function, called if we need to resize the table after
     /// an insertion.
     fn try_resize(&mut self) {
-        // Check that we can resize: we need to check that there are no overflows.
-        // Note that we are conservative about the usize::MAX.
-        // Also note that `as usize` is a trait, but we apply it to a constant
-        // here, which gets compiled by the MIR interpreter (so we don't see
-        // the conversion, actually).
-        // Rk.: this is a hit heavy...
-        let max_usize = u32::MAX as usize;
+        // We can't resize if we're saturated
+        if self.saturated {
+            return;
+        }
+
+        let max_usize = usize::MAX;
         let capacity = self.slots.len();
         // Checking that there won't be overflows by using the fact that, if m > 0:
         // n * m <= p <==> n <= p / m
@@ -174,6 +176,8 @@ impl<T> HashMap<T> {
             // Replace the current table with the new table
             self.slots = ntable.slots;
             self.max_load = ntable.max_load;
+        } else {
+            self.saturated = true;
         }
     }
 
