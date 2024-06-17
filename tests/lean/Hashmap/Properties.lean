@@ -112,21 +112,6 @@ def slots_t_inv (s : alloc.vec.Vec (AList α)) : Prop :=
   slots_s_inv s.v
 
 @[simp]
-def base_inv (hm : HashMap α) : Prop :=
-  -- [num_entries] correctly tracks the number of entries
-  hm.num_entries.val = hm.al_v.len ∧
-  -- Slots invariant
-  slots_t_inv hm.slots ∧
-  -- The capacity must be > 0 (otherwise we can't resize)
-  0 < hm.slots.length
-  -- TODO: load computation
-
-def inv (hm : HashMap α) : Prop :=
-  -- Base invariant
-  base_inv hm
-  -- TODO: either the hashmap is not overloaded, or we can't resize it
-
-@[simp]
 def slots_s_lookup (s : List (AList α)) (k : Usize) : Option α :=
   let i := hash_mod_key k s.len
   let slot := s.index i
@@ -150,12 +135,149 @@ instance : Membership Usize (HashMap α) where
 /- Activate the ↑ notation -/
 attribute [coe] HashMap.v
 
+abbrev inv_load (hm : HashMap α) : Prop :=
+  let capacity := hm.slots.val.len
+  let (dividend, divisor) := hm.max_load_factor
+  0 < dividend.val ∧ dividend < divisor ∧
+  capacity * dividend >= divisor ∧
+  hm.max_load = (capacity * dividend) / divisor
+
+@[simp]
+def inv_base (hm : HashMap α) : Prop :=
+  -- [num_entries] correctly tracks the number of entries
+  hm.num_entries.val = hm.al_v.len ∧
+  -- Slots invariant
+  slots_t_inv hm.slots ∧
+  -- The capacity must be > 0 (otherwise we can't resize)
+  0 < hm.slots.length ∧ -- TODO: normalization lemmas for comparison
+  -- Load computation
+  inv_load hm
+
+def inv (hm : HashMap α) : Prop :=
+  -- Base invariant
+  inv_base hm
+  -- TODO: either the hashmap is not overloaded, or we can't resize it
+
+def frame_load (hm nhm : HashMap α) : Prop :=
+  nhm.max_load_factor = hm.max_load_factor ∧
+  nhm.max_load = hm.max_load ∧
+  nhm.saturated = hm.saturated
+
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
 
 -- The proof below is a bit expensive, so we need to increase the maximum number
 -- of heart beats
 set_option maxHeartbeats 1000000
+open AList
+
+@[pspec]
+theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : Usize)
+  (Hslots : ∀ (i : Int), 0 ≤ i → i < slots.len → slots.val.index i = Nil)
+  (Hlen : slots.len + n.val ≤ Usize.max) :
+  ∃ slots1, allocate_slots α slots n = ok slots1 ∧
+  (∀ (i : Int), 0 ≤ i → i < slots1.len → slots1.val.index i = Nil) ∧
+  slots1.len = slots.len + n.val := by
+  rw [allocate_slots]
+  rw [allocate_slots_loop]
+  if h: 0 < n.val then
+    simp [h]
+    -- TODO: progress fails here (maximum recursion depth reached)
+    -- progress as ⟨ slots1 .. ⟩
+    have ⟨ slots1, hEq, _ ⟩ := alloc.vec.Vec.push_spec slots Nil (by scalar_tac)
+    simp [hEq]; clear hEq
+    progress as ⟨ n1 ⟩
+    have : ∀ (i : ℤ), 0 ≤ i → i < ↑(alloc.vec.Vec.len (AList α) slots1) → slots1.val.index i = Nil := by
+      intro i h0 h1
+      simp [*]
+      if hi : i < slots.val.len then
+        simp [*]
+      else
+        simp_all
+        have : i - slots.val.len = 0 := by scalar_tac
+        simp [*]
+    have : alloc.vec.Vec.len (AList α) slots1 + n1.val ≤ Usize.max := by
+      simp_all
+    -- TODO: progress fails here (maximum recursion depth reached)
+    -- This probably comes from the fact that allocate_slots is reducible and applied an infinite number
+    -- of times
+    -- progress as ⟨ slots2 .. ⟩
+    -- TODO: bug here as well
+    stop
+    have ⟨ slots2, hEq, _, _ ⟩ := allocate_slots_spec slots1 n1 (by assumption) (by assumption)
+    stop
+    rw [allocate_slots] at hEq; rw [hEq]; clear hEq
+    simp
+    constructor
+    . intro i h0 h1
+      simp_all
+    . simp_all
+  else
+    simp [h]
+    simp_all
+    scalar_tac
+
+theorem forall_nil_imp_flatten_len_zero (slots : List (List α))
+  (Hnil : ∀ i, 0 ≤ i → i < slots.len → slots.index i = []) :
+  slots.flatten = [] := by
+  induction slots <;> simp_all
+  have Hhead := Hnil 0 (by simp) (by scalar_tac)
+  simp_all; clear Hhead
+  rename _ → _ => Hind
+  apply Hind
+  intros i h0 h1
+  have := Hnil (i + 1) (by scalar_tac) (by scalar_tac)
+  have : 0 < i + 1 := by scalar_tac
+  simp_all
+
+@[pspec]
+theorem new_with_capacity_spec
+  (capacity : Usize) (max_load_dividend : Usize) (max_load_divisor : Usize)
+  (Hcapa : 0 < capacity.val)
+  (Hfactor : 0 < max_load_dividend.val ∧ max_load_dividend.val < max_load_divisor.val ∧
+             capacity.val * max_load_dividend.val ≤ Usize.max ∧
+             capacity.val * max_load_dividend.val ≥ max_load_divisor)
+  (Hdivid : 0 < max_load_divisor.val) :
+  ∃ hm, new_with_capacity α capacity max_load_dividend max_load_divisor = ok hm ∧
+  hm.inv ∧ hm.len_s = 0 ∧ ∀ k, hm.lookup k = none := by
+  rw [new_with_capacity]
+  progress as ⟨ slots, Hnil .. ⟩
+  . intros; simp [alloc.vec.Vec.new] at *; scalar_tac
+  . simp [alloc.vec.Vec.new]; scalar_tac
+  . progress as ⟨ i1 .. ⟩
+    progress as ⟨ i2 .. ⟩
+    simp [inv, inv_load]
+    have : (Slots.al_v slots).len = 0 := by
+      have := forall_nil_imp_flatten_len_zero (slots.val.map AList.v)
+        (by intro i h0 h1; simp_all)
+      simp_all
+    have : 0 < slots.val.len := by simp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]
+    have : slots_t_inv slots := by
+      simp [slots_t_inv, slot_t_inv]
+      intro i h0 h1
+      simp_all
+    split_conjs
+    . simp_all [al_v, Slots.al_v, v]
+    . assumption
+    . scalar_tac
+    . simp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]
+    . simp_all
+    . simp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]
+    . simp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]
+    . simp_all [al_v, Slots.al_v, v]
+    . simp [lookup]
+      intro k
+      have : 0 ≤ k.val % slots.val.len := by apply Int.emod_nonneg; scalar_tac
+      have : k.val % slots.val.len < slots.val.len := by apply Int.emod_lt_of_pos; scalar_tac
+      simp [*]
+
+@[pspec]
+theorem new_spec (α : Type) :
+  ∃ hm, new α = ok hm ∧
+  hm.inv ∧ hm.len_s = 0 ∧ ∀ k, hm.lookup k = none := by
+  rw [new]
+  progress as ⟨ hm ⟩
+  simp_all
 
 theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: AList α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
@@ -329,7 +451,12 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   -- TODO: update progress to automate that
   -- TODO: later I don't want to inline nhm - we need to control simp: deactivate
   -- zeta reduction? For now I have to do this peculiar manipulation
-  have ⟨ nhm, nhm_eq ⟩ := @mk_opaque (HashMap α) { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
+  have ⟨ nhm, nhm_eq ⟩ := @mk_opaque (HashMap α) {
+      num_entries := i0,
+      max_load_factor := hm.max_load_factor,
+      max_load := hm.max_load,
+      saturated := hm.saturated,
+      slots := v }
   exists nhm
   have hupdt : lookup nhm key = some value := by
     simp [lookup, List.lookup] at *
@@ -398,6 +525,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       -- We need a case disjunction
       cases h_ieq : i == key.val % List.len hm.slots.val <;> simp_all [slot_s_inv]
     . simp [hinv, h_veq, nhm_eq]
+    . simp_all [frame_load, inv_base, inv_load]
   simp_all
 
 theorem slot_allP_not_key_lookup (slot : AList T) (h : slot.v.allP fun (k', _) => ¬k = k') :
@@ -469,6 +597,7 @@ theorem move_elements_from_list_spec
           hTable1LookupImp hSlot1LookupImp (by assumption)
     simp [hEq]; clear hEq
     -- The conclusion
+    -- TODO: use aesop here
     split_conjs
     . simp [*]
     . intro key' v hLookup
@@ -809,13 +938,19 @@ theorem move_elements_spec
   constructor <;> simp_all
 
 @[pspec]
-theorem try_resize_spec {α : Type} (hm : HashMap α) :
+theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
   ∃ hm', hm.try_resize α = ok hm' ∧
   (∀ key, hm'.lookup key = hm.lookup key) ∧
   hm'.al_v.len = hm.al_v.len := by
   rw [try_resize]
-
-  sorry
+  if hSat: hm.saturated = true then
+    simp [*]
+    tauto
+  else
+    simp [hSat]
+    progress as ⟨ n1 ⟩
+    progress
+    sorry
 
 end HashMap
 
