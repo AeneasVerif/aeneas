@@ -11,7 +11,7 @@ set_option linter.unusedVariables false
 namespace external
 
 /- Trait implementation: [core::marker::{(core::marker::Copy for u32)#61}]
-   Source: '/rustc/65ea825f4021eaf77f1b25139969712d65b435a4/library/core/src/marker.rs', lines 47:29-47:65
+   Source: '/rustc/library/core/src/marker.rs', lines 47:29-47:65
    Name pattern: core::marker::Copy<u32> -/
 def core.marker.CopyU32 : core.marker.Copy U32 := {
   cloneCloneInst := core.clone.CloneU32

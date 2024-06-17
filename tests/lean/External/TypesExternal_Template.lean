@@ -8,7 +8,7 @@ set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
 /- [core::cell::Cell]
-   Source: '/rustc/65ea825f4021eaf77f1b25139969712d65b435a4/library/core/src/cell.rs', lines 294:0-294:26
+   Source: '/rustc/library/core/src/cell.rs', lines 294:0-294:26
    Name pattern: core::cell::Cell -/
 axiom core.cell.Cell (T : Type) : Type
 
