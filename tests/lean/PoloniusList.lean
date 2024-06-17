@@ -2,6 +2,9 @@
 -- [polonius_list]
 import Base
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 namespace polonius_list
 

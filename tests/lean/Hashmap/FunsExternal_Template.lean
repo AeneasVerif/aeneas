@@ -4,6 +4,9 @@
 import Base
 import Hashmap.Types
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 open hashmap
 
 /- [hashmap::utils::deserialize]:
