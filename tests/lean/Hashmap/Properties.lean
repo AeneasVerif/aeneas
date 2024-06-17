@@ -76,6 +76,7 @@ def slot_t_inv (l i : Int) (s : AList α) : Prop := slot_s_inv l i s.v
 @[simp] theorem distinct_keys_nil : @distinct_keys α [] := by simp [distinct_keys]
 @[simp] theorem slot_s_inv_hash_nil : @slot_s_inv_hash l i α [] := by simp [slot_s_inv_hash]
 @[simp] theorem slot_s_inv_nil : @slot_s_inv α l i [] := by simp [slot_s_inv]
+@[simp] theorem slot_t_inv_nil : @slot_t_inv α l i .Nil := by simp [slot_t_inv]
 
 @[simp] theorem distinct_keys_cons (kv : Usize × α) (tl : List (Usize × α)) :
   distinct_keys (kv :: tl) ↔ ((tl.allP fun (k', _) => ¬↑kv.1 = ↑k') ∧ distinct_keys tl) := by simp [distinct_keys]
@@ -408,16 +409,16 @@ theorem move_elements_from_list_spec
   {T : Type} (ntable : HashMap T) (slot : AList T)
   (hinv : ntable.inv)
   {l i : Int} (hSlotInv : slot_t_inv l i slot)
-  (hDisjoint1 : ∀ key, ntable.lookup key ≠ none → slot.lookup key = none)
-  (hDisjoint2 : ∀ key, slot.lookup key ≠ none → ntable.lookup key = none)
+  (hDisjoint1 : ∀ key v, ntable.lookup key = some v → slot.lookup key = none)
+  (hDisjoint2 : ∀ key v, slot.lookup key = some v → ntable.lookup key = none)
   (hLen : ntable.al_v.len + slot.v.len ≤ Usize.max)
   :
   ∃ ntable1, ntable.move_elements_from_list T slot = ok ntable1 ∧
   ntable1.inv ∧
-  (∀ key, ntable1.lookup key ≠ none ↔
-    (ntable.lookup key ≠ none ∨ slot.lookup key ≠ none)) ∧
+  (∀ key v, ntable1.lookup key = some v → ntable.lookup key = some v ∨ slot.lookup key = some v) ∧
   (∀ key v, ntable.lookup key = some v → ntable1.lookup key = some v) ∧
-  (∀ key v, slot.lookup key = some v → ntable1.lookup key = some v)
+  (∀ key v, slot.lookup key = some v → ntable1.lookup key = some v) ∧
+  ntable1.al_v.len = ntable.al_v.len + slot.v.len
   := by
   rw [move_elements_from_list]; rw [move_elements_from_list_loop]
   cases slot with
@@ -425,38 +426,55 @@ theorem move_elements_from_list_spec
     simp [hinv]
   | Cons key value slot1 =>
     simp
-    have hLookupKey : ntable.lookup key = none := by simp_all
+    have hLookupKey : ntable.lookup key = none := by
+      by_contra
+      cases h: ntable.lookup key <;> simp_all
+      have h := hDisjoint1 _ _ h
+      simp_all
     have : ntable.lookup key = none → ntable.len_s < Usize.max := by simp_all; scalar_tac
     progress as ⟨ ntable1, _, hLookup11, hLookup12, hLength1 ⟩
     simp [hLookupKey] at hLength1
-    have : ∀ (key : Usize), ntable1.lookup key ≠ none → slot1.lookup key = none := by
-      intro key' hLookup
+    have hTable1LookupImp : ∀ (key : Usize) (v : T), ntable1.lookup key = some v → slot1.lookup key = none := by
+      intro key' v hLookup
       if h: key = key' then
         simp_all [slot_t_inv]
         apply slot_allP_not_key_lookup
         simp_all
       else
         simp_all
-        have := hDisjoint1 key' hLookup
+        cases h: ntable.lookup key' <;> simp_all
+        have := hDisjoint1 _ _ h
         simp_all
-    have : ∀ (key : Usize), slot1.lookup key ≠ none → ntable1.lookup key = none := by
-      intro key' hLookup
-      if h: key = key' then simp_all
+    have hSlot1LookupImp : ∀ (key : Usize) (v : T), slot1.lookup key = some v → ntable1.lookup key = none := by
+      intro key' v hLookup
+      if h: key' = key then
+        by_contra
+        rename _ => hNtable1NotNone
+        cases h: ntable1.lookup key' <;> simp [h] at hNtable1NotNone
+        have := hTable1LookupImp _ _ h
+        simp_all
       else
-        simp [*] -- TODO: simplification (simp_all)
+        have := hLookup12 key' h
+        have := hDisjoint2 key' v
+        simp_all
     have : ntable1.al_v.len + slot1.v.len ≤ Usize.max := by simp_all; scalar_tac
     have : slot_t_inv l i slot1 := by
       simp [slot_t_inv] at hSlotInv
       simp [slot_t_inv, hSlotInv]
     -- TODO: progress leads to: slot_t_inv i i slot1
     -- progress as ⟨ ntable2 ⟩
-    have  ⟨ ntable2, hEq, hInv2, hLookup21, hLookup22, hLookup23 ⟩ := move_elements_from_list_spec ntable1 slot1 (by assumption) (by assumption)
-      (by assumption) (by assumption) (by assumption)
+
+    have  ⟨ ntable2, hEq, hInv2, hLookup21, hLookup22, hLookup23, hLen1 ⟩ :=
+      move_elements_from_list_spec ntable1 slot1 (by assumption) (by assumption)
+          hTable1LookupImp hSlot1LookupImp (by assumption)
     simp [hEq]; clear hEq
     split_conjs
     . simp [*]
-    . intro key'
-      if h: key = key' then simp_all
+    . intro key' v hLookup
+      have := hLookup12 key' v
+      have := hLookup21 key' v
+      if h: key = key' then
+        simp_all
       else simp_all
     . intro key' v hLookup1
       if h: key' = key then
@@ -472,6 +490,7 @@ theorem move_elements_from_list_spec
       else
         have := hLookup23 key' v
         simp_all
+    . scalar_tac
 
 theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots.val.len ≠ 0)
   (hEmpty : ∀ j, 0 ≤ j → j < slots.val.len → slots.val.index j = AList.Nil) :
@@ -486,11 +505,26 @@ theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots.val.len
   have := hEmpty (key.val % slots.val.len) (by assumption) (by assumption)
   simp [*]
 
+theorem slots_index_len_le_flatten_len (slots : List (AList α)) (i : Int) (h : 0 ≤ i ∧ i < slots.len) :
+  (slots.index i).len ≤ (List.map AList.v slots).flatten.len := by
+  match slots with
+  | [] =>
+    simp at *; scalar_tac
+  | slot :: slots' =>
+    simp at *
+    if hi : i = 0 then
+      simp_all; scalar_tac
+    else
+      have := slots_index_len_le_flatten_len slots' (i - 1) (by scalar_tac)
+      simp [*]
+      scalar_tac
+
 /- If we successfully lookup a key from a slot, the hash of the key modulo the number of slots must
    be equal to the slot index.
+   TODO: remove?
  -/
 theorem slots_inv_lookup_imp_eq (slots : Slots α) (hInv : slots_t_inv slots)
-  (i : Int) (h0 : 0 ≤ i) (h1 : i < slots.val.len) (key : Usize) :
+  (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) (key : Usize) :
   (slots.val.index i).lookup key ≠ none → i = key.val % slots.val.len := by
   suffices hSlot : ∀ (slot : List (Usize × α)),
            slot_s_inv slots.val.len i slot →
@@ -498,7 +532,7 @@ theorem slots_inv_lookup_imp_eq (slots : Slots α) (hInv : slots_t_inv slots)
            i = key.val % slots.val.len
   from by
     rw [slots_t_inv, slots_s_inv] at hInv
-    replace hInv := hInv i h0 h1
+    replace hInv := hInv i hi.left hi.right
     simp [slot_t_inv] at hInv
     exact hSlot _ hInv
   intro slot
@@ -506,15 +540,51 @@ theorem slots_inv_lookup_imp_eq (slots : Slots α) (hInv : slots_t_inv slots)
   intros; simp_all
   split at * <;> simp_all
 
+-- TODO: remove?
 theorem slots_update_lookup_equiv (slots : Slots α) (hInv : slots_t_inv slots)
-  (i : Int) (h0 : 0 ≤ i) (h1 : i < slots.val.len) (key : Usize) :
+  (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) (key : Usize) :
   let slot := slots.val.index i
   slot.lookup key ≠ none ∨ slots_s_lookup (slots.val.update i .Nil) key ≠ none ↔
   slots.lookup key ≠ none := by
   -- We need the following lemma to derive a contradiction
-  have := slots_inv_lookup_imp_eq slots hInv i h0 h1 key
+  have := slots_inv_lookup_imp_eq slots hInv i hi key
   cases hi : (key.val % slots.val.len) == i <;>
   simp_all [Slots.lookup]
+
+/-theorem slots_update_lookup_imp
+  (slots slots1 : Slots α) (slot : AList α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len)
+  (hSlotsEq : slots.val = slots.val.update i slot) :
+  ∀ key v, slots1.lookup key = some v → slots.lookup key = some v ∨ slot.lookup key = some v-/
+
+theorem move_slots_updated_table_lookup_imp
+  (ntable ntable1 ntable2 : HashMap α) (slots slots1 : Slots α) (slot : AList α)
+  (hi : 0 ≤ i ∧ i < slots.val.len)
+  (hSlotsInv : slots_t_inv slots)
+  (hSlotEq : slot = slots.val.index i)
+  (hSlotsEq : slots1.val = slots.val.update i .Nil)
+  (hTableLookup : ∀ (key : Usize) (v : α), ntable1.lookup key = some v →
+                    ntable.lookup key = some v ∨ slot.lookup key = some v)
+  (hTable1Lookup : ∀ (key : Usize) (v : α), ntable2.lookup key = some v →
+                    ntable1.lookup key = some v ∨ Slots.lookup slots1 key = some v)
+  :
+  ∀ key v, ntable2.lookup key = some v → ntable.lookup key = some v ∨ slots.lookup key = some v := by
+  intro key v hLookup
+  replace hTableLookup := hTableLookup key v
+  replace hTable1Lookup := hTable1Lookup key v hLookup
+  cases hTable1Lookup with
+  | inl hTable1Lookup =>
+    replace hTableLookup := hTableLookup hTable1Lookup
+    cases hTableLookup <;> try simp [*]
+    right
+    have := slots_inv_lookup_imp_eq slots hSlotsInv i hi key (by simp_all)
+    simp_all [Slots.lookup]
+  | inr hTable1Lookup =>
+    right
+    -- The key can't be for the slot we replaced
+    if heq : key.val % slots.val.len = i then
+      simp_all [Slots.lookup]
+    else
+      simp_all [Slots.lookup]
 
 theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 : HashMap α)
   (slot : AList α)
@@ -543,6 +613,26 @@ theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 : HashMap
     have := hLookup3 key v
     simp_all
 
+theorem slots_lookup_none_imp_slot_lookup_none
+  (slots : Slots α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) :
+  ∀ (key : Usize), slots.lookup key = none → (slots.val.index i).lookup key = none := by
+  intro key hLookup
+  if heq : i = key.val % slots.val.len then
+    simp_all [Slots.lookup]
+  else
+    have := slots_inv_lookup_imp_eq slots hInv i (by scalar_tac) key
+    by_contra
+    simp_all
+
+theorem slot_lookup_not_none_imp_slots_lookup_not_none
+  (slots : Slots α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) :
+  ∀ (key : Usize), (slots.val.index i).lookup key ≠ none → slots.lookup key ≠ none := by
+  intro key hLookup hNone
+  have := slots_lookup_none_imp_slot_lookup_none slots hInv i hi key hNone
+  apply hLookup this
+
+set_option maxHeartbeats 10000000
+
 theorem move_elements_loop_spec
   {α : Type} (ntable : HashMap α) (slots : Slots α)
   (i : Usize) (hi : i ≤ alloc.vec.Vec.len (AList α) slots)
@@ -550,73 +640,121 @@ theorem move_elements_loop_spec
   (hSlotsNonZero : slots.val.len ≠ 0)
   (hSlotsInv : slots_t_inv slots)
   (hEmpty : ∀ j, 0 ≤ j → j < i.val → slots.val.index j = AList.Nil)
-  (hDisjoint1 : ∀ key, ntable.lookup key ≠ none → slots.lookup key = none)
-  (hDisjoint2 : ∀ key, slots.lookup key ≠ none → ntable.lookup key = none)
+  (hDisjoint1 : ∀ key v, ntable.lookup key = some v → slots.lookup key = none)
+  (hDisjoint2 : ∀ key v, slots.lookup key = some v → ntable.lookup key = none)
   (hLen : ntable.al_v.len + slots.al_v.len ≤ Usize.max)
   :
   ∃ ntable1 slots1, ntable.move_elements_loop α slots i = ok (ntable1, slots1) ∧
   ntable1.inv ∧
   slots1.len = slots.len ∧
-  (∀ key, ntable1.lookup key ≠ none ↔
-    (ntable.lookup key ≠ none ∨ slots.lookup key ≠ none)) ∧
+  (∀ key v, ntable1.lookup key = some v → ntable.lookup key = some v ∨ slots.lookup key = some v) ∧
   (∀ key v, slots.lookup key = some v → ntable1.lookup key = some v) ∧
   (∀ key v, ntable.lookup key = some v → ntable1.lookup key = some v) ∧
   (∀ (j : Int), 0 ≤ j → j < slots1.len → slots1.val.index j = AList.Nil)
   := by
-    rw [move_elements_loop]
-    simp
-  --if hi: i < alloc.vec.Vec.len (AList T) slots then
-    have hi: i < alloc.vec.Vec.len (AList α) slots := by sorry
+  rw [move_elements_loop]
+  simp
+  if hi: i < alloc.vec.Vec.len (AList α) slots then
+    have hIneq : 0 ≤ i.val ∧ i.val < slots.val.len := by scalar_tac
     simp [hi]
     progress as ⟨ slot, index_back, hSlotEq, hIndexBack ⟩
     rw [hIndexBack]; clear hIndexBack
     have hInvSlot : slot_t_inv slots.val.len i.val slot := by
       simp [slots_t_inv] at hSlotsInv
-      simp [hSlotEq]
-      apply hSlotsInv <;> scalar_tac
-    have : ∀ (key : Usize), ntable.lookup key ≠ none → slot.lookup key = none := by sorry
-    have : ∀ (key : Usize), slot.lookup key ≠ none → ntable.lookup key = none := by sorry
-    have : ntable.al_v.len + slot.v.len ≤ Usize.max := by sorry
-    progress as ⟨ ntable1, _, _, hLookup11, hLookup12 ⟩ -- TODO: decompose post-condition by default
+      simp [*]
+    have ntableLookupImpSlot :
+      ∀ (key : Usize) (v : α), ntable.lookup key = some v → slot.lookup key = none := by
+      intro key v hLookup
+      by_contra
+      have : i.val = key.val % slots.val.len := by
+        apply slots_inv_lookup_imp_eq slots hSlotsInv i.val (by scalar_tac)
+        simp_all
+      cases h: slot.lookup key <;> simp_all
+      have := hDisjoint2 _ _ h
+      simp_all
+    have slotLookupImpNtable :
+      ∀ (key : Usize) (v : α), slot.lookup key = some v → ntable.lookup key = none := by
+      intro key v hLookup
+      by_contra
+      cases h : ntable.lookup key <;> simp_all
+      have := ntableLookupImpSlot _ _ h
+      simp_all
+
+    have : ntable.al_v.len + slot.v.len ≤ Usize.max := by
+      have := slots_index_len_le_flatten_len slots.val i.val (by scalar_tac)
+      simp_all [Slots.al_v]; scalar_tac
+    progress as ⟨ ntable1, _, hDisjointNtable1, hLookup11, hLookup12, hLen1 ⟩ -- TODO: decompose post-condition by default
     progress as ⟨ i' .. ⟩
-    progress as ⟨ slots1 .. ⟩
-    have : i' ≤ alloc.vec.Vec.len (AList α) slots1 := by sorry
-    have : slots_t_inv slots1 := by sorry
-    have : ∀ (key : Usize), ntable1.lookup key ≠ none → Slots.lookup slots1 key = none := by sorry
-    have : ∀ (key : Usize), ntable1.lookup key ≠ none → Slots.lookup slots1 key = none := by sorry
-    have : ∀ (j : ℤ), OfNat.ofNat 0 ≤ j → j < i'.val → slots1.val.index j = AList.Nil := by sorry
-    have : ∀ (key : Usize), Slots.lookup slots1 key ≠ none → ntable1.lookup key = none := by sorry
-    have : ntable1.al_v.len + (Slots.al_v slots1).len ≤ Usize.max := by sorry
-    progress as ⟨ ntable2, slots2, _, _, _, hLookup21, hLookup22, hIndexNil ⟩
+    progress as ⟨ slots1, hSlots1Eq .. ⟩
+    have : i' ≤ alloc.vec.Vec.len (AList α) slots1 := by simp_all [alloc.vec.Vec.len]; scalar_tac
+    have : slots_t_inv slots1 := by
+      simp [slots_t_inv] at *
+      intro j h0 h1
+      cases h: j == i.val <;> simp_all
+
+    have ntable1LookupImpSlots1 : ∀ (key : Usize) (v : α), ntable1.lookup key = some v → Slots.lookup slots1 key = none := by
+      intro key v hLookup
+      cases hDisjointNtable1 _ _ hLookup with
+      | inl h =>
+        have := ntableLookupImpSlot _ _ h
+        have := hDisjoint1 _ _ h
+        cases heq : i == key.val % slots.val.len <;> simp_all [Slots.lookup]
+      | inr h =>
+        --have h1 := hLookup12 _ _ h
+        have heq : i = key.val % slots.val.len := by
+          exact slots_inv_lookup_imp_eq slots hSlotsInv i.val hIneq key (by simp_all [Slots.lookup])
+        simp_all [Slots.lookup]
+
+    have : ∀ (key : Usize) (v : α), Slots.lookup slots1 key = some v → ntable1.lookup key = none := by
+      intro key v hLookup
+      by_contra h
+      cases h : ntable1.lookup key <;> simp_all
+      have := ntable1LookupImpSlots1 _ _ h
+      simp_all
+
+    have : ∀ (j : ℤ), OfNat.ofNat 0 ≤ j → j < i'.val → slots1.val.index j = AList.Nil := by
+      intro j h0 h1
+      if h : j = i.val then
+        simp_all
+      else
+        have := hEmpty j h0 (by scalar_tac)
+        simp_all
+
+    have : ntable1.al_v.len + (Slots.al_v slots1).len ≤ Usize.max := by
+      have : i.val < (List.map AList.v slots.val).len := by simp; scalar_tac
+      simp_all [Slots.al_v, List.len_flatten_update_eq, List.update_map_eq]
+
+    progress as ⟨ ntable2, slots2, _, _, hLookup2Rev, hLookup21, hLookup22, hIndexNil ⟩
+
     simp [and_assoc]
     have : ∀ (j : ℤ), OfNat.ofNat 0 ≤ j → j < slots2.val.len → slots2.val.index j = AList.Nil := by
       intro j h0 h1
       apply hIndexNil j h0 h1
-    have : ∀ (key : Usize),
-       ntable.lookup key ≠ none ∨ slot.lookup key ≠ none ∨ Slots.lookup slots1 key ≠ none ↔
-       ntable.lookup key ≠ none ∨ slots.lookup key ≠ none := by
-       intro key
-       have := slots_update_lookup_equiv slots hSlotsInv i.val (by scalar_tac) (by scalar_tac) key
-       simp_all [Slots.lookup]
-    have :
+    have : ∀ key v, ntable2.lookup key = some v →
+           ntable.lookup key = some v ∨ slots.lookup key = some v := by
+      intro key v hLookup
+      apply move_slots_updated_table_lookup_imp ntable ntable1 ntable2 slots slots1 slot hIneq <;>
+      try assumption
+    have hLookupPreserve :
       (∀ key v, slots.lookup key = some v → ntable2.lookup key = some v) ∧
       (∀ key v, ntable.lookup key = some v → ntable2.lookup key = some v) := by
       exact move_one_slot_lookup_equiv ntable ntable1 ntable2 slot slots slots1 i.val
         (by assumption) (by assumption) (by assumption)
         (by assumption) (by assumption) (by assumption) (by assumption)
     simp_all [alloc.vec.Vec.len, or_assoc]
-  /-else
+    apply hLookupPreserve
+  else
     stop
     simp [hi, and_assoc, *]
     simp_all
-    have hi : i = alloc.vec.Vec.len (AList T) slots := by scalar_tac
+    have hi : i = alloc.vec.Vec.len (AList α) slots := by scalar_tac
     have hEmpty : ∀ j, 0 ≤ j → j < slots.val.len → slots.val.index j = AList.Nil := by
       simp [hi] at hEmpty
       exact hEmpty
     have hLenNonZero : slots.val.len ≠ 0 := by simp [*]
     have hLookupEmpty := slots_forall_nil_imp_lookup_none slots hLenNonZero hEmpty
     simp [hLookupEmpty]
-    apply hEmpty-/
+    apply hEmpty
 --termination_by (slots.val.len - i.val).toNat
 --decreasing_by scalar_decr_tac
 
