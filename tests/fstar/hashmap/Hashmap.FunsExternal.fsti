@@ -7,10 +7,10 @@ include Hashmap.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap::utils::deserialize]:
-    Source: 'tests/src/hashmap.rs', lines 332:4-332:47 *)
+    Source: 'tests/src/hashmap.rs', lines 336:4-336:47 *)
 val utils_deserialize : state -> result (state & (hashMap_t u64))
 
 (** [hashmap::utils::serialize]:
-    Source: 'tests/src/hashmap.rs', lines 327:4-327:46 *)
+    Source: 'tests/src/hashmap.rs', lines 331:4-331:46 *)
 val utils_serialize : hashMap_t u64 -> state -> result (state & unit)
 

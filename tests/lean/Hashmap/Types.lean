@@ -21,6 +21,7 @@ structure HashMap (T : Type) where
   num_entries : Usize
   max_load_factor : (Usize × Usize)
   max_load : Usize
+  saturated : Bool
   slots : alloc.vec.Vec (AList T)
 
 end hashmap

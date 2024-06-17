@@ -27,6 +27,7 @@ mkHashMap_t {
   hashMap_num_entries : usize;
   hashMap_max_load_factor : (usize * usize);
   hashMap_max_load : usize;
+  hashMap_saturated : bool;
   hashMap_slots : alloc_vec_Vec (AList_t T);
 }
 .
@@ -35,6 +36,7 @@ Arguments mkHashMap_t { _ }.
 Arguments hashMap_num_entries { _ }.
 Arguments hashMap_max_load_factor { _ }.
 Arguments hashMap_max_load { _ }.
+Arguments hashMap_saturated { _ }.
 Arguments hashMap_slots { _ }.
 
 End Hashmap_Types.
