@@ -63,7 +63,7 @@ def HashMap.new (T : Type) : Result (HashMap T) :=
   HashMap.new_with_capacity T 32#usize 4#usize 5#usize
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-   Source: 'tests/src/hashmap.rs', lines 91:4-99:5 -/
+   Source: 'tests/src/hashmap.rs', lines 94:8-99:5 -/
 divergent def HashMap.clear_loop
   (T : Type) (slots : alloc.vec.Vec (AList T)) (i : Usize) :
   Result (alloc.vec.Vec (AList T))

@@ -70,7 +70,7 @@ Definition hashMap_new (T : Type) (n : nat) : result (HashMap_t T) :=
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 91:4-99:5 *)
+    Source: 'tests/src/hashmap.rs', lines 94:8-99:5 *)
 Fixpoint hashMap_clear_loop
   (T : Type) (n : nat) (slots : alloc_vec_Vec (AList_t T)) (i : usize) :
   result (alloc_vec_Vec (AList_t T))

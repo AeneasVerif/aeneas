@@ -1,7 +1,6 @@
 let log = Logging.errors_log
 
-let span_to_string (span : Meta.span) =
-  let raw_span = span.span in
+let raw_span_to_string (raw_span : Meta.raw_span) =
   let file = match raw_span.file with Virtual s | Local s -> s in
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
@@ -10,6 +9,8 @@ let span_to_string (span : Meta.span) =
   ^ loc_to_string raw_span.beg_loc
   ^ "-"
   ^ loc_to_string raw_span.end_loc
+
+let span_to_string (span : Meta.span) = raw_span_to_string span.span
 
 let format_error_message (span : Meta.span option) (msg : string) =
   let span =
