@@ -15,13 +15,13 @@ structure BoolTest (Self : Type) where
 
 /- [rename_attribute::{(rename_attribute::BoolTrait for bool)}::get_bool]:
    Source: 'tests/src/rename_attribute.rs', lines 21:4-21:30 -/
-def BoolTraitBool.get_bool (self : Bool) : Result Bool :=
+def BoolTraitBool.getTest (self : Bool) : Result Bool :=
   Result.ok self
 
 /- Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
    Source: 'tests/src/rename_attribute.rs', lines 20:0-20:23 -/
 def BoolImplBool : BoolTest Bool := {
-  getTest := BoolTraitBool.get_bool
+  getTest := BoolTraitBool.getTest
 }
 
 /- [rename_attribute::BoolTrait::ret_true]:
@@ -34,7 +34,7 @@ def BoolTrait.retTest
    Source: 'tests/src/rename_attribute.rs', lines 27:0-27:42 -/
 def BoolFn (T : Type) (x : Bool) : Result Bool :=
   do
-  let b ← BoolTraitBool.get_bool x
+  let b ← BoolTraitBool.getTest x
   if b
   then BoolTrait.retTest BoolImplBool x
   else Result.ok false

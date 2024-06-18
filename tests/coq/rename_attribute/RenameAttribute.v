@@ -19,13 +19,13 @@ Arguments BoolTest_t_getTest { _ }.
 
 (** [rename_attribute::{(rename_attribute::BoolTrait for bool)}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 21:4-21:30 *)
-Definition boolTraitBool_get_bool (self : bool) : result bool :=
+Definition boolTraitBool_getTest (self : bool) : result bool :=
   Ok self.
 
 (** Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
     Source: 'tests/src/rename_attribute.rs', lines 20:0-20:23 *)
 Definition BoolImplBool : BoolTest_t bool := {|
-  BoolTest_t_getTest := boolTraitBool_get_bool;
+  BoolTest_t_getTest := boolTraitBool_getTest;
 |}.
 
 (** [rename_attribute::BoolTrait::ret_true]:
@@ -38,7 +38,7 @@ Definition boolTrait_retTest
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 27:0-27:42 *)
 Definition boolFn (T : Type) (x : bool) : result bool :=
-  b <- boolTraitBool_get_bool x;
+  b <- boolTraitBool_getTest x;
   if b then boolTrait_retTest BoolImplBool x else Ok false
 .
 

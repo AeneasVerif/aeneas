@@ -11,12 +11,12 @@ noeq type boolTest_t (self : Type0) = { getTest : self -> result bool; }
 
 (** [rename_attribute::{(rename_attribute::BoolTrait for bool)}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 21:4-21:30 *)
-let boolTraitBool_get_bool (self : bool) : result bool =
+let boolTraitBool_getTest (self : bool) : result bool =
   Ok self
 
 (** Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
     Source: 'tests/src/rename_attribute.rs', lines 20:0-20:23 *)
-let boolImplBool : boolTest_t bool = { getTest = boolTraitBool_get_bool; }
+let boolImplBool : boolTest_t bool = { getTest = boolTraitBool_getTest; }
 
 (** [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 14:4-14:30 *)
@@ -29,7 +29,7 @@ let boolTrait_retTest
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 27:0-27:42 *)
 let boolFn (t : Type0) (x : bool) : result bool =
-  let* b = boolTraitBool_get_bool x in
+  let* b = boolTraitBool_getTest x in
   if b then boolTrait_retTest boolImplBool x else Ok false
 
 (** [rename_attribute::SimpleEnum]
