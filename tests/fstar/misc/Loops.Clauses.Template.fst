@@ -7,31 +7,31 @@ open Loops.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [loops::sum]: decreases clause
-    Source: 'tests/src/loops.rs', lines 8:0-18:1 *)
+    Source: 'tests/src/loops.rs', lines 10:4-18:1 *)
 unfold let sum_loop_decreases (max : u32) (i : u32) (s : u32) : nat = admit ()
 
 (** [loops::sum_with_mut_borrows]: decreases clause
-    Source: 'tests/src/loops.rs', lines 23:0-35:1 *)
+    Source: 'tests/src/loops.rs', lines 25:4-35:1 *)
 unfold
 let sum_with_mut_borrows_loop_decreases (max : u32) (i : u32) (s : u32) : nat =
   admit ()
 
 (** [loops::sum_with_shared_borrows]: decreases clause
-    Source: 'tests/src/loops.rs', lines 38:0-52:1 *)
+    Source: 'tests/src/loops.rs', lines 40:4-52:1 *)
 unfold
 let sum_with_shared_borrows_loop_decreases (max : u32) (i : u32) (s : u32) :
   nat =
   admit ()
 
 (** [loops::sum_array]: decreases clause
-    Source: 'tests/src/loops.rs', lines 54:0-62:1 *)
+    Source: 'tests/src/loops.rs', lines 56:4-62:1 *)
 unfold
 let sum_array_loop_decreases (n : usize) (a : array u32 n) (i : usize)
   (s : u32) : nat =
   admit ()
 
 (** [loops::clear]: decreases clause
-    Source: 'tests/src/loops.rs', lines 66:0-72:1 *)
+    Source: 'tests/src/loops.rs', lines 67:4-72:1 *)
 unfold
 let clear_loop_decreases (v : alloc_vec_Vec u32) (i : usize) : nat = admit ()
 

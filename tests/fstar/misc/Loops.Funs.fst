@@ -8,7 +8,7 @@ include Loops.Clauses
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [loops::sum]: loop 0:
-    Source: 'tests/src/loops.rs', lines 8:0-18:1 *)
+    Source: 'tests/src/loops.rs', lines 10:4-18:1 *)
 let rec sum_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_loop_decreases max i s))
@@ -23,7 +23,7 @@ let sum (max : u32) : result u32 =
   sum_loop max 0 0
 
 (** [loops::sum_with_mut_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 23:0-35:1 *)
+    Source: 'tests/src/loops.rs', lines 25:4-35:1 *)
 let rec sum_with_mut_borrows_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_with_mut_borrows_loop_decreases max i s))
@@ -41,7 +41,7 @@ let sum_with_mut_borrows (max : u32) : result u32 =
   sum_with_mut_borrows_loop max 0 0
 
 (** [loops::sum_with_shared_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 38:0-52:1 *)
+    Source: 'tests/src/loops.rs', lines 40:4-52:1 *)
 let rec sum_with_shared_borrows_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_with_shared_borrows_loop_decreases max i s))
@@ -59,7 +59,7 @@ let sum_with_shared_borrows (max : u32) : result u32 =
   sum_with_shared_borrows_loop max 0 0
 
 (** [loops::sum_array]: loop 0:
-    Source: 'tests/src/loops.rs', lines 54:0-62:1 *)
+    Source: 'tests/src/loops.rs', lines 56:4-62:1 *)
 let rec sum_array_loop
   (n : usize) (a : array u32 n) (i : usize) (s : u32) :
   Tot (result u32) (decreases (sum_array_loop_decreases n a i s))
@@ -78,7 +78,7 @@ let sum_array (n : usize) (a : array u32 n) : result u32 =
   sum_array_loop n a 0 0
 
 (** [loops::clear]: loop 0:
-    Source: 'tests/src/loops.rs', lines 66:0-72:1 *)
+    Source: 'tests/src/loops.rs', lines 67:4-72:1 *)
 let rec clear_loop
   (v : alloc_vec_Vec u32) (i : usize) :
   Tot (result (alloc_vec_Vec u32)) (decreases (clear_loop_decreases v i))
