@@ -24,7 +24,7 @@ Definition boolTraitBool_getTest (self : bool) : result bool :=
 
 (** Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
     Source: 'tests/src/rename_attribute.rs', lines 20:0-20:23 *)
-Definition BoolImplBool : BoolTest_t bool := {|
+Definition BoolImpl : BoolTest_t bool := {|
   BoolTest_t_getTest := boolTraitBool_getTest;
 |}.
 
@@ -39,7 +39,7 @@ Definition boolTrait_retTest
     Source: 'tests/src/rename_attribute.rs', lines 27:0-27:42 *)
 Definition boolFn (T : Type) (x : bool) : result bool :=
   b <- boolTraitBool_getTest x;
-  if b then boolTrait_retTest BoolImplBool x else Ok false
+  if b then boolTrait_retTest BoolImpl x else Ok false
 .
 
 (** [rename_attribute::SimpleEnum]

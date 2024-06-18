@@ -20,7 +20,7 @@ def BoolTraitBool.getTest (self : Bool) : Result Bool :=
 
 /- Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
    Source: 'tests/src/rename_attribute.rs', lines 20:0-20:23 -/
-def BoolImplBool : BoolTest Bool := {
+def BoolImpl : BoolTest Bool := {
   getTest := BoolTraitBool.getTest
 }
 
@@ -36,7 +36,7 @@ def BoolFn (T : Type) (x : Bool) : Result Bool :=
   do
   let b ← BoolTraitBool.getTest x
   if b
-  then BoolTrait.retTest BoolImplBool x
+  then BoolTrait.retTest BoolImpl x
   else Result.ok false
 
 /- [rename_attribute::SimpleEnum]

@@ -1559,17 +1559,25 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
      for `<foo::Foo, u32>`, we generate the name: "trait.TraitFooFooU32Inst".
      Importantly, it is to be noted that the name is independent of the place
      where the instance has been defined (it is indepedent of the file, etc.).
+
+     Note that if the user provided a [rename] attribute, we simply use that.
   *)
   let name =
-    let params = trait_impl.llbc_generics in
-    let args = trait_impl.llbc_impl_trait.decl_generics in
-    let name =
-      ctx_prepare_name trait_impl.item_meta.span ctx trait_decl.llbc_name
-    in
-    let name = rename_llbc_name trait_impl.item_meta name in
-    trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
+    match trait_impl.item_meta.rename with
+    | None ->
+        let name =
+          let params = trait_impl.llbc_generics in
+          let args = trait_impl.llbc_impl_trait.decl_generics in
+          let name =
+            ctx_prepare_name trait_impl.item_meta.span ctx trait_decl.llbc_name
+          in
+          let name = rename_llbc_name trait_impl.item_meta name in
+          trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
+        in
+        flatten_name name
+    | Some name -> name
   in
-  let name = flatten_name name in
+  (* Additional modifications to make sure we comply with the backends restrictions *)
   match backend () with
   | FStar -> StringUtils.lowercase_first_letter name
   | Coq | HOL4 | Lean -> name

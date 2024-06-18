@@ -16,7 +16,7 @@ let boolTraitBool_getTest (self : bool) : result bool =
 
 (** Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
     Source: 'tests/src/rename_attribute.rs', lines 20:0-20:23 *)
-let boolImplBool : boolTest_t bool = { getTest = boolTraitBool_getTest; }
+let boolImpl : boolTest_t bool = { getTest = boolTraitBool_getTest; }
 
 (** [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 14:4-14:30 *)
@@ -30,7 +30,7 @@ let boolTrait_retTest
     Source: 'tests/src/rename_attribute.rs', lines 27:0-27:42 *)
 let boolFn (t : Type0) (x : bool) : result bool =
   let* b = boolTraitBool_getTest x in
-  if b then boolTrait_retTest boolImplBool x else Ok false
+  if b then boolTrait_retTest boolImpl x else Ok false
 
 (** [rename_attribute::SimpleEnum]
     Source: 'tests/src/rename_attribute.rs', lines 35:0-35:15 *)
