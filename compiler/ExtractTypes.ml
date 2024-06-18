@@ -6,6 +6,7 @@ open TranslateCore
 open Config
 open Errors
 include ExtractBase
+module T = Types
 
 (** Format a constant value.
 
@@ -288,7 +289,8 @@ let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
       if is_single_opaque_fun_decl_group dg then ()
       else
         let compute_fun_def_name (def : Pure.fun_decl) : string =
-          ctx_get_local_function def.span def.def_id def.loop_id ctx ^ "_def"
+          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          ^ "_def"
         in
         let names = List.map compute_fun_def_name dg in
         (* Add a break before *)
@@ -750,13 +752,15 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
         }
     | _ -> ctx
   in
-  (* Compute and register the type def name *)
+  (* Compute and register the type decl name *)
   let def_name =
     match info with
-    | None -> ctx_compute_type_name def.span ctx def.llbc_name
+    | None -> ctx_compute_type_decl_name ctx def
     | Some info -> info.extract_name
   in
-  let ctx = ctx_add def.span (TypeId (TAdtId def.def_id)) def_name ctx in
+  let ctx =
+    ctx_add def.item_meta.span (TypeId (TAdtId def.def_id)) def_name ctx
+  in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -778,12 +782,12 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   FieldId.mapi
                     (fun fid (field : field) ->
                       ( fid,
-                        ctx_compute_field_name def.span ctx def.llbc_name fid
-                          field.field_name ))
+                        ctx_compute_field_name def field.item_meta ctx
+                          def.llbc_name fid field.field_name ))
                     fields
                 in
                 let cons_name =
-                  ctx_compute_struct_constructor def.span ctx def.llbc_name
+                  ctx_compute_struct_constructor def ctx def.llbc_name
                 in
                 (field_names, cons_name)
             | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
@@ -800,34 +804,32 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 in
                 (field_names, cons_name)
             | Some info ->
-                craise __FILE__ __LINE__ def.span
+                craise __FILE__ __LINE__ def.item_meta.span
                   ("Invalid builtin information: " ^ show_builtin_type_info info)
           in
           (* Add the fields *)
           let ctx =
             List.fold_left
               (fun ctx (fid, name) ->
-                ctx_add def.span (FieldId (TAdtId def.def_id, fid)) name ctx)
+                ctx_add def.item_meta.span
+                  (FieldId (TAdtId def.def_id, fid))
+                  name ctx)
               ctx field_names
           in
           (* Add the constructor name *)
-          ctx_add def.span (StructId (TAdtId def.def_id)) cons_name ctx
+          ctx_add def.item_meta.span (StructId (TAdtId def.def_id)) cons_name
+            ctx
       | Enum variants ->
           let variant_names =
             match info with
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
-                    let name =
-                      ctx_compute_variant_name def.span ctx def.llbc_name
-                        variant.variant_name
-                    in
+                    let name = ctx_compute_variant_name ctx def variant in
                     (* Add the type name prefix for Lean *)
                     let name =
                       if Config.backend () = Lean then
-                        let type_name =
-                          ctx_compute_type_name def.span ctx def.llbc_name
-                        in
+                        let type_name = ctx_compute_type_decl_name ctx def in
                         type_name ^ "." ^ name
                       else name
                     in
@@ -847,11 +849,14 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     (variant_id, StringMap.find variant.variant_name variant_map))
                   variants
             | _ ->
-                craise __FILE__ __LINE__ def.span "Invalid builtin information"
+                craise __FILE__ __LINE__ def.item_meta.span
+                  "Invalid builtin information"
           in
           List.fold_left
             (fun ctx (vid, vname) ->
-              ctx_add def.span (VariantId (TAdtId def.def_id, vid)) vname ctx)
+              ctx_add def.item_meta.span
+                (VariantId (TAdtId def.def_id, vid))
+                vname ctx)
             ctx variant_names
       | Opaque ->
           (* Nothing to do *)
@@ -971,12 +976,10 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   let print_variant _variant_id (v : variant) =
     (* We don't lookup the name, because it may have a prefix for the type
        id (in the case of Lean) *)
-    let cons_name =
-      ctx_compute_variant_name def.span ctx def.llbc_name v.variant_name
-    in
+    let cons_name = ctx_compute_variant_name ctx def v in
     let fields = v.fields in
-    extract_type_decl_variant def.span ctx fmt type_decl_group def_name
-      type_params cg_params cons_name fields
+    extract_type_decl_variant def.item_meta.span ctx fmt type_decl_group
+      def_name type_params cg_params cons_name fields
   in
   (* Print the variants *)
   let variants = VariantId.mapi (fun vid v -> (vid, v)) variants in
@@ -1073,7 +1076,8 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       (* If Coq: print the constructor name *)
       (* TODO: remove superfluous test not is_rec below *)
       if backend () = Coq && not is_rec then (
-        F.pp_print_string fmt (ctx_get_struct def.span (TAdtId def.def_id) ctx);
+        F.pp_print_string fmt
+          (ctx_get_struct def.item_meta.span (TAdtId def.def_id) ctx);
         F.pp_print_string fmt " ");
       (match backend () with
       | Lean -> ()
@@ -1088,7 +1092,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       (* Print the fields *)
       let print_field (field_id : FieldId.id) (f : field) : unit =
         let field_name =
-          ctx_get_field def.span (TAdtId def.def_id) field_id ctx
+          ctx_get_field def.item_meta.span (TAdtId def.def_id) field_id ctx
         in
         (* Open a box for the field *)
         F.pp_open_box fmt ctx.indent_incr;
@@ -1096,7 +1100,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt ":";
         F.pp_print_space fmt ();
-        extract_ty def.span ctx fmt type_decl_group false f.field_ty;
+        extract_ty def.item_meta.span ctx fmt type_decl_group false f.field_ty;
         if backend () <> Lean then F.pp_print_string fmt ";";
         (* Close the box for the field *)
         F.pp_close_box fmt ()
@@ -1120,7 +1124,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
          a group of mutually recursive types: we extract it as an inductive type *)
       cassert __FILE__ __LINE__
         (is_rec && (backend () = Coq || backend () = Lean))
-        def.span
+        def.item_meta.span
         "Constant generics are not supported yet when generating code for HOL4";
       (* Small trick: in Lean we use namespaces, meaning we don't need to prefix
          the constructor name with the name of the type at definition site,
@@ -1128,11 +1132,11 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
          we generate `inductive Foo := | mk ... *)
       let cons_name =
         if backend () = Lean then "mk"
-        else ctx_get_struct def.span (TAdtId def.def_id) ctx
+        else ctx_get_struct def.item_meta.span (TAdtId def.def_id) ctx
       in
-      let def_name = ctx_get_local_type def.span def.def_id ctx in
-      extract_type_decl_variant def.span ctx fmt type_decl_group def_name
-        type_params cg_params cons_name fields)
+      let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
+      extract_type_decl_variant def.item_meta.span ctx fmt type_decl_group
+        def_name type_params cg_params cons_name fields)
   in
   ()
 
@@ -1198,12 +1202,14 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
     (params : string list) : unit =
   insert_req_space ();
   F.pp_print_string fmt "(";
-  let self_clause = ctx_get_trait_self_clause trait_decl.span ctx in
+  let self_clause = ctx_get_trait_self_clause trait_decl.item_meta.span ctx in
   F.pp_print_string fmt self_clause;
   F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
   F.pp_print_space fmt ();
-  let trait_id = ctx_get_trait_decl trait_decl.span trait_decl.def_id ctx in
+  let trait_id =
+    ctx_get_trait_decl trait_decl.item_meta.span trait_decl.def_id ctx
+  in
   F.pp_print_string fmt trait_id;
   List.iter
     (fun p ->
@@ -1352,11 +1358,13 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               dtype_params;
               map
                 (fun (cg : const_generic_var) ->
-                  ctx_get_const_generic_var trait_decl.span cg.index ctx)
+                  ctx_get_const_generic_var trait_decl.item_meta.span cg.index
+                    ctx)
                 dcgs;
               map
                 (fun c ->
-                  ctx_get_local_trait_clause trait_decl.span c.clause_id ctx)
+                  ctx_get_local_trait_clause trait_decl.item_meta.span
+                    c.clause_id ctx)
                 dtrait_clauses;
             ]
         in
@@ -1375,7 +1383,9 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
     (extract_body : bool) : unit =
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ (extract_body || backend () <> HOL4) def.span;
+  sanity_check __FILE__ __LINE__
+    (extract_body || backend () <> HOL4)
+    def.item_meta.span;
   let is_tuple_struct =
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
@@ -1403,12 +1413,12 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let is_opaque_coq = backend () = Coq && is_opaque in
   let use_forall = is_opaque_coq && def.generics <> empty_generic_params in
   (* Retrieve the definition name *)
-  let def_name = ctx_get_local_type def.span def.def_id ctx in
+  let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.span def.llbc_name def.llbc_generics def.generics
-      ctx
+    ctx_add_generic_params def.item_meta.span def.llbc_name def.llbc_generics
+      def.generics ctx
   in
   (* Add a break before *)
   if backend () <> HOL4 || not (decl_is_first_from_group kind) then
@@ -1421,7 +1431,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    in
    extract_comment_with_raw_span ctx fmt
      [ "[" ^ name_to_string ctx def.llbc_name ^ "]" ]
-     name def.span.span);
+     name def.item_meta.span.span);
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important
@@ -1441,7 +1451,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ())
   else ();
   (* > "type TYPE_NAME" *)
-  let qualif = type_decl_kind_to_qualif def.span kind type_kind in
+  let qualif = type_decl_kind_to_qualif def.item_meta.span kind type_kind in
   (match qualif with
   | Some qualif -> F.pp_print_string fmt (qualif ^ " " ^ def_name)
   | None -> F.pp_print_string fmt def_name);
@@ -1449,12 +1459,12 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      support trait clauses *)
   cassert __FILE__ __LINE__
     ((cg_params = [] && trait_clauses = []) || backend () <> HOL4)
-    def.span
+    def.item_meta.span
     "Constant generics and type definitions with trait clauses are not \
      supported yet when generating code for HOL4";
   (* Print the generic parameters *)
-  extract_generic_params def.span ctx_body fmt type_decl_group ~use_forall
-    def.generics type_params cg_params trait_clauses;
+  extract_generic_params def.item_meta.span ctx_body fmt type_decl_group
+    ~use_forall def.generics type_params cg_params trait_clauses;
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
@@ -1480,21 +1490,22 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt ":");
     F.pp_print_space fmt ();
-    F.pp_print_string fmt (type_keyword def.span));
+    F.pp_print_string fmt (type_keyword def.item_meta.span));
   (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_close_box fmt ();
   (if extract_body then
      match def.kind with
      | Struct fields ->
          if is_tuple_struct then
-           extract_type_decl_tuple_struct_body def.span ctx_body fmt fields
+           extract_type_decl_tuple_struct_body def.item_meta.span ctx_body fmt
+             fields
          else
            extract_type_decl_struct_body ctx_body fmt type_decl_group kind def
              type_params cg_params fields
      | Enum variants ->
          extract_type_decl_enum_body ctx_body fmt type_decl_group def def_name
            type_params cg_params variants
-     | Opaque -> craise __FILE__ __LINE__ def.span "Unreachable");
+     | Opaque -> craise __FILE__ __LINE__ def.item_meta.span "Unreachable");
   (* Add the definition end delimiter *)
   if backend () = HOL4 && decl_is_not_last_from_group kind then (
     F.pp_print_space fmt ();
@@ -1518,16 +1529,16 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : type_decl) : unit =
   (* Retrieve the definition name *)
-  let def_name = ctx_get_local_type def.span def.def_id ctx in
+  let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
   (* Generic parameters are unsupported *)
   cassert __FILE__ __LINE__
     (def.generics.const_generics = [])
-    def.span
+    def.item_meta.span
     "Constant generics are not supported yet when generating code for HOL4";
   (* Trait clauses on type definitions are unsupported *)
   cassert __FILE__ __LINE__
     (def.generics.trait_clauses = [])
-    def.span
+    def.item_meta.span
     "Types with trait clauses are not supported yet when generating code for \
      HOL4";
   (* Types  *)
@@ -1550,9 +1561,11 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
     (fmt : F.formatter) (def : type_decl) : unit =
   (* Retrieve the definition name *)
-  let def_name = ctx_get_local_type def.span def.def_id ctx in
+  let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ (def.generics = empty_generic_params) def.span;
+  sanity_check __FILE__ __LINE__
+    (def.generics = empty_generic_params)
+    def.item_meta.span;
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ("Type " ^ def_name ^ " = “: unit”");
@@ -1628,7 +1641,7 @@ let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
-  sanity_check __FILE__ __LINE__ (backend () = Coq) decl.span;
+  sanity_check __FILE__ __LINE__ (backend () = Coq) decl.item_meta.span;
   (* Generating the [Arguments] instructions is useful only if there are parameters *)
   let num_params =
     List.length decl.generics.types
@@ -1643,14 +1656,16 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     | Struct fields ->
         let adt_id = TAdtId decl.def_id in
         (* Generate the instruction for the record constructor *)
-        let cons_name = ctx_get_struct decl.span adt_id ctx in
+        let cons_name = ctx_get_struct decl.item_meta.span adt_id ctx in
         extract_coq_arguments_instruction ctx fmt cons_name num_params;
         (* Generate the instruction for the record projectors, if there are *)
         let is_rec = decl_is_from_rec_group kind in
         if not is_rec then
           FieldId.iteri
             (fun fid _ ->
-              let cons_name = ctx_get_field decl.span adt_id fid ctx in
+              let cons_name =
+                ctx_get_field decl.item_meta.span adt_id fid ctx
+              in
               extract_coq_arguments_instruction ctx fmt cons_name num_params)
             fields;
         (* Add breaks to insert new lines between definitions *)
@@ -1660,7 +1675,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
         VariantId.iteri
           (fun vid (_ : variant) ->
             let cons_name =
-              ctx_get_variant decl.span (TAdtId decl.def_id) vid ctx
+              ctx_get_variant decl.item_meta.span (TAdtId decl.def_id) vid ctx
             in
             extract_coq_arguments_instruction ctx fmt cons_name num_params)
           variants;
@@ -1679,7 +1694,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
   sanity_check __FILE__ __LINE__
     (backend () = Coq || backend () = Lean)
-    decl.span;
+    decl.item_meta.span;
   match decl.kind with
   | Opaque | Enum _ -> ()
   | Struct fields ->
@@ -1688,18 +1703,24 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
       if is_rec then
         (* Add the type params *)
         let ctx, type_params, cg_params, trait_clauses =
-          ctx_add_generic_params decl.span decl.llbc_name decl.llbc_generics
-            decl.generics ctx
+          ctx_add_generic_params decl.item_meta.span decl.llbc_name
+            decl.llbc_generics decl.generics ctx
         in
         (* Record_var will be the ADT argument to the projector *)
-        let ctx, record_var = ctx_add_var decl.span "x" (VarId.of_int 0) ctx in
+        let ctx, record_var =
+          ctx_add_var decl.item_meta.span "x" (VarId.of_int 0) ctx
+        in
         (* Field_var will be the variable in the constructor that is returned by the projector *)
-        let ctx, field_var = ctx_add_var decl.span "x" (VarId.of_int 1) ctx in
+        let ctx, field_var =
+          ctx_add_var decl.item_meta.span "x" (VarId.of_int 1) ctx
+        in
         (* Name of the ADT *)
-        let def_name = ctx_get_local_type decl.span decl.def_id ctx in
+        let def_name = ctx_get_local_type decl.item_meta.span decl.def_id ctx in
         (* Name of the ADT constructor. As we are in the struct case, we only have
            one constructor *)
-        let cons_name = ctx_get_struct decl.span (TAdtId decl.def_id) ctx in
+        let cons_name =
+          ctx_get_struct decl.item_meta.span (TAdtId decl.def_id) ctx
+        in
 
         let extract_field_proj (field_id : FieldId.id) (_ : field) : unit =
           F.pp_print_space fmt ();
@@ -1725,14 +1746,14 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           (match backend () with
           | Lean -> F.pp_print_string fmt "def"
           | Coq -> F.pp_print_string fmt "Definition"
-          | _ -> internal_error __FILE__ __LINE__ decl.span);
+          | _ -> internal_error __FILE__ __LINE__ decl.item_meta.span);
           F.pp_print_space fmt ();
 
           (* Print the function name. In Lean, the syntax ADT.proj will
              allow us to call x.proj for any x of type ADT. In Coq,
              we will have to introduce a notation for the projector. *)
           let field_name =
-            ctx_get_field decl.span (TAdtId decl.def_id) field_id ctx
+            ctx_get_field decl.item_meta.span (TAdtId decl.def_id) field_id ctx
           in
           if backend () = Lean then (
             F.pp_print_string fmt def_name;
@@ -1741,8 +1762,9 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
 
           (* Print the generics *)
           let as_implicits = true in
-          extract_generic_params decl.span ctx fmt TypeDeclId.Set.empty
-            ~as_implicits decl.generics type_params cg_params trait_clauses;
+          extract_generic_params decl.item_meta.span ctx fmt
+            TypeDeclId.Set.empty ~as_implicits decl.generics type_params
+            cg_params trait_clauses;
 
           (* Print the record parameter as "(x : ADT)" *)
           F.pp_print_space fmt ();
@@ -1826,12 +1848,12 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           (* Inner box for the projector definition *)
           F.pp_open_hovbox fmt ctx.indent_incr;
           let ctx, record_var =
-            ctx_add_var decl.span "x" (VarId.of_int 0) ctx
+            ctx_add_var decl.item_meta.span "x" (VarId.of_int 0) ctx
           in
           F.pp_print_string fmt "Notation";
           F.pp_print_space fmt ();
           let field_name =
-            ctx_get_field decl.span (TAdtId decl.def_id) field_id ctx
+            ctx_get_field decl.item_meta.span (TAdtId decl.def_id) field_id ctx
           in
           F.pp_print_string fmt ("\"" ^ record_var ^ " .(" ^ field_name ^ ")\"");
           F.pp_print_space fmt ();

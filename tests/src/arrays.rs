@@ -1,5 +1,5 @@
 //@ [coq] aeneas-args=-use-fuel
-//@ [fstar] aeneas-args=-decreases-clauses -template-clauses
+//@ [fstar] aeneas-args=-decreases-clauses
 //@ [fstar] aeneas-args=-split-files
 //! Exercise the translation of arrays, with features supported by Eurydice
 

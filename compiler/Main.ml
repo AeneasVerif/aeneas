@@ -97,10 +97,11 @@ let () =
       ( "-backward-no-state-update",
         Arg.Set backward_no_state_update,
         " Forbid backward functions from updating the state" );
-      ( "-template-clauses",
-        Arg.Set extract_template_decreases_clauses,
-        " Generate templates for the required decreases clauses/termination \
-         measures, in a dedicated file. Implies -decreases-clauses" );
+      ( "-no-template-clauses",
+        Arg.Clear extract_template_decreases_clauses,
+        " Do not generate templates for the required decreases \
+         clauses/termination measures, in a dedicated file, if you also put \
+         the option -decreases-clauses" );
       ( "-split-files",
         Arg.Set split_files,
         " Split the definitions between different files for types, functions, \
@@ -180,10 +181,12 @@ let () =
 
   if !print_llbc then main_log#set_level EL.Debug;
 
-  (* Sanity check (now that the arguments are parsed!): -template-clauses ==> decrease-clauses *)
+  (* Sanity check (now that the arguments are parsed!) *)
   check_arg_implies
-    !extract_template_decreases_clauses
-    "-template-clauses" !extract_decreases_clauses "-decreases-clauses";
+    (not !extract_template_decreases_clauses)
+    "-no-template-clauses" !extract_decreases_clauses "-decreases-clauses";
+  if not !extract_decreases_clauses then
+    extract_template_decreases_clauses := false;
   (* Sanity check: -backward-no-state-update ==> -state *)
   check_arg_implies !backward_no_state_update "-backward-no-state-update"
     !use_state "-state";

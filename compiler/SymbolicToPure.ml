@@ -545,7 +545,8 @@ let translate_generic_params (span : Meta.span) (generics : T.generic_params) :
 let translate_field (span : Meta.span) (f : T.field) : field =
   let field_name = f.field_name in
   let field_ty = translate_sty span f.field_ty in
-  { field_name; field_ty }
+  let item_meta = f.item_meta in
+  { field_name; field_ty; item_meta }
 
 let translate_fields (span : Meta.span) (fl : T.field list) : field list =
   List.map (translate_field span) fl
@@ -553,7 +554,8 @@ let translate_fields (span : Meta.span) (fl : T.field list) : field list =
 let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_name = v.variant_name in
   let fields = translate_fields span v.fields in
-  { variant_name; fields }
+  let item_meta = v.item_meta in
+  { variant_name; fields; item_meta }
 
 let translate_variants (span : Meta.span) (vl : T.variant list) : variant list =
   List.map (translate_variant span) vl
@@ -597,13 +599,13 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let kind = translate_type_decl_kind def.item_meta.span def.T.kind in
   let preds = translate_predicates def.item_meta.span def.preds in
   let is_local = def.is_local in
-  let span = def.item_meta.span in
+  let item_meta = def.item_meta in
   {
     def_id;
     is_local;
     llbc_name;
     name;
-    span;
+    item_meta;
     generics;
     llbc_generics = def.generics;
     kind;
@@ -3899,7 +3901,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     {
       def_id;
       is_local = def.is_local;
-      span = def.item_meta.span;
+      item_meta = def.item_meta;
       kind = def.kind;
       backend_attributes;
       num_loops;
@@ -3988,7 +3990,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     is_local;
     llbc_name;
     name;
-    span = item_meta.span;
+    item_meta;
     generics;
     llbc_generics;
     preds;
@@ -4057,7 +4059,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     is_local;
     llbc_name;
     name;
-    span = item_meta.span;
+    item_meta;
     impl_trait;
     llbc_impl_trait;
     generics;
