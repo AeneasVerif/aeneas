@@ -1,4 +1,4 @@
-//@ [fstar] aeneas-args=-decreases-clauses -template-clauses
+//@ [fstar] aeneas-args=-decreases-clauses -template-clauses -split-files
 #![feature(register_tool)]
 #![register_tool(charon)]
 #![register_tool(aeneas)]

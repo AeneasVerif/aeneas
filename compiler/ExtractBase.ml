@@ -1438,18 +1438,18 @@ let ctx_compute_field_name (def : type_decl) (field_meta : Meta.item_meta)
   (* Prefix the name with the name of the type, if necessary (some backends don't
      support field name collisions) *)
   let def_name = rename_llbc_name def.item_meta def_name in
-  if !Config.record_fields_short_names then
-    if field_name = None then (* TODO: this is a bit ugly *)
-      "_" ^ field_name_s
-    else field_name_s
-  else
-    let def_name =
+  let name =
+    if !Config.record_fields_short_names then
+      if field_name = None then (* TODO: this is a bit ugly *)
+        "_" ^ field_name_s
+      else field_name_s
+    else
       ctx_compute_type_name_no_suffix ctx def.item_meta def_name
       ^ "_" ^ field_name_s
-    in
-    match backend () with
-    | Lean | HOL4 -> def_name
-    | Coq | FStar -> StringUtils.lowercase_first_letter def_name
+  in
+  match backend () with
+  | Lean | HOL4 -> name
+  | Coq | FStar -> StringUtils.lowercase_first_letter name
 
 (** Inputs:
     - type name
