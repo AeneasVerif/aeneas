@@ -214,10 +214,13 @@ let test_trans_unit_functions = ref false
 let extract_decreases_clauses = ref false
 
 (** In order to help the user, we can generate "template" decrease clauses/ termination
-   measures (i.e., definitions with proper signatures but dummy bodies) in a dedicated
-   file.
+    measures (i.e., definitions with proper signatures but dummy bodies) in a dedicated
+    file.
+
+    We initialize it to [true], then deactivate it depending on the CL options
+    given by the user.
 *)
-let extract_template_decreases_clauses = ref false
+let extract_template_decreases_clauses = ref true
 
 (** {1 Micro passes} *)
 
