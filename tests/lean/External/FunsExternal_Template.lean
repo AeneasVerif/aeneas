@@ -4,6 +4,9 @@
 import Base
 import External.Types
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 open external
 
 /- [core::cell::{core::cell::Cell<T>#10}::get]:

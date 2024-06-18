@@ -3,6 +3,9 @@
 -- This is a template file: rename it to "TypesExternal.lean" and fill the holes.
 import Base
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 /- The state type used in the state-error monad -/
 axiom State : Type

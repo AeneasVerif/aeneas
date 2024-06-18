@@ -3,6 +3,9 @@
 -- This is a template file: rename it to "TypesExternal.lean" and fill the holes.
 import Base
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 /- [core::cell::Cell]
    Source: '/rustc/library/core/src/cell.rs', lines 294:0-294:26

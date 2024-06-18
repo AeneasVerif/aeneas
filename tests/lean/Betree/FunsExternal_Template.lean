@@ -4,6 +4,9 @@
 import Base
 import Betree.Types
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 open betree
 
 /- [betree::betree_utils::load_internal_node]:

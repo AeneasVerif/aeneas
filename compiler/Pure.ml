@@ -1077,11 +1077,18 @@ type fun_body = {
 
 type item_kind = A.item_kind [@@deriving show]
 
+(** Attributes to add to the generated code *)
+type backend_attributes = {
+  reducible : bool;  (** Lean "reducible" attribute *)
+}
+[@@deriving show]
+
 type fun_decl = {
   def_id : FunDeclId.id;
   is_local : bool;
   span : span;
   kind : item_kind;
+  backend_attributes : backend_attributes;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the number
           of loops appearing in the original Rust functions, unless some loops are

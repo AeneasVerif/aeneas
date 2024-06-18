@@ -6,19 +6,19 @@ include Hashmap.TypesExternal
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [hashmap::List]
-    Source: 'tests/src/hashmap.rs', lines 29:0-29:16 *)
-type list_t (t : Type0) =
-| List_Cons : usize -> t -> list_t t -> list_t t
-| List_Nil : list_t t
+(** [hashmap::AList]
+    Source: 'tests/src/hashmap.rs', lines 30:0-30:17 *)
+type aList_t (t : Type0) =
+| AList_Cons : usize -> t -> aList_t t -> aList_t t
+| AList_Nil : aList_t t
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 45:0-45:21 *)
+    Source: 'tests/src/hashmap.rs', lines 46:0-46:21 *)
 type hashMap_t (t : Type0) =
 {
   num_entries : usize;
   max_load_factor : (usize & usize);
   max_load : usize;
-  slots : alloc_vec_Vec (list_t t);
+  slots : alloc_vec_Vec (aList_t t);
 }
 

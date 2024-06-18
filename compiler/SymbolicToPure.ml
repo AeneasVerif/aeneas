@@ -1744,11 +1744,11 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
       (* Ignore *)
       None
 
-and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
+and aborrow_content_to_consumed (ctx : bs_ctx) (bc : V.aborrow_content) :
     texpression option =
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow (_, _) | AIgnoredMutBorrow (_, _) ->
-      craise __FILE__ __LINE__ _ctx.span "Unreachable"
+      craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutBorrow (_, _) ->
       (* We collect consumed values: ignore *)
       None
@@ -3894,12 +3894,14 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let loop_id = None in
 
   (* Assemble the declaration *)
+  let backend_attributes = { reducible = false } in
   let def : fun_decl =
     {
       def_id;
       is_local = def.is_local;
       span = def.item_meta.span;
       kind = def.kind;
+      backend_attributes;
       num_loops;
       loop_id;
       llbc_name;

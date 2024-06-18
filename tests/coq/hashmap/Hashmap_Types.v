@@ -10,24 +10,24 @@ Require Import Hashmap_TypesExternal.
 Include Hashmap_TypesExternal.
 Module Hashmap_Types.
 
-(** [hashmap::List]
-    Source: 'tests/src/hashmap.rs', lines 29:0-29:16 *)
-Inductive List_t (T : Type) :=
-| List_Cons : usize -> T -> List_t T -> List_t T
-| List_Nil : List_t T
+(** [hashmap::AList]
+    Source: 'tests/src/hashmap.rs', lines 30:0-30:17 *)
+Inductive AList_t (T : Type) :=
+| AList_Cons : usize -> T -> AList_t T -> AList_t T
+| AList_Nil : AList_t T
 .
 
-Arguments List_Cons { _ }.
-Arguments List_Nil { _ }.
+Arguments AList_Cons { _ }.
+Arguments AList_Nil { _ }.
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 45:0-45:21 *)
+    Source: 'tests/src/hashmap.rs', lines 46:0-46:21 *)
 Record HashMap_t (T : Type) :=
 mkHashMap_t {
   hashMap_num_entries : usize;
   hashMap_max_load_factor : (usize * usize);
   hashMap_max_load : usize;
-  hashMap_slots : alloc_vec_Vec (List_t T);
+  hashMap_slots : alloc_vec_Vec (AList_t T);
 }
 .
 

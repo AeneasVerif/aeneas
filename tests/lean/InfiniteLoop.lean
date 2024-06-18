@@ -2,6 +2,9 @@
 -- [infinite_loop]
 import Base
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 namespace infinite_loop
 
@@ -19,7 +22,7 @@ divergent def foo_loop : Result Unit :=
 
 /- [infinite_loop::foo]:
    Source: 'tests/src/infinite-loop.rs', lines 6:0-6:8 -/
-def foo : Result Unit :=
-  foo_loop
+@[reducible] def foo : Result Unit :=
+               foo_loop
 
 end infinite_loop

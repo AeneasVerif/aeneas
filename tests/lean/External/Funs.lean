@@ -4,6 +4,9 @@ import Base
 import External.Types
 import External.FunsExternal
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 namespace external
 
