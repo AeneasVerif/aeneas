@@ -1417,19 +1417,17 @@ let ctx_compute_type_name (item_meta : Meta.item_meta) (ctx : extraction_ctx)
     - field name
 
     Note that fields don't always have names, but we still need to
-    generate some names if we want to extract the structures to records...
-    We might want to extract such structures to tuples, later, but field
-    access then causes trouble because not all provers accept syntax like
-    [x.3] where [x] is a tuple.
+    generate some names if we want to extract the structures to records.
+    For nameless fields, we generate a name based on the index.
+
+    Note that in most situations we extract structures with nameless fields
+    to tuples, meaning generating names by using indices shouldn't be too
+    much of a problem.
  *)
 let ctx_compute_field_name (def : type_decl) (field_meta : Meta.item_meta)
     (ctx : extraction_ctx) (def_name : llbc_name) (field_id : FieldId.id)
     (field_name : string option) : string =
-  (* If the user did not provide a name, use the field index.
-
-     Note that we extract structures with unnamed fields to tuples, so in
-     practice we shouldn't get here (because either all fields have names,
-     or none of them have). *)
+  (* If the user did not provide a name, use the field index. *)
   let field_name_s =
     Option.value field_name ~default:(FieldId.to_string field_id)
   in
