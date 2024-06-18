@@ -1171,16 +1171,7 @@ let extract_comment_with_raw_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
     ?(generics : (Types.generic_params * Types.generic_args) option = None)
     (raw_span : Meta.raw_span) : unit =
-  let file = match raw_span.file with Virtual s | Local s -> s in
-  let loc_to_string (l : Meta.loc) : string =
-    string_of_int l.line ^ ":" ^ string_of_int l.col
-  in
-  let raw_span =
-    "Source: '" ^ file ^ "', lines "
-    ^ loc_to_string raw_span.beg_loc
-    ^ "-"
-    ^ loc_to_string raw_span.end_loc
-  in
+  let raw_span = raw_span_to_string raw_span in
   let name =
     match (name, generics) with
     | None, _ -> []

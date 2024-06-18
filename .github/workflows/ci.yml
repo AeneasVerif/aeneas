@@ -18,11 +18,8 @@ permissions:
 jobs:
   # Avoid `push` and `pull_request` running the same job twice
   check_if_skip_duplicate_job:
-    # runs-on: [self-hosted, linux, nix]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, nix]
     steps:
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v5
         with:
@@ -33,13 +30,11 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
 
   nix:
-    # runs-on: [self-hosted, linux, nix]
-    runs-on: ubuntu-latest
+    #runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, nix]
     needs: check_if_skip_duplicate_job
     if: needs.check_if_skip_duplicate_job.outputs.should_skip != 'true'
     steps:
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/checkout@v4
       - run: nix build -L .#checks.x86_64-linux.aeneas-check-tidiness
       - run: nix build -L .#checks.x86_64-linux.check-charon-pin
@@ -61,11 +56,8 @@ jobs:
       - run: nix develop --command bash -c "cd tests/lean && make"
 
   check-charon-pin:
-    # runs-on: [self-hosted, linux, nix]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, nix]
     steps:
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # deep clone in order to get access to other commits
