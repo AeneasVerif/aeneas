@@ -2,6 +2,9 @@
 -- [no_nested_borrows]
 import Base
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 namespace no_nested_borrows
 

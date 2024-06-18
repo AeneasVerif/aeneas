@@ -48,8 +48,8 @@ struct Foo {
 #[charon::rename("Const_Test")]
 const C: u32 = 100 + 10 + 1;
 
-#[aeneas::rename("Type-Aeneas36")]
-type Test2 = u32;
+#[aeneas::rename("Const_Aeneas11")]
+const CA: u32 = 10 + 1;
 
 #[charon::rename("Factfn")]
 fn factorial(n: u64) -> u64 {

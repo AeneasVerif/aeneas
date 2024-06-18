@@ -48,6 +48,11 @@ type structTest_t = { FieldTest : u32; }
 let const_test_body : result u32 = let* i = u32_add 100 10 in u32_add i 1
 let const_test : u32 = eval_global const_test_body
 
+(** [rename_attribute::CA]
+    Source: 'tests/src/rename_attribute.rs', lines 52:0-52:13 *)
+let const_aeneas11_body : result u32 = u32_add 10 1
+let const_aeneas11 : u32 = eval_global const_aeneas11_body
+
 (** [rename_attribute::factorial]: decreases clause
     Source: 'tests/src/rename_attribute.rs', lines 55:0-55:27 *)
 unfold let factfn_decreases (n : u64) : nat = admit ()

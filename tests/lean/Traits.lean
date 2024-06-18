@@ -2,6 +2,9 @@
 -- [traits]
 import Base
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 namespace traits
 
@@ -512,7 +515,7 @@ structure Foo (T U : Type) where
   y : U
 
 /- [core::result::Result]
-   Source: '/rustc/65ea825f4021eaf77f1b25139969712d65b435a4/library/core/src/result.rs', lines 502:0-502:21
+   Source: '/rustc/library/core/src/result.rs', lines 502:0-502:21
    Name pattern: core::result::Result -/
 inductive core.result.Result (T E : Type) :=
 | Ok : T → core.result.Result T E

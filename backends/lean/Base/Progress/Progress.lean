@@ -131,7 +131,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     Tactic.focus do
     let _ ←
       tryTac
-        (simpAt true {} []
+        (simpAt true {} #[] []
                [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
@@ -140,7 +140,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     else
        trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
        -- TODO: remove this (some types get unfolded too much: we "fold" them back)
-       let _ ← tryTac (simpAt true {} [] scalar_eqs [] .wildcard_dep)
+       let _ ← tryTac (simpAt true {} #[] [] scalar_eqs [] .wildcard_dep)
        trace[Progress] "goal after folding back scalar types: {← getMainGoal}"
        -- Clear the equality, unless the user requests not to do so
        let mgoal ← do
@@ -346,11 +346,8 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
         -- Not a local declaration: should be a theorem
         trace[Progress] "With arg: theorem"
         addCompletionInfo <| CompletionInfo.id id id.getId (danglingDot := false) {} none
-        let cs ← resolveGlobalConstWithInfos id
-        match cs with
-        | [] => throwError "Could not find theorem {id}"
-        | id :: _ =>
-          pure (some (.Theorem id))
+        let some (.const name _) ← Term.resolveId? id | throwError m!"Could not find theorem: {id}"
+        pure (some (.Theorem name))
     else pure none
   let ids :=
     let args := asArgs.getArgs

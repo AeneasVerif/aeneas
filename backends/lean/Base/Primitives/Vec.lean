@@ -2,7 +2,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Mathlib.Tactic.Linarith
 import Base.IList
 import Base.Primitives.Scalar
 import Base.Primitives.ArraySlice
@@ -59,7 +58,7 @@ def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
     have h : nlen ≤ Usize.max := by
       simp [Usize.max] at *
       have hm := Usize.refined_max.property
-      cases h <;> cases hm <;> simp [U32.max, U64.max] at * <;> try linarith
+      cases h <;> cases hm <;> simp [U32.max, U64.max] at * <;> try omega
     ok ⟨ List.concat v.val x, by simp at *; assumption ⟩
   else
     fail maximumSizeExceeded

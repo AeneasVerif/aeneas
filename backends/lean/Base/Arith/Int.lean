@@ -21,6 +21,11 @@ class HasIntProp (a : Sort u) where
   prop_ty : a → Prop
   prop : ∀ x:a, prop_ty x
 
+/- Terms that induces predicates: if we can find the term `x`, we can introduce `concl` in the context. -/
+class HasIntPred {a: Sort u} (x: a) where
+  concl : Prop
+  prop : concl
+
 /- Proposition with implications: if we find P we can introduce Q in the context -/
 class PropHasImp (x : Sort u) where
   concl : Prop
@@ -106,35 +111,51 @@ def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.Tact
   let hs := HashSet.empty
   -- Explore the declarations
   let decls ← ctx.getDecls
-  let hs ← decls.foldlM (fun hs d => collectInstances k hs d.toExpr) hs
+  let hs ← decls.foldlM (fun hs d => do 
+    -- Collect instances over all subexpressions in the context.
+    -- Note that we explore the *type* of the local declarations: if we have
+    -- for instance `h : A ∧ B` in the context, the expression itself is simply
+    -- `h`; the information we are interested in is its type.
+    let ty ← Lean.Meta.inferType d.toExpr
+    collectInstances k hs ty
+  ) hs
   -- Also explore the goal
   collectInstances k hs (← Tactic.getMainTarget)
 
 -- Helper
-def lookupProp (fName : String) (className : Name) (e : Expr) : MetaM (Option Expr) := do
+def lookupProp (fName : String) (className : Name) (e : Expr)
+  (instantiateClassFn : Expr → MetaM (Array Expr))
+  (instantiateProjectionFn : Expr → MetaM (Array Expr)) : MetaM (Option Expr) := do
   trace[Arith] fName
   -- TODO: do we need Lean.observing?
   -- This actually eliminates the error messages
   trace[Arith] m!"{fName}: {e}"
   Lean.observing? do
     trace[Arith] m!"{fName}: observing: {e}"
-    let ty ← Lean.Meta.inferType e
-    let hasProp ← mkAppM className #[ty]
+    let hasProp ← mkAppM className (← instantiateClassFn e)
     let hasPropInst ← trySynthInstance hasProp
     match hasPropInst with
     | LOption.some i =>
       trace[Arith] "Found {fName} instance"
       let i_prop ← mkProjection i (Name.mkSimple "prop")
-      some (← mkAppM' i_prop #[e])
+      some (← mkAppM' i_prop (← instantiateProjectionFn e))
     | _ => none
 
 -- Return an instance of `HasIntProp` for `e` if it has some
 def lookupHasIntProp (e : Expr) : MetaM (Option Expr) :=
-  lookupProp "lookupHasIntProp" ``HasIntProp e
+  lookupProp "lookupHasIntProp" ``HasIntProp e (fun e => do pure #[← Lean.Meta.inferType e]) (fun e => pure #[e])
 
 -- Collect the instances of `HasIntProp` for the subexpressions in the context
 def collectHasIntPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
   collectInstancesFromMainCtx lookupHasIntProp
+
+-- Return an instance of `HasIntPred` for `e` if it has some
+def lookupHasIntPred (e : Expr) : MetaM (Option Expr) :=
+  lookupProp "lookupHasIntPred" ``HasIntPred e (fun term => pure #[term]) (fun _ => pure #[])
+
+-- Collect the instances of `HasIntPred` for the subexpressions in the context
+def collectHasIntPredInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do 
+  collectInstancesFromMainCtx lookupHasIntPred
 
 -- Return an instance of `PropHasImp` for `e` if it has some
 def lookupPropHasImp (e : Expr) : MetaM (Option Expr) := do
@@ -180,7 +201,7 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     -- Add a declaration
     let nval ← Utils.addDeclTac name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
-    Utils.simpAt true {} [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
+    Utils.simpAt true {} #[] [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
     -- Return the new value
     pure nval
 
@@ -192,6 +213,13 @@ def introHasIntPropInstances : Tactic.TacticM (Array Expr) := do
 -- and introduce the corresponding assumptions
 elab "intro_has_int_prop_instances" : tactic => do
   let _ ← introHasIntPropInstances
+
+def introHasIntPredInstances : Tactic.TacticM (Array Expr) := do 
+  trace[Arith] "Introducing the HasIntPred instances"
+  introInstances ``HasIntPred.concl lookupHasIntPred
+
+elab "intro_has_int_pred_instances" : tactic => do
+  let _ ← introHasIntPredInstances
 
 def introPropHasImpInstances : Tactic.TacticM (Array Expr) := do
   trace[Arith] "Introducing the PropHasImp instances"
@@ -208,13 +236,15 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   Tactic.withMainContext do
   -- Introduce the instances of `HasIntProp`
   let _ ← introHasIntPropInstances
+  -- Introduce the instances of `HasIntPred`
+  let _ ← introHasIntPredInstances
   -- Introduce the instances of `PropHasImp`
   let _ ← introPropHasImpInstances
   -- Extra preprocessing
   extraPreprocess
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `Tactic.allGoals`
-  Tactic.allGoals do tryTac (dsimpAt false {} [] [] [] Tactic.Location.wildcard)
+  Tactic.allGoals do tryTac (dsimpAt false {} #[] [] [] [] Tactic.Location.wildcard)
 
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ())
@@ -231,10 +261,10 @@ def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic
   -- the goal. I think before leads to a smaller proof term?
   Tactic.allGoals (intTacPreprocess extraPreprocess)
   -- More preprocessing
-  Tactic.allGoals (Utils.tryTac (Utils.simpAt true {} [] [``nat_zero_eq_int_zero] [] .wildcard))
+  Tactic.allGoals (Utils.tryTac (Utils.simpAt true {} #[] [] [``nat_zero_eq_int_zero] [] .wildcard))
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
-  -- Call linarith
+  -- Call omega
   Tactic.allGoals do
     try do Tactic.Omega.omegaTactic {}
     catch _ =>

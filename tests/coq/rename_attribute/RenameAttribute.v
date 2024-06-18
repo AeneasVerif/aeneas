@@ -61,6 +61,11 @@ Definition const_test_body : result u32 :=
 .
 Definition const_test : u32 := const_test_body%global.
 
+(** [rename_attribute::CA]
+    Source: 'tests/src/rename_attribute.rs', lines 52:0-52:13 *)
+Definition const_aeneas11_body : result u32 := u32_add 10%u32 1%u32.
+Definition const_aeneas11 : u32 := const_aeneas11_body%global.
+
 (** [rename_attribute::factorial]:
     Source: 'tests/src/rename_attribute.rs', lines 55:0-55:27 *)
 Fixpoint factfn (n : u64) : result u64 :=

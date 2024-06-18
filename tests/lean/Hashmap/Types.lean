@@ -3,21 +3,24 @@
 import Base
 import Hashmap.TypesExternal
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 namespace hashmap
 
-/- [hashmap::List]
-   Source: 'tests/src/hashmap.rs', lines 29:0-29:16 -/
-inductive List (T : Type) :=
-| Cons : Usize → T → List T → List T
-| Nil : List T
+/- [hashmap::AList]
+   Source: 'tests/src/hashmap.rs', lines 30:0-30:17 -/
+inductive AList (T : Type) :=
+| Cons : Usize → T → AList T → AList T
+| Nil : AList T
 
 /- [hashmap::HashMap]
-   Source: 'tests/src/hashmap.rs', lines 45:0-45:21 -/
+   Source: 'tests/src/hashmap.rs', lines 46:0-46:21 -/
 structure HashMap (T : Type) where
   num_entries : Usize
   max_load_factor : (Usize × Usize)
   max_load : Usize
-  slots : alloc.vec.Vec (List T)
+  slots : alloc.vec.Vec (AList T)
 
 end hashmap

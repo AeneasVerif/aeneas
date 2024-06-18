@@ -3,11 +3,14 @@
 import Base
 import External.TypesExternal
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 namespace external
 
 /- Trait declaration: [core::marker::Copy]
-   Source: '/rustc/65ea825f4021eaf77f1b25139969712d65b435a4/library/core/src/marker.rs', lines 465:0-465:21
+   Source: '/rustc/library/core/src/marker.rs', lines 465:0-465:21
    Name pattern: core::marker::Copy -/
 structure core.marker.Copy (Self : Type) where
   cloneCloneInst : core.clone.Clone Self

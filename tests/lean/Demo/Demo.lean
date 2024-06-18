@@ -2,6 +2,9 @@
 -- [demo]
 import Base
 open Primitives
+set_option linter.dupNamespace false
+set_option linter.hashCommand false
+set_option linter.unusedVariables false
 
 namespace demo
 
@@ -112,6 +115,7 @@ divergent def list_nth_mut1_loop
 
 /- [demo::list_nth_mut1]:
    Source: 'tests/src/demo.rs', lines 71:0-71:77 -/
+@[reducible]
 def list_nth_mut1
   (T : Type) (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))
