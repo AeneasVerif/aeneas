@@ -307,7 +307,7 @@ let non_copyable_array : result unit =
   take_array_t (mk_array aB_t 2 [ AB_A; AB_B ])
 
 (** [arrays::sum]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 245:0-245:28 *)
+    Source: 'tests/src/arrays.rs', lines 247:4-253:1 *)
 let rec sum_loop
   (s : slice u32) (sum1 : u32) (i : usize) :
   Tot (result u32) (decreases (sum_loop_decreases s sum1 i))
@@ -327,7 +327,7 @@ let sum (s : slice u32) : result u32 =
   sum_loop s 0 0
 
 (** [arrays::sum2]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 255:0-255:41 *)
+    Source: 'tests/src/arrays.rs', lines 258:4-264:1 *)
 let rec sum2_loop
   (s : slice u32) (s2 : slice u32) (sum1 : u32) (i : usize) :
   Tot (result u32) (decreases (sum2_loop_decreases s s2 sum1 i))
@@ -415,7 +415,7 @@ let ite : result unit =
   Ok ()
 
 (** [arrays::zero_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 306:0-306:31 *)
+    Source: 'tests/src/arrays.rs', lines 308:4-313:1 *)
 let rec zero_slice_loop
   (a : slice u8) (i : usize) (len : usize) :
   Tot (result (slice u8)) (decreases (zero_slice_loop_decreases a i len))
@@ -434,7 +434,7 @@ let zero_slice (a : slice u8) : result (slice u8) =
   let len = slice_len u8 a in zero_slice_loop a 0 len
 
 (** [arrays::iter_mut_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 315:0-315:35 *)
+    Source: 'tests/src/arrays.rs', lines 317:4-321:1 *)
 let rec iter_mut_slice_loop
   (len : usize) (i : usize) :
   Tot (result unit) (decreases (iter_mut_slice_loop_decreases len i))
@@ -449,7 +449,7 @@ let iter_mut_slice (a : slice u8) : result (slice u8) =
   let len = slice_len u8 a in let* _ = iter_mut_slice_loop len 0 in Ok a
 
 (** [arrays::sum_mut_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 323:0-323:42 *)
+    Source: 'tests/src/arrays.rs', lines 325:4-331:1 *)
 let rec sum_mut_slice_loop
   (a : slice u32) (i : usize) (s : u32) :
   Tot (result u32) (decreases (sum_mut_slice_loop_decreases a i s))

@@ -1492,13 +1492,15 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
             in
 
             let loop_body = { inputs; inputs_lvs; body = loop_body } in
+            (* We retrieve the meta information from the parent function
+               *but* replace its span with the span of the loop *)
+            let item_meta = { def.item_meta with span = loop.span } in
 
             let loop_def : fun_decl =
               {
                 def_id = def.def_id;
                 is_local = def.is_local;
-                item_meta = def.item_meta;
-                (*TODO check is right item_meta*)
+                item_meta;
                 kind = def.kind;
                 backend_attributes = def.backend_attributes;
                 num_loops;

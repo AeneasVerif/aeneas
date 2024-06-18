@@ -14,7 +14,7 @@ def bar : Result Unit :=
   Result.ok ()
 
 /- [infinite_loop::foo]: loop 0:
-   Source: 'tests/src/infinite-loop.rs', lines 6:0-6:8 -/
+   Source: 'tests/src/infinite-loop.rs', lines 6:0-10:1 -/
 divergent def foo_loop : Result Unit :=
   do
   let _ ← bar

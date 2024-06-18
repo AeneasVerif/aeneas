@@ -75,7 +75,7 @@ Fixpoint factfn (n : u64) : result u64 :=
 .
 
 (** [rename_attribute::sum]: loop 0:
-    Source: 'tests/src/rename_attribute.rs', lines 64:0-64:27 *)
+    Source: 'tests/src/rename_attribute.rs', lines 66:4-74:1 *)
 Fixpoint no_borrows_sum_loop (max : u32) (i : u32) (s : u32) : result u32 :=
   if i s< max
   then (

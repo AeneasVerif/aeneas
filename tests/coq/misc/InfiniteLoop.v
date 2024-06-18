@@ -14,7 +14,7 @@ Definition bar : result unit :=
   Ok tt.
 
 (** [infinite_loop::foo]: loop 0:
-    Source: 'tests/src/infinite-loop.rs', lines 6:0-6:8 *)
+    Source: 'tests/src/infinite-loop.rs', lines 6:0-10:1 *)
 Fixpoint foo_loop (n : nat) : result unit :=
   match n with | O => Fail_ OutOfFuel | S n1 => _ <- bar; foo_loop n1 end
 .

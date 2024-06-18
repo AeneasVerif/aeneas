@@ -91,7 +91,7 @@ Fixpoint list_nth_mut
 .
 
 (** [demo::list_nth_mut1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 71:0-71:77 *)
+    Source: 'tests/src/demo.rs', lines 71:0-80:1 *)
 Fixpoint list_nth_mut1_loop
   (T : Type) (n : nat) (l : CList_t T) (i : u32) :
   result (T * (T -> result (CList_t T)))

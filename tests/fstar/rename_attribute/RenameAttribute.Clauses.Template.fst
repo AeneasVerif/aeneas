@@ -11,7 +11,7 @@ open RenameAttribute.Types
 unfold let factfn_decreases (n : u64) : nat = admit ()
 
 (** [rename_attribute::sum]: decreases clause
-    Source: 'tests/src/rename_attribute.rs', lines 64:0-64:27 *)
+    Source: 'tests/src/rename_attribute.rs', lines 66:4-74:1 *)
 unfold
 let no_borrows_sum_loop_decreases (max : u32) (i : u32) (s : u32) : nat =
   admit ()

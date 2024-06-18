@@ -48,7 +48,7 @@ let rec factfn (n : u64) : Tot (result u64) (decreases (factfn_decreases n)) =
   else let* i = u64_sub n 1 in let* i1 = factfn i in u64_mul n i1
 
 (** [rename_attribute::sum]: loop 0:
-    Source: 'tests/src/rename_attribute.rs', lines 64:0-64:27 *)
+    Source: 'tests/src/rename_attribute.rs', lines 66:4-74:1 *)
 let rec no_borrows_sum_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (no_borrows_sum_loop_decreases max i s))
