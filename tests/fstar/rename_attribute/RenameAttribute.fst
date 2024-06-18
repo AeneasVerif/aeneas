@@ -35,9 +35,9 @@ let boolFn (t : Type0) (x : bool) : result bool =
 (** [rename_attribute::SimpleEnum]
     Source: 'tests/src/rename_attribute.rs', lines 35:0-35:15 *)
 type variantsTest_t =
-| SimpleEnum_Variant1 : variantsTest_t
-| SimpleEnum_SecondVariant : variantsTest_t
-| SimpleEnum_ThirdVariant : variantsTest_t
+| VariantsTest_Variant1 : variantsTest_t
+| VariantsTest_SecondVariant : variantsTest_t
+| VariantsTest_ThirdVariant : variantsTest_t
 
 (** [rename_attribute::Foo]
     Source: 'tests/src/rename_attribute.rs', lines 43:0-43:10 *)

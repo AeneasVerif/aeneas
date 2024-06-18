@@ -752,7 +752,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
         }
     | _ -> ctx
   in
-  (* Compute and register the type def name *)
+  (* Compute and register the type decl name *)
   let def_name =
     match info with
     | None -> ctx_compute_type_decl_name ctx def
@@ -825,10 +825,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
-                    let name =
-                      ctx_compute_variant_name def.item_meta.span ctx
-                        def.llbc_name variant
-                    in
+                    let name = ctx_compute_variant_name ctx def variant in
                     (* Add the type name prefix for Lean *)
                     let name =
                       if Config.backend () = Lean then
@@ -979,9 +976,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   let print_variant _variant_id (v : variant) =
     (* We don't lookup the name, because it may have a prefix for the type
        id (in the case of Lean) *)
-    let cons_name =
-      ctx_compute_variant_name def.item_meta.span ctx def.llbc_name v
-    in
+    let cons_name = ctx_compute_variant_name ctx def v in
     let fields = v.fields in
     extract_type_decl_variant def.item_meta.span ctx fmt type_decl_group
       def_name type_params cg_params cons_name fields

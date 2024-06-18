@@ -1392,10 +1392,10 @@ let ctx_compute_simple_name (span : Meta.span) (ctx : extraction_ctx)
 let ctx_compute_simple_type_name = ctx_compute_simple_name
 
 (** Helper *)
-
-let ctx_compute_type_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
-    (name : llbc_name) : string =
-  flatten_name (ctx_compute_simple_type_name span ctx name)
+let ctx_compute_type_name_no_suffix (ctx : extraction_ctx)
+    (item_meta : Meta.item_meta) (name : llbc_name) : string =
+  let name = rename_llbc_name item_meta name in
+  flatten_name (ctx_compute_simple_type_name item_meta.span ctx name)
 
 (** Provided a basename, compute a type name.
 
@@ -1405,8 +1405,7 @@ let ctx_compute_type_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
  *)
 let ctx_compute_type_name (item_meta : Meta.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) =
-  let name = rename_llbc_name item_meta name in
-  let name = ctx_compute_type_name_no_suffix item_meta.span ctx name in
+  let name = ctx_compute_type_name_no_suffix ctx item_meta name in
   match backend () with
   | FStar -> StringUtils.lowercase_first_letter (name ^ "_t")
   | Coq | HOL4 -> name ^ "_t"
@@ -1445,7 +1444,7 @@ let ctx_compute_field_name (def : type_decl) (field_meta : Meta.item_meta)
     else field_name_s
   else
     let def_name =
-      ctx_compute_type_name_no_suffix def.item_meta.span ctx def_name
+      ctx_compute_type_name_no_suffix ctx def.item_meta def_name
       ^ "_" ^ field_name_s
     in
     match backend () with
@@ -1456,8 +1455,8 @@ let ctx_compute_field_name (def : type_decl) (field_meta : Meta.item_meta)
     - type name
     - variant name
  *)
-let ctx_compute_variant_name (span : Meta.span) (ctx : extraction_ctx)
-    (def_name : llbc_name) (variant : variant) : string =
+let ctx_compute_variant_name (ctx : extraction_ctx) (def : type_decl)
+    (variant : variant) : string =
   (* Replace the name of the variant if the user annotated it with the [rename] attribute. *)
   let variant =
     Option.value variant.item_meta.rename ~default:variant.variant_name
@@ -1469,7 +1468,8 @@ let ctx_compute_variant_name (span : Meta.span) (ctx : extraction_ctx)
          (some backends don't support collision of variant names) *)
       if !variant_concatenate_type_name then
         StringUtils.capitalize_first_letter
-          (ctx_compute_type_name_no_suffix span ctx def_name ^ "_" ^ variant)
+          (ctx_compute_type_name_no_suffix ctx def.item_meta def.llbc_name
+          ^ "_" ^ variant)
       else variant
   | Lean -> variant
 
