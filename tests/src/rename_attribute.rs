@@ -1,4 +1,5 @@
 //@ [fstar] aeneas-args=-decreases-clauses -template-clauses -split-files
+//@ [coq] aeneas-args=-use-fuel
 #![feature(register_tool)]
 #![register_tool(charon)]
 #![register_tool(aeneas)]

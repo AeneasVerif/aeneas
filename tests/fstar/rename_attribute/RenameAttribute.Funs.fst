@@ -8,16 +8,16 @@ include RenameAttribute.Clauses
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [rename_attribute::{(rename_attribute::BoolTrait for bool)}::get_bool]:
-    Source: 'tests/src/rename_attribute.rs', lines 21:4-21:30 *)
+    Source: 'tests/src/rename_attribute.rs', lines 22:4-22:30 *)
 let boolTraitBool_getTest (self : bool) : result bool =
   Ok self
 
 (** Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
-    Source: 'tests/src/rename_attribute.rs', lines 20:0-20:23 *)
+    Source: 'tests/src/rename_attribute.rs', lines 21:0-21:23 *)
 let boolImpl : boolTest_t bool = { getTest = boolTraitBool_getTest; }
 
 (** [rename_attribute::BoolTrait::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 14:4-14:30 *)
+    Source: 'tests/src/rename_attribute.rs', lines 15:4-15:30 *)
 let boolTrait_retTest
   (#self : Type0) (self_clause : boolTest_t self) (self1 : self) :
   result bool
@@ -25,30 +25,30 @@ let boolTrait_retTest
   Ok true
 
 (** [rename_attribute::test_bool_trait]:
-    Source: 'tests/src/rename_attribute.rs', lines 27:0-27:42 *)
+    Source: 'tests/src/rename_attribute.rs', lines 28:0-28:42 *)
 let boolFn (t : Type0) (x : bool) : result bool =
   let* b = boolTraitBool_getTest x in
   if b then boolTrait_retTest boolImpl x else Ok false
 
 (** [rename_attribute::C]
-    Source: 'tests/src/rename_attribute.rs', lines 49:0-49:12 *)
+    Source: 'tests/src/rename_attribute.rs', lines 50:0-50:12 *)
 let const_test_body : result u32 = let* i = u32_add 100 10 in u32_add i 1
 let const_test : u32 = eval_global const_test_body
 
 (** [rename_attribute::CA]
-    Source: 'tests/src/rename_attribute.rs', lines 52:0-52:13 *)
+    Source: 'tests/src/rename_attribute.rs', lines 53:0-53:13 *)
 let const_aeneas11_body : result u32 = u32_add 10 1
 let const_aeneas11 : u32 = eval_global const_aeneas11_body
 
 (** [rename_attribute::factorial]:
-    Source: 'tests/src/rename_attribute.rs', lines 55:0-55:27 *)
+    Source: 'tests/src/rename_attribute.rs', lines 56:0-56:27 *)
 let rec factfn (n : u64) : Tot (result u64) (decreases (factfn_decreases n)) =
   if n <= 1
   then Ok 1
   else let* i = u64_sub n 1 in let* i1 = factfn i in u64_mul n i1
 
 (** [rename_attribute::sum]: loop 0:
-    Source: 'tests/src/rename_attribute.rs', lines 66:4-74:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 67:4-75:1 *)
 let rec no_borrows_sum_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (no_borrows_sum_loop_decreases max i s))
@@ -61,7 +61,7 @@ let rec no_borrows_sum_loop
   else u32_mul s 2
 
 (** [rename_attribute::sum]:
-    Source: 'tests/src/rename_attribute.rs', lines 64:0-64:27 *)
+    Source: 'tests/src/rename_attribute.rs', lines 65:0-65:27 *)
 let no_borrows_sum (max : u32) : result u32 =
   no_borrows_sum_loop max 0 0
 
