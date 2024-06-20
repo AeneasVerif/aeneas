@@ -66,7 +66,15 @@ module Sig = struct
     { regions; types; const_generics; trait_refs = [] }
 
   let mk_generic_params regions types const_generics : generic_params =
-    { regions; types; const_generics; trait_clauses = [] }
+    {
+      regions;
+      types;
+      const_generics;
+      trait_clauses = [];
+      regions_outlive = [];
+      types_outlive = [];
+      trait_type_constraints = [];
+    }
 
   let mk_ref_ty (r : region) (ty : ty) (is_mut : bool) : ty =
     let ref_kind = if is_mut then RMut else RShared in
@@ -79,15 +87,11 @@ module Sig = struct
     TAdt (TAssumed TSlice, mk_generic_args [] [ ty ] [])
 
   let mk_sig generics inputs output : fun_sig =
-    let preds : predicates =
-      { regions_outlive = []; types_outlive = []; trait_type_constraints = [] }
-    in
     {
       is_unsafe = false;
       is_closure = false;
       closure_info = None;
       generics;
-      preds;
       parent_params_info = None;
       inputs;
       output;

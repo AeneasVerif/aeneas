@@ -426,7 +426,6 @@ module Contexts = struct
     let global_decls = ctx.global_ctx.global_decls in
     let trait_decls = ctx.trait_decls_ctx.trait_decls in
     let trait_impls = ctx.trait_impls_ctx.trait_impls in
-    let preds = TypesUtils.empty_predicates in
     {
       type_decls;
       fun_decls;
@@ -434,10 +433,7 @@ module Contexts = struct
       trait_decls;
       trait_impls;
       regions = [];
-      types = [];
-      const_generics = [];
-      trait_clauses = [];
-      preds;
+      generics = TypesUtils.empty_generic_params;
       locals = [];
     }
 
@@ -450,8 +446,6 @@ module Contexts = struct
     (* Below: it is always safe to omit fields - if an id can't be found at
        printing time, we print the id (in raw form) instead of the name it
        designates. *)
-    (* We don't need the predicates so we initialize them to empty *)
-    let preds = empty_predicates in
     (* For the locals: we retrieve the information from the environment.
        Note that the locals don't need to be ordered based on their indices.
     *)
@@ -469,13 +463,16 @@ module Contexts = struct
       global_decls;
       trait_decls;
       trait_impls;
-      types = ctx.type_vars;
       (* The regions have been transformed to region groups *)
       regions = [];
-      const_generics = ctx.const_generic_vars;
-      (* We don't need the trait clauses so we initialize them to empty *)
-      trait_clauses = [];
-      preds;
+      generics =
+        {
+          TypesUtils.empty_generic_params with
+          types = ctx.type_vars;
+          const_generics = ctx.const_generic_vars;
+          (* We don't need the trait clauses so we initialize them to empty *)
+          trait_clauses = [];
+        };
       locals;
     }
 

@@ -122,11 +122,14 @@ let norm_ctx_to_fmt_env (ctx : norm_ctx) : Print.fmt_env =
     global_decls = ctx.global_decls;
     trait_decls = ctx.trait_decls;
     trait_impls = ctx.trait_impls;
-    types = ctx.type_vars;
-    const_generics = ctx.const_generic_vars;
     regions = [];
-    trait_clauses = [];
-    preds = empty_predicates;
+    generics =
+      {
+        TypesUtils.empty_generic_params with
+        types = ctx.type_vars;
+        const_generics = ctx.const_generic_vars;
+        trait_clauses = [];
+      };
     locals = [];
   }
 

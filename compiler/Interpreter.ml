@@ -78,7 +78,7 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     | TraitItemDecl _ | TraitItemProvided _ -> Self
   in
   let generics =
-    let { regions; types; const_generics; trait_clauses } = sg.generics in
+    let { regions; types; const_generics; trait_clauses; _ } = sg.generics in
     let regions = List.map (fun _ -> RErased) regions in
     let types = List.map (fun (v : type_var) -> TVar v.index) types in
     let const_generics =

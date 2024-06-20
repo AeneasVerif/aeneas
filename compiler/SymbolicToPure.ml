@@ -294,10 +294,7 @@ let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
   let global_decls = ctx.global_ctx.llbc_global_decls in
   let trait_decls = ctx.trait_decls_ctx in
   let trait_impls = ctx.trait_impls_ctx in
-  let { regions; types; const_generics; trait_clauses } : T.generic_params =
-    ctx.fun_decl.signature.generics
-  in
-  let preds = ctx.fun_decl.signature.preds in
+  let { regions; _ } : T.generic_params = ctx.fun_decl.signature.generics in
   {
     type_decls;
     fun_decls;
@@ -305,10 +302,7 @@ let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
     trait_decls;
     trait_impls;
     regions = [ regions ];
-    types;
-    const_generics;
-    trait_clauses;
-    preds;
+    generics = ctx.fun_decl.signature.generics;
     locals = [];
   }
 
@@ -527,20 +521,23 @@ let translate_strait_type_constraint (span : Meta.span)
   let ty = translate_sty span ty in
   { trait_ref; type_name; ty }
 
-let translate_predicates (span : Meta.span) (preds : T.predicates) : predicates
-    =
-  let trait_type_constraints =
-    List.map
-      (translate_strait_type_constraint span)
-      preds.trait_type_constraints
-  in
-  { trait_type_constraints }
-
 let translate_generic_params (span : Meta.span) (generics : T.generic_params) :
-    generic_params =
-  let { T.regions = _; types; const_generics; trait_clauses } = generics in
+    generic_params * predicates =
+  let {
+    T.regions = _;
+    types;
+    const_generics;
+    trait_clauses;
+    trait_type_constraints;
+    _;
+  } =
+    generics
+  in
   let trait_clauses = List.map (translate_trait_clause span) trait_clauses in
-  { types; const_generics; trait_clauses }
+  let trait_type_constraints =
+    List.map (translate_strait_type_constraint span) trait_type_constraints
+  in
+  ({ types; const_generics; trait_clauses }, { trait_type_constraints })
 
 let translate_field (span : Meta.span) (f : T.field) : field =
   let field_name = f.field_name in
@@ -588,16 +585,14 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let def_id = def.T.def_id in
   let llbc_name = def.name in
   let name = Print.Types.name_to_string env def.name in
-  let { T.regions; types; const_generics; trait_clauses } = def.generics in
   (* Can't translate types with regions for now *)
-  cassert __FILE__ __LINE__ (regions = []) def.item_meta.span
-    "ADTs containing borrows are not supported yet";
-  let trait_clauses =
-    List.map (translate_trait_clause def.item_meta.span) trait_clauses
+  cassert __FILE__ __LINE__
+    (def.generics.regions = [])
+    def.item_meta.span "ADTs containing borrows are not supported yet";
+  let generics, preds =
+    translate_generic_params def.item_meta.span def.generics
   in
-  let generics = { types; const_generics; trait_clauses } in
   let kind = translate_type_decl_kind def.item_meta.span def.T.kind in
-  let preds = translate_predicates def.item_meta.span def.preds in
   let is_local = def.is_local in
   let item_meta = def.item_meta in
   {
@@ -1019,7 +1014,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : Meta.span)
     in
     (* Compute the normalization map for the *sty* types and add it to the context *)
     AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
-      sg.preds.trait_type_constraints
+      sg.generics.trait_type_constraints
   in
 
   (* Normalize the signature *)
@@ -1247,10 +1242,9 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : Meta.span)
   in
 
   (* Generic parameters *)
-  let generics = translate_generic_params span sg.generics in
+  let generics, preds = translate_generic_params span sg.generics in
 
   (* Return *)
-  let preds = translate_predicates span sg.preds in
   {
     generics;
     llbc_generics = sg.generics;
@@ -3943,7 +3937,6 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     name = llbc_name;
     item_meta;
     generics = llbc_generics;
-    preds;
     parent_clauses = llbc_parent_clauses;
     consts;
     types;
@@ -3958,10 +3951,9 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics =
+  let generics, preds =
     translate_generic_params trait_decl.item_meta.span llbc_generics
   in
-  let preds = translate_predicates trait_decl.item_meta.span preds in
   let parent_clauses =
     List.map
       (translate_trait_clause trait_decl.item_meta.span)
@@ -4011,7 +4003,6 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     item_meta;
     impl_trait = llbc_impl_trait;
     generics = llbc_generics;
-    preds;
     parent_trait_refs;
     consts;
     types;
@@ -4031,10 +4022,9 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics =
+  let generics, preds =
     translate_generic_params trait_impl.item_meta.span llbc_generics
   in
-  let preds = translate_predicates trait_impl.item_meta.span preds in
   let parent_trait_refs =
     List.map (translate_strait_ref trait_impl.item_meta.span) parent_trait_refs
   in
@@ -4080,7 +4070,6 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     is_local;
     name = llbc_name;
     generics = llbc_generics;
-    preds;
     ty;
     kind;
     body = body_id;
@@ -4092,8 +4081,9 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       llbc_name
   in
-  let generics = translate_generic_params decl.item_meta.span llbc_generics in
-  let preds = translate_predicates decl.item_meta.span preds in
+  let generics, preds =
+    translate_generic_params decl.item_meta.span llbc_generics
+  in
   let ty = translate_fwd_ty decl.item_meta.span ctx.type_ctx.type_infos ty in
   {
     span = item_meta.span;

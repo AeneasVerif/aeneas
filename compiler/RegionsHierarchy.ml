@@ -53,7 +53,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
   let norm_ctx : AssociatedTypes.norm_ctx =
     let norm_trait_types =
       AssociatedTypes.compute_norm_trait_types_from_preds span
-        sg.preds.trait_type_constraints
+        sg.generics.trait_type_constraints
     in
     {
       span;
@@ -130,7 +130,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
 
   (* Explore the clauses - we only explore the "region outlives" clause,
      not the "type outlives" clauses *)
-  List.iter add_edge_from_region_constraint sg.preds.regions_outlive;
+  List.iter add_edge_from_region_constraint sg.generics.regions_outlive;
 
   (* Explore the types in the signature to add the edges *)
   let rec explore_ty (outer : region list) (ty : ty) =
@@ -148,7 +148,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
             let subst =
               Subst.make_subst_from_generics decl.generics generics tr_self
             in
-            let predicates = Subst.predicates_substitute subst decl.preds in
+            let predicates =
+              Subst.generic_params_substitute subst decl.generics
+            in
             (* Note that because we also explore the generics below, we may
                explore several times the same type - this is ok *)
             List.iter
@@ -312,10 +314,7 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
       trait_decls;
       trait_impls;
       regions = [];
-      types = [];
-      const_generics = [];
-      trait_clauses = [];
-      preds = empty_predicates;
+      generics = empty_generic_params;
       locals = [];
     }
   in
