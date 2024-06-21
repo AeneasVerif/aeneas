@@ -7,15 +7,33 @@ namespace demo
 
 #check U32.add_spec
 
--- @[pspec]
-theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
-  : ∃ y, mul2_add1 x = ok y ∧
-  ↑y = 2 * ↑x + (1 : Int)
-  := by
-  rw [mul2_add1]
-  progress with U32.add_spec as ⟨ i ⟩
-  progress as ⟨ i' ⟩
-  simp; scalar_tac
+example (a: Slice U32) (u: U32):
+  a.val = [u] →
+  a.length = 1#usize := by
+  intro h
+  simp [h, Slice.len, Usize.ofInt, Usize.ofIntCore]
+
+example (a: Slice U32) (u: U32):
+  a.val = [u] →
+  a.val.len = 1 := by
+  intro h
+  simp [h]
+
+#check Scalar.eq_equiv
+
+example (a: Slice U32) (u: U32):
+  a.val = [u] →
+  a.length = 1#usize := by
+  intro h
+  simp [h]
+
+@[simp] theorem Scalar.eq_imp {x y : U32} (h : x.val = y.val) :
+  x = y := sorry
+
+example (f : U32 → Bool) (x : U32) (y : U32) (h : x.val = y.val) : f x := by
+  have := Scalar.eq_imp h
+  simp [Scalar.eq_imp h]
+
 
 theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
   ∃ z, use_mul2_add1 x y = ok z ∧

@@ -3,6 +3,7 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
+import Mathlib.Tactic.Ring.RingNF
 import Base.Utils
 import Base.Arith.Base
 
@@ -111,7 +112,7 @@ def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.Tact
   let hs := HashSet.empty
   -- Explore the declarations
   let decls ← ctx.getDecls
-  let hs ← decls.foldlM (fun hs d => do 
+  let hs ← decls.foldlM (fun hs d => do
     -- Collect instances over all subexpressions in the context.
     -- Note that we explore the *type* of the local declarations: if we have
     -- for instance `h : A ∧ B` in the context, the expression itself is simply
@@ -154,7 +155,7 @@ def lookupHasIntPred (e : Expr) : MetaM (Option Expr) :=
   lookupProp "lookupHasIntPred" ``HasIntPred e (fun term => pure #[term]) (fun _ => pure #[])
 
 -- Collect the instances of `HasIntPred` for the subexpressions in the context
-def collectHasIntPredInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do 
+def collectHasIntPredInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
   collectInstancesFromMainCtx lookupHasIntPred
 
 -- Return an instance of `PropHasImp` for `e` if it has some
@@ -214,7 +215,7 @@ def introHasIntPropInstances : Tactic.TacticM (Array Expr) := do
 elab "intro_has_int_prop_instances" : tactic => do
   let _ ← introHasIntPropInstances
 
-def introHasIntPredInstances : Tactic.TacticM (Array Expr) := do 
+def introHasIntPredInstances : Tactic.TacticM (Array Expr) := do
   trace[Arith] "Introducing the HasIntPred instances"
   introInstances ``HasIntPred.concl lookupHasIntPred
 

@@ -40,6 +40,7 @@ instance (α : Type u) : Inhabited (Vec α) := by
   apply Vec.new
 
 -- TODO: very annoying that the α is an explicit parameter
+@[simp]
 abbrev Vec.len (α : Type u) (v : Vec α) : Usize :=
   Usize.ofIntCore v.val.len (by constructor <;> scalar_tac)
 

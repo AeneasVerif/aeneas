@@ -456,16 +456,18 @@ theorem index_update_eq
         simp at *
         apply index_update_eq <;> scalar_tac
 
-theorem update_map_eq {α : Type u} {β : Type v} (ls : List α) (i : Int) (x : α) (f : α → β) :
+@[simp]
+theorem map_update_eq {α : Type u} {β : Type v} (ls : List α) (i : Int) (x : α) (f : α → β) :
   (ls.update i x).map f = (ls.map f).update i (f x) :=
   match ls with
   | [] => by simp
   | hd :: tl =>
     if h : i = 0 then by simp [*]
     else
-      have hi := update_map_eq tl (i - 1) x f
+      have hi := map_update_eq tl (i - 1) x f
       by simp [*]
 
+@[simp]
 theorem len_flatten_update_eq {α : Type u} (ls : List (List α)) (i : Int) (x : List α)
   (h0 : 0 ≤ i) (h1 : i < ls.len) :
   (ls.update i x).flatten.len = ls.flatten.len + x.len - (ls.index i).len :=
@@ -477,6 +479,20 @@ theorem len_flatten_update_eq {α : Type u} (ls : List (List α)) (i : Int) (x :
     else
       have hi := len_flatten_update_eq tl (i - 1) x (by int_tac) (by int_tac)
       simp [*]
+      int_tac
+
+theorem len_index_le_len_flatten (ls : List (List α)) :
+  forall (i : Int), (ls.index i).len ≤ ls.flatten.len := by
+  induction ls <;> intro i <;> simp_all
+  . rw [List.index]
+    simp [default]
+  . rename ∀ _, _ => ih
+    if hi: i = 0 then
+      simp_all
+      int_tac
+    else
+      replace ih := ih (i - 1)
+      simp_all
       int_tac
 
 @[simp]
