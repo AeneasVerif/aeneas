@@ -968,66 +968,62 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
   (∀ key, hm'.lookup key = hm.lookup key) ∧
   hm'.al_v.len = hm.al_v.len := by
   rw [try_resize]
-  if hSat: hm.saturated = true then
-    simp [*]
-    tauto
-  else
-    simp [hSat]
-    progress as ⟨ n1 ⟩ -- TODO: simplify (Usize.ofInt (OfNat.ofNat 2) try_resize.proof_1).val
-    have : hm.2.1.val ≠ 0 := by
-      simp [inv, inv_load] at hInv
-      -- TODO: why does hm.max_load_factor appears as hm.2??
-      -- Can we deactivate field notations?
+  simp
+  progress as ⟨ n1 ⟩ -- TODO: simplify (Usize.ofInt (OfNat.ofNat 2) try_resize.proof_1).val
+  have : hm.2.1.val ≠ 0 := by
+    simp [inv, inv_load] at hInv
+    -- TODO: why does hm.max_load_factor appears as hm.2??
+    -- Can we deactivate field notations?
+    omega
+  progress as ⟨ n2 ⟩
+  if hSmaller : hm.slots.val.len ≤ n2.val then
+    simp [hSmaller]
+    have : (alloc.vec.Vec.len (AList α) hm.slots).val * 2 ≤ Usize.max := by
+          simp [alloc.vec.Vec.len, inv, inv_load] at *
+          -- TODO: this should be automated
+          have hIneq1 : n1.val ≤ Usize.max / 2 := by simp [*]
+          simp [Int.le_ediv_iff_mul_le] at hIneq1
+          -- TODO: this should be automated
+          have hIneq2 : n2.val ≤ n1.val / hm.2.1.val := by simp [*]
+          rw [Int.le_ediv_iff_mul_le] at hIneq2 <;> try simp [*]
+          have : n2.val * 1 ≤ n2.val * hm.max_load_factor.1.val := by
+            apply Int.mul_le_mul <;> scalar_tac
+          scalar_tac
+    progress as ⟨ newLength ⟩
+    have : 0 < newLength.val := by
+      simp_all [inv, inv_load]
+    progress as ⟨ ntable1 .. ⟩ -- TODO: introduce nice notation to take care of preconditions
+    . -- Pre 1
+      simp_all [inv, inv_load]
+      split_conjs at hInv
+      --
+      apply Int.mul_le_of_le_ediv at hSmaller <;> try simp [*]
+      apply Int.mul_le_of_le_ediv at hSmaller <;> try simp
+      --
+      have : (hm.slots.val.len * hm.2.1.val) * 1 ≤ (hm.slots.val.len * hm.2.1.val) * 2 := by
+        apply Int.mul_le_mul <;> (try simp [*]); scalar_tac
+      --
+      ring_nf at *
+      simp [*]
+      unfold max_load max_load_factor at *
       omega
-    progress as ⟨ n2 ⟩
-    if hSmaller : hm.slots.val.len ≤ n2.val then
-      simp [hSmaller]
-      have : (alloc.vec.Vec.len (AList α) hm.slots).val * 2 ≤ Usize.max := by
-            simp [alloc.vec.Vec.len, inv, inv_load] at *
-            -- TODO: this should be automated
-            have hIneq1 : n1.val ≤ Usize.max / 2 := by simp [*]
-            simp [Int.le_ediv_iff_mul_le] at hIneq1
-            -- TODO: this should be automated
-            have hIneq2 : n2.val ≤ n1.val / hm.2.1.val := by simp [*]
-            rw [Int.le_ediv_iff_mul_le] at hIneq2 <;> try simp [*]
-            have : n2.val * 1 ≤ n2.val * hm.max_load_factor.1.val := by
-              apply Int.mul_le_mul <;> scalar_tac
-            scalar_tac
-      progress as ⟨ newLength ⟩
-      have : 0 < newLength.val := by
-        simp_all [inv, inv_load]
-      progress as ⟨ ntable1 .. ⟩ -- TODO: introduce nice notation to take care of preconditions
-      . -- Pre 1
-        simp_all [inv, inv_load]
-        split_conjs at hInv
-        --
-        apply Int.mul_le_of_le_ediv at hSmaller <;> try simp [*]
-        apply Int.mul_le_of_le_ediv at hSmaller <;> try simp
-        --
-        have : (hm.slots.val.len * hm.2.1.val) * 1 ≤ (hm.slots.val.len * hm.2.1.val) * 2 := by
-          apply Int.mul_le_mul <;> (try simp [*]); scalar_tac
-        --
-        ring_nf at *
-        simp [*]
-        unfold max_load max_load_factor at *
-        omega
-      . -- Pre 2
-        simp_all [inv, inv_load]
-        unfold max_load_factor at * -- TODO: this is really annoying
-        omega
-      . -- End of the proof
-        have : slots_t_inv hm.slots := by simp_all [inv] -- TODO
-        have : (Slots.al_v hm.slots).len ≤ Usize.max := by simp_all [inv, al_v, v, Slots.al_v]; scalar_tac
-        progress as ⟨ ntable2, slots1, _, _, hLookup .. ⟩ -- TODO: assumption is not powerful enough
-        simp_all [lookup, al_v, v, alloc.vec.Vec.len]
-        intro key
-        replace hLookup := hLookup key
-        cases h1: (ntable2.slots.val.index (key.val % ntable2.slots.val.len)).v.lookup' key <;>
-        cases h2: (hm.slots.val.index (key.val % hm.slots.val.len)).v.lookup' key <;>
-        simp_all [Slots.lookup]
-    else
-      simp [hSmaller]
-      tauto
+    . -- Pre 2
+      simp_all [inv, inv_load]
+      unfold max_load_factor at * -- TODO: this is really annoying
+      omega
+    . -- End of the proof
+      have : slots_t_inv hm.slots := by simp_all [inv] -- TODO
+      have : (Slots.al_v hm.slots).len ≤ Usize.max := by simp_all [inv, al_v, v, Slots.al_v]; scalar_tac
+      progress as ⟨ ntable2, slots1, _, _, hLookup .. ⟩ -- TODO: assumption is not powerful enough
+      simp_all [lookup, al_v, v, alloc.vec.Vec.len]
+      intro key
+      replace hLookup := hLookup key
+      cases h1: (ntable2.slots.val.index (key.val % ntable2.slots.val.len)).v.lookup' key <;>
+      cases h2: (hm.slots.val.index (key.val % hm.slots.val.len)).v.lookup' key <;>
+      simp_all [Slots.lookup]
+  else
+    simp [hSmaller]
+    tauto
 
 @[pspec]
 theorem insert_spec {α} (hm : HashMap α) (key : Usize) (value : α)
@@ -1046,11 +1042,13 @@ theorem insert_spec {α} (hm : HashMap α) (key : Usize) (value : α)
   progress as ⟨ hm1 .. ⟩
   simp [len]
   split
-  . progress as ⟨ hm2 .. ⟩
-    simp [*]
-    intros; tauto
-  . simp [*]
-    intros; tauto
+  . split
+    . simp [*]
+      intros; tauto
+    . progress as ⟨ hm2 .. ⟩
+      simp [*]
+      intros; tauto
+  . simp [*]; tauto
 
 @[pspec]
 theorem get_in_list_spec {α} (key : Usize) (slot : AList α) (hLookup : slot.lookup key ≠ none) :
