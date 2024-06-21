@@ -52,10 +52,6 @@ theorem int_pos_ind (p : Int → Prop) :
     rename_i m
     cases m <;> simp_all
 
--- We sometimes need this to make sure no natural numbers appear in the goals
--- TODO: there is probably something more general to do
-theorem nat_zero_eq_int_zero : (0 : Nat) = (0 : Int) := by simp
-
 -- This is mostly used in termination proofs
 theorem to_int_to_nat_lt (x y : ℤ) (h0 : 0 ≤ x) (h1 : x < y) :
   ↑(x.toNat) < y := by
@@ -67,5 +63,9 @@ theorem to_int_sub_to_nat_lt (x y : ℤ) (x' : ℕ)
   ↑(x.toNat - x') < y := by
   have : 0 ≤ x := by omega
   simp [Int.toNat_sub_of_le, *]
+
+-- WARNING: do not use this with `simp` as it might loop. The left-hand side indeed reduces to the
+-- righ-hand side, meaning the rewriting can be applied to `n` itself.
+theorem ofNat_instOfNatNat_eq (n : Nat) : @OfNat.ofNat Nat n (instOfNatNat n) = n := by rfl
 
 end Arith

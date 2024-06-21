@@ -202,7 +202,7 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     -- Add a declaration
     let nval ← Utils.addDeclTac name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
-    Utils.simpAt true {} #[] [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
+    Utils.simpAt true {} [] [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
     -- Return the new value
     pure nval
 
@@ -231,6 +231,8 @@ def introPropHasImpInstances : Tactic.TacticM (Array Expr) := do
 elab "intro_prop_has_imp_instances" : tactic => do
   let _ ← introPropHasImpInstances
 
+def intTacSimpRocs : List Name := [``Int.reduceNegSucc, ``Int.reduceNeg]
+
 /- Boosting a bit the `omega` tac.
  -/
 def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
@@ -245,7 +247,33 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   extraPreprocess
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `Tactic.allGoals`
-  Tactic.allGoals do tryTac (dsimpAt false {} #[] [] [] [] Tactic.Location.wildcard)
+  let dsimp :=
+    Tactic.allGoals do tryTac (
+      -- We set `simpOnly` at false on purpose
+      dsimpAt false {} intTacSimpRocs
+        -- Declarations to unfold
+        []
+        -- Theorems
+        []
+        [] Tactic.Location.wildcard)
+  dsimp
+  -- More preprocessing: apply norm_cast to the whole context
+  Tactic.allGoals (Utils.tryTac (Utils.normCastAtAll))
+  -- norm_cast does weird things with negative numbers so we reapply simp
+  dsimp
+  -- We also need this, in case the goal is: ¬ False
+  Tactic.allGoals do tryTac (
+    Utils.simpAt true {}
+               -- Simprocs
+               intTacSimpRocs
+               -- Unfoldings
+               []
+                -- Simp lemmas
+                [``not_false_eq_true]
+                -- Hypotheses
+                []
+                (.targets #[] true)
+  )
 
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ())
@@ -261,8 +289,6 @@ def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
   Tactic.allGoals (intTacPreprocess extraPreprocess)
-  -- More preprocessing
-  Tactic.allGoals (Utils.tryTac (Utils.simpAt true {} #[] [] [``nat_zero_eq_int_zero] [] .wildcard))
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call omega
@@ -297,6 +323,13 @@ example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 
 
 -- Checking that we can prove exfalso
 example (a : Prop) (x : Int) (h0: 0 < x) (h1: x < 0) : a := by
+  int_tac
+
+-- Intermediate cast through natural numbers
+example (a : Prop) (x : Int) (h0: (0 : Nat) < x) (h1: x < 0) : a := by
+  int_tac
+
+example (x : Int) (h : x ≤ -3) : x ≤ -2 := by
   int_tac
 
 end Arith

@@ -1308,15 +1308,6 @@ theorem Scalar.eq_equiv {ty : ScalarTy} (x y : Scalar ty) :
   x = y ↔ (↑x : Int) = ↑y := by
   cases x; cases y; simp_all
 
--- Those theorems are safer to mark as `simp` however, I believe
-@[simp]
-theorem Scalar.eq_ofInt_right_equiv (x : Scalar ty) (y : Int) (h : Scalar.cMin ty ≤ y ∧ y ≤ Scalar.cMax ty) :
-  x = Scalar.ofInt y h ↔ x.val = y := by simp [Scalar.eq_equiv]
-
-@[simp]
-theorem Scalar.eq_ofInt_left_equiv (x : Scalar ty) (y : Int) (h : Scalar.cMin ty ≤ y ∧ y ≤ Scalar.cMax ty) :
-  Scalar.ofInt y h = x ↔ y = x.val := by simp [Scalar.eq_equiv]
-
 -- This is sometimes useful when rewriting the goal with the local assumptions
 -- TODO: this doesn't get triggered
 @[simp] theorem Scalar.eq_imp {ty : ScalarTy} (x y : Scalar ty) :

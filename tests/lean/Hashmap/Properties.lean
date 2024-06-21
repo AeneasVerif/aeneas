@@ -962,17 +962,6 @@ theorem move_elements_spec
   have := slotsLookup key v
   constructor <;> simp_all
 
--- TODO: this doesn't get applied
--- TODO: why doesn't norm_cast work here?
-@[simp]
-theorem ofNat_ofNat (n : Nat): @OfNat.ofNat ℕ n (instOfNatNat n) = n := by rfl
-
--- TODO: report this (problem when using simp with lemmas using typeclasses, also problem with norm_cast)
--- TODO: add this in the preprocessing of scalar_tac
-example (n : Nat) (h : 0 < n) : n ≠ OfNat.ofNat 0 := by
-  simp (config := {singlePass := true}) [instOfNatNat]
-  omega
-
 @[pspec]
 theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
   ∃ hm', hm.try_resize α = ok hm' ∧
@@ -1016,7 +1005,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
         apply Int.mul_le_of_le_ediv at hSmaller <;> try simp
         --
         have : (hm.slots.val.len * hm.2.1.val) * 1 ≤ (hm.slots.val.len * hm.2.1.val) * 2 := by
-          apply Int.mul_le_mul <;> (try simp [*]) <;> scalar_tac
+          apply Int.mul_le_mul <;> (try simp [*]); scalar_tac
         --
         ring_nf at *
         simp [*]
