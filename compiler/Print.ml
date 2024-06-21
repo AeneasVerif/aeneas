@@ -5,7 +5,6 @@ open Charon.PrintTypes
 open Charon.PrintExpressions
 open Charon.PrintLlbcAst.Ast
 open Types
-open TypesUtils
 open Values
 open ValuesUtils
 open Expressions
