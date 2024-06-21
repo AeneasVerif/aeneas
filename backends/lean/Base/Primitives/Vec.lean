@@ -33,14 +33,15 @@ abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
 example {a: Type u} (v : Vec a) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
-def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
+abbrev Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
 
 instance (α : Type u) : Inhabited (Vec α) := by
   constructor
   apply Vec.new
 
 -- TODO: very annoying that the α is an explicit parameter
-def Vec.len (α : Type u) (v : Vec α) : Usize :=
+@[simp]
+abbrev Vec.len (α : Type u) (v : Vec α) : Usize :=
   Usize.ofIntCore v.val.len (by constructor <;> scalar_tac)
 
 @[simp]
@@ -62,6 +63,14 @@ def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
     ok ⟨ List.concat v.val x, by simp at *; assumption ⟩
   else
     fail maximumSizeExceeded
+
+@[pspec]
+theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.len < Usize.max) :
+  ∃ v1, v.push α x = ok v1 ∧
+  v1.val = v.val ++ [x] := by
+  simp [push]
+  split <;> simp_all [List.len_eq_length]
+  scalar_tac
 
 -- This shouldn't be used
 def Vec.insert_fwd (α : Type u) (v: Vec α) (i: Usize) (_: α) : Result Unit :=

@@ -51,6 +51,8 @@ pub struct HashMap<T> {
     /// The max load factor applied to the current table length:
     /// gives the threshold at which to resize the table.
     max_load: usize,
+    /// [true] if we can't increase the size anymore.
+    saturated: bool,
     /// The table itself
     slots: Vec<AList<T>>,
 }
@@ -79,6 +81,7 @@ impl<T> HashMap<T> {
             num_entries: 0,
             max_load_factor: (max_load_dividend, max_load_divisor),
             max_load: (capacity * max_load_dividend) / max_load_divisor,
+            saturated: false,
             slots,
         }
     }
@@ -140,8 +143,8 @@ impl<T> HashMap<T> {
     pub fn insert(&mut self, key: Key, value: T) {
         // Insert
         self.insert_no_resize(key, value);
-        // Resize if necessary
-        if self.len() > self.max_load {
+        // Resize if necessary and if we're not saturated
+        if self.len() > self.max_load && !self.saturated {
             self.try_resize()
         }
     }
@@ -149,13 +152,7 @@ impl<T> HashMap<T> {
     /// The resize function, called if we need to resize the table after
     /// an insertion.
     fn try_resize(&mut self) {
-        // Check that we can resize: we need to check that there are no overflows.
-        // Note that we are conservative about the usize::MAX.
-        // Also note that `as usize` is a trait, but we apply it to a constant
-        // here, which gets compiled by the MIR interpreter (so we don't see
-        // the conversion, actually).
-        // Rk.: this is a hit heavy...
-        let max_usize = u32::MAX as usize;
+        let max_usize = usize::MAX;
         let capacity = self.slots.len();
         // Checking that there won't be overflows by using the fact that, if m > 0:
         // n * m <= p <==> n <= p / m
@@ -169,17 +166,20 @@ impl<T> HashMap<T> {
             );
 
             // Move the elements to the new table
-            HashMap::move_elements(&mut ntable, &mut self.slots, 0);
+            HashMap::move_elements(&mut ntable, &mut self.slots);
 
             // Replace the current table with the new table
             self.slots = ntable.slots;
             self.max_load = ntable.max_load;
+        } else {
+            self.saturated = true;
         }
     }
 
     /// Auxiliary function called by [try_resize] to move all the elements
     /// from the table to a new table
-    fn move_elements<'a>(ntable: &'a mut HashMap<T>, slots: &'a mut Vec<AList<T>>, mut i: usize) {
+    fn move_elements<'a>(ntable: &'a mut HashMap<T>, slots: &'a mut Vec<AList<T>>) {
+        let mut i = 0;
         while i < slots.len() {
             // Move the elements out of the slot i
             let ls = std::mem::replace(&mut slots[i], AList::Nil);

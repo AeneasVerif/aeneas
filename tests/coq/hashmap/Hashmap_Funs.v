@@ -18,7 +18,7 @@ Definition hash_key (k : usize) : result usize :=
   Ok k.
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 61:4-67:5 *)
+    Source: 'tests/src/hashmap.rs', lines 63:4-69:5 *)
 Fixpoint hashMap_allocate_slots_loop
   (T : Type) (n : nat) (slots : alloc_vec_Vec (AList_t T)) (n1 : usize) :
   result (alloc_vec_Vec (AList_t T))
@@ -36,7 +36,7 @@ Fixpoint hashMap_allocate_slots_loop
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]:
-    Source: 'tests/src/hashmap.rs', lines 61:4-61:78 *)
+    Source: 'tests/src/hashmap.rs', lines 63:4-63:78 *)
 Definition hashMap_allocate_slots
   (T : Type) (n : nat) (slots : alloc_vec_Vec (AList_t T)) (n1 : usize) :
   result (alloc_vec_Vec (AList_t T))
@@ -45,7 +45,7 @@ Definition hashMap_allocate_slots
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::new_with_capacity]:
-    Source: 'tests/src/hashmap.rs', lines 70:4-74:13 *)
+    Source: 'tests/src/hashmap.rs', lines 72:4-76:13 *)
 Definition hashMap_new_with_capacity
   (T : Type) (n : nat) (capacity : usize) (max_load_dividend : usize)
   (max_load_divisor : usize) :
@@ -59,18 +59,19 @@ Definition hashMap_new_with_capacity
       hashMap_num_entries := 0%usize;
       hashMap_max_load_factor := (max_load_dividend, max_load_divisor);
       hashMap_max_load := i1;
+      hashMap_saturated := false;
       hashMap_slots := slots
     |}
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::new]:
-    Source: 'tests/src/hashmap.rs', lines 86:4-86:24 *)
+    Source: 'tests/src/hashmap.rs', lines 89:4-89:24 *)
 Definition hashMap_new (T : Type) (n : nat) : result (HashMap_t T) :=
   hashMap_new_with_capacity T n 32%usize 4%usize 5%usize
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 94:8-99:5 *)
+    Source: 'tests/src/hashmap.rs', lines 97:8-102:5 *)
 Fixpoint hashMap_clear_loop
   (T : Type) (n : nat) (slots : alloc_vec_Vec (AList_t T)) (i : usize) :
   result (alloc_vec_Vec (AList_t T))
@@ -93,7 +94,7 @@ Fixpoint hashMap_clear_loop
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]:
-    Source: 'tests/src/hashmap.rs', lines 91:4-91:27 *)
+    Source: 'tests/src/hashmap.rs', lines 94:4-94:27 *)
 Definition hashMap_clear
   (T : Type) (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
   hm <- hashMap_clear_loop T n self.(hashMap_slots) 0%usize;
@@ -102,18 +103,19 @@ Definition hashMap_clear
       hashMap_num_entries := 0%usize;
       hashMap_max_load_factor := self.(hashMap_max_load_factor);
       hashMap_max_load := self.(hashMap_max_load);
+      hashMap_saturated := self.(hashMap_saturated);
       hashMap_slots := hm
     |}
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::len]:
-    Source: 'tests/src/hashmap.rs', lines 101:4-101:30 *)
+    Source: 'tests/src/hashmap.rs', lines 104:4-104:30 *)
 Definition hashMap_len (T : Type) (self : HashMap_t T) : result usize :=
   Ok self.(hashMap_num_entries)
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 108:4-125:5 *)
+    Source: 'tests/src/hashmap.rs', lines 111:4-128:5 *)
 Fixpoint hashMap_insert_in_list_loop
   (T : Type) (n : nat) (key : usize) (value : T) (ls : AList_t T) :
   result (bool * (AList_t T))
@@ -135,7 +137,7 @@ Fixpoint hashMap_insert_in_list_loop
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 108:4-108:72 *)
+    Source: 'tests/src/hashmap.rs', lines 111:4-111:72 *)
 Definition hashMap_insert_in_list
   (T : Type) (n : nat) (key : usize) (value : T) (ls : AList_t T) :
   result (bool * (AList_t T))
@@ -144,7 +146,7 @@ Definition hashMap_insert_in_list
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_no_resize]:
-    Source: 'tests/src/hashmap.rs', lines 128:4-128:54 *)
+    Source: 'tests/src/hashmap.rs', lines 131:4-131:54 *)
 Definition hashMap_insert_no_resize
   (T : Type) (n : nat) (self : HashMap_t T) (key : usize) (value : T) :
   result (HashMap_t T)
@@ -168,6 +170,7 @@ Definition hashMap_insert_no_resize
         hashMap_num_entries := i1;
         hashMap_max_load_factor := self.(hashMap_max_load_factor);
         hashMap_max_load := self.(hashMap_max_load);
+        hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := v
       |})
   else (
@@ -177,6 +180,7 @@ Definition hashMap_insert_no_resize
         hashMap_num_entries := self.(hashMap_num_entries);
         hashMap_max_load_factor := self.(hashMap_max_load_factor);
         hashMap_max_load := self.(hashMap_max_load);
+        hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := v
       |})
 .
@@ -209,7 +213,7 @@ Definition hashMap_move_elements_from_list
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 182:4-191:5 *)
+    Source: 'tests/src/hashmap.rs', lines 182:8-191:5 *)
 Fixpoint hashMap_move_elements_loop
   (T : Type) (n : nat) (ntable : HashMap_t T)
   (slots : alloc_vec_Vec (AList_t T)) (i : usize) :
@@ -235,35 +239,35 @@ Fixpoint hashMap_move_elements_loop
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]:
-    Source: 'tests/src/hashmap.rs', lines 182:4-182:96 *)
+    Source: 'tests/src/hashmap.rs', lines 181:4-181:82 *)
 Definition hashMap_move_elements
   (T : Type) (n : nat) (ntable : HashMap_t T)
-  (slots : alloc_vec_Vec (AList_t T)) (i : usize) :
+  (slots : alloc_vec_Vec (AList_t T)) :
   result ((HashMap_t T) * (alloc_vec_Vec (AList_t T)))
   :=
-  hashMap_move_elements_loop T n ntable slots i
+  hashMap_move_elements_loop T n ntable slots 0%usize
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::try_resize]:
-    Source: 'tests/src/hashmap.rs', lines 151:4-151:28 *)
+    Source: 'tests/src/hashmap.rs', lines 154:4-154:28 *)
 Definition hashMap_try_resize
   (T : Type) (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
-  max_usize <- scalar_cast U32 Usize core_u32_max;
   let capacity := alloc_vec_Vec_len (AList_t T) self.(hashMap_slots) in
-  n1 <- usize_div max_usize 2%usize;
+  n1 <- usize_div core_usize_max 2%usize;
   let (i, i1) := self.(hashMap_max_load_factor) in
   i2 <- usize_div n1 i;
   if capacity s<= i2
   then (
     i3 <- usize_mul capacity 2%usize;
     ntable <- hashMap_new_with_capacity T n i3 i i1;
-    p <- hashMap_move_elements T n ntable self.(hashMap_slots) 0%usize;
+    p <- hashMap_move_elements T n ntable self.(hashMap_slots);
     let (ntable1, _) := p in
     Ok
       {|
         hashMap_num_entries := self.(hashMap_num_entries);
         hashMap_max_load_factor := (i, i1);
         hashMap_max_load := ntable1.(hashMap_max_load);
+        hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := ntable1.(hashMap_slots)
       |})
   else
@@ -272,12 +276,13 @@ Definition hashMap_try_resize
         hashMap_num_entries := self.(hashMap_num_entries);
         hashMap_max_load_factor := (i, i1);
         hashMap_max_load := self.(hashMap_max_load);
+        hashMap_saturated := true;
         hashMap_slots := self.(hashMap_slots)
       |}
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert]:
-    Source: 'tests/src/hashmap.rs', lines 140:4-140:48 *)
+    Source: 'tests/src/hashmap.rs', lines 143:4-143:48 *)
 Definition hashMap_insert
   (T : Type) (n : nat) (self : HashMap_t T) (key : usize) (value : T) :
   result (HashMap_t T)
@@ -285,7 +290,26 @@ Definition hashMap_insert
   self1 <- hashMap_insert_no_resize T n self key value;
   i <- hashMap_len T self1;
   if i s> self1.(hashMap_max_load)
-  then hashMap_try_resize T n self1
+  then
+    if self1.(hashMap_saturated)
+    then
+      Ok
+        {|
+          hashMap_num_entries := self1.(hashMap_num_entries);
+          hashMap_max_load_factor := self1.(hashMap_max_load_factor);
+          hashMap_max_load := self1.(hashMap_max_load);
+          hashMap_saturated := true;
+          hashMap_slots := self1.(hashMap_slots)
+        |}
+    else
+      hashMap_try_resize T n
+        {|
+          hashMap_num_entries := self1.(hashMap_num_entries);
+          hashMap_max_load_factor := self1.(hashMap_max_load_factor);
+          hashMap_max_load := self1.(hashMap_max_load);
+          hashMap_saturated := false;
+          hashMap_slots := self1.(hashMap_slots)
+        |}
   else Ok self1
 .
 
@@ -423,6 +447,7 @@ Definition hashMap_get_mut
           hashMap_num_entries := self.(hashMap_num_entries);
           hashMap_max_load_factor := self.(hashMap_max_load_factor);
           hashMap_max_load := self.(hashMap_max_load);
+          hashMap_saturated := self.(hashMap_saturated);
           hashMap_slots := v
         |} in
   Ok (t, back)
@@ -489,6 +514,7 @@ Definition hashMap_remove
         hashMap_num_entries := self.(hashMap_num_entries);
         hashMap_max_load_factor := self.(hashMap_max_load_factor);
         hashMap_max_load := self.(hashMap_max_load);
+        hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := v
       |})
   | Some x1 =>
@@ -499,6 +525,7 @@ Definition hashMap_remove
         hashMap_num_entries := i1;
         hashMap_max_load_factor := self.(hashMap_max_load_factor);
         hashMap_max_load := self.(hashMap_max_load);
+        hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := v
       |})
   end

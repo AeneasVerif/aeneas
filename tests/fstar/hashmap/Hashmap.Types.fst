@@ -19,6 +19,7 @@ type hashMap_t (t : Type0) =
   num_entries : usize;
   max_load_factor : (usize & usize);
   max_load : usize;
+  saturated : bool;
   slots : alloc_vec_Vec (aList_t t);
 }
 

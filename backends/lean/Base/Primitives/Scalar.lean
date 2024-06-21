@@ -1301,22 +1301,25 @@ instance {ty} : LT (Scalar ty) where
 
 instance {ty} : LE (Scalar ty) where le a b := LE.le a.val b.val
 
--- Not marking this one with @[simp] on purpose
+-- Not marking this one with @[simp] on purpose: if we have `x = y` somewhere in the context,
+-- we may want to use it to substitute `y` with `x` somewhere.
+-- TODO: mark it as simp anyway?
 theorem Scalar.eq_equiv {ty : ScalarTy} (x y : Scalar ty) :
   x = y ↔ (↑x : Int) = ↑y := by
   cases x; cases y; simp_all
 
 -- This is sometimes useful when rewriting the goal with the local assumptions
+-- TODO: this doesn't get triggered
 @[simp] theorem Scalar.eq_imp {ty : ScalarTy} (x y : Scalar ty) :
   (↑x : Int) = ↑y → x = y := (eq_equiv x y).mpr
 
-theorem Scalar.lt_equiv {ty : ScalarTy} (x y : Scalar ty) :
+@[simp] theorem Scalar.lt_equiv {ty : ScalarTy} (x y : Scalar ty) :
   x < y ↔ (↑x : Int) < ↑y := by simp [LT.lt]
 
 @[simp] theorem Scalar.lt_imp {ty : ScalarTy} (x y : Scalar ty) :
   (↑x : Int) < (↑y) → x < y := (lt_equiv x y).mpr
 
-theorem Scalar.le_equiv {ty : ScalarTy} (x y : Scalar ty) :
+@[simp] theorem Scalar.le_equiv {ty : ScalarTy} (x y : Scalar ty) :
   x ≤ y ↔ (↑x : Int) ≤ ↑y := by simp [LE.le]
 
 @[simp] theorem Scalar.le_imp {ty : ScalarTy} (x y : Scalar ty) :
@@ -1377,8 +1380,6 @@ theorem coe_max {ty: ScalarTy} (a b: Scalar ty): ↑(Max.max a b) = (Max.max (�
   -- TODO: there should be a shorter way to prove this.
   rw [max_def, max_def]
   split_ifs <;> simp_all
-  refine' absurd _ (lt_irrefl a)
-  exact lt_of_le_of_lt (by assumption) ((Scalar.lt_equiv _ _).2 (by assumption))
 
 -- Max theory
 -- TODO: do the min theory later on.

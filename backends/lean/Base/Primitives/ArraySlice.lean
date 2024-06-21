@@ -129,7 +129,7 @@ example {a: Type u} (v : Slice a) : v.length ≤ Scalar.max ScalarTy.Usize := by
 def Slice.new (α : Type u): Slice α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
 
 -- TODO: very annoying that the α is an explicit parameter
-def Slice.len (α : Type u) (v : Slice α) : Usize :=
+abbrev Slice.len (α : Type u) (v : Slice α) : Usize :=
   Usize.ofIntCore v.val.len (by constructor <;> scalar_tac)
 
 @[simp]

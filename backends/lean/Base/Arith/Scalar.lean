@@ -19,7 +19,7 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
   -- Reveal the concrete bounds, simplify calls to [ofInt]
   Utils.simpAt true {}
                -- Simprocs
-               #[]
+               intTacSimpRocs
                -- Unfoldings
                [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
                 ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
@@ -59,11 +59,11 @@ instance (ty : ScalarTy) : HasIntProp (Scalar ty) where
   -- prop_ty is inferred
   prop := λ x => And.intro x.hmin x.hmax
 
-example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
+example (x _y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
   intro_has_int_prop_instances
   simp [*]
 
-example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
+example (x _y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
   scalar_tac
 
 -- Checking that we explore the goal *and* projectors correctly
@@ -90,6 +90,12 @@ example (x : U32) (h0 : ¬ x = U32.ofInt 0) : 0 < x.val := by
    the rewriting tactic (not the simplifier), probably because of the use
    of typeclasses. -/
 example {u: U64} (h1: (u : Int) < 2): (u : Int) = 0 ∨ (u : Int) = 1 := by
+  scalar_tac
+
+example (x : I32) : -100000000000 < x.val := by
+  scalar_tac
+
+example : (Usize.ofInt 2).val ≠ 0 := by
   scalar_tac
 
 end Arith
