@@ -64,7 +64,7 @@ def HashMap.new (T : Type) : Result (HashMap T) :=
   HashMap.new_with_capacity T 32#usize 4#usize 5#usize
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-   Source: 'tests/src/hashmap.rs', lines 94:4-102:5 -/
+   Source: 'tests/src/hashmap.rs', lines 97:8-102:5 -/
 divergent def HashMap.clear_loop
   (T : Type) (slots : alloc.vec.Vec (AList T)) (i : Usize) :
   Result (alloc.vec.Vec (AList T))
@@ -162,7 +162,7 @@ def HashMap.move_elements_from_list
   HashMap.move_elements_from_list_loop T ntable ls
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
-   Source: 'tests/src/hashmap.rs', lines 186:4-196:5 -/
+   Source: 'tests/src/hashmap.rs', lines 187:8-196:5 -/
 divergent def HashMap.move_elements_loop
   (T : Type) (ntable : HashMap T) (slots : alloc.vec.Vec (AList T)) (i : Usize)
   :

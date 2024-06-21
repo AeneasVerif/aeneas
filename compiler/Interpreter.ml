@@ -17,7 +17,7 @@ module SA = SymbolicAst
 let log = Logging.interpreter_log
 
 let compute_contexts (m : crate) : decls_ctx =
-  let type_decls_list, _, _, _, _ = split_declarations m.declarations in
+  let type_decls_list, _, _, _, _, _ = split_declarations m.declarations in
   let type_decls = m.type_decls in
   let fun_decls = m.fun_decls in
   let global_decls = m.global_decls in
@@ -78,7 +78,7 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     | TraitItemDecl _ | TraitItemProvided _ -> Self
   in
   let generics =
-    let { regions; types; const_generics; trait_clauses } = sg.generics in
+    let { regions; types; const_generics; trait_clauses; _ } = sg.generics in
     let regions = List.map (fun _ -> RErased) regions in
     let types = List.map (fun (v : type_var) -> TVar v.index) types in
     let const_generics =

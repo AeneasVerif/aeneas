@@ -71,7 +71,7 @@ Definition hashMap_new (T : Type) (n : nat) : result (HashMap_t T) :=
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 94:4-102:5 *)
+    Source: 'tests/src/hashmap.rs', lines 97:8-102:5 *)
 Fixpoint hashMap_clear_loop
   (T : Type) (n : nat) (slots : alloc_vec_Vec (AList_t T)) (i : usize) :
   result (alloc_vec_Vec (AList_t T))
@@ -213,7 +213,7 @@ Definition hashMap_move_elements_from_list
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 186:4-196:5 *)
+    Source: 'tests/src/hashmap.rs', lines 187:8-196:5 *)
 Fixpoint hashMap_move_elements_loop
   (T : Type) (n : nat) (ntable : HashMap_t T)
   (slots : alloc_vec_Vec (AList_t T)) (i : usize) :

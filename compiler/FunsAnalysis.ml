@@ -223,6 +223,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
         let global = GlobalDeclId.Map.find id globals_map in
         analyze_fun_decl_group (NonRecGroup global.body);
         analyze_decl_groups decls'
+    | MixedGroup ids :: _ ->
+        craise_opt_span __FILE__ __LINE__ None
+          ("Mixed declaration groups are not supported yet: ["
+          ^ String.concat ", "
+              (List.map Charon.PrintGAst.any_decl_id_to_string
+                 (Charon.GAstUtils.g_declaration_group_to_list ids))
+          ^ "]")
   in
 
   analyze_decl_groups m.declarations;

@@ -820,6 +820,9 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | TraitImplGroup id ->
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl id
+    | MixedGroup _ ->
+        craise_opt_span __FILE__ __LINE__ None
+          "Mixed-recursive declaration groups are not supported"
   in
 
   (* If we need to export the state type: we try to export it after we defined

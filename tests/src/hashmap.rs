@@ -1,7 +1,7 @@
 //@ charon-args=--opaque=utils
 //@ [!borrow-check] aeneas-args=-state -split-files
 //@ [coq] aeneas-args=-use-fuel
-//@ [fstar] aeneas-args=-decreases-clauses -template-clauses
+//@ [fstar] aeneas-args=-decreases-clauses
 //@ [lean] aeneas-args=-no-gen-lib-entry
 // ^ the `-no-gen-lib-entry` is because we add a custom import in the Hashmap.lean file: we do not
 // want to overwrite it.

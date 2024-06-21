@@ -58,10 +58,7 @@ let fmt_env_to_llbc_fmt_env (env : fmt_env) : Print.fmt_env =
     trait_decls = env.trait_decls;
     trait_impls = env.trait_impls;
     regions = [];
-    types = [];
-    const_generics = [];
-    trait_clauses = [];
-    preds = TypesUtils.empty_predicates;
+    generics = TypesUtils.empty_generic_params;
     locals = [];
   }
 
@@ -798,7 +795,7 @@ let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
         else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
       in
       let body =
-        texpression_to_string ~spandata:(Some def.span) env inside indent indent
-          body.body
+        texpression_to_string ~spandata:(Some def.item_meta.span) env inside
+          indent indent body.body
       in
       "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body

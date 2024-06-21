@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module Loops.
 
 (** [loops::sum]: loop 0:
-    Source: 'tests/src/loops.rs', lines 8:0-18:1 *)
+    Source: 'tests/src/loops.rs', lines 10:4-18:1 *)
 Fixpoint sum_loop (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
   | O => Fail_ OutOfFuel
@@ -27,7 +27,7 @@ Definition sum (n : nat) (max : u32) : result u32 :=
 .
 
 (** [loops::sum_with_mut_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 23:0-35:1 *)
+    Source: 'tests/src/loops.rs', lines 25:4-35:1 *)
 Fixpoint sum_with_mut_borrows_loop
   (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
@@ -49,7 +49,7 @@ Definition sum_with_mut_borrows (n : nat) (max : u32) : result u32 :=
 .
 
 (** [loops::sum_with_shared_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 38:0-52:1 *)
+    Source: 'tests/src/loops.rs', lines 40:4-52:1 *)
 Fixpoint sum_with_shared_borrows_loop
   (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
@@ -71,7 +71,7 @@ Definition sum_with_shared_borrows (n : nat) (max : u32) : result u32 :=
 .
 
 (** [loops::sum_array]: loop 0:
-    Source: 'tests/src/loops.rs', lines 54:0-62:1 *)
+    Source: 'tests/src/loops.rs', lines 56:4-62:1 *)
 Fixpoint sum_array_loop
   (N : usize) (n : nat) (a : array u32 N) (i : usize) (s : u32) : result u32 :=
   match n with
@@ -94,7 +94,7 @@ Definition sum_array (N : usize) (n : nat) (a : array u32 N) : result u32 :=
 .
 
 (** [loops::clear]: loop 0:
-    Source: 'tests/src/loops.rs', lines 66:0-72:1 *)
+    Source: 'tests/src/loops.rs', lines 67:4-72:1 *)
 Fixpoint clear_loop
   (n : nat) (v : alloc_vec_Vec u32) (i : usize) : result (alloc_vec_Vec u32) :=
   match n with

@@ -7,28 +7,28 @@ open Betree.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [betree::betree::{betree::betree::List<T>#1}::len]: decreases clause
-    Source: 'src/betree.rs', lines 276:4-284:5 *)
+    Source: 'src/betree.rs', lines 278:8-284:5 *)
 unfold
 let betree_List_len_loop_decreases (t : Type0) (self : betree_List_t t)
   (len : u64) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::List<T>#1}::reverse]: decreases clause
-    Source: 'src/betree.rs', lines 304:4-312:5 *)
+    Source: 'src/betree.rs', lines 305:8-312:5 *)
 unfold
 let betree_List_reverse_loop_decreases (t : Type0) (self : betree_List_t t)
   (out : betree_List_t t) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::List<T>#1}::split_at]: decreases clause
-    Source: 'src/betree.rs', lines 287:4-302:5 *)
+    Source: 'src/betree.rs', lines 289:8-302:5 *)
 unfold
 let betree_List_split_at_loop_decreases (t : Type0) (n : u64)
   (beg : betree_List_t t) (self : betree_List_t t) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::List<(u64, T)>#2}::partition_at_pivot]: decreases clause
-    Source: 'src/betree.rs', lines 355:4-370:5 *)
+    Source: 'src/betree.rs', lines 358:8-370:5 *)
 unfold
 let betree_ListPairU64T_partition_at_pivot_loop_decreases (t : Type0)
   (pivot : u64) (beg : betree_List_t (u64 & t))

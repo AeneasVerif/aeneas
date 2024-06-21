@@ -119,7 +119,7 @@ let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
   let trait_type_constraints =
     List.map
       (trait_type_constraint_substitute subst)
-      sg.preds.trait_type_constraints
+      sg.generics.trait_type_constraints
   in
   { inputs; output; regions_hierarchy; trait_type_constraints }
 

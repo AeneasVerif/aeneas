@@ -252,6 +252,14 @@ let empty_names_map : names_map =
     names_set = StringSet.empty;
   }
 
+(** Small helper to update an LLBC name if the rename attribute has been set *)
+let rename_llbc_name (item_meta : Meta.item_meta) (llbc_name : llbc_name) =
+  match item_meta.rename with
+  | Some rename ->
+      let name_prefix = List.tl (List.rev llbc_name) in
+      List.rev (T.PeIdent (rename, Disambiguator.zero) :: name_prefix)
+  | None -> llbc_name
+
 (** Small helper to report name collision *)
 let report_name_collision (id_to_string : id -> string)
     ((id1, span1) : id * Meta.span option) (id2 : id) (span2 : Meta.span option)
@@ -1384,15 +1392,20 @@ let ctx_compute_simple_name (span : Meta.span) (ctx : extraction_ctx)
 let ctx_compute_simple_type_name = ctx_compute_simple_name
 
 (** Helper *)
+let ctx_compute_type_name_no_suffix (ctx : extraction_ctx)
+    (item_meta : Meta.item_meta) (name : llbc_name) : string =
+  let name = rename_llbc_name item_meta name in
+  flatten_name (ctx_compute_simple_type_name item_meta.span ctx name)
 
-let ctx_compute_type_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
-    (name : llbc_name) : string =
-  flatten_name (ctx_compute_simple_type_name span ctx name)
+(** Provided a basename, compute a type name.
 
-(** Provided a basename, compute a type name. *)
-let ctx_compute_type_name (span : Meta.span) (ctx : extraction_ctx)
+    This is an auxiliary helper that we use to compute type declaration names, but also
+    for instance field and variant names when we need to add the name of the type as a
+    prefix.
+ *)
+let ctx_compute_type_name (item_meta : Meta.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) =
-  let name = ctx_compute_type_name_no_suffix span ctx name in
+  let name = ctx_compute_type_name_no_suffix ctx item_meta name in
   match backend () with
   | FStar -> StringUtils.lowercase_first_letter (name ^ "_t")
   | Coq | HOL4 -> name ^ "_t"
@@ -1404,45 +1417,57 @@ let ctx_compute_type_name (span : Meta.span) (ctx : extraction_ctx)
     - field name
 
     Note that fields don't always have names, but we still need to
-    generate some names if we want to extract the structures to records...
-    We might want to extract such structures to tuples, later, but field
-    access then causes trouble because not all provers accept syntax like
-    [x.3] where [x] is a tuple.
+    generate some names if we want to extract the structures to records.
+    For nameless fields, we generate a name based on the index.
+
+    Note that in most situations we extract structures with nameless fields
+    to tuples, meaning generating names by using indices shouldn't be too
+    much of a problem.
  *)
-let ctx_compute_field_name (span : Meta.span) (ctx : extraction_ctx)
-    (def_name : llbc_name) (field_id : FieldId.id) (field_name : string option)
-    : string =
+let ctx_compute_field_name (def : type_decl) (field_meta : Meta.item_meta)
+    (ctx : extraction_ctx) (def_name : llbc_name) (field_id : FieldId.id)
+    (field_name : string option) : string =
+  (* If the user did not provide a name, use the field index. *)
   let field_name_s =
-    match field_name with
-    | Some field_name -> field_name
-    | None ->
-        (* TODO: extract structs with no field names to tuples *)
-        FieldId.to_string field_id
+    Option.value field_name ~default:(FieldId.to_string field_id)
   in
-  if !Config.record_fields_short_names then
-    if field_name = None then (* TODO: this is a bit ugly *)
-      "_" ^ field_name_s
-    else field_name_s
-  else
-    let def_name =
-      ctx_compute_type_name_no_suffix span ctx def_name ^ "_" ^ field_name_s
-    in
-    match backend () with
-    | Lean | HOL4 -> def_name
-    | Coq | FStar -> StringUtils.lowercase_first_letter def_name
+  (* Replace the name of the field if the user annotated it with the [rename] attribute. *)
+  let field_name_s = Option.value field_meta.rename ~default:field_name_s in
+  (* Prefix the name with the name of the type, if necessary (some backends don't
+     support field name collisions) *)
+  let def_name = rename_llbc_name def.item_meta def_name in
+  let name =
+    if !Config.record_fields_short_names then
+      if field_name = None then (* TODO: this is a bit ugly *)
+        "_" ^ field_name_s
+      else field_name_s
+    else
+      ctx_compute_type_name_no_suffix ctx def.item_meta def_name
+      ^ "_" ^ field_name_s
+  in
+  match backend () with
+  | Lean | HOL4 -> name
+  | Coq | FStar -> StringUtils.lowercase_first_letter name
 
 (** Inputs:
     - type name
     - variant name
  *)
-let ctx_compute_variant_name (span : Meta.span) (ctx : extraction_ctx)
-    (def_name : llbc_name) (variant : string) : string =
+let ctx_compute_variant_name (ctx : extraction_ctx) (def : type_decl)
+    (variant : variant) : string =
+  (* Replace the name of the variant if the user annotated it with the [rename] attribute. *)
+  let variant =
+    Option.value variant.item_meta.rename ~default:variant.variant_name
+  in
   match backend () with
   | FStar | Coq | HOL4 ->
       let variant = to_camel_case variant in
+      (* Prefix the name of the variant with the name of the type, if necessary
+         (some backends don't support collision of variant names) *)
       if !variant_concatenate_type_name then
         StringUtils.capitalize_first_letter
-          (ctx_compute_type_name_no_suffix span ctx def_name ^ "_" ^ variant)
+          (ctx_compute_type_name_no_suffix ctx def.item_meta def.llbc_name
+          ^ "_" ^ variant)
       else variant
   | Lean -> variant
 
@@ -1457,9 +1482,9 @@ let ctx_compute_variant_name (span : Meta.span) (ctx : extraction_ctx)
     Inputs:
     - type name
 *)
-let ctx_compute_struct_constructor (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
     (basename : llbc_name) : string =
-  let tname = ctx_compute_type_name span ctx basename in
+  let tname = ctx_compute_type_name def.item_meta ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
 let ctx_compute_fun_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
@@ -1522,7 +1547,8 @@ let ctx_compute_fun_name (span : Meta.span) (ctx : extraction_ctx)
 
 let ctx_compute_trait_decl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     : string =
-  ctx_compute_type_name trait_decl.span ctx trait_decl.llbc_name
+  let llbc_name = rename_llbc_name trait_decl.item_meta trait_decl.llbc_name in
+  ctx_compute_type_name trait_decl.item_meta ctx llbc_name
 
 let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (trait_impl : trait_impl) : string =
@@ -1531,14 +1557,25 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
      for `<foo::Foo, u32>`, we generate the name: "trait.TraitFooFooU32Inst".
      Importantly, it is to be noted that the name is independent of the place
      where the instance has been defined (it is indepedent of the file, etc.).
+
+     Note that if the user provided a [rename] attribute, we simply use that.
   *)
   let name =
-    let params = trait_impl.llbc_generics in
-    let args = trait_impl.llbc_impl_trait.decl_generics in
-    let name = ctx_prepare_name trait_impl.span ctx trait_decl.llbc_name in
-    trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
+    match trait_impl.item_meta.rename with
+    | None ->
+        let name =
+          let params = trait_impl.llbc_generics in
+          let args = trait_impl.llbc_impl_trait.decl_generics in
+          let name =
+            ctx_prepare_name trait_impl.item_meta.span ctx trait_decl.llbc_name
+          in
+          let name = rename_llbc_name trait_impl.item_meta name in
+          trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
+        in
+        flatten_name name
+    | Some name -> name
   in
-  let name = flatten_name name in
+  (* Additional modifications to make sure we comply with the backends restrictions *)
   match backend () with
   | FStar -> StringUtils.lowercase_first_letter name
   | Coq | HOL4 | Lean -> name
@@ -1969,21 +2006,23 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
 
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
+  let name = rename_llbc_name def.item_meta def.llbc_name in
   let name =
-    ctx_compute_decreases_proof_name def.span ctx def.def_id def.llbc_name
+    ctx_compute_decreases_proof_name def.item_meta.span ctx def.def_id name
       def.num_loops def.loop_id
   in
-  ctx_add def.span
+  ctx_add def.item_meta.span
     (DecreasesProofId (FRegular def.def_id, def.loop_id))
     name ctx
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
+  let name = rename_llbc_name def.item_meta def.llbc_name in
   let name =
-    ctx_compute_termination_measure_name def.span ctx def.def_id def.llbc_name
+    ctx_compute_termination_measure_name def.item_meta.span ctx def.def_id name
       def.num_loops def.loop_id
   in
-  ctx_add def.span
+  ctx_add def.item_meta.span
     (TerminationMeasureId (FRegular def.def_id, def.loop_id))
     name ctx
 
@@ -2001,7 +2040,8 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       ctx_add def.item_meta.span decl name ctx
   | None ->
       (* Not the case: "standard" registration *)
-      let name = ctx_compute_global_name def.item_meta.span ctx def.name in
+      let name = rename_llbc_name def.item_meta def.name in
+      let name = ctx_compute_global_name def.item_meta.span ctx name in
 
       let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
       (* If this is a provided constant (i.e., the default value for a constant
@@ -2016,21 +2056,66 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       ctx
 
 let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
-  (* Add the function name *)
-  ctx_compute_fun_name def.span ctx def.llbc_name def.num_loops def.loop_id
+  (* Rename the function, if the user added a [rename] attribute.
+
+     We have to do something peculiar for the implementation of trait
+     methods, by looking up the meta information of the method *declaration*
+     because this is where the attribute is.
+
+     Note that if the user also added an attribute for the *implementation*,
+     we keep this one.
+  *)
+  let item_meta =
+    match def.kind with
+    | TraitItemImpl (_, trait_decl_id, item_name, _) -> (
+        if Option.is_some def.item_meta.rename then def.item_meta
+        else
+          (* Lookup the declaration. TODO: the trait item impl info
+             should directly give us the id of the method declaration. *)
+          match
+            TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls
+          with
+          | None -> def.item_meta
+          | Some trait_decl -> (
+              let methods =
+                trait_decl.required_methods
+                @ List.filter_map
+                    (fun (name, opt_id) ->
+                      match opt_id with
+                      | None -> None
+                      | Some id -> Some (name, id))
+                    trait_decl.provided_methods
+              in
+              match
+                List.find_opt (fun (name, _) -> name = item_name) methods
+              with
+              | None -> def.item_meta
+              | Some (_, id) ->
+                  Option.value
+                    (Option.map
+                       (fun (def : A.fun_decl) -> def.item_meta)
+                       (FunDeclId.Map.find_opt id
+                          ctx.trans_ctx.fun_ctx.fun_decls))
+                    ~default:def.item_meta))
+    | _ -> def.item_meta
+  in
+  let llbc_name = rename_llbc_name item_meta def.llbc_name in
+  ctx_compute_fun_name def.item_meta.span ctx llbc_name def.num_loops
+    def.loop_id
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Sanity check: the function should not be a global body - those are handled
    * separately *)
-  sanity_check __FILE__ __LINE__ (not def.is_global_decl_body) def.span;
-  (* Lookup the LLBC def to compute the region group information *)
+  sanity_check __FILE__ __LINE__
+    (not def.is_global_decl_body)
+    def.item_meta.span;
   let def_id = def.def_id in
   (* Add the function name *)
   let def_name = ctx_compute_fun_name def ctx in
   let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
-  ctx_add def.span (FunId (FromLlbc fun_id)) def_name ctx
+  ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =
-  ctx_compute_type_name def.span ctx def.llbc_name
+  ctx_compute_type_name def.item_meta ctx def.llbc_name

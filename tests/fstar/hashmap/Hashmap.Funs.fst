@@ -61,7 +61,7 @@ let hashMap_new (t : Type0) : result (hashMap_t t) =
   hashMap_new_with_capacity t 32 4 5
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 94:4-102:5 *)
+    Source: 'tests/src/hashmap.rs', lines 97:8-102:5 *)
 let rec hashMap_clear_loop
   (t : Type0) (slots : alloc_vec_Vec (aList_t t)) (i : usize) :
   Tot (result (alloc_vec_Vec (aList_t t)))
@@ -156,7 +156,7 @@ let hashMap_move_elements_from_list
   hashMap_move_elements_from_list_loop t ntable ls
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 186:4-196:5 *)
+    Source: 'tests/src/hashmap.rs', lines 187:8-196:5 *)
 let rec hashMap_move_elements_loop
   (t : Type0) (ntable : hashMap_t t) (slots : alloc_vec_Vec (aList_t t))
   (i : usize) :
