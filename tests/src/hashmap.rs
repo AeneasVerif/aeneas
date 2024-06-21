@@ -143,8 +143,8 @@ impl<T> HashMap<T> {
     pub fn insert(&mut self, key: Key, value: T) {
         // Insert
         self.insert_no_resize(key, value);
-        // Resize if necessary
-        if self.len() > self.max_load {
+        // Resize if necessary and if we're not saturated
+        if self.len() > self.max_load && !self.saturated {
             self.try_resize()
         }
     }
@@ -152,11 +152,6 @@ impl<T> HashMap<T> {
     /// The resize function, called if we need to resize the table after
     /// an insertion.
     fn try_resize(&mut self) {
-        // We can't resize if we're saturated
-        if self.saturated {
-            return;
-        }
-
         let max_usize = usize::MAX;
         let capacity = self.slots.len();
         // Checking that there won't be overflows by using the fact that, if m > 0:
