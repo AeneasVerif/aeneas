@@ -5,7 +5,7 @@ if ! which jq 2> /dev/null 1>&2; then
 fi
 
 if [ -L charon ]; then
-    echo '`./charon` is a symlink; we using the commit there for our new pin.'
+    echo '`./charon` is a symlink; we will use the commit there for our new pin.'
     COMMIT="$(git -C charon rev-parse HEAD)"
     nix flake lock --override-input charon "github:aeneasverif/charon/$COMMIT"
 else

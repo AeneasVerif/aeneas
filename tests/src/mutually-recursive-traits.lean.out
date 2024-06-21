@@ -11,7 +11,7 @@ Uncaught exception:
 
 Raised at Aeneas__Errors.craise_opt_span in file "Errors.ml", line 47, characters 4-76
 Called from Stdlib__List.iter in file "list.ml", line 110, characters 12-15
-Called from Aeneas__Translate.extract_definitions in file "Translate.ml", line 836, characters 2-52
-Called from Aeneas__Translate.extract_file in file "Translate.ml", line 963, characters 2-36
-Called from Aeneas__Translate.translate_crate in file "Translate.ml", line 1512, characters 5-42
+Called from Aeneas__Translate.extract_definitions in file "Translate.ml", line 839, characters 2-52
+Called from Aeneas__Translate.extract_file in file "Translate.ml", line 966, characters 2-36
+Called from Aeneas__Translate.translate_crate in file "Translate.ml", line 1515, characters 5-42
 Called from Dune__exe__Main in file "Main.ml", line 317, characters 14-66
