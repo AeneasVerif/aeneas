@@ -807,7 +807,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         match pure_fun with
         | Some pure_fun -> (
             match pure_fun.f.Pure.kind with
-            | TraitItemDecl _ -> ()
+            | TraitDeclItem (_, _, false) -> ()
             | _ ->
                 (* Translate *)
                 export_functions_group [ pure_fun ])

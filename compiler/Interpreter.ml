@@ -74,8 +74,8 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     eval_ctx * inst_fun_sig =
   let tr_self =
     match kind with
-    | RegularKind | TraitItemImpl _ -> UnknownTrait __FUNCTION__
-    | TraitItemDecl _ | TraitItemProvided _ -> Self
+    | RegularItem | TraitImplItem _ -> UnknownTrait __FUNCTION__
+    | TraitDeclItem _ -> Self
   in
   let generics =
     let { regions; types; const_generics; trait_clauses; _ } = sg.generics in

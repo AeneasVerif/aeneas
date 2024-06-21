@@ -20,7 +20,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
      only use their type for the fields of the records we generate for the trait
      declarations *)
   match def.f.kind with
-  | TraitItemDecl _ -> ctx
+  | TraitDeclItem (_, _, false) -> ctx
   | _ -> (
       (* Check if the function is builtin *)
       let builtin =
@@ -1160,7 +1160,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   *)
   let ctx, trait_decl =
     match def.kind with
-    | TraitItemProvided (decl_id, _) ->
+    | TraitDeclItem (decl_id, _, true) ->
         let trait_decl = T.TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
         let ctx, _ = ctx_add_trait_self_clause def.item_meta.span ctx in
         let ctx = { ctx with is_provided_method = true } in
