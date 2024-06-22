@@ -168,9 +168,9 @@ def frame_load (hm nhm : HashMap α) : Prop :=
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
 
--- The proof below is a bit expensive, so we need to increase the maximum number
--- of heart beats
-set_option maxHeartbeats 1000000
+-- The proofs below are a bit expensive, so we need to increase the maximum number of heart beats
+set_option maxHeartbeats 2000000
+
 open AList
 
 @[pspec]
@@ -206,10 +206,7 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
     -- of times
     -- progress as ⟨ slots2 .. ⟩
     -- TODO: bug here as well
-    stop
-    have ⟨ slots2, hEq, _, _ ⟩ := allocate_slots_spec slots1 n1 (by assumption) (by assumption)
-    stop
-    rw [allocate_slots] at hEq; rw [hEq]; clear hEq
+    progress as ⟨ slots2 .. ⟩
     simp
     constructor
     . intro i h0 h1
@@ -219,6 +216,13 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
     simp [h]
     simp_all
     scalar_tac
+termination_by n.val.toNat
+decreasing_by
+  -- TODO: improve the scalar_decr_tac (the simp_all makes the context blow up)
+  -- The issue comes from the assertions which contain the invImage: we could filter them
+  -- before simplifying the context
+  simp_wf
+  apply Arith.to_int_to_nat_lt <;> scalar_tac
 
 theorem forall_nil_imp_flatten_len_zero (slots : List (List α))
   (Hnil : ∀ i, 0 ≤ i → i < slots.len → slots.index i = []) :
@@ -383,10 +387,6 @@ def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
 
 -- For pretty printing (useful when copy-pasting goals)
 set_option pp.coercions false -- do not print coercions with ↑ (this doesn't parse)
-
--- The proof below is a bit expensive, so we need to increase the maximum number
--- of heart beats
-set_option maxHeartbeats 2000000
 
 @[pspec]
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
