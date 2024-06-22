@@ -4,7 +4,28 @@
 import Base.Arith
 import Base.Utils
 
+-- TODO: move?
+-- This lemma is generally useful. It often happens that (because we
+-- make a split on a condition for instance) we have `x ≠ y` in the context
+-- and need to simplify `y ≠ x` somewhere.
+@[simp]
+theorem neq_imp {α : Type u} {x y : α} (h : ¬ x = y) : ¬ y = x := by intro; simp_all
+
 namespace List
+
+-- Small helper
+-- We cover a set of cases which might imply inequality, to make sure that using
+-- this as the precondition of a `simp` lemma will allow the lemma to get correctly
+-- triggered.
+-- TODO: there should be something more systematic to do, with discharged procedures
+-- or simprocs I guess.
+@[simp]
+abbrev Int.not_eq (i j : Int) : Prop :=
+  i ≠ j ∨ j ≠ i ∨ i < j ∨ j < i
+
+theorem Int.not_eq_imp_not_eq {i j} : Int.not_eq i j → i ≠ j := by
+  intro h g
+  simp_all
 
 def len (ls : List α) : Int :=
   match ls with
@@ -32,7 +53,7 @@ def indexOpt (ls : List α) (i : Int) : Option α :=
 
 @[simp] theorem indexOpt_nil : indexOpt ([] : List α) i = none := by simp [indexOpt]
 @[simp] theorem indexOpt_zero_cons : indexOpt ((x :: tl) : List α) 0 = some x := by simp [indexOpt]
-@[simp] theorem indexOpt_nzero_cons (hne : i ≠ 0) : indexOpt ((x :: tl) : List α) i = indexOpt tl (i - 1) := by simp [*, indexOpt]
+@[simp] theorem indexOpt_nzero_cons (hne : Int.not_eq i 0) : indexOpt ((x :: tl) : List α) i = indexOpt tl (i - 1) := by simp [indexOpt]; intro; simp_all
 
 -- Remark: if i < 0, then the result is the default element
 def index [Inhabited α] (ls : List α) (i : Int) : α :=
@@ -42,10 +63,7 @@ def index [Inhabited α] (ls : List α) (i : Int) : α :=
     if i = 0 then x else index tl (i - 1)
 
 @[simp] theorem index_zero_cons [Inhabited α] : index ((x :: tl) : List α) 0 = x := by simp [index]
-@[simp] theorem index_nzero_cons [Inhabited α] (hne : i ≠ 0) : index ((x :: tl) : List α) i = index tl (i - 1) := by simp [*, index]
-@[simp] theorem index_zero_lt_cons [Inhabited α] (hne : 0 < i) : index ((x :: tl) : List α) i = index tl (i - 1) := by
-  have : i ≠ 0 := by scalar_tac
-  simp [*, index]
+@[simp] theorem index_nzero_cons [Inhabited α] (hne : Int.not_eq i 0) : index ((x :: tl) : List α) i = index tl (i - 1) := by simp [index]; intro; simp_all
 
 theorem indexOpt_bounds (ls : List α) (i : Int) :
   ls.indexOpt i = none ↔ i < 0 ∨ ls.len ≤ i :=
@@ -128,15 +146,15 @@ decreasing_by int_decr_tac
 
 @[simp] theorem update_nil : update ([] : List α) i y = [] := by simp [update]
 @[simp] theorem update_zero_cons : update ((x :: tl) : List α) 0 y = y :: tl := by simp [update]
-@[simp] theorem update_nzero_cons (hne : i ≠ 0) : update ((x :: tl) : List α) i y = x :: update tl (i - 1) y := by simp [*, update]
+@[simp] theorem update_nzero_cons (hne : Int.not_eq i 0) : update ((x :: tl) : List α) i y = x :: update tl (i - 1) y := by simp [update]; intro; simp_all
 
 @[simp] theorem idrop_nil : idrop i ([] : List α) = [] := by simp [idrop]
 @[simp] theorem idrop_zero : idrop 0 (ls : List α) = ls := by cases ls <;> simp [idrop]
-@[simp] theorem idrop_nzero_cons (hne : i ≠ 0) : idrop i ((x :: tl) : List α) = idrop (i - 1) tl := by simp [*, idrop]
+@[simp] theorem idrop_nzero_cons (hne : Int.not_eq i 0) : idrop i ((x :: tl) : List α) = idrop (i - 1) tl := by simp [idrop]; intro; simp_all
 
 @[simp] theorem itake_nil : itake i ([] : List α) = [] := by simp [itake]
 @[simp] theorem itake_zero : itake 0 (ls : List α) = [] := by cases ls <;> simp [itake]
-@[simp] theorem itake_nzero_cons (hne : i ≠ 0) : itake i ((x :: tl) : List α) = x :: itake (i - 1) tl := by simp [*, itake]
+@[simp] theorem itake_nzero_cons (hne : Int.not_eq i 0) : itake i ((x :: tl) : List α) = x :: itake (i - 1) tl := by simp [itake]; intro; simp_all
 
 @[simp] theorem slice_nil : slice i j ([] : List α) = [] := by simp [slice]
 @[simp] theorem slice_zero : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
@@ -146,20 +164,21 @@ decreasing_by int_decr_tac
   rw [ireplicate]; simp [*]
 
 @[simp]
-theorem slice_nzero_cons (i j : Int) (x : α) (tl : List α) (hne : i ≠ 0) : slice i j ((x :: tl) : List α) = slice (i - 1) (j - 1) tl :=
+theorem slice_nzero_cons (i j : Int) (x : α) (tl : List α) (hne : Int.not_eq i 0) :
+  slice i j ((x :: tl) : List α) = slice (i - 1) (j - 1) tl := by
+  apply Int.not_eq_imp_not_eq at hne
   match tl with
-  | [] => by simp [slice]; simp [*]
+  | [] => simp [slice]; simp [*]
   | hd :: tl =>
-    if h: i - 1 = 0 then by
+    if h: i - 1 = 0 then
       have : i = 1 := by int_tac
       simp [*, slice]
     else
-      have hi := slice_nzero_cons (i - 1) (j - 1) hd tl h
-      by
-        conv => lhs; simp [slice, *]
-        conv at hi => lhs; simp [slice, *]
-        simp [slice]
-        simp [*]
+      have hi := slice_nzero_cons (i - 1) (j - 1) hd tl (by simp_all)
+      conv => lhs; simp [slice, *]
+      conv at hi => lhs; simp [slice, *]
+      simp [slice]
+      simp [*]
 
 @[simp]
 theorem ireplicate_replicate {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
@@ -319,7 +338,8 @@ theorem itake_len_le (i : Int) (ls : List α) : (ls.itake i).len ≤ ls.len :=
       by simp [*]
 
 @[simp]
-theorem itake_len (i : Int) (ls : List α) (_ : 0 ≤ i) (_ : i ≤ ls.len) : (ls.itake i).len = i :=
+theorem itake_len (i : Int) (ls : List α) (_ : 0 ≤ i) (_ : i ≤ ls.len) :
+  (ls.itake i).len = i :=
   match ls with
   | [] => by simp_all; int_tac
   | hd :: tl =>
@@ -359,7 +379,8 @@ theorem index_itake [Inhabited α] (i : Int) (j : Int) (ls : List α)
   | [] => by simp at *
   | hd :: tl =>
     have : ¬ 0 = i := by int_tac -- TODO: this is slightly annoying
-    if h: j = 0 then by simp [*] at *
+    if h: j = 0 then by
+      simp_all
     else by
       simp [*]
       -- TODO: rewriting rule: ¬ i = 0 → 0 ≤ i → 0 < i ?
@@ -422,7 +443,7 @@ theorem index_itake_append_end [Inhabited α] (i j : Int) (l0 l1 : List α)
 @[simp]
 theorem index_update_ne
   {α : Type u} [Inhabited α] (l: List α) (i: ℤ) (j: ℤ) (x: α) :
-   j ≠ i → (l.update i x).index j = l.index j
+   Int.not_eq i j → (l.update i x).index j = l.index j
   :=
   λ _ => match l with
   | [] => by simp at *

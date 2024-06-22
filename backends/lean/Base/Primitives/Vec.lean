@@ -48,10 +48,7 @@ abbrev Vec.len (α : Type u) (v : Vec α) : Usize :=
 theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len α v).val = v.length :=
   by rfl
 
--- This shouldn't be used
-def Vec.push_fwd (α : Type u) (_ : Vec α) (_ : α) : Unit := ()
-
--- This is actually the backward function
+@[irreducible]
 def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
   :=
   let nlen := List.length v.val + 1
@@ -68,7 +65,7 @@ def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
 theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.len < Usize.max) :
   ∃ v1, v.push α x = ok v1 ∧
   v1.val = v.val ++ [x] := by
-  simp [push]
+  rw [push]; simp
   split <;> simp_all [List.len_eq_length]
   scalar_tac
 
