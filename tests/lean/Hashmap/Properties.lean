@@ -168,8 +168,8 @@ def frame_load (hm nhm : HashMap α) : Prop :=
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
 
--- The proofs below are a bit expensive, so we need to increase the maximum number of heart beats
-set_option maxHeartbeats 2000000
+-- The proofs below are a bit expensive, so we deactivate the heart bits limit
+set_option maxHeartbeats 0
 
 open AList
 
@@ -201,11 +201,6 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
         simp [*]
     have Hslots1Len : alloc.vec.Vec.len (AList α) slots1 + n1.val ≤ Usize.max := by
       simp_all
-    -- TODO: progress fails here (maximum recursion depth reached)
-    -- This probably comes from the fact that allocate_slots is reducible and applied an infinite number
-    -- of times
-    -- progress as ⟨ slots2 .. ⟩
-    -- TODO: bug here as well
     progress as ⟨ slots2 .. ⟩
     simp
     constructor
@@ -217,12 +212,7 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
     simp_all
     scalar_tac
 termination_by n.val.toNat
-decreasing_by
-  -- TODO: improve the scalar_decr_tac (the simp_all makes the context blow up)
-  -- The issue comes from the assertions which contain the invImage: we could filter them
-  -- before simplifying the context
-  simp_wf
-  apply Arith.to_int_to_nat_lt <;> scalar_tac
+decreasing_by scalar_decr_tac -- TODO: this is expensive
 
 theorem forall_nil_imp_flatten_len_zero (slots : List (List α))
   (Hnil : ∀ i, 0 ≤ i → i < slots.len → slots.index i = []) :
@@ -377,13 +367,9 @@ theorem if_update_eq
   split <;> simp [Pure.pure]
 
 -- Small helper
--- TODO: move, and introduce a better solution with nice syntax
+-- TODO: let bindings now work
 def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
   ⟨ x, by simp ⟩
-
---set_option profiler true
---set_option profiler.threshold 10
---set_option trace.profiler true
 
 -- For pretty printing (useful when copy-pasting goals)
 set_option pp.coercions false -- do not print coercions with ↑ (this doesn't parse)
@@ -484,15 +470,8 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       -- TODO: we want to automate this
       simp only [k_hash_mod]
       have h := Int.emod_lt_of_pos k.val hvpos
-      simp_all only [ok.injEq, exists_eq_left', List.len_update, gt_iff_lt,
-                     List.index_update_eq, ne_eq, not_false_eq_true, neq_imp]
-    if h_hm : k_hash_mod = hash_mod.val then
-      simp_all only [k_hash_mod, List.len_update, gt_iff_lt, List.index_update_eq,
-                     ne_eq, not_false_eq_true, neq_imp, alloc.vec.Vec.length]
-    else
-      simp_all only [k_hash_mod, List.len_update, gt_iff_lt, List.index_update_eq,
-                     ne_eq, not_false_eq_true, neq_imp, ge_iff_le,
-                     alloc.vec.Vec.length, List.index_update_ne]
+      simp_all
+    cases h_hm: k_hash_mod == hash_mod.val <;> simp_all (config := {zetaDelta := true})
   have _ :
     match hm.lookup key with
     | none => nhm.len_s = hm.len_s + 1
@@ -529,7 +508,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     . simp_all [frame_load, inv_base, inv_load]
   simp_all
 
-theorem slot_allP_not_key_lookup (slot : AList T) (h : slot.v.allP fun (k', _) => ¬k = k') :
+private theorem slot_allP_not_key_lookup (slot : AList T) (h : slot.v.allP fun (k', _) => ¬k = k') :
   slot.lookup k = none := by
   induction slot <;> simp_all
 
@@ -628,7 +607,7 @@ theorem move_elements_from_list_spec
         simp_all
     . scalar_tac
 
-theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots.val.len ≠ 0)
+private theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots.val.len ≠ 0)
   (hEmpty : ∀ j, 0 ≤ j → j < slots.val.len → slots.val.index j = AList.Nil) :
   ∀ key, slots.lookup key = none := by
   intro key
@@ -641,7 +620,7 @@ theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots.val.len
   have := hEmpty (key.val % slots.val.len) (by assumption) (by assumption)
   simp [*]
 
-theorem slots_index_len_le_flatten_len (slots : List (AList α)) (i : Int) (h : 0 ≤ i ∧ i < slots.len) :
+private theorem slots_index_len_le_flatten_len (slots : List (AList α)) (i : Int) (h : 0 ≤ i ∧ i < slots.len) :
   (slots.index i).len ≤ (List.map AList.v slots).flatten.len := by
   match slots with
   | [] =>
@@ -659,7 +638,7 @@ theorem slots_index_len_le_flatten_len (slots : List (AList α)) (i : Int) (h : 
    be equal to the slot index.
    TODO: remove?
  -/
-theorem slots_inv_lookup_imp_eq (slots : Slots α) (hInv : slots_t_inv slots)
+private theorem slots_inv_lookup_imp_eq (slots : Slots α) (hInv : slots_t_inv slots)
   (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) (key : Usize) :
   (slots.val.index i).lookup key ≠ none → i = key.val % slots.val.len := by
   suffices hSlot : ∀ (slot : List (Usize × α)),
@@ -676,23 +655,7 @@ theorem slots_inv_lookup_imp_eq (slots : Slots α) (hInv : slots_t_inv slots)
   intros; simp_all
   split at * <;> simp_all
 
--- TODO: remove?
-theorem slots_update_lookup_equiv (slots : Slots α) (hInv : slots_t_inv slots)
-  (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) (key : Usize) :
-  let slot := slots.val.index i
-  slot.lookup key ≠ none ∨ slots_s_lookup (slots.val.update i .Nil) key ≠ none ↔
-  slots.lookup key ≠ none := by
-  -- We need the following lemma to derive a contradiction
-  have := slots_inv_lookup_imp_eq slots hInv i hi key
-  cases hi : (key.val % slots.val.len) == i <;>
-  simp_all [Slots.lookup]
-
-/-theorem slots_update_lookup_imp
-  (slots slots1 : Slots α) (slot : AList α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len)
-  (hSlotsEq : slots.val = slots.val.update i slot) :
-  ∀ key v, slots1.lookup key = some v → slots.lookup key = some v ∨ slot.lookup key = some v-/
-
-theorem move_slots_updated_table_lookup_imp
+private theorem move_slots_updated_table_lookup_imp
   (ntable ntable1 ntable2 : HashMap α) (slots slots1 : Slots α) (slot : AList α)
   (hi : 0 ≤ i ∧ i < slots.val.len)
   (hSlotsInv : slots_t_inv slots)
@@ -717,12 +680,9 @@ theorem move_slots_updated_table_lookup_imp
   | inr hTable1Lookup =>
     right
     -- The key can't be for the slot we replaced
-    if heq : key.val % slots.val.len = i then
-      simp_all [Slots.lookup]
-    else
-      simp_all [Slots.lookup]
+    cases heq : key.val % slots.val.len == i <;> simp_all [Slots.lookup]
 
-theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 : HashMap α)
+private theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 : HashMap α)
   (slot : AList α)
   (slots slots1 : Slots α)
   (i : Int) (h1 : i < slots.len)
@@ -749,7 +709,7 @@ theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 : HashMap
     have := hLookup3 key v
     simp_all
 
-theorem slots_lookup_none_imp_slot_lookup_none
+private theorem slots_lookup_none_imp_slot_lookup_none
   (slots : Slots α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) :
   ∀ (key : Usize), slots.lookup key = none → (slots.val.index i).lookup key = none := by
   intro key hLookup
@@ -760,14 +720,14 @@ theorem slots_lookup_none_imp_slot_lookup_none
     by_contra
     simp_all
 
-theorem slot_lookup_not_none_imp_slots_lookup_not_none
+private theorem slot_lookup_not_none_imp_slots_lookup_not_none
   (slots : Slots α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) :
   ∀ (key : Usize), (slots.val.index i).lookup key ≠ none → slots.lookup key ≠ none := by
   intro key hLookup hNone
   have := slots_lookup_none_imp_slot_lookup_none slots hInv i hi key hNone
   apply hLookup this
 
-theorem slots_forall_nil_imp_al_v_nil (slots : Slots α)
+private theorem slots_forall_nil_imp_al_v_nil (slots : Slots α)
   (hEmpty : ∀ i, 0 ≤ i → i < slots.val.len → slots.val.index i = AList.Nil) :
   slots.al_v = [] := by
   suffices h :
@@ -790,10 +750,8 @@ theorem slots_forall_nil_imp_al_v_nil (slots : Slots α)
   simp_all
 
 theorem move_elements_loop_spec
-  (n : Nat) -- We need this, otherwise we can't prove termination (the termination_by clauses can be expensive)
   {α : Type} (ntable : HashMap α) (slots : Slots α)
   (i : Usize)
-  (hn : n = slots.val.len - i.val) -- Condition for termination
   (hi : i ≤ alloc.vec.Vec.len (AList α) slots)
   (hinv : ntable.inv)
   (hSlotsNonZero : slots.val.len ≠ 0)
@@ -814,9 +772,6 @@ theorem move_elements_loop_spec
   rw [move_elements_loop]
   simp
   if hi: i.val < slots.val.len then
-    -- Proof of termination: eliminate the case: n = 0
-    cases n; scalar_tac
-    rename ℕ => n
     -- Continue the proof
     have hIneq : 0 ≤ i.val ∧ i.val < slots.val.len := by scalar_tac
     simp [hi]
@@ -887,8 +842,6 @@ theorem move_elements_loop_spec
       have : i.val < (List.map AList.v slots.val).len := by simp; scalar_tac
       simp_all [Slots.al_v, List.len_flatten_update_eq, List.map_update_eq]
 
-    have : n = slots1.val.len - i'.val := by simp_all; scalar_tac
-
     progress as ⟨ ntable2, slots2, _, _, hLookup2Rev, hLookup21, hLookup22, hIndexNil ⟩
 
     simp [and_assoc]
@@ -921,6 +874,8 @@ theorem move_elements_loop_spec
     have hLookupEmpty := slots_forall_nil_imp_lookup_none slots hLenNonZero hEmpty
     simp [hNil, hLookupEmpty]
     apply hEmpty
+termination_by (slots.val.len - i.val).toNat
+decreasing_by scalar_decr_tac -- TODO: this is expensive
 
 @[pspec]
 theorem move_elements_spec
@@ -939,16 +894,8 @@ theorem move_elements_spec
   (∀ key v, ntable1.lookup key = some v ↔ slots.lookup key = some v)
   := by
   rw [move_elements]
-  let n := (slots.val.len - 0).toNat
-  have hn : n = slots.val.len - 0 := by
-    -- TODO: scalar_tac should succeed here
-    scalar_tac_preprocess
-    simp [n] at *
-    norm_cast at *
-    have := @Int.le_toNat n (slots.val.len - OfNat.ofNat 0) (by simp; scalar_tac)
-    simp_all
   have ⟨ ntable1, slots1, hEq, _, _, ntable1Lookup, slotsLookup, _, _ ⟩ :=
-    move_elements_loop_spec (slots.val.len - 0).toNat ntable slots 0#usize hn (by scalar_tac) hinv
+    move_elements_loop_spec ntable slots 0#usize (by scalar_tac) hinv
     (by scalar_tac)
     hSlotsInv
     (by intro j h0 h1; scalar_tac)
@@ -1187,12 +1134,13 @@ theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv :
         simp_all
       . cases v1 <;> simp_all
 
+-- TODO: move?
 theorem lookup'_not_none_imp_len_pos (l : List (Usize × α)) (key : Usize) (hLookup : l.lookup' key ≠ none) :
   0 < l.len := by
   induction l <;> simp_all
   scalar_tac
 
-theorem lookup_not_none_imp_len_s_pos (hm : HashMap α) (key : Usize) (hLookup : hm.lookup key ≠ none)
+private theorem lookup_not_none_imp_len_s_pos (hm : HashMap α) (key : Usize) (hLookup : hm.lookup key ≠ none)
   (hNotEmpty : 0 < hm.slots.val.len) :
   0 < hm.len_s := by
   have : 0 ≤ key.val % hm.slots.val.len := by -- TODO: automate

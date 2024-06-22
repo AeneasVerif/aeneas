@@ -44,17 +44,6 @@ def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
 elab "scalar_tac" : tactic =>
   scalarTac false
 
--- For termination proofs
-syntax "scalar_decr_tac" : tactic
-macro_rules
-  | `(tactic| scalar_decr_tac) =>
-    `(tactic|
-      simp_wf;
-      -- TODO: don't use a macro (namespace problems)
-      (first | apply Arith.to_int_to_nat_lt
-             | apply Arith.to_int_sub_to_nat_lt) <;>
-      simp_all <;> scalar_tac)
-
 instance (ty : ScalarTy) : HasIntProp (Scalar ty) where
   -- prop_ty is inferred
   prop := λ x => And.intro x.hmin x.hmax

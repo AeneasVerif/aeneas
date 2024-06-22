@@ -106,19 +106,26 @@ def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.Tact
   Tactic.withMainContext do
   -- Get the local context
   let ctx ← Lean.MonadLCtx.getLCtx
-  -- Just a matter of precaution
-  let ctx ← instantiateLCtxMVars ctx
   -- Initialize the hashset
   let hs := HashSet.empty
   -- Explore the declarations
   let decls ← ctx.getDecls
   let hs ← decls.foldlM (fun hs d => do
     -- Collect instances over all subexpressions in the context.
-    -- Note that we explore the *type* of the local declarations: if we have
+    -- Note that if the local declaration is
+    -- Note that we explore the *type* of propositions: if we have
     -- for instance `h : A ∧ B` in the context, the expression itself is simply
     -- `h`; the information we are interested in is its type.
-    let ty ← Lean.Meta.inferType d.toExpr
-    collectInstances k hs ty
+    -- However, if the decl is not a proposition, we explore it directly.
+    -- For instance: `x : U32`
+    -- TODO: case disjunction on whether the local decl is a Prop or not. If prop,
+    -- we need to explore its type.
+    let d := d.toExpr
+    if d.isProp then
+      collectInstances k hs d
+    else
+      let ty ← Lean.Meta.inferType d
+      collectInstances k hs ty
   ) hs
   -- Also explore the goal
   collectInstances k hs (← Tactic.getMainTarget)
