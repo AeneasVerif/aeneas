@@ -16,6 +16,10 @@ open Result Error core.ops.range
 
 def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
 
+instance [BEq α] : BEq (Array α n) := SubtypeBEq _
+
+instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
+
 instance (a : Type u) (n : Usize) : Arith.HasIntProp (Array a n) where
   prop_ty := λ v => v.val.len = n.val
   prop := λ ⟨ _, l ⟩ => by simp[Scalar.max, List.len_eq_length, *]
@@ -108,6 +112,10 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: 
   simp [h]
 
 def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
+
+instance [BEq α] : BEq (Slice α) := SubtypeBEq _
+
+instance [BEq α] [LawfulBEq α] : LawfulBEq (Slice α) := SubtypeLawfulBEq _
 
 instance (a : Type u) : Arith.HasIntProp (Slice a) where
   prop_ty := λ v => 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize

@@ -134,18 +134,16 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ok x } :=
 -- MISC --
 ----------
 
--- This acts like a swap effectively in a functional pure world.
--- We return the old value of `dst`, i.e. `dst` itself.
--- The new value of `dst` is `src`.
-@[simp] def core.mem.replace (a : Type) (dst : a) (src : a) : a × a := (dst, src)
-/- [core::option::Option::take] -/
-@[simp] def Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
-/- [core::mem::swap] -/
-@[simp] def core.mem.swap (T: Type) (a b: T): T × T := (b, a)
+instance SubtypeBEq [BEq α] (p : α → Prop) : BEq (Subtype p) where
+  beq v0 v1 := v0.val == v1.val
 
-/-- Aeneas-translated function -- useful to reduce non-recursive definitions.
- Use with `simp [ aeneas ]` -/
-register_simp_attr aeneas
+instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq (Subtype p) where
+  eq_of_beq {a b} h := by cases a; cases b; simp_all [BEq.beq]
+  rfl := by intro a; cases a; simp [BEq.beq]
+
+------------------------------
+---- Misc Primitives Types ---
+------------------------------
 
 -- We don't really use raw pointers for now
 structure MutRawPtr (T : Type) where

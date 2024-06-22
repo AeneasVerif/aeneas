@@ -59,4 +59,17 @@ def Option.unwrap (T : Type) (x : Option T) : Result T :=
 
 end option -- core.option
 
+/- [core::option::Option::take] -/
+@[simp] def Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
+
+/- [core::mem::replace]
+
+   This acts like a swap effectively in a functional pure world.
+   We return the old value of `dst`, i.e. `dst` itself.
+   The new value of `dst` is `src`. -/
+@[simp] def mem.replace (a : Type) (dst : a) (src : a) : a × a := (dst, src)
+
+/- [core::mem::swap] -/
+@[simp] def mem.swap (T: Type) (a b: T): T × T := (b, a)
+
 end core

@@ -16,6 +16,10 @@ namespace alloc.vec
 
 def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
+instance [BEq α] : BEq (Vec α) := SubtypeBEq _
+
+instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
+
 instance (a : Type u) : Arith.HasIntProp (Vec a) where
   prop_ty := λ v => 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize
   prop := λ ⟨ _, l ⟩ => by simp[Scalar.max, List.len_eq_length, *]
