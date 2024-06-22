@@ -299,7 +299,14 @@ structure Scalar (ty : ScalarTy) where
   val : Int
   hmin : Scalar.min ty ≤ val
   hmax : val ≤ Scalar.max ty
-deriving Repr
+deriving Repr, BEq, DecidableEq
+
+instance {ty} : BEq (Scalar ty) where
+  beq a b := a.val = b.val
+
+instance {ty} : LawfulBEq (Scalar ty) where
+  eq_of_beq {a b} := by cases a; cases b; simp[BEq.beq]
+  rfl {a} := by cases a; simp [BEq.beq]
 
 instance (ty : ScalarTy) : CoeOut (Scalar ty) Int where
   coe := λ v => v.val

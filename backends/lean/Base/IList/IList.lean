@@ -3,13 +3,7 @@
 
 import Base.Arith
 import Base.Utils
-
--- TODO: move?
--- This lemma is generally useful. It often happens that (because we
--- make a split on a condition for instance) we have `x ≠ y` in the context
--- and need to simplify `y ≠ x` somewhere.
-@[simp]
-theorem neq_imp {α : Type u} {x y : α} (h : ¬ x = y) : ¬ y = x := by intro; simp_all
+import Base.Core
 
 namespace List
 
@@ -134,7 +128,7 @@ def pairwise_rel
   | [] => True
   | hd :: tl => allP tl (rel hd) ∧ pairwise_rel rel tl
 
-section Lemmas
+section
 
 variable {α : Type u}
 
@@ -578,6 +572,12 @@ theorem pairwise_rel_cons {α : Type u} (rel : α → α → Prop) (hd: α) (tl:
   pairwise_rel rel (hd :: tl) ↔ allP tl (rel hd) ∧ pairwise_rel rel tl
   := by simp [pairwise_rel]
 
-end Lemmas
+theorem lookup_not_none_imp_len_pos [BEq α] (l : List (α × β)) (key : α)
+  (hLookup : l.lookup key ≠ none) :
+  0 < l.len := by
+  induction l <;> simp_all
+  scalar_tac
+
+end
 
 end List
