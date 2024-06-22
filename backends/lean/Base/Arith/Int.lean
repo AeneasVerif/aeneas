@@ -303,7 +303,7 @@ def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic
     try do Tactic.Omega.omegaTactic {}
     catch _ =>
       let g ← Tactic.getMainGoal
-      throwError "{tacName} failed to prove the goal:\n{g}"
+      throwError "{tacName} failed to prove the goal below.\n\nNote that {tacName} is equivalent to:\n  {tacName}_preprocess; omega\n\nGoal: \n{g}"
 
 elab "int_tac" args:(" split_goal"?): tactic =>
   let split := args.raw.getArgs.size > 0
