@@ -46,13 +46,14 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_assumed : bool) :
        (which don't have a body but must not be considered as opaque) *)
     && (match d.kind with TraitItemDecl _ -> false | _ -> true)
     && ((not filter_assumed)
-       || (not (NameMatcherMap.mem ctx d.name builtin_globals_map))
-          && not (NameMatcherMap.mem ctx d.name (builtin_funs_map ())))
+       || (not (NameMatcherMap.mem ctx d.item_meta.name builtin_globals_map))
+          && not (NameMatcherMap.mem ctx d.item_meta.name (builtin_funs_map ()))
+       )
   in
   let is_opaque_type (d : type_decl) : bool =
     d.kind = Opaque
     && ((not filter_assumed)
-       || not (NameMatcherMap.mem ctx d.name (builtin_types_map ())))
+       || not (NameMatcherMap.mem ctx d.item_meta.name (builtin_types_map ())))
   in
   (* Note that by checking the function bodies we also the globals *)
   ( List.filter is_opaque_type (TypeDeclId.Map.values k.type_decls),

@@ -1258,7 +1258,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name =
-     if !extract_external_name_patterns && not def.is_local then
+     if !extract_external_name_patterns && not def.item_meta.is_local then
        Some def.llbc_name
      else None
    in
@@ -1433,7 +1433,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     [ comment_pre ^ loop_comment ]
   in
   let name =
-    if !extract_external_name_patterns && not def.is_local then
+    if !extract_external_name_patterns && not def.item_meta.is_local then
       Some def.llbc_name
     else None
   in
@@ -1924,7 +1924,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
   let name =
-    if !extract_external_name_patterns && not global.is_local then
+    if !extract_external_name_patterns && not global.item_meta.is_local then
       Some global.llbc_name
     else None
   in
@@ -2389,7 +2389,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name =
-     if !extract_external_name_patterns && not decl.is_local then
+     if !extract_external_name_patterns && not decl.item_meta.is_local then
        Some decl.llbc_name
      else None
    in
@@ -2703,7 +2703,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name, generics =
-     if !extract_external_name_patterns && not impl.is_local then
+     if !extract_external_name_patterns && not impl.item_meta.is_local then
        let decl_id = impl.impl_trait.trait_decl_id in
        let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
        let decl_ref = impl.llbc_impl_trait in

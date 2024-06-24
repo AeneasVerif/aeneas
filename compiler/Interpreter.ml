@@ -282,7 +282,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return:"
      ^ "\n- fname: "
-      ^ Print.EvalCtx.name_to_string ctx fdef.name
+      ^ Print.EvalCtx.name_to_string ctx fdef.item_meta.name
       ^ "\n- back_id: "
       ^ RegionGroupId.to_string back_id
       ^ "\n- loop_id: "
@@ -526,7 +526,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   let name_to_string () =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
-      fdef.name
+      fdef.item_meta.name
   in
   log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
 
@@ -670,7 +670,7 @@ module Test = struct
         ("test_unit_function: "
         ^ Print.Types.name_to_string
             (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
-            fdef.name));
+            fdef.item_meta.name));
 
     (* Sanity check - *)
     sanity_check __FILE__ __LINE__
@@ -697,7 +697,7 @@ module Test = struct
             ("Unit test failed (concrete execution) on: "
             ^ Print.Types.name_to_string
                 (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
-                fdef.name)
+                fdef.item_meta.name)
     in
     (* Evaluate the function *)
     let ctx_resl, _ = eval_function_body config body.body ctx in

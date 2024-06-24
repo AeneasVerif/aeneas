@@ -689,7 +689,6 @@ let trait_decl_get_method (trait_decl : trait_decl) (method_name : string) :
 let trait_decl_is_empty (trait_decl : trait_decl) : bool =
   let {
     def_id = _;
-    is_local = _;
     name = _;
     llbc_name = _;
     item_meta = _;
@@ -711,7 +710,6 @@ let trait_decl_is_empty (trait_decl : trait_decl) : bool =
 let trait_impl_is_empty (trait_impl : trait_impl) : bool =
   let {
     def_id = _;
-    is_local = _;
     name = _;
     llbc_name = _;
     item_meta = _;
