@@ -782,7 +782,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   FieldId.mapi
                     (fun fid (field : field) ->
                       ( fid,
-                        ctx_compute_field_name def field.item_meta ctx
+                        ctx_compute_field_name def field.attr_info ctx
                           def.llbc_name fid field.field_name ))
                     fields
                 in
@@ -1425,8 +1425,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name =
-     if !Config.extract_external_name_patterns && not def.is_local then
-       Some def.llbc_name
+     if !Config.extract_external_name_patterns && not def.item_meta.is_local
+     then Some def.llbc_name
      else None
    in
    extract_comment_with_raw_span ctx fmt

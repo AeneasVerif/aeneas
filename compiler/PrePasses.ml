@@ -482,7 +482,7 @@ let apply_passes (crate : crate) : crate =
          However, we replace the body of the function, and save an error to
          report to the user the fact that we will ignore the function body *)
       let fmt = Print.Crate.crate_to_fmt_env crate in
-      let name = Print.name_to_string fmt f.name in
+      let name = Print.name_to_string fmt f.item_meta.name in
       save_error __FILE__ __LINE__ (Some f.item_meta.span)
         ("Ignoring the body of '" ^ name ^ "' because of previous error");
       { f with body = None }

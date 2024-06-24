@@ -74,7 +74,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
        way. *)
     let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
       let open ExtractBuiltin in
-      NameMatcherMap.find_opt name_matcher_ctx f.name
+      NameMatcherMap.find_opt name_matcher_ctx f.item_meta.name
         (builtin_fun_effects_map ())
     in
 

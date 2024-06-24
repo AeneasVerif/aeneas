@@ -647,7 +647,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
                   ("Attempted to greedily expand a symbolic enumeration with > \
                     1 variants (option [greedy_expand_symbolics_with_borrows] \
                     of [config]): "
-                  ^ name_to_string ctx def.name)
+                  ^ name_to_string ctx def.item_meta.name)
             | Alias _ | Opaque ->
                 craise __FILE__ __LINE__ span
                   "Attempted to greedily expand an alias or opaque type");
@@ -656,7 +656,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
               craise __FILE__ __LINE__ span
                 ("Attempted to greedily expand a recursive definition (option \
                   [greedy_expand_symbolics_with_borrows] of [config]): "
-                ^ name_to_string ctx def.name)
+                ^ name_to_string ctx def.item_meta.name)
             else expand_symbolic_value_no_branching config span sv None ctx
         | TAdt ((TTuple | TAssumed TBox), _) | TRef (_, _, _) ->
             (* Ok *)

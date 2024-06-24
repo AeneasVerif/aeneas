@@ -1274,7 +1274,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
         | None ->
             craise __FILE__ __LINE__ span
               ("Can't evaluate a call to an opaque function: "
-              ^ name_to_string ctx def.name)
+              ^ name_to_string ctx def.item_meta.name)
         | Some body -> body
       in
       (* TODO: we need to normalize the types if we want to correctly support traits *)

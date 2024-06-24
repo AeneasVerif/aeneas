@@ -355,14 +355,14 @@ and trait_instance_id =
 type field = {
   field_name : string option;
   field_ty : ty;
-  item_meta : item_meta;
+  attr_info : attr_info;
 }
 [@@deriving show]
 
 type variant = {
   variant_name : string;
   fields : field list;
-  item_meta : item_meta;
+  attr_info : attr_info;
 }
 [@@deriving show]
 
@@ -397,7 +397,6 @@ type predicates = { trait_type_constraints : trait_type_constraint list }
 
 type type_decl = {
   def_id : TypeDeclId.id;
-  is_local : bool;
   llbc_name : llbc_name;
       (** The original name coming from the LLBC declaration *)
   name : string;
@@ -405,7 +404,7 @@ type type_decl = {
           the name used at extraction time will be derived from the
           llbc_name.
        *)
-  item_meta : item_meta;
+  item_meta : T.item_meta;
   generics : generic_params;
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
@@ -1097,8 +1096,7 @@ type backend_attributes = {
 
 type fun_decl = {
   def_id : FunDeclId.id;
-  is_local : bool;
-  item_meta : item_meta;
+  item_meta : T.item_meta;
   kind : item_kind;
   backend_attributes : backend_attributes;
   num_loops : int;
@@ -1121,9 +1119,9 @@ type fun_decl = {
 [@@deriving show]
 
 type global_decl = {
-  span : span;
   def_id : GlobalDeclId.id;
-  is_local : bool;
+  span : span;
+  item_meta : T.item_meta;
   llbc_name : llbc_name;  (** The original LLBC name. *)
   name : string;
       (** We use the name only for printing purposes (for debugging):
@@ -1142,10 +1140,9 @@ type global_decl = {
 
 type trait_decl = {
   def_id : trait_decl_id;
-  is_local : bool;
   llbc_name : llbc_name;
   name : string;
-  item_meta : item_meta;
+  item_meta : T.item_meta;
   generics : generic_params;
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
@@ -1165,10 +1162,9 @@ type trait_decl = {
 
 type trait_impl = {
   def_id : trait_impl_id;
-  is_local : bool;
   llbc_name : llbc_name;
   name : string;
-  item_meta : item_meta;
+  item_meta : T.item_meta;
   impl_trait : trait_decl_ref;
   llbc_impl_trait : Types.trait_decl_ref;
       (** Same remark as for {!field:llbc_generics}. *)

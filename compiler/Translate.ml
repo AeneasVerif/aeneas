@@ -25,7 +25,8 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
   (* Debug *)
   log#ldebug
     (lazy
-      ("translate_function_to_symbolics: " ^ name_to_string trans_ctx fdef.name));
+      ("translate_function_to_symbolics: "
+      ^ name_to_string trans_ctx fdef.item_meta.name));
 
   match fdef.body with
   | None -> None
@@ -47,7 +48,9 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     pure_fun_translation_no_loops =
   (* Debug *)
   log#ldebug
-    (lazy ("translate_function_to_pure: " ^ name_to_string trans_ctx fdef.name));
+    (lazy
+      ("translate_function_to_pure: "
+      ^ name_to_string trans_ctx fdef.item_meta.name));
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
@@ -205,8 +208,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     Some
       (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
   with CFailure (span, _) ->
-    let name = name_to_string trans_ctx fdef.name in
-    let name_pattern = name_to_pattern_string trans_ctx fdef.name in
+    let name = name_to_string trans_ctx fdef.item_meta.name in
+    let name_pattern = name_to_pattern_string trans_ctx fdef.item_meta.name in
     save_error __FILE__ __LINE__ span
       ("Could not translate the function '" ^ name
      ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
@@ -245,8 +248,10 @@ let translate_crate_to_pure (crate : crate) :
                  SymbolicToPure.translate_fun_sig_from_decl_to_decomposed
                    trans_ctx fdef )
            with CFailure (span, _) ->
-             let name = name_to_string trans_ctx fdef.name in
-             let name_pattern = name_to_pattern_string trans_ctx fdef.name in
+             let name = name_to_string trans_ctx fdef.item_meta.name in
+             let name_pattern =
+               name_to_pattern_string trans_ctx fdef.item_meta.name
+             in
              save_error __FILE__ __LINE__ span
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
@@ -268,8 +273,10 @@ let translate_crate_to_pure (crate : crate) :
       (fun d ->
         try Some (SymbolicToPure.translate_trait_decl trans_ctx d)
         with CFailure (span, _) ->
-          let name = name_to_string trans_ctx d.name in
-          let name_pattern = name_to_pattern_string trans_ctx d.name in
+          let name = name_to_string trans_ctx d.item_meta.name in
+          let name_pattern =
+            name_to_pattern_string trans_ctx d.item_meta.name
+          in
           save_error __FILE__ __LINE__ span
             ("Could not translate the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
@@ -284,8 +291,10 @@ let translate_crate_to_pure (crate : crate) :
       (fun d ->
         try Some (SymbolicToPure.translate_trait_impl trans_ctx d)
         with CFailure (span, _) ->
-          let name = name_to_string trans_ctx d.name in
-          let name_pattern = name_to_pattern_string trans_ctx d.name in
+          let name = name_to_string trans_ctx d.item_meta.name in
+          let name_pattern =
+            name_to_pattern_string trans_ctx d.item_meta.name
+          in
           save_error __FILE__ __LINE__ span
             ("Could not translate the trait instance '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
@@ -511,7 +520,9 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let open ExtractBuiltin in
   let extract =
     extract
-    && match_name_find_opt ctx.trans_ctx global.name builtin_globals_map = None
+    && match_name_find_opt ctx.trans_ctx global.item_meta.name
+         builtin_globals_map
+       = None
   in
   if extract then
     (* We don't wrap global declaration groups between calls to functions
@@ -522,8 +533,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     let global =
       try Some (SymbolicToPure.translate_global ctx.trans_ctx global)
       with CFailure (span, _) ->
-        let name = name_to_string ctx.trans_ctx global.name in
-        let name_pattern = name_to_pattern_string ctx.trans_ctx global.name in
+        let name = name_to_string ctx.trans_ctx global.item_meta.name in
+        let name_pattern =
+          name_to_pattern_string ctx.trans_ctx global.item_meta.name
+        in
         save_error __FILE__ __LINE__ span
           ("Could not translate the global declaration '" ^ name
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");

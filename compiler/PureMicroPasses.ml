@@ -1499,7 +1499,6 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
             let loop_def : fun_decl =
               {
                 def_id = def.def_id;
-                is_local = def.is_local;
                 item_meta;
                 kind = def.kind;
                 backend_attributes = def.backend_attributes;
