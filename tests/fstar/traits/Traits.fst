@@ -221,7 +221,7 @@ let toTypetraitsBoolWrapperT_to_type
   toTypeBoolTInst.to_type self
 
 (** Trait implementation: [traits::{(traits::ToType<T> for traits::BoolWrapper)#7}]
-    Source: 'tests/src/traits.rs', lines 153:0-153:33 *)
+    Source: 'tests/src/traits.rs', lines 153:0-155:20 *)
 let toTypetraitsBoolWrapperT (t : Type0) (toTypeBoolTInst : toType_t bool t) :
   toType_t boolWrapper_t t = {
   to_type = toTypetraitsBoolWrapperT_to_type t toTypeBoolTInst;

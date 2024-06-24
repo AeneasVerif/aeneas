@@ -275,7 +275,7 @@ Definition toTypetraitsBoolWrapperT_to_type
 .
 
 (** Trait implementation: [traits::{(traits::ToType<T> for traits::BoolWrapper)#7}]
-    Source: 'tests/src/traits.rs', lines 153:0-153:33 *)
+    Source: 'tests/src/traits.rs', lines 153:0-155:20 *)
 Definition ToTypetraitsBoolWrapperT (T : Type) (toTypeBoolTInst : ToType_t bool
   T) : ToType_t BoolWrapper_t T := {|
   ToType_t_to_type := toTypetraitsBoolWrapperT_to_type T toTypeBoolTInst;
