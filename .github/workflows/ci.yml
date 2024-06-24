@@ -47,12 +47,11 @@ jobs:
       #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-lean
 
   lean:
-    runs-on: [ubuntu-latest]
+    runs-on: [self-hosted, linux, nix]
     needs: check_if_skip_duplicate_job
     if: needs.check_if_skip_duplicate_job.outputs.should_skip != 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v26
       - run: nix develop --command bash -c "cd tests/lean && make"
 
   check-charon-pin:
