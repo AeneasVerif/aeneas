@@ -341,9 +341,6 @@ theorem if_update_eq
 def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
   ⟨ x, by simp ⟩
 
--- For pretty printing (useful when copy-pasting goals)
-set_option pp.coercions false -- do not print coercions with ↑ (this doesn't parse)
-
 @[pspec]
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
