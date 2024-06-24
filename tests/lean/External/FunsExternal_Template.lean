@@ -10,14 +10,14 @@ set_option linter.unusedVariables false
 open external
 
 /- [core::cell::{core::cell::Cell<T>#10}::get]:
-   Source: '/rustc/library/core/src/cell.rs', lines 510:4-510:26
+   Source: '/rustc/library/core/src/cell.rs', lines 509:4-509:26
    Name pattern: core::cell::{core::cell::Cell<@T>}::get -/
 axiom core.cell.Cell.get
   (T : Type) (markerCopyInst : core.marker.Copy T) :
   core.cell.Cell T → State → Result (State × T)
 
 /- [core::cell::{core::cell::Cell<T>#11}::get_mut]:
-   Source: '/rustc/library/core/src/cell.rs', lines 588:4-588:39
+   Source: '/rustc/library/core/src/cell.rs', lines 587:4-587:39
    Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut -/
 axiom core.cell.Cell.get_mut
   (T : Type) :

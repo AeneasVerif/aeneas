@@ -229,7 +229,7 @@ Fixpoint hashMap_move_elements_loop
         alloc_vec_Vec_index_mut (AList_t T) usize
           (core_slice_index_SliceIndexUsizeSliceTInst (AList_t T)) slots i;
       let (a, index_mut_back) := p in
-      let (ls, a1) := core_mem_replace (AList_t T) a AList_Nil in
+      let (ls, a1) := core_mem_replace (AList_t T) true a AList_Nil in
       ntable1 <- hashMap_move_elements_from_list T n1 ntable ls;
       i2 <- usize_add i 1%usize;
       slots1 <- index_mut_back a1;
@@ -467,7 +467,7 @@ Fixpoint hashMap_remove_from_list_loop
       if ckey s= key
       then
         let (mv_ls, _) :=
-          core_mem_replace (AList_t T) (AList_Cons ckey t tl) AList_Nil in
+          core_mem_replace (AList_t T) true (AList_Cons ckey t tl) AList_Nil in
         match mv_ls with
         | AList_Cons _ cvalue tl1 => Ok (Some cvalue, tl1)
         | AList_Nil => Fail_ Failure

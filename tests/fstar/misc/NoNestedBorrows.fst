@@ -271,7 +271,7 @@ let rec list_rev_aux
 (** [no_nested_borrows::list_rev]:
     Source: 'tests/src/no_nested_borrows.rs', lines 319:0-319:42 *)
 let list_rev (t : Type0) (l : list_t t) : result (list_t t) =
-  let (li, _) = core_mem_replace (list_t t) l List_Nil in
+  let (li, _) = core_mem_replace (list_t t) true l List_Nil in
   list_rev_aux t li List_Nil
 
 (** [no_nested_borrows::test_list_functions]:
@@ -404,7 +404,7 @@ let _ = assert_norm (test_weird_borrows1 = Ok ())
 (** [no_nested_borrows::test_mem_replace]:
     Source: 'tests/src/no_nested_borrows.rs', lines 407:0-407:37 *)
 let test_mem_replace (px : u32) : result u32 =
-  let (y, _) = core_mem_replace u32 px 1 in
+  let (y, _) = core_mem_replace u32 true px 1 in
   if y = 0 then Ok 2 else Fail Failure
 
 (** [no_nested_borrows::test_shared_borrow_bool1]:

@@ -38,19 +38,19 @@ def array_to_mut_slice_
 def array_len (T : Type) (s : Array T 32#usize) : Result Usize :=
   do
   let s1 ← Array.to_slice T 32#usize s
-  Result.ok (Slice.len T s1)
+  Result.ok (Slice.len T true s1)
 
 /- [arrays::shared_array_len]:
    Source: 'tests/src/arrays.rs', lines 32:0-32:48 -/
 def shared_array_len (T : Type) (s : Array T 32#usize) : Result Usize :=
   do
   let s1 ← Array.to_slice T 32#usize s
-  Result.ok (Slice.len T s1)
+  Result.ok (Slice.len T true s1)
 
 /- [arrays::shared_slice_len]:
    Source: 'tests/src/arrays.rs', lines 36:0-36:44 -/
 def shared_slice_len (T : Type) (s : Slice T) : Result Usize :=
-  Result.ok (Slice.len T s)
+  Result.ok (Slice.len T true s)
 
 /- [arrays::index_array_shared]:
    Source: 'tests/src/arrays.rs', lines 40:0-40:57 -/
@@ -351,7 +351,7 @@ def non_copyable_array : Result Unit :=
 /- [arrays::sum]: loop 0:
    Source: 'tests/src/arrays.rs', lines 247:4-253:1 -/
 divergent def sum_loop (s : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
-  let i1 := Slice.len U32 s
+  let i1 := Slice.len U32 true s
   if i < i1
   then
     do
@@ -370,7 +370,7 @@ def sum (s : Slice U32) : Result U32 :=
    Source: 'tests/src/arrays.rs', lines 258:4-264:1 -/
 divergent def sum2_loop
   (s : Slice U32) (s2 : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
-  let i1 := Slice.len U32 s
+  let i1 := Slice.len U32 true s
   if i < i1
   then
     do
@@ -385,8 +385,8 @@ divergent def sum2_loop
 /- [arrays::sum2]:
    Source: 'tests/src/arrays.rs', lines 255:0-255:41 -/
 def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
-  let i := Slice.len U32 s
-  let i1 := Slice.len U32 s2
+  let i := Slice.len U32 true s
+  let i1 := Slice.len U32 true s2
   if i = i1
   then sum2_loop s s2 0#u32 0#usize
   else Result.fail .panic
@@ -479,7 +479,7 @@ divergent def zero_slice_loop
 /- [arrays::zero_slice]:
    Source: 'tests/src/arrays.rs', lines 306:0-306:31 -/
 def zero_slice (a : Slice U8) : Result (Slice U8) :=
-  let len := Slice.len U8 a
+  let len := Slice.len U8 true a
   zero_slice_loop a 0#usize len
 
 /- [arrays::iter_mut_slice]: loop 0:
@@ -495,7 +495,7 @@ divergent def iter_mut_slice_loop (len : Usize) (i : Usize) : Result Unit :=
    Source: 'tests/src/arrays.rs', lines 315:0-315:35 -/
 def iter_mut_slice (a : Slice U8) : Result (Slice U8) :=
   do
-  let len := Slice.len U8 a
+  let len := Slice.len U8 true a
   let _ ← iter_mut_slice_loop len 0#usize
   Result.ok a
 
@@ -503,7 +503,7 @@ def iter_mut_slice (a : Slice U8) : Result (Slice U8) :=
    Source: 'tests/src/arrays.rs', lines 325:4-331:1 -/
 divergent def sum_mut_slice_loop
   (a : Slice U32) (i : Usize) (s : U32) : Result U32 :=
-  let i1 := Slice.len U32 a
+  let i1 := Slice.len U32 true a
   if i < i1
   then
     do

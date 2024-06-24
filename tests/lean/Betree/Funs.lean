@@ -145,14 +145,14 @@ def betree.List.split_at
    Source: 'src/betree.rs', lines 315:4-315:34 -/
 def betree.List.push_front
   (T : Type) (self : betree.List T) (x : T) : Result (betree.List T) :=
-  let (tl, _) := core.mem.replace (betree.List T) self betree.List.Nil
+  let (tl, _) := core.mem.replace (betree.List T) true self betree.List.Nil
   Result.ok (betree.List.Cons x tl)
 
 /- [betree::betree::{betree::betree::List<T>#1}::pop_front]:
    Source: 'src/betree.rs', lines 322:4-322:32 -/
 def betree.List.pop_front
   (T : Type) (self : betree.List T) : Result (T × (betree.List T)) :=
-  let (ls, _) := core.mem.replace (betree.List T) self betree.List.Nil
+  let (ls, _) := core.mem.replace (betree.List T) true self betree.List.Nil
   match ls with
   | betree.List.Cons x tl => Result.ok (x, tl)
   | betree.List.Nil => Result.fail .panic
@@ -304,7 +304,7 @@ divergent def betree.Node.apply_upserts_loop
       betree.Node.apply_upserts_loop msgs1 (some v) key
   else
     do
-    let v ← core.option.Option.unwrap U64 prev
+    let v ← core.option.Option.unwrap U64 true prev
     let msgs1 ←
       betree.List.push_front (U64 × betree.Message) msgs (key,
         betree.Message.Insert v)

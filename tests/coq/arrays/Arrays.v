@@ -36,19 +36,19 @@ Definition array_to_mut_slice_
 (** [arrays::array_len]:
     Source: 'tests/src/arrays.rs', lines 28:0-28:40 *)
 Definition array_len (T : Type) (s : array T 32%usize) : result usize :=
-  s1 <- array_to_slice T 32%usize s; Ok (slice_len T s1)
+  s1 <- array_to_slice T 32%usize s; Ok (slice_len T true s1)
 .
 
 (** [arrays::shared_array_len]:
     Source: 'tests/src/arrays.rs', lines 32:0-32:48 *)
 Definition shared_array_len (T : Type) (s : array T 32%usize) : result usize :=
-  s1 <- array_to_slice T 32%usize s; Ok (slice_len T s1)
+  s1 <- array_to_slice T 32%usize s; Ok (slice_len T true s1)
 .
 
 (** [arrays::shared_slice_len]:
     Source: 'tests/src/arrays.rs', lines 36:0-36:44 *)
 Definition shared_slice_len (T : Type) (s : slice T) : result usize :=
-  Ok (slice_len T s)
+  Ok (slice_len T true s)
 .
 
 (** [arrays::index_array_shared]:
@@ -382,7 +382,7 @@ Fixpoint sum_loop
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
-    let i1 := slice_len u32 s in
+    let i1 := slice_len u32 true s in
     if i s< i1
     then (
       i2 <- slice_index_usize u32 s i;
@@ -408,7 +408,7 @@ Fixpoint sum2_loop
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
-    let i1 := slice_len u32 s in
+    let i1 := slice_len u32 true s in
     if i s< i1
     then (
       i2 <- slice_index_usize u32 s i;
@@ -424,8 +424,8 @@ Fixpoint sum2_loop
 (** [arrays::sum2]:
     Source: 'tests/src/arrays.rs', lines 255:0-255:41 *)
 Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
-  let i := slice_len u32 s in
-  let i1 := slice_len u32 s2 in
+  let i := slice_len u32 true s in
+  let i1 := slice_len u32 true s2 in
   if i s= i1 then sum2_loop n s s2 0%u32 0%usize else Fail_ Failure
 .
 
@@ -528,7 +528,7 @@ Fixpoint zero_slice_loop
 (** [arrays::zero_slice]:
     Source: 'tests/src/arrays.rs', lines 306:0-306:31 *)
 Definition zero_slice (n : nat) (a : slice u8) : result (slice u8) :=
-  let len := slice_len u8 a in zero_slice_loop n a 0%usize len
+  let len := slice_len u8 true a in zero_slice_loop n a 0%usize len
 .
 
 (** [arrays::iter_mut_slice]: loop 0:
@@ -547,7 +547,9 @@ Fixpoint iter_mut_slice_loop
 (** [arrays::iter_mut_slice]:
     Source: 'tests/src/arrays.rs', lines 315:0-315:35 *)
 Definition iter_mut_slice (n : nat) (a : slice u8) : result (slice u8) :=
-  let len := slice_len u8 a in _ <- iter_mut_slice_loop n len 0%usize; Ok a
+  let len := slice_len u8 true a in
+  _ <- iter_mut_slice_loop n len 0%usize;
+  Ok a
 .
 
 (** [arrays::sum_mut_slice]: loop 0:
@@ -557,7 +559,7 @@ Fixpoint sum_mut_slice_loop
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
-    let i1 := slice_len u32 a in
+    let i1 := slice_len u32 true a in
     if i s< i1
     then (
       i2 <- slice_index_usize u32 a i;

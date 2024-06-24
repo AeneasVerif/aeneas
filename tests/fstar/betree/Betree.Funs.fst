@@ -140,14 +140,14 @@ let betree_List_split_at
     Source: 'src/betree.rs', lines 315:4-315:34 *)
 let betree_List_push_front
   (t : Type0) (self : betree_List_t t) (x : t) : result (betree_List_t t) =
-  let (tl, _) = core_mem_replace (betree_List_t t) self Betree_List_Nil in
+  let (tl, _) = core_mem_replace (betree_List_t t) true self Betree_List_Nil in
   Ok (Betree_List_Cons x tl)
 
 (** [betree::betree::{betree::betree::List<T>#1}::pop_front]:
     Source: 'src/betree.rs', lines 322:4-322:32 *)
 let betree_List_pop_front
   (t : Type0) (self : betree_List_t t) : result (t & (betree_List_t t)) =
-  let (ls, _) = core_mem_replace (betree_List_t t) self Betree_List_Nil in
+  let (ls, _) = core_mem_replace (betree_List_t t) true self Betree_List_Nil in
   begin match ls with
   | Betree_List_Cons x tl -> Ok (x, tl)
   | Betree_List_Nil -> Fail Failure
@@ -304,7 +304,7 @@ let rec betree_Node_apply_upserts_loop
       betree_Node_apply_upserts_loop msgs1 (Some v) key
     end
   else
-    let* v = core_option_Option_unwrap u64 prev in
+    let* v = core_option_Option_unwrap u64 true prev in
     let* msgs1 =
       betree_List_push_front (u64 & betree_Message_t) msgs (key,
         Betree_Message_Insert v) in

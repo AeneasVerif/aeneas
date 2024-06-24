@@ -322,7 +322,7 @@ Fixpoint list_rev_aux
 (** [no_nested_borrows::list_rev]:
     Source: 'tests/src/no_nested_borrows.rs', lines 319:0-319:42 *)
 Definition list_rev (T : Type) (l : List_t T) : result (List_t T) :=
-  let (li, _) := core_mem_replace (List_t T) l List_Nil in
+  let (li, _) := core_mem_replace (List_t T) true l List_Nil in
   list_rev_aux T li List_Nil
 .
 
@@ -485,7 +485,7 @@ Check (test_weird_borrows1 )%return.
 (** [no_nested_borrows::test_mem_replace]:
     Source: 'tests/src/no_nested_borrows.rs', lines 407:0-407:37 *)
 Definition test_mem_replace (px : u32) : result u32 :=
-  let (y, _) := core_mem_replace u32 px 1%u32 in
+  let (y, _) := core_mem_replace u32 true px 1%u32 in
   if y s= 0%u32 then Ok 2%u32 else Fail_ Failure
 .
 

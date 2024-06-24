@@ -175,7 +175,7 @@ divergent def HashMap.move_elements_loop
     let (a, index_mut_back) ←
       alloc.vec.Vec.index_mut (AList T) Usize
         (core.slice.index.SliceIndexUsizeSliceTInst (AList T)) slots i
-    let (ls, a1) := core.mem.replace (AList T) a AList.Nil
+    let (ls, a1) := core.mem.replace (AList T) true a AList.Nil
     let ntable1 ← HashMap.move_elements_from_list T ntable ls
     let i2 ← i + 1#usize
     let slots1 ← index_mut_back a1
@@ -357,7 +357,7 @@ divergent def HashMap.remove_from_list_loop
     if ckey = key
     then
       let (mv_ls, _) :=
-        core.mem.replace (AList T) (AList.Cons ckey t tl) AList.Nil
+        core.mem.replace (AList T) true (AList.Cons ckey t tl) AList.Nil
       match mv_ls with
       | AList.Cons _ cvalue tl1 => Result.ok (some cvalue, tl1)
       | AList.Nil => Result.fail .panic

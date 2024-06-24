@@ -336,7 +336,7 @@ divergent def list_rev_aux
 /- [no_nested_borrows::list_rev]:
    Source: 'tests/src/no_nested_borrows.rs', lines 319:0-319:42 -/
 def list_rev (T : Type) (l : List T) : Result (List T) :=
-  let (li, _) := core.mem.replace (List T) l List.Nil
+  let (li, _) := core.mem.replace (List T) true l List.Nil
   list_rev_aux T li List.Nil
 
 /- [no_nested_borrows::test_list_functions]:
@@ -491,7 +491,7 @@ def test_weird_borrows1 : Result Unit :=
 /- [no_nested_borrows::test_mem_replace]:
    Source: 'tests/src/no_nested_borrows.rs', lines 407:0-407:37 -/
 def test_mem_replace (px : U32) : Result U32 :=
-  let (y, _) := core.mem.replace U32 px 1#u32
+  let (y, _) := core.mem.replace U32 true px 1#u32
   if y = 0#u32
   then Result.ok 2#u32
   else Result.fail .panic

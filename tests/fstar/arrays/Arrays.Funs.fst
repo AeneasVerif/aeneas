@@ -28,17 +28,17 @@ let array_to_mut_slice_
 (** [arrays::array_len]:
     Source: 'tests/src/arrays.rs', lines 28:0-28:40 *)
 let array_len (t : Type0) (s : array t 32) : result usize =
-  let* s1 = array_to_slice t 32 s in Ok (slice_len t s1)
+  let* s1 = array_to_slice t 32 s in Ok (slice_len t true s1)
 
 (** [arrays::shared_array_len]:
     Source: 'tests/src/arrays.rs', lines 32:0-32:48 *)
 let shared_array_len (t : Type0) (s : array t 32) : result usize =
-  let* s1 = array_to_slice t 32 s in Ok (slice_len t s1)
+  let* s1 = array_to_slice t 32 s in Ok (slice_len t true s1)
 
 (** [arrays::shared_slice_len]:
     Source: 'tests/src/arrays.rs', lines 36:0-36:44 *)
 let shared_slice_len (t : Type0) (s : slice t) : result usize =
-  Ok (slice_len t s)
+  Ok (slice_len t true s)
 
 (** [arrays::index_array_shared]:
     Source: 'tests/src/arrays.rs', lines 40:0-40:57 *)
@@ -312,7 +312,7 @@ let rec sum_loop
   (s : slice u32) (sum1 : u32) (i : usize) :
   Tot (result u32) (decreases (sum_loop_decreases s sum1 i))
   =
-  let i1 = slice_len u32 s in
+  let i1 = slice_len u32 true s in
   if i < i1
   then
     let* i2 = slice_index_usize u32 s i in
@@ -332,7 +332,7 @@ let rec sum2_loop
   (s : slice u32) (s2 : slice u32) (sum1 : u32) (i : usize) :
   Tot (result u32) (decreases (sum2_loop_decreases s s2 sum1 i))
   =
-  let i1 = slice_len u32 s in
+  let i1 = slice_len u32 true s in
   if i < i1
   then
     let* i2 = slice_index_usize u32 s i in
@@ -346,8 +346,8 @@ let rec sum2_loop
 (** [arrays::sum2]:
     Source: 'tests/src/arrays.rs', lines 255:0-255:41 *)
 let sum2 (s : slice u32) (s2 : slice u32) : result u32 =
-  let i = slice_len u32 s in
-  let i1 = slice_len u32 s2 in
+  let i = slice_len u32 true s in
+  let i1 = slice_len u32 true s2 in
   if i = i1 then sum2_loop s s2 0 0 else Fail Failure
 
 (** [arrays::f0]:
@@ -431,7 +431,7 @@ let rec zero_slice_loop
 (** [arrays::zero_slice]:
     Source: 'tests/src/arrays.rs', lines 306:0-306:31 *)
 let zero_slice (a : slice u8) : result (slice u8) =
-  let len = slice_len u8 a in zero_slice_loop a 0 len
+  let len = slice_len u8 true a in zero_slice_loop a 0 len
 
 (** [arrays::iter_mut_slice]: loop 0:
     Source: 'tests/src/arrays.rs', lines 317:4-321:1 *)
@@ -446,7 +446,7 @@ let rec iter_mut_slice_loop
 (** [arrays::iter_mut_slice]:
     Source: 'tests/src/arrays.rs', lines 315:0-315:35 *)
 let iter_mut_slice (a : slice u8) : result (slice u8) =
-  let len = slice_len u8 a in let* _ = iter_mut_slice_loop len 0 in Ok a
+  let len = slice_len u8 true a in let* _ = iter_mut_slice_loop len 0 in Ok a
 
 (** [arrays::sum_mut_slice]: loop 0:
     Source: 'tests/src/arrays.rs', lines 325:4-331:1 *)
@@ -454,7 +454,7 @@ let rec sum_mut_slice_loop
   (a : slice u32) (i : usize) (s : u32) :
   Tot (result u32) (decreases (sum_mut_slice_loop_decreases a i s))
   =
-  let i1 = slice_len u32 a in
+  let i1 = slice_len u32 true a in
   if i < i1
   then
     let* i2 = slice_index_usize u32 a i in

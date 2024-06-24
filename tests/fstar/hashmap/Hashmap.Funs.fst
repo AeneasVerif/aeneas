@@ -169,7 +169,7 @@ let rec hashMap_move_elements_loop
     let* (a, index_mut_back) =
       alloc_vec_Vec_index_mut (aList_t t) usize
         (core_slice_index_SliceIndexUsizeSliceTInst (aList_t t)) slots i in
-    let (ls, a1) = core_mem_replace (aList_t t) a AList_Nil in
+    let (ls, a1) = core_mem_replace (aList_t t) true a AList_Nil in
     let* ntable1 = hashMap_move_elements_from_list t ntable ls in
     let* i2 = usize_add i 1 in
     let* slots1 = index_mut_back a1 in
@@ -344,7 +344,7 @@ let rec hashMap_remove_from_list_loop
     if ckey = key
     then
       let (mv_ls, _) =
-        core_mem_replace (aList_t t) (AList_Cons ckey x tl) AList_Nil in
+        core_mem_replace (aList_t t) true (AList_Cons ckey x tl) AList_Nil in
       begin match mv_ls with
       | AList_Cons _ cvalue tl1 -> Ok (Some cvalue, tl1)
       | AList_Nil -> Fail Failure

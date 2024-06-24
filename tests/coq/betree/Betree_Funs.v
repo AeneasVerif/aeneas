@@ -169,7 +169,8 @@ Definition betree_List_split_at
     Source: 'src/betree.rs', lines 315:4-315:34 *)
 Definition betree_List_push_front
   (T : Type) (self : betree_List_t T) (x : T) : result (betree_List_t T) :=
-  let (tl, _) := core_mem_replace (betree_List_t T) self Betree_List_Nil in
+  let (tl, _) := core_mem_replace (betree_List_t T) true self Betree_List_Nil
+    in
   Ok (Betree_List_Cons x tl)
 .
 
@@ -177,7 +178,8 @@ Definition betree_List_push_front
     Source: 'src/betree.rs', lines 322:4-322:32 *)
 Definition betree_List_pop_front
   (T : Type) (self : betree_List_t T) : result (T * (betree_List_t T)) :=
-  let (ls, _) := core_mem_replace (betree_List_t T) self Betree_List_Nil in
+  let (ls, _) := core_mem_replace (betree_List_t T) true self Betree_List_Nil
+    in
   match ls with
   | Betree_List_Cons x tl => Ok (x, tl)
   | Betree_List_Nil => Fail_ Failure
@@ -370,7 +372,7 @@ Fixpoint betree_Node_apply_upserts_loop
         betree_Node_apply_upserts_loop n1 msgs1 (Some v) key
       end)
     else (
-      v <- core_option_Option_unwrap u64 prev;
+      v <- core_option_Option_unwrap u64 true prev;
       msgs1 <-
         betree_List_push_front (u64 * betree_Message_t) msgs (key,
           Betree_Message_Insert v);

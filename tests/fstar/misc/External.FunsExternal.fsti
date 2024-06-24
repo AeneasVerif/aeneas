@@ -7,14 +7,14 @@ include External.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::cell::{core::cell::Cell<T>#10}::get]:
-    Source: '/rustc/library/core/src/cell.rs', lines 510:4-510:26
+    Source: '/rustc/library/core/src/cell.rs', lines 509:4-509:26
     Name pattern: core::cell::{core::cell::Cell<@T>}::get *)
 val core_cell_Cell_get
   (t : Type0) (markerCopyInst : core_marker_Copy_t t) :
   core_cell_Cell_t t -> state -> result (state & t)
 
 (** [core::cell::{core::cell::Cell<T>#11}::get_mut]:
-    Source: '/rustc/library/core/src/cell.rs', lines 588:4-588:39
+    Source: '/rustc/library/core/src/cell.rs', lines 587:4-587:39
     Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut *)
 val core_cell_Cell_get_mut
   (t : Type0) :
