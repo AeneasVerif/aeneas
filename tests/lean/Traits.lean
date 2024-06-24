@@ -237,7 +237,7 @@ def ToTypetraitsBoolWrapperT.to_type
   ToTypeBoolTInst.to_type self
 
 /- Trait implementation: [traits::{(traits::ToType<T> for traits::BoolWrapper)#7}]
-   Source: 'tests/src/traits.rs', lines 153:0-153:33 -/
+   Source: 'tests/src/traits.rs', lines 153:0-155:20 -/
 def ToTypetraitsBoolWrapperT (T : Type) (ToTypeBoolTInst : ToType Bool T) :
   ToType BoolWrapper T := {
   to_type := ToTypetraitsBoolWrapperT.to_type T ToTypeBoolTInst
