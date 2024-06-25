@@ -55,7 +55,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
   (* Symbolic values contained in the expansion might contain already ended regions *)
   let check_symbolic_no_ended = false in
   (* Prepare reborrows registration *)
-  let fresh_reborrow, apply_registered_reborrows =
+  let (fresh_reborrow, apply_registered_reborrows) =
     prepare_reborrows config span allow_reborrows
   in
   (* Visitor to apply the expansion *)
@@ -91,12 +91,12 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
         (* Explore in depth first - we won't update anything: we simply
          * want to check we don't have to expand inner symbolic value *)
         match (aproj, proj_kind) with
-        | AEndedProjBorrows _, _ -> ASymbolic aproj
-        | AEndedProjLoans _, _ ->
+        | (AEndedProjBorrows _, _) -> ASymbolic aproj
+        | (AEndedProjLoans _, _) ->
             (* Explore the given back values to make sure we don't have to expand
              * anything in there *)
             ASymbolic (self#visit_aproj (Some current_abs) aproj)
-        | AProjLoans (sv, given_back), LoanProj ->
+        | (AProjLoans (sv, given_back), LoanProj) ->
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then (
               (* There mustn't be any given back values *)
@@ -111,7 +111,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) aproj
-        | AProjBorrows (sv, proj_ty), BorrowProj ->
+        | (AProjBorrows (sv, proj_ty), BorrowProj) ->
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then
               (* Convert the symbolic expansion to a value on which we can
@@ -134,9 +134,9 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) aproj
-        | AProjLoans _, BorrowProj
-        | AProjBorrows (_, _), LoanProj
-        | AIgnoredProjBorrows, _ ->
+        | (AProjLoans _, BorrowProj)
+        | (AProjBorrows (_, _), LoanProj)
+        | (AIgnoredProjBorrows, _) ->
             (* Nothing to do *)
             ASymbolic aproj
     end
@@ -274,12 +274,12 @@ let compute_expanded_symbolic_adt_value (span : Meta.span)
     (expand_enumerations : bool) (adt_id : type_id) (generics : generic_args)
     (ctx : eval_ctx) : symbolic_expansion list =
   match (adt_id, generics.regions, generics.types) with
-  | TAdtId def_id, _, _ ->
+  | (TAdtId def_id, _, _) ->
       compute_expanded_symbolic_non_assumed_adt_value span expand_enumerations
         def_id generics ctx
-  | TTuple, [], _ ->
+  | (TTuple, [], _) ->
       [ compute_expanded_symbolic_tuple_value span generics.types ]
-  | TAssumed TBox, [], [ boxed_ty ] ->
+  | (TAssumed TBox, [], [ boxed_ty ]) ->
       [ compute_expanded_symbolic_box_value span boxed_ty ]
   | _ ->
       craise __FILE__ __LINE__ span
@@ -483,7 +483,7 @@ let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
   let original_sv = sv in
   let original_sv_place = sv_place in
   let rty = original_sv.sv_ty in
-  let ctx, cc =
+  let (ctx, cc) =
     match rty with
     (* ADTs *)
     | TAdt (adt_id, generics) ->
@@ -633,7 +633,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
         (lazy
           ("greedy_expand_symbolics_with_borrows: about to expand: "
           ^ symbolic_value_to_string ctx sv));
-      let ctx, cc =
+      let (ctx, cc) =
         match sv.sv_ty with
         | TAdt (TAdtId def_id, _) ->
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,

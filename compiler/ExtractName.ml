@@ -37,7 +37,9 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
   let c = { tgt = TkName } in
   let all_vars =
     let check (g : generic_arg) : bool =
-      match g with GExpr (EVar _) | GRegion (RVar _) -> true | _ -> false
+      match g with
+      | GExpr (EVar _) | GRegion (RVar _) -> true
+      | _ -> false
     in
     List.for_all check
   in
@@ -123,7 +125,7 @@ let name_with_generics_to_simple_name (ctx : ctx)
           name_with_generics_to_pattern ctx c TypesUtils.empty_generic_params
             prefix TypesUtils.empty_generic_args
         in
-        let _, _, name = pattern_common_prefix { equiv = true } prefix name in
+        let (_, _, name) = pattern_common_prefix { equiv = true } prefix name in
         name
   in
   pattern_to_extract_name None name

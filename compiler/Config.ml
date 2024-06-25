@@ -41,7 +41,9 @@ let borrow_check = ref false
 let backend () : backend = Option.get !opt_backend
 
 let if_backend (f : unit -> 'a) (default : 'a) : 'a =
-  match !opt_backend with None -> default | Some _ -> f ()
+  match !opt_backend with
+  | None -> default
+  | Some _ -> f ()
 
 (** {1 Interpreter} *)
 
@@ -374,7 +376,9 @@ let variant_concatenate_type_name = ref true
 let use_tuple_structs = ref true
 
 let backend_has_tuple_projectors backend =
-  match backend with Lean -> true | Coq | FStar | HOL4 -> false
+  match backend with
+  | Lean -> true
+  | Coq | FStar | HOL4 -> false
 
 (** Toggle the use of tuple projectors *)
 let use_tuple_projectors = ref false

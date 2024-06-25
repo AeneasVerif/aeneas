@@ -94,9 +94,13 @@ let ctx_add_norm_trait_types_from_preds (span : Meta.span) (ctx : eval_ctx)
 let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
-  | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ | FnPointer _
-  | Closure _ | Unsolved _ ->
-      false
+  | TraitImpl _
+  | BuiltinOrAuto _
+  | TraitRef _
+  | UnknownTrait _
+  | FnPointer _
+  | Closure _
+  | Unsolved _ -> false
   | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
       trait_instance_id_is_local_clause id
 
@@ -175,7 +179,7 @@ let norm_ctx_lookup_trait_impl (ctx : norm_ctx) (impl_id : TraitImplId.id)
 let norm_ctx_lookup_trait_impl_ty (ctx : norm_ctx) (impl_id : TraitImplId.id)
     (generics : generic_args) (type_name : string) : ty =
   (* Lookup the implementation *)
-  let trait_impl, subst = norm_ctx_lookup_trait_impl ctx impl_id generics in
+  let (trait_impl, subst) = norm_ctx_lookup_trait_impl ctx impl_id generics in
   (* Lookup the type *)
   let ty = snd (List.assoc type_name trait_impl.types) in
   (* Substitute *)
@@ -185,7 +189,7 @@ let norm_ctx_lookup_trait_impl_parent_clause (ctx : norm_ctx)
     (impl_id : TraitImplId.id) (generics : generic_args)
     (clause_id : TraitClauseId.id) : trait_ref =
   (* Lookup the implementation *)
-  let trait_impl, subst = norm_ctx_lookup_trait_impl ctx impl_id generics in
+  let (trait_impl, subst) = norm_ctx_lookup_trait_impl ctx impl_id generics in
   (* Lookup the clause *)
   let clause = TraitClauseId.nth trait_impl.parent_trait_refs clause_id in
   (* Sanity check: the clause necessarily refers to an impl *)
@@ -197,7 +201,7 @@ let norm_ctx_lookup_trait_impl_item_clause (ctx : norm_ctx)
     (impl_id : TraitImplId.id) (generics : generic_args) (item_name : string)
     (clause_id : TraitClauseId.id) : trait_ref =
   (* Lookup the implementation *)
-  let trait_impl, subst = norm_ctx_lookup_trait_impl ctx impl_id generics in
+  let (trait_impl, subst) = norm_ctx_lookup_trait_impl ctx impl_id generics in
   (* Lookup the item then its clause *)
   let item = List.assoc item_name trait_impl.types in
   let clause = TraitClauseId.nth (fst item) clause_id in
@@ -293,7 +297,9 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       in
       let tr : trait_type_ref = { trait_ref; type_name } in
       (* Lookup the representative, if there is *)
-      match norm_ctx_get_ty_repr ctx tr with None -> ty | Some ty -> ty)
+      match norm_ctx_get_ty_repr ctx tr with
+      | None -> ty
+      | Some ty -> ty)
 
 (** This returns the normalized trait instance id together with an optional
     reference to a trait **implementation** (the `trait_ref` we return has
@@ -351,7 +357,7 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | Clause _ -> (id, None)
   | BuiltinOrAuto _ -> (id, None)
   | ParentClause (inst_id, decl_id, clause_id) -> (
-      let inst_id, impl = norm_ctx_normalize_trait_instance_id ctx inst_id in
+      let (inst_id, impl) = norm_ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
       match impl with
       | None ->
@@ -384,7 +390,7 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
           let clause = norm_ctx_normalize_trait_ref ctx clause in
           (TraitRef clause, Some clause))
   | ItemClause (inst_id, decl_id, item_name, clause_id) -> (
-      let inst_id, impl = norm_ctx_normalize_trait_instance_id ctx inst_id in
+      let (inst_id, impl) = norm_ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
       match impl with
       | None ->
@@ -466,7 +472,7 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
       ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
   let { trait_id; generics; trait_decl_ref } = trait_ref in
   (* Check if the id is an impl, otherwise normalize it *)
-  let trait_id, norm_trait_ref =
+  let (trait_id, norm_trait_ref) =
     norm_ctx_normalize_trait_instance_id ctx trait_id
   in
   match norm_trait_ref with

@@ -104,8 +104,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
           method! visit_rvalue _env rv =
             match rv with
             | Use _ | RvRef _ | Global _ | Discriminant _ | Aggregate _ | Len _
-              ->
-                ()
+              -> ()
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail
@@ -157,7 +156,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
       match f.body with
       | None ->
-          let info_can_fail, info_stateful =
+          let (info_can_fail, info_stateful) =
             match builtin_info with
             | None -> (true, use_state)
             | Some { can_fail; stateful } -> (can_fail, stateful)
@@ -202,7 +201,11 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
   let analyze_fun_decl_group (d : fun_declaration_group) : unit =
     (* Retrieve the function declarations *)
-    let funs = match d with NonRecGroup id -> [ id ] | RecGroup ids -> ids in
+    let funs =
+      match d with
+      | NonRecGroup id -> [ id ]
+      | RecGroup ids -> ids
+    in
     let funs = List.map (fun id -> FunDeclId.Map.find id funs_map) funs in
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.Set.of_list fun_ids in

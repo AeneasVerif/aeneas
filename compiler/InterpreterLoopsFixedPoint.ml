@@ -74,10 +74,10 @@ let rec end_useless_fresh_borrows_and_abs (config : config) (span : Meta.span)
     (ctx, fun e -> e)
   with
   | FoundAbsId abs_id ->
-      let ctx, cc = end_abstraction config span abs_id ctx in
+      let (ctx, cc) = end_abstraction config span abs_id ctx in
       comp cc (rec_call ctx)
   | FoundBorrowId bid ->
-      let ctx, cc = end_borrow config span bid ctx in
+      let (ctx, cc) = end_borrow config span bid ctx in
       comp cc (rec_call ctx)
 
 (* Explore the fresh anonymous values and replace all the values which are not
@@ -122,7 +122,7 @@ let cleanup_fresh_values (fixed_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
 let cleanup_fresh_values_and_abs (config : config) (span : Meta.span)
     (fixed_ids : ids_sets) : cm_fun =
  fun ctx ->
-  let ctx, cc = end_useless_fresh_borrows_and_abs config span fixed_ids ctx in
+  let (ctx, cc) = end_useless_fresh_borrows_and_abs config span fixed_ids ctx in
   let ctx = cleanup_fresh_values fixed_ids ctx in
   (ctx, cc)
 
@@ -135,10 +135,12 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
   *)
   let absl =
     List.filter_map
-      (function EBinding _ | EFrame -> None | EAbs abs -> Some abs)
+      (function
+        | EBinding _ | EFrame -> None
+        | EAbs abs -> Some abs)
       ctx.env
   in
-  let absl_ids, absl_id_maps = compute_absl_ids absl in
+  let (absl_ids, absl_id_maps) = compute_absl_ids absl in
   let abs_borrow_ids = absl_ids.borrow_ids in
 
   (* Map from the fresh sids to the original symbolic values *)
@@ -350,7 +352,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
   let env =
     let bmap = BorrowId.Map.of_list !borrow_substs in
     let bsusbt bid =
-      match BorrowId.Map.find_opt bid bmap with None -> bid | Some bid -> bid
+      match BorrowId.Map.find_opt bid bmap with
+      | None -> bid
+      | Some bid -> bid
     in
 
     let visitor =
@@ -367,7 +371,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
   let env = List.append fresh_absl env in
   let ctx = { ctx with env } in
 
-  let _, new_ctx_ids_map = compute_ctx_ids ctx in
+  let (_, new_ctx_ids_map) = compute_ctx_ids ctx in
 
   (* Synthesize *)
   let cf e =
@@ -425,12 +429,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 
        We also end those borrows in the collected contexts.
     *)
-    let ctx1, ctxs =
+    let (ctx1, ctxs) =
       match !fixed_ids with
       | Some _ -> (ctx1, ctxs)
       | None ->
-          let old_ids, _ = compute_ctx_ids ctx1 in
-          let new_ids, _ = compute_ctxs_ids ctxs in
+          let (old_ids, _) = compute_ctx_ids ctx1 in
+          let (new_ids, _) = compute_ctxs_ids ctxs in
           let blids = BorrowId.Set.diff old_ids.blids new_ids.blids in
           let aids = AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those borrows and abstractions *)
@@ -469,7 +473,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     let fixed_ids = Option.get !fixed_ids in
 
     (* Join the context with the context at the loop entry *)
-    let (_, _), ctx2 =
+    let ((_, _), ctx2) =
       loop_join_origin_with_continue_ctxs config span loop_id fixed_ids ctx1
         ctxs
     in
@@ -481,12 +485,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      intersection of ids between the original environment and the list
      of new environments *)
   let compute_fixed_ids (ctxl : eval_ctx list) : ids_sets =
-    let fixed_ids, _ = compute_ctx_ids ctx0 in
+    let (fixed_ids, _) = compute_ctx_ids ctx0 in
     let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
     let sids = ref sids in
     List.iter
       (fun ctx ->
-        let fixed_ids, _ = compute_ctx_ids ctx in
+        let (fixed_ids, _) = compute_ctx_ids ctx in
         sids := SymbolicValueId.Set.inter !sids fixed_ids.sids)
       ctxl;
     let sids = !sids in
@@ -513,7 +517,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        ^ " iterations")
     else
       (* Evaluate the loop body to register the different contexts upon reentry *)
-      let ctx_resl, _ = eval_loop_body ctx in
+      let (ctx_resl, _) = eval_loop_body ctx in
       (* Keep only the contexts which reached a `continue`. *)
       let keep_continue_ctx (ctx, res) =
         log#ldebug
@@ -583,9 +587,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      "horizontally": the symbolic values contained in the abstractions (typically
      the shared values) will be preserved.
   *)
-  let fp, rg_to_abs =
+  let (fp, rg_to_abs) =
     (* List the loop abstractions in the fixed-point *)
-    let fp_aids, add_aid, _mem_aid = AbstractionId.Set.mk_stateful_set () in
+    let (fp_aids, add_aid, _mem_aid) = AbstractionId.Set.mk_stateful_set () in
 
     let list_loop_abstractions =
       object
@@ -658,7 +662,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                   ctx
               in
               (* Explore the context, and check which abstractions are not there anymore *)
-              let ids, _ = compute_ctx_ids ctx in
+              let (ids, _) = compute_ctx_ids ctx in
               let ended_ids = AbstractionId.Set.diff !fp_aids ids.aids in
               add_ended_aids rg_id ended_ids)
             ctx.region_groups
@@ -698,7 +702,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        we will explore them in this order) *)
     let all_abs_ids =
       List.filter_map
-        (function EAbs abs -> Some abs.abs_id | _ -> None)
+        (function
+          | EAbs abs -> Some abs.abs_id
+          | _ -> None)
         (* TODO: we may want to use a different order, for instance the order
            in which the regions were ended. *)
         (List.rev !fp.env)
@@ -740,7 +746,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
               in
               let abs = ctx_lookup_abs !fp !id0 in
               let abs = { abs with kind = abs_kind } in
-              let fp', _ = ctx_subst_abs span !fp !id0 abs in
+              let (fp', _) = ctx_subst_abs span !fp !id0 abs in
               fp := fp';
               (* Merge all the abstractions into this one *)
               List.iter
@@ -752,7 +758,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                           abstraction: " ^ AbstractionId.to_string id ^ " into "
                         ^ AbstractionId.to_string !id0));
                     (* Note that we merge *into* [id0] *)
-                    let fp', id0' =
+                    let (fp', id0') =
                       merge_into_first_abstraction span loop_id abs_kind false
                         !fp !id0 id
                     in
@@ -848,9 +854,11 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
       ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
       ^ "\n\n"));
 
-  let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
+  let (filt_src_env, _, _) = ctx_split_fixed_new span fixed_ids src_ctx in
   let filt_src_ctx = { src_ctx with env = filt_src_env } in
-  let filt_tgt_env, new_absl, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
+  let (filt_tgt_env, new_absl, _) =
+    ctx_split_fixed_new span fixed_ids tgt_ctx
+  in
   let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
 
   log#ldebug
@@ -925,7 +933,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
   *)
   List.iter
     (fun abs ->
-      let ids, _ = compute_abs_ids abs in
+      let (ids, _) = compute_abs_ids abs in
       (* Map the *loan* ids (we just match the corresponding *loans* ) *)
       let loan_ids =
         BorrowId.Set.map
@@ -980,8 +988,8 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
 
 let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
     (fp_ctx : eval_ctx) : SymbolicValueId.Set.t * symbolic_value list =
-  let old_ids, _ = compute_ctx_ids ctx in
-  let fp_ids, fp_ids_maps = compute_ctx_ids fp_ctx in
+  let (old_ids, _) = compute_ctx_ids ctx in
+  let (fp_ids, fp_ids_maps) = compute_ctx_ids fp_ctx in
   let fresh_sids = SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
 
   (* Compute the set of symbolic values which appear in shared values inside

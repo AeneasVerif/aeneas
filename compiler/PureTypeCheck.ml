@@ -69,9 +69,9 @@ type tc_ctx = {
 
 let check_literal (span : Meta.span) (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
-  | TInteger int_ty, VScalar sv ->
+  | (TInteger int_ty, VScalar sv) ->
       sanity_check __FILE__ __LINE__ (int_ty = sv.int_ty) span
-  | TBool, VBool _ | TChar, VChar _ -> ()
+  | (TBool, VBool _) | (TChar, VChar _) -> ()
   | _ -> craise __FILE__ __LINE__ span "Inconsistent type"
 
 let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
@@ -88,7 +88,7 @@ let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
       { ctx with env }
   | PatAdt av ->
       (* Compute the field types *)
-      let type_id, generics = ty_as_adt span v.ty in
+      let (type_id, generics) = ty_as_adt span v.ty in
       let field_tys =
         get_adt_field_types span ctx.type_decls type_id av.variant_id generics
       in
@@ -123,13 +123,13 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
       sanity_check __FILE__ __LINE__ (ty = e.ty) span
   | Const cv -> check_literal span cv (ty_as_literal span e.ty)
   | App (app, arg) ->
-      let input_ty, output_ty = destruct_arrow span app.ty in
+      let (input_ty, output_ty) = destruct_arrow span app.ty in
       sanity_check __FILE__ __LINE__ (input_ty = arg.ty) span;
       sanity_check __FILE__ __LINE__ (output_ty = e.ty) span;
       check_texpression span ctx app;
       check_texpression span ctx arg
   | Lambda (pat, body) ->
-      let pat_ty, body_ty = destruct_arrow span e.ty in
+      let (pat_ty, body_ty) = destruct_arrow span e.ty in
       sanity_check __FILE__ __LINE__ (pat.ty = pat_ty) span;
       sanity_check __FILE__ __LINE__ (body.ty = body_ty) span;
       (* Check the pattern and register the introduced variables at the same time *)
@@ -143,8 +143,8 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
       | Proj { adt_id = proj_adt_id; field_id } ->
           (* Note we can only project fields of structures (not enumerations) *)
           (* Deconstruct the projector type *)
-          let adt_ty, field_ty = destruct_arrow span e.ty in
-          let adt_id, adt_generics = ty_as_adt span adt_ty in
+          let (adt_ty, field_ty) = destruct_arrow span e.ty in
+          let (adt_id, adt_generics) = ty_as_adt span adt_ty in
           (* Check the ADT type *)
           sanity_check __FILE__ __LINE__ (adt_id = proj_adt_id) span;
           sanity_check __FILE__ __LINE__ (adt_generics = qualif.generics) span;
@@ -161,7 +161,7 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
             get_adt_field_types span ctx.type_decls id.adt_id id.variant_id
               qualif.generics
           in
-          let field_tys, adt_ty = destruct_arrows e.ty in
+          let (field_tys, adt_ty) = destruct_arrows e.ty in
           sanity_check __FILE__ __LINE__ (expected_field_tys = field_tys) span;
           match adt_ty with
           | TAdt (type_id, generics) ->
@@ -208,7 +208,7 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
          | Some ty -> sanity_check __FILE__ __LINE__ (ty = e.ty) span);
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
-      let adt_id, adt_generics = ty_as_adt span e.ty in
+      let (adt_id, adt_generics) = ty_as_adt span e.ty in
       sanity_check __FILE__ __LINE__ (adt_id = supd.struct_id) span;
       (* The id can only be: a custom type decl or an array *)
       match adt_id with

@@ -58,11 +58,11 @@ type stl_cm_fun =
 let cc_comp (f : 'b -> 'c) (g : 'a -> 'b) : 'a -> 'c = fun e -> f (g e)
 
 let comp (f : 'b -> 'c) (g : 'x * ('a -> 'b)) : 'x * ('a -> 'c) =
-  let x, g = g in
+  let (x, g) = g in
   (x, cc_comp f g)
 
 let comp2 (f : 'b -> 'c) (g : 'x * 'y * ('a -> 'b)) : 'x * 'y * ('a -> 'c) =
-  let x, y, g = g in
+  let (x, y, g) = g in
   (x, y, cc_comp f g)
 
 (** [fold] operation for functions which thread a context and return a continuation *)
@@ -73,7 +73,7 @@ let fold_left_apply_continuation (f : 'a -> 'c -> 'c * ('e -> 'e))
     match inputs with
     | [] -> (ctx, fun x -> x)
     | x :: inputs ->
-        let ctx, cc = f x ctx in
+        let (ctx, cc) = f x ctx in
         comp cc (eval_list inputs ctx)
   in
   eval_list inputs ctx
@@ -85,17 +85,21 @@ let map_apply_continuation (f : 'a -> 'c -> 'b * 'c * ('e -> 'e))
     match inputs with
     | [] -> ([], ctx, fun e -> e)
     | x :: inputs ->
-        let v, ctx, cc1 = f x ctx in
-        let vl, ctx, cc2 = eval_list inputs ctx in
+        let (v, ctx, cc1) = f x ctx in
+        let (vl, ctx, cc2) = eval_list inputs ctx in
         (v :: vl, ctx, cc_comp cc1 cc2)
   in
   eval_list inputs ctx
 
 let cc_singleton file line span cf el =
-  match el with [ e ] -> cf e | _ -> internal_error file line span
+  match el with
+  | [ e ] -> cf e
+  | _ -> internal_error file line span
 
 let cf_singleton file line span el =
-  match el with [ e ] -> e | _ -> internal_error file line span
+  match el with
+  | [ e ] -> e
+  | _ -> internal_error file line span
 
 (** It happens that we need to concatenate lists of results, for
     instance when evaluating the branches of a match. When applying
@@ -119,7 +123,7 @@ let comp_seqs (file : string) (line : int) (span : Meta.span)
         (* Split the list of expressions between:
            - the expressions for the current branch
            - the expressions for the remaining branches *)
-        let el0, el = Collections.List.split_at el (List.length resl) in
+        let (el0, el) = Collections.List.split_at el (List.length resl) in
         (* Compute the expression for the current branch *)
         let e0 = cf el0 in
         (* Compute the expressions for the remaining branches *)

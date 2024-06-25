@@ -49,7 +49,9 @@ let flatten_name (name : string list) : string =
 
 (** Utility for Lean-only definitions **)
 let mk_lean_only (funs : 'a list) : 'a list =
-  match backend () with Lean -> funs | _ -> []
+  match backend () with
+  | Lean -> funs
+  | _ -> []
 
 let () =
   assert (split_on_separator "x::y::z" = [ "x"; "y"; "z" ]);
@@ -61,7 +63,9 @@ let () =
     is F*, Coq or HOL4, and a different value if the target is Lean.
  *)
 let backend_choice (fstar_coq_hol4 : 'a) (lean : 'a) : 'a =
-  match backend () with Coq | FStar | HOL4 -> fstar_coq_hol4 | Lean -> lean
+  match backend () with
+  | Coq | FStar | HOL4 -> fstar_coq_hol4
+  | Lean -> lean
 
 let builtin_globals : (string * string) list =
   [
@@ -135,10 +139,15 @@ type type_variant_kind =
 
 let mk_struct_constructor (type_name : string) : string =
   let prefix =
-    match backend () with FStar -> "Mk" | Coq | HOL4 -> "mk" | Lean -> ""
+    match backend () with
+    | FStar -> "Mk"
+    | Coq | HOL4 -> "mk"
+    | Lean -> ""
   in
   let suffix =
-    match backend () with FStar | Coq | HOL4 -> "" | Lean -> ".mk"
+    match backend () with
+    | FStar | Coq | HOL4 -> ""
+    | Lean -> ".mk"
   in
   prefix ^ type_name ^ suffix
 

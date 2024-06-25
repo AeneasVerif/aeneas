@@ -44,7 +44,9 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_assumed : bool) :
     d.body = None
     (* Something to pay attention to: we must ignore trait method *declarations*
        (which don't have a body but must not be considered as opaque) *)
-    && (match d.kind with TraitItemDecl _ -> false | _ -> true)
+    && (match d.kind with
+       | TraitItemDecl _ -> false
+       | _ -> true)
     && ((not filter_assumed)
        || (not (NameMatcherMap.mem ctx d.item_meta.name builtin_globals_map))
           && not (NameMatcherMap.mem ctx d.item_meta.name (builtin_funs_map ()))

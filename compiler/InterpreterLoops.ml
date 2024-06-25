@@ -38,7 +38,7 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
         [ (ctx, res) ]
     | Continue 0 ->
         (* Re-evaluate the loop body *)
-        let ctx_resl, _ = eval_loop_body ctx in
+        let (ctx_resl, _) = eval_loop_body ctx in
         let ctx_res_cfl =
           List.map (fun (ctx, res) -> rec_eval_loop_body ctx res) ctx_resl
         in
@@ -94,7 +94,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     * borrow_loan_corresp =
   (* First, preemptively end borrows/move values by matching the current
      context with the target context *)
-  let ctx, cf_prepare =
+  let (ctx, cf_prepare) =
     log#ldebug
       (lazy
         ("eval_loop_symbolic_synthesize_fun_end: about to reorganize the \
@@ -151,7 +151,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
       | ALoan _ -> false
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
-    let borrows, loans = List.partition is_borrow abs.avalues in
+    let (borrows, loans) = List.partition is_borrow abs.avalues in
 
     let mut_borrows =
       List.filter_map
@@ -212,7 +212,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (eval_ctx * statement_eval_res) list
     * (SymbolicAst.expression list -> SymbolicAst.expression) =
   (* First, evaluate the loop body starting from the **fixed-point** context *)
-  let ctx_resl, cf_loop = eval_loop_body fp_ctx in
+  let (ctx_resl, cf_loop) = eval_loop_body fp_ctx in
 
   (* Then, do a special treatment of the break and continue cases.
      For now, we forbid having breaks in loops (and eliminate breaks
@@ -249,7 +249,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
   in
 
   (* Apply and compose *)
-  let ctx_resl, cfl = List.split (List.map eval_after_loop_iter ctx_resl) in
+  let (ctx_resl, cfl) = List.split (List.map eval_after_loop_iter ctx_resl) in
   let cc (el : SymbolicAst.expression list) : SymbolicAst.expression =
     let el = List.map (fun (cf, e) -> cf e) (List.combine cfl el) in
     cf_loop el
@@ -272,7 +272,7 @@ let eval_loop_symbolic (config : config) (span : span)
   let loop_id = fresh_loop_id () in
 
   (* Compute the fixed point at the loop entrance *)
-  let fp_ctx, fixed_ids, rg_to_abs =
+  let (fp_ctx, fixed_ids, rg_to_abs) =
     compute_loop_entry_fixed_point config span loop_id eval_loop_body ctx
   in
 
@@ -285,7 +285,7 @@ let eval_loop_symbolic (config : config) (span : span)
       ^ eval_ctx_to_string ~span:(Some span) fp_ctx));
 
   (* Compute the loop input parameters *)
-  let fresh_sids, input_svalues =
+  let (fresh_sids, input_svalues) =
     compute_fp_ctx_symbolic_values span ctx fp_ctx
   in
   let fp_input_svalues = List.map (fun sv -> sv.sv_id) input_svalues in
@@ -297,7 +297,7 @@ let eval_loop_symbolic (config : config) (span : span)
      We update the loop fixed point at the same time by reordering the borrows/
      loans which appear inside it.
   *)
-  let (res_fun_end, cf_fun_end), fp_bl_corresp =
+  let ((res_fun_end, cf_fun_end), fp_bl_corresp) =
     eval_loop_symbolic_synthesize_fun_end config span loop_id ctx fixed_ids
       fp_ctx fp_input_svalues rg_to_abs
   in
@@ -308,7 +308,7 @@ let eval_loop_symbolic (config : config) (span : span)
        context.");
 
   (* Synthesize the loop body *)
-  let resl_loop_body, cf_loop_body =
+  let (resl_loop_body, cf_loop_body) =
     eval_loop_symbolic_synthesize_loop_body config span eval_loop_body loop_id
       fixed_ids fp_ctx fp_input_svalues fp_bl_corresp
   in
@@ -352,7 +352,7 @@ let eval_loop_symbolic (config : config) (span : span)
         | ALoan _ -> false
         | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
-      let borrows, _ = List.partition is_borrow abs.avalues in
+      let (borrows, _) = List.partition is_borrow abs.avalues in
 
       List.filter_map
         (fun (av : typed_avalue) ->
@@ -390,7 +390,7 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
   | SymbolicMode ->
       (* Simplify the context by ending the unnecessary borrows/loans and getting
          rid of the useless symbolic values (which are in anonymous variables) *)
-      let ctx, cc =
+      let (ctx, cc) =
         cleanup_fresh_values_and_abs config span empty_ids_set ctx
       in
 
@@ -412,5 +412,5 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
          introduce *fixed* abstractions, and again later to introduce
          *non-fixed* abstractions.
       *)
-      let ctx, cc = comp cc (prepare_ashared_loans span None ctx) in
+      let (ctx, cc) = comp cc (prepare_ashared_loans span None ctx) in
       comp cc (eval_loop_symbolic config span eval_loop_body ctx)

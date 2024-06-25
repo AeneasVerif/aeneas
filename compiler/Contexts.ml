@@ -76,21 +76,21 @@ let log = L.contexts_log
   interpreter to use CPS).
  *)
 
-let symbolic_value_id_counter, fresh_symbolic_value_id =
+let (symbolic_value_id_counter, fresh_symbolic_value_id) =
   SymbolicValueId.fresh_stateful_generator ()
 
-let borrow_id_counter, fresh_borrow_id = BorrowId.fresh_stateful_generator ()
-let region_id_counter, fresh_region_id = RegionId.fresh_stateful_generator ()
+let (borrow_id_counter, fresh_borrow_id) = BorrowId.fresh_stateful_generator ()
+let (region_id_counter, fresh_region_id) = RegionId.fresh_stateful_generator ()
 
-let abstraction_id_counter, fresh_abstraction_id =
+let (abstraction_id_counter, fresh_abstraction_id) =
   AbstractionId.fresh_stateful_generator ()
 
-let loop_id_counter, fresh_loop_id = LoopId.fresh_stateful_generator ()
+let (loop_id_counter, fresh_loop_id) = LoopId.fresh_stateful_generator ()
 
-let fun_call_id_counter, fresh_fun_call_id =
+let (fun_call_id_counter, fresh_fun_call_id) =
   FunCallId.fresh_stateful_generator ()
 
-let dummy_var_id_counter, fresh_dummy_var_id =
+let (dummy_var_id_counter, fresh_dummy_var_id) =
   DummyVarId.fresh_stateful_generator ()
 
 (** We shouldn't need to reset the global counters, but it might be good to
@@ -433,10 +433,10 @@ let ctx_remove_dummy_var span (ctx : eval_ctx) (vid : DummyVarId.id) :
     | [] -> craise __FILE__ __LINE__ span "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: env when vid' = vid -> (env, v)
     | ee :: env ->
-        let env, v = remove_var env in
+        let (env, v) = remove_var env in
         (ee :: env, v)
   in
-  let env, v = remove_var ctx.env in
+  let (env, v) = remove_var ctx.env in
   ({ ctx with env }, v)
 
 (** Lookup a dummy variable in a context's environment. *)
@@ -496,12 +496,12 @@ let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id) :
     | [] -> craise __FILE__ __LINE__ span "Unreachable"
     | EFrame :: _ -> (env, None)
     | EBinding (bv, v) :: env ->
-        let env, abs_opt = remove env in
+        let (env, abs_opt) = remove env in
         (EBinding (bv, v) :: env, abs_opt)
     | EAbs abs :: env ->
         if abs.abs_id = abs_id then (env, Some abs)
         else
-          let env, abs_opt = remove env in
+          let (env, abs_opt) = remove env in
           (* Update the parents set *)
           let parents = AbstractionId.Set.remove abs_id abs.parents in
           (EAbs { abs with parents } :: env, abs_opt)
@@ -522,12 +522,12 @@ let env_subst_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id)
     | [] -> craise __FILE__ __LINE__ span "Unreachable"
     | EFrame :: _ -> (* We're done *) (env, None)
     | EBinding (bv, v) :: env ->
-        let env, opt_abs = update env in
+        let (env, opt_abs) = update env in
         (EBinding (bv, v) :: env, opt_abs)
     | EAbs abs :: env ->
         if abs.abs_id = abs_id then (EAbs nabs :: env, Some abs)
         else
-          let env, opt_abs = update env in
+          let (env, opt_abs) = update env in
           (* Update the parents set *)
           let parents = abs.parents in
           let parents =
@@ -553,13 +553,13 @@ let ctx_find_abs (ctx : eval_ctx) (p : abs -> bool) : abs option =
 (** See the comments for {!env_remove_abs} *)
 let ctx_remove_abs (span : Meta.span) (ctx : eval_ctx)
     (abs_id : AbstractionId.id) : eval_ctx * abs option =
-  let env, abs = env_remove_abs span ctx.env abs_id in
+  let (env, abs) = env_remove_abs span ctx.env abs_id in
   ({ ctx with env }, abs)
 
 (** See the comments for {!env_subst_abs} *)
 let ctx_subst_abs (span : Meta.span) (ctx : eval_ctx)
     (abs_id : AbstractionId.id) (nabs : abs) : eval_ctx * abs option =
-  let env, abs_opt = env_subst_abs span ctx.env abs_id nabs in
+  let (env, abs_opt) = env_subst_abs span ctx.env abs_id nabs in
   ({ ctx with env }, abs_opt)
 
 let ctx_set_abs_can_end (span : Meta.span) (ctx : eval_ctx)
@@ -570,7 +570,9 @@ let ctx_set_abs_can_end (span : Meta.span) (ctx : eval_ctx)
 
 let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
   let decl_group = TypeDeclId.Map.find id ctx.type_ctx.type_decls_groups in
-  match decl_group with RecGroup _ -> true | NonRecGroup _ -> false
+  match decl_group with
+  | RecGroup _ -> true
+  | NonRecGroup _ -> false
 
 (** Visitor to iterate over the values in the *current* frame *)
 class ['self] iter_frame =
@@ -626,17 +628,23 @@ class ['self] map_eval_ctx =
 let env_iter_abs (f : abs -> unit) (env : env) : unit =
   List.iter
     (fun (ee : env_elem) ->
-      match ee with EBinding _ | EFrame -> () | EAbs abs -> f abs)
+      match ee with
+      | EBinding _ | EFrame -> ()
+      | EAbs abs -> f abs)
     env
 
 let env_map_abs (f : abs -> abs) (env : env) : env =
   List.map
     (fun (ee : env_elem) ->
-      match ee with EBinding _ | EFrame -> ee | EAbs abs -> EAbs (f abs))
+      match ee with
+      | EBinding _ | EFrame -> ee
+      | EAbs abs -> EAbs (f abs))
     env
 
 let env_filter_abs (f : abs -> bool) (env : env) : env =
   List.filter
     (fun (ee : env_elem) ->
-      match ee with EBinding _ | EFrame -> true | EAbs abs -> f abs)
+      match ee with
+      | EBinding _ | EFrame -> true
+      | EAbs abs -> f abs)
     env

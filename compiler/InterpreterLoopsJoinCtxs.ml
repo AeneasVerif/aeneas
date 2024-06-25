@@ -27,7 +27,7 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     (ctx : ctx_with_info) (abs_id0 : AbstractionId.id)
     (abs_id1 : AbstractionId.id) : ctx_with_info =
   (* Compute the new context and the new abstraction id *)
-  let nctx, nabs_id =
+  let (nctx, nabs_id) =
     merge_into_first_abstraction span abs_kind can_end merge_funs ctx.ctx
       abs_id0 abs_id1
   in
@@ -482,7 +482,9 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
       inherit [_] iter_eval_ctx
 
       method! visit_proj_marker _ pm =
-        match pm with PNone -> () | PLeft | PRight -> raise Found
+        match pm with
+        | PNone -> ()
+        | PLeft | PRight -> raise Found
     end
   in
   try
@@ -575,8 +577,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
   let merge_ashared_borrows id ty0 _pm0 ty1 _pm1 =
     (* Sanity checks *)
     let _ =
-      let _, ty0, _ = ty_as_ref ty0 in
-      let _, ty1, _ = ty_as_ref ty1 in
+      let (_, ty0, _) = ty_as_ref ty0 in
+      let (_, ty1, _) = ty_as_ref ty1 in
       sanity_check __FILE__ __LINE__
         (not (ty_has_borrows ctx.type_ctx.type_infos ty0))
         span;
@@ -776,7 +778,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         let var = EBinding (BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
-    | (EAbs abs0 as abs) :: env0', EAbs abs1 :: env1' ->
+    | ((EAbs abs0 as abs) :: env0', EAbs abs1 :: env1') ->
         (* Debug *)
         log#ldebug
           (lazy
@@ -802,9 +804,9 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
   try
     (* Remove the frame delimiter (the first element of an environment is a frame delimiter) *)
-    let env0, env1 =
+    let (env0, env1) =
       match (env0, env1) with
-      | EFrame :: env0, EFrame :: env1 -> (env0, env1)
+      | (EFrame :: env0, EFrame :: env1) -> (env0, env1)
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
 
@@ -896,7 +898,7 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
     contexts we join don't have non-fixed abstractions with the same ids.
   *)
 let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
-  let ids, _ = compute_ctx_ids ctx in
+  let (ids, _) = compute_ctx_ids ctx in
   let abs_to_refresh = AbstractionId.Set.diff ids.aids old_abs in
   let aids_subst =
     List.map

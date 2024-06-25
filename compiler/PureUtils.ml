@@ -76,7 +76,9 @@ let fun_sig_info_is_wf (info : fun_sig_info) : bool =
   inputs_info_is_wf info.fwd_info
 
 let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
-  match ty with TArrow (arg_ty, ret_ty) -> Some (arg_ty, ret_ty) | _ -> None
+  match ty with
+  | TArrow (arg_ty, ret_ty) -> Some (arg_ty, ret_ty)
+  | _ -> None
 
 let is_arrow_ty (ty : ty) : bool = Option.is_some (opt_dest_arrow_ty ty)
 
@@ -177,11 +179,14 @@ let make_trait_subst (clauses : trait_clause list) (refs : trait_ref list) :
 let type_decl_get_fields (def : type_decl)
     (opt_variant_id : VariantId.id option) : field list =
   match (def.kind, opt_variant_id) with
-  | Enum variants, Some variant_id -> (VariantId.nth variants variant_id).fields
-  | Struct fields, None -> fields
+  | (Enum variants, Some variant_id) ->
+      (VariantId.nth variants variant_id).fields
+  | (Struct fields, None) -> fields
   | _ ->
       let opt_variant_id =
-        match opt_variant_id with None -> "None" | Some _ -> "Some"
+        match opt_variant_id with
+        | None -> "None"
+        | Some _ -> "Some"
       in
       raise
         (Invalid_argument
@@ -246,19 +251,29 @@ let texpression_requires_parentheses span e =
   | Coq | HOL4 -> let_group_requires_parentheses span e
 
 let is_var (e : texpression) : bool =
-  match e.e with Var _ -> true | _ -> false
+  match e.e with
+  | Var _ -> true
+  | _ -> false
 
 let as_var (span : Meta.span) (e : texpression) : VarId.id =
-  match e.e with Var v -> v | _ -> craise __FILE__ __LINE__ span "Not a var"
+  match e.e with
+  | Var v -> v
+  | _ -> craise __FILE__ __LINE__ span "Not a var"
 
 let is_cvar (e : texpression) : bool =
-  match e.e with CVar _ -> true | _ -> false
+  match e.e with
+  | CVar _ -> true
+  | _ -> false
 
 let is_global (e : texpression) : bool =
-  match e.e with Qualif { id = Global _; _ } -> true | _ -> false
+  match e.e with
+  | Qualif { id = Global _; _ } -> true
+  | _ -> false
 
 let is_const (e : texpression) : bool =
-  match e.e with Const _ -> true | _ -> false
+  match e.e with
+  | Const _ -> true
+  | _ -> false
 
 let ty_as_adt (span : Meta.span) (ty : ty) : type_id * generic_args =
   match ty with
@@ -267,7 +282,9 @@ let ty_as_adt (span : Meta.span) (ty : ty) : type_id * generic_args =
 
 (** Remove the external occurrences of {!Meta} *)
 let rec unspan (e : texpression) : texpression =
-  match e.e with Meta (_, e) -> unspan e | _ -> e
+  match e.e with
+  | Meta (_, e) -> unspan e
+  | _ -> e
 
 (** Remove *all* the span information *)
 let remove_span (e : texpression) : texpression =
@@ -284,7 +301,9 @@ let mk_arrow (ty0 : ty) (ty1 : ty) : ty = TArrow (ty0, ty1)
 (** Construct a type as a list of arrows: ty1 -> ... tyn  *)
 let mk_arrows (inputs : ty list) (output : ty) =
   let rec aux (tys : ty list) : ty =
-    match tys with [] -> output | ty :: tys' -> TArrow (ty, aux tys')
+    match tys with
+    | [] -> output
+    | ty :: tys' -> TArrow (ty, aux tys')
   in
   aux inputs
 
@@ -293,7 +312,7 @@ let rec destruct_lets (e : texpression) :
     (bool * typed_pattern * texpression) list * texpression =
   match e.e with
   | Let (monadic, lv, re, next_e) ->
-      let lets, last_e = destruct_lets next_e in
+      let (lets, last_e) = destruct_lets next_e in
       ((monadic, lv, re) :: lets, last_e)
   | _ -> ([], e)
 
@@ -314,7 +333,7 @@ let destruct_lets_no_interleave (span : Meta.span) (e : texpression) :
     match e.e with
     | Let (monadic, lv, re, next_e) ->
         if monadic = m then
-          let lets, last_e = destruct_lets next_e in
+          let (lets, last_e) = destruct_lets next_e in
           ((monadic, lv, re) :: lets, last_e)
         else ([], e)
     | _ -> ([], e)
@@ -328,7 +347,9 @@ let destruct_lets_no_interleave (span : Meta.span) (e : texpression) :
 let destruct_apps (e : texpression) : texpression * texpression list =
   let rec aux (args : texpression list) (e : texpression) :
       texpression * texpression list =
-    match e.e with App (f, x) -> aux (x :: args) f | _ -> (e, args)
+    match e.e with
+    | App (f, x) -> aux (x :: args) f
+    | _ -> (e, args)
   in
   aux [] e
 
@@ -365,8 +386,10 @@ let mk_apps (span : Meta.span) (app : texpression) (args : texpression list) :
  *  if possible *)
 let opt_destruct_qualif_app (e : texpression) :
     (qualif * texpression list) option =
-  let app, args = destruct_apps e in
-  match app.e with Qualif qualif -> Some (qualif, args) | _ -> None
+  let (app, args) = destruct_apps e in
+  match app.e with
+  | Qualif qualif -> Some (qualif, args)
+  | _ -> None
 
 (** Destruct an expression into a qualif identifier and a list of arguments *)
 let destruct_qualif_app (e : texpression) : qualif * texpression list =
@@ -409,7 +432,7 @@ let destruct_arrow (span : Meta.span) (ty : ty) : ty * ty =
 let rec destruct_arrows (ty : ty) : ty list * ty =
   match ty with
   | TArrow (ty0, ty1) ->
-      let tys, out_ty = destruct_arrows ty1 in
+      let (tys, out_ty) = destruct_arrows ty1 in
       (ty0 :: tys, out_ty)
   | _ -> ([], ty)
 
@@ -501,7 +524,9 @@ let mk_mplace_texpression (mp : mplace) (e : texpression) : texpression =
 
 let mk_opt_mplace_texpression (mp : mplace option) (e : texpression) :
     texpression =
-  match mp with None -> e | Some mp -> mk_mplace_texpression mp e
+  match mp with
+  | None -> e
+  | Some mp -> mk_mplace_texpression mp e
 
 (** Make a "simplified" tuple value from a list of values:
     - if there is exactly one value, just return it
@@ -567,8 +592,7 @@ let unwrap_result_ty (span : Meta.span) (ty : ty) : ty =
   match ty with
   | TAdt
       ( TAssumed TResult,
-        { types = [ ty ]; const_generics = []; trait_refs = [] } ) ->
-      ty
+        { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> ty
   | _ -> craise __FILE__ __LINE__ span "not a result type"
 
 let mk_result_fail_texpression (span : Meta.span) (error : texpression)
@@ -622,7 +646,9 @@ let mk_result_ok_pattern (v : typed_pattern) : typed_pattern =
   { value; ty }
 
 let opt_unspan_mplace (e : texpression) : mplace option * texpression =
-  match e.e with Meta (MPlace mp, e) -> (Some mp, e) | _ -> (None, e)
+  match e.e with
+  | Meta (MPlace mp, e) -> (Some mp, e)
+  | _ -> (None, e)
 
 let mk_state_var (id : VarId.id) : var =
   { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
@@ -652,7 +678,7 @@ let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
           let fields_values = List.map (fun e -> Option.get e) fields in
 
           (* Retrieve the type id and the type args from the pat type (simpler this way *)
-          let adt_id, generics = ty_as_adt span pat.ty in
+          let (adt_id, generics) = ty_as_adt span pat.ty in
 
           (* Create the constructor *)
           let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
@@ -667,7 +693,9 @@ let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
           (* Apply the constructor *)
           Some (mk_apps span cons fields_values).e
   in
-  match e_opt with None -> None | Some e -> Some { e; ty = pat.ty }
+  match e_opt with
+  | None -> None
+  | Some e -> Some { e; ty = pat.ty }
 
 type trait_decl_method_decl_id = { is_provided : bool; id : fun_decl_id }
 
@@ -681,7 +709,7 @@ let trait_decl_get_method (trait_decl : trait_decl) (method_name : string) :
   | Some (_, id) -> { is_provided = false; id }
   | None ->
       (* Must be a provided method *)
-      let _, id =
+      let (_, id) =
         List.find (fun (s, _) -> s = method_name) trait_decl.provided_methods
       in
       { is_provided = true; id = Option.get id }
@@ -759,16 +787,15 @@ let mk_lambdas_from_vars (vars : var list) (mps : mplace option list)
 let rec destruct_lambdas (e : texpression) : typed_pattern list * texpression =
   match e.e with
   | Lambda (pat, e) ->
-      let pats, e = destruct_lambdas e in
+      let (pats, e) = destruct_lambdas e in
       (pat :: pats, e)
   | _ -> ([], e)
 
 let opt_dest_tuple_texpression (e : texpression) : texpression list option =
-  let app, args = destruct_apps e in
+  let (app, args) = destruct_apps e in
   match app.e with
   | Qualif { id = AdtCons { adt_id = TTuple; variant_id = None }; generics = _ }
-    ->
-      Some args
+    -> Some args
   | _ -> None
 
 let opt_dest_struct_pattern (pat : typed_pattern) : typed_pattern list option =
@@ -790,6 +817,5 @@ let opt_destruct_ret (e : texpression) : texpression option =
           ty = _;
         },
         arg )
-    when variant_id = Some result_ok_id ->
-      Some arg
+    when variant_id = Some result_ok_id -> Some arg
   | _ -> None

@@ -261,7 +261,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Register an mplace the first time we find one *)
   let register_mplace (mp : mplace) (ctx : pn_ctx) : pn_ctx =
     match (E.VarId.Map.find_opt mp.var_id ctx.llbc_vars, mp.name) with
-    | None, Some name ->
+    | (None, Some name) ->
         let llbc_vars = E.VarId.Map.add mp.var_id name ctx.llbc_vars in
         { ctx with llbc_vars }
     | _ -> ctx
@@ -293,7 +293,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx = register_mplace mp ctx in
     (* Update the variable name *)
     match (mp.name, mp.projection) with
-    | Some name, [] ->
+    | (Some name, []) ->
         (* Check if the variable already has a name - if not: insert the new name *)
         let ctx = add_pure_var_constraint var_id name ctx in
         let ctx = add_llbc_var_constraint mp.var_id name ctx in
@@ -306,7 +306,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
     (* Add the constraint *)
-    match (unspan rv).e with Var vid -> add_constraint mp vid ctx | _ -> ctx
+    match (unspan rv).e with
+    | Var vid -> add_constraint mp vid ctx
+    | _ -> ctx
   in
   let add_pure_var_value_constraint (var_id : VarId.id) (rv : texpression)
       (ctx : pn_ctx) : pn_ctx =
@@ -331,7 +333,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           (* Register the variable *)
           let ctx = register_var (self#zero ()) v in
           (* Register the mplace information if there is such information *)
-          match mp with Some mp -> add_constraint mp v.id ctx | None -> ctx
+          match mp with
+          | Some mp -> add_constraint mp v.id ctx
+          | None -> ctx
       end
     in
     let ctx1 = obj#visit_typed_pattern () lv () in
@@ -342,7 +346,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   let add_eq_var_constraint (lv : typed_pattern) (re : texpression)
       (ctx : pn_ctx) : pn_ctx =
     match (lv.value, re.e) with
-    | PatVar (lv, _), Var rv when Option.is_some lv.basename ->
+    | (PatVar (lv, _), Var rv) when Option.is_some lv.basename ->
         add_pure_var_constraint rv (Option.get lv.basename) ctx
     | _ -> ctx
   in
@@ -373,7 +377,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             | Some lmp -> add_llbc_var_constraint lmp.var_id name ctx
           in
           (* We try to use the right-place information *)
-          let rmp, re = opt_unspan_mplace re in
+          let (rmp, re) = opt_unspan_mplace re in
           let ctx =
             match rmp with
             | Some { var_id; name; projection = [] } -> (
@@ -401,12 +405,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   let rec update_texpression (e : texpression) (ctx : pn_ctx) :
       pn_ctx * texpression =
     let ty = e.ty in
-    let ctx, e =
+    let (ctx, e) =
       match e.e with
       | Var _ | CVar _ | Const _ -> (* Nothing to do *) (ctx, e.e)
       | App (app, arg) ->
-          let ctx, app = update_texpression app ctx in
-          let ctx, arg = update_texpression arg ctx in
+          let (ctx, app) = update_texpression app ctx in
+          let (ctx, arg) = update_texpression arg ctx in
           let e = App (app, arg) in
           (ctx, e)
       | Qualif _ -> (* nothing to do *) (ctx, e.e)
@@ -425,7 +429,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* We first add the left-constraint *)
     let ctx = add_left_constraint x ctx in
     (* Update the expression, and add additional constraints *)
-    let ctx, e = update_texpression e ctx in
+    let (ctx, e) = update_texpression e ctx in
     (* Update the abstracted value *)
     let x = update_typed_pattern ctx x in
     (* Put together *)
@@ -438,21 +442,21 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Then we try to propagate the right-constraints to the left, in case
      * the left constraints didn't give naming information *)
     let ctx = add_left_right_constraint lv re ctx in
-    let ctx, re = update_texpression re ctx in
-    let ctx, e = update_texpression e ctx in
+    let (ctx, re) = update_texpression re ctx in
+    let (ctx, e) = update_texpression e ctx in
     let lv = update_typed_pattern ctx lv in
     let ctx = add_eq_var_constraint lv re ctx in
     (ctx, Let (monadic, lv, re, e))
   (* *)
   and update_switch_body (scrut : texpression) (body : switch_body)
       (ctx : pn_ctx) : pn_ctx * expression =
-    let ctx, scrut = update_texpression scrut ctx in
+    let (ctx, scrut) = update_texpression scrut ctx in
 
-    let ctx, body =
+    let (ctx, body) =
       match body with
       | If (e_true, e_false) ->
-          let ctx1, e_true = update_texpression e_true ctx in
-          let ctx2, e_false = update_texpression e_false ctx in
+          let (ctx1, e_true) = update_texpression e_true ctx in
+          let (ctx2, e_false) = update_texpression e_false ctx in
           let ctx = merge_ctxs ctx1 ctx2 in
           (ctx, If (e_true, e_false))
       | Match branches ->
@@ -460,12 +464,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             List.map
               (fun br ->
                 let ctx = add_left_constraint br.pat ctx in
-                let ctx, branch = update_texpression br.branch ctx in
+                let (ctx, branch) = update_texpression br.branch ctx in
                 let pat = update_typed_pattern ctx br.pat in
                 (ctx, { pat; branch }))
               branches
           in
-          let ctxs, branches = List.split ctx_branches_ls in
+          let (ctxs, branches) = List.split ctx_branches_ls in
           let ctx = merge_ctxs_ls ctxs in
           (ctx, Match branches)
     in
@@ -486,8 +490,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     } =
       loop
     in
-    let ctx, fun_end = update_texpression fun_end ctx in
-    let ctx, loop_body = update_texpression loop_body ctx in
+    let (ctx, fun_end) = update_texpression fun_end ctx in
+    let (ctx, loop_body) = update_texpression loop_body ctx in
     let inputs = List.map (fun v -> update_var ctx v None) inputs in
     let inputs_lvs = List.map (update_typed_pattern ctx) inputs_lvs in
     let loop =
@@ -508,10 +512,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   and update_struct_update (supd : struct_update) (ctx : pn_ctx) :
       pn_ctx * expression =
     let { struct_id; init; updates } = supd in
-    let ctx, updates =
+    let (ctx, updates) =
       List.fold_left_map
         (fun ctx (fid, fe) ->
-          let ctx, fe = update_texpression fe ctx in
+          let (ctx, fe) = update_texpression fe ctx in
           (ctx, (fid, fe)))
         ctx updates
     in
@@ -526,7 +530,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           let ctx = add_right_constraint mp rvalue ctx in
           let ctx =
             match (mp.projection, rmp) with
-            | [], Some { var_id; name; projection = [] } -> (
+            | ([], Some { var_id; name; projection = [] }) -> (
                 let name =
                   match name with
                   | Some name -> Some name
@@ -550,7 +554,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | MPlace mp -> add_right_constraint mp e ctx
       | Tag _ -> ctx
     in
-    let ctx, e = update_texpression e ctx in
+    let (ctx, e) = update_texpression e ctx in
     let e = mk_espan span e in
     (ctx, e.e)
   in
@@ -573,7 +577,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             llbc_vars = E.VarId.Map.empty;
           }
         in
-        let _, body_exp = update_texpression body.body ctx in
+        let (_, body_exp) = update_texpression body.body ctx in
         Some { body with body = body_exp }
   in
   { def with body }
@@ -612,7 +616,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       method! visit_texpression env (e : texpression) =
         match e.e with
         | App _ -> (
-            let app, args = destruct_apps e in
+            let (app, args) = destruct_apps e in
             let ignore () =
               mk_apps def.item_meta.span
                 (self#visit_texpression env app)
@@ -766,7 +770,7 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               match
                 (opt_dest_struct_pattern lv, opt_dest_tuple_texpression rv)
               with
-              | Some pats, Some vals ->
+              | (Some pats, Some vals) ->
                   (* Tuple case *)
                   let pat_vals = List.combine pats vals in
                   let e =
@@ -780,13 +784,13 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         | Lambda _ ->
             if not monadic then
               (* Arrow case *)
-              let pats, e = destruct_lambdas rv in
-              let g, args = destruct_apps e in
+              let (pats, e) = destruct_lambdas rv in
+              let (g, args) = destruct_apps e in
               if List.length pats = List.length args then
                 (* Check if the arguments are exactly the lambdas *)
                 let check_pat_arg ((pat, arg) : typed_pattern * texpression) =
                   match (pat.value, arg.e) with
-                  | PatVar (v, _), Var vid -> v.id = vid
+                  | (PatVar (v, _), Var vid) -> v.id = vid
                   | _ -> false
                 in
                 if List.for_all check_pat_arg (List.combine pats args) then
@@ -846,12 +850,12 @@ let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
            extracted as a tuple, and the right value is a variable.
         *)
         match (monadic, lv.value) with
-        | false, PatVar (lv_var, _) ->
+        | (false, PatVar (lv_var, _)) ->
             (* We can filter if: *)
             (* 1. the left variable is unnamed or [inline_named] is true *)
             let filter_left =
               match (inline_named, lv_var.basename) with
-              | true, _ | _, None -> true
+              | (true, _) | (_, None) -> true
               | _ -> false
             in
             (* And either:
@@ -864,7 +868,7 @@ let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
               inline_const
               &&
               let is_const_adt =
-                let app, args = destruct_apps re in
+                let (app, args) = destruct_apps re in
                 if args = [] then
                   match app.e with
                   | Qualif _ -> true
@@ -880,7 +884,7 @@ let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
             let pure_re =
               inline_pure
               &&
-              let app, _ = destruct_apps re in
+              let (app, _) = destruct_apps re in
               match app.e with
               | Qualif qualif -> (
                   match qualif.id with
@@ -914,7 +918,7 @@ let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
               } ) ->
             (* Second case: we deconstruct a structure with one field that we will
                extract as tuple. *)
-            let adt_id, _ = PureUtils.ty_as_adt def.item_meta.span re.ty in
+            let (adt_id, _) = PureUtils.ty_as_adt def.item_meta.span re.ty in
             (* Update the rhs (we may perform substitutions inside, and it is
              * better to do them *before* we inline it *)
             let re = self#visit_texpression env re in
@@ -985,7 +989,7 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   in
   let filter_typed_pattern (used_vars : VarId.Set.t) (lv : typed_pattern) :
       typed_pattern * bool =
-    let lv, all_dummies = lv_visitor#visit_typed_pattern used_vars lv in
+    let (lv, all_dummies) = lv_visitor#visit_typed_pattern used_vars lv in
     (lv, all_dummies ())
   in
 
@@ -1008,8 +1012,7 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         | Var _ | CVar _ | Const _ | App _ | Qualif _
         | Meta (_, _)
         | StructUpdate _ | Lambda _
-        | EError (_, _) ->
-            super#visit_expression env e
+        | EError (_, _) -> super#visit_expression env e
         | Switch (scrut, switch) -> (
             match switch with
             | If (_, _) -> super#visit_expression env e
@@ -1017,22 +1020,22 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 (* Simplify the branches *)
                 let simplify_branch (br : match_branch) =
                   (* Compute the set of values used inside the branch *)
-                  let branch, used = self#visit_texpression env br.branch in
+                  let (branch, used) = self#visit_texpression env br.branch in
                   (* Simplify the pattern *)
-                  let pat, _ = filter_typed_pattern (used ()) br.pat in
+                  let (pat, _) = filter_typed_pattern (used ()) br.pat in
                   { pat; branch }
                 in
                 super#visit_expression env
                   (Switch (scrut, Match (List.map simplify_branch branches))))
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)
-            let e, used = self#visit_texpression env e in
+            let (e, used) = self#visit_texpression env e in
             let used = used () in
             (* Filter the left values *)
-            let lv, all_dummies = filter_typed_pattern used lv in
+            let (lv, all_dummies) = filter_typed_pattern used lv in
             (* Small utility - called if we can't filter the let-binding *)
             let dont_filter () =
-              let re, used_re = self#visit_texpression env re in
+              let (re, used_re) = self#visit_texpression env re in
               let used = VarId.Set.union used (used_re ()) in
               (* Simplify the left pattern if it only contains dummy variables *)
               let lv =
@@ -1055,8 +1058,8 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               dont_filter ()
         | Loop loop ->
             (* We take care to ignore the varset computed on the *loop body* *)
-            let fun_end, s = self#visit_texpression () loop.fun_end in
-            let loop_body, _ = self#visit_texpression () loop.loop_body in
+            let (fun_end, s) = self#visit_texpression () loop.fun_end in
+            let (loop_body, _) = self#visit_texpression () loop.loop_body in
             (Loop { loop with fun_end; loop_body }, s)
     end
   in
@@ -1065,7 +1068,7 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   | None -> def
   | Some body ->
       (* Visit the body *)
-      let body_exp, used_vars = expr_visitor#visit_texpression () body.body in
+      let (body_exp, used_vars) = expr_visitor#visit_texpression () body.body in
       (* Visit the parameters - TODO: update: we can filter only if the definition
        * is not recursive (otherwise it might mess up with the decrease clauses:
        * the decrease clauses uses all the inputs given to the function, if some
@@ -1102,13 +1105,13 @@ let simplify_let_then_ok _ctx (def : fun_decl) =
   let rec match_pattern_and_expr (pat : typed_pattern) (e : texpression) : bool
       =
     match (pat.value, e.e) with
-    | PatConstant plit, Const lit -> plit = lit
-    | PatVar (pv, _), Var vid -> pv.id = vid
-    | PatDummy, _ ->
+    | (PatConstant plit, Const lit) -> plit = lit
+    | (PatVar (pv, _), Var vid) -> pv.id = vid
+    | (PatDummy, _) ->
         (* It is ok only if we ignore the unit value *)
         pat.ty = mk_unit_ty && e = mk_unit_rvalue
-    | PatAdt padt, _ -> (
-        let qualif, args = destruct_apps e in
+    | (PatAdt padt, _) -> (
+        let (qualif, args) = destruct_apps e in
         match qualif.e with
         | Qualif { id = AdtCons cons_id; generics = _ } ->
             if
@@ -1188,7 +1191,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
         | App _ -> (
             (* TODO: we should remove this case, which dates from before the
                introduction of [StructUpdate] *)
-            let app, args = destruct_apps e in
+            let (app, args) = destruct_apps e in
             match app.e with
             | Qualif
                 {
@@ -1242,7 +1245,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   if List.length args = num_fields then
                     (* Check that this is the same variable we project from -
                      * note that we checked above that there is at least one field *)
-                    let (_, x), end_args = Collections.List.pop args in
+                    let ((_, x), end_args) = Collections.List.pop args in
                     if List.for_all (fun (_, y) -> y = x) end_args then (
                       (* We can substitute *)
                       (* Sanity check: all types correct *)
@@ -1435,9 +1438,9 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               }
             in
 
-            let fuel_vars, inputs, inputs_lvs =
+            let (fuel_vars, inputs, inputs_lvs) =
               (* Introduce the fuel input *)
-              let fuel_vars, fuel0_var, fuel_lvs =
+              let (fuel_vars, fuel0_var, fuel_lvs) =
                 if !Config.use_fuel then
                   let fuel0_var = mk_fuel_var loop.fuel0 in
                   let fuel_lvs = mk_typed_pattern_from_var fuel0_var None in
@@ -1446,7 +1449,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               in
 
               (* Introduce the forward input state *)
-              let fwd_state_var, fwd_state_lvs =
+              let (fwd_state_var, fwd_state_lvs) =
                 sanity_check __FILE__ __LINE__
                   (loop_fwd_effect_info.stateful
                   = Option.is_some loop.input_state)
@@ -1462,11 +1465,11 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
               (* Introduce the additional backward inputs, if necessary *)
               let fun_body = Option.get def.body in
               let info = fwd_info.fwd_info in
-              let _, back_inputs =
+              let (_, back_inputs) =
                 Collections.List.split_at fun_body.inputs
                   info.num_inputs_with_fuel_with_state
               in
-              let _, back_inputs_lvs =
+              let (_, back_inputs_lvs) =
                 Collections.List.split_at fun_body.inputs_lvs
                   info.num_inputs_with_fuel_with_state
               in
@@ -1583,16 +1586,19 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
             | Fun (FromLlbc (FunId (FAssumed aid), _lp_id)) -> (
                 match aid with
                 | BoxNew ->
-                    let arg, args = Collections.List.pop args in
+                    let (arg, args) = Collections.List.pop args in
                     mk_apps def.item_meta.span arg args
                 | BoxFree ->
                     sanity_check __FILE__ __LINE__ (args = [])
                       def.item_meta.span;
                     mk_unit_rvalue
-                | SliceIndexShared | SliceIndexMut | ArrayIndexShared
-                | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
-                | ArrayRepeat ->
-                    super#visit_texpression env e)
+                | SliceIndexShared
+                | SliceIndexMut
+                | ArrayIndexShared
+                | ArrayIndexMut
+                | ArrayToSliceShared
+                | ArrayToSliceMut
+                | ArrayRepeat -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end
@@ -1620,7 +1626,7 @@ let decompose_let_bindings (decompose_monadic : bool)
   | Some body ->
       (* Set up the var id generator *)
       let cnt = get_body_min_var_counter body in
-      let _, fresh_id = VarId.mk_stateful_generator cnt in
+      let (_, fresh_id) = VarId.mk_stateful_generator cnt in
       let mk_fresh (ty : ty) : typed_pattern * texpression =
         let vid = fresh_id () in
         let tmp : var = { id = vid; basename = None; ty } in
@@ -1666,7 +1672,7 @@ let decompose_let_bindings (decompose_monadic : bool)
               | PatAdt _ ->
                   if not inside then super#visit_typed_pattern true pat
                   else
-                    let ltmp, rtmp = mk_fresh pat.ty in
+                    let (ltmp, rtmp) = mk_fresh pat.ty in
                     let pat = super#visit_typed_pattern false pat in
                     patterns := (pat, rtmp) :: !patterns;
                     ltmp
@@ -1685,7 +1691,7 @@ let decompose_let_bindings (decompose_monadic : bool)
 
           method! visit_Let env monadic lv re next_e =
             (* Decompose the monadic let-bindings *)
-            let monadic, lv, re, next_e =
+            let (monadic, lv, re, next_e) =
               if (not monadic) || not decompose_monadic then
                 (monadic, lv, re, next_e)
               else
@@ -1701,17 +1707,17 @@ let decompose_let_bindings (decompose_monadic : bool)
                     (* Not a variable: decompose if required *)
                     (* Introduce a temporary variable to receive the value of the
                      * monadic binding *)
-                    let ltmp, rtmp = mk_fresh lv.ty in
+                    let (ltmp, rtmp) = mk_fresh lv.ty in
                     (* Visit the next expression *)
                     let next_e = self#visit_texpression env next_e in
                     (* Create the let-bindings *)
                     (monadic, ltmp, re, mk_let false lv rtmp next_e)
             in
             (* Decompose the nested let-patterns *)
-            let lv, next_e =
+            let (lv, next_e) =
               if not decompose_nested_pats then (lv, next_e)
               else
-                let pats, first_pat = decompose_pat lv in
+                let (pats, first_pat) = decompose_pat lv in
                 let e =
                   List.fold_left
                     (fun next_e (lpat, rv) -> mk_let false lpat rv next_e)
@@ -1752,7 +1758,7 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   | None -> def
   | Some body ->
       let cnt = get_body_min_var_counter body in
-      let _, fresh_id = VarId.mk_stateful_generator cnt in
+      let (_, fresh_id) = VarId.mk_stateful_generator cnt in
 
       (* It is a very simple map *)
       let obj =
@@ -1958,7 +1964,7 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
 (** Small utility for {!filter_loop_inputs} *)
 let filter_prefix (keep : bool list) (ls : 'a list) : 'a list =
-  let ls0, ls1 = Collections.List.split_at ls (List.length keep) in
+  let (ls0, ls1) = Collections.List.split_at ls (List.length keep) in
   let ls0 =
     List.filter_map
       (fun (b, x) -> if b then Some x else None)
@@ -2022,7 +2028,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
     (* There should be a body *)
     let body = Option.get decl.body in
     (* We only look at the forward inputs, without the state *)
-    let inputs_prefix, _ =
+    let (inputs_prefix, _) =
       Collections.List.split_at body.inputs
         decl.signature.fwd_info.fwd_info.num_inputs_with_fuel_no_state
     in
@@ -2064,7 +2070,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           | App _ -> (
               (* If this is an app: destruct all the arguments, and check if
                  the leftmost expression is the loop function call *)
-              let e_app, args = destruct_apps e in
+              let (e_app, args) = destruct_apps e in
               match e_app.e with
               | Qualif qualif -> (
                   match qualif.id with
@@ -2076,7 +2082,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
                            should be exactly the number of input parameters (i.e.,
                            we can use [combine])
                         *)
-                        let beg_args, end_args =
+                        let (beg_args, end_args) =
                           Collections.List.split_at args inputs_prefix_length
                         in
                         log#ldebug
@@ -2219,7 +2225,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           (* Update the list of vars *)
           let { inputs; inputs_lvs; body } = body in
 
-          let inputs, inputs_lvs =
+          let (inputs, inputs_lvs) =
             match FunLoopIdMap.find_opt fun_id !used_map with
             | None -> (* Nothing to filter *) (inputs, inputs_lvs)
             | Some used_info ->
@@ -2236,7 +2242,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
               method! visit_texpression env e =
                 match e.e with
                 | App _ -> (
-                    let e_app, args = destruct_apps e in
+                    let (e_app, args) = destruct_apps e in
                     match e_app.e with
                     | Qualif qualif -> (
                         match qualif.id with
@@ -2247,7 +2253,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
                             | None -> super#visit_texpression env e
                             | Some used_info ->
                                 (* Filter the types in the arrow type *)
-                                let tys, ret_ty = destruct_arrows e_app.ty in
+                                let (tys, ret_ty) = destruct_arrows e_app.ty in
                                 let tys = filter_prefix used_info tys in
                                 let ty = mk_arrows tys ret_ty in
                                 let e_app = { e_app with ty } in
@@ -2310,7 +2316,7 @@ let compute_reducible (_ctx : trans_ctx) (transl : pure_fun_translation list) :
            variables - otherwise we may not want the call to be reducible;
            for instance when using the [progress] tactic we might want to
            use a more specialized specification theorem. *)
-        let app, args = destruct_apps body.body in
+        let (app, args) = destruct_apps body.body in
         match app.e with
         | Qualif
             {
@@ -2368,7 +2374,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_and_loops =
   log#ldebug (lazy ("remove_span:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Extract the loop definitions by removing the {!Loop} node *)
-  let def, loops = decompose_loops ctx def in
+  let (def, loops) = decompose_loops ctx def in
 
   (* Apply the remaining passes *)
   let f = apply_end_passes_to_def ctx def in

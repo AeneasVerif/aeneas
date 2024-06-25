@@ -33,10 +33,10 @@ let filter_drop_assigns (f : fun_decl) : fun_decl =
 
       method! visit_Sequence env st1 st2 =
         match (st1.content, st2.content) with
-        | Drop p1, Assign (p2, _) ->
+        | (Drop p1, Assign (p2, _)) ->
             if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
-        | Drop p1, Sequence ({ content = Assign (p2, _); span = _ }, _) ->
+        | (Drop p1, Sequence ({ content = Assign (p2, _); span = _ }, _)) ->
             if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
         | _ -> super#visit_Sequence env st1 st2
@@ -99,9 +99,14 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
    * *)
   let rec can_be_moved_aux (must_end_with_exit : bool) (st : statement) : bool =
     match st.content with
-    | SetDiscriminant _ | Assert _ | Call _ | Break _ | Continue _ | Switch _
-    | Loop _ | Error _ ->
-        false
+    | SetDiscriminant _
+    | Assert _
+    | Call _
+    | Break _
+    | Continue _
+    | Switch _
+    | Loop _
+    | Error _ -> false
     | Assign (_, rv) -> (
         match rv with
         | Use _ | RvRef _ -> not must_end_with_exit
@@ -379,7 +384,7 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
 
         method! visit_Assign env p rv =
           match (p.projection, rv) with
-          | [], RvRef (_, BShallow) ->
+          | ([], RvRef (_, BShallow)) ->
               (* Filter *)
               filtered := VarId.Set.add p.var_id !filtered;
               Nop
@@ -438,7 +443,9 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
 (* Remove the type aliases from the type declarations and declaration groups *)
 let filter_type_aliases (crate : crate) : crate =
   let type_decl_is_alias (ty : type_decl) =
-    match ty.kind with Alias _ -> true | _ -> false
+    match ty.kind with
+    | Alias _ -> true
+    | _ -> false
   in
   (* Whether the declaration group has a single entry that is a type alias.
      Type aliases should not be in recursive groups so we also ensure this doesn't
