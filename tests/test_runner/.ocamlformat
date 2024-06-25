@@ -1,0 +1,5 @@
+break-cases = fit-or-vertical
+doc-comments = before
+exp-grouping = preserve
+parens-tuple = always
+parens-tuple-patterns = always
