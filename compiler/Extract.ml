@@ -26,7 +26,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       let builtin =
         let open ExtractBuiltin in
         let funs_map = builtin_funs_map () in
-        match_name_find_opt ctx.trans_ctx def.f.llbc_name funs_map
+        match_name_find_opt ctx.trans_ctx def.f.item_meta.name funs_map
       in
       (* Use the builtin names if necessary *)
       match builtin with
@@ -214,7 +214,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
         let decl = FunDeclId.Map.find id ctx.trans_funs in
         let err =
           "Ill-formed builtin information for function "
-          ^ name_to_string ctx decl.f.llbc_name
+          ^ name_to_string ctx decl.f.item_meta.name
           ^ ": "
           ^ string_of_int (List.length filter)
           ^ " filtering arguments provided for "
@@ -1158,7 +1158,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.item_meta.span def.llbc_name
+    ctx_add_generic_params def.item_meta.span def.item_meta.name
       def.signature.llbc_generics def.signature.generics ctx
   in
   (* Print the generics *)
@@ -1259,11 +1259,11 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name =
      if !extract_external_name_patterns && not def.item_meta.is_local then
-       Some def.llbc_name
+       Some def.item_meta.name
      else None
    in
    extract_comment_with_raw_span ctx fmt
-     [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases clause" ]
+     [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: decreases clause" ]
      name def.item_meta.span.span);
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
@@ -1332,7 +1332,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   extract_comment_with_raw_span ctx fmt
-    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: termination measure" ]
+    [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: termination measure" ]
     None def.item_meta.span.span;
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
@@ -1391,7 +1391,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
   extract_comment_with_raw_span ctx fmt
-    [ "[" ^ name_to_string ctx def.llbc_name ^ "]: decreases_by tactic" ]
+    [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: decreases_by tactic" ]
     None def.item_meta.span.span;
   F.pp_print_space fmt ();
   F.pp_open_hvbox fmt 0;
@@ -1423,7 +1423,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
 
 let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
-  let comment_pre = "[" ^ name_to_string ctx def.llbc_name ^ "]:" in
+  let comment_pre = "[" ^ name_to_string ctx def.item_meta.name ^ "]:" in
   let comment =
     let loop_comment =
       match def.loop_id with
@@ -1434,7 +1434,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
   in
   let name =
     if !extract_external_name_patterns && not def.item_meta.is_local then
-      Some def.llbc_name
+      Some def.item_meta.name
     else None
   in
   extract_comment_with_raw_span ctx fmt comment name def.item_meta.span.span
@@ -1722,7 +1722,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
   let ctx, _, _, _ =
-    ctx_add_generic_params def.item_meta.span def.llbc_name
+    ctx_add_generic_params def.item_meta.span def.item_meta.name
       def.signature.llbc_generics def.signature.generics ctx
   in
   (* Add breaks to insert new lines between definitions *)
@@ -1925,11 +1925,11 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   let name =
     if !extract_external_name_patterns && not global.item_meta.is_local then
-      Some global.llbc_name
+      Some global.item_meta.name
     else None
   in
   extract_comment_with_raw_span ctx fmt
-    [ "[" ^ name_to_string ctx global.llbc_name ^ "]" ]
+    [ "[" ^ name_to_string ctx global.item_meta.name ^ "]" ]
     name global.span.span;
   F.pp_print_space fmt ();
 
@@ -1947,7 +1947,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   in
   (* Add the type parameters *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params span global.llbc_name global.llbc_generics
+    ctx_add_generic_params span global.item_meta.name global.llbc_generics
       global.generics ctx
   in
   match body.body with
@@ -2173,7 +2173,9 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           let llbc_name : Types.name =
             [ Types.PeIdent (item_name, Disambiguator.zero) ]
           in
-          let f = { f with llbc_name } in
+          let f =
+            { f with item_meta = { f.item_meta with name = llbc_name } }
+          in
           let name = ctx_compute_fun_name f ctx in
           (* Add a prefix if necessary *)
           let name =
@@ -2208,7 +2210,7 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
   (* Lookup the information if this is a builtin trait *)
   let open ExtractBuiltin in
   let builtin_info =
-    match_name_find_opt ctx.trans_ctx trait_decl.llbc_name
+    match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
       (builtin_trait_decls_map ())
   in
   let ctx =
@@ -2254,7 +2256,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
       TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
     in
     let decl_ref = trait_impl.impl_trait in
-    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.llbc_name
+    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
       decl_ref.decl_generics
       (builtin_trait_impls_map ())
   in
@@ -2360,7 +2362,7 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params decl.item_meta.span f.llbc_name
+      ctx_add_generic_params decl.item_meta.span f.item_meta.name
         f.signature.llbc_generics generics ctx
     in
     let backend_uses_forall =
@@ -2390,11 +2392,11 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name =
      if !extract_external_name_patterns && not decl.item_meta.is_local then
-       Some decl.llbc_name
+       Some decl.item_meta.name
      else None
    in
    extract_comment_with_raw_span ctx fmt
-     [ "Trait declaration: [" ^ name_to_string ctx decl.llbc_name ^ "]" ]
+     [ "Trait declaration: [" ^ name_to_string ctx decl.item_meta.name ^ "]" ]
      name decl.item_meta.span.span);
   F.pp_print_break fmt 0 0;
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
@@ -2429,8 +2431,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params decl.item_meta.span decl.llbc_name decl.llbc_generics
-      generics ctx
+    ctx_add_generic_params decl.item_meta.span decl.item_meta.name
+      decl.llbc_generics generics ctx
   in
   extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty
     generics type_params cg_params trait_clauses;
@@ -2666,7 +2668,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, f_tys, f_cgs, f_tcs =
-      ctx_add_generic_params impl.item_meta.span f.llbc_name
+      ctx_add_generic_params impl.item_meta.span f.item_meta.name
         f.signature.llbc_generics f_generics ctx
     in
     let use_forall = f_generics <> empty_generic_params in
@@ -2696,7 +2698,8 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
-  log#ldebug (lazy ("extract_trait_impl: " ^ name_to_string ctx impl.llbc_name));
+  log#ldebug
+    (lazy ("extract_trait_impl: " ^ name_to_string ctx impl.item_meta.name));
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl impl.item_meta.span impl.def_id ctx in
   (* Add a break before *)
@@ -2707,12 +2710,14 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
        let decl_id = impl.impl_trait.trait_decl_id in
        let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
        let decl_ref = impl.llbc_impl_trait in
-       ( Some trait_decl.llbc_name,
+       ( Some trait_decl.item_meta.name,
          Some (trait_decl.llbc_generics, decl_ref.decl_generics) )
      else (None, None)
    in
    extract_comment_with_raw_span ctx fmt
-     [ "Trait implementation: [" ^ name_to_string ctx impl.llbc_name ^ "]" ]
+     [
+       "Trait implementation: [" ^ name_to_string ctx impl.item_meta.name ^ "]";
+     ]
      (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
      name ?generics:(Some generics) impl.item_meta.span.span);
   F.pp_print_break fmt 0 0;
@@ -2744,8 +2749,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params impl.item_meta.span impl.llbc_name impl.llbc_generics
-      impl.generics ctx
+    ctx_add_generic_params impl.item_meta.span impl.item_meta.name
+      impl.llbc_generics impl.generics ctx
   in
   let all_generics = (type_params, cg_params, trait_clauses) in
   extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty
@@ -2913,7 +2918,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_break fmt 0 0;
     (* Print a comment *)
     extract_comment fmt
-      [ "Unit test for [" ^ name_to_string ctx def.llbc_name ^ "]" ];
+      [ "Unit test for [" ^ name_to_string ctx def.item_meta.name ^ "]" ];
     F.pp_print_space fmt ();
     (* Open a box for the test *)
     F.pp_open_hovbox fmt ctx.indent_incr;
