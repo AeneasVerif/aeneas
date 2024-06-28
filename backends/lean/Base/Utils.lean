@@ -1,6 +1,7 @@
 import Lean
 import Mathlib.Tactic.Core
 import Base.UtilsBase
+import Aesop
 
 /-
 Mathlib tactics:
@@ -822,5 +823,12 @@ def normCastAtAll : TacticM Unit := do
   let decls ← ctx.getDecls
   NormCast.normCastTarget
   decls.forM (fun d => NormCast.normCastHyp d.fvarId)
+
+/-- Call the saturate function from aesop -/
+def evalAesopSaturate (options : Aesop.Options') (ruleSets : Array Name) : TacticM Unit := do
+  let rss ← Aesop.Frontend.getGlobalRuleSets ruleSets
+  let rs ← Aesop.mkLocalRuleSet rss options
+    |> Aesop.ElabM.runForwardElab (← getMainGoal)
+  liftMetaTactic1 (Aesop.saturate rs · |>.run { options })
 
 end Utils

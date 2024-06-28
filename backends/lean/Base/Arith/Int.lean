@@ -11,7 +11,7 @@ import Base.Arith.Init
 namespace Arith
 
 open Utils
-open Lean Lean.Elab Lean.Meta
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
 /- Defining a custom attribute for Aesop - we use Aesop tactic in the arithmetic tactics -/
 
