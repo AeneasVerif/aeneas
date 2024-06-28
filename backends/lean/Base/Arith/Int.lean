@@ -6,11 +6,20 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.Ring.RingNF
 import Base.Utils
 import Base.Arith.Base
+import Base.Arith.Init
 
 namespace Arith
 
 open Utils
 open Lean Lean.Elab Lean.Meta
+
+/- Defining a custom attribute for Aesop - we use Aesop tactic in the arithmetic tactics -/
+
+attribute [aesop (rule_sets := [Aeneas.ScalarTac]) unfold norm] Function.comp
+
+/-- The `scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactic. -/
+macro "scalar_tac" : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]))
 
 /- We can introduce a term in the context.
    For instance, if we find `x : U32` in the context we can introduce `0 ≤ x ∧ x ≤ U32.max`
