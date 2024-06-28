@@ -1467,7 +1467,7 @@ let ctx_compute_variant_name (ctx : extraction_ctx) (def : type_decl)
          (some backends don't support collision of variant names) *)
       if !variant_concatenate_type_name then
         StringUtils.capitalize_first_letter
-          (ctx_compute_type_name_no_suffix ctx def.item_meta def.llbc_name
+          (ctx_compute_type_name_no_suffix ctx def.item_meta def.item_meta.name
           ^ "_" ^ variant)
       else variant
   | Lean -> variant
@@ -1549,7 +1549,7 @@ let ctx_compute_fun_name (span : Meta.span) (ctx : extraction_ctx)
 let ctx_compute_trait_decl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     : string =
   let llbc_name =
-    rename_llbc_name trait_decl.item_meta.attr_info trait_decl.llbc_name
+    rename_llbc_name trait_decl.item_meta.attr_info trait_decl.item_meta.name
   in
   ctx_compute_type_name trait_decl.item_meta ctx llbc_name
 
@@ -1570,7 +1570,8 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
           let params = trait_impl.llbc_generics in
           let args = trait_impl.llbc_impl_trait.decl_generics in
           let name =
-            ctx_prepare_name trait_impl.item_meta.span ctx trait_decl.llbc_name
+            ctx_prepare_name trait_impl.item_meta.span ctx
+              trait_decl.item_meta.name
           in
           let name = rename_llbc_name trait_impl.item_meta.attr_info name in
           trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
@@ -1646,7 +1647,7 @@ let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
   *)
   (* We need to lookup the LLBC definitions, to have the original instantiation *)
   let clause =
-    let current_def_name = trait_decl.llbc_name in
+    let current_def_name = trait_decl.item_meta.name in
     let params = trait_decl.llbc_generics in
     ctx_compute_trait_clause_name ctx current_def_name params
       trait_decl.llbc_parent_clauses clause.clause_id
@@ -2009,7 +2010,7 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
 
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let name = rename_llbc_name def.item_meta.attr_info def.llbc_name in
+  let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
   let name =
     ctx_compute_decreases_proof_name def.item_meta.span ctx def.def_id name
       def.num_loops def.loop_id
@@ -2020,7 +2021,7 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let name = rename_llbc_name def.item_meta.attr_info def.llbc_name in
+  let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
   let name =
     ctx_compute_termination_measure_name def.item_meta.span ctx def.def_id name
       def.num_loops def.loop_id
@@ -2104,7 +2105,7 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
                     ~default:def.item_meta))
     | _ -> def.item_meta
   in
-  let llbc_name = rename_llbc_name item_meta.attr_info def.llbc_name in
+  let llbc_name = rename_llbc_name item_meta.attr_info def.item_meta.name in
   ctx_compute_fun_name def.item_meta.span ctx llbc_name def.num_loops
     def.loop_id
 
@@ -2123,4 +2124,4 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =
-  ctx_compute_type_name def.item_meta ctx def.llbc_name
+  ctx_compute_type_name def.item_meta ctx def.item_meta.name

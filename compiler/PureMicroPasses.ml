@@ -1504,7 +1504,6 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
                 backend_attributes = def.backend_attributes;
                 num_loops;
                 loop_id = Some loop.loop_id;
-                llbc_name = def.llbc_name;
                 name = def.name;
                 signature = loop_sig;
                 is_global_decl_body = def.is_global_decl_body;

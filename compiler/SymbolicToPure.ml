@@ -583,7 +583,6 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
        ^ "\n"));
   let env = Print.Contexts.decls_ctx_to_fmt_env ctx in
   let def_id = def.T.def_id in
-  let llbc_name = def.item_meta.name in
   let name = Print.Types.name_to_string env def.item_meta.name in
   (* Can't translate types with regions for now *)
   cassert __FILE__ __LINE__
@@ -596,7 +595,6 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let item_meta = def.item_meta in
   {
     def_id;
-    llbc_name;
     name;
     item_meta;
     generics;
@@ -3772,8 +3770,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
 
   (* Translate the declaration *)
   let def_id = def.def_id in
-  let llbc_name = def.item_meta.name in
-  let name = name_to_string ctx llbc_name in
+  let name = name_to_string ctx def.item_meta.name in
   (* Translate the signature *)
   let signature = translate_fun_sig_from_decomposed ctx.sg in
   (* Translate the body, if there is *)
@@ -3898,7 +3895,6 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
       backend_attributes;
       num_loops;
       loop_id;
-      llbc_name;
       name;
       signature;
       is_global_decl_body = def.is_global_decl_body;
@@ -3943,12 +3939,11 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   } : A.trait_decl =
     trait_decl
   in
-  let llbc_name = item_meta.name in
   let type_infos = ctx.type_ctx.type_infos in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
-      llbc_name
+      item_meta.name
   in
   let generics, preds =
     translate_generic_params trait_decl.item_meta.span llbc_generics
@@ -3978,7 +3973,6 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   {
     def_id;
-    llbc_name;
     name;
     item_meta;
     generics;
@@ -4007,7 +4001,6 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   } =
     trait_impl
   in
-  let llbc_name = item_meta.name in
   let type_infos = ctx.type_ctx.type_infos in
   let impl_trait =
     translate_trait_decl_ref trait_impl.item_meta.span
@@ -4017,7 +4010,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
-      llbc_name
+      item_meta.name
   in
   let generics, preds =
     translate_generic_params trait_impl.item_meta.span llbc_generics
@@ -4043,7 +4036,6 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   {
     def_id;
-    llbc_name;
     name;
     item_meta;
     impl_trait;
@@ -4070,11 +4062,10 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
   } =
     decl
   in
-  let llbc_name = item_meta.name in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
-      llbc_name
+      item_meta.name
   in
   let generics, preds =
     translate_generic_params decl.item_meta.span llbc_generics
@@ -4084,7 +4075,6 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     span = item_meta.span;
     def_id;
     item_meta;
-    llbc_name;
     name;
     llbc_generics;
     generics;
