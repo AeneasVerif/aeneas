@@ -17,33 +17,13 @@ open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
 attribute [aesop (rule_sets := [Aeneas.ScalarTac]) unfold norm] Function.comp
 
-/-- The `scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactic. -/
-macro "scalar_tac" : attr =>
+/-- The `int_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "int_tac" : attr =>
   `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]))
 
-/- We can introduce a term in the context.
-   For instance, if we find `x : U32` in the context we can introduce `0 ≤ x ∧ x ≤ U32.max`
-
-   Remark: I tried a version of the shape `HasScalarProp {a : Type} (x : a)`
-   but the lookup didn't work.
- -/
-class HasIntProp (a : Sort u) where
-  prop_ty : a → Prop
-  prop : ∀ x:a, prop_ty x
-
-/- Terms that induces predicates: if we can find the term `x`, we can introduce `concl` in the context. -/
-class HasIntPred {a: Sort u} (x: a) where
-  concl : Prop
-  prop : concl
-
-/- Proposition with implications: if we find P we can introduce Q in the context -/
-class PropHasImp (x : Sort u) where
-  concl : Prop
-  prop : x → concl
-
-instance (p : Int → Prop) : HasIntProp (Subtype p) where
-  prop_ty := λ x => p x
-  prop := λ x => x.property
+/-- The `scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "scalar_tac" : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]))
 
 /- Check if a proposition is a linear integer proposition.
    We notably use this to check the goals: this is useful to filter goals that
@@ -79,186 +59,23 @@ def goalIsLinearInt : Tactic.TacticM Bool := do
   | .some _ => pure true
   | _ => pure false
 
-/- Explore a term by decomposing the applications (we explore the applied
-   functions and their arguments, but ignore lambdas, forall, etc. -
-   should we go inside?).
-
-   Remark: we pretend projections are applications, and explore the projected
-   terms. -/
-partial def foldTermApps (k : α → Expr → MetaM α) (s : α) (e : Expr) : MetaM α := do
-  -- Explore the current expression
-  let e := e.consumeMData
-  let s ← k s e
-  -- Recurse
-  match e with
-  | .proj _ _ e' =>
-    foldTermApps k s e'
-  | .app .. =>
-    e.withApp fun f args => do
-      let s ← k s f
-      args.foldlM (foldTermApps k) s
-  | _ => pure s
-
-/- Provided a function `k` which lookups type class instances on an expression,
-   collect all the instances lookuped by applying `k` on the sub-expressions of `e`. -/
-def collectInstances
-  (k : Expr → MetaM (Option Expr)) (s : HashSet Expr) (e : Expr) : MetaM (HashSet Expr) := do
-  let k s e := do
-    match ← k e with
-    | none => pure s
-    | some i => pure (s.insert i)
-  foldTermApps k s e
-
-/- Similar to `collectInstances`, but explores all the local declarations in the
-   main context. -/
-def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.TacticM (HashSet Expr) := do
-  Tactic.withMainContext do
-  -- Get the local context
-  let ctx ← Lean.MonadLCtx.getLCtx
-  -- Initialize the hashset
-  let hs := HashSet.empty
-  -- Explore the declarations
-  let decls ← ctx.getDecls
-  let hs ← decls.foldlM (fun hs d => do
-    -- Collect instances over all subexpressions in the context.
-    -- Note that if the local declaration is
-    -- Note that we explore the *type* of propositions: if we have
-    -- for instance `h : A ∧ B` in the context, the expression itself is simply
-    -- `h`; the information we are interested in is its type.
-    -- However, if the decl is not a proposition, we explore it directly.
-    -- For instance: `x : U32`
-    -- TODO: case disjunction on whether the local decl is a Prop or not. If prop,
-    -- we need to explore its type.
-    let d := d.toExpr
-    if d.isProp then
-      collectInstances k hs d
-    else
-      let ty ← Lean.Meta.inferType d
-      collectInstances k hs ty
-  ) hs
-  -- Also explore the goal
-  collectInstances k hs (← Tactic.getMainTarget)
-
--- Helper
-def lookupProp (fName : String) (className : Name) (e : Expr)
-  (instantiateClassFn : Expr → MetaM (Array Expr))
-  (instantiateProjectionFn : Expr → MetaM (Array Expr)) : MetaM (Option Expr) := do
-  trace[Arith] fName
-  -- TODO: do we need Lean.observing?
-  -- This actually eliminates the error messages
-  trace[Arith] m!"{fName}: {e}"
-  Lean.observing? do
-    trace[Arith] m!"{fName}: observing: {e}"
-    let hasProp ← mkAppM className (← instantiateClassFn e)
-    let hasPropInst ← trySynthInstance hasProp
-    match hasPropInst with
-    | LOption.some i =>
-      trace[Arith] "Found {fName} instance"
-      let i_prop ← mkProjection i (Name.mkSimple "prop")
-      some (← mkAppM' i_prop (← instantiateProjectionFn e))
-    | _ => none
-
--- Return an instance of `HasIntProp` for `e` if it has some
-def lookupHasIntProp (e : Expr) : MetaM (Option Expr) :=
-  lookupProp "lookupHasIntProp" ``HasIntProp e (fun e => do pure #[← Lean.Meta.inferType e]) (fun e => pure #[e])
-
--- Collect the instances of `HasIntProp` for the subexpressions in the context
-def collectHasIntPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  collectInstancesFromMainCtx lookupHasIntProp
-
--- Return an instance of `HasIntPred` for `e` if it has some
-def lookupHasIntPred (e : Expr) : MetaM (Option Expr) :=
-  lookupProp "lookupHasIntPred" ``HasIntPred e (fun term => pure #[term]) (fun _ => pure #[])
-
--- Collect the instances of `HasIntPred` for the subexpressions in the context
-def collectHasIntPredInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  collectInstancesFromMainCtx lookupHasIntPred
-
--- Return an instance of `PropHasImp` for `e` if it has some
-def lookupPropHasImp (e : Expr) : MetaM (Option Expr) := do
-  trace[Arith] m!"lookupPropHasImp: {e}"
-  -- TODO: do we need Lean.observing?
-  -- This actually eliminates the error messages
-  Lean.observing? do
-    trace[Arith] "lookupPropHasImp: observing: {e}"
-    let ty ← Lean.Meta.inferType e
-    trace[Arith] "lookupPropHasImp: ty: {ty}"
-    let cl ← mkAppM ``PropHasImp #[ty]
-    let inst ← trySynthInstance cl
-    match inst with
-    | LOption.some i =>
-      trace[Arith] "Found PropHasImp instance"
-      let i_prop ←  mkProjection i (Name.mkSimple "prop")
-      some (← mkAppM' i_prop #[e])
-    | _ => none
-
--- Collect the instances of `PropHasImp` for the subexpressions in the context
-def collectPropHasImpInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  collectInstancesFromMainCtx lookupPropHasImp
-
-elab "display_prop_has_imp_instances" : tactic => do
-  trace[Arith] "Displaying the PropHasImp instances"
-  let hs ← collectPropHasImpInstancesFromMainCtx
-  hs.forM fun e => do
-    trace[Arith] "+ PropHasImp instance: {e}"
-
-example (x y : Int) (_ : x ≠ y) (_ : ¬ x = y) : True := by
-  display_prop_has_imp_instances
-  simp
-
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
--- Lookup instances in a context and introduce them with additional declarations.
-def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr)) : Tactic.TacticM (Array Expr) := do
-  let hs ← collectInstancesFromMainCtx lookup
-  hs.toArray.mapM fun e => do
-    let type ← inferType e
-    let name ← mkFreshAnonPropUserName
-    -- Add a declaration
-    let nval ← Utils.addDeclTac name e type (asLet := false)
-    -- Simplify to unfold the declaration to unfold (i.e., the projector)
-    Utils.simpAt true {} [] [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
-    -- Return the new value
-    pure nval
-
-def introHasIntPropInstances : Tactic.TacticM (Array Expr) := do
-  trace[Arith] "Introducing the HasIntProp instances"
-  introInstances ``HasIntProp.prop_ty lookupHasIntProp
-
--- Lookup the instances of `HasIntProp for all the sub-expressions in the context,
--- and introduce the corresponding assumptions
-elab "intro_has_int_prop_instances" : tactic => do
-  let _ ← introHasIntPropInstances
-
-def introHasIntPredInstances : Tactic.TacticM (Array Expr) := do
-  trace[Arith] "Introducing the HasIntPred instances"
-  introInstances ``HasIntPred.concl lookupHasIntPred
-
-elab "intro_has_int_pred_instances" : tactic => do
-  let _ ← introHasIntPredInstances
-
-def introPropHasImpInstances : Tactic.TacticM (Array Expr) := do
-  trace[Arith] "Introducing the PropHasImp instances"
-  introInstances ``PropHasImp.concl lookupPropHasImp
-
--- Lookup the instances of `PropHasImp for all the sub-expressions in the context,
--- and introduce the corresponding assumptions
-elab "intro_prop_has_imp_instances" : tactic => do
-  let _ ← introPropHasImpInstances
-
 def intTacSimpRocs : List Name := [``Int.reduceNegSucc, ``Int.reduceNeg]
+
+/-- Apply the scalar_tac forward rules -/
+def intTacSaturateForward : Tactic.TacticM Unit := do
+  let options : Aesop.Options := {}
+  let options ← options.toOptions'
+  evalAesopSaturate options #[`Aeneas.ScalarTac]
 
 /- Boosting a bit the `omega` tac.
  -/
 def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
-  -- Introduce the instances of `HasIntProp`
-  let _ ← introHasIntPropInstances
-  -- Introduce the instances of `HasIntPred`
-  let _ ← introHasIntPredInstances
-  -- Introduce the instances of `PropHasImp`
-  let _ ← introPropHasImpInstances
+  -- Apply the forward rules
+  intTacSaturateForward
   -- Extra preprocessing
   extraPreprocess
   -- Reduce all the terms in the goal - note that the extra preprocessing step
