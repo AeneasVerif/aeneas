@@ -163,7 +163,7 @@ let rec match_types (span : Meta.span) (match_distinct_types : ty -> ty -> ty)
     (match_regions : region -> region -> region) (ty0 : ty) (ty1 : ty) : ty =
   let match_rec = match_types span match_distinct_types match_regions in
   match (ty0, ty1) with
-  | TAdt (id0, generics0), TAdt (id1, generics1) ->
+  | (TAdt (id0, generics0), TAdt (id1, generics1)) ->
       sanity_check __FILE__ __LINE__ (id0 = id1) span;
       sanity_check __FILE__ __LINE__
         (generics0.const_generics = generics1.const_generics)
@@ -186,15 +186,15 @@ let rec match_types (span : Meta.span) (match_distinct_types : ty -> ty -> ty)
       in
       let generics = { regions; types; const_generics; trait_refs } in
       TAdt (id, generics)
-  | TVar vid0, TVar vid1 ->
+  | (TVar vid0, TVar vid1) ->
       sanity_check __FILE__ __LINE__ (vid0 = vid1) span;
       let vid = vid0 in
       TVar vid
-  | TLiteral lty0, TLiteral lty1 ->
+  | (TLiteral lty0, TLiteral lty1) ->
       sanity_check __FILE__ __LINE__ (lty0 = lty1) span;
       ty0
-  | TNever, TNever -> ty0
-  | TRef (r0, ty0, k0), TRef (r1, ty1, k1) ->
+  | (TNever, TNever) -> ty0
+  | (TRef (r0, ty0, k0), TRef (r1, ty1, k1)) ->
       let r = match_regions r0 r1 in
       let ty = match_rec ty0 ty1 in
       sanity_check __FILE__ __LINE__ (k0 = k1) span;
@@ -217,9 +217,9 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
       ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
     in
     match (v0.value, v1.value) with
-    | VLiteral lv0, VLiteral lv1 ->
+    | (VLiteral lv0, VLiteral lv1) ->
         if lv0 = lv1 then v1 else M.match_distinct_literals ctx0 ctx1 ty lv0 lv1
-    | VAdt av0, VAdt av1 ->
+    | (VAdt av0, VAdt av1) ->
         if av0.variant_id = av1.variant_id then
           let fields = List.combine av0.field_values av1.field_values in
           let field_values =
@@ -239,16 +239,16 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             M.span;
           (* Merge *)
           M.match_distinct_adts ctx0 ctx1 ty av0 av1)
-    | VBottom, VBottom -> v0
-    | VBorrow bc0, VBorrow bc1 ->
+    | (VBottom, VBottom) -> v0
+    | (VBorrow bc0, VBorrow bc1) ->
         let bc =
           match (bc0, bc1) with
-          | VSharedBorrow bid0, VSharedBorrow bid1 ->
+          | (VSharedBorrow bid0, VSharedBorrow bid1) ->
               let bid =
                 M.match_shared_borrows ctx0 ctx1 match_rec ty bid0 bid1
               in
               VSharedBorrow bid
-          | VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1) ->
+          | (VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1)) ->
               let bv = match_rec bv0 bv1 in
 
               cassert __FILE__ __LINE__
@@ -256,14 +256,14 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                    (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
                       bv.value))
                 M.span "The join of nested borrows is not supported yet";
-              let bid, bv =
+              let (bid, bv) =
                 M.match_mut_borrows ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
               in
               VMutBorrow (bid, bv)
-          | VReservedMutBorrow _, _
-          | _, VReservedMutBorrow _
-          | VSharedBorrow _, VMutBorrow _
-          | VMutBorrow _, VSharedBorrow _ ->
+          | (VReservedMutBorrow _, _)
+          | (_, VReservedMutBorrow _)
+          | (VSharedBorrow _, VMutBorrow _)
+          | (VMutBorrow _, VSharedBorrow _) ->
               (* If we get here, either there is a typing inconsistency, or we are
                  trying to match a reserved borrow, which shouldn't happen because
                  reserved borrow should be eliminated very quickly - they are introduced
@@ -271,26 +271,26 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               craise __FILE__ __LINE__ M.span "Unexpected"
         in
         { value = VBorrow bc; ty }
-    | VLoan lc0, VLoan lc1 ->
+    | (VLoan lc0, VLoan lc1) ->
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         let lc =
           match (lc0, lc1) with
-          | VSharedLoan (ids0, sv0), VSharedLoan (ids1, sv1) ->
+          | (VSharedLoan (ids0, sv0), VSharedLoan (ids1, sv1)) ->
               let sv = match_rec sv0 sv1 in
               cassert __FILE__ __LINE__
                 (not (value_has_borrows sv.value))
                 M.span "The join of nested borrows is not supported yet";
-              let ids, sv = M.match_shared_loans ctx0 ctx1 ty ids0 ids1 sv in
+              let (ids, sv) = M.match_shared_loans ctx0 ctx1 ty ids0 ids1 sv in
               VSharedLoan (ids, sv)
-          | VMutLoan id0, VMutLoan id1 ->
+          | (VMutLoan id0, VMutLoan id1) ->
               let id = M.match_mut_loans ctx0 ctx1 ty id0 id1 in
               VMutLoan id
-          | VSharedLoan _, VMutLoan _ | VMutLoan _, VSharedLoan _ ->
+          | (VSharedLoan _, VMutLoan _) | (VMutLoan _, VSharedLoan _) ->
               craise __FILE__ __LINE__ M.span "Unreachable"
         in
         { value = VLoan lc; ty = v1.ty }
-    | VSymbolic sv0, VSymbolic sv1 ->
+    | (VSymbolic sv0, VSymbolic sv1) ->
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
         cassert __FILE__ __LINE__
@@ -306,18 +306,18 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         (* Match *)
         let sv = M.match_symbolic_values ctx0 ctx1 sv0 sv1 in
         { v1 with value = VSymbolic sv }
-    | VLoan lc, _ -> (
+    | (VLoan lc, _) -> (
         match lc with
         | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInLeft ids))
         | VMutLoan id -> raise (ValueMatchFailure (LoanInLeft id)))
-    | _, VLoan lc -> (
+    | (_, VLoan lc) -> (
         match lc with
         | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInRight ids))
         | VMutLoan id -> raise (ValueMatchFailure (LoanInRight id)))
-    | VSymbolic sv, _ -> M.match_symbolic_with_other ctx0 ctx1 true sv v1
-    | _, VSymbolic sv -> M.match_symbolic_with_other ctx0 ctx1 false sv v0
-    | VBottom, _ -> M.match_bottom_with_other ctx0 ctx1 true v1
-    | _, VBottom -> M.match_bottom_with_other ctx0 ctx1 false v0
+    | (VSymbolic sv, _) -> M.match_symbolic_with_other ctx0 ctx1 true sv v1
+    | (_, VSymbolic sv) -> M.match_symbolic_with_other ctx0 ctx1 false sv v0
+    | (VBottom, _) -> M.match_bottom_with_other ctx0 ctx1 true v1
+    | (_, VBottom) -> M.match_bottom_with_other ctx0 ctx1 false v0
     | _ ->
         log#ldebug
           (lazy
@@ -348,7 +348,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     let match_arec = match_typed_avalues ctx0 ctx1 in
     let ty = M.match_rtys ctx0 ctx1 v0.ty v1.ty in
     match (v0.value, v1.value) with
-    | AAdt av0, AAdt av1 ->
+    | (AAdt av0, AAdt av1) ->
         if av0.variant_id = av1.variant_id then
           let fields = List.combine av0.field_values av1.field_values in
           let field_values =
@@ -360,15 +360,15 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           { value; ty }
         else (* Merge *)
           M.match_distinct_aadts ctx0 ctx1 v0.ty av0 v1.ty av1 ty
-    | ABottom, ABottom -> mk_abottom M.span ty
-    | AIgnored, AIgnored -> mk_aignored M.span ty
-    | ABorrow bc0, ABorrow bc1 -> (
+    | (ABottom, ABottom) -> mk_abottom M.span ty
+    | (AIgnored, AIgnored) -> mk_aignored M.span ty
+    | (ABorrow bc0, ABorrow bc1) -> (
         log#ldebug (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
-        | ASharedBorrow (pm0, bid0), ASharedBorrow (pm1, bid1) ->
+        | (ASharedBorrow (pm0, bid0), ASharedBorrow (pm1, bid1)) ->
             log#ldebug (lazy "match_typed_avalues: shared borrows");
             M.match_ashared_borrows ctx0 ctx1 v0.ty pm0 bid0 v1.ty pm1 bid1 ty
-        | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
+        | (AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1)) ->
             log#ldebug (lazy "match_typed_avalues: mut borrows");
             log#ldebug
               (lazy
@@ -378,12 +378,12 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               (lazy "match_typed_avalues: mut borrows: matched children values");
             M.match_amut_borrows ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty pm1 bid1 av1
               ty av
-        | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
+        | (AIgnoredMutBorrow _, AIgnoredMutBorrow _) ->
             (* The abstractions are destructured: we shouldn't get there *)
             craise __FILE__ __LINE__ M.span "Unexpected"
-        | AProjSharedBorrow asb0, AProjSharedBorrow asb1 -> (
+        | (AProjSharedBorrow asb0, AProjSharedBorrow asb1) -> (
             match (asb0, asb1) with
-            | [], [] ->
+            | ([], []) ->
                 (* This case actually stands for ignored shared borrows, when
                    there are no nested borrows *)
                 v0
@@ -401,12 +401,12 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                to completely end it before continuing.
             *)
             craise __FILE__ __LINE__ M.span "Unexpected")
-    | ALoan lc0, ALoan lc1 -> (
+    | (ALoan lc0, ALoan lc1) -> (
         log#ldebug (lazy "match_typed_avalues: loans");
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
-        | ASharedLoan (pm0, ids0, sv0, av0), ASharedLoan (pm1, ids1, sv1, av1)
+        | (ASharedLoan (pm0, ids0, sv0, av0), ASharedLoan (pm1, ids1, sv1, av1))
           ->
             log#ldebug (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
@@ -416,7 +416,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               M.span;
             M.match_ashared_loans ctx0 ctx1 v0.ty pm0 ids0 sv0 av0 v1.ty pm1
               ids1 sv1 av1 ty sv av
-        | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
+        | (AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1)) ->
             log#ldebug (lazy "match_typed_avalues: mut loans");
             log#ldebug
               (lazy "match_typed_avalues: mut loans: matching children values");
@@ -425,13 +425,13 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               (lazy "match_typed_avalues: mut loans: matched children values");
             M.match_amut_loans ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1 id1 av1 ty
               av
-        | AIgnoredMutLoan _, AIgnoredMutLoan _
-        | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
+        | (AIgnoredMutLoan _, AIgnoredMutLoan _)
+        | (AIgnoredSharedLoan _, AIgnoredSharedLoan _) ->
             (* Those should have been filtered when destructuring the abstractions -
                they are necessary only when there are nested borrows *)
             craise __FILE__ __LINE__ M.span "Unreachable"
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable")
-    | ASymbolic _, ASymbolic _ ->
+    | (ASymbolic _, ASymbolic _) ->
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
         craise __FILE__ __LINE__ M.span "Unreachable"
@@ -514,7 +514,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let bid2 = fresh_borrow_id () in
 
       (* Update the type of the shared loan to use the fresh region *)
-      let _, bv_ty, kind = ty_as_ref ty in
+      let (_, bv_ty, kind) = ty_as_ref ty in
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
@@ -673,7 +673,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let bid2 = fresh_borrow_id () in
 
       (* Generate a fresh symbolic value for the borrowed value *)
-      let _, bv_ty, kind = ty_as_ref ty in
+      let (_, bv_ty, kind) = ty_as_ref ty in
       let sv = mk_fresh_symbolic_typed_value_from_no_regions_ty span bv_ty in
 
       let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
@@ -1098,8 +1098,8 @@ struct
     let match_distinct_types _ _ = raise (Distinct "match_rtys") in
     let match_regions r0 r1 =
       match (r0, r1) with
-      | RStatic, RStatic -> r1
-      | RFVar rid0, RFVar rid1 ->
+      | (RStatic, RStatic) -> r1
+      | (RFVar rid0, RFVar rid1) ->
           let rid = match_rid rid0 rid1 in
           RFVar rid
       | _ -> raise (Distinct "match_rtys")
@@ -1437,7 +1437,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
         ^ "\n\n"));
 
     match (env0, env1) with
-    | EBinding (BDummy b0, v0) :: env0', EBinding (BDummy b1, v1) :: env1' ->
+    | (EBinding (BDummy b0, v0) :: env0', EBinding (BDummy b1, v1) :: env1') ->
         (* Sanity check: if the dummy value is an old value, the bindings must
            be the same and their values equal (and the borrows/loans/symbolic *)
         if DummyVarId.Set.mem b0 fixed_ids.dids then (
@@ -1445,7 +1445,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
           sanity_check __FILE__ __LINE__ (b0 = b1) span;
           sanity_check __FILE__ __LINE__ (v0 = v1) span;
           (* The ids present in the left value must be fixed *)
-          let ids, _ = compute_typed_value_ids v0 in
+          let (ids, _) = compute_typed_value_ids v0 in
           sanity_check __FILE__ __LINE__
             ((not S.check_equiv) || ids_are_fixed ids)
             span);
@@ -1453,13 +1453,13 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
            are the identity actually) *)
         let _ = M.match_typed_values ctx0 ctx1 v0 v1 in
         match_envs env0' env1'
-    | EBinding (BVar b0, v0) :: env0', EBinding (BVar b1, v1) :: env1' ->
+    | (EBinding (BVar b0, v0) :: env0', EBinding (BVar b1, v1) :: env1') ->
         sanity_check __FILE__ __LINE__ (b0 = b1) span;
         (* Match the values *)
         let _ = M.match_typed_values ctx0 ctx1 v0 v1 in
         (* Continue *)
         match_envs env0' env1'
-    | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
+    | (EAbs abs0 :: env0', EAbs abs1 :: env1') ->
         log#ldebug (lazy "match_ctxs: match_envs: matching abs");
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
@@ -1467,7 +1467,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
           (* Still in the prefix: the abstractions must be the same *)
           sanity_check __FILE__ __LINE__ (abs0 = abs1) span;
           (* Their ids must be fixed *)
-          let ids, _ = compute_abs_ids abs0 in
+          let (ids, _) = compute_abs_ids abs0 in
           sanity_check __FILE__ __LINE__
             ((not S.check_equiv) || ids_are_fixed ids)
             span;
@@ -1480,7 +1480,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
           match_abstractions abs0 abs1;
           (* Continue *)
           match_envs env0' env1')
-    | [], [] ->
+    | ([], []) ->
         (* Done *)
         ()
     | _ ->
@@ -1495,9 +1495,9 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     (* Remove the frame delimiter (the first element of an environment is a frame delimiter) *)
     let env0 = List.rev ctx0.env in
     let env1 = List.rev ctx1.env in
-    let env0, env1 =
+    let (env0, env1) =
       match (env0, env1) with
-      | EFrame :: env0, EFrame :: env1 -> (env0, env1)
+      | (EFrame :: env0, EFrame :: env1) -> (env0, env1)
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
 
@@ -1549,8 +1549,8 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
    fun tgt_ctx ->
     (* Collect fixed values in the source and target contexts: end the loans in the
        source context which don't appear in the target context *)
-    let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
-    let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
+    let (filt_src_env, _, _) = ctx_split_fixed_new span fixed_ids src_ctx in
+    let (filt_tgt_env, _, _) = ctx_split_fixed_new span fixed_ids tgt_ctx in
 
     log#ldebug
       (lazy
@@ -1563,7 +1563,9 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
 
     (* Remove the abstractions *)
     let filter (ee : env_elem) : bool =
-      match ee with EBinding _ -> true | EAbs _ | EFrame -> false
+      match ee with
+      | EBinding _ -> true
+      | EAbs _ | EFrame -> false
     in
     let filt_src_env = List.filter filter filt_src_env in
     let filt_tgt_env = List.filter filter filt_tgt_env in
@@ -1583,11 +1585,11 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
         List.iter
           (fun (var0, var1) ->
             match (var0, var1) with
-            | EBinding (BDummy b0, v0), EBinding (BDummy b1, v1) ->
+            | (EBinding (BDummy b0, v0), EBinding (BDummy b1, v1)) ->
                 sanity_check __FILE__ __LINE__ (b0 = b1) span;
                 let _ = M.match_typed_values src_ctx tgt_ctx v0 v1 in
                 ()
-            | EBinding (BVar b0, v0), EBinding (BVar b1, v1) ->
+            | (EBinding (BVar b0, v0), EBinding (BVar b1, v1)) ->
                 sanity_check __FILE__ __LINE__ (b0 = b1) span;
                 let _ = M.match_typed_values src_ctx tgt_ctx v0 v1 in
                 ()
@@ -1621,11 +1623,11 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
         List.map
           (fun (var0, var1) ->
             match (var0, var1) with
-            | EBinding (BDummy b0, v0), EBinding ((BDummy b1 as var1), v1) ->
+            | (EBinding (BDummy b0, v0), EBinding ((BDummy b1 as var1), v1)) ->
                 sanity_check __FILE__ __LINE__ (b0 = b1) span;
                 let v = M.match_typed_values src_ctx tgt_ctx v0 v1 in
                 (var1, v)
-            | EBinding (BVar b0, v0), EBinding ((BVar b1 as var1), v1) ->
+            | (EBinding (BVar b0, v0), EBinding ((BVar b1 as var1), v1)) ->
                 sanity_check __FILE__ __LINE__ (b0 = b1) span;
                 let v = M.match_typed_values src_ctx tgt_ctx v0 v1 in
                 (var1, v)
@@ -1665,7 +1667,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
       (tgt_ctx, fun e -> e)
     with ValueMatchFailure e ->
       (* Exception: end the corresponding borrows, and continue *)
-      let ctx, cc =
+      let (ctx, cc) =
         match e with
         | LoanInRight bid ->
             InterpreterBorrows.end_borrow config span bid tgt_ctx
@@ -1697,7 +1699,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      context, which results from joins during which we ended the loans which
      were introduced during the loop iterations)
   *)
-  let tgt_ctx, cc =
+  let (tgt_ctx, cc) =
     prepare_match_ctx_with_target config span loop_id fixed_ids src_ctx tgt_ctx
   in
 
@@ -1726,8 +1728,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx
       ));
 
-  let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
-  let filt_src_env, new_absl, new_dummyl =
+  let (filt_tgt_env, _, _) = ctx_split_fixed_new span fixed_ids tgt_ctx in
+  let (filt_src_env, new_absl, new_dummyl) =
     ctx_split_fixed_new span fixed_ids src_ctx
   in
   sanity_check __FILE__ __LINE__ (new_dummyl = []) span;
@@ -1829,7 +1831,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   *)
   (* First, compute the set of borrows which appear in the fresh abstractions
      of the fixed-point: we want to introduce fresh ids only for those. *)
-  let new_absl_ids, _ = compute_absl_ids new_absl in
+  let (new_absl_ids, _) = compute_absl_ids new_absl in
   let src_fresh_borrows_map = ref BorrowId.Map.empty in
   let visit_tgt =
     object
@@ -1986,7 +1988,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     BorrowId.Set.of_list
       (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
   in
-  let tgt_ctx, cc =
+  let (tgt_ctx, cc) =
     comp cc (InterpreterBorrows.end_borrows config span new_borrows tgt_ctx)
   in
 

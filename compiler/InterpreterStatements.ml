@@ -29,9 +29,9 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
   let access = Write in
   (* First make sure we can access the place, by ending loans or expanding
    * symbolic values along the path, for instance *)
-  let ctx, cc = update_ctx_along_read_place config span access p ctx in
+  let (ctx, cc) = update_ctx_along_read_place config span access p ctx in
   (* Prepare the place (by ending the outer loans *at* the place). *)
-  let v, ctx, cc = comp2 cc (prepare_lplace config span p ctx) in
+  let (v, ctx, cc) = comp2 cc (prepare_lplace config span p ctx) in
   (* Replace the value with {!Bottom} *)
   let ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
@@ -59,7 +59,7 @@ let push_dummy_var (vid : DummyVarId.id) (v : typed_value) (ctx : eval_ctx) :
 (** Remove a dummy variable from the environment *)
 let remove_dummy_var (span : Meta.span) (vid : DummyVarId.id) (ctx : eval_ctx) :
     typed_value * eval_ctx =
-  let ctx, v = ctx_remove_dummy_var span ctx vid in
+  let (ctx, v) = ctx_remove_dummy_var span ctx vid in
   (v, ctx)
 
 (** Push an uninitialized variable to the environment *)
@@ -102,9 +102,9 @@ let assign_to_place (config : config) (span : Meta.span) (rv : typed_value)
   let rvalue_vid = fresh_dummy_var_id () in
   let ctx = push_dummy_var rvalue_vid rv ctx in
   (* Prepare the destination *)
-  let _, ctx, cc = prepare_lplace config span p ctx in
+  let (_, ctx, cc) = prepare_lplace config span p ctx in
   (* Retrieve the rvalue from the dummy variable *)
-  let rv, ctx = remove_dummy_var span rvalue_vid ctx in
+  let (rv, ctx) = remove_dummy_var span rvalue_vid ctx in
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
   let mv = InterpreterPaths.read_place span Write p ctx in
@@ -132,7 +132,7 @@ let eval_assertion_concrete (config : config) (span : Meta.span)
     (assertion : assertion) : st_cm_fun =
  fun ctx ->
   (* There won't be any symbolic expansions: fully evaluate the operand *)
-  let v, ctx, eval_op = eval_operand config span assertion.cond ctx in
+  let (v, ctx, eval_op) = eval_operand config span assertion.cond ctx in
   let st =
     match v.value with
     | VLiteral (VBool b) ->
@@ -156,10 +156,10 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
     : st_cm_fun =
  fun ctx ->
   (* Evaluate the operand *)
-  let v, ctx, cf_eval_op = eval_operand config span assertion.cond ctx in
+  let (v, ctx, cf_eval_op) = eval_operand config span assertion.cond ctx in
   (* Evaluate the assertion *)
   sanity_check __FILE__ __LINE__ (v.ty = TLiteral TBool) span;
-  let st, cf_eval_assert =
+  let (st, cf_eval_assert) =
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
      * know the concrete value of the boolean we test, we use this value
@@ -213,11 +213,11 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
       ^ eval_ctx_to_string ~span:(Some span) ctx));
   (* Access the value *)
   let access = Write in
-  let ctx, cc = update_ctx_along_read_place config span access p ctx in
-  let v, ctx, cc = comp2 cc (prepare_lplace config span p ctx) in
+  let (ctx, cc) = update_ctx_along_read_place config span access p ctx in
+  let (v, ctx, cc) = comp2 cc (prepare_lplace config span p ctx) in
   (* Update the value *)
   match (v.ty, v.value) with
-  | TAdt ((TAdtId _ as type_id), generics), VAdt av -> (
+  | (TAdt ((TAdtId _ as type_id), generics), VAdt av) -> (
       (* There are two situations:
          - either the discriminant is already the proper one (in which case we
            don't do anything)
@@ -240,11 +240,11 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
                     (Some variant_id) generics
               | _ -> craise __FILE__ __LINE__ span "Unreachable"
             in
-            let ctx, cc =
+            let (ctx, cc) =
               comp cc (assign_to_place config span bottom_v p ctx)
             in
             ((ctx, Unit), cc))
-  | TAdt ((TAdtId _ as type_id), generics), VBottom ->
+  | (TAdt ((TAdtId _ as type_id), generics), VBottom) ->
       let bottom_v =
         match type_id with
         | TAdtId def_id ->
@@ -252,9 +252,9 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
               generics
         | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
-      let ctx, cc = comp cc (assign_to_place config span bottom_v p ctx) in
+      let (ctx, cc) = comp cc (assign_to_place config span bottom_v p ctx) in
       ((ctx, Unit), cc)
-  | _, VSymbolic _ ->
+  | (_, VSymbolic _) ->
       sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) span;
       (* This is a bit annoying: in theory we should expand the symbolic value
        * then set the discriminant, because in the case the discriminant is
@@ -264,8 +264,9 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
        * setting a discriminant should only be used to initialize a value,
        * or reset an already initialized value, really. *)
       craise __FILE__ __LINE__ span "Unexpected value"
-  | _, (VAdt _ | VBottom) -> craise __FILE__ __LINE__ span "Inconsistent state"
-  | _, (VLiteral _ | VBorrow _ | VLoan _) ->
+  | (_, (VAdt _ | VBottom)) ->
+      craise __FILE__ __LINE__ span "Inconsistent state"
+  | (_, (VLiteral _ | VBorrow _ | VLoan _)) ->
       craise __FILE__ __LINE__ span "Unexpected value"
 
 (** Push a frame delimiter in the context's environment *)
@@ -311,7 +312,7 @@ let move_return_value (config : config) (span : Meta.span)
     * (SymbolicAst.expression -> SymbolicAst.expression) =
   if pop_return_value then
     let ret_vid = VarId.zero in
-    let v, ctx, cc =
+    let (v, ctx, cc) =
       eval_operand config span (Move (mk_place_from_var_id ret_vid)) ctx
     in
     (Some v, ctx, cc)
@@ -346,7 +347,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
       ^ "]"));
 
   (* Move the return value out of the return variable *)
-  let v, ctx, cc = move_return_value config span pop_return_value ctx in
+  let (v, ctx, cc) = move_return_value config span pop_return_value ctx in
   let _ =
     match v with
     | None -> ()
@@ -357,7 +358,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
   in
 
   (* Drop the outer *loans* we find in the local variables *)
-  let ctx, cc =
+  let (ctx, cc) =
     comp cc
       ((* Drop the loans *)
        let locals = List.rev locals in
@@ -393,7 +394,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
 let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
     cm_fun =
  fun ctx ->
-  let v, ctx, cc = pop_frame config span true ctx in
+  let (v, ctx, cc) = pop_frame config span true ctx in
   comp cc (assign_to_place config span (Option.get v) dest ctx)
 
 (** Auxiliary function - see {!eval_assumed_function_call} *)
@@ -416,7 +417,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
         span "The input given to Box::new doesn't have the proper type";
 
       (* Move the input value *)
-      let v, ctx, cc =
+      let (v, ctx, cc) =
         eval_operand config span
           (Move (mk_place_from_var_id input_var.index))
           ctx
@@ -457,7 +458,7 @@ let eval_box_free (config : config) (span : Meta.span) (generics : generic_args)
     (args : operand list) (dest : place) : cm_fun =
  fun ctx ->
   match (generics.regions, generics.types, generics.const_generics, args) with
-  | [], [ boxed_ty ], [], [ Move input_box_place ] ->
+  | ([], [ boxed_ty ], [], [ Move input_box_place ]) ->
       (* Required type checking *)
       let input_box =
         InterpreterPaths.read_place span Write input_box_place ctx
@@ -467,7 +468,7 @@ let eval_box_free (config : config) (span : Meta.span) (generics : generic_args)
         span;
 
       (* Drop the value *)
-      let ctx, cc = drop_value config span input_box_place ctx in
+      let (ctx, cc) = drop_value config span input_box_place ctx in
 
       (* Update the destination by setting it to [()] *)
       comp cc (assign_to_place config span mk_unit_value dest ctx)
@@ -501,7 +502,7 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
           (* "Normal" case: not box_free *)
           (* Evaluate the operands *)
           (*      let ctx, args_vl = eval_operands config ctx args in *)
-          let args_vl, ctx, cc = eval_operands config span args ctx in
+          let (args_vl, ctx, cc) = eval_operands config span args ctx in
 
           (* Evaluate the call
            *
@@ -531,16 +532,19 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
           (* "Execute" the function body. As the functions are assumed, here we call
            * custom functions to perform the proper manipulations: we don't have
            * access to a body. *)
-          let ctx, cf_eval_body =
+          let (ctx, cf_eval_body) =
             match fid with
             | BoxNew -> eval_box_new_concrete config span generics ctx
             | BoxFree ->
                 (* Should have been treated above *)
                 craise __FILE__ __LINE__ span "Unreachable"
-            | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
-            | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
-              ->
-                craise __FILE__ __LINE__ span "Unimplemented"
+            | ArrayIndexShared
+            | ArrayIndexMut
+            | ArrayToSliceShared
+            | ArrayToSliceMut
+            | ArrayRepeat
+            | SliceIndexShared
+            | SliceIndexMut -> craise __FILE__ __LINE__ span "Unimplemented"
           in
           let cc = cc_comp cc cf_eval_body in
 
@@ -624,7 +628,7 @@ let create_push_abstractions_from_abs_region_groups
    * in the context. *)
   let insert_abs (ctx : eval_ctx) (abs : abs) : eval_ctx =
     (* Compute the values to insert in the abstraction *)
-    let ctx, avalues = compute_abs_avalues abs ctx in
+    let (ctx, avalues) = compute_abs_avalues abs ctx in
     (* Add the avalues to the abstraction *)
     let abs = { abs with avalues } in
     (* Insert the abstraction in the context *)
@@ -804,7 +808,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     ctx_lookup_trait_decl ctx
                       trait_ref.trait_decl_ref.trait_decl_id
                   in
-                  let _, method_id =
+                  let (_, method_id) =
                     List.find
                       (fun (s, _) -> s = method_name)
                       trait_decl.provided_methods
@@ -861,11 +865,13 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 ctx_lookup_trait_decl ctx trait_ref.trait_decl_ref.trait_decl_id
               in
               (* Lookup the method decl in the required *and* the provided methods *)
-              let _, method_id =
+              let (_, method_id) =
                 let provided =
                   List.filter_map
                     (fun (id, f) ->
-                      match f with None -> None | Some f -> Some (id, f))
+                      match f with
+                      | None -> None
+                      | Some f -> Some (id, f))
                     trait_decl.provided_methods
                 in
                 List.find
@@ -914,7 +920,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   let cc = S.save_snapshot ctx in
   (* Expand the symbolic values if necessary - we need to do that before
      checking the invariants *)
-  let ctx, cc = comp cc (greedy_expand_symbolic_values config st.span ctx) in
+  let (ctx, cc) = comp cc (greedy_expand_symbolic_values config st.span ctx) in
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
@@ -937,14 +943,16 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
           eval_global config st.span p gid generics ctx
       | _ ->
           (* Evaluate the rvalue *)
-          let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
+          let (res, ctx, cc) =
+            eval_rvalue_not_global config st.span rvalue ctx
+          in
           (* Assign *)
           log#ldebug
             (lazy
               ("about to assign to place: " ^ place_to_string ctx p
              ^ "\n- Context:\n"
               ^ eval_ctx_to_string ~span:(Some st.span) ctx));
-          let (ctx, res), cf_assign =
+          let ((ctx, res), cf_assign) =
             match res with
             | Error EPanic -> ((ctx, Panic), fun e -> e)
             | Ok rv ->
@@ -970,7 +978,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                         (S.mk_mplace st.span p ctx)
                         rv rp
                 in
-                let ctx, cc =
+                let (ctx, cc) =
                   comp cc (assign_to_place config st.span rv p ctx)
                 in
                 ((ctx, Unit), cc)
@@ -979,16 +987,16 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
           (* Compose and apply *)
           ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
   | FakeRead p ->
-      let ctx, cc = eval_fake_read config st.span p ctx in
+      let (ctx, cc) = eval_fake_read config st.span p ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | SetDiscriminant (p, variant_id) ->
-      let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
+      let ((ctx, res), cc) = set_discriminant config st.span p variant_id ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Drop p ->
-      let ctx, cc = drop_value config st.span p ctx in
+      let (ctx, cc) = drop_value config st.span p ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Assert assertion ->
-      let (ctx, res), cc = eval_assertion config st.span assertion ctx in
+      let ((ctx, res), cc) = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Call call -> eval_function_call config st.span call ctx
   | Panic -> ([ (ctx, Panic) ], cf_singleton __FILE__ __LINE__ st.span)
@@ -998,7 +1006,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Nop -> ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
   | Sequence (st1, st2) ->
       (* Evaluate the first statement *)
-      let ctx_resl, cf_st1 = eval_statement config st1 ctx in
+      let (ctx_resl, cf_st1) = eval_statement config st1 ctx in
       (* Evaluate the sequence (evaluate the second statement if the first
          statement successfully evaluated, otherwise transfmit the control-flow
          break) *)
@@ -1009,8 +1017,13 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
             (* Evaluation successful: evaluate the second statement *)
             | Unit -> eval_statement config st2 ctx
             (* Control-flow break: transmit. We enumerate the cases on purpose *)
-            | Panic | Break _ | Continue _ | Return | LoopReturn _
-            | EndEnterLoop _ | EndContinue _ ->
+            | Panic
+            | Break _
+            | Continue _
+            | Return
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ ->
                 ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ st.span))
           ctx_resl
       in
@@ -1019,7 +1032,9 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
          - we need to build the continuation which will build the whole
            expression from the continuations for the individual branches
       *)
-      let ctx_resl, cf_st2 = comp_seqs __FILE__ __LINE__ st.span ctx_res_cfl in
+      let (ctx_resl, cf_st2) =
+        comp_seqs __FILE__ __LINE__ st.span ctx_res_cfl
+      in
       (ctx_resl, cc_comp cf_st1 cf_st2)
   | Loop loop_body ->
       let eval_loop_body = eval_statement config loop_body in
@@ -1054,7 +1069,7 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
           global.ty
       in
       let sval = mk_fresh_symbolic_value span ty in
-      let ctx, cc =
+      let (ctx, cc) =
         assign_to_place config span
           (mk_typed_value_from_symbolic_value sval)
           dest ctx
@@ -1079,9 +1094,9 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
   match switch with
   | If (op, st1, st2) ->
       (* Evaluate the operand *)
-      let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
+      let (op_v, ctx, cf_eval_op) = eval_operand config span op ctx in
       (* Switch on the value *)
-      let ctx_resl, cf_if =
+      let (ctx_resl, cf_if) =
         match op_v.value with
         | VLiteral (VBool b) ->
             (* Branch *)
@@ -1090,14 +1105,14 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         | VSymbolic sv ->
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
-            let (ctx_true, ctx_false), cf_bool =
+            let ((ctx_true, ctx_false), cf_bool) =
               expand_symbolic_bool config span sv
                 (S.mk_opt_place_from_op span op ctx)
                 ctx
             in
             let resl_true = eval_statement config st1 ctx_true in
             let resl_false = eval_statement config st2 ctx_false in
-            let ctx_resl, cf_branches =
+            let (ctx_resl, cf_branches) =
               comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
             in
             let cc el =
@@ -1112,9 +1127,9 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       (ctx_resl, cc_comp cf_eval_op cf_if)
   | SwitchInt (op, int_ty, stgts, otherwise) ->
       (* Evaluate the operand *)
-      let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
+      let (op_v, ctx, cf_eval_op) = eval_operand config span op ctx in
       (* Switch on the value *)
-      let ctx_resl, cf_switch =
+      let (ctx_resl, cf_switch) =
         match op_v.value with
         | VLiteral (VScalar sv) -> (
             (* Sanity check *)
@@ -1128,7 +1143,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
                by a pair (list of values, branch expression).
                In order to do a symbolic evaluation, we make this "flat" by
                de-grouping the branches. *)
-            let values, branches =
+            let (values, branches) =
               List.split
                 (List.concat
                    (List.map
@@ -1136,7 +1151,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
                       stgts))
             in
             (* Expand the symbolic value *)
-            let (ctx_branches, ctx_otherwise), cf_int =
+            let ((ctx_branches, ctx_otherwise), cf_int) =
               expand_symbolic_int config span sv
                 (S.mk_opt_place_from_op span op ctx)
                 int_ty values ctx
@@ -1152,12 +1167,12 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
               eval_statement config otherwise ctx_otherwise
             in
             (* Compose the continuations *)
-            let resl, cf =
+            let (resl, cf) =
               comp_seqs __FILE__ __LINE__ span
                 (resl_branches @ [ resl_otherwise ])
             in
             let cc el =
-              let el, e_otherwise = Collections.List.pop_last el in
+              let (el, e_otherwise) = Collections.List.pop_last el in
               cf_int (el, e_otherwise)
             in
             (resl, cc_comp cc cf)
@@ -1169,12 +1184,12 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       (* Access the place *)
       let access = Read in
       let expand_prim_copy = false in
-      let p_v, ctx, cf_read_p =
+      let (p_v, ctx, cf_read_p) =
         access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in
       (* Match on the value *)
-      let ctx_resl, cf_match =
+      let (ctx_resl, cf_match) =
         (* The value may be shared: we need to ignore the shared loans
            to read the value itself *)
         let p_v = value_strip_shared_loans p_v in
@@ -1192,7 +1207,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             | Some (_, tgt) -> eval_statement config tgt ctx)
         | VSymbolic sv ->
             (* Expand the symbolic value - may lead to branching *)
-            let ctxl, cf_expand =
+            let (ctxl, cf_expand) =
               expand_symbolic_adt config span sv
                 (Some (S.mk_mplace span p ctx))
                 ctx
@@ -1203,7 +1218,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
               List.map (fun ctx -> (eval_switch config span switch) ctx) ctxl
             in
             (* Compose the continuations *)
-            let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
+            let (ctx_resl, cf) = comp_seqs __FILE__ __LINE__ span resl in
             (ctx_resl, cc_comp cf_expand cf)
         | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
       in
@@ -1236,7 +1251,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
            * by giving {!Unit} to the continuation, because we place us in the case
            * where we haven't panicked. Of course, the translation needs to take the
            * panic case into account... *)
-          let ctx, cc =
+          let (ctx, cc) =
             eval_assumed_function_call_concrete config span fid call ctx
           in
           ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
@@ -1285,13 +1300,13 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
       let subst =
         Subst.make_subst_from_generics def.signature.generics generics tr_self
       in
-      let locals, body_st = Subst.fun_body_substitute_in_body subst body in
+      let (locals, body_st) = Subst.fun_body_substitute_in_body subst body in
 
       (* Evaluate the input operands *)
       sanity_check __FILE__ __LINE__
         (List.length args = body.arg_count)
         body.span;
-      let vl, ctx, cc = eval_operands config body.span args ctx in
+      let (vl, ctx, cc) = eval_operands config body.span args ctx in
 
       (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
        * of the operands evaluation from above to the functions afterwards, while
@@ -1300,12 +1315,12 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
 
       (* Compute the initial values for the local variables *)
       (* 1. Push the return value *)
-      let ret_var, locals =
+      let (ret_var, locals) =
         match locals with
         | ret_ty :: locals -> (ret_ty, locals)
         | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
-      let input_locals, locals =
+      let (input_locals, locals) =
         Collections.List.split_at locals body.arg_count
       in
 
@@ -1323,7 +1338,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
       let ctx = push_uninitialized_vars span locals ctx in
 
       (* Execute the function body *)
-      let ctx_resl, cc = comp cc (eval_function_body config body_st ctx) in
+      let (ctx_resl, cc) = comp cc (eval_function_body config body_st ctx) in
 
       (* Pop the stack frame and move the return value to its destination *)
       let ctx_resl_cfl =
@@ -1334,14 +1349,17 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
             | Return ->
                 (* Pop the stack frame, retrieve the return value, move it to
                    its destination and continue *)
-                let ctx, cf = pop_frame_assign config span dest ctx in
+                let (ctx, cf) = pop_frame_assign config span dest ctx in
                 ((ctx, Unit), cf)
-            | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
-            | EndContinue _ ->
-                craise __FILE__ __LINE__ span "Unreachable")
+            | Break _
+            | Continue _
+            | Unit
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ -> craise __FILE__ __LINE__ span "Unreachable")
           ctx_resl
       in
-      let ctx_resl, cfl = List.split ctx_resl_cfl in
+      let (ctx_resl, cfl) = List.split ctx_resl_cfl in
       let cf_pop el = List.map2 (fun cf e -> cf e) cfl el in
       (* Continue *)
       (ctx_resl, cc_comp cc cf_pop)
@@ -1350,7 +1368,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
 and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
-  let func, generics, trait_method_generics, def, regions_hierarchy, inst_sg =
+  let (func, generics, trait_method_generics, def, regions_hierarchy, inst_sg) =
     eval_transparent_function_call_symbolic_inst span call ctx
   in
   (* Sanity check: same number of inputs *)
@@ -1416,7 +1434,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let dest_place = Some (S.mk_mplace span dest ctx) in
 
   (* Evaluate the input operands *)
-  let args, ctx, cc = eval_operands config span args ctx in
+  let (args, ctx, cc) = eval_operands config span args ctx in
 
   (* Generate the abstractions and insert them in the context *)
   let abs_ids = List.map (fun rg -> rg.id) inst_sg.regions_hierarchy in
@@ -1447,7 +1465,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
       eval_ctx * typed_avalue list =
     (* Project over the input values *)
-    let ctx, args_projs =
+    let (ctx, args_projs) =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
           apply_proj_borrows_on_input_value config span ctx abs.regions
@@ -1474,7 +1492,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   in
 
   (* Move the return value to its destination *)
-  let ctx, cc = comp cc (assign_to_place config span ret_value dest ctx) in
+  let (ctx, cc) = comp cc (assign_to_place config span ret_value dest ctx) in
 
   (* End the abstractions which don't contain loans and don't have parent
    * abstractions.
@@ -1484,7 +1502,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let abs_ids = ref abs_ids in
   let rec end_abs_with_no_loans ctx =
     (* Find the abstractions which don't contain loans *)
-    let no_loans_abs, with_loans_abs =
+    let (no_loans_abs, with_loans_abs) =
       List.partition
         (fun abs_id ->
           (* Lookup the abstraction *)
@@ -1503,7 +1521,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       abs_ids := with_loans_abs;
       (* End the abstractions which can be ended *)
       let no_loans_abs = AbstractionId.Set.of_list no_loans_abs in
-      let ctx, cc =
+      let (ctx, cc) =
         InterpreterBorrows.end_abstractions config span no_loans_abs ctx
       in
       (* Recursive call *)
@@ -1516,7 +1534,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * - the function returns unit
    * (see the documentation of {!config} for more information)
    *)
-  let ctx, cc =
+  let (ctx, cc) =
     comp cc
       (if Config.return_unit_end_abs_with_no_loans && ty_is_unit inst_sg.output
        then end_abs_with_no_loans ctx
@@ -1553,14 +1571,14 @@ and eval_assumed_function_call_symbolic (config : config) (span : Meta.span)
   | BoxFree ->
       (* Degenerate case: box_free - note that this is not really a function
        * call: no need to call a "synthesize_..." function *)
-      let ctx, cc = eval_box_free config span generics args dest ctx in
+      let (ctx, cc) = eval_box_free config span generics args dest ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
   | _ ->
       (* "Normal" case: not box_free *)
       (* In symbolic mode, the behaviour of a function call is completely defined
        * by the signature of the function: we thus simply generate correctly
        * instantiated signatures, and delegate the work to an auxiliary function *)
-      let sg, regions_hierarchy, inst_sig =
+      let (sg, regions_hierarchy, inst_sig) =
         match fid with
         | BoxFree ->
             (* Should have been treated above *)
@@ -1588,7 +1606,7 @@ and eval_assumed_function_call_symbolic (config : config) (span : Meta.span)
 and eval_function_body (config : config) (body : statement) : stl_cm_fun =
  fun ctx ->
   log#ldebug (lazy "eval_function_body:");
-  let ctx_resl, cf_body = eval_statement config body ctx in
+  let (ctx_resl, cf_body) = eval_statement config body ctx in
   let ctx_res_cfl =
     List.map
       (fun (ctx, res) ->
@@ -1597,14 +1615,14 @@ and eval_function_body (config : config) (body : statement) : stl_cm_fun =
         log#ldebug (lazy "eval_function_body: cf_finish");
         (* Expand the symbolic values if necessary - we need to do that before
            checking the invariants *)
-        let ctx, cf = greedy_expand_symbolic_values config body.span ctx in
+        let (ctx, cf) = greedy_expand_symbolic_values config body.span ctx in
         (* Sanity check *)
         Invariants.check_invariants body.span ctx;
         (* Continue *)
         ((ctx, res), cf))
       ctx_resl
   in
-  let ctx_resl, cfl = List.split ctx_res_cfl in
+  let (ctx_resl, cfl) = List.split ctx_res_cfl in
   let cf_end el = List.map2 (fun cf e -> cf e) cfl el in
   (* Compose and continue *)
   (ctx_resl, cc_comp cf_body cf_end)

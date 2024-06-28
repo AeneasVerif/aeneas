@@ -272,7 +272,9 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
   analyze expl_info_init ty_info ty
 
 let type_decl_is_opaque (d : type_decl) : bool =
-  match d.kind with Opaque -> true | _ -> false
+  match d.kind with
+  | Opaque -> true
+  | _ -> false
 
 let analyze_type_decl (updated : bool ref) (infos : type_infos)
     (def : type_decl) : type_infos =
@@ -312,7 +314,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
 let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     (infos : type_infos) (decl : type_declaration_group) : type_infos =
   (* Collect the identifiers used in the declaration group *)
-  let is_rec, ids =
+  let (is_rec, ids) =
     match decl with
     | NonRecGroup id -> (false, [ id ])
     | RecGroup ids -> (true, ids)

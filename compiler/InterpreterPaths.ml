@@ -99,7 +99,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
           TAdt (type_id, _) ) -> (
           (* Check consistency *)
           (match (proj_kind, type_id) with
-          | ProjAdt (def_id, opt_variant_id), TAdtId def_id' ->
+          | (ProjAdt (def_id, opt_variant_id), TAdtId def_id') ->
               sanity_check __FILE__ __LINE__ (def_id = def_id') span;
               sanity_check __FILE__ __LINE__
                 (opt_variant_id = adt.variant_id)
@@ -118,7 +118,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
               let updated = { v with value = nadt } in
               Ok (ctx, { res with updated }))
       (* Tuples *)
-      | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> (
+      | (Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _)) -> (
           sanity_check __FILE__ __LINE__
             (arity = List.length adt.field_values)
             span;
@@ -136,10 +136,10 @@ let rec access_projection (span : Meta.span) (access : projection_access)
               Ok (ctx, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *))
-      | Field ((ProjAdt (_, _) | ProjTuple _), _), VBottom, _ ->
+      | (Field ((ProjAdt (_, _) | ProjTuple _), _), VBottom, _) ->
           Error (FailBottom (1 + List.length p', pe, v.ty))
       (* Symbolic value: needs to be expanded *)
-      | _, VSymbolic sp, _ ->
+      | (_, VSymbolic sp, _) ->
           (* Expand the symbolic value *)
           Error (FailSymbolic (1 + List.length p', sp))
       (* Box dereferencement *)
@@ -163,15 +163,15 @@ let rec access_projection (span : Meta.span) (access : projection_access)
               in
               Ok (ctx, { res with updated = nv }))
       (* Borrows *)
-      | Deref, VBorrow bc, _ -> (
+      | (Deref, VBorrow bc, _) -> (
           match bc with
           | VSharedBorrow bid ->
               (* Lookup the loan content, and explore from there *)
               if access.lookup_shared_borrows then
                 match lookup_loan span ek bid ctx with
-                | _, Concrete (VMutLoan _) ->
+                | (_, Concrete (VMutLoan _)) ->
                     craise __FILE__ __LINE__ span "Expected a shared loan"
-                | _, Concrete (VSharedLoan (bids, sv)) -> (
+                | (_, Concrete (VSharedLoan (bids, sv))) -> (
                     (* Explore the shared value *)
                     match access_projection span access ctx update p' sv with
                     | Error err -> Error err
@@ -197,7 +197,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                       | AIgnoredSharedLoan _ ) ) ->
                     craise __FILE__ __LINE__ span
                       "Expected a shared (abstraction) loan"
-                | _, Abstract (ASharedLoan (pm, bids, sv, _av)) -> (
+                | (_, Abstract (ASharedLoan (pm, bids, sv, _av))) -> (
                     (* Sanity check: projection markers can only appear when we're doing a join *)
                     sanity_check __FILE__ __LINE__ (pm = PNone) span;
                     (* Explore the shared value *)
@@ -207,7 +207,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                         (* Relookup the child avalue *)
                         let av =
                           match lookup_loan span ek bid ctx with
-                          | _, Abstract (ASharedLoan (_, _, _, av)) -> av
+                          | (_, Abstract (ASharedLoan (_, _, _, av))) -> av
                           | _ -> craise __FILE__ __LINE__ span "Unexpected"
                         in
                         (* Update the shared loan with the new value returned
@@ -231,7 +231,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                     in
                     Ok (ctx, { res with updated = nv })
               else Error (FailBorrow bc))
-      | _, VLoan lc, _ -> (
+      | (_, VLoan lc, _) -> (
           match lc with
           | VMutLoan bid -> Error (FailMutLoan bid)
           | VSharedLoan (bids, sv) ->
@@ -254,7 +254,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
             craise __FILE__ __LINE__ span
               "Can not apply a projection to the ⊥ value"
           else
-            let pe, v, ty = r in
+            let (pe, v, ty) = r in
             let pe = "- pe: " ^ show_projection_elem pe in
             let v = "- v:\n" ^ show_value v in
             let ty = "- ty:\n" ^ show_ety ty in
@@ -471,7 +471,7 @@ let rec update_ctx_along_read_place (config : config) (span : Meta.span)
   match try_read_place span access p ctx with
   | Ok _ -> (ctx, fun e -> e)
   | Error err ->
-      let ctx, cc =
+      let (ctx, cc) =
         match err with
         | FailSharedLoan bids -> end_borrows config span bids ctx
         | FailMutLoan bid -> end_borrow config span bid ctx
@@ -479,7 +479,7 @@ let rec update_ctx_along_read_place (config : config) (span : Meta.span)
             promote_reserved_mut_borrow config span bid ctx
         | FailSymbolic (i, sp) ->
             (* Expand the symbolic value *)
-            let proj, _ =
+            let (proj, _) =
               Collections.List.split_at p.projection
                 (List.length p.projection - i)
             in
@@ -504,7 +504,7 @@ let rec update_ctx_along_write_place (config : config) (span : Meta.span)
   | Ok _ -> (ctx, fun e -> e)
   | Error err ->
       (* Update the context *)
-      let ctx, cc =
+      let (ctx, cc) =
         match err with
         | FailSharedLoan bids -> end_borrows config span bids ctx
         | FailMutLoan bid -> end_borrow config span bid ctx
@@ -611,7 +611,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
         (ctx, fun e -> e)
     | Some c ->
         (* End the loans and retry *)
-        let ctx, cc =
+        let (ctx, cc) =
           match c with
           | LoanContent (VSharedLoan (bids, _)) ->
               end_borrows config span bids ctx
@@ -624,10 +624,10 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
         comp cc (drop ctx)
   in
   (* Apply the drop function *)
-  let ctx, cc = drop ctx in
+  let (ctx, cc) = drop ctx in
   (* Pop the temporary value and reinsert it *)
   (* Pop *)
-  let ctx, v = ctx_remove_dummy_var span ctx dummy_id in
+  let (ctx, v) = ctx_remove_dummy_var span ctx dummy_id in
   (* Sanity check *)
   sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) span;
   (* Reinsert *)
@@ -646,9 +646,9 @@ let prepare_lplace (config : config) (span : Meta.span) (p : place)
       ^ eval_ctx_to_string ~span:(Some span) ctx));
   (* Access the place *)
   let access = Write in
-  let ctx, cc = update_ctx_along_write_place config span access p ctx in
+  let (ctx, cc) = update_ctx_along_write_place config span access p ctx in
   (* End the loans at the place we are about to overwrite *)
-  let ctx, cc = comp cc (drop_outer_loans_at_lplace config span p ctx) in
+  let (ctx, cc) = comp cc (drop_outer_loans_at_lplace config span p ctx) in
   (* Read the value and check it *)
   let v = read_place span access p ctx in
   (* Sanity checks *)

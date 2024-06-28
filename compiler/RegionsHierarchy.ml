@@ -84,7 +84,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
      level of the signature (this excludes the regions locally bound inside
      the types, for instance at the level of an arrow type).
   *)
-  let bound_regions, bound_regions_id_subst, bound_regions_subst =
+  let (bound_regions, bound_regions_id_subst, bound_regions_subst) =
     Subst.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
       sg.generics.regions
   in
@@ -112,8 +112,8 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     sanity_check_opt_span __FILE__ __LINE__ (long <> RErased) span;
     (* Ignore the locally bound regions (at the level of arrow types for instance *)
     match (short, long) with
-    | RBVar _, _ | _, RBVar _ -> ()
-    | _, _ ->
+    | (RBVar _, _) | (_, RBVar _) -> ()
+    | (_, _) ->
         let m = !g in
         let s = RegionMap.find short !g in
         let s = RegionSet.add long s in
@@ -220,7 +220,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
   *)
   let sccs =
     (* Find the SCC which contains the static region *)
-    let static_gr_id, static_scc =
+    let (static_gr_id, static_scc) =
       List.find
         (fun (_, scc) -> List.mem RStatic scc)
         (SccId.Map.bindings sccs.sccs)

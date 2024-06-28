@@ -284,7 +284,11 @@ let rec mprojection_to_string (env : fmt_env) (inside : string)
               "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
 
 let mplace_to_string (env : fmt_env) (p : mplace) : string =
-  let name = match p.name with None -> "" | Some name -> name in
+  let name =
+    match p.name with
+    | None -> ""
+    | Some name -> name
+  in
   (* We add the "llbc" suffix to the variable index, because span-places
    * use indices of the variables in the original LLBC program, while
    * regular places use indices for the pure variables: we want to make
@@ -548,11 +552,11 @@ let rec texpression_to_string ?(spandata : Meta.span option = None)
   | Const cv -> literal_to_string cv
   | App _ ->
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
-      let app, args = destruct_apps e in
+      let (app, args) = destruct_apps e in
       (* Convert to string *)
       app_to_string ~span:spandata env inside indent indent_incr app args
   | Lambda _ ->
-      let xl, e = destruct_lambdas e in
+      let (xl, e) = destruct_lambdas e in
       let e = lambda_to_string ~span:spandata env indent indent_incr xl e in
       if inside then "(" ^ e ^ ")" else e
   | Qualif _ ->
@@ -621,7 +625,7 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
   (* There are two possibilities: either the [app] is an instantiated,
    * top-level qualifier (function, ADT constructore...), or it is a "regular"
    * expression *)
-  let app, generics =
+  let (app, generics) =
     match app.e with
     | Qualif qualif -> (
         (* Qualifier case *)

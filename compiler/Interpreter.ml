@@ -17,13 +17,13 @@ module SA = SymbolicAst
 let log = Logging.interpreter_log
 
 let compute_contexts (m : crate) : decls_ctx =
-  let type_decls_list, _, _, _, _, _ = split_declarations m.declarations in
+  let (type_decls_list, _, _, _, _, _) = split_declarations m.declarations in
   let type_decls = m.type_decls in
   let fun_decls = m.fun_decls in
   let global_decls = m.global_decls in
   let trait_decls = m.trait_decls in
   let trait_impls = m.trait_impls in
-  let type_decls_groups, _, _, _, _ =
+  let (type_decls_groups, _, _, _, _) =
     split_declarations_to_group_maps m.declarations
   in
   let type_infos =
@@ -129,7 +129,7 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
       let tr_subst = mk_tr_subst tr_map in
       { Substitute.r_subst; ty_subst; cg_subst; tr_subst; tr_self }
     in
-    let _, trait_refs =
+    let (_, trait_refs) =
       List.fold_left_map
         (fun tr_map (c : trait_clause) ->
           let subst = mk_subst tr_map in
@@ -217,7 +217,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   (* Instantiate the signature. This updates the context because we compute
      at the same time the normalization map for the associated types.
   *)
-  let ctx, inst_sg =
+  let (ctx, inst_sg) =
     symbolic_instantiate_fun_sig fdef.item_meta.span ctx fdef.signature
       regions_hierarchy fdef.kind
   in
@@ -247,7 +247,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   (* Split the variables between return var, inputs and remaining locals *)
   let body = Option.get fdef.body in
   let ret_var = List.hd body.locals in
-  let input_vars, local_vars =
+  let (input_vars, local_vars) =
     Collections.List.split_at (List.tl body.locals) body.arg_count
   in
   (* Push the return variable (initialized with ⊥) *)
@@ -300,14 +300,14 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let regions_hierarchy =
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
-  let _, ret_inst_sg =
+  let (_, ret_inst_sg) =
     symbolic_instantiate_fun_sig fdef.item_meta.span ctx fdef.signature
       regions_hierarchy fdef.kind
   in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in
-  let ret_value, ctx, cc =
+  let (ret_value, ctx, cc) =
     pop_frame config fdef.item_meta.span pop_return_value ctx
   in
 
@@ -335,7 +335,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       let ret_value = Option.get ret_value in
       let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
           eval_ctx * typed_avalue list =
-        let ctx, avalue =
+        let (ctx, avalue) =
           apply_proj_borrows_on_input_value config fdef.item_meta.span ctx
             abs.regions abs.ancestors_regions ret_value ret_rty
         in
@@ -381,7 +381,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
    * Note that we don't end the same abstraction if we are *inside* a loop (i.e.,
    * we are evaluating an [EndContinue]) or not.
    *)
-  let current_abs_id, end_fun_synth_input =
+  let (current_abs_id, end_fun_synth_input) =
     let fun_abs_id = (RegionGroupId.nth inst_sg.regions_hierarchy back_id).id in
     if not inside_loop then (Some fun_abs_id, true)
     else
@@ -391,7 +391,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         | Loop (_, rg_id', kind) ->
             let rg_id' = Option.get rg_id' in
             let is_ret =
-              match kind with LoopSynthInput -> true | LoopCall -> false
+              match kind with
+              | LoopSynthInput -> true
+              | LoopCall -> false
             in
             rg_id' = back_id && is_ret
         | _ -> false
@@ -491,10 +493,12 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
 
   let current_abs_id =
-    match current_abs_id with None -> [] | Some id -> [ id ]
+    match current_abs_id with
+    | None -> []
+    | Some id -> [ id ]
   in
   let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
-  let ctx, cc =
+  let (ctx, cc) =
     comp cc
       (fold_left_apply_continuation
          (fun id ctx -> end_abstraction config fdef.item_meta.span id ctx)
@@ -531,7 +535,9 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
 
   (* Create the evaluation context *)
-  let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
+  let (ctx, input_svs, inst_sg) =
+    initialize_symbolic_context_for_fun ctx fdef
+  in
 
   let regions_hierarchy =
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
@@ -563,7 +569,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         let fwd_e =
           (* Pop the frame and retrieve the returned value at the same time *)
           let pop_return_value = true in
-          let ret_value, ctx, cc_pop =
+          let (ret_value, ctx, cc_pop) =
             pop_frame config fdef.item_meta.span pop_return_value ctx
           in
           (* Generate the Return node *)
@@ -607,7 +613,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
           (* Pop the frame - there is no returned value to pop: in the
              translation we will simply call the loop function *)
           let pop_return_value = false in
-          let _ret_value, _ctx, cc_pop =
+          let (_ret_value, _ctx, cc_pop) =
             pop_frame config fdef.item_meta.span pop_return_value ctx
           in
           (* Generate the Return node *)
@@ -642,7 +648,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   (* Evaluate the function *)
   let symbolic =
     try
-      let ctx_resl, cc =
+      let (ctx_resl, cc) =
         eval_function_body config (Option.get fdef.body).body ctx
       in
       let el = List.map (fun (ctx, res) -> finish res ctx) ctx_resl in
@@ -700,7 +706,7 @@ module Test = struct
                 fdef.item_meta.name)
     in
     (* Evaluate the function *)
-    let ctx_resl, _ = eval_function_body config body.body ctx in
+    let (ctx_resl, _) = eval_function_body config body.body ctx in
     let _ = List.map (fun (ctx, res) -> check res ctx) ctx_resl in
     ()
 

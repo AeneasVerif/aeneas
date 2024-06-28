@@ -80,8 +80,8 @@ module Values = struct
         | TAdt (TAssumed aty, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
-            | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
-            | TArray, _ ->
+            | (TBox, [ bv ]) -> "@Box(" ^ bv ^ ")"
+            | (TArray, _) ->
                 (* Happens when we aggregate values *)
                 "@Array[" ^ String.concat ", " field_values ^ "]"
             | _ ->
@@ -190,7 +190,7 @@ module Values = struct
         | TAdt (TAssumed aty, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
-            | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
+            | (TBox, [ bv ]) -> "@Box(" ^ bv ^ ")"
             | _ -> craise_opt_span __FILE__ __LINE__ span "Inconsistent value")
         | _ -> craise_opt_span __FILE__ __LINE__ span "Inconsistent typed value"
         )

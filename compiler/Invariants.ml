@@ -209,7 +209,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
     let info = find_info bid in
     (* Check that the borrow kind is consistent *)
     (match (info.loan_kind, kind) with
-    | RShared, (BShared | BReserved) | RMut, BMut -> ()
+    | (RShared, (BShared | BReserved)) | (RMut, BMut) -> ()
     | _ -> craise __FILE__ __LINE__ span "Invariant not satisfied");
     (* A reserved borrow can't point to a value inside an abstraction *)
     sanity_check __FILE__ __LINE__
@@ -250,7 +250,9 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
           | ASharedBorrow (_, bid) -> register_borrow BShared bid
           | AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow RMut bid
           | AIgnoredMutBorrow (None, _)
-          | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedSharedBorrow
+          | AEndedMutBorrow _
+          | AEndedIgnoredMutBorrow _
+          | AEndedSharedBorrow
           | AProjSharedBorrow _ ->
               (* Do nothing *)
               ()
@@ -362,8 +364,7 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
           | AMutBorrow (_, _, _) -> set_outer_mut info
           | ASharedBorrow _ | AEndedSharedBorrow -> set_outer_shared info
           | AIgnoredMutBorrow _ | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _
-            ->
-              set_outer_mut info
+            -> set_outer_mut info
           | AProjSharedBorrow _ -> set_outer_shared info
         in
         (* Continue exploring *)
@@ -378,9 +379,9 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
 let check_literal_type (span : Meta.span) (cv : literal) (ty : literal_type) :
     unit =
   match (cv, ty) with
-  | VScalar sv, TInteger int_ty ->
+  | (VScalar sv, TInteger int_ty) ->
       sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) span
-  | VBool _, TBool | VChar _, TChar -> ()
+  | (VBool _, TBool) | (VChar _, TChar) -> ()
   | _ -> craise __FILE__ __LINE__ span "Erroneous typing"
 
 let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
@@ -392,7 +393,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
    * places.
    * *)
   let aloan_get_expected_child_type (ty : ty) : ty =
-    let _, ty, _ = ty_get_ref ty in
+    let (_, ty, _) = ty_get_ref ty in
     ty
   in
 
@@ -416,9 +417,9 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         sanity_check __FILE__ __LINE__ (ty_is_ety tv.ty) span;
         (* Check the current pair (value, type) *)
         (match (tv.value, tv.ty) with
-        | VLiteral cv, TLiteral ty -> check_literal_type span cv ty
+        | (VLiteral cv, TLiteral ty) -> check_literal_type span cv ty
         (* ADT case *)
-        | VAdt av, TAdt (TAdtId def_id, generics) ->
+        | (VAdt av, TAdt (TAdtId def_id, generics)) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = ctx_lookup_type_decl ctx def_id in
@@ -431,11 +432,11 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
               span;
             (* Check that the variant id is consistent *)
             (match (av.variant_id, def.kind) with
-            | Some variant_id, Enum variants ->
+            | (Some variant_id, Enum variants) ->
                 sanity_check __FILE__ __LINE__
                   (VariantId.to_int variant_id < List.length variants)
                   span
-            | None, Struct _ -> ()
+            | (None, Struct _) -> ()
             | _ -> craise __FILE__ __LINE__ span "Erroneous typing");
             (* Check that the field types are correct *)
             let field_types =
@@ -448,7 +449,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 sanity_check __FILE__ __LINE__ (v.ty = ty) span)
               fields_with_types
         (* Tuple case *)
-        | VAdt av, TAdt (TTuple, generics) ->
+        | (VAdt av, TAdt (TTuple, generics)) ->
             sanity_check __FILE__ __LINE__ (generics.regions = []) span;
             sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
             sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
@@ -462,7 +463,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 sanity_check __FILE__ __LINE__ (v.ty = ty) span)
               fields_with_types
         (* Assumed type case *)
-        | VAdt av, TAdt (TAssumed aty_id, generics) -> (
+        | (VAdt av, TAdt (TAssumed aty_id, generics)) -> (
             sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
             match
               ( aty_id,
@@ -472,9 +473,9 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 generics.const_generics )
             with
             (* Box *)
-            | TBox, [ inner_value ], [], [ inner_ty ], [] ->
+            | (TBox, [ inner_value ], [], [ inner_ty ], []) ->
                 sanity_check __FILE__ __LINE__ (inner_value.ty = inner_ty) span
-            | TArray, inner_values, _, [ inner_ty ], [ cg ] ->
+            | (TArray, inner_values, _, [ inner_ty ], [ cg ]) ->
                 (* *)
                 sanity_check __FILE__ __LINE__
                   (List.for_all
@@ -490,29 +491,29 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 sanity_check __FILE__ __LINE__
                   (Z.of_int (List.length inner_values) = len)
                   span
-            | (TSlice | TStr), _, _, _, _ ->
+            | ((TSlice | TStr), _, _, _, _) ->
                 craise __FILE__ __LINE__ span "Unexpected"
             | _ -> craise __FILE__ __LINE__ span "Erroneous type")
-        | VBottom, _ -> (* Nothing to check *) ()
-        | VBorrow bc, TRef (_, ref_ty, rkind) -> (
+        | (VBottom, _) -> (* Nothing to check *) ()
+        | (VBorrow bc, TRef (_, ref_ty, rkind)) -> (
             match (bc, rkind) with
-            | VSharedBorrow bid, RShared | VReservedMutBorrow bid, RMut -> (
+            | (VSharedBorrow bid, RShared) | (VReservedMutBorrow bid, RMut) -> (
                 (* Lookup the borrowed value to check it has the proper type.
                    Note that we ignore the marker: we will check it when
                    checking the loan itself. *)
-                let _, glc = lookup_loan span ek_all bid ctx in
+                let (_, glc) = lookup_loan span ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, _, sv, _)) ->
                     sanity_check __FILE__ __LINE__ (sv.ty = ref_ty) span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
-            | VMutBorrow (_, bv), RMut ->
+            | (VMutBorrow (_, bv), RMut) ->
                 sanity_check __FILE__ __LINE__
                   ((* Check that the borrowed value has the proper type *)
                    bv.ty = ref_ty)
                   span
             | _ -> craise __FILE__ __LINE__ span "Erroneous typing")
-        | VLoan lc, ty -> (
+        | (VLoan lc, ty) -> (
             match lc with
             | VSharedLoan (_, sv) ->
                 sanity_check __FILE__ __LINE__ (sv.ty = ty) span
@@ -529,7 +530,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                       (Substitute.erase_regions sv.ty = ty)
                       span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context"))
-        | VSymbolic sv, ty ->
+        | (VSymbolic sv, ty) ->
             let ty' = Substitute.erase_regions sv.sv_ty in
             sanity_check __FILE__ __LINE__ (ty' = ty) span
         | _ -> craise __FILE__ __LINE__ span "Erroneous typing");
@@ -550,7 +551,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         (* Check the current pair (value, type) *)
         (match (atv.value, atv.ty) with
         (* ADT case *)
-        | AAdt av, TAdt (TAdtId def_id, generics) ->
+        | (AAdt av, TAdt (TAdtId def_id, generics)) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
             let def = ctx_lookup_type_decl ctx def_id in
@@ -567,11 +568,11 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
               span;
             (* Check that the variant id is consistent *)
             (match (av.variant_id, def.kind) with
-            | Some variant_id, Enum variants ->
+            | (Some variant_id, Enum variants) ->
                 sanity_check __FILE__ __LINE__
                   (VariantId.to_int variant_id < List.length variants)
                   span
-            | None, Struct _ -> ()
+            | (None, Struct _) -> ()
             | _ -> craise __FILE__ __LINE__ span "Erroneous typing");
             (* Check that the field types are correct *)
             let field_types =
@@ -584,7 +585,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 sanity_check __FILE__ __LINE__ (v.ty = ty) span)
               fields_with_types
         (* Tuple case *)
-        | AAdt av, TAdt (TTuple, generics) ->
+        | (AAdt av, TAdt (TTuple, generics)) ->
             sanity_check __FILE__ __LINE__ (generics.regions = []) span;
             sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
             sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
@@ -598,7 +599,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 sanity_check __FILE__ __LINE__ (v.ty = ty) span)
               fields_with_types
         (* Assumed type case *)
-        | AAdt av, TAdt (TAssumed aty_id, generics) -> (
+        | (AAdt av, TAdt (TAssumed aty_id, generics)) -> (
             sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
             match
               ( aty_id,
@@ -608,20 +609,20 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 generics.const_generics )
             with
             (* Box *)
-            | TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
+            | (TBox, [ boxed_value ], [], [ boxed_ty ], []) ->
                 sanity_check __FILE__ __LINE__ (boxed_value.ty = boxed_ty) span
             | _ -> craise __FILE__ __LINE__ span "Erroneous type")
-        | ABottom, _ -> (* Nothing to check *) ()
-        | ABorrow bc, TRef (_, ref_ty, rkind) -> (
+        | (ABottom, _) -> (* Nothing to check *) ()
+        | (ABorrow bc, TRef (_, ref_ty, rkind)) -> (
             match (bc, rkind) with
-            | AMutBorrow (pm, _, av), RMut ->
+            | (AMutBorrow (pm, _, av), RMut) ->
                 sanity_check __FILE__ __LINE__ (pm = PNone) span;
                 (* Check that the child value has the proper type *)
                 sanity_check __FILE__ __LINE__ (av.ty = ref_ty) span
-            | ASharedBorrow (pm, bid), RShared -> (
+            | (ASharedBorrow (pm, bid), RShared) -> (
                 sanity_check __FILE__ __LINE__ (pm = PNone) span;
                 (* Lookup the borrowed value to check it has the proper type *)
-                let _, glc = lookup_loan span ek_all bid ctx in
+                let (_, glc) = lookup_loan span ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, _, sv, _)) ->
@@ -629,15 +630,15 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                       (sv.ty = Substitute.erase_regions ref_ty)
                       span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
-            | AIgnoredMutBorrow (_opt_bid, av), RMut ->
+            | (AIgnoredMutBorrow (_opt_bid, av), RMut) ->
                 sanity_check __FILE__ __LINE__ (av.ty = ref_ty) span
             | ( AEndedIgnoredMutBorrow { given_back; child; given_back_span = _ },
                 RMut ) ->
                 sanity_check __FILE__ __LINE__ (given_back.ty = ref_ty) span;
                 sanity_check __FILE__ __LINE__ (child.ty = ref_ty) span
-            | AProjSharedBorrow _, RShared -> ()
+            | (AProjSharedBorrow _, RShared) -> ()
             | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
-        | ALoan lc, aty -> (
+        | (ALoan lc, aty) -> (
             match lc with
             | AMutLoan (PNone, bid, child_av)
             | AIgnoredMutLoan (Some bid, child_av) -> (
@@ -684,7 +685,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 sanity_check __FILE__ __LINE__
                   (child_av.ty = aloan_get_expected_child_type aty)
                   span)
-        | ASymbolic aproj, ty -> (
+        | (ASymbolic aproj, ty) -> (
             let ty1 = Substitute.erase_regions ty in
             match aproj with
             | AProjLoans (sv, _) ->
@@ -715,7 +716,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                     | _ -> craise __FILE__ __LINE__ span "Unexpected")
                   given_back_ls
             | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
-        | AIgnored, _ -> ()
+        | (AIgnored, _) -> ()
         | _ ->
             log#ltrace
               (lazy

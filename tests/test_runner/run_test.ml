@@ -66,7 +66,11 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
     match backend with
     | Backend.BorrowCheck -> []
     | _ ->
-        let subdir = match subdir with None -> [] | Some x -> [ x ] in
+        let subdir =
+          match subdir with
+          | None -> []
+          | Some x -> [ x ]
+        in
         [ "-dest"; concat_path ([ env.dest_dir; backend_str ] @ subdir) ]
   in
 

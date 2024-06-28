@@ -33,7 +33,9 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
   | Some _ ->
       (* Evaluate *)
       let synthesize = true in
-      let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
+      let (inputs, symb) =
+        evaluate_function_symbolic synthesize trans_ctx fdef
+      in
       Some (inputs, Option.get symb)
 
 (** Translate a function, by generating its forward and backward translations.
@@ -60,9 +62,9 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   (* Initialize the context *)
   let sv_to_var = SymbolicValueId.Map.empty in
   let var_counter = Pure.VarId.generator_zero in
-  let state_var, var_counter = Pure.VarId.fresh var_counter in
-  let fuel0, var_counter = Pure.VarId.fresh var_counter in
-  let fuel, var_counter = Pure.VarId.fresh var_counter in
+  let (state_var, var_counter) = Pure.VarId.fresh var_counter in
+  let (fuel0, var_counter) = Pure.VarId.fresh var_counter in
+  let (fuel, var_counter) = Pure.VarId.fresh var_counter in
   let calls = FunCallId.Map.empty in
   let abstractions = AbstractionId.Map.empty in
   let recursive_type_decls =
@@ -102,7 +104,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     | None -> LoopId.Map.empty
     | Some (_, ast) ->
         let m = ref LoopId.Map.empty in
-        let _, fresh_loop_id = Pure.LoopId.fresh_stateful_generator () in
+        let (_, fresh_loop_id) = Pure.LoopId.fresh_stateful_generator () in
 
         let visitor =
           object
@@ -125,7 +127,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     SymbolicToPure.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
   in
 
-  let var_counter, back_state_vars = (var_counter, []) in
+  let (var_counter, back_state_vars) = (var_counter, []) in
   let back_state_vars = RegionGroupId.Map.of_list back_state_vars in
 
   let ctx =
@@ -171,14 +173,14 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   *)
   let ctx =
     match (fdef.body, symbolic_trans) with
-    | None, None -> ctx
-    | Some body, Some (input_svs, _) ->
+    | (None, None) -> ctx
+    | (Some body, Some (input_svs, _)) ->
         let forward_input_vars = LlbcAstUtils.fun_body_get_input_vars body in
         let forward_input_varnames =
           List.map (fun (v : var) -> v.name) forward_input_vars
         in
         let input_svs = List.combine forward_input_varnames input_svs in
-        let ctx, forward_inputs =
+        let (ctx, forward_inputs) =
           SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
         in
         { ctx with forward_inputs }
@@ -186,7 +188,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
 
   (* Add the backward inputs *)
-  let backward_inputs_no_state, backward_inputs_with_state = ([], []) in
+  let (backward_inputs_no_state, backward_inputs_with_state) = ([], []) in
   let backward_inputs_no_state =
     RegionGroupId.Map.of_list backward_inputs_no_state
   in
@@ -353,7 +355,7 @@ type gen_config = {
  *)
 let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_assumed : bool) :
     bool * bool =
-  let types, funs =
+  let (types, funs) =
     LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_assumed
   in
   log#ldebug
@@ -378,7 +380,7 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (def : Pure.type_decl) (extract_decl : bool) (extract_extra_info : bool) :
     unit =
   (* Update the kind, if the type is opaque *)
-  let is_opaque, kind =
+  let (is_opaque, kind) =
     match def.kind with
     | Enum _ | Struct _ -> (false, kind)
     | Opaque ->
@@ -1002,7 +1004,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
 let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     unit =
   (* Translate the module to the pure AST *)
-  let trans_ctx, trans_types, trans_funs, trans_trait_decls, trans_trait_impls =
+  let (trans_ctx, trans_types, trans_funs, trans_trait_decls, trans_trait_impls)
+      =
     translate_crate_to_pure crate
   in
 
@@ -1129,7 +1132,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
   (* Open the output file *)
   (* First compute the filename by replacing the extension and converting the
    * case (rust module names are snake case) *)
-  let namespace, crate_name, extract_filebasename =
+  let (namespace, crate_name, extract_filebasename) =
     match Filename.chop_suffix_opt ~suffix:".llbc" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
@@ -1264,7 +1267,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
 
      (* Check if there are opaque types and functions - in which case we need
       * to split *)
-     let has_opaque_types, has_opaque_funs =
+     let (has_opaque_types, has_opaque_funs) =
        crate_has_opaque_non_builtin_decls ctx true
      in
      let has_opaque_types = has_opaque_types || !Config.use_state in
@@ -1279,7 +1282,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          (* For F*, we generate an .fsti, and let the user write the .fst.
             For the other backends, we generate a template file as a model
             for the file the user has to provide. *)
-         let module_suffix, opaque_imported_suffix, custom_msg =
+         let (module_suffix, opaque_imported_suffix, custom_msg) =
            match Config.backend () with
            | FStar ->
                ("TypesExternal", "TypesExternal", ": external type declarations")
@@ -1403,7 +1406,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
          (* For F*, we generate an .fsti, and let the user write the .fst.
             For the other backends, we generate a template file as a model
             for the file the user has to provide. *)
-         let module_suffix, opaque_imported_suffix, custom_msg =
+         let (module_suffix, opaque_imported_suffix, custom_msg) =
            match Config.backend () with
            | FStar ->
                ( "FunsExternal",

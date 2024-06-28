@@ -36,13 +36,12 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         | [
          (Some (SeLiteral (VBool true)), true_exp);
          (Some (SeLiteral (VBool false)), false_exp);
-        ] ->
-            ExpandBool (true_exp, false_exp)
+        ] -> ExpandBool (true_exp, false_exp)
         | _ -> craise __FILE__ __LINE__ span "Ill-formed boolean expansion")
     | TLiteral (TInteger int_ty) ->
         (* Switch over an integer: split between the "regular" branches
            and the "otherwise" branch (which should be the last branch) *)
-        let branches, otherwise = Collections.List.pop_last ls in
+        let (branches, otherwise) = Collections.List.pop_last ls in
         (* For all the regular branches, the symbolic value should have
          * been expanded to a constant *)
         let get_scalar (see : symbolic_expansion option) : scalar_value =
@@ -57,7 +56,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         in
         (* For the otherwise branch, the symbolic value should have been left
          * unchanged *)
-        let otherwise_see, otherwise = otherwise in
+        let (otherwise_see, otherwise) = otherwise in
         sanity_check __FILE__ __LINE__ (otherwise_see = None) span;
         (* Return *)
         ExpandInt (int_ty, branches, otherwise)
@@ -73,7 +72,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         let exp =
           List.map
             (fun (see, exp) ->
-              let vid, fields = get_variant see in
+              let (vid, fields) = get_variant see in
               (vid, fields, exp))
             ls
         in

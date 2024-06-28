@@ -389,14 +389,18 @@ type names_maps = {
 (** Return [true] if we are strict on collisions for this id (i.e., we forbid
     collisions even with the ids in the unsafe names map) *)
 let strict_collisions (id : id) : bool =
-  match id with UnknownId | TypeId _ -> true | _ -> false
+  match id with
+  | UnknownId | TypeId _ -> true
+  | _ -> false
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
   match id with
-  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
-  | TraitMethodId _ ->
-      !Config.record_fields_short_names
+  | FieldId _
+  | TraitItemClauseId _
+  | TraitParentClauseId _
+  | TraitItemId _
+  | TraitMethodId _ -> !Config.record_fields_short_names
   | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _)) ->
       (* We map several assumed functions to the same id *)
       true
@@ -510,7 +514,7 @@ let str_name () = if backend () = Lean then "String" else "string"
 
 (** Small helper to compute the name of an int type *)
 let int_name (int_ty : integer_type) : string =
-  let isize, usize, i_format, u_format =
+  let (isize, usize, i_format, u_format) =
     match backend () with
     | FStar | Coq | HOL4 ->
         ("isize", "usize", format_of_string "i%d", format_of_string "u%d")
@@ -534,9 +538,13 @@ let scalar_name (ty : literal_type) : string =
   match ty with
   | TInteger ty -> int_name ty
   | TBool -> (
-      match backend () with FStar | Coq | HOL4 -> "bool" | Lean -> "Bool")
+      match backend () with
+      | FStar | Coq | HOL4 -> "bool"
+      | Lean -> "Bool")
   | TChar -> (
-      match backend () with FStar | Coq | HOL4 -> "char" | Lean -> "Char")
+      match backend () with
+      | FStar | Coq | HOL4 -> "char"
+      | Lean -> "Char")
 
 (** Extraction context.
 
@@ -801,7 +809,9 @@ let unop_name (unop : unop) : string =
       | Coq -> "negb"
       | HOL4 -> "~")
   | Neg (int_ty : integer_type) -> (
-      match backend () with Lean -> "-." | _ -> int_name int_ty ^ "_neg")
+      match backend () with
+      | Lean -> "-."
+      | _ -> int_name int_ty ^ "_neg")
   | Cast _ ->
       (* We never directly use the unop name in this case *)
       raise (Failure "Unsupported")
@@ -1281,17 +1291,17 @@ let type_decl_kind_to_qualif (span : Meta.span) (kind : decl_kind)
       | Declared -> Some "val")
   | Coq -> (
       match (kind, type_kind) with
-      | SingleNonRec, Some Tuple -> Some "Definition"
-      | SingleNonRec, Some Enum -> Some "Inductive"
-      | SingleNonRec, Some Struct -> Some "Record"
-      | (SingleRec | MutRecFirst), Some _ -> Some "Inductive"
-      | (MutRecInner | MutRecLast), Some _ ->
+      | (SingleNonRec, Some Tuple) -> Some "Definition"
+      | (SingleNonRec, Some Enum) -> Some "Inductive"
+      | (SingleNonRec, Some Struct) -> Some "Record"
+      | ((SingleRec | MutRecFirst), Some _) -> Some "Inductive"
+      | ((MutRecInner | MutRecLast), Some _) ->
           (* Coq doesn't support groups of mutually recursive definitions which mix
            * records and inductives: we convert everything to records if this happens
            *)
           Some "with"
-      | (Assumed | Declared), None -> Some "Axiom"
-      | SingleNonRec, None ->
+      | ((Assumed | Declared), None) -> Some "Axiom"
+      | (SingleNonRec, None) ->
           (* This is for traits *)
           Some "Record"
       | _ ->
@@ -1675,7 +1685,9 @@ let ctx_compute_trait_type_name (ctx : extraction_ctx) (trait_decl : trait_decl)
      can't disambiguate fields coming from different ADTs if they have the same
      names), and thus don't need to add a prefix starting with a lowercase.
   *)
-  match backend () with FStar -> "t" ^ name | Coq | Lean | HOL4 -> name
+  match backend () with
+  | FStar -> "t" ^ name
+  | Coq | Lean | HOL4 -> name
 
 let ctx_compute_trait_const_name (ctx : extraction_ctx)
     (trait_decl : trait_decl) (item : string) : string =
@@ -1684,7 +1696,9 @@ let ctx_compute_trait_const_name (ctx : extraction_ctx)
     else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ item
   in
   (* See [trait_type_name] *)
-  match backend () with FStar -> "c" ^ name | Coq | Lean | HOL4 -> name
+  match backend () with
+  | FStar -> "c" ^ name
+  | Coq | Lean | HOL4 -> name
 
 let ctx_compute_trait_method_name (ctx : extraction_ctx)
     (trait_decl : trait_decl) (item : string) : string =
@@ -1825,7 +1839,10 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | FStar -> "x" (* lacking inspiration here... *)
           | Coq | Lean | HOL4 -> "t" (* lacking inspiration here... *))
       | TLiteral lty -> (
-          match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
+          match lty with
+          | TBool -> "b"
+          | TChar -> "c"
+          | TInteger _ -> "i")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
       | Error -> "x")
@@ -1999,9 +2016,9 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
     (ctx : extraction_ctx) :
     extraction_ctx * string list * string list * string list =
   let { types; const_generics; trait_clauses } = generics in
-  let ctx, tys = ctx_add_type_params span types ctx in
-  let ctx, cgs = ctx_add_const_generic_params span const_generics ctx in
-  let ctx, tcs =
+  let (ctx, tys) = ctx_add_type_params span types ctx in
+  let (ctx, cgs) = ctx_add_const_generic_params span const_generics ctx in
+  let (ctx, tcs) =
     ctx_add_local_trait_clauses span current_def_name llbc_generics
       trait_clauses ctx
   in
@@ -2054,7 +2071,9 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
          between the name for the default constant and the name for the field
          in the trait declaration *)
       let suffix =
-        match def.kind with TraitItemProvided _ -> "_default" | _ -> ""
+        match def.kind with
+        | TraitItemProvided _ -> "_default"
+        | _ -> ""
       in
       let ctx = ctx_add def.item_meta.span decl (name ^ suffix) ctx in
       let ctx = ctx_add def.item_meta.span body (name ^ suffix ^ "_body") ctx in

@@ -129,7 +129,9 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
 
 (** TODO: move *)
 let borrow_is_asb (bid : BorrowId.id) (asb : abstract_shared_borrow) : bool =
-  match asb with AsbBorrow bid' -> bid' = bid | AsbProjReborrows _ -> false
+  match asb with
+  | AsbBorrow bid' -> bid' = bid
+  | AsbProjReborrows _ -> false
 
 (** TODO: move *)
 let borrow_in_asb (bid : BorrowId.id) (asb : abstract_shared_borrows) : bool =
@@ -380,7 +382,7 @@ let compute_ids () =
 (** Compute the sets of ids found in a list of typed values. *)
 let compute_typed_values_ids (xl : typed_value list) : ids_sets * ids_to_values
     =
-  let compute, get_ids, get_ids_to_values = compute_ids () in
+  let (compute, get_ids, get_ids_to_values) = compute_ids () in
   List.iter (compute#visit_typed_value ()) xl;
   (get_ids (), get_ids_to_values ())
 
@@ -390,7 +392,7 @@ let compute_typed_value_ids (x : typed_value) : ids_sets * ids_to_values =
 
 (** Compute the sets of ids found in a list of abstractions. *)
 let compute_absl_ids (xl : abs list) : ids_sets * ids_to_values =
-  let compute, get_ids, get_ids_to_values = compute_ids () in
+  let (compute, get_ids, get_ids_to_values) = compute_ids () in
   List.iter (compute#visit_abs ()) xl;
   (get_ids (), get_ids_to_values ())
 
@@ -400,7 +402,7 @@ let compute_abs_ids (x : abs) : ids_sets * ids_to_values =
 
 (** Compute the sets of ids found in an environment. *)
 let compute_env_ids (x : env) : ids_sets * ids_to_values =
-  let compute, get_ids, get_ids_to_values = compute_ids () in
+  let (compute, get_ids, get_ids_to_values) = compute_ids () in
   compute#visit_env () x;
   (get_ids (), get_ids_to_values ())
 
@@ -410,7 +412,7 @@ let compute_env_elem_ids (x : env_elem) : ids_sets * ids_to_values =
 
 (** Compute the sets of ids found in a list of contexts. *)
 let compute_ctxs_ids (ctxl : eval_ctx list) : ids_sets * ids_to_values =
-  let compute, get_ids, get_ids_to_values = compute_ids () in
+  let (compute, get_ids, get_ids_to_values) = compute_ids () in
   List.iter (compute#visit_eval_ctx ()) ctxl;
   (get_ids (), get_ids_to_values ())
 
@@ -486,7 +488,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     RegionGroupId.Map.find rg_id asubst_map
   in
   (* Generate fresh regions and their substitutions *)
-  let _, rsubst, _ =
+  let (_, rsubst, _) =
     Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
       sg.generics.regions
   in

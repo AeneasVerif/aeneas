@@ -43,13 +43,20 @@ let mk_box_value (span : Meta.span) (v : typed_value) : typed_value =
   let box_v = VAdt { variant_id = None; field_values = [ v ] } in
   mk_typed_value span box_ty box_v
 
-let is_bottom (v : value) : bool = match v with VBottom -> true | _ -> false
+let is_bottom (v : value) : bool =
+  match v with
+  | VBottom -> true
+  | _ -> false
 
 let is_aignored (v : avalue) : bool =
-  match v with AIgnored -> true | _ -> false
+  match v with
+  | AIgnored -> true
+  | _ -> false
 
 let is_symbolic (v : value) : bool =
-  match v with VSymbolic _ -> true | _ -> false
+  match v with
+  | VSymbolic _ -> true
+  | _ -> false
 
 let as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
