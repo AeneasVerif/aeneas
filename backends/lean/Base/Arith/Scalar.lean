@@ -44,7 +44,7 @@ def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
 elab "scalar_tac" : tactic =>
   scalarTac false
 
-@[scalar_tac]
+@[scalar_tac x]
 theorem Scalar.bounds {ty : ScalarTy} (x : Scalar ty) :
   Scalar.min ty ≤ x.val ∧ x.val ≤ Scalar.max ty :=
   And.intro x.hmin x.hmax

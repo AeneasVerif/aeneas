@@ -18,12 +18,12 @@ open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 attribute [aesop (rule_sets := [Aeneas.ScalarTac]) unfold norm] Function.comp
 
 /-- The `int_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
-macro "int_tac" : attr =>
-  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]))
+macro "int_tac" pat:term : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]) (pattern := $pat))
 
 /-- The `scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
-macro "scalar_tac" : attr =>
-  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]))
+macro "scalar_tac" pat:term : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]) (pattern := $pat))
 
 /- Check if a proposition is a linear integer proposition.
    We notably use this to check the goals: this is useful to filter goals that
