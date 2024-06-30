@@ -2954,8 +2954,8 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "()");
-        F.pp_print_space fmt ();
+          F.pp_print_string fmt "()";
+          F.pp_print_space fmt ());
         F.pp_print_string fmt ")%return."
     | Lean ->
         F.pp_print_string fmt "#assert";
