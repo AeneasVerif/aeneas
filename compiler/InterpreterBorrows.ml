@@ -3021,15 +3021,18 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
 
   { ctx with env }
 
-(** Reorder the fresh region abstractions.
+type typed_avalue_list = typed_avalue list [@@deriving ord, show]
 
-    Similarly to the loans and borrows, after experimenting, it seems that a
-    good way of reordering the fresh region abstractions is to sort them
-    by increasing order of id.
+module OrderedTypedAvalueList :
+  Collections.OrderedType with type t = typed_avalue list = struct
+  type t = typed_avalue_list
 
-    Again, this is actually not as arbitrary as it might seem, because the ids
-    give us the order in which we introduced those borrows/loans.
- *)
+  let compare x y = compare_typed_avalue_list x y
+  let to_string x = show_typed_avalue_list x
+  let pp_t fmt x = Format.pp_print_string fmt (show_typed_avalue_list x)
+  let show_t x = show_typed_avalue_list x
+end
+
 let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
     (ctx : eval_ctx) : eval_ctx =
   (* Split between the fresh abstractions and the rest of the context *)
@@ -3040,15 +3043,22 @@ let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
       ctx.env
   in
 
-  (* Reorder the fresh abstractions *)
-  let fresh_abs =
-    List.map
-      (function
-        | EAbs abs -> (abs.abs_id, EAbs abs)
-        | _ -> internal_error __FILE__ __LINE__ span)
-      fresh_abs
-    |> AbstractionId.Map.of_list |> AbstractionId.Map.values |> List.rev
+  (* Reorder the fresh abstractions.
+
+     We use the content of the abstractions to reorder them.
+     In practice, this allows us to reorder the abstractions by using the ids
+     of the loans, borrows and symbolic values. This is far from perfect, but
+     allows us to have a quite simple matching algorithm for now, to compute
+     the joins as well as to check whether two environments are equivalent.
+     We may want to make this algorithm more general in the future.
+  *)
+  let cmp abs0 abs1 =
+    match (abs0, abs1) with
+    | EAbs abs0, EAbs abs1 ->
+        compare_typed_avalue_list abs0.avalues abs1.avalues
+    | _ -> internal_error __FILE__ __LINE__ span
   in
+  let fresh_abs = List.sort cmp fresh_abs |> List.rev in
 
   (* Reconstruct the environment *)
   let env = fresh_abs @ env in

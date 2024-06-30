@@ -314,7 +314,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     in
     List.iter (visit_avalue#visit_typed_avalue None) abs.avalues
   in
-  env_iter_abs collect_shared_values_in_abs ctx.env;
+  (* Note that we iterate over the environment by starting with the oldest
+     abstractions *)
+  env_iter_abs collect_shared_values_in_abs (List.rev ctx.env);
 
   (* Update the borrow ids in the environment.
 

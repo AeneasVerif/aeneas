@@ -277,6 +277,10 @@ val merge_into_first_abstraction :
     called typically after we merge abstractions together (see {!reduce_ctx}
     and {!collapse_ctx} for instance).
 
+    TODO: in the future it would be better to implement a more general matching
+    algorithm, both for the joins and for checking whether two environments are
+    equivalent.
+
     Inputs:
     - [span]
     - [allow_markers]: disables some sanity checks (which check that projection
