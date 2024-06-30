@@ -20,7 +20,7 @@ Definition test_incr : result unit :=
 .
 
 (** Unit test for [paper::test_incr] *)
-Check (test_incr )%return.
+Check (test_incr)%return.
 
 (** [paper::choose]:
     Source: 'tests/src/paper.rs', lines 18:0-18:70 *)
@@ -48,7 +48,7 @@ Definition test_choose : result unit :=
 .
 
 (** Unit test for [paper::test_choose] *)
-Check (test_choose )%return.
+Check (test_choose)%return.
 
 (** [paper::List]
     Source: 'tests/src/paper.rs', lines 38:0-38:16 *)
@@ -104,7 +104,7 @@ Definition test_nth : result unit :=
 .
 
 (** Unit test for [paper::test_nth] *)
-Check (test_nth )%return.
+Check (test_nth)%return.
 
 (** [paper::call_choose]:
     Source: 'tests/src/paper.rs', lines 79:0-79:44 *)
