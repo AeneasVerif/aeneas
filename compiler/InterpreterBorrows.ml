@@ -2957,6 +2957,10 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
   (* Return *)
   (ctx, nabs.abs_id)
 
+(** Reorder the loans and borrows inside the fresh abstractions.
+
+    See {!reorder_fresh_abs}.
+ *)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let reorder_in_fresh_abs (abs : abs) : abs =
@@ -3016,3 +3020,42 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
   let env = env_map_abs reorder_in_abs ctx.env in
 
   { ctx with env }
+
+(** Reorder the fresh region abstractions.
+
+    Similarly to the loans and borrows, after experimenting, it seems that a
+    good way of reordering the fresh region abstractions is to sort them
+    by increasing order of id.
+
+    Again, this is actually not as arbitrary as it might seem, because the ids
+    give us the order in which we introduced those borrows/loans.
+ *)
+let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
+    (ctx : eval_ctx) : eval_ctx =
+  (* Split between the fresh abstractions and the rest of the context *)
+  let env, fresh_abs =
+    List.partition
+      (function
+        | EAbs abs -> AbstractionId.Set.mem abs.abs_id old_abs_ids | _ -> true)
+      ctx.env
+  in
+
+  (* Reorder the fresh abstractions *)
+  let fresh_abs =
+    List.map
+      (function
+        | EAbs abs -> (abs.abs_id, EAbs abs)
+        | _ -> internal_error __FILE__ __LINE__ span)
+      fresh_abs
+    |> AbstractionId.Map.of_list |> AbstractionId.Map.values |> List.rev
+  in
+
+  (* Reconstruct the environment *)
+  let env = fresh_abs @ env in
+
+  { ctx with env }
+
+let reorder_fresh_abs (span : Meta.span) (allow_markers : bool)
+    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+  reorder_loans_borrows_in_fresh_abs span allow_markers old_abs_ids ctx
+  |> reorder_fresh_abs_aux span old_abs_ids

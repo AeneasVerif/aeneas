@@ -768,11 +768,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     in
     let rg_to_abs = !rg_to_abs in
 
-    (* Reorder the loans and borrows in the fresh abstractions in the fixed-point *)
-    let fp =
-      reorder_loans_borrows_in_fresh_abs span false (Option.get !fixed_ids).aids
-        !fp
-    in
+    (* Reorder the fresh abstractions in the fixed-point *)
+    let fp = reorder_fresh_abs span false (Option.get !fixed_ids).aids !fp in
 
     (* Update the abstraction's [can_end] field and their kinds.
 
