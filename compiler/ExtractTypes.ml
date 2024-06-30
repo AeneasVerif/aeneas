@@ -739,7 +739,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   (* Lookup the builtin information, if there is *)
   let open ExtractBuiltin in
   let info =
-    match_name_find_opt ctx.trans_ctx def.llbc_name (builtin_types_map ())
+    match_name_find_opt ctx.trans_ctx def.item_meta.name (builtin_types_map ())
   in
   (* Register the filtering information, if there is *)
   let ctx =
@@ -783,11 +783,11 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     (fun fid (field : field) ->
                       ( fid,
                         ctx_compute_field_name def field.attr_info ctx
-                          def.llbc_name fid field.field_name ))
+                          def.item_meta.name fid field.field_name ))
                     fields
                 in
                 let cons_name =
-                  ctx_compute_struct_constructor def ctx def.llbc_name
+                  ctx_compute_struct_constructor def ctx def.item_meta.name
                 in
                 (field_names, cons_name)
             | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
@@ -1417,8 +1417,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.item_meta.span def.llbc_name def.llbc_generics
-      def.generics ctx
+    ctx_add_generic_params def.item_meta.span def.item_meta.name
+      def.llbc_generics def.generics ctx
   in
   (* Add a break before *)
   if backend () <> HOL4 || not (decl_is_first_from_group kind) then
@@ -1426,11 +1426,11 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name =
      if !Config.extract_external_name_patterns && not def.item_meta.is_local
-     then Some def.llbc_name
+     then Some def.item_meta.name
      else None
    in
    extract_comment_with_raw_span ctx fmt
-     [ "[" ^ name_to_string ctx def.llbc_name ^ "]" ]
+     [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
      name def.item_meta.span.span);
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
@@ -1703,7 +1703,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
       if is_rec then
         (* Add the type params *)
         let ctx, type_params, cg_params, trait_clauses =
-          ctx_add_generic_params decl.item_meta.span decl.llbc_name
+          ctx_add_generic_params decl.item_meta.span decl.item_meta.name
             decl.llbc_generics decl.generics ctx
         in
         (* Record_var will be the ADT argument to the projector *)

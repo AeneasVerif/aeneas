@@ -964,6 +964,6 @@ Definition main : result unit :=
   Ok tt.
 
 (** Unit test for [betree::main] *)
-Check (main )%return.
+Check (main)%return.
 
 End Betree_Funs.

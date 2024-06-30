@@ -442,7 +442,7 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     let types_map = builtin_types_map () in
     List.map
       (fun (def : Pure.type_decl) ->
-        match_name_find_opt ctx.trans_ctx def.llbc_name types_map <> None)
+        match_name_find_opt ctx.trans_ctx def.item_meta.name types_map <> None)
       defs
   in
 
@@ -648,7 +648,8 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     let funs_map = builtin_funs_map () in
     List.map
       (fun (trans : pure_fun_translation) ->
-        match_name_find_opt ctx.trans_ctx trans.f.llbc_name funs_map <> None)
+        match_name_find_opt ctx.trans_ctx trans.f.item_meta.name funs_map
+        <> None)
       pure_ls
   in
 
@@ -727,7 +728,7 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
   (* Check if the trait declaration is builtin, in which case we ignore it *)
   let open ExtractBuiltin in
   if
-    match_name_find_opt ctx.trans_ctx trait_decl.llbc_name
+    match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
       (builtin_trait_decls_map ())
     = None
   then (
@@ -752,7 +753,7 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     let trait_impl =
       TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
     in
-    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.llbc_name
+    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
       trait_impl.impl_trait.decl_generics
       (builtin_trait_impls_map ())
   in

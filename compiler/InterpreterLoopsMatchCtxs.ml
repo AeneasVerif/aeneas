@@ -159,9 +159,12 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 
     TODO: probably don't need to take [match_regions] as input anymore.
  *)
-let rec match_types (span : Meta.span) (match_distinct_types : ty -> ty -> ty)
+let rec match_types (span : Meta.span) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+    (match_distinct_types : ty -> ty -> ty)
     (match_regions : region -> region -> region) (ty0 : ty) (ty1 : ty) : ty =
-  let match_rec = match_types span match_distinct_types match_regions in
+  let match_rec =
+    match_types span ctx0 ctx1 match_distinct_types match_regions
+  in
   match (ty0, ty1) with
   | TAdt (id0, generics0), TAdt (id1, generics1) ->
       sanity_check __FILE__ __LINE__ (id0 = id1) span;
@@ -1094,7 +1097,7 @@ struct
   let match_etys (_ : eval_ctx) (_ : eval_ctx) ty0 ty1 =
     if ty0 <> ty1 then raise (Distinct "match_etys") else ty0
 
-  let match_rtys (_ : eval_ctx) (_ : eval_ctx) ty0 ty1 =
+  let match_rtys (ctx0 : eval_ctx) (ctx1 : eval_ctx) ty0 ty1 =
     let match_distinct_types _ _ = raise (Distinct "match_rtys") in
     let match_regions r0 r1 =
       match (r0, r1) with
@@ -1104,7 +1107,7 @@ struct
           RFVar rid
       | _ -> raise (Distinct "match_rtys")
     in
-    match_types span match_distinct_types match_regions ty0 ty1
+    match_types span ctx0 ctx1 match_distinct_types match_regions ty0 ty1
 
   let match_distinct_literals (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
       (_ : literal) (_ : literal) : typed_value =
