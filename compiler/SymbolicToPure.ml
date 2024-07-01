@@ -456,6 +456,8 @@ and translate_trait_instance_id (span : Meta.span) (translate_ty : T.ty -> ty)
   | TraitRef tr -> TraitRef (translate_trait_ref span translate_ty tr)
   | FnPointer _ | Closure _ ->
       craise __FILE__ __LINE__ span "Closures are not supported yet"
+  | Dyn _ ->
+      craise __FILE__ __LINE__ span "Dynamic trait types are not supported yet"
   | Unsolved _ -> craise __FILE__ __LINE__ span "Couldn't solve trait bound"
   | UnknownTrait s -> craise __FILE__ __LINE__ span ("Unknown trait found: " ^ s)
 
@@ -496,6 +498,8 @@ let rec translate_sty (span : Meta.span) (ty : T.ty) : ty =
       TTraitType (trait_ref, type_name)
   | TArrow _ ->
       craise __FILE__ __LINE__ span "Arrow types are not supported yet"
+  | TDynTrait _ ->
+      craise __FILE__ __LINE__ span "Dynamic trait types are not supported yet"
 
 and translate_sgeneric_args (span : Meta.span) (generics : T.generic_args) :
     generic_args =
@@ -672,6 +676,8 @@ let rec translate_fwd_ty (span : Meta.span) (type_infos : type_infos)
       TTraitType (trait_ref, type_name)
   | TArrow _ ->
       craise __FILE__ __LINE__ span "Arrow types are not supported yet"
+  | TDynTrait _ ->
+      craise __FILE__ __LINE__ span "Dynamic trait types are not supported yet"
 
 and translate_fwd_generic_args (span : Meta.span) (type_infos : type_infos)
     (generics : T.generic_args) : generic_args =
@@ -782,6 +788,8 @@ let rec translate_back_ty (span : Meta.span) (type_infos : type_infos)
       else None
   | TArrow _ ->
       craise __FILE__ __LINE__ span "Arrow types are not supported yet"
+  | TDynTrait _ ->
+      craise __FILE__ __LINE__ span "Dynamic trait types are not supported yet"
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
@@ -2306,7 +2314,9 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, dest)
         | CastFnPtr _ ->
-            craise __FILE__ __LINE__ ctx.span "TODO: function casts")
+            craise __FILE__ __LINE__ ctx.span "TODO: function casts"
+        | CastUnsize _ ->
+            craise __FILE__ __LINE__ ctx.span "TODO: unsize coercions")
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
