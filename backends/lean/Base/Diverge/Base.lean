@@ -5,10 +5,6 @@ import Base.Primitives.Base
 import Base.Arith.Base
 import Base.Diverge.ElabBase
 
-/- TODO: this is very useful, but is there more? -/
-set_option profiler true
-set_option profiler.threshold 100
-
 namespace Diverge
 
 /- Auxiliary lemmas -/
@@ -210,7 +206,7 @@ namespace Fix
     {f : ((x:a) → Result (b x)) → (x:a) → Result (b x)} {x : a} {n : Nat} :
     ¬ fix_fuel_P f x n ↔ (fix_fuel n f x = div) := by
     simp [fix_fuel_P, div?]
-    cases fix_fuel n f x <;> simp  
+    cases fix_fuel n f x <;> simp
 
   theorem fix_fuel_fix_mono {f : ((x:a) → Result (b x)) → (x:a) → Result (b x)} (Hmono : is_mono f) :
     ∀ n, karrow_rel (fix_fuel n f) (fix f) := by

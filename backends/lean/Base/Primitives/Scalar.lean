@@ -489,6 +489,14 @@ def Scalar.cast {src_ty : ScalarTy} (tgt_ty : ScalarTy) (x : Scalar src_ty) : Re
 def Scalar.cast_bool (tgt_ty : ScalarTy) (x : Bool) : Result (Scalar tgt_ty) :=
   Scalar.tryMk tgt_ty (if x then 1 else 0)
 
+@[pspec]
+theorem Scalar.cast_in_bounds_eq {src_ty tgt_ty : ScalarTy} (x : Scalar src_ty) (h_bounds: Scalar.in_bounds tgt_ty x): ∃ x', Scalar.cast tgt_ty x = .ok x' ∧ x'.val = x.val := by
+  simp at h_bounds
+  simp [cast, tryMk, tryMkOpt]
+  split_ifs with h_nbounds
+  . use (Scalar.ofIntCore x h_bounds); simp [ofOption, ofIntCore]
+  . omega
+
 -- The scalar types
 -- We declare the definitions as reducible so that Lean can unfold them (useful
 -- for type class resolution for instance).

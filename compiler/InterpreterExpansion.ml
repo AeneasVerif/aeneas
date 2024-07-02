@@ -665,7 +665,8 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
             (* We can't expand those *)
             craise __FILE__ __LINE__ span
               "Attempted to greedily expand an ADT which can't be expanded "
-        | TVar _ | TLiteral _ | TNever | TTraitType _ | TArrow _ | TRawPtr _ ->
+        | TVar _ | TLiteral _ | TNever | TTraitType _ | TArrow _ | TRawPtr _
+        | TDynTrait _ ->
             craise __FILE__ __LINE__ span "Unreachable"
       in
       (* *)

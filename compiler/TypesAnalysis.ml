@@ -147,7 +147,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
   let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
       (ty : ty) : partial_type_info =
     match ty with
-    | TLiteral _ | TNever | TTraitType _ -> ty_info
+    | TLiteral _ | TNever | TTraitType _ | TDynTrait _ -> ty_info
     | TVar var_id -> (
         (* Update the information for the proper parameter, if necessary *)
         match ty_info.param_infos with

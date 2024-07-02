@@ -95,7 +95,7 @@ let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
   | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ | FnPointer _
-  | Closure _ | Unsolved _ ->
+  | Closure _ | Unsolved _ | Dyn _ ->
       false
   | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
       trait_instance_id_is_local_clause id
@@ -294,6 +294,9 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       let tr : trait_type_ref = { trait_ref; type_name } in
       (* Lookup the representative, if there is *)
       match norm_ctx_get_ty_repr ctx tr with None -> ty | Some ty -> ty)
+  | TDynTrait _ ->
+      craise_opt_span __FILE__ __LINE__ ctx.span
+        "Dynamic trait types are not supported yet"
 
 (** This returns the normalized trait instance id together with an optional
     reference to a trait **implementation** (the `trait_ref` we return has
@@ -449,6 +452,9 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
   | Unsolved _ | UnknownTrait _ ->
       (* This is actually an error case *)
       (id, None)
+  | Dyn _ ->
+      craise_opt_span __FILE__ __LINE__ ctx.span
+        "Dynamic trait types are not supported yet"
 
 and norm_ctx_normalize_generic_args (ctx : norm_ctx) (generics : generic_args) :
     generic_args =
