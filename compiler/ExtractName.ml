@@ -37,7 +37,9 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
   let c = { tgt = TkName } in
   let all_vars =
     let check (g : generic_arg) : bool =
-      match g with GExpr (EVar _) | GRegion (RVar _) -> true | _ -> false
+      match g with
+      | GExpr (EVar _) | GRegion (RVar _) -> true
+      | _ -> false
     in
     List.for_all check
   in

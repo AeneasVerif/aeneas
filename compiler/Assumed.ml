@@ -139,7 +139,10 @@ module Sig = struct
       ]
     in
     let inputs =
-      List.append inputs (match index_ty with None -> [] | Some ty -> [ ty ])
+      List.append inputs
+        (match index_ty with
+        | None -> []
+        | Some ty -> [ ty ])
     in
     let output =
       mk_ref_ty rvar_0

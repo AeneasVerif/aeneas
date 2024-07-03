@@ -94,9 +94,14 @@ let ctx_add_norm_trait_types_from_preds (span : Meta.span) (ctx : eval_ctx)
 let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
-  | TraitImpl _ | BuiltinOrAuto _ | TraitRef _ | UnknownTrait _ | FnPointer _
-  | Closure _ | Unsolved _ | Dyn _ ->
-      false
+  | TraitImpl _
+  | BuiltinOrAuto _
+  | TraitRef _
+  | UnknownTrait _
+  | FnPointer _
+  | Closure _
+  | Unsolved _
+  | Dyn _ -> false
   | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
       trait_instance_id_is_local_clause id
 
@@ -293,7 +298,9 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       in
       let tr : trait_type_ref = { trait_ref; type_name } in
       (* Lookup the representative, if there is *)
-      match norm_ctx_get_ty_repr ctx tr with None -> ty | Some ty -> ty)
+      match norm_ctx_get_ty_repr ctx tr with
+      | None -> ty
+      | Some ty -> ty)
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ ctx.span
         "Dynamic trait types are not supported yet"

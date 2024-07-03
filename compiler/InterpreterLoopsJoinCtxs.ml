@@ -482,7 +482,9 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
       inherit [_] iter_eval_ctx
 
       method! visit_proj_marker _ pm =
-        match pm with PNone -> () | PLeft | PRight -> raise Found
+        match pm with
+        | PNone -> ()
+        | PLeft | PRight -> raise Found
     end
   in
   try
