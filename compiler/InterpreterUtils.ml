@@ -129,7 +129,9 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
 
 (** TODO: move *)
 let borrow_is_asb (bid : BorrowId.id) (asb : abstract_shared_borrow) : bool =
-  match asb with AsbBorrow bid' -> bid' = bid | AsbProjReborrows _ -> false
+  match asb with
+  | AsbBorrow bid' -> bid' = bid
+  | AsbProjReborrows _ -> false
 
 (** TODO: move *)
 let borrow_in_asb (bid : BorrowId.id) (asb : abstract_shared_borrows) : bool =

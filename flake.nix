@@ -222,6 +222,7 @@
         };
         devShells.default = pkgs.mkShell {
           packages = [
+            pkgs.curl
             pkgs.elan
             pkgs.ocamlPackages.ocaml
             pkgs.ocamlPackages.ocamlformat

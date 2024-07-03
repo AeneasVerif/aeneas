@@ -489,7 +489,11 @@ let rec translate_sty (span : Meta.span) (ty : T.ty) : ty =
   | TNever -> craise __FILE__ __LINE__ span "Unreachable"
   | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
-      let mut = match rkind with RMut -> Mut | RShared -> Const in
+      let mut =
+        match rkind with
+        | RMut -> Mut
+        | RShared -> Const
+      in
       let ty = translate span ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
@@ -667,7 +671,11 @@ let rec translate_fwd_ty (span : Meta.span) (type_infos : type_infos)
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
-      let mut = match rkind with RMut -> Mut | RShared -> Const in
+      let mut =
+        match rkind with
+        | RMut -> Mut
+        | RShared -> Const
+      in
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
@@ -1805,7 +1813,9 @@ let translate_mplace (p : S.mplace) : mplace =
   { var_id; name; projection }
 
 let translate_opt_mplace (p : S.mplace option) : mplace option =
-  match p with None -> None | Some p -> Some (translate_mplace p)
+  match p with
+  | None -> None
+  | Some p -> Some (translate_mplace p)
 
 (** Explore an abstraction value and convert it to a given back value
     by collecting all the meta-values from the ended *borrows*.
@@ -1864,7 +1874,9 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
   in
   (* Sanity check - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
-  (match value with None -> () | Some value -> type_check_pattern ctx value);
+  (match value with
+  | None -> ()
+  | Some value -> type_check_pattern ctx value);
   (* Return *)
   (ctx, value)
 
@@ -2075,7 +2087,9 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
            If this happens, there are no backward outputs.
         *)
         let backward_outputs =
-          match ctx.backward_outputs with Some outputs -> outputs | None -> []
+          match ctx.backward_outputs with
+          | Some outputs -> outputs
+          | None -> []
         in
         let field_values = List.map mk_texpression_from_var backward_outputs in
         mk_simpl_tuple_texpression ctx.span field_values

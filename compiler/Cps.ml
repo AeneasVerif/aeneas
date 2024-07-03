@@ -92,10 +92,14 @@ let map_apply_continuation (f : 'a -> 'c -> 'b * 'c * ('e -> 'e))
   eval_list inputs ctx
 
 let cc_singleton file line span cf el =
-  match el with [ e ] -> cf e | _ -> internal_error file line span
+  match el with
+  | [ e ] -> cf e
+  | _ -> internal_error file line span
 
 let cf_singleton file line span el =
-  match el with [ e ] -> e | _ -> internal_error file line span
+  match el with
+  | [ e ] -> e
+  | _ -> internal_error file line span
 
 (** It happens that we need to concatenate lists of results, for
     instance when evaluating the branches of a match. When applying

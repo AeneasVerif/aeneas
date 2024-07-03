@@ -586,7 +586,9 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
         | _ -> None
       in
       let has_one_field =
-        match num_fields with Some len -> len = 1 | None -> false
+        match num_fields with
+        | Some len -> len = 1
+        | None -> false
       in
       if is_tuple_struct && has_one_field then
         extract_texpression span ctx fmt inside arg
@@ -924,7 +926,9 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       extract_texpression span ctx fmt scrut_inside scrut;
       F.pp_print_space fmt ();
       let match_scrut_end =
-        match backend () with FStar | Coq | Lean -> "with" | HOL4 -> "of"
+        match backend () with
+        | FStar | Coq | Lean -> "with"
+        | HOL4 -> "of"
       in
       F.pp_print_string fmt match_scrut_end;
       (* Close the box for the [match ... with] *)
@@ -943,7 +947,9 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         let ctx = extract_typed_pattern span ctx fmt false false br.pat in
         F.pp_print_space fmt ();
         let arrow =
-          match backend () with FStar -> "->" | Coq | Lean | HOL4 -> "=>"
+          match backend () with
+          | FStar -> "->"
+          | Coq | Lean | HOL4 -> "=>"
         in
         F.pp_print_string fmt arrow;
         (* Close the box for the pattern *)
@@ -1049,10 +1055,14 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         print_bracket true ilb;
         F.pp_open_hvbox fmt 0;
         let delimiter =
-          match backend () with Lean -> "," | Coq | FStar | HOL4 -> ";"
+          match backend () with
+          | Lean -> ","
+          | Coq | FStar | HOL4 -> ";"
         in
         let assign =
-          match backend () with Coq | Lean | HOL4 -> ":=" | FStar -> "="
+          match backend () with
+          | Coq | Lean | HOL4 -> ":="
+          | FStar -> "="
         in
         Collections.List.iter_link
           (fun () ->
@@ -1100,7 +1110,9 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         F.pp_close_box fmt ();
         (* Print the values *)
         let delimiter =
-          match backend () with Lean -> "," | Coq | FStar | HOL4 -> ";"
+          match backend () with
+          | Lean -> ","
+          | Coq | FStar | HOL4 -> ";"
         in
         F.pp_print_space fmt ();
         F.pp_open_hovbox fmt 0;
@@ -1599,7 +1611,11 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the "=" *)
   if not is_opaque then (
     F.pp_print_space fmt ();
-    let eq = match backend () with FStar | HOL4 -> "=" | Coq | Lean -> ":=" in
+    let eq =
+      match backend () with
+      | FStar | HOL4 -> "="
+      | Coq | Lean -> ":="
+    in
     F.pp_print_string fmt eq);
   (* Close the box for "(PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
@@ -1833,7 +1849,11 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   if not is_opaque then (
     (* Print " =" *)
     F.pp_print_space fmt ();
-    let eq = match backend () with FStar | HOL4 -> "=" | Coq | Lean -> ":=" in
+    let eq =
+      match backend () with
+      | FStar | HOL4 -> "="
+      | Coq | Lean -> ":="
+    in
     F.pp_print_string fmt eq);
   (* Close ": TYPE =" box (depth=2) *)
   F.pp_close_box fmt ();
@@ -2310,7 +2330,9 @@ let extract_trait_item (ctx : extraction_ctx) (fmt : F.formatter)
   (* ":" or "=" *)
   F.pp_print_string fmt separator;
   ty ();
-  (match backend () with Lean -> () | _ -> F.pp_print_string fmt ";");
+  (match backend () with
+  | Lean -> ()
+  | _ -> F.pp_print_string fmt ";");
   F.pp_close_box fmt ()
 
 let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
@@ -2319,7 +2341,11 @@ let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
 
 let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
     (item_name : string) (ty : unit -> unit) : unit =
-  let assign = match backend () with Lean | Coq -> ":=" | _ -> "=" in
+  let assign =
+    match backend () with
+    | Lean | Coq -> ":="
+    | _ -> "="
+  in
   extract_trait_item ctx fmt item_name assign ty
 
 (** Small helper - TODO: move *)
@@ -2366,7 +2392,9 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
         f.signature.llbc_generics generics ctx
     in
     let backend_uses_forall =
-      match backend () with Coq | Lean -> true | FStar | HOL4 -> false
+      match backend () with
+      | Coq | Lean -> true
+      | FStar | HOL4 -> false
     in
     let generics_not_empty = generics <> empty_generic_params in
     let use_forall = generics_not_empty && backend_uses_forall in

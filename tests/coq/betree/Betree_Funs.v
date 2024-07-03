@@ -314,38 +314,6 @@ Definition betree_Node_lookup_first_message_for_key
   betree_Node_lookup_first_message_for_key_loop n key msgs
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]: loop 0:
-    Source: 'src/betree.rs', lines 649:4-660:5 *)
-Fixpoint betree_Node_lookup_in_bindings_loop
-  (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
-  result (option u64)
-  :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n1 =>
-    match bindings with
-    | Betree_List_Cons hd tl =>
-      let (i, i1) := hd in
-      if i s= key
-      then Ok (Some i1)
-      else
-        if i s> key
-        then Ok None
-        else betree_Node_lookup_in_bindings_loop n1 key tl
-    | Betree_List_Nil => Ok None
-    end
-  end
-.
-
-(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]:
-    Source: 'src/betree.rs', lines 649:4-649:84 *)
-Definition betree_Node_lookup_in_bindings
-  (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
-  result (option u64)
-  :=
-  betree_Node_lookup_in_bindings_loop n key bindings
-.
-
 (** [betree::betree::{betree::betree::Node#5}::apply_upserts]: loop 0:
     Source: 'src/betree.rs', lines 820:4-844:5 *)
 Fixpoint betree_Node_apply_upserts_loop
@@ -386,6 +354,38 @@ Definition betree_Node_apply_upserts
   result (u64 * (betree_List_t (u64 * betree_Message_t)))
   :=
   betree_Node_apply_upserts_loop n msgs prev key
+.
+
+(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]: loop 0:
+    Source: 'src/betree.rs', lines 649:4-660:5 *)
+Fixpoint betree_Node_lookup_in_bindings_loop
+  (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
+  result (option u64)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match bindings with
+    | Betree_List_Cons hd tl =>
+      let (i, i1) := hd in
+      if i s= key
+      then Ok (Some i1)
+      else
+        if i s> key
+        then Ok None
+        else betree_Node_lookup_in_bindings_loop n1 key tl
+    | Betree_List_Nil => Ok None
+    end
+  end
+.
+
+(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]:
+    Source: 'src/betree.rs', lines 649:4-649:84 *)
+Definition betree_Node_lookup_in_bindings
+  (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
+  result (option u64)
+  :=
+  betree_Node_lookup_in_bindings_loop n key bindings
 .
 
 (** [betree::betree::{betree::betree::Internal#4}::lookup_in_children]:
