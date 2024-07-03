@@ -272,7 +272,9 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
   analyze expl_info_init ty_info ty
 
 let type_decl_is_opaque (d : type_decl) : bool =
-  match d.kind with Opaque -> true | _ -> false
+  match d.kind with
+  | Opaque -> true
+  | _ -> false
 
 let analyze_type_decl (updated : bool ref) (infos : type_infos)
     (def : type_decl) : type_infos =

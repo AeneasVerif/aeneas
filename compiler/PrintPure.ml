@@ -284,7 +284,11 @@ let rec mprojection_to_string (env : fmt_env) (inside : string)
               "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
 
 let mplace_to_string (env : fmt_env) (p : mplace) : string =
-  let name = match p.name with None -> "" | Some name -> name in
+  let name =
+    match p.name with
+    | None -> ""
+    | Some name -> name
+  in
   (* We add the "llbc" suffix to the variable index, because span-places
    * use indices of the variables in the original LLBC program, while
    * regular places use indices for the pure variables: we want to make

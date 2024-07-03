@@ -1566,7 +1566,9 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
 
     (* Remove the abstractions *)
     let filter (ee : env_elem) : bool =
-      match ee with EBinding _ -> true | EAbs _ | EFrame -> false
+      match ee with
+      | EBinding _ -> true
+      | EAbs _ | EFrame -> false
     in
     let filt_src_env = List.filter filter filt_src_env in
     let filt_tgt_env = List.filter filter filt_tgt_env in

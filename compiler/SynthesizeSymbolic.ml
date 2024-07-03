@@ -36,8 +36,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         | [
          (Some (SeLiteral (VBool true)), true_exp);
          (Some (SeLiteral (VBool false)), false_exp);
-        ] ->
-            ExpandBool (true_exp, false_exp)
+        ] -> ExpandBool (true_exp, false_exp)
         | _ -> craise __FILE__ __LINE__ span "Ill-formed boolean expansion")
     | TLiteral (TInteger int_ty) ->
         (* Switch over an integer: split between the "regular" branches

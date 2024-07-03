@@ -48,7 +48,10 @@ type priority_borrows_or_abs =
   | InnerLoans of borrow_ids
 [@@deriving show]
 
-let update_if_none opt x = match opt with None -> Some x | _ -> opt
+let update_if_none opt x =
+  match opt with
+  | None -> Some x
+  | _ -> opt
 
 (** Utility exception *)
 exception FoundPriority of priority_borrows_or_abs
@@ -271,8 +274,7 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         | AIgnoredMutLoan (_, _)
         | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_span = _ }
-        | AIgnoredSharedLoan _ ->
-            super#visit_aloan_content env lc
+        | AIgnoredSharedLoan _ -> super#visit_aloan_content env lc
 
       method! visit_EBinding env bv v =
         sanity_check __FILE__ __LINE__ (Option.is_none !abs_or_var) span;
@@ -414,8 +416,7 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         | AIgnoredMutLoan (_, _)
         | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_span = _ }
-        | AIgnoredSharedLoan _ ->
-            super#visit_aloan_content env lc
+        | AIgnoredSharedLoan _ -> super#visit_aloan_content env lc
 
       (** Note that once inside the abstractions, we don't control diving
           (there are no use cases requiring finer control). *)
@@ -475,8 +476,7 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         | AEndedMutBorrow _
         | AEndedIgnoredMutBorrow
             { given_back = _; child = _; given_back_span = _ }
-        | AEndedSharedBorrow ->
-            super#visit_aborrow_content env bc
+        | AEndedSharedBorrow -> super#visit_aborrow_content env bc
         | AProjSharedBorrow asb ->
             if borrow_in_asb l asb then
               raise (FoundGBorrowContent (Abstract bc))
@@ -593,9 +593,10 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then update ()
             else ABorrow (super#visit_ASharedBorrow env pm bid)
-        | AIgnoredMutBorrow _ | AEndedMutBorrow _ | AEndedSharedBorrow
-        | AEndedIgnoredMutBorrow _ ->
-            super#visit_ABorrow env bc
+        | AIgnoredMutBorrow _
+        | AEndedMutBorrow _
+        | AEndedSharedBorrow
+        | AEndedIgnoredMutBorrow _ -> super#visit_ABorrow env bc
         | AProjSharedBorrow asb ->
             if borrow_in_asb l asb then update ()
             else ABorrow (super#visit_AProjSharedBorrow env asb)
@@ -767,9 +768,10 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
       method! visit_aproj abs sproj =
         (let abs = Option.get abs in
          match sproj with
-         | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _
-         | AIgnoredProjBorrows ->
-             ()
+         | AProjLoans _
+         | AEndedProjLoans _
+         | AEndedProjBorrows _
+         | AIgnoredProjBorrows -> ()
          | AProjBorrows (sv', proj_rty) ->
              let is_shared = false in
              check_add_proj_borrows is_shared abs sv' proj_rty);
@@ -865,9 +867,10 @@ let update_intersecting_aproj_borrows (span : Meta.span)
 
       method! visit_aproj abs sproj =
         match sproj with
-        | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _
-        | AIgnoredProjBorrows ->
-            super#visit_aproj abs sproj
+        | AProjLoans _
+        | AEndedProjLoans _
+        | AEndedProjBorrows _
+        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
         | AProjBorrows (sv', proj_rty) ->
             let abs = Option.get abs in
             let is_shared = true in
@@ -981,9 +984,10 @@ let update_intersecting_aproj_loans (span : Meta.span)
 
       method! visit_aproj abs sproj =
         match sproj with
-        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _
-        | AIgnoredProjBorrows ->
-            super#visit_aproj abs sproj
+        | AProjBorrows _
+        | AEndedProjLoans _
+        | AEndedProjBorrows _
+        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
         | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
             if same_symbolic_id sv sv' then (
@@ -1032,9 +1036,10 @@ let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
 
       method! visit_aproj (abs : abs option) sproj =
         (match sproj with
-        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _
-        | AIgnoredProjBorrows ->
-            super#visit_aproj abs sproj
+        | AProjBorrows _
+        | AEndedProjLoans _
+        | AEndedProjBorrows _
+        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
         | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
             sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
@@ -1078,9 +1083,10 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
 
       method! visit_aproj (abs : abs option) sproj =
         match sproj with
-        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _
-        | AIgnoredProjBorrows ->
-            super#visit_aproj abs sproj
+        | AProjBorrows _
+        | AEndedProjLoans _
+        | AEndedProjBorrows _
+        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
         | AProjLoans (sv', _) ->
             let abs = Option.get abs in
             sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
@@ -1127,9 +1133,10 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
 
       method! visit_aproj (abs : abs option) sproj =
         match sproj with
-        | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _
-        | AIgnoredProjBorrows ->
-            super#visit_aproj abs sproj
+        | AProjLoans _
+        | AEndedProjLoans _
+        | AEndedProjBorrows _
+        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
         | AProjBorrows (sv', _proj_ty) ->
             let abs = Option.get abs in
             sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
@@ -1207,8 +1214,7 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             raise (FoundBorrowIds (Borrows bids))
         | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
-        | AEndedSharedLoan (_, _) ->
-            super#visit_aloan_content env lc
+        | AEndedSharedLoan (_, _) -> super#visit_aloan_content env lc
         | AIgnoredMutLoan (_, _) ->
             (* Ignore *)
             super#visit_aloan_content env lc
@@ -1230,8 +1236,7 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
       method! visit_aproj env sproj =
         (match sproj with
         | AProjBorrows (_, _)
-        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows ->
-            ()
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
         | AProjLoans (sv, _) -> raise (ValuesUtils.FoundSymbolicValue sv));
         super#visit_aproj env sproj
     end

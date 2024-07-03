@@ -54,7 +54,9 @@ let raise_if_not_rty_visitor =
     inherit [_] iter_ty
 
     method! visit_region _ r =
-      match r with RBVar _ | RErased -> raise Found | RStatic | RFVar _ -> ()
+      match r with
+      | RBVar _ | RErased -> raise Found
+      | RStatic | RFVar _ -> ()
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased
@@ -71,7 +73,9 @@ let raise_if_not_erased_ty_visitor =
     inherit [_] iter_ty
 
     method! visit_region _ r =
-      match r with RStatic | RBVar _ | RFVar _ -> raise Found | RErased -> ()
+      match r with
+      | RStatic | RBVar _ | RFVar _ -> raise Found
+      | RErased -> ()
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased regions) *)
