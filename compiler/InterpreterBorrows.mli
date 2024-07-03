@@ -270,12 +270,16 @@ val merge_into_first_abstraction :
   AbstractionId.id ->
   eval_ctx * AbstractionId.id
 
-(** Reorder the loans and borrows in the fresh abstractions.
+(** Reorder the fresh abstractions, as well as the loans and borrows inside them.
 
     We do this in order to enforce some structure in the environments: this
     allows us to find fixed-points. Note that this function needs to be
     called typically after we merge abstractions together (see {!reduce_ctx}
     and {!collapse_ctx} for instance).
+
+    TODO: in the future it would be better to implement a more general matching
+    algorithm, both for the joins and for checking whether two environments are
+    equivalent.
 
     Inputs:
     - [span]
@@ -284,5 +288,5 @@ val merge_into_first_abstraction :
     - [old_abs_ids]
     - [eval_ctx]
  *)
-val reorder_loans_borrows_in_fresh_abs :
+val reorder_fresh_abs :
   Meta.span -> bool -> AbstractionId.Set.t -> eval_ctx -> eval_ctx

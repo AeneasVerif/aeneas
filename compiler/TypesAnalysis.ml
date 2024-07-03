@@ -147,7 +147,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
   let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
       (ty : ty) : partial_type_info =
     match ty with
-    | TLiteral _ | TNever | TTraitType _ -> ty_info
+    | TLiteral _ | TNever | TTraitType _ | TDynTrait _ -> ty_info
     | TVar var_id -> (
         (* Update the information for the proper parameter, if necessary *)
         match ty_info.param_infos with
@@ -272,7 +272,9 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
   analyze expl_info_init ty_info ty
 
 let type_decl_is_opaque (d : type_decl) : bool =
-  match d.kind with Opaque -> true | _ -> false
+  match d.kind with
+  | Opaque -> true
+  | _ -> false
 
 let analyze_type_decl (updated : bool ref) (infos : type_infos)
     (def : type_decl) : type_infos =

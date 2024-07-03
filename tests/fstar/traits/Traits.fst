@@ -503,7 +503,7 @@ let use_wrapper_len (t : Type0) (traitInst : trait_t t) : result usize =
 type foo_t (t u : Type0) = { x : t; y : u; }
 
 (** [core::result::Result]
-    Source: '/rustc/library/core/src/result.rs', lines 502:0-502:21
+    Source: '/rustc/library/core/src/result.rs', lines 527:0-527:21
     Name pattern: core::result::Result *)
 type core_result_Result_t (t e : Type0) =
 | Core_result_Result_Ok : t -> core_result_Result_t t e

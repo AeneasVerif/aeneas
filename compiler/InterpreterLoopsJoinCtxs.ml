@@ -312,14 +312,14 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
 
-  (* Reorder the loans and borrows in the fresh abstractions - note that we may
-     not have eliminated all the markers at this point. *)
-  let ctx = reorder_loans_borrows_in_fresh_abs span true old_ids.aids ctx in
+  (* Reorder the fresh region abstractions - note that we may not have eliminated
+     all the markers at this point. *)
+  let ctx = reorder_fresh_abs span true old_ids.aids ctx in
 
   log#ldebug
     (lazy
       ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- after reduce and reorder borrows/loans:\n"
+     ^ "\n\n- after reduce and reorder borrows/loans and abstractions:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
 
@@ -461,9 +461,9 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
 
-  (* Reorder the loans and borrows in the fresh abstractions - note that we may
-     not have eliminated all the markers yet *)
-  let ctx = reorder_loans_borrows_in_fresh_abs span true old_ids.aids ctx in
+  (* Reorder the fresh region abstractions - note that we may not have eliminated
+     all the markers yet *)
+  let ctx = reorder_fresh_abs span true old_ids.aids ctx in
 
   log#ldebug
     (lazy
@@ -482,7 +482,9 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
       inherit [_] iter_eval_ctx
 
       method! visit_proj_marker _ pm =
-        match pm with PNone -> () | PLeft | PRight -> raise Found
+        match pm with
+        | PNone -> ()
+        | PLeft | PRight -> raise Found
     end
   in
   try

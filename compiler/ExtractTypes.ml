@@ -240,7 +240,11 @@ let extract_binop (span : Meta.span)
       F.pp_print_space fmt ();
       extract_expr false arg1
   | _ ->
-      let binop_is_shift = match binop with Shl | Shr -> true | _ -> false in
+      let binop_is_shift =
+        match binop with
+        | Shl | Shr -> true
+        | _ -> false
+      in
       let binop = named_binop_name binop int_ty in
       F.pp_print_string fmt binop;
       (* In the case of F*, for shift operations, because machine integers
@@ -258,15 +262,21 @@ let extract_binop (span : Meta.span)
   if inside then F.pp_print_string fmt ")"
 
 let is_single_opaque_fun_decl_group (dg : Pure.fun_decl list) : bool =
-  match dg with [ d ] -> d.body = None | _ -> false
+  match dg with
+  | [ d ] -> d.body = None
+  | _ -> false
 
 let is_single_opaque_type_decl_group (dg : Pure.type_decl list) : bool =
-  match dg with [ d ] -> d.kind = Opaque | _ -> false
+  match dg with
+  | [ d ] -> d.kind = Opaque
+  | _ -> false
 
 let is_empty_record_type_decl (d : Pure.type_decl) : bool = d.kind = Struct []
 
 let is_empty_record_type_decl_group (dg : Pure.type_decl list) : bool =
-  match dg with [ d ] -> is_empty_record_type_decl d | _ -> false
+  match dg with
+  | [ d ] -> is_empty_record_type_decl d
+  | _ -> false
 
 (** In some provers, groups of definitions must be delimited.
 
@@ -402,7 +412,9 @@ let end_type_decl_group (fmt : F.formatter) (is_rec : bool)
         F.pp_print_break fmt 0 0)
 
 let unit_name () =
-  match backend () with Lean -> "Unit" | Coq | FStar | HOL4 -> "unit"
+  match backend () with
+  | Lean -> "Unit"
+  | Coq | FStar | HOL4 -> "unit"
 
 (** Small helper *)
 let extract_arrow (fmt : F.formatter) () : unit =
@@ -739,7 +751,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   (* Lookup the builtin information, if there is *)
   let open ExtractBuiltin in
   let info =
-    match_name_find_opt ctx.trans_ctx def.llbc_name (builtin_types_map ())
+    match_name_find_opt ctx.trans_ctx def.item_meta.name (builtin_types_map ())
   in
   (* Register the filtering information, if there is *)
   let ctx =
@@ -783,11 +795,11 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     (fun fid (field : field) ->
                       ( fid,
                         ctx_compute_field_name def field.attr_info ctx
-                          def.llbc_name fid field.field_name ))
+                          def.item_meta.name fid field.field_name ))
                     fields
                 in
                 let cons_name =
-                  ctx_compute_struct_constructor def ctx def.llbc_name
+                  ctx_compute_struct_constructor def ctx def.item_meta.name
                 in
                 (field_names, cons_name)
             | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
@@ -993,7 +1005,11 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
     F.pp_print_space fmt ();
     F.pp_print_string fmt (unit_name ()))
   else
-    let sep = match backend () with Coq | FStar | HOL4 -> "*" | Lean -> "×" in
+    let sep =
+      match backend () with
+      | Coq | FStar | HOL4 -> "*"
+      | Lean -> "×"
+    in
     Collections.List.iter_link
       (fun () ->
         F.pp_print_space fmt ();
@@ -1392,7 +1408,10 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   in
   let is_tuple_struct_one_or_zero_field =
     is_tuple_struct
-    && match def.kind with Struct [] | Struct [ _ ] -> true | _ -> false
+    &&
+    match def.kind with
+    | Struct [] | Struct [ _ ] -> true
+    | _ -> false
   in
   let type_kind =
     if extract_body then
@@ -1417,8 +1436,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.item_meta.span def.llbc_name def.llbc_generics
-      def.generics ctx
+    ctx_add_generic_params def.item_meta.span def.item_meta.name
+      def.llbc_generics def.generics ctx
   in
   (* Add a break before *)
   if backend () <> HOL4 || not (decl_is_first_from_group kind) then
@@ -1426,11 +1445,11 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name =
      if !Config.extract_external_name_patterns && not def.item_meta.is_local
-     then Some def.llbc_name
+     then Some def.item_meta.name
      else None
    in
    extract_comment_with_raw_span ctx fmt
-     [ "[" ^ name_to_string ctx def.llbc_name ^ "]" ]
+     [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
      name def.item_meta.span.span);
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
@@ -1703,7 +1722,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
       if is_rec then
         (* Add the type params *)
         let ctx, type_params, cg_params, trait_clauses =
-          ctx_add_generic_params decl.item_meta.span decl.llbc_name
+          ctx_add_generic_params decl.item_meta.span decl.item_meta.name
             decl.llbc_generics decl.generics ctx
         in
         (* Record_var will be the ADT argument to the projector *)

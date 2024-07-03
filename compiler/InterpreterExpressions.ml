@@ -536,9 +536,21 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | Le -> Z.leq sv1.value sv2.value
               | Ge -> Z.geq sv1.value sv2.value
               | Gt -> Z.gt sv1.value sv2.value
-              | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr | Shl
-              | Shr | Ne | Eq | CheckedAdd | CheckedSub | CheckedMul ->
-                  craise __FILE__ __LINE__ span "Unreachable"
+              | Div
+              | Rem
+              | Add
+              | Sub
+              | Mul
+              | BitXor
+              | BitAnd
+              | BitOr
+              | Shl
+              | Shr
+              | Ne
+              | Eq
+              | CheckedAdd
+              | CheckedSub
+              | CheckedMul -> craise __FILE__ __LINE__ span "Unreachable"
             in
             Ok
               ({ value = VLiteral (VBool b); ty = TLiteral TBool }
@@ -561,9 +573,17 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
               | BitOr -> raise Unimplemented
-              | Lt | Le | Ge | Gt | Shl | Shr | Ne | Eq | CheckedAdd
-              | CheckedSub | CheckedMul ->
-                  craise __FILE__ __LINE__ span "Unreachable"
+              | Lt
+              | Le
+              | Ge
+              | Gt
+              | Shl
+              | Shr
+              | Ne
+              | Eq
+              | CheckedAdd
+              | CheckedSub
+              | CheckedMul -> craise __FILE__ __LINE__ span "Unreachable"
             in
             match res with
             | Error _ -> Error EPanic

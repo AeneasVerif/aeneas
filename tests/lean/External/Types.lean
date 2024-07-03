@@ -10,7 +10,7 @@ set_option linter.unusedVariables false
 namespace external
 
 /- Trait declaration: [core::marker::Copy]
-   Source: '/rustc/library/core/src/marker.rs', lines 472:0-472:21
+   Source: '/rustc/library/core/src/marker.rs', lines 403:0-403:21
    Name pattern: core::marker::Copy -/
 structure core.marker.Copy (Self : Type) where
   cloneCloneInst : core.clone.Clone Self
