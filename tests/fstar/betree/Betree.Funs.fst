@@ -260,29 +260,6 @@ let betree_Node_lookup_first_message_for_key
   =
   betree_Node_lookup_first_message_for_key_loop key msgs
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]: loop 0:
-    Source: 'src/betree.rs', lines 649:4-660:5 *)
-let rec betree_Node_lookup_in_bindings_loop
-  (key : u64) (bindings : betree_List_t (u64 & u64)) :
-  Tot (result (option u64))
-  (decreases (betree_Node_lookup_in_bindings_loop_decreases key bindings))
-  =
-  begin match bindings with
-  | Betree_List_Cons hd tl ->
-    let (i, i1) = hd in
-    if i = key
-    then Ok (Some i1)
-    else
-      if i > key then Ok None else betree_Node_lookup_in_bindings_loop key tl
-  | Betree_List_Nil -> Ok None
-  end
-
-(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]:
-    Source: 'src/betree.rs', lines 649:4-649:84 *)
-let betree_Node_lookup_in_bindings
-  (key : u64) (bindings : betree_List_t (u64 & u64)) : result (option u64) =
-  betree_Node_lookup_in_bindings_loop key bindings
-
 (** [betree::betree::{betree::betree::Node#5}::apply_upserts]: loop 0:
     Source: 'src/betree.rs', lines 820:4-844:5 *)
 let rec betree_Node_apply_upserts_loop
@@ -318,6 +295,29 @@ let betree_Node_apply_upserts
   result (u64 & (betree_List_t (u64 & betree_Message_t)))
   =
   betree_Node_apply_upserts_loop msgs prev key
+
+(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]: loop 0:
+    Source: 'src/betree.rs', lines 649:4-660:5 *)
+let rec betree_Node_lookup_in_bindings_loop
+  (key : u64) (bindings : betree_List_t (u64 & u64)) :
+  Tot (result (option u64))
+  (decreases (betree_Node_lookup_in_bindings_loop_decreases key bindings))
+  =
+  begin match bindings with
+  | Betree_List_Cons hd tl ->
+    let (i, i1) = hd in
+    if i = key
+    then Ok (Some i1)
+    else
+      if i > key then Ok None else betree_Node_lookup_in_bindings_loop key tl
+  | Betree_List_Nil -> Ok None
+  end
+
+(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]:
+    Source: 'src/betree.rs', lines 649:4-649:84 *)
+let betree_Node_lookup_in_bindings
+  (key : u64) (bindings : betree_List_t (u64 & u64)) : result (option u64) =
+  betree_Node_lookup_in_bindings_loop key bindings
 
 (** [betree::betree::{betree::betree::Internal#4}::lookup_in_children]:
     Source: 'src/betree.rs', lines 414:4-414:63 *)
