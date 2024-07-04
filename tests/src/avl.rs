@@ -31,16 +31,19 @@ pub enum Ordering {
     Greater,
 }
 
-trait Ord {
+pub trait Ord {
     fn cmp(&self, other: &Self) -> Ordering;
 }
 
 struct AVLNode<T> {
     value: T,
-    left: AVLTree<T>,
-    right: AVLTree<T>,
-    #[aeneas::rename("height_field")]
+    left: Option<Box<AVLNode<T>>>,
+    right: Option<Box<AVLNode<T>>>,
     height: usize,
+}
+
+pub struct AVLTree<T> {
+    root: Option<Box<AVLNode<T>>>,
 }
 
 impl<T> AVLNode<T> {
@@ -48,13 +51,9 @@ impl<T> AVLNode<T> {
         self.height = 1 + max(self.left_height(), self.right_height());
     }
 
-    fn height(&self) -> usize {
-        return 1 + max(self.left_height(), self.right_height());
-    }
-
     fn left_height(&self) -> usize {
         if let Some(ref left) = self.left {
-            left.height()
+            left.height
         } else {
             0
         }
@@ -62,7 +61,7 @@ impl<T> AVLNode<T> {
 
     fn right_height(&self) -> usize {
         if let Some(ref right) = self.right {
-            right.height()
+            right.height
         } else {
             0
         }
@@ -156,7 +155,7 @@ impl<T> AVLNode<T> {
         }
     }
 
-    fn rebalance(&mut self) -> bool {
+    fn rebalance(&mut self) {
         match self.balance_factor() {
             -2 => {
                 if let Some(ref mut right_node) = self.right {
@@ -168,8 +167,6 @@ impl<T> AVLNode<T> {
                 }
 
                 self.rotate_left();
-
-                true
             }
             2 => {
                 if let Some(ref mut left_node) = self.left {
@@ -181,21 +178,24 @@ impl<T> AVLNode<T> {
                 }
 
                 self.rotate_right();
-
-                true
             }
-            _ => false,
+            _ => (),
         }
     }
 }
 
-type AVLTree<T> = Option<Box<AVLNode<T>>>;
-
-struct AVLTreeSet<T> {
-    root: AVLTree<T>,
+impl<T: Ord> AVLNode<T> {
+    fn insert(&mut self, value: T) -> bool {
+        let ordering = self.value.cmp(&value);
+        match ordering {
+            Ordering::Less => AVLTree::insert_in_opt_node(&mut self.left, value),
+            Ordering::Equal => false,
+            Ordering::Greater => AVLTree::insert_in_opt_node(&mut self.right, value),
+        }
+    }
 }
 
-impl<T: Ord> AVLTreeSet<T> {
+impl<T: Ord> AVLTree<T> {
     pub fn new() -> Self {
         Self { root: None }
     }
@@ -214,58 +214,29 @@ impl<T: Ord> AVLTreeSet<T> {
         false
     }
 
-    // TODO: reimplement as a recursive function
-    fn insert_phase1(&mut self, value: T) -> bool {
-        let mut current_tree = &mut self.root;
-
-        while let Some(current_node) = current_tree {
-            let ordering = current_node.value.cmp(&value);
-            match ordering {
-                Ordering::Less => current_tree = &mut current_node.right,
-                Ordering::Equal => return false,
-                Ordering::Greater => current_tree = &mut current_node.left,
+    fn insert_in_opt_node(node: &mut Option<Box<AVLNode<T>>>, value: T) -> bool {
+        match *node {
+            Some(node) => {
+                let inserted = node.insert(value);
+                if inserted {
+                    node.rebalance();
+                }
+                inserted
+            }
+            None => {
+                *node = Some(Box::new(AVLNode {
+                    value,
+                    left: None,
+                    right: None,
+                    height: 0,
+                }));
+                true
             }
         }
-
-        *current_tree = Some(Box::new(AVLNode {
-            value,
-            left: None,
-            right: None,
-            height: 0,
-        }));
-
-        true
     }
 
-    fn insert_rebalance_left(&mut self) {
-        let mut current_tree = &mut self.root;
-
-        while let Some(current_node) = current_tree {
-            current_node.update_height();
-            current_node.rebalance();
-            current_tree = &mut current_node.left;
-        }
-    }
-
-    fn insert_rebalance_right(&mut self) {
-        let mut current_tree = &mut self.root;
-
-        while let Some(current_node) = current_tree {
-            current_node.update_height();
-            current_node.rebalance();
-            current_tree = &mut current_node.right;
-        }
-    }
-
-    // TODO: do not rebalance the whole tree after insertion (!)
+    /// Insert a value and return [true] if the value was not already there.
     pub fn insert(&mut self, value: T) -> bool {
-        if !self.insert_phase1(value) {
-            return false;
-        }
-
-        self.insert_rebalance_left();
-        self.insert_rebalance_right();
-
-        true
+        AVLTree::insert_in_opt_node(&mut self.root, value)
     }
 }
