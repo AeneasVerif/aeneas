@@ -1,3 +1,10 @@
+//@ [!lean] skip
+//@ [lean] aeneas-args=-split-files -no-gen-lib-entry
+// ^ the `-no-gen-lib-entry` is because we add a custom import in the Avl.lean file: we do not
+// want to overwrite it.
+#![feature(register_tool)]
+#![register_tool(aeneas)]
+
 fn max<T: Ord + Copy>(a: T, b: T) -> T {
     match a.cmp(&b) {
         Ordering::Less => b,
@@ -32,8 +39,7 @@ struct AVLNode<T> {
     value: T,
     left: AVLTree<T>,
     right: AVLTree<T>,
-
-    // Memoized height.
+    #[aeneas::rename("height_field")]
     height: usize,
 }
 

@@ -1,23 +1,22 @@
 import Avl.Tree
 import Avl.BinarySearchTree
 import Avl.Specifications
-import Avl.Extracted
 
 namespace Implementation
 
 open Primitives
-open avl_verification
+open avl
 open Tree (AVLTree AVLTree.set)
 open Specifications (OrdSpecLinearOrderEq infallible ltOfRustOrder gtOfRustOrder)
 
-variable (T: Type) (H: avl_verification.Ord T) [DecidableEq T] [LinearOrder T] (Ospec: OrdSpecLinearOrderEq H)
+variable (T: Type) (H: avl.Ord T) [DecidableEq T] [LinearOrder T] (Ospec: OrdSpecLinearOrderEq H)
 
 @[pspec]
 def AVLTreeSet.find_loop_spec
   (a: T) (t: Option (AVLNode T)):
   BST.Invariant t -> ∃ b, AVLTreeSet.find_loop _ H a t = Result.ok b ∧ (b ↔ a ∈ AVLTree.set t) := fun Hbst => by
   rewrite [AVLTreeSet.find_loop]
-  match t with 
+  match t with
   | none => use false; simp [AVLTree.set]; tauto
   | some (AVLNode.mk b left right _) =>
     dsimp only
@@ -45,4 +44,3 @@ def AVLTreeSet.find_spec
     progress; simp only [Result.ok.injEq, exists_eq_left']; assumption
 
 end Implementation
-

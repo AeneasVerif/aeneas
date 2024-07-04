@@ -1,4 +1,3 @@
-import Avl.Extracted
 import Avl.Tree
 
 open Tree (AVLTree)
@@ -7,7 +6,7 @@ namespace Tree
 
 variable {T: Type}
 
-open avl_verification
+open avl
 
 def AVLTree.balancingFactor (t: AVLTree T): ℤ := match t with
 | .none => 0

@@ -1,10 +1,9 @@
 import Avl.Specifications
-import Avl.Extracted
 
 namespace Implementation
 
 open Primitives
-open avl_verification
+open avl
 open Specifications (OrdSpecLinearOrderEq ltOfRustOrder gtOfRustOrder)
 
 instance ScalarU32DecidableLE : DecidableRel (· ≤ · : U32 -> U32 -> Prop) := by
@@ -16,8 +15,8 @@ instance : LinearOrder (Scalar .U32) where
   le_antisymm := fun a b Hab Hba => by
     apply (Scalar.eq_equiv a b).2; exact (Int.le_antisymm ((Scalar.le_equiv _ _).1 Hab) ((Scalar.le_equiv _ _).1 Hba))
   le_total := fun a b => by
-    rcases (Int.le_total a b) with H | H 
-    left; exact (Scalar.le_equiv _ _).2 H 
+    rcases (Int.le_total a b) with H | H
+    left; exact (Scalar.le_equiv _ _).2 H
     right; exact (Scalar.le_equiv _ _).2 H
   decidableLE := ScalarU32DecidableLE
 
@@ -28,7 +27,7 @@ instance : OrdSpecLinearOrderEq OrdUsize where
     unfold OrdUsize
     unfold OrdUsize.cmp
     rw [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
-    if hlt : a < b then 
+    if hlt : a < b then
       use .Less
       simp [hlt]
     else

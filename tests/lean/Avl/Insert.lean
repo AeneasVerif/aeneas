@@ -2,16 +2,15 @@ import Avl.Tree
 import Avl.AVL
 import Avl.BinarySearchTree
 import Avl.Specifications
-import Avl.Extracted
 
 namespace Implementation
 
 open Primitives
-open avl_verification
+open avl
 open Tree (AVLTree AVLTree.set)
 open Specifications (OrdSpecLinearOrderEq infallible ltOfRustOrder gtOfRustOrder)
 
-variable (T: Type) (H: avl_verification.Ord T) [LinearOrder T] (Ospec: OrdSpecLinearOrderEq H)
+variable (T: Type) (H: avl.Ord T) [LinearOrder T] (Ospec: OrdSpecLinearOrderEq H)
 
 @[pspec]
 theorem AVLTreeSet.insert_loop_spec_local (p: T -> Prop)
@@ -70,7 +69,7 @@ lemma AVLTreeSet.insert_loop_spec_global
   (a: T) (t: Option (AVLNode T))
   :
   BST.Invariant t -> ∃ added t_new, AVLTreeSet.insert_loop T H a t = Result.ok ⟨ added, t_new ⟩
-  ∧ BST.Invariant t_new ∧ AVLTree.set t_new = {a} ∪ AVLTree.set t := by 
+  ∧ BST.Invariant t_new ∧ AVLTree.set t_new = {a} ∪ AVLTree.set t := by
   intro Hbst
   match t with
   | none => simp [AVLTreeSet.insert_loop, AVLTree.set, setOf]
@@ -128,7 +127,7 @@ lemma AVLTreeSet.insert_loop_spec_global
     }
 
 @[pspec]
-def AVLTreeSet.insert_spec 
+def AVLTreeSet.insert_spec
   (a: T) (t: AVLTreeSet T):
   BST.Invariant t.root -> (∃ t' added,t.insert _ H a = Result.ok (added, t')
   -- it's still a binary search tree.
@@ -136,8 +135,7 @@ def AVLTreeSet.insert_spec
   ∧ AVLTree.set t'.root = {a} ∪ AVLTree.set t.root)
   := by
   rw [AVLTreeSet.insert]; intro Hbst
-  progress keep h as ⟨ t', Hset ⟩; 
+  progress keep h as ⟨ t', Hset ⟩;
   simp; assumption
 
 end Implementation
-

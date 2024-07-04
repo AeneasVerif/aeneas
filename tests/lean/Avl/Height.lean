@@ -1,4 +1,3 @@
-import Avl.Extracted
 import Avl.Tree
 import Avl.BinarySearchTree
 
@@ -6,67 +5,67 @@ namespace Implementation
 
 variable {T: Type}
 
-open avl_verification
+open avl
 open Primitives
 open Tree (AVLTree AVLNode.left AVLNode.right AVLTree.height_node AVLNode.memoized_height AVLNode.height_left_lt_tree AVLNode.height_right_lt_tree)
 open BST (AVLNode.mk')
 
-variable (t: AVLNode T) [O: LinearOrder T] (Tcopy: core.marker.Copy T) (H: avl_verification.Ord T)
+variable (t: AVLNode T) [O: LinearOrder T] (Tcopy: core.marker.Copy T) (H: avl.Ord T)
 
-
-instance (ty: ScalarTy) : InBounds ty 0 where
-  hInBounds := by
-    induction ty <;> simp [Scalar.cMax, Scalar.cMin, Scalar.max, Scalar.min] <;> decide
-
-theorem Scalar.zero_le_unsigned {ty} (s: ¬ ty.isSigned) (x: Scalar ty): Scalar.ofInt 0 ≤ x := by
+-- TODO: remove?
+theorem Scalar.zero_le_unsigned {ty} (s: ¬ ty.isSigned) (h : Scalar.cMin ty ≤ 0 ∧ 0 ≤ Scalar.cMax ty)
+  (x: Scalar ty) : Scalar.ofInt 0 h ≤ x := by
   apply (Scalar.le_equiv _ _).2
   convert x.hmin
   cases ty <;> simp [ScalarTy.isSigned] at s <;> simp [Scalar.min]
 
 @[simp]
-theorem Scalar.max_unsigned_left_zero_eq {ty} [s: Fact (¬ ty.isSigned)] (x: Scalar ty):
-  Max.max (Scalar.ofInt 0) x = x := max_eq_right (Scalar.zero_le_unsigned s.out x)
+theorem Scalar.max_unsigned_left_zero_eq {ty} [s: Fact (¬ ty.isSigned)]
+  (h : Scalar.cMin ty ≤ 0 ∧ 0 ≤ Scalar.cMax ty) (x: Scalar ty):
+  Max.max (Scalar.ofInt 0 h) x = x := max_eq_right (Scalar.zero_le_unsigned s.out h x)
 
 @[simp]
-theorem Scalar.max_unsigned_right_zero_eq {ty} [s: Fact (¬ ty.isSigned)] (x: Scalar ty):
-  Max.max x (Scalar.ofInt 0) = x := max_eq_left (Scalar.zero_le_unsigned s.out x)
+theorem Scalar.max_unsigned_right_zero_eq {ty} [s: Fact (¬ ty.isSigned)]
+  (h : Scalar.cMin ty ≤ 0 ∧ 0 ≤ Scalar.cMax ty) (x: Scalar ty):
+  Max.max x (Scalar.ofInt 0 h) = x := max_eq_left (Scalar.zero_le_unsigned s.out h x)
 
 @[ext]
 theorem Scalar.ext {ty} (a b: Scalar ty): a.val = b.val -> a = b := (Scalar.eq_equiv a b).2
 
 @[pspec]
-def max_spec {a b: T}: ∃ o, avl_verification.max _ H Tcopy a b = .ok o ∧ o = O.max a b := by sorry
+def max_spec {a b: T}: ∃ o, avl.max _ H Tcopy a b = .ok o ∧ o = O.max a b := by sorry
 
 @[pspec]
 def AVLNode.left_height_spec
   (left: AVLNode T): (AVLNode.mk x (some left) right h).left_height = left.height
-  := by simp only [AVLNode.left_height]
+  := by
+  -- TODO: simp on divergent defs doesn't work anymore
+  rw [AVLNode.left_height]
 
 @[pspec]
 def AVLNode.right_height_spec
   (right: AVLNode T): (AVLNode.mk x left (some right) h).right_height = right.height
-  := by simp only [AVLNode.right_height]
+  := by rw [AVLNode.right_height]
 
 @[simp, norm_cast]
 theorem coe_max {ty: ScalarTy} (a b: Scalar ty): ↑(Max.max a b) = (Max.max (↑a) (↑b): ℤ) := by
   -- TODO: there should be a shorter way to prove this.
   rw [max_def, max_def]
   split_ifs <;> simp_all
-  refine' absurd _ (lt_irrefl a)
-  exact lt_of_le_of_lt (by assumption) ((Scalar.lt_equiv _ _).2 (by assumption))
 
 -- TODO:
 @[pspec]
-def AVLNode.height_spec (t: AVLNode T): AVLTree.height_node t ≤ Scalar.max .Usize -> ∃ v, t.height = .ok v ∧ v.val = AVLTree.height_node t
+def AVLNode.height_spec (t: AVLNode T): AVLTree.height_node t ≤ Scalar.max .Usize ->
+  ∃ v, t.height = .ok v ∧ v.val = AVLTree.height_node t
   := by
   haveI: Fact (¬ ScalarTy.isSigned .Usize) := ⟨by simp [ScalarTy.isSigned]⟩
   intro Hbound
-  simp [AVLNode.height]
-  match t with 
+  rw [AVLNode.height]
+  match t with
   | AVLNode.mk x left right h =>
-    rcases Hleft: left with _ | ⟨ a, left_left, left_right, h_left ⟩ <;> rcases Hright: right with _ | ⟨ b, right_left, right_right, h_right ⟩ <;> simp only [AVLNode.left_height,
-      AVLNode.right_height, bind_tc_ok, max_self, Nat.cast_add,
-      Nat.cast_one]
+    rcases Hleft: left with _ | ⟨ a, left_left, left_right, h_left ⟩ <;> rcases Hright: right with _ | ⟨ b, right_left, right_right, h_right ⟩ <;>
+    rw [AVLNode.left_height, AVLNode.right_height] <;>
+    simp only [bind_tc_ok, max_self, Nat.cast_add, Nat.cast_one]
     -- (none, none) case.
     . progress with max_spec as ⟨ w, Hw ⟩
       simp only [Hw, max_self, AVLTree.height_node_of_mk, Nat.cast_add, Nat.cast_one]
@@ -126,14 +125,16 @@ decreasing_by
 -- TODO: discharge all bound requirements
 -- by taking (multiple?) hypotheses.
 @[pspec]
-def AVLNode.update_height_spec (x: T) (h: Usize) (left right: AVLTree T): ∃ t_new, AVLNode.update_height _ (AVLNode.mk x left right h) = .ok t_new ∧ t_new = AVLNode.mk' x left right := by 
+def AVLNode.update_height_spec (x: T) (h: Usize) (left right: AVLTree T): ∃ t_new, AVLNode.update_height _ (AVLNode.mk x left right h) = .ok t_new ∧ t_new = AVLNode.mk' x left right := by
   simp [AVLNode.update_height]
   haveI: Fact (¬ ScalarTy.isSigned .Usize) := ⟨by simp [ScalarTy.isSigned]⟩
-  rcases Hleft: left with _ | ⟨ a, left_left, left_right, h_left ⟩ <;> rcases Hright: right with _ | ⟨ b, right_left, right_right, h_right ⟩ <;> simp [AVLNode.right_height, AVLNode.left_height]
+  rcases Hleft: left with _ | ⟨ a, left_left, left_right, h_left ⟩ <;>
+  rcases Hright: right with _ | ⟨ b, right_left, right_right, h_right ⟩ <;>
+  rw [AVLNode.right_height, AVLNode.left_height]
   -- TODO: clean up proof structure
   -- it's always the same.
   . progress with max_spec as ⟨ w, Hw ⟩
-    rw [Hw]; 
+    rw [Hw];
     progress as ⟨ H, H_height ⟩
     . simp; scalar_tac
     . simp only [Result.ok.injEq, AVLNode.mk.injEq, true_and]; ext; simp [H_height, AVLTree.height]
