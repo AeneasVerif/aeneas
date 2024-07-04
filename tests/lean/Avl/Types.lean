@@ -26,30 +26,30 @@ structure Ord (Self : Type) where
 structure core.marker.Copy (Self : Type) where
   cloneCloneInst : core.clone.Clone Self
 
-/- [avl::AVLNode]
-   Source: 'tests/src/avl.rs', lines 39:0-39:17 -/
-inductive AVLNode (T : Type) :=
-| mk : T → Option (AVLNode T) → Option (AVLNode T) → Usize → AVLNode T
+/- [avl::Node]
+   Source: 'tests/src/avl.rs', lines 39:0-39:14 -/
+inductive Node (T : Type) :=
+| mk : T → Option (Node T) → Option (Node T) → Usize → Node T
 
 @[simp, reducible]
-def AVLNode.value {T : Type} (x : AVLNode T) :=
-  match x with | AVLNode.mk x1 _ _ _ => x1
+def Node.value {T : Type} (x : Node T) :=
+  match x with | Node.mk x1 _ _ _ => x1
 
 @[simp, reducible]
-def AVLNode.left {T : Type} (x : AVLNode T) :=
-  match x with | AVLNode.mk _ x1 _ _ => x1
+def Node.left {T : Type} (x : Node T) :=
+  match x with | Node.mk _ x1 _ _ => x1
 
 @[simp, reducible]
-def AVLNode.right {T : Type} (x : AVLNode T) :=
-  match x with | AVLNode.mk _ _ x1 _ => x1
+def Node.right {T : Type} (x : Node T) :=
+  match x with | Node.mk _ _ x1 _ => x1
 
 @[simp, reducible]
-def AVLNode.height {T : Type} (x : AVLNode T) :=
-  match x with | AVLNode.mk _ _ _ x1 => x1
+def Node.height {T : Type} (x : Node T) :=
+  match x with | Node.mk _ _ _ x1 => x1
 
-/- [avl::AVLTree]
-   Source: 'tests/src/avl.rs', lines 46:0-46:21 -/
-structure AVLTree (T : Type) where
-  root : Option (AVLNode T)
+/- [avl::Tree]
+   Source: 'tests/src/avl.rs', lines 46:0-46:18 -/
+structure Tree (T : Type) where
+  root : Option (Node T)
 
 end avl

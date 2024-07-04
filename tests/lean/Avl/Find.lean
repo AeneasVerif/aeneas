@@ -2,7 +2,7 @@ import Avl.Tree
 import Avl.BinarySearchTree
 import Avl.Specifications
 
-namespace Implementation
+namespace avl
 
 open Primitives
 open avl
@@ -43,4 +43,4 @@ def AVLTreeSet.find_spec
     rw [AVLTreeSet.find]
     progress; simp only [Result.ok.injEq, exists_eq_left']; assumption
 
-end Implementation
+end avl

@@ -1,10 +1,10 @@
-import Avl.Specifications
+import Avl.OrderSpec
 
 namespace Implementation
 
 open Primitives
 open avl
-open Specifications (OrdSpecLinearOrderEq ltOfRustOrder gtOfRustOrder)
+open OrderSpec (OrdSpecLinearOrderEq ltOfRustOrder gtOfRustOrder)
 
 instance ScalarU32DecidableLE : DecidableRel (· ≤ · : U32 -> U32 -> Prop) := by
   simp [instLEScalar]
@@ -29,17 +29,17 @@ instance : OrdSpecLinearOrderEq OrdUsize where
     rw [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     if hlt : a < b then
       use .Less
-      simp [hlt]
+      simp [*]
+      intros; scalar_tac -- Contradiction
     else
       if heq: a = b
       then
-      use .Equal
-      simp [hlt]
-      rw [heq]
-      -- TODO: simp [hlt, heq] breaks everything???
+        use .Equal
+        simp [hlt, *]
       else
         use .Greater
         simp [hlt, heq]
+        scalar_tac
   symmetry := fun a b => by
     rw [Ordering.toDualOrdering, LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     rw [compare, Ord.opposite]

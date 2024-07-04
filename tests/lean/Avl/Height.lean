@@ -1,16 +1,14 @@
 import Avl.Tree
-import Avl.BinarySearchTree
+import Avl.Spec
+import Avl.OrderSpec
 
-namespace Implementation
+open Primitives
+
+namespace avl
 
 variable {T: Type}
 
-open avl
-open Primitives
-open Tree (AVLTree AVLNode.left AVLNode.right AVLTree.height_node AVLNode.memoized_height AVLNode.height_left_lt_tree AVLNode.height_right_lt_tree)
-open BST (AVLNode.mk')
-
-variable (t: AVLNode T) [O: LinearOrder T] (Tcopy: core.marker.Copy T) (H: avl.Ord T)
+----variable (t: AVLNode T) [O: LinearOrder T] (Tcopy: core.marker.Copy T) (H: avl.Ord T)
 
 -- TODO: remove?
 theorem Scalar.zero_le_unsigned {ty} (s: ¬ ty.isSigned) (h : Scalar.cMin ty ≤ 0 ∧ 0 ≤ Scalar.cMax ty)
@@ -33,11 +31,25 @@ theorem Scalar.max_unsigned_right_zero_eq {ty} [s: Fact (¬ ty.isSigned)]
 theorem Scalar.ext {ty} (a b: Scalar ty): a.val = b.val -> a = b := (Scalar.eq_equiv a b).2
 
 @[pspec]
-def max_spec {a b: T}: ∃ o, avl.max _ H Tcopy a b = .ok o ∧ o = O.max a b := by sorry
+def max_spec (ordInst : avl.Ord T) (instCopy : core.marker.Copy T)
+  [_root_.Ord T] [O: LinearOrder T] [ordSpecInst : OrdSpecLinearOrderEq ordInst] (a b : T) :
+  ∃ o, avl.get_max _ ordInst instCopy a b = .ok o ∧ o = O.max a b := by
+  rw [get_max]
+  have Hcmp := ordSpecInst.infallible
+  progress as ⟨ o ⟩; clear Hcmp
+  split <;> simp_all [O.compare_eq_compareOfLessAndEq]
+  have := O.compare_eq_compareOfLessAndEq a b
+
+  simp [O.compare_eq_compareOfLessAndEq] at *
+
+  simp [max_def, *]
+  simp at *
+
+  sorry
 
 @[pspec]
 def AVLNode.left_height_spec
-  (left: AVLNode T): (AVLNode.mk x (some left) right h).left_height = left.height
+  (left: AVLNode T) : (AVLNode.mk x (some left) right h).left_height = left.height
   := by
   -- TODO: simp on divergent defs doesn't work anymore
   rw [AVLNode.left_height]

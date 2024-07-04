@@ -6,7 +6,7 @@
 #![register_tool(aeneas)]
 #![feature(box_patterns)]
 
-fn max<T: Ord + Copy>(a: T, b: T) -> T {
+fn get_max<T: Ord + Copy>(a: T, b: T) -> T {
     match a.cmp(&b) {
         Ordering::Less => b,
         Ordering::Equal => b,
@@ -36,20 +36,20 @@ pub trait Ord {
     fn cmp(&self, other: &Self) -> Ordering;
 }
 
-struct AVLNode<T> {
+struct Node<T> {
     value: T,
-    left: Option<Box<AVLNode<T>>>,
-    right: Option<Box<AVLNode<T>>>,
+    left: Option<Box<Node<T>>>,
+    right: Option<Box<Node<T>>>,
     height: usize,
 }
 
-pub struct AVLTree<T> {
-    root: Option<Box<AVLNode<T>>>,
+pub struct Tree<T> {
+    root: Option<Box<Node<T>>>,
 }
 
-impl<T> AVLNode<T> {
+impl<T> Node<T> {
     fn update_height(&mut self) {
-        self.height = 1 + max(self.left_height(), self.right_height());
+        self.height = 1 + get_max(self.left_height(), self.right_height());
     }
 
     fn left_height(&self) -> usize {
@@ -185,18 +185,18 @@ impl<T> AVLNode<T> {
     }
 }
 
-impl<T: Ord> AVLNode<T> {
+impl<T: Ord> Node<T> {
     fn insert(&mut self, value: T) -> bool {
         let ordering = self.value.cmp(&value);
         match ordering {
-            Ordering::Less => AVLTree::insert_in_opt_node(&mut self.left, value),
+            Ordering::Less => Tree::insert_in_opt_node(&mut self.left, value),
             Ordering::Equal => false,
-            Ordering::Greater => AVLTree::insert_in_opt_node(&mut self.right, value),
+            Ordering::Greater => Tree::insert_in_opt_node(&mut self.right, value),
         }
     }
 }
 
-impl<T: Ord> AVLTree<T> {
+impl<T: Ord> Tree<T> {
     pub fn new() -> Self {
         Self { root: None }
     }
@@ -215,7 +215,7 @@ impl<T: Ord> AVLTree<T> {
         false
     }
 
-    fn insert_in_opt_node(node: &mut Option<Box<AVLNode<T>>>, value: T) -> bool {
+    fn insert_in_opt_node(node: &mut Option<Box<Node<T>>>, value: T) -> bool {
         match node {
             Some(box ref mut node) => {
                 let inserted = node.insert(value);
@@ -225,7 +225,7 @@ impl<T: Ord> AVLTree<T> {
                 inserted
             }
             None => {
-                *node = Some(Box::new(AVLNode {
+                *node = Some(Box::new(Node {
                     value,
                     left: None,
                     right: None,
@@ -238,6 +238,6 @@ impl<T: Ord> AVLTree<T> {
 
     /// Insert a value and return [true] if the value was not already there.
     pub fn insert(&mut self, value: T) -> bool {
-        AVLTree::insert_in_opt_node(&mut self.root, value)
+        Tree::insert_in_opt_node(&mut self.root, value)
     }
 }

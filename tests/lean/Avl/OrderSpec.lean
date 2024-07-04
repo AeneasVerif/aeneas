@@ -1,27 +1,7 @@
 import Avl.Tree
 
-namespace Primitives
-
-namespace Result
-
-def map {A B: Type} (x: Result A) (f: A -> B): Result B := match x with
-| .ok y => .ok (f y)
-| .fail e => .fail e
-| .div => .div
-
-@[inline]
-def isok {A: Type} : Result A -> Bool
-| .ok _ => true
-| .fail _ => false
-| .div => false
-
-@[inline]
-def get? {A: Type}: (r: Result A) -> isok r -> A
-| .ok x, _ => x
-
-end Result
-
-end Primitives
+open Primitives
+open Result
 
 namespace avl
 
@@ -31,6 +11,7 @@ def Ordering.toLeanOrdering (o: avl.Ordering): _root_.Ordering := match o with
 | .Equal => .eq
 | .Greater => .gt
 
+@[simp]
 def Ordering.ofLeanOrdering (o: _root_.Ordering): avl.Ordering := match o with
 | .lt => .Less
 | .eq => .Equal
@@ -62,14 +43,7 @@ theorem ite_eq_gt_distrib (c : Prop) [Decidable c] (a b : Ordering) :
     ((if c then a else b) = .Greater) = if c then a = .Greater else b = .Greater := by
   by_cases c <;> simp [*]
 
-end avl
-
-namespace Specifications
-
-open Primitives
-open Result
-
-variable {T: Type} (H: outParam (avl.Ord T))
+variable {T: Type} (H: outParam (Ord T))
 
 @[simp]
 def _root_.Ordering.toDualOrdering (o: _root_.Ordering): _root_.Ordering := match o with
@@ -89,26 +63,26 @@ theorem toDualOrderingIdempotency (o: _root_.Ordering): o.toDualOrdering.toDualO
 -- TODO: reason about raw bundling vs. refined bundling.
 -- raw bundling: hypothesis with Rust extracted objects.
 -- refined bundling: lifted hypothesis with Lean native objects.
-class OrdSpec [Ord T] where
+class OrdSpec [_root_.Ord T] where
   infallible: ∀ a b, ∃ (o: avl.Ordering), H.cmp a b = .ok o ∧ compare a b = o.toLeanOrdering
 
-class OrdSpecSymmetry [O: Ord T] extends OrdSpec H where
+class OrdSpecSymmetry [O: _root_.Ord T] extends OrdSpec H where
   symmetry: ∀ a b, O.compare a b = (O.opposite.compare a b).toDualOrdering
 
 -- Must be R decidableRel and an equivalence relationship?
-class OrdSpecRel [O: Ord T] (R: outParam (T -> T -> Prop)) extends OrdSpec H where
+class OrdSpecRel [O: _root_.Ord T] (R: outParam (T -> T -> Prop)) extends OrdSpec H where
   equivalence: ∀ a b, H.cmp a b = .ok .Equal -> R a b
 
-class OrdSpecLinearOrderEq [O: Ord T] extends OrdSpecSymmetry H, OrdSpecRel H Eq
+class OrdSpecLinearOrderEq [O: _root_.Ord T] extends OrdSpecSymmetry H, OrdSpecRel H Eq
 
-theorem infallible [Ord T] [OrdSpec H]: ∀ a b, ∃ o, H.cmp a b = .ok o := fun a b => by
+theorem infallible [_root_.Ord T] [OrdSpec H]: ∀ a b, ∃ o, H.cmp a b = .ok o := fun a b => by
   obtain ⟨ o, ⟨ H, _ ⟩ ⟩ := OrdSpec.infallible a b
   exact ⟨ o, H ⟩
 
 instance: Coe (avl.Ordering) (_root_.Ordering) where
   coe a := a.toLeanOrdering
 
-theorem rustCmpEq [Ord T] [O: OrdSpec H]: H.cmp a b = .ok o <-> compare a b = o.toLeanOrdering := by
+theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]: H.cmp a b = .ok o <-> compare a b = o.toLeanOrdering := by
   apply Iff.intro
   . intro Hcmp
     obtain ⟨ o', ⟨ Hcmp', Hcompare ⟩ ⟩ := O.infallible a b
@@ -122,7 +96,7 @@ theorem rustCmpEq [Ord T] [O: OrdSpec H]: H.cmp a b = .ok o <-> compare a b = o.
 
 theorem oppositeOfOpposite {x y: _root_.Ordering}: x.toDualOrdering = y ↔ x = y.toDualOrdering := by
   cases x <;> cases y <;> simp
-theorem oppositeRustOrder [Ord T] [Spec: OrdSpecSymmetry H] {a b}: H.cmp b a = .ok o ↔ H.cmp a b = .ok o.toDualOrdering := by
+theorem oppositeRustOrder [_root_.Ord T] [Spec: OrdSpecSymmetry H] {a b}: H.cmp b a = .ok o ↔ H.cmp a b = .ok o.toDualOrdering := by
   rw [rustCmpEq, Spec.symmetry, compare, Ord.opposite, oppositeOfOpposite, rustCmpEq, toDualOrderingOfToLeanOrdering]
 
 theorem ltOfRustOrder
@@ -147,4 +121,4 @@ theorem gtOfRustOrder
   rewrite [oppositeRustOrder]
   simp [Hcmp]
 
-end Specifications
+end avl
