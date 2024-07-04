@@ -497,17 +497,13 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
   (* Lean-only definitions *)
   @ mk_lean_only
       [
-        (* `backend_choice` first parameter is for non-Lean backends
-            By construction, we cannot write down that parameter in the output
-            in this list
-        *)
         mk_fun "core::mem::swap" ~can_fail:false ();
         mk_fun "core::option::{core::option::Option<@T>}::take"
-          ~extract_name:(Some (backend_choice "" "Option::take"))
+          ~extract_name:(Some (backend_choice "" "core::option::Option::take"))
           ~can_fail:false ();
         mk_fun "core::option::{core::option::Option<@T>}::is_none"
-          ~extract_name:(Some (backend_choice "" "Option::isNone"))
-          ~filter:(Some [ false ]) ~can_fail:false ();
+          ~extract_name:(Some (backend_choice "" "core::option::Option::is_none"))
+          ~can_fail:false ();
       ]
 
 let builtin_funs : unit -> (pattern * bool list option * builtin_fun_info) list

@@ -51,17 +51,6 @@ def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
 }
 
-namespace option -- core.option
-
-/- [core::option::{core::option::Option<T>}::unwrap] -/
-def Option.unwrap (T : Type) (x : Option T) : Result T :=
-  Result.ofOption x Error.panic
-
-end option -- core.option
-
-/- [core::option::Option::take] -/
-@[simp] def Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
-
 /- [core::mem::replace]
 
    This acts like a swap effectively in a functional pure world.
@@ -73,3 +62,13 @@ end option -- core.option
 @[simp] def mem.swap (T: Type) (a b: T): T × T := (b, a)
 
 end core
+
+/- [core::option::{core::option::Option<T>}::unwrap] -/
+@[simp] def core.option.Option.unwrap (T : Type) (x : Option T) : Result T :=
+  Result.ofOption x Error.panic
+
+/- [core::option::Option::take] -/
+@[simp] def core.option.Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
+
+/- [core::option::Option::is_none] -/
+@[simp] def core.option.Option.is_none (T: Type) (self: Option T): Bool := self.isNone
