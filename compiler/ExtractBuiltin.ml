@@ -502,7 +502,8 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
           ~extract_name:(Some (backend_choice "" "core::option::Option::take"))
           ~can_fail:false ();
         mk_fun "core::option::{core::option::Option<@T>}::is_none"
-          ~extract_name:(Some (backend_choice "" "core::option::Option::is_none"))
+          ~extract_name:
+            (Some (backend_choice "" "core::option::Option::is_none"))
           ~can_fail:false ();
       ]
 
