@@ -4,6 +4,7 @@
 // want to overwrite it.
 #![feature(register_tool)]
 #![register_tool(aeneas)]
+#![feature(box_patterns)]
 
 fn max<T: Ord + Copy>(a: T, b: T) -> T {
     match a.cmp(&b) {
@@ -215,8 +216,8 @@ impl<T: Ord> AVLTree<T> {
     }
 
     fn insert_in_opt_node(node: &mut Option<Box<AVLNode<T>>>, value: T) -> bool {
-        match *node {
-            Some(node) => {
+        match node {
+            Some(box ref mut node) => {
                 let inserted = node.insert(value);
                 if inserted {
                     node.rebalance();
