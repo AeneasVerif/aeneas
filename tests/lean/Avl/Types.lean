@@ -9,14 +9,14 @@ set_option linter.unusedVariables false
 namespace avl
 
 /- [avl::Ordering]
-   Source: 'tests/src/avl.rs', lines 28:0-28:17 -/
+   Source: 'tests/src/avl.rs', lines 29:0-29:17 -/
 inductive Ordering :=
 | Less : Ordering
 | Equal : Ordering
 | Greater : Ordering
 
 /- Trait declaration: [avl::Ord]
-   Source: 'tests/src/avl.rs', lines 34:0-34:9 -/
+   Source: 'tests/src/avl.rs', lines 35:0-35:13 -/
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 
@@ -27,7 +27,7 @@ structure core.marker.Copy (Self : Type) where
   cloneCloneInst : core.clone.Clone Self
 
 /- [avl::AVLNode]
-   Source: 'tests/src/avl.rs', lines 38:0-38:17 -/
+   Source: 'tests/src/avl.rs', lines 39:0-39:17 -/
 inductive AVLNode (T : Type) :=
 | mk : T → Option (AVLNode T) → Option (AVLNode T) → Usize → AVLNode T
 
@@ -44,12 +44,12 @@ def AVLNode.right {T : Type} (x : AVLNode T) :=
   match x with | AVLNode.mk _ _ x1 _ => x1
 
 @[simp, reducible]
-def AVLNode.height_field {T : Type} (x : AVLNode T) :=
+def AVLNode.height {T : Type} (x : AVLNode T) :=
   match x with | AVLNode.mk _ _ _ x1 => x1
 
-/- [avl::AVLTreeSet]
-   Source: 'tests/src/avl.rs', lines 194:0-194:20 -/
-structure AVLTreeSet (T : Type) where
+/- [avl::AVLTree]
+   Source: 'tests/src/avl.rs', lines 46:0-46:21 -/
+structure AVLTree (T : Type) where
   root : Option (AVLNode T)
 
 end avl
