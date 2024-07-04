@@ -1,12 +1,11 @@
 import Avl.Tree
 import Avl.Spec
 import Avl.OrderSpec
+import Avl.ScalarOrder
 
 open Primitives
 
 namespace avl
-
-variable {T: Type}
 
 ----variable (t: AVLNode T) [O: LinearOrder T] (Tcopy: core.marker.Copy T) (H: avl.Ord T)
 
@@ -32,32 +31,20 @@ theorem Scalar.ext {ty} (a b: Scalar ty): a.val = b.val -> a = b := (Scalar.eq_e
 
 @[pspec]
 def max_spec (ordInst : avl.Ord T) (instCopy : core.marker.Copy T)
-  [_root_.Ord T] [O: LinearOrder T] [ordSpecInst : OrdSpecLinearOrderEq ordInst] (a b : T) :
+  [O: LinearOrder T] [ordSpecInst : OrdSpecLinearOrderEq ordInst] (a b : T) :
   ∃ o, avl.get_max _ ordInst instCopy a b = .ok o ∧ o = O.max a b := by
   rw [get_max]
   have Hcmp := ordSpecInst.infallible
-  progress as ⟨ o ⟩; clear Hcmp
-  split <;> simp_all [O.compare_eq_compareOfLessAndEq]
-  have := O.compare_eq_compareOfLessAndEq a b
-
-  simp [O.compare_eq_compareOfLessAndEq] at *
-
-  simp [max_def, *]
-  simp at *
-
-  sorry
-
-@[pspec]
-def AVLNode.left_height_spec
-  (left: AVLNode T) : (AVLNode.mk x (some left) right h).left_height = left.height
-  := by
-  -- TODO: simp on divergent defs doesn't work anymore
-  rw [AVLNode.left_height]
-
-@[pspec]
-def AVLNode.right_height_spec
-  (right: AVLNode T): (AVLNode.mk x left (some right) h).right_height = right.height
-  := by rw [AVLNode.right_height]
+  progress as ⟨ o, Hpost ⟩; clear Hcmp
+  split <;> simp_all [O.compare_eq_compareOfLessAndEq, compareOfLessAndEq, max_def] <;>
+  cases h: a == b <;> simp_all <;> split <;> simp_all
+  . simp only [O.lt_iff_le_not_le] at *
+    tauto
+  . -- TODO: cases doesn't work here
+    if h : a < b then simp_all
+    else simp_all
+  . have := O.le_antisymm a b
+    simp_all
 
 @[simp, norm_cast]
 theorem coe_max {ty: ScalarTy} (a b: Scalar ty): ↑(Max.max a b) = (Max.max (↑a) (↑b): ℤ) := by
@@ -65,107 +52,47 @@ theorem coe_max {ty: ScalarTy} (a b: Scalar ty): ↑(Max.max a b) = (Max.max (�
   rw [max_def, max_def]
   split_ifs <;> simp_all
 
--- TODO:
 @[pspec]
-def AVLNode.height_spec (t: AVLNode T) (Hbound: AVLTree.height_node t ≤ Scalar.max .Usize) :
-  ∃ v, t.height = .ok v ∧ v.val = AVLTree.height_node t
-  := by
-  haveI: Fact (¬ ScalarTy.isSigned .Usize) := ⟨by simp [ScalarTy.isSigned]⟩
-  rw [AVLNode.height]
-  match t with
-  | AVLNode.mk x left right h =>
-    rcases Hleft: left with _ | ⟨ a, left_left, left_right, h_left ⟩ <;> rcases Hright: right with _ | ⟨ b, right_left, right_right, h_right ⟩ <;>
-    rw [AVLNode.left_height, AVLNode.right_height] <;>
-    simp only [bind_tc_ok, max_self, Nat.cast_add, Nat.cast_one]
-    -- (none, none) case.
-    . progress with max_spec as ⟨ w, Hw ⟩
-      simp [Hw]
-      progress
-      simp at *; simp [*]
-    -- (none, some .) case.
-    . progress with height_spec as ⟨ w, Hw ⟩
-      . simp_all [AVLTree.height_node]
-        scalar_tac
-      . progress with max_spec as ⟨ M, Hm ⟩
-        rw [Hm]
-        have: 1 + w.val ≤ Scalar.max .Usize := by
-          rw [Hw]
-          refine' le_trans _ Hbound
-          conv =>
-            rhs
-            rw [Hright, AVLTree.height_node, AVLTree.height]
-          push_cast
-          refine' Int.add_le_add_left _ _
-          exact Int.le_max_right _ _
-        simp only [Scalar.max_unsigned_left_zero_eq, ge_iff_le, zero_le, max_eq_right, Nat.cast_add,
-          Nat.cast_one]
-        progress with Usize.add_spec as ⟨ X, Hx ⟩
-        simp only [Result.ok.injEq, Nat.cast_add,
-          Nat.cast_one, Nat.cast_max, exists_eq_left', Hx, Scalar.ofInt_val_eq, Hw, add_right_inj]
-        conv =>
-          rhs
-          rw [AVLTree.height_node, AVLTree.height, (max_eq_right (zero_le _)), AVLTree.height]
-        -- TODO: render invariant by commutativity.
-    -- (some ., none) case, above.
-    . sorry
-    -- (some ., some .) case.
-    . progress with height_spec as ⟨ c, Hc ⟩
-      -- TODO: factor me out...
-      push_cast
-      refine' le_trans _ Hbound
-      apply le_of_lt; rw [Hleft]
-      exact_mod_cast AVLNode.height_left_lt_tree _
-      progress with height_spec as ⟨ d, Hd ⟩
-      push_cast
-      refine' le_trans _ Hbound
-      apply le_of_lt; rw [Hright]
-      exact_mod_cast AVLNode.height_right_lt_tree _
-      progress with max_spec as ⟨ M, Hm ⟩
-      have: 1 + M.val ≤ Scalar.max .Usize := by
-        rw [Hm]
-        refine' le_trans _ Hbound
-        rw [Hleft, Hright, AVLTree.height_node, AVLTree.height, AVLTree.height]
-        push_cast
-        rw [Hc, Hd]
-      progress with Usize.add_spec as ⟨ X, Hx ⟩
-      simp [Hx, Hm, Hc, Hd, AVLTree.height]
-decreasing_by
-  all_goals (simp_wf; try simp [Hleft]; try simp [Hright]; try linarith)
+def Node.left_height_spec [LinearOrder T] (node : Node T) (hInv : Child.inv node.left):
+  ∃ h, Node.left_height _ node = .ok h ∧
+  h.val = Child.compute_height node.left := by
+  rw [left_height]
+  match h: node.left with
+  | none => simp [*]
+  | some child =>
+    simp [h] at hInv
+    have := Node.inv_imp_height_eq hInv
+    simp [*]
 
--- TODO: discharge all bound requirements
--- by taking (multiple?) hypotheses.
 @[pspec]
-def AVLNode.update_height_spec (x: T) (h: Usize) (left right: AVLTree T): ∃ t_new, AVLNode.update_height _ (AVLNode.mk x left right h) = .ok t_new ∧ t_new = AVLNode.mk' x left right := by
-  simp [AVLNode.update_height]
-  haveI: Fact (¬ ScalarTy.isSigned .Usize) := ⟨by simp [ScalarTy.isSigned]⟩
-  rcases Hleft: left with _ | ⟨ a, left_left, left_right, h_left ⟩ <;>
-  rcases Hright: right with _ | ⟨ b, right_left, right_right, h_right ⟩ <;>
-  rw [AVLNode.right_height, AVLNode.left_height]
-  -- TODO: clean up proof structure
-  -- it's always the same.
-  . progress with max_spec as ⟨ w, Hw ⟩
-    rw [Hw];
-    progress as ⟨ H, H_height ⟩
-    . simp; scalar_tac
-    . simp only [Result.ok.injEq, AVLNode.mk.injEq, true_and]; ext; simp [H_height, AVLTree.height]
-  . progress with height_spec as ⟨ c, Hc ⟩
-    . sorry
-    . progress with max_spec as ⟨ w, Hw ⟩
-      simp at Hw; rw [Hw]; progress as ⟨ H, H_height ⟩; simp; sorry -- 1 + c ≤ Usize.max
-      simp only [Result.ok.injEq, AVLNode.mk.injEq, true_and]; ext; simp [AVLTree.height, H_height, Hc]
-  . progress with height_spec as ⟨ c, Hc ⟩
-    . sorry
-    . progress with max_spec as ⟨ w, Hw ⟩
-      progress as ⟨ H, H_height ⟩
-      . sorry
-      . simp only [Result.ok.injEq, AVLNode.mk.injEq, true_and]; ext; simp [AVLTree.height, H_height, Hw, Hc]
-  . progress with height_spec as ⟨ c, Hc ⟩
-    . sorry
-    . progress with height_spec as ⟨ d, Hd ⟩
-      . sorry
-      . progress with max_spec as ⟨ w, Hw ⟩
-        progress as ⟨ H, H_height ⟩
-        . sorry
-        . simp only [Result.ok.injEq, AVLNode.mk.injEq, true_and]; ext; simp [AVLTree.height, H_height, Hw, Hc, Hd]
+def Node.right_height_spec [LinearOrder T] (node : Node T) (hInv : Child.inv node.right):
+  ∃ h, Node.right_height _ node = .ok h ∧
+  h.val = Child.compute_height node.right := by
+  rw [right_height]
+  match h: node.right with
+  | none => simp [*]
+  | some child =>
+    simp [h] at hInv
+    have := Node.inv_imp_height_eq hInv
+    simp [*]
 
-end Implementation
+@[pspec]
+def Node.update_height_spec {T : Type} [LinearOrder T]
+  (node : Node T) (h : node.compute_height ≤ Usize.max)
+  (hLeftInv : Child.inv node.left) (hRightInv : Child.inv node.right) :
+  ∃ node', Node.update_height _ node = .ok node' ∧
+  node'.left = node.left ∧
+  node'.right = node.right ∧
+  node'.value = node.value ∧
+  node'.height.val = node.compute_height := by
+  rw [update_height]
+  progress as ⟨ hLeft .. ⟩
+  progress as ⟨ hRight .. ⟩
+  progress as ⟨ hMax .. ⟩
+  have h : 1 + hMax.val ≤ Usize.max := by
+    cases node; simp_all
+  progress as ⟨ height .. ⟩
+  simp
+  cases node; simp_all
+
+end avl

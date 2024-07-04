@@ -1,7 +1,5 @@
 import Avl.Tree
-import Avl.AVL
-import Avl.BinarySearchTree
-import Avl.Specifications
+import Avl.Spec
 
 namespace Implementation
 

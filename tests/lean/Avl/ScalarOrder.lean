@@ -1,10 +1,8 @@
 import Avl.OrderSpec
 
-namespace Implementation
+namespace avl
 
 open Primitives
-open avl
-open OrderSpec (OrdSpecLinearOrderEq ltOfRustOrder gtOfRustOrder)
 
 instance ScalarU32DecidableLE : DecidableRel (· ≤ · : U32 -> U32 -> Prop) := by
   simp [instLEScalar]
@@ -20,7 +18,6 @@ instance : LinearOrder (Scalar .U32) where
     right; exact (Scalar.le_equiv _ _).2 H
   decidableLE := ScalarU32DecidableLE
 
--- OrdU32 does not exist anymore, it's OrdUsize, this crashes in a weird way.
 instance : OrdSpecLinearOrderEq OrdUsize where
   infallible := fun a b => by
     unfold Ord.cmp
@@ -41,7 +38,7 @@ instance : OrdSpecLinearOrderEq OrdUsize where
         simp [hlt, heq]
         scalar_tac
   symmetry := fun a b => by
-    rw [Ordering.toDualOrdering, LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
+    simp [Ordering.toDualOrdering, LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     rw [compare, Ord.opposite]
     simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     split_ifs with hab hba hba' hab' hba'' _ hba₃ _ <;> tauto
@@ -56,3 +53,5 @@ instance : OrdSpecLinearOrderEq OrdUsize where
     unfold OrdUsize.cmp
     simp only []
     split_ifs <;> simp only [Result.ok.injEq, not_false_eq_true, neq_imp, IsEmpty.forall_iff]; tauto; try assumption
+
+end avl

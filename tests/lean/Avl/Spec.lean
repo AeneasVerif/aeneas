@@ -10,13 +10,13 @@ mutual
   match child with
   | none => true
   | some child => child.forall p
-termination_by Child.compute_height child
+termination_by Child.size child
 decreasing_by simp_wf
 
 def Node.forall (p: Node T -> Prop) (node : Node T) : Prop :=
   p node ∧
   Child.forall p node.left ∧ Child.forall p node.right
-termination_by Node.compute_height node
+termination_by Node.size node
 decreasing_by all_goals (simp_wf <;> split <;> simp <;> scalar_tac)
 end
 
@@ -84,14 +84,18 @@ def Node.inv_aux (node : Node T) : Prop :=
   Child.forall (fun node' => node.value < node'.value) node.right ∧
   -1 ≤ node.balancingFactor ∧ node.balancingFactor ≤ 1
 
+@[reducible]
 def Node.inv (node : Node T) : Prop :=
   Node.forall Node.inv_aux node
 
-@[simp]
+@[simp, reducible]
 def Child.inv (child : Child T) : Prop :=
   match child with
   | none => true
   | some node => node.inv
+
+@[reducible]
+def Tree.inv (t : Tree T) : Prop := Child.inv t.root
 
 @[simp]
 theorem Node.inv_left {t: Node T}: t.inv -> Child.inv t.left := by
@@ -106,6 +110,10 @@ theorem Node.inv_right {t: Node T}: t.inv -> Child.inv t.right := by
   intro
   cases t; simp
   split <;> try simp_all [Node.forall]
+
+theorem Node.inv_imp_height_eq {t: Node T} (hInv : t.inv) : t.height.val = t.compute_height := by
+  simp [inv, Node.forall, inv_aux] at hInv
+  cases t; simp_all
 
 /-
 -- TODO: ask at most for LT + Irreflexive (lt_irrefl) + Trichotomy (le_of_not_lt)?
@@ -139,5 +147,23 @@ theorem right_pos {left right: Option (Node T)} {a x: T}: BST.Invariant (some (N
      assumption
    . assumption
 -/
+
+@[simp]
+theorem Node.lt_imp_not_in_right (node : Node T) (hInv : node.inv) (x : T)
+  (hLt : x < node.value) :
+  x ∉ Child.v node.right := by sorry
+
+@[simp]
+theorem Node.lt_imp_not_in_left (node : Node T) (hInv : node.inv) (x : T)
+  (hLt : node.value < x) :
+  x ∉ Child.v node.left := by sorry
+
+@[simp]
+theorem Node.value_not_in_right (node : Node T) (hInv : node.inv) :
+  node.value ∉ Child.v node.right := by sorry
+
+@[simp]
+theorem Node.value_not_in_left (node : Node T) (hInv : node.inv) :
+  node.value ∉ Child.v node.left := by sorry
 
 end avl

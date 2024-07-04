@@ -1,46 +1,48 @@
-import Avl.Tree
-import Avl.BinarySearchTree
-import Avl.Specifications
+import Avl.Spec
+import Avl.OrderSpec
+
+open Primitives Result
 
 namespace avl
 
-open Primitives
-open avl
-open Tree (AVLTree AVLTree.set)
-open Specifications (OrdSpecLinearOrderEq infallible ltOfRustOrder gtOfRustOrder)
-
-variable (T: Type) (H: avl.Ord T) [DecidableEq T] [LinearOrder T] (Ospec: OrdSpecLinearOrderEq H)
-
 @[pspec]
-def AVLTreeSet.find_loop_spec
-  (a: T) (t: Option (AVLNode T)):
-  BST.Invariant t -> ∃ b, AVLTreeSet.find_loop _ H a t = Result.ok b ∧ (b ↔ a ∈ AVLTree.set t) := fun Hbst => by
-  rewrite [AVLTreeSet.find_loop]
+theorem Tree.find_loop_spec
+  {T : Type} (OrdInst : Ord T)
+  [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
+  (value : T) (t : Child T) (hInv : Child.inv t) :
+  ∃ b, Tree.find_loop T OrdInst value t = ok b ∧
+  (b ↔ value ∈ Child.v t) := by
+  rewrite [find_loop]
   match t with
-  | none => use false; simp [AVLTree.set]; tauto
-  | some (AVLNode.mk b left right _) =>
+  | none => simp
+  | some (.mk v left right height) =>
     dsimp only
-    have : ∀ a b, ∃ o, H.cmp a b = .ok o := infallible H
-    progress keep Hordering as ⟨ ordering ⟩
-    cases ordering
-    all_goals dsimp only
-    . convert (AVLTreeSet.find_loop_spec a right (BST.right Hbst)) using 4
-      apply Iff.intro
-      -- We apply a localization theorem here.
-      . intro Hmem; exact (BST.right_pos Hbst Hmem (ltOfRustOrder _ _ _ Hordering))
-      . intro Hmem; simp [AVLTree.set_some]; right; assumption
-    . simp [Ospec.equivalence _ _ Hordering]
-    . convert (AVLTreeSet.find_loop_spec a left (BST.left Hbst)) using 4
-      apply Iff.intro
-      -- We apply a localization theorem here.
-      . intro Hmem; exact (BST.left_pos Hbst Hmem (gtOfRustOrder _ _ _ Hordering))
-      . intro Hmem; simp [AVLTree.set_some]; left; right; assumption
+    have hCmp := Ospec.infallible
+    progress keep Hordering as ⟨ ordering ⟩; clear hCmp
+    have hInvLeft := Node.inv_left hInv
+    have hInvRight := Node.inv_right hInv
+    cases ordering <;> dsimp only
+    . /- node.value < value -/
+      progress
+      have hNotIn := Node.lt_imp_not_in_left _ hInv
+      simp_all
+      intro; simp_all
+    . /- node.value = value -/
+      simp_all
+    . /- node.value > value -/
+      progress
+      have hNotIn := Node.lt_imp_not_in_right _ hInv
+      simp_all
+      intro; simp_all
 
-
-def AVLTreeSet.find_spec
-  (a: T) (t: AVLTreeSet T):
-  BST.Invariant t.root -> ∃ b, t.find _ H a = Result.ok b ∧ (b ↔ a ∈ AVLTree.set t.root) := fun Hbst => by
-    rw [AVLTreeSet.find]
-    progress; simp only [Result.ok.injEq, exists_eq_left']; assumption
+theorem Tree.find_spec
+  {T : Type} (OrdInst : Ord T)
+  [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
+  (t : Tree T) (value : T) (hInv : t.inv) :
+  ∃ b, Tree.find T OrdInst t value = ok b ∧
+  (b ↔ value ∈ t.v) := by
+  rw [find]
+  progress
+  simp [Tree.v]; assumption
 
 end avl
