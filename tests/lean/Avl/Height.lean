@@ -55,11 +55,10 @@ theorem coe_max {ty: ScalarTy} (a b: Scalar ty): ↑(Max.max a b) = (Max.max (�
 
 -- TODO:
 @[pspec]
-def AVLNode.height_spec (t: AVLNode T): AVLTree.height_node t ≤ Scalar.max .Usize ->
+def AVLNode.height_spec (t: AVLNode T) (Hbound: AVLTree.height_node t ≤ Scalar.max .Usize) :
   ∃ v, t.height = .ok v ∧ v.val = AVLTree.height_node t
   := by
   haveI: Fact (¬ ScalarTy.isSigned .Usize) := ⟨by simp [ScalarTy.isSigned]⟩
-  intro Hbound
   rw [AVLNode.height]
   match t with
   | AVLNode.mk x left right h =>
@@ -68,14 +67,13 @@ def AVLNode.height_spec (t: AVLNode T): AVLTree.height_node t ≤ Scalar.max .Us
     simp only [bind_tc_ok, max_self, Nat.cast_add, Nat.cast_one]
     -- (none, none) case.
     . progress with max_spec as ⟨ w, Hw ⟩
-      simp only [Hw, max_self, AVLTree.height_node_of_mk, Nat.cast_add, Nat.cast_one]
-      use 1#usize; norm_cast
+      simp [Hw]
+      progress
+      simp at *; simp [*]
     -- (none, some .) case.
     . progress with height_spec as ⟨ w, Hw ⟩
-      . push_cast
-        refine' le_trans _ Hbound
-        apply le_of_lt; rw [Hright]
-        exact_mod_cast AVLNode.height_right_lt_tree _
+      . simp_all [AVLTree.height_node]
+        scalar_tac
       . progress with max_spec as ⟨ M, Hm ⟩
         rw [Hm]
         have: 1 + w.val ≤ Scalar.max .Usize := by

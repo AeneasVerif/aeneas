@@ -214,6 +214,7 @@ impl<T: Ord> AVLTreeSet<T> {
         false
     }
 
+    // TODO: reimplement as a recursive function
     fn insert_phase1(&mut self, value: T) -> bool {
         let mut current_tree = &mut self.root;
 
@@ -256,6 +257,7 @@ impl<T: Ord> AVLTreeSet<T> {
         }
     }
 
+    // TODO: do not rebalance the whole tree after insertion (!)
     pub fn insert(&mut self, value: T) -> bool {
         if !self.insert_phase1(value) {
             return false;

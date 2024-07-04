@@ -63,6 +63,7 @@ lemma AVLNode.val_of_mk {x: T} {left right: AVLTree T}: AVLNode.val (AVLNode.mk 
 def AVLNode.memoized_height (t: AVLNode T): Primitives.Scalar .Usize := match t with
 | AVLNode.mk _ _ _ h => h
 
+-- TODO: rename to node_height
 mutual
 def AVLTree.height_node: AVLNode T -> Nat
 | AVLNode.mk y left right _ => 1 + max (AVLTree.height left) (AVLTree.height right)
