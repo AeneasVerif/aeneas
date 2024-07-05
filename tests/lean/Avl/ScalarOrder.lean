@@ -4,19 +4,21 @@ namespace avl
 
 open Primitives
 
-instance ScalarU32DecidableLE : DecidableRel (· ≤ · : U32 -> U32 -> Prop) := by
+-- TODO: move
+instance ScalarDecidableLE {ty} : DecidableRel (· ≤ · : Scalar ty -> Scalar ty -> Prop) := by
   simp [instLEScalar]
   -- Lift this to the decidability of the Int version.
   infer_instance
 
-instance : LinearOrder (Scalar .U32) where
+-- TODO: move
+instance {ty} : LinearOrder (Scalar ty) where
   le_antisymm := fun a b Hab Hba => by
     apply (Scalar.eq_equiv a b).2; exact (Int.le_antisymm ((Scalar.le_equiv _ _).1 Hab) ((Scalar.le_equiv _ _).1 Hba))
   le_total := fun a b => by
     rcases (Int.le_total a b) with H | H
     left; exact (Scalar.le_equiv _ _).2 H
     right; exact (Scalar.le_equiv _ _).2 H
-  decidableLE := ScalarU32DecidableLE
+  decidableLE := ScalarDecidableLE
 
 instance : OrdSpecLinearOrderEq OrdUsize where
   infallible := fun a b => by

@@ -5,6 +5,13 @@ namespace avl
 open Primitives (Result Scalar)
 open avl Node Ordering Tree
 
+-- TODO: move
+@[simp]
+def Option.allP {α : Type u} (p : α → Prop) (x : Option α) : Prop :=
+  match x with
+  | none => true
+  | some x => p x
+
 mutual
 @[simp] def Child.forall (p: Node T -> Prop) (child : Child T) : Prop :=
   match child with

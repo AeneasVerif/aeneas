@@ -1,12 +1,9 @@
 import Avl.Tree
 import Avl.Height
 
-namespace Implementation
+namespace avl
 
-open BST (AVLNode.mk')
-open Tree (AVLNode.memoized_height AVLNode.val AVLNode.right AVLNode.left AVLTree.balancingFactor)
-open Primitives
-open avl
+open Primitives Result
 
 variable {T: Type} (H: avl.Ord T) [LinearOrder T] (Ospec: OrdSpecLinearOrderEq H)
 
@@ -103,4 +100,4 @@ lemma AVLNode.rotate_right_spec' (self: AVLNode T):
       | some (AVLNode.mk y left_left left_right _) =>
         simp at Ht; simp [AVLNode.rotateRight, Ht]
 
-end Implementation
+end avl
