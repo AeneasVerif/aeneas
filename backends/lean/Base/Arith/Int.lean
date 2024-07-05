@@ -67,7 +67,9 @@ def intTacSimpRocs : List Name := [``Int.reduceNegSucc, ``Int.reduceNeg]
 /-- Apply the scalar_tac forward rules -/
 def intTacSaturateForward : Tactic.TacticM Unit := do
   let options : Aesop.Options := {}
-  let options ← options.toOptions'
+  -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
+  -- introduced by the forward rules themselves.
+  let options ← options.toOptions' (some 0)
   evalAesopSaturate options #[`Aeneas.ScalarTac]
 
 /- Boosting a bit the `omega` tac.

@@ -29,7 +29,7 @@ def len (ls : List α) : Int :=
 @[simp] theorem len_nil : len ([] : List α) = 0 := by simp [len]
 @[simp] theorem len_cons : len ((x :: tl) : List α) = 1 + len tl := by simp [len]
 
-@[scalar_tac]
+@[scalar_tac ls.len]
 theorem len_pos : 0 ≤ (ls : List α).len := by
   induction ls <;> simp [*]
   omega
