@@ -391,7 +391,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         | Loop (_, rg_id', kind) ->
             let rg_id' = Option.get rg_id' in
             let is_ret =
-              match kind with LoopSynthInput -> true | LoopCall -> false
+              match kind with
+              | LoopSynthInput -> true
+              | LoopCall -> false
             in
             rg_id' = back_id && is_ret
         | _ -> false
@@ -491,7 +493,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
 
   let current_abs_id =
-    match current_abs_id with None -> [] | Some id -> [ id ]
+    match current_abs_id with
+    | None -> []
+    | Some id -> [ id ]
   in
   let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
   let ctx, cc =

@@ -306,7 +306,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
     (* Add the constraint *)
-    match (unspan rv).e with Var vid -> add_constraint mp vid ctx | _ -> ctx
+    match (unspan rv).e with
+    | Var vid -> add_constraint mp vid ctx
+    | _ -> ctx
   in
   let add_pure_var_value_constraint (var_id : VarId.id) (rv : texpression)
       (ctx : pn_ctx) : pn_ctx =
@@ -331,7 +333,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           (* Register the variable *)
           let ctx = register_var (self#zero ()) v in
           (* Register the mplace information if there is such information *)
-          match mp with Some mp -> add_constraint mp v.id ctx | None -> ctx
+          match mp with
+          | Some mp -> add_constraint mp v.id ctx
+          | None -> ctx
       end
     in
     let ctx1 = obj#visit_typed_pattern () lv () in
@@ -1008,8 +1012,7 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         | Var _ | CVar _ | Const _ | App _ | Qualif _
         | Meta (_, _)
         | StructUpdate _ | Lambda _
-        | EError (_, _) ->
-            super#visit_expression env e
+        | EError (_, _) -> super#visit_expression env e
         | Switch (scrut, switch) -> (
             match switch with
             | If (_, _) -> super#visit_expression env e
@@ -1504,7 +1507,6 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
                 backend_attributes = def.backend_attributes;
                 num_loops;
                 loop_id = Some loop.loop_id;
-                llbc_name = def.llbc_name;
                 name = def.name;
                 signature = loop_sig;
                 is_global_decl_body = def.is_global_decl_body;
@@ -1589,10 +1591,13 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     sanity_check __FILE__ __LINE__ (args = [])
                       def.item_meta.span;
                     mk_unit_rvalue
-                | SliceIndexShared | SliceIndexMut | ArrayIndexShared
-                | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
-                | ArrayRepeat ->
-                    super#visit_texpression env e)
+                | SliceIndexShared
+                | SliceIndexMut
+                | ArrayIndexShared
+                | ArrayIndexMut
+                | ArrayToSliceShared
+                | ArrayToSliceMut
+                | ArrayRepeat -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end

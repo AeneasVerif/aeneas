@@ -186,6 +186,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
           "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
         List.iter (explore_ty []) (output :: inputs)
+    | TDynTrait _ ->
+        craise_opt_span __FILE__ __LINE__ span
+          "Dynamic trait types are not supported yet"
   and explore_generics (outer : region list) (generics : generic_args) =
     let { regions; types; const_generics = _; trait_refs = _ } = generics in
     List.iter (fun long -> add_edges ~long ~shorts:outer) regions;

@@ -259,28 +259,6 @@ def betree.Node.lookup_first_message_for_key
   :=
   betree.Node.lookup_first_message_for_key_loop key msgs
 
-/- [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]: loop 0:
-   Source: 'src/betree.rs', lines 649:4-660:5 -/
-divergent def betree.Node.lookup_in_bindings_loop
-  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
-  match bindings with
-  | betree.List.Cons hd tl =>
-    let (i, i1) := hd
-    if i = key
-    then Result.ok (some i1)
-    else
-      if i > key
-      then Result.ok none
-      else betree.Node.lookup_in_bindings_loop key tl
-  | betree.List.Nil => Result.ok none
-
-/- [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]:
-   Source: 'src/betree.rs', lines 649:4-649:84 -/
-@[reducible]
-def betree.Node.lookup_in_bindings
-  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
-  betree.Node.lookup_in_bindings_loop key bindings
-
 /- [betree::betree::{betree::betree::Node#5}::apply_upserts]: loop 0:
    Source: 'src/betree.rs', lines 820:4-844:5 -/
 divergent def betree.Node.apply_upserts_loop
@@ -319,6 +297,28 @@ def betree.Node.apply_upserts
   Result (U64 × (betree.List (U64 × betree.Message)))
   :=
   betree.Node.apply_upserts_loop msgs prev key
+
+/- [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]: loop 0:
+   Source: 'src/betree.rs', lines 649:4-660:5 -/
+divergent def betree.Node.lookup_in_bindings_loop
+  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
+  match bindings with
+  | betree.List.Cons hd tl =>
+    let (i, i1) := hd
+    if i = key
+    then Result.ok (some i1)
+    else
+      if i > key
+      then Result.ok none
+      else betree.Node.lookup_in_bindings_loop key tl
+  | betree.List.Nil => Result.ok none
+
+/- [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]:
+   Source: 'src/betree.rs', lines 649:4-649:84 -/
+@[reducible]
+def betree.Node.lookup_in_bindings
+  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
+  betree.Node.lookup_in_bindings_loop key bindings
 
 /- [betree::betree::{betree::betree::Internal#4}::lookup_in_children]:
    Source: 'src/betree.rs', lines 414:4-414:63 -/

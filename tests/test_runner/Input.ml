@@ -43,7 +43,7 @@ let apply_special_comment comment input =
   let comment = String.trim comment in
   (* Parse the backends if any *)
   let re = Re.compile (Re.Pcre.re "^\\[(!)?([a-zA-Z,-]+)\\](.*)$") in
-  let comment, (backends : Backend.t list) =
+  let (comment, (backends : Backend.t list)) =
     match Re.exec_opt re comment with
     | Some groups ->
         let exclude = Re.Group.get_opt groups 1 <> None in

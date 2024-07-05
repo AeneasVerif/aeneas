@@ -148,9 +148,16 @@ pub fn test_unreachable(b: bool) {
     }
 }
 
-/// Just checking the parameters given to panic
-/// Rk.: the input parameter prevents using the function as a unit test.
+/// Rem.: the input parameter prevents using the function as a unit test.
 pub fn test_panic(b: bool) {
+    if b {
+        panic!();
+    }
+}
+
+/// Just checking the parameters given to panic
+/// Rem.: the input parameter prevents using the function as a unit test.
+pub fn test_panic_msg(b: bool) {
     if b {
         panic!("Panicked!");
     }

@@ -397,8 +397,6 @@ type predicates = { trait_type_constraints : trait_type_constraint list }
 
 type type_decl = {
   def_id : TypeDeclId.id;
-  llbc_name : llbc_name;
-      (** The original name coming from the LLBC declaration *)
   name : string;
       (** We use the name only for printing purposes (for debugging):
           the name used at extraction time will be derived from the
@@ -1106,7 +1104,6 @@ type fun_decl = {
        *)
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
-  llbc_name : llbc_name;  (** The original LLBC name. *)
   name : string;
       (** We use the name only for printing purposes (for debugging):
           the name used at extraction time will be derived from the
@@ -1122,7 +1119,6 @@ type global_decl = {
   def_id : GlobalDeclId.id;
   span : span;
   item_meta : T.item_meta;
-  llbc_name : llbc_name;  (** The original LLBC name. *)
   name : string;
       (** We use the name only for printing purposes (for debugging):
           the name used at extraction time will be derived from the
@@ -1140,7 +1136,6 @@ type global_decl = {
 
 type trait_decl = {
   def_id : trait_decl_id;
-  llbc_name : llbc_name;
   name : string;
   item_meta : T.item_meta;
   generics : generic_params;
@@ -1162,7 +1157,6 @@ type trait_decl = {
 
 type trait_impl = {
   def_id : trait_impl_id;
-  llbc_name : llbc_name;
   name : string;
   item_meta : T.item_meta;
   impl_trait : trait_decl_ref;

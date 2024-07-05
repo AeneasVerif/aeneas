@@ -836,9 +836,10 @@ let give_back (config : config) (span : Meta.span) (l : BorrowId.id)
       (* Update the context *)
       give_back_shared config span l ctx
   | Abstract
-      ( AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
-      | AEndedSharedBorrow ) ->
-      craise __FILE__ __LINE__ span "Unreachable"
+      ( AEndedMutBorrow _
+      | AIgnoredMutBorrow _
+      | AEndedIgnoredMutBorrow _
+      | AEndedSharedBorrow ) -> craise __FILE__ __LINE__ span "Unreachable"
 
 let check_borrow_disappeared (span : Meta.span) (fun_name : string)
     (l : BorrowId.id) (ctx0 : eval_ctx) (ctx : eval_ctx) : unit =
@@ -1181,11 +1182,16 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             (* Raise an exception only if the asb contains borrows *)
             if
               List.exists
-                (fun x -> match x with AsbBorrow _ -> true | _ -> false)
+                (fun x ->
+                  match x with
+                  | AsbBorrow _ -> true
+                  | _ -> false)
                 asb
             then raise (FoundABorrowContent bc)
             else ()
-        | AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
+        | AEndedMutBorrow _
+        | AIgnoredMutBorrow _
+        | AEndedIgnoredMutBorrow _
         | AEndedSharedBorrow ->
             (* Nothing to do for ignored borrows *)
             ()
@@ -1261,9 +1267,10 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             in
             (* Continue *)
             ctx
-        | AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
-        | AEndedSharedBorrow ->
-            craise __FILE__ __LINE__ span "Unexpected"
+        | AEndedMutBorrow _
+        | AIgnoredMutBorrow _
+        | AEndedIgnoredMutBorrow _
+        | AEndedSharedBorrow -> craise __FILE__ __LINE__ span "Unexpected"
       in
       (* Reexplore *)
       end_abstraction_borrows config span chain abs_id ctx
@@ -2093,8 +2100,11 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
         (match lc with
         | ASharedLoan (pm, bids, _, _) -> push_loans pm bids (Abstract (ty, lc))
         | AMutLoan (pm, bid, _) -> push_loan pm bid (Abstract (ty, lc))
-        | AEndedMutLoan _ | AEndedSharedLoan _ | AIgnoredMutLoan _
-        | AEndedIgnoredMutLoan _ | AIgnoredSharedLoan _ ->
+        | AEndedMutLoan _
+        | AEndedSharedLoan _
+        | AIgnoredMutLoan _
+        | AEndedIgnoredMutLoan _
+        | AIgnoredSharedLoan _ ->
             (* The abstraction has been destructured, so those shouldn't appear *)
             craise __FILE__ __LINE__ span "Unreachable");
         (* Continue *)
@@ -2120,7 +2130,9 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
                   craise __FILE__ __LINE__ span "Unreachable"
             in
             List.iter register asb
-        | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedMutBorrow _
+        | AIgnoredMutBorrow _
+        | AEndedIgnoredMutBorrow _
+        | AEndedMutBorrow _
         | AEndedSharedBorrow ->
             (* The abstraction has been destructured, so those shouldn't appear *)
             craise __FILE__ __LINE__ span "Unreachable");
@@ -2345,12 +2357,14 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
   if merge_funs = None then (
     sanity_check __FILE__ __LINE__
       (List.for_all
-         (function LoanId (pm, _) | BorrowId (pm, _) -> pm = PNone)
+         (function
+           | LoanId (pm, _) | BorrowId (pm, _) -> pm = PNone)
          borrows_loans0)
       span;
     sanity_check __FILE__ __LINE__
       (List.for_all
-         (function LoanId (pm, _) | BorrowId (pm, _) -> pm = PNone)
+         (function
+           | LoanId (pm, _) | BorrowId (pm, _) -> pm = PNone)
          borrows_loans1)
       span;
     sanity_check __FILE__ __LINE__
@@ -2391,7 +2405,9 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     avalues := av :: !avalues
   in
   let push_opt_avalue av =
-    match av with None -> () | Some av -> push_avalue av
+    match av with
+    | None -> ()
+    | Some av -> push_avalue av
   in
 
   (* Compute the intersection of:
@@ -2529,8 +2545,10 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                           | AMutLoan _ ->
                               set_loan_as_merged bid;
                               Some { value = ALoan lc; ty }
-                          | AEndedMutLoan _ | AEndedSharedLoan _
-                          | AIgnoredMutLoan _ | AEndedIgnoredMutLoan _
+                          | AEndedMutLoan _
+                          | AEndedSharedLoan _
+                          | AIgnoredMutLoan _
+                          | AEndedIgnoredMutLoan _
                           | AIgnoredSharedLoan _ ->
                               (* The abstraction has been destructured, so those shouldn't appear *)
                               craise __FILE__ __LINE__ span "Unreachable"))
@@ -2957,6 +2975,10 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
   (* Return *)
   (ctx, nabs.abs_id)
 
+(** Reorder the loans and borrows inside the fresh abstractions.
+
+    See {!reorder_fresh_abs}.
+ *)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let reorder_in_fresh_abs (abs : abs) : abs =
@@ -3016,3 +3038,53 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
   let env = env_map_abs reorder_in_abs ctx.env in
 
   { ctx with env }
+
+type typed_avalue_list = typed_avalue list [@@deriving ord, show]
+
+module OrderedTypedAvalueList :
+  Collections.OrderedType with type t = typed_avalue list = struct
+  type t = typed_avalue_list
+
+  let compare x y = compare_typed_avalue_list x y
+  let to_string x = show_typed_avalue_list x
+  let pp_t fmt x = Format.pp_print_string fmt (show_typed_avalue_list x)
+  let show_t x = show_typed_avalue_list x
+end
+
+let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
+    (ctx : eval_ctx) : eval_ctx =
+  (* Split between the fresh abstractions and the rest of the context *)
+  let env, fresh_abs =
+    List.partition
+      (function
+        | EAbs abs -> AbstractionId.Set.mem abs.abs_id old_abs_ids
+        | _ -> true)
+      ctx.env
+  in
+
+  (* Reorder the fresh abstractions.
+
+     We use the content of the abstractions to reorder them.
+     In practice, this allows us to reorder the abstractions by using the ids
+     of the loans, borrows and symbolic values. This is far from perfect, but
+     allows us to have a quite simple matching algorithm for now, to compute
+     the joins as well as to check whether two environments are equivalent.
+     We may want to make this algorithm more general in the future.
+  *)
+  let cmp abs0 abs1 =
+    match (abs0, abs1) with
+    | EAbs abs0, EAbs abs1 ->
+        compare_typed_avalue_list abs0.avalues abs1.avalues
+    | _ -> internal_error __FILE__ __LINE__ span
+  in
+  let fresh_abs = List.sort cmp fresh_abs |> List.rev in
+
+  (* Reconstruct the environment *)
+  let env = fresh_abs @ env in
+
+  { ctx with env }
+
+let reorder_fresh_abs (span : Meta.span) (allow_markers : bool)
+    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+  reorder_loans_borrows_in_fresh_abs span allow_markers old_abs_ids ctx
+  |> reorder_fresh_abs_aux span old_abs_ids

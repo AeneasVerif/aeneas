@@ -537,10 +537,13 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
             | BoxFree ->
                 (* Should have been treated above *)
                 craise __FILE__ __LINE__ span "Unreachable"
-            | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
-            | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
-              ->
-                craise __FILE__ __LINE__ span "Unimplemented"
+            | ArrayIndexShared
+            | ArrayIndexMut
+            | ArrayToSliceShared
+            | ArrayToSliceMut
+            | ArrayRepeat
+            | SliceIndexShared
+            | SliceIndexMut -> craise __FILE__ __LINE__ span "Unimplemented"
           in
           let cc = cc_comp cc cf_eval_body in
 
@@ -865,7 +868,9 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 let provided =
                   List.filter_map
                     (fun (id, f) ->
-                      match f with None -> None | Some f -> Some (id, f))
+                      match f with
+                      | None -> None
+                      | Some f -> Some (id, f))
                     trait_decl.provided_methods
                 in
                 List.find
@@ -1009,8 +1014,13 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
             (* Evaluation successful: evaluate the second statement *)
             | Unit -> eval_statement config st2 ctx
             (* Control-flow break: transmit. We enumerate the cases on purpose *)
-            | Panic | Break _ | Continue _ | Return | LoopReturn _
-            | EndEnterLoop _ | EndContinue _ ->
+            | Panic
+            | Break _
+            | Continue _
+            | Return
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ ->
                 ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ st.span))
           ctx_resl
       in
@@ -1336,9 +1346,12 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
                    its destination and continue *)
                 let ctx, cf = pop_frame_assign config span dest ctx in
                 ((ctx, Unit), cf)
-            | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
-            | EndContinue _ ->
-                craise __FILE__ __LINE__ span "Unreachable")
+            | Break _
+            | Continue _
+            | Unit
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ -> craise __FILE__ __LINE__ span "Unreachable")
           ctx_resl
       in
       let ctx_resl, cfl = List.split ctx_resl_cfl in
