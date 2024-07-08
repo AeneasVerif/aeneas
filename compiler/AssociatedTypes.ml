@@ -94,16 +94,15 @@ let ctx_add_norm_trait_types_from_preds (span : Meta.span) (ctx : eval_ctx)
 let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
+  | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
+      trait_instance_id_is_local_clause id
   | TraitImpl _
   | BuiltinOrAuto _
-  | TraitRef _
   | UnknownTrait _
   | FnPointer _
   | Closure _
   | Unsolved _
   | Dyn _ -> false
-  | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
-      trait_instance_id_is_local_clause id
 
 (** About the conversion functions: for now we need them (TODO: merge ety, rty, etc.),
     but they should be applied to types without regions.
@@ -148,6 +147,10 @@ let ty_to_string (ctx : norm_ctx) (ty : ty) : string =
 let trait_ref_to_string (ctx : norm_ctx) (x : trait_ref) : string =
   let ctx = norm_ctx_to_fmt_env ctx in
   Print.Types.trait_ref_to_string ctx x
+
+let trait_decl_ref_to_string (ctx : norm_ctx) (x : trait_decl_ref) : string =
+  let ctx = norm_ctx_to_fmt_env ctx in
+  Print.Types.trait_decl_ref_to_string ctx x
 
 let trait_instance_id_to_string (ctx : norm_ctx) (x : trait_instance_id) :
     string =
@@ -247,23 +250,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       let trait_ref = norm_ctx_normalize_trait_ref ctx trait_ref in
       let ty : ty =
         match trait_ref.trait_id with
-        | TraitRef { trait_id = TraitImpl impl_id; generics = ref_generics; _ }
-          ->
-            cassert_opt_span __FILE__ __LINE__
-              (ref_generics = empty_generic_args)
-              ctx.span "Higher order trait types are not supported yet";
-            log#ldebug
-              (lazy
-                ("norm_ctx_normalize_ty: trait type: trait ref: "
-               ^ ty_to_string ctx ty));
-            (* Lookup the type *)
-            let ty =
-              norm_ctx_lookup_trait_impl_ty ctx impl_id trait_ref.generics
-                type_name
-            in
-            (* Normalize *)
-            norm_ctx_normalize_ty ctx ty
-        | TraitImpl impl_id ->
+        | TraitImpl (impl_id, generics) ->
             log#ldebug
               (lazy
                 ("norm_ctx_normalize_ty (trait impl):\n- trait type: "
@@ -278,8 +265,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
             *)
             (* Lookup the type *)
             let ty =
-              norm_ctx_lookup_trait_impl_ty ctx impl_id trait_ref.generics
-                type_name
+              norm_ctx_lookup_trait_impl_ty ctx impl_id generics type_name
             in
             (* Normalize *)
             norm_ctx_normalize_ty ctx ty
@@ -353,18 +339,19 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
     (id : trait_instance_id) : trait_instance_id =
   match id with
   | Self -> id
-  | TraitImpl _ ->
+  | TraitImpl (impl_id, generics) ->
       (* The [TraitImpl] shouldn't be inside any projection - we check this
          elsewhere by asserting that whenever we return [None] for the impl
          trait ref, then the id actually refers to a local clause. *)
-      id
+      let generics = norm_ctx_normalize_generic_args ctx generics in
+      TraitImpl (impl_id, generics)
   | Clause _ -> id
   | BuiltinOrAuto _ -> id
   | ParentClause (inst_id, decl_id, clause_id) -> begin
       let inst_id = norm_ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
       match inst_id with
-      | TraitRef impl ->
+      | TraitImpl (impl_id, generics) ->
           (* We figure out the parent clause by doing the following:
              {[
                // The implementation we are looking at
@@ -377,16 +364,12 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
              ]}
           *)
           (* Lookup the clause *)
-          let impl_id =
-            TypesUtils.trait_instance_id_as_trait_impl impl.trait_id
-          in
           let clause =
-            norm_ctx_lookup_trait_impl_parent_clause ctx impl_id impl.generics
+            norm_ctx_lookup_trait_impl_parent_clause ctx impl_id generics
               clause_id
           in
           (* Normalize the clause *)
-          let clause = norm_ctx_normalize_trait_ref ctx clause in
-          TraitRef clause
+          norm_ctx_normalize_trait_instance_id ctx clause.trait_id
       | _ ->
           (* This is actually a local clause *)
           sanity_check_opt_span __FILE__ __LINE__
@@ -398,7 +381,7 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       let inst_id = norm_ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
       match inst_id with
-      | TraitRef impl ->
+      | TraitImpl (impl_id, generics) ->
           (* We figure out the item clause by doing the following:
              {[
                // The implementation we are looking at
@@ -411,16 +394,12 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
              ]}
           *)
           (* Lookup the impl *)
-          let impl_id =
-            TypesUtils.trait_instance_id_as_trait_impl impl.trait_id
-          in
           let clause =
-            norm_ctx_lookup_trait_impl_item_clause ctx impl_id impl.generics
+            norm_ctx_lookup_trait_impl_item_clause ctx impl_id generics
               item_name clause_id
           in
           (* Normalize the clause *)
-          let clause = norm_ctx_normalize_trait_ref ctx clause in
-          TraitRef clause
+          norm_ctx_normalize_trait_instance_id ctx clause.trait_id
       | _ ->
           (* This is actually a local clause *)
           sanity_check_opt_span __FILE__ __LINE__
@@ -428,28 +407,6 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
             ctx.span;
           ItemClause (inst_id, decl_id, item_name, clause_id)
     end
-  | TraitRef { trait_id = TraitImpl trait_id; generics; trait_decl_ref } ->
-      (* We can't simplify the id *yet* : we will simplify it when projecting.
-         However, we have an implementation to return *)
-      (* Normalize the generics *)
-      let generics = norm_ctx_normalize_generic_args ctx generics in
-      let trait_decl_ref =
-        norm_ctx_normalize_trait_decl_ref ctx trait_decl_ref
-      in
-      let trait_ref : trait_ref =
-        { trait_id = TraitImpl trait_id; generics; trait_decl_ref }
-      in
-      TraitRef trait_ref
-  | TraitRef trait_ref ->
-      (* The trait instance id necessarily refers to a local sub-clause. We
-         can't project over it and can only peel off the [TraitRef] wrapper *)
-      sanity_check_opt_span __FILE__ __LINE__
-        (trait_instance_id_is_local_clause trait_ref.trait_id)
-        ctx.span;
-      sanity_check_opt_span __FILE__ __LINE__
-        (trait_ref.generics = empty_generic_args)
-        ctx.span;
-      trait_ref.trait_id
   | FnPointer ty ->
       let ty = norm_ctx_normalize_ty ctx ty in
       (* TODO: we might want to return the ref to the function pointer,
@@ -479,29 +436,16 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
       ("norm_ctx_normalize_trait_ref: "
       ^ trait_ref_to_string ctx trait_ref
       ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
-  let { trait_id; generics; trait_decl_ref } = trait_ref in
+  let { trait_id; trait_decl_ref } = trait_ref in
+
   (* Check if the id is an impl, otherwise normalize it *)
   let trait_id = norm_ctx_normalize_trait_instance_id ctx trait_id in
-  match trait_id with
-  | TraitRef trait_ref ->
-      log#ldebug
-        (lazy
-          ("norm_ctx_normalize_trait_ref: normalized to: "
-          ^ trait_ref_to_string ctx trait_ref));
-      sanity_check_opt_span __FILE__ __LINE__
-        (generics = empty_generic_args)
-        ctx.span;
-      trait_ref
-  | _ ->
-      log#ldebug
-        (lazy
-          ("norm_ctx_normalize_trait_ref: no norm: "
-          ^ trait_instance_id_to_string ctx trait_id));
-      let generics = norm_ctx_normalize_generic_args ctx generics in
-      let trait_decl_ref =
-        norm_ctx_normalize_trait_decl_ref ctx trait_decl_ref
-      in
-      { trait_id; generics; trait_decl_ref }
+  let trait_decl_ref = norm_ctx_normalize_trait_decl_ref ctx trait_decl_ref in
+  log#ldebug
+    (lazy
+      ("norm_ctx_normalize_trait_ref: no norm: "
+      ^ trait_instance_id_to_string ctx trait_id));
+  { trait_id; trait_decl_ref }
 
 (* Not sure this one is really necessary *)
 and norm_ctx_normalize_trait_decl_ref (ctx : norm_ctx)

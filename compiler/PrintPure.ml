@@ -177,26 +177,31 @@ and generic_args_to_string (env : fmt_env) (generics : generic_args) : string =
 
 and trait_ref_to_string (env : fmt_env) (inside : bool) (tr : trait_ref) :
     string =
-  let trait_id = trait_instance_id_to_string env false tr.trait_id in
-  let generics = generic_args_to_string env tr.generics in
-  let s = trait_id ^ generics in
-  if tr.generics = empty_generic_args || not inside then s else "(" ^ s ^ ")"
+  let trait_id = trait_instance_id_to_string env tr.trait_id in
+  let generics_are_empty =
+    match tr.trait_id with
+    | TraitImpl (_, generics) -> generics = empty_generic_args
+    | _ -> true
+  in
+  if generics_are_empty || not inside then trait_id else "(" ^ trait_id ^ ")"
 
-and trait_instance_id_to_string (env : fmt_env) (inside : bool)
-    (id : trait_instance_id) : string =
+and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
+    string =
   match id with
   | Self -> "Self"
-  | TraitImpl id -> trait_impl_id_to_string env id
+  | TraitImpl (impl_id, generics) ->
+      let generics = generic_args_to_string env generics in
+      let impl_id = trait_impl_id_to_string env impl_id in
+      impl_id ^ generics
   | Clause id -> trait_clause_id_to_string env id
   | ParentClause (inst_id, _decl_id, clause_id) ->
-      let inst_id = trait_instance_id_to_string env false inst_id in
+      let inst_id = trait_instance_id_to_string env inst_id in
       let clause_id = trait_clause_id_to_string env clause_id in
       "parent(" ^ inst_id ^ ")::" ^ clause_id
   | ItemClause (inst_id, _decl_id, item_name, clause_id) ->
-      let inst_id = trait_instance_id_to_string env false inst_id in
+      let inst_id = trait_instance_id_to_string env inst_id in
       let clause_id = trait_clause_id_to_string env clause_id in
       "(" ^ inst_id ^ ")::" ^ item_name ^ "::[" ^ clause_id ^ "]"
-  | TraitRef tr -> trait_ref_to_string env inside tr
   | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
 
 let trait_clause_to_string (env : fmt_env) (clause : trait_clause) : string =

@@ -163,7 +163,7 @@ let make_const_generic_subst (vars : const_generic_var list)
 let make_trait_subst (clauses : trait_clause list) (refs : trait_ref list) :
     TraitClauseId.id -> trait_instance_id =
   let clauses = List.map (fun x -> x.clause_id) clauses in
-  let refs = List.map (fun x -> TraitRef x) refs in
+  let refs = List.map (fun (x : trait_ref) -> x.trait_id) refs in
   let ls = List.combine clauses refs in
   let mp =
     List.fold_left
