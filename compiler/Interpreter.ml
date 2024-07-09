@@ -133,17 +133,15 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
       List.fold_left_map
         (fun tr_map (c : trait_clause) ->
           let subst = mk_subst tr_map in
-          let { trait_id = trait_decl_id; clause_generics; _ } = c in
+          let { trait_decl_id; decl_generics; _ } = c.trait in
           let generics =
-            Substitute.generic_args_substitute subst clause_generics
+            Substitute.generic_args_substitute subst decl_generics
           in
           let trait_decl_ref = { trait_decl_id; decl_generics = generics } in
           (* Note that because we directly refer to the clause, we give it
              empty generics *)
           let trait_id = Clause c.clause_id in
-          let trait_ref =
-            { trait_id; generics = empty_generic_args; trait_decl_ref }
-          in
+          let trait_ref = { trait_id; trait_decl_ref } in
           (* Update the traits map *)
           let tr_map = TraitClauseId.Map.add c.clause_id trait_id tr_map in
           (tr_map, trait_ref))
