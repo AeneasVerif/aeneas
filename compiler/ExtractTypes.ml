@@ -587,9 +587,6 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            sanity_check __FILE__ __LINE__
-              (trait_ref.generics = empty_generic_args)
-              span;
             extract_trait_instance_id_with_dot span ctx fmt no_params_tys false
               trait_ref.trait_id;
             F.pp_print_string fmt type_name
@@ -606,28 +603,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
     (tr : trait_ref) : unit =
-  let use_brackets = tr.generics <> empty_generic_args && inside in
-  if use_brackets then F.pp_print_string fmt "(";
-  (* We may need to filter the parameters if the trait is builtin *)
-  let generics =
-    match tr.trait_id with
-    | TraitImpl id -> (
-        match
-          TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
-        with
-        | None -> tr.generics
-        | Some filter ->
-            let types =
-              List.filter_map
-                (fun (b, x) -> if b then Some x else None)
-                (List.combine filter tr.generics.types)
-            in
-            { tr.generics with types })
-    | _ -> tr.generics
-  in
-  extract_trait_instance_id span ctx fmt no_params_tys inside tr.trait_id;
-  extract_generic_args span ctx fmt no_params_tys generics;
-  if use_brackets then F.pp_print_string fmt ")"
+  extract_trait_instance_id span ctx fmt no_params_tys inside tr.trait_id
 
 and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
@@ -715,9 +691,27 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
          (associated type, etc.). We should have caught this elsewhere. *)
       save_error __FILE__ __LINE__ (Some span) "Unexpected occurrence of `Self`";
       F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
-  | TraitImpl id ->
+  | TraitImpl (id, generics) ->
+      (* We may need to filter the parameters if the trait is builtin *)
+      let generics =
+        match
+          TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
+        with
+        | None -> generics
+        | Some filter ->
+            let types =
+              List.filter_map
+                (fun (b, x) -> if b then Some x else None)
+                (List.combine filter generics.types)
+            in
+            { generics with types }
+      in
       let name = ctx_get_trait_impl span id ctx in
-      F.pp_print_string fmt name
+      let use_brackets = generics <> empty_generic_args && inside in
+      if use_brackets then F.pp_print_string fmt "(";
+      F.pp_print_string fmt name;
+      extract_generic_args span ctx fmt no_params_tys generics;
+      if use_brackets then F.pp_print_string fmt ")"
   | Clause id ->
       let name = ctx_get_local_trait_clause span id ctx in
       F.pp_print_string fmt name
@@ -733,8 +727,6 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       in
       extract_trait_instance_id_with_dot span ctx fmt no_params_tys true inst_id;
       F.pp_print_string fmt (add_brackets name)
-  | TraitRef trait_ref ->
-      extract_trait_ref span ctx fmt no_params_tys inside trait_ref
   | UnknownTrait _ ->
       (* This is an error case *)
       craise __FILE__ __LINE__ span "Unexpected"

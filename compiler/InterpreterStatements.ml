@@ -753,7 +753,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
           match trait_ref.trait_id with
-          | TraitImpl impl_id -> (
+          | TraitImpl (impl_id, generics) -> (
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl ctx impl_id in
               log#ldebug
@@ -770,11 +770,9 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                   let method_def = ctx_lookup_fun_decl ctx id in
                   (* We have to concatenate the generics for the impl
                      and the generics for the method *)
-                  let generics =
-                    merge_generic_args trait_ref.generics func.generics
-                  in
+                  let generics = merge_generic_args generics func.generics in
                   (* Instantiate *)
-                  let tr_self = TraitRef trait_ref in
+                  let tr_self = trait_ref.trait_id in
                   let fid : fun_id = FRegular id in
                   let regions_hierarchy =
                     LlbcAstUtils.FunIdMap.find fid
@@ -847,7 +845,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     LlbcAstUtils.FunIdMap.find (FRegular method_id)
                       ctx.fun_ctx.regions_hierarchies
                   in
-                  let tr_self = TraitRef trait_ref in
+                  let tr_self = trait_ref.trait_id in
                   let inst_sg =
                     instantiate_fun_sig span ctx all_generics tr_self
                       method_def.signature regions_hierarchy
@@ -891,7 +889,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
                   ctx.fun_ctx.regions_hierarchies
               in
-              let tr_self = TraitRef trait_ref in
+              let tr_self = trait_ref.trait_id in
               let inst_sg =
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
