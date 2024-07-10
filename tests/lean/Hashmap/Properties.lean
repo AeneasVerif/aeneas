@@ -141,6 +141,22 @@ attribute [-simp] Bool.exists_bool
 
 attribute [local simp] List.lookup
 
+/- Adding some theorems for `scalar_tac`-/
+-- TODO: move
+-- TODO: make this rule local
+@[scalar_tac n % m]
+theorem Int.emod_of_pos (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
+  if h: 0 < m then
+    right; constructor
+    . apply Int.emod_nonneg; scalar_tac
+    . apply Int.emod_lt_of_pos; scalar_tac
+  else left; scalar_tac
+
+-- TODO: make this rule local
+@[scalar_tac h]
+theorem inv_imp_eqs_ineqs {hm : HashMap α} (h : hm.inv) : 0 < hm.slots.length ∧ hm.num_entries = hm.al_v.len := by
+  simp_all [inv]
+
 -- The proofs below are a bit expensive, so we deactivate the heart bits limit
 set_option maxHeartbeats 0
 
@@ -237,8 +253,7 @@ theorem new_with_capacity_spec
     . simp_all [al_v, Slots.al_v, v]
     . simp [lookup]
       intro k
-      have : 0 ≤ k.val % slots.val.len := by apply Int.emod_nonneg; scalar_tac
-      have : k.val % slots.val.len < slots.val.len := by apply Int.emod_lt_of_pos; scalar_tac
+      have : 0 ≤ k.val % slots.val.len ∧ k.val % slots.val.len < slots.val.len := by scalar_tac
       simp [*]
 
 @[pspec]
@@ -358,28 +373,19 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   rw [insert_no_resize]
   -- Simplify. Note that this also simplifies some function calls, like array index
   simp [hash_key, bind_tc_ok]
-  have _ : (alloc.vec.Vec.len (AList α) hm.slots).val ≠ 0 := by
-   intro
-   simp_all [inv]
   progress as ⟨ hash_mod, hhm ⟩
-  have _ : 0 ≤ hash_mod.val := by scalar_tac
-  have _ : hash_mod.val < alloc.vec.Vec.length hm.slots := by
-    have : 0 < hm.slots.val.len := by
-      simp [inv] at hinv
-      simp [hinv]
-    -- TODO: we want to automate that
-    simp [*, Int.emod_lt_of_pos]
+  have _ : 0 ≤ hash_mod.val ∧ hash_mod.val < alloc.vec.Vec.length hm.slots := by scalar_tac
   progress as ⟨ l, index_mut_back, h_leq, h_index_mut_back ⟩
   simp [h_index_mut_back] at *; clear h_index_mut_back index_mut_back
   have h_slot :
     slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v := by
     simp [inv] at hinv
-    have h := (hinv.right.left hash_mod.val (by assumption) (by assumption)).right
+    have h := (hinv.right.left hash_mod.val (by scalar_tac) (by scalar_tac)).right
     simp [slot_t_inv, hhm] at h
     simp [h, hhm, h_leq]
   have hd : distinct_keys l.v := by
     simp [inv, slots_t_inv, slot_t_inv, slot_s_inv] at hinv
-    have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
+    have h := hinv.right.left hash_mod.val (by scalar_tac) (by scalar_tac)
     simp [h, h_leq]
   progress as ⟨ inserted, l0, _, _, _, _, hlen .. ⟩
   rw [if_update_eq] -- TODO: necessary because we don't have a join
@@ -393,8 +399,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       have hbounds : hm.num_entries.val + (Usize.ofInt 1).val ≤ Usize.max := by
         simp [lookup] at hnsat
         simp_all
-        simp [inv] at hinv
-        int_tac
+        scalar_tac
       progress as ⟨ z, hp ⟩
       simp [hp]
     else
@@ -425,19 +430,9 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     -- are the same, in which case we have to reason about what happens
     -- in one slot
     let k_hash_mod := k.val % v.val.len
-    have : 0 < hm.slots.val.len := by simp_all [inv]
-    have hvpos : 0 < v.val.len := by simp_all
-    have hvnz: v.val.len ≠ 0 := by
-      simp_all
-    have _ : 0 ≤ k_hash_mod := by
-      -- TODO: we want to automate this
-      simp only [k_hash_mod]
-      apply Int.emod_nonneg k.val hvnz
-    have _ : k_hash_mod < alloc.vec.Vec.length hm.slots := by
-      -- TODO: we want to automate this
-      simp only [k_hash_mod]
-      have h := Int.emod_lt_of_pos k.val hvpos
-      simp_all
+    have _ : 0 ≤ k_hash_mod ∧ k_hash_mod < alloc.vec.Vec.length hm.slots := by
+      simp_all [k_hash_mod] -- TODO: shouldn't need to do this
+      scalar_tac
     cases h_hm: k_hash_mod == hash_mod.val <;> simp_all (config := {zetaDelta := true})
   have _ :
     match hm.lookup key with
@@ -579,12 +574,10 @@ private theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots
   ∀ key, slots.lookup key = none := by
   intro key
   simp [Slots.lookup]
-  have : 0 ≤ key.val % slots.val.len := by
-    exact Int.emod_nonneg key.val hLen -- TODO: automate that
-  have : key.val % slots.val.len < slots.val.len := by
-    apply Int.emod_lt_of_pos
+  -- TODO: simplify
+  have : 0 ≤ key.val % slots.val.len ∧ key.val % slots.val.len < slots.val.len := by
     scalar_tac
-  have := hEmpty (key.val % slots.val.len) (by assumption) (by assumption)
+  have := hEmpty (key.val % slots.val.len) (by simp [*]) (by simp [*])
   simp [*]
 
 private theorem slots_index_len_le_flatten_len (slots : List (AList α)) (i : Int) (h : 0 ≤ i ∧ i < slots.len) :
@@ -977,15 +970,8 @@ theorem get_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLookup :
   ∃ v, get α hm key = ok v ∧ hm.lookup key = some v := by
   rw [get]
   simp [hash_key, alloc.vec.Vec.len]
-  have : 0 < hm.slots.val.len := by simp_all [inv]
   progress as ⟨ hash_mod .. ⟩ -- TODO: decompose post by default
   simp at *
-  have : 0 ≤ hash_mod.val := by -- TODO: automate
-    simp [*]
-    apply Int.emod_nonneg; simp [inv] at hInv; scalar_tac
-  have : hash_mod < hm.slots.val.len := by -- TODO: automate
-    simp [*]
-    apply Int.emod_lt_of_pos; scalar_tac
   progress as ⟨ slot ⟩
   progress as ⟨ v .. ⟩ <;> simp_all [lookup]
 
@@ -1037,15 +1023,9 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLook
    := by
   rw [get_mut]
   simp [hash_key, alloc.vec.Vec.len]
-  have : 0 < hm.slots.val.len := by simp_all [inv]
   progress as ⟨ hash_mod .. ⟩ -- TODO: decompose post by default
   simp at *
-  have : 0 ≤ hash_mod.val := by -- TODO: automate
-    simp [*]
-    apply Int.emod_nonneg; simp [inv] at hInv; scalar_tac
-  have : hash_mod < hm.slots.val.len := by -- TODO: automate
-    simp [*]
-    apply Int.emod_lt_of_pos; scalar_tac
+  have : 0 ≤ hash_mod.val ∧ hash_mod < hm.slots.val.len := by scalar_tac
   progress as ⟨ slot, index_back .. ⟩
   have : slot_t_inv hm.slots.val.len hash_mod slot := by
     simp_all [inv, slots_t_inv]
@@ -1062,10 +1042,8 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLook
     simp_all
     -- Last postcondition
     intro key' hNotEq
-    have : 0 ≤ key'.val % hm.slots.val.len := by -- TODO: automate
-      apply Int.emod_nonneg; simp [inv] at hInv; scalar_tac
-    have : key'.val % hm.slots.val.len < hm.slots.val.len := by -- TODO: automate
-      apply Int.emod_lt_of_pos; scalar_tac
+    -- TODO: simplify
+    have : 0 ≤ key'.val % hm.slots.val.len ∧ key'.val % hm.slots.val.len < hm.slots.val.len := by scalar_tac
     -- We need to do a case disjunction
     cases h: (key.val % hm.slots.val.len == key'.val % hm.slots.val.len) <;>
     simp_all
@@ -1104,10 +1082,8 @@ theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv :
 private theorem lookup_not_none_imp_len_s_pos (hm : HashMap α) (key : Usize) (hLookup : hm.lookup key ≠ none)
   (hNotEmpty : 0 < hm.slots.val.len) :
   0 < hm.len_s := by
-  have : 0 ≤ key.val % hm.slots.val.len := by -- TODO: automate
-    apply Int.emod_nonneg; scalar_tac
-  have : key.val % hm.slots.val.len < hm.slots.val.len := by -- TODO: automate
-    apply Int.emod_lt_of_pos; scalar_tac
+  -- TODO: simplify
+  have : 0 ≤ key.val % hm.slots.val.len ∧ key.val % hm.slots.val.len < hm.slots.val.len := by scalar_tac
   have := List.len_index_le_len_flatten hm.v (key.val % hm.slots.val.len)
   have := List.lookup_not_none_imp_len_pos (hm.slots.val.index (key.val % hm.slots.val.len)).v key
   simp_all [lookup, len_s, al_v, v]
@@ -1124,15 +1100,11 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
   | some _ => hm'.len_s = hm.len_s - 1 := by
   rw [remove]
   simp [hash_key, alloc.vec.Vec.len]
-  have : 0 < hm.slots.val.len := by simp_all [inv]
   progress as ⟨ hash_mod .. ⟩ -- TODO: decompose post by default
   simp at *
-  have : 0 ≤ hash_mod.val := by -- TODO: automate
-    simp [*]
-    apply Int.emod_nonneg; simp [inv] at hInv; scalar_tac
-  have : hash_mod < hm.slots.val.len := by -- TODO: automate
-    simp [*]
-    apply Int.emod_lt_of_pos; scalar_tac
+  -- TODO: simplify
+  have : 0 ≤ hash_mod.val ∧ hash_mod < hm.slots.val.len := by
+    scalar_tac
   progress as ⟨ slot, index_back .. ⟩
   have : slot_t_inv hm.slots.val.len hash_mod slot := by simp_all [inv, slots_t_inv]
   progress as ⟨ vOpt, slot' .. ⟩
