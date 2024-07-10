@@ -187,16 +187,6 @@ def lookupPropHasImp (e : Expr) : MetaM (Option Expr) := do
 def collectPropHasImpInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
   collectInstancesFromMainCtx lookupPropHasImp
 
-elab "display_prop_has_imp_instances" : tactic => do
-  trace[Arith] "Displaying the PropHasImp instances"
-  let hs ← collectPropHasImpInstancesFromMainCtx
-  hs.forM fun e => do
-    trace[Arith] "+ PropHasImp instance: {e}"
-
-example (x y : Int) (_ : x ≠ y) (_ : ¬ x = y) : True := by
-  display_prop_has_imp_instances
-  simp
-
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
