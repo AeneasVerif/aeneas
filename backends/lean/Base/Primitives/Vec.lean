@@ -20,13 +20,13 @@ instance [BEq α] : BEq (Vec α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
 
-instance (a : Type u) : Arith.HasIntProp (Vec a) where
-  prop_ty := λ v => 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize
-  prop := λ ⟨ _, l ⟩ => by simp[Scalar.max, List.len_eq_length, *]
+@[scalar_tac v]
+theorem Vec.len_ineq {α : Type u} (v : Vec α) : 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize := by
+  cases v; simp[Scalar.max, List.len_eq_length, *]
 
-instance {α : Type u} (p : Vec α → Prop) : Arith.HasIntProp (Subtype p) where
-  prop_ty := λ x => p x
-  prop := λ x => x.property
+-- TODO: move/remove?
+@[scalar_tac v]
+theorem Vec.subtype_property {α : Type u} {p : Vec α → Prop} (v : Subtype p) : p v.val := v.property
 
 @[simp]
 abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.len

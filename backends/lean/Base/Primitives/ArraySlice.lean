@@ -20,13 +20,14 @@ instance [BEq α] : BEq (Array α n) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
 
-instance (a : Type u) (n : Usize) : Arith.HasIntProp (Array a n) where
-  prop_ty := λ v => v.val.len = n.val
-  prop := λ ⟨ _, l ⟩ => by simp[Scalar.max, List.len_eq_length, *]
+/- Registering some theorems for `scalar_tac` -/
+@[scalar_tac a]
+theorem Array.len_eq {α : Type u} {n : Usize} (a : Array α n) : a.val.len = n.val := by
+  cases a; simp[List.len_eq_length, *]
 
-instance {α : Type u} {n : Usize} (p : Array α n → Prop) : Arith.HasIntProp (Subtype p) where
-  prop_ty := λ x => p x
-  prop := λ x => x.property
+-- TODO: move/remove?
+@[scalar_tac a]
+theorem Array.subtype_property {α : Type u} {n : Usize} {p : Array α n → Prop} (a : Subtype p) : p a.val := a.property
 
 @[simp]
 abbrev Array.length {α : Type u} {n : Usize} (v : Array α n) : Int := v.val.len
@@ -117,13 +118,13 @@ instance [BEq α] : BEq (Slice α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Slice α) := SubtypeLawfulBEq _
 
-instance (a : Type u) : Arith.HasIntProp (Slice a) where
-  prop_ty := λ v => 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize
-  prop := λ ⟨ _, l ⟩ => by simp[Scalar.max, List.len_eq_length, *]
+@[scalar_tac s]
+theorem Slice.len_ineq {α : Type u} (s : Slice α) : 0 ≤ s.val.len ∧ s.val.len ≤ Scalar.max ScalarTy.Usize := by
+  cases s; simp[Scalar.max, List.len_eq_length, *]
 
-instance {α : Type u} (p : Slice α → Prop) : Arith.HasIntProp (Subtype p) where
-  prop_ty := λ x => p x
-  prop := λ x => x.property
+-- TODO: move/remove?
+@[scalar_tac s]
+theorem Slice.subtype_property {α : Type u} {p : Slice α → Prop} (s : Subtype p) : p s.val := s.property
 
 @[simp]
 abbrev Slice.length {α : Type u} (v : Slice α) : Int := v.val.len
