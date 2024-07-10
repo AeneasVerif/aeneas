@@ -135,7 +135,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
   *)
   let absl =
     List.filter_map
-      (function EBinding _ | EFrame -> None | EAbs abs -> Some abs)
+      (function
+        | EBinding _ | EFrame -> None
+        | EAbs abs -> Some abs)
       ctx.env
   in
   let absl_ids, absl_id_maps = compute_absl_ids absl in
@@ -352,7 +354,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
   let env =
     let bmap = BorrowId.Map.of_list !borrow_substs in
     let bsusbt bid =
-      match BorrowId.Map.find_opt bid bmap with None -> bid | Some bid -> bid
+      match BorrowId.Map.find_opt bid bmap with
+      | None -> bid
+      | Some bid -> bid
     in
 
     let visitor =
@@ -700,7 +704,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        we will explore them in this order) *)
     let all_abs_ids =
       List.filter_map
-        (function EAbs abs -> Some abs.abs_id | _ -> None)
+        (function
+          | EAbs abs -> Some abs.abs_id
+          | _ -> None)
         (* TODO: we may want to use a different order, for instance the order
            in which the regions were ended. *)
         (List.rev !fp.env)

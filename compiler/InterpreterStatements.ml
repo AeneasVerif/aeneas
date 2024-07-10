@@ -537,10 +537,13 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
             | BoxFree ->
                 (* Should have been treated above *)
                 craise __FILE__ __LINE__ span "Unreachable"
-            | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
-            | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
-              ->
-                craise __FILE__ __LINE__ span "Unimplemented"
+            | ArrayIndexShared
+            | ArrayIndexMut
+            | ArrayToSliceShared
+            | ArrayToSliceMut
+            | ArrayRepeat
+            | SliceIndexShared
+            | SliceIndexMut -> craise __FILE__ __LINE__ span "Unimplemented"
           in
           let cc = cc_comp cc cf_eval_body in
 
@@ -750,7 +753,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
           match trait_ref.trait_id with
-          | TraitImpl impl_id -> (
+          | TraitImpl (impl_id, generics) -> (
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl ctx impl_id in
               log#ldebug
@@ -767,11 +770,9 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                   let method_def = ctx_lookup_fun_decl ctx id in
                   (* We have to concatenate the generics for the impl
                      and the generics for the method *)
-                  let generics =
-                    merge_generic_args trait_ref.generics func.generics
-                  in
+                  let generics = merge_generic_args generics func.generics in
                   (* Instantiate *)
-                  let tr_self = TraitRef trait_ref in
+                  let tr_self = trait_ref.trait_id in
                   let fid : fun_id = FRegular id in
                   let regions_hierarchy =
                     LlbcAstUtils.FunIdMap.find fid
@@ -844,7 +845,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     LlbcAstUtils.FunIdMap.find (FRegular method_id)
                       ctx.fun_ctx.regions_hierarchies
                   in
-                  let tr_self = TraitRef trait_ref in
+                  let tr_self = trait_ref.trait_id in
                   let inst_sg =
                     instantiate_fun_sig span ctx all_generics tr_self
                       method_def.signature regions_hierarchy
@@ -865,7 +866,9 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 let provided =
                   List.filter_map
                     (fun (id, f) ->
-                      match f with None -> None | Some f -> Some (id, f))
+                      match f with
+                      | None -> None
+                      | Some f -> Some (id, f))
                     trait_decl.provided_methods
                 in
                 List.find
@@ -886,7 +889,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
                   ctx.fun_ctx.regions_hierarchies
               in
-              let tr_self = TraitRef trait_ref in
+              let tr_self = trait_ref.trait_id in
               let inst_sg =
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
@@ -1009,8 +1012,13 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
             (* Evaluation successful: evaluate the second statement *)
             | Unit -> eval_statement config st2 ctx
             (* Control-flow break: transmit. We enumerate the cases on purpose *)
-            | Panic | Break _ | Continue _ | Return | LoopReturn _
-            | EndEnterLoop _ | EndContinue _ ->
+            | Panic
+            | Break _
+            | Continue _
+            | Return
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ ->
                 ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ st.span))
           ctx_resl
       in
@@ -1336,9 +1344,12 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
                    its destination and continue *)
                 let ctx, cf = pop_frame_assign config span dest ctx in
                 ((ctx, Unit), cf)
-            | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
-            | EndContinue _ ->
-                craise __FILE__ __LINE__ span "Unreachable")
+            | Break _
+            | Continue _
+            | Unit
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ -> craise __FILE__ __LINE__ span "Unreachable")
           ctx_resl
       in
       let ctx_resl, cfl = List.split ctx_resl_cfl in

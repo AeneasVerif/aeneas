@@ -222,12 +222,14 @@
         };
         devShells.default = pkgs.mkShell {
           packages = [
+            pkgs.curl
             pkgs.elan
             pkgs.ocamlPackages.ocaml
             pkgs.ocamlPackages.ocamlformat
             pkgs.ocamlPackages.menhir
             pkgs.ocamlPackages.odoc
             pkgs.jq
+            pkgs.rustup
           ];
 
           inputsFrom = [

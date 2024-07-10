@@ -422,11 +422,10 @@ let rec translate_generic_args (span : Meta.span) (translate_ty : T.ty -> ty)
 and translate_trait_ref (span : Meta.span) (translate_ty : T.ty -> ty)
     (tr : T.trait_ref) : trait_ref =
   let trait_id = translate_trait_instance_id span translate_ty tr.trait_id in
-  let generics = translate_generic_args span translate_ty tr.generics in
   let trait_decl_ref =
     translate_trait_decl_ref span translate_ty tr.trait_decl_ref
   in
-  { trait_id; generics; trait_decl_ref }
+  { trait_id; trait_decl_ref }
 
 and translate_trait_decl_ref (span : Meta.span) (translate_ty : T.ty -> ty)
     (tr : T.trait_decl_ref) : trait_decl_ref =
@@ -442,7 +441,9 @@ and translate_trait_instance_id (span : Meta.span) (translate_ty : T.ty -> ty)
   in
   match id with
   | T.Self -> Self
-  | TraitImpl id -> TraitImpl id
+  | TraitImpl (id, generics) ->
+      let generics = translate_generic_args span translate_ty generics in
+      TraitImpl (id, generics)
   | BuiltinOrAuto _ ->
       (* We should have eliminated those in the prepasses *)
       craise __FILE__ __LINE__ span "Unreachable"
@@ -453,7 +454,6 @@ and translate_trait_instance_id (span : Meta.span) (translate_ty : T.ty -> ty)
   | ItemClause (inst_id, decl_id, item_name, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
       ItemClause (inst_id, decl_id, item_name, clause_id)
-  | TraitRef tr -> TraitRef (translate_trait_ref span translate_ty tr)
   | FnPointer _ | Closure _ ->
       craise __FILE__ __LINE__ span "Closures are not supported yet"
   | Dyn _ ->
@@ -489,7 +489,11 @@ let rec translate_sty (span : Meta.span) (ty : T.ty) : ty =
   | TNever -> craise __FILE__ __LINE__ span "Unreachable"
   | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
-      let mut = match rkind with RMut -> Mut | RShared -> Const in
+      let mut =
+        match rkind with
+        | RMut -> Mut
+        | RShared -> Const
+      in
       let ty = translate span ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
@@ -514,9 +518,9 @@ and translate_strait_instance_id (span : Meta.span) (id : T.trait_instance_id) :
 
 let translate_trait_clause (span : Meta.span) (clause : T.trait_clause) :
     trait_clause =
-  let { T.clause_id; span = _; trait_id; clause_generics } = clause in
-  let generics = translate_sgeneric_args span clause_generics in
-  { clause_id; trait_id; generics }
+  let { T.clause_id; span = _; trait } = clause in
+  let generics = translate_sgeneric_args span trait.decl_generics in
+  { clause_id; trait_id = trait.trait_decl_id; generics }
 
 let translate_strait_type_constraint (span : Meta.span)
     (ttc : T.trait_type_constraint) : trait_type_constraint =
@@ -667,7 +671,11 @@ let rec translate_fwd_ty (span : Meta.span) (type_infos : type_infos)
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
-      let mut = match rkind with RMut -> Mut | RShared -> Const in
+      let mut =
+        match rkind with
+        | RMut -> Mut
+        | RShared -> Const
+      in
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TAssumed (TRawPtr mut), generics)
@@ -1805,7 +1813,9 @@ let translate_mplace (p : S.mplace) : mplace =
   { var_id; name; projection }
 
 let translate_opt_mplace (p : S.mplace option) : mplace option =
-  match p with None -> None | Some p -> Some (translate_mplace p)
+  match p with
+  | None -> None
+  | Some p -> Some (translate_mplace p)
 
 (** Explore an abstraction value and convert it to a given back value
     by collecting all the meta-values from the ended *borrows*.
@@ -1864,7 +1874,9 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
   in
   (* Sanity check - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
-  (match value with None -> () | Some value -> type_check_pattern ctx value);
+  (match value with
+  | None -> ()
+  | Some value -> type_check_pattern ctx value);
   (* Return *)
   (ctx, value)
 
@@ -2075,7 +2087,9 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
            If this happens, there are no backward outputs.
         *)
         let backward_outputs =
-          match ctx.backward_outputs with Some outputs -> outputs | None -> []
+          match ctx.backward_outputs with
+          | Some outputs -> outputs
+          | None -> []
         in
         let field_values = List.map mk_texpression_from_var backward_outputs in
         mk_simpl_tuple_texpression ctx.span field_values
@@ -3562,11 +3576,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
             let trait_decl_ref =
               { trait_decl_id = c.trait_id; decl_generics = empty_generic_args }
             in
-            {
-              trait_id = Clause c.clause_id;
-              generics = empty_generic_args;
-              trait_decl_ref;
-            })
+            { trait_id = Clause c.clause_id; trait_decl_ref })
           trait_clauses
       in
       { types; const_generics; trait_refs }

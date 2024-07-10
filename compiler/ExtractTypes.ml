@@ -240,7 +240,11 @@ let extract_binop (span : Meta.span)
       F.pp_print_space fmt ();
       extract_expr false arg1
   | _ ->
-      let binop_is_shift = match binop with Shl | Shr -> true | _ -> false in
+      let binop_is_shift =
+        match binop with
+        | Shl | Shr -> true
+        | _ -> false
+      in
       let binop = named_binop_name binop int_ty in
       F.pp_print_string fmt binop;
       (* In the case of F*, for shift operations, because machine integers
@@ -258,15 +262,21 @@ let extract_binop (span : Meta.span)
   if inside then F.pp_print_string fmt ")"
 
 let is_single_opaque_fun_decl_group (dg : Pure.fun_decl list) : bool =
-  match dg with [ d ] -> d.body = None | _ -> false
+  match dg with
+  | [ d ] -> d.body = None
+  | _ -> false
 
 let is_single_opaque_type_decl_group (dg : Pure.type_decl list) : bool =
-  match dg with [ d ] -> d.kind = Opaque | _ -> false
+  match dg with
+  | [ d ] -> d.kind = Opaque
+  | _ -> false
 
 let is_empty_record_type_decl (d : Pure.type_decl) : bool = d.kind = Struct []
 
 let is_empty_record_type_decl_group (dg : Pure.type_decl list) : bool =
-  match dg with [ d ] -> is_empty_record_type_decl d | _ -> false
+  match dg with
+  | [ d ] -> is_empty_record_type_decl d
+  | _ -> false
 
 (** In some provers, groups of definitions must be delimited.
 
@@ -402,7 +412,9 @@ let end_type_decl_group (fmt : F.formatter) (is_rec : bool)
         F.pp_print_break fmt 0 0)
 
 let unit_name () =
-  match backend () with Lean -> "Unit" | Coq | FStar | HOL4 -> "unit"
+  match backend () with
+  | Lean -> "Unit"
+  | Coq | FStar | HOL4 -> "unit"
 
 (** Small helper *)
 let extract_arrow (fmt : F.formatter) () : unit =
@@ -575,9 +587,6 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            sanity_check __FILE__ __LINE__
-              (trait_ref.generics = empty_generic_args)
-              span;
             extract_trait_instance_id_with_dot span ctx fmt no_params_tys false
               trait_ref.trait_id;
             F.pp_print_string fmt type_name
@@ -594,28 +603,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
     (tr : trait_ref) : unit =
-  let use_brackets = tr.generics <> empty_generic_args && inside in
-  if use_brackets then F.pp_print_string fmt "(";
-  (* We may need to filter the parameters if the trait is builtin *)
-  let generics =
-    match tr.trait_id with
-    | TraitImpl id -> (
-        match
-          TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
-        with
-        | None -> tr.generics
-        | Some filter ->
-            let types =
-              List.filter_map
-                (fun (b, x) -> if b then Some x else None)
-                (List.combine filter tr.generics.types)
-            in
-            { tr.generics with types })
-    | _ -> tr.generics
-  in
-  extract_trait_instance_id span ctx fmt no_params_tys inside tr.trait_id;
-  extract_generic_args span ctx fmt no_params_tys generics;
-  if use_brackets then F.pp_print_string fmt ")"
+  extract_trait_instance_id span ctx fmt no_params_tys inside tr.trait_id
 
 and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
@@ -703,9 +691,27 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
          (associated type, etc.). We should have caught this elsewhere. *)
       save_error __FILE__ __LINE__ (Some span) "Unexpected occurrence of `Self`";
       F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
-  | TraitImpl id ->
+  | TraitImpl (id, generics) ->
+      (* We may need to filter the parameters if the trait is builtin *)
+      let generics =
+        match
+          TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
+        with
+        | None -> generics
+        | Some filter ->
+            let types =
+              List.filter_map
+                (fun (b, x) -> if b then Some x else None)
+                (List.combine filter generics.types)
+            in
+            { generics with types }
+      in
       let name = ctx_get_trait_impl span id ctx in
-      F.pp_print_string fmt name
+      let use_brackets = generics <> empty_generic_args && inside in
+      if use_brackets then F.pp_print_string fmt "(";
+      F.pp_print_string fmt name;
+      extract_generic_args span ctx fmt no_params_tys generics;
+      if use_brackets then F.pp_print_string fmt ")"
   | Clause id ->
       let name = ctx_get_local_trait_clause span id ctx in
       F.pp_print_string fmt name
@@ -721,8 +727,6 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       in
       extract_trait_instance_id_with_dot span ctx fmt no_params_tys true inst_id;
       F.pp_print_string fmt (add_brackets name)
-  | TraitRef trait_ref ->
-      extract_trait_ref span ctx fmt no_params_tys inside trait_ref
   | UnknownTrait _ ->
       (* This is an error case *)
       craise __FILE__ __LINE__ span "Unexpected"
@@ -993,7 +997,11 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
     F.pp_print_space fmt ();
     F.pp_print_string fmt (unit_name ()))
   else
-    let sep = match backend () with Coq | FStar | HOL4 -> "*" | Lean -> "×" in
+    let sep =
+      match backend () with
+      | Coq | FStar | HOL4 -> "*"
+      | Lean -> "×"
+    in
     Collections.List.iter_link
       (fun () ->
         F.pp_print_space fmt ();
@@ -1392,7 +1400,10 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   in
   let is_tuple_struct_one_or_zero_field =
     is_tuple_struct
-    && match def.kind with Struct [] | Struct [ _ ] -> true | _ -> false
+    &&
+    match def.kind with
+    | Struct [] | Struct [ _ ] -> true
+    | _ -> false
   in
   let type_kind =
     if extract_body then

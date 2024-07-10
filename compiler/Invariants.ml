@@ -250,7 +250,9 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
           | ASharedBorrow (_, bid) -> register_borrow BShared bid
           | AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow RMut bid
           | AIgnoredMutBorrow (None, _)
-          | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedSharedBorrow
+          | AEndedMutBorrow _
+          | AEndedIgnoredMutBorrow _
+          | AEndedSharedBorrow
           | AProjSharedBorrow _ ->
               (* Do nothing *)
               ()
@@ -362,8 +364,7 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
           | AMutBorrow (_, _, _) -> set_outer_mut info
           | ASharedBorrow _ | AEndedSharedBorrow -> set_outer_shared info
           | AIgnoredMutBorrow _ | AEndedMutBorrow _ | AEndedIgnoredMutBorrow _
-            ->
-              set_outer_mut info
+            -> set_outer_mut info
           | AProjSharedBorrow _ -> set_outer_shared info
         in
         (* Continue exploring *)

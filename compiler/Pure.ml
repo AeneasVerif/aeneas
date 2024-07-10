@@ -290,7 +290,6 @@ type ty =
 
 and trait_ref = {
   trait_id : trait_instance_id;
-  generics : generic_args;
   trait_decl_ref : trait_decl_ref;
 }
 
@@ -307,12 +306,11 @@ and generic_args = {
 
 and trait_instance_id =
   | Self
-  | TraitImpl of trait_impl_id
+  | TraitImpl of trait_impl_id * generic_args
   | Clause of trait_clause_id
   | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
   | ItemClause of
       trait_instance_id * trait_decl_id * trait_item_name * trait_clause_id
-  | TraitRef of trait_ref
   | UnknownTrait of string
 [@@deriving
   show,
