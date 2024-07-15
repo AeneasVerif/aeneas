@@ -142,9 +142,6 @@ attribute [-simp] Bool.exists_bool
 attribute [local simp] List.lookup
 
 /- Adding some theorems for `scalar_tac`-/
--- TODO: move
--- TODO: make this rule local
-@[scalar_tac n % m]
 theorem Int.emod_of_pos (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
   if h: 0 < m then
     right; constructor
@@ -152,8 +149,10 @@ theorem Int.emod_of_pos (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) :=
     . apply Int.emod_lt_of_pos; scalar_tac
   else left; scalar_tac
 
+attribute [local scalar_tac n % m] Int.emod_of_pos
+
 -- TODO: make this rule local
-@[scalar_tac h]
+@[local scalar_tac h]
 theorem inv_imp_eqs_ineqs {hm : HashMap α} (h : hm.inv) : 0 < hm.slots.length ∧ hm.num_entries = hm.al_v.len := by
   simp_all [inv]
 
@@ -951,10 +950,10 @@ theorem insert_spec {α} (hm : HashMap α) (key : Usize) (value : α)
   split
   . split
     . simp [*]
-      intros; tauto
+      tauto
     . progress as ⟨ hm2 .. ⟩
       simp [*]
-      intros; tauto
+      tauto
   . simp [*]; tauto
 
 @[pspec]
