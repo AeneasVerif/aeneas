@@ -720,13 +720,6 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       let name = ctx_get_trait_parent_clause span decl_id clause_id ctx in
       extract_trait_instance_id_with_dot span ctx fmt no_params_tys true inst_id;
       F.pp_print_string fmt (add_brackets name)
-  | ItemClause (inst_id, decl_id, item_name, clause_id) ->
-      (* Use the trait decl id to lookup the name *)
-      let name =
-        ctx_get_trait_item_clause span decl_id item_name clause_id ctx
-      in
-      extract_trait_instance_id_with_dot span ctx fmt no_params_tys true inst_id;
-      F.pp_print_string fmt (add_brackets name)
   | UnknownTrait _ ->
       (* This is an error case *)
       craise __FILE__ __LINE__ span "Unexpected"
