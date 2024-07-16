@@ -90,12 +90,11 @@ let ctx_add_norm_trait_types_from_preds (span : Meta.span) (ctx : eval_ctx)
   { ctx with norm_trait_types }
 
 (** A trait instance id refers to a local clause if it only uses the variants:
-    [Self], [Clause], [ParentClause], [ItemClause] *)
+    [Self], [Clause], [ParentClause] *)
 let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
-  | ParentClause (id, _, _) | ItemClause (id, _, _, _) ->
-      trait_instance_id_is_local_clause id
+  | ParentClause (id, _, _) -> trait_instance_id_is_local_clause id
   | TraitImpl _
   | BuiltinOrAuto _
   | UnknownTrait _
@@ -185,7 +184,7 @@ let norm_ctx_lookup_trait_impl_ty (ctx : norm_ctx) (impl_id : TraitImplId.id)
   (* Lookup the implementation *)
   let trait_impl, subst = norm_ctx_lookup_trait_impl ctx impl_id generics in
   (* Lookup the type *)
-  let ty = snd (List.assoc type_name trait_impl.types) in
+  let ty = List.assoc type_name trait_impl.types in
   (* Substitute *)
   Subst.ty_substitute subst ty
 
@@ -196,19 +195,6 @@ let norm_ctx_lookup_trait_impl_parent_clause (ctx : norm_ctx)
   let trait_impl, subst = norm_ctx_lookup_trait_impl ctx impl_id generics in
   (* Lookup the clause *)
   let clause = TraitClauseId.nth trait_impl.parent_trait_refs clause_id in
-  (* Sanity check: the clause necessarily refers to an impl *)
-  let _ = TypesUtils.trait_instance_id_as_trait_impl clause.trait_id in
-  (* Substitute *)
-  Subst.trait_ref_substitute subst clause
-
-let norm_ctx_lookup_trait_impl_item_clause (ctx : norm_ctx)
-    (impl_id : TraitImplId.id) (generics : generic_args) (item_name : string)
-    (clause_id : TraitClauseId.id) : trait_ref =
-  (* Lookup the implementation *)
-  let trait_impl, subst = norm_ctx_lookup_trait_impl ctx impl_id generics in
-  (* Lookup the item then its clause *)
-  let item = List.assoc item_name trait_impl.types in
-  let clause = TraitClauseId.nth (fst item) clause_id in
   (* Sanity check: the clause necessarily refers to an impl *)
   let _ = TypesUtils.trait_instance_id_as_trait_impl clause.trait_id in
   (* Substitute *)
@@ -325,7 +311,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       the normalization is in particular to eliminate it. Inside a [TraitRef]
       there is necessarily:
       - an id referencing a local (sub-)clause, that is an id using the variants
-        [Self], [Clause], [ItemClause] and [ParentClause] exclusively. We can't
+        [Self], [Clause], and [ParentClause] exclusively. We can't
         simplify those cases: all we can do is remove the [TraitRef] wrapper
         by leveraging the fact that the generic arguments must be empty.
       - a [TraitImpl]. Note that the [TraitImpl] is necessarily just a [TraitImpl],
@@ -376,36 +362,6 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
             (trait_instance_id_is_local_clause inst_id)
             ctx.span;
           ParentClause (inst_id, decl_id, clause_id)
-    end
-  | ItemClause (inst_id, decl_id, item_name, clause_id) -> begin
-      let inst_id = norm_ctx_normalize_trait_instance_id ctx inst_id in
-      (* Check if the inst_id refers to a specific implementation, if yes project *)
-      match inst_id with
-      | TraitImpl (impl_id, generics) ->
-          (* We figure out the item clause by doing the following:
-             {[
-               // The implementation we are looking at
-               impl Impl1 : Trait1<R> {
-                  type S = ...
-                     with Impl2 : Trait2 ... // Instances satisfying the declared bounds
-                          ^^^^^^^^^^^^^^^^^^
-                      Lookup the clause from here
-               }
-             ]}
-          *)
-          (* Lookup the impl *)
-          let clause =
-            norm_ctx_lookup_trait_impl_item_clause ctx impl_id generics
-              item_name clause_id
-          in
-          (* Normalize the clause *)
-          norm_ctx_normalize_trait_instance_id ctx clause.trait_id
-      | _ ->
-          (* This is actually a local clause *)
-          sanity_check_opt_span __FILE__ __LINE__
-            (trait_instance_id_is_local_clause inst_id)
-            ctx.span;
-          ItemClause (inst_id, decl_id, item_name, clause_id)
     end
   | FnPointer ty ->
       let ty = norm_ctx_normalize_ty ctx ty in

@@ -172,7 +172,6 @@ type id =
   | TraitItemId of TraitDeclId.id * string
       (** A trait associated item which is not a method *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
-  | TraitItemClauseId of TraitDeclId.id * string * TraitClauseId.id
   | TraitSelfClauseId
       (** Specifically for the clause: [Self : Trait].
 
@@ -396,11 +395,8 @@ let strict_collisions (id : id) : bool =
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
   match id with
-  | FieldId _
-  | TraitItemClauseId _
-  | TraitParentClauseId _
-  | TraitItemId _
-  | TraitMethodId _ -> !Config.record_fields_short_names
+  | FieldId _ | TraitParentClauseId _ | TraitItemId _ | TraitMethodId _ ->
+      !Config.record_fields_short_names
   | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _)) ->
       (* We map several assumed functions to the same id *)
       true
@@ -675,10 +671,6 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
   | TraitParentClauseId (id, clause_id) ->
       "trait_parent_clause_id: " ^ trait_decl_id_to_string id ^ ", clause_id: "
       ^ TraitClauseId.to_string clause_id
-  | TraitItemClauseId (id, item_name, clause_id) ->
-      "trait_item_clause_id: " ^ trait_decl_id_to_string id ^ ", item name: "
-      ^ item_name ^ ", clause_id: "
-      ^ TraitClauseId.to_string clause_id
   | TraitItemId (id, name) ->
       "trait_item_id: " ^ trait_decl_id_to_string id ^ ", type name: " ^ name
   | TraitMethodId (trait_decl_id, fun_name) ->
@@ -758,10 +750,6 @@ let ctx_get_trait_method (span : Meta.span) (id : trait_decl_id)
 let ctx_get_trait_parent_clause (span : Meta.span) (id : trait_decl_id)
     (clause : trait_clause_id) (ctx : extraction_ctx) : string =
   ctx_get (Some span) (TraitParentClauseId (id, clause)) ctx
-
-let ctx_get_trait_item_clause (span : Meta.span) (id : trait_decl_id)
-    (item : string) (clause : trait_clause_id) (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (TraitItemClauseId (id, item, clause)) ctx
 
 let ctx_get_var (span : Meta.span) (id : VarId.id) (ctx : extraction_ctx) :
     string =

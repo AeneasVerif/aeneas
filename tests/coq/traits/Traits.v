@@ -298,7 +298,8 @@ Record WithConstTy_t (Self : Type) (LEN : usize) := mkWithConstTy_t {
   WithConstTy_tWithConstTy_t_LEN2 : usize;
   WithConstTy_tWithConstTy_t_V : Type;
   WithConstTy_tWithConstTy_t_W : Type;
-  WithConstTy_tWithConstTy_t_W_clause_0 : ToU64_t WithConstTy_tWithConstTy_t_W;
+  WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst : ToU64_t
+    WithConstTy_tWithConstTy_t_W;
   WithConstTy_t_f : WithConstTy_tWithConstTy_t_W -> array u8 LEN -> result
     WithConstTy_tWithConstTy_t_W;
 }.
@@ -308,7 +309,7 @@ Arguments WithConstTy_tWithConstTy_t_LEN1 { _ _ }.
 Arguments WithConstTy_tWithConstTy_t_LEN2 { _ _ }.
 Arguments WithConstTy_tWithConstTy_t_V { _ _ }.
 Arguments WithConstTy_tWithConstTy_t_W { _ _ }.
-Arguments WithConstTy_tWithConstTy_t_W_clause_0 { _ _ }.
+Arguments WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst { _ _ }.
 Arguments WithConstTy_t_f { _ _ }.
 
 (** [traits::{(traits::WithConstTy<32: usize> for bool)#8}::LEN1]
@@ -332,7 +333,7 @@ Definition WithConstTyBool32 : WithConstTy_t bool 32%usize := {|
   WithConstTy_tWithConstTy_t_LEN2 := with_const_ty_len2_default bool 32%usize;
   WithConstTy_tWithConstTy_t_V := u8;
   WithConstTy_tWithConstTy_t_W := u64;
-  WithConstTy_tWithConstTy_t_W_clause_0 := ToU64U64;
+  WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst := ToU64U64;
   WithConstTy_t_f := withConstTyBool32_f;
 |}.
 
@@ -362,7 +363,8 @@ Definition use_with_const_ty3
   (x : withConstTyInst.(WithConstTy_tWithConstTy_t_W)) :
   result u64
   :=
-  withConstTyInst.(WithConstTy_tWithConstTy_t_W_clause_0).(ToU64_t_to_u64) x
+  withConstTyInst.(WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst).(ToU64_t_to_u64)
+    x
 .
 
 (** [traits::test_where1]:
@@ -471,8 +473,8 @@ Arguments Iterator_tIterator_t_Item { _ }.
 Record IntoIterator_t (Self : Type) := mkIntoIterator_t {
   IntoIterator_tIntoIterator_t_Item : Type;
   IntoIterator_tIntoIterator_t_IntoIter : Type;
-  IntoIterator_tIntoIterator_t_IntoIter_clause_0 : Iterator_t
-    IntoIterator_tIntoIterator_t_IntoIter;
+  IntoIterator_tIntoIterator_t_IteratortraitsIntoIteratorIntoIterInst :
+    Iterator_t IntoIterator_tIntoIterator_t_IntoIter;
   IntoIterator_t_into_iter : Self -> result
     IntoIterator_tIntoIterator_t_IntoIter;
 }.
@@ -480,7 +482,8 @@ Record IntoIterator_t (Self : Type) := mkIntoIterator_t {
 Arguments mkIntoIterator_t { _ }.
 Arguments IntoIterator_tIntoIterator_t_Item { _ }.
 Arguments IntoIterator_tIntoIterator_t_IntoIter { _ }.
-Arguments IntoIterator_tIntoIterator_t_IntoIter_clause_0 { _ }.
+Arguments IntoIterator_tIntoIterator_t_IteratortraitsIntoIteratorIntoIterInst {
+  _ }.
 Arguments IntoIterator_t_into_iter { _ }.
 
 (** Trait declaration: [traits::FromResidual]
@@ -514,13 +517,13 @@ Arguments WithTarget_tWithTarget_t_Target { _ }.
     Source: 'tests/src/traits.rs', lines 257:0-257:22 *)
 Record ParentTrait2_t (Self : Type) := mkParentTrait2_t {
   ParentTrait2_tParentTrait2_t_U : Type;
-  ParentTrait2_tParentTrait2_t_U_clause_0 : WithTarget_t
+  ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst : WithTarget_t
     ParentTrait2_tParentTrait2_t_U;
 }.
 
 Arguments mkParentTrait2_t { _ }.
 Arguments ParentTrait2_tParentTrait2_t_U { _ }.
-Arguments ParentTrait2_tParentTrait2_t_U_clause_0 { _ }.
+Arguments ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst { _ }.
 
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 261:0-261:35 *)
@@ -529,7 +532,7 @@ Record ChildTrait2_t (Self : Type) := mkChildTrait2_t {
   ChildTrait2_t_convert :
     (ChildTrait2_tChildTrait2_t_ParentTrait2Inst).(ParentTrait2_tParentTrait2_t_U)
     -> result
-    (ChildTrait2_tChildTrait2_t_ParentTrait2Inst).(ParentTrait2_tParentTrait2_t_U_clause_0).(WithTarget_tWithTarget_t_Target);
+    (ChildTrait2_tChildTrait2_t_ParentTrait2Inst).(ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst).(WithTarget_tWithTarget_t_Target);
 }.
 
 Arguments mkChildTrait2_t { _ }.
@@ -546,7 +549,8 @@ Definition WithTargetU32 : WithTarget_t u32 := {|
     Source: 'tests/src/traits.rs', lines 269:0-269:25 *)
 Definition ParentTrait2U32 : ParentTrait2_t u32 := {|
   ParentTrait2_tParentTrait2_t_U := u32;
-  ParentTrait2_tParentTrait2_t_U_clause_0 := WithTargetU32;
+  ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst :=
+    WithTargetU32;
 |}.
 
 (** [traits::{(traits::ChildTrait2 for u32)#13}::convert]:
