@@ -13,7 +13,6 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: result/
-    # TODO: test the Lean examples code via nix build '.?dir=docs/user'#test or something similar.
   deploy:
     needs: build
     permissions:
