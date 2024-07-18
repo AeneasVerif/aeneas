@@ -25,6 +25,10 @@ macro "int_tac" pat:term : attr =>
 macro "scalar_tac" pat:term : attr =>
   `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]) (pattern := $pat))
 
+/-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "nonlin_scalar_tac" pat:term : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTacNonLin):ident]) (pattern := $pat))
+
 /- Check if a proposition is a linear integer proposition.
    We notably use this to check the goals: this is useful to filter goals that
    are unlikely to be solvable with arithmetic tactics. -/
@@ -70,7 +74,14 @@ def intTacSaturateForward : Tactic.TacticM Unit := do
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
   -- introduced by the forward rules themselves.
   let options ← options.toOptions' (some 0)
-  evalAesopSaturate options #[`Aeneas.ScalarTac]
+  -- We always use the rule set `Aeneas.ScalarTac`, but also need to add other rule sets locally
+  -- activated by the user. The `Aeneas.ScalarTacNonLin` rule set has a special treatment as
+  -- it is activated through an option.
+  let ruleSets :=
+    let ruleSets := `Aeneas.ScalarTac :: (← scalarTacRuleSets.get)
+    if scalarTac.nonLin.get (← getOptions) then `Aeneas.ScalarTacNonLin :: ruleSets
+    else ruleSets
+  evalAesopSaturate options ruleSets.toArray
 
 /- Boosting a bit the `omega` tac.
  -/

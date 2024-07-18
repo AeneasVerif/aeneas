@@ -141,17 +141,11 @@ attribute [-simp] Bool.exists_bool
 
 attribute [local simp] List.lookup
 
-/- Adding some theorems for `scalar_tac`-/
-theorem Int.emod_of_pos (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
-  if h: 0 < m then
-    right; constructor
-    . apply Int.emod_nonneg; scalar_tac
-    . apply Int.emod_lt_of_pos; scalar_tac
-  else left; scalar_tac
+/- Adding some theorems for `scalar_tac` -/
+-- We first activate the rule set for non linear arithmetic - this is needed because of the modulo operations
+set_option scalarTac.nonLin true
 
-attribute [local scalar_tac n % m] Int.emod_of_pos
-
--- TODO: make this rule local
+-- Custom, local rule
 @[local scalar_tac h]
 theorem inv_imp_eqs_ineqs {hm : HashMap α} (h : hm.inv) : 0 < hm.slots.length ∧ hm.num_entries = hm.al_v.len := by
   simp_all [inv]
