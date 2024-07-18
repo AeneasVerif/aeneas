@@ -198,10 +198,6 @@ and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
       let inst_id = trait_instance_id_to_string env inst_id in
       let clause_id = trait_clause_id_to_string env clause_id in
       "parent(" ^ inst_id ^ ")::" ^ clause_id
-  | ItemClause (inst_id, _decl_id, item_name, clause_id) ->
-      let inst_id = trait_instance_id_to_string env inst_id in
-      let clause_id = trait_clause_id_to_string env clause_id in
-      "(" ^ inst_id ^ ")::" ^ item_name ^ "::[" ^ clause_id ^ "]"
   | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
 
 let trait_clause_to_string (env : fmt_env) (clause : trait_clause) : string =

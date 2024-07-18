@@ -451,9 +451,6 @@ and translate_trait_instance_id (span : Meta.span) (translate_ty : T.ty -> ty)
   | ParentClause (inst_id, decl_id, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
       ParentClause (inst_id, decl_id, clause_id)
-  | ItemClause (inst_id, decl_id, item_name, clause_id) ->
-      let inst_id = translate_trait_instance_id inst_id in
-      ItemClause (inst_id, decl_id, item_name, clause_id)
   | FnPointer _ | Closure _ ->
       craise __FILE__ __LINE__ span "Closures are not supported yet"
   | Dyn _ ->
@@ -3981,14 +3978,10 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   let types =
     List.map
-      (fun (name, (trait_clauses, ty)) ->
+      (fun (name, ty) ->
         ( name,
-          ( List.map
-              (translate_trait_clause trait_decl.item_meta.span)
-              trait_clauses,
-            Option.map
-              (translate_fwd_ty trait_decl.item_meta.span type_infos)
-              ty ) ))
+          Option.map (translate_fwd_ty trait_decl.item_meta.span type_infos) ty
+        ))
       types
   in
   {
@@ -4046,12 +4039,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   let types =
     List.map
-      (fun (name, (trait_refs, ty)) ->
-        ( name,
-          ( List.map
-              (translate_fwd_trait_ref trait_impl.item_meta.span type_infos)
-              trait_refs,
-            translate_fwd_ty trait_impl.item_meta.span type_infos ty ) ))
+      (fun (name, ty) ->
+        (name, translate_fwd_ty trait_impl.item_meta.span type_infos ty))
       types
   in
   {
