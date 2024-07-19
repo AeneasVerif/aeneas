@@ -34,7 +34,7 @@ inductive TheoremOrLocal where
 | Local (asm : LocalDecl)
 
 structure Stats where
-  usedTheorem : TheoremOrLocal
+  usedTheorem : Syntax
 
 instance : ToMessageData TheoremOrLocal where
   toMessageData := λ x => match x with | .Theorem thName => m!"{thName}" | .Local asm => m!"{asm.userName}"
@@ -51,7 +51,7 @@ inductive ProgressError
 | Error (msg : MessageData)
 deriving Inhabited
 
-def progressWith (fExpr : Expr) (th : TheoremOrLocal)
+def progressWith (fExpr : Expr) (thExpr : Expr)
   (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
   (asmTac : TacticM Unit) : TacticM ProgressError := do
   /- Apply the theorem
@@ -64,14 +64,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
      We also make sure that all the meta variables which appear in the
      function arguments have been instantiated
    -/
-  let thTy ← do
-    match th with
-    | .Theorem thName =>
-      -- Lookup the theorem and introduce fresh meta-variables for the universes
-      let th ← mkConstWithFreshMVarLevels thName
-      -- Retrieve the type
-      inferType th
-    | .Local asmDecl => pure asmDecl.type
+  let thTy ← inferType thExpr
   trace[Progress] "Looked up theorem/assumption type: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
   -- withNewMCtxDepth do
@@ -98,13 +91,10 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
   let thBody ← instantiateMVars thBody
   trace[Progress] "thBody (after instantiation): {thBody}"
   -- Add the instantiated theorem to the assumptions (we apply it on the metavariables).
-  let th ← do
-    match th with
-    | .Theorem thName => mkAppOptM thName (mvars.map some)
-    | .Local decl => mkAppOptM' (mkFVar decl.fvarId) (mvars.map some)
+  let th ← mkAppOptM' thExpr (mvars.map some)
+  trace[Progress] "Instantiated theorem reusing the metavariables: {th}"
   let asmName ← do match keep with | none => mkFreshAnonPropUserName | some n => do pure n
-  let thTy ← inferType th
-  let thAsm ← Utils.addDeclTac asmName th thTy (asLet := false)
+  let thAsm ← Utils.addDeclTac asmName th (← inferType th) (asLet := false)
   withMainContext do -- The context changed - TODO: remove once addDeclTac is updated
   let ngoal ← getMainGoal
   trace[Progress] "current goal: {ngoal}"
@@ -219,7 +209,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
    Return true if it succeeded. -/
 def tryLookupApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
   (asmTac : TacticM Unit) (fExpr : Expr)
-  (kind : String) (th : Option TheoremOrLocal) : TacticM Bool := do
+  (kind : String) (th : Option Expr) : TacticM Bool := do
   let res ← do
     match th with
     | none =>
@@ -239,8 +229,8 @@ def tryLookupApply (keep : Option Name) (ids : Array (Option Name)) (splitPost :
   | none => pure false
 
 -- The array of ids are identifiers to use when introducing fresh variables
-def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrLocal)
-  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM TheoremOrLocal := do
+def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
+  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM Syntax := do
   withMainContext do
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
@@ -268,7 +258,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
   match withTh with
   | some th => do
     match ← progressWith fExpr th keep ids splitPost asmTac with
-    | .Ok => return th
+    | .Ok => return (← exprToSyntax th)
     | .Error msg => throwError msg
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
@@ -276,9 +266,9 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     let decls ← ctx.getDecls
     for decl in decls.reverse do
       trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fExpr (.Local decl) keep ids splitPost asmTac catch _ => continue
+      let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
       match res with
-      | .Ok => return (.Local decl)
+      | .Ok => return (mkIdent decl.userName)
       | .Error msg => throwError msg
     -- It failed: lookup the pspec theorems which match the expression *only
     -- if the function is a constant*
@@ -288,7 +278,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     if ¬ fIsConst then throwError "Progress failed"
     else do
       trace[Progress] "No assumption succeeded: trying to lookup a pspec theorem"
-      let pspecs : Array TheoremOrLocal ← do
+      let pspecs : Array Name ← do
         let thNames ← pspecAttr.find? fExpr
         -- TODO: because of reduction, there may be several valid theorems (for
         -- instance for the scalars). We need to sort them from most specific to
@@ -296,10 +286,12 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
         -- the end.
         let thNames := thNames.reverse
         trace[Progress] "Looked up pspec theorems: {thNames}"
-        pure (thNames.map fun th => TheoremOrLocal.Theorem th)
+        pure thNames
       -- Try the theorems one by one
       for pspec in pspecs do
-        if ← tryLookupApply keep ids splitPost asmTac fExpr "pspec theorem" pspec then return pspec
+        -- TODO: convert pspec into an Expr.
+        let pspecExpr ← Term.mkConst pspec
+        if ← tryLookupApply keep ids splitPost asmTac fExpr "pspec theorem" pspecExpr then return (mkIdent pspec)
         else pure ()
       -- It failed: try to use the recursive assumptions
       trace[Progress] "Failed using a pspec theorem: trying to use a recursive assumption"
@@ -310,14 +302,14 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
         | .default | .implDetail => false | .auxDecl => true)
       for decl in decls.reverse do
         trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-        let res ← do try progressWith fExpr (.Local decl) keep ids splitPost asmTac catch _ => continue
+        let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
         match res with
-        | .Ok => return (.Local decl)
+        | .Ok => return (mkIdent decl.userName)
         | .Error msg => throwError msg
       -- Nothing worked: failed
       throwError "Progress failed"
 
-syntax progressArgs := ("keep" (ident <|> "_"))? ("with" ident)? ("as" " ⟨ " (ident <|> "_"),* " .."? " ⟩")?
+syntax progressArgs := ("keep" (ident <|> "_"))? ("with" term)? ("as" " ⟨ " (ident <|> "_"),* " .."? " ⟩")?
 
 def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Stats := do
   let args := args.raw
@@ -343,17 +335,27 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Stats := do
     if withArg.size > 0 then
       let id := withArg.get! 1
       trace[Progress] "With arg: {id}"
-      -- Attempt to lookup a local declaration
-      match (← getLCtx).findFromUserName? id.getId with
-      | some decl => do
-        trace[Progress] "With arg: local decl"
-        pure (some (.Local decl))
-      | none => do
-        -- Not a local declaration: should be a theorem
-        trace[Progress] "With arg: theorem"
-        addCompletionInfo <| CompletionInfo.id id id.getId (danglingDot := false) {} none
-        let some (.const name _) ← Term.resolveId? id | throwError m!"Could not find theorem: {id}"
-        pure (some (.Theorem name))
+
+      -- Either, it's a local declaration or a theorem, either it's a term
+      -- for which we need to find a declaration
+
+      if id.isIdent then
+        -- Attempt to lookup a local declaration
+        match (← getLCtx).findFromUserName? id.getId with
+        | some decl => do
+          trace[Progress] "With arg: local decl"
+          pure (some decl.toExpr)
+        | none => do
+          -- Not a local declaration: should be a theorem
+          trace[Progress] "With arg: theorem"
+          addCompletionInfo <| CompletionInfo.id id id.getId (danglingDot := false) {} none
+          let some e ← Term.resolveId? id | throwError m!"Could not find theorem: {id}"
+          pure (some e)
+      else
+        trace[Progress] "With arg: not an identifier (a term?)"
+        let e ← Tactic.elabTerm id none
+        trace[Progress] m!"With arg: elaborated expression {e}"
+        pure (some e)
     else pure none
   let ids :=
     let args := asArgs.getArgs
@@ -392,9 +394,12 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let stats ← evalProgress args
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
-    let withArg := mkNullNode #[mkAtom "with", mkIdent stats.usedTheorem]
+    let withArg := mkNullNode #[mkAtom "with", stats.usedTheorem]
     stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Progress.progress #[mkAtom "progress", stxArgs]
+  -- if stats.usedTheorem.isInaccesisble then
+  --  logInfo "{...} is inaccessible, if you want to actually use the suggestion, please use `rename_i ...`"
+
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
 
 namespace Test
@@ -504,6 +509,13 @@ namespace Test
     right
     progress keep _ as ⟨ z, h1 .. ⟩
     simp [*, h1]
+
+  /- Progress using a term -/
+  example {x: U32}
+    (f : U32 → Result Unit)
+    (h : ∀ x, f x = .ok ()):
+      f x = ok () := by
+      progress with (show ∀ x, f x = .ok () by exact h)
 
 end Test
 
