@@ -118,9 +118,9 @@ let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
   in
   FunCall (call, e)
 
-let synthesize_global_eval (gid : GlobalDeclId.id) (generics : generic_args)
-    (dest : symbolic_value) (e : expression) : expression =
-  EvalGlobal (gid, generics, dest, e)
+let synthesize_global_eval (gref : global_decl_ref) (dest : symbolic_value)
+    (e : expression) : expression =
+  EvalGlobal (gref.global_id, gref.global_generics, dest, e)
 
 let synthesize_regular_function_call (fun_id : fun_id_or_trait_method_ref)
     (call_id : FunCallId.id) (ctx : Contexts.eval_ctx) (sg : fun_sig)
