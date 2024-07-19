@@ -1,0 +1,6 @@
+[book]
+authors = ["The Aeneas contributors"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Aeneas user documentation"

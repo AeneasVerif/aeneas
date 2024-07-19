@@ -257,7 +257,7 @@ structure WithConstTy (Self : Type) (LEN : Usize) where
   LEN2 : Usize
   V : Type
   W : Type
-  W_clause_0 : ToU64 W
+  ToU64traitsWithConstTyWInst : ToU64 W
   f : W → Array U8 LEN → Result W
 
 /- [traits::{(traits::WithConstTy<32: usize> for bool)#8}::LEN1]
@@ -277,7 +277,7 @@ def WithConstTyBool32 : WithConstTy Bool 32#usize := {
   LEN2 := WithConstTy.LEN2_default Bool 32#usize
   V := U8
   W := U64
-  W_clause_0 := ToU64U64
+  ToU64traitsWithConstTyWInst := ToU64U64
   f := WithConstTyBool32.f
 }
 
@@ -305,7 +305,7 @@ def use_with_const_ty3
   (x : WithConstTyInst.W) :
   Result U64
   :=
-  WithConstTyInst.W_clause_0.to_u64 x
+  WithConstTyInst.ToU64traitsWithConstTyWInst.to_u64 x
 
 /- [traits::test_where1]:
    Source: 'tests/src/traits.rs', lines 194:0-194:40 -/
@@ -386,7 +386,7 @@ structure Iterator (Self : Type) where
 structure IntoIterator (Self : Type) where
   Item : Type
   IntoIter : Type
-  IntoIter_clause_0 : Iterator IntoIter
+  IteratortraitsIntoIteratorIntoIterInst : Iterator IntoIter
   into_iter : Self → Result IntoIter
 
 /- Trait declaration: [traits::FromResidual]
@@ -408,13 +408,14 @@ structure WithTarget (Self : Type) where
    Source: 'tests/src/traits.rs', lines 257:0-257:22 -/
 structure ParentTrait2 (Self : Type) where
   U : Type
-  U_clause_0 : WithTarget U
+  WithTargettraitsParentTrait2UInst : WithTarget U
 
 /- Trait declaration: [traits::ChildTrait2]
    Source: 'tests/src/traits.rs', lines 261:0-261:35 -/
 structure ChildTrait2 (Self : Type) where
   ParentTrait2Inst : ParentTrait2 Self
-  convert : ParentTrait2Inst.U → Result ParentTrait2Inst.U_clause_0.Target
+  convert : ParentTrait2Inst.U → Result
+    ParentTrait2Inst.WithTargettraitsParentTrait2UInst.Target
 
 /- Trait implementation: [traits::{(traits::WithTarget for u32)#11}]
    Source: 'tests/src/traits.rs', lines 265:0-265:23 -/
@@ -426,7 +427,7 @@ def WithTargetU32 : WithTarget U32 := {
    Source: 'tests/src/traits.rs', lines 269:0-269:25 -/
 def ParentTrait2U32 : ParentTrait2 U32 := {
   U := U32
-  U_clause_0 := WithTargetU32
+  WithTargettraitsParentTrait2UInst := WithTargetU32
 }
 
 /- [traits::{(traits::ChildTrait2 for u32)#13}::convert]:

@@ -242,7 +242,7 @@ noeq type withConstTy_t (self : Type0) (len : usize) = {
   cLEN2 : usize;
   tV : Type0;
   tW : Type0;
-  tW_clause_0 : toU64_t tW;
+  toU64traitsWithConstTyWInst : toU64_t tW;
   f : tW -> array u8 len -> result tW;
 }
 
@@ -264,7 +264,7 @@ let withConstTyBool32 : withConstTy_t bool 32 = {
   cLEN2 = with_const_ty_len2_default bool 32;
   tV = u8;
   tW = u64;
-  tW_clause_0 = toU64U64;
+  toU64traitsWithConstTyWInst = toU64U64;
   f = withConstTyBool32_f;
 }
 
@@ -292,7 +292,7 @@ let use_with_const_ty3
   (x : withConstTyInst.tW) :
   result u64
   =
-  withConstTyInst.tW_clause_0.to_u64 x
+  withConstTyInst.toU64traitsWithConstTyWInst.to_u64 x
 
 (** [traits::test_where1]:
     Source: 'tests/src/traits.rs', lines 194:0-194:40 *)
@@ -374,7 +374,7 @@ noeq type iterator_t (self : Type0) = { tItem : Type0; }
 noeq type intoIterator_t (self : Type0) = {
   tItem : Type0;
   tIntoIter : Type0;
-  tIntoIter_clause_0 : iterator_t tIntoIter;
+  iteratortraitsIntoIteratorIntoIterInst : iterator_t tIntoIter;
   into_iter : self -> result tIntoIter;
 }
 
@@ -397,14 +397,15 @@ noeq type withTarget_t (self : Type0) = { tTarget : Type0; }
     Source: 'tests/src/traits.rs', lines 257:0-257:22 *)
 noeq type parentTrait2_t (self : Type0) = {
   tU : Type0;
-  tU_clause_0 : withTarget_t tU;
+  withTargettraitsParentTrait2UInst : withTarget_t tU;
 }
 
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 261:0-261:35 *)
 noeq type childTrait2_t (self : Type0) = {
   parentTrait2Inst : parentTrait2_t self;
-  convert : parentTrait2Inst.tU -> result parentTrait2Inst.tU_clause_0.tTarget;
+  convert : parentTrait2Inst.tU -> result
+    parentTrait2Inst.withTargettraitsParentTrait2UInst.tTarget;
 }
 
 (** Trait implementation: [traits::{(traits::WithTarget for u32)#11}]
@@ -415,7 +416,7 @@ let withTargetU32 : withTarget_t u32 = { tTarget = u32; }
     Source: 'tests/src/traits.rs', lines 269:0-269:25 *)
 let parentTrait2U32 : parentTrait2_t u32 = {
   tU = u32;
-  tU_clause_0 = withTargetU32;
+  withTargettraitsParentTrait2UInst = withTargetU32;
 }
 
 (** [traits::{(traits::ChildTrait2 for u32)#13}::convert]:

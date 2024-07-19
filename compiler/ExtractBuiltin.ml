@@ -547,11 +547,10 @@ type builtin_trait_decl_info = {
   constructor : string;
   parent_clauses : string list;
   consts : (string * string) list;
-  types : (string * (string * string list)) list;
+  types : (string * string) list;
       (** Every type has:
           - a Rust name
-          - an extraction name
-          - a list of clauses *)
+          - an extraction name *)
   methods : (string * builtin_fun_info) list;
 }
 [@@deriving show]
@@ -583,8 +582,7 @@ let builtin_trait_decls_info () =
           | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter type_name
           | Lean -> type_name
         in
-        let clauses = [] in
-        (item_name, (type_name, clauses))
+        (item_name, type_name)
       in
       List.map mk_type types
     in
