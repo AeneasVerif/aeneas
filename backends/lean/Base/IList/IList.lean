@@ -29,15 +29,13 @@ def len (ls : List α) : Int :=
 @[simp] theorem len_nil : len ([] : List α) = 0 := by simp [len]
 @[simp] theorem len_cons : len ((x :: tl) : List α) = 1 + len tl := by simp [len]
 
+@[scalar_tac ls.len]
 theorem len_pos : 0 ≤ (ls : List α).len := by
   induction ls <;> simp [*]
   omega
 
-instance (l: List a) : Arith.HasIntPred (l.len) where
-   concl := 0 ≤ l.len
-   prop := l.len_pos
-
 example (l: List a): 0 ≤ l.len := by scalar_tac
+example (a : Type): 0 ≤ ([] : List a).len := by scalar_tac
 
 -- Remark: if i < 0, then the result is none
 def indexOpt (ls : List α) (i : Int) : Option α :=

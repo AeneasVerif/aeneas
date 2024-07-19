@@ -1,37 +1,7 @@
 import Lean
 import Mathlib.Tactic.Core
 import Base.UtilsBase
-
-/-
-Mathlib tactics:
-- rcases: https://leanprover-community.github.io/mathlib_docs/tactics.html#rcases
-- split_ifs: https://leanprover-community.github.io/mathlib_docs/tactics.html#split_ifs
-- norm_num: https://leanprover-community.github.io/mathlib_docs/tactics.html#norm_num
-- hint: https://leanprover-community.github.io/mathlib_docs/tactics.html#hint
-- classical: https://leanprover-community.github.io/mathlib_docs/tactics.html#classical
--/
-
-/-
-TODO:
-- we want an easier to use cases:
-  - keeps in the goal an equation of the shape: `t = case`
-  - if called on Prop terms, uses Classical.em
-  Actually, the cases from mathlib seems already quite powerful
-  (https://leanprover-community.github.io/mathlib_docs/tactics.html#cases)
-  For instance: cases h : e
-  Also: **casesm**
-- better split tactic
-- we need conversions to operate on the head of applications.
-  Actually, something like this works:
-  ```
-  conv at Hl =>
-    apply congr_fun
-    simp [fix_fuel_P]
-  ```
-  Maybe we need a rpt ... ; focus?
-- simplifier/rewriter have a strange behavior sometimes
--/
-
+import Aesop
 
 namespace List
 
@@ -822,5 +792,19 @@ def normCastAtAll : TacticM Unit := do
   let decls ← ctx.getDecls
   NormCast.normCastTarget
   decls.forM (fun d => NormCast.normCastHyp d.fvarId)
+
+@[inline] def tryLiftMetaTactic1 (tactic : MVarId → MetaM (Option MVarId)) (msg : String) : TacticM Unit :=
+  withMainContext do
+    if let some mvarId ← tactic (← getMainGoal) then
+      replaceMainGoal [mvarId]
+    else
+      throwError msg
+
+/-- Call the saturate function from aesop -/
+def evalAesopSaturate (options : Aesop.Options') (ruleSets : Array Name) : TacticM Unit := do
+  let rss ← Aesop.Frontend.getGlobalRuleSets ruleSets
+  let rs ← Aesop.mkLocalRuleSet rss options
+    |> Aesop.ElabM.runForwardElab (← getMainGoal)
+  tryLiftMetaTactic1 (Aesop.saturate rs · |>.run { options }) "Aesop.saturate failed"
 
 end Utils

@@ -44,12 +44,13 @@ def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
 elab "scalar_tac" : tactic =>
   scalarTac false
 
-instance (ty : ScalarTy) : HasIntProp (Scalar ty) where
-  -- prop_ty is inferred
-  prop := λ x => And.intro x.hmin x.hmax
+@[scalar_tac x]
+theorem Scalar.bounds {ty : ScalarTy} (x : Scalar ty) :
+  Scalar.min ty ≤ x.val ∧ x.val ≤ Scalar.max ty :=
+  And.intro x.hmin x.hmax
 
 example (x _y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
-  intro_has_int_prop_instances
+  scalar_tac_preprocess
   simp [*]
 
 example (x _y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
@@ -65,6 +66,7 @@ example : U32.ofInt 1 ≤ U32.max := by
 
 example (x : Int) (h0 : 0 ≤ x) (h1 : x ≤ U32.max) :
   U32.ofIntCore x (by constructor <;> scalar_tac) ≤ U32.max := by
+  scalar_tac_preprocess
   scalar_tac
 
 -- Not equal

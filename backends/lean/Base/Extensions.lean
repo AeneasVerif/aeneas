@@ -11,6 +11,20 @@ namespace Extensions
 open Lean Elab Term Meta
 open Utils
 
+def ListDeclarationExtension (α : Type) := SimplePersistentEnvExtension α (List α)
+
+instance : Inhabited (ListDeclarationExtension α) :=
+  inferInstanceAs (Inhabited (SimplePersistentEnvExtension ..))
+
+def mkListDeclarationExtension [Inhabited α] (name : Name := by exact decl_name%) :
+  IO (ListDeclarationExtension α) :=
+  registerSimplePersistentEnvExtension {
+    name          := name,
+    addImportedFn := fun entries => entries.foldl (fun s l => l.data ++ s) [],
+    addEntryFn    := fun l x => x :: l,
+    toArrayFn     := fun l => l.toArray
+  }
+
 -- This is not used anymore but we keep it here.
 -- TODO: the original function doesn't define correctly the `addImportedFn`. Do a PR?
 def mkMapDeclarationExtension [Inhabited α] (name : Name := by exact decl_name%) :
