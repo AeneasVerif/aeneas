@@ -9,27 +9,21 @@ set_option linter.unusedVariables false
 namespace avl
 
 /- [avl::Ordering]
-   Source: 'tests/src/avl.rs', lines 29:0-29:17 -/
+   Source: 'src/avl.rs', lines 18:0-18:17 -/
 inductive Ordering :=
 | Less : Ordering
 | Equal : Ordering
 | Greater : Ordering
 
 /- Trait declaration: [avl::Ord]
-   Source: 'tests/src/avl.rs', lines 35:0-35:13 -/
+   Source: 'src/avl.rs', lines 24:0-24:13 -/
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 
-/- Trait declaration: [core::marker::Copy]
-   Source: '/rustc/library/core/src/marker.rs', lines 403:0-403:21
-   Name pattern: core::marker::Copy -/
-structure core.marker.Copy (Self : Type) where
-  cloneCloneInst : core.clone.Clone Self
-
 /- [avl::Node]
-   Source: 'tests/src/avl.rs', lines 39:0-39:14 -/
+   Source: 'src/avl.rs', lines 28:0-28:14 -/
 inductive Node (T : Type) :=
-| mk : T → Option (Node T) → Option (Node T) → Usize → Node T
+| mk : T → Option (Node T) → Option (Node T) → I8 → Node T
 
 @[simp, reducible]
 def Node.value {T : Type} (x : Node T) :=
@@ -44,11 +38,11 @@ def Node.right {T : Type} (x : Node T) :=
   match x with | Node.mk _ _ x1 _ => x1
 
 @[simp, reducible]
-def Node.height {T : Type} (x : Node T) :=
+def Node.balance_factor {T : Type} (x : Node T) :=
   match x with | Node.mk _ _ _ x1 => x1
 
 /- [avl::Tree]
-   Source: 'tests/src/avl.rs', lines 46:0-46:18 -/
+   Source: 'src/avl.rs', lines 35:0-35:18 -/
 structure Tree (T : Type) where
   root : Option (Node T)
 
