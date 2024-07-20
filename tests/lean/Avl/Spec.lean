@@ -1,4 +1,5 @@
 import Avl.Tree
+import Aesop
 
 namespace avl
 
@@ -83,42 +84,51 @@ def Child.balancingFactor (t: Child T): ℤ :=
   | .none => 0
   | .some x => x.balancingFactor
 
-variable [LinearOrder T]
-
-def Node.inv_aux (node : Node T) : Prop :=
+def Node.inv_aux [LinearOrder T] (node : Node T) : Prop :=
   node.height.val = node.compute_height ∧
-  Child.forall (fun node' => node'.value < node.value) node.left ∧
-  Child.forall (fun node' => node.value < node'.value) node.right ∧
+  (∀ x ∈ Child.v node.left, x < node.value) ∧
+  (∀ x ∈ Child.v node.right, node.value < x) ∧
+  --Child.forall (fun node' => node'.value < node.value) node.left ∧
+  --Child.forall (fun node' => node.value < node'.value) node.right ∧
   -1 ≤ node.balancingFactor ∧ node.balancingFactor ≤ 1
 
 @[reducible]
-def Node.inv (node : Node T) : Prop :=
+def Node.inv [LinearOrder T] (node : Node T) : Prop :=
   Node.forall Node.inv_aux node
 
+-- TODO: use a custom set
+@[aesop safe forward]
+theorem Node.inv_imp_current [LinearOrder T] {node : Node T} (hInv : node.inv) :
+  node.height.val = node.compute_height ∧
+  (∀ x ∈ Child.v node.left, x < node.value) ∧
+  (∀ x ∈ Child.v node.right, node.value < x) ∧
+  -1 ≤ node.balancingFactor ∧ node.balancingFactor ≤ 1 := by
+  simp_all [Node.inv, Node.forall, Node.inv_aux]
+
 @[simp, reducible]
-def Child.inv (child : Child T) : Prop :=
+def Child.inv [LinearOrder T] (child : Child T) : Prop :=
   match child with
   | none => true
   | some node => node.inv
 
 @[reducible]
-def Tree.inv (t : Tree T) : Prop := Child.inv t.root
+def Tree.inv [LinearOrder T] (t : Tree T) : Prop := Child.inv t.root
 
 @[simp]
-theorem Node.inv_left {t: Node T}: t.inv -> Child.inv t.left := by
+theorem Node.inv_left [LinearOrder T] {t: Node T}: t.inv -> Child.inv t.left := by
   simp [Node.inv]
   intro
   cases t; simp
   split <;> try simp_all [Node.forall]
 
 @[simp]
-theorem Node.inv_right {t: Node T}: t.inv -> Child.inv t.right := by
+theorem Node.inv_right [LinearOrder T] {t: Node T}: t.inv -> Child.inv t.right := by
   simp [Node.inv]
   intro
   cases t; simp
   split <;> try simp_all [Node.forall]
 
-theorem Node.inv_imp_height_eq {t: Node T} (hInv : t.inv) : t.height.val = t.compute_height := by
+theorem Node.inv_imp_height_eq [LinearOrder T] {t: Node T} (hInv : t.inv) : t.height.val = t.compute_height := by
   simp [inv, Node.forall, inv_aux] at hInv
   cases t; simp_all
 
@@ -156,21 +166,41 @@ theorem right_pos {left right: Option (Node T)} {a x: T}: BST.Invariant (some (N
 -/
 
 @[simp]
-theorem Node.lt_imp_not_in_right (node : Node T) (hInv : node.inv) (x : T)
+theorem Node.lt_imp_not_in_right [LinearOrder T] (node : Node T) (hInv : node.inv) (x : T)
   (hLt : x < node.value) :
-  x ∉ Child.v node.right := by sorry
+  x ∉ Child.v node.right := by
+  have ⟨ _, _, h, _ ⟩ := Node.inv_imp_current hInv
+  intro hIn
+  have := h x hIn
+  have := lt_asymm this
+  tauto
 
 @[simp]
-theorem Node.lt_imp_not_in_left (node : Node T) (hInv : node.inv) (x : T)
+theorem Node.lt_imp_not_in_left [LinearOrder T] (node : Node T) (hInv : node.inv) (x : T)
   (hLt : node.value < x) :
-  x ∉ Child.v node.left := by sorry
+  x ∉ Child.v node.left := by
+  have ⟨ _, h, _, _ ⟩ := Node.inv_imp_current hInv
+  intro hIn
+  have := h x hIn
+  have := lt_asymm this
+  tauto
 
 @[simp]
-theorem Node.value_not_in_right (node : Node T) (hInv : node.inv) :
-  node.value ∉ Child.v node.right := by sorry
+theorem Node.value_not_in_right [LinearOrder T] (node : Node T) (hInv : node.inv) :
+  node.value ∉ Child.v node.right := by
+  have ⟨ _, _, h, _ ⟩ := Node.inv_imp_current hInv
+  intro hIn
+  have := h node.value hIn
+  have := ne_of_lt this
+  tauto
 
 @[simp]
-theorem Node.value_not_in_left (node : Node T) (hInv : node.inv) :
-  node.value ∉ Child.v node.left := by sorry
+theorem Node.value_not_in_left [LinearOrder T] (node : Node T) (hInv : node.inv) :
+  node.value ∉ Child.v node.left := by
+  have ⟨ _, h, _, _ ⟩ := Node.inv_imp_current hInv
+  intro hIn
+  have := h node.value hIn
+  have := ne_of_lt this
+  tauto
 
 end avl
