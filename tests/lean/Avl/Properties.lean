@@ -264,12 +264,12 @@ set_option maxHeartbeats 5000000
 @[pspec]
 theorem Node.rotate_left_spec
   {T : Type} [LinearOrder T]
-  (x : T) (a : Option (Node T)) (bf_x : I8) (z : T) (b c : Option (Node T))
+  (x z : T) (a b c : Option (Node T)) (bf_x : I8)
   -- Invariants for the subtrees
   (hInvA : Subtree.inv a)
   (hInvZ : Node.inv ⟨ z, b, c, bf_z ⟩)
   -- Invariant for the complete tree (but without the bounds on the balancing operation)
-  (hInv : Node.invAuxNotBalanced ⟨ x, a, some ⟨ z, b, c, bf_z ⟩, bf_x ⟩)
+  (hInvX : Node.invAuxNotBalanced ⟨ x, a, some ⟨ z, b, c, bf_z ⟩, bf_x ⟩)
   -- The tree is not balanced
   (hBfX : bf_x.val = 2)
   -- Z has a positive balance factor
@@ -302,7 +302,7 @@ theorem Node.rotate_left_spec
         -- Using: y < x ∧ x < z
         rename _ => hIn
         have hInv1 : y < x := by tauto
-        have hInv2 := hInv.right.right z
+        have hInv2 := hInvX.right.right z
         simp at hInv2
         apply lt_trans hInv1 hInv2
     . tauto
@@ -336,7 +336,7 @@ theorem Node.rotate_left_spec
       apply Set.ext; simp; tauto
     . -- The height didn't change
       simp [balanceFactor] at *
-      replace hInv := hInv.left
+      replace hInvX := hInvX.left
       simp_all
       scalar_tac
   . -- BF(Z) == 1
@@ -372,19 +372,19 @@ theorem Node.rotate_left_spec
       apply Set.ext; simp; tauto
     . -- The height didn't change
       simp [balanceFactor] at *
-      replace hInv := hInv.left
+      replace hInvX := hInvX.left
       simp_all
       scalar_tac
 
 @[pspec]
 theorem Node.rotate_right_spec
   {T : Type} [LinearOrder T]
-  (x : T) (a : Option (Node T)) (bf_x : I8) (z : T) (b c : Option (Node T))
+  (x z : T) (a b c : Option (Node T)) (bf_x : I8)
   -- Invariants for the subtrees
   (hInvC : Subtree.inv c)
   (hInvZ : Node.inv ⟨ z, a, b, bf_z ⟩)
   -- Invariant for the complete tree (but without the bounds on the balancing operation)
-  (hInv : Node.invAuxNotBalanced ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩)
+  (hInvX : Node.invAuxNotBalanced ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩)
   -- The tree is not balanced
   (hBfX : bf_x.val = -2)
   -- Z has a positive balance factor
@@ -448,7 +448,7 @@ theorem Node.rotate_right_spec
       apply Set.ext; simp; tauto
     . -- The height didn't change
       simp [balanceFactor] at *
-      replace hInv := hInv.left
+      replace hInvX := hInvX.left
       simp_all
       scalar_tac
   . -- BF(Z) == -1
@@ -484,7 +484,7 @@ theorem Node.rotate_right_spec
       apply Set.ext; simp; tauto
     . -- The height didn't change
       simp [balanceFactor] at *
-      replace hInv := hInv.left
+      replace hInvX := hInvX.left
       simp_all
       scalar_tac
 
@@ -499,7 +499,7 @@ theorem Int.eq_of_sub_left_iff_eq_of_add (a b c : Int) : a - b = c ↔ a = c + b
 --@[pspec]
 theorem Node.rotate_left_right_spec
   {T : Type} [LinearOrder T]
-  (x z y : T) (bf_x bf_z bf_y : I8)
+  (x y z : T) (bf_x bf_y bf_z : I8)
   (a b t0 t1 : Option (Node T))
   -- Invariants for the subtrees
   (hInvX : Node.invAuxNotBalanced ⟨ x, some ⟨ z, t0, some ⟨ y, a, b, bf_y ⟩, bf_z ⟩, t1, bf_x ⟩)
@@ -626,7 +626,7 @@ theorem Node.rotate_left_right_spec
 --@[pspec]
 theorem Node.rotate_right_left_spec
   {T : Type} [LinearOrder T]
-  (x z y : T) (bf_x bf_z bf_y : I8)
+  (x y z : T) (bf_x bf_y bf_z : I8)
   (a b t0 t1 : Option (Node T))
   -- Invariants for the subtrees
   (hInvX : Node.invAuxNotBalanced ⟨ x, t1, some ⟨ z, some ⟨ y, b, a, bf_y ⟩, t0, bf_z ⟩, bf_x ⟩)
