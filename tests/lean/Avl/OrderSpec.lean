@@ -1,5 +1,4 @@
-import Avl.Tree
-
+import Avl.Funs
 open Primitives
 open Result
 

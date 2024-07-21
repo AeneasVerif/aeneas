@@ -83,6 +83,9 @@ impl<T> Node<T> {
                 root.balance_factor = 0;
             }
         }
+        else {
+            panic!()
+        }
     }
 
     fn rotate_right(root: &mut Box<Node<T>>, mut z : Box<Node<T>>) {
@@ -125,6 +128,9 @@ impl<T> Node<T> {
                 x.balance_factor = 0;
                 root.balance_factor = 0;
             }
+        }
+        else {
+            panic!()
         }
     }
 

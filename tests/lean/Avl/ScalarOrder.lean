@@ -20,11 +20,11 @@ instance {ty} : LinearOrder (Scalar ty) where
     right; exact (Scalar.le_equiv _ _).2 H
   decidableLE := ScalarDecidableLE
 
-instance : OrdSpecLinearOrderEq OrdUsize where
+instance : OrdSpecLinearOrderEq OrdI32 where
   infallible := fun a b => by
     unfold Ord.cmp
-    unfold OrdUsize
-    unfold OrdUsize.cmp
+    unfold OrdI32
+    unfold OrdI32.cmp
     rw [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     if hlt : a < b then
       use .Less
@@ -51,8 +51,8 @@ instance : OrdSpecLinearOrderEq OrdUsize where
     cases (lt_trichotomy a b) <;> tauto
   equivalence := fun a b => by
     unfold Ord.cmp
-    unfold OrdUsize
-    unfold OrdUsize.cmp
+    unfold OrdI32
+    unfold OrdI32.cmp
     simp only []
     split_ifs <;> simp only [Result.ok.injEq, not_false_eq_true, neq_imp, IsEmpty.forall_iff]; tauto; try assumption
 
