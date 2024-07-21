@@ -258,21 +258,10 @@ theorem Tree.find_spec
   progress
   simp [Tree.v]; assumption
 
--- TODO: generalize and move
-@[scalar_tac max x y]
-theorem Nat.max_equiv (x y : Nat) :
-  x ≤ max x y ∧ y ≤ max x y ∧ (max x y = x ∨ max x y = y) := by
-  omega
-
--- TODO: generalize and move
-@[scalar_tac max x y]
-theorem Int.max_equiv (x y : Int) :
-  x ≤ max x y ∧ y ≤ max x y ∧ (max x y = x ∨ max x y = y) := by
-  omega
-
 -- TODO: move
 set_option maxHeartbeats 5000000
 
+@[pspec]
 theorem Node.rotate_left_spec
   {T : Type} [LinearOrder T]
   (x : T) (a : Option (Node T)) (bf_x : I8) (z : T) (b c : Option (Node T))
@@ -387,6 +376,7 @@ theorem Node.rotate_left_spec
       simp_all
       scalar_tac
 
+@[pspec]
 theorem Node.rotate_right_spec
   {T : Type} [LinearOrder T]
   (x : T) (a : Option (Node T)) (bf_x : I8) (z : T) (b c : Option (Node T))
@@ -498,13 +488,6 @@ theorem Node.rotate_right_spec
       simp_all
       scalar_tac
 
--- TODO: combine this with simplification of Node.height, etc.
-@[scalar_tac x.inv]
-theorem Node.inv_imp_balanceFactor {T : Type} [LinearOrder T] (x : Node T) (hInv : x.inv) :
-  x.balance_factor.val + Subtree.height x.left = Subtree.height x.right := by
-  cases x
-  simp_all [inv, invAux, balanceFactor]
-
 -- TODO: move
 @[simp]
 theorem Int.eq_of_sub_right_iff_eq_of_add (a b c : Int) : c = a - b ↔ c + b = a := by omega
@@ -512,6 +495,8 @@ theorem Int.eq_of_sub_right_iff_eq_of_add (a b c : Int) : c = a - b ↔ c + b = 
 @[simp]
 theorem Int.eq_of_sub_left_iff_eq_of_add (a b c : Int) : a - b = c ↔ a = c + b := by omega
 
+-- TODO:
+--@[pspec]
 theorem Node.rotate_left_right_spec
   {T : Type} [LinearOrder T]
   (x z y : T) (bf_x bf_z bf_y : I8)
@@ -637,6 +622,8 @@ theorem Node.rotate_left_right_spec
       . -- Height
         scalar_tac
 
+-- TODO:
+--@[pspec]
 theorem Node.rotate_right_left_spec
   {T : Type} [LinearOrder T]
   (x z y : T) (bf_x bf_z bf_y : I8)
