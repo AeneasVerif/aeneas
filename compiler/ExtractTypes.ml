@@ -1740,7 +1740,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
             (* Annotate the projectors with both simp and reducible.
                The first one allows to automatically unfold when calling simp in proofs.
                The second ensures that projectors will interact well with the unifier *)
-            F.pp_print_string fmt "@[simp, reducible]";
+            F.pp_print_string fmt "@[reducible]";
             F.pp_print_break fmt 0 0;
             (* Close box for the attributes *)
             F.pp_close_box fmt ());
@@ -1890,6 +1890,142 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
 
         FieldId.iteri extract_field_proj_and_notation fields
 
+(** Auxiliary function.
+
+    Generate field projectors simp lemmas for Lean.
+
+    See {!extract_type_decl_record_field_projectors}.
+ *)
+let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
+    (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
+  let span = decl.item_meta.span in
+  sanity_check __FILE__ __LINE__ (backend () = Coq || backend () = Lean) span;
+  match decl.kind with
+  | Opaque | Enum _ -> ()
+  | Struct fields ->
+      (* Records are extracted as inductives only if they are recursive *)
+      let is_rec = decl_is_from_rec_group kind in
+      if is_rec then
+        (* Add the type params *)
+        let ctx, type_params, cg_params, trait_clauses =
+          ctx_add_generic_params span decl.item_meta.name decl.llbc_generics
+            decl.generics ctx
+        in
+        (* Name of the ADT *)
+        let def_name = ctx_get_local_type span decl.def_id ctx in
+        (* Name of the ADT constructor. As we are in the struct case, we only have
+           one constructor *)
+        let cons_name = ctx_get_struct span (TAdtId decl.def_id) ctx in
+
+        let extract_field_proj_simp_lemma (field_id : FieldId.id) (_ : field) :
+            unit =
+          F.pp_print_space fmt ();
+          (* Outer box for the projector definition *)
+          F.pp_open_hvbox fmt 0;
+          (* Inner box for the projector definition *)
+          F.pp_open_hvbox fmt ctx.indent_incr;
+
+          (* For Lean: add some attributes *)
+          if backend () = Lean then (
+            (* Box for the attributes *)
+            F.pp_open_vbox fmt 0;
+            (* Annotate the projectors with both simp and reducible.
+               The first one allows to automatically unfold when calling simp in proofs.
+               The second ensures that projectors will interact well with the unifier *)
+            F.pp_print_string fmt "@[simp]";
+            F.pp_print_break fmt 0 0;
+            (* Close box for the attributes *)
+            F.pp_close_box fmt ());
+
+          (* Box for the [theorem ... : ... = ... :=] *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          (match backend () with
+          | Lean -> F.pp_print_string fmt "theorem"
+          | _ -> internal_error __FILE__ __LINE__ span);
+          F.pp_print_space fmt ();
+
+          (* Print the theorem name. *)
+          let field_name =
+            ctx_get_field span (TAdtId decl.def_id) field_id ctx
+          in
+          (* TODO: check for name collisions *)
+          F.pp_print_string fmt (def_name ^ "." ^ field_name ^ "._simpLemma_");
+
+          (* Print the generics *)
+          let as_implicits = true in
+          extract_generic_params span ctx fmt TypeDeclId.Set.empty ~as_implicits
+            decl.generics type_params cg_params trait_clauses;
+
+          (* Print the input parameters (the fields) *)
+          let print_field (ctx : extraction_ctx) (field_id : FieldId.id)
+              (f : field) : extraction_ctx * string =
+            let id = VarId.of_int (FieldId.to_int field_id) in
+            let field_name =
+              ctx_get_field span (TAdtId decl.def_id) field_id ctx
+            in
+            let ctx, vname = ctx_add_var span field_name id ctx in
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "(";
+            F.pp_print_string fmt vname;
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt ":";
+            F.pp_print_space fmt ();
+            extract_ty span ctx fmt TypeDeclId.Set.empty false f.field_ty;
+            F.pp_print_string fmt ")";
+            (ctx, field_name)
+          in
+          let _, field_names =
+            List.fold_left_map
+              (fun ctx (id, f) -> print_field ctx id f)
+              ctx
+              (FieldId.mapi (fun i f -> (i, f)) fields)
+          in
+
+          (* The theorem content *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":";
+          F.pp_print_space fmt ();
+          (* (mk ... x ...).f = x *)
+          (* Open a box for the theorem content *)
+          F.pp_open_hvbox fmt ctx.indent_incr;
+          F.pp_print_string fmt "(";
+          F.pp_print_string fmt cons_name;
+          List.iter
+            (fun f ->
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt f)
+            field_names;
+          F.pp_print_string fmt (")." ^ field_name);
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "=";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt (FieldId.nth field_names field_id);
+          (* Close the box for the theorem content *)
+          F.pp_close_box fmt ();
+
+          (* The proof *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":=";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "by rfl";
+
+          (* Close the box for the [theorem ... :=] *)
+          F.pp_close_box fmt ();
+
+          (* Close the inner box projector *)
+          F.pp_close_box fmt ();
+          (* If Coq: end the definition with a "." *)
+          if backend () = Coq then (
+            F.pp_print_cut fmt ();
+            F.pp_print_string fmt ".");
+          (* Close the outer box for projector definition *)
+          F.pp_close_box fmt ();
+          (* Add breaks to insert new lines between definitions *)
+          F.pp_print_break fmt 0 0
+        in
+
+        FieldId.iteri extract_field_proj_simp_lemma fields
+
 (** Extract extra information for a type (e.g., [Arguments] instructions in Coq).
 
     Note that all the names used for extraction should already have been
@@ -1907,7 +2043,10 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
       then (
         if backend () = Coq then
           extract_type_decl_coq_arguments ctx fmt kind decl;
-        extract_type_decl_record_field_projectors ctx fmt kind decl)
+        extract_type_decl_record_field_projectors ctx fmt kind decl;
+        if backend () = Lean then
+          extract_type_decl_record_field_projectors_simp_lemmas ctx fmt kind
+            decl)
 
 (** Extract the state type declaration. *)
 let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
