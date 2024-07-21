@@ -134,56 +134,6 @@ impl<T> Node<T> {
         }
     }
 
-    fn rotate_right_left(root : &mut Box<Node<T>>, mut z : Box<Node<T>>) {
-        // We do (root is X):
-        //
-        //        X
-        //       /
-        //      0   Z
-        //         / \
-        //        Y   1
-        //       / \
-        //      A  B
-        //
-        //        ~>
-        //
-        //          Y
-        //        /   \
-        //      X       Z
-        //     / \     / \
-        //    0   A   B   1
-
-        let mut y = std::mem::replace(&mut z.left, None).unwrap();
-        let a = std::mem::replace(&mut y.left, None);
-        let b = std::mem::replace(&mut y.right, None);
-        z.left = b;
-        root.right = a;
-
-        let x = std::mem::replace(root, y);
-        root.left = Some(x);
-        root.right = Some(z);
-
-        // Update the balance factors
-        if let Some(x) = &mut root.left && let Some(z) = &mut root.right {
-            if root.balance_factor == 0 {
-                x.balance_factor = 0;
-                z.balance_factor = 0;
-            }
-            else if root.balance_factor > 0 {
-                x.balance_factor = -1;
-                z.balance_factor = 0;
-            }
-            else {
-                x.balance_factor = 0;
-                z.balance_factor = 1;
-            }
-            root.balance_factor = 0;
-        }
-        else {
-            panic!();
-        }
-    }
-
     fn rotate_left_right(root : &mut Box<Node<T>>, mut z : Box<Node<T>>) {
         // We do (root is X):
         //
@@ -193,7 +143,7 @@ impl<T> Node<T> {
         //     / \
         //    0   Y
         //       / \
-        //      B   A
+        //      A   B
         //
         //        ~>
         //
@@ -201,13 +151,13 @@ impl<T> Node<T> {
         //        /   \
         //      Z       X
         //     / \     / \
-        //    0   B   A   1
+        //    0   A   B   1
 
         let mut y = std::mem::replace(&mut z.right, None).unwrap();
-        let a = std::mem::replace(&mut y.right, None);
-        let b = std::mem::replace(&mut y.left, None);
-        z.right = b;
-        root.left = a;
+        let a = std::mem::replace(&mut y.left, None);
+        let b = std::mem::replace(&mut y.right, None);
+        z.right = a;
+        root.left = b;
 
         let x = std::mem::replace(root, y);
         root.left = Some(z);
@@ -226,6 +176,56 @@ impl<T> Node<T> {
             else {
                 x.balance_factor = 0;
                 z.balance_factor = -1;
+            }
+            root.balance_factor = 0;
+        }
+        else {
+            panic!();
+        }
+    }
+
+    fn rotate_right_left(root : &mut Box<Node<T>>, mut z : Box<Node<T>>) {
+        // We do (root is X):
+        //
+        //        X
+        //       /
+        //      1   Z
+        //         / \
+        //        Y   0
+        //       / \
+        //      B  A
+        //
+        //        ~>
+        //
+        //          Y
+        //        /   \
+        //      X       Z
+        //     / \     / \
+        //    1   B   A   0
+
+        let mut y = std::mem::replace(&mut z.left, None).unwrap();
+        let b = std::mem::replace(&mut y.left, None);
+        let a = std::mem::replace(&mut y.right, None);
+        z.left = a;
+        root.right = b;
+
+        let x = std::mem::replace(root, y);
+        root.left = Some(x);
+        root.right = Some(z);
+
+        // Update the balance factors
+        if let Some(x) = &mut root.left && let Some(z) = &mut root.right {
+            if root.balance_factor == 0 {
+                x.balance_factor = 0;
+                z.balance_factor = 0;
+            }
+            else if root.balance_factor > 0 {
+                x.balance_factor = -1;
+                z.balance_factor = 0;
+            }
+            else {
+                x.balance_factor = 0;
+                z.balance_factor = 1;
             }
             root.balance_factor = 0;
         }
