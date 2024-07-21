@@ -637,4 +637,129 @@ theorem Node.rotate_left_right_spec
       . -- Height
         scalar_tac
 
+theorem Node.rotate_right_left_spec
+  {T : Type} [LinearOrder T]
+  (x z y : T) (bf_x bf_z bf_y : I8)
+  (a b t0 t1 : Option (Node T))
+  -- Invariants for the subtrees
+  (hInvX : Node.invAuxNotBalanced ⟨ x, t1, some ⟨ z, some ⟨ y, a, b, bf_y ⟩, t0, bf_z ⟩, bf_x ⟩)
+  (hInvZ : Node.inv ⟨ z, some ⟨ y, a, b, bf_y ⟩, t0, bf_z ⟩)
+  (hInv1 : Subtree.inv t1)
+  -- The tree is not balanced
+  (hBfX : bf_x.val = 2)
+  -- Z has a negative balance factor
+  (hBfZ : bf_z.val = -1)
+  :
+  let x_tree := ⟨ x, t1, none, bf_x ⟩
+  let y_tree := ⟨ y, a, b, bf_y ⟩
+  let z_tree := ⟨ z, some y_tree, t0, bf_z ⟩
+  let tree : Node T := ⟨ x, t1, some z_tree, bf_x ⟩
+  ∃ ntree, rotate_right_left T x_tree z_tree = ok ntree ∧
+  -- We reestablished the invariant
+  Node.inv ntree ∧
+  -- The tree contains the nodes we expect
+  Node.v ntree = Node.v tree ∧
+  -- The height is the same as before. The original height is 2 + height b, and by
+  -- inserting an element (which produced subtree c) we got a new height of
+  -- 3 + height b; after the rotation we get back to 2 + height b.
+  Node.height ntree = 2 + Subtree.height t1
+  := by
+  intro x_tree y_tree z_tree tree
+  simp [rotate_right_left] -- TODO: this inlines the local decls
+  -- Some facts about the heights and the balance factors
+  -- TODO: automate that
+  have : Node.height z_tree = Subtree.height t1 + 2 := by
+    simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
+  have : Node.height y_tree = Subtree.height t0 + 1 := by
+    simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
+  have : bf_y.val + Subtree.height a = Subtree.height b := by
+    simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
+  simp [x_tree, y_tree, z_tree] at *
+  -- TODO: automate the < proofs
+  -- Auxiliary proofs for invAux for y
+  have : ∀ (e : T), (e = z ∨ e ∈ Subtree.v b) ∨ e ∈ Subtree.v t0 → y < e := by
+    intro e hIn
+    simp [invAux] at *
+    cases hIn
+    . rename _ => hIn
+      -- TODO: those cases are cumbersome
+      cases hIn
+      . simp_all
+      . tauto
+    . have : z < e := by tauto
+      have : y < z := by tauto
+      apply lt_trans <;> tauto
+  have : ∀ (e : T), (e = x ∨ e ∈ Subtree.v t1) ∨ e ∈ Subtree.v a → e < y := by
+    intro e hIn; simp [invAux] at *
+    cases hIn
+    . rename _ => hIn
+      cases hIn
+      . simp_all
+      . have : x < y := by
+          replace hInvX := hInvX.right.right y
+          tauto
+        have : e < x := by tauto
+        apply lt_trans <;> tauto
+    . tauto
+  -- Auxiliary proofs for invAux for z
+  have : ∀ e ∈ Subtree.v t0, z < e := by
+    intro x hIn; simp [invAux] at *
+    tauto
+  have : ∀ e ∈ Subtree.v b, e < z := by
+    intro e hIn; simp [invAux] at *
+    replace hInvZ := hInvZ.left.left.right.left e
+    tauto
+  -- Auxiliary proofs for invAux for x
+  have : ∀ e ∈ Subtree.v a, x < e := by
+    intro e hIn; simp [invAux] at *
+    replace hInvX := hInvX.right.right e
+    tauto
+  have : ∀ e ∈ Subtree.v t1, e < x := by
+    intro e hIn; simp [invAux] at *
+    tauto
+  -- Case disjunction on the balance factor of Y
+  split
+  . -- BF(Y) = 0
+    simp [and_assoc]
+    simp [balanceFactor] at *
+    split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
+    . -- invAux for y
+      split_conjs <;> (try omega) <;> (try tauto)
+    . -- invAux for z
+      split_conjs <;> (try simp [*]) <;> (try scalar_tac) <;> tauto
+    . -- invAux for x
+      split_conjs <;> (try simp [*]) <;> (try scalar_tac) <;> tauto
+    . -- The sets are the same
+      apply Set.ext; simp [tree, z_tree, y_tree]; tauto
+    . -- Height
+      scalar_tac
+  . split <;> simp [and_assoc]
+    . -- BF(Y) > 0
+      have : bf_y.val = 1 := by simp [Node.invAux] at *; omega
+      simp [balanceFactor] at *
+      split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
+      . -- invAux for y
+        split_conjs <;> (try omega) <;> (try tauto)
+      . -- invAux for z
+        split_conjs <;> (try simp [*]) <;> (try scalar_tac) <;> tauto
+      . -- invAux for x
+        split_conjs <;> (try simp [*]) <;> (try scalar_tac) <;> tauto
+      . -- The sets are the same
+        apply Set.ext; simp [tree, z_tree, y_tree]; tauto
+      . -- Height
+        scalar_tac
+    . -- BF(Y) < 0
+      have : bf_y.val = -1 := by simp [Node.invAux] at *; omega
+      split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
+      . -- invAux for y
+        split_conjs <;> (try omega) <;> (try tauto)
+      . -- invAux for z
+        split_conjs <;> (try simp [*]) <;> (try scalar_tac) <;> tauto
+      . -- invAux for x
+        split_conjs <;> (try simp [*]) <;> (try scalar_tac) <;> tauto
+      . -- The sets are the same
+        apply Set.ext; simp [tree, z_tree, y_tree]; tauto
+      . -- Height
+        scalar_tac
+
 end avl
