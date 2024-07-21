@@ -313,12 +313,12 @@ theorem Node.rotate_left_spec
       . -- Proving: y ∈ a → y < z
         -- Using: y < x ∧ x < z
         rename _ => hIn
-        have hInv1 : y < x := hInv.right.left y hIn
+        have hInv1 : y < x := by tauto
         have hInv2 := hInv.right.right z
         simp at hInv2
         apply lt_trans hInv1 hInv2
     . tauto
-  -- Elements in the left subtree are < z
+  -- Elements in the right subtree are < z
   have : ∀ y ∈ Subtree.v c, z < y := by
     simp [inv_aux] at hInvZ
     tauto
@@ -372,6 +372,119 @@ theorem Node.rotate_left_spec
       simp_all [balanceFactor, Node.inv_aux]
       omega
     have : Subtree.height a = Subtree.height b := by
+      simp_all
+    split_conjs
+    . -- Invariant for whole tree (starting at z)
+      simp [inv_aux, balanceFactor]
+      split_conjs <;> (try omega) <;> tauto
+    . -- Invariant for subtree x
+      simp [inv_aux, balanceFactor]
+      split_conjs <;> (try omega) <;> simp_all
+    . -- The sets are the same
+      apply Set.ext; simp; tauto
+    . -- The height didn't change
+      simp [balanceFactor] at *
+      replace hInv := hInv.left
+      simp_all
+      scalar_tac
+
+theorem Node.rotate_right_spec
+  {T : Type} [LinearOrder T]
+  (x : T) (a : Option (Node T)) (bf_x : I8) (z : T) (b c : Option (Node T))
+  -- Invariants for the subtrees
+  (hInvC : Subtree.inv c)
+  --(hInvB : Subtree.inv b)
+  --(hInvC : Subtree.inv c)
+  (hInvZ : Node.inv ⟨ z, a, b, bf_z ⟩)
+  -- Invariant for the complete tree (but without the bounds on the balancing operation)
+  (hInv : Node.invNoBalance ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩)
+  -- The tree is not balanced
+  (hBfX : bf_x.val = -2)
+  -- Z has a positive balance factor
+  (hBfZ : bf_z.val ≤ 0)
+  :
+  ∃ ntree, rotate_right T ⟨ x, none, c, bf_x ⟩ ⟨ z, a, b, bf_z ⟩ = ok ntree ∧
+  let tree : Node T := ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩
+  -- We reestablished the invariant
+  Node.inv ntree ∧
+  -- The tree contains the nodes we expect
+  Node.v ntree = Node.v tree ∧
+  -- The height is the same as before. The original height is 2 + height b, and by
+  -- inserting an element (which produced subtree c) we got a new height of
+  -- 3 + height b; after the rotation we get back to 2 + height b.
+  Node.height ntree = 2 + Subtree.height b
+  := by
+  rw [rotate_right]
+  simp [core.mem.replace]
+  -- Some proofs common to both cases
+  -- Elements in the right subtree are > z
+  have : ∀ (y : T), (y = x ∨ y ∈ Subtree.v b) ∨ y ∈ Subtree.v c → z < y := by
+    simp [inv_aux] at *
+    intro y hIn
+    -- TODO: automate that
+    cases hIn
+    . rename _ => hIn
+      cases hIn
+      . simp [*]
+      . tauto
+    . -- Proving: y ∈ c → z < y
+      -- Using: z < x ∧ x < y
+      have : z < x := by tauto
+      have : x < y := by tauto
+      apply lt_trans <;> tauto
+  -- Elements in the left subtree are < z
+  have : ∀ y ∈ Subtree.v a, y < z := by
+    simp_all [inv_aux]
+  -- Two cases depending on whether the BF of Z is 0 or 1
+  split
+  . -- BF(Z) == 0
+    simp at *
+    simp [and_assoc, *]
+    have hHeightEq : Subtree.height a = Subtree.height b := by
+      simp_all [balanceFactor, Node.inv_aux]
+      -- TODO: scalar_tac fails here (conversion int/nat)
+      omega
+    -- TODO: we shouldn't need this: scalar_tac should succeed
+    have : 1 + Subtree.height a = Subtree.height c + 2 := by
+      -- TODO: scalar_tac fails here (conversion int/nat)
+      simp_all [balanceFactor, Node.inv_aux]
+      omega
+    simp_all
+    split_conjs
+    . -- Partial invariant for the final tree starting at z
+      simp [Node.inv_aux, balanceFactor, *]
+      split_conjs <;> (try omega) <;> tauto
+    . -- Partial invariant for the subtree x
+      simp [Node.inv_aux, balanceFactor, *]
+      split_conjs <;> (try omega) <;> simp_all
+    . -- The sets are the same
+      apply Set.ext; simp; tauto
+    . -- The height didn't change
+      simp [balanceFactor] at *
+      replace hInv := hInv.left
+      simp_all
+      scalar_tac
+  . -- BF(Z) == -1
+    rename _ => hNotEq
+    simp at *
+    simp [and_assoc, *]
+    simp_all
+    have : bf_z.val = -1 := by
+      simp [Node.inv_aux] at hInvZ
+      omega
+    clear hNotEq hBfZ
+    have : Subtree.height a = 1 + Subtree.height b := by
+      simp [balanceFactor, Node.inv_aux] at *
+      replace hInvZ := hInvZ.left.left.left
+      omega
+    have : max (Subtree.height a) (Subtree.height b) = Subtree.height a := by
+      scalar_tac
+    -- TODO: we shouldn't need this: scalar_tac should succeed
+    have : Subtree.height a = 1 + Subtree.height c := by
+      -- TODO: scalar_tac fails here (conversion int/nat)
+      simp_all [balanceFactor, Node.inv_aux]
+      omega
+    have : Subtree.height c = Subtree.height b := by
       simp_all
     split_conjs
     . -- Invariant for whole tree (starting at z)
