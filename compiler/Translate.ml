@@ -822,7 +822,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         in
         (* Translate *)
         export_functions_group pure_funs
-    | GlobalGroup id -> export_global id
+    | GlobalGroup (NonRecGroup id) -> export_global id
+    | GlobalGroup (RecGroup _ids) ->
+        craise_opt_span __FILE__ __LINE__ None
+          "Mutually recursive globals are not supported"
     | TraitDeclGroup (RecGroup _ids) ->
         craise_opt_span __FILE__ __LINE__ None
           "Mutually recursive trait declarations are not supported"
@@ -831,9 +834,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         if config.extract_trait_decls && config.extract_transparent then (
           export_trait_decl_group id;
           export_trait_decl_group_extra_info id)
-    | TraitImplGroup id ->
+    | TraitImplGroup (NonRecGroup id) ->
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl id
+    | TraitImplGroup (RecGroup _ids) ->
+        craise_opt_span __FILE__ __LINE__ None
+          "Mutually recursive trait implementations are not supported"
     | MixedGroup _ ->
         craise_opt_span __FILE__ __LINE__ None
           "Mixed-recursive declaration groups are not supported"

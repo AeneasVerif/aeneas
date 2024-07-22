@@ -298,6 +298,11 @@ and trait_decl_ref = {
   decl_generics : generic_args; (* The name: annoying field collisions... *)
 }
 
+and global_decl_ref = {
+  global_id : global_decl_id;
+  global_generics : generic_args; (* The name: annoying field collisions... *)
+}
+
 and generic_args = {
   types : ty list;
   const_generics : const_generic list;
@@ -1144,8 +1149,8 @@ type trait_decl = {
   preds : predicates;
   parent_clauses : trait_clause list;
   llbc_parent_clauses : Types.trait_clause list;
-  consts : (trait_item_name * (ty * global_decl_id option)) list;
-  types : (trait_item_name * ty option) list;
+  consts : (trait_item_name * ty) list;
+  types : trait_item_name list;
   required_methods : (trait_item_name * fun_decl_id) list;
   provided_methods : (trait_item_name * fun_decl_id option) list;
 }
@@ -1167,7 +1172,7 @@ type trait_impl = {
           simplification of types like boxes and references. *)
   preds : predicates;
   parent_trait_refs : trait_ref list;
-  consts : (trait_item_name * (ty * global_decl_id)) list;
+  consts : (trait_item_name * global_decl_ref) list;
   types : (trait_item_name * ty) list;
   required_methods : (trait_item_name * fun_decl_id) list;
   provided_methods : (trait_item_name * fun_decl_id) list;

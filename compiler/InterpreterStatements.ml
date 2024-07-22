@@ -935,9 +935,9 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Assign (p, rvalue) -> (
       (* We handle global assignments separately *)
       match rvalue with
-      | Global (gid, generics) ->
+      | Global gref ->
           (* Evaluate the global *)
-          eval_global config st.span p gid generics ctx
+          eval_global config st.span p gref ctx
       | _ ->
           (* Evaluate the rvalue *)
           let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
@@ -1036,9 +1036,10 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Error s -> craise __FILE__ __LINE__ st.span s
 
 and eval_global (config : config) (span : Meta.span) (dest : place)
-    (gid : GlobalDeclId.id) (generics : generic_args) : stl_cm_fun =
+    (gref : global_decl_ref) : stl_cm_fun =
  fun ctx ->
-  let global = ctx_lookup_global_decl ctx gid in
+  let generics = gref.global_generics in
+  let global = ctx_lookup_global_decl ctx gref.global_id in
   match config.mode with
   | ConcreteMode ->
       (* Treat the evaluation of the global as a call to the global body *)
@@ -1069,7 +1070,7 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
       in
       ( [ (ctx, Unit) ],
         cc_singleton __FILE__ __LINE__ span
-          (cc_comp (S.synthesize_global_eval gid generics sval) cc) )
+          (cc_comp (S.synthesize_global_eval gref sval) cc) )
 
 (** Evaluate a switch *)
 and eval_switch (config : config) (span : Meta.span) (switch : switch) :
