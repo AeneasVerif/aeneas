@@ -167,13 +167,13 @@ Record Counter_t (Self : Type) := mkCounter_t {
 Arguments mkCounter_t { _ }.
 Arguments Counter_t_incr { _ }.
 
-(** [demo::{(demo::Counter for usize)}::incr]:
+(** [demo::{demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 104:4-104:31 *)
 Definition counterUsize_incr (self : usize) : result (usize * usize) :=
   self1 <- usize_add self 1%usize; Ok (self, self1)
 .
 
-(** Trait implementation: [demo::{(demo::Counter for usize)}]
+(** Trait implementation: [demo::{demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 103:0-103:22 *)
 Definition CounterUsize : Counter_t usize := {|
   Counter_t_incr := counterUsize_incr;

@@ -155,14 +155,14 @@ divergent def list_tail
 structure Counter (Self : Type) where
   incr : Self → Result (Usize × Self)
 
-/- [demo::{(demo::Counter for usize)}::incr]:
+/- [demo::{demo::Counter for usize}::incr]:
    Source: 'tests/src/demo.rs', lines 104:4-104:31 -/
 def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
   do
   let self1 ← self + 1#usize
   Result.ok (self, self1)
 
-/- Trait implementation: [demo::{(demo::Counter for usize)}]
+/- Trait implementation: [demo::{demo::Counter for usize}]
    Source: 'tests/src/demo.rs', lines 103:0-103:22 -/
 def CounterUsize : Counter Usize := {
   incr := CounterUsize.incr

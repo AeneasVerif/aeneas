@@ -17,12 +17,12 @@ Record BoolTest_t (Self : Type) := mkBoolTest_t {
 Arguments mkBoolTest_t { _ }.
 Arguments BoolTest_t_getTest { _ }.
 
-(** [rename_attribute::{(rename_attribute::BoolTrait for bool)}::get_bool]:
+(** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 22:4-22:30 *)
 Definition boolTraitBool_getTest (self : bool) : result bool :=
   Ok self.
 
-(** Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
+(** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 21:0-21:23 *)
 Definition BoolImpl : BoolTest_t bool := {|
   BoolTest_t_getTest := boolTraitBool_getTest;
