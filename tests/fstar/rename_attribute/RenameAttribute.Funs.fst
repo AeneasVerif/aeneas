@@ -7,12 +7,12 @@ include RenameAttribute.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [rename_attribute::{(rename_attribute::BoolTrait for bool)}::get_bool]:
+(** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 22:4-22:30 *)
 let boolTraitBool_getTest (self : bool) : result bool =
   Ok self
 
-(** Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
+(** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 21:0-21:23 *)
 let boolImpl : boolTest_t bool = { getTest = boolTraitBool_getTest; }
 
