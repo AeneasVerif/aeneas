@@ -228,6 +228,9 @@
             pkgs.ocamlPackages.ocamlformat
             pkgs.ocamlPackages.menhir
             pkgs.ocamlPackages.odoc
+            # ocaml-lsp's version must match the ocaml version used. Pinning
+            # this here to save everyone a headache.
+            pkgs.ocamlPackages.ocaml-lsp
             pkgs.jq
             pkgs.rustup
           ];
