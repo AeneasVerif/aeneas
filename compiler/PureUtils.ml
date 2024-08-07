@@ -711,7 +711,7 @@ let trait_decl_get_method (trait_decl : trait_decl) (method_name : string) :
       let _, id =
         List.find (fun (s, _) -> s = method_name) trait_decl.provided_methods
       in
-      { is_provided = true; id = Option.get id }
+      { is_provided = true; id }
 
 let trait_decl_is_empty (trait_decl : trait_decl) : bool =
   let {

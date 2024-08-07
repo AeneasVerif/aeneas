@@ -2095,13 +2095,7 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
           | None -> def.item_meta
           | Some trait_decl -> (
               let methods =
-                trait_decl.required_methods
-                @ List.filter_map
-                    (fun (name, opt_id) ->
-                      match opt_id with
-                      | None -> None
-                      | Some id -> Some (name, id))
-                    trait_decl.provided_methods
+                trait_decl.required_methods @ trait_decl.provided_methods
               in
               match
                 List.find_opt (fun (name, _) -> name = item_name) methods

@@ -1155,7 +1155,7 @@ type trait_decl = {
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
   required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : (trait_item_name * fun_decl_id option) list;
+  provided_methods : (trait_item_name * fun_decl_id) list;
 }
 [@@deriving show]
 

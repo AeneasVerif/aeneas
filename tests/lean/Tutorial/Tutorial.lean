@@ -385,4 +385,11 @@ def add
   let x1 ← alloc.vec.Vec.resize U32 core.clone.CloneU32 x max1 0#u32
   add_loop x1 y max1 0#u8 0#usize
 
+/- [core::clone::Clone::clone_from]:
+   Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
+   Name pattern: core::clone::Clone::clone_from -/
+axiom core.clone.Clone.clone_from
+  {Self : Type} (self_clause : core.clone.Clone Self) :
+  Self → Self → Result Self
+
 end tutorial
