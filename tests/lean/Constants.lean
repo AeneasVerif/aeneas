@@ -157,7 +157,7 @@ def S4 : Pair U32 U32 := eval_global S4_body
 structure V (T : Type) (N : Usize) where
   x : Array T N
 
-/- [constants::{constants::V<T, N>#1}::LEN]
+/- [constants::{constants::V<T, N>}#1::LEN]
    Source: 'tests/src/constants.rs', lines 94:4-94:24 -/
 def V.LEN_body (T : Type) (N : Usize) : Result Usize := Result.ok N
 def V.LEN (T : Type) (N : Usize) : Usize := eval_global (V.LEN_body T N)

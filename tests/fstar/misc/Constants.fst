@@ -147,7 +147,7 @@ let s4 : pair_t u32 u32 = eval_global s4_body
     Source: 'tests/src/constants.rs', lines 89:0-89:31 *)
 type v_t (t : Type0) (n : usize) = { x : array t n; }
 
-(** [constants::{constants::V<T, N>#1}::LEN]
+(** [constants::{constants::V<T, N>}#1::LEN]
     Source: 'tests/src/constants.rs', lines 94:4-94:24 *)
 let v_len_body (t : Type0) (n : usize) : result usize = Ok n
 let v_len (t : Type0) (n : usize) : usize = eval_global (v_len_body t n)

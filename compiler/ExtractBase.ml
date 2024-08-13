@@ -2061,7 +2061,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
          in the trait declaration *)
       let suffix =
         match def.kind with
-        | TraitItemProvided _ -> "_default"
+        | TraitDeclItem (_, _, true) -> "_default"
         | _ -> ""
       in
       let ctx = ctx_add def.item_meta.span decl (name ^ suffix) ctx in
@@ -2080,7 +2080,7 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
   *)
   let item_meta =
     match def.kind with
-    | TraitItemImpl (_, trait_decl_id, item_name, _) -> (
+    | TraitImplItem (_, trait_decl_id, item_name, _) -> (
         if Option.is_some def.item_meta.attr_info.rename then def.item_meta
         else
           (* Lookup the declaration. TODO: the trait item impl info

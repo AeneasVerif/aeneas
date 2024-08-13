@@ -88,7 +88,7 @@ Definition betree_upsert_update
   end
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::len]: loop 0:
+(** [betree::betree::{betree::betree::List<T>}#1::len]: loop 0:
     Source: 'src/betree.rs', lines 278:8-284:5 *)
 Fixpoint betree_List_len_loop
   (T : Type) (n : nat) (self : betree_List_t T) (len : u64) : result u64 :=
@@ -103,14 +103,14 @@ Fixpoint betree_List_len_loop
   end
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::len]:
+(** [betree::betree::{betree::betree::List<T>}#1::len]:
     Source: 'src/betree.rs', lines 276:4-276:24 *)
 Definition betree_List_len
   (T : Type) (n : nat) (self : betree_List_t T) : result u64 :=
   betree_List_len_loop T n self 0%u64
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::reverse]: loop 0:
+(** [betree::betree::{betree::betree::List<T>}#1::reverse]: loop 0:
     Source: 'src/betree.rs', lines 305:8-312:5 *)
 Fixpoint betree_List_reverse_loop
   (T : Type) (n : nat) (self : betree_List_t T) (out : betree_List_t T) :
@@ -127,14 +127,14 @@ Fixpoint betree_List_reverse_loop
   end
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::reverse]:
+(** [betree::betree::{betree::betree::List<T>}#1::reverse]:
     Source: 'src/betree.rs', lines 304:4-304:32 *)
 Definition betree_List_reverse
   (T : Type) (n : nat) (self : betree_List_t T) : result (betree_List_t T) :=
   betree_List_reverse_loop T n self Betree_List_Nil
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::split_at]: loop 0:
+(** [betree::betree::{betree::betree::List<T>}#1::split_at]: loop 0:
     Source: 'src/betree.rs', lines 289:8-302:5 *)
 Fixpoint betree_List_split_at_loop
   (T : Type) (n : nat) (n1 : u64) (beg : betree_List_t T)
@@ -156,7 +156,7 @@ Fixpoint betree_List_split_at_loop
   end
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::split_at]:
+(** [betree::betree::{betree::betree::List<T>}#1::split_at]:
     Source: 'src/betree.rs', lines 287:4-287:55 *)
 Definition betree_List_split_at
   (T : Type) (n : nat) (self : betree_List_t T) (n1 : u64) :
@@ -165,7 +165,7 @@ Definition betree_List_split_at
   betree_List_split_at_loop T n n1 Betree_List_Nil self
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::push_front]:
+(** [betree::betree::{betree::betree::List<T>}#1::push_front]:
     Source: 'src/betree.rs', lines 315:4-315:34 *)
 Definition betree_List_push_front
   (T : Type) (self : betree_List_t T) (x : T) : result (betree_List_t T) :=
@@ -173,7 +173,7 @@ Definition betree_List_push_front
   Ok (Betree_List_Cons x tl)
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::pop_front]:
+(** [betree::betree::{betree::betree::List<T>}#1::pop_front]:
     Source: 'src/betree.rs', lines 322:4-322:32 *)
 Definition betree_List_pop_front
   (T : Type) (self : betree_List_t T) : result (T * (betree_List_t T)) :=
@@ -184,7 +184,7 @@ Definition betree_List_pop_front
   end
 .
 
-(** [betree::betree::{betree::betree::List<T>#1}::hd]:
+(** [betree::betree::{betree::betree::List<T>}#1::hd]:
     Source: 'src/betree.rs', lines 334:4-334:22 *)
 Definition betree_List_hd (T : Type) (self : betree_List_t T) : result T :=
   match self with
@@ -193,7 +193,7 @@ Definition betree_List_hd (T : Type) (self : betree_List_t T) : result T :=
   end
 .
 
-(** [betree::betree::{betree::betree::List<(u64, T)>#2}::head_has_key]:
+(** [betree::betree::{betree::betree::List<(u64, T)>}#2::head_has_key]:
     Source: 'src/betree.rs', lines 343:4-343:44 *)
 Definition betree_ListPairU64T_head_has_key
   (T : Type) (self : betree_List_t (u64 * T)) (key : u64) : result bool :=
@@ -203,7 +203,7 @@ Definition betree_ListPairU64T_head_has_key
   end
 .
 
-(** [betree::betree::{betree::betree::List<(u64, T)>#2}::partition_at_pivot]: loop 0:
+(** [betree::betree::{betree::betree::List<(u64, T)>}#2::partition_at_pivot]: loop 0:
     Source: 'src/betree.rs', lines 358:8-370:5 *)
 Fixpoint betree_ListPairU64T_partition_at_pivot_loop
   (T : Type) (n : nat) (pivot : u64) (beg : betree_List_t (u64 * T))
@@ -231,7 +231,7 @@ Fixpoint betree_ListPairU64T_partition_at_pivot_loop
   end
 .
 
-(** [betree::betree::{betree::betree::List<(u64, T)>#2}::partition_at_pivot]:
+(** [betree::betree::{betree::betree::List<(u64, T)>}#2::partition_at_pivot]:
     Source: 'src/betree.rs', lines 355:4-355:73 *)
 Definition betree_ListPairU64T_partition_at_pivot
   (T : Type) (n : nat) (self : betree_List_t (u64 * T)) (pivot : u64) :
@@ -241,7 +241,7 @@ Definition betree_ListPairU64T_partition_at_pivot
     Betree_List_Nil self
 .
 
-(** [betree::betree::{betree::betree::Leaf#3}::split]:
+(** [betree::betree::{betree::betree::Leaf}#3::split]:
     Source: 'src/betree.rs', lines 378:4-383:17 *)
 Definition betree_Leaf_split
   (n : nat) (self : betree_Leaf_t) (content : betree_List_t (u64 * u64))
@@ -277,7 +277,7 @@ Definition betree_Leaf_split
     node_id_cnt2))
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_first_message_for_key]: loop 0:
+(** [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]: loop 0:
     Source: 'src/betree.rs', lines 792:4-810:5 *)
 Fixpoint betree_Node_lookup_first_message_for_key_loop
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
@@ -304,7 +304,7 @@ Fixpoint betree_Node_lookup_first_message_for_key_loop
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_first_message_for_key]:
+(** [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]:
     Source: 'src/betree.rs', lines 792:4-795:34 *)
 Definition betree_Node_lookup_first_message_for_key
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
@@ -314,7 +314,7 @@ Definition betree_Node_lookup_first_message_for_key
   betree_Node_lookup_first_message_for_key_loop n key msgs
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply_upserts]: loop 0:
+(** [betree::betree::{betree::betree::Node}#5::apply_upserts]: loop 0:
     Source: 'src/betree.rs', lines 820:4-844:5 *)
 Fixpoint betree_Node_apply_upserts_loop
   (n : nat) (msgs : betree_List_t (u64 * betree_Message_t)) (prev : option u64)
@@ -346,7 +346,7 @@ Fixpoint betree_Node_apply_upserts_loop
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply_upserts]:
+(** [betree::betree::{betree::betree::Node}#5::apply_upserts]:
     Source: 'src/betree.rs', lines 820:4-820:94 *)
 Definition betree_Node_apply_upserts
   (n : nat) (msgs : betree_List_t (u64 * betree_Message_t)) (prev : option u64)
@@ -356,7 +356,7 @@ Definition betree_Node_apply_upserts
   betree_Node_apply_upserts_loop n msgs prev key
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]: loop 0:
+(** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: loop 0:
     Source: 'src/betree.rs', lines 649:4-660:5 *)
 Fixpoint betree_Node_lookup_in_bindings_loop
   (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
@@ -379,7 +379,7 @@ Fixpoint betree_Node_lookup_in_bindings_loop
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_in_bindings]:
+(** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]:
     Source: 'src/betree.rs', lines 649:4-649:84 *)
 Definition betree_Node_lookup_in_bindings
   (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
@@ -388,7 +388,7 @@ Definition betree_Node_lookup_in_bindings
   betree_Node_lookup_in_bindings_loop n key bindings
 .
 
-(** [betree::betree::{betree::betree::Internal#4}::lookup_in_children]:
+(** [betree::betree::{betree::betree::Internal}#4::lookup_in_children]:
     Source: 'src/betree.rs', lines 414:4-414:63 *)
 Fixpoint betree_Internal_lookup_in_children
   (n : nat) (self : betree_Internal_t) (key : u64) (st : state) :
@@ -412,7 +412,7 @@ Fixpoint betree_Internal_lookup_in_children
         self.(betree_Internal_pivot) self.(betree_Internal_left) n2)))
   end
 
-(** [betree::betree::{betree::betree::Node#5}::lookup]:
+(** [betree::betree::{betree::betree::Node}#5::lookup]:
     Source: 'src/betree.rs', lines 712:4-712:58 *)
 with betree_Node_lookup
   (n : nat) (self : betree_Node_t) (key : u64) (st : state) :
@@ -479,7 +479,7 @@ with betree_Node_lookup
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::filter_messages_for_key]: loop 0:
+(** [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]: loop 0:
     Source: 'src/betree.rs', lines 683:4-692:5 *)
 Fixpoint betree_Node_filter_messages_for_key_loop
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
@@ -504,7 +504,7 @@ Fixpoint betree_Node_filter_messages_for_key_loop
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::filter_messages_for_key]:
+(** [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]:
     Source: 'src/betree.rs', lines 683:4-683:77 *)
 Definition betree_Node_filter_messages_for_key
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
@@ -513,7 +513,7 @@ Definition betree_Node_filter_messages_for_key
   betree_Node_filter_messages_for_key_loop n key msgs
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_first_message_after_key]: loop 0:
+(** [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]: loop 0:
     Source: 'src/betree.rs', lines 694:4-706:5 *)
 Fixpoint betree_Node_lookup_first_message_after_key_loop
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
@@ -540,7 +540,7 @@ Fixpoint betree_Node_lookup_first_message_after_key_loop
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_first_message_after_key]:
+(** [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]:
     Source: 'src/betree.rs', lines 694:4-697:34 *)
 Definition betree_Node_lookup_first_message_after_key
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
@@ -550,7 +550,7 @@ Definition betree_Node_lookup_first_message_after_key
   betree_Node_lookup_first_message_after_key_loop n key msgs
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply_to_internal]:
+(** [betree::betree::{betree::betree::Node}#5::apply_to_internal]:
     Source: 'src/betree.rs', lines 534:4-534:89 *)
 Definition betree_Node_apply_to_internal
   (n : nat) (msgs : betree_List_t (u64 * betree_Message_t)) (key : u64)
@@ -611,7 +611,7 @@ Definition betree_Node_apply_to_internal
     lookup_first_message_for_key_back msgs2)
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply_messages_to_internal]: loop 0:
+(** [betree::betree::{betree::betree::Node}#5::apply_messages_to_internal]: loop 0:
     Source: 'src/betree.rs', lines 518:4-526:5 *)
 Fixpoint betree_Node_apply_messages_to_internal_loop
   (n : nat) (msgs : betree_List_t (u64 * betree_Message_t))
@@ -631,7 +631,7 @@ Fixpoint betree_Node_apply_messages_to_internal_loop
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply_messages_to_internal]:
+(** [betree::betree::{betree::betree::Node}#5::apply_messages_to_internal]:
     Source: 'src/betree.rs', lines 518:4-521:5 *)
 Definition betree_Node_apply_messages_to_internal
   (n : nat) (msgs : betree_List_t (u64 * betree_Message_t))
@@ -641,7 +641,7 @@ Definition betree_Node_apply_messages_to_internal
   betree_Node_apply_messages_to_internal_loop n msgs new_msgs
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_mut_in_bindings]: loop 0:
+(** [betree::betree::{betree::betree::Node}#5::lookup_mut_in_bindings]: loop 0:
     Source: 'src/betree.rs', lines 664:4-677:5 *)
 Fixpoint betree_Node_lookup_mut_in_bindings_loop
   (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
@@ -668,7 +668,7 @@ Fixpoint betree_Node_lookup_mut_in_bindings_loop
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::lookup_mut_in_bindings]:
+(** [betree::betree::{betree::betree::Node}#5::lookup_mut_in_bindings]:
     Source: 'src/betree.rs', lines 664:4-667:32 *)
 Definition betree_Node_lookup_mut_in_bindings
   (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
@@ -678,7 +678,7 @@ Definition betree_Node_lookup_mut_in_bindings
   betree_Node_lookup_mut_in_bindings_loop n key bindings
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply_to_leaf]:
+(** [betree::betree::{betree::betree::Node}#5::apply_to_leaf]:
     Source: 'src/betree.rs', lines 476:4-476:87 *)
 Definition betree_Node_apply_to_leaf
   (n : nat) (bindings : betree_List_t (u64 * u64)) (key : u64)
@@ -716,7 +716,7 @@ Definition betree_Node_apply_to_leaf
     end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply_messages_to_leaf]: loop 0:
+(** [betree::betree::{betree::betree::Node}#5::apply_messages_to_leaf]: loop 0:
     Source: 'src/betree.rs', lines 463:4-471:5 *)
 Fixpoint betree_Node_apply_messages_to_leaf_loop
   (n : nat) (bindings : betree_List_t (u64 * u64))
@@ -736,7 +736,7 @@ Fixpoint betree_Node_apply_messages_to_leaf_loop
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply_messages_to_leaf]:
+(** [betree::betree::{betree::betree::Node}#5::apply_messages_to_leaf]:
     Source: 'src/betree.rs', lines 463:4-466:5 *)
 Definition betree_Node_apply_messages_to_leaf
   (n : nat) (bindings : betree_List_t (u64 * u64))
@@ -746,7 +746,7 @@ Definition betree_Node_apply_messages_to_leaf
   betree_Node_apply_messages_to_leaf_loop n bindings new_msgs
 .
 
-(** [betree::betree::{betree::betree::Internal#4}::flush]:
+(** [betree::betree::{betree::betree::Internal}#4::flush]:
     Source: 'src/betree.rs', lines 429:4-434:26 *)
 Fixpoint betree_Internal_flush
   (n : nat) (self : betree_Internal_t) (params : betree_Params_t)
@@ -796,7 +796,7 @@ Fixpoint betree_Internal_flush
         node_id_cnt1))))
   end
 
-(** [betree::betree::{betree::betree::Node#5}::apply_messages]:
+(** [betree::betree::{betree::betree::Node}#5::apply_messages]:
     Source: 'src/betree.rs', lines 601:4-606:5 *)
 with betree_Node_apply_messages
   (n : nat) (self : betree_Node_t) (params : betree_Params_t)
@@ -852,7 +852,7 @@ with betree_Node_apply_messages
   end
 .
 
-(** [betree::betree::{betree::betree::Node#5}::apply]:
+(** [betree::betree::{betree::betree::Node}#5::apply]:
     Source: 'src/betree.rs', lines 589:4-595:5 *)
 Definition betree_Node_apply
   (n : nat) (self : betree_Node_t) (params : betree_Params_t)
@@ -868,7 +868,7 @@ Definition betree_Node_apply
   Ok (st1, (self1, node_id_cnt1))
 .
 
-(** [betree::betree::{betree::betree::BeTree#6}::new]:
+(** [betree::betree::{betree::betree::BeTree}#6::new]:
     Source: 'src/betree.rs', lines 848:4-848:60 *)
 Definition betree_BeTree_new
   (min_flush_size : u64) (split_size : u64) (st : state) :
@@ -893,7 +893,7 @@ Definition betree_BeTree_new
     |})
 .
 
-(** [betree::betree::{betree::betree::BeTree#6}::apply]:
+(** [betree::betree::{betree::betree::BeTree}#6::apply]:
     Source: 'src/betree.rs', lines 867:4-867:47 *)
 Definition betree_BeTree_apply
   (n : nat) (self : betree_BeTree_t) (key : u64) (msg : betree_Message_t)
@@ -913,7 +913,7 @@ Definition betree_BeTree_apply
     |})
 .
 
-(** [betree::betree::{betree::betree::BeTree#6}::insert]:
+(** [betree::betree::{betree::betree::BeTree}#6::insert]:
     Source: 'src/betree.rs', lines 873:4-873:52 *)
 Definition betree_BeTree_insert
   (n : nat) (self : betree_BeTree_t) (key : u64) (value : u64) (st : state) :
@@ -922,7 +922,7 @@ Definition betree_BeTree_insert
   betree_BeTree_apply n self key (Betree_Message_Insert value) st
 .
 
-(** [betree::betree::{betree::betree::BeTree#6}::delete]:
+(** [betree::betree::{betree::betree::BeTree}#6::delete]:
     Source: 'src/betree.rs', lines 879:4-879:38 *)
 Definition betree_BeTree_delete
   (n : nat) (self : betree_BeTree_t) (key : u64) (st : state) :
@@ -931,7 +931,7 @@ Definition betree_BeTree_delete
   betree_BeTree_apply n self key Betree_Message_Delete st
 .
 
-(** [betree::betree::{betree::betree::BeTree#6}::upsert]:
+(** [betree::betree::{betree::betree::BeTree}#6::upsert]:
     Source: 'src/betree.rs', lines 885:4-885:59 *)
 Definition betree_BeTree_upsert
   (n : nat) (self : betree_BeTree_t) (key : u64)
@@ -941,7 +941,7 @@ Definition betree_BeTree_upsert
   betree_BeTree_apply n self key (Betree_Message_Upsert upd) st
 .
 
-(** [betree::betree::{betree::betree::BeTree#6}::lookup]:
+(** [betree::betree::{betree::betree::BeTree}#6::lookup]:
     Source: 'src/betree.rs', lines 894:4-894:62 *)
 Definition betree_BeTree_lookup
   (n : nat) (self : betree_BeTree_t) (key : u64) (st : state) :

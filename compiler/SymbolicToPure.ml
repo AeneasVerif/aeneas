@@ -434,6 +434,13 @@ and translate_trait_decl_ref (span : Meta.span) (translate_ty : T.ty -> ty)
   in
   { trait_decl_id = tr.trait_decl_id; decl_generics }
 
+and translate_global_decl_ref (span : Meta.span) (translate_ty : T.ty -> ty)
+    (gr : T.global_decl_ref) : global_decl_ref =
+  let global_generics =
+    translate_generic_args span translate_ty gr.global_generics
+  in
+  { global_id = gr.global_id; global_generics }
+
 and translate_trait_instance_id (span : Meta.span) (translate_ty : T.ty -> ty)
     (id : T.trait_instance_id) : trait_instance_id =
   let translate_trait_instance_id =
@@ -3972,17 +3979,9 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   let consts =
     List.map
-      (fun (name, (ty, id)) ->
-        (name, (translate_fwd_ty trait_decl.item_meta.span type_infos ty, id)))
-      consts
-  in
-  let types =
-    List.map
       (fun (name, ty) ->
-        ( name,
-          Option.map (translate_fwd_ty trait_decl.item_meta.span type_infos) ty
-        ))
-      types
+        (name, translate_fwd_ty trait_decl.item_meta.span type_infos ty))
+      consts
   in
   {
     def_id;
@@ -4014,10 +4013,11 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   } =
     trait_impl
   in
+  let span = item_meta.span in
   let type_infos = ctx.type_ctx.type_infos in
   let impl_trait =
-    translate_trait_decl_ref trait_impl.item_meta.span
-      (translate_fwd_ty trait_impl.item_meta.span type_infos)
+    translate_trait_decl_ref span
+      (translate_fwd_ty span type_infos)
       llbc_impl_trait
   in
   let name =
@@ -4025,22 +4025,21 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
-  let generics, preds =
-    translate_generic_params trait_impl.item_meta.span llbc_generics
-  in
+  let generics, preds = translate_generic_params span llbc_generics in
   let parent_trait_refs =
-    List.map (translate_strait_ref trait_impl.item_meta.span) parent_trait_refs
+    List.map (translate_strait_ref span) parent_trait_refs
   in
   let consts =
     List.map
-      (fun (name, (ty, id)) ->
-        (name, (translate_fwd_ty trait_impl.item_meta.span type_infos ty, id)))
+      (fun (name, gref) ->
+        ( name,
+          translate_global_decl_ref span (translate_fwd_ty span type_infos) gref
+        ))
       consts
   in
   let types =
     List.map
-      (fun (name, ty) ->
-        (name, translate_fwd_ty trait_impl.item_meta.span type_infos ty))
+      (fun (name, ty) -> (name, translate_fwd_ty span type_infos ty))
       types
   in
   {

@@ -13,12 +13,12 @@ namespace rename_attribute
 structure BoolTest (Self : Type) where
   getTest : Self → Result Bool
 
-/- [rename_attribute::{(rename_attribute::BoolTrait for bool)}::get_bool]:
+/- [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
    Source: 'tests/src/rename_attribute.rs', lines 22:4-22:30 -/
 def BoolTraitBool.getTest (self : Bool) : Result Bool :=
   Result.ok self
 
-/- Trait implementation: [rename_attribute::{(rename_attribute::BoolTrait for bool)}]
+/- Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
    Source: 'tests/src/rename_attribute.rs', lines 21:0-21:23 -/
 def BoolImpl : BoolTest Bool := {
   getTest := BoolTraitBool.getTest
