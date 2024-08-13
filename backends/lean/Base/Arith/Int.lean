@@ -107,6 +107,17 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   Tactic.allGoals (Utils.tryTac (Utils.normCastAtAll))
   -- norm_cast does weird things with negative numbers so we reapply simp
   dsimp
+  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+  Utils.tryTac (
+    Utils.simpAt true {}
+               -- Simprocs
+               []
+               -- Unfoldings
+               []
+                -- Simp lemmas
+                [``Int.subNatNat_eq_coe]
+                -- Hypotheses
+                [] .wildcard)
   -- We also need this, in case the goal is: ¬ False
   Tactic.allGoals do tryTac (
     Utils.simpAt true {}

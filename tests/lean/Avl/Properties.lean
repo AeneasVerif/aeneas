@@ -752,7 +752,19 @@ theorem Node.rotate_right_left_spec
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
 
-set_option maxRecDepth 10000
+-- For the proofs of termination
+@[simp]
+theorem Node.left_height_lt_height (n : Node T) :
+  Subtree.height n.left < n.height := by
+  cases n; simp; scalar_tac
+
+@[simp]
+theorem Node.right_height_lt_height (n : Node T) :
+  Subtree.height n.right < n.height := by
+  cases n; simp; scalar_tac
+
+-- TODO: always activate this one
+attribute [simp] Prod.lex_iff
 
 mutual
 
@@ -764,20 +776,24 @@ theorem Node.insert_spec
   ∃ b node', Node.insert T OrdInst node value = ok (b, node') ∧
   Node.inv node' ∧
   Node.v node' = Node.v node ∪ {value} ∧
-  (if b then node'.height = node.height + 1 else node'.height = node.height) := by
+  (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
+  -- This is important for some of the proofs
+  (b → node'.balanceFactor ≠ 0) := by
   rw [Node.insert]
   have hCmp := Ospec.infallible -- TODO
   progress as ⟨ ordering ⟩
   split <;> rename _ => hEq <;> clear hCmp <;> simp at *
   . -- value < node.value
     progress as ⟨ updt, node', h1, h2 ⟩
-    simp [and_assoc, *]
+    simp_all [and_assoc]
   . -- value = node.value
     simp [and_assoc]
     cases node; simp_all
   . -- node.value < value
     progress as ⟨ updt, node', h1, h2 ⟩
-    simp [and_assoc, *]
+    simp_all [and_assoc]
+termination_by (node.height, 1)
+decreasing_by all_goals simp_wf
 
 @[pspec]
 theorem Tree.insert_in_opt_node_spec
@@ -788,7 +804,8 @@ theorem Tree.insert_in_opt_node_spec
   Subtree.inv tree' ∧
   Subtree.v tree' = Subtree.v tree ∪ {value} ∧
   (if b then Subtree.height tree' = Subtree.height tree + 1
-   else Subtree.height tree' = Subtree.height tree) := by
+   else Subtree.height tree' = Subtree.height tree) ∧
+  (b → Subtree.height tree > 0 → Subtree.balanceFactor tree' ≠ 0) := by
   rw [Tree.insert_in_opt_node]
   cases hNode : tree <;> simp [hNode]
   . -- tree = none
@@ -801,8 +818,11 @@ theorem Tree.insert_in_opt_node_spec
     rename Node T => node
     have hNodeInv : Node.inv node := by simp_all
     progress as ⟨ updt, tree' ⟩
-    simp [and_assoc, *]
+    simp_all [and_assoc]
+termination_by (Subtree.height tree, 2)
+decreasing_by simp_wf; simp [*]
 
+-- TODO: any modification triggers the replay of the whole proof
 @[pspec]
 theorem Node.insert_in_left_spec
   {T : Type} (OrdInst : Ord T)
@@ -813,7 +833,8 @@ theorem Node.insert_in_left_spec
   ∃ b node', Node.insert_in_left T OrdInst node value = ok (b, node') ∧
   Node.inv node' ∧
   Node.v node' = Node.v node ∪ {value} ∧
-  (if b then node'.height = node.height + 1 else node'.height = node.height) := by
+  (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
+  (b → node'.balanceFactor ≠ 0) := by
   rw [Node.insert_in_left]
   have hInvLeft : Subtree.inv node.left := by cases node; simp_all
   progress as ⟨ updt, left_opt' .. ⟩
@@ -850,10 +871,32 @@ theorem Node.insert_in_left_spec
             intro x; tauto
           . -- height
             simp_all [Node.invAux, Node.balanceFactor]
-            have : bf_z.val = -1 := by sorry
+            -- This assertion is not necessary for the proof, but it is important that it holds.
+            -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
+            have : bf_z.val = -1 := by scalar_tac
             scalar_tac
         . -- rotate_left_right
-          sorry
+          simp
+          cases h:left' with | mk z t0 y bf_z =>
+          cases h: y with
+          | none =>
+            -- Can't get there
+            simp_all [Node.balanceFactor, Node.invAux]
+          | some y =>
+            cases h: y with | mk y a b bf_y =>
+            -- TODO: fix progress
+            have ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩ :=
+              Node.rotate_left_right_spec x y z i bf_y bf_z a b t0 right
+                (by simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac)
+                (by simp_all) (by simp_all) (by simp [*])
+                (by simp_all [Node.invAux, Node.balanceFactor]; scalar_tac)
+            simp [hEq]; clear hEq
+            simp [and_assoc, *]
+            split_conjs
+            . apply Set.ext; simp_all
+              intro x; tauto
+            . simp_all [Node.invAux, Node.balanceFactor]
+              scalar_tac
     . -- i ≠ -2: the height of the tree did not change
       simp [and_assoc, *]
       split_conjs
@@ -865,6 +908,8 @@ theorem Node.insert_in_left_spec
       . simp_all
         cases node with | mk node_value left right balance_factor =>
         split <;> simp [Node.balanceFactor] at * <;> scalar_tac
+      . simp_all [Node.balanceFactor]
+        scalar_tac
   . -- the height of the subtree did not change
     simp [and_assoc, *] -- TODO: annoying to use this simp everytime: put this in progress
     split_conjs
@@ -875,6 +920,8 @@ theorem Node.insert_in_left_spec
       tauto
     . simp_all
       cases node; simp_all
+termination_by (node.height, 0)
+decreasing_by simp_wf
 
 @[pspec]
 theorem Node.insert_in_right_spec
@@ -886,10 +933,113 @@ theorem Node.insert_in_right_spec
   ∃ b node', Node.insert_in_right T OrdInst node value = ok (b, node') ∧
   Node.inv node' ∧
   Node.v node' = Node.v node ∪ {value} ∧
-  (if b then node'.height = node.height + 1 else node'.height = node.height) := by
+  (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
+  (b → node'.balanceFactor ≠ 0) := by
   rw [Node.insert_in_right]
-  sorry
+  have hInvLeft : Subtree.inv node.right := by cases node; simp_all
+  progress as ⟨ updt, right_opt' .. ⟩
+  split
+  . -- the height of the subtree changed
+    have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
+           -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
+      cases node; simp_all [Node.invAux]
+    progress as ⟨ i .. ⟩
+    split
+    . -- i = 2
+      simp
+      cases h: right_opt' with
+      | none => simp_all -- absurd
+      | some right' =>
+        simp [h]
+        split
+        . -- rotate_left
+          cases node with | mk x a right balance_factor =>
+          -- TODO: fix progress
+          cases h:right' with | mk z b c bf_z =>
+          have ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩ :=
+            Node.rotate_left_spec x z a b c i bf_z
+            (by simp_all) (by simp_all)
+            (by simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac)
+            (by simp [*]) (by simp_all)
+          simp [hEq]; clear hEq
+          simp [and_assoc, *]
+          split_conjs
+          . -- set reasoning
+            simp_all
+          . -- height
+            simp_all [Node.invAux, Node.balanceFactor]
+            -- This assertion is not necessary for the proof, but it is important that it holds.
+            -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
+            have : bf_z.val = 1 := by scalar_tac
+            scalar_tac
+        . -- rotate_right_left
+          cases node with | mk x t1 right balance_factor =>
+          simp
+          cases h:right' with | mk z y t0 bf_z =>
+          cases h: y with
+          | none =>
+            -- Can't get there
+            simp_all [Node.balanceFactor, Node.invAux]
+          | some y =>
+            cases h: y with | mk y b a bf_y =>
+            -- TODO: fix progress
+            have ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩ :=
+              Node.rotate_right_left_spec x y z i bf_y bf_z a b t0 t1
+                (by simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac)
+                (by simp_all) (by simp_all) (by simp [*])
+                (by simp_all [Node.invAux, Node.balanceFactor]; scalar_tac)
+            simp [hEq]; clear hEq
+            simp [and_assoc, *]
+            split_conjs
+            . apply Set.ext; simp_all
+            . simp_all [Node.invAux, Node.balanceFactor]
+              scalar_tac
+    . -- i ≠ -2: the height of the tree did not change
+      simp [and_assoc, *]
+      split_conjs
+      . cases node; simp_all [Node.invAux, Node.balanceFactor]
+        split_conjs <;> scalar_tac
+      . apply Set.ext; simp
+        cases node; simp_all
+      . simp_all
+        cases node with | mk node_value left right balance_factor =>
+        split <;> simp [Node.balanceFactor] at * <;> scalar_tac
+      . simp_all [Node.balanceFactor]
+        scalar_tac
+  . -- the height of the subtree did not change
+    simp [and_assoc, *] -- TODO: annoying to use this simp everytime: put this in progress
+    split_conjs
+    . cases node;
+      simp_all [Node.invAux, Node.balanceFactor]
+    . apply Set.ext; simp; intro x
+      cases node; simp_all
+    . simp_all
+      cases node; simp_all
+termination_by (node.height, 0)
+decreasing_by simp_wf
 
 end
+
+-- TODO: move
+@[reducible]
+def Tree.height (t : Tree T) := Subtree.height t.root
+
+@[pspec]
+theorem Tree.insert_spec {T : Type}
+  (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
+  (tree : Tree T) (value : T)
+  (hInv : tree.inv) :
+  ∃ updt tree', Tree.insert T OrdInst tree value = ok (updt, tree') ∧
+  tree'.inv ∧
+  (if updt then tree'.height = tree.height + 1 else tree'.height = tree.height) ∧
+  tree'.v = tree.v ∪ {value} := by
+  rw [Tree.insert]
+  progress as ⟨ updt, tree' ⟩
+  simp [and_assoc, *]
+
+@[pspec]
+theorem Tree.new_spec {T : Type} (OrdInst : Ord T) :
+  ∃ t, Tree.new T OrdInst = ok t ∧ t.v = ∅ ∧ t.height = 0 := by
+  simp [new, Tree.v, Tree.height]
 
 end avl

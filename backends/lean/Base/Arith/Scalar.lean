@@ -89,4 +89,8 @@ example (x : I32) : -100000000000 < x.val := by
 example : (Usize.ofInt 2).val ≠ 0 := by
   scalar_tac
 
+example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y : Int) + z = 0 := by
+  scalar_tac_preprocess
+  omega
+
 end Arith
