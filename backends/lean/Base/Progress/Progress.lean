@@ -73,6 +73,9 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
       inferType th
     | .Local asmDecl => pure asmDecl.type
   trace[Progress] "Looked up theorem/assumption type: {thTy}"
+  -- Normalize to inline the let-bindings
+  let thTy ← normalizeLetBindings thTy
+  trace[Progress] "After normalizing the let-bindings: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
   -- withNewMCtxDepth do
   let (mvars, binders, thExBody) ← forallMetaTelescope thTy
@@ -104,6 +107,11 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     | .Local decl => mkAppOptM' (mkFVar decl.fvarId) (mvars.map some)
   let asmName ← do match keep with | none => mkFreshAnonPropUserName | some n => do pure n
   let thTy ← inferType th
+  trace[Progress] "thTy (after application): {thTy}"
+  -- Normalize the let-bindings - TODO: actually we might want to let
+  -- the user insert them in the context
+  let thTy ← normalizeLetBindings thTy
+  trace[Progress] "thTy (after normalizing let-bindings): {thTy}"
   let thAsm ← Utils.addDeclTac asmName th thTy (asLet := false)
   withMainContext do -- The context changed - TODO: remove once addDeclTac is updated
   let ngoal ← getMainGoal
@@ -138,7 +146,11 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     let _ ←
       tryTac
         (simpAt true {} [] []
-               [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+               [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div,
+                -- This last one is quite useful. In particular, it is necessary to rewrite the
+                -- conjunctions for Lean to automatically instantiate the existential quantifiers
+                -- (I don't know why).
+                ``and_assoc]
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
     -- TODO: not sure this is the best way of checking it
@@ -459,7 +471,6 @@ namespace Test
     progress
     simp [*]
 
-
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
     ∃ nv, v.update_usize i x = ok nv ∧
@@ -554,6 +565,29 @@ namespace Test
     omega
 
   end
+
+  -- Testing progress on theorems containing local let-bindings
+  def add (x y : U32) : Result U32 := x + y
+
+  @[pspec] -- TODO: give the possibility of using pspec as a local attribute
+  theorem add_spec x y (h : x.val + y.val ≤ U32.max) :
+    let tot := x.val + y.val
+    ∃ z, add x y = ok z ∧ z.val = tot := by
+    rw [add]
+    intro tot
+    progress
+    simp [*]
+
+  def add1 (x y : U32) : Result U32 := do
+    let z ← add x y
+    add z z
+
+  example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
+    ∃ z, add1 x y = ok z := by
+    rw [add1]
+    progress as ⟨ z1, h ⟩
+    progress as ⟨ z2, h ⟩
+    simp
 
 end Test
 

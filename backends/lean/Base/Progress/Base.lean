@@ -169,7 +169,11 @@ initialize pspecAttr : PSpecAttr ← do
         trace[Progress] "Registering spec theorem for {thName}"
         let thDecl := env.constants.find! thName
         let fKey ← MetaM.run' (do
-          let fExpr ← getPSpecFunArgsExpr false thDecl.type
+          trace[Progress] "Theorem: {thDecl.type}"
+          -- Normalize to eliminate the let-bindings
+          let ty ← normalizeLetBindings thDecl.type
+          trace[Progress] "Theorem after normalization (to eliminate the let bindings): {ty}"
+          let fExpr ← getPSpecFunArgsExpr false ty
           trace[Progress] "Registering spec theorem for expr: {fExpr}"
           -- Convert the function expression to a discrimination tree key
           -- We use the default configuration
@@ -182,10 +186,6 @@ initialize pspecAttr : PSpecAttr ← do
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
-
-#check Name
-
-#check ConstantInfo
 
 def PSpecAttr.find? (s : PSpecAttr) (e : Expr) : MetaM (Array Name) := do
   -- We use the default configuration

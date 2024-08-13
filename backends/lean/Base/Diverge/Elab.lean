@@ -661,12 +661,10 @@ mutual
  -/
 partial def proveExprIsValid (k_var kk_var : Expr) (e : Expr) : MetaM Expr := do
   trace[Diverge.def.valid] "proveExprIsValid: {e}"
-  -- Normalize to eliminate the lambdas - TODO: this is slightly dangerous.
+  -- Normalize to eliminate the let-bindings - TODO: this is slightly dangerous.
   let e ← do
     if e.isLet ∧ normalize_let_bindings then do
-      let updt_config (config : Lean.Meta.Config) :=
-        { config with transparency := .reducible }
-      let e ← withConfig updt_config (whnf e)
+      let e ← normalizeLetBindings e
       trace[Diverge.def.valid] "e (after normalization): {e}"
       pure e
     else pure e

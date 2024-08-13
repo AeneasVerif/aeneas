@@ -498,8 +498,7 @@ theorem Int.eq_of_sub_right_iff_eq_of_add (a b c : Int) : c = a - b ↔ c + b = 
 @[simp]
 theorem Int.eq_of_sub_left_iff_eq_of_add (a b c : Int) : a - b = c ↔ a = c + b := by omega
 
--- TODO:
---@[pspec]
+@[pspec]
 theorem Node.rotate_left_right_spec
   {T : Type} [LinearOrder T]
   (x y z : T) (bf_x bf_y bf_z : I8)
@@ -625,8 +624,7 @@ theorem Node.rotate_left_right_spec
       . -- Height
         scalar_tac
 
--- TODO:
---@[pspec]
+@[pspec]
 theorem Node.rotate_right_left_spec
   {T : Type} [LinearOrder T]
   (x y z : T) (bf_x bf_y bf_z : I8)
@@ -856,25 +854,27 @@ theorem Node.insert_in_left_spec
         . -- rotate_right
           -- TODO: fix progress
           cases h:left' with | mk z a b bf_z =>
-          have hInv1 : (Node.mk x (some (Node.mk z a b bf_z)) right i).invAuxNotBalanced := by
-            simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
+          progress as ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩
+          -- TODO: syntax for preconditions
+          . simp_all
+          . simp_all
+          . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
-          have ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩ := Node.rotate_right_spec x z a b right i bf_z
-            (by simp_all) (by simp_all) hInv1 (by simp [*]) (by simp_all)
-          simp [hEq]; clear hEq
-          clear hInv1 -- TODO: simp_all loops otherwise
-          simp [and_assoc, *]
-          split_conjs
-          . -- set reasoning
-            simp_all
-            apply Set.ext; simp
-            intro x; tauto
-          . -- height
-            simp_all [Node.invAux, Node.balanceFactor]
-            -- This assertion is not necessary for the proof, but it is important that it holds.
-            -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
-            have : bf_z.val = -1 := by scalar_tac
-            scalar_tac
+          . simp [*]
+          . simp_all
+          . -- End of the proof
+            simp [and_assoc, *]
+            split_conjs
+            . -- set reasoning
+              simp_all
+              apply Set.ext; simp
+              intro x; tauto
+            . -- height
+              simp_all [Node.invAux, Node.balanceFactor]
+              -- This assertion is not necessary for the proof, but it is important that it holds.
+              -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
+              have : bf_z.val = -1 := by scalar_tac
+              scalar_tac
         . -- rotate_left_right
           simp
           cases h:left' with | mk z t0 y bf_z =>
@@ -884,19 +884,20 @@ theorem Node.insert_in_left_spec
             simp_all [Node.balanceFactor, Node.invAux]
           | some y =>
             cases h: y with | mk y a b bf_y =>
-            -- TODO: fix progress
-            have ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩ :=
-              Node.rotate_left_right_spec x y z i bf_y bf_z a b t0 right
-                (by simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac)
-                (by simp_all) (by simp_all) (by simp [*])
-                (by simp_all [Node.invAux, Node.balanceFactor]; scalar_tac)
-            simp [hEq]; clear hEq
-            simp [and_assoc, *]
-            split_conjs
-            . apply Set.ext; simp_all
-              intro x; tauto
-            . simp_all [Node.invAux, Node.balanceFactor]
-              scalar_tac
+            progress as ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩
+            -- TODO: syntax for preconditions
+            . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+            . simp_all
+            . simp_all
+            . simp [*]
+            . simp_all [Node.invAux, Node.balanceFactor]; scalar_tac
+            . -- End of the proof
+              simp [*]
+              split_conjs
+              . apply Set.ext; simp_all
+                intro x; tauto
+              . simp_all [Node.invAux, Node.balanceFactor]
+                scalar_tac
     . -- i ≠ -2: the height of the tree did not change
       simp [and_assoc, *]
       split_conjs
@@ -956,22 +957,24 @@ theorem Node.insert_in_right_spec
           cases node with | mk x a right balance_factor =>
           -- TODO: fix progress
           cases h:right' with | mk z b c bf_z =>
-          have ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩ :=
-            Node.rotate_left_spec x z a b c i bf_z
-            (by simp_all) (by simp_all)
-            (by simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac)
-            (by simp [*]) (by simp_all)
-          simp [hEq]; clear hEq
-          simp [and_assoc, *]
-          split_conjs
-          . -- set reasoning
-            simp_all
-          . -- height
-            simp_all [Node.invAux, Node.balanceFactor]
-            -- This assertion is not necessary for the proof, but it is important that it holds.
-            -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
-            have : bf_z.val = 1 := by scalar_tac
-            scalar_tac
+          progress as ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩
+          -- TODO: syntax for preconditions
+          . simp_all
+          . simp_all
+          . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+          . simp [*]
+          . simp_all
+          . -- End of the proof
+            simp [and_assoc, *]
+            split_conjs
+            . -- set reasoning
+              simp_all
+            . -- height
+              simp_all [Node.invAux, Node.balanceFactor]
+              -- This assertion is not necessary for the proof, but it is important that it holds.
+              -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
+              have : bf_z.val = 1 := by scalar_tac
+              scalar_tac
         . -- rotate_right_left
           cases node with | mk x t1 right balance_factor =>
           simp
@@ -982,18 +985,20 @@ theorem Node.insert_in_right_spec
             simp_all [Node.balanceFactor, Node.invAux]
           | some y =>
             cases h: y with | mk y b a bf_y =>
-            -- TODO: fix progress
-            have ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩ :=
-              Node.rotate_right_left_spec x y z i bf_y bf_z a b t0 t1
-                (by simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac)
-                (by simp_all) (by simp_all) (by simp [*])
-                (by simp_all [Node.invAux, Node.balanceFactor]; scalar_tac)
-            simp [hEq]; clear hEq
-            simp [and_assoc, *]
-            split_conjs
-            . apply Set.ext; simp_all
-            . simp_all [Node.invAux, Node.balanceFactor]
-              scalar_tac
+            progress as ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩
+            -- TODO: syntax for preconditions
+            . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+            . simp_all
+            . simp_all
+            . simp [*]
+            . simp_all [Node.invAux, Node.balanceFactor]; scalar_tac
+            . -- End of the proof
+              simp [hEq]; clear hEq
+              simp [and_assoc, *]
+              split_conjs
+              . apply Set.ext; simp_all
+              . simp_all [Node.invAux, Node.balanceFactor]
+                scalar_tac
     . -- i ≠ -2: the height of the tree did not change
       simp [and_assoc, *]
       split_conjs

@@ -95,7 +95,7 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   -- might have proven the goal, hence the `Tactic.allGoals`
   let dsimp :=
     Tactic.allGoals do tryTac (
-      -- We set `simpOnly` at false on purpose
+      -- We set `simpOnly` at false on purpose.
       dsimpAt false {} intTacSimpRocs
         -- Declarations to unfold
         []
@@ -188,5 +188,11 @@ example (a : Prop) (x : Int) (h0: (0 : Nat) < x) (h1: x < 0) : a := by
 
 example (x : Int) (h : x ≤ -3) : x ≤ -2 := by
   int_tac
+
+example (x y : Int) (h : x + y = 3) :
+  let z := x + y
+  z = 3 := by
+  intro z
+  omega
 
 end Arith
