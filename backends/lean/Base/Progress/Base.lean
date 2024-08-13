@@ -81,7 +81,7 @@ section Methods
     trace[Progress] "After splitting the conjunction:\n- eq: {th}\n- post: {post}"
     -- Destruct the equality
     let (mExpr, ret) ← destEq th.consumeMData
-    trace[Progress] "After splitting the equality:\n- lhs: {th}\n- rhs: {ret}"
+    trace[Progress] "After splitting the equality:\n- lhs: {mExpr}\n- rhs: {ret}"
     -- Recursively destruct the monadic application to dive into the binds,
     -- if necessary (this is for when we use `withPSpec` inside of the `progress` tactic),
     -- and destruct the application to get the function name
@@ -154,21 +154,38 @@ initialize pspecAttr : PSpecAttr ← do
         throwError "invalid attribute 'pspec', must be global"
       -- Lookup the theorem
       let env ← getEnv
-      let thDecl := env.constants.find! thName
-      let fKey ← MetaM.run' (do
-        let fExpr ← getPSpecFunArgsExpr false thDecl.type
-        trace[Progress] "Registering spec theorem for {fExpr}"
-        -- Convert the function expression to a discrimination tree key
-        -- We use the default configuration
-        let config : WhnfCoreConfig := {}
-        DiscrTree.mkPath fExpr config)
-      let env := ext.addEntry env (fKey, thName)
-      setEnv env
-      trace[Progress] "Saved the environment"
-      pure ()
+      -- If we apply the attribute to a definition in a group of mutually recursive definitions
+      -- (say, to `foo` in `foo` and `bar`), the attribute gets applied to `foo` but also to
+      -- the recursive definition which encodes `foo` and `bar` (Lean encodes mutually recursive
+      -- definitions in one recursive definition). This definition should be named `foo._mutual`
+      -- or `bar._mutual`, and we want to ignore it.
+      -- TODO: this is a hack
+      if let .str _ "_mutual" := thName then
+        -- Ignore: this is the fixed point of a mutually recursive definition -
+        -- the attribute will also be applied to the definitions revealed to the user:
+        -- we want to apply the attribute for those
+        trace[Progress] "Ignoring a mutually recursive definition: {thName}"
+      else
+        trace[Progress] "Registering spec theorem for {thName}"
+        let thDecl := env.constants.find! thName
+        let fKey ← MetaM.run' (do
+          let fExpr ← getPSpecFunArgsExpr false thDecl.type
+          trace[Progress] "Registering spec theorem for expr: {fExpr}"
+          -- Convert the function expression to a discrimination tree key
+          -- We use the default configuration
+          let config : WhnfCoreConfig := {}
+          DiscrTree.mkPath fExpr config)
+        let env := ext.addEntry env (fKey, thName)
+        setEnv env
+        trace[Progress] "Saved the environment"
+        pure ()
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
+
+#check Name
+
+#check ConstantInfo
 
 def PSpecAttr.find? (s : PSpecAttr) (e : Expr) : MetaM (Array Name) := do
   -- We use the default configuration

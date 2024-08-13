@@ -505,6 +505,56 @@ namespace Test
     progress keep _ as ⟨ z, h1 .. ⟩
     simp [*, h1]
 
+  -- Testing with mutually recursive definitions
+  mutual
+
+  inductive Tree
+  | mk : Trees → Tree
+
+  inductive Trees
+  | nil
+  | cons : Tree → Trees → Trees
+
+  end
+
+  mutual
+
+  def Tree.size (t : Tree) : Result Int :=
+    match t with
+    | .mk trees => trees.size
+
+  def Trees.size (t : Trees) : Result Int :=
+    match t with
+    | .nil => ok 0
+    | .cons t t' => do
+      let s ← t.size
+      let s' ← t'.size
+      ok (s + s')
+
+  end
+
+  mutual
+
+  @[pspec]
+  theorem Tree.size_spec (t : Tree) :
+    ∃ i, t.size = ok i ∧ i ≥ 0 := by
+    cases t
+    simp [Tree.size]
+    progress
+    simp
+    omega
+
+  @[pspec]
+  theorem Trees.size_spec (t : Trees) :
+    ∃ i, t.size = ok i ∧ i ≥ 0 := by
+    cases t <;> simp [Trees.size]
+    progress
+    progress
+    simp
+    omega
+
+  end
+
 end Test
 
 end Progress
