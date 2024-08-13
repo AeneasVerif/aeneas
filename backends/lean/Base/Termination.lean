@@ -91,4 +91,7 @@ macro_rules
       -- Finish
       simp_all <;> scalar_tac)
 
+-- We always activate this simplification lemma because it is useful for the proofs of termination
+attribute [simp] Prod.lex_iff
+
 end Utils

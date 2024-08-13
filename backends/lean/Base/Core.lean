@@ -1,5 +1,6 @@
 
 import Lean
+import Mathlib.Data.Bool.Basic
 
 /- This lemma is generally useful. It often happens that (because we
    make a split on a condition for instance) we have `x ≠ y` in the context

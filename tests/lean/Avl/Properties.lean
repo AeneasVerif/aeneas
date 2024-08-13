@@ -150,6 +150,9 @@ theorem Subtree.inv_some [LinearOrder T] (s : Node T) : Subtree.inv (some s) = s
   rfl
 
 @[reducible]
+def Tree.height (t : Tree T) := Subtree.height t.root
+
+@[reducible]
 def Tree.inv [LinearOrder T] (t : Tree T) : Prop := Subtree.inv t.root
 
 @[simp]
@@ -763,9 +766,6 @@ theorem Node.right_height_lt_height (n : Node T) :
   Subtree.height n.right < n.height := by
   cases n; simp; scalar_tac
 
--- TODO: always activate this one
-attribute [simp] Prod.lex_iff
-
 mutual
 
 @[pspec]
@@ -1019,10 +1019,6 @@ termination_by (node.height, 0)
 decreasing_by simp_wf
 
 end
-
--- TODO: move
-@[reducible]
-def Tree.height (t : Tree T) := Subtree.height t.root
 
 @[pspec]
 theorem Tree.insert_spec {T : Type}
