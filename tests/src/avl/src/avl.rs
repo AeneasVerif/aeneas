@@ -1,3 +1,4 @@
+//! Adapted from https://en.wikipedia.org/wiki/AVL_tree
 #![feature(register_tool)]
 #![register_tool(aeneas)]
 #![feature(box_patterns)]
