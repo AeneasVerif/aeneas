@@ -49,21 +49,41 @@ inductive betree.Node :=
 
 end
 
-@[simp, reducible]
+@[reducible]
 def betree.Internal.id (x : betree.Internal) :=
   match x with | betree.Internal.mk x1 _ _ _ => x1
 
-@[simp, reducible]
+@[reducible]
 def betree.Internal.pivot (x : betree.Internal) :=
   match x with | betree.Internal.mk _ x1 _ _ => x1
 
-@[simp, reducible]
+@[reducible]
 def betree.Internal.left (x : betree.Internal) :=
   match x with | betree.Internal.mk _ _ x1 _ => x1
 
-@[simp, reducible]
+@[reducible]
 def betree.Internal.right (x : betree.Internal) :=
   match x with | betree.Internal.mk _ _ _ x1 => x1
+
+@[simp]
+theorem betree.Internal.id._simpLemma_ (id : U64) (pivot : U64) (left :
+  betree.Node) (right : betree.Node) :
+  (betree.Internal.mk id pivot left right).id = id := by rfl
+
+@[simp]
+theorem betree.Internal.pivot._simpLemma_ (id : U64) (pivot : U64) (left :
+  betree.Node) (right : betree.Node) :
+  (betree.Internal.mk id pivot left right).pivot = pivot := by rfl
+
+@[simp]
+theorem betree.Internal.left._simpLemma_ (id : U64) (pivot : U64) (left :
+  betree.Node) (right : betree.Node) :
+  (betree.Internal.mk id pivot left right).left = left := by rfl
+
+@[simp]
+theorem betree.Internal.right._simpLemma_ (id : U64) (pivot : U64) (left :
+  betree.Node) (right : betree.Node) :
+  (betree.Internal.mk id pivot left right).right = right := by rfl
 
 /- [betree::betree::Params]
    Source: 'src/betree.rs', lines 187:0-187:13 -/
