@@ -244,6 +244,7 @@ impl<T: Ord> Node<T> {
                 // The node is left-heavy: we need to rebalance
                 let left = std::mem::replace(&mut node.left, Option::None).unwrap();
                 if left.balance_factor <= 0 {
+                    // Note that the left balance factor is actually < 0 here
                     Node::rotate_right(node, left);
                 }
                 else {
@@ -282,6 +283,7 @@ impl<T: Ord> Node<T> {
                 // The node is right-heavy: we need to rebalance
                 let right = std::mem::replace(&mut node.right, Option::None).unwrap();
                 if right.balance_factor >= 0 {
+                    // Note that the right balance factor is actually > 0 here
                     Node::rotate_left(node, right);
                 }
                 else {

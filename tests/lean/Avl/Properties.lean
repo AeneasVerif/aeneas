@@ -230,7 +230,7 @@ theorem Tree.find_loop_spec
   | none => simp
   | some (.mk v left right height) =>
     dsimp only
-    have hCmp := Ospec.infallible
+    have hCmp := Ospec.infallible -- TODO
     progress keep Hordering as ⟨ ordering ⟩; clear hCmp
     have hInvLeft := Node.inv_left hInv
     have hInvRight := Node.inv_right hInv
@@ -264,7 +264,7 @@ set_option maxHeartbeats 5000000
 @[pspec]
 theorem Node.rotate_left_spec
   {T : Type} [LinearOrder T]
-  (x z : T) (a b c : Option (Node T)) (bf_x : I8)
+  (x z : T) (a b c : Option (Node T)) (bf_x bf_z : I8)
   -- Invariants for the subtrees
   (hInvA : Subtree.inv a)
   (hInvZ : Node.inv ⟨ z, b, c, bf_z ⟩)
@@ -379,7 +379,7 @@ theorem Node.rotate_left_spec
 @[pspec]
 theorem Node.rotate_right_spec
   {T : Type} [LinearOrder T]
-  (x z : T) (a b c : Option (Node T)) (bf_x : I8)
+  (x z : T) (a b c : Option (Node T)) (bf_x bf_z : I8)
   -- Invariants for the subtrees
   (hInvC : Subtree.inv c)
   (hInvZ : Node.inv ⟨ z, a, b, bf_z ⟩)
@@ -507,7 +507,7 @@ theorem Node.rotate_left_right_spec
   (hInv1 : Subtree.inv t1)
   -- The tree is not balanced
   (hBfX : bf_x.val = -2)
-  -- Z has a negative balance factor
+  -- Z has a positive balance factor
   (hBfZ : bf_z.val = 1)
   :
   let x_tree := ⟨ x, none, t1, bf_x ⟩
@@ -748,5 +748,148 @@ theorem Node.rotate_right_left_spec
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
         scalar_tac
+
+-- This rewriting lemma is problematic below
+attribute [-simp] Bool.exists_bool
+
+set_option maxRecDepth 10000
+
+mutual
+
+@[pspec]
+theorem Node.insert_spec
+  {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
+  (node : Node T) (value : T)
+  (hInv : Node.inv node) :
+  ∃ b node', Node.insert T OrdInst node value = ok (b, node') ∧
+  Node.inv node' ∧
+  Node.v node' = Node.v node ∪ {value} ∧
+  (if b then node'.height = node.height + 1 else node'.height = node.height) := by
+  rw [Node.insert]
+  have hCmp := Ospec.infallible -- TODO
+  progress as ⟨ ordering ⟩
+  split <;> rename _ => hEq <;> clear hCmp <;> simp at *
+  . -- value < node.value
+    progress as ⟨ updt, node', h1, h2 ⟩
+    simp [and_assoc, *]
+  . -- value = node.value
+    simp [and_assoc]
+    cases node; simp_all
+  . -- node.value < value
+    progress as ⟨ updt, node', h1, h2 ⟩
+    simp [and_assoc, *]
+
+@[pspec]
+theorem Tree.insert_in_opt_node_spec
+  {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
+  (tree : Option (Node T)) (value : T)
+  (hInv : Subtree.inv tree) :
+  ∃ b tree', Tree.insert_in_opt_node T OrdInst tree value = ok (b, tree') ∧
+  Subtree.inv tree' ∧
+  Subtree.v tree' = Subtree.v tree ∪ {value} ∧
+  (if b then Subtree.height tree' = Subtree.height tree + 1
+   else Subtree.height tree' = Subtree.height tree) := by
+  rw [Tree.insert_in_opt_node]
+  cases hNode : tree <;> simp [hNode]
+  . -- tree = none
+    simp [and_assoc]
+    split_conjs
+    . simp [Node.invAux, Node.balanceFactor]
+    . simp [Subtree.inv]
+    . apply Set.ext; simp
+  . -- tree = some
+    rename Node T => node
+    have hNodeInv : Node.inv node := by simp_all
+    progress as ⟨ updt, tree' ⟩
+    simp [and_assoc, *]
+
+@[pspec]
+theorem Node.insert_in_left_spec
+  {T : Type} (OrdInst : Ord T)
+  [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
+  (node : Node T) (value : T)
+  (hInv : Node.inv node)
+  (hLt : value < node.value) :
+  ∃ b node', Node.insert_in_left T OrdInst node value = ok (b, node') ∧
+  Node.inv node' ∧
+  Node.v node' = Node.v node ∪ {value} ∧
+  (if b then node'.height = node.height + 1 else node'.height = node.height) := by
+  rw [Node.insert_in_left]
+  have hInvLeft : Subtree.inv node.left := by cases node; simp_all
+  progress as ⟨ updt, left_opt' .. ⟩
+  split
+  . -- the height of the subtree changed
+    have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
+           -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
+      cases node; simp_all [Node.invAux]
+    progress as ⟨ i .. ⟩
+    split
+    . -- i = -2
+      simp
+      cases h: left_opt' with
+      | none => simp_all -- absurd
+      | some left' =>
+        simp [h]
+        cases node with | mk x left right balance_factor =>
+        split
+        . -- rotate_right
+          -- TODO: fix progress
+          cases h:left' with | mk z a b bf_z =>
+          have hInv1 : (Node.mk x (some (Node.mk z a b bf_z)) right i).invAuxNotBalanced := by
+            simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
+            scalar_tac
+          have ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩ := Node.rotate_right_spec x z a b right i bf_z
+            (by simp_all) (by simp_all) hInv1 (by simp [*]) (by simp_all)
+          simp [hEq]; clear hEq
+          clear hInv1 -- TODO: simp_all loops otherwise
+          simp [and_assoc, *]
+          split_conjs
+          . -- set reasoning
+            simp_all
+            apply Set.ext; simp
+            intro x; tauto
+          . -- height
+            simp_all [Node.invAux, Node.balanceFactor]
+            have : bf_z.val = -1 := by sorry
+            scalar_tac
+        . -- rotate_left_right
+          sorry
+    . -- i ≠ -2: the height of the tree did not change
+      simp [and_assoc, *]
+      split_conjs
+      . cases node; simp_all [Node.invAux, Node.balanceFactor]
+        split_conjs <;> scalar_tac
+      . apply Set.ext; simp
+        cases node; simp_all
+        tauto
+      . simp_all
+        cases node with | mk node_value left right balance_factor =>
+        split <;> simp [Node.balanceFactor] at * <;> scalar_tac
+  . -- the height of the subtree did not change
+    simp [and_assoc, *] -- TODO: annoying to use this simp everytime: put this in progress
+    split_conjs
+    . cases node;
+      simp_all [Node.invAux, Node.balanceFactor]
+    . apply Set.ext; simp; intro x
+      cases node; simp_all
+      tauto
+    . simp_all
+      cases node; simp_all
+
+@[pspec]
+theorem Node.insert_in_right_spec
+  {T : Type} (OrdInst : Ord T)
+  [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
+  (node : Node T) (value : T)
+  (hInv : Node.inv node)
+  (hGt : value > node.value) :
+  ∃ b node', Node.insert_in_right T OrdInst node value = ok (b, node') ∧
+  Node.inv node' ∧
+  Node.v node' = Node.v node ∪ {value} ∧
+  (if b then node'.height = node.height + 1 else node'.height = node.height) := by
+  rw [Node.insert_in_right]
+  sorry
+
+end
 
 end avl
