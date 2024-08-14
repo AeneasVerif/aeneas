@@ -63,9 +63,9 @@ namespace Lemmas
           simp_arith [hk]
         have hi := hi (m + 1) heq1 hineq
         apply hi <;> simp_all
-        . unfold for_all_fin_aux at hf
+        · unfold for_all_fin_aux at hf
           simp_all
-        . simp_all [Arith.add_one_le_iff_le_ne]
+        · simp_all [Arith.add_one_le_iff_le_ne]
 
   -- TODO: this is not necessary anymore
   theorem for_all_fin_imp_forall (n : Nat) (f : Fin n → Prop) :
@@ -369,10 +369,10 @@ namespace Fix
     intro Hdiv
     -- Case on `g (fix... k)`: is there an n s.t. it terminates?
     cases Classical.em (∀ n, g (fix_fuel n k) = .div) <;> rename_i Hn
-    . -- Case 1: g diverges
+    · -- Case 1: g diverges
       have Hgcont := Hgcont Hn
       simp_all
-    . -- Case 2: g doesn't diverge
+    · -- Case 2: g doesn't diverge
       simp at Hn
       let ⟨ n, Hn ⟩ := Hn
       have Hdivn := Hdiv n
@@ -397,8 +397,8 @@ namespace Fix
         intro m
         -- TODO: we shouldn't need the excluded middle here because it is decidable
         cases Classical.em (n ≤ m) <;> rename_i Hl
-        . apply Hhdiv; assumption
-        . simp at Hl
+        · apply Hhdiv; assumption
+        · simp at Hl
           -- Make a case disjunction on `h y (fix_fuel m k)`: if it is not equal
           -- to div, use the monotonicity of `h y`
           have Hle : m ≤ n := by omega
@@ -457,9 +457,9 @@ namespace Fix
     have ⟨ Hhmono, Hhcont ⟩ := Hhvalid
     simp [← imp_forall_iff] at Hhcont
     simp [is_valid_p]; constructor
-    . -- Monotonicity
+    · -- Monotonicity
       apply is_mono_p_bind <;> assumption
-    . -- Continuity
+    · -- Continuity
       intro Hkmono
       have Hgcont := Hgcont Hkmono
       have Hhcont := Hhcont Hkmono
@@ -646,8 +646,8 @@ namespace FixI
     (Hhvalid : ∀ y, is_valid_p k (h y)) :
     is_valid_p k (λ k => do let y ← g k; h y k) := by
     apply Fix.is_valid_p_bind
-    . apply Hgvalid
-    . apply Hhvalid
+    · apply Hgvalid
+    · apply Hhvalid
 
   def Funs.is_valid_p
     (k : k_ty id a b)
@@ -859,8 +859,8 @@ namespace FixII
     (Hhvalid : ∀ y, is_valid_p k (h y)) :
     is_valid_p k (λ k => do let y ← g k; h y k) := by
     apply Fix.is_valid_p_bind
-    . apply Hgvalid
-    . apply Hhvalid
+    · apply Hgvalid
+    · apply Hhvalid
 
   def Funs.is_valid_p
     (k : k_ty id ty a b)
@@ -1162,9 +1162,9 @@ namespace Ex4
     (repeat (apply And.intro)) <;> intro x <;>
     simp only [is_even_body, is_odd_body]
     -- Prove the validity of the individual bodies
-    . split <;> simp
+    · split <;> simp
       apply is_valid_p_bind <;> simp
-    . split <;> simp
+    · split <;> simp
       apply is_valid_p_bind <;> simp
 
   theorem body_fix_eq : fix body = body (fix body) :=
@@ -1538,12 +1538,12 @@ namespace Ex9
     intro k a x
     simp only [id_body]
     split <;> try simp
-    . apply is_valid_p_same
-    . apply is_valid_p_bind
-      . -- We have to show that `map k tl` is valid
+    · apply is_valid_p_same
+    · apply is_valid_p_bind
+      · -- We have to show that `map k tl` is valid
         -- Remark: `map_is_valid` doesn't work here, we need the specialized version
         apply map_is_valid_simple
-      . -- TODO: why isn't `is_valid_p_same` automatically applied?
+      · -- TODO: why isn't `is_valid_p_same` automatically applied?
         intro tl
         apply is_valid_p_same
 
