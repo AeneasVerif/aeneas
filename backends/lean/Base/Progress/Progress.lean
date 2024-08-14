@@ -175,8 +175,8 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
        | none =>
          -- Sanity check
          if ¬ ids.isEmpty then
-           return (.Error m!"Too many ids provided ({ids}): there is no postcondition to split")
-         else return .Ok
+          logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
+         return .Ok
        | some hPost => do
          let rec splitPostWithIds (prevId : Name) (hPost : Expr) (ids0 : List (Option Name)) : TacticM ProgressError := do
            match ids0 with
@@ -197,7 +197,9 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
              trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
              if ← isConj (← inferType hPost) then
                splitConjTac hPost (some (prevId, nid)) (λ _ nhPost => splitPostWithIds nid nhPost ids)
-             else return (.Error m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition")
+             else
+              logWarning m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition"
+              pure .Ok
          let curPostId := (← hPost.fvarId!.getDecl).userName
          splitPostWithIds curPostId hPost ids
   match res with

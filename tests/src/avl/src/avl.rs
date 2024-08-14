@@ -376,10 +376,6 @@ impl<T: Ord> Tree<T> {
     }
 }
 
-// We need this because we can't make this crate a library (see the Cargo.toml)
-pub fn main() {}
-
-
 #[cfg(test)]
 mod tests {
     use super::*;

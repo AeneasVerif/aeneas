@@ -235,9 +235,4 @@ def Tree.insert
   let (b, o) ← Tree.insert_in_opt_node T OrdInst self.root value
   Result.ok (b, { root := o })
 
-/- [avl::main]:
-   Source: 'src/avl.rs', lines 380:0-380:13 -/
-def main : Result Unit :=
-  Result.ok ()
-
 end avl
