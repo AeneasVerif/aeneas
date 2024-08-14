@@ -12,7 +12,7 @@ Include External_Types.
 Module External_FunsExternal_Template.
 
 (** [core::cell::{core::cell::Cell<T>}#10::get]:
-    Source: '/rustc/library/core/src/cell.rs', lines 533:4-533:26
+    Source: '/rustc/library/core/src/cell.rs', lines 536:4-536:26
     Name pattern: core::cell::{core::cell::Cell<@T>}::get *)
 Axiom core_cell_Cell_get :
   forall(T : Type) (markerCopyInst : core_marker_Copy_t T),
@@ -20,7 +20,7 @@ Axiom core_cell_Cell_get :
 .
 
 (** [core::cell::{core::cell::Cell<T>}#11::get_mut]:
-    Source: '/rustc/library/core/src/cell.rs', lines 611:4-611:39
+    Source: '/rustc/library/core/src/cell.rs', lines 614:4-614:39
     Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut *)
 Axiom core_cell_Cell_get_mut :
   forall(T : Type),

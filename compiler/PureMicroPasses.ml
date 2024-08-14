@@ -1205,7 +1205,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 in
                 let fields =
                   match adt_decl.kind with
-                  | Enum _ | Alias _ | Opaque ->
+                  | Enum _ | Alias _ | Opaque | Error _ ->
                       craise __FILE__ __LINE__ def.item_meta.span "Unreachable"
                   | Struct fields -> fields
                 in
