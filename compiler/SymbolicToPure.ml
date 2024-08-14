@@ -578,7 +578,7 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
   | Alias _ ->
       craise __FILE__ __LINE__ span
         "type aliases should have been removed earlier"
-  | T.Opaque -> Opaque
+  | T.Opaque | T.Error _ -> Opaque
 
 (** Translate a type definition from LLBC
 
