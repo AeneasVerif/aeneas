@@ -29,6 +29,9 @@ macro "scalar_tac" pat:term : attr =>
 macro "nonlin_scalar_tac" pat:term : attr =>
   `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTacNonLin):ident]) (pattern := $pat))
 
+-- This is useful especially in the termination proofs
+attribute [scalar_tac a.toNat] Int.toNat_eq_max
+
 /- Check if a proposition is a linear integer proposition.
    We notably use this to check the goals: this is useful to filter goals that
    are unlikely to be solvable with arithmetic tactics. -/
