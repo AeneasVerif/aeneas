@@ -3,8 +3,11 @@ name = "avl"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
+# TODO: If we turn this package into a library, building the tests fails.
+[[bin]]
 name = "avl"
 path = "src/avl.rs"
 
-[dependencies]
+# [lib]
+# name = "avl"
+# path = "src/avl.rs"
