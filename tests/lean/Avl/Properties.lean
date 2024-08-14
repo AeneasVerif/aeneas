@@ -491,13 +491,6 @@ theorem Node.rotate_right_spec
       simp_all
       scalar_tac
 
--- TODO: move
-@[simp]
-theorem Int.eq_of_sub_right_iff_eq_of_add (a b c : Int) : c = a - b ↔ c + b = a := by omega
-
-@[simp]
-theorem Int.eq_of_sub_left_iff_eq_of_add (a b c : Int) : a - b = c ↔ a = c + b := by omega
-
 @[pspec]
 theorem Node.rotate_left_right_spec
   {T : Type} [LinearOrder T]
