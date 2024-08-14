@@ -261,7 +261,7 @@ def CList.to_list {α : Type} (x : CList α) : List α :=
  -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   -- Precondition: the index is in bounds
-  (h : ↑i < l.to_list.len)
+  (h : i.val < l.to_list.length)
   -- Postcondition
   : ∃ x, list_nth T l i = ok x ∧
   -- [x] is the ith element of [l] after conversion to [List]

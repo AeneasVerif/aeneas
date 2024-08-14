@@ -18,7 +18,7 @@ abbrev lookup {α : Type} (ls: AList α) (key: Usize) : Option α :=
   ls.v.lookup key
 
 @[simp]
-abbrev len {α : Type} (ls : AList α) : Int := ls.v.len
+abbrev length {α : Type} (ls : AList α) : Int := ls.v.length
 
 end AList
 
@@ -77,14 +77,14 @@ instance : Inhabited (AList α) where
 
 @[simp]
 def slots_s_inv (s : List (AList α)) : Prop :=
-  ∀ (i : Int), 0 ≤ i → i < s.len → slot_t_inv s.len i (s.index i)
+  ∀ (i : Int), 0 ≤ i → i < s.length → slot_t_inv s.length i (s.index i)
 
 def slots_t_inv (s : alloc.vec.Vec (AList α)) : Prop :=
   slots_s_inv s.v
 
 @[simp]
 def slots_s_lookup (s : List (AList α)) (k : Usize) : Option α :=
-  let i := hash_mod_key k s.len
+  let i := hash_mod_key k s.length
   let slot := s.index i
   slot.lookup k
 
@@ -98,7 +98,7 @@ def lookup (hm : HashMap α) (k : Usize) : Option α :=
   slots_s_lookup hm.slots.val k
 
 @[simp]
-abbrev len_s (hm : HashMap α) : Int := hm.al_v.len
+abbrev len_s (hm : HashMap α) : Int := hm.al_v.length
 
 instance : Membership Usize (HashMap α) where
   mem k hm := hm.lookup k ≠ none
@@ -107,18 +107,18 @@ instance : Membership Usize (HashMap α) where
 attribute [coe] HashMap.v
 
 abbrev inv_load (hm : HashMap α) : Prop :=
-  let capacity := hm.slots.val.len
+  let capacity : Int := hm.slots.val.length
   -- TODO: let (dividend, divisor) := hm.max_load_factor introduces field notation .2, etc.
-  let dividend := hm.max_load_factor.1
-  let divisor := hm.max_load_factor.2
-  0 < dividend.val ∧ dividend < divisor ∧
+  let dividend := hm.max_load_factor.1.val
+  let divisor := hm.max_load_factor.2.val
+  0 < dividend ∧ dividend < divisor ∧
   capacity * dividend >= divisor ∧
   hm.max_load = (capacity * dividend) / divisor
 
 @[simp]
 def inv_base (hm : HashMap α) : Prop :=
   -- [num_entries] correctly tracks the number of entries
-  hm.num_entries.val = hm.al_v.len ∧
+  hm.num_entries.val = hm.al_v.length ∧
   -- Slots invariant
   slots_t_inv hm.slots ∧
   -- The capacity must be > 0 (otherwise we can't resize)
@@ -147,7 +147,8 @@ set_option scalarTac.nonLin true
 
 -- Custom, local rule
 @[local scalar_tac h]
-theorem inv_imp_eqs_ineqs {hm : HashMap α} (h : hm.inv) : 0 < hm.slots.length ∧ hm.num_entries = hm.al_v.len := by
+theorem inv_imp_eqs_ineqs {hm : HashMap α} (h : hm.inv) :
+  0 < hm.slots.length ∧ hm.num_entries.val = hm.al_v.length := by
   simp_all [inv]
 
 -- The proofs below are a bit expensive, so we deactivate the heart bits limit
@@ -172,11 +173,11 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
       ∀ (i : ℤ), 0 ≤ i → i < ↑(alloc.vec.Vec.len (AList α) slots1) → slots1.val.index i = Nil := by
       intro i h0 h1
       simp [*]
-      if hi : i < slots.val.len then
+      if hi : i < slots.val.length then
         simp [*]
       else
         simp_all
-        have : i - slots.val.len = 0 := by scalar_tac
+        have : i - slots.val.length = 0 := by scalar_tac
         simp [*]
     have Hslots1Len : alloc.vec.Vec.len (AList α) slots1 + n1.val ≤ Usize.max := by
       simp_all
@@ -193,15 +194,15 @@ termination_by n.val.toNat
 decreasing_by scalar_decr_tac -- TODO: this is expensive
 
 theorem forall_nil_imp_flatten_len_zero (slots : List (List α))
-  (Hnil : ∀ i, 0 ≤ i → i < slots.len → slots.index i = []) :
+  (Hnil : ∀ i, 0 ≤ i → i < slots.length → slots.index i = []) :
   slots.flatten = [] := by
   induction slots <;> simp_all
-  have Hhead := Hnil 0 (by simp) (by scalar_tac)
+  have Hhead := Hnil 0 (by simp)
   simp_all; clear Hhead
   rename _ → _ => Hind
   apply Hind
-  intros i h0 h1
-  have := Hnil (i + 1) (by scalar_tac) (by scalar_tac)
+  intros i h0
+  have := Hnil (i + 1) (by scalar_tac)
   have : 0 < i + 1 := by scalar_tac
   simp_all
 
@@ -222,11 +223,15 @@ theorem new_with_capacity_spec
   . progress as ⟨ i1 ⟩
     progress as ⟨ i2 ⟩
     simp [inv, inv_load]
-    have : (Slots.al_v slots).len = 0 := by
+    have : (Slots.al_v slots).length = 0 := by
       have := forall_nil_imp_flatten_len_zero (slots.val.map AList.v)
-        (by intro i h0 h1; simp_all)
+        (by intro i h0 h1
+            -- TODO: simp_all eliminates Hnil !?
+            simp at *
+            simp_all
+            rw [Hnil] <;> scalar_tac)
       simp_all
-    have : 0 < slots.val.len := by simp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]
+    have : 0 < slots.val.length := by simp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]; scalar_tac
     have : slots_t_inv slots := by
       simp [slots_t_inv, slot_t_inv]
       intro i h0 h1
@@ -242,7 +247,7 @@ theorem new_with_capacity_spec
     . simp_all [al_v, Slots.al_v, v]
     . simp [lookup]
       intro k
-      have : 0 ≤ k.val % slots.val.len ∧ k.val % slots.val.len < slots.val.len := by scalar_tac
+      have : 0 ≤ k.val % slots.val.length ∧ k.val % slots.val.length < slots.val.length := by scalar_tac
       simp [*]
 
 @[pspec]
@@ -270,8 +275,8 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
     slot_s_inv_hash l (hash_mod_key key l) l1.v ∧
     -- Reasoning about the length
     (match l0.lookup key with
-     | none => l1.len = l0.len + 1
-     | some _ => l1.len = l0.len) ∧
+     | none => l1.length = l0.length + 1
+     | some _ => l1.length = l0.length) ∧
     -- The keys are distinct
     distinct_keys l1.v ∧
     -- We need this auxiliary property to prove that the keys distinct properties is preserved
@@ -323,8 +328,8 @@ theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: 
     slot_s_inv_hash l (hash_mod_key key l) l1.v ∧
     -- Reasoning about the length
     (match l0.lookup key with
-     | none => l1.len = l0.len + 1
-     | some _ => l1.len = l0.len) ∧
+     | none => l1.length = l0.length + 1
+     | some _ => l1.length = l0.length) ∧
     -- The keys are distinct
     distinct_keys l1.v
   := by
@@ -409,7 +414,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     -- in which case we don't even lookup the same slots, or the hashes
     -- are the same, in which case we have to reason about what happens
     -- in one slot
-    let k_hash_mod := k.val % v.val.len
+    let k_hash_mod := k.val % v.val.length
     have _ : 0 ≤ k_hash_mod ∧ k_hash_mod < alloc.vec.Vec.length hm.slots := by
       simp_all [k_hash_mod] -- TODO: shouldn't need to do this
       scalar_tac
@@ -422,7 +427,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     -- We have to do a case disjunction
     simp_all [List.map_update_eq]
     -- TODO: dependent rewrites
-    have _ : key.val % hm.slots.val.len < (List.map AList.v hm.slots.val).len := by
+    have _ : key.val % hm.slots.val.length < (List.map AList.v hm.slots.val).length := by
       simp [*]
     split <;>
     rename_i heq <;>
@@ -445,7 +450,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       intro i hipos _
       have _ := hinv.right.left i hipos (by simp_all)
       -- We need a case disjunction
-      cases h_ieq : i == key.val % List.len hm.slots.val <;> simp_all [slot_s_inv]
+      cases h_ieq : i == key.val % List.length hm.slots.val <;> simp_all [slot_s_inv]
     . simp [hinv, h_veq]
     . simp_all [frame_load, inv_base, inv_load]
   simp_all
@@ -461,14 +466,14 @@ theorem move_elements_from_list_spec
   {l i : Int} (hSlotInv : slot_t_inv l i slot)
   (hDisjoint1 : ∀ key v, ntable.lookup key = some v → slot.lookup key = none)
   (hDisjoint2 : ∀ key v, slot.lookup key = some v → ntable.lookup key = none)
-  (hLen : ntable.al_v.len + slot.v.len ≤ Usize.max)
+  (hLen : ntable.al_v.length + slot.v.length ≤ Usize.max)
   :
   ∃ ntable1, ntable.move_elements_from_list T slot = ok ntable1 ∧
   ntable1.inv ∧
   (∀ key v, ntable1.lookup key = some v → ntable.lookup key = some v ∨ slot.lookup key = some v) ∧
   (∀ key v, ntable.lookup key = some v → ntable1.lookup key = some v) ∧
   (∀ key v, slot.lookup key = some v → ntable1.lookup key = some v) ∧
-  ntable1.al_v.len = ntable.al_v.len + slot.v.len
+  ntable1.al_v.length = ntable.al_v.length + slot.v.length
   := by
   rw [move_elements_from_list]; rw [move_elements_from_list_loop]
   cases slot with
@@ -507,7 +512,7 @@ theorem move_elements_from_list_spec
         have := hLookup12 key' h
         have := hDisjoint2 key' v
         simp_all
-    have : ntable1.al_v.len + slot1.v.len ≤ Usize.max := by simp_all; scalar_tac
+    have : ntable1.al_v.length + slot1.v.length ≤ Usize.max := by simp_all; scalar_tac
     have : slot_t_inv l i slot1 := by
       simp [slot_t_inv] at hSlotInv
       simp [slot_t_inv, hSlotInv]
@@ -549,26 +554,27 @@ theorem move_elements_from_list_spec
         simp_all
     . scalar_tac
 
-private theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots.val.len ≠ 0)
-  (hEmpty : ∀ j, 0 ≤ j → j < slots.val.len → slots.val.index j = AList.Nil) :
+private theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots.val.length ≠ 0)
+  (hEmpty : ∀ (j : Int), 0 ≤ j → j < slots.val.length → slots.val.index j = AList.Nil) :
   ∀ key, slots.lookup key = none := by
   intro key
   simp [Slots.lookup]
   -- TODO: simplify
-  have : 0 ≤ key.val % slots.val.len ∧ key.val % slots.val.len < slots.val.len := by
+  have : 0 ≤ key.val % slots.val.length ∧ key.val % slots.val.length < slots.val.length := by
     scalar_tac
-  have := hEmpty (key.val % slots.val.len) (by simp [*]) (by simp [*])
+  have := hEmpty (key.val % (slots.val.length : Int)) (by simp [*]) (by simp [*])
   simp [*]
 
-private theorem slots_index_len_le_flatten_len (slots : List (AList α)) (i : Int) (h : 0 ≤ i ∧ i < slots.len) :
-  (slots.index i).len ≤ (List.map AList.v slots).flatten.len := by
+private theorem slots_index_len_le_flatten_len
+  (slots : List (AList α)) (i : Int) (h : 0 ≤ i ∧ i < slots.length) :
+  (slots.index i).length ≤ (List.map AList.v slots).flatten.length := by
   match slots with
   | [] =>
     simp at *
   | slot :: slots' =>
     simp at *
     if hi : i = 0 then
-      simp_all; scalar_tac
+      simp_all
     else
       have := slots_index_len_le_flatten_len slots' (i - 1) (by scalar_tac)
       simp [*]
@@ -579,12 +585,12 @@ private theorem slots_index_len_le_flatten_len (slots : List (AList α)) (i : In
    TODO: remove?
  -/
 private theorem slots_inv_lookup_imp_eq (slots : Slots α) (hInv : slots_t_inv slots)
-  (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) (key : Usize) :
-  (slots.val.index i).lookup key ≠ none → i = key.val % slots.val.len := by
+  (i : Int) (hi : 0 ≤ i ∧ i < slots.val.length) (key : Usize) :
+  (slots.val.index i).lookup key ≠ none → i = key.val % slots.val.length := by
   suffices hSlot : ∀ (slot : List (Usize × α)),
-           slot_s_inv slots.val.len i slot →
+           slot_s_inv slots.val.length i slot →
            slot.lookup key ≠ none →
-           i = key.val % slots.val.len
+           i = key.val % slots.val.length
   from by
     rw [slots_t_inv, slots_s_inv] at hInv
     replace hInv := hInv i hi.left hi.right
@@ -596,8 +602,9 @@ private theorem slots_inv_lookup_imp_eq (slots : Slots α) (hInv : slots_t_inv s
   split at * <;> simp_all
 
 private theorem move_slots_updated_table_lookup_imp
+  (i : Int)
   (ntable ntable1 ntable2 : HashMap α) (slots slots1 : Slots α) (slot : AList α)
-  (hi : 0 ≤ i ∧ i < slots.val.len)
+  (hi : 0 ≤ i ∧ i < slots.val.length)
   (hSlotsInv : slots_t_inv slots)
   (hSlotEq : slot = slots.val.index i)
   (hSlotsEq : slots1.val = slots.val.update i .Nil)
@@ -620,12 +627,12 @@ private theorem move_slots_updated_table_lookup_imp
   | inr hTable1Lookup =>
     right
     -- The key can't be for the slot we replaced
-    cases heq : key.val % slots.val.len == i <;> simp_all [Slots.lookup]
+    cases heq : key.val % slots.val.length == i <;> simp_all [Slots.lookup]
 
 private theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 : HashMap α)
   (slot : AList α)
   (slots slots1 : Slots α)
-  (i : Int) (h1 : i < slots.len)
+  (i : Int) (h1 : i < slots.length)
   (hSlotEq : slot = slots.val.index i)
   (hSlots1Eq : slots1.val = slots.val.update i .Nil)
   (hLookup1 : ∀ (key : Usize) (v : α), ntable.lookup key = some v → ntable1.lookup key = some v)
@@ -635,7 +642,7 @@ private theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 :
   (∀ key v, slots.lookup key = some v → ntable2.lookup key = some v) ∧
   (∀ key v, ntable.lookup key = some v → ntable2.lookup key = some v) := by
   constructor <;> intro key v hLookup
-  . if hi: key.val % slots.val.len = i then
+  . if hi: key.val % slots.val.length = i then
       -- We lookup in slot
       have := hLookup2 key v
       simp_all [Slots.lookup]
@@ -650,10 +657,10 @@ private theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 :
     simp_all
 
 private theorem slots_lookup_none_imp_slot_lookup_none
-  (slots : Slots α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) :
+  (slots : Slots α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.length) :
   ∀ (key : Usize), slots.lookup key = none → (slots.val.index i).lookup key = none := by
   intro key hLookup
-  if heq : i = key.val % slots.val.len then
+  if heq : i = key.val % slots.val.length then
     simp_all [Slots.lookup]
   else
     have := slots_inv_lookup_imp_eq slots hInv i (by scalar_tac) key
@@ -661,18 +668,19 @@ private theorem slots_lookup_none_imp_slot_lookup_none
     simp_all
 
 private theorem slot_lookup_not_none_imp_slots_lookup_not_none
-  (slots : Slots α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.len) :
+  (slots : Slots α) (hInv : slots_t_inv slots) (i : Int) (hi : 0 ≤ i ∧ i < slots.val.length) :
   ∀ (key : Usize), (slots.val.index i).lookup key ≠ none → slots.lookup key ≠ none := by
   intro key hLookup hNone
   have := slots_lookup_none_imp_slot_lookup_none slots hInv i hi key hNone
   apply hLookup this
 
-private theorem slots_forall_nil_imp_al_v_nil (slots : Slots α)
-  (hEmpty : ∀ i, 0 ≤ i → i < slots.val.len → slots.val.index i = AList.Nil) :
+private theorem slots_forall_nil_imp_al_v_nil
+  (slots : Slots α)
+  (hEmpty : ∀ (i : Int), 0 ≤ i → i < slots.val.length → slots.val.index i = AList.Nil) :
   slots.al_v = [] := by
   suffices h :
     ∀ (slots : List (AList α)),
-      (∀ (i : ℤ), 0 ≤ i → i < slots.len → slots.index i = Nil) →
+      (∀ (i : ℤ), 0 ≤ i → i < slots.length → slots.index i = Nil) →
       (slots.map AList.v).flatten = [] from by
       replace h := h slots.val (by intro i h0 h1; exact hEmpty i h0 h1)
       simp_all
@@ -694,37 +702,37 @@ theorem move_elements_loop_spec
   (i : Usize)
   (hi : i ≤ alloc.vec.Vec.len (AList α) slots)
   (hinv : ntable.inv)
-  (hSlotsNonZero : slots.val.len ≠ 0)
+  (hSlotsNonZero : slots.val.length ≠ 0)
   (hSlotsInv : slots_t_inv slots)
   (hEmpty : ∀ j, 0 ≤ j → j < i.val → slots.val.index j = AList.Nil)
   (hDisjoint1 : ∀ key v, ntable.lookup key = some v → slots.lookup key = none)
   (hDisjoint2 : ∀ key v, slots.lookup key = some v → ntable.lookup key = none)
-  (hLen : ntable.al_v.len + slots.al_v.len ≤ Usize.max)
+  (hLen : ntable.al_v.length + slots.al_v.length ≤ Usize.max)
   :
   ∃ ntable1 slots1, ntable.move_elements_loop α slots i = ok (ntable1, slots1) ∧
   ntable1.inv ∧
-  ntable1.al_v.len = ntable.al_v.len + slots.al_v.len ∧
+  ntable1.al_v.length = ntable.al_v.length + slots.al_v.length ∧
   (∀ key v, ntable1.lookup key = some v → ntable.lookup key = some v ∨ slots.lookup key = some v) ∧
   (∀ key v, slots.lookup key = some v → ntable1.lookup key = some v) ∧
   (∀ key v, ntable.lookup key = some v → ntable1.lookup key = some v) ∧
-  (∀ (j : Int), 0 ≤ j → j < slots1.len → slots1.val.index j = AList.Nil)
+  (∀ (j : Int), 0 ≤ j → j < slots1.length → slots1.val.index j = AList.Nil)
   := by
   rw [move_elements_loop]
   simp
-  if hi: i.val < slots.val.len then
+  if hi: i.val < slots.val.length then
     -- Continue the proof
-    have hIneq : 0 ≤ i.val ∧ i.val < slots.val.len := by scalar_tac
+    have hIneq : 0 ≤ i.val ∧ i.val < slots.val.length := by scalar_tac
     simp [hi]
     progress as ⟨ slot, index_back, hSlotEq, hIndexBack ⟩
     rw [hIndexBack]; clear hIndexBack
-    have hInvSlot : slot_t_inv slots.val.len i.val slot := by
+    have hInvSlot : slot_t_inv slots.val.length i.val slot := by
       simp [slots_t_inv] at hSlotsInv
       simp [*]
     have ntableLookupImpSlot :
       ∀ (key : Usize) (v : α), ntable.lookup key = some v → slot.lookup key = none := by
       intro key v hLookup
       by_contra
-      have : i.val = key.val % slots.val.len := by
+      have : i.val = key.val % slots.val.length := by
         apply slots_inv_lookup_imp_eq slots hSlotsInv i.val (by scalar_tac)
         simp_all
       cases h: slot.lookup key <;> simp_all
@@ -738,10 +746,10 @@ theorem move_elements_loop_spec
       have := ntableLookupImpSlot _ _ h
       simp_all
 
-    have : ntable.al_v.len + slot.v.len ≤ Usize.max := by
+    have : ntable.al_v.length + slot.v.length ≤ Usize.max := by
       have := slots_index_len_le_flatten_len slots.val i.val (by scalar_tac)
       simp_all [Slots.al_v]; scalar_tac
-    progress as ⟨ ntable1, _, hDisjointNtable1, hLookup11, hLookup12, hLen1 ⟩ -- TODO: decompose post-condition by default
+    progress as ⟨ ntable1, _, hDisjointNtable1, hLookup11, hLookup12, hLen1 ⟩
     progress as ⟨ i' ⟩
     progress as ⟨ slots1, hSlots1Eq ⟩
     have : i' ≤ alloc.vec.Vec.len (AList α) slots1 := by simp_all [alloc.vec.Vec.len]; scalar_tac
@@ -756,10 +764,9 @@ theorem move_elements_loop_spec
       | inl h =>
         have := ntableLookupImpSlot _ _ h
         have := hDisjoint1 _ _ h
-        cases heq : i == key.val % slots.val.len <;> simp_all [Slots.lookup]
+        cases heq : i == key.val % slots.val.length <;> simp_all [Slots.lookup]
       | inr h =>
-        --have h1 := hLookup12 _ _ h
-        have heq : i = key.val % slots.val.len := by
+        have heq : i = key.val % slots.val.length := by
           exact slots_inv_lookup_imp_eq slots hSlotsInv i.val hIneq key (by simp_all [Slots.lookup])
         simp_all [Slots.lookup]
 
@@ -778,21 +785,26 @@ theorem move_elements_loop_spec
         have := hEmpty j h0 (by scalar_tac)
         simp_all
 
-    have : ntable1.al_v.len + (Slots.al_v slots1).len ≤ Usize.max := by
-      have : i.val < (List.map AList.v slots.val).len := by simp; scalar_tac
-      simp_all [Slots.al_v, List.len_flatten_update_eq, List.map_update_eq]
+    have : ntable1.al_v.length + (Slots.al_v slots1).length ≤ Usize.max := by
+      have : i.val < (List.map AList.v slots.val).length := by simp; scalar_tac
+      simp_all [Slots.al_v, List.length_flatten_update_eq, List.map_update_eq]
 
     progress as ⟨ ntable2, slots2, _, _, hLookup2Rev, hLookup21, hLookup22, hIndexNil ⟩
 
     simp
-    have : ∀ (j : ℤ), OfNat.ofNat 0 ≤ j → j < slots2.val.len → slots2.val.index j = AList.Nil := by
+    have : ∀ (j : ℤ), OfNat.ofNat 0 ≤ j → j < slots2.val.length → slots2.val.index j = AList.Nil := by
       intro j h0 h1
       apply hIndexNil j h0 h1
-    have : ntable2.al_v.len = ntable.al_v.len + slots.al_v.len := by simp_all [Slots.al_v]
+    have : ntable2.al_v.length = ntable.al_v.length + slots.al_v.length := by
+      simp_all [Slots.al_v]
+      -- TODO
+      scalar_tac_preprocess
+      simp_all
+      omega
     have : ∀ key v, ntable2.lookup key = some v →
            ntable.lookup key = some v ∨ slots.lookup key = some v := by
       intro key v hLookup
-      apply move_slots_updated_table_lookup_imp ntable ntable1 ntable2 slots slots1 slot hIneq <;>
+      apply move_slots_updated_table_lookup_imp _ ntable ntable1 ntable2 slots slots1 slot hIneq <;>
       try assumption
     have hLookupPreserve :
       (∀ key v, slots.lookup key = some v → ntable2.lookup key = some v) ∧
@@ -806,31 +818,31 @@ theorem move_elements_loop_spec
     simp [hi, *]
     simp_all
     have hi : i = alloc.vec.Vec.len (AList α) slots := by scalar_tac
-    have hEmpty : ∀ j, 0 ≤ j → j < slots.val.len → slots.val.index j = AList.Nil := by
+    have hEmpty : ∀ (j : Int), 0 ≤ j → j < slots.val.length → slots.val.index j = AList.Nil := by
       simp [hi] at hEmpty
       exact hEmpty
     have hNil : slots.al_v = [] := slots_forall_nil_imp_al_v_nil slots hEmpty
-    have hLenNonZero : slots.val.len ≠ 0 := by simp [*]
+    have hLenNonZero : slots.val.length ≠ 0 := by simp [*]
     have hLookupEmpty := slots_forall_nil_imp_lookup_none slots hLenNonZero hEmpty
     simp [hNil, hLookupEmpty]
     apply hEmpty
-termination_by (slots.val.len - i.val).toNat
+termination_by (slots.val.length - i.val).toNat
 decreasing_by scalar_decr_tac -- TODO: this is expensive
 
 @[pspec]
 theorem move_elements_spec
   {α : Type} (ntable : HashMap α) (slots : Slots α)
   (hinv : ntable.inv)
-  (hslotsNempty : 0 < slots.val.len)
+  (hslotsNempty : 0 < slots.val.length)
   (hSlotsInv : slots_t_inv slots)
   -- The initial table is empty
   (hEmpty : ∀ key, ntable.lookup key = none)
-  (hTableLen : ntable.al_v.len = 0)
-  (hSlotsLen : slots.al_v.len ≤ Usize.max)
+  (hTableLen : ntable.al_v.length = 0)
+  (hSlotsLen : slots.al_v.length ≤ Usize.max)
   :
   ∃ ntable1 slots1, ntable.move_elements α slots = ok (ntable1, slots1) ∧
   ntable1.inv ∧
-  ntable1.al_v.len = ntable.al_v.len + slots.al_v.len ∧
+  ntable1.al_v.length = ntable.al_v.length + slots.al_v.length ∧
   (∀ key v, ntable1.lookup key = some v ↔ slots.lookup key = some v)
   := by
   rw [move_elements]
@@ -853,7 +865,7 @@ theorem move_elements_spec
 theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
   ∃ hm', hm.try_resize α = ok hm' ∧
   (∀ key, hm'.lookup key = hm.lookup key) ∧
-  hm'.al_v.len = hm.al_v.len := by
+  hm'.al_v.length = hm.al_v.length := by
   rw [try_resize]
   simp
   progress as ⟨ n1 ⟩ -- TODO: simplify (Usize.ofInt (OfNat.ofNat 2) try_resize.proof_1).val
@@ -863,7 +875,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
     -- Can we deactivate field notations?
     omega
   progress as ⟨ n2 ⟩
-  if hSmaller : hm.slots.val.len ≤ n2.val then
+  if hSmaller : hm.slots.val.length ≤ n2.val then
     simp [hSmaller]
     have : (alloc.vec.Vec.len (AList α) hm.slots).val * 2 ≤ Usize.max := by
           simp [alloc.vec.Vec.len, inv, inv_load] at *
@@ -887,7 +899,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
       apply Int.mul_le_of_le_ediv at hSmaller <;> try simp [*]
       apply Int.mul_le_of_le_ediv at hSmaller <;> try simp
       --
-      have : (hm.slots.val.len * hm.2.1.val) * 1 ≤ (hm.slots.val.len * hm.2.1.val) * 2 := by
+      have : (hm.slots.val.length * hm.2.1.val) * 1 ≤ (hm.slots.val.length * hm.2.1.val) * 2 := by
         apply Int.mul_le_mul <;> (try simp [*]); scalar_tac
       --
       ring_nf at *
@@ -900,13 +912,13 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
       omega
     . -- End of the proof
       have : slots_t_inv hm.slots := by simp_all [inv] -- TODO
-      have : (Slots.al_v hm.slots).len ≤ Usize.max := by simp_all [inv, al_v, v, Slots.al_v]; scalar_tac
+      have : (Slots.al_v hm.slots).length ≤ Usize.max := by simp_all [inv, al_v, v, Slots.al_v]; scalar_tac
       progress as ⟨ ntable2, slots1, _, _, hLookup ⟩ -- TODO: assumption is not powerful enough
       simp_all [lookup, al_v, v, alloc.vec.Vec.len]
       intro key
       replace hLookup := hLookup key
-      cases h1: (ntable2.slots.val.index (key.val % ntable2.slots.val.len)).v.lookup key <;>
-      cases h2: (hm.slots.val.index (key.val % hm.slots.val.len)).v.lookup key <;>
+      cases h1: (ntable2.slots.val.index (key.val % ntable2.slots.val.length)).v.lookup key <;>
+      cases h2: (hm.slots.val.index (key.val % hm.slots.val.length)).v.lookup key <;>
       simp_all [Slots.lookup]
   else
     simp [hSmaller]
@@ -930,12 +942,12 @@ theorem insert_spec {α} (hm : HashMap α) (key : Usize) (value : α)
   simp [len]
   split
   . split
-    . simp [*]
+    . simp_all
       tauto
     . progress as ⟨ hm2 ⟩
-      simp [*]
+      simp_all
       tauto
-  . simp [*]; tauto
+  . simp_all
 
 @[pspec]
 theorem get_in_list_spec {α} (key : Usize) (slot : AList α) (hLookup : slot.lookup key ≠ none) :
@@ -1005,9 +1017,9 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLook
   simp [hash_key, alloc.vec.Vec.len]
   progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
   simp at *
-  have : 0 ≤ hash_mod.val ∧ hash_mod < hm.slots.val.len := by scalar_tac
+  have : 0 ≤ hash_mod.val ∧ hash_mod.val < hm.slots.val.length := by scalar_tac
   progress as ⟨ slot, index_back ⟩
-  have : slot_t_inv hm.slots.val.len hash_mod slot := by
+  have : slot_t_inv hm.slots.val.length hash_mod slot := by
     simp_all [inv, slots_t_inv]
   have : slot.lookup key ≠ none := by
     simp_all [lookup]
@@ -1023,9 +1035,9 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLook
     -- Last postcondition
     intro key' hNotEq
     -- TODO: simplify
-    have : 0 ≤ key'.val % hm.slots.val.len ∧ key'.val % hm.slots.val.len < hm.slots.val.len := by scalar_tac
+    have : 0 ≤ key'.val % hm.slots.val.length ∧ key'.val % hm.slots.val.length < hm.slots.val.length := by scalar_tac
     -- We need to do a case disjunction
-    cases h: (key.val % hm.slots.val.len == key'.val % hm.slots.val.len) <;>
+    cases h: (key.val % hm.slots.val.length == key'.val % hm.slots.val.length) <;>
     simp_all
 
 @[pspec]
@@ -1035,8 +1047,8 @@ theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv :
   slot'.lookup key = none ∧
   (∀ key', key' ≠ key → slot'.lookup key' = slot.lookup key') ∧
   match v with
-  | none => slot'.v.len = slot.v.len
-  | some _ => slot'.v.len = slot.v.len - 1 := by
+  | none => slot'.v.length = slot.v.length
+  | some _ => slot'.v.length + 1 = slot.v.length := by
   rw [remove_from_list, remove_from_list_loop]
   match hEq : slot with
   | .Nil =>
@@ -1054,18 +1066,16 @@ theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv :
       have hInv' : slot_t_inv l i tl := by simp_all [slot_t_inv]
       have ⟨ v1, tl1, hRemove, _, _, hLookupTl1, _ ⟩ := remove_from_list_spec key tl hInv'
       simp [*]; clear hRemove
-      constructor
-      . intro key' hNotEq1
-        simp_all
-      . cases v1 <;> simp_all
+      intro key' hNotEq1
+      simp_all
 
 private theorem lookup_not_none_imp_len_s_pos (hm : HashMap α) (key : Usize) (hLookup : hm.lookup key ≠ none)
-  (hNotEmpty : 0 < hm.slots.val.len) :
+  (hNotEmpty : 0 < hm.slots.val.length) :
   0 < hm.len_s := by
   -- TODO: simplify
-  have : 0 ≤ key.val % hm.slots.val.len ∧ key.val % hm.slots.val.len < hm.slots.val.len := by scalar_tac
-  have := List.len_index_le_len_flatten hm.v (key.val % hm.slots.val.len)
-  have := List.lookup_not_none_imp_len_pos (hm.slots.val.index (key.val % hm.slots.val.len)).v key
+  have : 0 ≤ key.val % hm.slots.val.length ∧ key.val % hm.slots.val.length < hm.slots.val.length := by scalar_tac
+  have := List.length_index_le_length_flatten hm.v (key.val % hm.slots.val.length)
+  have := List.lookup_not_none_imp_length_pos (hm.slots.val.index (key.val % hm.slots.val.length)).v key
   simp_all [lookup, len_s, al_v, v]
   scalar_tac
 
@@ -1083,21 +1093,26 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
   progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
   simp at *
   -- TODO: simplify
-  have : 0 ≤ hash_mod.val ∧ hash_mod < hm.slots.val.len := by
+  have : 0 ≤ hash_mod.val ∧ hash_mod.val < hm.slots.val.length := by
     scalar_tac
   progress as ⟨ slot, index_back ⟩
-  have : slot_t_inv hm.slots.val.len hash_mod slot := by simp_all [inv, slots_t_inv]
+  have : slot_t_inv hm.slots.val.length hash_mod slot := by simp_all [inv, slots_t_inv]
   progress as ⟨ vOpt, slot' ⟩
-  match hOpt : vOpt with
+  cases hOpt : vOpt with
   | none =>
     simp [*]
     progress as ⟨ slot'' ⟩
     simp [lookup, *]
     simp_all [al_v, v]
-    intro key' hNotEq
-    -- We need to make a case disjunction
-    cases h: (key.val % hm.slots.val.len) == (key'.val % hm.slots.val.len) <;>
-    simp_all
+    split_conjs
+    . intro key' hNotEq
+      -- We need to make a case disjunction
+      cases h: (key.val % hm.slots.val.length) == (key'.val % hm.slots.val.length) <;>
+      simp_all
+    . -- TODO
+      scalar_tac_preprocess
+      simp_all
+      omega
   | some v =>
     simp [*]
     have : 0 < hm.num_entries.val := by
@@ -1108,7 +1123,7 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
     simp_all [lookup, al_v, HashMap.v]
     constructor
     . intro key' hNotEq
-      cases h: (key.val % hm.slots.val.len) == (key'.val % hm.slots.val.len) <;>
+      cases h: (key.val % hm.slots.val.length) == (key'.val % hm.slots.val.length) <;>
       simp_all
     . scalar_tac
 

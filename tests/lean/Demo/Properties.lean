@@ -33,7 +33,7 @@ open CList
   | CCons hd tl => hd :: tl.to_list
 
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : ↑i < l.to_list.len) :
+  (h : i.val < l.to_list.length) :
   ∃ x, list_nth T l i = ok x ∧
   x = l.to_list.index ↑i
   := by

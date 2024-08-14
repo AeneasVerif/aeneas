@@ -21,15 +21,15 @@ instance [BEq α] : BEq (Vec α) := SubtypeBEq _
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
 
 @[scalar_tac v]
-theorem Vec.len_ineq {α : Type u} (v : Vec α) : 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize := by
-  cases v; simp[Scalar.max, List.len_eq_length, *]
+theorem Vec.len_ineq {α : Type u} (v : Vec α) : 0 ≤ v.val.length ∧ v.val.length ≤ Scalar.max ScalarTy.Usize := by
+  cases v; simp[Scalar.max, *]
 
 -- TODO: move/remove?
 @[scalar_tac v]
 theorem Vec.subtype_property {α : Type u} {p : Vec α → Prop} (v : Subtype p) : p v.val := v.property
 
 @[simp]
-abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.len
+abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.length
 
 @[simp]
 abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
@@ -46,7 +46,7 @@ instance (α : Type u) : Inhabited (Vec α) := by
 -- TODO: very annoying that the α is an explicit parameter
 @[simp]
 abbrev Vec.len (α : Type u) (v : Vec α) : Usize :=
-  Usize.ofIntCore v.val.len (by constructor <;> scalar_tac)
+  Usize.ofIntCore v.val.length (by constructor <;> scalar_tac)
 
 @[simp]
 theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len α v).val = v.length :=
@@ -66,11 +66,11 @@ def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
     fail maximumSizeExceeded
 
 @[pspec]
-theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.len < Usize.max) :
+theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Usize.max) :
   ∃ v1, v.push α x = ok v1 ∧
   v1.val = v.val ++ [x] := by
   rw [push]; simp
-  split <;> simp_all [List.len_eq_length]
+  split <;> simp_all
   scalar_tac
 
 -- This shouldn't be used
