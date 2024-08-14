@@ -86,7 +86,8 @@ macro_rules
       simp_wf <;>
       -- Simplify the context - otherwise simp_all below will blow up
       remove_invImage_assumptions <;>
-      -- Transform the goal a bit
+      -- Transform the goal a bit to get rid of `Int.toNat` if there is
+      -- (note that this is actually not necessary anymore).
       scalar_decr_tac_apply_lemmas <;>
       -- Finish
       simp_all <;> scalar_tac)
