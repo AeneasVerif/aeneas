@@ -382,8 +382,7 @@ decreasing_by
   -- We first need to "massage" the goal (in practice, all the proofs of [decreasing_by]
   -- should start with a call to [simp_wf]).
   simp_wf
-  -- Finish the proof
-  have : 1 ≤ x.val := by scalar_tac
-  simp [Int.toNat_sub_of_le, *]
+  -- This is just a linear arithmetic goal so we conclude with [scalar_tac]
+  scalar_tac
 
 end Tutorial
