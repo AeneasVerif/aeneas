@@ -13,8 +13,12 @@ namespace mini_tree
 inductive Node :=
 | mk : Option Node → Node
 
-@[simp, reducible]
+@[reducible]
 def Node.child (x : Node) := match x with | Node.mk x1 => x1
+
+@[simp]
+theorem Node.child._simpLemma_ (child : Option Node) :
+  (Node.mk child).child = child := by rfl
 
 /- [mini_tree::Tree]
    Source: 'tests/src/mini_tree.rs', lines 9:0-9:11 -/

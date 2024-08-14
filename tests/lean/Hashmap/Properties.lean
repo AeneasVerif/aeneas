@@ -291,7 +291,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
      if h: k = key then
        rw [insert_in_list]
        rw [insert_in_list_loop]
-       simp [h, and_assoc]
+       simp [h]
        split_conjs <;> simp_all [slot_s_inv_hash]
      else
        rw [insert_in_list]
@@ -797,7 +797,7 @@ theorem move_elements_loop_spec
 
     progress as ⟨ ntable2, slots2, _, _, hLookup2Rev, hLookup21, hLookup22, hIndexNil ⟩
 
-    simp [and_assoc]
+    simp
     have : ∀ (j : ℤ), OfNat.ofNat 0 ≤ j → j < slots2.val.len → slots2.val.index j = AList.Nil := by
       intro j h0 h1
       apply hIndexNil j h0 h1
@@ -816,7 +816,7 @@ theorem move_elements_loop_spec
     simp_all [alloc.vec.Vec.len, or_assoc]
     apply hLookupPreserve
   else
-    simp [hi, and_assoc, *]
+    simp [hi, *]
     simp_all
     have hi : i = alloc.vec.Vec.len (AList α) slots := by scalar_tac
     have hEmpty : ∀ j, 0 ≤ j → j < slots.val.len → slots.val.index j = AList.Nil := by
@@ -987,7 +987,7 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
   simp_all
   split
   . -- Non-recursive case
-    simp_all [and_assoc, slot_t_inv]
+    simp_all [slot_t_inv]
   . -- Recursive case
     -- TODO: progress doesn't instantiate l correctly
     rename _ → _ → _ => ih
@@ -997,11 +997,11 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
     -- TODO: progress? notation to have some feedback
     have ⟨ v, back, hEq, _, hBack ⟩ := ih; clear ih
     simp [hEq]; clear hEq
-    simp [and_assoc, *]
+    simp [*]
     -- Proving the post-condition about back
     intro v
     progress as ⟨ slot', _, _, _, hForAll ⟩; clear hBack
-    simp [and_assoc, *]
+    simp [*]
     constructor
     . simp_all [slot_t_inv, slot_s_inv, slot_s_inv_hash]
     . simp_all
@@ -1025,7 +1025,7 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLook
   have : slot.lookup key ≠ none := by
     simp_all [lookup]
   progress as ⟨ v, back .. ⟩
-  simp [and_assoc, lookup, *]
+  simp [lookup, *]
   constructor
   . simp_all
   . -- Backward function
@@ -1053,11 +1053,11 @@ theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv :
   rw [remove_from_list, remove_from_list_loop]
   match hEq : slot with
   | .Nil =>
-    simp [and_assoc]
+    simp
   | .Cons k v0 tl =>
     simp
     if hKey : k = key then
-      simp [hKey, and_assoc]
+      simp [hKey]
       simp_all [slot_t_inv, slot_s_inv]
       apply slot_allP_not_key_lookup
       simp [*]
@@ -1066,7 +1066,7 @@ theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv :
       -- TODO: progress doesn't instantiate l properly
       have hInv' : slot_t_inv l i tl := by simp_all [slot_t_inv]
       have ⟨ v1, tl1, hRemove, _, _, hLookupTl1, _ ⟩ := remove_from_list_spec key tl hInv'
-      simp [and_assoc, *]; clear hRemove
+      simp [*]; clear hRemove
       constructor
       . intro key' hNotEq1
         simp_all
@@ -1105,7 +1105,7 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
   | none =>
     simp [*]
     progress as ⟨ slot'' ⟩
-    simp [and_assoc, lookup, *]
+    simp [lookup, *]
     simp_all [al_v, v]
     intro key' hNotEq
     -- We need to make a case disjunction
@@ -1118,7 +1118,7 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
       simp_all [inv]
     progress as ⟨ newSize .. ⟩
     progress as ⟨ slots1 .. ⟩
-    simp_all [and_assoc, lookup, al_v, HashMap.v]
+    simp_all [lookup, al_v, HashMap.v]
     constructor
     . intro key' hNotEq
       cases h: (key.val % hm.slots.val.len) == (key'.val % hm.slots.val.len) <;>

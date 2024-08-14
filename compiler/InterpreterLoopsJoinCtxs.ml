@@ -889,7 +889,9 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
         else abs)
       ctx.env
   in
-  { ctx with env }
+  let ctx = { ctx with env } in
+  Invariants.check_invariants span ctx;
+  ctx
 
 (** Refresh the ids of the fresh abstractions.
 

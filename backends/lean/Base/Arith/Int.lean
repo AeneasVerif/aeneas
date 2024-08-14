@@ -95,7 +95,7 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   -- might have proven the goal, hence the `Tactic.allGoals`
   let dsimp :=
     Tactic.allGoals do tryTac (
-      -- We set `simpOnly` at false on purpose
+      -- We set `simpOnly` at false on purpose.
       dsimpAt false {} intTacSimpRocs
         -- Declarations to unfold
         []
@@ -107,6 +107,17 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   Tactic.allGoals (Utils.tryTac (Utils.normCastAtAll))
   -- norm_cast does weird things with negative numbers so we reapply simp
   dsimp
+  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+  Utils.tryTac (
+    Utils.simpAt true {}
+               -- Simprocs
+               []
+               -- Unfoldings
+               []
+                -- Simp lemmas
+                [``Int.subNatNat_eq_coe]
+                -- Hypotheses
+                [] .wildcard)
   -- We also need this, in case the goal is: ¬ False
   Tactic.allGoals do tryTac (
     Utils.simpAt true {}
@@ -177,5 +188,11 @@ example (a : Prop) (x : Int) (h0: (0 : Nat) < x) (h1: x < 0) : a := by
 
 example (x : Int) (h : x ≤ -3) : x ≤ -2 := by
   int_tac
+
+example (x y : Int) (h : x + y = 3) :
+  let z := x + y
+  z = 3 := by
+  intro z
+  omega
 
 end Arith

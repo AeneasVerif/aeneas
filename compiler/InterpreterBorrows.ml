@@ -1803,6 +1803,13 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                 let value =
                   ALoan (ASharedLoan (PNone, bids, sv, mk_aignored span ty))
                 in
+                (* We need to update the type of the value: abstract shared loans
+                   have the type `& ...` - TODO: this is annoying and not very clean... *)
+                let ty =
+                  (* Take the first region of the abstraction - this doesn't really matter *)
+                  let r = RegionId.Set.min_elt abs0.regions in
+                  TRef (RFVar r, ty, RShared)
+                in
                 { value; ty }
               in
               let avl = List.append [ av ] avl in

@@ -73,6 +73,9 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
       inferType th
     | .Local asmDecl => pure asmDecl.type
   trace[Progress] "Looked up theorem/assumption type: {thTy}"
+  -- Normalize to inline the let-bindings
+  let thTy ← normalizeLetBindings thTy
+  trace[Progress] "After normalizing the let-bindings: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
   -- withNewMCtxDepth do
   let (mvars, binders, thExBody) ← forallMetaTelescope thTy
@@ -104,6 +107,13 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     | .Local decl => mkAppOptM' (mkFVar decl.fvarId) (mvars.map some)
   let asmName ← do match keep with | none => mkFreshAnonPropUserName | some n => do pure n
   let thTy ← inferType th
+  trace[Progress] "thTy (after application): {thTy}"
+  -- Normalize the let-bindings (note that we already inlined the let bindings once above when analizing
+  -- the theorem, now we do it again on the instantiated theorem - there is probably a smarter way to do,
+  -- but it doesn't really matter).
+  -- TODO: actually we might want to let the user insert them in the context
+  let thTy ← normalizeLetBindings thTy
+  trace[Progress] "thTy (after normalizing let-bindings): {thTy}"
   let thAsm ← Utils.addDeclTac asmName th thTy (asLet := false)
   withMainContext do -- The context changed - TODO: remove once addDeclTac is updated
   let ngoal ← getMainGoal
@@ -138,7 +148,11 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     let _ ←
       tryTac
         (simpAt true {} [] []
-               [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+               [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div,
+                -- This last one is quite useful. In particular, it is necessary to rewrite the
+                -- conjunctions for Lean to automatically instantiate the existential quantifiers
+                -- (I don't know why).
+                ``and_assoc]
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
     -- TODO: not sure this is the best way of checking it
@@ -161,8 +175,8 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
        | none =>
          -- Sanity check
          if ¬ ids.isEmpty then
-           return (.Error m!"Too many ids provided ({ids}): there is no postcondition to split")
-         else return .Ok
+          logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
+         return .Ok
        | some hPost => do
          let rec splitPostWithIds (prevId : Name) (hPost : Expr) (ids0 : List (Option Name)) : TacticM ProgressError := do
            match ids0 with
@@ -183,7 +197,9 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
              trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
              if ← isConj (← inferType hPost) then
                splitConjTac hPost (some (prevId, nid)) (λ _ nhPost => splitPostWithIds nid nhPost ids)
-             else return (.Error m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition")
+             else
+              logWarning m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition"
+              pure .Ok
          let curPostId := (← hPost.fvarId!.getDecl).userName
          splitPostWithIds curPostId hPost ids
   match res with
@@ -459,7 +475,6 @@ namespace Test
     progress
     simp [*]
 
-
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
     ∃ nv, v.update_usize i x = ok nv ∧
@@ -504,6 +519,73 @@ namespace Test
     right
     progress keep _ as ⟨ z, h1 .. ⟩
     simp [*, h1]
+
+  -- Testing with mutually recursive definitions
+  mutual
+    inductive Tree
+    | mk : Trees → Tree
+
+    inductive Trees
+    | nil
+    | cons : Tree → Trees → Trees
+  end
+
+  mutual
+    def Tree.size (t : Tree) : Result Int :=
+      match t with
+      | .mk trees => trees.size
+
+    def Trees.size (t : Trees) : Result Int :=
+      match t with
+      | .nil => ok 0
+      | .cons t t' => do
+        let s ← t.size
+        let s' ← t'.size
+        ok (s + s')
+  end
+
+  mutual
+    @[pspec]
+    theorem Tree.size_spec (t : Tree) :
+      ∃ i, t.size = ok i ∧ i ≥ 0 := by
+      cases t
+      simp [Tree.size]
+      progress
+      simp
+      omega
+
+    @[pspec]
+    theorem Trees.size_spec (t : Trees) :
+      ∃ i, t.size = ok i ∧ i ≥ 0 := by
+      cases t <;> simp [Trees.size]
+      progress
+      progress
+      simp
+      omega
+  end
+
+  -- Testing progress on theorems containing local let-bindings
+  def add (x y : U32) : Result U32 := x + y
+
+  @[pspec] -- TODO: give the possibility of using pspec as a local attribute
+  theorem add_spec x y (h : x.val + y.val ≤ U32.max) :
+    let tot := x.val + y.val
+    ∃ z, add x y = ok z ∧ z.val = tot := by
+    rw [add]
+    intro tot
+    progress
+    simp [*]
+
+  def add1 (x y : U32) : Result U32 := do
+    let z ← add x y
+    add z z
+
+  example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
+    ∃ z, add1 x y = ok z := by
+    rw [add1]
+    progress as ⟨ z1, h ⟩
+    progress as ⟨ z2, h ⟩
+    simp
 
 end Test
 

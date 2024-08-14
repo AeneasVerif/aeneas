@@ -13,17 +13,32 @@ namespace issue_194_recursive_struct_projector
 inductive AVLNode (T : Type) :=
 | mk : T → Option (AVLNode T) → Option (AVLNode T) → AVLNode T
 
-@[simp, reducible]
+@[reducible]
 def AVLNode.value {T : Type} (x : AVLNode T) :=
   match x with | AVLNode.mk x1 _ _ => x1
 
-@[simp, reducible]
+@[reducible]
 def AVLNode.left {T : Type} (x : AVLNode T) :=
   match x with | AVLNode.mk _ x1 _ => x1
 
-@[simp, reducible]
+@[reducible]
 def AVLNode.right {T : Type} (x : AVLNode T) :=
   match x with | AVLNode.mk _ _ x1 => x1
+
+@[simp]
+theorem AVLNode.value._simpLemma_ {T : Type} (value : T) (left : Option
+  (AVLNode T)) (right : Option (AVLNode T)) :
+  (AVLNode.mk value left right).value = value := by rfl
+
+@[simp]
+theorem AVLNode.left._simpLemma_ {T : Type} (value : T) (left : Option (AVLNode
+  T)) (right : Option (AVLNode T)) : (AVLNode.mk value left right).left = left
+  := by rfl
+
+@[simp]
+theorem AVLNode.right._simpLemma_ {T : Type} (value : T) (left : Option
+  (AVLNode T)) (right : Option (AVLNode T)) :
+  (AVLNode.mk value left right).right = right := by rfl
 
 /- [issue_194_recursive_struct_projector::get_val]:
    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 10:0-10:33 -/
