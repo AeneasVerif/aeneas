@@ -850,13 +850,12 @@ theorem Node.insert_in_left_spec
         . -- rotate_right
           -- TODO: fix progress
           cases h:left' with | mk z a b bf_z =>
-          progress as ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩
+          progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . simp_all
           . simp_all
           . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
-          . simp [*]
           . simp_all
           . -- End of the proof
             simp [*]
@@ -880,12 +879,11 @@ theorem Node.insert_in_left_spec
             simp_all [Node.balanceFactor, Node.invAux]
           | some y =>
             cases h: y with | mk y a b bf_y =>
-            progress as ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩
+            progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
             . simp_all
             . simp_all
-            . simp [*]
             . simp_all [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
               simp [*]
@@ -953,12 +951,11 @@ theorem Node.insert_in_right_spec
           cases node with | mk x a right balance_factor =>
           -- TODO: fix progress
           cases h:right' with | mk z b c bf_z =>
-          progress as ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩
+          progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . simp_all
           . simp_all
           . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-          . simp [*]
           . simp_all
           . -- End of the proof
             simp [*]
@@ -981,15 +978,13 @@ theorem Node.insert_in_right_spec
             simp_all [Node.balanceFactor, Node.invAux]
           | some y =>
             cases h: y with | mk y b a bf_y =>
-            progress as ⟨ tree', hEq, hInv', hTree'Set, hTree'Height ⟩
+            progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
             . simp_all
             . simp_all
-            . simp [*]
             . simp_all [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
-              simp [hEq]; clear hEq
               simp [*]
               split_conjs
               . apply Set.ext; simp_all
