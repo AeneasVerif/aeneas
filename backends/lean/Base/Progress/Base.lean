@@ -155,9 +155,10 @@ initialize pspecAttr : PSpecAttr ← do
       -- Lookup the theorem
       let env ← getEnv
       -- If we apply the attribute to a definition in a group of mutually recursive definitions
-      -- (say, to `foo` in `foo` and `bar`), the attribute gets applied to `foo` but also to
+      -- (say, to `foo` in the group [`foo`, `bar`]), the attribute gets applied to `foo` but also to
       -- the recursive definition which encodes `foo` and `bar` (Lean encodes mutually recursive
-      -- definitions in one recursive definition). This definition should be named `foo._mutual`
+      -- definitions in one recursive definition, e.g., `foo._mutual`, before deriving the individual
+      -- definitions, e.g., `foo` and `bar`, from this one). This definition should be named `foo._mutual`
       -- or `bar._mutual`, and we want to ignore it.
       -- TODO: this is a hack
       if let .str _ "_mutual" := thName then

@@ -108,8 +108,10 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
   let asmName ← do match keep with | none => mkFreshAnonPropUserName | some n => do pure n
   let thTy ← inferType th
   trace[Progress] "thTy (after application): {thTy}"
-  -- Normalize the let-bindings - TODO: actually we might want to let
-  -- the user insert them in the context
+  -- Normalize the let-bindings (note that we already inlined the let bindings once above when analizing
+  -- the theorem, now we do it again on the instantiated theorem - there is probably a smarter way to do,
+  -- but it doesn't really matter).
+  -- TODO: actually we might want to let the user insert them in the context
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "thTy (after normalizing let-bindings): {thTy}"
   let thAsm ← Utils.addDeclTac asmName th thTy (asLet := false)
@@ -518,52 +520,46 @@ namespace Test
 
   -- Testing with mutually recursive definitions
   mutual
+    inductive Tree
+    | mk : Trees → Tree
 
-  inductive Tree
-  | mk : Trees → Tree
-
-  inductive Trees
-  | nil
-  | cons : Tree → Trees → Trees
-
+    inductive Trees
+    | nil
+    | cons : Tree → Trees → Trees
   end
 
   mutual
+    def Tree.size (t : Tree) : Result Int :=
+      match t with
+      | .mk trees => trees.size
 
-  def Tree.size (t : Tree) : Result Int :=
-    match t with
-    | .mk trees => trees.size
-
-  def Trees.size (t : Trees) : Result Int :=
-    match t with
-    | .nil => ok 0
-    | .cons t t' => do
-      let s ← t.size
-      let s' ← t'.size
-      ok (s + s')
-
+    def Trees.size (t : Trees) : Result Int :=
+      match t with
+      | .nil => ok 0
+      | .cons t t' => do
+        let s ← t.size
+        let s' ← t'.size
+        ok (s + s')
   end
 
   mutual
+    @[pspec]
+    theorem Tree.size_spec (t : Tree) :
+      ∃ i, t.size = ok i ∧ i ≥ 0 := by
+      cases t
+      simp [Tree.size]
+      progress
+      simp
+      omega
 
-  @[pspec]
-  theorem Tree.size_spec (t : Tree) :
-    ∃ i, t.size = ok i ∧ i ≥ 0 := by
-    cases t
-    simp [Tree.size]
-    progress
-    simp
-    omega
-
-  @[pspec]
-  theorem Trees.size_spec (t : Trees) :
-    ∃ i, t.size = ok i ∧ i ≥ 0 := by
-    cases t <;> simp [Trees.size]
-    progress
-    progress
-    simp
-    omega
-
+    @[pspec]
+    theorem Trees.size_spec (t : Trees) :
+      ∃ i, t.size = ok i ∧ i ≥ 0 := by
+      cases t <;> simp [Trees.size]
+      progress
+      progress
+      simp
+      omega
   end
 
   -- Testing progress on theorems containing local let-bindings

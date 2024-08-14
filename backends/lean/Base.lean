@@ -3,5 +3,6 @@ import Base.Diverge
 import Base.IList
 import Base.Primitives
 import Base.Progress
+import Base.SimpLemmas
 import Base.Utils
 import Base.Termination
