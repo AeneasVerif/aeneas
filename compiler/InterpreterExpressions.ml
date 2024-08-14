@@ -558,7 +558,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
         | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr -> (
             (* The two operands must have the same type and the result is an integer *)
             sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) span;
-            let res =
+            let res : _ result =
               match binop with
               | Div ->
                   if sv2.value = Z.zero then Error ()
