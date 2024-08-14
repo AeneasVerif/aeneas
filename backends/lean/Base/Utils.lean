@@ -268,8 +268,6 @@ def addDeclTac (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : TacticM
     -- For debugging
     let lctx ← Lean.MonadLCtx.getLCtx
     let fid := nval.fvarId!
-    let decl := lctx.get! fid
-    trace[Arith] "  new decl: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
     --
     -- Tranform the main goal `?m0` to `let x = nval in ?m1`
     let mvarId ← getMainGoal

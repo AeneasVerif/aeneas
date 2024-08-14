@@ -824,13 +824,13 @@ theorem Node.insert_in_left_spec
   (b → node'.balanceFactor ≠ 0) := by
   rw [Node.insert_in_left]
   have hInvLeft : Subtree.inv node.left := by cases node; simp_all
-  progress as ⟨ updt, left_opt' .. ⟩
+  progress as ⟨ updt, left_opt' ⟩
   split
   . -- the height of the subtree changed
     have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
            -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
       cases node; simp_all [Node.invAux]
-    progress as ⟨ i .. ⟩
+    progress as ⟨ i ⟩
     split
     . -- i = -2
       simp
@@ -925,13 +925,13 @@ theorem Node.insert_in_right_spec
   (b → node'.balanceFactor ≠ 0) := by
   rw [Node.insert_in_right]
   have hInvLeft : Subtree.inv node.right := by cases node; simp_all
-  progress as ⟨ updt, right_opt' .. ⟩
+  progress as ⟨ updt, right_opt' ⟩
   split
   . -- the height of the subtree changed
     have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
            -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
       cases node; simp_all [Node.invAux]
-    progress as ⟨ i .. ⟩
+    progress as ⟨ i ⟩
     split
     . -- i = 2
       simp

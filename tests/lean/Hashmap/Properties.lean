@@ -166,10 +166,7 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
   rw [allocate_slots_loop]
   if h: 0 < n.val then
     simp [h]
-    -- TODO: progress fails here (maximum recursion depth reached)
-    -- progress as ⟨ slots1 .. ⟩
-    have ⟨ slots1, hEq, _ ⟩ := alloc.vec.Vec.push_spec slots Nil (by scalar_tac)
-    simp [hEq]; clear hEq
+    progress as ⟨ slots1 ⟩
     progress as ⟨ n1 ⟩
     have Hslots1Nil :
       ∀ (i : ℤ), 0 ≤ i → i < ↑(alloc.vec.Vec.len (AList α) slots1) → slots1.val.index i = Nil := by
@@ -183,8 +180,7 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
         simp [*]
     have Hslots1Len : alloc.vec.Vec.len (AList α) slots1 + n1.val ≤ Usize.max := by
       simp_all
-    progress as ⟨ slots2 .. ⟩
-    simp
+    progress as ⟨ slots2 ⟩
     constructor
     . intro i h0 h1
       simp_all
@@ -220,11 +216,11 @@ theorem new_with_capacity_spec
   ∃ hm, new_with_capacity α capacity max_load_dividend max_load_divisor = ok hm ∧
   hm.inv ∧ hm.len_s = 0 ∧ ∀ k, hm.lookup k = none := by
   rw [new_with_capacity]
-  progress as ⟨ slots, Hnil .. ⟩
+  progress as ⟨ slots, Hnil ⟩
   . intros; simp [alloc.vec.Vec.new] at *; scalar_tac
   . simp [alloc.vec.Vec.new]; scalar_tac
-  . progress as ⟨ i1 .. ⟩
-    progress as ⟨ i2 .. ⟩
+  . progress as ⟨ i1 ⟩
+    progress as ⟨ i2 ⟩
     simp [inv, inv_load]
     have : (Slots.al_v slots).len = 0 := by
       have := forall_nil_imp_flatten_len_zero (slots.val.map AList.v)
@@ -302,7 +298,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
        have : distinct_keys (AList.v tl0) := by
          simp [distinct_keys] at hdk
          simp [hdk, distinct_keys]
-       progress as ⟨ b, tl1 .. ⟩
+       progress as ⟨ b, tl1 ⟩
        have : slot_s_inv_hash l (hash_mod_key key l) (AList.v (AList.Cons k v tl1)) := by
          simp [AList.v, slot_s_inv_hash] at *
          simp [*]
@@ -332,7 +328,7 @@ theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: 
     -- The keys are distinct
     distinct_keys l1.v
   := by
-  progress with insert_in_list_spec_aux as ⟨ b, l1 .. ⟩
+  progress with insert_in_list_spec_aux as ⟨ b, l1 ⟩
   exists b
   exists l1
 
@@ -343,11 +339,6 @@ theorem if_update_eq
   (if b then Bind.bind e f else f y) = Bind.bind (if b then e else pure y) f
   := by
   split <;> simp [Pure.pure]
-
--- Small helper
--- TODO: let bindings now work
-def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
-  ⟨ x, by simp ⟩
 
 @[pspec]
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
@@ -380,7 +371,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     simp [inv, slots_t_inv, slot_t_inv, slot_s_inv] at hinv
     have h := hinv.right.left hash_mod.val (by scalar_tac) (by scalar_tac)
     simp [h, h_leq]
-  progress as ⟨ inserted, l0, _, _, _, _, hlen .. ⟩
+  progress as ⟨ inserted, l0, _, _, _, _, hlen ⟩
   rw [if_update_eq] -- TODO: necessary because we don't have a join
   -- TODO: progress to ...
   have hipost :
@@ -402,16 +393,12 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   -- TODO: allow providing terms to progress to instantiate the meta variables
   -- which are not propositions
   progress keep hv as ⟨ v, h_veq ⟩
-  -- TODO: update progress to automate that
-  -- TODO: later I don't want to inline nhm - we need to control simp: deactivate
-  -- zeta reduction? For now I have to do this peculiar manipulation
-  have ⟨ nhm, nhm_eq ⟩ := @mk_opaque (HashMap α) {
+  let nhm : HashMap α := {
       num_entries := i0,
       max_load_factor := hm.max_load_factor,
       max_load := hm.max_load,
       saturated := hm.saturated,
       slots := v }
-  exists nhm
   have hupdt : lookup nhm key = some value := by
     simp [lookup] at *
     simp_all
@@ -459,7 +446,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       have _ := hinv.right.left i hipos (by simp_all)
       -- We need a case disjunction
       cases h_ieq : i == key.val % List.len hm.slots.val <;> simp_all [slot_s_inv]
-    . simp [hinv, h_veq, nhm_eq]
+    . simp [hinv, h_veq]
     . simp_all [frame_load, inv_base, inv_load]
   simp_all
 
@@ -755,8 +742,8 @@ theorem move_elements_loop_spec
       have := slots_index_len_le_flatten_len slots.val i.val (by scalar_tac)
       simp_all [Slots.al_v]; scalar_tac
     progress as ⟨ ntable1, _, hDisjointNtable1, hLookup11, hLookup12, hLen1 ⟩ -- TODO: decompose post-condition by default
-    progress as ⟨ i' .. ⟩
-    progress as ⟨ slots1, hSlots1Eq .. ⟩
+    progress as ⟨ i' ⟩
+    progress as ⟨ slots1, hSlots1Eq ⟩
     have : i' ≤ alloc.vec.Vec.len (AList α) slots1 := by simp_all [alloc.vec.Vec.len]; scalar_tac
     have : slots_t_inv slots1 := by
       simp [slots_t_inv] at *
@@ -892,7 +879,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
     progress as ⟨ newLength ⟩
     have : 0 < newLength.val := by
       simp_all [inv, inv_load]
-    progress as ⟨ ntable1 .. ⟩ -- TODO: introduce nice notation to take care of preconditions
+    progress as ⟨ ntable1 ⟩ -- TODO: introduce nice notation to take care of preconditions
     . -- Pre 1
       simp_all [inv, inv_load]
       split_conjs at hInv
@@ -914,7 +901,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
     . -- End of the proof
       have : slots_t_inv hm.slots := by simp_all [inv] -- TODO
       have : (Slots.al_v hm.slots).len ≤ Usize.max := by simp_all [inv, al_v, v, Slots.al_v]; scalar_tac
-      progress as ⟨ ntable2, slots1, _, _, hLookup .. ⟩ -- TODO: assumption is not powerful enough
+      progress as ⟨ ntable2, slots1, _, _, hLookup ⟩ -- TODO: assumption is not powerful enough
       simp_all [lookup, al_v, v, alloc.vec.Vec.len]
       intro key
       replace hLookup := hLookup key
@@ -939,13 +926,13 @@ theorem insert_spec {α} (hm : HashMap α) (key : Usize) (value : α)
   | some _ => hm1.len_s = hm.len_s
   := by
   rw [insert]
-  progress as ⟨ hm1 .. ⟩
+  progress as ⟨ hm1 ⟩
   simp [len]
   split
   . split
     . simp [*]
       tauto
-    . progress as ⟨ hm2 .. ⟩
+    . progress as ⟨ hm2 ⟩
       simp [*]
       tauto
   . simp [*]; tauto
@@ -963,10 +950,10 @@ theorem get_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLookup :
   ∃ v, get α hm key = ok v ∧ hm.lookup key = some v := by
   rw [get]
   simp [hash_key, alloc.vec.Vec.len]
-  progress as ⟨ hash_mod .. ⟩ -- TODO: decompose post by default
+  progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
   simp at *
   progress as ⟨ slot ⟩
-  progress as ⟨ v .. ⟩ <;> simp_all [lookup]
+  progress as ⟨ v ⟩ <;> simp_all [lookup]
 
 @[pspec]
 theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
@@ -1016,21 +1003,21 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLook
    := by
   rw [get_mut]
   simp [hash_key, alloc.vec.Vec.len]
-  progress as ⟨ hash_mod .. ⟩ -- TODO: decompose post by default
+  progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
   simp at *
   have : 0 ≤ hash_mod.val ∧ hash_mod < hm.slots.val.len := by scalar_tac
-  progress as ⟨ slot, index_back .. ⟩
+  progress as ⟨ slot, index_back ⟩
   have : slot_t_inv hm.slots.val.len hash_mod slot := by
     simp_all [inv, slots_t_inv]
   have : slot.lookup key ≠ none := by
     simp_all [lookup]
-  progress as ⟨ v, back .. ⟩
+  progress as ⟨ v, back ⟩
   simp [lookup, *]
   constructor
   . simp_all
   . -- Backward function
     intro v'
-    progress as ⟨ slot' .. ⟩
+    progress as ⟨ slot' ⟩
     progress as ⟨ slots' ⟩
     simp_all
     -- Last postcondition
@@ -1093,14 +1080,14 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
   | some _ => hm'.len_s = hm.len_s - 1 := by
   rw [remove]
   simp [hash_key, alloc.vec.Vec.len]
-  progress as ⟨ hash_mod .. ⟩ -- TODO: decompose post by default
+  progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
   simp at *
   -- TODO: simplify
   have : 0 ≤ hash_mod.val ∧ hash_mod < hm.slots.val.len := by
     scalar_tac
-  progress as ⟨ slot, index_back .. ⟩
+  progress as ⟨ slot, index_back ⟩
   have : slot_t_inv hm.slots.val.len hash_mod slot := by simp_all [inv, slots_t_inv]
-  progress as ⟨ vOpt, slot' .. ⟩
+  progress as ⟨ vOpt, slot' ⟩
   match hOpt : vOpt with
   | none =>
     simp [*]
@@ -1116,8 +1103,8 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
     have : 0 < hm.num_entries.val := by
       have := lookup_not_none_imp_len_s_pos hm key (by simp_all [lookup]) (by simp_all [inv])
       simp_all [inv]
-    progress as ⟨ newSize .. ⟩
-    progress as ⟨ slots1 .. ⟩
+    progress as ⟨ newSize ⟩
+    progress as ⟨ slots1 ⟩
     simp_all [lookup, al_v, HashMap.v]
     constructor
     . intro key' hNotEq

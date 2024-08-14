@@ -149,10 +149,9 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
       tryTac
         (simpAt true {} [] []
                [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div,
-                -- This last one is quite useful. In particular, it is necessary to rewrite the
-                -- conjunctions for Lean to automatically instantiate the existential quantifiers
-                -- (I don't know why).
-                ``and_assoc]
+                -- Those ones are quite useful to simplify the goal further by eliminating
+                -- existential quantifiers, for instance.
+                ``and_assoc, ``Primitives.Result.ok.injEq, ``exists_eq_left']
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
     -- TODO: not sure this is the best way of checking it
@@ -333,7 +332,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
       -- Nothing worked: failed
       throwError "Progress failed"
 
-syntax progressArgs := ("keep" (ident <|> "_"))? ("with" ident)? ("as" " ⟨ " (ident <|> "_"),* " .."? " ⟩")?
+syntax progressArgs := ("keep" (ident <|> "_"))? ("with" ident)? ("as" " ⟨ " (ident <|> "_"),* " ⟩")?
 
 def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Stats := do
   let args := args.raw
@@ -378,10 +377,7 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Stats := do
       args.map (λ s => if s.isIdent then some s.getId else none)
     else #[]
   trace[Progress] "User-provided ids: {ids}"
-  let splitPost : Bool :=
-    let args := asArgs.getArgs
-    args.size > 3 ∧ (args.get! 3).getArgs.size > 0
-  trace[Progress] "Split post: {splitPost}"
+  let splitPost := true
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
      to prove a contradiction) -/
@@ -430,14 +426,14 @@ namespace Test
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress keep _ as ⟨ z, h1 .. ⟩
+    progress keep _ as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress? keep _ as ⟨ z, h1 .. ⟩ says progress keep _ with Primitives.Scalar.add_spec as ⟨ z, h1 .. ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Primitives.Scalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {ty} {x y : Scalar ty}
@@ -451,19 +447,19 @@ namespace Test
     (hmax : x.val + y.val ≤ U32.max) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     -- This spec theorem is suboptimal, but it is good to check that it works
-    progress with Scalar.add_spec as ⟨ z, h1 .. ⟩
+    progress with Scalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress with U32.add_spec as ⟨ z, h1 .. ⟩
+    progress with U32.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress keep _ as ⟨ z, h1 .. ⟩
+    progress keep _ as ⟨ z, h1 ⟩
     simp [*, h1]
 
   /- Checking that universe instantiation works: the original spec uses
@@ -517,7 +513,7 @@ namespace Test
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
     right
-    progress keep _ as ⟨ z, h1 .. ⟩
+    progress keep _ as ⟨ z, h1 ⟩
     simp [*, h1]
 
   -- Testing with mutually recursive definitions
@@ -551,7 +547,6 @@ namespace Test
       cases t
       simp [Tree.size]
       progress
-      simp
       omega
 
     @[pspec]
@@ -560,7 +555,6 @@ namespace Test
       cases t <;> simp [Trees.size]
       progress
       progress
-      simp
       omega
   end
 

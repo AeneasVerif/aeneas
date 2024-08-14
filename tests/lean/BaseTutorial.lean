@@ -115,7 +115,7 @@ theorem mul2_add1_spec
      succeeds and returns the value we expect, as given by the theorem [U32.add_spec].
      Doing this properly requires a few manipulations: we need to instantiate
      the theorem, introduce it in the context, destruct it to introduce [x1], etc.
-     We automate this with the [progress] tactic: [progress with th as ⟨ x1 .. ⟩]
+     We automate this with the [progress] tactic: [progress with th as ⟨ x1 ⟩]
      uses theorem [th], instantiates it properly by looking at the goal, renames
      the output to [x1] and further decomposes the postcondition of [th].
 
@@ -158,8 +158,8 @@ theorem mul2_add1_spec2 (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   ↑ y = 2 * ↑x + (1 : Int)
   := by
   rw [mul2_add1]
-  progress as ⟨ x1 .. ⟩ -- [progress] automatically lookups [U32.add_spec]
-  progress as ⟨ x2 .. ⟩ -- same
+  progress as ⟨ x1⟩ -- [progress] automatically lookups [U32.add_spec]
+  progress as ⟨ x2 ⟩ -- same
   simp at *; scalar_tac
 
 /- Because we marked [mul2_add1_spec2] theorem with [pspec], [progress] can
@@ -176,9 +176,9 @@ theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [use_mul2_add1]
   -- Here we use [progress] on [mul2_add1]
-  progress as ⟨ x1 .. ⟩
-  progress as ⟨ z .. ⟩
-  simp at *; scalar_tac
+  progress as ⟨ x1 ⟩
+  progress as ⟨ z ⟩
+  scalar_tac
 
 
 /-#===========================================================================#
@@ -356,7 +356,7 @@ divergent def i32_id (x : I32) : Result I32 :=
 
 /- We can easily prove that [i32_id] behaves like the identity on positive inputs -/
 theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
-  ∃ y, i32_id x = ok y ∧ x.val = y.val := by
+  i32_id x = ok x := by
   rw [i32_id]
   if hx : x = 0#i32 then
     simp_all
@@ -365,11 +365,11 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
     -- x - 1
     progress as ⟨ x1 ⟩
     -- Recursive call
-    progress as ⟨ x2 ⟩
-    -- x2 + 1
     progress
+    -- x2 + 1
+    progress as ⟨ x2 ⟩
     -- Postcondition
-    simp; scalar_tac
+    scalar_tac
 -- Below: we have to prove that the recursive call performed in the proof terminates.
 -- Otherwise, we could prove any result we want by simply writing a theorem which
 -- uses itself in the proof.

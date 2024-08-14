@@ -15,7 +15,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   rw [mul2_add1]
   progress with U32.add_spec as ⟨ i ⟩
   progress as ⟨ i' ⟩
-  simp; scalar_tac
+  scalar_tac
 
 theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
   ∃ z, use_mul2_add1 x y = ok z ∧
@@ -23,7 +23,7 @@ theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.
   rw [use_mul2_add1]
   progress with mul2_add1_spec as ⟨ i ⟩
   progress as ⟨ i' ⟩
-  simp; scalar_tac
+  scalar_tac
 
 open CList
 
@@ -51,19 +51,17 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       progress as ⟨ x ⟩
       simp_all
 
-theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
-  ∃ y, i32_id x = ok y ∧ x.val = y.val := by
+theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
+  i32_id n = ok n := by
   rw [i32_id]
-  if hx : x = 0#i32 then
-    simp_all
-  else
-    simp_all
-    progress as ⟨ x1 ⟩
-    progress as ⟨ x2 ⟩
+  split
+  . simp [*]
+  . progress as ⟨ n1 ⟩
     progress
-    simp_all
-termination_by x.val.toNat
-decreasing_by scalar_decr_tac
+    progress as ⟨ n2 ⟩
+    scalar_tac
+termination_by n.toNat
+decreasing_by simp_wf; scalar_tac
 
 theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
   ∃ back, list_tail T l = ok (CList.CNil, back) ∧

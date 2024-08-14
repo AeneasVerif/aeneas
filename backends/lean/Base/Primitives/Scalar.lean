@@ -544,6 +544,21 @@ instance (ty : ScalarTy) : Inhabited (Scalar ty) := by
 @[reducible] def core_u128_min : U128 := Scalar.ofInt U128.min
 @[reducible] def core_u128_max : U128 := Scalar.ofInt U128.max
 
+-- Some conversions
+@[simp] abbrev Scalar.toNat {ty} (x : Scalar ty) : Nat := x.val.toNat
+@[simp] abbrev U8.toNat    (x : U8) : Nat := x.val.toNat
+@[simp] abbrev U16.toNat   (x : U16) : Nat := x.val.toNat
+@[simp] abbrev U32.toNat   (x : U32) : Nat := x.val.toNat
+@[simp] abbrev U64.toNat   (x : U64) : Nat := x.val.toNat
+@[simp] abbrev U128.toNat  (x : U128) : Nat := x.val.toNat
+@[simp] abbrev Usize.toNat (x : Usize) : Nat := x.val.toNat
+@[simp] abbrev I8.toNat    (x : I8) : Nat := x.val.toNat
+@[simp] abbrev I16.toNat   (x : I16) : Nat := x.val.toNat
+@[simp] abbrev I32.toNat   (x : I32) : Nat := x.val.toNat
+@[simp] abbrev I64.toNat   (x : I64) : Nat := x.val.toNat
+@[simp] abbrev I128.toNat  (x : I128) : Nat := x.val.toNat
+@[simp] abbrev Isize.toNat (x : Isize) : Nat := x.val.toNat
+
 -- TODO: below: not sure this is the best way.
 -- Should we rather overload operations like +, -, etc.?
 -- Also, it is possible to automate the generation of those definitions

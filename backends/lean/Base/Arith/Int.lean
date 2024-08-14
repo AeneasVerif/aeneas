@@ -88,8 +88,10 @@ def intTacSaturateForward : Tactic.TacticM Unit := do
 
 /- Boosting a bit the `omega` tac.
  -/
-def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
+  -- Pre-preprocessing
+  extraPrePreprocess
   -- Apply the forward rules
   intTacSaturateForward
   -- Extra preprocessing
@@ -136,9 +138,9 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
   )
 
 elab "int_tac_preprocess" : tactic =>
-  intTacPreprocess (do pure ())
+  intTacPreprocess (do pure ()) (do pure ())
 
-def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+def intTac (tacName : String) (splitGoalConjs : Bool) (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
   let g ← Tactic.getMainGoal
@@ -148,7 +150,7 @@ def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic
   Tactic.setGoals [g]
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
-  Tactic.allGoals (intTacPreprocess extraPreprocess)
+  Tactic.allGoals (intTacPreprocess extraPrePreprocess extraPreprocess)
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call omega
@@ -160,7 +162,7 @@ def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic
 
 elab "int_tac" args:(" split_goal"?): tactic =>
   let split := args.raw.getArgs.size > 0
-  intTac "int_tac" split (do pure ())
+  intTac "int_tac" split (do pure ()) (do pure ())
 
 -- For termination proofs
 syntax "int_decr_tac" : tactic

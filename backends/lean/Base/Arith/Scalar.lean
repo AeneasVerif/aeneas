@@ -7,6 +7,24 @@ namespace Arith
 open Lean Lean.Elab Lean.Meta
 open Primitives
 
+def scalarTacSimpLemmas :=
+  [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val,
+   ``Scalar.lt_equiv, ``Scalar.le_equiv, ``Scalar.eq_equiv]
+
+def scalarTacExtraPrePreprocess : Tactic.TacticM Unit :=
+  Tactic.withMainContext do
+  -- First get rid of [ofInt] (if there are dependent arguments, we may not
+  -- manage to simplify the context)
+  Utils.simpAt true {dsimp := false, failIfUnchanged := false}
+               -- Simprocs
+               intTacSimpRocs
+               -- Unfoldings
+               []
+                -- Simp lemmas
+                scalarTacSimpLemmas
+                -- Hypotheses
+                [] .wildcard
+
 def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   -- Inroduce the bounds for the isize/usize types
@@ -16,8 +34,7 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
   add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Isize []])
   add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
   add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
-  -- Reveal the concrete bounds, simplify calls to [ofInt]
-  Utils.simpAt true {}
+  Utils.simpAt true {failIfUnchanged := false}
                -- Simprocs
                intTacSimpRocs
                -- Unfoldings
@@ -26,20 +43,23 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
                 ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
                 ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
                 ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max,
-                ``Usize.min
+                ``Usize.min,
+                ``Scalar.toNat, ``Isize.toNat, ``USize.toNat,
+                ``I8.toNat, ``I16.toNat, ``I32.toNat, ``I64.toNat, ``I128.toNat,
+                ``U8.toNat, ``U16.toNat, ``U32.toNat, ``U64.toNat, ``U128.toNat,
                 ]
                 -- Simp lemmas
-                [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val,
-                 ``Scalar.lt_equiv, ``Scalar.le_equiv, ``Scalar.eq_equiv]
+                scalarTacSimpLemmas
                 -- Hypotheses
                 [] .wildcard
+  trace[Arith] "scalarTacExtraPreprocess: after simp: {(← Tactic.getMainGoal)}"
 
 elab "scalar_tac_preprocess" : tactic =>
-  intTacPreprocess scalarTacExtraPreprocess
+  intTacPreprocess scalarTacExtraPrePreprocess scalarTacExtraPreprocess
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
 def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
-  intTac "scalar_tac" splitGoalConjs scalarTacExtraPreprocess
+  intTac "scalar_tac" splitGoalConjs scalarTacExtraPrePreprocess scalarTacExtraPreprocess
 
 elab "scalar_tac" : tactic =>
   scalarTac false
@@ -92,5 +112,9 @@ example : (Usize.ofInt 2).val ≠ 0 := by
 example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y : Int) + z = 0 := by
   scalar_tac_preprocess
   omega
+
+example (x : U32) (h : 16 * ↑x ≤ U32.max) :
+  4 * U32.ofInt (4 * x.val) (by scalar_tac) ≤ U32.max := by
+  scalar_tac
 
 end Arith
