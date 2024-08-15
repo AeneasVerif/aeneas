@@ -86,6 +86,10 @@ def intTacSaturateForward : Tactic.TacticM Unit := do
     else ruleSets
   evalAesopSaturate options ruleSets.toArray
 
+-- For debugging
+elab "int_tac_saturate" : tactic =>
+  intTacSaturateForward
+
 /- Boosting a bit the `omega` tac.
  -/
 def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
@@ -112,30 +116,19 @@ def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit)
   Tactic.allGoals (Utils.tryTac (Utils.normCastAtAll))
   -- norm_cast does weird things with negative numbers so we reapply simp
   dsimp
-  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
-  Utils.tryTac (
+  Tactic.allGoals do Utils.tryTac (
     Utils.simpAt true {}
                -- Simprocs
                []
                -- Unfoldings
                []
                 -- Simp lemmas
-                [``Int.subNatNat_eq_coe]
+                [-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+                 ``Int.subNatNat_eq_coe,
+                 -- We also need this, in case the goal is: ¬ False
+                 ``not_false_eq_true]
                 -- Hypotheses
                 [] .wildcard)
-  -- We also need this, in case the goal is: ¬ False
-  Tactic.allGoals do tryTac (
-    Utils.simpAt true {}
-               -- Simprocs
-               intTacSimpRocs
-               -- Unfoldings
-               []
-                -- Simp lemmas
-                [``not_false_eq_true]
-                -- Hypotheses
-                []
-                (.targets #[] true)
-  )
 
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ()) (do pure ())
