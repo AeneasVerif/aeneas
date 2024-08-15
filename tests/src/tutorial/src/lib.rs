@@ -23,19 +23,27 @@ pub fn add_no_overflow(x: &mut Bignum, y: &Bignum) {
     }
 }
 
+fn max(x : usize, y : usize) -> usize {
+    if x > y { x } else { y }
+}
+
+fn get_or_zero(y : &Bignum, i : usize) -> u32 {
+    if i < y.len() { y[i] } else { 0 }
+}
+
 /// Add a bignum in place.
 ///
 /// The bignums do not necessarily have the same length.
 /// We also return the carry, if there is an overflow.
 pub fn add_with_carry(x: &mut Bignum, y: &Bignum) -> u8 {
-    let max = std::cmp::max(x.len(), y.len());
+    let max = max(x.len(), y.len());
     x.resize(max, 0u32);
     // now: length x >= length y
     let mut c0 = 0u8;
     let mut i = 0;
     // Remark: we have (and need) the invariant that: c0 <= 1
     while i < max {
-        let yi = if i < y.len() { y[i] } else { 0 };
+        let yi = get_or_zero(y, i);
         let (sum, c1) = x[i].overflowing_add(c0 as u32);
         let (sum, c2) = sum.overflowing_add(yi);
         // We have: c1 as u8 + c2 as u8 <= 1
