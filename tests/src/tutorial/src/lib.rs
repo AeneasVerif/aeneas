@@ -1,6 +1,5 @@
 pub type Bignum = Vec<u32>;
 
-
 /// Zero out a bignum
 pub fn zero(x : &mut Bignum) {
     let mut i = 0;

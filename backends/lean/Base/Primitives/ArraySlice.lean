@@ -30,7 +30,7 @@ theorem Array.length_eq {α : Type u} {n : Usize} (a : Array α n) : a.val.lengt
 theorem Array.subtype_property {α : Type u} {n : Usize} {p : Array α n → Prop} (a : Subtype p) : p a.val := a.property
 
 @[simp]
-abbrev Array.length {α : Type u} {n : Usize} (v : Array α n) : Int := v.val.length
+abbrev Array.length {α : Type u} {n : Usize} (v : Array α n) : Nat := v.val.length
 
 @[simp]
 abbrev Array.v {α : Type u} {n : Usize} (v : Array α n) : List α := v.val
@@ -105,9 +105,8 @@ def Array.index_mut_usize (α : Type u) (n : Usize) (v: Array α n) (i: Usize) :
 @[pspec]
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x back, v.index_mut_usize α n i = ok (x, back) ∧
-  x = v.val.index i.val ∧
-  back = update_usize α n v i := by
+  ∃ x, v.index_mut_usize α n i = ok (x, update_usize α n v i) ∧
+  x = v.val.index i.val := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := index_usize_spec v i hbound
   simp [h]
@@ -127,7 +126,7 @@ theorem Slice.length_ineq {α : Type u} (s : Slice α) : 0 ≤ s.val.length ∧ 
 theorem Slice.subtype_property {α : Type u} {p : Slice α → Prop} (s : Subtype p) : p s.val := s.property
 
 @[simp]
-abbrev Slice.length {α : Type u} (v : Slice α) : Int := v.val.length
+abbrev Slice.length {α : Type u} (v : Slice α) : Nat := v.val.length
 
 @[simp]
 abbrev Slice.v {α : Type u} (v : Slice α) : List α := v.val
@@ -198,9 +197,8 @@ def Slice.index_mut_usize (α : Type u) (v: Slice α) (i: Usize) :
 @[pspec]
 theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x back, v.index_mut_usize α i = ok (x, back) ∧
-  x = v.val.index i.val ∧
-  back = Slice.update_usize α v i := by
+  ∃ x, v.index_mut_usize α i = ok (x, Slice.update_usize α v i) ∧
+  x = v.val.index i.val := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := Slice.index_usize_spec v i hbound
   simp [h]

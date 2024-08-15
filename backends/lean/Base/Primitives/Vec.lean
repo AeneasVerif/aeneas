@@ -29,7 +29,7 @@ theorem Vec.len_ineq {α : Type u} (v : Vec α) : 0 ≤ v.val.length ∧ v.val.l
 theorem Vec.subtype_property {α : Type u} {p : Vec α → Prop} (v : Subtype p) : p v.val := v.property
 
 @[simp]
-abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.length
+abbrev Vec.length {α : Type u} (v : Vec α) : Nat := v.val.length
 
 @[simp]
 abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
@@ -141,10 +141,8 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
 @[pspec]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x back, v.index_mut_usize i = ok (x, back) ∧
-  x = v.val.index i.val ∧
-  -- Backward function
-  back = v.update_usize i
+  ∃ x, v.index_mut_usize i = ok (x, v.update_usize i) ∧
+  x = v.val.index i.val
   := by
   simp only [index_mut_usize]
   have ⟨ x, h ⟩ := index_usize_spec v i hbound
@@ -236,7 +234,7 @@ def core.ops.deref.DerefMutVec (T : Type) :
 
 def alloc.vec.Vec.resize (T : Type) (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
-  if new_len < v.length then
+  if new_len.val < v.length then
     ok ⟨ v.val.resize new_len.val value, by scalar_tac ⟩
   else
     let value ← cloneInst.clone value
