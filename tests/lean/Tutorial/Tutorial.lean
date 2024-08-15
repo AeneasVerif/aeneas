@@ -78,11 +78,6 @@ def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
       U32) y i
   else Result.ok 0#u32
 
-/- [core::num::{u32}#8::overflowing_add]:
-   Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2182:8-2182:69
-   Name pattern: core::num::{u32}::overflowing_add -/
-axiom core.num.U32.overflowing_add : U32 → U32 → Result (U32 × Bool)
-
 /- [tutorial::add_with_carry]: loop 0:
    Source: 'src/lib.rs', lines 39:4-50:1 -/
 divergent def add_with_carry_loop

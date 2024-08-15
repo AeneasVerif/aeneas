@@ -496,19 +496,30 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       ~can_fail:false ()
   (* Lean-only definitions *)
   @ mk_lean_only
-      [
-        mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
-          ~filter:(Some [ true; false ])
-          ();
-        mk_fun "core::mem::swap" ~can_fail:false ();
-        mk_fun "core::option::{core::option::Option<@T>}::take"
-          ~extract_name:(Some (backend_choice "" "core::option::Option::take"))
-          ~can_fail:false ();
-        mk_fun "core::option::{core::option::Option<@T>}::is_none"
-          ~extract_name:
-            (Some (backend_choice "" "core::option::Option::is_none"))
-          ~can_fail:false ();
-      ]
+      ([
+         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
+           ~filter:(Some [ true; false ])
+           ();
+         mk_fun "core::mem::swap" ~can_fail:false ();
+         mk_fun "core::option::{core::option::Option<@T>}::take"
+           ~extract_name:(Some (backend_choice "" "core::option::Option::take"))
+           ~can_fail:false ();
+         mk_fun "core::option::{core::option::Option<@T>}::is_none"
+           ~extract_name:
+             (Some (backend_choice "" "core::option::Option::is_none"))
+           ~can_fail:false ();
+       ]
+      @ List.map
+          (fun ty ->
+            mk_fun
+              ("core::num::{" ^ ty ^ "}::overflowing_add")
+              ~extract_name:
+                (Some
+                   ("core.num."
+                   ^ StringUtils.capitalize_first_letter ty
+                   ^ ".overflowing_add"))
+              ())
+          all_int_names)
 
 let builtin_funs : unit -> (pattern * bool list option * builtin_fun_info) list
     =

@@ -905,4 +905,119 @@ def core.clone.CloneI128 : core.clone.Clone I128 := {
   clone := fun x => ok (core.clone.impls.CloneI128.clone x)
 }
 
+-- This is easier defined this way than with the modulo operation (because of the
+-- unsigned cases).
+def int_overflowing_add (ty : ScalarTy) (x y : Int) : Int × Bool :=
+  let z := x + y
+  let b := false
+  let range := Scalar.max ty - Scalar.min ty + 1
+  let r := (z, b)
+  let r := if r.1 > Scalar.max ty then (r.1 - range, true) else r
+  let r := if r.1 < Scalar.min ty then (r.1 + range, true) else r
+  r
+
+def int_overflowing_add_in_bounds {ty} (x y : Scalar ty) :
+  let r := int_overflowing_add ty x.val y.val
+  Scalar.min ty ≤ r.1 ∧ r.1 ≤ Scalar.max ty := by
+  simp [int_overflowing_add]
+  split <;> split <;> cases ty <;> simp at * <;>
+  scalar_tac
+
+def int_overflowing_add_unsigned_overflow {ty} (h: ¬ ty.isSigned) (x y : Scalar ty) :
+  let r := int_overflowing_add ty x.val y.val
+  x.val + y.val = if r.2 then r.1 + Scalar.max ty + 1 else r.1 := by
+  simp [int_overflowing_add]
+  split <;> split <;> cases ty <;> simp [ScalarTy.isSigned] at * <;>
+  scalar_tac
+
+def Scalar.overflowing_add {ty} (x y : Scalar ty) : Result (Scalar ty × Bool) :=
+  let r := int_overflowing_add ty x.val y.val
+  have h := int_overflowing_add_in_bounds x y
+  let z : Scalar ty := ⟨ r.1, h.left, h.right ⟩
+  ok (z, r.2)
+
+/- [core::num::{u8}::overflowing_add] -/
+def core.num.U8.overflowing_add := @Scalar.overflowing_add ScalarTy.U8
+
+/- [core::num::{u16}::overflowing_add] -/
+def core.num.U16.overflowing_add := @Scalar.overflowing_add ScalarTy.U16
+
+/- [core::num::{u32}::overflowing_add] -/
+def core.num.U32.overflowing_add := @Scalar.overflowing_add ScalarTy.U32
+
+/- [core::num::{u64}::overflowing_add] -/
+def core.num.U64.overflowing_add := @Scalar.overflowing_add ScalarTy.U64
+
+/- [core::num::{u128}::overflowing_add] -/
+def core.num.U128.overflowing_add := @Scalar.overflowing_add ScalarTy.U128
+
+/- [core::num::{usize}::overflowing_add] -/
+def core.num.Usize.overflowing_add := @Scalar.overflowing_add ScalarTy.Usize
+
+/- [core::num::{i8}::overflowing_add] -/
+def core.num.I8.overflowing_add := @Scalar.overflowing_add ScalarTy.I8
+
+/- [core::num::{i16}::overflowing_add] -/
+def core.num.I16.overflowing_add := @Scalar.overflowing_add ScalarTy.I16
+
+/- [core::num::{i32}::overflowing_add] -/
+def core.num.I32.overflowing_add := @Scalar.overflowing_add ScalarTy.I32
+
+/- [core::num::{i64}::overflowing_add] -/
+def core.num.I64.overflowing_add := @Scalar.overflowing_add ScalarTy.I64
+
+/- [core::num::{i128}::overflowing_add] -/
+def core.num.I128.overflowing_add := @Scalar.overflowing_add ScalarTy.I128
+
+/- [core::num::{isize}::overflowing_add] -/
+def core.num.Isize.overflowing_add := @Scalar.overflowing_add ScalarTy.Isize
+
+@[pspec]
+theorem core.num.U8.overflowing_add_spec (x y : U8) :
+  ∃ z b, overflowing_add x y = ok (z, b) ∧
+  (z.val, b) = if x.val + y.val > U8.max then (x.val + y.val - U8.max - 1, true) else (x.val + y.val, false)
+  := by
+  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
+  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+
+@[pspec]
+theorem core.num.U16.overflowing_add_spec (x y : U16) :
+  ∃ z b, overflowing_add x y = ok (z, b) ∧
+  (z.val, b) = if x.val + y.val > U16.max then (x.val + y.val - U16.max - 1, true) else (x.val + y.val, false)
+  := by
+  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
+  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+
+@[pspec]
+theorem core.num.U32.overflowing_add_spec (x y : U32) :
+  ∃ z b, overflowing_add x y = ok (z, b) ∧
+  (z.val, b) = if x.val + y.val > U32.max then (x.val + y.val - U32.max - 1, true) else (x.val + y.val, false)
+  := by
+  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
+  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+
+@[pspec]
+theorem core.num.U64.overflowing_add_spec (x y : U64) :
+  ∃ z b, overflowing_add x y = ok (z, b) ∧
+  (z.val, b) = if x.val + y.val > U64.max then (x.val + y.val - U64.max - 1, true) else (x.val + y.val, false)
+  := by
+  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
+  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+
+@[pspec]
+theorem core.num.U128.overflowing_add_spec (x y : U128) :
+  ∃ z b, overflowing_add x y = ok (z, b) ∧
+  (z.val, b) = if x.val + y.val > U128.max then (x.val + y.val - U128.max - 1, true) else (x.val + y.val, false)
+  := by
+  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
+  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+
+@[pspec]
+theorem core.num.Usize.overflowing_add_spec (x y : Usize) :
+  ∃ z b, overflowing_add x y = ok (z, b) ∧
+  (z.val, b) = if x.val + y.val > Usize.max then (x.val + y.val - Usize.max - 1, true) else (x.val + y.val, false)
+  := by
+  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
+  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+
 end Primitives

@@ -119,6 +119,12 @@ def Isize.min := Isize.refined_min.val
 def Isize.max := Isize.refined_max.val
 def Usize.max := Usize.refined_max.val
 
+theorem Usize.bounds_eq :
+  Usize.max = U32.max ∨ Usize.max = U64.max := by
+  simp [Usize.min, Usize.max, refined_max, smin, smax]
+  cases System.Platform.numBits_eq <;>
+  unfold System.Platform.numBits at * <;> simp [*] <;> decide
+
 theorem Isize.bounds_eq :
   (Isize.min = I32.min ∧ Isize.max = I32.max)
   ∨ (Isize.min = I64.min ∧ Isize.max = I64.max) := by
@@ -140,6 +146,7 @@ inductive ScalarTy :=
 | U64
 | U128
 
+@[reducible]
 def ScalarTy.isSigned (ty : ScalarTy) : Bool :=
   match ty with
   | Isize
