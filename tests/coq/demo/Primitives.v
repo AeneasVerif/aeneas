@@ -452,18 +452,18 @@ Definition i128_shr {ty} := @scalar_shr I128 ty.
 Definition isize_shr {ty} := @scalar_shr Isize ty.
 
 (** Not *)
-Definition u8_not {ty} := @scalar_not U8 ty.
-Definition u16_not {ty} := @scalar_not U16 ty.
-Definition u32_not {ty} := @scalar_not U32 ty.
-Definition u64_not {ty} := @scalar_not U64 ty.
-Definition u128_not {ty} := @scalar_not U128 ty.
-Definition usize_not {ty} := @scalar_not Usize ty.
-Definition i8_not {ty} := @scalar_not I8 ty.
-Definition i16_not {ty} := @scalar_not I16 ty.
-Definition i32_not {ty} := @scalar_not I32 ty.
-Definition i64_not {ty} := @scalar_not I64 ty.
-Definition i128_not {ty} := @scalar_not I128 ty.
-Definition isize_not {ty} := @scalar_not Isize ty.
+Definition u8_not := @scalar_not U8.
+Definition u16_not := @scalar_not U16.
+Definition u32_not := @scalar_not U32.
+Definition u64_not := @scalar_not U64.
+Definition u128_not := @scalar_not U128.
+Definition usize_not := @scalar_not Usize.
+Definition i8_not := @scalar_not I8.
+Definition i16_not := @scalar_not I16.
+Definition i32_not := @scalar_not I32.
+Definition i64_not := @scalar_not I64.
+Definition i128_not := @scalar_not I128.
+Definition isize_not := @scalar_not Isize.
 
 (** Small utility *)
 Definition usize_to_nat (x: usize) : nat := Z.to_nat (to_Z x).

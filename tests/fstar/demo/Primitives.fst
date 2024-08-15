@@ -468,18 +468,18 @@ let i128_shr #ty = scalar_shr #I128 #ty
 let isize_shr #ty = scalar_shr #Isize #ty
 
 /// Not
-let u8_not #ty = scalar_not #U8 #ty
-let u16_not #ty = scalar_not #U16 #ty
-let u32_not #ty = scalar_not #U32 #ty
-let u64_not #ty = scalar_not #U64 #ty
-let u128_not #ty = scalar_not #U128 #ty
-let usize_not #ty = scalar_not #Usize #ty
-let i8_not #ty = scalar_not #I8 #ty
-let i16_not #ty = scalar_not #I16 #ty
-let i32_not #ty = scalar_not #I32 #ty
-let i64_not #ty = scalar_not #I64 #ty
-let i128_not #ty = scalar_not #I128 #ty
-let isize_not #ty = scalar_not #Isize #ty
+let u8_not = scalar_not #U8
+let u16_not = scalar_not #U16
+let u32_not = scalar_not #U32
+let u64_not = scalar_not #U64
+let u128_not = scalar_not #U128
+let usize_not = scalar_not #Usize
+let i8_not = scalar_not #I8
+let i16_not = scalar_not #I16
+let i32_not = scalar_not #I32
+let i64_not = scalar_not #I64
+let i128_not = scalar_not #I128
+let isize_not = scalar_not #Isize
 
 (*** core *)
 
