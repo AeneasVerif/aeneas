@@ -265,10 +265,6 @@ def addDeclTac (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : TacticM
   -- Insert the new declaration
   let withDecl := if asLet then withLetDecl name type val else withLocalDeclD name type
   withDecl fun nval => do
-    -- For debugging
-    let lctx ← Lean.MonadLCtx.getLCtx
-    let fid := nval.fvarId!
-    --
     -- Tranform the main goal `?m0` to `let x = nval in ?m1`
     let mvarId ← getMainGoal
     let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
@@ -347,10 +343,6 @@ def firstTac (tacl : List (TacticM Unit)) : TacticM Unit := do
     | some _ => pure ()
     | none => firstTac tacl -/
 
--- Taken from Lean.Elab.evalAssumption
-def assumptionTac : TacticM Unit :=
-  liftMetaTactic fun mvarId => do mvarId.assumption; pure []
-
 def isConj (e : Expr) : MetaM Bool :=
   e.consumeMData.withApp fun f args => pure (f.isConstOf ``And ∧ args.size = 2)
 
@@ -400,11 +392,67 @@ partial def getMVarIds (e : Expr) (hs : HashSet MVarId := HashSet.empty) : MetaM
     if e.isMVar then pure (hs.insert e.mvarId!) else pure hs)
     hs e
 
+-- Taken from Lean.Elab.evalAssumption
+def assumptionTac : TacticM Unit :=
+  liftMetaTactic fun mvarId => do mvarId.assumption; pure []
+
+-- List all the local declarations matching the goal
+def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
+  let decls ← (← getLCtx).getAllDecls
+  decls.filterMapM fun localDecl => do
+    -- Make sure we revert the meta-variables instantiations by saving the state and restoring it
+    let s ← saveState
+    let x :=
+        if (← isDefEq type localDecl.type) then (some (localDecl, localDecl.userName))
+        else none
+    restoreState s
+    pure x
+
+/- Like the assumption tactic, but if the goal contains meta-variables it applies an assumption only
+   if there is a single assumption matching the goal. Aborts if several assumptions match the goal.
+
+   We implement this behaviour to make sure we do not trigger spurious instantiations of meta-variables.
+-/
+def singleAssumptionTac : TacticM Unit := do
+  withMainContext do
+  let mvarId ← getMainGoal
+  mvarId.checkNotAssigned `sassumption
+  let goal ← instantiateMVars (← mvarId.getType)
+  let goalMVars ← getMVarIds goal
+  if goalMVars.isEmpty then
+    -- No meta-variables: we can safely use the assumption tactic
+    trace[Utils] "The goal does not contain meta-variables"
+    assumptionTac
+  else
+    trace[Utils] "The goal contains meta-variables"
+    -- There are meta-variables that
+    match ← (getAllMatchingAssumptions goal) with
+    | [(localDecl, _)] =>
+      -- There is a single assumption which matches the goal: use it
+      -- Note that we need to call isDefEq again to properly instantiate the meta-variables
+      let _ ← isDefEq goal localDecl.type
+      mvarId.assign (mkFVar localDecl.fvarId)
+    | [] =>
+      -- No assumption
+      throwError "Could not find an assumption matching the goal"
+    | fvars =>
+      -- Several assumptions
+      let fvars := fvars.map Prod.snd
+      throwError "Several assumptions match the goal: {fvars}"
+
+elab "sassumption " : tactic => do singleAssumptionTac
+
+example (x y z w : Int) (h0 : x < y) (_ : x < w) (h1 : y < z) : x < z := by
+  apply Int.lt_trans
+  try sassumption -- This fails
+  apply h0
+  sassumption
+
 -- Tactic to split on a disjunction.
 -- The expression `h` should be an fvar.
 -- TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance
 def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
-  trace[Arith] "assumption on which to split: {h}"
+  trace[Utils] "assumption on which to split: {h}"
   -- Retrieve the main goal
   withMainContext do
   let goalType ← getMainTarget
@@ -413,7 +461,7 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   -- Case disjunction
   let hTy ← inferType h
   hTy.withApp fun f xs => do
-  trace[Arith] "as app: {f} {xs}"
+  trace[Utils] "as app: {f} {xs}"
   -- Sanity check
   if ¬ (f.isConstOf ``Or ∧ xs.size = 2) then throwError "Invalid argument to splitDisjTac"
   let a := xs.get! 0
@@ -435,15 +483,15 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
     pure (branch, mgoal)
   let (inl, mleft) ← mkGoal a "left"
   let (inr, mright) ← mkGoal b "right"
-  trace[Arith] "left: {inl}: {mleft}"
-  trace[Arith] "right: {inr}: {mright}"
+  trace[Utils] "left: {inl}: {mleft}"
+  trace[Utils] "right: {inr}: {mright}"
   -- Create the match expression
   withLocalDeclD (← mkFreshAnonPropUserName) hTy fun hVar => do
   let motive ← mkLambdaFVars #[hVar] goalType
   let casesExpr ← mkAppOptM ``Or.casesOn #[a, b, motive, h, inl, inr]
   let mgoal ← getMainGoal
-  trace[Arith] "goals: {← getUnsolvedGoals}"
-  trace[Arith] "main goal: {mgoal}"
+  trace[Utils] "goals: {← getUnsolvedGoals}"
+  trace[Utils] "main goal: {mgoal}"
   mgoal.assign casesExpr
   let goals ← getUnsolvedGoals
   -- Focus on the left
@@ -456,7 +504,7 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   let rightGoals ← getUnsolvedGoals
   -- Put all the goals back
   setGoals (leftGoals ++ rightGoals ++ goals)
-  trace[Arith] "new goals: {← getUnsolvedGoals}"
+  trace[Utils] "new goals: {← getUnsolvedGoals}"
 
 elab "split_disj " n:ident : tactic => do
   withMainContext do

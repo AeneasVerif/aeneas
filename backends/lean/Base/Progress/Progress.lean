@@ -151,7 +151,10 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
                [``Primitives.bind_tc_ok, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div,
                 -- Those ones are quite useful to simplify the goal further by eliminating
                 -- existential quantifiers, for instance.
-                ``and_assoc, ``Primitives.Result.ok.injEq, ``exists_eq_left']
+                ``and_assoc, ``Primitives.Result.ok.injEq,
+                ``exists_eq_left, ``exists_eq_left',
+                ``exists_eq_right, ``exists_eq_right',
+                ``exists_eq, ``exists_eq']
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
     -- TODO: not sure this is the best way of checking it
@@ -209,9 +212,19 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     let newGoals := mvars.map Expr.mvarId!
     let newGoals ← newGoals.filterM fun mvar => not <$> mvar.isAssigned
     trace[Progress] "new goals: {newGoals}"
-    setGoals newGoals.toList
+    -- Split between the goals which are propositions and the others
+    let (newPropGoals, newNonPropGoals) ←
+      newGoals.data.partitionM fun mvar => do isProp (← mvar.getType)
+    trace[Progress] "Prop goals: {newPropGoals}"
+    trace[Progress] "Non prop goals: {← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
+    -- Try to solve the goals which are propositions
+    setGoals newPropGoals
     allGoals asmTac
-    let newGoals ← getUnsolvedGoals
+    --
+    let newPropGoals ← getUnsolvedGoals
+    let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
+    let newGoals := newNonPropGoals ++ newPropGoals
+    trace[Progress] "Final remaining preconditions: {newGoals}"
     setGoals (newGoals ++ curGoals)
     trace[Progress] "progress: replaced the goals"
     --
@@ -393,10 +406,14 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Stats := do
       Utils.simpAt false {} [] [] [] [] (.targets #[] true)
       -- Raise an error if the goal is not proved
       allGoals (throwError "Goal not proved")
+  -- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
+  -- assumption matching the goal.
+  let customAssumTac : TacticM Unit := singleAssumptionTac
   let usedTheorem ← progressAsmsOrLookupTheorem keep withArg ids splitPost (
     withMainContext do
-    trace[Progress] "trying to solve assumption: {← getMainGoal}"
-    firstTac [assumptionTac, simpTac, scalarTac])
+    trace[Progress] "trying to solve precondition: {← getMainGoal}"
+    firstTac [customAssumTac, simpTac, scalarTac]
+    trace[Progress] "Precondition solved!")
   trace[Progress] "Progress done"
   return {
     usedTheorem
@@ -584,7 +601,15 @@ namespace Test
     rw [add1]
     progress as ⟨ z1, h ⟩
     progress as ⟨ z2, h ⟩
-    simp
+
+  variable (P : ℕ → List α → Prop)
+  variable (f : List α → Result Bool)
+  variable (f_spec : ∀ l i, P i l → ∃ b, f l = ok b)
+
+  set_option trace.Progress true
+  example (l : List α) (h : P i l) :
+    ∃ b, f l = ok b := by
+    progress as ⟨ b ⟩
 
 end Test
 

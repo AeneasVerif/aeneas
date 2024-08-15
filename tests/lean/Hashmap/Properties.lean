@@ -122,7 +122,7 @@ def inv_base (hm : HashMap α) : Prop :=
   -- Slots invariant
   slots_t_inv hm.slots ∧
   -- The capacity must be > 0 (otherwise we can't resize)
-  0 < hm.slots.length ∧ -- TODO: normalization lemmas for comparison
+  0 < hm.slots.length ∧
   -- Load computation
   inv_load hm
 
@@ -516,13 +516,8 @@ theorem move_elements_from_list_spec
     have : slot_t_inv l i slot1 := by
       simp [slot_t_inv] at hSlotInv
       simp [slot_t_inv, hSlotInv]
-    -- TODO: progress leads to: slot_t_inv i i slot1
-    -- progress as ⟨ ntable2 ⟩
+    progress as ⟨ ntable2, hInv2, hLookup21, hLookup22, hLookup23, hLen1 ⟩ -- TODO: allow progress to receive instantiation hints
 
-    have  ⟨ ntable2, hEq, hInv2, hLookup21, hLookup22, hLookup23, hLen1 ⟩ :=
-      move_elements_from_list_spec ntable1 slot1 (by assumption) (by assumption)
-          hTable1LookupImp hSlot1LookupImp (by assumption)
-    simp [hEq]; clear hEq
     -- The conclusion
     -- TODO: use aesop here
     split_conjs
@@ -988,22 +983,18 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
   . -- Non-recursive case
     simp_all [slot_t_inv]
   . -- Recursive case
-    -- TODO: progress doesn't instantiate l correctly
-    rename _ → _ → _ => ih
-    rename AList α => tl
-    replace ih := ih (by simp_all [slot_t_inv]) (by simp_all)
-    -- progress also fails here
-    -- TODO: progress? notation to have some feedback
-    have ⟨ v, back, hEq, _, hBack ⟩ := ih; clear ih
-    simp [hEq]; clear hEq
-    simp [*]
-    -- Proving the post-condition about back
-    intro v
-    progress as ⟨ slot', _, _, _, hForAll ⟩; clear hBack
-    simp [*]
-    constructor
-    . simp_all [slot_t_inv, slot_s_inv, slot_s_inv_hash]
+    -- TODO: progress by
+    progress as ⟨ v, back, _, hBack ⟩
+    . simp_all [slot_t_inv]
     . simp_all
+    . simp [*]
+      -- Proving the post-condition about back
+      intro v
+      progress as ⟨ slot', _, _, _, hForAll ⟩; clear hBack
+      simp [*]
+      constructor
+      . simp_all [slot_t_inv, slot_s_inv, slot_s_inv_hash]
+      . simp_all
 
 @[pspec]
 theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLookup : hm.lookup key ≠ none) :
@@ -1015,7 +1006,7 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLook
    := by
   rw [get_mut]
   simp [hash_key, alloc.vec.Vec.len]
-  progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
+  progress as ⟨ hash_mod ⟩
   simp at *
   have : 0 ≤ hash_mod.val ∧ hash_mod.val < hm.slots.val.length := by scalar_tac
   progress as ⟨ slot, index_back ⟩
@@ -1062,10 +1053,9 @@ theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv :
       simp [*]
     else
       simp [hKey]
-      -- TODO: progress doesn't instantiate l properly
       have hInv' : slot_t_inv l i tl := by simp_all [slot_t_inv]
-      have ⟨ v1, tl1, hRemove, _, _, hLookupTl1, _ ⟩ := remove_from_list_spec key tl hInv'
-      simp [*]; clear hRemove
+      progress as ⟨ v1, tl1, _, _, hLookupTl1, _ ⟩
+      simp [*]
       intro key' hNotEq1
       simp_all
 
