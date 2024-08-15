@@ -259,6 +259,7 @@ Axiom scalar_or : forall ty, scalar ty -> scalar ty -> scalar ty. (* TODO *)
 Axiom scalar_and : forall ty, scalar ty -> scalar ty -> scalar ty. (* TODO *)
 Axiom scalar_shl : forall ty0 ty1, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
 Axiom scalar_shr : forall ty0 ty1, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
+Axiom scalar_not : forall ty, scalar ty -> scalar ty. (* TODO *)
 
 (** Cast an integer from a [src_ty] to a [tgt_ty] *)
 (* TODO: check the semantics of casts in Rust *)
@@ -287,7 +288,6 @@ Definition scalar_eqb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
 
 Definition scalar_neqb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
   negb (Z.eqb (to_Z x) (to_Z y)) .
-
 
 (** The scalar types *)
 Definition isize := scalar Isize.
@@ -450,6 +450,20 @@ Definition i32_shr {ty} := @scalar_shr I32 ty.
 Definition i64_shr {ty} := @scalar_shr I64 ty.
 Definition i128_shr {ty} := @scalar_shr I128 ty.
 Definition isize_shr {ty} := @scalar_shr Isize ty.
+
+(** Not *)
+Definition u8_not {ty} := @scalar_not U8 ty.
+Definition u16_not {ty} := @scalar_not U16 ty.
+Definition u32_not {ty} := @scalar_not U32 ty.
+Definition u64_not {ty} := @scalar_not U64 ty.
+Definition u128_not {ty} := @scalar_not U128 ty.
+Definition usize_not {ty} := @scalar_not Usize ty.
+Definition i8_not {ty} := @scalar_not I8 ty.
+Definition i16_not {ty} := @scalar_not I16 ty.
+Definition i32_not {ty} := @scalar_not I32 ty.
+Definition i64_not {ty} := @scalar_not I64 ty.
+Definition i128_not {ty} := @scalar_not I128 ty.
+Definition isize_not {ty} := @scalar_not Isize ty.
 
 (** Small utility *)
 Definition usize_to_nat (x: usize) : nat := Z.to_nat (to_Z x).
