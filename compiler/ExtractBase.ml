@@ -790,11 +790,14 @@ let ctx_get_termination_measure (span : Meta.span) (def_id : A.FunDeclId.id)
 (** Small helper to compute the name of a unary operation *)
 let unop_name (unop : unop) : string =
   match unop with
-  | Not -> (
+  | Not ty -> (
       match backend () with
-      | FStar -> "not"
-      | Lean -> "¬"
-      | Coq -> "negb"
+      | FStar -> (
+          match ty with
+          | None -> "not"
+          | Some int_ty -> int_name int_ty ^ "_not")
+      | Lean -> "￢"
+      | Coq -> if Option.is_none ty then "negb" else "scalar_not"
       | HOL4 -> "~")
   | Neg (int_ty : integer_type) -> (
       match backend () with
@@ -840,8 +843,9 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
  *)
 let keywords () =
   let named_unops =
-    unop_name Not
-    :: List.map (fun it -> unop_name (Neg it)) T.all_signed_int_types
+    unop_name (Not None)
+    :: List.map (fun it -> unop_name (Not (Some it))) T.all_signed_int_types
+    @ List.map (fun it -> unop_name (Neg it)) T.all_signed_int_types
   in
   let named_binops = [ E.Div; Rem; Add; Sub; Mul ] in
   let named_binops =

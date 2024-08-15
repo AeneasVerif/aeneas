@@ -490,3 +490,18 @@ let use_id_type (t : Type0) (x : idType_t t) : result t =
 let create_id_type (t : Type0) (x : t) : result (idType_t t) =
   Ok x
 
+(** [no_nested_borrows::not_bool]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 520:0-520:32 *)
+let not_bool (x : bool) : result bool =
+  Ok (not x)
+
+(** [no_nested_borrows::not_u32]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 524:0-524:29 *)
+let not_u32 (x : u32) : result u32 =
+  Ok (u32_not x)
+
+(** [no_nested_borrows::not_i32]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 528:0-528:29 *)
+let not_i32 (x : i32) : result i32 =
+  Ok (i32_not x)
+

@@ -1,5 +1,5 @@
 import Base.Arith.Int
-import Base.Primitives.Scalar
+import Base.Primitives.ScalarBase
 
 /- Automation for scalars - TODO: not sure it is worth having two files (Int.lean and Scalar.lean) -/
 namespace Arith
