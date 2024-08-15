@@ -388,10 +388,15 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Stats := do
       Arith.scalarTac false
     else
       throwError "Not a linear arithmetic goal"
+  let simpTac : TacticM Unit := do
+      -- Simplify the goal
+      Utils.simpAt false {} [] [] [] [] (.targets #[] true)
+      -- Raise an error if the goal is not proved
+      allGoals (throwError "Goal not proved")
   let usedTheorem ← progressAsmsOrLookupTheorem keep withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve assumption: {← getMainGoal}"
-    firstTac [assumptionTac, scalarTac])
+    firstTac [assumptionTac, simpTac, scalarTac])
   trace[Progress] "Progress done"
   return {
     usedTheorem
