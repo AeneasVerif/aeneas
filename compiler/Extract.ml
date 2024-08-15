@@ -2698,6 +2698,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      name ?generics:(Some generics) impl.item_meta.span.span);
   F.pp_print_break fmt 0 0;
 
+  (* If extracting for Lean, mark the definition as reducible *)
+  if backend () = Lean then (
+    F.pp_print_string fmt "@[reducible]";
+    F.pp_print_break fmt 0 0);
+
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.
 

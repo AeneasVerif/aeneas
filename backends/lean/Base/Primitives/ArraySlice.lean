@@ -461,6 +461,7 @@ def core.slice.index.private_slice_index.SealedRangeUsizeInst
   : core.slice.index.private_slice_index.Sealed (Range Usize) := {}
 
 /- Trait implementation: [core::slice::index::Range] -/
+@[reducible]
 def core.slice.index.SliceIndexRangeUsizeSliceTInst (T : Type) :
   core.slice.index.SliceIndex (Range Usize) (Slice T) := {
   sealedInst := core.slice.index.private_slice_index.SealedRangeUsizeInst
@@ -539,6 +540,7 @@ def core.slice.index.private_slice_index.SealedUsizeInst
   : core.slice.index.private_slice_index.Sealed Usize := {}
 
 /- Trait implementation: [core::slice::index::usize] -/
+@[reducible]
 def core.slice.index.SliceIndexUsizeSliceTInst (T : Type) :
   core.slice.index.SliceIndex Usize (Slice T) := {
   sealedInst := core.slice.index.private_slice_index.SealedUsizeInst

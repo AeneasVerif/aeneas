@@ -162,6 +162,7 @@ def Vec.index_mut (T I : Type) (inst : core.slice.index.SliceIndex I (Slice T))
   sorry -- TODO
 
 /- Trait implementation: [alloc::vec::Vec] -/
+@[reducible]
 def Vec.coreopsindexIndexInst (T I : Type)
   (inst : core.slice.index.SliceIndex I (Slice T)) :
   core.ops.index.Index (alloc.vec.Vec T) I := {
@@ -170,6 +171,7 @@ def Vec.coreopsindexIndexInst (T I : Type)
 }
 
 /- Trait implementation: [alloc::vec::Vec] -/
+@[reducible]
 def Vec.coreopsindexIndexMutInst (T I : Type)
   (inst : core.slice.index.SliceIndex I (Slice T)) :
   core.ops.index.IndexMut (alloc.vec.Vec T) I := {
@@ -209,6 +211,7 @@ def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.
 def alloc.vec.DerefVec.deref (T : Type) (v : Vec T) : Slice T :=
   ⟨ v.val, v.property ⟩
 
+@[reducible]
 def core.ops.deref.DerefVec (T : Type) : core.ops.deref.Deref (alloc.vec.Vec T) := {
   Target := Slice T
   deref := fun v => ok (alloc.vec.DerefVec.deref T v)
@@ -224,6 +227,7 @@ def alloc.vec.DerefMutVec.deref_mut (T : Type) (v :  alloc.vec.Vec T) :
 /- Trait implementation: [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}]
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2630:0-2630:49
    Name pattern: core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>> -/
+@[reducible]
 def core.ops.deref.DerefMutVec (T : Type) :
   core.ops.deref.DerefMut (alloc.vec.Vec T) := {
   derefInst := core.ops.deref.DerefVec T

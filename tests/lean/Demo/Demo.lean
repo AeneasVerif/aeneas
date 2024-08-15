@@ -164,6 +164,7 @@ def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
 
 /- Trait implementation: [demo::{demo::Counter for usize}]
    Source: 'tests/src/demo.rs', lines 103:0-103:22 -/
+@[reducible]
 def CounterUsize : Counter Usize := {
   incr := CounterUsize.incr
 }

@@ -45,8 +45,6 @@ divergent def add_no_overflow_loop
     let (i3, index_mut_back) ←
       alloc.vec.Vec.index_mut U32 Usize
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
-    let i2 : U32 := i2
-    let i3 : U32 := i3
     let i4 ← i3 + i2
     let i5 ← i + 1#usize
     let x1 ← index_mut_back i4
