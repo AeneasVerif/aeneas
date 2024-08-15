@@ -497,6 +497,9 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
   (* Lean-only definitions *)
   @ mk_lean_only
       [
+        mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
+          ~filter:(Some [ true; false ])
+          ();
         mk_fun "core::mem::swap" ~can_fail:false ();
         mk_fun "core::option::{core::option::Option<@T>}::take"
           ~extract_name:(Some (backend_choice "" "core::option::Option::take"))

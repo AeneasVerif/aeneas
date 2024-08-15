@@ -230,4 +230,23 @@ def core.ops.deref.DerefMutVec (T : Type) :
   deref_mut := alloc.vec.DerefMutVec.deref_mut T
 }
 
+def alloc.vec.Vec.resize (T : Type) (cloneInst : core.clone.Clone T)
+  (v : alloc.vec.Vec T) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
+  if new_len < v.length then
+    ok ⟨ v.val.resize new_len.val value, by scalar_tac ⟩
+  else
+    let value ← cloneInst.clone value
+    ok ⟨ v.val.resize new_len.val value, by scalar_tac ⟩
+
+@[pspec]
+theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
+  (v : alloc.vec.Vec T) (new_len : Usize) (value : T)
+  (hClone : cloneInst.clone value = ok value) :
+  ∃ nv, alloc.vec.Vec.resize T cloneInst v new_len value = ok nv ∧
+    nv.val = v.val.resize new_len.val value := by
+  rw [resize]
+  split
+  . simp
+  . simp [*]
+
 end Primitives

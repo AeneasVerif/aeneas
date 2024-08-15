@@ -78,13 +78,6 @@ def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
       U32) y i
   else Result.ok 0#u32
 
-/- [alloc::vec::{alloc::vec::Vec<T, A>}#2::resize]:
-   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 2575:4-2575:54
-   Name pattern: alloc::vec::{alloc::vec::Vec<@T, @A>}::resize -/
-axiom alloc.vec.Vec.resize
-  (T A : Type) (corecloneCloneInst : core.clone.Clone T) :
-  alloc.vec.Vec T → Usize → T → Result (alloc.vec.Vec T)
-
 /- [core::num::{u32}#8::overflowing_add]:
    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2182:8-2182:69
    Name pattern: core::num::{u32}::overflowing_add -/
@@ -130,9 +123,7 @@ def add_with_carry
   let i := alloc.vec.Vec.len U32 x
   let i1 := alloc.vec.Vec.len U32 y
   let max1 ← max i i1
-  let x1 ←
-    alloc.vec.Vec.resize U32 alloc.alloc.Global core.clone.CloneU32 x max1
-      0#u32
+  let x1 ← alloc.vec.Vec.resize U32 core.clone.CloneU32 x max1 0#u32
   add_with_carry_loop x1 y max1 0#u8 0#usize
 
 end tutorial

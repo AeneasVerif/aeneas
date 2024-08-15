@@ -262,13 +262,15 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
   have := List.index_slice r.start.val r.end_.val i a.val (by scalar_tac) (by scalar_tac) (by trivial) (by scalar_tac)
   simp [*]
 
+set_option maxHeartbeats 500000
+
 def Array.update_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
   -- TODO: not completely sure here
   if h: r.start.val < r.end_.val ∧ r.end_.val ≤ a.length ∧ s.val.length = r.end_.val - r.start.val then
     let s_beg := a.val.itake r.start.val
     let s_end := a.val.idrop r.end_.val
     have : s_beg.length = r.start.val := by
-      apply List.itake_len
+      apply List.itake_length
       . simp_all; scalar_tac
       . scalar_tac
     have : s_end.length = a.val.length- r.end_.val := by
@@ -281,8 +283,6 @@ def Array.update_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range 
     ok ⟨ na, by simp_all; scalar_tac ⟩
   else
     fail panic
-
-set_option maxHeartbeats 500000
 
 -- TODO: it is annoying to write `.val` everywhere. We could leverage coercions,
 -- but: some symbols like `+` are already overloaded to be notations for monadic
@@ -341,7 +341,7 @@ def Slice.update_subslice (α : Type u) (s : Slice α) (r : Range Usize) (ss : S
     let s_beg := s.val.itake r.start.val
     let s_end := s.val.idrop r.end_.val
     have : s_beg.length = r.start.val := by
-      apply List.itake_len
+      apply List.itake_length
       . simp_all; scalar_tac
       . scalar_tac
     have : s_end.length = s.val.length - r.end_.val := by

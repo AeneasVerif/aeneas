@@ -119,6 +119,11 @@ def ireplicate {α : Type u} (i : ℤ) (x : α) : List α :=
 termination_by i.toNat
 decreasing_by int_decr_tac
 
+def resize (l : List α) (new_len : Int) (x : α) : List α :=
+  if new_len ≥ 0 then
+    l.itake new_len ++ ireplicate (new_len - l.length) x
+  else []
+
 @[simp] theorem update_nil : update ([] : List α) i y = [] := by simp [update]
 @[simp] theorem update_zero_cons : update ((x :: tl) : List α) 0 y = y :: tl := by simp [update]
 @[simp] theorem update_nzero_cons (hne : Int.not_eq i 0) : update ((x :: tl) : List α) i y = x :: update tl (i - 1) y := by simp [update]; intro; simp_all
@@ -134,6 +139,7 @@ decreasing_by int_decr_tac
 @[simp] theorem slice_nil : slice i j ([] : List α) = [] := by simp [slice]
 @[simp] theorem slice_zero : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
 
+@[simp] theorem ireplicate_le (h : i ≤ 0) : ireplicate i x = [] := by rw [ireplicate]; simp [*]
 @[simp] theorem ireplicate_zero : ireplicate 0 x = [] := by rw [ireplicate]; simp
 @[simp] theorem ireplicate_nzero_cons (hne : 0 < i) : ireplicate i x = x :: ireplicate (i - 1) x := by
   rw [ireplicate]; simp [*]
@@ -183,7 +189,20 @@ theorem ireplicate_length {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
 termination_by l.toNat
 decreasing_by int_decr_tac
 
-@[simp]
+@[scalar_tac (ireplicate l x).length]
+theorem ireplicate_length_max {α : Type u} (l : ℤ) (x : α) :
+  (ireplicate l x).length = max 0 l := by
+  if h: l ≤ 0 then
+    simp_all
+  else
+    have : 0 < l := by int_tac
+    have hr := ireplicate_length_max (l - 1) x
+    simp_all
+    int_tac
+termination_by l.toNat
+decreasing_by int_decr_tac
+
+@[simp, scalar_tac (ls.update i x).length]
 theorem length_update (ls : List α) (i : Int) (x : α) : (ls.update i x).length = ls.length := by
   revert i
   induction ls <;> simp_all [length, update]
@@ -278,16 +297,38 @@ theorem itake_length_le (i : Int) (ls : List α) : (ls.itake i).length ≤ ls.le
       have := itake_length_le (i - 1) tl
       by simp [*]
 
+@[scalar_tac ls.itake i]
+theorem itake_length_eq (i : Int) (ls : List α) :
+  (ls.itake i).length = if 0 ≤ i then min (ls.length : Int) i else ls.length := by
+  match ls with
+  | [] => simp; scalar_tac
+  | hd :: tl =>
+    if h: i = 0 then simp [*]; scalar_tac
+    else
+      have := itake_length_eq (i - 1) tl
+      simp [*]
+      scalar_tac
+
 @[simp]
-theorem itake_len (i : Int) (ls : List α) (_ : 0 ≤ i) (_ : i ≤ ls.length) :
+theorem itake_length (i : Int) (ls : List α) (_ : 0 ≤ i) (_ : i ≤ ls.length) :
   (ls.itake i).length = i :=
   match ls with
   | [] => by simp_all; int_tac
   | hd :: tl =>
     if h: i = 0 then by simp [*]
     else
-      have := itake_len (i - 1) tl (by int_tac) (by simp at *; int_tac)
+      have := itake_length (i - 1) tl (by int_tac) (by simp at *; int_tac)
       by simp [*]
+
+@[simp, scalar_tac (l.resize new_len x).length]
+theorem resize_length (l : List α) (new_len : Int) (x : α) :
+  (l.resize new_len x).length = max 0 new_len := by
+  if h: 0 ≤ new_len then
+    simp_all [resize]
+    scalar_tac
+  else
+    simp [resize, *]
+    scalar_tac
 
 theorem slice_length_le (i j : Int) (ls : List α) : (ls.slice i j).length ≤ ls.length := by
   simp [slice]
