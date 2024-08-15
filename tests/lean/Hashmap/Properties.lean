@@ -364,8 +364,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   simp [hash_key, bind_tc_ok]
   progress as ⟨ hash_mod, hhm ⟩
   have _ : 0 ≤ hash_mod.val ∧ hash_mod.val < alloc.vec.Vec.length hm.slots := by scalar_tac
-  progress as ⟨ l, index_mut_back, h_leq, h_index_mut_back ⟩
-  simp [h_index_mut_back] at *; clear h_index_mut_back index_mut_back
+  progress as ⟨ l, h_leq ⟩
   have h_slot :
     slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v := by
     simp [inv] at hinv
@@ -718,8 +717,7 @@ theorem move_elements_loop_spec
     -- Continue the proof
     have hIneq : 0 ≤ i.val ∧ i.val < slots.val.length := by scalar_tac
     simp [hi]
-    progress as ⟨ slot, index_back, hSlotEq, hIndexBack ⟩
-    rw [hIndexBack]; clear hIndexBack
+    progress as ⟨ slot, hSlotEq ⟩
     have hInvSlot : slot_t_inv slots.val.length i.val slot := by
       simp [slots_t_inv] at hSlotsInv
       simp [*]
