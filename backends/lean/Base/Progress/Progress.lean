@@ -152,9 +152,8 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
                 -- Those ones are quite useful to simplify the goal further by eliminating
                 -- existential quantifiers, for instance.
                 ``and_assoc, ``Primitives.Result.ok.injEq,
-                ``exists_eq_left, ``exists_eq_left',
-                ``exists_eq_right, ``exists_eq_right',
-                ``exists_eq, ``exists_eq']
+                ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
+                ``exists_eq, ``exists_eq', ``true_and, ``and_true]
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
     -- TODO: not sure this is the best way of checking it
