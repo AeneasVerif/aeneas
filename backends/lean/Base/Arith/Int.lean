@@ -111,7 +111,10 @@ def intTacSaturateForward : Tactic.TacticM Unit := do
 elab "int_tac_saturate" : tactic =>
   intTacSaturateForward
 
-/- Boosting a bit the `omega` tac.
+/-  Boosting a bit the `omega` tac.
+
+    - `extraPrePreprocess`: extra-preprocessing to be done *before* this preprocessing
+    - `extraPreprocess`: extra-preprocessing to be done *after* this preprocessing
  -/
 def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
@@ -122,11 +125,13 @@ def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit)
   -- Extra preprocessing
   extraPreprocess
   -- Reduce all the terms in the goal - note that the extra preprocessing step
-  -- might have proven the goal, hence the `Tactic.allGoals`
+  -- might have proven the goal, hence the `allGoals`
   let dsimp :=
-    Tactic.allGoals do tryTac (
+    allGoalsNoRecover do tryTac (
       -- We set `simpOnly` at false on purpose.
-      dsimpAt false {} intTacSimpRocs
+      -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
+      -- to deal with them)
+      dsimpAt false {zetaDelta := true} intTacSimpRocs
         -- Declarations to unfold
         []
         -- Theorems
@@ -134,10 +139,10 @@ def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit)
         [] Tactic.Location.wildcard)
   dsimp
   -- More preprocessing: apply norm_cast to the whole context
-  Tactic.allGoals (Utils.tryTac (Utils.normCastAtAll))
+  allGoalsNoRecover (Utils.tryTac (Utils.normCastAtAll))
   -- norm_cast does weird things with negative numbers so we reapply simp
   dsimp
-  Tactic.allGoals do Utils.tryTac (
+  allGoalsNoRecover do Utils.tryTac (
     Utils.simpAt true {}
                -- Simprocs
                []
@@ -154,7 +159,13 @@ def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit)
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ()) (do pure ())
 
-def intTac (tacName : String) (splitGoalConjs : Bool) (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+/-- - `splitAllDisjs`: if true, also split all the matches/if then else in the context (note that
+      `omega` splits the *disjunctions*)
+    - `splitGoalConjs`: if true, split the goal if it is a conjunction so as to introduce one
+      subgoal per conjunction.
+-/
+def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
+  (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
   let g ← Tactic.getMainGoal
@@ -164,19 +175,50 @@ def intTac (tacName : String) (splitGoalConjs : Bool) (extraPrePreprocess extraP
   Tactic.setGoals [g]
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
-  Tactic.allGoals (intTacPreprocess extraPrePreprocess extraPreprocess)
+  allGoalsNoRecover (intTacPreprocess extraPrePreprocess extraPreprocess)
   -- Split the conjunctions in the goal
-  if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
-  -- Call omega
-  Tactic.allGoals do
-    try do Tactic.Omega.omegaTactic {}
+  if splitGoalConjs then allGoalsNoRecover (Utils.repeatTac Utils.splitConjTarget)
+  /- If we split the disjunctions, split then use simp_all. Otherwise only use simp_all.
+     Note that simp_all is very useful here as a "congruence" procedure. Note however that we
+     only activate a very restricted set of simp lemmas (otherwise it can be very expensive,
+     and have surprising behaviors). -/
+  allGoalsNoRecover do
+    try do
+      let simpThenOmega := do
+        /- IMPORTANT: we put a quite low number for `maxSteps`.
+           There are two reasons.
+           First, `simp_all` seems to loop at times, so by controling the maximum number of steps
+           we make sure it doesn't exceed the maximum number of heart beats (or worse, overflows the
+           stack).
+           Second, this makes the tactic very snappy.
+         -/
+        Utils.tryTac (
+          -- TODO: is there a simproc to simplify propositional logic?
+          Utils.simpAll {failIfUnchanged := false, maxSteps := 75} true [``reduceIte] []
+            [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq, ``not_false_eq_true,
+             ``true_and, ``and_true, ``false_and, ``and_false, ``true_or, ``or_true,
+             ``false_or, ``or_false] [])
+        allGoalsNoRecover (do
+          trace[Arith] "Goal after simplification: {← getMainGoal}"
+          Tactic.Omega.omegaTactic {})
+      if splitAllDisjs then do
+        /- In order to improve performance, we first try to prove the goal without splitting. If it
+           fails, we split. -/
+        try
+          trace[Arith] "First trying to solve the goal without splitting"
+          simpThenOmega
+        catch _ =>
+          trace[Arith] "First attempt failed: splitting the goal and retrying"
+          splitAll (allGoalsNoRecover simpThenOmega)
+      else
+        simpThenOmega
     catch _ =>
       let g ← Tactic.getMainGoal
-      throwError "{tacName} failed to prove the goal below.\n\nNote that {tacName} is equivalent to:\n  {tacName}_preprocess; omega\n\nGoal: \n{g}"
+      throwError "{tacName} failed to prove the goal below.\n\nNote that {tacName} is equivalent to:\n  {tacName}_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
 
 elab "int_tac" args:(" split_goal"?): tactic =>
-  let split := args.raw.getArgs.size > 0
-  intTac "int_tac" split (do pure ()) (do pure ())
+  let splitConjs := args.raw.getArgs.size > 0
+  intTac "int_tac" true splitConjs (do pure ()) (do pure ())
 
 -- For termination proofs
 syntax "int_decr_tac" : tactic
@@ -192,6 +234,9 @@ macro_rules
 -- Checking that things happen correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
   int_tac split_goal
+
+--example (x y : Int) : x + y ≥ 2 := by
+--  int_tac split_goal
 
 -- Checking that things happen correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
@@ -213,5 +258,9 @@ example (x y : Int) (h : x + y = 3) :
   z = 3 := by
   intro z
   omega
+
+-- Checking that we manage to split the cases/if then else
+example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by
+  int_tac
 
 end Arith

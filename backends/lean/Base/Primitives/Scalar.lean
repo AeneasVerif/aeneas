@@ -440,7 +440,6 @@ theorem Scalar.sub_unsigned_spec {ty : ScalarTy} (s : ¬ ty.isSigned)
     have hxm := x.hmax
     have hy := y.hmin
     cases ty <;> simp [min, max, ScalarTy.isSigned] at * <;> omega
-  intros
   apply sub_spec <;> assumption
 
 /- Fine-grained theorems -/

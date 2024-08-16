@@ -218,7 +218,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     trace[Progress] "Non prop goals: {← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
     -- Try to solve the goals which are propositions
     setGoals newPropGoals
-    allGoals asmTac
+    allGoalsNoRecover asmTac
     --
     let newPropGoals ← getUnsolvedGoals
     let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
@@ -396,15 +396,15 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Stats := do
   let scalarTac : TacticM Unit := do
     if ← Arith.goalIsLinearInt then
       -- Also: we don't try to split the goal if it is a conjunction
-      -- (it shouldn't be)
-      Arith.scalarTac false
+      -- (it shouldn't be), but we split the disjunctions.
+      Arith.scalarTac true false
     else
       throwError "Not a linear arithmetic goal"
   let simpTac : TacticM Unit := do
       -- Simplify the goal
       Utils.simpAt false {} [] [] [] [] (.targets #[] true)
       -- Raise an error if the goal is not proved
-      allGoals (throwError "Goal not proved")
+      allGoalsNoRecover (throwError "Goal not proved")
   -- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
   -- assumption matching the goal.
   let customAssumTac : TacticM Unit := singleAssumptionTac

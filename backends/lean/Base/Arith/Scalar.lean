@@ -58,11 +58,11 @@ elab "scalar_tac_preprocess" : tactic =>
   intTacPreprocess scalarTacExtraPrePreprocess scalarTacExtraPreprocess
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
-def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
-  intTac "scalar_tac" splitGoalConjs scalarTacExtraPrePreprocess scalarTacExtraPreprocess
+def scalarTac (splitAllDisjs splitGoalConjs : Bool) : Tactic.TacticM Unit := do
+  intTac "scalar_tac" splitAllDisjs splitGoalConjs scalarTacExtraPrePreprocess scalarTacExtraPreprocess
 
 elab "scalar_tac" : tactic =>
-  scalarTac false
+  scalarTac true false
 
 @[scalar_tac x]
 theorem Scalar.bounds {ty : ScalarTy} (x : Scalar ty) :
@@ -115,6 +115,30 @@ example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y :
 
 example (x : U32) (h : 16 * ↑x ≤ U32.max) :
   4 * U32.ofInt (4 * x.val) (by scalar_tac) ≤ U32.max := by
+  scalar_tac
+
+example (b : Bool) (x y : Int) (h : if b then P ∧ x + y < 3 else x + y < 4) : x + y < 5 := by
+  scalar_tac
+
+example
+  (xi yi : U32)
+  (c0 : U8)
+  (hCarryLe : c0.val ≤ 1)
+  (c0u : U32)
+  (_ : c0u.val = c0.val)
+  (s1 : U32)
+  (c1 : Bool)
+  (hConv1 : if ↑xi + ↑c0u > U32.max then ↑s1 = ↑xi + ↑c0u - U32.max - 1 ∧ c1 = true else s1 = xi.val + c0u ∧ c1 = false)
+  (s2 : U32)
+  (c2 : Bool)
+  (hConv2 : if ↑s1 + ↑yi > U32.max then ↑s2 = ↑s1 + ↑yi - U32.max - 1 ∧ c2 = true else s2 = s1.val + yi ∧ c2 = false)
+  (c1u : U8)
+  (_ : c1u.val = if c1 = true then 1 else 0)
+  (c2u : U8)
+  (_ : c2u.val = if c2 = true then 1 else 0)
+  (c3 : U8)
+  (_ : c3.val = c1u.val + c2u.val):
+  c3.val ≤ 1 := by
   scalar_tac
 
 end Arith

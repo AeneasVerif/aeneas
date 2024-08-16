@@ -137,7 +137,7 @@ initialize saturateAttr : SaturateAttribute ← do
   let ext ← mkExtension `aeneas_saturate_map
   let attrImpl : AttributeImpl := {
     name := `aeneas_saturate
-    descr := "Saturation attribute"
+    descr := "Saturation attribute to automatically introduce lemmas in the context"
     add := fun thName stx attrKind => do
       trace[Saturate.attribute] "Theorem: {thName}"
       -- Check that the rule is not already registered

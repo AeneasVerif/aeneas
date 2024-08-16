@@ -849,7 +849,6 @@ theorem Node.insert_in_left_spec
           . simp_all
           . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
-          . simp_all
           . -- End of the proof
             simp [*]
             split_conjs
@@ -949,7 +948,6 @@ theorem Node.insert_in_right_spec
           . simp_all
           . simp_all
           . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-          . simp_all
           . -- End of the proof
             simp [*]
             split_conjs

@@ -313,11 +313,26 @@ example (x : Bool) : Nat := by
 def tryTac (tac : TacticM Unit) : TacticM Unit := do
   let _ ← tryTactic tac
 
+/-- Adapted from allGoals
+
+    We use this instead of allGoals, because when the tactic throws an exception that we attempt
+    to catch outside, the behavior can be quite surprising.
+ -/
+def allGoalsNoRecover (tac : TacticM Unit) : TacticM Unit := do
+  let mvarIds ← getGoals
+  let mut mvarIdsNew := #[]
+  for mvarId in mvarIds do
+    unless (← mvarId.isAssigned) do
+      setGoals [mvarId]
+      tac
+      mvarIdsNew := mvarIdsNew ++ (← getUnsolvedGoals)
+  setGoals mvarIdsNew.toList
+
 -- Repeatedly apply a tactic
 partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
   try
     tac
-    allGoals (focus (repeatTac tac))
+    allGoalsNoRecover (focus (repeatTac tac))
   -- TODO: does this restore the state?
   catch _ => pure ()
 
@@ -763,12 +778,15 @@ def dsimpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name)
   dsimpLocation ctx simprocs loc
 
 -- Call the simpAll tactic
-def simpAll (config : Simp.Config) (simprocs : List Name) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def simpAll (config : Simp.Config) (simpOnly : Bool) (simprocs : List Name) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx false config .simpAll simprocs declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll simprocs declsToUnfold thms hypsToUse
   -- Apply the simplifier
-  let _ ← Lean.Meta.simpAll (← getMainGoal) ctx simprocs
+  let (result?, _) ← Lean.Meta.simpAll (← getMainGoal) ctx (simprocs := simprocs)
+  match result? with
+  | none => replaceMainGoal []
+  | some mvarId => replaceMainGoal [mvarId]
 
 /- Adapted from Elab.Tactic.Rewrite -/
 def rewriteTarget (eqThm : Expr) (symm : Bool) (config : Rewrite.Config := {}) : TacticM Unit := do
@@ -881,5 +899,39 @@ def attrIgnoreAuxDef (name : Name) (default : AttrM α) (x : AttrM α) : AttrM �
   else
     -- Normal execution
     x
+
+/-- Split anything in the context, and return the resulting set of subgoals.
+    Raise an exception if we couldn't split.
+ -/
+def splitAny : TacticM (List MVarId) := do
+  -- This is taken from `evalSplit`
+  let mvarId ← getMainGoal
+  let fvarIds ← mvarId.getNondepPropHyps
+  for fvarId in fvarIds do
+    if let some mvarIds ← splitLocalDecl? mvarId fvarId then
+      return mvarIds
+  let some mvarIds ← splitTarget? mvarId | Meta.throwTacticEx `splitAny mvarId "Could not split"
+  return mvarIds
+
+/-- Repeteadly split the disjunctions in the context, then apply a tactic when we can't split anymore -/
+partial def splitAll (endTac : TacticM Unit) : TacticM Unit := do
+  withMainContext do
+  try
+    let mvarIds ← splitAny
+    -- Update the goals
+    setGoals ((← getUnsolvedGoals) ++ mvarIds)
+    -- Continue
+    allGoalsNoRecover (focus (splitAll endTac))
+  catch _ =>
+    allGoalsNoRecover endTac
+
+elab "split_all" : tactic => do
+  withMainContext do
+  splitAll (pure ())
+
+example (x y z : Int) (b1 b2 : Bool)
+  (h1 : if b1 then x ≤ y else y ≥ x) (h2 : if b2 then y ≤ z else z ≥ y) :
+  x ≤ z := by
+  split_all <;> omega
 
 end Utils
