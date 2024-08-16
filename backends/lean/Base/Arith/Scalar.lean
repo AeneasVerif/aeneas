@@ -47,6 +47,9 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
                 ``Scalar.toNat, ``Isize.toNat, ``USize.toNat,
                 ``I8.toNat, ``I16.toNat, ``I32.toNat, ``I64.toNat, ``I128.toNat,
                 ``U8.toNat, ``U16.toNat, ``U32.toNat, ``U64.toNat, ``U128.toNat,
+                ``U8.unsigned_ofNat_toNat, ``U16.unsigned_ofNat_toNat,
+                ``U32.unsigned_ofNat_toNat, ``U64.unsigned_ofNat_toNat,
+                ``U128.unsigned_ofNat_toNat, ``Usize.unsigned_ofNat_toNat,
                 ]
                 -- Simp lemmas
                 scalarTacSimpLemmas

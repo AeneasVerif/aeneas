@@ -488,14 +488,14 @@ namespace Test
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
     ∃ nv, v.update_usize i x = ok nv ∧
-    nv.val = v.val.update i.val x := by
+    nv.val = v.val.update i.toNat x := by
     progress
     simp [*]
 
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
     ∃ nv, v.update_usize i x = ok nv ∧
-    nv.val = v.val.update i.val x := by
+    nv.val = v.val.update i.toNat x := by
     progress? says progress with Primitives.alloc.vec.Vec.update_usize_spec
     simp [*]
 

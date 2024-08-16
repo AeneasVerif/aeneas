@@ -647,4 +647,17 @@ theorem Scalar.max_unsigned_right_zero_eq {ty} [s: Fact (¬ ty.isSigned)] (x: Sc
 @[simp] abbrev I128.toNat  (x : I128) : Nat := x.val.toNat
 @[simp] abbrev Isize.toNat (x : Isize) : Nat := x.val.toNat
 
+@[simp]
+theorem Scalar.unsigned_ofNat_toNat (x : Scalar ty) (h : ¬ ty.isSigned := by decide) :
+  (x.toNat : Int) = x.val := by
+  have := x.hmin
+  simp; cases ty <;> simp_all [min]
+
+@[simp] theorem U8.unsigned_ofNat_toNat (x : U8) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[simp] theorem U16.unsigned_ofNat_toNat (x : U16) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[simp] theorem U32.unsigned_ofNat_toNat (x : U32) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[simp] theorem U64.unsigned_ofNat_toNat (x : U64) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[simp] theorem U128.unsigned_ofNat_toNat (x : U128) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[simp] theorem Usize.unsigned_ofNat_toNat (x : Usize) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+
 end Primitives

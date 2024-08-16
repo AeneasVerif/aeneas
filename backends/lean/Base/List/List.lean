@@ -169,7 +169,7 @@ theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.l
       have := drop_length_is_le (i - 1) tl
       by simp [*]; omega
 
-@[simp, scalar_tac ls.take i]
+@[simp, scalar_tac ls.drop i]
 theorem length_drop_eq (i : Nat) (ls : List α) :
   (ls.drop i).length = ls.length - i := by
   induction ls <;> simp_all
