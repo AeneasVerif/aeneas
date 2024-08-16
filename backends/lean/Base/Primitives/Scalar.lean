@@ -128,6 +128,12 @@ theorem Scalar.cast_in_bounds_eq {src_ty tgt_ty : ScalarTy} (x : Scalar src_ty) 
   . use (Scalar.ofIntCore x h_bounds); simp [ofOption, ofIntCore]
   . omega
 
+@[pspec]
+theorem Scalar.cast_bool_spec ty (b : Bool) :
+  ∃ s, Scalar.cast_bool ty b = ok s ∧ s.val = if b then 1 else 0 := by
+  simp [Scalar.cast_bool, tryMk, tryMkOpt]
+  split <;> split <;> simp_all <;> scalar_tac
+
 -- TODO: below: not sure this is the best way.
 -- Should we rather overload operations like +, -, etc.?
 -- Also, it is possible to automate the generation of those definitions
@@ -986,49 +992,55 @@ def core.num.Isize.overflowing_add := @Scalar.overflowing_add ScalarTy.Isize
 @[pspec]
 theorem core.num.U8.overflowing_add_spec (x y : U8) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
-  (z.val, b) = if x.val + y.val > U8.max then (x.val + y.val - U8.max - 1, true) else (x.val + y.val, false)
+  if x.val + y.val > U8.max then z.val = x.val + y.val - U8.max - 1 ∧ b = true
+  else z.val = x.val + y.val ∧ b = false
   := by
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+  split <;> split <;> simp_all <;> scalar_tac
 
 @[pspec]
 theorem core.num.U16.overflowing_add_spec (x y : U16) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
-  (z.val, b) = if x.val + y.val > U16.max then (x.val + y.val - U16.max - 1, true) else (x.val + y.val, false)
+  if x.val + y.val > U16.max then z.val = x.val + y.val - U16.max - 1 ∧ b = true
+  else z.val = x.val + y.val ∧ b = false
   := by
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+  split <;> split <;> simp_all <;> scalar_tac
 
 @[pspec]
 theorem core.num.U32.overflowing_add_spec (x y : U32) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
-  (z.val, b) = if x.val + y.val > U32.max then (x.val + y.val - U32.max - 1, true) else (x.val + y.val, false)
+  if x.val + y.val > U32.max then z.val = x.val + y.val - U32.max - 1 ∧ b = true
+  else z.val = x.val + y.val ∧ b = false
   := by
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+  split <;> split <;> simp_all <;> scalar_tac
 
 @[pspec]
 theorem core.num.U64.overflowing_add_spec (x y : U64) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
-  (z.val, b) = if x.val + y.val > U64.max then (x.val + y.val - U64.max - 1, true) else (x.val + y.val, false)
+  if x.val + y.val > U64.max then z.val = x.val + y.val - U64.max - 1 ∧ b = true
+  else z.val = x.val + y.val ∧ b = false
   := by
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+  split <;> split <;> simp_all <;> scalar_tac
 
 @[pspec]
 theorem core.num.U128.overflowing_add_spec (x y : U128) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
-  (z.val, b) = if x.val + y.val > U128.max then (x.val + y.val - U128.max - 1, true) else (x.val + y.val, false)
+  if x.val + y.val > U128.max then z.val = x.val + y.val - U128.max - 1 ∧ b = true
+  else z.val = x.val + y.val ∧ b = false
   := by
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+  split <;> split <;> simp_all <;> scalar_tac
 
 @[pspec]
 theorem core.num.Usize.overflowing_add_spec (x y : Usize) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
-  (z.val, b) = if x.val + y.val > Usize.max then (x.val + y.val - Usize.max - 1, true) else (x.val + y.val, false)
+  if x.val + y.val > Usize.max then z.val = x.val + y.val - Usize.max - 1 ∧ b = true
+  else z.val = x.val + y.val ∧ b = false
   := by
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> split <;> simp_all <;> scalar_tac
+  split <;> split <;> simp_all <;> scalar_tac
 
 end Primitives

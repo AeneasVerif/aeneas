@@ -189,7 +189,7 @@ theorem ireplicate_length {α : Type u} (l : ℤ) (x : α) (h : 0 ≤ l) :
 termination_by l.toNat
 decreasing_by int_decr_tac
 
-@[scalar_tac (ireplicate l x).length]
+@[scalar_tac ireplicate l x]
 theorem ireplicate_length_max {α : Type u} (l : ℤ) (x : α) :
   (ireplicate l x).length = max 0 l := by
   if h: l ≤ 0 then
@@ -202,7 +202,7 @@ theorem ireplicate_length_max {α : Type u} (l : ℤ) (x : α) :
 termination_by l.toNat
 decreasing_by int_decr_tac
 
-@[simp, scalar_tac (ls.update i x).length]
+@[simp, scalar_tac ls.update i x]
 theorem length_update (ls : List α) (i : Int) (x : α) : (ls.update i x).length = ls.length := by
   revert i
   induction ls <;> simp_all [length, update]
@@ -472,7 +472,7 @@ theorem map_update_eq {α : Type u} {β : Type v} (ls : List α) (i : Int) (x : 
 
 example (x tl hd : Nat) : x + tl = hd + tl + x - hd := by omega
 
-@[scalar_tac (ls.index i).length]
+@[scalar_tac ls.index i]
 theorem length_index_le_length_flatten (ls : List (List α)) :
   forall (i : Int), (ls.index i).length ≤ ls.flatten.length := by
   induction ls <;> intro i <;> simp_all
@@ -500,7 +500,7 @@ theorem length_flatten_update_eq {α : Type u} (ls : List (List α)) (i : Int) (
       simp [*]
       int_tac
 
-@[scalar_tac (ls.update i x).flatten.length]
+@[scalar_tac (ls.update i x).flatten]
 theorem length_flatten_update_eq_disj {α : Type u} (ls : List (List α)) (i : Int) (x : List α) :
   i < 0 ∨ ls.length ≤ i ∨
   (ls.update i x).flatten.length + (ls.index i).length = ls.flatten.length + x.length := by

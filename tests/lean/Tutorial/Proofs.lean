@@ -7,6 +7,24 @@ end Primitives
 
 namespace Tutorial
 
+-- TODO: move, use natural numbers, etc.
+@[simp]
+theorem index_update_eq_unsigned_scalar
+  {α : Type u} [Inhabited α] (l: List α) (i: Scalar ty) (x: α) :
+  ¬ ty.isSigned → i.val < l.length → (l.update i.val x).index i.val = x := by
+  intros
+  apply List.index_update_eq <;> (try simp [*])
+  cases ty <;> simp_all <;> scalar_tac
+
+
+-- TODO: specialize the theorems for the cases unsigned scalar
+-- TODO: use natural numbers
+-- TODO: theorems for .toNat
+-- Ex.: (x.val + n).toNat = x.toNat + n.toNat
+
+-- TODO: use simp with discharger to simplify array expressions
+-- TODO: introduce gindex (for ghost index)
+
 def times4 (x : U32) : Result U32 := do
   let x1 ← x + x
   x1 + x1
@@ -241,26 +259,7 @@ divergent def zero_loop
     zero_loop x1 i2
   else Result.ok x
 
--- TODO:
-@[simp, scalar_tac ls.update i x]
-theorem length_update (ls : List α) (i : Int) (x : α) : (ls.update i x).length = ls.length := by
-  sorry
-
 set_option maxHeartbeats 1000000
-
--- TODO: move
-@[simp]
-theorem index_update_eq_unsigned_scalar
-  {α : Type u} [Inhabited α] (l: List α) (i: Scalar ty) (x: α) :
-  ¬ ty.isSigned → i.val < l.length → (l.update i.val x).index i.val = x := by
-  intros
-  apply List.index_update_eq <;> (try simp [*])
-  cases ty <;> simp_all <;> scalar_tac
-
-example
-  {α : Type u} [Inhabited α] (l: List α) (i: U32) (x: α) (h : i.val < l.length) :
-  (l.update i.val x).index i.val = x := by
-  simp [*]
 
 abbrev Bignum U32 := alloc.vec.Vec U32
 
@@ -376,8 +375,6 @@ theorem toInt_aux_append (l0 l1 : List U32) :
     simp_all
     scalar_eq_nf
 
--- TODO: specialize the theorems for the cases unsigned scalar
--- Ex.: (x.val + n).toNat = x.toNat + n.toNat
 @[simp]
 theorem toInt_aux_update (l : List U32) (i : Int) (x : U32) (h0 : 0 ≤ i) (h1 : i < l.length) :
   toInt_aux (l.update i x) = toInt_aux l + 2 ^ (32 * i.toNat) * (x - l.index i) := by
@@ -437,8 +434,6 @@ theorem UScalar.pos_add_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Int) (h'
 
 set_option maxHeartbeats 5000000
 
--- TODO: use simp with discharger to simplify array expressions
--- TODO: introduce gindex (for ghost index)
 @[pspec]
 theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
@@ -524,22 +519,6 @@ divergent def add_with_carry_loop
     let x1 ← index_mut_back sum1
     add_with_carry_loop x1 y c01 i7
   else Result.ok (c0, x)
-
--- TODO:
-@[pspec]
-theorem Scalar.cast_bool_spec ty (b : Bool) :
-  ∃ s, Scalar.cast_bool ty b = ok s ∧ s.val = if b then 1 else 0 := by
-  simp [Scalar.cast_bool]
-  sorry
-
--- TODO:
-@[pspec]
-theorem core.num.U32.overflowing_add_spec' (x y : U32) :
-  ∃ z b, core.num.U32.overflowing_add x y = ok (z, b) ∧
-  if x.val + y.val > U32.max then (z.val = x.val + y.val - U32.max - 1 ∧ b = true)
-  else (z.val = x.val + y.val ∧ b = false)
-  := by
-  sorry
 
 @[pspec]
 theorem add_with_carry_loop_spec
