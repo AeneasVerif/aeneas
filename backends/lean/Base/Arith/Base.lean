@@ -95,4 +95,16 @@ theorem Nat.not_eq_imp_not_eq {i j} : Nat.not_eq i j → i ≠ j := by
   intro h g
   simp_all
 
+@[simp]
+theorem Nat.le_imp_le_equiv_eq (i j : Nat) (h0 : i ≤ j) : j ≤ i ↔ i = j := by
+  omega
+
+@[simp]
+theorem Int.le_imp_le_equiv_eq (i j : Int) (h0 : i ≤ j) : j ≤ i ↔ i = j := by
+  omega
+
+example (i : Int) (j : Nat) (h : i ≤ j) (h2 : j ≤ i) :
+  i = j := by
+  simp_all
+
 end Arith

@@ -35,7 +35,7 @@ open CList
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.to_list.length) :
   ∃ x, list_nth T l i = ok x ∧
-  x = l.to_list.index ↑i
+  x = l.to_list.index i.toNat
   := by
   rw [list_nth]
   match l with

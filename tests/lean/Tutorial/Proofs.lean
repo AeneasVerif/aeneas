@@ -1,21 +1,13 @@
 import Base
 open Primitives Result
 
+set_option maxHeartbeats 5000000
+
 namespace Primitives
 
 end Primitives
 
 namespace Tutorial
-
--- TODO: move, use natural numbers, etc.
-@[simp]
-theorem index_update_eq_unsigned_scalar
-  {α : Type u} [Inhabited α] (l: List α) (i: Scalar ty) (x: α) :
-  ¬ ty.isSigned → i.val < l.length → (l.update i.val x).index i.val = x := by
-  intros
-  apply List.index_update_eq <;> (try simp [*])
-  cases ty <;> simp_all <;> scalar_tac
-
 
 -- TODO: specialize the theorems for the cases unsigned scalar
 -- TODO: use natural numbers
@@ -186,7 +178,7 @@ open CList
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.to_list.length) :
   ∃ x, list_nth T l i = ok x ∧
-  x = l.to_list.index ↑i
+  x = l.to_list.index i.toNat
   := by
   rw [list_nth]
   match l with
@@ -259,8 +251,6 @@ divergent def zero_loop
     zero_loop x1 i2
   else Result.ok x
 
-set_option maxHeartbeats 1000000
-
 abbrev Bignum U32 := alloc.vec.Vec U32
 
 @[simp]
@@ -279,8 +269,8 @@ theorem zero_loop_spec
   ∃ x',
     zero_loop x i = ok x' ∧
     x'.length = x.length ∧
-    (∀ j, 0 ≤ j → j < i.val → x'.val.index j = x.val.index j) ∧
-    (∀ j, i.val ≤ j → j < x.length → x'.val.index j = 0#u32) := by
+    (∀ j, j < i.toNat → x'.val.index j = x.val.index j) ∧
+    (∀ j, i.toNat ≤ j → j < x.length → x'.val.index j = 0#u32) := by
   rw [zero_loop]
   simp
   split
@@ -290,15 +280,14 @@ theorem zero_loop_spec
     progress as ⟨ x2, _, hSame, hZero ⟩
     simp_all
     split_conjs
-    . intro j h0 h1
-      replace hSame := hSame j (by scalar_tac) (by scalar_tac)
+    . intro j h0
+      replace hSame := hSame j (by scalar_tac)
       simp_all
     . intro j h0 h1
       -- TODO: we want a shortcut for this
-      cases h: (¬ j = i.val : Bool) <;> simp_all
-      . have := hSame j (by scalar_tac) (by scalar_tac)
-        simp_all
-      . apply hZero j (by scalar_tac) (by scalar_tac)
+      cases h: (¬ j = i.toNat : Bool) <;> simp_all
+      have := hZero j (by scalar_tac)
+      simp_all
   . simp; scalar_tac
 termination_by (x.length - i.val).toNat
 decreasing_by scalar_decr_tac
@@ -315,10 +304,12 @@ theorem all_nil_impl_toInt_eq_zero
   | [] => simp
   | hd :: tl =>
     have h1 := h 0
-    simp_all
+    simp at *
+    simp [*]
     apply all_nil_impl_toInt_eq_zero
     intro j h2
-    have := h (j + 1)
+    have := h (j + 1) (by simp [*])
+    simp at this
     simp_all
 
 theorem zero_spec (x : alloc.vec.Vec U32) :
@@ -376,21 +367,21 @@ theorem toInt_aux_append (l0 l1 : List U32) :
     scalar_eq_nf
 
 @[simp]
-theorem toInt_aux_update (l : List U32) (i : Int) (x : U32) (h0 : 0 ≤ i) (h1 : i < l.length) :
-  toInt_aux (l.update i x) = toInt_aux l + 2 ^ (32 * i.toNat) * (x - l.index i) := by
+theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
+  toInt_aux (l.update i x) = toInt_aux l + 2 ^ (32 * i) * (x - l.index i) := by
   cases l with
-  | nil => simp at *; scalar_tac
+  | nil => simp at *
   | cons hd tl =>
     simp_all
     -- TODO: simplify this
     cases h : (i = 0 : Bool) <;> simp_all
-    . have := toInt_aux_update tl (i - 1) x (by scalar_tac) (by scalar_tac)
+    . have := toInt_aux_update tl (i - 1) x (by scalar_tac)
       simp_all
       scalar_nf at *
       scalar_eq_nf
-      have : (2 ^ ((i.toNat - 1) * 32) * 4294967296  : Int) = 2 ^ (32 * i.toNat) := by
+      have : (2 ^ ((i - 1) * 32) * 4294967296  : Int) = 2 ^ (32 * i) := by
         scalar_nf
-        have : i.toNat = i.toNat - 1 + 1 := by scalar_tac
+        have : i = i - 1 + 1 := by scalar_tac
         conv => rhs; rw [this]
         scalar_nf
       simp [mul_assoc, *]
@@ -398,18 +389,18 @@ theorem toInt_aux_update (l : List U32) (i : Int) (x : U32) (h0 : 0 ≤ i) (h1 :
     . scalar_eq_nf
 
 @[simp]
-theorem toInt_aux_idrop (l : List U32) (i : Int) (h0 : 0 ≤ i) (h1 : i < l.length) :
-  toInt_aux (l.idrop i) = l.index i + 2 ^ 32 * toInt_aux (l.idrop (i + 1)) := by
+theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
+  toInt_aux (l.drop i) = l.index i + 2 ^ 32 * toInt_aux (l.drop (i + 1)) := by
   cases l with
-  | nil => simp at *; scalar_tac
+  | nil => simp at *
   | cons hd tl =>
     simp_all
     -- TODO: simplify this
     cases h : (i = 0 : Bool) <;> simp_all
-    have := toInt_aux_idrop tl (i - 1) (by scalar_tac) (by scalar_tac)
+    have := toInt_aux_drop tl (i - 1) (by scalar_tac)
     simp_all
     scalar_nf at *
-    have : 0 < 1 + i := by scalar_tac
+    have : 1 + (i - 1) = i := by scalar_tac
     simp [*]
 
 @[simp]
@@ -432,25 +423,23 @@ theorem UScalar.pos_add_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Int) (h'
   (n + x.val).toNat = n.toNat + x.val.toNat := by
   cases ty <;> simp_all <;> scalar_tac
 
-set_option maxHeartbeats 5000000
-
 @[pspec]
 theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Int), i.val ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max)
+  (hNoOverflow : ∀ (j : Nat), i.toNat ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max)
   (hi : i.val ≤ x.length) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
-  toInt x' = toInt x + 2 ^ (32 * i.toNat) * toInt_aux (y.val.idrop i.val) := by
+  toInt x' = toInt x + 2 ^ (32 * i.toNat) * toInt_aux (y.val.drop i.toNat) := by
   rw [add_no_overflow_loop]
   simp
   split
   . progress as ⟨ yv ⟩
     progress as ⟨ xv ⟩
     progress as ⟨ sum ⟩
-    . have := hNoOverflow i.val (by scalar_tac) (by scalar_tac)
+    . have := hNoOverflow i.toNat (by scalar_tac) (by scalar_tac)
       scalar_tac
     . progress as ⟨ i' ⟩
       progress as ⟨ x1 ⟩
@@ -459,7 +448,7 @@ theorem add_no_overflow_loop_spec
         intro j h0 h1
         -- TODO: this is annoying
         -- TODO: aesop?
-        have : i.val < j := by scalar_tac
+        have : i.toNat < j := by scalar_tac
         simp_all
         apply hNoOverflow j (by scalar_tac) (by scalar_tac)
       . -- Postcondition
@@ -480,12 +469,12 @@ def add_no_overflow
 
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
-  (hNoOverflow : ∀ (j : Int), 0 ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max) :
   ∃ x', add_no_overflow x y = ok x' ∧
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by
   rw [add_no_overflow]
-  progress as ⟨ x' ⟩
+  progress as ⟨ x' ⟩ <;>
   simp_all [toInt]
 
 /- [tutorial::add_with_carry]: loop 0:
@@ -530,7 +519,7 @@ theorem add_with_carry_loop_spec
   x'.length = x.length ∧
   c1.val ≤ 1 ∧
   toInt x' + c1.val * 2 ^ (32 * x'.length) =
-    toInt x + 2 ^ (32 * i.toNat) * toInt_aux (y.val.idrop i.val) + c0.val * 2 ^ (32 * i.toNat) := by
+    toInt x + 2 ^ (32 * i.toNat) * toInt_aux (y.val.drop i.toNat) + c0.val * 2 ^ (32 * i.toNat) := by
   rw [add_with_carry_loop]
   simp
   split
@@ -551,9 +540,9 @@ theorem add_with_carry_loop_spec
       progress as ⟨ c4, x2 ⟩
       -- Proving the post-condition
       simp_all [toInt]
-      have hxUpdate := toInt_aux_update x.val i.val s2 (by scalar_tac) (by scalar_tac)
+      have hxUpdate := toInt_aux_update x.val i.toNat s2 (by scalar_tac)
       simp [hxUpdate]; clear hxUpdate
-      have hyDrop := toInt_aux_idrop y.val i.val (by scalar_tac) (by scalar_tac)
+      have hyDrop := toInt_aux_drop y.val i.toNat (by scalar_tac)
       simp [hyDrop]; clear hyDrop
       scalar_eq_nf
       split at hConv1 <;>
@@ -561,7 +550,6 @@ theorem add_with_carry_loop_spec
       simp_all <;>
       scalar_eq_nf <;> simp [U32.max] <;> scalar_eq_nf
   . simp_all
-    scalar_tac
 termination_by (x.length - i.val).toNat
 decreasing_by scalar_decr_tac
 

@@ -5,6 +5,9 @@ namespace Primitives
 
 open Result Error
 
+@[simp] theorem Scalar.unsigned_neq_zero_equiv (x : Scalar ty) (h : ¬ ty.isSigned := by decide): x.val ≠ 0 ↔ 0 < x.val := by
+  cases ty <;> simp_all <;> scalar_tac
+
 def Scalar.neg {ty : ScalarTy} (x : Scalar ty) : Result (Scalar ty) := Scalar.tryMk ty (- x.val)
 
 -- Our custom remainder operation, which satisfies the semantics of Rust
@@ -15,7 +18,6 @@ def scalar_rem (x y : Int) : Int :=
 
 @[simp]
 def scalar_rem_nonneg {x y : Int} (hx : 0 ≤ x) : scalar_rem x y = x % y := by
-  intros
   simp [*, scalar_rem]
 
 -- Our custom division operation, which satisfies the semantics of Rust
@@ -28,7 +30,6 @@ def scalar_div (x y : Int) : Int :=
 
 @[simp]
 def scalar_div_nonneg {x y : Int} (hx : 0 ≤ x) (hy : 0 ≤ y) : scalar_div x y = x / y := by
-  intros
   simp [*, scalar_div]
 
 -- Checking that the remainder operation is correct
@@ -127,6 +128,41 @@ theorem Scalar.cast_in_bounds_eq {src_ty tgt_ty : ScalarTy} (x : Scalar src_ty) 
   split_ifs with h_nbounds
   . use (Scalar.ofIntCore x h_bounds); simp [ofOption, ofIntCore]
   . omega
+
+@[simp] theorem Scalar.exists_eq_left {p : Scalar ty → Prop} {a' : Scalar ty} :
+  (∃ (a : Scalar ty), a.val = a'.val ∧ p a) ↔ p a' := by
+  constructor <;> intro h
+  . cases h
+    cases a'
+    simp_all [eq_comm]
+  . exists a'
+
+@[simp] theorem Scalar.exists_eq_left' {p : Scalar ty → Prop} {a' : Scalar ty} :
+  (∃ (a : Scalar ty), a'.val = a.val ∧ p a) ↔ p a' := by
+  constructor <;> intro h
+  . cases h
+    cases a'
+    simp_all [eq_comm]
+  . exists a'
+
+@[simp] theorem Scalar.exists_eq_right {p : Scalar ty → Prop} {a' : Scalar ty} :
+  (∃ (a : Scalar ty), p a ∧ a.val = a'.val) ↔ p a' := by
+  constructor <;> intro h
+  . cases h
+    cases a'
+    simp_all [eq_comm]
+  . exists a'
+
+@[simp] theorem Scalar.exists_eq_right' {p : Scalar ty → Prop} {a' : Scalar ty} :
+  (∃ (a : Scalar ty), p a ∧ a'.val = a.val) ↔ p a' := by
+  constructor <;> intro h
+  . cases h
+    cases a'
+    simp_all [eq_comm]
+  . exists a'
+
+@[simp] theorem Scalar.exists_eq {a' : Scalar ty} : ∃ (a : Scalar ty), a.val = a'.val := by exists a'
+@[simp] theorem Scalar.exists_eq' {a' : Scalar ty} : ∃ (a : Scalar ty), a'.val = a.val := by exists a'
 
 @[pspec]
 theorem Scalar.cast_bool_spec ty (b : Bool) :

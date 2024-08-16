@@ -538,13 +538,10 @@ instance {ty} : LE (Scalar ty) where le a b := LE.le a.val b.val
 
 -- Not marking this one with @[simp] on purpose: if we have `x = y` somewhere in the context,
 -- we may want to use it to substitute `y` with `x` somewhere.
--- TODO: mark it as simp anyway?
 theorem Scalar.eq_equiv {ty : ScalarTy} (x y : Scalar ty) :
   x = y ↔ (↑x : Int) = ↑y := by
   cases x; cases y; simp_all
 
--- This is sometimes useful when rewriting the goal with the local assumptions
--- TODO: this doesn't get triggered
 @[simp] theorem Scalar.eq_imp {ty : ScalarTy} (x y : Scalar ty) :
   (↑x : Int) = ↑y → x = y := (eq_equiv x y).mpr
 
@@ -580,6 +577,11 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
 
 @[simp] theorem Scalar.neq_to_neq_val {ty} : ∀ {i j : Scalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
   simp [eq_equiv]
+
+@[simp]
+theorem Scalar.val_not_eq_imp_not_eq (x y : Scalar ty) (h : Arith.Int.not_eq x.val y.val) :
+  ¬ x = y := by
+  simp_all; int_tac
 
 instance (ty: ScalarTy) : Preorder (Scalar ty) where
   le_refl := fun a => by simp
@@ -653,11 +655,11 @@ theorem Scalar.unsigned_ofNat_toNat (x : Scalar ty) (h : ¬ ty.isSigned := by de
   have := x.hmin
   simp; cases ty <;> simp_all [min]
 
-@[simp] theorem U8.unsigned_ofNat_toNat (x : U8) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
-@[simp] theorem U16.unsigned_ofNat_toNat (x : U16) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
-@[simp] theorem U32.unsigned_ofNat_toNat (x : U32) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
-@[simp] theorem U64.unsigned_ofNat_toNat (x : U64) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
-@[simp] theorem U128.unsigned_ofNat_toNat (x : U128) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
-@[simp] theorem Usize.unsigned_ofNat_toNat (x : Usize) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[scalar_tac x.toNat] theorem U8.unsigned_ofNat_toNat (x : U8) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[scalar_tac x.toNat] theorem U16.unsigned_ofNat_toNat (x : U16) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[scalar_tac x.toNat] theorem U32.unsigned_ofNat_toNat (x : U32) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[scalar_tac x.toNat] theorem U64.unsigned_ofNat_toNat (x : U64) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[scalar_tac x.toNat] theorem U128.unsigned_ofNat_toNat (x : U128) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
+@[scalar_tac x.toNat] theorem Usize.unsigned_ofNat_toNat (x : Usize) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
 
 end Primitives
