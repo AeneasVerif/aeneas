@@ -7,6 +7,7 @@ import Mathlib.Tactic.Ring.RingNF
 import Base.Utils
 import Base.Arith.Base
 import Base.Arith.Init
+import Base.Saturate
 
 namespace Arith
 
@@ -17,6 +18,10 @@ open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
 attribute [aesop (rule_sets := [Aeneas.ScalarTac]) unfold norm] Function.comp
 
+/-
+-- DEPRECATED: `int_tac` and `scalar_tac` used to rely on `aesop`. As there are performance issues
+-- with the saturation tactic for now we use our own tactic. We will revert once the performance
+-- is improved.
 /-- The `int_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
 macro "int_tac" pat:term : attr =>
   `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]) (pattern := $pat))
@@ -28,6 +33,19 @@ macro "scalar_tac" pat:term : attr =>
 /-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
 macro "nonlin_scalar_tac" pat:term : attr =>
   `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTacNonLin):ident]) (pattern := $pat))
+-/
+
+/-- The `int_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "int_tac" pat:term : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)) (pattern := $pat))
+
+/-- The `scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "scalar_tac" pat:term : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)) (pattern := $pat))
+
+/-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "nonlin_scalar_tac" pat:term : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTacNonLin)) (pattern := $pat))
 
 -- This is useful especially in the termination proofs
 attribute [scalar_tac a.toNat] Int.toNat_eq_max
@@ -73,10 +91,11 @@ def intTacSimpRocs : List Name := [``Int.reduceNegSucc, ``Int.reduceNeg]
 
 /-- Apply the scalar_tac forward rules -/
 def intTacSaturateForward : Tactic.TacticM Unit := do
+  /-
   let options : Aesop.Options := {}
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
   -- introduced by the forward rules themselves.
-  let options ← options.toOptions' (some 0)
+  let options ← options.toOptions' (some 0)-/
   -- We always use the rule set `Aeneas.ScalarTac`, but also need to add other rule sets locally
   -- activated by the user. The `Aeneas.ScalarTacNonLin` rule set has a special treatment as
   -- it is activated through an option.
@@ -84,7 +103,9 @@ def intTacSaturateForward : Tactic.TacticM Unit := do
     let ruleSets := `Aeneas.ScalarTac :: (← scalarTacRuleSets.get)
     if scalarTac.nonLin.get (← getOptions) then `Aeneas.ScalarTacNonLin :: ruleSets
     else ruleSets
-  evalAesopSaturate options ruleSets.toArray
+  -- TODO
+  -- evalAesopSaturate options ruleSets.toArray
+  Saturate.evalSaturate ruleSets
 
 -- For debugging
 elab "int_tac_saturate" : tactic =>

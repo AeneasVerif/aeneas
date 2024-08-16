@@ -155,7 +155,7 @@ initialize pspecAttr : PSpecAttr ← do
       -- Lookup the theorem
       let env ← getEnv
       -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
-      attrIgnoreMutRec thName (pure ()) do
+      attrIgnoreAuxDef thName (pure ()) do
         trace[Progress] "Registering spec theorem for {thName}"
         let thDecl := env.constants.find! thName
         let fKey ← MetaM.run' (do

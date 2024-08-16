@@ -866,12 +866,17 @@ def normalizeLetBindings (e : Expr) : MetaM Expr :=
     definitions, e.g., `foo` and `bar`, from this one). This definition should be named `foo._mutual`
     or `bar._mutual`, and we generally want to ignore it.
 
-    Below, we implement a small utility to do so
+    TODO: same problem happens if we use decreases clauses, etc.
+
+    Below, we implement a small utility to do so.
   -/
-def attrIgnoreMutRec (name : Name) (default : AttrM α) (x : AttrM α) : AttrM α := do
+def attrIgnoreAuxDef (name : Name) (default : AttrM α) (x : AttrM α) : AttrM α := do
   -- TODO: this is a hack
   if let .str _ "_mutual" := name then
     trace[Utils] "Ignoring a mutually recursive definition: {name}"
+    default
+  else if let .str _ "_unary" := name then
+    trace[Utils] "Ignoring a unary def: {name}"
     default
   else
     -- Normal execution

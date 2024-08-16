@@ -605,7 +605,6 @@ namespace Test
   variable (f : List α → Result Bool)
   variable (f_spec : ∀ l i, P i l → ∃ b, f l = ok b)
 
-  set_option trace.Progress true
   example (l : List α) (h : P i l) :
     ∃ b, f l = ok b := by
     progress as ⟨ b ⟩

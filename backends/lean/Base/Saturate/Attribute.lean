@@ -8,6 +8,7 @@ open Utils Extensions
 namespace Saturate
 
 initialize registerTraceClass `Saturate
+initialize registerTraceClass `Saturate.attribute
 
 namespace Attribute
 
@@ -58,11 +59,12 @@ initialize saturateAttr : SaturateAttribute ← do
     name := `aeneas_saturate
     descr := "Saturation attribute"
     add := fun thName stx attrKind => do
+      trace[Saturate.attribute] "Theorem: {thName}"
       -- TODO: use the attribute kind
       unless attrKind == AttributeKind.global do
         throwError "invalid attribute {attrKind}: must be global"
       -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
-      attrIgnoreMutRec thName (pure ()) do
+      attrIgnoreAuxDef thName (pure ()) do
         -- Lookup the theorem
         let env ← getEnv
         let thDecl := env.constants.find! thName
@@ -74,30 +76,36 @@ initialize saturateAttr : SaturateAttribute ← do
           forallTelescope ty.consumeMData fun fvars _ => do
           let numFVars := fvars.size
           -- Elaborate the pattern
-          trace[Saturate] "Syntax: {stx}"
+          trace[Saturate.attribute] "Syntax: {stx}"
           let (setName, pat) ← elabSaturateAttribute stx
-          trace[Saturate] "Syntax: setName: {setName}, pat: {pat}"
+          trace[Saturate.attribute] "Syntax: setName: {setName}, pat: {pat}"
           let pat ← instantiateMVars (← Elab.Term.elabTerm pat none |>.run')
-          trace[Saturate] "Pattern: {pat}"
+          trace[Saturate.attribute] "Pattern: {pat}"
           -- Check that the pattern contains all the quantified variables
           let allFVars ← fvars.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
-          let patFVars ← getFVarIds pat
-          unless allFVars.all fun f => patFVars.contains f do
-            throwError "The pattern does not contain all the variables quantified in the theorem"
+          let patFVars ← getFVarIds pat (← getFVarIds (← inferType pat))
+          trace[Saturate.attribute] "allFVars: {← allFVars.toList.mapM FVarId.getUserName}"
+          trace[Saturate.attribute] "patFVars: {← patFVars.toList.mapM FVarId.getUserName}"
+          let remFVars := patFVars.toList.foldl (fun hs fvar => hs.erase fvar) allFVars
+          unless remFVars.isEmpty do
+            let remFVars ← remFVars.toList.mapM FVarId.getUserName
+            throwError "The pattern does not contain all the variables quantified in the theorem; those are not included in the pattern: {remFVars}"
           -- Create the pattern
           let patExpr ← mkLambdaFVars fvars pat
-          trace[Saturate] "Pattern expression: {patExpr}"
+          trace[Saturate.attribute] "Pattern expression: {patExpr}"
           -- Create the discrimination tree key - we use the default configuration
           let (_, _, patWithMetas) ← lambdaMetaTelescope patExpr
-          trace[Saturate] "patWithMetas: {patWithMetas}"
+          trace[Saturate.attribute] "patWithMetas: {patWithMetas}"
           let config : WhnfCoreConfig := {}
           let key ← DiscrTree.mkPath patWithMetas config
-          trace[Saturate] "key: {key}"
+          trace[Saturate.attribute] "key: {key}"
           --
           pure (setName, key, numFVars, patExpr, thName)
         -- Store
         let env := ext.addEntry env v
         setEnv env
+    -- TODO: local attribute
+    -- erase := fun ...
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
