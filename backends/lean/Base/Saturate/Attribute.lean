@@ -169,8 +169,13 @@ initialize saturateAttr : SaturateAttribute ← do
           trace[Saturate.attribute] "patFVars: {← patFVars.toList.mapM FVarId.getUserName}"
           let remFVars := patFVars.toList.foldl (fun hs fvar => hs.erase fvar) allFVars
           unless remFVars.isEmpty do
-            let remFVars ← remFVars.toList.mapM FVarId.getUserName
-            throwError "The pattern does not contain all the variables quantified in the theorem; those are not included in the pattern: {remFVars}"
+            let remFVars ← remFVars.toList.mapM fun fv => do pure (← fv.getUserName, ← fv.getType)
+            let msg := m!"The pattern does not contain all the variables quantified in the theorem; those are not included in the pattern: {remFVars}."
+            let msg :=
+              if (← inferType pat).isProp then
+                msg ++ " Also note that your pattern has type Prop, which is spurious and may be the reason why it is not valid."
+              else msg
+            throwError msg
           -- Create the pattern
           let patExpr ← mkLambdaFVars fvars pat
           trace[Saturate.attribute] "Pattern expression: {patExpr}"
