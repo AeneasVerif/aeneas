@@ -49,12 +49,36 @@ abbrev DiscrTreeKey := Array DiscrTree.Key
 abbrev DiscrTreeExtension (α : Type) :=
   SimplePersistentEnvExtension (DiscrTreeKey × α) (DiscrTree α)
 
-def mkDiscrTreeExtention [Inhabited α] [BEq α] (name : Name := by exact decl_name%) :
+def mkDiscrTreeExtension [Inhabited α] [BEq α] (name : Name := by exact decl_name%) :
   IO (DiscrTreeExtension α) :=
   registerSimplePersistentEnvExtension {
     name          := name,
     addImportedFn := fun a => a.foldl (fun s a => a.foldl (fun s (k, v) => s.insertCore k v) s) DiscrTree.empty,
     addEntryFn    := fun s n => s.insertCore n.1 n.2 ,
+  }
+
+/- A map to a discrimination tree -/
+abbrev MapDiscrTreeExtension (α : Type) :=
+  SimplePersistentEnvExtension (Name × DiscrTreeKey × α) (NameMap (DiscrTree α))
+
+private def insertInMapDiscrTree [BEq α] (s : NameMap (DiscrTree α))
+  (v : (Name × DiscrTreeKey × α)) : NameMap (DiscrTree α) :=
+  let (setName, dtKey, v) := v
+  let dtree :=
+    match s.find? setName with
+    | none => DiscrTree.empty
+    | some dtree => dtree
+  let dtree := dtree.insertCore dtKey v
+  s.insert setName dtree
+
+def mkMapDiscrTreeExtension [Inhabited α] [BEq α] (name : Name := by exact decl_name%) :
+  IO (MapDiscrTreeExtension α) :=
+  registerSimplePersistentEnvExtension {
+    name          := name,
+    addImportedFn :=
+      fun a => a.foldl (fun s a => a.foldl insertInMapDiscrTree s) RBMap.empty,
+    addEntryFn    := insertInMapDiscrTree,
+    toArrayFn     := fun es => es.toArray.qsort (fun a b => Name.quickLt a.1 b.1)
   }
 
 end Extensions

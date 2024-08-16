@@ -143,7 +143,7 @@ structure PSpecAttr where
 
 /- The persistent map from expressions to pspec theorems. -/
 initialize pspecAttr : PSpecAttr ← do
-  let ext ← mkDiscrTreeExtention `pspecMap
+  let ext ← mkDiscrTreeExtension `pspecMap
   let attrImpl : AttributeImpl := {
     name := `pspec
     descr := "Marks theorems to use with the `progress` tactic"
@@ -154,19 +154,8 @@ initialize pspecAttr : PSpecAttr ← do
         throwError "invalid attribute 'pspec', must be global"
       -- Lookup the theorem
       let env ← getEnv
-      -- If we apply the attribute to a definition in a group of mutually recursive definitions
-      -- (say, to `foo` in the group [`foo`, `bar`]), the attribute gets applied to `foo` but also to
-      -- the recursive definition which encodes `foo` and `bar` (Lean encodes mutually recursive
-      -- definitions in one recursive definition, e.g., `foo._mutual`, before deriving the individual
-      -- definitions, e.g., `foo` and `bar`, from this one). This definition should be named `foo._mutual`
-      -- or `bar._mutual`, and we want to ignore it.
-      -- TODO: this is a hack
-      if let .str _ "_mutual" := thName then
-        -- Ignore: this is the fixed point of a mutually recursive definition -
-        -- the attribute will also be applied to the definitions revealed to the user:
-        -- we want to apply the attribute for those
-        trace[Progress] "Ignoring a mutually recursive definition: {thName}"
-      else
+      -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
+      attrIgnoreMutRec thName (pure ()) do
         trace[Progress] "Registering spec theorem for {thName}"
         let thDecl := env.constants.find! thName
         let fKey ← MetaM.run' (do

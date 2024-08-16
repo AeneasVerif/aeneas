@@ -857,4 +857,24 @@ def evalAesopSaturate (options : Aesop.Options') (ruleSets : Array Name) : Tacti
 def normalizeLetBindings (e : Expr) : MetaM Expr :=
   zetaReduce e
 
+/-- For the attributes
+
+    If we apply an attribute to a definition in a group of mutually recursive definitions
+    (say, to `foo` in the group [`foo`, `bar`]), the attribute gets applied to `foo` but also to
+    the recursive definition which encodes `foo` and `bar` (Lean encodes mutually recursive
+    definitions in one recursive definition, e.g., `foo._mutual`, before deriving the individual
+    definitions, e.g., `foo` and `bar`, from this one). This definition should be named `foo._mutual`
+    or `bar._mutual`, and we generally want to ignore it.
+
+    Below, we implement a small utility to do so
+  -/
+def attrIgnoreMutRec (name : Name) (default : AttrM α) (x : AttrM α) : AttrM α := do
+  -- TODO: this is a hack
+  if let .str _ "_mutual" := name then
+    trace[Utils] "Ignoring a mutually recursive definition: {name}"
+    default
+  else
+    -- Normal execution
+    x
+
 end Utils
