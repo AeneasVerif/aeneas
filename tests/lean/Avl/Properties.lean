@@ -77,11 +77,11 @@ end
 
 @[simp]
 theorem Subtree.forall_left {p: Node T -> Prop} {t: Node T}: Node.forall p t -> Subtree.forall p t.left := by
-  cases t; simp_all [Node.forall]
+  cases t; simp_all (config := {maxDischargeDepth := 1}) [Node.forall]
 
 @[simp]
 theorem Subtree.forall_right {p: Node T -> Prop} {t: Node T}: Subtree.forall p t -> Subtree.forall p t.right := by
-  cases t; simp_all [Node.forall]
+  cases t; simp_all (config := {maxDischargeDepth := 1}) [Node.forall]
 
 mutual
 theorem Subtree.forall_imp {p q: Node T -> Prop} {t: Subtree T}: (∀ x, p x -> q x) -> Subtree.forall p t -> Subtree.forall q t
@@ -137,7 +137,7 @@ theorem Node.inv_imp_current [LinearOrder T] {node : Node T} (hInv : node.inv) :
   (∀ x ∈ Subtree.v node.left, x < node.value) ∧
   (∀ x ∈ Subtree.v node.right, node.value < x) ∧
   -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
-  simp_all [Node.inv, Node.forall, Node.invAux]
+  simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.forall, Node.invAux]
 
 @[reducible]
 def Subtree.inv [LinearOrder T] (st : Subtree T) : Prop :=
@@ -170,18 +170,18 @@ theorem Node.inv_mk [LinearOrder T] (value : T) (left right : Option (Node T)) (
 theorem Node.inv_left [LinearOrder T] {t: Node T}: t.inv -> Subtree.inv t.left := by
   simp [Node.inv]
   intro
-  cases t; simp_all
+  cases t; simp_all (config := {maxDischargeDepth := 1})
 
 @[simp]
 theorem Node.inv_right [LinearOrder T] {t: Node T}: t.inv -> Subtree.inv t.right := by
   simp [Node.inv]
   intro
-  cases t; simp_all
+  cases t; simp_all (config := {maxDischargeDepth := 1})
 
 theorem Node.inv_imp_balance_factor_eq [LinearOrder T] {t: Node T} (hInv : t.inv) :
   t.balance_factor.val = t.balanceFactor := by
   simp [inv, Node.forall, invAux] at hInv
-  cases t; simp_all
+  cases t; simp_all (config := {maxDischargeDepth := 1})
 
 @[simp]
 theorem Node.lt_imp_not_in_right [LinearOrder T] (node : Node T) (hInv : node.inv) (x : T)
@@ -241,15 +241,15 @@ theorem Tree.find_loop_spec
     . /- node.value < value -/
       progress
       have hNotIn := Node.lt_imp_not_in_left _ hInv
-      simp_all
-      intro; simp_all
+      simp_all (config := {maxDischargeDepth := 1})
+      intro; simp_all (config := {maxDischargeDepth := 1})
     . /- node.value = value -/
-      simp_all
+      simp_all (config := {maxDischargeDepth := 1})
     . /- node.value > value -/
       progress
       have hNotIn := Node.lt_imp_not_in_right _ hInv
-      simp_all
-      intro; simp_all
+      simp_all (config := {maxDischargeDepth := 1})
+      intro; simp_all (config := {maxDischargeDepth := 1})
 
 theorem Tree.find_spec
   {T : Type} (OrdInst : Ord T)
@@ -319,34 +319,34 @@ theorem Node.rotate_left_spec
     simp at *
     simp [*]
     have hHeightEq : Subtree.height b = Subtree.height c := by
-      simp_all [balanceFactor, Node.invAux]
+      simp_all (config := {maxDischargeDepth := 1}) [balanceFactor, Node.invAux]
       -- TODO: scalar_tac fails here (conversion int/nat)
       omega
     -- TODO: we shouldn't need this: scalar_tac should succeed
     have : 1 + Subtree.height c = Subtree.height a + 2 := by
       -- TODO: scalar_tac fails here (conversion int/nat)
-      simp_all [balanceFactor, Node.invAux]
+      simp_all (config := {maxDischargeDepth := 1}) [balanceFactor, Node.invAux]
       omega
-    simp_all
+    simp_all (config := {maxDischargeDepth := 1})
     split_conjs
     . -- Partial invariant for the final tree starting at z
       simp [Node.invAux, balanceFactor, *]
       split_conjs <;> (try omega) <;> tauto
     . -- Partial invariant for the subtree x
       simp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega) <;> simp_all
+      split_conjs <;> (try omega) <;> simp_all (config := {maxDischargeDepth := 1})
     . -- The sets are the same
       apply Set.ext; simp; tauto
     . -- The height didn't change
       simp [balanceFactor] at *
       replace hInvX := hInvX.left
-      simp_all
+      simp_all (config := {maxDischargeDepth := 1})
       scalar_tac
   . -- BF(Z) == 1
     rename _ => hNotEq
     simp at *
     simp [*]
-    simp_all
+    simp_all (config := {maxDischargeDepth := 1})
     have : bf_z.val = 1 := by
       simp [Node.invAux] at hInvZ
       omega
@@ -360,23 +360,23 @@ theorem Node.rotate_left_spec
     -- TODO: we shouldn't need this: scalar_tac should succeed
     have : Subtree.height c = 1 + Subtree.height a := by
       -- TODO: scalar_tac fails here (conversion int/nat)
-      simp_all [balanceFactor, Node.invAux]
+      simp_all (config := {maxDischargeDepth := 1}) [balanceFactor, Node.invAux]
       omega
     have : Subtree.height a = Subtree.height b := by
-      simp_all
+      simp_all (config := {maxDischargeDepth := 1})
     split_conjs
     . -- Invariant for whole tree (starting at z)
       simp [invAux, balanceFactor]
       split_conjs <;> (try omega) <;> tauto
     . -- Invariant for subtree x
       simp [invAux, balanceFactor]
-      split_conjs <;> (try omega) <;> simp_all
+      split_conjs <;> (try omega) <;> simp_all (config := {maxDischargeDepth := 1})
     . -- The sets are the same
       apply Set.ext; simp; tauto
     . -- The height didn't change
       simp [balanceFactor] at *
       replace hInvX := hInvX.left
-      simp_all
+      simp_all (config := {maxDischargeDepth := 1})
       scalar_tac
 
 @[pspec]
@@ -424,41 +424,41 @@ theorem Node.rotate_right_spec
       apply lt_trans <;> tauto
   -- Elements in the left subtree are < z
   have : ∀ y ∈ Subtree.v a, y < z := by
-    simp_all [invAux]
+    simp_all (config := {maxDischargeDepth := 1}) [invAux]
   -- Two cases depending on whether the BF of Z is 0 or 1
   split
   . -- BF(Z) == 0
     simp at *
     simp [*]
     have hHeightEq : Subtree.height a = Subtree.height b := by
-      simp_all [balanceFactor, Node.invAux]
+      simp_all (config := {maxDischargeDepth := 1}) [balanceFactor, Node.invAux]
       -- TODO: scalar_tac fails here (conversion int/nat)
       omega
     -- TODO: we shouldn't need this: scalar_tac should succeed
     have : 1 + Subtree.height a = Subtree.height c + 2 := by
       -- TODO: scalar_tac fails here (conversion int/nat)
-      simp_all [balanceFactor, Node.invAux]
+      simp_all (config := {maxDischargeDepth := 1}) [balanceFactor, Node.invAux]
       omega
-    simp_all
+    simp_all (config := {maxDischargeDepth := 1})
     split_conjs
     . -- Partial invariant for the final tree starting at z
       simp [Node.invAux, balanceFactor, *]
       split_conjs <;> (try omega) <;> tauto
     . -- Partial invariant for the subtree x
       simp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega) <;> simp_all
+      split_conjs <;> (try omega) <;> simp_all (config := {maxDischargeDepth := 1})
     . -- The sets are the same
       apply Set.ext; simp; tauto
     . -- The height didn't change
       simp [balanceFactor] at *
       replace hInvX := hInvX.left
-      simp_all
+      simp_all (config := {maxDischargeDepth := 1})
       scalar_tac
   . -- BF(Z) == -1
     rename _ => hNotEq
     simp at *
     simp [*]
-    simp_all
+    simp_all (config := {maxDischargeDepth := 1})
     have : bf_z.val = -1 := by
       simp [Node.invAux] at hInvZ
       omega
@@ -472,23 +472,23 @@ theorem Node.rotate_right_spec
     -- TODO: we shouldn't need this: scalar_tac should succeed
     have : Subtree.height a = 1 + Subtree.height c := by
       -- TODO: scalar_tac fails here (conversion int/nat)
-      simp_all [balanceFactor, Node.invAux]
+      simp_all (config := {maxDischargeDepth := 1}) [balanceFactor, Node.invAux]
       omega
     have : Subtree.height c = Subtree.height b := by
-      simp_all
+      simp_all (config := {maxDischargeDepth := 1})
     split_conjs
     . -- Invariant for whole tree (starting at z)
       simp [invAux, balanceFactor]
       split_conjs <;> (try omega) <;> tauto
     . -- Invariant for subtree x
       simp [invAux, balanceFactor]
-      split_conjs <;> (try omega) <;> simp_all
+      split_conjs <;> (try omega) <;> simp_all (config := {maxDischargeDepth := 1})
     . -- The sets are the same
       apply Set.ext; simp; tauto
     . -- The height didn't change
       simp [balanceFactor] at *
       replace hInvX := hInvX.left
-      simp_all
+      simp_all (config := {maxDischargeDepth := 1})
       scalar_tac
 
 @[pspec]
@@ -539,7 +539,7 @@ theorem Node.rotate_left_right_spec
     . rename _ => hIn
       -- TODO: those cases are cumbersome
       cases hIn
-      . simp_all
+      . simp_all (config := {maxDischargeDepth := 1})
       . have : e < z := by tauto
         have : z < y := by tauto
         apply lt_trans <;> tauto
@@ -549,7 +549,7 @@ theorem Node.rotate_left_right_spec
     cases hIn
     . rename _ => hIn
       cases hIn
-      . simp_all
+      . simp_all (config := {maxDischargeDepth := 1})
       . tauto
     . have : y < x := by
         replace hInvX := hInvX.right.left y
@@ -664,7 +664,7 @@ theorem Node.rotate_right_left_spec
     . rename _ => hIn
       -- TODO: those cases are cumbersome
       cases hIn
-      . simp_all
+      . simp_all (config := {maxDischargeDepth := 1})
       . tauto
     . have : z < e := by tauto
       have : y < z := by tauto
@@ -674,7 +674,7 @@ theorem Node.rotate_right_left_spec
     cases hIn
     . rename _ => hIn
       cases hIn
-      . simp_all
+      . simp_all (config := {maxDischargeDepth := 1})
       . have : x < y := by
           replace hInvX := hInvX.right.right y
           tauto
@@ -774,12 +774,12 @@ theorem Node.insert_spec
   split <;> rename _ => hEq <;> clear hCmp <;> simp at *
   . -- value < node.value
     progress as ⟨ updt, node', h1, h2 ⟩
-    simp_all
+    simp_all (config := {maxDischargeDepth := 1})
   . -- value = node.value
-    cases node; simp_all
+    cases node; simp_all (config := {maxDischargeDepth := 1})
   . -- node.value < value
     progress as ⟨ updt, node', h1, h2 ⟩
-    simp_all
+    simp_all (config := {maxDischargeDepth := 1})
 termination_by (node.height, 1)
 decreasing_by all_goals simp_wf
 
@@ -803,9 +803,9 @@ theorem Tree.insert_in_opt_node_spec
     . apply Set.ext; simp
   . -- tree = some
     rename Node T => node
-    have hNodeInv : Node.inv node := by simp_all
+    have hNodeInv : Node.inv node := by simp_all (config := {maxDischargeDepth := 1})
     progress as ⟨ updt, tree' ⟩
-    simp_all
+    simp_all (config := {maxDischargeDepth := 1})
 termination_by (Subtree.height tree, 2)
 decreasing_by simp_wf; simp [*]
 
@@ -823,19 +823,19 @@ theorem Node.insert_in_left_spec
   (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
   (b → node'.balanceFactor ≠ 0) := by
   rw [Node.insert_in_left]
-  have hInvLeft : Subtree.inv node.left := by cases node; simp_all
+  have hInvLeft : Subtree.inv node.left := by cases node; simp_all (config := {maxDischargeDepth := 1})
   progress as ⟨ updt, left_opt' ⟩
   split
   . -- the height of the subtree changed
     have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
            -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
-      cases node; simp_all [Node.invAux]
+      cases node; simp_all (config := {maxDischargeDepth := 1}) [Node.invAux]
     progress as ⟨ i ⟩
     split
     . -- i = -2
       simp
       cases h: left_opt' with
-      | none => simp_all -- absurd
+      | none => simp_all (config := {maxDischargeDepth := 1}) -- absurd
       | some left' =>
         simp [h]
         cases node with | mk x left right balance_factor =>
@@ -845,19 +845,19 @@ theorem Node.insert_in_left_spec
           cases h:left' with | mk z a b bf_z =>
           progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
-          . simp_all
-          . simp_all
-          . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
+          . simp_all (config := {maxDischargeDepth := 1})
+          . simp_all (config := {maxDischargeDepth := 1})
+          . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
           . -- End of the proof
             simp [*]
             split_conjs
             . -- set reasoning
-              simp_all
+              simp_all (config := {maxDischargeDepth := 1})
               apply Set.ext; simp
               intro x; tauto
             . -- height
-              simp_all [Node.invAux, Node.balanceFactor]
+              simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
               -- This assertion is not necessary for the proof, but it is important that it holds.
               -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
               have : bf_z.val = -1 := by scalar_tac
@@ -868,45 +868,45 @@ theorem Node.insert_in_left_spec
           cases h: y with
           | none =>
             -- Can't get there
-            simp_all [Node.balanceFactor, Node.invAux]
+            simp_all (config := {maxDischargeDepth := 1}) [Node.balanceFactor, Node.invAux]
           | some y =>
             cases h: y with | mk y a b bf_y =>
             progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
-            . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-            . simp_all
-            . simp_all
-            . simp_all [Node.invAux, Node.balanceFactor]; scalar_tac
+            . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+            . simp_all (config := {maxDischargeDepth := 1})
+            . simp_all (config := {maxDischargeDepth := 1})
+            . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
               simp [*]
               split_conjs
-              . apply Set.ext; simp_all
+              . apply Set.ext; simp_all (config := {maxDischargeDepth := 1})
                 intro x; tauto
-              . simp_all [Node.invAux, Node.balanceFactor]
+              . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
                 scalar_tac
     . -- i ≠ -2: the height of the tree did not change
       simp [*]
       split_conjs
-      . cases node; simp_all [Node.invAux, Node.balanceFactor]
+      . cases node; simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
         split_conjs <;> scalar_tac
       . apply Set.ext; simp
-        cases node; simp_all
+        cases node; simp_all (config := {maxDischargeDepth := 1})
         tauto
-      . simp_all
+      . simp_all (config := {maxDischargeDepth := 1})
         cases node with | mk node_value left right balance_factor =>
         split <;> simp [Node.balanceFactor] at * <;> scalar_tac
-      . simp_all [Node.balanceFactor]
+      . simp_all (config := {maxDischargeDepth := 1}) [Node.balanceFactor]
         scalar_tac
   . -- the height of the subtree did not change
     simp [*]
     split_conjs
     . cases node;
-      simp_all [Node.invAux, Node.balanceFactor]
+      simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
     . apply Set.ext; simp; intro x
-      cases node; simp_all
+      cases node; simp_all (config := {maxDischargeDepth := 1})
       tauto
-    . simp_all
-      cases node; simp_all
+    . simp_all (config := {maxDischargeDepth := 1})
+      cases node; simp_all (config := {maxDischargeDepth := 1})
 termination_by (node.height, 0)
 decreasing_by simp_wf
 
@@ -923,19 +923,19 @@ theorem Node.insert_in_right_spec
   (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
   (b → node'.balanceFactor ≠ 0) := by
   rw [Node.insert_in_right]
-  have hInvLeft : Subtree.inv node.right := by cases node; simp_all
+  have hInvLeft : Subtree.inv node.right := by cases node; simp_all (config := {maxDischargeDepth := 1})
   progress as ⟨ updt, right_opt' ⟩
   split
   . -- the height of the subtree changed
     have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
            -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
-      cases node; simp_all [Node.invAux]
+      cases node; simp_all (config := {maxDischargeDepth := 1}) [Node.invAux]
     progress as ⟨ i ⟩
     split
     . -- i = 2
       simp
       cases h: right_opt' with
-      | none => simp_all -- absurd
+      | none => simp_all (config := {maxDischargeDepth := 1}) -- absurd
       | some right' =>
         simp [h]
         split
@@ -945,16 +945,16 @@ theorem Node.insert_in_right_spec
           cases h:right' with | mk z b c bf_z =>
           progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
-          . simp_all
-          . simp_all
-          . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+          . simp_all (config := {maxDischargeDepth := 1})
+          . simp_all (config := {maxDischargeDepth := 1})
+          . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
           . -- End of the proof
             simp [*]
             split_conjs
             . -- set reasoning
-              simp_all
+              simp_all (config := {maxDischargeDepth := 1})
             . -- height
-              simp_all [Node.invAux, Node.balanceFactor]
+              simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
               -- This assertion is not necessary for the proof, but it is important that it holds.
               -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
               have : bf_z.val = 1 := by scalar_tac
@@ -966,42 +966,42 @@ theorem Node.insert_in_right_spec
           cases h: y with
           | none =>
             -- Can't get there
-            simp_all [Node.balanceFactor, Node.invAux]
+            simp_all (config := {maxDischargeDepth := 1}) [Node.balanceFactor, Node.invAux]
           | some y =>
             cases h: y with | mk y b a bf_y =>
             progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
-            . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-            . simp_all
-            . simp_all
-            . simp_all [Node.invAux, Node.balanceFactor]; scalar_tac
+            . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+            . simp_all (config := {maxDischargeDepth := 1})
+            . simp_all (config := {maxDischargeDepth := 1})
+            . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
               simp [*]
               split_conjs
-              . apply Set.ext; simp_all
-              . simp_all [Node.invAux, Node.balanceFactor]
+              . apply Set.ext; simp_all (config := {maxDischargeDepth := 1})
+              . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
                 scalar_tac
     . -- i ≠ -2: the height of the tree did not change
       simp [*]
       split_conjs
-      . cases node; simp_all [Node.invAux, Node.balanceFactor]
+      . cases node; simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
         split_conjs <;> scalar_tac
       . apply Set.ext; simp
-        cases node; simp_all
-      . simp_all
+        cases node; simp_all (config := {maxDischargeDepth := 1})
+      . simp_all (config := {maxDischargeDepth := 1})
         cases node with | mk node_value left right balance_factor =>
         split <;> simp [Node.balanceFactor] at * <;> scalar_tac
-      . simp_all [Node.balanceFactor]
+      . simp_all (config := {maxDischargeDepth := 1}) [Node.balanceFactor]
         scalar_tac
   . -- the height of the subtree did not change
     simp [*] -- TODO: annoying to use this simp everytime: put this in progress
     split_conjs
     . cases node;
-      simp_all [Node.invAux, Node.balanceFactor]
+      simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
     . apply Set.ext; simp; intro x
-      cases node; simp_all
-    . simp_all
-      cases node; simp_all
+      cases node; simp_all (config := {maxDischargeDepth := 1})
+    . simp_all (config := {maxDischargeDepth := 1})
+      cases node; simp_all (config := {maxDischargeDepth := 1})
 termination_by (node.height, 0)
 decreasing_by simp_wf
 
