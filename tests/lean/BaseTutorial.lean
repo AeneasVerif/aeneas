@@ -265,7 +265,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   -- Postcondition
   : ∃ x, list_nth T l i = ok x ∧
   -- [x] is the ith element of [l] after conversion to [List]
-  x = l.to_list.index ↑i
+  x = l.to_list.index i.toNat
   := by
   -- Here we have to be careful when unfolding the body of [list_nth]: we could
   -- use the [simp] tactic, but it will sometimes loop on recursive definitions.
@@ -314,7 +314,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- by giving it [*] as argument, we tell [simp] to use all the assumptions
       -- to perform rewritings. In particular, it will use [i.val ≠ 0] to
       -- apply [List.index_nzero_cons].
-      have : i.val ≠ 0 := by scalar_tac -- Remark: [simp at hi] also works
+      have : i.toNat ≠ 0 := by scalar_tac -- Remark: [simp at hi] also works
       simp [CList.to_list, *]
 
 /-#===========================================================================#
