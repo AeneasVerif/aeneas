@@ -7,137 +7,73 @@ namespace Primitives
 
 end Primitives
 
-namespace Tutorial
+namespace Tutorial.Solutions
 
--- TODO: specialize the theorems for the cases unsigned scalar
--- TODO: use natural numbers
--- TODO: theorems for .toNat
--- Ex.: (x.val + n).toNat = x.toNat + n.toNat
-
--- TODO: use simp with discharger to simplify array expressions
--- TODO: introduce gindex (for ghost index)
-
-def times4 (x : U32) : Result U32 := do
-  let x1 ← x + x
-  x1 + x1
-
-def times16 (x : U32) : Result U32 := do
-  let x1 ← times4 x
-  times4 x1
+/- [tutorial::mul2_add1]:
+   Source: 'src/lib.rs', lines 11:0-11:31 -/
+def mul2_add1 (x : U32) : Result U32 :=
+  do
+  let i ← x + x
+  i + 1#u32
 
 #check U32.add_spec
 
--- Without progress
-theorem times4_spec (x : U32) (h : 4 * x.val ≤ U32.max) :
-  times4 x = ok (4 * x)#u32 := by
-  rw [times4]
+/-- Theorem about `mul2_add1`: without the `progress` tactic -/
+-- @[pspec]
+theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
+  : ∃ y, mul2_add1 x = ok y ∧
+  ↑y = 2 * ↑x + (1 : Int)
+  := by
+  rw [mul2_add1]
   have ⟨ x1, hEq1, hPost1 ⟩ := @U32.add_spec x x (by scalar_tac)
   simp [hEq1]
-  have ⟨ x2, hEq2, hPost2 ⟩ := @U32.add_spec x1 x1 (by scalar_tac)
+  have ⟨ x2, hEq2, hPost2 ⟩ := @U32.add_spec x1 1#u32 (by scalar_tac)
   simp [hEq2]
   scalar_tac
 
--- With progress
-@[pspec]
-theorem times4_spec1 (x : U32) (h : 4 * x.val ≤ U32.max) :
-  times4 x = ok (4 * x)#u32 := by
-  rw [times4]
-  progress
-  progress
+/-- Theorem about mul2_add1: with the `progress` tactic -/
+-- @[pspec]
+theorem mul2_add1_spec' (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
+  : ∃ y, mul2_add1 x = ok y ∧
+  ↑y = 2 * ↑x + (1 : Int)
+  := by
+  rw [mul2_add1]
+  progress with U32.add_spec as ⟨ i ⟩
+  progress as ⟨ i' ⟩
   scalar_tac
 
-theorem times16_spec (x : U32) (h : 16 * x.val ≤ U32.max) :
-  times16 x = ok (16 * x)#u32 := by
-  rw [times16]
-  progress
-  progress
-  scalar_tac
-
-/- [demo::incr]:
-   Source: 'tests/src/demo.rs', lines 23:0-23:31 -/
-def incr (x : U32) : Result U32 :=
-  x + 1#u32
-
-/- [demo::use_incr]:
-   Source: 'tests/src/demo.rs', lines 27:0-27:17 -/
-def use_incr : Result Unit :=
+/- [tutorial::mul2_add1_add]:
+   Source: 'src/lib.rs', lines 15:0-15:43 -/
+def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
   do
-  let x ← incr 0#u32
-  let x1 ← incr x
-  let _ ← incr x1
-  Result.ok ()
+  let i ← mul2_add1 x
+  i + y
 
-divergent def i32_id (n : I32) : Result I32 :=
-  if n = 0#i32 then ok 0#i32
-  else do
-    let n1 ← n - 1#i32
-    let n2 ← i32_id n1
-    n2 + 1#i32
+/-- Theorem about mul2_add1_add -/
+theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
+  ∃ z, mul2_add1_add x y = ok z ∧
+  ↑z = 2 * ↑x + (1 : Int) + ↑y := by
+  rw [mul2_add1_add]
+  progress with mul2_add1_spec as ⟨ i ⟩
+  progress as ⟨ i' ⟩
+  scalar_tac
 
-theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
-  i32_id n = ok n := by
-  rw [i32_id]
-  split
-  . simp [*]
-  . progress as ⟨ n1 ⟩
-    progress
-    progress as ⟨ n2 ⟩
-    scalar_tac
-termination_by n.toNat
-decreasing_by simp_wf; scalar_tac
-
-mutual
-
-divergent def even (n : U32) : Result Bool :=
-  if n = 0#u32 then ok true
-  else do
-    let n ← n - 1#u32
-    odd n
-
-divergent def odd (n : U32) : Result Bool :=
-  if n = 0#u32 then ok false
-  else do
-    let n ← n - 1#u32
-    even n
-
-end
-
-mutual
-
-theorem even_spec (n : U32) :
-  ∃ b, even n = ok b ∧ (b ↔ Even n.val) := by
-  rw [even]
-  split
-  . simp [*]
-  . progress as ⟨ n' ⟩
-    progress as ⟨ b ⟩
-    simp [*]
-    simp [Int.even_sub]
-termination_by n.toNat
-decreasing_by simp_wf; scalar_tac
-
-theorem odd_spec (n : U32) :
-  ∃ b, odd n = ok b ∧ (b ↔ Odd n.val) := by
-  rw [odd]
-  split
-  . simp [*]
-  . progress as ⟨ n' ⟩
-    progress as ⟨ b ⟩
-    simp [*]
-    simp [Int.even_sub]
-termination_by n.toNat
-decreasing_by simp_wf; scalar_tac
-
-end
-
-/- [demo::CList]
-   Source: 'tests/src/demo.rs', lines 36:0-36:17 -/
+/- [tutorial::CList]
+   Source: 'src/lib.rs', lines 32:0-32:17 -/
 inductive CList (T : Type) :=
 | CCons : T → CList T → CList T
 | CNil : CList T
 
-/- [demo::list_nth]:
-   Source: 'tests/src/demo.rs', lines 41:0-41:56 -/
+open CList
+
+-- Convert a "custom" list to a standard Lean list
+@[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
+  match x with
+  | CNil => []
+  | CCons hd tl => hd :: tl.to_list
+
+/- [tutorial::list_nth]:
+   Source: 'src/lib.rs', lines 37:0-37:56 -/
 divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
@@ -148,92 +84,219 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
          list_nth T tl i1
   | CList.CNil => Result.fail .panic
 
--- TODO: list_nth1 (with a loop)
-
-/- [demo::list_tail]:
-   Source: 'tests/src/demo.rs', lines 90:0-90:64 -/
-divergent def list_tail
-  (T : Type) (l : CList T) :
-  Result ((CList T) × (CList T → Result (CList T)))
-  :=
-  match l with
-  | CList.CCons t tl =>
-    do
-    let (c, list_tail_back) ← list_tail T tl
-    let back :=
-      fun ret =>
-        do
-        let tl1 ← list_tail_back ret
-        Result.ok (CList.CCons t tl1)
-    Result.ok (c, back)
-  | CList.CNil => Result.ok (CList.CNil, Result.ok)
-
-open CList
-
-@[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
-  match x with
-  | CNil => []
-  | CCons hd tl => hd :: tl.to_list
-
+/-- Theorem about list_nth -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.to_list.length) :
   ∃ x, list_nth T l i = ok x ∧
   x = l.to_list.index i.toNat
   := by
   rw [list_nth]
-  match l with
-  | CNil =>
-    simp_all; scalar_tac
-  | CCons hd tl =>
-    simp_all
-    if hi: i = 0#u32 then
-      simp_all
-    else
-      simp_all
+  split
+  . split
+    . simp_all
+    . simp_all
       progress as ⟨ i1 ⟩
       progress as ⟨ x ⟩
       simp_all
+  . simp_all
+    scalar_tac
 
-theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
+/- [tutorial::i32_id]:
+   Source: 'src/lib.rs', lines 78:0-78:29 -/
+divergent def i32_id (i : I32) : Result I32 :=
+  if i = 0#i32
+  then Result.ok 0#i32
+  else do
+       let i1 ← i - 1#i32
+       let i2 ← i32_id i1
+       i2 + 1#i32
+
+/-- Theorem about i32_id -/
+theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
+  i32_id n = ok n := by
+  rw [i32_id]
+  split
+  . simp [*]
+  . progress as ⟨ n1 ⟩
+    progress
+    progress as ⟨ n2 ⟩
+    scalar_tac
+termination_by n.toNat
+decreasing_by
+  simp_wf; scalar_tac
+  -- Remark: `scalar_decr_tac` does the same
+
+/- [tutorial::even]:
+   Source: 'src/lib.rs', lines 87:0-87:28 -/
+mutual divergent def even (i : U32) : Result Bool :=
+  if i = 0#u32
+  then Result.ok true
+  else do
+       let i1 ← i - 1#u32
+       odd i1
+
+/- [tutorial::odd]:
+   Source: 'src/lib.rs', lines 96:0-96:27 -/
+divergent def odd (i : U32) : Result Bool :=
+  if i = 0#u32
+  then Result.ok false
+  else do
+       let i1 ← i - 1#u32
+       even i1
+
+end
+
+mutual
+
+/-- The proof about `even` -/
+theorem even_spec (n : U32) :
+  ∃ b, even n = ok b ∧ (b ↔ Even n.val) := by
+  rw [even]
+  split
+  . simp [*]
+  . progress as ⟨ n' ⟩
+    progress as ⟨ b ⟩
+    simp [*]
+    simp [Int.even_sub]
+termination_by n.toNat
+decreasing_by scalar_decr_tac
+
+/-- The proof about `odd` -/
+theorem odd_spec (n : U32) :
+  ∃ b, odd n = ok b ∧ (b ↔ Odd n.val) := by
+  rw [odd]
+  split
+  . simp [*]
+  . progress as ⟨ n' ⟩
+    progress as ⟨ b ⟩
+    simp [*]
+    simp [Int.even_sub]
+termination_by n.toNat
+decreasing_by scalar_decr_tac
+
+end
+
+/- [tutorial::list_nth_mut1]: loop 0:
+   Source: 'src/lib.rs', lines 107:0-116:1 -/
+divergent def list_nth_mut1_loop
+  (T : Type) (l : CList T) (i : U32) :
+  Result (T × (T → Result (CList T)))
+  :=
+  match l with
+  | CList.CCons x tl =>
+    if i = 0#u32
+    then
+      let back := fun ret => Result.ok (CList.CCons ret tl)
+      Result.ok (x, back)
+    else
+      do
+      let i1 ← i - 1#u32
+      let (t, back) ← list_nth_mut1_loop T tl i1
+      let back1 :=
+        fun ret => do
+                   let tl1 ← back ret
+                   Result.ok (CList.CCons x tl1)
+      Result.ok (t, back1)
+  | CList.CNil => Result.fail .panic
+
+/- [tutorial::list_nth_mut1]:
+   Source: 'src/lib.rs', lines 107:0-107:77 -/
+@[reducible]
+def list_nth_mut1
+  (T : Type) (l : CList T) (i : U32) :
+  Result (T × (T → Result (CList T)))
+  :=
+  list_nth_mut1_loop T l i
+
+/-- Theorem about list_nth_mut1 -/
+theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
+  (h : i.val < l.to_list.length) :
+  ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
+  x = l.to_list.index i.toNat ∧
+  ∀ x', ∃ l', back x' = ok l' ∧ l'.to_list = l.to_list.update i.toNat x' := by
+  rw [list_nth_mut1, list_nth_mut1_loop]
+  split
+  . split
+    . simp
+      split_conjs
+      . simp_all
+      . intro x
+        simp_all
+    . simp_all
+      progress as ⟨ i1 ⟩
+      progress as ⟨ tl1, back ⟩
+      simp
+      split_conjs
+      . simp_all
+      . -- Backward function
+        intro x'
+        progress as ⟨ tl2 ⟩
+        simp_all
+  . simp_all
+    scalar_tac
+
+/- [tutorial::list_tail]: loop 0:
+   Source: 'src/lib.rs', lines 118:0-123:1 -/
+divergent def list_tail_loop
+  (T : Type) (l : CList T) :
+  Result ((CList T) × (CList T → Result (CList T)))
+  :=
+  match l with
+  | CList.CCons t tl =>
+    do
+    let (c, back) ← list_tail_loop T tl
+    let back1 :=
+      fun ret => do
+                 let tl1 ← back ret
+                 Result.ok (CList.CCons t tl1)
+    Result.ok (c, back1)
+  | CList.CNil => Result.ok (CList.CNil, Result.ok)
+
+/- [tutorial::list_tail]:
+   Source: 'src/lib.rs', lines 118:0-118:68 -/
+@[reducible]
+def list_tail
+  (T : Type) (l : CList T) :
+  Result ((CList T) × (CList T → Result (CList T)))
+  :=
+  list_tail_loop T l
+
+/- [tutorial::append_in_place]:
+   Source: 'src/lib.rs', lines 125:0-125:67 -/
+def append_in_place
+  (T : Type) (l0 : CList T) (l1 : CList T) : Result (CList T) :=
+  do
+  let (_, list_tail_back) ← list_tail T l0
+  list_tail_back l1
+
+/-- Theorem about `list_tail` -/
+@[pspec]
+theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail T l = ok (CList.CNil, back) ∧
   ∀ tl', ∃ l', back tl' = ok l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
-  rw [list_tail]
-  match l with
-  | CNil =>
-    simp_all
-  | CCons hd tl =>
-    simp_all
+  rw [list_tail, list_tail_loop]
+  split
+  . simp_all
     progress as ⟨ back ⟩
     simp
     -- Proving the backward function
     intro tl'
     progress
     simp_all
+  . simp_all
 
-/- Trait declaration: [demo::Counter]
-   Source: 'tests/src/demo.rs', lines 99:0-99:17 -/
-structure Counter (Self : Type) where
-  incr : Self → Result (Usize × Self)
+/-- Theorem about `append_in_place` -/
+@[pspec]
+theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
+  ∃ l2, append_in_place T l0 l1 = ok l2 ∧
+  l2.to_list = l0.to_list ++ l1.to_list := by
+  rw [append_in_place]
+  progress as ⟨ tl, back ⟩
+  progress as ⟨ l2 ⟩
+  simp_all
 
-/- [demo::{demo::Counter for usize}::incr]:
-   Source: 'tests/src/demo.rs', lines 104:4-104:31 -/
-def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
-  do
-  let self1 ← self + 1#usize
-  Result.ok (self, self1)
 
-/- Trait implementation: [demo::{demo::Counter for usize}]
-   Source: 'tests/src/demo.rs', lines 103:0-103:22 -/
-def CounterUsize : Counter Usize := {
-  incr := CounterUsize.incr
-}
-
-/- [demo::use_counter]:
-   Source: 'tests/src/demo.rs', lines 111:0-111:59 -/
-def use_counter
-  (T : Type) (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
-  CounterInst.incr cnt
-
+/- Big numbers -/
 
 /- [tutorial::zero]: loop 0:
    Source: 'src/lib.rs', lines 6:4-11:1 -/
@@ -251,8 +314,8 @@ divergent def zero_loop
     zero_loop x1 i2
   else Result.ok x
 
-abbrev Bignum U32 := alloc.vec.Vec U32
 
+-- Auxiliary definitions to interpret a vector of u32 as a mathematical integer
 @[simp]
 def toInt_aux (l : List U32) : ℤ :=
   match l with
@@ -263,6 +326,9 @@ def toInt_aux (l : List U32) : ℤ :=
 @[reducible]
 def toInt (x : alloc.vec.Vec U32) : ℤ := toInt_aux x.val
 
+-- TODO: case disjunctions
+-- TODO: have := lemma x (by tactic)
+/-- The theorem about `zero_loop` -/
 @[pspec]
 theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
@@ -297,6 +363,10 @@ decreasing_by scalar_decr_tac
 def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
   zero_loop x 0#usize
 
+/-- You will need this lemma for the proof of `zero_spec`
+
+    Advice: do the proof of `zero_spec` first, then come back to prove this lemma.
+-/
 theorem all_nil_impl_toInt_eq_zero
   (l : List U32) (h : ∀ (j : ℕ), j < l.length → l.index j = 0#u32) :
   toInt_aux l = 0 := by
@@ -312,6 +382,7 @@ theorem all_nil_impl_toInt_eq_zero
     simp at this
     simp_all
 
+/-- The theorem about `zero` -/
 theorem zero_spec (x : alloc.vec.Vec U32) :
   ∃ x',
     zero x = ok x' ∧
@@ -345,16 +416,10 @@ divergent def add_no_overflow_loop
     add_no_overflow_loop x1 y i5
   else Result.ok x
 
-@[simp]
-def List.isplitAt (l : List α) (i : ℤ) : List α × List α :=
-  match l with
-  | [] => ([], [])
-  | hd :: tl =>
-    if i = 0 then ([], hd :: tl)
-    else
-      let (l0, l1) := isplitAt tl (i - 1)
-      (hd :: l0, l1)
+/-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
 
+    Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
+ -/
 -- Here, we're using ring_nf
 @[simp]
 theorem toInt_aux_append (l0 l1 : List U32) :
@@ -366,6 +431,10 @@ theorem toInt_aux_append (l0 l1 : List U32) :
     simp_all
     scalar_eq_nf
 
+/-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
+
+    Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
+ -/
 @[simp]
 theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
   toInt_aux (l.update i x) = toInt_aux l + 2 ^ (32 * i) * (x - l.index i) := by
@@ -388,6 +457,10 @@ theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) 
       scalar_eq_nf
     . scalar_eq_nf
 
+/-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
+
+    Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
+ -/
 @[simp]
 theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
   toInt_aux (l.drop i) = l.index i + 2 ^ 32 * toInt_aux (l.drop (i + 1)) := by
@@ -403,26 +476,7 @@ theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
     have : 1 + (i - 1) = i := by scalar_tac
     simp [*]
 
-@[simp]
-theorem UScalar.add_nat_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Nat) :
-  (x.val + n).toNat = x.val.toNat + n := by
-  cases ty <;> simp_all <;> scalar_tac
-
-@[simp]
-theorem UScalar.nat_add_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Nat) :
-  (n + x.val).toNat = x.val.toNat + n := by
-  cases ty <;> simp_all <;> scalar_tac
-
-@[simp]
-theorem UScalar.add_pos_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Int) (h' : 0 ≤ n) :
-  (x.val + n).toNat = x.val.toNat + n.toNat := by
-  cases ty <;> simp_all <;> scalar_tac
-
-@[simp]
-theorem UScalar.pos_add_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Int) (h' : 0 ≤ n) :
-  (n + x.val).toNat = n.toNat + x.val.toNat := by
-  cases ty <;> simp_all <;> scalar_tac
-
+/-- The proof about `add_no_overflow_loop` -/
 @[pspec]
 theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
@@ -449,6 +503,7 @@ theorem add_no_overflow_loop_spec
         -- TODO: this is annoying
         -- TODO: aesop?
         have : i.toNat < j := by scalar_tac
+        -- This applies List.index_update_ne
         simp_all
         apply hNoOverflow j (by scalar_tac) (by scalar_tac)
       . -- Postcondition
@@ -467,6 +522,7 @@ def add_no_overflow
   :=
   add_no_overflow_loop x y 0#usize
 
+/-- The proof about `add_no_overflow` -/
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
   (hNoOverflow : ∀ (j : Nat), j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max) :
@@ -509,6 +565,7 @@ divergent def add_with_carry_loop
     add_with_carry_loop x1 y c01 i7
   else Result.ok (c0, x)
 
+/-- The proof about `add_with_carry_loop` -/
 @[pspec]
 theorem add_with_carry_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize)
@@ -525,9 +582,6 @@ theorem add_with_carry_loop_spec
   split
   . progress as ⟨ xi ⟩
     progress as ⟨ c0u ⟩
-    . -- TODO: automation with scalar tac, and more precise lemmas
-      simp
-      scalar_tac
     . progress as ⟨ s1, c1, hConv1 ⟩
       progress as ⟨ yi ⟩
       progress as ⟨ s2, c2, hConv2 ⟩
@@ -561,6 +615,7 @@ def add_with_carry
   :=
   add_with_carry_loop x y 0#u8 0#usize
 
+/-- The proof about `add_with_carry` -/
 @[pspec]
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
@@ -572,6 +627,8 @@ theorem add_with_carry_spec
   rw [add_with_carry]
   progress as ⟨ c, x' ⟩
   simp_all
+
+/- Bonus exercises -/
 
 /- [tutorial::max]:
    Source: 'src/lib.rs', lines 26:0-26:37 -/
@@ -638,4 +695,4 @@ def add
   let x1 ← alloc.vec.Vec.resize U32 core.clone.CloneU32 x max1 0#u32
   add_loop x1 y max1 0#u8 0#usize
 
-end Tutorial
+end Tutorial.Solutions

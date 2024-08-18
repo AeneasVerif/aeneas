@@ -662,4 +662,24 @@ theorem Scalar.unsigned_ofNat_toNat (x : Scalar ty) (h : ¬ ty.isSigned := by de
 @[scalar_tac x.toNat] theorem U128.unsigned_ofNat_toNat (x : U128) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
 @[scalar_tac x.toNat] theorem Usize.unsigned_ofNat_toNat (x : Usize) : (x.toNat : Int) = x.val := Scalar.unsigned_ofNat_toNat x
 
+@[simp]
+theorem Scalar.unsigned_add_nat_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Nat) :
+  (x.val + n).toNat = x.val.toNat + n := by
+  cases ty <;> simp_all <;> int_tac
+
+@[simp]
+theorem Scalar.unsigned_nat_add_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Nat) :
+  (n + x.val).toNat = x.val.toNat + n := by
+  cases ty <;> simp_all <;> int_tac
+
+@[simp]
+theorem Scalar.unsigned_add_pos_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Int) (h' : 0 ≤ n) :
+  (x.val + n).toNat = x.val.toNat + n.toNat := by
+  cases ty <;> simp_all <;> int_tac
+
+@[simp]
+theorem Scalar.unsigned_pos_add_toNat (h : ¬ ty.isSigned) (x : Scalar ty) (n : Int) (h' : 0 ≤ n) :
+  (n + x.val).toNat = n.toNat + x.val.toNat := by
+  cases ty <;> simp_all <;> int_tac
+
 end Primitives

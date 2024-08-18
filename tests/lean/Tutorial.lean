@@ -1,1 +1,1 @@
-import Tutorial.Proofs
+import Tutorial.Solutions

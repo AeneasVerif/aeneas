@@ -44,6 +44,7 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
                 ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
                 ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max,
                 ``Usize.min,
+                ``Scalar.in_bounds,
                 ``Scalar.toNat, ``Isize.toNat, ``USize.toNat,
                 ``I8.toNat, ``I16.toNat, ``I32.toNat, ``I64.toNat, ``I128.toNat,
                 ``U8.toNat, ``U16.toNat, ``U32.toNat, ``U64.toNat, ``U128.toNat,
