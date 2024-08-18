@@ -149,7 +149,6 @@ initialize saturateAttr : SaturateAttribute ← do
         -- Lookup the theorem
         let env ← getEnv
         let thDecl := env.constants.find! thName
-        MetaM.run' do
         -- Analyze the theorem
         let (key, rule) ← MetaM.run' do
           let ty := thDecl.type

@@ -1,7 +1,7 @@
 import Base
 open Primitives Result
 
-set_option maxHeartbeats 5000000
+set_option maxHeartbeats 1000000
 
 namespace Primitives
 
@@ -326,7 +326,6 @@ def toInt_aux (l : List U32) : ℤ :=
 @[reducible]
 def toInt (x : alloc.vec.Vec U32) : ℤ := toInt_aux x.val
 
--- TODO: case disjunctions
 -- TODO: have := lemma x (by tactic)
 /-- The theorem about `zero_loop` -/
 @[pspec]
@@ -350,8 +349,7 @@ theorem zero_loop_spec
       replace hSame := hSame j (by scalar_tac)
       simp_all
     . intro j h0 h1
-      -- TODO: we want a shortcut for this
-      cases h: (¬ j = i.toNat : Bool) <;> simp_all
+      dcases j = i.toNat <;> simp_all
       have := hZero j (by scalar_tac)
       simp_all
   . simp; scalar_tac
@@ -442,8 +440,8 @@ theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) 
   | nil => simp at *
   | cons hd tl =>
     simp_all
-    -- TODO: simplify this
-    cases h : (i = 0 : Bool) <;> simp_all
+    dcases i = 0 <;> simp_all
+    . scalar_eq_nf
     . have := toInt_aux_update tl (i - 1) x (by scalar_tac)
       simp_all
       scalar_nf at *
@@ -455,7 +453,6 @@ theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) 
         scalar_nf
       simp [mul_assoc, *]
       scalar_eq_nf
-    . scalar_eq_nf
 
 /-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
 
@@ -468,8 +465,7 @@ theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
   | nil => simp at *
   | cons hd tl =>
     simp_all
-    -- TODO: simplify this
-    cases h : (i = 0 : Bool) <;> simp_all
+    dcases i = 0 <;> simp_all
     have := toInt_aux_drop tl (i - 1) (by scalar_tac)
     simp_all
     scalar_nf at *

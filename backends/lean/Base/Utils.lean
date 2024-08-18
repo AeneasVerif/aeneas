@@ -934,4 +934,62 @@ example (x y z : Int) (b1 b2 : Bool)
   x ≤ z := by
   split_all <;> omega
 
+
+syntax (name := checkIsProp) "check_is_prop" term : tactic
+
+/-- Small utility: see below
+
+    Check if a term has type `Prop`.
+ -/
+@[tactic checkIsProp]
+def checkIfPropEval : Tactic := fun stx =>
+  withMainContext do
+  let x := stx.getArgs.toList.get! 1
+  let x ← Elab.Term.elabTerm x none
+  let ty ← inferType x
+  if ty.isProp then pure ()
+  else throwError "Not a proposition"
+
+/-- "Decidable" cases: it often happens that we want to make a case disjunction over a decidable proposition `P`.
+    If we simply call `cases P` we don't get what we expect at all, and we need to do instead: `cases h : (P : Bool)`.
+    There are two important things:
+    - we need to cast the proposition to `Bool` so that the elaborator understands it should lookup the instance of `Decidable``
+    - we need to name the hypothesis resulting from the case split, because generally we will need it to do some rewriting
+
+    Doing this is often annoying (the syntax is ugly) and actually people often forget to write it exactly the way above.
+    For this reason we introduce the tactic below, which first checks whether the term on which we do the case disjunction
+    is a proposition or not, then performs the proper case split accordingly.
+
+    Also, when doing a case disjunction over a decidable proposition, the `cases` tactic introduces the *negation* of
+    the proposition first, while we expect the reverse. For this reason we don't do a case disjunction over `P` but
+    rather `¬ P`.
+  -/
+syntax (name := dcases) "dcases" atomic(ident " : ")? term : tactic
+macro_rules
+| `(tactic| dcases $x) =>
+   let h := mkIdent (.str .anonymous "_")
+  `(tactic|
+    first | check_is_prop $x; cases $h : (¬ ($x) : $(Lean.mkIdent ``Bool)) <;>
+            simp only [$(mkIdent ``decide_eq_false_iff_not):ident,
+                       $(mkIdent ``decide_eq_true_eq):ident,
+                       $(mkIdent ``Bool.not_eq_false'):ident,
+                       $(mkIdent ``Bool.not_eq_true'):ident,
+                       $(mkIdent ``Decidable.not_not):ident] at $h:ident
+          | cases ($x))
+| `(tactic| dcases $h : $x) =>
+  `(tactic|
+    first | check_is_prop $x; cases $h : (¬ ($x) : $(Lean.mkIdent ``Bool)) <;>
+            simp only [$(mkIdent ``decide_eq_false_iff_not):ident,
+                       $(mkIdent ``decide_eq_true_eq):ident,
+                       $(mkIdent ``Bool.not_eq_false'):ident,
+                       $(mkIdent ``Bool.not_eq_true'):ident,
+                       $(mkIdent ``Decidable.not_not):ident] at ($h)
+          | cases $h : ($x))
+
+example (x y : Int) : True := by
+  dcases h: x = y <;> simp
+
+example (x y : Int) : True := by
+  dcases h: x = y <;> simp
+
 end Utils
