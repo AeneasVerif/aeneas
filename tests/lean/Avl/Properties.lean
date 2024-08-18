@@ -130,7 +130,7 @@ def Node.invAux [LinearOrder T] (node : Node T) : Prop :=
 def Node.inv [LinearOrder T] (node : Node T) : Prop :=
   Node.forall Node.invAux node
 
--- TODO: use a custom set
+-- TODO: use scalar_tac
 @[aesop safe forward]
 theorem Node.inv_imp_current [LinearOrder T] {node : Node T} (hInv : node.inv) :
   node.balance_factor.val = node.balanceFactor ∧
@@ -318,15 +318,14 @@ theorem Node.rotate_left_spec
   . -- BF(Z) == 0
     simp at *
     simp [*]
+    -- TODO: scalar_tac should succeed below
     have hHeightEq : Subtree.height b = Subtree.height c := by
       simp_all (config := {maxDischargeDepth := 1}) [balanceFactor, Node.invAux]
-      -- TODO: scalar_tac fails here (conversion int/nat)
-      omega
-    -- TODO: we shouldn't need this: scalar_tac should succeed
+      scalar_tac
+    -- TODO: scalar_tac should succeed below
     have : 1 + Subtree.height c = Subtree.height a + 2 := by
-      -- TODO: scalar_tac fails here (conversion int/nat)
       simp_all (config := {maxDischargeDepth := 1}) [balanceFactor, Node.invAux]
-      omega
+      scalar_tac
     simp_all (config := {maxDischargeDepth := 1})
     split_conjs
     . -- Partial invariant for the final tree starting at z
