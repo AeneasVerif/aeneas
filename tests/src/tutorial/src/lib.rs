@@ -1,5 +1,3 @@
-pub type Bignum = Vec<u32>;
-
 pub fn choose<'a, T>(b: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     if b {
         x
@@ -147,6 +145,8 @@ pub fn append_in_place<'a, T>(l0: &'a mut CList<T>,  l1 : CList<T>) {
 
 /* Big numbers */
 
+pub type Bignum = Vec<u32>;
+
 /// Zero out a bignum
 pub fn zero(x : &mut Bignum) {
     let mut i = 0;
@@ -164,17 +164,9 @@ pub fn zero(x : &mut Bignum) {
 pub fn add_no_overflow(x: &mut Bignum, y: &Bignum) {
     let mut i = 0;
     while i < x.len() {
-        x[i] += y[i];
+        x[i] += y[i]; // We assume this doesn't overflow
         i += 1;
     }
-}
-
-fn usize_max(x : usize, y : usize) -> usize {
-    if x > y { x } else { y }
-}
-
-fn get_or_zero(y : &Bignum, i : usize) -> u32 {
-    if i < y.len() { y[i] } else { 0 }
 }
 
 /// Add a bignum in place, and return the carry.
@@ -195,13 +187,21 @@ pub fn add_with_carry(x: &mut Bignum, y: &Bignum) -> u8 {
     c0
 }
 
+fn max(x : usize, y : usize) -> usize {
+    if x > y { x } else { y }
+}
+
+fn get_or_zero(y : &Bignum, i : usize) -> u32 {
+    if i < y.len() { y[i] } else { 0 }
+}
+
 /// Add a bignum in place.
 ///
 /// The bignums may have different lengths, and we resize x if necessary.
 /// Note: this is not what we usually do in cryptographic code, where big
 /// numbers have a fixed size, but is interesting as an exercise.
 pub fn add(x: &mut Bignum, y: &Bignum) {
-    let max = usize_max(x.len(), y.len());
+    let max = max(x.len(), y.len());
     x.resize(max, 0u32);
     // now: length x >= length y
     let mut c0 = 0u8;

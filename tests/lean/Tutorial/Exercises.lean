@@ -38,8 +38,8 @@ theorem mul2_add1_spec' (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   ↑y = 2 * ↑x + (1 : Int)
   := by
   rw [mul2_add1]
-  progress with U32.add_spec as ⟨ i ⟩
-  progress as ⟨ i' ⟩
+  progress with U32.add_spec as ⟨ x1 ⟩
+  progress as ⟨ x2 ⟩
   scalar_tac
 
 /- [tutorial::mul2_add1_add]:
@@ -54,8 +54,8 @@ theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.
   ∃ z, mul2_add1_add x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [mul2_add1_add]
-  progress with mul2_add1_spec as ⟨ i ⟩
-  progress as ⟨ i' ⟩
+  progress with mul2_add1_spec as ⟨ x1 ⟩
+  progress as ⟨ x2 ⟩
   scalar_tac
 
 /- [tutorial::CList]
@@ -231,11 +231,26 @@ def list_nth_mut1
     - to prove a goal of the shape: `∀ x0 x1, ...`, use `intro y0 y1` to introduce the
       quantified variables in the context and name them `y0`, `y1`
     - if the goal is an arithmetic goal, use `scalar_tac`
+
+    In order to type the special characters, you need to type the character '\' then a specific string:
+    - ↑ : \ + u    ("up")
+    - → : \ + r    ("right")
+    - ∧ : \ + and
+    - ∨ : \ + or
+    - ∀ : \ + forall
+    - ∃ : \ + exists
+
+    Remarks:
+    - if `x` is a scalar machine, `↑x : Int` and `x.val` are the same
+    - if `v` is a vector (see exercises below) `↑v : List α` and `v.val` are the same
+
+    If you don't know what a notation which appears in the goal is exactly, just put your mouse over it.
  -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.to_list.length) :
   ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
   x = l.to_list.index i.toNat ∧
+  -- Specification of the backward function
   ∀ x', ∃ l', back x' = ok l' ∧ l'.to_list = l.to_list.update i.toNat x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   sorry
@@ -327,7 +342,7 @@ def toInt (x : alloc.vec.Vec U32) : ℤ := toInt_aux x.val
     - if you have lemma (or assumption): `h : ∀ x, P x → Q x`, you can instantiate it and introduce it in
       the context by doing:
       `have h' := h y (by tactic)`
-    - for the termination proof: look at `i32_id_spec`
+    - for the proof of termination: look at `i32_id_spec` above
     - if you need to do a case disjunction, use `dcases`
       Ex.: `dcases x = y` will introduce two goals, one with the assumption `x = y` and the
       other with the assumption `x ≠ y`. You can name this assumption by writing: `dcases h : x = y`
