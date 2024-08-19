@@ -20,6 +20,7 @@ def BoolTraitBool.get_bool (self : Bool) : Result Bool :=
 
 /- Trait implementation: [traits::{traits::BoolTrait for bool}]
    Source: 'tests/src/traits.rs', lines 12:0-12:23 -/
+@[reducible]
 def BoolTraitBool : BoolTrait Bool := {
   get_bool := BoolTraitBool.get_bool
 }
@@ -48,6 +49,7 @@ def BoolTraitOption.get_bool (T : Type) (self : Option T) : Result Bool :=
 
 /- Trait implementation: [traits::{traits::BoolTrait for core::option::Option<T>}#1]
    Source: 'tests/src/traits.rs', lines 23:0-23:31 -/
+@[reducible]
 def BoolTraitOption (T : Type) : BoolTrait (Option T) := {
   get_bool := BoolTraitOption.get_bool T
 }
@@ -79,6 +81,7 @@ def ToU64U64.to_u64 (self : U64) : Result U64 :=
 
 /- Trait implementation: [traits::{traits::ToU64 for u64}#2]
    Source: 'tests/src/traits.rs', lines 44:0-44:18 -/
+@[reducible]
 def ToU64U64 : ToU64 U64 := {
   to_u64 := ToU64U64.to_u64
 }
@@ -95,6 +98,7 @@ def ToU64Pair.to_u64
 
 /- Trait implementation: [traits::{traits::ToU64 for (A, A)}#3]
    Source: 'tests/src/traits.rs', lines 50:0-50:31 -/
+@[reducible]
 def ToU64Pair (A : Type) (ToU64Inst : ToU64 A) : ToU64 (A × A) := {
   to_u64 := ToU64Pair.to_u64 A ToU64Inst
 }
@@ -128,6 +132,7 @@ def ToU64traitsWrapper.to_u64
 
 /- Trait implementation: [traits::{traits::ToU64 for traits::Wrapper<T>}#4]
    Source: 'tests/src/traits.rs', lines 75:0-75:35 -/
+@[reducible]
 def ToU64traitsWrapper (T : Type) (ToU64Inst : ToU64 T) : ToU64 (Wrapper T)
   := {
   to_u64 := ToU64traitsWrapper.to_u64 T ToU64Inst
@@ -155,6 +160,7 @@ def ToTypeU64Bool.to_type (self : U64) : Result Bool :=
 
 /- Trait implementation: [traits::{traits::ToType<bool> for u64}#5]
    Source: 'tests/src/traits.rs', lines 93:0-93:25 -/
+@[reducible]
 def ToTypeU64Bool : ToType U64 Bool := {
   to_type := ToTypeU64Bool.to_type
 }
@@ -209,6 +215,7 @@ def TestType.test.TestTraittraitsTestTypetestTestType1.test
 
 /- Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
    Source: 'tests/src/traits.rs', lines 139:8-139:36 -/
+@[reducible]
 def TestType.test.TestTraittraitsTestTypetestTestType1 :
   TestType.test.TestTrait TestType.test.TestType1 := {
   test := TestType.test.TestTraittraitsTestTypetestTestType1.test
@@ -238,6 +245,7 @@ def ToTypetraitsBoolWrapperT.to_type
 
 /- Trait implementation: [traits::{traits::ToType<T> for traits::BoolWrapper}#7]
    Source: 'tests/src/traits.rs', lines 153:0-155:20 -/
+@[reducible]
 def ToTypetraitsBoolWrapperT (T : Type) (ToTypeBoolTInst : ToType Bool T) :
   ToType BoolWrapper T := {
   to_type := ToTypetraitsBoolWrapperT.to_type T ToTypeBoolTInst
@@ -272,6 +280,7 @@ def WithConstTyBool32.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
 
 /- Trait implementation: [traits::{traits::WithConstTy<32: usize> for bool}#8]
    Source: 'tests/src/traits.rs', lines 175:0-175:29 -/
+@[reducible]
 def WithConstTyBool32 : WithConstTy Bool 32#usize := {
   LEN1 := WithConstTyBool32.LEN1
   LEN2 := WithConstTy.LEN2_default Bool 32#usize
@@ -367,11 +376,13 @@ structure ChildTrait1 (Self : Type) where
 
 /- Trait implementation: [traits::{traits::ParentTrait1 for usize}#9]
    Source: 'tests/src/traits.rs', lines 225:0-225:27 -/
+@[reducible]
 def ParentTrait1Usize : ParentTrait1 Usize := {
 }
 
 /- Trait implementation: [traits::{traits::ChildTrait1 for usize}#10]
    Source: 'tests/src/traits.rs', lines 226:0-226:26 -/
+@[reducible]
 def ChildTrait1Usize : ChildTrait1 Usize := {
   ParentTrait1Inst := ParentTrait1Usize
 }
@@ -419,12 +430,14 @@ structure ChildTrait2 (Self : Type) where
 
 /- Trait implementation: [traits::{traits::WithTarget for u32}#11]
    Source: 'tests/src/traits.rs', lines 265:0-265:23 -/
+@[reducible]
 def WithTargetU32 : WithTarget U32 := {
   Target := U32
 }
 
 /- Trait implementation: [traits::{traits::ParentTrait2 for u32}#12]
    Source: 'tests/src/traits.rs', lines 269:0-269:25 -/
+@[reducible]
 def ParentTrait2U32 : ParentTrait2 U32 := {
   U := U32
   WithTargettraitsParentTrait2UInst := WithTargetU32
@@ -437,6 +450,7 @@ def ChildTrait2U32.convert (x : U32) : Result U32 :=
 
 /- Trait implementation: [traits::{traits::ChildTrait2 for u32}#13]
    Source: 'tests/src/traits.rs', lines 273:0-273:24 -/
+@[reducible]
 def ChildTrait2U32 : ChildTrait2 U32 := {
   ParentTrait2Inst := ParentTrait2U32
   convert := ChildTrait2U32.convert
@@ -485,6 +499,7 @@ def TraitArray.LEN (T : Type) (N : Usize) : Usize :=
 
 /- Trait implementation: [traits::{traits::Trait for @Array<T, N>}#14]
    Source: 'tests/src/traits.rs', lines 315:0-315:40 -/
+@[reducible]
 def TraitArray (T : Type) (N : Usize) : Trait (Array T N) := {
   LEN := TraitArray.LEN T N
 }
@@ -499,6 +514,7 @@ def TraittraitsWrapper.LEN (T : Type) (TraitInst : Trait T) : Usize :=
 
 /- Trait implementation: [traits::{traits::Trait for traits::Wrapper<T>}#15]
    Source: 'tests/src/traits.rs', lines 319:0-319:35 -/
+@[reducible]
 def TraittraitsWrapper (T : Type) (TraitInst : Trait T) : Trait (Wrapper T)
   := {
   LEN := TraittraitsWrapper.LEN T TraitInst

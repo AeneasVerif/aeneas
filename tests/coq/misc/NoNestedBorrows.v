@@ -583,4 +583,19 @@ Definition use_id_type (T : Type) (x : IdType_t T) : result T :=
 Definition create_id_type (T : Type) (x : T) : result (IdType_t T) :=
   Ok x.
 
+(** [no_nested_borrows::not_bool]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 520:0-520:32 *)
+Definition not_bool (x : bool) : result bool :=
+  Ok (negb x).
+
+(** [no_nested_borrows::not_u32]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 524:0-524:29 *)
+Definition not_u32 (x : u32) : result u32 :=
+  Ok (scalar_not x).
+
+(** [no_nested_borrows::not_i32]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 528:0-528:29 *)
+Definition not_i32 (x : i32) : result i32 :=
+  Ok (scalar_not x).
+
 End NoNestedBorrows.

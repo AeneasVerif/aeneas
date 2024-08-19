@@ -20,6 +20,7 @@ def BoolTraitBool.getTest (self : Bool) : Result Bool :=
 
 /- Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
    Source: 'tests/src/rename_attribute.rs', lines 21:0-21:23 -/
+@[reducible]
 def BoolImpl : BoolTest Bool := {
   getTest := BoolTraitBool.getTest
 }

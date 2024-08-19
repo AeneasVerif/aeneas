@@ -52,8 +52,29 @@ let rec list_nth (t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
     | CList_CNil -> Fail Failure
     end
 
+(** [demo::list_nth1]: loop 0:
+    Source: 'tests/src/demo.rs', lines 56:0-65:1 *)
+let rec list_nth1_loop
+  (t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
+  if is_zero n
+  then Fail OutOfFuel
+  else
+    let n1 = decrease n in
+    begin match l with
+    | CList_CCons x tl ->
+      if i = 0
+      then Ok x
+      else let* i1 = u32_sub i 1 in list_nth1_loop t n1 tl i1
+    | CList_CNil -> Fail Failure
+    end
+
+(** [demo::list_nth1]:
+    Source: 'tests/src/demo.rs', lines 56:0-56:65 *)
+let list_nth1 (t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
+  list_nth1_loop t n l i
+
 (** [demo::list_nth_mut]:
-    Source: 'tests/src/demo.rs', lines 56:0-56:68 *)
+    Source: 'tests/src/demo.rs', lines 67:0-67:76 *)
 let rec list_nth_mut
   (t : Type0) (n : nat) (l : cList_t t) (i : u32) :
   result (t & (t -> result (cList_t t)))
@@ -75,36 +96,6 @@ let rec list_nth_mut
         Ok (x1, back)
     | CList_CNil -> Fail Failure
     end
-
-(** [demo::list_nth_mut1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 71:0-80:1 *)
-let rec list_nth_mut1_loop
-  (t : Type0) (n : nat) (l : cList_t t) (i : u32) :
-  result (t & (t -> result (cList_t t)))
-  =
-  if is_zero n
-  then Fail OutOfFuel
-  else
-    let n1 = decrease n in
-    begin match l with
-    | CList_CCons x tl ->
-      if i = 0
-      then let back = fun ret -> Ok (CList_CCons ret tl) in Ok (x, back)
-      else
-        let* i1 = u32_sub i 1 in
-        let* (x1, back) = list_nth_mut1_loop t n1 tl i1 in
-        let back1 = fun ret -> let* tl1 = back ret in Ok (CList_CCons x tl1) in
-        Ok (x1, back1)
-    | CList_CNil -> Fail Failure
-    end
-
-(** [demo::list_nth_mut1]:
-    Source: 'tests/src/demo.rs', lines 71:0-71:77 *)
-let list_nth_mut1
-  (t : Type0) (n : nat) (l : cList_t t) (i : u32) :
-  result (t & (t -> result (cList_t t)))
-  =
-  list_nth_mut1_loop t n l i
 
 (** [demo::i32_id]:
     Source: 'tests/src/demo.rs', lines 82:0-82:28 *)

@@ -423,6 +423,17 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
   let r =
     match (unop, v.value) with
     | Not, VLiteral (VBool b) -> Ok { v with value = VLiteral (VBool (not b)) }
+    | Not, VLiteral (VScalar i) ->
+        (* The ! operator flips the bits.
+           In effect, this does the operation we implement below.
+        *)
+        let int_ty = i.int_ty in
+        let x =
+          if integer_type_is_signed int_ty then Z.of_int (-1)
+          else scalar_max int_ty
+        in
+        let value = Z.sub x i.value in
+        Ok { v with value = VLiteral (VScalar { value; int_ty }) }
     | Neg, VLiteral (VScalar sv) -> (
         let i = Z.neg sv.value in
         match mk_scalar sv.int_ty i with
@@ -476,6 +487,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   let res_sv_ty =
     match (unop, v.ty) with
     | Not, (TLiteral TBool as lty) -> lty
+    | Not, (TLiteral (TInteger _) as lty) -> lty
     | Neg, (TLiteral (TInteger _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
     | _ -> exec_raise __FILE__ __LINE__ span "Invalid input for unop"

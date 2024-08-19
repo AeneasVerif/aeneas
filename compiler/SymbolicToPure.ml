@@ -2283,19 +2283,29 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           bs_ctx_register_forward_call call_id call args back_funs_map ctx
         in
         (ctx, func, effect_info, args, dest)
-    | S.Unop E.Not ->
-        let effect_info =
-          {
-            can_fail = false;
-            stateful_group = false;
-            stateful = false;
-            can_diverge = false;
-            is_rec = false;
-          }
-        in
-        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-        let dest = mk_typed_pattern_from_var dest dest_mplace in
-        (ctx, Unop Not, effect_info, args, dest)
+    | S.Unop E.Not -> (
+        match args with
+        | [ arg ] ->
+            let ty =
+              let lit_ty = ty_as_literal ctx.span arg.ty in
+              match lit_ty with
+              | TBool -> None
+              | TInteger int_ty -> Some int_ty
+              | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+            in
+            let effect_info =
+              {
+                can_fail = false;
+                stateful_group = false;
+                stateful = false;
+                can_diverge = false;
+                is_rec = false;
+              }
+            in
+            let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+            let dest = mk_typed_pattern_from_var dest dest_mplace in
+            (ctx, Unop (Not ty), effect_info, args, dest)
+        | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | S.Unop E.Neg -> (
         match args with
         | [ arg ] ->

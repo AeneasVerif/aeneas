@@ -90,7 +90,7 @@ macro_rules
       -- (note that this is actually not necessary anymore).
       scalar_decr_tac_apply_lemmas <;>
       -- Finish
-      simp_all <;> scalar_tac)
+      simp_all (config := {maxDischargeDepth := 1}) <;> scalar_tac)
 
 -- We always activate this simplification lemma because it is useful for the proofs of termination
 attribute [simp] Prod.lex_iff

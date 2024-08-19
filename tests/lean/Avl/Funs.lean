@@ -21,6 +21,7 @@ def OrdI32.cmp (self : I32) (other : I32) : Result Ordering :=
 
 /- Trait implementation: [avl::{avl::Ord for i32}]
    Source: 'src/avl.rs', lines 7:0-7:16 -/
+@[reducible]
 def OrdI32 : Ord I32 := {
   cmp := OrdI32.cmp
 }

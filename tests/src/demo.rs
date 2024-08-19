@@ -53,7 +53,18 @@ pub fn list_nth<'a, T>(l: &'a CList<T>, i: u32) -> &'a T {
     }
 }
 
-pub fn list_nth_mut<'a, T>(l: &'a mut CList<T>, i: u32) -> &'a mut T {
+pub fn list_nth1<'a, T>(mut l: &'a CList<T>, mut i: u32) -> &'a T {
+    while let CList::CCons(x, tl) = l {
+        if i == 0 {
+            return x;
+        }
+        i -= 1;
+        l = tl;
+    }
+    panic!()
+}
+
+pub fn list_nth_mut<'a, T>(mut l: &'a mut CList<T>, mut i: u32) -> &'a mut T {
     match l {
         CList::CCons(x, tl) => {
             if i == 0 {
@@ -66,17 +77,6 @@ pub fn list_nth_mut<'a, T>(l: &'a mut CList<T>, i: u32) -> &'a mut T {
             panic!()
         }
     }
-}
-
-pub fn list_nth_mut1<'a, T>(mut l: &'a mut CList<T>, mut i: u32) -> &'a mut T {
-    while let CList::CCons(x, tl) = l {
-        if i == 0 {
-            return x;
-        }
-        i -= 1;
-        l = tl;
-    }
-    panic!()
 }
 
 pub fn i32_id(i: i32) -> i32 {

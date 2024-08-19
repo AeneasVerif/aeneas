@@ -64,8 +64,32 @@ Fixpoint list_nth (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
   end
 .
 
+(** [demo::list_nth1]: loop 0:
+    Source: 'tests/src/demo.rs', lines 56:0-65:1 *)
+Fixpoint list_nth1_loop
+  (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match l with
+    | CList_CCons x tl =>
+      if i s= 0%u32
+      then Ok x
+      else (i1 <- u32_sub i 1%u32; list_nth1_loop T n1 tl i1)
+    | CList_CNil => Fail_ Failure
+    end
+  end
+.
+
+(** [demo::list_nth1]:
+    Source: 'tests/src/demo.rs', lines 56:0-56:65 *)
+Definition list_nth1
+  (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
+  list_nth1_loop T n l i
+.
+
 (** [demo::list_nth_mut]:
-    Source: 'tests/src/demo.rs', lines 56:0-56:68 *)
+    Source: 'tests/src/demo.rs', lines 67:0-67:76 *)
 Fixpoint list_nth_mut
   (T : Type) (n : nat) (l : CList_t T) (i : u32) :
   result (T * (T -> result (CList_t T)))
@@ -88,40 +112,6 @@ Fixpoint list_nth_mut
     | CList_CNil => Fail_ Failure
     end
   end
-.
-
-(** [demo::list_nth_mut1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 71:0-80:1 *)
-Fixpoint list_nth_mut1_loop
-  (T : Type) (n : nat) (l : CList_t T) (i : u32) :
-  result (T * (T -> result (CList_t T)))
-  :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n1 =>
-    match l with
-    | CList_CCons x tl =>
-      if i s= 0%u32
-      then let back := fun (ret : T) => Ok (CList_CCons ret tl) in Ok (x, back)
-      else (
-        i1 <- u32_sub i 1%u32;
-        p <- list_nth_mut1_loop T n1 tl i1;
-        let (t, back) := p in
-        let back1 := fun (ret : T) => tl1 <- back ret; Ok (CList_CCons x tl1)
-          in
-        Ok (t, back1))
-    | CList_CNil => Fail_ Failure
-    end
-  end
-.
-
-(** [demo::list_nth_mut1]:
-    Source: 'tests/src/demo.rs', lines 71:0-71:77 *)
-Definition list_nth_mut1
-  (T : Type) (n : nat) (l : CList_t T) (i : u32) :
-  result (T * (T -> result (CList_t T)))
-  :=
-  list_nth_mut1_loop T n l i
 .
 
 (** [demo::i32_id]:

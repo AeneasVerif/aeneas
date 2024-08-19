@@ -550,7 +550,10 @@ and typed_pattern = { value : pattern; ty : ty }
         polymorphic = false;
       }]
 
-type unop = Not | Neg of integer_type | Cast of literal_type * literal_type
+type unop =
+  | Not of integer_type option
+  | Neg of integer_type
+  | Cast of literal_type * literal_type
 [@@deriving show, ord]
 
 (** Identifiers of assumed functions that we use only in the pure translation *)
