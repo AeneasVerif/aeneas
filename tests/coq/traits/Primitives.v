@@ -254,12 +254,12 @@ Definition scalar_rem {ty} (x y: scalar ty) : result (scalar ty) := mk_scalar ty
   
 Definition scalar_neg {ty} (x: scalar ty) : result (scalar ty) := mk_scalar ty (-(to_Z x)).
 
-Axiom scalar_xor : forall ty, scalar ty -> scalar ty -> scalar ty. (* TODO *)
-Axiom scalar_or : forall ty, scalar ty -> scalar ty -> scalar ty. (* TODO *)
-Axiom scalar_and : forall ty, scalar ty -> scalar ty -> scalar ty. (* TODO *)
-Axiom scalar_shl : forall ty0 ty1, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
-Axiom scalar_shr : forall ty0 ty1, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
-Axiom scalar_not : forall ty, scalar ty -> scalar ty. (* TODO *)
+Axiom scalar_xor : forall {ty}, scalar ty -> scalar ty -> scalar ty. (* TODO *)
+Axiom scalar_or : forall {ty}, scalar ty -> scalar ty -> scalar ty. (* TODO *)
+Axiom scalar_and : forall {ty}, scalar ty -> scalar ty -> scalar ty. (* TODO *)
+Axiom scalar_shl : forall {ty0 ty1}, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
+Axiom scalar_shr : forall {ty0 ty1}, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
+Axiom scalar_not : forall {ty}, scalar ty -> scalar ty. (* TODO *)
 
 (** Cast an integer from a [src_ty] to a [tgt_ty] *)
 (* TODO: check the semantics of casts in Rust *)
