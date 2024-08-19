@@ -7,7 +7,7 @@ namespace Primitives
 
 end Primitives
 
-namespace Tutorial.Solutions
+namespace Tutorial.Exercises
 
 /- [tutorial::mul2_add1]:
    Source: 'src/lib.rs', lines 11:0-11:31 -/
@@ -718,4 +718,4 @@ def add
   let x1 ← alloc.vec.Vec.resize U32 core.clone.CloneU32 x max1 0#u32
   add_loop x1 y max1 0#u8 0#usize
 
-end Tutorial.Solutions
+end Tutorial.Exercises
