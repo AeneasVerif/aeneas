@@ -267,7 +267,7 @@ let scalar_shr (#ty0 #ty1 : scalar_ty)
     (x : scalar ty0) (y : scalar ty1) : result (scalar ty0) =
   admit()
 
-let scalar_not #ty (x : scalar ty) : scalar_ty = admit()
+let scalar_not #ty (x : scalar ty) : scalar ty = admit()
 
 (** Cast an integer from a [src_ty] to a [tgt_ty] *)
 // TODO: check the semantics of casts in Rust
