@@ -66,7 +66,11 @@ inductive CList (T : Type) :=
 
 open CList
 
--- Convert a "custom" list to a standard Lean list
+/-- Convert a "custom" list to a standard Lean list.
+
+    By putting this definition in the namespace `CList`, we give the possibility of using the `.`
+    notation: if `x` has type `CList α` we can write `x.to_list` instead of `to_list x`.
+ -/
 @[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
@@ -241,7 +245,7 @@ def list_nth_mut1
     - ∃ : \ + exists
 
     Remarks:
-    - if `x` is a scalar machine, `↑x : Int` and `x.val` are the same
+    - if `x` is a machine scalar, `↑x : Int` and `x.val` are the same
     - if `v` is a vector (see exercises below) `↑v : List α` and `v.val` are the same
 
     If you don't know what a notation which appears in the goal is exactly, just put your mouse over it.

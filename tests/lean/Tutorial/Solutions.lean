@@ -38,8 +38,8 @@ theorem mul2_add1_spec' (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   ↑y = 2 * ↑x + (1 : Int)
   := by
   rw [mul2_add1]
-  progress with U32.add_spec as ⟨ i ⟩
-  progress as ⟨ i' ⟩
+  progress with U32.add_spec as ⟨ x1 ⟩
+  progress as ⟨ x2 ⟩
   scalar_tac
 
 /- [tutorial::mul2_add1_add]:
@@ -54,8 +54,8 @@ theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.
   ∃ z, mul2_add1_add x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [mul2_add1_add]
-  progress with mul2_add1_spec as ⟨ i ⟩
-  progress as ⟨ i' ⟩
+  progress with mul2_add1_spec as ⟨ x1 ⟩
+  progress as ⟨ x2 ⟩
   scalar_tac
 
 /- [tutorial::CList]
@@ -66,7 +66,11 @@ inductive CList (T : Type) :=
 
 open CList
 
--- Convert a "custom" list to a standard Lean list
+/-- Convert a "custom" list to a standard Lean list.
+
+    By putting this definition in the namespace `CList`, we give the possibility of using the `.`
+    notation: if `x` has type `CList α` we can write `x.to_list` instead of `to_list x`.
+ -/
 @[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
@@ -208,7 +212,40 @@ def list_nth_mut1
   :=
   list_nth_mut1_loop T l i
 
-/-- Theorem about `list_nth_mut1` -/
+/-- Theorem about `list_nth_mut1`: exercise!
+
+    Hints:
+    - you can use `progress` to automatically apply a lemma, then refine it into `progress as ⟨ ... ⟩``
+      to name the variables it introduces
+    - if there is a disjunction in the goal, use `split`
+    - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoal per disjunct
+    - to simplify the context, use:
+      - `simp_all`: simplify the goal and the assumptions, and use the assumptions to simplify the goal
+         and the other assumption
+      - `simp`: simplify the goal
+      - `simp at *`: simplify the goal and the assumptions
+      - `simp [*]`: simplify the goal by using the assumptions
+      - `simp [a]`: simplify the goal by using the theorem `a`/the assumption `a`/unfolding the definition `a`
+        (also works with `simp_all`)
+      - `simp at h`: simplify a given hypothesis
+    - to prove a goal of the shape: `∀ x0 x1, ...`, use `intro y0 y1` to introduce the
+      quantified variables in the context and name them `y0`, `y1`
+    - if the goal is an arithmetic goal, use `scalar_tac`
+
+    In order to type the special characters, you need to type the character '\' then a specific string:
+    - ↑ : \ + u    ("up")
+    - → : \ + r    ("right")
+    - ∧ : \ + and
+    - ∨ : \ + or
+    - ∀ : \ + forall
+    - ∃ : \ + exists
+
+    Remarks:
+    - if `x` is a machine scalar, `↑x : Int` and `x.val` are the same
+    - if `v` is a vector (see exercises below) `↑v : List α` and `v.val` are the same
+
+    If you don't know what a notation which appears in the goal is exactly, just put your mouse over it.
+ -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.to_list.length) :
   ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
