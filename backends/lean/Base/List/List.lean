@@ -235,7 +235,7 @@ theorem index_take_append_beg [Inhabited α] (i j : Nat) (l0 l1 : List α)
   cases j <;> simp_all
 
 @[simp]
-theorem index_update_ne
+theorem index_update_neq
   {α : Type u} [Inhabited α] (l: List α) (i: Nat) (j: Nat) (x: α) :
    Nat.not_eq i j → (l.update i x).index j = l.index j
   :=
@@ -251,7 +251,7 @@ theorem index_update_ne
     else
       by
         simp_all
-        apply index_update_ne; scalar_tac
+        apply index_update_neq; scalar_tac
 
 @[simp]
 theorem index_update_eq

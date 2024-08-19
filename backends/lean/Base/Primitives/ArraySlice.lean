@@ -16,6 +16,12 @@ open Result Error core.ops.range
 
 def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
 
+/-- We need this to coerce arrays to lists without marking `Array` as reducible.
+    Also not that we *do not* want to mark `Array` as reducible: it triggers issues.
+-/
+instance (α : Type u) (n : Usize) : CoeOut (Array α n) (List α) where
+  coe := λ v => v.val
+
 instance [BEq α] : BEq (Array α n) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
@@ -113,6 +119,12 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: 
   simp [h]
 
 def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
+
+/-- We need this to coerce slices to lists without marking `Slice` as reducible.
+    Also not that we *do not* want to mark `Slice` as reducible: it triggers issues.
+-/
+instance (α : Type u) : CoeOut (Slice α) (List α) where
+  coe := λ v => v.val
 
 instance [BEq α] : BEq (Slice α) := SubtypeBEq _
 

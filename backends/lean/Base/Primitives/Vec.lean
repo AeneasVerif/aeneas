@@ -15,6 +15,12 @@ namespace alloc.vec
 
 def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
+/-- We need this to coerce vectors to lists without marking `Vec` as reducible.
+    Also not that we *do not* want to mark `Vec` as reducible: it triggers issues.
+-/
+instance (α : Type u) : CoeOut (Vec α) (List α) where
+  coe := λ v => v.val
+
 instance [BEq α] : BEq (Vec α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
@@ -69,7 +75,7 @@ theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Us
   ∃ v1, v.push α x = ok v1 ∧
   v1.val = v.val ++ [x] := by
   rw [push]; simp
-  split <;> simp_all
+  split <;> simp_all <;>
   scalar_tac
 
 -- This shouldn't be used
