@@ -9,11 +9,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1723705977,
-        "narHash": "sha256-pfxZB7R4kyHr/+8/UYpvKBlTBlDY1H0oTIwqQI0vAXA=",
+        "lastModified": 1724231050,
+        "narHash": "sha256-RGKXT/OrFTnOU2fwO2yHvr5+ylGlKcRksyFw2viYIgw=",
         "owner": "aeneasverif",
         "repo": "charon",
-        "rev": "962f26311ccdf09a6a3cfeacbccafba22bf3d405",
+        "rev": "34014046de827679e27967de482a33c02e0a865a",
         "type": "github"
       },
       "original": {
@@ -272,11 +272,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1723688259,
-        "narHash": "sha256-WzeUR1MG9MnJnh9T7qcVe/v12qHvJvzdc3Z5HCeE2ns=",
+        "lastModified": 1724206841,
+        "narHash": "sha256-L8dKaX4T3k+TR2fEHCfGbH4UXdspovz/pj87iai9qmc=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "6e75319846684326d900daff1e2e11338cc80d2b",
+        "rev": "45e98fbd62c32e5927e952d2833fa1ba4fb35a61",
         "type": "github"
       },
       "original": {
