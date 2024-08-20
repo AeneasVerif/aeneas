@@ -1,0 +1,8 @@
+[package]
+name = "bst"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "bst"
+path = "src/bst.rs"
