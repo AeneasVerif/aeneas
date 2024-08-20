@@ -37,27 +37,13 @@
         src = doc-src;
         buildInputs = [ lean-mdbook ];
         buildCommand = ''
+          set -x
           mkdir $out
           # necessary for `additional-css`...?
           cp -vr --no-preserve=mode $src/* .
-          cp -vr --no-preserve=mode ${inked}/* .
+          cp -vr --no-preserve=mode ${inked.out}/* .
           mdbook build -d $out
         '';
-      };
-      # We use a separate derivation instead of `checkPhase` so we can push it but not `doc` to the binary cache
-      test = stdenv.mkDerivation {
-        name = "aeneas-doc-test";
-        src = doc-src;
-        buildInputs = [ lean-mdbook stage1.Lean.lean-package strace ];
-        patchPhase = ''
-          cd doc
-          patchShebangs test
-        '';
-        buildPhase = ''
-          mdbook test
-          touch $out
-        '';
-        dontInstall = true;
       };
 
       leanInk = (buildLeanPackage {
@@ -89,7 +75,7 @@
           dir=$(dirname $relpath)
           mkdir -p $dir out/$dir
           if [ -d $src ]; then cp -r $src/. $dir/; else cp $src $leanPath; fi
-          alectryon --lake $src/lakefile.lean --frontend lean4+markup $leanPath --backend webpage -o $out/$leanPath.md
+          alectryon --frontend lean4+markup $leanPath --backend webpage -o $out/$leanPath.md
         '';
       });
 
@@ -100,7 +86,7 @@
 
       aeneas-base = 
       let
-        manifest = builtins.fromJSON (builtins.readFile ../../backends/lean/lake-manifest.json);
+        manifest = builtins.fromJSON (builtins.readFile ./lake-manifest.json);
         fetchFromLakeManifest = { name, hash, ... }:
         let 
           dep = lib.findFirst (pkg: pkg.name == name) null manifest.packages;
@@ -205,6 +191,12 @@
         name = "literate";
         deps = [ aeneas-base ];
         src = ./.;
+        roots = [
+          {
+            mod = "src/lean/basics";
+            glob = "submodules";
+          }
+        ];
       };
       inked = renderPackage literate;
       doc = book;

@@ -7,6 +7,7 @@
 # Proving with Lean
 
 - [Getting started]()
+  - [Factorial function](./lean/basics/factorial.lean.md)
 - [Defining Binary Search Trees in Rust](./rust/bst_def.md)
   - [Extracting to Lean]()
   - [Panic-freedomness]()
