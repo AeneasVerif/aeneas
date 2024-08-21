@@ -9,7 +9,7 @@ set_option linter.unusedVariables false
 namespace mini_tree
 
 /- [mini_tree::Node]
-   Source: 'tests/src/mini_tree.rs', lines 3:0-3:11 -/
+   Source: 'tests/src/mini_tree.rs', lines 3:0-5:1 -/
 inductive Node :=
 | mk : Option Node → Node
 
@@ -21,7 +21,7 @@ theorem Node.child._simpLemma_ (child : Option Node) :
   (Node.mk child).child = child := by rfl
 
 /- [mini_tree::Tree]
-   Source: 'tests/src/mini_tree.rs', lines 9:0-9:11 -/
+   Source: 'tests/src/mini_tree.rs', lines 9:0-11:1 -/
 structure Tree where
   root : Option Node
 
@@ -33,7 +33,7 @@ divergent def Tree.explore_loop (current_tree : Option Node) : Result Unit :=
   | some current_node => Tree.explore_loop current_node.child
 
 /- [mini_tree::{mini_tree::Tree}::explore]:
-   Source: 'tests/src/mini_tree.rs', lines 14:4-14:25 -/
+   Source: 'tests/src/mini_tree.rs', lines 14:4-20:5 -/
 def Tree.explore (self : Tree) : Result Unit :=
   Tree.explore_loop self.root
 

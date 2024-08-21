@@ -9,19 +9,19 @@ set_option linter.unusedVariables false
 namespace avl
 
 /- [avl::Ordering]
-   Source: 'src/avl.rs', lines 19:0-19:17 -/
+   Source: 'src/avl.rs', lines 19:0-23:1 -/
 inductive Ordering :=
 | Less : Ordering
 | Equal : Ordering
 | Greater : Ordering
 
 /- Trait declaration: [avl::Ord]
-   Source: 'src/avl.rs', lines 25:0-25:13 -/
+   Source: 'src/avl.rs', lines 25:0-27:1 -/
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 
 /- [avl::Node]
-   Source: 'src/avl.rs', lines 29:0-29:14 -/
+   Source: 'src/avl.rs', lines 29:0-34:1 -/
 inductive Node (T : Type) :=
 | mk : T → Option (Node T) → Option (Node T) → I8 → Node T
 
@@ -63,7 +63,7 @@ theorem Node.balance_factor._simpLemma_ {T : Type} (value : T) (left : Option
   by rfl
 
 /- [avl::Tree]
-   Source: 'src/avl.rs', lines 36:0-36:18 -/
+   Source: 'src/avl.rs', lines 36:0-38:1 -/
 structure Tree (T : Type) where
   root : Option (Node T)
 
