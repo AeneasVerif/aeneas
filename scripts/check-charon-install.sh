@@ -46,11 +46,11 @@ cd charon
 ACTUAL_COMMIT="$(git rev-parse HEAD)"
 if [[ "$CHARON_IS_SYMLINK" != "1" && "$ACTUAL_COMMIT" != "$PINNED_COMMIT" ]]; then
     if [[ "$FORCE" == "1" ]]; then
-        git checkout "$PINNED_COMMIT" && rebuild
+        git fetch origin && git checkout "$PINNED_COMMIT" && rebuild
         exit 0
     else
         echo 'Error: `charon` commit is not the pinned commit. Update the charon repository to the commit specified in `./charon-pin`:'
-        echo '  $ cd charon && git checkout '"$PINNED_COMMIT"' && make test'
+        echo '  $ cd charon && git fetch origin && git checkout '"$PINNED_COMMIT"' && make test'
         echo 'To do this automatically, run `make setup-charon`.'
         exit 1
     fi
