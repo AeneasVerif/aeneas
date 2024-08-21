@@ -10,7 +10,7 @@ set_option linter.unusedVariables false
 namespace avl
 
 /- [avl::{avl::Ord for i32}::cmp]:
-   Source: 'src/avl.rs', lines 8:4-8:43 -/
+   Source: 'src/avl.rs', lines 8:4-16:5 -/
 def OrdI32.cmp (self : I32) (other : I32) : Result Ordering :=
   if self < other
   then Result.ok Ordering.Less
@@ -20,14 +20,14 @@ def OrdI32.cmp (self : I32) (other : I32) : Result Ordering :=
     else Result.ok Ordering.Greater
 
 /- Trait implementation: [avl::{avl::Ord for i32}]
-   Source: 'src/avl.rs', lines 7:0-7:16 -/
+   Source: 'src/avl.rs', lines 7:0-17:1 -/
 @[reducible]
 def OrdI32 : Ord I32 := {
   cmp := OrdI32.cmp
 }
 
 /- [avl::{avl::Node<T>}#1::rotate_left]:
-   Source: 'src/avl.rs', lines 41:4-41:65 -/
+   Source: 'src/avl.rs', lines 41:4-90:5 -/
 def Node.rotate_left
   (T : Type) (root : Node T) (z : Node T) : Result (Node T) :=
   let (b, o) := core.mem.replace (Option (Node T)) z.left none
@@ -43,7 +43,7 @@ def Node.rotate_left
       root1.right 0#i8)
 
 /- [avl::{avl::Node<T>}#1::rotate_right]:
-   Source: 'src/avl.rs', lines 92:4-92:66 -/
+   Source: 'src/avl.rs', lines 92:4-136:5 -/
 def Node.rotate_right
   (T : Type) (root : Node T) (z : Node T) : Result (Node T) :=
   let (b, o) := core.mem.replace (Option (Node T)) z.right none
@@ -59,7 +59,7 @@ def Node.rotate_right
       x.left x.right 0#i8)) 0#i8)
 
 /- [avl::{avl::Node<T>}#1::rotate_left_right]:
-   Source: 'src/avl.rs', lines 138:4-138:72 -/
+   Source: 'src/avl.rs', lines 138:4-186:5 -/
 def Node.rotate_left_right
   (T : Type) (root : Node T) (z : Node T) : Result (Node T) :=
   do
@@ -84,7 +84,7 @@ def Node.rotate_left_right
         (some (Node.mk x.value x.left x.right 0#i8)) 0#i8)
 
 /- [avl::{avl::Node<T>}#1::rotate_right_left]:
-   Source: 'src/avl.rs', lines 188:4-188:72 -/
+   Source: 'src/avl.rs', lines 188:4-236:5 -/
 def Node.rotate_right_left
   (T : Type) (root : Node T) (z : Node T) : Result (Node T) :=
   do
@@ -109,7 +109,7 @@ def Node.rotate_right_left
         0#i8)) (some (Node.mk z.value a z.right 1#i8)) 0#i8)
 
 /- [avl::{avl::Node<T>}#2::insert_in_left]:
-   Source: 'src/avl.rs', lines 240:4-240:64 -/
+   Source: 'src/avl.rs', lines 240:4-275:5 -/
 mutual divergent def Node.insert_in_left
   (T : Type) (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
@@ -140,7 +140,7 @@ mutual divergent def Node.insert_in_left
   else Result.ok (false, Node.mk node.value o node.right node.balance_factor)
 
 /- [avl::{avl::Tree<T>}#3::insert_in_opt_node]:
-   Source: 'src/avl.rs', lines 356:4-356:76 -/
+   Source: 'src/avl.rs', lines 356:4-371:5 -/
 divergent def Tree.insert_in_opt_node
   (T : Type) (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
   Result (Bool × (Option (Node T)))
@@ -154,7 +154,7 @@ divergent def Tree.insert_in_opt_node
     Result.ok (b, some node2)
 
 /- [avl::{avl::Node<T>}#2::insert_in_right]:
-   Source: 'src/avl.rs', lines 277:4-277:65 -/
+   Source: 'src/avl.rs', lines 277:4-315:5 -/
 divergent def Node.insert_in_right
   (T : Type) (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
@@ -185,7 +185,7 @@ divergent def Node.insert_in_right
   else Result.ok (false, Node.mk node.value node.left o node.balance_factor)
 
 /- [avl::{avl::Node<T>}#2::insert]:
-   Source: 'src/avl.rs', lines 318:4-318:56 -/
+   Source: 'src/avl.rs', lines 318:4-334:5 -/
 divergent def Node.insert
   (T : Type) (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
@@ -200,7 +200,7 @@ divergent def Node.insert
 end
 
 /- [avl::{avl::Tree<T>}#3::new]:
-   Source: 'src/avl.rs', lines 338:4-338:24 -/
+   Source: 'src/avl.rs', lines 338:4-340:5 -/
 def Tree.new (T : Type) (OrdInst : Ord T) : Result (Tree T) :=
   Result.ok { root := none }
 
@@ -221,13 +221,13 @@ divergent def Tree.find_loop
     | Ordering.Greater => Tree.find_loop T OrdInst value current_node.left
 
 /- [avl::{avl::Tree<T>}#3::find]:
-   Source: 'src/avl.rs', lines 342:4-342:40 -/
+   Source: 'src/avl.rs', lines 342:4-354:5 -/
 def Tree.find
   (T : Type) (OrdInst : Ord T) (self : Tree T) (value : T) : Result Bool :=
   Tree.find_loop T OrdInst value self.root
 
 /- [avl::{avl::Tree<T>}#3::insert]:
-   Source: 'src/avl.rs', lines 374:4-374:46 -/
+   Source: 'src/avl.rs', lines 374:4-376:5 -/
 def Tree.insert
   (T : Type) (OrdInst : Ord T) (self : Tree T) (value : T) :
   Result (Bool × (Tree T))

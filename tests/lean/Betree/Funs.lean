@@ -11,7 +11,7 @@ set_option linter.unusedVariables false
 namespace betree
 
 /- [betree::betree::load_internal_node]:
-   Source: 'src/betree.rs', lines 36:0-36:52 -/
+   Source: 'src/betree.rs', lines 36:0-38:1 -/
 def betree.load_internal_node
   (id : U64) (st : State) :
   Result (State × (betree.List (U64 × betree.Message)))
@@ -19,7 +19,7 @@ def betree.load_internal_node
   betree_utils.load_internal_node id st
 
 /- [betree::betree::store_internal_node]:
-   Source: 'src/betree.rs', lines 41:0-41:60 -/
+   Source: 'src/betree.rs', lines 41:0-43:1 -/
 def betree.store_internal_node
   (id : U64) (content : betree.List (U64 × betree.Message)) (st : State) :
   Result (State × Unit)
@@ -27,13 +27,13 @@ def betree.store_internal_node
   betree_utils.store_internal_node id content st
 
 /- [betree::betree::load_leaf_node]:
-   Source: 'src/betree.rs', lines 46:0-46:44 -/
+   Source: 'src/betree.rs', lines 46:0-48:1 -/
 def betree.load_leaf_node
   (id : U64) (st : State) : Result (State × (betree.List (U64 × U64))) :=
   betree_utils.load_leaf_node id st
 
 /- [betree::betree::store_leaf_node]:
-   Source: 'src/betree.rs', lines 51:0-51:52 -/
+   Source: 'src/betree.rs', lines 51:0-53:1 -/
 def betree.store_leaf_node
   (id : U64) (content : betree.List (U64 × U64)) (st : State) :
   Result (State × Unit)
@@ -41,19 +41,19 @@ def betree.store_leaf_node
   betree_utils.store_leaf_node id content st
 
 /- [betree::betree::fresh_node_id]:
-   Source: 'src/betree.rs', lines 55:0-55:48 -/
+   Source: 'src/betree.rs', lines 55:0-59:1 -/
 def betree.fresh_node_id (counter : U64) : Result (U64 × U64) :=
   do
   let counter1 ← counter + 1#u64
   Result.ok (counter, counter1)
 
 /- [betree::betree::{betree::betree::NodeIdCounter}::new]:
-   Source: 'src/betree.rs', lines 206:4-206:20 -/
+   Source: 'src/betree.rs', lines 206:4-208:5 -/
 def betree.NodeIdCounter.new : Result betree.NodeIdCounter :=
   Result.ok { next_node_id := 0#u64 }
 
 /- [betree::betree::{betree::betree::NodeIdCounter}::fresh_id]:
-   Source: 'src/betree.rs', lines 210:4-210:36 -/
+   Source: 'src/betree.rs', lines 210:4-214:5 -/
 def betree.NodeIdCounter.fresh_id
   (self : betree.NodeIdCounter) : Result (U64 × betree.NodeIdCounter) :=
   do
@@ -61,7 +61,7 @@ def betree.NodeIdCounter.fresh_id
   Result.ok (self.next_node_id, { next_node_id := i })
 
 /- [betree::betree::upsert_update]:
-   Source: 'src/betree.rs', lines 234:0-234:70 -/
+   Source: 'src/betree.rs', lines 234:0-273:1 -/
 def betree.upsert_update
   (prev : Option U64) (st : betree.UpsertFunState) : Result U64 :=
   match prev with
@@ -94,7 +94,7 @@ divergent def betree.List.len_loop
   | betree.List.Nil => Result.ok len
 
 /- [betree::betree::{betree::betree::List<T>}#1::len]:
-   Source: 'src/betree.rs', lines 276:4-276:24 -/
+   Source: 'src/betree.rs', lines 276:4-284:5 -/
 def betree.List.len (T : Type) (self : betree.List T) : Result U64 :=
   betree.List.len_loop T self 0#u64
 
@@ -110,7 +110,7 @@ divergent def betree.List.reverse_loop
   | betree.List.Nil => Result.ok out
 
 /- [betree::betree::{betree::betree::List<T>}#1::reverse]:
-   Source: 'src/betree.rs', lines 304:4-304:32 -/
+   Source: 'src/betree.rs', lines 304:4-312:5 -/
 def betree.List.reverse
   (T : Type) (self : betree.List T) : Result (betree.List T) :=
   betree.List.reverse_loop T self betree.List.Nil
@@ -134,7 +134,7 @@ divergent def betree.List.split_at_loop
        Result.ok (l, self)
 
 /- [betree::betree::{betree::betree::List<T>}#1::split_at]:
-   Source: 'src/betree.rs', lines 287:4-287:55 -/
+   Source: 'src/betree.rs', lines 287:4-302:5 -/
 def betree.List.split_at
   (T : Type) (self : betree.List T) (n : U64) :
   Result ((betree.List T) × (betree.List T))
@@ -142,14 +142,14 @@ def betree.List.split_at
   betree.List.split_at_loop T n betree.List.Nil self
 
 /- [betree::betree::{betree::betree::List<T>}#1::push_front]:
-   Source: 'src/betree.rs', lines 315:4-315:34 -/
+   Source: 'src/betree.rs', lines 315:4-319:5 -/
 def betree.List.push_front
   (T : Type) (self : betree.List T) (x : T) : Result (betree.List T) :=
   let (tl, _) := core.mem.replace (betree.List T) self betree.List.Nil
   Result.ok (betree.List.Cons x tl)
 
 /- [betree::betree::{betree::betree::List<T>}#1::pop_front]:
-   Source: 'src/betree.rs', lines 322:4-322:32 -/
+   Source: 'src/betree.rs', lines 322:4-332:5 -/
 def betree.List.pop_front
   (T : Type) (self : betree.List T) : Result (T × (betree.List T)) :=
   let (ls, _) := core.mem.replace (betree.List T) self betree.List.Nil
@@ -158,14 +158,14 @@ def betree.List.pop_front
   | betree.List.Nil => Result.fail .panic
 
 /- [betree::betree::{betree::betree::List<T>}#1::hd]:
-   Source: 'src/betree.rs', lines 334:4-334:22 -/
+   Source: 'src/betree.rs', lines 334:4-339:5 -/
 def betree.List.hd (T : Type) (self : betree.List T) : Result T :=
   match self with
   | betree.List.Cons hd _ => Result.ok hd
   | betree.List.Nil => Result.fail .panic
 
 /- [betree::betree::{betree::betree::List<(u64, T)>}#2::head_has_key]:
-   Source: 'src/betree.rs', lines 343:4-343:44 -/
+   Source: 'src/betree.rs', lines 343:4-348:5 -/
 def betree.ListPairU64T.head_has_key
   (T : Type) (self : betree.List (U64 × T)) (key : U64) : Result Bool :=
   match self with
@@ -197,7 +197,7 @@ divergent def betree.ListPairU64T.partition_at_pivot_loop
     Result.ok (l, l1)
 
 /- [betree::betree::{betree::betree::List<(u64, T)>}#2::partition_at_pivot]:
-   Source: 'src/betree.rs', lines 355:4-355:73 -/
+   Source: 'src/betree.rs', lines 355:4-370:5 -/
 def betree.ListPairU64T.partition_at_pivot
   (T : Type) (self : betree.List (U64 × T)) (pivot : U64) :
   Result ((betree.List (U64 × T)) × (betree.List (U64 × T)))
@@ -206,7 +206,7 @@ def betree.ListPairU64T.partition_at_pivot
     betree.List.Nil self
 
 /- [betree::betree::{betree::betree::Leaf}#3::split]:
-   Source: 'src/betree.rs', lines 378:4-383:17 -/
+   Source: 'src/betree.rs', lines 378:4-409:5 -/
 def betree.Leaf.split
   (self : betree.Leaf) (content : betree.List (U64 × U64))
   (params : betree.Params) (node_id_cnt : betree.NodeIdCounter) (st : State) :
@@ -250,7 +250,7 @@ divergent def betree.Node.lookup_first_message_for_key_loop
   | betree.List.Nil => Result.ok (betree.List.Nil, Result.ok)
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]:
-   Source: 'src/betree.rs', lines 792:4-795:34 -/
+   Source: 'src/betree.rs', lines 792:4-810:5 -/
 @[reducible]
 def betree.Node.lookup_first_message_for_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
@@ -289,7 +289,7 @@ divergent def betree.Node.apply_upserts_loop
     Result.ok (v, msgs1)
 
 /- [betree::betree::{betree::betree::Node}#5::apply_upserts]:
-   Source: 'src/betree.rs', lines 820:4-820:94 -/
+   Source: 'src/betree.rs', lines 820:4-844:5 -/
 @[reducible]
 def betree.Node.apply_upserts
   (msgs : betree.List (U64 × betree.Message)) (prev : Option U64) (key : U64)
@@ -314,14 +314,14 @@ divergent def betree.Node.lookup_in_bindings_loop
   | betree.List.Nil => Result.ok none
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]:
-   Source: 'src/betree.rs', lines 649:4-649:84 -/
+   Source: 'src/betree.rs', lines 649:4-660:5 -/
 @[reducible]
 def betree.Node.lookup_in_bindings
   (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
   betree.Node.lookup_in_bindings_loop key bindings
 
 /- [betree::betree::{betree::betree::Internal}#4::lookup_in_children]:
-   Source: 'src/betree.rs', lines 414:4-414:63 -/
+   Source: 'src/betree.rs', lines 414:4-420:5 -/
 mutual divergent def betree.Internal.lookup_in_children
   (self : betree.Internal) (key : U64) (st : State) :
   Result (State × ((Option U64) × betree.Internal))
@@ -337,7 +337,7 @@ mutual divergent def betree.Internal.lookup_in_children
     Result.ok (st1, (o, betree.Internal.mk self.id self.pivot self.left n))
 
 /- [betree::betree::{betree::betree::Node}#5::lookup]:
-   Source: 'src/betree.rs', lines 712:4-712:58 -/
+   Source: 'src/betree.rs', lines 712:4-785:5 -/
 divergent def betree.Node.lookup
   (self : betree.Node) (key : U64) (st : State) :
   Result (State × ((Option U64) × betree.Node))
@@ -416,7 +416,7 @@ divergent def betree.Node.filter_messages_for_key_loop
   | betree.List.Nil => Result.ok betree.List.Nil
 
 /- [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]:
-   Source: 'src/betree.rs', lines 683:4-683:77 -/
+   Source: 'src/betree.rs', lines 683:4-692:5 -/
 @[reducible]
 def betree.Node.filter_messages_for_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
@@ -449,7 +449,7 @@ divergent def betree.Node.lookup_first_message_after_key_loop
   | betree.List.Nil => Result.ok (betree.List.Nil, Result.ok)
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]:
-   Source: 'src/betree.rs', lines 694:4-697:34 -/
+   Source: 'src/betree.rs', lines 694:4-706:5 -/
 @[reducible]
 def betree.Node.lookup_first_message_after_key
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
@@ -459,7 +459,7 @@ def betree.Node.lookup_first_message_after_key
   betree.Node.lookup_first_message_after_key_loop key msgs
 
 /- [betree::betree::{betree::betree::Node}#5::apply_to_internal]:
-   Source: 'src/betree.rs', lines 534:4-534:89 -/
+   Source: 'src/betree.rs', lines 534:4-586:5 -/
 def betree.Node.apply_to_internal
   (msgs : betree.List (U64 × betree.Message)) (key : U64)
   (new_msg : betree.Message) :
@@ -538,7 +538,7 @@ divergent def betree.Node.apply_messages_to_internal_loop
   | betree.List.Nil => Result.ok msgs
 
 /- [betree::betree::{betree::betree::Node}#5::apply_messages_to_internal]:
-   Source: 'src/betree.rs', lines 518:4-521:5 -/
+   Source: 'src/betree.rs', lines 518:4-526:5 -/
 @[reducible]
 def betree.Node.apply_messages_to_internal
   (msgs : betree.List (U64 × betree.Message))
@@ -571,7 +571,7 @@ divergent def betree.Node.lookup_mut_in_bindings_loop
   | betree.List.Nil => Result.ok (betree.List.Nil, Result.ok)
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_mut_in_bindings]:
-   Source: 'src/betree.rs', lines 664:4-667:32 -/
+   Source: 'src/betree.rs', lines 664:4-677:5 -/
 @[reducible]
 def betree.Node.lookup_mut_in_bindings
   (key : U64) (bindings : betree.List (U64 × U64)) :
@@ -581,7 +581,7 @@ def betree.Node.lookup_mut_in_bindings
   betree.Node.lookup_mut_in_bindings_loop key bindings
 
 /- [betree::betree::{betree::betree::Node}#5::apply_to_leaf]:
-   Source: 'src/betree.rs', lines 476:4-476:87 -/
+   Source: 'src/betree.rs', lines 476:4-515:5 -/
 def betree.Node.apply_to_leaf
   (bindings : betree.List (U64 × U64)) (key : U64) (new_msg : betree.Message)
   :
@@ -636,7 +636,7 @@ divergent def betree.Node.apply_messages_to_leaf_loop
   | betree.List.Nil => Result.ok bindings
 
 /- [betree::betree::{betree::betree::Node}#5::apply_messages_to_leaf]:
-   Source: 'src/betree.rs', lines 463:4-466:5 -/
+   Source: 'src/betree.rs', lines 463:4-471:5 -/
 @[reducible]
 def betree.Node.apply_messages_to_leaf
   (bindings : betree.List (U64 × U64))
@@ -646,7 +646,7 @@ def betree.Node.apply_messages_to_leaf
   betree.Node.apply_messages_to_leaf_loop bindings new_msgs
 
 /- [betree::betree::{betree::betree::Internal}#4::flush]:
-   Source: 'src/betree.rs', lines 429:4-434:26 -/
+   Source: 'src/betree.rs', lines 429:4-458:5 -/
 mutual divergent def betree.Internal.flush
   (self : betree.Internal) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter)
@@ -687,7 +687,7 @@ mutual divergent def betree.Internal.flush
       self.left n, node_id_cnt1)))
 
 /- [betree::betree::{betree::betree::Node}#5::apply_messages]:
-   Source: 'src/betree.rs', lines 601:4-606:5 -/
+   Source: 'src/betree.rs', lines 601:4-645:5 -/
 divergent def betree.Node.apply_messages
   (self : betree.Node) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter)
@@ -734,7 +734,7 @@ divergent def betree.Node.apply_messages
 end
 
 /- [betree::betree::{betree::betree::Node}#5::apply]:
-   Source: 'src/betree.rs', lines 589:4-595:5 -/
+   Source: 'src/betree.rs', lines 589:4-598:5 -/
 def betree.Node.apply
   (self : betree.Node) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter) (key : U64) (new_msg : betree.Message)
@@ -749,7 +749,7 @@ def betree.Node.apply
   Result.ok (st1, (self1, node_id_cnt1))
 
 /- [betree::betree::{betree::betree::BeTree}#6::new]:
-   Source: 'src/betree.rs', lines 848:4-848:60 -/
+   Source: 'src/betree.rs', lines 848:4-862:5 -/
 def betree.BeTree.new
   (min_flush_size : U64) (split_size : U64) (st : State) :
   Result (State × betree.BeTree)
@@ -766,7 +766,7 @@ def betree.BeTree.new
     })
 
 /- [betree::betree::{betree::betree::BeTree}#6::apply]:
-   Source: 'src/betree.rs', lines 867:4-867:47 -/
+   Source: 'src/betree.rs', lines 867:4-870:5 -/
 def betree.BeTree.apply
   (self : betree.BeTree) (key : U64) (msg : betree.Message) (st : State) :
   Result (State × betree.BeTree)
@@ -778,7 +778,7 @@ def betree.BeTree.apply
   Result.ok (st1, { self with node_id_cnt := nic, root := n })
 
 /- [betree::betree::{betree::betree::BeTree}#6::insert]:
-   Source: 'src/betree.rs', lines 873:4-873:52 -/
+   Source: 'src/betree.rs', lines 873:4-876:5 -/
 def betree.BeTree.insert
   (self : betree.BeTree) (key : U64) (value : U64) (st : State) :
   Result (State × betree.BeTree)
@@ -786,7 +786,7 @@ def betree.BeTree.insert
   betree.BeTree.apply self key (betree.Message.Insert value) st
 
 /- [betree::betree::{betree::betree::BeTree}#6::delete]:
-   Source: 'src/betree.rs', lines 879:4-879:38 -/
+   Source: 'src/betree.rs', lines 879:4-882:5 -/
 def betree.BeTree.delete
   (self : betree.BeTree) (key : U64) (st : State) :
   Result (State × betree.BeTree)
@@ -794,7 +794,7 @@ def betree.BeTree.delete
   betree.BeTree.apply self key betree.Message.Delete st
 
 /- [betree::betree::{betree::betree::BeTree}#6::upsert]:
-   Source: 'src/betree.rs', lines 885:4-885:59 -/
+   Source: 'src/betree.rs', lines 885:4-888:5 -/
 def betree.BeTree.upsert
   (self : betree.BeTree) (key : U64) (upd : betree.UpsertFunState) (st : State)
   :
@@ -803,7 +803,7 @@ def betree.BeTree.upsert
   betree.BeTree.apply self key (betree.Message.Upsert upd) st
 
 /- [betree::betree::{betree::betree::BeTree}#6::lookup]:
-   Source: 'src/betree.rs', lines 894:4-894:62 -/
+   Source: 'src/betree.rs', lines 894:4-896:5 -/
 def betree.BeTree.lookup
   (self : betree.BeTree) (key : U64) (st : State) :
   Result (State × ((Option U64) × betree.BeTree))
@@ -813,7 +813,7 @@ def betree.BeTree.lookup
   Result.ok (st1, (o, { self with root := n }))
 
 /- [betree::main]:
-   Source: 'src/main.rs', lines 4:0-4:9 -/
+   Source: 'src/main.rs', lines 4:0-4:12 -/
 def main : Result Unit :=
   Result.ok ()
 

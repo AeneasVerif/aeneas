@@ -12,13 +12,13 @@ Include Betree_Types.
 Module Betree_FunsExternal_Template.
 
 (** [betree::betree_utils::load_internal_node]:
-    Source: 'src/betree_utils.rs', lines 98:0-98:63 *)
+    Source: 'src/betree_utils.rs', lines 98:0-112:1 *)
 Axiom betree_utils_load_internal_node
   : u64 -> state -> result (state * (betree_List_t (u64 * betree_Message_t)))
 .
 
 (** [betree::betree_utils::store_internal_node]:
-    Source: 'src/betree_utils.rs', lines 115:0-115:71 *)
+    Source: 'src/betree_utils.rs', lines 115:0-129:1 *)
 Axiom betree_utils_store_internal_node
   :
   u64 -> betree_List_t (u64 * betree_Message_t) -> state -> result (state *
@@ -26,13 +26,13 @@ Axiom betree_utils_store_internal_node
 .
 
 (** [betree::betree_utils::load_leaf_node]:
-    Source: 'src/betree_utils.rs', lines 132:0-132:55 *)
+    Source: 'src/betree_utils.rs', lines 132:0-142:1 *)
 Axiom betree_utils_load_leaf_node
   : u64 -> state -> result (state * (betree_List_t (u64 * u64)))
 .
 
 (** [betree::betree_utils::store_leaf_node]:
-    Source: 'src/betree_utils.rs', lines 145:0-145:63 *)
+    Source: 'src/betree_utils.rs', lines 145:0-155:1 *)
 Axiom betree_utils_store_leaf_node
   : u64 -> betree_List_t (u64 * u64) -> state -> result (state * unit)
 .

@@ -6,13 +6,13 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [polonius_list::List]
-    Source: 'tests/src/polonius_list.rs', lines 6:0-6:16 *)
+    Source: 'tests/src/polonius_list.rs', lines 6:0-9:1 *)
 type list_t (t : Type0) =
 | List_Cons : t -> list_t t -> list_t t
 | List_Nil : list_t t
 
 (** [polonius_list::get_list_at_x]:
-    Source: 'tests/src/polonius_list.rs', lines 16:0-16:76 *)
+    Source: 'tests/src/polonius_list.rs', lines 16:0-30:1 *)
 let rec get_list_at_x
   (ls : list_t u32) (x : u32) :
   result ((list_t u32) & (list_t u32 -> result (list_t u32)))
