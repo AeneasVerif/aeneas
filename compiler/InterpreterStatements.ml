@@ -810,7 +810,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                       (fun (s, _) -> s = method_name)
                       trait_decl.provided_methods
                   in
-                  let method_id = Option.get method_id in
                   let method_def = ctx_lookup_fun_decl ctx method_id in
                   (* For the instantiation we have to do something peculiar
                      because the method was defined for the trait declaration.
@@ -863,17 +862,10 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               in
               (* Lookup the method decl in the required *and* the provided methods *)
               let _, method_id =
-                let provided =
-                  List.filter_map
-                    (fun (id, f) ->
-                      match f with
-                      | None -> None
-                      | Some f -> Some (id, f))
-                    trait_decl.provided_methods
-                in
                 List.find
                   (fun (s, _) -> s = method_name)
-                  (List.append trait_decl.required_methods provided)
+                  (List.append trait_decl.required_methods
+                     trait_decl.provided_methods)
               in
               let method_def = ctx_lookup_fun_decl ctx method_id in
               log#ldebug
