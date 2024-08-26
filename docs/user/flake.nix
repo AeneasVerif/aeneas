@@ -21,6 +21,7 @@
     with inputs.lean.packages.${system}; with nixpkgs;
     let
       doc-src = ./.; # lib.sourceByRegex ../. ["doc.*" "tests(/lean(/beginEndAsMacro.lean)?)?"];
+      leanLib = callPackage ./nix { };
     in {
     packages = rec {
       lean-mdbook = mdbook.overrideAttrs (drv: rec {
@@ -87,36 +88,8 @@
       aeneas-base = 
       let
         manifest = builtins.fromJSON (builtins.readFile ./lake-manifest.json);
-        fetchFromLakeManifest = { name, hash, ... }:
-        let 
-          dep = lib.findFirst (pkg: pkg.name == name) null manifest.packages;
-        in 
-        assert dep != null;
-        assert dep.type == "git"; fetchGit {
-          inherit (dep) url rev;
-          narHash = hash;
-        } // (if dep.inputRev != null then { ref = dep.inputRev; } else {});
-
-        # Inspired from Loogle scaffolding.
-        # addFakeFile can plug into buildLeanPackage’s overrideBuildModAttrs
-        # it takes a lean module name and a filename, and makes that file available
-        # (as an empty file) in the build tree, e.g. for include_str.
-        addFakeFiles = m: self: super:
-          if m ? ${super.name}
-          then let
-            paths = m.${super.name};
-          in {
-            src = pkgs.runCommandCC "${super.name}-patched" {
-              inherit (super) leanPath src relpath;
-            } (''
-              dir=$(dirname $relpath)
-              mkdir -p $out/$dir
-              if [ -d $src ]; then cp -r $src/. $out/$dir/; else cp $src $out/$leanPath; fi
-            '' + pkgs.lib.concatMapStringsSep "\n" (p : ''
-              install -D -m 644 ${pkgs.emptyFile} $out/${p}
-            '') paths);
-          }
-          else {};
+        fetchFromLakeManifest = leanLib.fetchFromLakeManifest manifest;
+        inherit (leanLib) addFakeFiles;
 
         batteries = buildLeanPackage {
           name = "Batteries";
