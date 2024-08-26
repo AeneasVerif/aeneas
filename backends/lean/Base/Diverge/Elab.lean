@@ -1505,7 +1505,7 @@ def Command.elabMutualDef (ds : Array Syntax) : CommandElabM Unit := do
       let modifiers ← elabModifiers d[0]
       if ds.size > 1 && modifiers.isNonrec then
         throwErrorAt d "invalid use of 'nonrec' modifier in 'mutual' block"
-      let mut view ← mkDefView modifiers d[1]
+      let mut view ← mkDefView modifiers d[2] -- MODIFICATION: changed the index to 2
       let fullHeaderRef := mkNullNode #[d[0], view.headerRef]
       if let some snap := snap? then
         view := { view with headerSnap? := some {
@@ -1537,7 +1537,7 @@ def Command.elabMutualDef (ds : Array Syntax) : CommandElabM Unit := do
     runTermElabM fun vars => Term.elabMutualDef vars includedVars views
 
 syntax (name := divergentDef)
-  declModifiers "divergent" "def" declId ppIndent(optDeclSig) declVal : command
+  declModifiers "divergent" Lean.Parser.Command.definition : command
 
 -- Special command so that we don't fall back to the built-in mutual when we produce an error.
 local syntax "_divergent" Parser.Command.mutual : command
@@ -1592,14 +1592,14 @@ namespace Tests
     0 ≤ i → i < ls.length →
     ∃ x, list_nth ls i = .ok x := by
     induction ls
-    . intro i hpos h; simp at h; omega
-    . rename_i hd tl ih
+    · intro i hpos h; simp at h; omega
+    · rename_i hd tl ih
       intro i hpos h
       -- We can directly use `rw [list_nth]`
       rw [list_nth]; simp
       split <;> try simp [*]
-      . tauto
-      . -- We don't have to do this if we use scalar_tac
+      · tauto
+      · -- We don't have to do this if we use scalar_tac
         have hneq : 0 < i := by cases i <;> rename_i a _ <;> simp_all; cases a <;> simp_all
         simp at h
         have ⟨ x, ih ⟩ := ih (i - 1) (by omega) (by omega)
