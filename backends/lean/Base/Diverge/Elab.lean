@@ -1592,14 +1592,14 @@ namespace Tests
     0 ≤ i → i < ls.length →
     ∃ x, list_nth ls i = .ok x := by
     induction ls
-    · intro i hpos h; simp at h; omega
-    · rename_i hd tl ih
+    . intro i hpos h; simp at h; omega
+    . rename_i hd tl ih
       intro i hpos h
       -- We can directly use `rw [list_nth]`
       rw [list_nth]; simp
       split <;> try simp [*]
-      · tauto
-      · -- We don't have to do this if we use scalar_tac
+      . tauto
+      . -- We don't have to do this if we use scalar_tac
         have hneq : 0 < i := by cases i <;> rename_i a _ <;> simp_all; cases a <;> simp_all
         simp at h
         have ⟨ x, ih ⟩ := ih (i - 1) (by omega) (by omega)
