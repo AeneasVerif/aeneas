@@ -508,6 +508,7 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
            ~extract_name:
              (Some (backend_choice "" "core::option::Option::is_none"))
            ~can_fail:false ();
+         mk_fun "core::clone::Clone::clone_from" ();
        ]
       @ List.map
           (fun ty ->

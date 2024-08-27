@@ -24,10 +24,3 @@ axiom core.cell.Cell.get_mut
   core.cell.Cell T → State → Result (State × (T × (T → State → Result
     (State × (core.cell.Cell T)))))
 
-/- [core::clone::Clone::clone_from]:
-   Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
-   Name pattern: core::clone::Clone::clone_from -/
-axiom core.clone.Clone.clone_from
-  {Self : Type} (self_clause : core.clone.Clone Self) :
-  Self → Self → State → Result (State × Self)
-
