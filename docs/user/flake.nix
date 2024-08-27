@@ -2,7 +2,7 @@
 {
   description = "Aeneas documentation";
 
-  inputs.lean.url = "github:leanprover/lean4/v4.10.0";
+  inputs.lean.url = "github:leanprover/lean4/v4.11.0-rc2";
   inputs.flake-utils.follows = "lean/flake-utils";
   inputs.mdBook = {
     url = "github:leanprover/mdBook";
@@ -18,7 +18,7 @@
   };
 
   outputs = inputs@{ self, ... }: inputs.flake-utils.lib.eachDefaultSystem (system:
-    with inputs.lean.packages.${system}; with nixpkgs;
+    with inputs.lean.packages.${system}.deprecated; with nixpkgs;
     let
       doc-src = ./.; # lib.sourceByRegex ../. ["doc.*" "tests(/lean(/beginEndAsMacro.lean)?)?"];
       leanLib = callPackage ./nix { };
@@ -87,7 +87,7 @@
 
       aeneas-base = 
       let
-        manifest = builtins.fromJSON (builtins.readFile ./lake-manifest.json);
+        manifest = builtins.fromJSON (builtins.readFile ../../backends/lean/lake-manifest.json);
         fetchFromLakeManifest = leanLib.fetchFromLakeManifest manifest;
         inherit (leanLib) addFakeFiles;
 
@@ -95,14 +95,14 @@
           name = "Batteries";
           src = fetchFromLakeManifest {
             name = "batteries";
-            hash = "sha256-JbOOKsUiYedNj3oiCNfwgkWyEIXsb1bAUm3uSEWsWPs=";
+            hash = "sha256-EGcjOcTu66rtAICAqgPKaR8kBlImoq4lUZfNZR9dHiY=";
           };
         };
         qq = buildLeanPackage {
           name = "Qq";
           src = fetchFromLakeManifest {
             name = "Qq";
-            hash = "sha256-//sZE32XzebePy81HEwNhIH8YW8iHgk+O8A0y/qNJrg=";
+            hash = "sha256-iFlAiq8Uxq+QD6ql4EMpRQENvIhKdioaleoEiDmMuDQ=";
           };
         };
         aesop = buildLeanPackage {
@@ -110,7 +110,7 @@
           deps = [ batteries ];
           src = fetchFromLakeManifest {
             name = "aesop";
-            hash = "sha256-LzooSD6NaSQyqKkBcxbSbjIZHrnDBx/lp/s4UdWeHpU=";
+            hash = "sha256-97xcl82SU9/EZ8L4vT7g/Ureoi11s3c4ZeFlaCd4Az4=";
           };
         };
         import-graph = buildLeanPackage {
@@ -118,7 +118,7 @@
           deps = [ batteries ];
           src = fetchFromLakeManifest {
             name = "importGraph";
-            hash = "sha256-3bWWnklUHuY/dA1Y3SK78SSDE+J8syEsMPJ67LnRI3M=";
+            hash = "sha256-u8tk5IWU/n47kmNAlxZCmurq7e08oCzANhsk9VJeCCM=";
           };
         };
         proof-widgets = buildLeanPackage {
@@ -126,7 +126,7 @@
           deps = [ batteries ];
           src = fetchFromLakeManifest {
             name = "proofwidgets";
-            hash = "sha256-6PzWhCNxxcuh0vEV0JhV0G30NVkYGEDup1j3KvG2VzA=";
+            hash = "sha256-jPvUi73NylxFiU5V0tjK92M0hJfHWZi5ULZldDwctYY=";
           };
 
           overrideBuildModAttrs = addFakeFiles {
@@ -150,7 +150,7 @@
           name = "Mathlib";
           src = fetchFromLakeManifest {
             name = "mathlib";
-            hash = "sha256-gJYmaNDVus3vgUE3aNQfyMCcQJxw/lq5aYtLjs4OI7I=";
+            hash = "sha256-3FnWd0dUVhNyUPxLNNHA41RWF34fwmXulnRSIEmIQXM=";
           };
         };
       in
