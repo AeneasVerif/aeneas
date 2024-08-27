@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module Issue194RecursiveStructProjector.
 
 (** [issue_194_recursive_struct_projector::AVLNode]
-    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 2:0-2:17 *)
+    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 2:0-6:1 *)
 Inductive AVLNode_t (T : Type) :=
 | mkAVLNode_t :
   T ->
@@ -39,13 +39,13 @@ Definition aVLNode_right {T : Type} (x : AVLNode_t T) :=
 Notation "x2 .(aVLNode_right)" := (aVLNode_right x2) (at level 9).
 
 (** [issue_194_recursive_struct_projector::get_val]:
-    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 10:0-10:33 *)
+    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 10:0-12:1 *)
 Definition get_val (T : Type) (x : AVLNode_t T) : result T :=
   Ok x.(aVLNode_value)
 .
 
 (** [issue_194_recursive_struct_projector::get_left]:
-    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 14:0-14:43 *)
+    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 14:0-16:1 *)
 Definition get_left
   (T : Type) (x : AVLNode_t T) : result (option (AVLNode_t T)) :=
   Ok x.(aVLNode_left)

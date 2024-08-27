@@ -32,7 +32,7 @@ structure DivSpecAttr where
 
 /- The persistent map from expressions to divspec theorems. -/
 initialize divspecAttr : DivSpecAttr ← do
-  let ext ← mkDiscrTreeExtention `divspecMap
+  let ext ← mkDiscrTreeExtension `divspecMap
   let attrImpl : AttributeImpl := {
     name := `divspec
     descr := "Marks theorems to use with the `divergent` encoding"

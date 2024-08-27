@@ -10,24 +10,24 @@ set_option linter.unusedVariables false
 open betree
 
 /- [betree::betree_utils::load_internal_node]:
-   Source: 'src/betree_utils.rs', lines 98:0-98:63 -/
+   Source: 'src/betree_utils.rs', lines 98:0-112:1 -/
 axiom betree_utils.load_internal_node
   : U64 → State → Result (State × (betree.List (U64 × betree.Message)))
 
 /- [betree::betree_utils::store_internal_node]:
-   Source: 'src/betree_utils.rs', lines 115:0-115:71 -/
+   Source: 'src/betree_utils.rs', lines 115:0-129:1 -/
 axiom betree_utils.store_internal_node
   :
   U64 → betree.List (U64 × betree.Message) → State → Result (State ×
     Unit)
 
 /- [betree::betree_utils::load_leaf_node]:
-   Source: 'src/betree_utils.rs', lines 132:0-132:55 -/
+   Source: 'src/betree_utils.rs', lines 132:0-142:1 -/
 axiom betree_utils.load_leaf_node
   : U64 → State → Result (State × (betree.List (U64 × U64)))
 
 /- [betree::betree_utils::store_leaf_node]:
-   Source: 'src/betree_utils.rs', lines 145:0-145:63 -/
+   Source: 'src/betree_utils.rs', lines 145:0-155:1 -/
 axiom betree_utils.store_leaf_node
   : U64 → betree.List (U64 × U64) → State → Result (State × Unit)
 

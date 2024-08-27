@@ -10,26 +10,26 @@ set_option linter.unusedVariables false
 namespace betree
 
 /- [betree::betree::List]
-   Source: 'src/betree.rs', lines 17:0-17:23 -/
+   Source: 'src/betree.rs', lines 17:0-20:1 -/
 inductive betree.List (T : Type) :=
 | Cons : T → betree.List T → betree.List T
 | Nil : betree.List T
 
 /- [betree::betree::UpsertFunState]
-   Source: 'src/betree.rs', lines 63:0-63:23 -/
+   Source: 'src/betree.rs', lines 63:0-66:1 -/
 inductive betree.UpsertFunState :=
 | Add : U64 → betree.UpsertFunState
 | Sub : U64 → betree.UpsertFunState
 
 /- [betree::betree::Message]
-   Source: 'src/betree.rs', lines 69:0-69:23 -/
+   Source: 'src/betree.rs', lines 69:0-117:1 -/
 inductive betree.Message :=
 | Insert : U64 → betree.Message
 | Delete : betree.Message
 | Upsert : betree.UpsertFunState → betree.Message
 
 /- [betree::betree::Leaf]
-   Source: 'src/betree.rs', lines 167:0-167:11 -/
+   Source: 'src/betree.rs', lines 167:0-171:1 -/
 structure betree.Leaf where
   id : U64
   size : U64
@@ -37,12 +37,12 @@ structure betree.Leaf where
 mutual
 
 /- [betree::betree::Internal]
-   Source: 'src/betree.rs', lines 156:0-156:15 -/
+   Source: 'src/betree.rs', lines 156:0-161:1 -/
 inductive betree.Internal :=
 | mk : U64 → U64 → betree.Node → betree.Node → betree.Internal
 
 /- [betree::betree::Node]
-   Source: 'src/betree.rs', lines 179:0-179:9 -/
+   Source: 'src/betree.rs', lines 179:0-184:1 -/
 inductive betree.Node :=
 | Internal : betree.Internal → betree.Node
 | Leaf : betree.Leaf → betree.Node
@@ -86,18 +86,18 @@ theorem betree.Internal.right._simpLemma_ (id : U64) (pivot : U64) (left :
   (betree.Internal.mk id pivot left right).right = right := by rfl
 
 /- [betree::betree::Params]
-   Source: 'src/betree.rs', lines 187:0-187:13 -/
+   Source: 'src/betree.rs', lines 187:0-199:1 -/
 structure betree.Params where
   min_flush_size : U64
   split_size : U64
 
 /- [betree::betree::NodeIdCounter]
-   Source: 'src/betree.rs', lines 201:0-201:20 -/
+   Source: 'src/betree.rs', lines 201:0-203:1 -/
 structure betree.NodeIdCounter where
   next_node_id : U64
 
 /- [betree::betree::BeTree]
-   Source: 'src/betree.rs', lines 218:0-218:17 -/
+   Source: 'src/betree.rs', lines 218:0-225:1 -/
 structure betree.BeTree where
   params : betree.Params
   node_id_cnt : betree.NodeIdCounter

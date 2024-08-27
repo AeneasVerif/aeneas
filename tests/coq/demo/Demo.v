@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module Demo.
 
 (** [demo::choose]:
-    Source: 'tests/src/demo.rs', lines 7:0-7:70 *)
+    Source: 'tests/src/demo.rs', lines 7:0-13:1 *)
 Definition choose
   (T : Type) (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
   if b
@@ -18,30 +18,30 @@ Definition choose
 .
 
 (** [demo::mul2_add1]:
-    Source: 'tests/src/demo.rs', lines 15:0-15:31 *)
+    Source: 'tests/src/demo.rs', lines 15:0-17:1 *)
 Definition mul2_add1 (x : u32) : result u32 :=
   i <- u32_add x x; u32_add i 1%u32
 .
 
 (** [demo::use_mul2_add1]:
-    Source: 'tests/src/demo.rs', lines 19:0-19:43 *)
+    Source: 'tests/src/demo.rs', lines 19:0-21:1 *)
 Definition use_mul2_add1 (x : u32) (y : u32) : result u32 :=
   i <- mul2_add1 x; u32_add i y
 .
 
 (** [demo::incr]:
-    Source: 'tests/src/demo.rs', lines 23:0-23:31 *)
+    Source: 'tests/src/demo.rs', lines 23:0-25:1 *)
 Definition incr (x : u32) : result u32 :=
   u32_add x 1%u32.
 
 (** [demo::use_incr]:
-    Source: 'tests/src/demo.rs', lines 27:0-27:17 *)
+    Source: 'tests/src/demo.rs', lines 27:0-32:1 *)
 Definition use_incr : result unit :=
   x <- incr 0%u32; x1 <- incr x; _ <- incr x1; Ok tt
 .
 
 (** [demo::CList]
-    Source: 'tests/src/demo.rs', lines 36:0-36:17 *)
+    Source: 'tests/src/demo.rs', lines 36:0-39:1 *)
 Inductive CList_t (T : Type) :=
 | CList_CCons : T -> CList_t T -> CList_t T
 | CList_CNil : CList_t T
@@ -51,7 +51,7 @@ Arguments CList_CCons { _ }.
 Arguments CList_CNil { _ }.
 
 (** [demo::list_nth]:
-    Source: 'tests/src/demo.rs', lines 41:0-41:56 *)
+    Source: 'tests/src/demo.rs', lines 41:0-54:1 *)
 Fixpoint list_nth (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
   match n with
   | O => Fail_ OutOfFuel
@@ -64,8 +64,32 @@ Fixpoint list_nth (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
   end
 .
 
+(** [demo::list_nth1]: loop 0:
+    Source: 'tests/src/demo.rs', lines 56:0-65:1 *)
+Fixpoint list_nth1_loop
+  (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    match l with
+    | CList_CCons x tl =>
+      if i s= 0%u32
+      then Ok x
+      else (i1 <- u32_sub i 1%u32; list_nth1_loop T n1 tl i1)
+    | CList_CNil => Fail_ Failure
+    end
+  end
+.
+
+(** [demo::list_nth1]:
+    Source: 'tests/src/demo.rs', lines 56:0-65:1 *)
+Definition list_nth1
+  (T : Type) (n : nat) (l : CList_t T) (i : u32) : result T :=
+  list_nth1_loop T n l i
+.
+
 (** [demo::list_nth_mut]:
-    Source: 'tests/src/demo.rs', lines 56:0-56:68 *)
+    Source: 'tests/src/demo.rs', lines 67:0-80:1 *)
 Fixpoint list_nth_mut
   (T : Type) (n : nat) (l : CList_t T) (i : u32) :
   result (T * (T -> result (CList_t T)))
@@ -90,42 +114,8 @@ Fixpoint list_nth_mut
   end
 .
 
-(** [demo::list_nth_mut1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 71:0-80:1 *)
-Fixpoint list_nth_mut1_loop
-  (T : Type) (n : nat) (l : CList_t T) (i : u32) :
-  result (T * (T -> result (CList_t T)))
-  :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n1 =>
-    match l with
-    | CList_CCons x tl =>
-      if i s= 0%u32
-      then let back := fun (ret : T) => Ok (CList_CCons ret tl) in Ok (x, back)
-      else (
-        i1 <- u32_sub i 1%u32;
-        p <- list_nth_mut1_loop T n1 tl i1;
-        let (t, back) := p in
-        let back1 := fun (ret : T) => tl1 <- back ret; Ok (CList_CCons x tl1)
-          in
-        Ok (t, back1))
-    | CList_CNil => Fail_ Failure
-    end
-  end
-.
-
-(** [demo::list_nth_mut1]:
-    Source: 'tests/src/demo.rs', lines 71:0-71:77 *)
-Definition list_nth_mut1
-  (T : Type) (n : nat) (l : CList_t T) (i : u32) :
-  result (T * (T -> result (CList_t T)))
-  :=
-  list_nth_mut1_loop T n l i
-.
-
 (** [demo::i32_id]:
-    Source: 'tests/src/demo.rs', lines 82:0-82:28 *)
+    Source: 'tests/src/demo.rs', lines 82:0-88:1 *)
 Fixpoint i32_id (n : nat) (i : i32) : result i32 :=
   match n with
   | O => Fail_ OutOfFuel
@@ -137,7 +127,7 @@ Fixpoint i32_id (n : nat) (i : i32) : result i32 :=
 .
 
 (** [demo::list_tail]:
-    Source: 'tests/src/demo.rs', lines 90:0-90:64 *)
+    Source: 'tests/src/demo.rs', lines 90:0-95:1 *)
 Fixpoint list_tail
   (T : Type) (n : nat) (l : CList_t T) :
   result ((CList_t T) * (CList_t T -> result (CList_t T)))
@@ -159,7 +149,7 @@ Fixpoint list_tail
 .
 
 (** Trait declaration: [demo::Counter]
-    Source: 'tests/src/demo.rs', lines 99:0-99:17 *)
+    Source: 'tests/src/demo.rs', lines 99:0-101:1 *)
 Record Counter_t (Self : Type) := mkCounter_t {
   Counter_t_incr : Self -> result (usize * Self);
 }.
@@ -168,19 +158,19 @@ Arguments mkCounter_t { _ }.
 Arguments Counter_t_incr { _ }.
 
 (** [demo::{demo::Counter for usize}::incr]:
-    Source: 'tests/src/demo.rs', lines 104:4-104:31 *)
+    Source: 'tests/src/demo.rs', lines 104:4-108:5 *)
 Definition counterUsize_incr (self : usize) : result (usize * usize) :=
   self1 <- usize_add self 1%usize; Ok (self, self1)
 .
 
 (** Trait implementation: [demo::{demo::Counter for usize}]
-    Source: 'tests/src/demo.rs', lines 103:0-103:22 *)
+    Source: 'tests/src/demo.rs', lines 103:0-109:1 *)
 Definition CounterUsize : Counter_t usize := {|
   Counter_t_incr := counterUsize_incr;
 |}.
 
 (** [demo::use_counter]:
-    Source: 'tests/src/demo.rs', lines 111:0-111:59 *)
+    Source: 'tests/src/demo.rs', lines 111:0-113:1 *)
 Definition use_counter
   (T : Type) (counterInst : Counter_t T) (cnt : T) : result (usize * T) :=
   counterInst.(Counter_t_incr) cnt

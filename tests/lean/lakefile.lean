@@ -10,6 +10,7 @@ package «tests» {}
 
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib Avl
+@[default_target] lean_lib BaseTutorial
 @[default_target] lean_lib Betree
 @[default_target] lean_lib Constants
 @[default_target] lean_lib Demo

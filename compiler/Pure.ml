@@ -550,7 +550,10 @@ and typed_pattern = { value : pattern; ty : ty }
         polymorphic = false;
       }]
 
-type unop = Not | Neg of integer_type | Cast of literal_type * literal_type
+type unop =
+  | Not of integer_type option
+  | Neg of integer_type
+  | Cast of literal_type * literal_type
 [@@deriving show, ord]
 
 (** Identifiers of assumed functions that we use only in the pure translation *)
@@ -1152,7 +1155,7 @@ type trait_decl = {
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
   required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : (trait_item_name * fun_decl_id option) list;
+  provided_methods : (trait_item_name * fun_decl_id) list;
 }
 [@@deriving show]
 

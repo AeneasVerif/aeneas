@@ -21,3 +21,10 @@ val core_cell_Cell_get_mut
   core_cell_Cell_t t -> state -> result (state & (t & (t -> state -> result
     (state & (core_cell_Cell_t t)))))
 
+(** [core::clone::Clone::clone_from]:
+    Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
+    Name pattern: core::clone::Clone::clone_from *)
+val core_clone_Clone_clone_from
+  (#self : Type0) (self_clause : core_clone_Clone self) :
+  self -> self -> state -> result (state & self)
+

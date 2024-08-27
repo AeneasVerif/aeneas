@@ -528,7 +528,7 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
 
 let unop_to_string (unop : unop) : string =
   match unop with
-  | Not -> "¬"
+  | Not _ -> "¬"
   | Neg _ -> "-"
   | Cast (src, tgt) ->
       "cast<" ^ literal_type_to_string src ^ "," ^ literal_type_to_string tgt

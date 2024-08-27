@@ -2,7 +2,6 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.Linarith
-import Base.IList
 import Base.Primitives.Scalar
 import Base.Primitives.ScalarNotations
 import Base.Primitives.ArraySlice
@@ -107,154 +106,192 @@ def FromI128I128.from (x : I128) : I128 := ⟨ x.val, by scalar_tac, by scalar_t
 
 end num -- core.convert.num
 
+@[reducible]
 def FromUsizeU8 : core.convert.From Usize U8 := {
   from_ := fun x => ok (num.FromUsizeU8.from x)
 }
 
+@[reducible]
 def FromUsizeU16 : core.convert.From Usize U16 := {
   from_ := fun x => ok (num.FromUsizeU16.from x)
 }
 
+@[reducible]
 def FromUsizeU32 : core.convert.From Usize U32 := {
   from_ := fun x => ok (num.FromUsizeU32.from x)
 }
 
+@[reducible]
 def FromUsizeUsize : core.convert.From Usize Usize := {
   from_ := fun x => ok (num.FromUsizeUsize.from x)
 }
 
+@[reducible]
 def FromU8U8 : core.convert.From U8 U8 := {
   from_ := fun x => ok (num.FromU8U8.from x)
 }
 
+@[reducible]
 def FromU16U8 : core.convert.From U16 U8 := {
   from_ := fun x => ok (num.FromU16U8.from x)
 }
 
+@[reducible]
 def FromU16U16 : core.convert.From U16 U16 := {
   from_ := fun x => ok (num.FromU16U16.from x)
 }
 
+@[reducible]
 def FromU32U8 : core.convert.From U32 U8 := {
   from_ := fun x => ok (num.FromU32U8.from x)
 }
 
+@[reducible]
 def FromU32U16 : core.convert.From U32 U16 := {
   from_ := fun x => ok (num.FromU32U16.from x)
 }
 
+@[reducible]
 def FromU32U32 : core.convert.From U32 U32 := {
   from_ := fun x => ok (num.FromU32U32.from x)
 }
 
+@[reducible]
 def FromU64U8 : core.convert.From U64 U8 := {
   from_ := fun x => ok (num.FromU64U8.from x)
 }
 
+@[reducible]
 def FromU64U16 : core.convert.From U64 U16 := {
   from_ := fun x => ok (num.FromU64U16.from x)
 }
 
+@[reducible]
 def FromU64U32 : core.convert.From U64 U32 := {
   from_ := fun x => ok (num.FromU64U32.from x)
 }
 
+@[reducible]
 def FromU64U64 : core.convert.From U64 U64 := {
   from_ := fun x => ok (num.FromU64U64.from x)
 }
 
+@[reducible]
 def FromU128U8 : core.convert.From U128 U8 := {
   from_ := fun x => ok (num.FromU128U8.from x)
 }
 
+@[reducible]
 def FromU128U16 : core.convert.From U128 U16 := {
   from_ := fun x => ok (num.FromU128U16.from x)
 }
 
+@[reducible]
 def FromU128U32 : core.convert.From U128 U32 := {
   from_ := fun x => ok (num.FromU128U32.from x)
 }
 
+@[reducible]
 def FromU128U64 : core.convert.From U128 U64 := {
   from_ := fun x => ok (num.FromU128U64.from x)
 }
 
+@[reducible]
 def FromU128U128 : core.convert.From U128 U128 := {
   from_ := fun x => ok (num.FromU128U128.from x)
 }
 
+@[reducible]
 def FromIsizeI8 : core.convert.From Isize I8 := {
   from_ := fun x => ok (num.FromIsizeI8.from x)
 }
 
+@[reducible]
 def FromIsizeI16 : core.convert.From Isize I16 := {
   from_ := fun x => ok (num.FromIsizeI16.from x)
 }
 
+@[reducible]
 def FromIsizeI32 : core.convert.From Isize I32 := {
   from_ := fun x => ok (num.FromIsizeI32.from x)
 }
 
+@[reducible]
 def FromIsizeIsize : core.convert.From Isize Isize := {
   from_ := fun x => ok (num.FromIsizeIsize.from x)
 }
 
+@[reducible]
 def FromI8I8 : core.convert.From I8 I8 := {
   from_ := fun x => ok (num.FromI8I8.from x)
 }
 
+@[reducible]
 def FromI16I8 : core.convert.From I16 I8 := {
   from_ := fun x => ok (num.FromI16I8.from x)
 }
 
+@[reducible]
 def FromI16I16 : core.convert.From I16 I16 := {
   from_ := fun x => ok (num.FromI16I16.from x)
 }
 
+@[reducible]
 def FromI32I8 : core.convert.From I32 I8 := {
   from_ := fun x => ok (num.FromI32I8.from x)
 }
 
+@[reducible]
 def FromI32I16 : core.convert.From I32 I16 := {
   from_ := fun x => ok (num.FromI32I16.from x)
 }
 
+@[reducible]
 def FromI32I32 : core.convert.From I32 I32 := {
   from_ := fun x => ok (num.FromI32I32.from x)
 }
 
+@[reducible]
 def FromI64I8 : core.convert.From I64 I8 := {
   from_ := fun x => ok (num.FromI64I8.from x)
 }
 
+@[reducible]
 def FromI64I16 : core.convert.From I64 I16 := {
   from_ := fun x => ok (num.FromI64I16.from x)
 }
 
+@[reducible]
 def FromI64I32 : core.convert.From I64 I32 := {
   from_ := fun x => ok (num.FromI64I32.from x)
 }
 
+@[reducible]
 def FromI64I64 : core.convert.From I64 I64 := {
   from_ := fun x => ok (num.FromI64I64.from x)
 }
 
+@[reducible]
 def FromI128I8 : core.convert.From I128 I8 := {
   from_ := fun x => ok (num.FromI128I8.from x)
 }
 
+@[reducible]
 def FromI128I16 : core.convert.From I128 I16 := {
   from_ := fun x => ok (num.FromI128I16.from x)
 }
 
+@[reducible]
 def FromI128I32 : core.convert.From I128 I32 := {
   from_ := fun x => ok (num.FromI128I32.from x)
 }
 
+@[reducible]
 def FromI128I64 : core.convert.From I128 I64 := {
   from_ := fun x => ok (num.FromI128I64.from x)
 }
 
+@[reducible]
 def FromI128I128 : core.convert.From I128 I128 := {
   from_ := fun x => ok (num.FromI128I128.from x)
 }

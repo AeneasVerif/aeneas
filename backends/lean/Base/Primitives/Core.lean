@@ -45,8 +45,10 @@ structure clone.Clone (Self : Type) where
   clone : Self → Result Self
 
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
+@[reducible, simp]
 def clone.impls.CloneBool.clone (b : Bool) : Bool := b
 
+@[reducible]
 def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
 }

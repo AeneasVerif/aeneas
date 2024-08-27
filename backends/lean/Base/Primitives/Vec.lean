@@ -2,7 +2,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
-import Base.IList
 import Base.Primitives.Scalar
 import Base.Primitives.ArraySlice
 import Base.Arith
@@ -16,20 +15,26 @@ namespace alloc.vec
 
 def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
+/-- We need this to coerce vectors to lists without marking `Vec` as reducible.
+    Also not that we *do not* want to mark `Vec` as reducible: it triggers issues.
+-/
+instance (α : Type u) : CoeOut (Vec α) (List α) where
+  coe := λ v => v.val
+
 instance [BEq α] : BEq (Vec α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
 
 @[scalar_tac v]
-theorem Vec.len_ineq {α : Type u} (v : Vec α) : 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize := by
-  cases v; simp[Scalar.max, List.len_eq_length, *]
+theorem Vec.len_ineq {α : Type u} (v : Vec α) : 0 ≤ v.val.length ∧ v.val.length ≤ Scalar.max ScalarTy.Usize := by
+  cases v; simp[Scalar.max, *]
 
 -- TODO: move/remove?
 @[scalar_tac v]
 theorem Vec.subtype_property {α : Type u} {p : Vec α → Prop} (v : Subtype p) : p v.val := v.property
 
 @[simp]
-abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.len
+abbrev Vec.length {α : Type u} (v : Vec α) : Nat := v.val.length
 
 @[simp]
 abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
@@ -46,7 +51,7 @@ instance (α : Type u) : Inhabited (Vec α) := by
 -- TODO: very annoying that the α is an explicit parameter
 @[simp]
 abbrev Vec.len (α : Type u) (v : Vec α) : Usize :=
-  Usize.ofIntCore v.val.len (by constructor <;> scalar_tac)
+  Usize.ofIntCore v.val.length (by constructor <;> scalar_tac)
 
 @[simp]
 theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len α v).val = v.length :=
@@ -66,11 +71,11 @@ def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
     fail maximumSizeExceeded
 
 @[pspec]
-theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.len < Usize.max) :
+theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Usize.max) :
   ∃ v1, v.push α x = ok v1 ∧
   v1.val = v.val ++ [x] := by
   rw [push]; simp
-  split <;> simp_all [List.len_eq_length]
+  split <;> simp_all <;>
   scalar_tac
 
 -- This shouldn't be used
@@ -83,18 +88,18 @@ def Vec.insert_fwd (α : Type u) (v: Vec α) (i: Usize) (_: α) : Result Unit :=
 -- This is actually the backward function
 def Vec.insert (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   if i.val < v.length then
-    ok ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
+    ok ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
   else
     fail arrayOutOfBounds
 
 @[pspec]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.insert α i x = ok nv ∧ nv.val = v.val.update i.val x := by
+  ∃ nv, v.insert α i x = ok nv ∧ nv.val = v.val.update i.toNat x := by
   simp [insert, *]
 
 def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
-  match v.val.indexOpt i.val with
+  match v.val.indexOpt i.toNat with
   | none => fail .arrayOutOfBounds
   | some x => ok x
 
@@ -106,28 +111,28 @@ def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
 @[pspec]
 theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_usize i = ok x ∧ x = v.val.index i.val := by
+  ∃ x, v.index_usize i = ok x ∧ x = v.val.index i.toNat := by
   simp only [index_usize]
   -- TODO: dependent rewrite
-  have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
+  have h := List.indexOpt_eq_index v.val i.toNat (by scalar_tac)
   simp [*]
 
 def Vec.update_usize {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
-  match v.val.indexOpt i.val with
+  match v.val.indexOpt i.toNat with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    ok ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
+    ok ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
 
 @[pspec]
 theorem Vec.update_usize_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
   ∃ nv, v.update_usize i x = ok nv ∧
-  nv.val = v.val.update i.val x
+  nv.val = v.val.update i.toNat x
   := by
   simp only [update_usize]
-  have h := List.indexOpt_bounds v.val i.val
+  have h := List.indexOpt_bounds v.val i.toNat
   split
-  . simp_all [length]; cases h <;> scalar_tac
+  . simp_all [length]; scalar_tac
   . simp_all
 
 def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
@@ -141,10 +146,8 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
 @[pspec]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x back, v.index_mut_usize i = ok (x, back) ∧
-  x = v.val.index i.val ∧
-  -- Backward function
-  back = v.update_usize i
+  ∃ x, v.index_mut_usize i = ok (x, v.update_usize i) ∧
+  x = v.val.index i.toNat
   := by
   simp only [index_mut_usize]
   have ⟨ x, h ⟩ := index_usize_spec v i hbound
@@ -162,6 +165,7 @@ def Vec.index_mut (T I : Type) (inst : core.slice.index.SliceIndex I (Slice T))
   sorry -- TODO
 
 /- Trait implementation: [alloc::vec::Vec] -/
+@[reducible]
 def Vec.coreopsindexIndexInst (T I : Type)
   (inst : core.slice.index.SliceIndex I (Slice T)) :
   core.ops.index.Index (alloc.vec.Vec T) I := {
@@ -170,6 +174,7 @@ def Vec.coreopsindexIndexInst (T I : Type)
 }
 
 /- Trait implementation: [alloc::vec::Vec] -/
+@[reducible]
 def Vec.coreopsindexIndexMutInst (T I : Type)
   (inst : core.slice.index.SliceIndex I (Slice T)) :
   core.ops.index.IndexMut (alloc.vec.Vec T) I := {
@@ -209,6 +214,7 @@ def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.
 def alloc.vec.DerefVec.deref (T : Type) (v : Vec T) : Slice T :=
   ⟨ v.val, v.property ⟩
 
+@[reducible]
 def core.ops.deref.DerefVec (T : Type) : core.ops.deref.Deref (alloc.vec.Vec T) := {
   Target := Slice T
   deref := fun v => ok (alloc.vec.DerefVec.deref T v)
@@ -224,10 +230,30 @@ def alloc.vec.DerefMutVec.deref_mut (T : Type) (v :  alloc.vec.Vec T) :
 /- Trait implementation: [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}]
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2630:0-2630:49
    Name pattern: core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>> -/
+@[reducible]
 def core.ops.deref.DerefMutVec (T : Type) :
   core.ops.deref.DerefMut (alloc.vec.Vec T) := {
   derefInst := core.ops.deref.DerefVec T
   deref_mut := alloc.vec.DerefMutVec.deref_mut T
 }
+
+def alloc.vec.Vec.resize (T : Type) (cloneInst : core.clone.Clone T)
+  (v : alloc.vec.Vec T) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
+  if new_len.val < v.length then
+    ok ⟨ v.val.resize new_len.toNat value, by scalar_tac ⟩
+  else
+    let value ← cloneInst.clone value
+    ok ⟨ v.val.resize new_len.toNat value, by scalar_tac ⟩
+
+@[pspec]
+theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
+  (v : alloc.vec.Vec T) (new_len : Usize) (value : T)
+  (hClone : cloneInst.clone value = ok value) :
+  ∃ nv, alloc.vec.Vec.resize T cloneInst v new_len value = ok nv ∧
+    nv.val = v.val.resize new_len.toNat value := by
+  rw [resize]
+  split
+  . simp
+  . simp [*]
 
 end Primitives

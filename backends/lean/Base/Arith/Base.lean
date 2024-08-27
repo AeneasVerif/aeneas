@@ -68,4 +68,43 @@ theorem to_int_sub_to_nat_lt (x y : ℤ) (x' : ℕ)
 -- righ-hand side, meaning the rewriting can be applied to `n` itself.
 theorem ofNat_instOfNatNat_eq (n : Nat) : @OfNat.ofNat Nat n (instOfNatNat n) = n := by rfl
 
+
+/-- Small helper
+
+    We used to use this for the list definitions, as some definitions like `index` used to
+    manipulate integers and not natural numbers.
+
+    We cover a set of cases which might imply inequality, to make sure that using
+    this as the precondition of a `simp` lemma will allow the lemma to get correctly
+    triggered.
+    TODO: there should be something more systematic to do, with discharged procedures
+    or simprocs I guess. -/
+@[simp]
+abbrev Int.not_eq (i j : Int) : Prop :=
+  i ≠ j ∨ j ≠ i ∨ i < j ∨ j < i
+
+theorem Int.not_eq_imp_not_eq {i j} : Int.not_eq i j → i ≠ j := by
+  intro h g
+  simp_all
+
+@[simp]
+abbrev Nat.not_eq (i j : Nat) : Prop :=
+  i ≠ j ∨ j ≠ i ∨ i < j ∨ j < i
+
+theorem Nat.not_eq_imp_not_eq {i j} : Nat.not_eq i j → i ≠ j := by
+  intro h g
+  simp_all
+
+@[simp]
+theorem Nat.le_imp_le_equiv_eq (i j : Nat) (h0 : i ≤ j) : j ≤ i ↔ i = j := by
+  omega
+
+@[simp]
+theorem Int.le_imp_le_equiv_eq (i j : Int) (h0 : i ≤ j) : j ≤ i ↔ i = j := by
+  omega
+
+example (i : Int) (j : Nat) (h : i ≤ j) (h2 : j ≤ i) :
+  i = j := by
+  simp_all
+
 end Arith
