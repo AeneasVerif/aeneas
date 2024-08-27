@@ -800,7 +800,6 @@ theorem Tree.insert_in_opt_node_spec
     split_conjs
     . simp [Node.invAux, Node.balanceFactor]
     . simp [Subtree.inv]
-    . apply Set.ext; simp
   . -- tree = some
     rename Node T => node
     have hNodeInv : Node.inv node := by simp_all
