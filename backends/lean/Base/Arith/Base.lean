@@ -11,9 +11,9 @@ initialize registerTraceClass `Arith
 -- TODO: move?
 theorem ne_zero_is_lt_or_gt {x : Int} (hne : x ≠ 0) : x < 0 ∨ x > 0 := by
   cases h: x <;> simp_all
-  · rename_i n;
+  . rename_i n;
     cases n <;> simp_all
-  · apply Int.negSucc_lt_zero
+  . apply Int.negSucc_lt_zero
 
 -- TODO: move?
 theorem ne_is_lt_or_gt {x y : Int} (hne : x ≠ y) : x < y ∨ x > y := by
@@ -44,9 +44,9 @@ theorem int_pos_ind (p : Int → Prop) :
   have ⟨ n, heq ⟩  : {n:Nat // n = i } := ⟨ Int.toNat i, by cases i <;> simp_all ⟩
   revert i
   induction n
-  · intro i hpos heq
+  . intro i hpos heq
     cases i <;> simp_all
-  · rename_i n hi
+  . rename_i n hi
     intro i hpos heq
     cases i <;> simp_all
     rename_i m
