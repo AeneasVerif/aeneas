@@ -438,6 +438,7 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
   | TBool -> F.pp_print_string fmt (bool_name ())
   | TChar -> F.pp_print_string fmt (char_name ())
   | TInteger int_ty -> F.pp_print_string fmt (int_name int_ty)
+  | TFloat float_ty -> F.pp_print_string fmt (float_name float_ty)
 
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
