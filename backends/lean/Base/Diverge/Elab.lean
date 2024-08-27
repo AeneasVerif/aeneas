@@ -1441,7 +1441,7 @@ where
       withFunLocalDecls headers fun funFVars => do
         for view in views, funFVar in funFVars do
           addLocalVarInfo view.declId funFVar
-          -- Modification 1:
+          -- MODIFICATION 1:
           -- Add fake use site to prevent "unused variable" warning (if the
           -- function is actually not recursive, Lean would print this warning).
           -- Remark: we could detect this case and encode the function without
@@ -1472,7 +1472,7 @@ where
           for preDef in preDefs do
             trace[Elab.definition] "after eraseAuxDiscr, {preDef.declName} : {preDef.type} :=\n{preDef.value}"
           checkForHiddenUnivLevels allUserLevelNames preDefs
-          addPreDefinitions preDefs -- Modification 2: we use our custom function here
+          addPreDefinitions preDefs -- MODIFICATION 2: we use our custom function here
           processDeriving headers
       for view in views, header in headers do
         -- NOTE: this should be the full `ref`, and thus needs to be done after any snapshotting
