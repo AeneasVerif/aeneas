@@ -491,7 +491,6 @@ let fun_suffix (lp_id : LoopId.id option) : string =
 let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   match fid with
   | BoxNew -> "alloc::boxed::Box::new"
-  | BoxFree -> "alloc::alloc::box_free"
   | ArrayIndexShared -> "@ArrayIndexShared"
   | ArrayIndexMut -> "@ArrayIndexMut"
   | ArrayToSliceShared -> "@ArrayToSliceShared"
