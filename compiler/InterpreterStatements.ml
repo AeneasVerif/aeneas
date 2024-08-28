@@ -952,22 +952,18 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                   | Global _ -> craise __FILE__ __LINE__ st.span "Unreachable"
                   | Len _ ->
                       craise __FILE__ __LINE__ st.span "Len is not handled yet"
-                  | ShallowInitBox _ ->
-                      craise __FILE__ __LINE__ st.span "ShallowInitBox"
                   | Use _
                   | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
-                  | NullaryOp _
-                  | UnaryOp _
-                  | BinaryOp _
-                  | Discriminant _
-                  | Aggregate _
-                  | RawPtr _ ->
-                      let p = S.mk_mplace st.span p ctx in
+                  | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ ->
                       let rp = rvalue_get_place rvalue in
                       let rp =
-                        Option.map (fun rp -> S.mk_mplace st.span rp ctx) rp
+                        match rp with
+                        | Some rp -> Some (S.mk_mplace st.span rp ctx)
+                        | None -> None
                       in
-                      S.synthesize_assignment ctx p rv rp
+                      S.synthesize_assignment ctx
+                        (S.mk_mplace st.span p ctx)
+                        rv rp
                 in
                 let ctx, cc =
                   comp cc (assign_to_place config st.span rv p ctx)

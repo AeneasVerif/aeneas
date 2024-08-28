@@ -613,10 +613,6 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     operand_to_string env op
 
-  let rvalue_to_string (ctx : eval_ctx) (rval : rvalue) : string =
-    let env = eval_ctx_to_fmt_env ctx in
-    rvalue_to_string env rval
-
   let call_to_string (ctx : eval_ctx) (call : call) : string =
     let env = eval_ctx_to_fmt_env ctx in
     call_to_string env "" call

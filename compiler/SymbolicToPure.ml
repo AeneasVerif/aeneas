@@ -2325,7 +2325,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Neg int_ty), effect_info, args, dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
-    | S.Unop (E.Cast cast_kind) -> begin
+    | S.Unop (E.Cast cast_kind) -> (
         match cast_kind with
         | CastScalar (src_ty, tgt_ty) ->
             (* Note that cast can fail *)
@@ -2344,12 +2344,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         | CastFnPtr _ ->
             craise __FILE__ __LINE__ ctx.span "TODO: function casts"
         | CastUnsize _ ->
-            craise __FILE__ __LINE__ ctx.span "TODO: unsize coercions"
-        | CastRawPtr _ ->
-            craise __FILE__ __LINE__ ctx.span "Unsupported: raw ptr casts"
-        | CastTransmute _ ->
-            craise __FILE__ __LINE__ ctx.span "Unsupported: transmute"
-      end
+            craise __FILE__ __LINE__ ctx.span "TODO: unsize coercions")
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->

@@ -862,9 +862,6 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
          AST"
   | Global _ -> craise __FILE__ __LINE__ span "Unreachable"
   | Len _ -> craise __FILE__ __LINE__ span "Unhandled Len"
-  | _ ->
-      craise __FILE__ __LINE__ span
-        ("Unsupported operation: " ^ Print.EvalCtx.rvalue_to_string ctx rvalue)
 
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
