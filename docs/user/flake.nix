@@ -2,6 +2,7 @@
 {
   description = "Aeneas documentation";
 
+  # When you update Lean in Aeneas, update this URI as well.
   inputs.lean.url = "github:leanprover/lean4/v4.11.0-rc2";
   inputs.flake-utils.follows = "lean/flake-utils";
   inputs.mdBook = {
@@ -33,6 +34,11 @@
         });
         doCheck = false;
       });
+
+      # This is the final book:
+      # * We copy the classical mdBook contents.
+      # * We interpose the inked Lean files (*.lean.md) in the source tree
+      # Finally, we call mdBook to process this soup into a HTML webroot you can deploy.
       book = stdenv.mkDerivation {
         name = "aeneas-doc";
         src = doc-src;
@@ -91,6 +97,13 @@
         fetchFromLakeManifest = leanLib.fetchFromLakeManifest manifest;
         inherit (leanLib) addFakeFiles;
 
+        # To update the dependencies, just ensure that the `lake-manifest.json`
+        # in `backends/lean` is up to date. Then, replace each `hash = "...";`
+        # by `hash = lib.fakeHash;` Then, perform `nix build .#doc
+        # --keep-going` to get all the new hashes. Copy them back here and
+        # commit this result.
+
+        # Those are specifically the Mathlib4 dependencies.
         batteries = buildLeanPackage {
           name = "Batteries";
           src = fetchFromLakeManifest {
@@ -129,6 +142,12 @@
             hash = "sha256-jPvUi73NylxFiU5V0tjK92M0hJfHWZi5ULZldDwctYY=";
           };
 
+          # ProofWidgets require a special Node.js build pass encoded in its
+          # Lakefile In principle, we could parse the Node.js lockfile, lock it
+          # using Nix, generate these JS files and link them properly in the
+          # build process. But we make no use of ProofWidgets in Aeneas manual,
+          # so we just polyfill all of these files by empty files, satisfying
+          # Lake build process.
           overrideBuildModAttrs = addFakeFiles {
             "ProofWidgets.Compat" = [ ".lake/build/js/compat.js" ];
             "ProofWidgets.Component.Basic" = [ ".lake/build/js/interactiveExpr.js" ];
@@ -145,6 +164,7 @@
               "ProofWidgets.Presentation.Expr" = [ ".lake/build/js/exprPresentation.js" ];
           };
         };
+        # This is Mathlib4, a dependency of Aeneas standard library.
         mathlib = buildLeanPackage {
           deps = [ qq aesop batteries import-graph proof-widgets ];
           name = "Mathlib";
@@ -154,16 +174,22 @@
           };
         };
       in
+      # Aeneas standard library does not require any hashing
+      # as it is present in this local repository.
       buildLeanPackage {
         name = "Base";
         deps = [ mathlib ];
         src = ../../backends/lean;
       };
 
+      # This is a meta Lean package of all Lean files used in the documentation.
       literate = buildLeanPackage {
         name = "literate";
+        # Add here new Lean packages if you need them for the manual
         deps = [ aeneas-base ];
         src = ./.;
+        # To add a new directory containing Lean files to be processed
+        # by Alectryon, add a new attribute set `{ mod = "path to the lean files"; glob = "submodules"; }`
         roots = [
           {
             mod = "src/lean/basics";
@@ -171,12 +197,19 @@
           }
         ];
       };
+
+      # This is the tree of all inked Lean files, i.e. the *.lean.md files
+      # expected by mdBook.
       inked = renderPackage literate;
+
+      # This is the final book.
       doc = book;
     };
     defaultPackage = self.packages.${system}.doc;
     devShells.default = mkShell {
       packages = [
+        # If you need to run Alectryon or LeanInk manually for tests
+        # This is available in the default development shell.
         self.packages.${system}.alectryon
         self.packages.${system}.leanInk
       ];
