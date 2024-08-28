@@ -10,9 +10,6 @@ namespace Diverge
 /- Automating the generation of the encoding and the proofs so as to use nice
    syntactic sugar. -/
 
-syntax (name := divergentDef)
-  declModifiers "divergent" "def" declId ppIndent(optDeclSig) declVal : command
-
 open Lean Elab Term Meta Primitives Lean.Meta
 open Utils
 
@@ -1389,17 +1386,43 @@ def addPreDefinitions (preDefs : Array PreDefinition) : TermElabM Unit := withLC
         else return ()
       catch _ => s.restore
 
--- The following two functions are copy-pasted from Lean.Elab.MutualDef
-
+-- The following three functions are copy-pasted from Lean.Elab.MutualDef.lean
 open private elabHeaders levelMVarToParamHeaders getAllUserLevelNames withFunLocalDecls elabFunValues
   instantiateMVarsAtHeader instantiateMVarsAtLetRecToLift checkLetRecsToLiftTypes withUsed from Lean.Elab.MutualDef
+
+-- Copy/pasted from Lean.Elab.Term.withHeaderSecVars (because the definition is private)
+private def Term.withHeaderSecVars {α} (vars : Array Expr) (includedVars : List Name) (headers : Array DefViewElabHeader)
+    (k : Array Expr → TermElabM α) : TermElabM α := do
+  let (_, used) ← collectUsed.run {}
+  let (lctx, localInsts, vars) ← removeUnused vars used
+  withLCtx lctx localInsts <| k vars
+where
+  collectUsed : StateRefT CollectFVars.State MetaM Unit := do
+    -- directly referenced in headers
+    headers.forM (·.type.collectFVars)
+    -- included by `include`
+    vars.forM fun var => do
+      let ldecl ← getFVarLocalDecl var
+      if includedVars.contains ldecl.userName then
+        modify (·.add ldecl.fvarId)
+    -- transitively referenced
+    get >>= (·.addDependencies) >>= set
+    -- instances (`addDependencies` unnecessary as by definition they may only reference variables
+    -- already included)
+    vars.forM fun var => do
+      let ldecl ← getFVarLocalDecl var
+      let st ← get
+      if ldecl.binderInfo.isInstImplicit && (← getFVars ldecl.type).all st.fvarSet.contains then
+        modify (·.add ldecl.fvarId)
+  getFVars (e : Expr) : MetaM (Array FVarId) :=
+    (·.2.fvarIds) <$> e.collectFVars.run {}
 
 -- Comes from Term.isExample
 def isExample (views : Array DefView) : Bool :=
   views.any (·.kind.isExample)
 
 open Language in
-def Term.elabMutualDef (vars : Array Expr) (views : Array DefView) : TermElabM Unit :=
+def Term.elabMutualDef (vars : Array Expr) (includedVars : List Name) (views : Array DefView) : TermElabM Unit :=
   if isExample views then
     withoutModifyingEnv do
       -- save correct environment in info tree
@@ -1418,7 +1441,7 @@ where
       withFunLocalDecls headers fun funFVars => do
         for view in views, funFVar in funFVars do
           addLocalVarInfo view.declId funFVar
-          -- Modification 1:
+          -- MODIFICATION 1:
           -- Add fake use site to prevent "unused variable" warning (if the
           -- function is actually not recursive, Lean would print this warning).
           -- Remark: we could detect this case and encode the function without
@@ -1428,7 +1451,7 @@ where
           addTermInfo' view.declId funFVar
         let values ←
           try
-            let values ← elabFunValues headers
+            let values ← elabFunValues headers vars includedVars
             Term.synthesizeSyntheticMVarsNoPostponing
             values.mapM (instantiateMVars ·)
           catch ex =>
@@ -1438,18 +1461,23 @@ where
         let letRecsToLift ← getLetRecsToLift
         let letRecsToLift ← letRecsToLift.mapM instantiateMVarsAtLetRecToLift
         checkLetRecsToLiftTypes funFVars letRecsToLift
-        withUsed vars headers values letRecsToLift fun vars => do
+        (if headers.all (·.kind.isTheorem) && !deprecated.oldSectionVars.get (← getOptions) then withHeaderSecVars vars includedVars headers else withUsed vars headers values letRecsToLift) fun vars => do
           let preDefs ← MutualClosure.main vars headers funFVars values letRecsToLift
           for preDef in preDefs do
             trace[Elab.definition] "{preDef.declName} : {preDef.type} :=\n{preDef.value}"
           let preDefs ← withLevelNames allUserLevelNames <| levelMVarToParamPreDecls preDefs
           let preDefs ← instantiateMVarsAtPreDecls preDefs
+          let preDefs ← shareCommonPreDefs preDefs
           let preDefs ← fixLevelParams preDefs scopeLevelNames allUserLevelNames
           for preDef in preDefs do
             trace[Elab.definition] "after eraseAuxDiscr, {preDef.declName} : {preDef.type} :=\n{preDef.value}"
           checkForHiddenUnivLevels allUserLevelNames preDefs
-          addPreDefinitions preDefs -- Modification 2: we use our custom function here
+          addPreDefinitions preDefs -- MODIFICATION 2: we use our custom function here
           processDeriving headers
+      for view in views, header in headers do
+        -- NOTE: this should be the full `ref`, and thus needs to be done after any snapshotting
+        -- that depends only on a part of the ref
+        addDeclarationRanges header.declName view.ref
 
   processDeriving (headers : Array DefViewElabHeader) := do
     for header in headers, view in views do
@@ -1460,22 +1488,61 @@ where
             unless (← processDefDeriving className header.declName) do
               throwError "failed to synthesize instance '{className}' for '{header.declName}'"
 
+#check Command.elabMutualDef
+
+-- Copy/pasted from Lean.Elab.MutualDef
 open Command in
+open Language in
 def Command.elabMutualDef (ds : Array Syntax) : CommandElabM Unit := do
-  let views ← ds.mapM fun d => do
-    let `($mods:declModifiers divergent def $id:declId $sig:optDeclSig $val:declVal) := d
-      | throwUnsupportedSyntax
-    let modifiers ← elabModifiers mods
-    let (binders, type) := expandOptDeclSig sig
-    let deriving? := none
-    let headerRef := Syntax.missing -- Not sure what to put here
-    pure { ref := d, kind := DefKind.def, headerRef, modifiers,
-           declId := id, binders, type? := type, value := val, deriving? }
-  runTermElabM fun vars => Term.elabMutualDef vars views
+  let opts ← getOptions
+  withAlwaysResolvedPromises ds.size fun headerPromises => do
+    let snap? := (← read).snap?
+    let mut views := #[]
+    let mut defs := #[]
+    let mut reusedAllHeaders := true
+    for h : i in [0:ds.size], headerPromise in headerPromises do
+      let d := ds[i]
+      let modifiers ← elabModifiers d[0]
+      if ds.size > 1 && modifiers.isNonrec then
+        throwErrorAt d "invalid use of 'nonrec' modifier in 'mutual' block"
+      let mut view ← mkDefView modifiers d[2] -- MODIFICATION: changed the index to 2
+      let fullHeaderRef := mkNullNode #[d[0], view.headerRef]
+      if let some snap := snap? then
+        view := { view with headerSnap? := some {
+          old? := do
+            -- transitioning from `Context.snap?` to `DefView.headerSnap?` invariant: if the
+            -- elaboration context and state are unchanged, and the syntax of this as well as all
+            -- previous headers is unchanged, then the elaboration result for this header (which
+            -- includes state from elaboration of previous headers!) should be unchanged.
+            guard reusedAllHeaders
+            let old ← snap.old?
+            -- blocking wait, `HeadersParsedSnapshot` (and hopefully others) should be quick
+            let old ← old.val.get.toTyped? DefsParsedSnapshot
+            let oldParsed ← old.defs[i]?
+            guard <| fullHeaderRef.eqWithInfoAndTraceReuse opts oldParsed.fullHeaderRef
+            -- no syntax guard to store, we already did the necessary checks
+            return ⟨.missing, oldParsed.headerProcessedSnap⟩
+          new := headerPromise
+        } }
+        defs := defs.push {
+          fullHeaderRef
+          headerProcessedSnap := { range? := d.getRange?, task := headerPromise.result }
+        }
+        reusedAllHeaders := reusedAllHeaders && view.headerSnap?.any (·.old?.isSome)
+      views := views.push view
+    if let some snap := snap? then
+      -- no non-fatal diagnostics at this point
+      snap.new.resolve <| .ofTyped { defs, diagnostics := .empty : DefsParsedSnapshot }
+    let includedVars := (← getScope).includedVars
+    runTermElabM fun vars => Term.elabMutualDef vars includedVars views
+
+syntax (name := divergentDef)
+  declModifiers "divergent" Lean.Parser.Command.definition : command
 
 -- Special command so that we don't fall back to the built-in mutual when we produce an error.
 local syntax "_divergent" Parser.Command.mutual : command
-elab_rules : command | `(_divergent mutual $decls* end) => Command.elabMutualDef decls
+elab_rules : command
+  | `(_divergent mutual $decls* end) => Command.elabMutualDef decls
 
 macro_rules
   | `(mutual $decls* end) => do
@@ -1501,6 +1568,8 @@ namespace Tests
 
   /- Some examples of partial functions -/
 
+  -- set_option trace.Diverge true
+  -- set_option pp.rawOnError true
   --set_option trace.Diverge.def true
   --set_option trace.Diverge.def.genBody true
   --set_option trace.Diverge.def.valid true

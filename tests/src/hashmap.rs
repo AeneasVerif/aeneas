@@ -1,4 +1,4 @@
-//@ charon-args=--opaque=utils
+//@ charon-args=--opaque=crate::utils
 //@ [!borrow-check] aeneas-args=-state -split-files
 //@ [coq] aeneas-args=-use-fuel
 //@ [fstar] aeneas-args=-decreases-clauses

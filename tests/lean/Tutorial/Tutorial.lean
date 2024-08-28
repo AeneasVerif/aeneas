@@ -9,7 +9,7 @@ set_option linter.unusedVariables false
 namespace tutorial
 
 /- [tutorial::choose]:
-   Source: 'src/lib.rs', lines 1:0-1:70 -/
+   Source: 'src/lib.rs', lines 1:0-7:1 -/
 def choose
   (T : Type) (b : Bool) (x : T) (y : T) :
   Result (T × (T → Result (T × T)))
@@ -21,26 +21,26 @@ def choose
        Result.ok (y, back)
 
 /- [tutorial::mul2_add1]:
-   Source: 'src/lib.rs', lines 9:0-9:31 -/
+   Source: 'src/lib.rs', lines 9:0-11:1 -/
 def mul2_add1 (x : U32) : Result U32 :=
   do
   let i ← x + x
   i + 1#u32
 
 /- [tutorial::mul2_add1_add]:
-   Source: 'src/lib.rs', lines 13:0-13:43 -/
+   Source: 'src/lib.rs', lines 13:0-15:1 -/
 def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
   do
   let i ← mul2_add1 x
   i + y
 
 /- [tutorial::incr]:
-   Source: 'src/lib.rs', lines 17:0-17:31 -/
+   Source: 'src/lib.rs', lines 17:0-19:1 -/
 def incr (x : U32) : Result U32 :=
   x + 1#u32
 
 /- [tutorial::use_incr]:
-   Source: 'src/lib.rs', lines 21:0-21:17 -/
+   Source: 'src/lib.rs', lines 21:0-26:1 -/
 def use_incr : Result Unit :=
   do
   let x ← incr 0#u32
@@ -49,13 +49,13 @@ def use_incr : Result Unit :=
   Result.ok ()
 
 /- [tutorial::CList]
-   Source: 'src/lib.rs', lines 30:0-30:17 -/
+   Source: 'src/lib.rs', lines 30:0-33:1 -/
 inductive CList (T : Type) :=
 | CCons : T → CList T → CList T
 | CNil : CList T
 
 /- [tutorial::list_nth]:
-   Source: 'src/lib.rs', lines 35:0-35:56 -/
+   Source: 'src/lib.rs', lines 35:0-48:1 -/
 divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
@@ -67,7 +67,7 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
   | CList.CNil => Result.fail .panic
 
 /- [tutorial::list_nth_mut]:
-   Source: 'src/lib.rs', lines 50:0-50:68 -/
+   Source: 'src/lib.rs', lines 50:0-63:1 -/
 divergent def list_nth_mut
   (T : Type) (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))
@@ -103,13 +103,13 @@ divergent def list_nth1_loop (T : Type) (l : CList T) (i : U32) : Result T :=
   | CList.CNil => Result.fail .panic
 
 /- [tutorial::list_nth1]:
-   Source: 'src/lib.rs', lines 65:0-65:65 -/
+   Source: 'src/lib.rs', lines 65:0-74:1 -/
 @[reducible]
 def list_nth1 (T : Type) (l : CList T) (i : U32) : Result T :=
   list_nth1_loop T l i
 
 /- [tutorial::i32_id]:
-   Source: 'src/lib.rs', lines 76:0-76:29 -/
+   Source: 'src/lib.rs', lines 76:0-83:1 -/
 divergent def i32_id (i : I32) : Result I32 :=
   if i = 0#i32
   then Result.ok 0#i32
@@ -119,7 +119,7 @@ divergent def i32_id (i : I32) : Result I32 :=
        i2 + 1#i32
 
 /- [tutorial::even]:
-   Source: 'src/lib.rs', lines 85:0-85:28 -/
+   Source: 'src/lib.rs', lines 85:0-92:1 -/
 mutual divergent def even (i : U32) : Result Bool :=
   if i = 0#u32
   then Result.ok true
@@ -128,7 +128,7 @@ mutual divergent def even (i : U32) : Result Bool :=
        odd i1
 
 /- [tutorial::odd]:
-   Source: 'src/lib.rs', lines 94:0-94:27 -/
+   Source: 'src/lib.rs', lines 94:0-101:1 -/
 divergent def odd (i : U32) : Result Bool :=
   if i = 0#u32
   then Result.ok false
@@ -139,26 +139,26 @@ divergent def odd (i : U32) : Result Bool :=
 end
 
 /- Trait declaration: [tutorial::Counter]
-   Source: 'src/lib.rs', lines 105:0-105:17 -/
+   Source: 'src/lib.rs', lines 105:0-107:1 -/
 structure Counter (Self : Type) where
   incr : Self → Result (Usize × Self)
 
 /- [tutorial::{tutorial::Counter for usize}::incr]:
-   Source: 'src/lib.rs', lines 110:4-110:31 -/
+   Source: 'src/lib.rs', lines 110:4-114:5 -/
 def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
   do
   let self1 ← self + 1#usize
   Result.ok (self, self1)
 
 /- Trait implementation: [tutorial::{tutorial::Counter for usize}]
-   Source: 'src/lib.rs', lines 109:0-109:22 -/
+   Source: 'src/lib.rs', lines 109:0-115:1 -/
 @[reducible]
 def CounterUsize : Counter Usize := {
   incr := CounterUsize.incr
 }
 
 /- [tutorial::use_counter]:
-   Source: 'src/lib.rs', lines 117:0-117:59 -/
+   Source: 'src/lib.rs', lines 117:0-119:1 -/
 def use_counter
   (T : Type) (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
   CounterInst.incr cnt
@@ -187,7 +187,7 @@ divergent def list_nth_mut1_loop
   | CList.CNil => Result.fail .panic
 
 /- [tutorial::list_nth_mut1]:
-   Source: 'src/lib.rs', lines 123:0-123:77 -/
+   Source: 'src/lib.rs', lines 123:0-132:1 -/
 @[reducible]
 def list_nth_mut1
   (T : Type) (l : CList T) (i : U32) :
@@ -213,7 +213,7 @@ divergent def list_tail_loop
   | CList.CNil => Result.ok (CList.CNil, Result.ok)
 
 /- [tutorial::list_tail]:
-   Source: 'src/lib.rs', lines 134:0-134:68 -/
+   Source: 'src/lib.rs', lines 134:0-139:1 -/
 @[reducible]
 def list_tail
   (T : Type) (l : CList T) :
@@ -222,7 +222,7 @@ def list_tail
   list_tail_loop T l
 
 /- [tutorial::append_in_place]:
-   Source: 'src/lib.rs', lines 141:0-141:67 -/
+   Source: 'src/lib.rs', lines 141:0-144:1 -/
 def append_in_place
   (T : Type) (l0 : CList T) (l1 : CList T) : Result (CList T) :=
   do
@@ -246,7 +246,7 @@ divergent def zero_loop
   else Result.ok x
 
 /- [tutorial::zero]:
-   Source: 'src/lib.rs', lines 151:0-151:28 -/
+   Source: 'src/lib.rs', lines 151:0-157:1 -/
 def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
   zero_loop x 0#usize
 
@@ -273,7 +273,7 @@ divergent def add_no_overflow_loop
   else Result.ok x
 
 /- [tutorial::add_no_overflow]:
-   Source: 'src/lib.rs', lines 164:0-164:50 -/
+   Source: 'src/lib.rs', lines 164:0-170:1 -/
 def add_no_overflow
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (alloc.vec.Vec U32)
@@ -313,7 +313,7 @@ divergent def add_with_carry_loop
   else Result.ok (c0, x)
 
 /- [tutorial::add_with_carry]:
-   Source: 'src/lib.rs', lines 175:0-175:55 -/
+   Source: 'src/lib.rs', lines 175:0-188:1 -/
 def add_with_carry
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (U8 × (alloc.vec.Vec U32))
@@ -321,14 +321,14 @@ def add_with_carry
   add_with_carry_loop x y 0#u8 0#usize
 
 /- [tutorial::max]:
-   Source: 'src/lib.rs', lines 190:0-190:37 -/
+   Source: 'src/lib.rs', lines 190:0-192:1 -/
 def max (x : Usize) (y : Usize) : Result Usize :=
   if x > y
   then Result.ok x
   else Result.ok y
 
 /- [tutorial::get_or_zero]:
-   Source: 'src/lib.rs', lines 194:0-194:45 -/
+   Source: 'src/lib.rs', lines 194:0-196:1 -/
 def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
   let i1 := alloc.vec.Vec.len U32 y
   if i < i1
@@ -373,7 +373,7 @@ divergent def add_loop
     else Result.ok x
 
 /- [tutorial::add]:
-   Source: 'src/lib.rs', lines 203:0-203:38 -/
+   Source: 'src/lib.rs', lines 203:0-224:1 -/
 def add
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (alloc.vec.Vec U32)

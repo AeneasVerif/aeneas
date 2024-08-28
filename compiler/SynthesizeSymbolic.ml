@@ -60,6 +60,8 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         sanity_check __FILE__ __LINE__ (otherwise_see = None) span;
         (* Return *)
         ExpandInt (int_ty, branches, otherwise)
+    | TLiteral (TFloat _) ->
+        craise __FILE__ __LINE__ span "Float are not supported in Aeneas yet"
     | TAdt (_, _) ->
         (* Branching: it is necessarily an enumeration expansion *)
         let get_variant (see : symbolic_expansion option) :

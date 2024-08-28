@@ -90,7 +90,7 @@
         betree-llbc = charon.extractCrateWithCharon.${system} {
           name = "betree";
           src = ./tests/src/betree;
-          charonFlags = "--polonius --opaque=betree_utils";
+          charonFlags = "--polonius --opaque=crate::betree_utils";
           craneExtraArgs.checkPhaseCargoCommand = ''
             cargo rustc -- --test -Zpolonius
             ./target/debug/betree

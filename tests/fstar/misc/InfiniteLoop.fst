@@ -6,7 +6,7 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [infinite_loop::bar]:
-    Source: 'tests/src/infinite-loop.rs', lines 4:0-4:8 *)
+    Source: 'tests/src/infinite-loop.rs', lines 4:0-4:11 *)
 let bar : result unit =
   Ok ()
 
@@ -18,7 +18,7 @@ let rec foo_loop (n : nat) : result unit =
   else let n1 = decrease n in let* _ = bar in foo_loop n1
 
 (** [infinite_loop::foo]:
-    Source: 'tests/src/infinite-loop.rs', lines 6:0-6:8 *)
+    Source: 'tests/src/infinite-loop.rs', lines 6:0-10:1 *)
 let foo (n : nat) : result unit =
   foo_loop n
 

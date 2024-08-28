@@ -7,7 +7,7 @@ open RenameAttribute.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [rename_attribute::factorial]: decreases clause
-    Source: 'tests/src/rename_attribute.rs', lines 56:0-56:27 *)
+    Source: 'tests/src/rename_attribute.rs', lines 56:0-62:1 *)
 unfold let factfn_decreases (n : u64) : nat = admit ()
 
 (** [rename_attribute::sum]: decreases clause

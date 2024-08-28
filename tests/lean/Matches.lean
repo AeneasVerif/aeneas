@@ -9,7 +9,7 @@ set_option linter.unusedVariables false
 namespace matches
 
 /- [matches::match_u32]:
-   Source: 'tests/src/matches.rs', lines 4:0-4:27 -/
+   Source: 'tests/src/matches.rs', lines 4:0-10:1 -/
 def match_u32 (x : U32) : Result U32 :=
   match x with
   | 0#scalar => Result.ok 0#u32

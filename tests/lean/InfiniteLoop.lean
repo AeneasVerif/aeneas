@@ -9,7 +9,7 @@ set_option linter.unusedVariables false
 namespace infinite_loop
 
 /- [infinite_loop::bar]:
-   Source: 'tests/src/infinite-loop.rs', lines 4:0-4:8 -/
+   Source: 'tests/src/infinite-loop.rs', lines 4:0-4:11 -/
 def bar : Result Unit :=
   Result.ok ()
 
@@ -21,7 +21,7 @@ divergent def foo_loop : Result Unit :=
   foo_loop
 
 /- [infinite_loop::foo]:
-   Source: 'tests/src/infinite-loop.rs', lines 6:0-6:8 -/
+   Source: 'tests/src/infinite-loop.rs', lines 6:0-10:1 -/
 @[reducible] def foo : Result Unit :=
                foo_loop
 

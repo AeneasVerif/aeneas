@@ -11,7 +11,7 @@ Include Betree_TypesExternal.
 Module Betree_Types.
 
 (** [betree::betree::List]
-    Source: 'src/betree.rs', lines 17:0-17:23 *)
+    Source: 'src/betree.rs', lines 17:0-20:1 *)
 Inductive betree_List_t (T : Type) :=
 | Betree_List_Cons : T -> betree_List_t T -> betree_List_t T
 | Betree_List_Nil : betree_List_t T
@@ -21,14 +21,14 @@ Arguments Betree_List_Cons { _ }.
 Arguments Betree_List_Nil { _ }.
 
 (** [betree::betree::UpsertFunState]
-    Source: 'src/betree.rs', lines 63:0-63:23 *)
+    Source: 'src/betree.rs', lines 63:0-66:1 *)
 Inductive betree_UpsertFunState_t :=
 | Betree_UpsertFunState_Add : u64 -> betree_UpsertFunState_t
 | Betree_UpsertFunState_Sub : u64 -> betree_UpsertFunState_t
 .
 
 (** [betree::betree::Message]
-    Source: 'src/betree.rs', lines 69:0-69:23 *)
+    Source: 'src/betree.rs', lines 69:0-117:1 *)
 Inductive betree_Message_t :=
 | Betree_Message_Insert : u64 -> betree_Message_t
 | Betree_Message_Delete : betree_Message_t
@@ -36,7 +36,7 @@ Inductive betree_Message_t :=
 .
 
 (** [betree::betree::Leaf]
-    Source: 'src/betree.rs', lines 167:0-167:11 *)
+    Source: 'src/betree.rs', lines 167:0-171:1 *)
 Record betree_Leaf_t :=
 mkbetree_Leaf_t {
   betree_Leaf_id : u64; betree_Leaf_size : u64;
@@ -44,7 +44,7 @@ mkbetree_Leaf_t {
 .
 
 (** [betree::betree::Internal]
-    Source: 'src/betree.rs', lines 156:0-156:15 *)
+    Source: 'src/betree.rs', lines 156:0-161:1 *)
 Inductive betree_Internal_t :=
 | mkbetree_Internal_t :
   u64 ->
@@ -54,7 +54,7 @@ Inductive betree_Internal_t :=
   betree_Internal_t
 
 (** [betree::betree::Node]
-    Source: 'src/betree.rs', lines 179:0-179:9 *)
+    Source: 'src/betree.rs', lines 179:0-184:1 *)
 with betree_Node_t :=
 | Betree_Node_Internal : betree_Internal_t -> betree_Node_t
 | Betree_Node_Leaf : betree_Leaf_t -> betree_Node_t
@@ -90,7 +90,7 @@ Notation "x2 .(betree_Internal_right)" := (betree_Internal_right x2)
 .
 
 (** [betree::betree::Params]
-    Source: 'src/betree.rs', lines 187:0-187:13 *)
+    Source: 'src/betree.rs', lines 187:0-199:1 *)
 Record betree_Params_t :=
 mkbetree_Params_t {
   betree_Params_min_flush_size : u64; betree_Params_split_size : u64;
@@ -98,7 +98,7 @@ mkbetree_Params_t {
 .
 
 (** [betree::betree::NodeIdCounter]
-    Source: 'src/betree.rs', lines 201:0-201:20 *)
+    Source: 'src/betree.rs', lines 201:0-203:1 *)
 Record betree_NodeIdCounter_t :=
 mkbetree_NodeIdCounter_t {
   betree_NodeIdCounter_next_node_id : u64;
@@ -106,7 +106,7 @@ mkbetree_NodeIdCounter_t {
 .
 
 (** [betree::betree::BeTree]
-    Source: 'src/betree.rs', lines 218:0-218:17 *)
+    Source: 'src/betree.rs', lines 218:0-225:1 *)
 Record betree_BeTree_t :=
 mkbetree_BeTree_t {
   betree_BeTree_params : betree_Params_t;
