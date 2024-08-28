@@ -1587,10 +1587,6 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 | BoxNew ->
                     let arg, args = Collections.List.pop args in
                     mk_apps def.item_meta.span arg args
-                | BoxFree ->
-                    sanity_check __FILE__ __LINE__ (args = [])
-                      def.item_meta.span;
-                    mk_unit_rvalue
                 | SliceIndexShared
                 | SliceIndexMut
                 | ArrayIndexShared

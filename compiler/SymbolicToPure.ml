@@ -2195,7 +2195,6 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
               | FunId (FAssumed fid) -> (
                   match fid with
                   | BoxNew -> "box_new"
-                  | BoxFree -> "box_free"
                   | ArrayRepeat -> "array_repeat"
                   | ArrayIndexShared -> "index_shared"
                   | ArrayIndexMut -> "index_mut"

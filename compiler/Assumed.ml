@@ -240,12 +240,6 @@ let raw_assumed_fun_infos : raw_assumed_fun_info list =
       false,
       "alloc::boxed::Box::new",
       Some [ true; false ] );
-    (* BoxFree shouldn't be used *)
-    ( BoxFree,
-      Sig.box_free_sig,
-      false,
-      "alloc::boxed::Box::free",
-      Some [ true; false ] );
     (* Array Index *)
     ( ArrayIndexShared,
       Sig.array_index_sig false,
