@@ -688,6 +688,9 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   match bkind with
+  | BUniqueImmutable ->
+      craise __FILE__ __LINE__ span
+        "Unique immutable closure captures are not supported"
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we

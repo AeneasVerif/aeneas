@@ -578,7 +578,7 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
   | Alias _ ->
       craise __FILE__ __LINE__ span
         "type aliases should have been removed earlier"
-  | T.Opaque | T.Error _ -> Opaque
+  | T.Union _ | T.Opaque | T.Error _ -> Opaque
 
 (** Translate a type definition from LLBC
 
@@ -2192,16 +2192,23 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           let back_fun_name =
             let name =
               match fid with
-              | FunId (FAssumed fid) -> (
+              | FunId (FAssumed fid) -> begin
                   match fid with
                   | BoxNew -> "box_new"
                   | ArrayRepeat -> "array_repeat"
-                  | ArrayIndexShared -> "index_shared"
-                  | ArrayIndexMut -> "index_mut"
                   | ArrayToSliceShared -> "to_slice_shared"
                   | ArrayToSliceMut -> "to_slice_mut"
-                  | SliceIndexShared -> "index_shared"
-                  | SliceIndexMut -> "index_mut")
+                  | Index { is_array = _; mutability = RMut; is_range = false }
+                    -> "index_mut"
+                  | Index
+                      { is_array = _; mutability = RShared; is_range = false }
+                    -> "index_shared"
+                  | Index { is_array = _; mutability = RMut; is_range = true }
+                    -> "subslice_mut"
+                  | Index
+                      { is_array = _; mutability = RShared; is_range = true } ->
+                      "subslice_shared"
+                end
               | FunId (FRegular fid) | TraitMethod (_, _, fid) -> (
                   let decl =
                     FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls

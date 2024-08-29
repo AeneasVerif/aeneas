@@ -477,13 +477,8 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
       let ctx, cf_eval_body =
         match fid with
         | BoxNew -> eval_box_new_concrete config span generics ctx
-        | ArrayIndexShared
-        | ArrayIndexMut
-        | ArrayToSliceShared
-        | ArrayToSliceMut
-        | ArrayRepeat
-        | SliceIndexShared
-        | SliceIndexMut -> craise __FILE__ __LINE__ span "Unimplemented"
+        | Index _ | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat ->
+            craise __FILE__ __LINE__ span "Unimplemented"
       in
       let cc = cc_comp cc cf_eval_body in
 
@@ -892,10 +887,14 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                   | Global _ -> craise __FILE__ __LINE__ st.span "Unreachable"
                   | Len _ ->
                       craise __FILE__ __LINE__ st.span "Len is not handled yet"
-                  | ShallowInitBox _ ->
-                      craise __FILE__ __LINE__ st.span "ShallowInitBox"
                   | Use _
-                  | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
+                  | RvRef
+                      ( _,
+                        ( BShared
+                        | BMut
+                        | BTwoPhaseMut
+                        | BShallow
+                        | BUniqueImmutable ) )
                   | NullaryOp _
                   | UnaryOp _
                   | BinaryOp _

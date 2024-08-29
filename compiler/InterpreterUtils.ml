@@ -300,7 +300,6 @@ let rvalue_get_place (rv : rvalue) : place option =
   | Global _
   | Discriminant _
   | Aggregate _ -> None
-  | ShallowInitBox _ -> failwith "ShallowInitBox"
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows (ctx : eval_ctx) (sv : symbolic_value) : bool =

@@ -640,17 +640,21 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
             let def = ctx_lookup_type_decl ctx def_id in
-            (match def.kind with
-            | Struct _ | Enum ([] | [ _ ]) -> ()
-            | Enum (_ :: _) ->
-                craise __FILE__ __LINE__ span
-                  ("Attempted to greedily expand a symbolic enumeration with > \
-                    1 variants (option [greedy_expand_symbolics_with_borrows] \
-                    of [config]): "
-                  ^ name_to_string ctx def.item_meta.name)
-            | Alias _ | Opaque | Error _ ->
-                craise __FILE__ __LINE__ span
-                  "Attempted to greedily expand an alias or opaque type");
+            begin
+              match def.kind with
+              | Struct _ | Enum ([] | [ _ ]) -> ()
+              | Enum (_ :: _) ->
+                  craise __FILE__ __LINE__ span
+                    ("Attempted to greedily expand a symbolic enumeration with \
+                      > 1 variants (option \
+                      [greedy_expand_symbolics_with_borrows] of [config]): "
+                    ^ name_to_string ctx def.item_meta.name)
+              | Alias _ | Opaque | Error _ ->
+                  craise __FILE__ __LINE__ span
+                    "Attempted to greedily expand an alias or opaque type"
+              | Union _ ->
+                  craise __FILE__ __LINE__ span "Unions are not supported"
+            end;
             (* Also, we need to check if the definition is recursive *)
             if ctx_type_decl_is_rec ctx def_id then
               craise __FILE__ __LINE__ span

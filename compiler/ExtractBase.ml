@@ -1152,23 +1152,31 @@ let assumed_llbc_functions () : (A.assumed_fun_id * string) list =
   match backend () with
   | FStar | Coq | HOL4 ->
       [
-        (ArrayIndexShared, "array_index_usize");
-        (ArrayIndexMut, "array_index_mut_usize");
         (ArrayToSliceShared, "array_to_slice");
         (ArrayToSliceMut, "array_to_slice_mut");
         (ArrayRepeat, "array_repeat");
-        (SliceIndexShared, "slice_index_usize");
-        (SliceIndexMut, "slice_index_mut_usize");
+        ( Index { is_array = true; mutability = RShared; is_range = false },
+          "array_index_usize" );
+        ( Index { is_array = true; mutability = RMut; is_range = false },
+          "array_index_mut_usize" );
+        ( Index { is_array = false; mutability = RShared; is_range = false },
+          "slice_index_usize" );
+        ( Index { is_array = false; mutability = RMut; is_range = false },
+          "slice_index_mut_usize" );
       ]
   | Lean ->
       [
-        (ArrayIndexShared, "Array.index_usize");
-        (ArrayIndexMut, "Array.index_mut_usize");
         (ArrayToSliceShared, "Array.to_slice");
         (ArrayToSliceMut, "Array.to_slice_mut");
         (ArrayRepeat, "Array.repeat");
-        (SliceIndexShared, "Slice.index_usize");
-        (SliceIndexMut, "Slice.index_mut_usize");
+        ( Index { is_array = true; mutability = RShared; is_range = false },
+          "Array.index_usize" );
+        ( Index { is_array = true; mutability = RMut; is_range = false },
+          "Array.index_mut_usize" );
+        ( Index { is_array = false; mutability = RShared; is_range = false },
+          "Slice.index_usize" );
+        ( Index { is_array = false; mutability = RMut; is_range = false },
+          "Slice.index_mut_usize" );
       ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
