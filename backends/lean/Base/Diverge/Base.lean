@@ -1,5 +1,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
+import Mathlib.Tactic.Zify
 import Init.Data.List.Basic
 import Base.Primitives.Base
 import Base.Arith.Base
