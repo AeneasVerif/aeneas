@@ -360,18 +360,18 @@ example α (p q r : α → Prop) (h : ∀ x, p x) (h : ∀ x, p x → q x) (h : 
   --
   simp_all
 
-/- Coercions make the goal more succinct but can be confusing.
-   We deactivate them when printing goals to make those goals less ambiguous: feel free
-   to remove this line if you want to activate them.
+/- **Coercions**:
+   The notation `↑` indicates a coercion. For instance:
+   - if `x` is a machine scalar, `↑x : Int` desugars to `x.val`
+   - if `v` is a vector (see exercises below), `↑v : List α` desugars to `v.val`
 
-   If you activate coercions, please be aware that:
-   - if `x` is a machine scalar, `↑x : Int` and `x.val` are the same
-   - if `v` is a vector (see exercises below) `↑v : List α` and `v.val` are the same
-
-   Also, if you don't know what a **notation** which appears in the goal is exactly, just
+   Note that if you don't know what a **notation** which appears in the goal is exactly, just
    put your mouse over it.
+
+   If you find coercions too confusing, you can set the option below to `false`.
+   Note however that the goals will become significantly more verbose.
  -/
-set_option pp.coercions false
+set_option pp.coercions true
 
 /- # Reasoning about lists
 
