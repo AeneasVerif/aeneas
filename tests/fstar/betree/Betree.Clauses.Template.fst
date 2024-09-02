@@ -58,14 +58,14 @@ let betree_Node_lookup_in_bindings_loop_decreases (key : u64)
   admit ()
 
 (** [betree::betree::{betree::betree::Internal}#4::lookup_in_children]: decreases clause
-    Source: 'src/betree.rs', lines 414:4-414:63 *)
+    Source: 'src/betree.rs', lines 414:4-420:5 *)
 unfold
 let betree_Internal_lookup_in_children_decreases (self : betree_Internal_t)
   (key : u64) (st : state) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::lookup]: decreases clause
-    Source: 'src/betree.rs', lines 712:4-712:58 *)
+    Source: 'src/betree.rs', lines 712:4-785:5 *)
 unfold
 let betree_Node_lookup_decreases (self : betree_Node_t) (key : u64)
   (st : state) : nat =
@@ -109,7 +109,7 @@ let betree_Node_apply_messages_to_leaf_loop_decreases
   admit ()
 
 (** [betree::betree::{betree::betree::Internal}#4::flush]: decreases clause
-    Source: 'src/betree.rs', lines 429:4-434:26 *)
+    Source: 'src/betree.rs', lines 429:4-458:5 *)
 unfold
 let betree_Internal_flush_decreases (self : betree_Internal_t)
   (params : betree_Params_t) (node_id_cnt : betree_NodeIdCounter_t)
@@ -117,7 +117,7 @@ let betree_Internal_flush_decreases (self : betree_Internal_t)
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::apply_messages]: decreases clause
-    Source: 'src/betree.rs', lines 601:4-606:5 *)
+    Source: 'src/betree.rs', lines 601:4-645:5 *)
 unfold
 let betree_Node_apply_messages_decreases (self : betree_Node_t)
   (params : betree_Params_t) (node_id_cnt : betree_NodeIdCounter_t)

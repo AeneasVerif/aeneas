@@ -1207,6 +1207,9 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   match adt_decl.kind with
                   | Enum _ | Alias _ | Opaque | Error _ ->
                       craise __FILE__ __LINE__ def.item_meta.span "Unreachable"
+                  | Union _ ->
+                      craise __FILE__ __LINE__ def.item_meta.span
+                        "Unions are not supported"
                   | Struct fields -> fields
                 in
                 let num_fields = List.length fields in
@@ -1587,17 +1590,8 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 | BoxNew ->
                     let arg, args = Collections.List.pop args in
                     mk_apps def.item_meta.span arg args
-                | BoxFree ->
-                    sanity_check __FILE__ __LINE__ (args = [])
-                      def.item_meta.span;
-                    mk_unit_rvalue
-                | SliceIndexShared
-                | SliceIndexMut
-                | ArrayIndexShared
-                | ArrayIndexMut
-                | ArrayToSliceShared
-                | ArrayToSliceMut
-                | ArrayRepeat -> super#visit_texpression env e)
+                | Index _ | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat
+                  -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end

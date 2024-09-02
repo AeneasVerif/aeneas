@@ -530,9 +530,22 @@ let int_name (int_ty : integer_type) : string =
   | U64 -> Printf.sprintf u_format 64
   | U128 -> Printf.sprintf u_format 128
 
+let float_name (float_ty : float_type) : string =
+  let format =
+    match backend () with
+    | FStar | Coq | HOL4 -> format_of_string "f%d"
+    | Lean -> format_of_string "F%d"
+  in
+  match float_ty with
+  | F16 -> Printf.sprintf format 16
+  | F32 -> Printf.sprintf format 32
+  | F64 -> Printf.sprintf format 64
+  | F128 -> Printf.sprintf format 128
+
 let scalar_name (ty : literal_type) : string =
   match ty with
   | TInteger ty -> int_name ty
+  | TFloat ty -> float_name ty
   | TBool -> (
       match backend () with
       | FStar | Coq | HOL4 -> "bool"
@@ -1139,23 +1152,31 @@ let assumed_llbc_functions () : (A.assumed_fun_id * string) list =
   match backend () with
   | FStar | Coq | HOL4 ->
       [
-        (ArrayIndexShared, "array_index_usize");
-        (ArrayIndexMut, "array_index_mut_usize");
         (ArrayToSliceShared, "array_to_slice");
         (ArrayToSliceMut, "array_to_slice_mut");
         (ArrayRepeat, "array_repeat");
-        (SliceIndexShared, "slice_index_usize");
-        (SliceIndexMut, "slice_index_mut_usize");
+        ( Index { is_array = true; mutability = RShared; is_range = false },
+          "array_index_usize" );
+        ( Index { is_array = true; mutability = RMut; is_range = false },
+          "array_index_mut_usize" );
+        ( Index { is_array = false; mutability = RShared; is_range = false },
+          "slice_index_usize" );
+        ( Index { is_array = false; mutability = RMut; is_range = false },
+          "slice_index_mut_usize" );
       ]
   | Lean ->
       [
-        (ArrayIndexShared, "Array.index_usize");
-        (ArrayIndexMut, "Array.index_mut_usize");
         (ArrayToSliceShared, "Array.to_slice");
         (ArrayToSliceMut, "Array.to_slice_mut");
         (ArrayRepeat, "Array.repeat");
-        (SliceIndexShared, "Slice.index_usize");
-        (SliceIndexMut, "Slice.index_mut_usize");
+        ( Index { is_array = true; mutability = RShared; is_range = false },
+          "Array.index_usize" );
+        ( Index { is_array = true; mutability = RMut; is_range = false },
+          "Array.index_mut_usize" );
+        ( Index { is_array = false; mutability = RShared; is_range = false },
+          "Slice.index_usize" );
+        ( Index { is_array = false; mutability = RMut; is_range = false },
+          "Slice.index_mut_usize" );
       ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
@@ -1835,7 +1856,8 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           match lty with
           | TBool -> "b"
           | TChar -> "c"
-          | TInteger _ -> "i")
+          | TInteger _ -> "i"
+          | TFloat _ -> "fl")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
       | Error -> "x")
@@ -2095,13 +2117,7 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
           | None -> def.item_meta
           | Some trait_decl -> (
               let methods =
-                trait_decl.required_methods
-                @ List.filter_map
-                    (fun (name, opt_id) ->
-                      match opt_id with
-                      | None -> None
-                      | Some id -> Some (name, id))
-                    trait_decl.provided_methods
+                trait_decl.required_methods @ trait_decl.provided_methods
               in
               match
                 List.find_opt (fun (name, _) -> name = item_name) methods

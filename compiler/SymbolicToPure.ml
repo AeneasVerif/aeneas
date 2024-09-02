@@ -578,7 +578,7 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
   | Alias _ ->
       craise __FILE__ __LINE__ span
         "type aliases should have been removed earlier"
-  | T.Opaque | T.Error _ -> Opaque
+  | T.Union _ | T.Opaque | T.Error _ -> Opaque
 
 (** Translate a type definition from LLBC
 
@@ -2192,17 +2192,23 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           let back_fun_name =
             let name =
               match fid with
-              | FunId (FAssumed fid) -> (
+              | FunId (FAssumed fid) -> begin
                   match fid with
                   | BoxNew -> "box_new"
-                  | BoxFree -> "box_free"
                   | ArrayRepeat -> "array_repeat"
-                  | ArrayIndexShared -> "index_shared"
-                  | ArrayIndexMut -> "index_mut"
                   | ArrayToSliceShared -> "to_slice_shared"
                   | ArrayToSliceMut -> "to_slice_mut"
-                  | SliceIndexShared -> "index_shared"
-                  | SliceIndexMut -> "index_mut")
+                  | Index { is_array = _; mutability = RMut; is_range = false }
+                    -> "index_mut"
+                  | Index
+                      { is_array = _; mutability = RShared; is_range = false }
+                    -> "index_shared"
+                  | Index { is_array = _; mutability = RMut; is_range = true }
+                    -> "subslice_mut"
+                  | Index
+                      { is_array = _; mutability = RShared; is_range = true } ->
+                      "subslice_shared"
+                end
               | FunId (FRegular fid) | TraitMethod (_, _, fid) -> (
                   let decl =
                     FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls
@@ -2325,7 +2331,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Neg int_ty), effect_info, args, dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
-    | S.Unop (E.Cast cast_kind) -> (
+    | S.Unop (E.Cast cast_kind) -> begin
         match cast_kind with
         | CastScalar (src_ty, tgt_ty) ->
             (* Note that cast can fail *)
@@ -2344,7 +2350,12 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         | CastFnPtr _ ->
             craise __FILE__ __LINE__ ctx.span "TODO: function casts"
         | CastUnsize _ ->
-            craise __FILE__ __LINE__ ctx.span "TODO: unsize coercions")
+            craise __FILE__ __LINE__ ctx.span "TODO: unsize coercions"
+        | CastRawPtr _ ->
+            craise __FILE__ __LINE__ ctx.span "Unsupported: raw ptr casts"
+        | CastTransmute _ ->
+            craise __FILE__ __LINE__ ctx.span "Unsupported: transmute"
+      end
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->

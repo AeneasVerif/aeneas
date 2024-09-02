@@ -489,16 +489,7 @@ let fun_suffix (lp_id : LoopId.id option) : string =
   lp_suff
 
 let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
-  match fid with
-  | BoxNew -> "alloc::boxed::Box::new"
-  | BoxFree -> "alloc::alloc::box_free"
-  | ArrayIndexShared -> "@ArrayIndexShared"
-  | ArrayIndexMut -> "@ArrayIndexMut"
-  | ArrayToSliceShared -> "@ArrayToSliceShared"
-  | ArrayToSliceMut -> "@ArrayToSliceMut"
-  | ArrayRepeat -> "@ArrayRepeat"
-  | SliceIndexShared -> "@SliceIndexShared"
-  | SliceIndexMut -> "@SliceIndexMut"
+  Charon.PrintExpressions.assumed_fun_id_to_string fid
 
 let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
   match fid with

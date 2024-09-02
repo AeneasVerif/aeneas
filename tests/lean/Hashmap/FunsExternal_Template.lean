@@ -10,10 +10,10 @@ set_option linter.unusedVariables false
 open hashmap
 
 /- [hashmap::utils::deserialize]:
-   Source: 'tests/src/hashmap.rs', lines 331:4-331:47 -/
+   Source: 'tests/src/hashmap.rs', lines 331:4-333:5 -/
 axiom utils.deserialize : State → Result (State × (HashMap U64))
 
 /- [hashmap::utils::serialize]:
-   Source: 'tests/src/hashmap.rs', lines 326:4-326:46 -/
+   Source: 'tests/src/hashmap.rs', lines 326:4-328:5 -/
 axiom utils.serialize : HashMap U64 → State → Result (State × Unit)
 

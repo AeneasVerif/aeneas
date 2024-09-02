@@ -37,6 +37,7 @@ module ConstGenericVarId = T.ConstGenericVarId
 
 type llbc_name = T.name [@@deriving show, ord]
 type integer_type = T.integer_type [@@deriving show, ord]
+type float_type = T.float_type [@@deriving show, ord]
 type const_generic_var = T.const_generic_var [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
@@ -1155,7 +1156,7 @@ type trait_decl = {
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
   required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : (trait_item_name * fun_decl_id option) list;
+  provided_methods : (trait_item_name * fun_decl_id) list;
 }
 [@@deriving show]
 

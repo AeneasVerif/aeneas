@@ -688,6 +688,9 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   match bkind with
+  | BUniqueImmutable ->
+      craise __FILE__ __LINE__ span
+        "Unique immutable closure captures are not supported"
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we
@@ -862,6 +865,9 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
          AST"
   | Global _ -> craise __FILE__ __LINE__ span "Unreachable"
   | Len _ -> craise __FILE__ __LINE__ span "Unhandled Len"
+  | _ ->
+      craise __FILE__ __LINE__ span
+        ("Unsupported operation: " ^ Print.EvalCtx.rvalue_to_string ctx rvalue)
 
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->

@@ -74,3 +74,10 @@ end core
 
 /- [core::option::Option::is_none] -/
 @[simp] def core.option.Option.is_none (T: Type) (self: Option T): Bool := self.isNone
+
+/- [core::clone::Clone::clone_from]:
+   Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
+   Name pattern: core::clone::Clone::clone_from -/
+@[simp] def core.clone.Clone.clone_from
+  {Self : Type} (cloneInst : core.clone.Clone Self) (_self : Self) (source : Self) : Result Self :=
+  cloneInst.clone source

@@ -869,7 +869,7 @@ def evalAesopSaturate (options : Aesop.Options') (ruleSets : Array Name) : Tacti
   let rss ← Aesop.Frontend.getGlobalRuleSets ruleSets
   let rs ← Aesop.mkLocalRuleSet rss options
     |> Aesop.ElabM.runForwardElab (← getMainGoal)
-  tryLiftMetaTactic1 (Aesop.saturate rs · |>.run { options }) "Aesop.saturate failed"
+  tryLiftMetaTactic1 (Aesop.saturate rs · options) "Aesop.saturate failed"
 
 /-- Normalize the let-bindings by inlining them -/
 def normalizeLetBindings (e : Expr) : MetaM Expr :=

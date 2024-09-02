@@ -293,8 +293,13 @@ let rvalue_get_place (rv : rvalue) : place option =
   match rv with
   | Use (Copy p | Move p) -> Some p
   | Use (Constant _) -> None
-  | Len (p, _, _) | RvRef (p, _) -> Some p
-  | UnaryOp _ | BinaryOp _ | Global _ | Discriminant _ | Aggregate _ -> None
+  | Len (p, _, _) | RvRef (p, _) | RawPtr (p, _) -> Some p
+  | NullaryOp _
+  | UnaryOp _
+  | BinaryOp _
+  | Global _
+  | Discriminant _
+  | Aggregate _ -> None
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows (ctx : eval_ctx) (sv : symbolic_value) : bool =

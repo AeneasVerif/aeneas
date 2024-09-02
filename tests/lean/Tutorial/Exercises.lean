@@ -165,7 +165,7 @@ theorem even_spec (n : U32) :
   . progress as ⟨ n' ⟩
     progress as ⟨ b ⟩
     simp [*]
-    simp [Int.even_sub]
+    simp [Int.odd_sub]
 termination_by n.toNat
 decreasing_by scalar_decr_tac
 
@@ -559,10 +559,9 @@ divergent def add_no_overflow_loop
     - `scalar_eq_nf`: similar, but tuned to prove goals of the shape: `... = ...`
     You can try both tactics and see their effect.
  -/
--- Here, we're using ring_nf
 @[simp]
-theorem toInt_aux_append (l0 l1 : List U32) :
-  toInt_aux (l0 ++ l1) = toInt_aux l0 + 2 ^ (32 * l0.length) * toInt_aux l1 := by
+theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
+  toInt_aux (l.drop i) = l.index i + 2 ^ 32 * toInt_aux (l.drop (i + 1)) := by
   sorry
 
 /-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
@@ -583,16 +582,11 @@ theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) 
   toInt_aux (l.update i x) = toInt_aux l + 2 ^ (32 * i) * (x - l.index i) := by
   sorry
 
-/-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
+/-- The proof about `add_no_overflow_loop`.
 
-    Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
+    Hint: you will need to reason about non-linear arithmetic with `scalar_nf` and
+    `scalar_eq_nf`` (see above).
  -/
-@[simp]
-theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
-  toInt_aux (l.drop i) = l.index i + 2 ^ 32 * toInt_aux (l.drop (i + 1)) := by
-  sorry
-
-/-- The proof about `add_no_overflow_loop` -/
 @[pspec]
 theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)

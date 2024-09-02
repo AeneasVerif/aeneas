@@ -281,28 +281,20 @@ let push_frame (ctx : eval_ctx) : eval_ctx = ctx_push_frame ctx
 let get_assumed_function_return_type (span : Meta.span) (ctx : eval_ctx)
     (fid : assumed_fun_id) (generics : generic_args) : ety =
   sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
-  (* [Box::free] has a special treatment *)
-  match fid with
-  | BoxFree ->
-      sanity_check __FILE__ __LINE__ (generics.regions = []) span;
-      sanity_check __FILE__ __LINE__ (List.length generics.types = 1) span;
-      sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
-      mk_unit_ty
-  | _ ->
-      (* Retrieve the function's signature *)
-      let sg = Assumed.get_assumed_fun_sig fid in
-      (* Instantiate the return type  *)
-      (* There shouldn't be any reference to Self *)
-      let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
-      let generics = Subst.generic_args_erase_regions generics in
-      let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
-        Subst.make_subst_from_generics sg.generics generics tr_self
-      in
-      let ty =
-        Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
-          sg.output
-      in
-      AssociatedTypes.ctx_normalize_erase_ty span ctx ty
+  (* Retrieve the function's signature *)
+  let sg = Assumed.get_assumed_fun_sig fid in
+  (* Instantiate the return type  *)
+  (* There shouldn't be any reference to Self *)
+  let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
+  let generics = Subst.generic_args_erase_regions generics in
+  let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
+    Subst.make_subst_from_generics sg.generics generics tr_self
+  in
+  let ty =
+    Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
+      sg.output
+  in
+  AssociatedTypes.ctx_normalize_erase_ty span ctx ty
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
@@ -434,45 +426,6 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       comp cc (assign_to_place config span box_v dest ctx)
   | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
 
-(** Auxiliary function - see {!eval_assumed_function_call}.
-
-    [Box::free] is not handled the same way as the other assumed functions:
-    - in the regular case, whenever we need to evaluate an assumed function,
-      we evaluate the operands, push a frame, call a dedicated function
-      to correctly update the variables in the frame (and mimic the execution
-      of a body) and finally pop the frame
-    - in the case of [Box::free]: the value given to this function is often
-      of the form [Box(⊥)] because we can move the value out of the
-      box before freeing the box. It makes it invalid to see box_free as a
-      "regular" function: it is not valid to call a function with arguments
-      which contain [⊥]. For this reason, we execute [Box::free] as drop_value,
-      but this is a bit annoying with regards to the semantics...
-
-    Followingly this function doesn't behave like the others: it does not expect
-    a stack frame to have been pushed, but rather simply behaves like {!drop_value}.
-    It thus updates the box value (by calling {!drop_value}) and updates
-    the destination (by setting it to [()]).
-*)
-let eval_box_free (config : config) (span : Meta.span) (generics : generic_args)
-    (args : operand list) (dest : place) : cm_fun =
- fun ctx ->
-  match (generics.regions, generics.types, generics.const_generics, args) with
-  | [], [ boxed_ty ], [], [ Move input_box_place ] ->
-      (* Required type checking *)
-      let input_box =
-        InterpreterPaths.read_place span Write input_box_place ctx
-      in
-      (let input_ty = ty_get_box input_box.ty in
-       sanity_check __FILE__ __LINE__ (input_ty = boxed_ty))
-        span;
-
-      (* Drop the value *)
-      let ctx, cc = drop_value config span input_box_place ctx in
-
-      (* Update the destination by setting it to [()] *)
-      comp cc (assign_to_place config span mk_unit_value dest ctx)
-  | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
-
 (** Evaluate a non-local function call in concrete mode *)
 let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
     (fid : assumed_fun_id) (call : call) : cm_fun =
@@ -483,72 +436,54 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
   | FnOpMove _ ->
       (* Closure case: TODO *)
       craise __FILE__ __LINE__ span "Closures are not supported yet"
-  | FnOpRegular func -> (
+  | FnOpRegular func ->
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
       sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
-      (* There are two cases (and this is extremely annoying):
-         - the function is not box_free
-         - the function is box_free
-         See {!eval_box_free}
-      *)
-      match fid with
-      | BoxFree ->
-          (* Degenerate case: box_free *)
-          eval_box_free config span generics args dest ctx
-      | _ ->
-          (* "Normal" case: not box_free *)
-          (* Evaluate the operands *)
-          (*      let ctx, args_vl = eval_operands config ctx args in *)
-          let args_vl, ctx, cc = eval_operands config span args ctx in
 
-          (* Evaluate the call
-           *
-           * Style note: at some point we used {!comp_transmit} to
-           * transmit the result of {!eval_operands} above down to {!push_vars}
-           * below, without having to introduce an intermediary function call,
-           * but it made it less clear where the computed values came from,
-           * so we reversed the modifications. *)
-          (* Push the stack frame: we initialize the frame with the return variable,
-             and one variable per input argument *)
-          let ctx = push_frame ctx in
+      (* Evaluate the operands *)
+      (*      let ctx, args_vl = eval_operands config ctx args in *)
+      let args_vl, ctx, cc = eval_operands config span args ctx in
 
-          (* Create and push the return variable *)
-          let ret_vid = VarId.zero in
-          let ret_ty = get_assumed_function_return_type span ctx fid generics in
-          let ret_var = mk_var ret_vid (Some "@return") ret_ty in
-          let ctx = push_uninitialized_var span ret_var ctx in
+      (* Evaluate the call
+       *
+       * Style note: at some point we used {!comp_transmit} to
+       * transmit the result of {!eval_operands} above down to {!push_vars}
+       * below, without having to introduce an intermediary function call,
+       * but it made it less clear where the computed values came from,
+       * so we reversed the modifications. *)
+      (* Push the stack frame: we initialize the frame with the return variable,
+         and one variable per input argument *)
+      let ctx = push_frame ctx in
 
-          (* Create and push the input variables *)
-          let input_vars =
-            VarId.mapi_from1
-              (fun id (v : typed_value) -> (mk_var id None v.ty, v))
-              args_vl
-          in
-          let ctx = push_vars span input_vars ctx in
+      (* Create and push the return variable *)
+      let ret_vid = VarId.zero in
+      let ret_ty = get_assumed_function_return_type span ctx fid generics in
+      let ret_var = mk_var ret_vid (Some "@return") ret_ty in
+      let ctx = push_uninitialized_var span ret_var ctx in
 
-          (* "Execute" the function body. As the functions are assumed, here we call
-           * custom functions to perform the proper manipulations: we don't have
-           * access to a body. *)
-          let ctx, cf_eval_body =
-            match fid with
-            | BoxNew -> eval_box_new_concrete config span generics ctx
-            | BoxFree ->
-                (* Should have been treated above *)
-                craise __FILE__ __LINE__ span "Unreachable"
-            | ArrayIndexShared
-            | ArrayIndexMut
-            | ArrayToSliceShared
-            | ArrayToSliceMut
-            | ArrayRepeat
-            | SliceIndexShared
-            | SliceIndexMut -> craise __FILE__ __LINE__ span "Unimplemented"
-          in
-          let cc = cc_comp cc cf_eval_body in
+      (* Create and push the input variables *)
+      let input_vars =
+        VarId.mapi_from1
+          (fun id (v : typed_value) -> (mk_var id None v.ty, v))
+          args_vl
+      in
+      let ctx = push_vars span input_vars ctx in
 
-          (* Pop the frame *)
-          comp cc (pop_frame_assign config span dest ctx))
+      (* "Execute" the function body. As the functions are assumed, here we call
+       * custom functions to perform the proper manipulations: we don't have
+       * access to a body. *)
+      let ctx, cf_eval_body =
+        match fid with
+        | BoxNew -> eval_box_new_concrete config span generics ctx
+        | Index _ | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat ->
+            craise __FILE__ __LINE__ span "Unimplemented"
+      in
+      let cc = cc_comp cc cf_eval_body in
+
+      (* Pop the frame *)
+      comp cc (pop_frame_assign config span dest ctx)
 
 (** Helper
  
@@ -810,7 +745,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                       (fun (s, _) -> s = method_name)
                       trait_decl.provided_methods
                   in
-                  let method_id = Option.get method_id in
                   let method_def = ctx_lookup_fun_decl ctx method_id in
                   (* For the instantiation we have to do something peculiar
                      because the method was defined for the trait declaration.
@@ -863,17 +797,10 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               in
               (* Lookup the method decl in the required *and* the provided methods *)
               let _, method_id =
-                let provided =
-                  List.filter_map
-                    (fun (id, f) ->
-                      match f with
-                      | None -> None
-                      | Some f -> Some (id, f))
-                    trait_decl.provided_methods
-                in
                 List.find
                   (fun (s, _) -> s = method_name)
-                  (List.append trait_decl.required_methods provided)
+                  (List.append trait_decl.required_methods
+                     trait_decl.provided_methods)
               in
               let method_def = ctx_lookup_fun_decl ctx method_id in
               log#ldebug
@@ -961,17 +888,25 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                   | Len _ ->
                       craise __FILE__ __LINE__ st.span "Len is not handled yet"
                   | Use _
-                  | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
-                  | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ ->
+                  | RvRef
+                      ( _,
+                        ( BShared
+                        | BMut
+                        | BTwoPhaseMut
+                        | BShallow
+                        | BUniqueImmutable ) )
+                  | NullaryOp _
+                  | UnaryOp _
+                  | BinaryOp _
+                  | Discriminant _
+                  | Aggregate _
+                  | RawPtr _ ->
+                      let p = S.mk_mplace st.span p ctx in
                       let rp = rvalue_get_place rvalue in
                       let rp =
-                        match rp with
-                        | Some rp -> Some (S.mk_mplace st.span rp ctx)
-                        | None -> None
+                        Option.map (fun rp -> S.mk_mplace st.span rp ctx) rp
                       in
-                      S.synthesize_assignment ctx
-                        (S.mk_mplace st.span p ctx)
-                        rv rp
+                      S.synthesize_assignment ctx p rv rp
                 in
                 let ctx, cc =
                   comp cc (assign_to_place config st.span rv p ctx)
@@ -1556,45 +1491,22 @@ and eval_assumed_function_call_symbolic (config : config) (span : Meta.span)
        generics.types)
     span;
 
-  (* There are two cases (and this is extremely annoying):
-     - the function is not box_free
-     - the function is box_free
-       See {!eval_box_free}
-  *)
-  match fid with
-  | BoxFree ->
-      (* Degenerate case: box_free - note that this is not really a function
-       * call: no need to call a "synthesize_..." function *)
-      let ctx, cc = eval_box_free config span generics args dest ctx in
-      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
-  | _ ->
-      (* "Normal" case: not box_free *)
-      (* In symbolic mode, the behaviour of a function call is completely defined
-       * by the signature of the function: we thus simply generate correctly
-       * instantiated signatures, and delegate the work to an auxiliary function *)
-      let sg, regions_hierarchy, inst_sig =
-        match fid with
-        | BoxFree ->
-            (* Should have been treated above *)
-            craise __FILE__ __LINE__ span "Unreachable"
-        | _ ->
-            let regions_hierarchy =
-              LlbcAstUtils.FunIdMap.find (FAssumed fid)
-                ctx.fun_ctx.regions_hierarchies
-            in
-            (* There shouldn't be any reference to Self *)
-            let tr_self = UnknownTrait __FUNCTION__ in
-            let sg = Assumed.get_assumed_fun_sig fid in
-            let inst_sg =
-              instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
-            in
-            (sg, regions_hierarchy, inst_sg)
-      in
+  (* In symbolic mode, the behaviour of a function call is completely defined
+   * by the signature of the function: we thus simply generate correctly
+   * instantiated signatures, and delegate the work to an auxiliary function *)
+  let regions_hierarchy =
+    LlbcAstUtils.FunIdMap.find (FAssumed fid) ctx.fun_ctx.regions_hierarchies
+  in
+  (* There shouldn't be any reference to Self *)
+  let tr_self = UnknownTrait __FUNCTION__ in
+  let sg = Assumed.get_assumed_fun_sig fid in
+  let inst_sig =
+    instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
+  in
 
-      (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config span
-        (FunId (FAssumed fid)) sg regions_hierarchy inst_sig generics None args
-        dest ctx
+  (* Evaluate the function call *)
+  eval_function_call_symbolic_from_inst_sig config span (FunId (FAssumed fid))
+    sg regions_hierarchy inst_sig generics None args dest ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : statement) : stl_cm_fun =

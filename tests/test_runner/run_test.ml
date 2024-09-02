@@ -117,6 +117,7 @@ let run_charon (env : runner_env) (case : Input.t) =
         [
           env.charon_path;
           "--no-cargo";
+          "--hide-marker-traits";
           "--input";
           case.path;
           "--crate";
@@ -143,7 +144,12 @@ let run_charon (env : runner_env) (case : Input.t) =
       in
       if generate then (
         let args =
-          [ env.charon_path; "--dest"; Filename_unix.realpath env.llbc_dir ]
+          [
+            env.charon_path;
+            "--hide-marker-traits";
+            "--dest";
+            Filename_unix.realpath env.llbc_dir;
+          ]
         in
         let args = List.append args case.charon_options in
         (* Run Charon inside the crate *)
