@@ -689,11 +689,11 @@ theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
     Remark: this proof is slightly technical and requires to control rewritings precisely (we
     haven't explained how to do that above) to prove at some point that (beware of the conversions
     between ℕ and ℤ!):
-    `2 ^ (i * 32) = ((2 ^ ((i - 1) * 32) * 4294967296 : Int)`
+    `2 ^ (i * 32) = ((2 ^ ((i - 1) * 32) * 2 ^ 32 : Int)`
 
     We recommend that you keep this proof until the very end then:
     - either ask for help
-    - go see the solution
+    - or go see the solution
  -/
 @[simp]
 theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
@@ -703,7 +703,7 @@ theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) 
 /-- The proof about `add_no_overflow_loop`.
 
     Hint: you will need to reason about non-linear arithmetic with `scalar_nf` and
-    `scalar_eq_nf`` (see above).
+    `scalar_eq_nf` (see above).
  -/
 @[pspec]
 theorem add_no_overflow_loop_spec

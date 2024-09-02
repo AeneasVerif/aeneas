@@ -8,7 +8,7 @@ namespace tutorial
 
 /- # Basic tactics -/
 
-/- Version 1: -/
+/- Exercise 1: Version 1: -/
 example α (n : Nat) (x y : α) (l0 l1 l2 : List α)
   (h0 : l1 = x :: l0)
   (h1 : l2 = y :: l1)
@@ -21,7 +21,7 @@ example α (n : Nat) (x y : α) (l0 l1 l2 : List α)
   simp -- This simplifies the `... + 1 + 1 = ... + 2`
   simp [h2]
 
-/- Version 2: the proof can be reduced to a one-liner. -/
+/- Exercise 1: Version 2: the proof can be reduced to a one-liner. -/
 example α (n : Nat) (x y : α) (l0 l1 l2 : List α)
   (h0 : l1 = x :: l0)
   (h1 : l2 = y :: l1)
