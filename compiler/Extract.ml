@@ -2774,6 +2774,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      * Extract the items
      *)
     let trait_decl_id = impl.impl_trait.trait_decl_id in
+    let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.crate.trait_decls in
 
     (* The constants *)
     List.iter
@@ -2810,11 +2811,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
       impl.types;
 
     (* The parent clauses *)
-    TraitClauseId.iteri
-      (fun clause_id trait_ref ->
+    List.iter
+      (fun (clause, trait_ref) ->
         let item_name =
           ctx_get_trait_parent_clause impl.item_meta.span trait_decl_id
-            clause_id ctx
+            clause.T.clause_id ctx
         in
         let ty () =
           F.pp_print_space fmt ();
@@ -2822,7 +2823,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
             false trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
-      impl.parent_trait_refs;
+      (List.combine trait_decl.parent_clauses impl.parent_trait_refs);
 
     (* The required methods *)
     List.iter
