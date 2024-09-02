@@ -69,12 +69,12 @@ open CList
 /-- Convert a "custom" list to a standard Lean list.
 
     By putting this definition in the namespace `CList`, we give the possibility of using the `.`
-    notation: if `x` has type `CList α` we can write `x.to_list` instead of `to_list x`.
+    notation: if `x` has type `CList α` we can write `x.toList` instead of `toList x`.
  -/
-@[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
+@[simp] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
-  | CCons hd tl => hd :: tl.to_list
+  | CCons hd tl => hd :: tl.toList
 
 /- [tutorial::list_nth]:
    Source: 'src/lib.rs', lines 37:0-37:56 -/
@@ -90,9 +90,9 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
 
 /-- Theorem about `list_nth` -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.to_list.length) :
+  (h : i.val < l.toList.length) :
   ∃ x, list_nth T l i = ok x ∧
-  x = l.to_list.index i.toNat
+  x = l.toList.index i.toNat
   := by
   rw [list_nth]
   split
@@ -217,36 +217,39 @@ def list_nth_mut1
   list_nth_mut1_loop T l i
 
 /-
-  # The exercises start here
+  # #####################################################################
+  # ###   THE EXERCISES START HERE     ##################################
+  # #####################################################################
 -/
 
 /- # Notations
 
-  You will need to type special characters: you can refer to those explanations throughout the
-  tutorial.
+  You will need to type some special characters like `↑` or `∃`, `∧`, etc..
 
   In order to type the special characters, you need to type the character '\' then a
-  specific string (note that typing abbreviations often works, for instance "ex" instead
+  specific string (note that typing an abbreviation often works, for instance "ex" instead
   of "exists"):
-  - ↑ : \ + u    ("up")
-  - → : \ + r    ("right")
-  - ∧ : \ + and
-  - ∨ : \ + or
-  - ∀ : \ + forall
-  - ∃ : \ + exists
+  - `↑` : \ + u    ("up")
+  - `→` : \ + r    ("right")
+  - `∧` : \ + and
+  - `∨` : \ + or
+  - `∀` : \ + forall
+  - `∃` : \ + exists
 -/
 
-/- Explanations about some basic tactics -/
+/- # Basic tactics -/
 
 /- `simp` simplifies the goal by applying rewriting lemmas and simplifying definitions
    marked as `@[simp]`. For instance, the lemma `List.length_cons` which states that
    `(hd :: tl).length = tl.length + 1` has been marked as `simp`: -/
 #check List.length_cons
 example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
-  -- This proves the goal automatically
+  -- This proves the goal automatically, by using `List.length_cons` above
   simp
 
 /- You can see which lemmas are applied by `simp` by using `simp?`.
+   This is often useful to build the intuition of what `simp` does, especially when
+   it simplifies the goal a lot.
 
    Note that `simp [...]` allows you to specify additional rewriting lemmas to apply,
    and that `simp only` allows to forbid `simp` from applying any lemmas other than
@@ -255,12 +258,25 @@ example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
 
    There are ways of being even more precise, for instance by using conversions
    (https://leanprover.github.io/theorem_proving_in_lean4/conv.html) and the `rw`
-   tactic, but we will not need them for this tutorial. Just be aware that `rw`
-   doesn't apply simplification lemmas recursively, while `simp` repeatedly simplifies
-   the goal until it can't make progress anymore.
+   tactic, but you will not need to understand those for this tutorial.
+
+   Just be aware that `rw` doesn't apply simplification lemmas recursively, while
+   `simp` repeatedly simplifies the goal until it can't make progress anymore.
  -/
 example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
   simp? -- This prints: `simp only [List.length_cons]`
+
+/- Your turn!
+
+   Note that we give **tips and tricks** in the solutions: we advise to always have a look at them
+   after you completed a proof.
+ -/
+example α (n : Nat) (x y : α) (l0 l1 l2 : List α)
+  (h0 : l1 = x :: l0)
+  (h1 : l2 = y :: l1)
+  (h2 : l0.length = n) :
+  l2.length = n + 2 := by
+  sorry
 
 /- The `simp` tactic is quite flexible: -/
 example α (a b c d e : α) (h0 : a = b) (h1 : b = c) (h2 : c = d) (h3 : d = e) : a = e := by
@@ -300,6 +316,11 @@ example (a b c : Prop) (h0 : a → b → c) (h1 : a) (h2 : b) : c := by
 example (a b c : Prop) (h0 : a → b → c) (h1 : a) (h2 : b) : c := by
   simp_all
 
+/- Your turn! -/
+example (a b c d : Prop) (h0 : a → b → c) (h1 : c → d → e)
+  (ha : a) (hb : b) (hd : d) : e := by
+  sorry
+
 /- You can apply a simplification lemma the other way around: -/
 example α (a b c : α) (h0 : a = b) (h1 : b = c) : a = c := by
   simp [← h1]
@@ -338,34 +359,97 @@ example α (p q r : α → Prop) (h : ∀ x, p x) (h : ∀ x, p x → q x) (h : 
 
 /- Coercions make the goal more succinct but can be confusing.
    We deactivate them when printing goals to make those goals less ambiguous: feel free
-   to remove this line to activate them.
+   to remove this line if you want to activate them.
 
    If you activate coercions, please be aware that:
    - if `x` is a machine scalar, `↑x : Int` and `x.val` are the same
    - if `v` is a vector (see exercises below) `↑v : List α` and `v.val` are the same
 
-   Generally speaking,  if you don't know what a **notation** which appears in the goal
-   is exactly, just put your mouse over it.
+   Also, if you don't know what a **notation** which appears in the goal is exactly, just
+   put your mouse over it.
  -/
 set_option pp.coercions false
 
-/-- Theorem about `list_nth_mut1`: exercise!
+/- # Reasoning about lists
 
-    Hints:
+   Small preparation for theorem `list_nth_mut1`.
+ -/
+
+/- Reasoning about `List.index`.
+
+   You can use the following two lemmas.
+ -/
+#check List.index_zero_cons
+#check List.index_nzero_cons
+
+/- Example 1: indexing the first element of the list -/
+example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
+  (hEq : i = 0#u32) :
+  (hd :: tl.toList).index i.toNat = hd := by
+  have hi : i.toNat = 0 := by scalar_tac
+  simp only [hi]
+  --
+  have hIndex := List.index_zero_cons hd tl.toList
+  simp only [hIndex]
+
+/- Example 2: indexing in the tail -/
+example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
+  (hEq : i ≠ 0#u32) :
+  (hd :: tl.toList).index i.toNat = tl.toList.index (i.toNat - 1) := by
+  -- Note that `scalar_tac` is aware of `Arith.Nat.not_eq`
+  have hIndex := List.index_nzero_cons hd tl.toList i.toNat (by scalar_tac)
+  simp only [hIndex]
+
+/- Note that `List.index_zero_cons` and `List.index_nzero_cons` have been
+   marked as `@[simp]` and are thus automatically applied. Also note
+   that `simp` can automatically prove the premises of rewriting lemmas,
+   if it has enough information.
+
+   For this reason, `simp [*]` and `simp_all` can often do more work than
+   you expect. In particular, `simp_all` manages to automatically apply
+   `List.index_nzero_cons` below, by using the fact that `i ≠ 0#u32`. -/
+example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
+  (hEq : i = 0#u32) :
+  (hd :: tl.toList).index i.toNat = hd := by
+  simp [hEq]
+
+example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
+  (hEq : i ≠ 0#u32) :
+  (hd :: tl.toList).index i.toNat = tl.toList.index (i.toNat - 1) := by
+  simp_all
+
+/- Below, you will need to reason about `List.update`.
+   You can use the following lemmas (which have been marked as `@[simp]`).
+ -/
+#check List.update_zero_cons
+#check List.update_nzero_cons
+
+/- # Some proofs of programs -/
+
+/-- Theorem about `list_nth_mut1`.
+
+    **Hints**:
     - you can use `progress` to automatically apply a lemma, then refine it into
       `progress as ⟨ ... ⟩` to name the variables and the post-conditions(s) it introduces.
     - if there is a disjunction or branching (like an `if then else`) in the goal, use `split`
     - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoa
       per disjunct
     - you should use `progress` for as long as you see a monadic `do` block, unless you
-      see a branching, in which case you should use `split`
+      see a branching, in which case you should use `split`.
+
+    **Remark**: we wrote two versions of the solution in `Solutions.lean`:
+    - a verbose one, where we attempt to be precise with the simplifer and
+      precisely instantiate the lemmas we need. This is for pedagogical
+      purpose.
+    - a simpler one, which is closer to what one would write in a real
+      development
  -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.to_list.length) :
+  (h : i.val < l.toList.length) :
   ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
-  x = l.to_list.index i.toNat ∧
+  x = l.toList.index i.toNat ∧
   -- Specification of the backward function
-  ∀ x', ∃ l', back x' = ok l' ∧ l'.to_list = l.to_list.update i.toNat x' := by
+  ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   sorry
 
@@ -407,7 +491,7 @@ def append_in_place
 @[pspec]
 theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail T l = ok (CList.CNil, back) ∧
-  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
+  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
   sorry
 
@@ -415,10 +499,37 @@ theorem list_tail_spec {T : Type} (l : CList T) :
 @[pspec]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place T l0 l1 = ok l2 ∧
-  l2.to_list = l0.to_list ++ l1.to_list := by
+  l2.toList = l0.toList ++ l1.toList := by
   rw [append_in_place]
   sorry
 
+/- [tutorial::reverse]: loop 0:
+   Source: 'src/lib.rs', lines 147:4-154:1 -/
+divergent def reverse_loop
+  (T : Type) (l : CList T) (out : CList T) : Result (CList T) :=
+  match l with
+  | CList.CCons hd tl => reverse_loop T tl (CList.CCons hd out)
+  | CList.CNil => Result.ok out
+
+@[pspec]
+theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
+  ∃ l', reverse_loop T l out = ok l' ∧
+  True -- Leaving the post-condition as an exercise
+  := by
+  rw [reverse_loop]
+  sorry
+
+/- [tutorial::reverse]:
+   Source: 'src/lib.rs', lines 146:0-154:1 -/
+def reverse (T : Type) (l : CList T) : Result (CList T) :=
+  reverse_loop T l CList.CNil
+
+theorem reverse_spec {T : Type} (l : CList T) :
+  ∃ l', reverse T l = ok l' ∧
+  True -- Leaving the post-condition as an exercise
+  := by
+  rw [reverse]
+  sorry
 
 /-
   # BIG NUMBERS
