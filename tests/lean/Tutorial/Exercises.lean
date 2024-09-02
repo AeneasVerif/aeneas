@@ -284,8 +284,11 @@ example α (a b c d e : α) (h0 : a = b) (h1 : b = c) (h2 : c = d) (h3 : d = e) 
   simp [h0]
   -- You can simplify an assumption rather than the goal
   simp [h2, h3] at h1
-  -- Note that you can simplify the goal *and* all the assumptions with `simp at *`
-  -- Similarly, you can use all the assumptions in the context with: `simp [*]`:
+  /- Note that you can simplify the goal *and* all the assumptions with `simp at *`.
+
+     Similarly, you can simplify the goal by usoing all the assumptions in the context with
+    `simp [*]`:
+   -/
   simp [*]
 
 /- The `simp_all` tactic is quite powerful: it repeatedly simplifies the assumptions
@@ -406,20 +409,24 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
    if it has enough information.
 
    For this reason, `simp [*]` and `simp_all` can often do more work than
-   you expect. In particular, `simp_all` manages to automatically apply
-   `List.index_nzero_cons` below, by using the fact that `i ≠ 0#u32`. -/
+   you expect. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
   (hd :: tl.toList).index i.toNat = hd := by
   simp [hEq]
 
+/- Note that `simp_all` manages to automatically apply `List.index_nzero_cons` below,
+   by using the fact that `i ≠ 0#u32`. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
   (hd :: tl.toList).index i.toNat = tl.toList.index (i.toNat - 1) := by
   simp_all
 
 /- Below, you will need to reason about `List.update`.
-   You can use the following lemmas (which have been marked as `@[simp]`).
+   You can use the following lemmas.
+
+   Those lemmas have been marked as `@[simp]`, meaning that if `simp` is properly used,
+   it will manage to apply them automatically.
  -/
 #check List.update_zero_cons
 #check List.update_nzero_cons
@@ -432,7 +439,7 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
     - you can use `progress` to automatically apply a lemma, then refine it into
       `progress as ⟨ ... ⟩` to name the variables and the post-conditions(s) it introduces.
     - if there is a disjunction or branching (like an `if then else`) in the goal, use `split`
-    - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoa
+    - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoal
       per disjunct
     - you should use `progress` for as long as you see a monadic `do` block, unless you
       see a branching, in which case you should use `split`.
