@@ -216,39 +216,149 @@ def list_nth_mut1
   :=
   list_nth_mut1_loop T l i
 
+/-
+  # The exercises start here
+-/
+
+/- # Notations
+
+  You will need to type special characters: you can refer to those explanations throughout the
+  tutorial.
+
+  In order to type the special characters, you need to type the character '\' then a
+  specific string (note that typing abbreviations often works, for instance "ex" instead
+  of "exists"):
+  - ↑ : \ + u    ("up")
+  - → : \ + r    ("right")
+  - ∧ : \ + and
+  - ∨ : \ + or
+  - ∀ : \ + forall
+  - ∃ : \ + exists
+-/
+
+/- Explanations about some basic tactics -/
+
+/- `simp` simplifies the goal by applying rewriting lemmas and simplifying definitions
+   marked as `@[simp]`. For instance, the lemma `List.length_cons` which states that
+   `(hd :: tl).length = tl.length + 1` has been marked as `simp`: -/
+#check List.length_cons
+example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
+  -- This proves the goal automatically
+  simp
+
+/- You can see which lemmas are applied by `simp` by using `simp?`.
+
+   Note that `simp [...]` allows you to specify additional rewriting lemmas to apply,
+   and that `simp only` allows to forbid `simp` from applying any lemmas other than
+   the ones you provide: this allows you to have quite fine-grained control on the
+   simplifications
+
+   There are ways of being even more precise, for instance by using conversions
+   (https://leanprover.github.io/theorem_proving_in_lean4/conv.html) and the `rw`
+   tactic, but we will not need them for this tutorial. Just be aware that `rw`
+   doesn't apply simplification lemmas recursively, while `simp` repeatedly simplifies
+   the goal until it can't make progress anymore.
+ -/
+example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
+  simp? -- This prints: `simp only [List.length_cons]`
+
+/- The `simp` tactic is quite flexible: -/
+example α (a b c d e : α) (h0 : a = b) (h1 : b = c) (h2 : c = d) (h3 : d = e) : a = e := by
+  -- You can give (named) assumptions to `simp` instead of theorems
+  simp [h0]
+  -- You can simplify an assumption rather than the goal
+  simp [h2, h3] at h1
+  -- Note that you can simplify the goal *and* all the assumptions with `simp at *`
+  -- Similarly, you can use all the assumptions in the context with: `simp [*]`:
+  simp [*]
+
+/- The `simp_all` tactic is quite powerful: it repeatedly simplifies the assumptions
+   and the goal by using the simp lemmas and the assumptions themselves.
+
+   Note that it supports a syntax similar to `simp`: `simp_all only [...]`
+ -/
+example α (a b c d e : α) (h0 : a = b) (h1 : b = c) (h2 : c = d) (h3 : d = e) : a = e := by
+  simp_all
+
+/- You may want to prove intermediate goals: you can do so with `have`. -/
+example (a b c : Prop) (h0 : a → b → c) (h1 : a) (h2 : b) : c := by
+  have h3 : c := by simp_all
+  -- If you omit the name, Lean will use the name `this`
+  have : c := by simp_all
+  -- You can also use an instantiated lemma/assumption with `have`:
+  have _h4 := h0 h1 h2
+  -- If your lemma/assumption has a precondition (i.e., if it is an implication)
+  -- you can use the keyword `by` to prove it
+  have := h0 (by simp [*]) (by simp [*])
+  -- The `apply` tactic allows to apply a theorem or an assumption to the goal, if
+  -- the conclusion of the assumption/theorem matches the goal (here, it allows us
+  -- to finish the goal)
+  apply this
+
+/- As a side note, `simp` simplifies implications, equivalences, etc. so you
+   can actually use it to prove the goal below. -/
+example (a b c : Prop) (h0 : a → b → c) (h1 : a) (h2 : b) : c := by
+  simp_all
+
+/- You can apply a simplification lemma the other way around: -/
+example α (a b c : α) (h0 : a = b) (h1 : b = c) : a = c := by
+  simp [← h1]
+  simp [← h0]
+
+/- To prove a goal of the shape `∀ x0 x1, ...` use `intro y0 y1 ...` to introduce
+   the quantified variables in the context. -/
+example α (p q : α → Prop) (h0 : ∀ x, p x) (h1 : ∀ x, p x → q x) : ∀ x, q x := by
+  intro x
+  have h2 := h0 x
+  have h3 := h1 x h2
+  apply h3
+
+/- If the goal is an linear arithmetic goal, you can use `scalar_tac` to discharge it -/
+example (x y z : Int) (h0 : x + y ≤ 3) (h1 : 2 * z ≤ 4) : x + y + z ≤ 5
+  := by scalar_tac
+
+/- Note that `scalar_tac` is aware of the bounds of the machine integers -/
+example (x : U32) : 0 ≤ x.val ∧ x.val ≤ 2 ^ 32 - 1 := by scalar_tac
+
+/- Renaming: note that the variables which appear in grey are variables which you can't
+   reference directly, either because Lean automatically introduced fresh names for them,
+   or because they are shadowed. You can use the `rename` and `rename_i` tactics to rename$
+   them. -/
+example α (p q r : α → Prop) (h : ∀ x, p x) (h : ∀ x, p x → q x) (h : ∀ x, q x → r x) :
+  ∀ x, r x := by
+  -- Rename all the unnamed variables/assumptions at once
+  rename_i hp hpq
+  -- The `rename` tactic allows to use a pattern to select the variable/assumption to rename
+  rename ∀ (x : α), p x => h0
+  rename ∀ (x : α), p x → q x => h1
+  -- You can use holes in your pattern
+  rename ∀ _, _ → _ => h2
+  --
+  simp_all
+
+/- Coercions make the goal more succinct but can be confusing.
+   We deactivate them when printing goals to make those goals less ambiguous: feel free
+   to remove this line to activate them.
+
+   If you activate coercions, please be aware that:
+   - if `x` is a machine scalar, `↑x : Int` and `x.val` are the same
+   - if `v` is a vector (see exercises below) `↑v : List α` and `v.val` are the same
+
+   Generally speaking,  if you don't know what a **notation** which appears in the goal
+   is exactly, just put your mouse over it.
+ -/
+set_option pp.coercions false
+
 /-- Theorem about `list_nth_mut1`: exercise!
 
     Hints:
-    - you can use `progress` to automatically apply a lemma, then refine it into `progress as ⟨ ... ⟩``
-      to name the variables it introduces
-    - if there is a disjunction in the goal, use `split`
-    - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoal per disjunct
-    - to simplify the context, use:
-      - `simp_all`: simplify the goal and the assumptions, and use the assumptions to simplify the goal
-         and the other assumption
-      - `simp`: simplify the goal
-      - `simp at *`: simplify the goal and the assumptions
-      - `simp [*]`: simplify the goal by using the assumptions
-      - `simp [a]`: simplify the goal by using the theorem `a`/the assumption `a`/unfolding the definition `a`
-        (also works with `simp_all`)
-      - `simp at h`: simplify a given hypothesis
-    - to prove a goal of the shape: `∀ x0 x1, ...`, use `intro y0 y1` to introduce the
-      quantified variables in the context and name them `y0`, `y1`
-    - if the goal is an arithmetic goal, use `scalar_tac`
-
-    In order to type the special characters, you need to type the character '\' then a specific string:
-    - ↑ : \ + u    ("up")
-    - → : \ + r    ("right")
-    - ∧ : \ + and
-    - ∨ : \ + or
-    - ∀ : \ + forall
-    - ∃ : \ + exists
-
-    Remarks:
-    - if `x` is a machine scalar, `↑x : Int` and `x.val` are the same
-    - if `v` is a vector (see exercises below) `↑v : List α` and `v.val` are the same
-
-    If you don't know what a notation which appears in the goal is exactly, just put your mouse over it.
+    - you can use `progress` to automatically apply a lemma, then refine it into
+      `progress as ⟨ ... ⟩` to name the variables and the post-conditions(s) it introduces.
+    - if there is a disjunction or branching (like an `if then else`) in the goal, use `split`
+    - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoa
+      per disjunct
+    - you should use `progress` for as long as you see a monadic `do` block, unless you
+      see a branching, in which case you should use `split`
  -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.to_list.length) :
@@ -310,7 +420,18 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   sorry
 
 
-/- Big numbers -/
+/-
+  # BIG NUMBERS
+ -/
+
+/- Deactivating some simplification procedures which are not necessary and which sometimes
+   makes the goal hard to understand by reducing 2 ^ 32 to 4294967296.
+
+   Remark: as mentioned above, if the simplifier simplifies too much, you can display the
+   simplification lemmas and the simplification procedures it uses with `simp?`, `simp_all?`,
+   etc. and then use `simp only` to control the set of simplifications which gets applied.
+ -/
+attribute [-simp] Int.reducePow Nat.reducePow
 
 /- [tutorial::zero]: loop 0:
    Source: 'src/lib.rs', lines 6:4-11:1 -/
@@ -403,6 +524,7 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
     zero x = ok x' ∧
     x'.length = x.length ∧
     toInt x' = 0 := by
+  rw [zero]
   sorry
 
 /- [tutorial::add_no_overflow]: loop 0:
@@ -500,6 +622,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   ∃ x', add_no_overflow x y = ok x' ∧
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by
+  rw [add_no_overflow]
   sorry
 
 /- [tutorial::add_with_carry]: loop 0:

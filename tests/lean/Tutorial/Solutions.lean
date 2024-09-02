@@ -97,7 +97,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   rw [list_nth]
   split
   . split
-    . simp_all
+    . simp [*]
     . simp_all
       progress as ⟨ i1 ⟩
       progress as ⟨ x ⟩
@@ -333,7 +333,11 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   simp_all
 
 
-/- Big numbers -/
+/-
+  # BIG NUMBERS
+ -/
+
+attribute [-simp] Int.reducePow Nat.reducePow
 
 /- [tutorial::zero]: loop 0:
    Source: 'src/lib.rs', lines 6:4-11:1 -/
@@ -455,21 +459,6 @@ divergent def add_no_overflow_loop
 
     Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
  -/
--- Here, we're using ring_nf
-@[simp]
-theorem toInt_aux_append (l0 l1 : List U32) :
-  toInt_aux (l0 ++ l1) = toInt_aux l0 + 2 ^ (32 * l0.length) * toInt_aux l1 := by
-  match l0 with
-  | [] => simp
-  | hd :: tl =>
-    have := toInt_aux_append tl l1
-    simp_all
-    scalar_eq_nf
-
-/-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
-
-    Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
- -/
 @[simp]
 theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
   toInt_aux (l.update i x) = toInt_aux l + 2 ^ (32 * i) * (x - l.index i) := by
@@ -541,35 +530,36 @@ theorem add_no_overflow_loop_spec
   . progress as ⟨ yv ⟩
     progress as ⟨ xv ⟩
     progress as ⟨ sum ⟩
-    . have := hNoOverflow i.toNat (by scalar_tac) (by scalar_tac)
+    . -- This precondition is not proven automatically
+      have := hNoOverflow i.toNat (by scalar_tac) (by scalar_tac)
       scalar_tac
-    . progress as ⟨ i' ⟩
-      progress as ⟨ x1 ⟩
-      progress as ⟨ x2 ⟩
-      . -- This precondition is not proven automatically
-        intro j h0 h1
-        simp_all
-        -- Simplifying (x.update ...).index:
-        have := List.index_update_neq x.val i.toNat j sum (by scalar_tac)
-        simp [*]
-        apply hNoOverflow j (by scalar_tac) (by scalar_tac)
-      . -- Postcondition
-        /- Note that you don't have to manually call the lemmas `toInt_aux_update`
-           and `toInt_aux_drop` below if you first do:
-           ```
-           have : i.toNat < x.length := by scalar_tac
-           ```
-           (simp_all will automatically apply the lemmas and prove the
-            the precondition sby using the context)
-         -/
-        simp_all [toInt]
-        scalar_eq_nf
-        -- Simplifying: toInt_aux ((↑x).update (↑i).toNat sum)
-        have := toInt_aux_update x.val i.toNat sum (by scalar_tac)
-        simp [*]; scalar_eq_nf
-        -- Simplifying: toInt_aux (List.drop (1 + (↑i).toNat) ↑y
-        have := toInt_aux_drop y.val i.toNat (by scalar_tac)
-        simp [*]; scalar_eq_nf
+    progress as ⟨ i' ⟩
+    progress as ⟨ x1 ⟩
+    progress as ⟨ x2 ⟩
+    . -- This precondition is not proven automatically
+      intro j h0 h1
+      simp_all
+      -- Simplifying (x.update ...).index:
+      have := List.index_update_neq x.val i.toNat j sum (by scalar_tac)
+      simp [*]
+      apply hNoOverflow j (by scalar_tac) (by scalar_tac)
+    -- Postcondition
+    /- Note that you don't have to manually call the lemmas `toInt_aux_update`
+        and `toInt_aux_drop` below if you first do:
+        ```
+        have : i.toNat < x.length := by scalar_tac
+        ```
+        (simp_all will automatically apply the lemmas and prove the
+        the precondition sby using the context)
+      -/
+    simp_all [toInt]
+    scalar_eq_nf
+    -- Simplifying: toInt_aux ((↑x).update (↑i).toNat sum)
+    have := toInt_aux_update x.val i.toNat sum (by scalar_tac)
+    simp [*]; scalar_eq_nf
+    -- Simplifying: toInt_aux (List.drop (1 + (↑i).toNat) ↑y
+    have := toInt_aux_drop y.val i.toNat (by scalar_tac)
+    simp [*]; scalar_eq_nf
   . simp_all
 termination_by (x.length - i.val).toNat
 decreasing_by scalar_decr_tac

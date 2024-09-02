@@ -25,8 +25,8 @@ def index [Inhabited α] (ls : List α) (i : Nat) : α :=
     if i = 0 then x else index tl (i - 1)
 
 @[simp] theorem index_nil [Inhabited α] : @index α _ [] i = Inhabited.default := by simp [index]
-@[simp] theorem index_zero_cons [Inhabited α] : index ((x :: tl) : List α) 0 = x := by simp [index]
-@[simp] theorem index_nzero_cons [Inhabited α] (hne : Nat.not_eq i 0) : index ((x :: tl) : List α) i = index tl (i - 1) := by simp [index]; intro; simp_all
+@[simp] theorem index_zero_cons (x : α) (tl : List α) [Inhabited α] : index ((x :: tl) : List α) 0 = x := by simp [index]
+@[simp] theorem index_nzero_cons (x : α) (tl : List α) (i : Nat) [Inhabited α] (hne : Nat.not_eq i 0) : index ((x :: tl) : List α) i = index tl (i - 1) := by simp [index]; intro; simp_all
 
 theorem indexOpt_bounds (ls : List α) (i : Nat) :
   ls.indexOpt i = none ↔ i < 0 ∨ ls.length ≤ i := by
@@ -85,18 +85,18 @@ def resize (l : List α) (new_len : Nat) (x : α) : List α :=
     l.take new_len ++ replicate (new_len - l.length) x
   else []
 
-@[simp] theorem update_nil : update ([] : List α) i y = [] := by simp [update]
-@[simp] theorem update_zero_cons : update ((x :: tl) : List α) 0 y = y :: tl := by simp [update]
-@[simp] theorem update_nzero_cons (hne : Nat.not_eq i 0) : update ((x :: tl) : List α) i y = x :: update tl (i - 1) y := by simp [update]; intro; simp_all
+@[simp] theorem update_nil i y : update ([] : List α) i y = [] := by simp [update]
+@[simp] theorem update_zero_cons x tl y : update ((x :: tl) : List α) 0 y = y :: tl := by simp [update]
+@[simp] theorem update_nzero_cons x tl i y (hne : Nat.not_eq i 0) : update ((x :: tl) : List α) i y = x :: update tl (i - 1) y := by simp [update]; intro; simp_all
 
-@[simp] theorem drop_nzero_cons (hne : Nat.not_eq i 0) : drop i ((x :: tl) : List α) = drop (i - 1) tl := by cases i <;> simp_all [drop]
+@[simp] theorem drop_nzero_cons i x tl (hne : Nat.not_eq i 0) : drop i ((x :: tl) : List α) = drop (i - 1) tl := by cases i <;> simp_all [drop]
 
-@[simp] theorem take_nzero_cons (hne : Nat.not_eq i 0) : take i ((x :: tl) : List α) = x :: take (i - 1) tl := by cases i <;> simp_all
+@[simp] theorem take_nzero_cons i x tl (hne : Nat.not_eq i 0) : take i ((x :: tl) : List α) = x :: take (i - 1) tl := by cases i <;> simp_all
 
-@[simp] theorem slice_nil : slice i j ([] : List α) = [] := by simp [slice]
-@[simp] theorem slice_zero : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
+@[simp] theorem slice_nil i j : slice i j ([] : List α) = [] := by simp [slice]
+@[simp] theorem slice_zero ls : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
 
-@[simp] theorem replicate_nzero_cons (hne : Nat.not_eq i 0) : replicate i x = x :: replicate (i - 1) x := by
+@[simp] theorem replicate_nzero_cons i (x : List α) (hne : Nat.not_eq i 0) : replicate i x = x :: replicate (i - 1) x := by
   cases i <;> simp_all [replicate]
 
 @[simp]
