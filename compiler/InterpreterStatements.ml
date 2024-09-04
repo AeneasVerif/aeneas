@@ -828,6 +828,26 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 regions_hierarchy,
                 inst_sg )))
 
+(** Helper: introduce a fresh symbolic value for a global *)
+let eval_global_as_fresh_symbolic_value (span : Meta.span)
+    (gref : global_decl_ref) (ctx : eval_ctx) : symbolic_value =
+  let generics = gref.global_generics in
+  let global = ctx_lookup_global_decl ctx gref.global_id in
+  cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
+    "Const globals should not contain regions";
+  (* Instantiate the type  *)
+  (* There shouldn't be any reference to Self *)
+  let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
+  let generics = Subst.generic_args_erase_regions generics in
+  let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
+    Subst.make_subst_from_generics global.generics generics tr_self
+  in
+  let ty =
+    Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
+      global.ty
+  in
+  mk_fresh_symbolic_value span ty
+
 (** Evaluate a statement *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
@@ -977,31 +997,18 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
 and eval_global (config : config) (span : Meta.span) (dest : place)
     (gref : global_decl_ref) : stl_cm_fun =
  fun ctx ->
-  let generics = gref.global_generics in
-  let global = ctx_lookup_global_decl ctx gref.global_id in
   match config.mode with
   | ConcreteMode ->
       (* Treat the evaluation of the global as a call to the global body *)
+      let generics = gref.global_generics in
+      let global = ctx_lookup_global_decl ctx gref.global_id in
       let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
       eval_transparent_function_call_concrete config span global.body call ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
-        "Const globals should not contain regions";
-      (* Instantiate the type  *)
-      (* There shouldn't be any reference to Self *)
-      let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
-      let generics = Subst.generic_args_erase_regions generics in
-      let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
-        Subst.make_subst_from_generics global.generics generics tr_self
-      in
-      let ty =
-        Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
-          global.ty
-      in
-      let sval = mk_fresh_symbolic_value span ty in
+      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
       let ctx, cc =
         assign_to_place config span
           (mk_typed_value_from_symbolic_value sval)
@@ -1017,8 +1024,6 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
   (* We only support shared references to globals *)
   cassert __FILE__ __LINE__ (rk = RShared) span
     "Can only create shared references to global values";
-  let generics = gref.global_generics in
-  let global = ctx_lookup_global_decl ctx gref.global_id in
   match config.mode with
   | ConcreteMode ->
       (* We should treat the evaluation of the global as a call to the global body,
@@ -1029,20 +1034,7 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}).
        * We then create a reference to the global.
        *)
-      cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
-        "Const globals should not contain regions";
-      (* Instantiate the type  *)
-      (* There shouldn't be any reference to Self *)
-      let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
-      let generics = Subst.generic_args_erase_regions generics in
-      let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
-        Subst.make_subst_from_generics global.generics generics tr_self
-      in
-      let ty =
-        Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
-          global.ty
-      in
-      let sval = mk_fresh_symbolic_value span ty in
+      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
       let typed_sval = mk_typed_value_from_symbolic_value sval in
       (* Create a shared loan containing the global, as well as a shared borrow *)
       let bid = fresh_borrow_id () in
