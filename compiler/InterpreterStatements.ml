@@ -865,6 +865,9 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       | Global gref ->
           (* Evaluate the global *)
           eval_global config st.span p gref ctx
+      | GlobalRef (gref, rkind) ->
+          (* Evaluate the reference to the global *)
+          eval_global_ref config st.span p gref rkind ctx
       | _ ->
           (* Evaluate the rvalue *)
           let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
@@ -884,7 +887,8 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                  * reserved borrow, we later can't translate it to pure values...) *)
                 let cc =
                   match rvalue with
-                  | Global _ -> craise __FILE__ __LINE__ st.span "Unreachable"
+                  | Global _ | GlobalRef _ ->
+                      craise __FILE__ __LINE__ st.span "Unreachable"
                   | Len _ ->
                       craise __FILE__ __LINE__ st.span "Len is not handled yet"
                   | Use _
@@ -1003,6 +1007,62 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
           (mk_typed_value_from_symbolic_value sval)
           dest ctx
       in
+      ( [ (ctx, Unit) ],
+        cc_singleton __FILE__ __LINE__ span
+          (cc_comp (S.synthesize_global_eval gref sval) cc) )
+
+and eval_global_ref (config : config) (span : Meta.span) (dest : place)
+    (gref : global_decl_ref) (rk : ref_kind) : stl_cm_fun =
+ fun ctx ->
+  (* We only support shared references to globals *)
+  cassert __FILE__ __LINE__ (rk = RShared) span
+    "Can only create shared references to global values";
+  let generics = gref.global_generics in
+  let global = ctx_lookup_global_decl ctx gref.global_id in
+  match config.mode with
+  | ConcreteMode ->
+      (* We should treat the evaluation of the global as a call to the global body,
+         then create a reference *)
+      craise __FILE__ __LINE__ span "Unimplemented"
+  | SymbolicMode ->
+      (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
+       * defined as equal to the value of the global (see {!S.synthesize_global_eval}).
+       * We then create a reference to the global.
+       *)
+      cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
+        "Const globals should not contain regions";
+      (* Instantiate the type  *)
+      (* There shouldn't be any reference to Self *)
+      let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
+      let generics = Subst.generic_args_erase_regions generics in
+      let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
+        Subst.make_subst_from_generics global.generics generics tr_self
+      in
+      let ty =
+        Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
+          global.ty
+      in
+      let sval = mk_fresh_symbolic_value span ty in
+      let typed_sval = mk_typed_value_from_symbolic_value sval in
+      (* Create a shared loan containing the global, as well as a shared borrow *)
+      let bid = fresh_borrow_id () in
+      let loan : typed_value =
+        {
+          value = VLoan (VSharedLoan (BorrowId.Set.singleton bid, typed_sval));
+          ty = sval.sv_ty;
+        }
+      in
+      let borrow : typed_value =
+        {
+          value = VBorrow (VSharedBorrow bid);
+          ty = TRef (RErased, sval.sv_ty, RShared);
+        }
+      in
+      (* We need to push the shared loan in a dummy variable *)
+      let dummy_id = fresh_dummy_var_id () in
+      let ctx = ctx_push_dummy_var ctx dummy_id loan in
+      (* Assign the borrow to its destination *)
+      let ctx, cc = assign_to_place config span borrow dest ctx in
       ( [ (ctx, Unit) ],
         cc_singleton __FILE__ __LINE__ span
           (cc_comp (S.synthesize_global_eval gref sval) cc) )

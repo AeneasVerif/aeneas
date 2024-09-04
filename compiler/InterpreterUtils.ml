@@ -298,6 +298,7 @@ let rvalue_get_place (rv : rvalue) : place option =
   | UnaryOp _
   | BinaryOp _
   | Global _
+  | GlobalRef _
   | Discriminant _
   | Aggregate _ -> None
 
