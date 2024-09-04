@@ -780,7 +780,9 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
   let v, cf_compute =
     (* Match on the aggregate kind *)
     match aggregate_kind with
-    | AggregatedAdt (type_id, opt_variant_id, generics) -> (
+    | AggregatedAdt (type_id, opt_variant_id, opt_field_id, generics) -> (
+        (* The opt_field_id is Some only for unions, that we don't support *)
+        sanity_check __FILE__ __LINE__ (opt_field_id = None) span;
         match type_id with
         | TTuple ->
             let tys = List.map (fun (v : typed_value) -> v.ty) values in
