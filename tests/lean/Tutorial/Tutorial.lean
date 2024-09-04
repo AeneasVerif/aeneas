@@ -229,8 +229,21 @@ def append_in_place
   let (_, list_tail_back) ← list_tail T l0
   list_tail_back l1
 
+/- [tutorial::reverse]: loop 0:
+   Source: 'src/lib.rs', lines 147:4-154:1 -/
+divergent def reverse_loop
+  (T : Type) (l : CList T) (out : CList T) : Result (CList T) :=
+  match l with
+  | CList.CCons hd tl => reverse_loop T tl (CList.CCons hd out)
+  | CList.CNil => Result.ok out
+
+/- [tutorial::reverse]:
+   Source: 'src/lib.rs', lines 146:0-154:1 -/
+def reverse (T : Type) (l : CList T) : Result (CList T) :=
+  reverse_loop T l CList.CNil
+
 /- [tutorial::zero]: loop 0:
-   Source: 'src/lib.rs', lines 152:4-157:1 -/
+   Source: 'src/lib.rs', lines 163:4-168:1 -/
 divergent def zero_loop
   (x : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
   let i1 := alloc.vec.Vec.len U32 x
@@ -246,12 +259,12 @@ divergent def zero_loop
   else Result.ok x
 
 /- [tutorial::zero]:
-   Source: 'src/lib.rs', lines 151:0-157:1 -/
+   Source: 'src/lib.rs', lines 162:0-168:1 -/
 def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
   zero_loop x 0#usize
 
 /- [tutorial::add_no_overflow]: loop 0:
-   Source: 'src/lib.rs', lines 165:4-170:1 -/
+   Source: 'src/lib.rs', lines 176:4-181:1 -/
 divergent def add_no_overflow_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize) :
   Result (alloc.vec.Vec U32)
@@ -273,7 +286,7 @@ divergent def add_no_overflow_loop
   else Result.ok x
 
 /- [tutorial::add_no_overflow]:
-   Source: 'src/lib.rs', lines 164:0-170:1 -/
+   Source: 'src/lib.rs', lines 175:0-181:1 -/
 def add_no_overflow
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (alloc.vec.Vec U32)
@@ -281,7 +294,7 @@ def add_no_overflow
   add_no_overflow_loop x y 0#usize
 
 /- [tutorial::add_with_carry]: loop 0:
-   Source: 'src/lib.rs', lines 177:4-188:1 -/
+   Source: 'src/lib.rs', lines 188:4-199:1 -/
 divergent def add_with_carry_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize) :
   Result (U8 × (alloc.vec.Vec U32))
@@ -313,7 +326,7 @@ divergent def add_with_carry_loop
   else Result.ok (c0, x)
 
 /- [tutorial::add_with_carry]:
-   Source: 'src/lib.rs', lines 175:0-188:1 -/
+   Source: 'src/lib.rs', lines 186:0-199:1 -/
 def add_with_carry
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (U8 × (alloc.vec.Vec U32))
@@ -321,14 +334,14 @@ def add_with_carry
   add_with_carry_loop x y 0#u8 0#usize
 
 /- [tutorial::max]:
-   Source: 'src/lib.rs', lines 190:0-192:1 -/
+   Source: 'src/lib.rs', lines 201:0-203:1 -/
 def max (x : Usize) (y : Usize) : Result Usize :=
   if x > y
   then Result.ok x
   else Result.ok y
 
 /- [tutorial::get_or_zero]:
-   Source: 'src/lib.rs', lines 194:0-196:1 -/
+   Source: 'src/lib.rs', lines 205:0-207:1 -/
 def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
   let i1 := alloc.vec.Vec.len U32 y
   if i < i1
@@ -338,7 +351,7 @@ def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
   else Result.ok 0#u32
 
 /- [tutorial::add]: loop 0:
-   Source: 'src/lib.rs', lines 208:4-224:1 -/
+   Source: 'src/lib.rs', lines 219:4-235:1 -/
 divergent def add_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (max1 : Usize) (c0 : U8)
   (i : Usize) :
@@ -373,7 +386,7 @@ divergent def add_loop
     else Result.ok x
 
 /- [tutorial::add]:
-   Source: 'src/lib.rs', lines 203:0-224:1 -/
+   Source: 'src/lib.rs', lines 214:0-235:1 -/
 def add
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (alloc.vec.Vec U32)

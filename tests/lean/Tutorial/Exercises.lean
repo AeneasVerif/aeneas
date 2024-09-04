@@ -69,12 +69,12 @@ open CList
 /-- Convert a "custom" list to a standard Lean list.
 
     By putting this definition in the namespace `CList`, we give the possibility of using the `.`
-    notation: if `x` has type `CList α` we can write `x.to_list` instead of `to_list x`.
+    notation: if `x` has type `CList α` we can write `x.toList` instead of `toList x`.
  -/
-@[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
+@[simp] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
-  | CCons hd tl => hd :: tl.to_list
+  | CCons hd tl => hd :: tl.toList
 
 /- [tutorial::list_nth]:
    Source: 'src/lib.rs', lines 37:0-37:56 -/
@@ -90,9 +90,9 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
 
 /-- Theorem about `list_nth` -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.to_list.length) :
+  (h : i.val < l.toList.length) :
   ∃ x, list_nth T l i = ok x ∧
-  x = l.to_list.index i.toNat
+  x = l.toList.index i.toNat
   := by
   rw [list_nth]
   split
@@ -216,46 +216,247 @@ def list_nth_mut1
   :=
   list_nth_mut1_loop T l i
 
-/-- Theorem about `list_nth_mut1`: exercise!
+/-
+  # #####################################################################
+  # ###   THE EXERCISES START HERE     ##################################
+  # #####################################################################
+-/
 
-    Hints:
-    - you can use `progress` to automatically apply a lemma, then refine it into `progress as ⟨ ... ⟩``
-      to name the variables it introduces
-    - if there is a disjunction in the goal, use `split`
-    - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoal per disjunct
-    - to simplify the context, use:
-      - `simp_all`: simplify the goal and the assumptions, and use the assumptions to simplify the goal
-         and the other assumption
-      - `simp`: simplify the goal
-      - `simp at *`: simplify the goal and the assumptions
-      - `simp [*]`: simplify the goal by using the assumptions
-      - `simp [a]`: simplify the goal by using the theorem `a`/the assumption `a`/unfolding the definition `a`
-        (also works with `simp_all`)
-      - `simp at h`: simplify a given hypothesis
-    - to prove a goal of the shape: `∀ x0 x1, ...`, use `intro y0 y1` to introduce the
-      quantified variables in the context and name them `y0`, `y1`
-    - if the goal is an arithmetic goal, use `scalar_tac`
+/- # Notations
 
-    In order to type the special characters, you need to type the character '\' then a specific string:
-    - ↑ : \ + u    ("up")
-    - → : \ + r    ("right")
-    - ∧ : \ + and
-    - ∨ : \ + or
-    - ∀ : \ + forall
-    - ∃ : \ + exists
+  You will need to type some special characters like `↑` or `∃`, `∧`, etc..
 
-    Remarks:
-    - if `x` is a machine scalar, `↑x : Int` and `x.val` are the same
-    - if `v` is a vector (see exercises below) `↑v : List α` and `v.val` are the same
+  In order to type the special characters, you need to type the character '\' then a
+  specific string (note that typing an abbreviation often works, for instance "ex" instead
+  of "exists"):
+  - `↑` : \ + u    ("up")
+  - `→` : \ + r    ("right")
+  - `∧` : \ + and
+  - `∨` : \ + or
+  - `∀` : \ + forall
+  - `∃` : \ + exists
+-/
 
-    If you don't know what a notation which appears in the goal is exactly, just put your mouse over it.
+/- # Basic tactics -/
+
+/- `simp` simplifies the goal by applying rewriting lemmas and simplifying definitions
+   marked as `@[simp]`. For instance, the lemma `List.length_cons` which states that
+   `(hd :: tl).length = tl.length + 1` has been marked as `simp`: -/
+#check List.length_cons
+example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
+  -- This proves the goal automatically, by using `List.length_cons` above
+  simp
+
+/- You can see which lemmas are applied by `simp` by using `simp?`.
+   This is often useful to build the intuition of what `simp` does, especially when
+   it simplifies the goal a lot.
+
+   Note that `simp [...]` allows you to specify additional rewriting lemmas to apply,
+   and that `simp only` allows to forbid `simp` from applying any lemmas other than
+   the ones you provide: this allows you to have quite fine-grained control on the
+   simplifications
+
+   There are ways of being even more precise, for instance by using conversions
+   (https://leanprover.github.io/theorem_proving_in_lean4/conv.html) and the `rw`
+   tactic, but you will not need to understand those for this tutorial.
+
+   Just be aware that `rw` doesn't apply simplification lemmas recursively, while
+   `simp` repeatedly simplifies the goal until it can't make progress anymore.
+ -/
+example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
+  simp? -- This prints: `simp only [List.length_cons]`
+
+/- Your turn!
+
+   Note that we give **tips and tricks** in the solutions: we advise to always have a look at them
+   after you completed a proof.
+ -/
+example α (n : Nat) (x y : α) (l0 l1 l2 : List α)
+  (h0 : l1 = x :: l0)
+  (h1 : l2 = y :: l1)
+  (h2 : l0.length = n) :
+  l2.length = n + 2 := by
+  sorry
+
+/- The `simp` tactic is quite flexible: -/
+example α (a b c d e : α) (h0 : a = b) (h1 : b = c) (h2 : c = d) (h3 : d = e) : a = e := by
+  -- You can give (named) assumptions to `simp` instead of theorems
+  simp [h0]
+  -- You can simplify an assumption rather than the goal
+  simp [h2, h3] at h1
+  /- Note that you can simplify the goal *and* all the assumptions with `simp at *`.
+
+     Similarly, you can simplify the goal by usoing all the assumptions in the context with
+    `simp [*]`:
+   -/
+  simp [*]
+
+/- The `simp_all` tactic is quite powerful: it repeatedly simplifies the assumptions
+   and the goal by using the simp lemmas and the assumptions themselves.
+
+   Note that it supports a syntax similar to `simp`: `simp_all only [...]`
+ -/
+example α (a b c d e : α) (h0 : a = b) (h1 : b = c) (h2 : c = d) (h3 : d = e) : a = e := by
+  simp_all
+
+/- You may want to prove intermediate goals: you can do so with `have`. -/
+example (a b c : Prop) (h0 : a → b → c) (h1 : a) (h2 : b) : c := by
+  have h3 : c := by simp_all
+  -- If you omit the name, Lean will use the name `this`
+  have : c := by simp_all
+  -- You can also use an instantiated lemma/assumption with `have`:
+  have _h4 := h0 h1 h2
+  -- If your lemma/assumption has a precondition (i.e., if it is an implication)
+  -- you can use the keyword `by` to prove it
+  have := h0 (by simp [*]) (by simp [*])
+  -- The `apply` tactic allows to apply a theorem or an assumption to the goal, if
+  -- the conclusion of the assumption/theorem matches the goal (here, it allows us
+  -- to finish the goal)
+  apply this
+
+/- As a side note, `simp` simplifies implications, equivalences, etc. so you
+   can actually use it to prove the goal below. -/
+example (a b c : Prop) (h0 : a → b → c) (h1 : a) (h2 : b) : c := by
+  simp_all
+
+/- Your turn! -/
+example (a b c d : Prop) (h0 : a → b → c) (h1 : c → d → e)
+  (ha : a) (hb : b) (hd : d) : e := by
+  sorry
+
+/- You can apply a simplification lemma the other way around: -/
+example α (a b c : α) (h0 : a = b) (h1 : b = c) : a = c := by
+  simp [← h1]
+  simp [← h0]
+
+/- To prove a goal of the shape `∀ x0 x1, ...` use `intro y0 y1 ...` to introduce
+   the quantified variables in the context. -/
+example α (p q : α → Prop) (h0 : ∀ x, p x) (h1 : ∀ x, p x → q x) : ∀ x, q x := by
+  intro x
+  have h2 := h0 x
+  have h3 := h1 x h2
+  apply h3
+
+/- If the goal is an linear arithmetic goal, you can use `scalar_tac` to discharge it -/
+example (x y z : Int) (h0 : x + y ≤ 3) (h1 : 2 * z ≤ 4) : x + y + z ≤ 5
+  := by scalar_tac
+
+/- Note that `scalar_tac` is aware of the bounds of the machine integers -/
+example (x : U32) : 0 ≤ x.val ∧ x.val ≤ 2 ^ 32 - 1 := by scalar_tac
+
+/- Renaming: note that the variables which appear in grey are variables which you can't
+   reference directly, either because Lean automatically introduced fresh names for them,
+   or because they are shadowed. You can use the `rename` and `rename_i` tactics to rename$
+   them. -/
+example α (p q r : α → Prop) (h : ∀ x, p x) (h : ∀ x, p x → q x) (h : ∀ x, q x → r x) :
+  ∀ x, r x := by
+  -- Rename all the unnamed variables/assumptions at once
+  rename_i hp hpq
+  -- The `rename` tactic allows to use a pattern to select the variable/assumption to rename
+  rename ∀ (x : α), p x => h0
+  rename ∀ (x : α), p x → q x => h1
+  -- You can use holes in your pattern
+  rename ∀ _, _ → _ => h2
+  --
+  simp_all
+
+/- **Coercions**:
+   The notation `↑` indicates a coercion. For instance:
+   - if `x` is a machine scalar, `↑x : Int` desugars to `x.val`
+   - if `v` is a vector (see exercises below), `↑v : List α` desugars to `v.val`
+
+   Note that if you don't know what a **notation** which appears in the goal is exactly, just
+   put your mouse over it.
+
+   If you find coercions too confusing, you can set the option below to `false`.
+   Note however that the goals will become significantly more verbose.
+ -/
+set_option pp.coercions true
+
+/- # Reasoning about lists
+
+   Small preparation for theorem `list_nth_mut1`.
+ -/
+
+/- Reasoning about `List.index`.
+
+   You can use the following two lemmas.
+ -/
+#check List.index_zero_cons
+#check List.index_nzero_cons
+
+/- Example 1: indexing the first element of the list -/
+example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
+  (hEq : i = 0#u32) :
+  (hd :: tl.toList).index i.toNat = hd := by
+  have hi : i.toNat = 0 := by scalar_tac
+  simp only [hi]
+  --
+  have hIndex := List.index_zero_cons hd tl.toList
+  simp only [hIndex]
+
+/- Example 2: indexing in the tail -/
+example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
+  (hEq : i ≠ 0#u32) :
+  (hd :: tl.toList).index i.toNat = tl.toList.index (i.toNat - 1) := by
+  -- Note that `scalar_tac` is aware of `Arith.Nat.not_eq`
+  have hIndex := List.index_nzero_cons hd tl.toList i.toNat (by scalar_tac)
+  simp only [hIndex]
+
+/- Note that `List.index_zero_cons` and `List.index_nzero_cons` have been
+   marked as `@[simp]` and are thus automatically applied. Also note
+   that `simp` can automatically prove the premises of rewriting lemmas,
+   if it has enough information.
+
+   For this reason, `simp [*]` and `simp_all` can often do more work than
+   you expect. -/
+example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
+  (hEq : i = 0#u32) :
+  (hd :: tl.toList).index i.toNat = hd := by
+  simp [hEq]
+
+/- Note that `simp_all` manages to automatically apply `List.index_nzero_cons` below,
+   by using the fact that `i ≠ 0#u32`. -/
+example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
+  (hEq : i ≠ 0#u32) :
+  (hd :: tl.toList).index i.toNat = tl.toList.index (i.toNat - 1) := by
+  simp_all
+
+/- Below, you will need to reason about `List.update`.
+   You can use the following lemmas.
+
+   Those lemmas have been marked as `@[simp]`, meaning that if `simp` is properly used,
+   it will manage to apply them automatically.
+ -/
+#check List.update_zero_cons
+#check List.update_nzero_cons
+
+/- # Some proofs of programs -/
+
+/-- Theorem about `list_nth_mut1`.
+
+    **Hints**:
+    - you can use `progress` to automatically apply a lemma, then refine it into
+      `progress as ⟨ ... ⟩` to name the variables and the post-conditions(s) it introduces.
+    - if there is a disjunction or branching (like an `if then else`) in the goal, use `split`
+    - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoal
+      per disjunct
+    - you should use `progress` for as long as you see a monadic `do` block, unless you
+      see a branching, in which case you should use `split`.
+
+    **Remark**: we wrote two versions of the solution in `Solutions.lean`:
+    - a verbose one, where we attempt to be precise with the simplifer and
+      precisely instantiate the lemmas we need. This is for pedagogical
+      purpose.
+    - a simpler one, which is closer to what one would write in a real
+      development
  -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.to_list.length) :
+  (h : i.val < l.toList.length) :
   ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
-  x = l.to_list.index i.toNat ∧
+  x = l.toList.index i.toNat ∧
   -- Specification of the backward function
-  ∀ x', ∃ l', back x' = ok l' ∧ l'.to_list = l.to_list.update i.toNat x' := by
+  ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   sorry
 
@@ -297,7 +498,7 @@ def append_in_place
 @[pspec]
 theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail T l = ok (CList.CNil, back) ∧
-  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
+  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
   sorry
 
@@ -305,12 +506,50 @@ theorem list_tail_spec {T : Type} (l : CList T) :
 @[pspec]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place T l0 l1 = ok l2 ∧
-  l2.to_list = l0.to_list ++ l1.to_list := by
+  l2.toList = l0.toList ++ l1.toList := by
   rw [append_in_place]
   sorry
 
+/- [tutorial::reverse]: loop 0:
+   Source: 'src/lib.rs', lines 147:4-154:1 -/
+divergent def reverse_loop
+  (T : Type) (l : CList T) (out : CList T) : Result (CList T) :=
+  match l with
+  | CList.CCons hd tl => reverse_loop T tl (CList.CCons hd out)
+  | CList.CNil => Result.ok out
 
-/- Big numbers -/
+@[pspec]
+theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
+  ∃ l', reverse_loop T l out = ok l' ∧
+  True -- Leaving the post-condition as an exercise
+  := by
+  rw [reverse_loop]
+  sorry
+
+/- [tutorial::reverse]:
+   Source: 'src/lib.rs', lines 146:0-154:1 -/
+def reverse (T : Type) (l : CList T) : Result (CList T) :=
+  reverse_loop T l CList.CNil
+
+theorem reverse_spec {T : Type} (l : CList T) :
+  ∃ l', reverse T l = ok l' ∧
+  True -- Leaving the post-condition as an exercise
+  := by
+  rw [reverse]
+  sorry
+
+/-
+  # BIG NUMBERS
+ -/
+
+/- Deactivating some simplification procedures which are not necessary and which sometimes
+   makes the goal hard to understand by reducing 2 ^ 32 to 4294967296.
+
+   Remark: as mentioned above, if the simplifier simplifies too much, you can display the
+   simplification lemmas and the simplification procedures it uses with `simp?`, `simp_all?`,
+   etc. and then use `simp only` to control the set of simplifications which gets applied.
+ -/
+attribute [-simp] Int.reducePow Nat.reducePow
 
 /- [tutorial::zero]: loop 0:
    Source: 'src/lib.rs', lines 6:4-11:1 -/
@@ -403,6 +642,7 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
     zero x = ok x' ∧
     x'.length = x.length ∧
     toInt x' = 0 := by
+  rw [zero]
   sorry
 
 /- [tutorial::add_no_overflow]: loop 0:
@@ -449,11 +689,11 @@ theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
     Remark: this proof is slightly technical and requires to control rewritings precisely (we
     haven't explained how to do that above) to prove at some point that (beware of the conversions
     between ℕ and ℤ!):
-    `2 ^ (i * 32) = ((2 ^ ((i - 1) * 32) * 4294967296 : Int)`
+    `2 ^ (i * 32) = ((2 ^ ((i - 1) * 32) * 2 ^ 32 : Int)`
 
     We recommend that you keep this proof until the very end then:
     - either ask for help
-    - go see the solution
+    - or go see the solution
  -/
 @[simp]
 theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
@@ -463,7 +703,7 @@ theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) 
 /-- The proof about `add_no_overflow_loop`.
 
     Hint: you will need to reason about non-linear arithmetic with `scalar_nf` and
-    `scalar_eq_nf`` (see above).
+    `scalar_eq_nf` (see above).
  -/
 @[pspec]
 theorem add_no_overflow_loop_spec
@@ -494,6 +734,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   ∃ x', add_no_overflow x y = ok x' ∧
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by
+  rw [add_no_overflow]
   sorry
 
 /- [tutorial::add_with_carry]: loop 0:
