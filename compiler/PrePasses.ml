@@ -2,8 +2,6 @@
     (concrete/symbolic) interpreter on it
  *)
 
-open Types
-open Expressions
 open LlbcAst
 open Utils
 open LlbcAstUtils
@@ -377,7 +375,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
 let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
   let filter_in_body (body : statement) : statement =
-    let filtered = ref VarId.Set.empty in
+    let filtered = ref LocalId.Set.empty in
 
     let filter_visitor =
       object
@@ -387,14 +385,14 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
           match (p.projection, rv) with
           | [], RvRef (_, BShallow) ->
               (* Filter *)
-              filtered := VarId.Set.add p.var_id !filtered;
+              filtered := LocalId.Set.add p.var_id !filtered;
               Nop
           | _ ->
               (* Don't filter *)
               super#visit_Assign env p rv
 
         method! visit_FakeRead env p =
-          if p.projection = [] && VarId.Set.mem p.var_id !filtered then
+          if p.projection = [] && LocalId.Set.mem p.var_id !filtered then
             (* Filter *)
             Nop
           else super#visit_FakeRead env p
@@ -412,9 +410,9 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
         (* Remember the span of the statement we enter *)
         method! visit_statement _ st = super#visit_statement st.span st
 
-        method! visit_var_id span id =
+        method! visit_local_id span id =
           cassert __FILE__ __LINE__
-            (not (VarId.Set.mem id !filtered))
+            (not (LocalId.Set.mem id !filtered))
             span
             "Filtered variables should have completely disappeared from the \
              body"

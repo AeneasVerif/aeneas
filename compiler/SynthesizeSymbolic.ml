@@ -1,6 +1,4 @@
-open Types
 open TypesUtils
-open Expressions
 open Values
 open LlbcAst
 open SymbolicAst

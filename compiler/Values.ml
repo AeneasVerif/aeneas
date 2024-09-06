@@ -1,6 +1,5 @@
 open Identifiers
-open Types
-include Charon.Values
+include Charon.GAst
 
 (* TODO(SH): I often write "abstract" (value, borrow content, etc.) while I should
  * write "abstraction" (because those values are not abstract, they simply are
@@ -28,7 +27,6 @@ class ['self] iter_typed_value_base =
     method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
       fun _ _ -> ()
 
-    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
     method visit_borrow_id : 'env -> borrow_id -> unit = fun _ _ -> ()
     method visit_loan_id : 'env -> loan_id -> unit = fun _ _ -> ()
 
@@ -48,7 +46,6 @@ class ['self] map_typed_value_base =
         : 'env -> symbolic_value_id -> symbolic_value_id =
       fun _ x -> x
 
-    method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
     method visit_borrow_id : 'env -> borrow_id -> borrow_id = fun _ id -> id
     method visit_loan_id : 'env -> loan_id -> loan_id = fun _ id -> id
 

@@ -6,7 +6,6 @@
     enforced by local clauses (i.e., clauses of the shape [where Trait1::T = Trait2::U]).
  *)
 
-open Types
 open TypesUtils
 open Values
 open LlbcAst

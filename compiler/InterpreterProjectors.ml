@@ -1,4 +1,3 @@
-open Types
 open Values
 open Contexts
 module Subst = Substitute

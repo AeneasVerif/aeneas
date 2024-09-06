@@ -113,7 +113,7 @@ let mk_tag (msg : string) (next_e : texpression) : texpression =
   let ty = next_e.ty in
   { e; ty }
 
-let mk_mplace (var_id : E.VarId.id) (name : string option)
+let mk_mplace (var_id : A.LocalId.id) (name : string option)
     (projection : mprojection) : mplace =
   { var_id; name; projection }
 

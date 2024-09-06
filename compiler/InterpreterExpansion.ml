@@ -3,7 +3,6 @@
  * some path utilities for replacement. We might change that in the future (by
  * using indices to identify the values for instance). *)
 
-open Types
 open Values
 open Contexts
 open TypesUtils

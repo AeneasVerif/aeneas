@@ -4,7 +4,6 @@
     to check if two contexts are equivalent (modulo conversion).
  *)
 
-open Types
 open Values
 open Contexts
 open TypesUtils

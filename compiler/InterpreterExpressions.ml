@@ -1,7 +1,5 @@
-open Types
 open Values
 open Scalars
-open Expressions
 open Utils
 open Contexts
 open TypesUtils

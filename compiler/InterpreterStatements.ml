@@ -1,8 +1,6 @@
-open Types
 open TypesUtils
 open Values
 open ValuesUtils
-open Expressions
 open Contexts
 open LlbcAst
 open Cps
@@ -63,22 +61,22 @@ let remove_dummy_var (span : Meta.span) (vid : DummyVarId.id) (ctx : eval_ctx) :
   (v, ctx)
 
 (** Push an uninitialized variable to the environment *)
-let push_uninitialized_var (span : Meta.span) (var : var) (ctx : eval_ctx) :
+let push_uninitialized_var (span : Meta.span) (var : local) (ctx : eval_ctx) :
     eval_ctx =
   ctx_push_uninitialized_var span ctx var
 
 (** Push a list of uninitialized variables to the environment *)
-let push_uninitialized_vars (span : Meta.span) (vars : var list)
+let push_uninitialized_vars (span : Meta.span) (vars : local list)
     (ctx : eval_ctx) : eval_ctx =
   ctx_push_uninitialized_vars span ctx vars
 
 (** Push a variable to the environment *)
-let push_var (span : Meta.span) (var : var) (v : typed_value) (ctx : eval_ctx) :
-    eval_ctx =
+let push_var (span : Meta.span) (var : local) (v : typed_value) (ctx : eval_ctx)
+    : eval_ctx =
   ctx_push_var span ctx var v
 
 (** Push a list of variables to the environment *)
-let push_vars (span : Meta.span) (vars : (var * typed_value) list)
+let push_vars (span : Meta.span) (vars : (local * typed_value) list)
     (ctx : eval_ctx) : eval_ctx =
   ctx_push_vars span ctx vars
 
@@ -302,7 +300,7 @@ let move_return_value (config : config) (span : Meta.span)
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
   if pop_return_value then
-    let ret_vid = VarId.zero in
+    let ret_vid = LocalId.zero in
     let v, ctx, cc =
       eval_operand config span (Move (mk_place_from_var_id ret_vid)) ctx
     in
@@ -318,7 +316,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
   log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
 
   (* List the local variables, but the return variable *)
-  let ret_vid = VarId.zero in
+  let ret_vid = LocalId.zero in
   let rec list_locals env =
     match env with
     | [] -> craise __FILE__ __LINE__ span "Inconsistent environment"
@@ -329,12 +327,12 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
         if var.index <> ret_vid then var.index :: locals else locals
     | EFrame :: _ -> []
   in
-  let locals : VarId.id list = list_locals ctx.env in
+  let locals : LocalId.id list = list_locals ctx.env in
   (* Debug *)
   log#ldebug
     (lazy
       ("pop_frame: locals in which to drop the outer loans: ["
-      ^ String.concat "," (List.map VarId.to_string locals)
+      ^ String.concat "," (List.map LocalId.to_string locals)
       ^ "]"));
 
   (* Move the return value out of the return variable *)
@@ -422,7 +420,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       let box_v = mk_typed_value span box_ty box_v in
 
       (* Move this value to the return variable *)
-      let dest = mk_place_from_var_id VarId.zero in
+      let dest = mk_place_from_var_id LocalId.zero in
       comp cc (assign_to_place config span box_v dest ctx)
   | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
 
@@ -458,14 +456,14 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
       let ctx = push_frame ctx in
 
       (* Create and push the return variable *)
-      let ret_vid = VarId.zero in
+      let ret_vid = LocalId.zero in
       let ret_ty = get_assumed_function_return_type span ctx fid generics in
       let ret_var = mk_var ret_vid (Some "@return") ret_ty in
       let ctx = push_uninitialized_var span ret_var ctx in
 
       (* Create and push the input variables *)
       let input_vars =
-        VarId.mapi_from1
+        LocalId.mapi_from1
           (fun id (v : typed_value) -> (mk_var id None v.ty, v))
           args_vl
       in
@@ -653,7 +651,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
       (* Closure case: TODO *)
       craise __FILE__ __LINE__ span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular fid) ->
           let def = ctx_lookup_fun_decl ctx fid in
           log#ldebug
@@ -672,7 +670,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
             instantiate_fun_sig span ctx func.generics tr_self def.signature
               regions_hierarchy
           in
-          (func.func, func.generics, None, def, regions_hierarchy, inst_sg)
+          (func.kind, func.generics, None, def, regions_hierarchy, inst_sg)
       | FunId (FAssumed _) ->
           (* Unreachable: must be a transparent function *)
           craise __FILE__ __LINE__ span "Unreachable"
@@ -784,7 +782,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     instantiate_fun_sig span ctx all_generics tr_self
                       method_def.signature regions_hierarchy
                   in
-                  ( func.func,
+                  ( func.kind,
                     func.generics,
                     Some (all_generics, tr_self),
                     method_def,
@@ -821,7 +819,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
               in
-              ( func.func,
+              ( func.kind,
                 func.generics,
                 Some (generics, tr_self),
                 method_def,
@@ -1002,7 +1000,7 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
       (* Treat the evaluation of the global as a call to the global body *)
       let generics = gref.global_generics in
       let global = ctx_lookup_global_decl ctx gref.global_id in
-      let func = { func = FunId (FRegular global.body); generics } in
+      let func = { kind = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
       eval_transparent_function_call_concrete config span global.body call ctx
   | SymbolicMode ->
@@ -1224,7 +1222,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   match call.func with
   | FnOpMove _ -> craise __FILE__ __LINE__ span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular fid) ->
           eval_transparent_function_call_concrete config span fid call ctx
       | FunId (FAssumed fid) ->
@@ -1243,7 +1241,7 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
   match call.func with
   | FnOpMove _ -> craise __FILE__ __LINE__ span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular _) | TraitMethod _ ->
           eval_transparent_function_call_symbolic config span call
       | FunId (FAssumed fid) ->

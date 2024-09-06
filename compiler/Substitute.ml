@@ -3,7 +3,6 @@
  *)
 
 include Charon.Substitute
-open Types
 open Values
 open LlbcAst
 open Contexts

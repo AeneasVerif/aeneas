@@ -29,7 +29,6 @@
     ]}
  *)
 
-open Types
 open TypesUtils
 open LlbcAst
 

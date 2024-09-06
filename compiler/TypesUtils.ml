@@ -1,4 +1,4 @@
-open Types
+open Charon.GAst
 open Utils
 include Charon.TypesUtils
 

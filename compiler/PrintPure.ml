@@ -269,8 +269,8 @@ let rec mprojection_to_string (env : fmt_env) (inside : string)
   | pe :: p' -> (
       let s = mprojection_to_string env inside p' in
       match pe.pkind with
-      | E.ProjTuple _ -> "(" ^ s ^ ")." ^ T.FieldId.to_string pe.field_id
-      | E.ProjAdt (adt_id, opt_variant_id) -> (
+      | A.ProjTuple _ -> "(" ^ s ^ ")." ^ T.FieldId.to_string pe.field_id
+      | A.ProjAdt (adt_id, opt_variant_id) -> (
           let field_name =
             match adt_field_to_string env adt_id opt_variant_id pe.field_id with
             | Some field_name -> field_name
@@ -294,7 +294,7 @@ let mplace_to_string (env : fmt_env) (p : mplace) : string =
    * use indices of the variables in the original LLBC program, while
    * regular places use indices for the pure variables: we want to make
    * this explicit, otherwise it is confusing. *)
-  let name = name ^ "^" ^ E.VarId.to_string p.var_id ^ "llbc" in
+  let name = name ^ "^" ^ A.LocalId.to_string p.var_id ^ "llbc" in
   mprojection_to_string env name p.projection
 
 let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)

@@ -1,4 +1,3 @@
-open Types
 open LlbcAst
 include Charon.LlbcAstUtils
 open Collections

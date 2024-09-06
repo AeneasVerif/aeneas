@@ -3,7 +3,6 @@
     also in Invariants or InterpreterProjectors
  *)
 
-open Types
 open Values
 open Contexts
 open Utils

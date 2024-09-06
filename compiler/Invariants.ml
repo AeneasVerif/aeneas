@@ -1,7 +1,6 @@
 (* The following module defines functions to check that some invariants
  * are always maintained by evaluation contexts *)
 
-open Types
 open Values
 open Contexts
 open TypesUtils

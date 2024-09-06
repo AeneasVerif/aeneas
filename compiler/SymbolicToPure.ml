@@ -1285,13 +1285,13 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
     (FunId (FRegular fun_id)) regions_hierarchy sg input_names
 
 let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
-    (fdef : LlbcAst.fun_decl) : decomposed_fun_sig =
+    (fdef : A.fun_decl) : decomposed_fun_sig =
   let input_names =
     match fdef.body with
     | None -> List.map (fun _ -> None) fdef.signature.inputs
     | Some body ->
         List.map
-          (fun (v : LlbcAst.var) -> v.name)
+          (fun (v : A.local) -> v.name)
           (LlbcAstUtils.fun_body_get_input_vars body)
   in
   let sg =

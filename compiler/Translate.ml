@@ -1,5 +1,4 @@
 open Interpreter
-open Types
 open Values
 open LlbcAst
 open Contexts
@@ -175,7 +174,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     | Some body, Some (input_svs, _) ->
         let forward_input_vars = LlbcAstUtils.fun_body_get_input_vars body in
         let forward_input_varnames =
-          List.map (fun (v : var) -> v.name) forward_input_vars
+          List.map (fun (v : local) -> v.name) forward_input_vars
         in
         let input_svs = List.combine forward_input_varnames input_svs in
         let ctx, forward_inputs =

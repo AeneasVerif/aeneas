@@ -133,7 +133,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                    the closure *)
                 ()
             | FnOpRegular func -> (
-                match func.func with
+                match func.kind with
                 | FunId (FRegular id) -> self#visit_fid id
                 | FunId (FAssumed id) ->
                     (* None of the assumed functions can diverge nor are considered stateful *)

@@ -4,7 +4,6 @@ open InterpreterProjectors
 open InterpreterBorrows
 open InterpreterStatements
 open LlbcAstUtils
-open Types
 open TypesUtils
 open Values
 open LlbcAst

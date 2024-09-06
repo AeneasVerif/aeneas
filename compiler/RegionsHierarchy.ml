@@ -27,9 +27,7 @@
     TODO: we don't handle locally bound regions yet.
  *)
 
-open Types
 open TypesUtils
-open Expressions
 open LlbcAst
 open LlbcAstUtils
 open Assumed

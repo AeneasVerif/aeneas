@@ -3,8 +3,6 @@
     the symbolic execution: we later apply transformations to generate the
     pure AST that we export. *)
 
-open Types
-open Expressions
 open Values
 open LlbcAst
 

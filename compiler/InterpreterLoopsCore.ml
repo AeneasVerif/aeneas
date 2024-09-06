@@ -1,6 +1,5 @@
 (** Core definitions for the [IntepreterLoops*] *)
 
-open Types
 open Values
 open Contexts
 open InterpreterUtils

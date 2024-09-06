@@ -1,8 +1,8 @@
 open Identifiers
 open Meta
-module T = Types
+module T = Charon.GAst
+module E = Charon.GAst
 module V = Values
-module E = Expressions
 module A = LlbcAst
 module TypeDeclId = T.TypeDeclId
 module TypeVarId = T.TypeVarId
@@ -29,7 +29,7 @@ IdGen ()
 module SynthPhaseId =
 IdGen ()
 
-(** Pay attention to the fact that we also define a {!E.VarId} module in Values *)
+(** Pay attention to the fact that we also define a {!A.VarId} module in Values *)
 module VarId =
 IdGen ()
 
@@ -198,15 +198,6 @@ class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] iter_type_id
     inherit! [_] T.iter_const_generic
-    method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
-    method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
-    method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
-
-    method visit_trait_clause_id : 'env -> trait_clause_id -> unit =
-      fun _ _ -> ()
-
-    method visit_trait_item_name : 'env -> trait_item_name -> unit =
-      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
@@ -214,63 +205,20 @@ class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] map_type_id
     inherit! [_] T.map_const_generic
-    method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
-
-    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id =
-      fun _ x -> x
-
-    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id =
-      fun _ x -> x
-
-    method visit_trait_clause_id : 'env -> trait_clause_id -> trait_clause_id =
-      fun _ x -> x
-
-    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
-      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
 class virtual ['self] reduce_ty_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] reduce_type_id
     inherit! [_] T.reduce_const_generic
-    method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
-
-    method visit_trait_decl_id : 'env -> trait_decl_id -> 'a =
-      fun _ _ -> self#zero
-
-    method visit_trait_impl_id : 'env -> trait_impl_id -> 'a =
-      fun _ _ -> self#zero
-
-    method visit_trait_clause_id : 'env -> trait_clause_id -> 'a =
-      fun _ _ -> self#zero
-
-    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
-      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
 class virtual ['self] mapreduce_ty_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] mapreduce_type_id
     inherit! [_] T.mapreduce_const_generic
-
-    method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_clause_id
-        : 'env -> trait_clause_id -> trait_clause_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_item_name
-        : 'env -> trait_item_name -> trait_item_name * 'a =
-      fun _ x -> (x, self#zero)
   end
 
 type ty =
@@ -439,7 +387,7 @@ type var = {
  * Also: tuples...
  * Rmk: projections are actually only used as span-data.
  * *)
-type mprojection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
+type mprojection_elem = { pkind : A.field_proj_kind; field_id : FieldId.id }
 [@@deriving show]
 
 type mprojection = mprojection_elem list [@@deriving show]
@@ -451,7 +399,7 @@ type mprojection = mprojection_elem list [@@deriving show]
     we introduce.
  *)
 type mplace = {
-  var_id : E.VarId.id;
+  var_id : A.LocalId.id;
   name : string option;
   projection : mprojection;
 }
@@ -465,7 +413,6 @@ class ['self] iter_typed_pattern_base =
     inherit [_] iter_ty
     method visit_var : 'env -> var -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_typed_pattern} visitor *)
@@ -474,7 +421,6 @@ class ['self] map_typed_pattern_base =
     inherit [_] map_ty
     method visit_var : 'env -> var -> var = fun _ x -> x
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
-    method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_typed_pattern} visitor *)
@@ -483,7 +429,6 @@ class virtual ['self] reduce_typed_pattern_base =
     inherit [_] reduce_ty
     method visit_var : 'env -> var -> 'a = fun _ _ -> self#zero
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
-    method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_typed_pattern} visitor *)
@@ -493,9 +438,6 @@ class virtual ['self] mapreduce_typed_pattern_base =
     method visit_var : 'env -> var -> var * 'a = fun _ x -> (x, self#zero)
 
     method visit_mplace : 'env -> mplace -> mplace * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_variant_id : 'env -> variant_id -> variant_id * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -596,7 +538,7 @@ type fun_id =
 type fun_or_op_id =
   | Fun of fun_id
   | Unop of unop
-  | Binop of E.binop * integer_type
+  | Binop of A.binop * integer_type
 [@@deriving show, ord]
 
 (** An identifier for an ADT constructor *)
@@ -635,7 +577,6 @@ class ['self] iter_expression_base =
     method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
-    method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
     method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
   end
 
@@ -647,7 +588,6 @@ class ['self] map_expression_base =
     method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
-    method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
     method visit_span : 'env -> Meta.span -> Meta.span = fun _ x -> x
   end
 
@@ -659,7 +599,6 @@ class virtual ['self] reduce_expression_base =
     method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
-    method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
     method visit_span : 'env -> Meta.span -> 'a = fun _ _ -> self#zero
   end
 
@@ -676,9 +615,6 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
 
     method visit_loop_id : 'env -> loop_id -> loop_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_field_id : 'env -> field_id -> field_id * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_span : 'env -> Meta.span -> Meta.span * 'a =

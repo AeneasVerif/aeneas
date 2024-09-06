@@ -1,5 +1,3 @@
-open Types
-open Expressions
 open Values
 open LlbcAst
 open LlbcAstUtils
@@ -119,7 +117,6 @@ let reset_global_counters () =
 class ['self] iter_env_base =
   object (_self : 'self)
     inherit [_] iter_abs
-    method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
     method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
   end
 
@@ -127,7 +124,6 @@ class ['self] iter_env_base =
 class ['self] map_env_base =
   object (_self : 'self)
     inherit [_] map_abs
-    method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
 
     method visit_dummy_var_id : 'env -> dummy_var_id -> dummy_var_id =
       fun _ x -> x
@@ -135,7 +131,7 @@ class ['self] map_env_base =
 
 (** A binder used in an environment, to map a variable to a value *)
 type var_binder = {
-  index : var_id;  (** Unique variable identifier *)
+  index : local_id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)
 }
 
@@ -286,7 +282,7 @@ let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
   ConstGenericVarId.nth ctx.const_generic_vars vid
 
 (** Lookup a variable in the current frame *)
-let env_lookup_var (span : Meta.span) (env : env) (vid : VarId.id) :
+let env_lookup_var (span : Meta.span) (env : env) (vid : LocalId.id) :
     var_binder * typed_value =
   (* We take care to stop at the end of current frame: different variables
      in different frames can have the same id!
@@ -294,7 +290,8 @@ let env_lookup_var (span : Meta.span) (env : env) (vid : VarId.id) :
   let rec lookup env =
     match env with
     | [] ->
-        raise (Invalid_argument ("Variable not found: " ^ VarId.to_string vid))
+        raise
+          (Invalid_argument ("Variable not found: " ^ LocalId.to_string vid))
     | EBinding (BVar var, v) :: env' ->
         if var.index = vid then (var, v) else lookup env'
     | (EBinding (BDummy _, _) | EAbs _) :: env' -> lookup env'
@@ -302,8 +299,8 @@ let env_lookup_var (span : Meta.span) (env : env) (vid : VarId.id) :
   in
   lookup env
 
-let ctx_lookup_var_binder (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id) :
-    var_binder =
+let ctx_lookup_var_binder (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
+    : var_binder =
   fst (env_lookup_var span ctx.env vid)
 
 let ctx_lookup_type_decl (ctx : eval_ctx) (tid : TypeDeclId.id) : type_decl =
@@ -323,13 +320,13 @@ let ctx_lookup_trait_impl (ctx : eval_ctx) (id : TraitImplId.id) : trait_impl =
   TraitImplId.Map.find id ctx.trait_impls_ctx.trait_impls
 
 (** Retrieve a variable's value in the current frame *)
-let env_lookup_var_value (span : Meta.span) (env : env) (vid : VarId.id) :
+let env_lookup_var_value (span : Meta.span) (env : env) (vid : LocalId.id) :
     typed_value =
   snd (env_lookup_var span env vid)
 
 (** Retrieve a variable's value in an evaluation context *)
-let ctx_lookup_var_value (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id) :
-    typed_value =
+let ctx_lookup_var_value (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
+    : typed_value =
   env_lookup_var_value span ctx.env vid
 
 (** Retrieve a const generic value in an evaluation context *)
@@ -342,7 +339,7 @@ let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
     This is a helper function: it can break invariants and doesn't perform
     any check.
 *)
-let env_update_var_value (span : Meta.span) (env : env) (vid : VarId.id)
+let env_update_var_value (span : Meta.span) (env : env) (vid : LocalId.id)
     (nv : typed_value) : env =
   (* We take care to stop at the end of current frame: different variables
      in different frames can have the same id!
@@ -358,7 +355,7 @@ let env_update_var_value (span : Meta.span) (env : env) (vid : VarId.id)
   in
   update env
 
-let var_to_binder (var : var) : var_binder =
+let var_to_binder (var : local) : var_binder =
   { index = var.index; name = var.name }
 
 (** Update a variable's value in an evaluation context.
@@ -366,7 +363,7 @@ let var_to_binder (var : var) : var_binder =
     This is a helper function: it can break invariants and doesn't perform
     any check.
 *)
-let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id)
+let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
     (nv : typed_value) : eval_ctx =
   { ctx with env = env_update_var_value span ctx.env vid nv }
 
@@ -375,7 +372,7 @@ let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id)
     Checks that the pushed variable and its value have the same type (this
     is important).
 *)
-let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : var)
+let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local)
     (v : typed_value) : eval_ctx =
   cassert __FILE__ __LINE__
     (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty)
@@ -389,7 +386,7 @@ let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : var)
     is important).
 *)
 let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
-    (vars : (var * typed_value) list) : eval_ctx =
+    (vars : (local * typed_value) list) : eval_ctx =
   log#ldebug
     (lazy
       ("push_vars:\n"
@@ -397,7 +394,7 @@ let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
           (List.map
              (fun (var, value) ->
                (* We can unfortunately not use Print because it depends on Contexts... *)
-               show_var var ^ " -> " ^ show_typed_value value)
+               show_local var ^ " -> " ^ show_typed_value value)
              vars)));
   cassert __FILE__ __LINE__
     (List.for_all
@@ -460,13 +457,13 @@ let erase_regions (ty : ty) : ty =
   v#visit_ty () ty
 
 (** Push an uninitialized variable (which thus maps to {!constructor:Values.value.VBottom}) *)
-let ctx_push_uninitialized_var (span : Meta.span) (ctx : eval_ctx) (var : var) :
-    eval_ctx =
+let ctx_push_uninitialized_var (span : Meta.span) (ctx : eval_ctx) (var : local)
+    : eval_ctx =
   ctx_push_var span ctx var (mk_bottom span (erase_regions var.var_ty))
 
 (** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_vars (span : Meta.span) (ctx : eval_ctx)
-    (vars : var list) : eval_ctx =
+    (vars : local list) : eval_ctx =
   let vars =
     List.map (fun v -> (v, mk_bottom span (erase_regions v.var_ty))) vars
   in

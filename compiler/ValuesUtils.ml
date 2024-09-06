@@ -1,6 +1,5 @@
 open Utils
 open TypesUtils
-open Types
 open Values
 open Errors
 include Charon.ValuesUtils

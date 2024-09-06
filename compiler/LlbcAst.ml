@@ -1,4 +1,3 @@
-open Types
 open Values
 include Charon.LlbcAst
 
