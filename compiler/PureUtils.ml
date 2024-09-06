@@ -92,9 +92,9 @@ let compute_literal_type (cv : literal) : literal_type =
   | VScalar sv -> TInteger sv.int_ty
   | VBool _ -> TBool
   | VChar _ -> TChar
-  | VStr _ | VByteStr _ ->
+  | VFloat _ | VStr _ | VByteStr _ ->
       craise_opt_span __FILE__ __LINE__ None
-        "String and byte string literals are unsupported"
+        "Float, string and byte string literals are unsupported"
 
 let var_get_id (v : var) : VarId.id = v.id
 

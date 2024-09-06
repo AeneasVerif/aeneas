@@ -75,9 +75,9 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
           in
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
-  | VStr _ | VByteStr _ ->
+  | VFloat _ | VStr _ | VByteStr _ ->
       craise __FILE__ __LINE__ span
-        "String and byte string literals are unsupported"
+        "Float, string and byte string literals are unsupported"
 
 (** Format a unary operation
 
