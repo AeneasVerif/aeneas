@@ -1380,6 +1380,41 @@ let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_sig) : ty =
   in
   mk_output_ty_from_effect_info effect_info output
 
+(** Compute which input parameters should be implicit or explicit.
+
+    The way we do it is simple: if a parameter appears in one of the inputs,
+    then it should be implicit. For instance, the type parameter of [Vec::get]
+    should be implicit, while the type parameter of [Vec::new] should be explicit
+    (it only appears in the output).
+ *)
+let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
+    : explicit_info =
+  let implicit_tys = ref Pure.TypeVarId.Set.empty in
+  let implicit_cgs = ref Pure.ConstGenericVarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] Pure.iter_ty
+
+      method! visit_type_var_id _ id =
+        implicit_tys := Pure.TypeVarId.Set.add id !implicit_tys
+
+      method! visit_const_generic_var_id _ id =
+        implicit_cgs := Pure.ConstGenericVarId.Set.add id !implicit_cgs
+    end
+  in
+  List.iter (visitor#visit_ty ()) input_tys;
+  let make_explicit_ty (v : Pure.type_var) : Pure.explicit =
+    if Pure.TypeVarId.Set.mem v.index !implicit_tys then Implicit else Explicit
+  in
+  let make_explicit_cg (v : Pure.const_generic_var) : Pure.explicit =
+    if Pure.ConstGenericVarId.Set.mem v.index !implicit_cgs then Implicit
+    else Explicit
+  in
+  {
+    explicit_types = List.map make_explicit_ty generics.types;
+    explicit_const_generics = List.map make_explicit_cg generics.const_generics;
+  }
+
 let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
     =
   let generics = dsg.generics in
@@ -1399,7 +1434,19 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
     let inputs = dsg.fwd_inputs in
     (inputs, output)
   in
-  { generics; llbc_generics; preds; inputs; output; fwd_info; back_effect_info }
+  (* Compute which input type parameters are explicit/implicit *)
+  let explicit_info = compute_explicit_info generics inputs in
+  (* Put together *)
+  {
+    generics;
+    explicit_info;
+    llbc_generics;
+    preds;
+    inputs;
+    output;
+    fwd_info;
+    back_effect_info;
+  }
 
 let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
   (* Generate the fresh variable *)

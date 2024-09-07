@@ -996,6 +996,15 @@ type decomposed_fun_sig = {
 }
 [@@deriving show]
 
+(** Characterize an input parameter as explicit or implicit *)
+type explicit = Explicit | Implicit [@@deriving show]
+
+type explicit_info = {
+  explicit_types : explicit list;
+  explicit_const_generics : explicit list;
+}
+[@@deriving show]
+
 (** A function signature.
 
     We have the following cases:
@@ -1031,7 +1040,8 @@ type decomposed_fun_sig = {
  *)
 type fun_sig = {
   generics : generic_params;
-      (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  explicit_info : explicit_info;
+      (** Information about the inputs parameters which are explicit/implicit *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive
@@ -1041,6 +1051,7 @@ type fun_sig = {
   preds : predicates;
   inputs : ty list;
       (** The types of the inputs.
+
 
           Note that those input types take into account the [fuel] parameter,
           if the function uses fuel for termination, and the [state] parameter,

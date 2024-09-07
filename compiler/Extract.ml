@@ -517,12 +517,33 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             fun_builtin_filter_types id generics.types ctx
         | _ -> Result.Ok generics.types
       in
+      (* Compute the information about the explicit/implicit input type parameters *)
+      let explicit =
+        let lookup fun_decl_id lp_id =
+          (* Lookup the function to retrieve the signature information *)
+          let trans_fun = A.FunDeclId.Map.find fun_decl_id ctx.trans_funs in
+          let trans_fun =
+            match lp_id with
+            | None -> trans_fun.f
+            | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+          in
+          Some trans_fun.signature.explicit_info
+        in
+        match fun_id with
+        | FromLlbc (FunId (FRegular fun_decl_id), lp_id) ->
+            lookup fun_decl_id lp_id
+        | FromLlbc (TraitMethod (_trait_ref, _method_name, fun_decl_id), lp_id)
+          ->
+            lookup fun_decl_id lp_id
+        | FromLlbc (FunId (FAssumed _), _) -> None
+        | Pure _ -> None
+      in
       (match types with
       | Ok types ->
-          extract_generic_args span ctx fmt TypeDeclId.Set.empty
+          extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
             { generics with types }
       | Error (types, err) ->
-          extract_generic_args span ctx fmt TypeDeclId.Set.empty
+          extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
             { generics with types };
           save_error __FILE__ __LINE__ (Some span) err;
           F.pp_print_string fmt

@@ -632,9 +632,21 @@ and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
 
 and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
-    (generics : generic_args) : unit =
+    ?(explicit : explicit_info option = None) (generics : generic_args) : unit =
   let { types; const_generics; trait_refs } = generics in
   if backend () <> HOL4 then (
+    (* Filter the input parameters if some of them are implicit *)
+    let types, const_generics =
+      match explicit with
+      | None -> (types, const_generics)
+      | Some explicit ->
+          let filter (x, e) = if e = Explicit then Some x else None in
+          let filter xl explicit =
+            List.filter_map filter (List.combine xl explicit)
+          in
+          ( filter types explicit.explicit_types,
+            filter const_generics explicit.explicit_const_generics )
+    in
     if types <> [] then (
       F.pp_print_space fmt ();
       Collections.List.iter_link (F.pp_print_space fmt)
