@@ -533,8 +533,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
         | FromLlbc (FunId (FRegular fun_decl_id), lp_id) ->
             lookup fun_decl_id lp_id
         | FromLlbc (TraitMethod (_trait_ref, _method_name, fun_decl_id), lp_id)
-          ->
-            lookup fun_decl_id lp_id
+          -> lookup fun_decl_id lp_id
         | FromLlbc (FunId (FAssumed _), _) -> None
         | Pure _ -> None
       in
