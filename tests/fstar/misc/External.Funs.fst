@@ -7,20 +7,20 @@ include External.FunsExternal
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** Trait implementation: [core::marker::{(core::marker::Copy for u32)#41}]
-    Source: '/rustc/library/core/src/marker.rs', lines 47:25-47:62
+(** Trait implementation: [core::marker::{core::marker::Copy for u32}#40]
+    Source: '/rustc/library/core/src/marker.rs', lines 48:25-48:62
     Name pattern: core::marker::Copy<u32> *)
 let core_marker_CopyU32 : core_marker_Copy_t u32 = {
   cloneCloneInst = core_clone_CloneU32;
 }
 
 (** [external::use_get]:
-    Source: 'tests/src/external.rs', lines 9:0-9:37 *)
+    Source: 'tests/src/external.rs', lines 9:0-11:1 *)
 let use_get (rc : core_cell_Cell_t u32) (st : state) : result (state & u32) =
   core_cell_Cell_get u32 core_marker_CopyU32 rc st
 
 (** [external::incr]:
-    Source: 'tests/src/external.rs', lines 13:0-13:31 *)
+    Source: 'tests/src/external.rs', lines 13:0-15:1 *)
 let incr
   (rc : core_cell_Cell_t u32) (st : state) :
   result (state & (core_cell_Cell_t u32))

@@ -81,7 +81,7 @@ section Methods
     trace[Progress] "After splitting the conjunction:\n- eq: {th}\n- post: {post}"
     -- Destruct the equality
     let (mExpr, ret) ← destEq th.consumeMData
-    trace[Progress] "After splitting the equality:\n- lhs: {th}\n- rhs: {ret}"
+    trace[Progress] "After splitting the equality:\n- lhs: {mExpr}\n- rhs: {ret}"
     -- Recursively destruct the monadic application to dive into the binds,
     -- if necessary (this is for when we use `withPSpec` inside of the `progress` tactic),
     -- and destruct the application to get the function name
@@ -143,7 +143,7 @@ structure PSpecAttr where
 
 /- The persistent map from expressions to pspec theorems. -/
 initialize pspecAttr : PSpecAttr ← do
-  let ext ← mkDiscrTreeExtention `pspecMap
+  let ext ← mkDiscrTreeExtension `pspecMap
   let attrImpl : AttributeImpl := {
     name := `pspec
     descr := "Marks theorems to use with the `progress` tactic"
@@ -154,18 +154,25 @@ initialize pspecAttr : PSpecAttr ← do
         throwError "invalid attribute 'pspec', must be global"
       -- Lookup the theorem
       let env ← getEnv
-      let thDecl := env.constants.find! thName
-      let fKey ← MetaM.run' (do
-        let fExpr ← getPSpecFunArgsExpr false thDecl.type
-        trace[Progress] "Registering spec theorem for {fExpr}"
-        -- Convert the function expression to a discrimination tree key
-        -- We use the default configuration
-        let config : WhnfCoreConfig := {}
-        DiscrTree.mkPath fExpr config)
-      let env := ext.addEntry env (fKey, thName)
-      setEnv env
-      trace[Progress] "Saved the environment"
-      pure ()
+      -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
+      attrIgnoreAuxDef thName (pure ()) do
+        trace[Progress] "Registering spec theorem for {thName}"
+        let thDecl := env.constants.find! thName
+        let fKey ← MetaM.run' (do
+          trace[Progress] "Theorem: {thDecl.type}"
+          -- Normalize to eliminate the let-bindings
+          let ty ← normalizeLetBindings thDecl.type
+          trace[Progress] "Theorem after normalization (to eliminate the let bindings): {ty}"
+          let fExpr ← getPSpecFunArgsExpr false ty
+          trace[Progress] "Registering spec theorem for expr: {fExpr}"
+          -- Convert the function expression to a discrimination tree key
+          -- We use the default configuration
+          let config : WhnfCoreConfig := {}
+          DiscrTree.mkPath fExpr config)
+        let env := ext.addEntry env (fKey, thName)
+        setEnv env
+        trace[Progress] "Saved the environment"
+        pure ()
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }

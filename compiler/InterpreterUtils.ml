@@ -129,7 +129,9 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
 
 (** TODO: move *)
 let borrow_is_asb (bid : BorrowId.id) (asb : abstract_shared_borrow) : bool =
-  match asb with AsbBorrow bid' -> bid' = bid | AsbProjReborrows _ -> false
+  match asb with
+  | AsbBorrow bid' -> bid' = bid
+  | AsbProjReborrows _ -> false
 
 (** TODO: move *)
 let borrow_in_asb (bid : BorrowId.id) (asb : abstract_shared_borrows) : bool =
@@ -291,8 +293,14 @@ let rvalue_get_place (rv : rvalue) : place option =
   match rv with
   | Use (Copy p | Move p) -> Some p
   | Use (Constant _) -> None
-  | Len (p, _, _) | RvRef (p, _) -> Some p
-  | UnaryOp _ | BinaryOp _ | Global _ | Discriminant _ | Aggregate _ -> None
+  | Len (p, _, _) | RvRef (p, _) | RawPtr (p, _) -> Some p
+  | NullaryOp _
+  | UnaryOp _
+  | BinaryOp _
+  | Global _
+  | GlobalRef _
+  | Discriminant _
+  | Aggregate _ -> None
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows (ctx : eval_ctx) (sv : symbolic_value) : bool =

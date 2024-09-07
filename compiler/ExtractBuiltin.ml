@@ -49,7 +49,9 @@ let flatten_name (name : string list) : string =
 
 (** Utility for Lean-only definitions **)
 let mk_lean_only (funs : 'a list) : 'a list =
-  match backend () with Lean -> funs | _ -> []
+  match backend () with
+  | Lean -> funs
+  | _ -> []
 
 let () =
   assert (split_on_separator "x::y::z" = [ "x"; "y"; "z" ]);
@@ -61,7 +63,9 @@ let () =
     is F*, Coq or HOL4, and a different value if the target is Lean.
  *)
 let backend_choice (fstar_coq_hol4 : 'a) (lean : 'a) : 'a =
-  match backend () with Coq | FStar | HOL4 -> fstar_coq_hol4 | Lean -> lean
+  match backend () with
+  | Coq | FStar | HOL4 -> fstar_coq_hol4
+  | Lean -> lean
 
 let builtin_globals : (string * string) list =
   [
@@ -135,10 +139,15 @@ type type_variant_kind =
 
 let mk_struct_constructor (type_name : string) : string =
   let prefix =
-    match backend () with FStar -> "Mk" | Coq | HOL4 -> "mk" | Lean -> ""
+    match backend () with
+    | FStar -> "Mk"
+    | Coq | HOL4 -> "mk"
+    | Lean -> ""
   in
   let suffix =
-    match backend () with FStar | Coq | HOL4 -> "" | Lean -> ".mk"
+    match backend () with
+    | FStar | Coq | HOL4 -> ""
+    | Lean -> ".mk"
   in
   prefix ^ type_name ^ suffix
 
@@ -487,19 +496,31 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       ~can_fail:false ()
   (* Lean-only definitions *)
   @ mk_lean_only
-      [
-        (* `backend_choice` first parameter is for non-Lean backends
-            By construction, we cannot write down that parameter in the output
-            in this list
-        *)
-        mk_fun "core::mem::swap" ~can_fail:false ();
-        mk_fun "core::option::{core::option::Option<@T>}::take"
-          ~extract_name:(Some (backend_choice "" "Option::take"))
-          ~can_fail:false ();
-        mk_fun "core::option::{core::option::Option<@T>}::is_none"
-          ~extract_name:(Some (backend_choice "" "Option::isNone"))
-          ~filter:(Some [ false ]) ~can_fail:false ();
-      ]
+      ([
+         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
+           ~filter:(Some [ true; false ])
+           ();
+         mk_fun "core::mem::swap" ~can_fail:false ();
+         mk_fun "core::option::{core::option::Option<@T>}::take"
+           ~extract_name:(Some (backend_choice "" "core::option::Option::take"))
+           ~can_fail:false ();
+         mk_fun "core::option::{core::option::Option<@T>}::is_none"
+           ~extract_name:
+             (Some (backend_choice "" "core::option::Option::is_none"))
+           ~can_fail:false ();
+         mk_fun "core::clone::Clone::clone_from" ();
+       ]
+      @ List.map
+          (fun ty ->
+            mk_fun
+              ("core::num::{" ^ ty ^ "}::overflowing_add")
+              ~extract_name:
+                (Some
+                   ("core.num."
+                   ^ StringUtils.capitalize_first_letter ty
+                   ^ ".overflowing_add"))
+              ())
+          all_int_names)
 
 let builtin_funs : unit -> (pattern * bool list option * builtin_fun_info) list
     =
@@ -541,11 +562,10 @@ type builtin_trait_decl_info = {
   constructor : string;
   parent_clauses : string list;
   consts : (string * string) list;
-  types : (string * (string * string list)) list;
+  types : (string * string) list;
       (** Every type has:
           - a Rust name
-          - an extraction name
-          - a list of clauses *)
+          - an extraction name *)
   methods : (string * builtin_fun_info) list;
 }
 [@@deriving show]
@@ -577,8 +597,7 @@ let builtin_trait_decls_info () =
           | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter type_name
           | Lean -> type_name
         in
-        let clauses = [] in
-        (item_name, (type_name, clauses))
+        (item_name, type_name)
       in
       List.map mk_type types
     in

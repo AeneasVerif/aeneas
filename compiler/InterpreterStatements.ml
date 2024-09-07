@@ -281,28 +281,20 @@ let push_frame (ctx : eval_ctx) : eval_ctx = ctx_push_frame ctx
 let get_assumed_function_return_type (span : Meta.span) (ctx : eval_ctx)
     (fid : assumed_fun_id) (generics : generic_args) : ety =
   sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
-  (* [Box::free] has a special treatment *)
-  match fid with
-  | BoxFree ->
-      sanity_check __FILE__ __LINE__ (generics.regions = []) span;
-      sanity_check __FILE__ __LINE__ (List.length generics.types = 1) span;
-      sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
-      mk_unit_ty
-  | _ ->
-      (* Retrieve the function's signature *)
-      let sg = Assumed.get_assumed_fun_sig fid in
-      (* Instantiate the return type  *)
-      (* There shouldn't be any reference to Self *)
-      let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
-      let generics = Subst.generic_args_erase_regions generics in
-      let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
-        Subst.make_subst_from_generics sg.generics generics tr_self
-      in
-      let ty =
-        Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
-          sg.output
-      in
-      AssociatedTypes.ctx_normalize_erase_ty span ctx ty
+  (* Retrieve the function's signature *)
+  let sg = Assumed.get_assumed_fun_sig fid in
+  (* Instantiate the return type  *)
+  (* There shouldn't be any reference to Self *)
+  let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
+  let generics = Subst.generic_args_erase_regions generics in
+  let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
+    Subst.make_subst_from_generics sg.generics generics tr_self
+  in
+  let ty =
+    Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
+      sg.output
+  in
+  AssociatedTypes.ctx_normalize_erase_ty span ctx ty
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
@@ -434,45 +426,6 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       comp cc (assign_to_place config span box_v dest ctx)
   | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
 
-(** Auxiliary function - see {!eval_assumed_function_call}.
-
-    [Box::free] is not handled the same way as the other assumed functions:
-    - in the regular case, whenever we need to evaluate an assumed function,
-      we evaluate the operands, push a frame, call a dedicated function
-      to correctly update the variables in the frame (and mimic the execution
-      of a body) and finally pop the frame
-    - in the case of [Box::free]: the value given to this function is often
-      of the form [Box(⊥)] because we can move the value out of the
-      box before freeing the box. It makes it invalid to see box_free as a
-      "regular" function: it is not valid to call a function with arguments
-      which contain [⊥]. For this reason, we execute [Box::free] as drop_value,
-      but this is a bit annoying with regards to the semantics...
-
-    Followingly this function doesn't behave like the others: it does not expect
-    a stack frame to have been pushed, but rather simply behaves like {!drop_value}.
-    It thus updates the box value (by calling {!drop_value}) and updates
-    the destination (by setting it to [()]).
-*)
-let eval_box_free (config : config) (span : Meta.span) (generics : generic_args)
-    (args : operand list) (dest : place) : cm_fun =
- fun ctx ->
-  match (generics.regions, generics.types, generics.const_generics, args) with
-  | [], [ boxed_ty ], [], [ Move input_box_place ] ->
-      (* Required type checking *)
-      let input_box =
-        InterpreterPaths.read_place span Write input_box_place ctx
-      in
-      (let input_ty = ty_get_box input_box.ty in
-       sanity_check __FILE__ __LINE__ (input_ty = boxed_ty))
-        span;
-
-      (* Drop the value *)
-      let ctx, cc = drop_value config span input_box_place ctx in
-
-      (* Update the destination by setting it to [()] *)
-      comp cc (assign_to_place config span mk_unit_value dest ctx)
-  | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
-
 (** Evaluate a non-local function call in concrete mode *)
 let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
     (fid : assumed_fun_id) (call : call) : cm_fun =
@@ -483,69 +436,54 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
   | FnOpMove _ ->
       (* Closure case: TODO *)
       craise __FILE__ __LINE__ span "Closures are not supported yet"
-  | FnOpRegular func -> (
+  | FnOpRegular func ->
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
          in concrete mode yet *)
       sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
-      (* There are two cases (and this is extremely annoying):
-         - the function is not box_free
-         - the function is box_free
-         See {!eval_box_free}
-      *)
-      match fid with
-      | BoxFree ->
-          (* Degenerate case: box_free *)
-          eval_box_free config span generics args dest ctx
-      | _ ->
-          (* "Normal" case: not box_free *)
-          (* Evaluate the operands *)
-          (*      let ctx, args_vl = eval_operands config ctx args in *)
-          let args_vl, ctx, cc = eval_operands config span args ctx in
 
-          (* Evaluate the call
-           *
-           * Style note: at some point we used {!comp_transmit} to
-           * transmit the result of {!eval_operands} above down to {!push_vars}
-           * below, without having to introduce an intermediary function call,
-           * but it made it less clear where the computed values came from,
-           * so we reversed the modifications. *)
-          (* Push the stack frame: we initialize the frame with the return variable,
-             and one variable per input argument *)
-          let ctx = push_frame ctx in
+      (* Evaluate the operands *)
+      (*      let ctx, args_vl = eval_operands config ctx args in *)
+      let args_vl, ctx, cc = eval_operands config span args ctx in
 
-          (* Create and push the return variable *)
-          let ret_vid = VarId.zero in
-          let ret_ty = get_assumed_function_return_type span ctx fid generics in
-          let ret_var = mk_var ret_vid (Some "@return") ret_ty in
-          let ctx = push_uninitialized_var span ret_var ctx in
+      (* Evaluate the call
+       *
+       * Style note: at some point we used {!comp_transmit} to
+       * transmit the result of {!eval_operands} above down to {!push_vars}
+       * below, without having to introduce an intermediary function call,
+       * but it made it less clear where the computed values came from,
+       * so we reversed the modifications. *)
+      (* Push the stack frame: we initialize the frame with the return variable,
+         and one variable per input argument *)
+      let ctx = push_frame ctx in
 
-          (* Create and push the input variables *)
-          let input_vars =
-            VarId.mapi_from1
-              (fun id (v : typed_value) -> (mk_var id None v.ty, v))
-              args_vl
-          in
-          let ctx = push_vars span input_vars ctx in
+      (* Create and push the return variable *)
+      let ret_vid = VarId.zero in
+      let ret_ty = get_assumed_function_return_type span ctx fid generics in
+      let ret_var = mk_var ret_vid (Some "@return") ret_ty in
+      let ctx = push_uninitialized_var span ret_var ctx in
 
-          (* "Execute" the function body. As the functions are assumed, here we call
-           * custom functions to perform the proper manipulations: we don't have
-           * access to a body. *)
-          let ctx, cf_eval_body =
-            match fid with
-            | BoxNew -> eval_box_new_concrete config span generics ctx
-            | BoxFree ->
-                (* Should have been treated above *)
-                craise __FILE__ __LINE__ span "Unreachable"
-            | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
-            | ArrayToSliceMut | ArrayRepeat | SliceIndexShared | SliceIndexMut
-              ->
-                craise __FILE__ __LINE__ span "Unimplemented"
-          in
-          let cc = cc_comp cc cf_eval_body in
+      (* Create and push the input variables *)
+      let input_vars =
+        VarId.mapi_from1
+          (fun id (v : typed_value) -> (mk_var id None v.ty, v))
+          args_vl
+      in
+      let ctx = push_vars span input_vars ctx in
 
-          (* Pop the frame *)
-          comp cc (pop_frame_assign config span dest ctx))
+      (* "Execute" the function body. As the functions are assumed, here we call
+       * custom functions to perform the proper manipulations: we don't have
+       * access to a body. *)
+      let ctx, cf_eval_body =
+        match fid with
+        | BoxNew -> eval_box_new_concrete config span generics ctx
+        | Index _ | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat ->
+            craise __FILE__ __LINE__ span "Unimplemented"
+      in
+      let cc = cc_comp cc cf_eval_body in
+
+      (* Pop the frame *)
+      comp cc (pop_frame_assign config span dest ctx)
 
 (** Helper
  
@@ -750,7 +688,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
           match trait_ref.trait_id with
-          | TraitImpl impl_id -> (
+          | TraitImpl (impl_id, generics) -> (
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl ctx impl_id in
               log#ldebug
@@ -767,11 +705,9 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                   let method_def = ctx_lookup_fun_decl ctx id in
                   (* We have to concatenate the generics for the impl
                      and the generics for the method *)
-                  let generics =
-                    merge_generic_args trait_ref.generics func.generics
-                  in
+                  let generics = merge_generic_args generics func.generics in
                   (* Instantiate *)
-                  let tr_self = TraitRef trait_ref in
+                  let tr_self = trait_ref.trait_id in
                   let fid : fun_id = FRegular id in
                   let regions_hierarchy =
                     LlbcAstUtils.FunIdMap.find fid
@@ -809,7 +745,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                       (fun (s, _) -> s = method_name)
                       trait_decl.provided_methods
                   in
-                  let method_id = Option.get method_id in
                   let method_def = ctx_lookup_fun_decl ctx method_id in
                   (* For the instantiation we have to do something peculiar
                      because the method was defined for the trait declaration.
@@ -844,7 +779,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     LlbcAstUtils.FunIdMap.find (FRegular method_id)
                       ctx.fun_ctx.regions_hierarchies
                   in
-                  let tr_self = TraitRef trait_ref in
+                  let tr_self = trait_ref.trait_id in
                   let inst_sg =
                     instantiate_fun_sig span ctx all_generics tr_self
                       method_def.signature regions_hierarchy
@@ -862,15 +797,10 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               in
               (* Lookup the method decl in the required *and* the provided methods *)
               let _, method_id =
-                let provided =
-                  List.filter_map
-                    (fun (id, f) ->
-                      match f with None -> None | Some f -> Some (id, f))
-                    trait_decl.provided_methods
-                in
                 List.find
                   (fun (s, _) -> s = method_name)
-                  (List.append trait_decl.required_methods provided)
+                  (List.append trait_decl.required_methods
+                     trait_decl.provided_methods)
               in
               let method_def = ctx_lookup_fun_decl ctx method_id in
               log#ldebug
@@ -886,7 +816,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
                   ctx.fun_ctx.regions_hierarchies
               in
-              let tr_self = TraitRef trait_ref in
+              let tr_self = trait_ref.trait_id in
               let inst_sg =
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
@@ -897,6 +827,26 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 method_def,
                 regions_hierarchy,
                 inst_sg )))
+
+(** Helper: introduce a fresh symbolic value for a global *)
+let eval_global_as_fresh_symbolic_value (span : Meta.span)
+    (gref : global_decl_ref) (ctx : eval_ctx) : symbolic_value =
+  let generics = gref.global_generics in
+  let global = ctx_lookup_global_decl ctx gref.global_id in
+  cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
+    "Const globals should not contain regions";
+  (* Instantiate the type  *)
+  (* There shouldn't be any reference to Self *)
+  let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
+  let generics = Subst.generic_args_erase_regions generics in
+  let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
+    Subst.make_subst_from_generics global.generics generics tr_self
+  in
+  let ty =
+    Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
+      global.ty
+  in
+  mk_fresh_symbolic_value span ty
 
 (** Evaluate a statement *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
@@ -932,9 +882,12 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Assign (p, rvalue) -> (
       (* We handle global assignments separately *)
       match rvalue with
-      | Global (gid, generics) ->
+      | Global gref ->
           (* Evaluate the global *)
-          eval_global config st.span p gid generics ctx
+          eval_global config st.span p gref ctx
+      | GlobalRef (gref, rkind) ->
+          (* Evaluate the reference to the global *)
+          eval_global_ref config st.span p gref rkind ctx
       | _ ->
           (* Evaluate the rvalue *)
           let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
@@ -954,21 +907,30 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                  * reserved borrow, we later can't translate it to pure values...) *)
                 let cc =
                   match rvalue with
-                  | Global _ -> craise __FILE__ __LINE__ st.span "Unreachable"
+                  | Global _ | GlobalRef _ ->
+                      craise __FILE__ __LINE__ st.span "Unreachable"
                   | Len _ ->
                       craise __FILE__ __LINE__ st.span "Len is not handled yet"
                   | Use _
-                  | RvRef (_, (BShared | BMut | BTwoPhaseMut | BShallow))
-                  | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ ->
+                  | RvRef
+                      ( _,
+                        ( BShared
+                        | BMut
+                        | BTwoPhaseMut
+                        | BShallow
+                        | BUniqueImmutable ) )
+                  | NullaryOp _
+                  | UnaryOp _
+                  | BinaryOp _
+                  | Discriminant _
+                  | Aggregate _
+                  | RawPtr _ ->
+                      let p = S.mk_mplace st.span p ctx in
                       let rp = rvalue_get_place rvalue in
                       let rp =
-                        match rp with
-                        | Some rp -> Some (S.mk_mplace st.span rp ctx)
-                        | None -> None
+                        Option.map (fun rp -> S.mk_mplace st.span rp ctx) rp
                       in
-                      S.synthesize_assignment ctx
-                        (S.mk_mplace st.span p ctx)
-                        rv rp
+                      S.synthesize_assignment ctx p rv rp
                 in
                 let ctx, cc =
                   comp cc (assign_to_place config st.span rv p ctx)
@@ -1009,8 +971,13 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
             (* Evaluation successful: evaluate the second statement *)
             | Unit -> eval_statement config st2 ctx
             (* Control-flow break: transmit. We enumerate the cases on purpose *)
-            | Panic | Break _ | Continue _ | Return | LoopReturn _
-            | EndEnterLoop _ | EndContinue _ ->
+            | Panic
+            | Break _
+            | Continue _
+            | Return
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ ->
                 ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ st.span))
           ctx_resl
       in
@@ -1028,32 +995,20 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Error s -> craise __FILE__ __LINE__ st.span s
 
 and eval_global (config : config) (span : Meta.span) (dest : place)
-    (gid : GlobalDeclId.id) (generics : generic_args) : stl_cm_fun =
+    (gref : global_decl_ref) : stl_cm_fun =
  fun ctx ->
-  let global = ctx_lookup_global_decl ctx gid in
   match config.mode with
   | ConcreteMode ->
       (* Treat the evaluation of the global as a call to the global body *)
+      let generics = gref.global_generics in
+      let global = ctx_lookup_global_decl ctx gref.global_id in
       let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
       eval_transparent_function_call_concrete config span global.body call ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
-        "Const globals should not contain regions";
-      (* Instantiate the type  *)
-      (* There shouldn't be any reference to Self *)
-      let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
-      let generics = Subst.generic_args_erase_regions generics in
-      let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
-        Subst.make_subst_from_generics global.generics generics tr_self
-      in
-      let ty =
-        Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
-          global.ty
-      in
-      let sval = mk_fresh_symbolic_value span ty in
+      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
       let ctx, cc =
         assign_to_place config span
           (mk_typed_value_from_symbolic_value sval)
@@ -1061,7 +1016,48 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
       in
       ( [ (ctx, Unit) ],
         cc_singleton __FILE__ __LINE__ span
-          (cc_comp (S.synthesize_global_eval gid generics sval) cc) )
+          (cc_comp (S.synthesize_global_eval gref sval) cc) )
+
+and eval_global_ref (config : config) (span : Meta.span) (dest : place)
+    (gref : global_decl_ref) (rk : ref_kind) : stl_cm_fun =
+ fun ctx ->
+  (* We only support shared references to globals *)
+  cassert __FILE__ __LINE__ (rk = RShared) span
+    "Can only create shared references to global values";
+  match config.mode with
+  | ConcreteMode ->
+      (* We should treat the evaluation of the global as a call to the global body,
+         then create a reference *)
+      craise __FILE__ __LINE__ span "Unimplemented"
+  | SymbolicMode ->
+      (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
+       * defined as equal to the value of the global (see {!S.synthesize_global_eval}).
+       * We then create a reference to the global.
+       *)
+      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
+      let typed_sval = mk_typed_value_from_symbolic_value sval in
+      (* Create a shared loan containing the global, as well as a shared borrow *)
+      let bid = fresh_borrow_id () in
+      let loan : typed_value =
+        {
+          value = VLoan (VSharedLoan (BorrowId.Set.singleton bid, typed_sval));
+          ty = sval.sv_ty;
+        }
+      in
+      let borrow : typed_value =
+        {
+          value = VBorrow (VSharedBorrow bid);
+          ty = TRef (RErased, sval.sv_ty, RShared);
+        }
+      in
+      (* We need to push the shared loan in a dummy variable *)
+      let dummy_id = fresh_dummy_var_id () in
+      let ctx = ctx_push_dummy_var ctx dummy_id loan in
+      (* Assign the borrow to its destination *)
+      let ctx, cc = assign_to_place config span borrow dest ctx in
+      ( [ (ctx, Unit) ],
+        cc_singleton __FILE__ __LINE__ span
+          (cc_comp (S.synthesize_global_eval gref sval) cc) )
 
 (** Evaluate a switch *)
 and eval_switch (config : config) (span : Meta.span) (switch : switch) :
@@ -1336,9 +1332,12 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
                    its destination and continue *)
                 let ctx, cf = pop_frame_assign config span dest ctx in
                 ((ctx, Unit), cf)
-            | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
-            | EndContinue _ ->
-                craise __FILE__ __LINE__ span "Unreachable")
+            | Break _
+            | Continue _
+            | Unit
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ -> craise __FILE__ __LINE__ span "Unreachable")
           ctx_resl
       in
       let ctx_resl, cfl = List.split ctx_resl_cfl in
@@ -1544,45 +1543,22 @@ and eval_assumed_function_call_symbolic (config : config) (span : Meta.span)
        generics.types)
     span;
 
-  (* There are two cases (and this is extremely annoying):
-     - the function is not box_free
-     - the function is box_free
-       See {!eval_box_free}
-  *)
-  match fid with
-  | BoxFree ->
-      (* Degenerate case: box_free - note that this is not really a function
-       * call: no need to call a "synthesize_..." function *)
-      let ctx, cc = eval_box_free config span generics args dest ctx in
-      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
-  | _ ->
-      (* "Normal" case: not box_free *)
-      (* In symbolic mode, the behaviour of a function call is completely defined
-       * by the signature of the function: we thus simply generate correctly
-       * instantiated signatures, and delegate the work to an auxiliary function *)
-      let sg, regions_hierarchy, inst_sig =
-        match fid with
-        | BoxFree ->
-            (* Should have been treated above *)
-            craise __FILE__ __LINE__ span "Unreachable"
-        | _ ->
-            let regions_hierarchy =
-              LlbcAstUtils.FunIdMap.find (FAssumed fid)
-                ctx.fun_ctx.regions_hierarchies
-            in
-            (* There shouldn't be any reference to Self *)
-            let tr_self = UnknownTrait __FUNCTION__ in
-            let sg = Assumed.get_assumed_fun_sig fid in
-            let inst_sg =
-              instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
-            in
-            (sg, regions_hierarchy, inst_sg)
-      in
+  (* In symbolic mode, the behaviour of a function call is completely defined
+   * by the signature of the function: we thus simply generate correctly
+   * instantiated signatures, and delegate the work to an auxiliary function *)
+  let regions_hierarchy =
+    LlbcAstUtils.FunIdMap.find (FAssumed fid) ctx.fun_ctx.regions_hierarchies
+  in
+  (* There shouldn't be any reference to Self *)
+  let tr_self = UnknownTrait __FUNCTION__ in
+  let sg = Assumed.get_assumed_fun_sig fid in
+  let inst_sig =
+    instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
+  in
 
-      (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config span
-        (FunId (FAssumed fid)) sg regions_hierarchy inst_sig generics None args
-        dest ctx
+  (* Evaluate the function call *)
+  eval_function_call_symbolic_from_inst_sig config span (FunId (FAssumed fid))
+    sg regions_hierarchy inst_sig generics None args dest ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : statement) : stl_cm_fun =

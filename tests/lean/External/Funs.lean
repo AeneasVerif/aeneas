@@ -10,20 +10,21 @@ set_option linter.unusedVariables false
 
 namespace external
 
-/- Trait implementation: [core::marker::{(core::marker::Copy for u32)#41}]
-   Source: '/rustc/library/core/src/marker.rs', lines 47:25-47:62
+/- Trait implementation: [core::marker::{core::marker::Copy for u32}#40]
+   Source: '/rustc/library/core/src/marker.rs', lines 48:25-48:62
    Name pattern: core::marker::Copy<u32> -/
+@[reducible]
 def core.marker.CopyU32 : core.marker.Copy U32 := {
   cloneCloneInst := core.clone.CloneU32
 }
 
 /- [external::use_get]:
-   Source: 'tests/src/external.rs', lines 9:0-9:37 -/
+   Source: 'tests/src/external.rs', lines 9:0-11:1 -/
 def use_get (rc : core.cell.Cell U32) (st : State) : Result (State × U32) :=
   core.cell.Cell.get U32 core.marker.CopyU32 rc st
 
 /- [external::incr]:
-   Source: 'tests/src/external.rs', lines 13:0-13:31 -/
+   Source: 'tests/src/external.rs', lines 13:0-15:1 -/
 def incr
   (rc : core.cell.Cell U32) (st : State) :
   Result (State × (core.cell.Cell U32))

@@ -66,7 +66,11 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
     match backend with
     | Backend.BorrowCheck -> []
     | _ ->
-        let subdir = match subdir with None -> [] | Some x -> [ x ] in
+        let subdir =
+          match subdir with
+          | None -> []
+          | Some x -> [ x ]
+        in
         [ "-dest"; concat_path ([ env.dest_dir; backend_str ] @ subdir) ]
   in
 
@@ -113,6 +117,7 @@ let run_charon (env : runner_env) (case : Input.t) =
         [
           env.charon_path;
           "--no-cargo";
+          "--hide-marker-traits";
           "--input";
           case.path;
           "--crate";
@@ -124,25 +129,39 @@ let run_charon (env : runner_env) (case : Input.t) =
       let args = List.append args case.charon_options in
       (* Run Charon on the rust file *)
       Command.run_command_expecting_success (Command.make args)
-  | Crate -> (
-      match Sys.getenv_opt "IN_CI" with
-      | None ->
-          let args =
-            [ env.charon_path; "--dest"; Filename_unix.realpath env.llbc_dir ]
-          in
-          let args = List.append args case.charon_options in
-          (* Run Charon inside the crate *)
-          let old_pwd = Unix.getcwd () in
-          Unix.chdir case.path;
-          Command.run_command_expecting_success (Command.make args);
-          Unix.chdir old_pwd
-      | Some _ ->
-          (* Crates with dependencies must be generated separately in CI. We skip
-             here and trust that CI takes care to generate the necessary llbc
-             file. *)
-          print_endline
-            "Warn: IN_CI is set; we skip generating llbc files for whole crates"
-      )
+  | Crate ->
+      (* Because some tests have dependencies which force us to implement custom
+         treatment in the flake.nix, when in CI, we regenerate files for the crates
+         only if the .llbc doesn't exist (if it exists, it means it was generated
+         via a custom derivation in the flake.nix) *)
+      let generate =
+        match Sys.getenv_opt "IN_CI" with
+        | None -> true
+        | Some _ ->
+            (* Check if the llbc file already exists *)
+            let llbc_name = env.llbc_dir ^ "/" ^ case.name ^ ".llbc" in
+            not (Sys.file_exists llbc_name)
+      in
+      if generate then (
+        let args =
+          [
+            env.charon_path;
+            "--hide-marker-traits";
+            "--dest";
+            Filename_unix.realpath env.llbc_dir;
+          ]
+        in
+        let args = List.append args case.charon_options in
+        (* Run Charon inside the crate *)
+        let old_pwd = Unix.getcwd () in
+        Unix.chdir case.path;
+        Command.run_command_expecting_success (Command.make args);
+        Unix.chdir old_pwd)
+      else
+        print_endline
+          ("Warn: crate test \"" ^ case.name
+         ^ "\": IN_CI is set and the llbc file already exists; we do not \
+            regenerate the llbc file for the crate")
 
 let () =
   match Array.to_list Sys.argv with

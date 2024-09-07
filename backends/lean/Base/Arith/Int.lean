@@ -6,35 +6,49 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.Ring.RingNF
 import Base.Utils
 import Base.Arith.Base
+import Base.Arith.Init
+import Base.Saturate
 
 namespace Arith
 
 open Utils
-open Lean Lean.Elab Lean.Meta
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
-/- We can introduce a term in the context.
-   For instance, if we find `x : U32` in the context we can introduce `0 ≤ x ∧ x ≤ U32.max`
+/- Defining a custom attribute for Aesop - we use Aesop tactic in the arithmetic tactics -/
 
-   Remark: I tried a version of the shape `HasScalarProp {a : Type} (x : a)`
-   but the lookup didn't work.
- -/
-class HasIntProp (a : Sort u) where
-  prop_ty : a → Prop
-  prop : ∀ x:a, prop_ty x
+attribute [aesop (rule_sets := [Aeneas.ScalarTac]) unfold norm] Function.comp
 
-/- Terms that induces predicates: if we can find the term `x`, we can introduce `concl` in the context. -/
-class HasIntPred {a: Sort u} (x: a) where
-  concl : Prop
-  prop : concl
+/-
+-- DEPRECATED: `int_tac` and `scalar_tac` used to rely on `aesop`. As there are performance issues
+-- with the saturation tactic for now we use our own tactic. We will revert once the performance
+-- is improved.
+/-- The `int_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "int_tac" pat:term : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]) (pattern := $pat))
 
-/- Proposition with implications: if we find P we can introduce Q in the context -/
-class PropHasImp (x : Sort u) where
-  concl : Prop
-  prop : x → concl
+/-- The `scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "scalar_tac" pat:term : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]) (pattern := $pat))
 
-instance (p : Int → Prop) : HasIntProp (Subtype p) where
-  prop_ty := λ x => p x
-  prop := λ x => x.property
+/-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "nonlin_scalar_tac" pat:term : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTacNonLin):ident]) (pattern := $pat))
+-/
+
+/-- The `int_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "int_tac" pat:term : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)) (pattern := $pat))
+
+/-- The `scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "scalar_tac" pat:term : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)) (pattern := $pat))
+
+/-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `int_tac` and `scalar_tac` tactics. -/
+macro "nonlin_scalar_tac" pat:term : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTacNonLin)) (pattern := $pat))
+
+-- This is useful especially in the termination proofs
+attribute [scalar_tac a.toNat] Int.toNat_eq_max
 
 /- Check if a proposition is a linear integer proposition.
    We notably use this to check the goals: this is useful to filter goals that
@@ -70,194 +84,54 @@ def goalIsLinearInt : Tactic.TacticM Bool := do
   | .some _ => pure true
   | _ => pure false
 
-/- Explore a term by decomposing the applications (we explore the applied
-   functions and their arguments, but ignore lambdas, forall, etc. -
-   should we go inside?).
-
-   Remark: we pretend projections are applications, and explore the projected
-   terms. -/
-partial def foldTermApps (k : α → Expr → MetaM α) (s : α) (e : Expr) : MetaM α := do
-  -- Explore the current expression
-  let e := e.consumeMData
-  let s ← k s e
-  -- Recurse
-  match e with
-  | .proj _ _ e' =>
-    foldTermApps k s e'
-  | .app .. =>
-    e.withApp fun f args => do
-      let s ← k s f
-      args.foldlM (foldTermApps k) s
-  | _ => pure s
-
-/- Provided a function `k` which lookups type class instances on an expression,
-   collect all the instances lookuped by applying `k` on the sub-expressions of `e`. -/
-def collectInstances
-  (k : Expr → MetaM (Option Expr)) (s : HashSet Expr) (e : Expr) : MetaM (HashSet Expr) := do
-  let k s e := do
-    match ← k e with
-    | none => pure s
-    | some i => pure (s.insert i)
-  foldTermApps k s e
-
-/- Similar to `collectInstances`, but explores all the local declarations in the
-   main context. -/
-def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.TacticM (HashSet Expr) := do
-  Tactic.withMainContext do
-  -- Get the local context
-  let ctx ← Lean.MonadLCtx.getLCtx
-  -- Initialize the hashset
-  let hs := HashSet.empty
-  -- Explore the declarations
-  let decls ← ctx.getDecls
-  let hs ← decls.foldlM (fun hs d => do
-    -- Collect instances over all subexpressions in the context.
-    -- Note that if the local declaration is
-    -- Note that we explore the *type* of propositions: if we have
-    -- for instance `h : A ∧ B` in the context, the expression itself is simply
-    -- `h`; the information we are interested in is its type.
-    -- However, if the decl is not a proposition, we explore it directly.
-    -- For instance: `x : U32`
-    -- TODO: case disjunction on whether the local decl is a Prop or not. If prop,
-    -- we need to explore its type.
-    let d := d.toExpr
-    if d.isProp then
-      collectInstances k hs d
-    else
-      let ty ← Lean.Meta.inferType d
-      collectInstances k hs ty
-  ) hs
-  -- Also explore the goal
-  collectInstances k hs (← Tactic.getMainTarget)
-
--- Helper
-def lookupProp (fName : String) (className : Name) (e : Expr)
-  (instantiateClassFn : Expr → MetaM (Array Expr))
-  (instantiateProjectionFn : Expr → MetaM (Array Expr)) : MetaM (Option Expr) := do
-  trace[Arith] fName
-  -- TODO: do we need Lean.observing?
-  -- This actually eliminates the error messages
-  trace[Arith] m!"{fName}: {e}"
-  Lean.observing? do
-    trace[Arith] m!"{fName}: observing: {e}"
-    let hasProp ← mkAppM className (← instantiateClassFn e)
-    let hasPropInst ← trySynthInstance hasProp
-    match hasPropInst with
-    | LOption.some i =>
-      trace[Arith] "Found {fName} instance"
-      let i_prop ← mkProjection i (Name.mkSimple "prop")
-      some (← mkAppM' i_prop (← instantiateProjectionFn e))
-    | _ => none
-
--- Return an instance of `HasIntProp` for `e` if it has some
-def lookupHasIntProp (e : Expr) : MetaM (Option Expr) :=
-  lookupProp "lookupHasIntProp" ``HasIntProp e (fun e => do pure #[← Lean.Meta.inferType e]) (fun e => pure #[e])
-
--- Collect the instances of `HasIntProp` for the subexpressions in the context
-def collectHasIntPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  collectInstancesFromMainCtx lookupHasIntProp
-
--- Return an instance of `HasIntPred` for `e` if it has some
-def lookupHasIntPred (e : Expr) : MetaM (Option Expr) :=
-  lookupProp "lookupHasIntPred" ``HasIntPred e (fun term => pure #[term]) (fun _ => pure #[])
-
--- Collect the instances of `HasIntPred` for the subexpressions in the context
-def collectHasIntPredInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  collectInstancesFromMainCtx lookupHasIntPred
-
--- Return an instance of `PropHasImp` for `e` if it has some
-def lookupPropHasImp (e : Expr) : MetaM (Option Expr) := do
-  trace[Arith] m!"lookupPropHasImp: {e}"
-  -- TODO: do we need Lean.observing?
-  -- This actually eliminates the error messages
-  Lean.observing? do
-    trace[Arith] "lookupPropHasImp: observing: {e}"
-    let ty ← Lean.Meta.inferType e
-    trace[Arith] "lookupPropHasImp: ty: {ty}"
-    let cl ← mkAppM ``PropHasImp #[ty]
-    let inst ← trySynthInstance cl
-    match inst with
-    | LOption.some i =>
-      trace[Arith] "Found PropHasImp instance"
-      let i_prop ←  mkProjection i (Name.mkSimple "prop")
-      some (← mkAppM' i_prop #[e])
-    | _ => none
-
--- Collect the instances of `PropHasImp` for the subexpressions in the context
-def collectPropHasImpInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  collectInstancesFromMainCtx lookupPropHasImp
-
-elab "display_prop_has_imp_instances" : tactic => do
-  trace[Arith] "Displaying the PropHasImp instances"
-  let hs ← collectPropHasImpInstancesFromMainCtx
-  hs.forM fun e => do
-    trace[Arith] "+ PropHasImp instance: {e}"
-
-example (x y : Int) (_ : x ≠ y) (_ : ¬ x = y) : True := by
-  display_prop_has_imp_instances
-  simp
-
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
--- Lookup instances in a context and introduce them with additional declarations.
-def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr)) : Tactic.TacticM (Array Expr) := do
-  let hs ← collectInstancesFromMainCtx lookup
-  hs.toArray.mapM fun e => do
-    let type ← inferType e
-    let name ← mkFreshAnonPropUserName
-    -- Add a declaration
-    let nval ← Utils.addDeclTac name e type (asLet := false)
-    -- Simplify to unfold the declaration to unfold (i.e., the projector)
-    Utils.simpAt true {} [] [declToUnfold] [] [] (Location.targets #[mkIdent name] false)
-    -- Return the new value
-    pure nval
-
-def introHasIntPropInstances : Tactic.TacticM (Array Expr) := do
-  trace[Arith] "Introducing the HasIntProp instances"
-  introInstances ``HasIntProp.prop_ty lookupHasIntProp
-
--- Lookup the instances of `HasIntProp for all the sub-expressions in the context,
--- and introduce the corresponding assumptions
-elab "intro_has_int_prop_instances" : tactic => do
-  let _ ← introHasIntPropInstances
-
-def introHasIntPredInstances : Tactic.TacticM (Array Expr) := do
-  trace[Arith] "Introducing the HasIntPred instances"
-  introInstances ``HasIntPred.concl lookupHasIntPred
-
-elab "intro_has_int_pred_instances" : tactic => do
-  let _ ← introHasIntPredInstances
-
-def introPropHasImpInstances : Tactic.TacticM (Array Expr) := do
-  trace[Arith] "Introducing the PropHasImp instances"
-  introInstances ``PropHasImp.concl lookupPropHasImp
-
--- Lookup the instances of `PropHasImp for all the sub-expressions in the context,
--- and introduce the corresponding assumptions
-elab "intro_prop_has_imp_instances" : tactic => do
-  let _ ← introPropHasImpInstances
-
 def intTacSimpRocs : List Name := [``Int.reduceNegSucc, ``Int.reduceNeg]
 
-/- Boosting a bit the `omega` tac.
+/-- Apply the scalar_tac forward rules -/
+def intTacSaturateForward : Tactic.TacticM Unit := do
+  /-
+  let options : Aesop.Options := {}
+  -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
+  -- introduced by the forward rules themselves.
+  let options ← options.toOptions' (some 0)-/
+  -- We always use the rule set `Aeneas.ScalarTac`, but also need to add other rule sets locally
+  -- activated by the user. The `Aeneas.ScalarTacNonLin` rule set has a special treatment as
+  -- it is activated through an option.
+  let ruleSets :=
+    let ruleSets := `Aeneas.ScalarTac :: (← scalarTacRuleSets.get)
+    if scalarTac.nonLin.get (← getOptions) then `Aeneas.ScalarTacNonLin :: ruleSets
+    else ruleSets
+  -- TODO
+  -- evalAesopSaturate options ruleSets.toArray
+  Saturate.evalSaturate ruleSets
+
+-- For debugging
+elab "int_tac_saturate" : tactic =>
+  intTacSaturateForward
+
+/-  Boosting a bit the `omega` tac.
+
+    - `extraPrePreprocess`: extra-preprocessing to be done *before* this preprocessing
+    - `extraPreprocess`: extra-preprocessing to be done *after* this preprocessing
  -/
-def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
-  -- Introduce the instances of `HasIntProp`
-  let _ ← introHasIntPropInstances
-  -- Introduce the instances of `HasIntPred`
-  let _ ← introHasIntPredInstances
-  -- Introduce the instances of `PropHasImp`
-  let _ ← introPropHasImpInstances
+  -- Pre-preprocessing
+  extraPrePreprocess
+  -- Apply the forward rules
+  intTacSaturateForward
   -- Extra preprocessing
   extraPreprocess
   -- Reduce all the terms in the goal - note that the extra preprocessing step
-  -- might have proven the goal, hence the `Tactic.allGoals`
+  -- might have proven the goal, hence the `allGoals`
   let dsimp :=
-    Tactic.allGoals do tryTac (
-      -- We set `simpOnly` at false on purpose
-      dsimpAt false {} intTacSimpRocs
+    allGoalsNoRecover do tryTac (
+      -- We set `simpOnly` at false on purpose.
+      -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
+      -- to deal with them)
+      dsimpAt false {zetaDelta := true} intTacSimpRocs
         -- Declarations to unfold
         []
         -- Theorems
@@ -265,27 +139,33 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
         [] Tactic.Location.wildcard)
   dsimp
   -- More preprocessing: apply norm_cast to the whole context
-  Tactic.allGoals (Utils.tryTac (Utils.normCastAtAll))
+  allGoalsNoRecover (Utils.tryTac (Utils.normCastAtAll))
   -- norm_cast does weird things with negative numbers so we reapply simp
   dsimp
-  -- We also need this, in case the goal is: ¬ False
-  Tactic.allGoals do tryTac (
+  allGoalsNoRecover do Utils.tryTac (
     Utils.simpAt true {}
                -- Simprocs
-               intTacSimpRocs
+               []
                -- Unfoldings
                []
                 -- Simp lemmas
-                [``not_false_eq_true]
+                [-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+                 ``Int.subNatNat_eq_coe,
+                 -- We also need this, in case the goal is: ¬ False
+                 ``not_false_eq_true]
                 -- Hypotheses
-                []
-                (.targets #[] true)
-  )
+                [] .wildcard)
 
 elab "int_tac_preprocess" : tactic =>
-  intTacPreprocess (do pure ())
+  intTacPreprocess (do pure ()) (do pure ())
 
-def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+/-- - `splitAllDisjs`: if true, also split all the matches/if then else in the context (note that
+      `omega` splits the *disjunctions*)
+    - `splitGoalConjs`: if true, split the goal if it is a conjunction so as to introduce one
+      subgoal per conjunction.
+-/
+def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
+  (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
   let g ← Tactic.getMainGoal
@@ -295,19 +175,50 @@ def intTac (tacName : String) (splitGoalConjs : Bool) (extraPreprocess :  Tactic
   Tactic.setGoals [g]
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
-  Tactic.allGoals (intTacPreprocess extraPreprocess)
+  allGoalsNoRecover (intTacPreprocess extraPrePreprocess extraPreprocess)
   -- Split the conjunctions in the goal
-  if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
-  -- Call omega
-  Tactic.allGoals do
-    try do Tactic.Omega.omegaTactic {}
+  if splitGoalConjs then allGoalsNoRecover (Utils.repeatTac Utils.splitConjTarget)
+  /- If we split the disjunctions, split then use simp_all. Otherwise only use simp_all.
+     Note that simp_all is very useful here as a "congruence" procedure. Note however that we
+     only activate a very restricted set of simp lemmas (otherwise it can be very expensive,
+     and have surprising behaviors). -/
+  allGoalsNoRecover do
+    try do
+      let simpThenOmega := do
+        /- IMPORTANT: we put a quite low number for `maxSteps`.
+           There are two reasons.
+           First, `simp_all` seems to loop at times, so by controling the maximum number of steps
+           we make sure it doesn't exceed the maximum number of heart beats (or worse, overflows the
+           stack).
+           Second, this makes the tactic very snappy.
+         -/
+        Utils.tryTac (
+          -- TODO: is there a simproc to simplify propositional logic?
+          Utils.simpAll {failIfUnchanged := false, maxSteps := 75} true [``reduceIte] []
+            [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq, ``not_false_eq_true,
+             ``true_and, ``and_true, ``false_and, ``and_false, ``true_or, ``or_true,
+             ``false_or, ``or_false] [])
+        allGoalsNoRecover (do
+          trace[Arith] "Goal after simplification: {← getMainGoal}"
+          Tactic.Omega.omegaTactic {})
+      if splitAllDisjs then do
+        /- In order to improve performance, we first try to prove the goal without splitting. If it
+           fails, we split. -/
+        try
+          trace[Arith] "First trying to solve the goal without splitting"
+          simpThenOmega
+        catch _ =>
+          trace[Arith] "First attempt failed: splitting the goal and retrying"
+          splitAll (allGoalsNoRecover simpThenOmega)
+      else
+        simpThenOmega
     catch _ =>
       let g ← Tactic.getMainGoal
-      throwError "{tacName} failed to prove the goal below.\n\nNote that {tacName} is equivalent to:\n  {tacName}_preprocess; omega\n\nGoal: \n{g}"
+      throwError "{tacName} failed to prove the goal below.\n\nNote that {tacName} is equivalent to:\n  {tacName}_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
 
 elab "int_tac" args:(" split_goal"?): tactic =>
-  let split := args.raw.getArgs.size > 0
-  intTac "int_tac" split (do pure ())
+  let splitConjs := args.raw.getArgs.size > 0
+  intTac "int_tac" true splitConjs (do pure ()) (do pure ())
 
 -- For termination proofs
 syntax "int_decr_tac" : tactic
@@ -324,6 +235,9 @@ macro_rules
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
   int_tac split_goal
 
+--example (x y : Int) : x + y ≥ 2 := by
+--  int_tac split_goal
+
 -- Checking that things happen correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
   int_tac split_goal
@@ -337,6 +251,16 @@ example (a : Prop) (x : Int) (h0: (0 : Nat) < x) (h1: x < 0) : a := by
   int_tac
 
 example (x : Int) (h : x ≤ -3) : x ≤ -2 := by
+  int_tac
+
+example (x y : Int) (h : x + y = 3) :
+  let z := x + y
+  z = 3 := by
+  intro z
+  omega
+
+-- Checking that we manage to split the cases/if then else
+example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by
   int_tac
 
 end Arith

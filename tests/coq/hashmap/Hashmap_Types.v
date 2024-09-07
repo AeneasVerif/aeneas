@@ -11,7 +11,7 @@ Include Hashmap_TypesExternal.
 Module Hashmap_Types.
 
 (** [hashmap::AList]
-    Source: 'tests/src/hashmap.rs', lines 30:0-30:17 *)
+    Source: 'tests/src/hashmap.rs', lines 30:0-33:1 *)
 Inductive AList_t (T : Type) :=
 | AList_Cons : usize -> T -> AList_t T -> AList_t T
 | AList_Nil : AList_t T
@@ -21,7 +21,7 @@ Arguments AList_Cons { _ }.
 Arguments AList_Nil { _ }.
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 46:0-46:21 *)
+    Source: 'tests/src/hashmap.rs', lines 46:0-58:1 *)
 Record HashMap_t (T : Type) :=
 mkHashMap_t {
   hashMap_num_entries : usize;

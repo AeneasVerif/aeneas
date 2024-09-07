@@ -37,6 +37,7 @@ module ConstGenericVarId = T.ConstGenericVarId
 
 type llbc_name = T.name [@@deriving show, ord]
 type integer_type = T.integer_type [@@deriving show, ord]
+type float_type = T.float_type [@@deriving show, ord]
 type const_generic_var = T.const_generic_var [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
@@ -290,13 +291,17 @@ type ty =
 
 and trait_ref = {
   trait_id : trait_instance_id;
-  generics : generic_args;
   trait_decl_ref : trait_decl_ref;
 }
 
 and trait_decl_ref = {
   trait_decl_id : trait_decl_id;
   decl_generics : generic_args; (* The name: annoying field collisions... *)
+}
+
+and global_decl_ref = {
+  global_id : global_decl_id;
+  global_generics : generic_args; (* The name: annoying field collisions... *)
 }
 
 and generic_args = {
@@ -307,12 +312,9 @@ and generic_args = {
 
 and trait_instance_id =
   | Self
-  | TraitImpl of trait_impl_id
+  | TraitImpl of trait_impl_id * generic_args
   | Clause of trait_clause_id
   | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
-  | ItemClause of
-      trait_instance_id * trait_decl_id * trait_item_name * trait_clause_id
-  | TraitRef of trait_ref
   | UnknownTrait of string
 [@@deriving
   show,
@@ -549,7 +551,10 @@ and typed_pattern = { value : pattern; ty : ty }
         polymorphic = false;
       }]
 
-type unop = Not | Neg of integer_type | Cast of literal_type * literal_type
+type unop =
+  | Not of integer_type option
+  | Neg of integer_type
+  | Cast of literal_type * literal_type
 [@@deriving show, ord]
 
 (** Identifiers of assumed functions that we use only in the pure translation *)
@@ -1159,10 +1164,10 @@ type trait_decl = {
   preds : predicates;
   parent_clauses : trait_clause list;
   llbc_parent_clauses : Types.trait_clause list;
-  consts : (trait_item_name * (ty * global_decl_id option)) list;
-  types : (trait_item_name * (trait_clause list * ty option)) list;
+  consts : (trait_item_name * ty) list;
+  types : trait_item_name list;
   required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : (trait_item_name * fun_decl_id option) list;
+  provided_methods : (trait_item_name * fun_decl_id) list;
 }
 [@@deriving show]
 
@@ -1182,8 +1187,8 @@ type trait_impl = {
           simplification of types like boxes and references. *)
   preds : predicates;
   parent_trait_refs : trait_ref list;
-  consts : (trait_item_name * (ty * global_decl_id)) list;
-  types : (trait_item_name * (trait_ref list * ty)) list;
+  consts : (trait_item_name * global_decl_ref) list;
+  types : (trait_item_name * ty) list;
   required_methods : (trait_item_name * fun_decl_id) list;
   provided_methods : (trait_item_name * fun_decl_id) list;
 }

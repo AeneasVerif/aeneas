@@ -74,8 +74,8 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     eval_ctx * inst_fun_sig =
   let tr_self =
     match kind with
-    | RegularKind | TraitItemImpl _ -> UnknownTrait __FUNCTION__
-    | TraitItemDecl _ | TraitItemProvided _ -> Self
+    | RegularItem | TraitImplItem _ -> UnknownTrait __FUNCTION__
+    | TraitDeclItem _ -> Self
   in
   let generics =
     let { regions; types; const_generics; trait_clauses; _ } = sg.generics in
@@ -133,17 +133,15 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
       List.fold_left_map
         (fun tr_map (c : trait_clause) ->
           let subst = mk_subst tr_map in
-          let { trait_id = trait_decl_id; clause_generics; _ } = c in
+          let { trait_decl_id; decl_generics; _ } = c.trait in
           let generics =
-            Substitute.generic_args_substitute subst clause_generics
+            Substitute.generic_args_substitute subst decl_generics
           in
           let trait_decl_ref = { trait_decl_id; decl_generics = generics } in
           (* Note that because we directly refer to the clause, we give it
              empty generics *)
           let trait_id = Clause c.clause_id in
-          let trait_ref =
-            { trait_id; generics = empty_generic_args; trait_decl_ref }
-          in
+          let trait_ref = { trait_id; trait_decl_ref } in
           (* Update the traits map *)
           let tr_map = TraitClauseId.Map.add c.clause_id trait_id tr_map in
           (tr_map, trait_ref))
@@ -391,7 +389,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         | Loop (_, rg_id', kind) ->
             let rg_id' = Option.get rg_id' in
             let is_ret =
-              match kind with LoopSynthInput -> true | LoopCall -> false
+              match kind with
+              | LoopSynthInput -> true
+              | LoopCall -> false
             in
             rg_id' = back_id && is_ret
         | _ -> false
@@ -491,7 +491,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
 
   let current_abs_id =
-    match current_abs_id with None -> [] | Some id -> [ id ]
+    match current_abs_id with
+    | None -> []
+    | Some id -> [ id ]
   in
   let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
   let ctx, cc =

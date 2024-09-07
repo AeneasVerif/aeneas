@@ -20,7 +20,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
      only use their type for the fields of the records we generate for the trait
      declarations *)
   match def.f.kind with
-  | TraitItemDecl _ -> ctx
+  | TraitDeclItem (_, _, false) -> ctx
   | _ -> (
       (* Check if the function is builtin *)
       let builtin =
@@ -607,7 +607,9 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
         | _ -> None
       in
       let has_one_field =
-        match num_fields with Some len -> len = 1 | None -> false
+        match num_fields with
+        | Some len -> len = 1
+        | None -> false
       in
       if is_tuple_struct && has_one_field then
         extract_texpression span ctx fmt inside arg
@@ -945,7 +947,9 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       extract_texpression span ctx fmt scrut_inside scrut;
       F.pp_print_space fmt ();
       let match_scrut_end =
-        match backend () with FStar | Coq | Lean -> "with" | HOL4 -> "of"
+        match backend () with
+        | FStar | Coq | Lean -> "with"
+        | HOL4 -> "of"
       in
       F.pp_print_string fmt match_scrut_end;
       (* Close the box for the [match ... with] *)
@@ -964,7 +968,9 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         let ctx = extract_typed_pattern span ctx fmt false false br.pat in
         F.pp_print_space fmt ();
         let arrow =
-          match backend () with FStar -> "->" | Coq | Lean | HOL4 -> "=>"
+          match backend () with
+          | FStar -> "->"
+          | Coq | Lean | HOL4 -> "=>"
         in
         F.pp_print_string fmt arrow;
         (* Close the box for the pattern *)
@@ -1070,10 +1076,14 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         print_bracket true ilb;
         F.pp_open_hvbox fmt 0;
         let delimiter =
-          match backend () with Lean -> "," | Coq | FStar | HOL4 -> ";"
+          match backend () with
+          | Lean -> ","
+          | Coq | FStar | HOL4 -> ";"
         in
         let assign =
-          match backend () with Coq | Lean | HOL4 -> ":=" | FStar -> "="
+          match backend () with
+          | Coq | Lean | HOL4 -> ":="
+          | FStar -> "="
         in
         Collections.List.iter_link
           (fun () ->
@@ -1121,7 +1131,9 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         F.pp_close_box fmt ();
         (* Print the values *)
         let delimiter =
-          match backend () with Lean -> "," | Coq | FStar | HOL4 -> ";"
+          match backend () with
+          | Lean -> ","
+          | Coq | FStar | HOL4 -> ";"
         in
         F.pp_print_space fmt ();
         F.pp_open_hovbox fmt 0;
@@ -1169,7 +1181,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   *)
   let ctx, trait_decl =
     match def.kind with
-    | TraitItemProvided (decl_id, _) ->
+    | TraitDeclItem (decl_id, _, true) ->
         let trait_decl = T.TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
         let ctx, _ = ctx_add_trait_self_clause def.item_meta.span ctx in
         let ctx = { ctx with is_provided_method = true } in
@@ -1620,7 +1632,11 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the "=" *)
   if not is_opaque then (
     F.pp_print_space fmt ();
-    let eq = match backend () with FStar | HOL4 -> "=" | Coq | Lean -> ":=" in
+    let eq =
+      match backend () with
+      | FStar | HOL4 -> "="
+      | Coq | Lean -> ":="
+    in
     F.pp_print_string fmt eq);
   (* Close the box for "(PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
@@ -1854,7 +1870,11 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   if not is_opaque then (
     (* Print " =" *)
     F.pp_print_space fmt ();
-    let eq = match backend () with FStar | HOL4 -> "=" | Coq | Lean -> ":=" in
+    let eq =
+      match backend () with
+      | FStar | HOL4 -> "="
+      | Coq | Lean -> ":="
+    in
     F.pp_print_string fmt eq);
   (* Close ": TYPE =" box (depth=2) *)
   F.pp_close_box fmt ();
@@ -2121,55 +2141,26 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
           if !record_fields_short_names then type_name
           else ctx_compute_trait_decl_name ctx trait_decl ^ type_name
         in
-        let compute_clause_name (item_name : string) (clause : trait_clause) :
-            TraitClauseId.id * string =
-          let name =
-            ctx_compute_trait_type_clause_name ctx trait_decl item_name clause
-          in
-          (* Add a prefix if necessary *)
-          let name =
-            if !record_fields_short_names then name
-            else ctx_compute_trait_decl_name ctx trait_decl ^ name
-          in
-          (clause.clause_id, name)
-        in
         List.map
-          (fun (item_name, (item_clauses, _)) ->
+          (fun item_name ->
             (* Type name *)
             let type_name = compute_type_name item_name in
-            (* Clause names *)
-            let clauses =
-              List.map (compute_clause_name item_name) item_clauses
-            in
-            (item_name, (type_name, clauses)))
+            (item_name, type_name))
           types
     | Some info ->
         let type_map = StringMap.of_list info.types in
         List.map
-          (fun (item_name, (item_clauses, _)) ->
-            let type_name, clauses_info = StringMap.find item_name type_map in
-            let clauses =
-              List.map
-                (fun (clause, clause_name) -> (clause.clause_id, clause_name))
-                (List.combine item_clauses clauses_info)
-            in
-            (item_name, (type_name, clauses)))
+          (fun item_name ->
+            let type_name = StringMap.find item_name type_map in
+            (item_name, type_name))
           types
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (item_name, (type_name, clauses)) ->
-      let ctx =
-        ctx_add trait_decl.item_meta.span
-          (TraitItemId (trait_decl.def_id, item_name))
-          type_name ctx
-      in
-      List.fold_left
-        (fun ctx (clause_id, clause_name) ->
-          ctx_add trait_decl.item_meta.span
-            (TraitItemClauseId (trait_decl.def_id, item_name, clause_id))
-            clause_name ctx)
-        ctx clauses)
+    (fun ctx (item_name, type_name) ->
+      ctx_add trait_decl.item_meta.span
+        (TraitItemId (trait_decl.def_id, item_name))
+        type_name ctx)
     ctx type_names
 
 (** Similar to {!extract_trait_decl_register_names} *)
@@ -2331,7 +2322,9 @@ let extract_trait_item (ctx : extraction_ctx) (fmt : F.formatter)
   (* ":" or "=" *)
   F.pp_print_string fmt separator;
   ty ();
-  (match backend () with Lean -> () | _ -> F.pp_print_string fmt ";");
+  (match backend () with
+  | Lean -> ()
+  | _ -> F.pp_print_string fmt ";");
   F.pp_close_box fmt ()
 
 let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
@@ -2340,7 +2333,11 @@ let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
 
 let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
     (item_name : string) (ty : unit -> unit) : unit =
-  let assign = match backend () with Lean | Coq -> ":=" | _ -> "=" in
+  let assign =
+    match backend () with
+    | Lean | Coq -> ":="
+    | _ -> "="
+  in
   extract_trait_item ctx fmt item_name assign ty
 
 (** Small helper - TODO: move *)
@@ -2387,7 +2384,9 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
         f.signature.llbc_generics generics ctx
     in
     let backend_uses_forall =
-      match backend () with Coq | Lean -> true | FStar | HOL4 -> false
+      match backend () with
+      | Coq | Lean -> true
+      | FStar | HOL4 -> false
     in
     let generics_not_empty = generics <> empty_generic_params in
     let use_forall = generics_not_empty && backend_uses_forall in
@@ -2489,7 +2488,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The constants *)
     List.iter
-      (fun (name, (ty, _)) ->
+      (fun (name, ty) ->
         let item_name =
           ctx_get_trait_const decl.item_meta.span decl.def_id name ctx
         in
@@ -2503,7 +2502,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The types *)
     List.iter
-      (fun (name, (clauses, _)) ->
+      (fun name ->
         (* Extract the type *)
         let item_name =
           ctx_get_trait_type decl.item_meta.span decl.def_id name ctx
@@ -2512,21 +2511,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           F.pp_print_string fmt (type_keyword decl.item_meta.span)
         in
-        extract_trait_decl_item ctx fmt item_name ty;
-        (* Extract the clauses *)
-        List.iter
-          (fun clause ->
-            let item_name =
-              ctx_get_trait_item_clause decl.item_meta.span decl.def_id name
-                clause.clause_id ctx
-            in
-            let ty () =
-              F.pp_print_space fmt ();
-              extract_trait_clause_type decl.item_meta.span ctx fmt
-                TypeDeclId.Set.empty clause
-            in
-            extract_trait_decl_item ctx fmt item_name ty)
-          clauses)
+        extract_trait_decl_item ctx fmt item_name ty)
       decl.types;
 
     (* The parent clauses - note that the parent clauses may refer to the types
@@ -2591,21 +2576,12 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
       decl.consts;
     (* The types *)
     List.iter
-      (fun (name, (clauses, _)) ->
+      (fun name ->
         (* The type *)
         let item_name =
           ctx_get_trait_type decl.item_meta.span decl.def_id name ctx
         in
-        extract_coq_arguments_instruction ctx fmt item_name num_params;
-        (* The type clauses *)
-        List.iter
-          (fun clause ->
-            let item_name =
-              ctx_get_trait_item_clause decl.item_meta.span decl.def_id name
-                clause.clause_id ctx
-            in
-            extract_coq_arguments_instruction ctx fmt item_name num_params)
-          clauses)
+        extract_coq_arguments_instruction ctx fmt item_name num_params)
       decl.types;
     (* The parent clauses *)
     List.iter
@@ -2743,6 +2719,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      name ?generics:(Some generics) impl.item_meta.span.span);
   F.pp_print_break fmt 0 0;
 
+  (* If extracting for Lean, mark the definition as reducible *)
+  if backend () = Lean then (
+    F.pp_print_string fmt "@[reducible]";
+    F.pp_print_break fmt 0 0);
+
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.
 
@@ -2814,45 +2795,31 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      * Extract the items
      *)
     let trait_decl_id = impl.impl_trait.trait_decl_id in
-    let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls in
-    let trait_decl_provided_consts =
-      List.map (fun (_, (_, x)) -> x) trait_decl.consts
-    in
+    let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.crate.trait_decls in
 
     (* The constants *)
     List.iter
-      (fun (provided_id, (name, (_, id))) ->
+      (fun (name, gref) ->
         let item_name =
           ctx_get_trait_const impl.item_meta.span trait_decl_id name ctx
         in
-        (* The parameters are not the same depending on whether the constant
-           is a provided constant or not *)
         let print_params () =
-          if provided_id = Some id then
-            extract_generic_args impl.item_meta.span ctx fmt
-              TypeDeclId.Set.empty impl.impl_trait.decl_generics
-          else
-            let all_params =
-              List.concat [ type_params; cg_params; trait_clauses ]
-            in
-            List.iter
-              (fun p ->
-                F.pp_print_space fmt ();
-                F.pp_print_string fmt p)
-              all_params
+          extract_generic_args impl.item_meta.span ctx fmt TypeDeclId.Set.empty
+            gref.global_generics
         in
         let ty () =
           F.pp_print_space fmt ();
-          F.pp_print_string fmt (ctx_get_global impl.item_meta.span id ctx);
+          F.pp_print_string fmt
+            (ctx_get_global impl.item_meta.span gref.global_id ctx);
           print_params ()
         in
 
         extract_trait_impl_item ctx fmt item_name ty)
-      (List.combine trait_decl_provided_consts impl.consts);
+      impl.consts;
 
     (* The types *)
     List.iter
-      (fun (name, (trait_refs, ty)) ->
+      (fun (name, ty) ->
         (* Extract the type *)
         let item_name =
           ctx_get_trait_type impl.item_meta.span trait_decl_id name ctx
@@ -2861,29 +2828,15 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           extract_ty impl.item_meta.span ctx fmt TypeDeclId.Set.empty false ty
         in
-        extract_trait_impl_item ctx fmt item_name ty;
-        (* Extract the clauses *)
-        TraitClauseId.iteri
-          (fun clause_id trait_ref ->
-            let item_name =
-              ctx_get_trait_item_clause impl.item_meta.span trait_decl_id name
-                clause_id ctx
-            in
-            let ty () =
-              F.pp_print_space fmt ();
-              extract_trait_ref impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-                false trait_ref
-            in
-            extract_trait_impl_item ctx fmt item_name ty)
-          trait_refs)
+        extract_trait_impl_item ctx fmt item_name ty)
       impl.types;
 
     (* The parent clauses *)
-    TraitClauseId.iteri
-      (fun clause_id trait_ref ->
+    List.iter
+      (fun (clause, trait_ref) ->
         let item_name =
           ctx_get_trait_parent_clause impl.item_meta.span trait_decl_id
-            clause_id ctx
+            clause.T.clause_id ctx
         in
         let ty () =
           F.pp_print_space fmt ();
@@ -2891,7 +2844,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
             false trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
-      impl.parent_trait_refs;
+      (List.combine trait_decl.parent_clauses impl.parent_trait_refs);
 
     (* The required methods *)
     List.iter

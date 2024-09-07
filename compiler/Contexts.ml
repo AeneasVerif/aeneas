@@ -570,7 +570,9 @@ let ctx_set_abs_can_end (span : Meta.span) (ctx : eval_ctx)
 
 let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
   let decl_group = TypeDeclId.Map.find id ctx.type_ctx.type_decls_groups in
-  match decl_group with RecGroup _ -> true | NonRecGroup _ -> false
+  match decl_group with
+  | RecGroup _ -> true
+  | NonRecGroup _ -> false
 
 (** Visitor to iterate over the values in the *current* frame *)
 class ['self] iter_frame =
@@ -626,17 +628,23 @@ class ['self] map_eval_ctx =
 let env_iter_abs (f : abs -> unit) (env : env) : unit =
   List.iter
     (fun (ee : env_elem) ->
-      match ee with EBinding _ | EFrame -> () | EAbs abs -> f abs)
+      match ee with
+      | EBinding _ | EFrame -> ()
+      | EAbs abs -> f abs)
     env
 
 let env_map_abs (f : abs -> abs) (env : env) : env =
   List.map
     (fun (ee : env_elem) ->
-      match ee with EBinding _ | EFrame -> ee | EAbs abs -> EAbs (f abs))
+      match ee with
+      | EBinding _ | EFrame -> ee
+      | EAbs abs -> EAbs (f abs))
     env
 
 let env_filter_abs (f : abs -> bool) (env : env) : env =
   List.filter
     (fun (ee : env_elem) ->
-      match ee with EBinding _ | EFrame -> true | EAbs abs -> f abs)
+      match ee with
+      | EBinding _ | EFrame -> true
+      | EAbs abs -> f abs)
     env

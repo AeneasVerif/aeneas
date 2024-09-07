@@ -45,22 +45,13 @@ structure clone.Clone (Self : Type) where
   clone : Self → Result Self
 
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
+@[reducible, simp]
 def clone.impls.CloneBool.clone (b : Bool) : Bool := b
 
+@[reducible]
 def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
 }
-
-namespace option -- core.option
-
-/- [core::option::{core::option::Option<T>}::unwrap] -/
-def Option.unwrap (T : Type) (x : Option T) : Result T :=
-  Result.ofOption x Error.panic
-
-end option -- core.option
-
-/- [core::option::Option::take] -/
-@[simp] def Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
 
 /- [core::mem::replace]
 
@@ -73,3 +64,20 @@ end option -- core.option
 @[simp] def mem.swap (T: Type) (a b: T): T × T := (b, a)
 
 end core
+
+/- [core::option::{core::option::Option<T>}::unwrap] -/
+@[simp] def core.option.Option.unwrap (T : Type) (x : Option T) : Result T :=
+  Result.ofOption x Error.panic
+
+/- [core::option::Option::take] -/
+@[simp] def core.option.Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
+
+/- [core::option::Option::is_none] -/
+@[simp] def core.option.Option.is_none (T: Type) (self: Option T): Bool := self.isNone
+
+/- [core::clone::Clone::clone_from]:
+   Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
+   Name pattern: core::clone::Clone::clone_from -/
+@[simp] def core.clone.Clone.clone_from
+  {Self : Type} (cloneInst : core.clone.Clone Self) (_self : Self) (source : Self) : Result Self :=
+  cloneInst.clone source

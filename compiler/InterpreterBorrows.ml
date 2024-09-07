@@ -836,9 +836,10 @@ let give_back (config : config) (span : Meta.span) (l : BorrowId.id)
       (* Update the context *)
       give_back_shared config span l ctx
   | Abstract
-      ( AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
-      | AEndedSharedBorrow ) ->
-      craise __FILE__ __LINE__ span "Unreachable"
+      ( AEndedMutBorrow _
+      | AIgnoredMutBorrow _
+      | AEndedIgnoredMutBorrow _
+      | AEndedSharedBorrow ) -> craise __FILE__ __LINE__ span "Unreachable"
 
 let check_borrow_disappeared (span : Meta.span) (fun_name : string)
     (l : BorrowId.id) (ctx0 : eval_ctx) (ctx : eval_ctx) : unit =
@@ -1181,11 +1182,16 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             (* Raise an exception only if the asb contains borrows *)
             if
               List.exists
-                (fun x -> match x with AsbBorrow _ -> true | _ -> false)
+                (fun x ->
+                  match x with
+                  | AsbBorrow _ -> true
+                  | _ -> false)
                 asb
             then raise (FoundABorrowContent bc)
             else ()
-        | AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
+        | AEndedMutBorrow _
+        | AIgnoredMutBorrow _
+        | AEndedIgnoredMutBorrow _
         | AEndedSharedBorrow ->
             (* Nothing to do for ignored borrows *)
             ()
@@ -1261,9 +1267,10 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             in
             (* Continue *)
             ctx
-        | AEndedMutBorrow _ | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _
-        | AEndedSharedBorrow ->
-            craise __FILE__ __LINE__ span "Unexpected"
+        | AEndedMutBorrow _
+        | AIgnoredMutBorrow _
+        | AEndedIgnoredMutBorrow _
+        | AEndedSharedBorrow -> craise __FILE__ __LINE__ span "Unexpected"
       in
       (* Reexplore *)
       end_abstraction_borrows config span chain abs_id ctx
@@ -1796,6 +1803,13 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                 let value =
                   ALoan (ASharedLoan (PNone, bids, sv, mk_aignored span ty))
                 in
+                (* We need to update the type of the value: abstract shared loans
+                   have the type `& ...` - TODO: this is annoying and not very clean... *)
+                let ty =
+                  (* Take the first region of the abstraction - this doesn't really matter *)
+                  let r = RegionId.Set.min_elt abs0.regions in
+                  TRef (RFVar r, ty, RShared)
+                in
                 { value; ty }
               in
               let avl = List.append [ av ] avl in
@@ -2093,8 +2107,11 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
         (match lc with
         | ASharedLoan (pm, bids, _, _) -> push_loans pm bids (Abstract (ty, lc))
         | AMutLoan (pm, bid, _) -> push_loan pm bid (Abstract (ty, lc))
-        | AEndedMutLoan _ | AEndedSharedLoan _ | AIgnoredMutLoan _
-        | AEndedIgnoredMutLoan _ | AIgnoredSharedLoan _ ->
+        | AEndedMutLoan _
+        | AEndedSharedLoan _
+        | AIgnoredMutLoan _
+        | AEndedIgnoredMutLoan _
+        | AIgnoredSharedLoan _ ->
             (* The abstraction has been destructured, so those shouldn't appear *)
             craise __FILE__ __LINE__ span "Unreachable");
         (* Continue *)
@@ -2120,7 +2137,9 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
                   craise __FILE__ __LINE__ span "Unreachable"
             in
             List.iter register asb
-        | AIgnoredMutBorrow _ | AEndedIgnoredMutBorrow _ | AEndedMutBorrow _
+        | AIgnoredMutBorrow _
+        | AEndedIgnoredMutBorrow _
+        | AEndedMutBorrow _
         | AEndedSharedBorrow ->
             (* The abstraction has been destructured, so those shouldn't appear *)
             craise __FILE__ __LINE__ span "Unreachable");
@@ -2345,12 +2364,14 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
   if merge_funs = None then (
     sanity_check __FILE__ __LINE__
       (List.for_all
-         (function LoanId (pm, _) | BorrowId (pm, _) -> pm = PNone)
+         (function
+           | LoanId (pm, _) | BorrowId (pm, _) -> pm = PNone)
          borrows_loans0)
       span;
     sanity_check __FILE__ __LINE__
       (List.for_all
-         (function LoanId (pm, _) | BorrowId (pm, _) -> pm = PNone)
+         (function
+           | LoanId (pm, _) | BorrowId (pm, _) -> pm = PNone)
          borrows_loans1)
       span;
     sanity_check __FILE__ __LINE__
@@ -2391,7 +2412,9 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     avalues := av :: !avalues
   in
   let push_opt_avalue av =
-    match av with None -> () | Some av -> push_avalue av
+    match av with
+    | None -> ()
+    | Some av -> push_avalue av
   in
 
   (* Compute the intersection of:
@@ -2529,8 +2552,10 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                           | AMutLoan _ ->
                               set_loan_as_merged bid;
                               Some { value = ALoan lc; ty }
-                          | AEndedMutLoan _ | AEndedSharedLoan _
-                          | AIgnoredMutLoan _ | AEndedIgnoredMutLoan _
+                          | AEndedMutLoan _
+                          | AEndedSharedLoan _
+                          | AIgnoredMutLoan _
+                          | AEndedIgnoredMutLoan _
                           | AIgnoredSharedLoan _ ->
                               (* The abstraction has been destructured, so those shouldn't appear *)
                               craise __FILE__ __LINE__ span "Unreachable"))
@@ -3039,7 +3064,8 @@ let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
   let env, fresh_abs =
     List.partition
       (function
-        | EAbs abs -> AbstractionId.Set.mem abs.abs_id old_abs_ids | _ -> true)
+        | EAbs abs -> AbstractionId.Set.mem abs.abs_id old_abs_ids
+        | _ -> true)
       ctx.env
   in
 

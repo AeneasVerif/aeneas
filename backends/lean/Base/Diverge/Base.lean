@@ -1066,7 +1066,7 @@ namespace Ex3
     ∀ k x, is_valid_p k (λ k => is_even_is_odd_body k x) := by
     intro k x
     simp [is_even_is_odd_body]
-    split <;> (try simp) <;> split <;> try simp
+    split <;> split <;> try simp
     apply is_valid_p_bind; simp
     intros; split <;> simp
     apply is_valid_p_bind; simp
@@ -1159,7 +1159,7 @@ namespace Ex4
     intro k
     apply (Funs.is_valid_p_is_valid_p tys)
     simp [Funs.is_valid_p]
-    (repeat (apply And.intro)) <;> intro x <;> (try simp at x) <;>
+    (repeat (apply And.intro)) <;> intro x <;>
     simp only [is_even_body, is_odd_body]
     -- Prove the validity of the individual bodies
     . split <;> simp
@@ -1301,7 +1301,7 @@ namespace Ex6
     intro k
     apply (Funs.is_valid_p_is_valid_p tys)
     simp [Funs.is_valid_p]
-    (repeat (apply And.intro)); intro x; try simp at x
+    intro x; try simp at x
     simp only [list_nth_body]
     -- Prove the validity of the individual bodies
     intro k x
@@ -1395,7 +1395,7 @@ namespace Ex7
     intro k
     apply (Funs.is_valid_p_is_valid_p tys)
     simp [Funs.is_valid_p]
-    (repeat (apply And.intro)); intro x; try simp at x
+    intro x; try simp at x
     simp only [list_nth_body]
     -- Prove the validity of the individual bodies
     intro k x
@@ -1539,10 +1539,13 @@ namespace Ex9
     simp only [id_body]
     split <;> try simp
     . apply is_valid_p_same
-    . apply is_valid_p_bind <;> try simp [*]
-      -- We have to show that `map k tl` is valid
-      -- Remark: `map_is_valid` doesn't work here, we need the specialized version
-      apply map_is_valid_simple
+    . apply is_valid_p_bind
+      . -- We have to show that `map k tl` is valid
+        -- Remark: `map_is_valid` doesn't work here, we need the specialized version
+        apply map_is_valid_simple
+      . -- TODO: why isn't `is_valid_p_same` automatically applied?
+        intro tl
+        apply is_valid_p_same
 
   def body (k : (i : Fin 1) → (t : ty i) → (x : input_ty i t) → Result (output_ty i t)) (i: Fin 1) :
     (t : ty i) → (x : input_ty i t) → Result (output_ty i t) := get_fun bodies i k

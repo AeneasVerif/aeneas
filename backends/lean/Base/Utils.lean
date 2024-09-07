@@ -1,37 +1,7 @@
 import Lean
 import Mathlib.Tactic.Core
 import Base.UtilsBase
-
-/-
-Mathlib tactics:
-- rcases: https://leanprover-community.github.io/mathlib_docs/tactics.html#rcases
-- split_ifs: https://leanprover-community.github.io/mathlib_docs/tactics.html#split_ifs
-- norm_num: https://leanprover-community.github.io/mathlib_docs/tactics.html#norm_num
-- hint: https://leanprover-community.github.io/mathlib_docs/tactics.html#hint
-- classical: https://leanprover-community.github.io/mathlib_docs/tactics.html#classical
--/
-
-/-
-TODO:
-- we want an easier to use cases:
-  - keeps in the goal an equation of the shape: `t = case`
-  - if called on Prop terms, uses Classical.em
-  Actually, the cases from mathlib seems already quite powerful
-  (https://leanprover-community.github.io/mathlib_docs/tactics.html#cases)
-  For instance: cases h : e
-  Also: **casesm**
-- better split tactic
-- we need conversions to operate on the head of applications.
-  Actually, something like this works:
-  ```
-  conv at Hl =>
-    apply congr_fun
-    simp [fix_fuel_P]
-  ```
-  Maybe we need a rpt ... ; focus?
-- simplifier/rewriter have a strange behavior sometimes
--/
-
+import Aesop
 
 namespace List
 
@@ -295,12 +265,6 @@ def addDeclTac (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : TacticM
   -- Insert the new declaration
   let withDecl := if asLet then withLetDecl name type val else withLocalDeclD name type
   withDecl fun nval => do
-    -- For debugging
-    let lctx ← Lean.MonadLCtx.getLCtx
-    let fid := nval.fvarId!
-    let decl := lctx.get! fid
-    trace[Arith] "  new decl: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
-    --
     -- Tranform the main goal `?m0` to `let x = nval in ?m1`
     let mvarId ← getMainGoal
     let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
@@ -349,11 +313,26 @@ example (x : Bool) : Nat := by
 def tryTac (tac : TacticM Unit) : TacticM Unit := do
   let _ ← tryTactic tac
 
+/-- Adapted from allGoals
+
+    We use this instead of allGoals, because when the tactic throws an exception that we attempt
+    to catch outside, the behavior can be quite surprising.
+ -/
+def allGoalsNoRecover (tac : TacticM Unit) : TacticM Unit := do
+  let mvarIds ← getGoals
+  let mut mvarIdsNew := #[]
+  for mvarId in mvarIds do
+    unless (← mvarId.isAssigned) do
+      setGoals [mvarId]
+      tac
+      mvarIdsNew := mvarIdsNew ++ (← getUnsolvedGoals)
+  setGoals mvarIdsNew.toList
+
 -- Repeatedly apply a tactic
 partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
   try
     tac
-    allGoals (focus (repeatTac tac))
+    allGoalsNoRecover (focus (repeatTac tac))
   -- TODO: does this restore the state?
   catch _ => pure ()
 
@@ -378,10 +357,6 @@ def firstTac (tacl : List (TacticM Unit)) : TacticM Unit := do
     match res with
     | some _ => pure ()
     | none => firstTac tacl -/
-
--- Taken from Lean.Elab.evalAssumption
-def assumptionTac : TacticM Unit :=
-  liftMetaTactic fun mvarId => do mvarId.assumption; pure []
 
 def isConj (e : Expr) : MetaM Bool :=
   e.consumeMData.withApp fun f args => pure (f.isConstOf ``And ∧ args.size = 2)
@@ -432,11 +407,67 @@ partial def getMVarIds (e : Expr) (hs : HashSet MVarId := HashSet.empty) : MetaM
     if e.isMVar then pure (hs.insert e.mvarId!) else pure hs)
     hs e
 
+-- Taken from Lean.Elab.evalAssumption
+def assumptionTac : TacticM Unit :=
+  liftMetaTactic fun mvarId => do mvarId.assumption; pure []
+
+-- List all the local declarations matching the goal
+def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
+  let decls ← (← getLCtx).getAllDecls
+  decls.filterMapM fun localDecl => do
+    -- Make sure we revert the meta-variables instantiations by saving the state and restoring it
+    let s ← saveState
+    let x :=
+        if (← isDefEq type localDecl.type) then (some (localDecl, localDecl.userName))
+        else none
+    restoreState s
+    pure x
+
+/- Like the assumption tactic, but if the goal contains meta-variables it applies an assumption only
+   if there is a single assumption matching the goal. Aborts if several assumptions match the goal.
+
+   We implement this behaviour to make sure we do not trigger spurious instantiations of meta-variables.
+-/
+def singleAssumptionTac : TacticM Unit := do
+  withMainContext do
+  let mvarId ← getMainGoal
+  mvarId.checkNotAssigned `sassumption
+  let goal ← instantiateMVars (← mvarId.getType)
+  let goalMVars ← getMVarIds goal
+  if goalMVars.isEmpty then
+    -- No meta-variables: we can safely use the assumption tactic
+    trace[Utils] "The goal does not contain meta-variables"
+    assumptionTac
+  else
+    trace[Utils] "The goal contains meta-variables"
+    -- There are meta-variables that
+    match ← (getAllMatchingAssumptions goal) with
+    | [(localDecl, _)] =>
+      -- There is a single assumption which matches the goal: use it
+      -- Note that we need to call isDefEq again to properly instantiate the meta-variables
+      let _ ← isDefEq goal localDecl.type
+      mvarId.assign (mkFVar localDecl.fvarId)
+    | [] =>
+      -- No assumption
+      throwError "Could not find an assumption matching the goal"
+    | fvars =>
+      -- Several assumptions
+      let fvars := fvars.map Prod.snd
+      throwError "Several assumptions match the goal: {fvars}"
+
+elab "sassumption " : tactic => do singleAssumptionTac
+
+example (x y z w : Int) (h0 : x < y) (_ : x < w) (h1 : y < z) : x < z := by
+  apply Int.lt_trans
+  try sassumption -- This fails
+  apply h0
+  sassumption
+
 -- Tactic to split on a disjunction.
 -- The expression `h` should be an fvar.
 -- TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance
 def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
-  trace[Arith] "assumption on which to split: {h}"
+  trace[Utils] "assumption on which to split: {h}"
   -- Retrieve the main goal
   withMainContext do
   let goalType ← getMainTarget
@@ -445,7 +476,7 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   -- Case disjunction
   let hTy ← inferType h
   hTy.withApp fun f xs => do
-  trace[Arith] "as app: {f} {xs}"
+  trace[Utils] "as app: {f} {xs}"
   -- Sanity check
   if ¬ (f.isConstOf ``Or ∧ xs.size = 2) then throwError "Invalid argument to splitDisjTac"
   let a := xs.get! 0
@@ -467,15 +498,15 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
     pure (branch, mgoal)
   let (inl, mleft) ← mkGoal a "left"
   let (inr, mright) ← mkGoal b "right"
-  trace[Arith] "left: {inl}: {mleft}"
-  trace[Arith] "right: {inr}: {mright}"
+  trace[Utils] "left: {inl}: {mleft}"
+  trace[Utils] "right: {inr}: {mright}"
   -- Create the match expression
   withLocalDeclD (← mkFreshAnonPropUserName) hTy fun hVar => do
   let motive ← mkLambdaFVars #[hVar] goalType
   let casesExpr ← mkAppOptM ``Or.casesOn #[a, b, motive, h, inl, inr]
   let mgoal ← getMainGoal
-  trace[Arith] "goals: {← getUnsolvedGoals}"
-  trace[Arith] "main goal: {mgoal}"
+  trace[Utils] "goals: {← getUnsolvedGoals}"
+  trace[Utils] "main goal: {mgoal}"
   mgoal.assign casesExpr
   let goals ← getUnsolvedGoals
   -- Focus on the left
@@ -488,7 +519,7 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   let rightGoals ← getUnsolvedGoals
   -- Put all the goals back
   setGoals (leftGoals ++ rightGoals ++ goals)
-  trace[Arith] "new goals: {← getUnsolvedGoals}"
+  trace[Utils] "new goals: {← getUnsolvedGoals}"
 
 elab "split_disj " n:ident : tactic => do
   withMainContext do
@@ -747,12 +778,15 @@ def dsimpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name)
   dsimpLocation ctx simprocs loc
 
 -- Call the simpAll tactic
-def simpAll (config : Simp.Config) (simprocs : List Name) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def simpAll (config : Simp.Config) (simpOnly : Bool) (simprocs : List Name) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx false config .simpAll simprocs declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll simprocs declsToUnfold thms hypsToUse
   -- Apply the simplifier
-  let _ ← Lean.Meta.simpAll (← getMainGoal) ctx simprocs
+  let (result?, _) ← Lean.Meta.simpAll (← getMainGoal) ctx (simprocs := simprocs)
+  match result? with
+  | none => replaceMainGoal []
+  | some mvarId => replaceMainGoal [mvarId]
 
 /- Adapted from Elab.Tactic.Rewrite -/
 def rewriteTarget (eqThm : Expr) (symm : Bool) (config : Rewrite.Config := {}) : TacticM Unit := do
@@ -822,5 +856,140 @@ def normCastAtAll : TacticM Unit := do
   let decls ← ctx.getDecls
   NormCast.normCastTarget
   decls.forM (fun d => NormCast.normCastHyp d.fvarId)
+
+@[inline] def tryLiftMetaTactic1 (tactic : MVarId → MetaM (Option MVarId)) (msg : String) : TacticM Unit :=
+  withMainContext do
+    if let some mvarId ← tactic (← getMainGoal) then
+      replaceMainGoal [mvarId]
+    else
+      throwError msg
+
+/-- Call the saturate function from aesop -/
+def evalAesopSaturate (options : Aesop.Options') (ruleSets : Array Name) : TacticM Unit := do
+  let rss ← Aesop.Frontend.getGlobalRuleSets ruleSets
+  let rs ← Aesop.mkLocalRuleSet rss options
+    |> Aesop.ElabM.runForwardElab (← getMainGoal)
+  tryLiftMetaTactic1 (Aesop.saturate rs · options) "Aesop.saturate failed"
+
+/-- Normalize the let-bindings by inlining them -/
+def normalizeLetBindings (e : Expr) : MetaM Expr :=
+  zetaReduce e
+
+/-- For the attributes
+
+    If we apply an attribute to a definition in a group of mutually recursive definitions
+    (say, to `foo` in the group [`foo`, `bar`]), the attribute gets applied to `foo` but also to
+    the recursive definition which encodes `foo` and `bar` (Lean encodes mutually recursive
+    definitions in one recursive definition, e.g., `foo._mutual`, before deriving the individual
+    definitions, e.g., `foo` and `bar`, from this one). This definition should be named `foo._mutual`
+    or `bar._mutual`, and we generally want to ignore it.
+
+    TODO: same problem happens if we use decreases clauses, etc.
+
+    Below, we implement a small utility to do so.
+  -/
+def attrIgnoreAuxDef (name : Name) (default : AttrM α) (x : AttrM α) : AttrM α := do
+  -- TODO: this is a hack
+  if let .str _ "_mutual" := name then
+    trace[Utils] "Ignoring a mutually recursive definition: {name}"
+    default
+  else if let .str _ "_unary" := name then
+    trace[Utils] "Ignoring a unary def: {name}"
+    default
+  else
+    -- Normal execution
+    x
+
+/-- Split anything in the context, and return the resulting set of subgoals.
+    Raise an exception if we couldn't split.
+ -/
+def splitAny : TacticM (List MVarId) := do
+  -- This is taken from `evalSplit`
+  let mvarId ← getMainGoal
+  let fvarIds ← mvarId.getNondepPropHyps
+  for fvarId in fvarIds do
+    if let some mvarIds ← splitLocalDecl? mvarId fvarId then
+      return mvarIds
+  let some mvarIds ← splitTarget? mvarId | Meta.throwTacticEx `splitAny mvarId "Could not split"
+  return mvarIds
+
+/-- Repeteadly split the disjunctions in the context, then apply a tactic when we can't split anymore -/
+partial def splitAll (endTac : TacticM Unit) : TacticM Unit := do
+  withMainContext do
+  try
+    let mvarIds ← splitAny
+    -- Update the goals
+    setGoals ((← getUnsolvedGoals) ++ mvarIds)
+    -- Continue
+    allGoalsNoRecover (focus (splitAll endTac))
+  catch _ =>
+    allGoalsNoRecover endTac
+
+elab "split_all" : tactic => do
+  withMainContext do
+  splitAll (pure ())
+
+example (x y z : Int) (b1 b2 : Bool)
+  (h1 : if b1 then x ≤ y else y ≥ x) (h2 : if b2 then y ≤ z else z ≥ y) :
+  x ≤ z := by
+  split_all <;> omega
+
+
+syntax (name := checkIsProp) "check_is_prop" term : tactic
+
+/-- Small utility: see below
+
+    Check if a term has type `Prop`.
+ -/
+@[tactic checkIsProp]
+def checkIfPropEval : Tactic := fun stx =>
+  withMainContext do
+  let x := stx.getArgs.toList.get! 1
+  let x ← Elab.Term.elabTerm x none
+  let ty ← inferType x
+  if ty.isProp then pure ()
+  else throwError "Not a proposition"
+
+/-- "Decidable" cases: it often happens that we want to make a case disjunction over a decidable proposition `P`.
+    If we simply call `cases P` we don't get what we expect at all, and we need to do instead: `cases h : (P : Bool)`.
+    There are two important things:
+    - we need to cast the proposition to `Bool` so that the elaborator understands it should lookup the instance of `Decidable``
+    - we need to name the hypothesis resulting from the case split, because generally we will need it to do some rewriting
+
+    Doing this is often annoying (the syntax is ugly) and actually people often forget to write it exactly the way above.
+    For this reason we introduce the tactic below, which first checks whether the term on which we do the case disjunction
+    is a proposition or not, then performs the proper case split accordingly.
+
+    Also, when doing a case disjunction over a decidable proposition, the `cases` tactic introduces the *negation* of
+    the proposition first, while we expect the reverse. For this reason we don't do a case disjunction over `P` but
+    rather `¬ P`.
+  -/
+syntax (name := dcases) "dcases" atomic(ident " : ")? term : tactic
+macro_rules
+| `(tactic| dcases $x) =>
+   let h := mkIdent (.str .anonymous "_")
+  `(tactic|
+    first | check_is_prop $x; cases $h : (¬ ($x) : $(Lean.mkIdent ``Bool)) <;>
+            simp only [$(mkIdent ``decide_eq_false_iff_not):ident,
+                       $(mkIdent ``decide_eq_true_eq):ident,
+                       $(mkIdent ``Bool.not_eq_false'):ident,
+                       $(mkIdent ``Bool.not_eq_true'):ident,
+                       $(mkIdent ``Decidable.not_not):ident] at $h:ident
+          | cases ($x))
+| `(tactic| dcases $h : $x) =>
+  `(tactic|
+    first | check_is_prop $x; cases $h : (¬ ($x) : $(Lean.mkIdent ``Bool)) <;>
+            simp only [$(mkIdent ``decide_eq_false_iff_not):ident,
+                       $(mkIdent ``decide_eq_true_eq):ident,
+                       $(mkIdent ``Bool.not_eq_false'):ident,
+                       $(mkIdent ``Bool.not_eq_true'):ident,
+                       $(mkIdent ``Decidable.not_not):ident] at ($h)
+          | cases $h : ($x))
+
+example (x y : Int) : True := by
+  dcases h: x = y <;> simp
+
+example (x y : Int) : True := by
+  dcases h: x = y <;> simp
 
 end Utils

@@ -9,6 +9,7 @@
 
 open LlbcAst
 open ExpressionsUtils
+open Charon.GAstUtils
 open Errors
 
 (** Various information about a function.
@@ -103,9 +104,15 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
           method! visit_rvalue _env rv =
             match rv with
-            | Use _ | RvRef _ | Global _ | Discriminant _ | Aggregate _ | Len _
-              ->
-                ()
+            | Use _
+            | RvRef _
+            | Global _
+            | GlobalRef _
+            | Discriminant _
+            | Aggregate _
+            | Len _
+            | NullaryOp _
+            | RawPtr _ -> ()
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail
@@ -200,9 +207,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     }
   in
 
-  let analyze_fun_decl_group (d : fun_declaration_group) : unit =
+  let analyze_fun_decl_group (funs : fun_decl_id list) : unit =
     (* Retrieve the function declarations *)
-    let funs = match d with NonRecGroup id -> [ id ] | RecGroup ids -> ids in
     let funs = List.map (fun id -> FunDeclId.Map.find id funs_map) funs in
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.Set.of_list fun_ids in
@@ -216,12 +222,19 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     | (TypeGroup _ | TraitDeclGroup _ | TraitImplGroup _) :: decls' ->
         analyze_decl_groups decls'
     | FunGroup decl :: decls' ->
-        analyze_fun_decl_group decl;
+        analyze_fun_decl_group (g_declaration_group_to_list decl);
         analyze_decl_groups decls'
-    | GlobalGroup id :: decls' ->
+    | GlobalGroup decl :: decls' ->
+        let global_ids = g_declaration_group_to_list decl in
         (* Analyze a global by analyzing its body function *)
-        let global = GlobalDeclId.Map.find id globals_map in
-        analyze_fun_decl_group (NonRecGroup global.body);
+        let funs =
+          List.map
+            (fun id ->
+              let global = GlobalDeclId.Map.find id globals_map in
+              global.body)
+            global_ids
+        in
+        analyze_fun_decl_group funs;
         analyze_decl_groups decls'
     | MixedGroup ids :: _ ->
         craise_opt_span __FILE__ __LINE__ None

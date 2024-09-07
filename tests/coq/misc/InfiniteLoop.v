@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module InfiniteLoop.
 
 (** [infinite_loop::bar]:
-    Source: 'tests/src/infinite-loop.rs', lines 4:0-4:8 *)
+    Source: 'tests/src/infinite-loop.rs', lines 4:0-4:11 *)
 Definition bar : result unit :=
   Ok tt.
 
@@ -20,7 +20,7 @@ Fixpoint foo_loop (n : nat) : result unit :=
 .
 
 (** [infinite_loop::foo]:
-    Source: 'tests/src/infinite-loop.rs', lines 6:0-6:8 *)
+    Source: 'tests/src/infinite-loop.rs', lines 6:0-10:1 *)
 Definition foo (n : nat) : result unit :=
   foo_loop n.
 

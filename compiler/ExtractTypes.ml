@@ -94,7 +94,7 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpression) : unit
     =
   match unop with
-  | Not | Neg _ ->
+  | Not _ | Neg _ ->
       let unop = unop_name unop in
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt unop;
@@ -240,7 +240,11 @@ let extract_binop (span : Meta.span)
       F.pp_print_space fmt ();
       extract_expr false arg1
   | _ ->
-      let binop_is_shift = match binop with Shl | Shr -> true | _ -> false in
+      let binop_is_shift =
+        match binop with
+        | Shl | Shr -> true
+        | _ -> false
+      in
       let binop = named_binop_name binop int_ty in
       F.pp_print_string fmt binop;
       (* In the case of F*, for shift operations, because machine integers
@@ -258,15 +262,21 @@ let extract_binop (span : Meta.span)
   if inside then F.pp_print_string fmt ")"
 
 let is_single_opaque_fun_decl_group (dg : Pure.fun_decl list) : bool =
-  match dg with [ d ] -> d.body = None | _ -> false
+  match dg with
+  | [ d ] -> d.body = None
+  | _ -> false
 
 let is_single_opaque_type_decl_group (dg : Pure.type_decl list) : bool =
-  match dg with [ d ] -> d.kind = Opaque | _ -> false
+  match dg with
+  | [ d ] -> d.kind = Opaque
+  | _ -> false
 
 let is_empty_record_type_decl (d : Pure.type_decl) : bool = d.kind = Struct []
 
 let is_empty_record_type_decl_group (dg : Pure.type_decl list) : bool =
-  match dg with [ d ] -> is_empty_record_type_decl d | _ -> false
+  match dg with
+  | [ d ] -> is_empty_record_type_decl d
+  | _ -> false
 
 (** In some provers, groups of definitions must be delimited.
 
@@ -402,7 +412,9 @@ let end_type_decl_group (fmt : F.formatter) (is_rec : bool)
         F.pp_print_break fmt 0 0)
 
 let unit_name () =
-  match backend () with Lean -> "Unit" | Coq | FStar | HOL4 -> "unit"
+  match backend () with
+  | Lean -> "Unit"
+  | Coq | FStar | HOL4 -> "unit"
 
 (** Small helper *)
 let extract_arrow (fmt : F.formatter) () : unit =
@@ -426,6 +438,7 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
   | TBool -> F.pp_print_string fmt (bool_name ())
   | TChar -> F.pp_print_string fmt (char_name ())
   | TInteger int_ty -> F.pp_print_string fmt (int_name int_ty)
+  | TFloat float_ty -> F.pp_print_string fmt (float_name float_ty)
 
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
@@ -575,9 +588,6 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            sanity_check __FILE__ __LINE__
-              (trait_ref.generics = empty_generic_args)
-              span;
             extract_trait_instance_id_with_dot span ctx fmt no_params_tys false
               trait_ref.trait_id;
             F.pp_print_string fmt type_name
@@ -594,28 +604,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
     (tr : trait_ref) : unit =
-  let use_brackets = tr.generics <> empty_generic_args && inside in
-  if use_brackets then F.pp_print_string fmt "(";
-  (* We may need to filter the parameters if the trait is builtin *)
-  let generics =
-    match tr.trait_id with
-    | TraitImpl id -> (
-        match
-          TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
-        with
-        | None -> tr.generics
-        | Some filter ->
-            let types =
-              List.filter_map
-                (fun (b, x) -> if b then Some x else None)
-                (List.combine filter tr.generics.types)
-            in
-            { tr.generics with types })
-    | _ -> tr.generics
-  in
-  extract_trait_instance_id span ctx fmt no_params_tys inside tr.trait_id;
-  extract_generic_args span ctx fmt no_params_tys generics;
-  if use_brackets then F.pp_print_string fmt ")"
+  extract_trait_instance_id span ctx fmt no_params_tys inside tr.trait_id
 
 and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
@@ -715,9 +704,27 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
          (associated type, etc.). We should have caught this elsewhere. *)
       save_error __FILE__ __LINE__ (Some span) "Unexpected occurrence of `Self`";
       F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
-  | TraitImpl id ->
+  | TraitImpl (id, generics) ->
+      (* We may need to filter the parameters if the trait is builtin *)
+      let generics =
+        match
+          TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
+        with
+        | None -> generics
+        | Some filter ->
+            let types =
+              List.filter_map
+                (fun (b, x) -> if b then Some x else None)
+                (List.combine filter generics.types)
+            in
+            { generics with types }
+      in
       let name = ctx_get_trait_impl span id ctx in
-      F.pp_print_string fmt name
+      let use_brackets = generics <> empty_generic_args && inside in
+      if use_brackets then F.pp_print_string fmt "(";
+      F.pp_print_string fmt name;
+      extract_generic_args span ctx fmt no_params_tys generics;
+      if use_brackets then F.pp_print_string fmt ")"
   | Clause id ->
       let name = ctx_get_local_trait_clause span id ctx in
       F.pp_print_string fmt name
@@ -726,15 +733,6 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       let name = ctx_get_trait_parent_clause span decl_id clause_id ctx in
       extract_trait_instance_id_with_dot span ctx fmt no_params_tys true inst_id;
       F.pp_print_string fmt (add_brackets name)
-  | ItemClause (inst_id, decl_id, item_name, clause_id) ->
-      (* Use the trait decl id to lookup the name *)
-      let name =
-        ctx_get_trait_item_clause span decl_id item_name clause_id ctx
-      in
-      extract_trait_instance_id_with_dot span ctx fmt no_params_tys true inst_id;
-      F.pp_print_string fmt (add_brackets name)
-  | TraitRef trait_ref ->
-      extract_trait_ref span ctx fmt no_params_tys inside trait_ref
   | UnknownTrait _ ->
       (* This is an error case *)
       craise __FILE__ __LINE__ span "Unexpected"
@@ -1005,7 +1003,11 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
     F.pp_print_space fmt ();
     F.pp_print_string fmt (unit_name ()))
   else
-    let sep = match backend () with Coq | FStar | HOL4 -> "*" | Lean -> "×" in
+    let sep =
+      match backend () with
+      | Coq | FStar | HOL4 -> "*"
+      | Lean -> "×"
+    in
     Collections.List.iter_link
       (fun () ->
         F.pp_print_space fmt ();
@@ -1404,7 +1406,10 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   in
   let is_tuple_struct_one_or_zero_field =
     is_tuple_struct
-    && match def.kind with Struct [] | Struct [ _ ] -> true | _ -> false
+    &&
+    match def.kind with
+    | Struct [] | Struct [ _ ] -> true
+    | _ -> false
   in
   let type_kind =
     if extract_body then
@@ -1748,7 +1753,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
             (* Annotate the projectors with both simp and reducible.
                The first one allows to automatically unfold when calling simp in proofs.
                The second ensures that projectors will interact well with the unifier *)
-            F.pp_print_string fmt "@[simp, reducible]";
+            F.pp_print_string fmt "@[reducible]";
             F.pp_print_break fmt 0 0;
             (* Close box for the attributes *)
             F.pp_close_box fmt ());
@@ -1898,6 +1903,142 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
 
         FieldId.iteri extract_field_proj_and_notation fields
 
+(** Auxiliary function.
+
+    Generate field projectors simp lemmas for Lean.
+
+    See {!extract_type_decl_record_field_projectors}.
+ *)
+let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
+    (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
+  let span = decl.item_meta.span in
+  sanity_check __FILE__ __LINE__ (backend () = Coq || backend () = Lean) span;
+  match decl.kind with
+  | Opaque | Enum _ -> ()
+  | Struct fields ->
+      (* Records are extracted as inductives only if they are recursive *)
+      let is_rec = decl_is_from_rec_group kind in
+      if is_rec then
+        (* Add the type params *)
+        let ctx, type_params, cg_params, trait_clauses =
+          ctx_add_generic_params span decl.item_meta.name decl.llbc_generics
+            decl.generics ctx
+        in
+        (* Name of the ADT *)
+        let def_name = ctx_get_local_type span decl.def_id ctx in
+        (* Name of the ADT constructor. As we are in the struct case, we only have
+           one constructor *)
+        let cons_name = ctx_get_struct span (TAdtId decl.def_id) ctx in
+
+        let extract_field_proj_simp_lemma (field_id : FieldId.id) (_ : field) :
+            unit =
+          F.pp_print_space fmt ();
+          (* Outer box for the projector definition *)
+          F.pp_open_hvbox fmt 0;
+          (* Inner box for the projector definition *)
+          F.pp_open_hvbox fmt ctx.indent_incr;
+
+          (* For Lean: add some attributes *)
+          if backend () = Lean then (
+            (* Box for the attributes *)
+            F.pp_open_vbox fmt 0;
+            (* Annotate the projectors with both simp and reducible.
+               The first one allows to automatically unfold when calling simp in proofs.
+               The second ensures that projectors will interact well with the unifier *)
+            F.pp_print_string fmt "@[simp]";
+            F.pp_print_break fmt 0 0;
+            (* Close box for the attributes *)
+            F.pp_close_box fmt ());
+
+          (* Box for the [theorem ... : ... = ... :=] *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          (match backend () with
+          | Lean -> F.pp_print_string fmt "theorem"
+          | _ -> internal_error __FILE__ __LINE__ span);
+          F.pp_print_space fmt ();
+
+          (* Print the theorem name. *)
+          let field_name =
+            ctx_get_field span (TAdtId decl.def_id) field_id ctx
+          in
+          (* TODO: check for name collisions *)
+          F.pp_print_string fmt (def_name ^ "." ^ field_name ^ "._simpLemma_");
+
+          (* Print the generics *)
+          let as_implicits = true in
+          extract_generic_params span ctx fmt TypeDeclId.Set.empty ~as_implicits
+            decl.generics type_params cg_params trait_clauses;
+
+          (* Print the input parameters (the fields) *)
+          let print_field (ctx : extraction_ctx) (field_id : FieldId.id)
+              (f : field) : extraction_ctx * string =
+            let id = VarId.of_int (FieldId.to_int field_id) in
+            let field_name =
+              ctx_get_field span (TAdtId decl.def_id) field_id ctx
+            in
+            let ctx, vname = ctx_add_var span field_name id ctx in
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "(";
+            F.pp_print_string fmt vname;
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt ":";
+            F.pp_print_space fmt ();
+            extract_ty span ctx fmt TypeDeclId.Set.empty false f.field_ty;
+            F.pp_print_string fmt ")";
+            (ctx, field_name)
+          in
+          let _, field_names =
+            List.fold_left_map
+              (fun ctx (id, f) -> print_field ctx id f)
+              ctx
+              (FieldId.mapi (fun i f -> (i, f)) fields)
+          in
+
+          (* The theorem content *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":";
+          F.pp_print_space fmt ();
+          (* (mk ... x ...).f = x *)
+          (* Open a box for the theorem content *)
+          F.pp_open_hvbox fmt ctx.indent_incr;
+          F.pp_print_string fmt "(";
+          F.pp_print_string fmt cons_name;
+          List.iter
+            (fun f ->
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt f)
+            field_names;
+          F.pp_print_string fmt (")." ^ field_name);
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "=";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt (FieldId.nth field_names field_id);
+          (* Close the box for the theorem content *)
+          F.pp_close_box fmt ();
+
+          (* The proof *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":=";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "by rfl";
+
+          (* Close the box for the [theorem ... :=] *)
+          F.pp_close_box fmt ();
+
+          (* Close the inner box projector *)
+          F.pp_close_box fmt ();
+          (* If Coq: end the definition with a "." *)
+          if backend () = Coq then (
+            F.pp_print_cut fmt ();
+            F.pp_print_string fmt ".");
+          (* Close the outer box for projector definition *)
+          F.pp_close_box fmt ();
+          (* Add breaks to insert new lines between definitions *)
+          F.pp_print_break fmt 0 0
+        in
+
+        FieldId.iteri extract_field_proj_simp_lemma fields
+
 (** Extract extra information for a type (e.g., [Arguments] instructions in Coq).
 
     Note that all the names used for extraction should already have been
@@ -1915,7 +2056,10 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
       then (
         if backend () = Coq then
           extract_type_decl_coq_arguments ctx fmt kind decl;
-        extract_type_decl_record_field_projectors ctx fmt kind decl)
+        extract_type_decl_record_field_projectors ctx fmt kind decl;
+        if backend () = Lean then
+          extract_type_decl_record_field_projectors_simp_lemmas ctx fmt kind
+            decl)
 
 (** Extract the state type declaration. *)
 let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)

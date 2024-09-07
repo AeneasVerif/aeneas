@@ -172,7 +172,6 @@ type id =
   | TraitItemId of TraitDeclId.id * string
       (** A trait associated item which is not a method *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
-  | TraitItemClauseId of TraitDeclId.id * string * TraitClauseId.id
   | TraitSelfClauseId
       (** Specifically for the clause: [Self : Trait].
 
@@ -389,13 +388,14 @@ type names_maps = {
 (** Return [true] if we are strict on collisions for this id (i.e., we forbid
     collisions even with the ids in the unsafe names map) *)
 let strict_collisions (id : id) : bool =
-  match id with UnknownId | TypeId _ -> true | _ -> false
+  match id with
+  | UnknownId | TypeId _ -> true
+  | _ -> false
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
 let allow_collisions (id : id) : bool =
   match id with
-  | FieldId _ | TraitItemClauseId _ | TraitParentClauseId _ | TraitItemId _
-  | TraitMethodId _ ->
+  | FieldId _ | TraitParentClauseId _ | TraitItemId _ | TraitMethodId _ ->
       !Config.record_fields_short_names
   | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _)) ->
       (* We map several assumed functions to the same id *)
@@ -530,13 +530,30 @@ let int_name (int_ty : integer_type) : string =
   | U64 -> Printf.sprintf u_format 64
   | U128 -> Printf.sprintf u_format 128
 
+let float_name (float_ty : float_type) : string =
+  let format =
+    match backend () with
+    | FStar | Coq | HOL4 -> format_of_string "f%d"
+    | Lean -> format_of_string "F%d"
+  in
+  match float_ty with
+  | F16 -> Printf.sprintf format 16
+  | F32 -> Printf.sprintf format 32
+  | F64 -> Printf.sprintf format 64
+  | F128 -> Printf.sprintf format 128
+
 let scalar_name (ty : literal_type) : string =
   match ty with
   | TInteger ty -> int_name ty
+  | TFloat ty -> float_name ty
   | TBool -> (
-      match backend () with FStar | Coq | HOL4 -> "bool" | Lean -> "Bool")
+      match backend () with
+      | FStar | Coq | HOL4 -> "bool"
+      | Lean -> "Bool")
   | TChar -> (
-      match backend () with FStar | Coq | HOL4 -> "char" | Lean -> "Char")
+      match backend () with
+      | FStar | Coq | HOL4 -> "char"
+      | Lean -> "Char")
 
 (** Extraction context.
 
@@ -667,10 +684,6 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
   | TraitParentClauseId (id, clause_id) ->
       "trait_parent_clause_id: " ^ trait_decl_id_to_string id ^ ", clause_id: "
       ^ TraitClauseId.to_string clause_id
-  | TraitItemClauseId (id, item_name, clause_id) ->
-      "trait_item_clause_id: " ^ trait_decl_id_to_string id ^ ", item name: "
-      ^ item_name ^ ", clause_id: "
-      ^ TraitClauseId.to_string clause_id
   | TraitItemId (id, name) ->
       "trait_item_id: " ^ trait_decl_id_to_string id ^ ", type name: " ^ name
   | TraitMethodId (trait_decl_id, fun_name) ->
@@ -751,10 +764,6 @@ let ctx_get_trait_parent_clause (span : Meta.span) (id : trait_decl_id)
     (clause : trait_clause_id) (ctx : extraction_ctx) : string =
   ctx_get (Some span) (TraitParentClauseId (id, clause)) ctx
 
-let ctx_get_trait_item_clause (span : Meta.span) (id : trait_decl_id)
-    (item : string) (clause : trait_clause_id) (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (TraitItemClauseId (id, item, clause)) ctx
-
 let ctx_get_var (span : Meta.span) (id : VarId.id) (ctx : extraction_ctx) :
     string =
   ctx_get (Some span) (VarId id) ctx
@@ -794,14 +803,19 @@ let ctx_get_termination_measure (span : Meta.span) (def_id : A.FunDeclId.id)
 (** Small helper to compute the name of a unary operation *)
 let unop_name (unop : unop) : string =
   match unop with
-  | Not -> (
+  | Not ty -> (
       match backend () with
-      | FStar -> "not"
-      | Lean -> "¬"
-      | Coq -> "negb"
+      | FStar -> (
+          match ty with
+          | None -> "not"
+          | Some int_ty -> int_name int_ty ^ "_not")
+      | Lean -> "￢"
+      | Coq -> if Option.is_none ty then "negb" else "scalar_not"
       | HOL4 -> "~")
   | Neg (int_ty : integer_type) -> (
-      match backend () with Lean -> "-." | _ -> int_name int_ty ^ "_neg")
+      match backend () with
+      | Lean -> "-."
+      | _ -> int_name int_ty ^ "_neg")
   | Cast _ ->
       (* We never directly use the unop name in this case *)
       raise (Failure "Unsupported")
@@ -842,8 +856,9 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
  *)
 let keywords () =
   let named_unops =
-    unop_name Not
-    :: List.map (fun it -> unop_name (Neg it)) T.all_signed_int_types
+    unop_name (Not None)
+    :: List.map (fun it -> unop_name (Not (Some it))) T.all_signed_int_types
+    @ List.map (fun it -> unop_name (Neg it)) T.all_signed_int_types
   in
   let named_binops = [ E.Div; Rem; Add; Sub; Mul ] in
   let named_binops =
@@ -1137,23 +1152,31 @@ let assumed_llbc_functions () : (A.assumed_fun_id * string) list =
   match backend () with
   | FStar | Coq | HOL4 ->
       [
-        (ArrayIndexShared, "array_index_usize");
-        (ArrayIndexMut, "array_index_mut_usize");
         (ArrayToSliceShared, "array_to_slice");
         (ArrayToSliceMut, "array_to_slice_mut");
         (ArrayRepeat, "array_repeat");
-        (SliceIndexShared, "slice_index_usize");
-        (SliceIndexMut, "slice_index_mut_usize");
+        ( Index { is_array = true; mutability = RShared; is_range = false },
+          "array_index_usize" );
+        ( Index { is_array = true; mutability = RMut; is_range = false },
+          "array_index_mut_usize" );
+        ( Index { is_array = false; mutability = RShared; is_range = false },
+          "slice_index_usize" );
+        ( Index { is_array = false; mutability = RMut; is_range = false },
+          "slice_index_mut_usize" );
       ]
   | Lean ->
       [
-        (ArrayIndexShared, "Array.index_usize");
-        (ArrayIndexMut, "Array.index_mut_usize");
         (ArrayToSliceShared, "Array.to_slice");
         (ArrayToSliceMut, "Array.to_slice_mut");
         (ArrayRepeat, "Array.repeat");
-        (SliceIndexShared, "Slice.index_usize");
-        (SliceIndexMut, "Slice.index_mut_usize");
+        ( Index { is_array = true; mutability = RShared; is_range = false },
+          "Array.index_usize" );
+        ( Index { is_array = true; mutability = RMut; is_range = false },
+          "Array.index_mut_usize" );
+        ( Index { is_array = false; mutability = RShared; is_range = false },
+          "Slice.index_usize" );
+        ( Index { is_array = false; mutability = RMut; is_range = false },
+          "Slice.index_mut_usize" );
       ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
@@ -1631,9 +1654,9 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
         (fun (c : Types.trait_clause) -> c.clause_id = clause_id)
         clauses
     in
-    let trait_id = clause.trait_id in
+    let trait_id = clause.trait.trait_decl_id in
     let impl_trait_decl = TraitDeclId.Map.find trait_id ctx.crate.trait_decls in
-    let args = clause.clause_generics in
+    let args = clause.trait.decl_generics in
     trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
       impl_trait_decl.item_meta.name params args
   in
@@ -1676,7 +1699,9 @@ let ctx_compute_trait_type_name (ctx : extraction_ctx) (trait_decl : trait_decl)
      can't disambiguate fields coming from different ADTs if they have the same
      names), and thus don't need to add a prefix starting with a lowercase.
   *)
-  match backend () with FStar -> "t" ^ name | Coq | Lean | HOL4 -> name
+  match backend () with
+  | FStar -> "t" ^ name
+  | Coq | Lean | HOL4 -> name
 
 let ctx_compute_trait_const_name (ctx : extraction_ctx)
     (trait_decl : trait_decl) (item : string) : string =
@@ -1685,7 +1710,9 @@ let ctx_compute_trait_const_name (ctx : extraction_ctx)
     else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ item
   in
   (* See [trait_type_name] *)
-  match backend () with FStar -> "c" ^ name | Coq | Lean | HOL4 -> name
+  match backend () with
+  | FStar -> "c" ^ name
+  | Coq | Lean | HOL4 -> name
 
 let ctx_compute_trait_method_name (ctx : extraction_ctx)
     (trait_decl : trait_decl) (item : string) : string =
@@ -1826,7 +1853,11 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | FStar -> "x" (* lacking inspiration here... *)
           | Coq | Lean | HOL4 -> "t" (* lacking inspiration here... *))
       | TLiteral lty -> (
-          match lty with TBool -> "b" | TChar -> "c" | TInteger _ -> "i")
+          match lty with
+          | TBool -> "b"
+          | TChar -> "c"
+          | TInteger _ -> "i"
+          | TFloat _ -> "fl")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
       | Error -> "x")
@@ -2055,7 +2086,9 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
          between the name for the default constant and the name for the field
          in the trait declaration *)
       let suffix =
-        match def.kind with TraitItemProvided _ -> "_default" | _ -> ""
+        match def.kind with
+        | TraitDeclItem (_, _, true) -> "_default"
+        | _ -> ""
       in
       let ctx = ctx_add def.item_meta.span decl (name ^ suffix) ctx in
       let ctx = ctx_add def.item_meta.span body (name ^ suffix ^ "_body") ctx in
@@ -2073,7 +2106,7 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
   *)
   let item_meta =
     match def.kind with
-    | TraitItemImpl (_, trait_decl_id, item_name, _) -> (
+    | TraitImplItem (_, trait_decl_id, item_name, _) -> (
         if Option.is_some def.item_meta.attr_info.rename then def.item_meta
         else
           (* Lookup the declaration. TODO: the trait item impl info
@@ -2084,13 +2117,7 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
           | None -> def.item_meta
           | Some trait_decl -> (
               let methods =
-                trait_decl.required_methods
-                @ List.filter_map
-                    (fun (name, opt_id) ->
-                      match opt_id with
-                      | None -> None
-                      | Some id -> Some (name, id))
-                    trait_decl.provided_methods
+                trait_decl.required_methods @ trait_decl.provided_methods
               in
               match
                 List.find_opt (fun (name, _) -> name = item_name) methods

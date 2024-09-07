@@ -423,6 +423,17 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
   let r =
     match (unop, v.value) with
     | Not, VLiteral (VBool b) -> Ok { v with value = VLiteral (VBool (not b)) }
+    | Not, VLiteral (VScalar i) ->
+        (* The ! operator flips the bits.
+           In effect, this does the operation we implement below.
+        *)
+        let int_ty = i.int_ty in
+        let x =
+          if integer_type_is_signed int_ty then Z.of_int (-1)
+          else scalar_max int_ty
+        in
+        let value = Z.sub x i.value in
+        Ok { v with value = VLiteral (VScalar { value; int_ty }) }
     | Neg, VLiteral (VScalar sv) -> (
         let i = Z.neg sv.value in
         match mk_scalar sv.int_ty i with
@@ -476,6 +487,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   let res_sv_ty =
     match (unop, v.ty) with
     | Not, (TLiteral TBool as lty) -> lty
+    | Not, (TLiteral (TInteger _) as lty) -> lty
     | Neg, (TLiteral (TInteger _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
     | _ -> exec_raise __FILE__ __LINE__ span "Invalid input for unop"
@@ -536,9 +548,21 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | Le -> Z.leq sv1.value sv2.value
               | Ge -> Z.geq sv1.value sv2.value
               | Gt -> Z.gt sv1.value sv2.value
-              | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr | Shl
-              | Shr | Ne | Eq | CheckedAdd | CheckedSub | CheckedMul ->
-                  craise __FILE__ __LINE__ span "Unreachable"
+              | Div
+              | Rem
+              | Add
+              | Sub
+              | Mul
+              | BitXor
+              | BitAnd
+              | BitOr
+              | Shl
+              | Shr
+              | Ne
+              | Eq
+              | CheckedAdd
+              | CheckedSub
+              | CheckedMul -> craise __FILE__ __LINE__ span "Unreachable"
             in
             Ok
               ({ value = VLiteral (VBool b); ty = TLiteral TBool }
@@ -546,7 +570,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
         | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr -> (
             (* The two operands must have the same type and the result is an integer *)
             sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) span;
-            let res =
+            let res : _ result =
               match binop with
               | Div ->
                   if sv2.value = Z.zero then Error ()
@@ -561,9 +585,17 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
               | BitOr -> raise Unimplemented
-              | Lt | Le | Ge | Gt | Shl | Shr | Ne | Eq | CheckedAdd
-              | CheckedSub | CheckedMul ->
-                  craise __FILE__ __LINE__ span "Unreachable"
+              | Lt
+              | Le
+              | Ge
+              | Gt
+              | Shl
+              | Shr
+              | Ne
+              | Eq
+              | CheckedAdd
+              | CheckedSub
+              | CheckedMul -> craise __FILE__ __LINE__ span "Unreachable"
             in
             match res with
             | Error _ -> Error EPanic
@@ -656,6 +688,9 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   match bkind with
+  | BUniqueImmutable ->
+      craise __FILE__ __LINE__ span
+        "Unique immutable closure captures are not supported"
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we
@@ -745,7 +780,9 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
   let v, cf_compute =
     (* Match on the aggregate kind *)
     match aggregate_kind with
-    | AggregatedAdt (type_id, opt_variant_id, generics) -> (
+    | AggregatedAdt (type_id, opt_variant_id, opt_field_id, generics) -> (
+        (* The opt_field_id is Some only for unions, that we don't support *)
+        sanity_check __FILE__ __LINE__ (opt_field_id = None) span;
         match type_id with
         | TTuple ->
             let tys = List.map (fun (v : typed_value) -> v.ty) values in
@@ -830,6 +867,9 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
          AST"
   | Global _ -> craise __FILE__ __LINE__ span "Unreachable"
   | Len _ -> craise __FILE__ __LINE__ span "Unhandled Len"
+  | _ ->
+      craise __FILE__ __LINE__ span
+        ("Unsupported operation: " ^ Print.EvalCtx.rvalue_to_string ctx rvalue)
 
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->

@@ -516,3 +516,15 @@ pub fn use_id_type<T>(x: IdType<T>) -> T {
 pub fn create_id_type<T>(x: T) -> IdType<T> {
     IdType(x)
 }
+
+pub fn not_bool(x: bool) -> bool {
+    !x
+}
+
+pub fn not_u32(x: u32) -> u32 {
+    !x
+}
+
+pub fn not_i32(x: i32) -> i32 {
+    !x
+}

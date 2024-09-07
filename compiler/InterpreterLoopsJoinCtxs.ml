@@ -482,7 +482,9 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
       inherit [_] iter_eval_ctx
 
       method! visit_proj_marker _ pm =
-        match pm with PNone -> () | PLeft | PRight -> raise Found
+        match pm with
+        | PNone -> ()
+        | PLeft | PRight -> raise Found
     end
   in
   try
@@ -887,7 +889,9 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
         else abs)
       ctx.env
   in
-  { ctx with env }
+  let ctx = { ctx with env } in
+  Invariants.check_invariants span ctx;
+  ctx
 
 (** Refresh the ids of the fresh abstractions.
 

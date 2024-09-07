@@ -1,0 +1,28 @@
+name: Deploy Aeneas user docs to GitHub pages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, nix]
+    steps:
+      - uses: actions/checkout@v4
+      - run: nix build '.?dir=docs/user'#book
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: result/
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -19,7 +19,7 @@ divergent def sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
   else s * 2#u32
 
 /- [loops::sum]:
-   Source: 'tests/src/loops.rs', lines 8:0-8:27 -/
+   Source: 'tests/src/loops.rs', lines 8:0-18:1 -/
 def sum (max : U32) : Result U32 :=
   sum_loop max 0#u32 0#u32
 
@@ -36,7 +36,7 @@ divergent def sum_with_mut_borrows_loop
   else s * 2#u32
 
 /- [loops::sum_with_mut_borrows]:
-   Source: 'tests/src/loops.rs', lines 23:0-23:44 -/
+   Source: 'tests/src/loops.rs', lines 23:0-35:1 -/
 def sum_with_mut_borrows (max : U32) : Result U32 :=
   sum_with_mut_borrows_loop max 0#u32 0#u32
 
@@ -53,7 +53,7 @@ divergent def sum_with_shared_borrows_loop
   else s * 2#u32
 
 /- [loops::sum_with_shared_borrows]:
-   Source: 'tests/src/loops.rs', lines 38:0-38:47 -/
+   Source: 'tests/src/loops.rs', lines 38:0-52:1 -/
 def sum_with_shared_borrows (max : U32) : Result U32 :=
   sum_with_shared_borrows_loop max 0#u32 0#u32
 
@@ -71,7 +71,7 @@ divergent def sum_array_loop
   else Result.ok s
 
 /- [loops::sum_array]:
-   Source: 'tests/src/loops.rs', lines 54:0-54:52 -/
+   Source: 'tests/src/loops.rs', lines 54:0-62:1 -/
 def sum_array (N : Usize) (a : Array U32 N) : Result U32 :=
   sum_array_loop N a 0#usize 0#u32
 
@@ -92,12 +92,12 @@ divergent def clear_loop
   else Result.ok v
 
 /- [loops::clear]:
-   Source: 'tests/src/loops.rs', lines 66:0-66:30 -/
+   Source: 'tests/src/loops.rs', lines 66:0-72:1 -/
 def clear (v : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
   clear_loop v 0#usize
 
 /- [loops::List]
-   Source: 'tests/src/loops.rs', lines 74:0-74:16 -/
+   Source: 'tests/src/loops.rs', lines 74:0-77:1 -/
 inductive List (T : Type) :=
 | Cons : T → List T → List T
 | Nil : List T
@@ -112,7 +112,7 @@ divergent def list_mem_loop (x : U32) (ls : List U32) : Result Bool :=
   | List.Nil => Result.ok false
 
 /- [loops::list_mem]:
-   Source: 'tests/src/loops.rs', lines 80:0-80:52 -/
+   Source: 'tests/src/loops.rs', lines 80:0-89:1 -/
 @[reducible]
 def list_mem (x : U32) (ls : List U32) : Result Bool :=
   list_mem_loop x ls
@@ -139,7 +139,7 @@ divergent def list_nth_mut_loop_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_mut_loop]:
-   Source: 'tests/src/loops.rs', lines 92:0-92:71 -/
+   Source: 'tests/src/loops.rs', lines 92:0-102:1 -/
 @[reducible]
 def list_nth_mut_loop
   (T : Type) (ls : List T) (i : U32) : Result (T × (T → Result (List T))) :=
@@ -159,7 +159,7 @@ divergent def list_nth_shared_loop_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_shared_loop]:
-   Source: 'tests/src/loops.rs', lines 105:0-105:66 -/
+   Source: 'tests/src/loops.rs', lines 105:0-115:1 -/
 @[reducible]
 def list_nth_shared_loop (T : Type) (ls : List T) (i : U32) : Result T :=
   list_nth_shared_loop_loop T ls i
@@ -187,7 +187,7 @@ divergent def get_elem_mut_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::get_elem_mut]:
-   Source: 'tests/src/loops.rs', lines 117:0-117:73 -/
+   Source: 'tests/src/loops.rs', lines 117:0-131:1 -/
 def get_elem_mut
   (slots : alloc.vec.Vec (List Usize)) (x : Usize) :
   Result (Usize × (Usize → Result (alloc.vec.Vec (List Usize))))
@@ -213,7 +213,7 @@ divergent def get_elem_shared_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::get_elem_shared]:
-   Source: 'tests/src/loops.rs', lines 133:0-133:68 -/
+   Source: 'tests/src/loops.rs', lines 133:0-147:1 -/
 def get_elem_shared
   (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize :=
   do
@@ -223,7 +223,7 @@ def get_elem_shared
   get_elem_shared_loop x ls
 
 /- [loops::id_mut]:
-   Source: 'tests/src/loops.rs', lines 149:0-149:50 -/
+   Source: 'tests/src/loops.rs', lines 149:0-151:1 -/
 def id_mut
   (T : Type) (ls : List T) :
   Result ((List T) × (List T → Result (List T)))
@@ -231,7 +231,7 @@ def id_mut
   Result.ok (ls, Result.ok)
 
 /- [loops::id_shared]:
-   Source: 'tests/src/loops.rs', lines 153:0-153:45 -/
+   Source: 'tests/src/loops.rs', lines 153:0-155:1 -/
 def id_shared (T : Type) (ls : List T) : Result (List T) :=
   Result.ok ls
 
@@ -257,7 +257,7 @@ divergent def list_nth_mut_loop_with_id_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_mut_loop_with_id]:
-   Source: 'tests/src/loops.rs', lines 158:0-158:75 -/
+   Source: 'tests/src/loops.rs', lines 158:0-169:1 -/
 def list_nth_mut_loop_with_id
   (T : Type) (ls : List T) (i : U32) : Result (T × (T → Result (List T))) :=
   do
@@ -282,7 +282,7 @@ divergent def list_nth_shared_loop_with_id_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_shared_loop_with_id]:
-   Source: 'tests/src/loops.rs', lines 172:0-172:70 -/
+   Source: 'tests/src/loops.rs', lines 172:0-183:1 -/
 def list_nth_shared_loop_with_id
   (T : Type) (ls : List T) (i : U32) : Result T :=
   do
@@ -321,7 +321,7 @@ divergent def list_nth_mut_loop_pair_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_mut_loop_pair]:
-   Source: 'tests/src/loops.rs', lines 188:0-192:27 -/
+   Source: 'tests/src/loops.rs', lines 188:0-209:1 -/
 @[reducible]
 def list_nth_mut_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
@@ -346,7 +346,7 @@ divergent def list_nth_shared_loop_pair_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_shared_loop_pair]:
-   Source: 'tests/src/loops.rs', lines 212:0-216:19 -/
+   Source: 'tests/src/loops.rs', lines 212:0-233:1 -/
 @[reducible]
 def list_nth_shared_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
@@ -383,7 +383,7 @@ divergent def list_nth_mut_loop_pair_merge_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_mut_loop_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 237:0-241:27 -/
+   Source: 'tests/src/loops.rs', lines 237:0-252:1 -/
 @[reducible]
 def list_nth_mut_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
@@ -409,7 +409,7 @@ divergent def list_nth_shared_loop_pair_merge_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_shared_loop_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 255:0-259:19 -/
+   Source: 'tests/src/loops.rs', lines 255:0-270:1 -/
 @[reducible]
 def list_nth_shared_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
@@ -442,7 +442,7 @@ divergent def list_nth_mut_shared_loop_pair_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_mut_shared_loop_pair]:
-   Source: 'tests/src/loops.rs', lines 273:0-277:23 -/
+   Source: 'tests/src/loops.rs', lines 273:0-288:1 -/
 @[reducible]
 def list_nth_mut_shared_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
@@ -477,7 +477,7 @@ divergent def list_nth_mut_shared_loop_pair_merge_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_mut_shared_loop_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 292:0-296:23 -/
+   Source: 'tests/src/loops.rs', lines 292:0-307:1 -/
 @[reducible]
 def list_nth_mut_shared_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
@@ -512,7 +512,7 @@ divergent def list_nth_shared_mut_loop_pair_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_shared_mut_loop_pair]:
-   Source: 'tests/src/loops.rs', lines 311:0-315:23 -/
+   Source: 'tests/src/loops.rs', lines 311:0-326:1 -/
 @[reducible]
 def list_nth_shared_mut_loop_pair
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
@@ -547,7 +547,7 @@ divergent def list_nth_shared_mut_loop_pair_merge_loop
   | List.Nil => Result.fail .panic
 
 /- [loops::list_nth_shared_mut_loop_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 330:0-334:23 -/
+   Source: 'tests/src/loops.rs', lines 330:0-345:1 -/
 @[reducible]
 def list_nth_shared_mut_loop_pair_merge
   (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) :
@@ -565,7 +565,7 @@ divergent def ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
   else Result.ok ()
 
 /- [loops::ignore_input_mut_borrow]:
-   Source: 'tests/src/loops.rs', lines 349:0-349:56 -/
+   Source: 'tests/src/loops.rs', lines 349:0-353:1 -/
 def ignore_input_mut_borrow (_a : U32) (i : U32) : Result U32 :=
   do
   let _ ← ignore_input_mut_borrow_loop i
@@ -581,7 +581,7 @@ divergent def incr_ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
   else Result.ok ()
 
 /- [loops::incr_ignore_input_mut_borrow]:
-   Source: 'tests/src/loops.rs', lines 357:0-357:60 -/
+   Source: 'tests/src/loops.rs', lines 357:0-362:1 -/
 def incr_ignore_input_mut_borrow (a : U32) (i : U32) : Result U32 :=
   do
   let a1 ← a + 1#u32
@@ -598,7 +598,7 @@ divergent def ignore_input_shared_borrow_loop (i : U32) : Result Unit :=
   else Result.ok ()
 
 /- [loops::ignore_input_shared_borrow]:
-   Source: 'tests/src/loops.rs', lines 366:0-366:59 -/
+   Source: 'tests/src/loops.rs', lines 366:0-370:1 -/
 def ignore_input_shared_borrow (_a : U32) (i : U32) : Result U32 :=
   do
   let _ ← ignore_input_shared_borrow_loop i

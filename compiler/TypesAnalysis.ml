@@ -272,7 +272,9 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
   analyze expl_info_init ty_info ty
 
 let type_decl_is_opaque (d : type_decl) : bool =
-  match d.kind with Opaque -> true | _ -> false
+  match d.kind with
+  | Opaque -> true
+  | _ -> false
 
 let analyze_type_decl (updated : bool ref) (infos : type_infos)
     (def : type_decl) : type_infos =
@@ -292,7 +294,10 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
       | Alias _ ->
           craise __FILE__ __LINE__ def.item_meta.span
             "type aliases should have been removed earlier"
-      | Opaque -> craise __FILE__ __LINE__ def.item_meta.span "unreachable"
+      | Union _ ->
+          craise __FILE__ __LINE__ def.item_meta.span "unions are not supported"
+      | Opaque | Error _ ->
+          craise __FILE__ __LINE__ def.item_meta.span "unreachable"
     in
     (* Explore the types and accumulate information *)
     let type_decl_info = TypeDeclId.Map.find def.def_id infos in
