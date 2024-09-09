@@ -40,7 +40,7 @@ def mk_pair0 (x : U32) (y : U32) : Result (U32 × U32) :=
 
 /- [constants::Pair]
    Source: 'tests/src/constants.rs', lines 39:0-42:1 -/
-structure Pair (T1 T2 : Type) where
+structure Pair (T1 : Type) (T2 : Type) where
   x : T1
   y : T2
 
@@ -76,12 +76,12 @@ structure Wrap (T : Type) where
 
 /- [constants::{constants::Wrap<T>}::new]:
    Source: 'tests/src/constants.rs', lines 57:4-59:5 -/
-def Wrap.new (T : Type) (value : T) : Result (Wrap T) :=
+def Wrap.new {T : Type} (value : T) : Result (Wrap T) :=
   Result.ok { value := value }
 
 /- [constants::Y]
    Source: 'tests/src/constants.rs', lines 44:0-44:38 -/
-def Y_body : Result (Wrap I32) := Wrap.new I32 2#i32
+def Y_body : Result (Wrap I32) := Wrap.new 2#i32
 def Y : Wrap I32 := eval_global Y_body
 
 /- [constants::unwrap_y]:
