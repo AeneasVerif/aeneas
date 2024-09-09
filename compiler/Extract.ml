@@ -10,6 +10,15 @@ open Config
 open Errors
 include ExtractTypes
 
+let fun_or_op_id_to_string (ctx : extraction_ctx) =
+  PrintPure.fun_or_op_id_to_string (extraction_ctx_to_fmt_env ctx)
+
+let generic_args_to_string (ctx : extraction_ctx) =
+  PrintPure.generic_args_to_string (extraction_ctx_to_fmt_env ctx)
+
+let texpression_to_string (ctx : extraction_ctx) =
+  PrintPure.texpression_to_string (extraction_ctx_to_fmt_env ctx) false "" "  "
+
 (** Compute the names for all the pure functions generated from a rust function.
  *)
 let extract_fun_decl_register_names (ctx : extraction_ctx)
@@ -206,9 +215,10 @@ let extract_global (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 
 (* Filter the generics of a function if it is builtin *)
 let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
-    (ctx : extraction_ctx) : ('a list, 'a list * string) Result.result =
+    (explicit : explicit_info option) (ctx : extraction_ctx) :
+    ('a list * explicit_info option, 'a list * string) Result.result =
   match FunDeclId.Map.find_opt id ctx.funs_filter_type_args_map with
-  | None -> Result.Ok types
+  | None -> Result.Ok (types, explicit)
   | Some filter ->
       if List.length filter <> List.length types then (
         let decl = FunDeclId.Map.find id ctx.trans_funs in
@@ -224,11 +234,24 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
         save_error __FILE__ __LINE__ None err;
         Result.Error (types, err))
       else
-        let types = List.combine filter types in
-        let types =
-          List.filter_map (fun (b, ty) -> if b then Some ty else None) types
+        let filter_f =
+          List.filter_map (fun (b, ty) -> if b then Some ty else None)
         in
-        Result.Ok types
+        let types = List.combine filter types in
+        let types = filter_f types in
+        let filter_f =
+          List.filter_map (fun (b, x) -> if b then Some x else None)
+        in
+        let explicit =
+          Option.map
+            (fun e ->
+              {
+                e with
+                explicit_types = filter_f (List.combine filter e.explicit_types);
+              })
+            explicit
+        in
+        Result.Ok (types, explicit)
 
 (** [inside]: see {!extract_ty}.
     [with_type]: do we also generate a type annotation? This is necessary for
@@ -391,6 +414,14 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (fid : fun_or_op_id)
     (generics : generic_args) (args : texpression list) : unit =
+  log#ldebug
+    (lazy
+      ("extract_function_call: "
+      ^ fun_or_op_id_to_string ctx fid
+      ^ "\n- generics: "
+      ^ generic_args_to_string ctx generics
+      ^ "\n- args: "
+      ^ String.concat ", " (List.map (texpression_to_string ctx) args)));
   match (fid, args) with
   | Unop unop, [ arg ] ->
       (* A unop can have *at most* one argument (the result can't be a function!).
@@ -505,21 +536,9 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       sanity_check __FILE__ __LINE__
         (generics.const_generics = [] || backend () <> HOL4)
         span;
-      (* Print the generics.
-
-         We might need to filter some of the type arguments, if the type
-         is builtin (for instance, we filter the global allocator type
-         argument for `Vec::new`).
-      *)
-      let types =
-        match fun_id with
-        | FromLlbc (FunId (FRegular id), _) ->
-            fun_builtin_filter_types id generics.types ctx
-        | _ -> Result.Ok generics.types
-      in
       (* Compute the information about the explicit/implicit input type parameters *)
       let explicit =
-        let lookup fun_decl_id lp_id =
+        let lookup is_trait_method fun_decl_id lp_id =
           (* Lookup the function to retrieve the signature information *)
           let trans_fun = A.FunDeclId.Map.find fun_decl_id ctx.trans_funs in
           let trans_fun =
@@ -527,18 +546,53 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             | None -> trans_fun.f
             | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
           in
-          Some trans_fun.signature.explicit_info
+          let explicit = trans_fun.signature.explicit_info in
+          (* If it is a trait method, we need to remove the prefix
+             which account for the generics of the impl. *)
+          let explicit =
+            if is_trait_method then
+              (* We simply adjust the length of the explicit information to
+                 the number of generic arguments *)
+              let open Collections.List in
+              let { explicit_types; explicit_const_generics } = explicit in
+              {
+                explicit_types =
+                  drop
+                    (length explicit_types - length generics.types)
+                    explicit_types;
+                explicit_const_generics =
+                  drop
+                    (length explicit_const_generics
+                    - length generics.const_generics)
+                    explicit_const_generics;
+              }
+            else explicit
+          in
+          (* *)
+          Some explicit
         in
         match fun_id with
         | FromLlbc (FunId (FRegular fun_decl_id), lp_id) ->
-            lookup fun_decl_id lp_id
+            lookup false fun_decl_id lp_id
         | FromLlbc (TraitMethod (_trait_ref, _method_name, fun_decl_id), lp_id)
-          -> lookup fun_decl_id lp_id
+          -> lookup true fun_decl_id lp_id
         | FromLlbc (FunId (FAssumed _), _) -> None
         | Pure _ -> None
       in
-      (match types with
-      | Ok types ->
+      (* Filter the generics.
+
+         We might need to filter some of the type arguments, if the type
+         is builtin (for instance, we filter the global allocator type
+         argument for `Vec::new`).
+      *)
+      let types_explicit =
+        match fun_id with
+        | FromLlbc (FunId (FRegular id), _) ->
+            fun_builtin_filter_types id generics.types explicit ctx
+        | _ -> Result.Ok (generics.types, explicit)
+      in
+      (match types_explicit with
+      | Ok (types, explicit) ->
           extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
             { generics with types }
       | Error (types, err) ->
