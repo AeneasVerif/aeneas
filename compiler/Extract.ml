@@ -1179,14 +1179,14 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         if need_paren then F.pp_print_string fmt "(";
         (* Open the box for `Array.replicate T N [` *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        (* Print the array constructor *)
+        (* Print the array constructor.
+
+           Note that we don't need to print the type parameter, which
+           is implicit. *)
         let cs = ctx_get_struct span (TAssumed TArray) ctx in
         F.pp_print_string fmt cs;
         (* Print the parameters *)
         let _, generics = ty_as_adt span e_ty in
-        let ty = Collections.List.to_cons_nil generics.types in
-        F.pp_print_space fmt ();
-        extract_ty span ctx fmt TypeDeclId.Set.empty true ty;
         let cg = Collections.List.to_cons_nil generics.const_generics in
         F.pp_print_space fmt ();
         extract_const_generic span ctx fmt true cg;
