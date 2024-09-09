@@ -496,10 +496,10 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_string fmt ")")
       | TAdtId _ | TAssumed _ -> (
           (* HOL4 behaves differently. Where in Coq/FStar/Lean we would write:
-             `tree a b`
+              `tree a b`
 
-             In HOL4 we would write:
-             `('a, 'b) tree`
+              In HOL4 we write:
+              `('a, 'b) tree`
           *)
           match backend () with
           | FStar | Coq | Lean ->
@@ -508,27 +508,48 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               (* TODO: for now, only the opaque *functions* are extracted in the
                  opaque module. The opaque *types* are assumed. *)
               F.pp_print_string fmt (ctx_get_type (Some span) type_id ctx);
-              (* We might need to filter the type arguments, if the type
-                 is builtin (for instance, we filter the global allocator type
-                 argument for `Vec`). *)
-              let generics =
+              (* We might need to:
+                 - lookup the information about the implicit/explicit parameters
+                   (note that builtin types don't have implicit parameters)
+                 - filter the type arguments, if the type is builtin (for instance,
+                   we filter the global allocator type argument for `Vec`).
+              *)
+              let generics, explicit =
                 match type_id with
                 | TAdtId id -> (
                     match
                       TypeDeclId.Map.find_opt id ctx.types_filter_type_args_map
                     with
-                    | None -> generics
+                    | None -> (generics, None)
                     | Some filter ->
-                        let types = List.combine filter generics.types in
-                        let types =
+                        let filter_types : 'a. 'a list -> 'a list =
+                         fun l ->
+                          let l = List.combine filter l in
                           List.filter_map
                             (fun (b, ty) -> if b then Some ty else None)
-                            types
+                            l
                         in
-                        { generics with types })
-                | _ -> generics
+                        let types = filter_types generics.types in
+                        let generics = { generics with types } in
+                        let explicit =
+                          match TypeDeclId.Map.find_opt id ctx.trans_types with
+                          | None ->
+                              (* The decl might be missing if there were some errors *)
+                              None
+                          | Some d ->
+                              Some
+                                {
+                                  d.explicit_info with
+                                  explicit_types =
+                                    filter_types d.explicit_info.explicit_types;
+                                }
+                        in
+                        (generics, explicit))
+                | _ ->
+                    (* All the parameters of builtin types are explicit *)
+                    (generics, None)
               in
-              extract_generic_args span ctx fmt no_params_tys generics;
+              extract_generic_args span ctx fmt no_params_tys ~explicit generics;
               if print_paren then F.pp_print_string fmt ")"
           | HOL4 ->
               let { types; const_generics; trait_refs } = generics in
@@ -613,10 +634,16 @@ and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
   let name = ctx_get_trait_decl span tr.trait_decl_id ctx in
   if use_brackets then F.pp_print_string fmt "(";
   F.pp_print_string fmt name;
+  (* Lookup the information about the implicit/explicit parameters *)
+  let explicit =
+    match TraitDeclId.Map.find_opt tr.trait_decl_id ctx.trans_trait_decls with
+    | None -> (* The declaration might be missing if there was an error *) None
+    | Some d -> Some d.explicit_info
+  in
   (* There is something subtle here: the trait obligations for the implemented
      trait are put inside the parent clauses, so we must ignore them here *)
   let generics = { tr.decl_generics with trait_refs = [] } in
-  extract_generic_args span ctx fmt no_params_tys generics;
+  extract_generic_args span ctx fmt no_params_tys ~explicit generics;
   if use_brackets then F.pp_print_string fmt ")"
 
 and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
@@ -705,25 +732,42 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       save_error __FILE__ __LINE__ (Some span) "Unexpected occurrence of `Self`";
       F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
   | TraitImpl (id, generics) ->
-      (* We may need to filter the parameters if the trait is builtin *)
-      let generics =
+      (* Lookup the the information about the explicit/implicit parameters. *)
+      let explicit =
+        match TraitImplId.Map.find_opt id ctx.trans_trait_impls with
+        | None ->
+            (* The declaration might be missing if there was an error *) None
+        | Some d -> Some d.explicit_info
+      in
+      (* We may need to filter the parameters if the trait is builtin.
+         Also lookup the information about the explicit/implicit parameters. *)
+      let generics, explicit =
         match
           TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
         with
-        | None -> generics
+        | None -> (generics, explicit)
         | Some filter ->
-            let types =
+            let filter_types : 'a. 'a list -> 'a list =
+             fun l ->
               List.filter_map
                 (fun (b, x) -> if b then Some x else None)
-                (List.combine filter generics.types)
+                (List.combine filter l)
             in
-            { generics with types }
+            let types = filter_types generics.types in
+            let generics = { generics with types } in
+            let explicit =
+              Option.map
+                (fun e ->
+                  { e with explicit_types = filter_types e.explicit_types })
+                explicit
+            in
+            (generics, explicit)
       in
       let name = ctx_get_trait_impl span id ctx in
       let use_brackets = generics <> empty_generic_args && inside in
       if use_brackets then F.pp_print_string fmt "(";
       F.pp_print_string fmt name;
-      extract_generic_args span ctx fmt no_params_tys generics;
+      extract_generic_args span ctx fmt no_params_tys ~explicit generics;
       if use_brackets then F.pp_print_string fmt ")"
   | Clause id ->
       let name = ctx_get_local_trait_clause span id ctx in
