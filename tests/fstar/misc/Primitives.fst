@@ -55,7 +55,7 @@ type string = string
 let is_zero (n: nat) : bool = n = 0
 let decrease (n: nat{n > 0}) : nat = n - 1
 
-let core_mem_replace (a : Type0) (x : a) (y : a) : a & a = (x, x)
+let core_mem_replace (#a : Type0) (x : a) (y : a) : a & a = (x, x)
 
 // We don't really use raw pointers for now
 type mut_raw_ptr (t : Type0) = { v : t }
