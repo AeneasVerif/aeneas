@@ -78,20 +78,20 @@ open CList
 
 /- [tutorial::list_nth]:
    Source: 'src/lib.rs', lines 37:0-37:56 -/
-divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
+divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then Result.ok x
     else do
          let i1 ← i - 1#u32
-         list_nth T tl i1
+         list_nth tl i1
   | CList.CNil => Result.fail .panic
 
 /-- Theorem about `list_nth` -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  ∃ x, list_nth T l i = ok x ∧
+  ∃ x, list_nth l i = ok x ∧
   x = l.toList.index i.toNat
   := by
   rw [list_nth]
@@ -187,7 +187,7 @@ end
 /- [tutorial::list_nth_mut1]: loop 0:
    Source: 'src/lib.rs', lines 107:0-116:1 -/
 divergent def list_nth_mut1_loop
-  (T : Type) (l : CList T) (i : U32) :
+  {T : Type} (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))
   :=
   match l with
@@ -199,7 +199,7 @@ divergent def list_nth_mut1_loop
     else
       do
       let i1 ← i - 1#u32
-      let (t, back) ← list_nth_mut1_loop T tl i1
+      let (t, back) ← list_nth_mut1_loop tl i1
       let back1 :=
         fun ret => do
                    let tl1 ← back ret
@@ -211,10 +211,10 @@ divergent def list_nth_mut1_loop
    Source: 'src/lib.rs', lines 107:0-107:77 -/
 @[reducible]
 def list_nth_mut1
-  (T : Type) (l : CList T) (i : U32) :
+  {T : Type} (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))
   :=
-  list_nth_mut1_loop T l i
+  list_nth_mut1_loop l i
 
 /-
   # #####################################################################
@@ -453,7 +453,7 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
  -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
+  ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
   x = l.toList.index i.toNat ∧
   -- Specification of the backward function
   ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
@@ -463,13 +463,13 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
 /- [tutorial::list_tail]: loop 0:
    Source: 'src/lib.rs', lines 118:0-123:1 -/
 divergent def list_tail_loop
-  (T : Type) (l : CList T) :
+  {T : Type} (l : CList T) :
   Result ((CList T) × (CList T → Result (CList T)))
   :=
   match l with
   | CList.CCons t tl =>
     do
-    let (c, back) ← list_tail_loop T tl
+    let (c, back) ← list_tail_loop tl
     let back1 :=
       fun ret => do
                  let tl1 ← back ret
@@ -481,23 +481,23 @@ divergent def list_tail_loop
    Source: 'src/lib.rs', lines 118:0-118:68 -/
 @[reducible]
 def list_tail
-  (T : Type) (l : CList T) :
+  {T : Type} (l : CList T) :
   Result ((CList T) × (CList T → Result (CList T)))
   :=
-  list_tail_loop T l
+  list_tail_loop l
 
 /- [tutorial::append_in_place]:
    Source: 'src/lib.rs', lines 125:0-125:67 -/
 def append_in_place
-  (T : Type) (l0 : CList T) (l1 : CList T) : Result (CList T) :=
+  {T : Type} (l0 : CList T) (l1 : CList T) : Result (CList T) :=
   do
-  let (_, list_tail_back) ← list_tail T l0
+  let (_, list_tail_back) ← list_tail l0
   list_tail_back l1
 
 /-- Theorem about `list_tail`: exercise -/
 @[pspec]
 theorem list_tail_spec {T : Type} (l : CList T) :
-  ∃ back, list_tail T l = ok (CList.CNil, back) ∧
+  ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
   sorry
@@ -505,7 +505,7 @@ theorem list_tail_spec {T : Type} (l : CList T) :
 /-- Theorem about `append_in_place`: exercise -/
 @[pspec]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
-  ∃ l2, append_in_place T l0 l1 = ok l2 ∧
+  ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
   rw [append_in_place]
   sorry
@@ -513,14 +513,14 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
 /- [tutorial::reverse]: loop 0:
    Source: 'src/lib.rs', lines 147:4-154:1 -/
 divergent def reverse_loop
-  (T : Type) (l : CList T) (out : CList T) : Result (CList T) :=
+  {T : Type} (l : CList T) (out : CList T) : Result (CList T) :=
   match l with
-  | CList.CCons hd tl => reverse_loop T tl (CList.CCons hd out)
+  | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)
   | CList.CNil => Result.ok out
 
 @[pspec]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
-  ∃ l', reverse_loop T l out = ok l' ∧
+  ∃ l', reverse_loop l out = ok l' ∧
   True -- Leaving the post-condition as an exercise
   := by
   rw [reverse_loop]
@@ -528,11 +528,11 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
 
 /- [tutorial::reverse]:
    Source: 'src/lib.rs', lines 146:0-154:1 -/
-def reverse (T : Type) (l : CList T) : Result (CList T) :=
-  reverse_loop T l CList.CNil
+def reverse {T : Type} (l : CList T) : Result (CList T) :=
+  reverse_loop l CList.CNil
 
 theorem reverse_spec {T : Type} (l : CList T) :
-  ∃ l', reverse T l = ok l' ∧
+  ∃ l', reverse l = ok l' ∧
   True -- Leaving the post-condition as an exercise
   := by
   rw [reverse]
@@ -555,12 +555,12 @@ attribute [-simp] Int.reducePow Nat.reducePow
    Source: 'src/lib.rs', lines 6:4-11:1 -/
 divergent def zero_loop
   (x : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
-  let i1 := alloc.vec.Vec.len U32 x
+  let i1 := alloc.vec.Vec.len x
   if i < i1
   then
     do
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut U32 Usize
+      alloc.vec.Vec.index_mut
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i2 ← i + 1#usize
     let x1 ← index_mut_back 0#u32
@@ -651,15 +651,14 @@ divergent def add_no_overflow_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize) :
   Result (alloc.vec.Vec U32)
   :=
-  let i1 := alloc.vec.Vec.len U32 x
+  let i1 := alloc.vec.Vec.len x
   if i < i1
   then
     do
     let i2 ←
-      alloc.vec.Vec.index U32 Usize (core.slice.index.SliceIndexUsizeSliceTInst
-        U32) y i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) y i
     let (i3, index_mut_back) ←
-      alloc.vec.Vec.index_mut U32 Usize
+      alloc.vec.Vec.index_mut
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i4 ← i3 + i2
     let i5 ← i + 1#usize
@@ -743,26 +742,25 @@ divergent def add_with_carry_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize) :
   Result (U8 × (alloc.vec.Vec U32))
   :=
-  let i1 := alloc.vec.Vec.len U32 x
+  let i1 := alloc.vec.Vec.len x
   if i < i1
   then
     do
     let i2 ←
-      alloc.vec.Vec.index U32 Usize (core.slice.index.SliceIndexUsizeSliceTInst
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst
         U32) x i
     let i3 ← Scalar.cast .U32 c0
     let p ← core.num.U32.overflowing_add i2 i3
     let (sum, c1) := p
     let i4 ←
-      alloc.vec.Vec.index U32 Usize (core.slice.index.SliceIndexUsizeSliceTInst
-        U32) y i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) y i
     let p1 ← core.num.U32.overflowing_add sum i4
     let (sum1, c2) := p1
     let i5 ← Scalar.cast_bool .U8 c1
     let i6 ← Scalar.cast_bool .U8 c2
     let c01 ← i5 + i6
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut U32 Usize
+      alloc.vec.Vec.index_mut
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i7 ← i + 1#usize
     let x1 ← index_mut_back sum1
@@ -818,10 +816,10 @@ def max (x : Usize) (y : Usize) : Result Usize :=
 /- [tutorial::get_or_zero]:
    Source: 'src/lib.rs', lines 30:0-30:45 -/
 def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
-  let i1 := alloc.vec.Vec.len U32 y
+  let i1 := alloc.vec.Vec.len y
   if i < i1
   then
-    alloc.vec.Vec.index U32 Usize (core.slice.index.SliceIndexUsizeSliceTInst
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst
       U32) y i
   else Result.ok 0#u32
 
@@ -837,8 +835,7 @@ divergent def add_loop
     do
     let yi ← get_or_zero y i
     let i1 ←
-      alloc.vec.Vec.index U32 Usize (core.slice.index.SliceIndexUsizeSliceTInst
-        U32) x i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i2 ← Scalar.cast .U32 c0
     let p ← core.num.U32.overflowing_add i1 i2
     let (sum, c1) := p
@@ -848,7 +845,7 @@ divergent def add_loop
     let i4 ← Scalar.cast_bool .U8 c2
     let c01 ← i3 + i4
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut U32 Usize
+      alloc.vec.Vec.index_mut
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i5 ← i + 1#usize
     let x1 ← index_mut_back sum1
@@ -857,7 +854,7 @@ divergent def add_loop
     if c0 != 0#u8
     then do
          let i1 ← Scalar.cast .U32 c0
-         alloc.vec.Vec.push U32 x i1
+         alloc.vec.Vec.push x i1
     else Result.ok x
 
 /- [tutorial::add]:
@@ -867,10 +864,10 @@ def add
   Result (alloc.vec.Vec U32)
   :=
   do
-  let i := alloc.vec.Vec.len U32 x
-  let i1 := alloc.vec.Vec.len U32 y
+  let i := alloc.vec.Vec.len x
+  let i1 := alloc.vec.Vec.len y
   let max1 ← max i i1
-  let x1 ← alloc.vec.Vec.resize U32 core.clone.CloneU32 x max1 0#u32
+  let x1 ← alloc.vec.Vec.resize core.clone.CloneU32 x max1 0#u32
   add_loop x1 y max1 0#u8 0#usize
 
 end Tutorial.Solutions

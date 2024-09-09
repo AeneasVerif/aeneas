@@ -13,14 +13,14 @@ open external
    Source: '/rustc/library/core/src/cell.rs', lines 536:4-536:26
    Name pattern: core::cell::{core::cell::Cell<@T>}::get -/
 axiom core.cell.Cell.get
-  (T : Type) (markerCopyInst : core.marker.Copy T) :
+  {T : Type} (markerCopyInst : core.marker.Copy T) :
   core.cell.Cell T → State → Result (State × T)
 
 /- [core::cell::{core::cell::Cell<T>}#11::get_mut]:
    Source: '/rustc/library/core/src/cell.rs', lines 614:4-614:39
    Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut -/
 axiom core.cell.Cell.get_mut
-  (T : Type) :
+  {T : Type} :
   core.cell.Cell T → State → Result (State × (T × (T → State → Result
     (State × (core.cell.Cell T)))))
 

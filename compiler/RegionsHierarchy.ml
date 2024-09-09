@@ -332,7 +332,7 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
     List.map
       (fun (info : assumed_fun_info) ->
         (FAssumed info.fun_id, (info.name, info.fun_sig, None)))
-      assumed_fun_infos
+      (AssumedFunIdMap.values assumed_fun_infos)
   in
   FunIdMap.of_list
     (List.map

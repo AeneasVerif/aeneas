@@ -25,7 +25,7 @@ Check (test_incr)%return.
 (** [paper::choose]:
     Source: 'tests/src/paper.rs', lines 18:0-24:1 *)
 Definition choose
-  (T : Type) (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
+  {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
   if b
   then let back := fun (ret : T) => Ok (ret, y) in Ok (x, back)
   else let back := fun (ret : T) => Ok (x, ret) in Ok (y, back)
@@ -34,7 +34,7 @@ Definition choose
 (** [paper::test_choose]:
     Source: 'tests/src/paper.rs', lines 26:0-34:1 *)
 Definition test_choose : result unit :=
-  p <- choose i32 true 0%i32 0%i32;
+  p <- choose true 0%i32 0%i32;
   let (z, choose_back) := p in
   z1 <- i32_add z 1%i32;
   if z1 s= 1%i32
@@ -63,7 +63,7 @@ Arguments List_Nil { _ }.
 (** [paper::list_nth_mut]:
     Source: 'tests/src/paper.rs', lines 45:0-58:1 *)
 Fixpoint list_nth_mut
-  (T : Type) (l : List_t T) (i : u32) :
+  {T : Type} (l : List_t T) (i : u32) :
   result (T * (T -> result (List_t T)))
   :=
   match l with
@@ -72,7 +72,7 @@ Fixpoint list_nth_mut
     then let back := fun (ret : T) => Ok (List_Cons ret tl) in Ok (x, back)
     else (
       i1 <- u32_sub i 1%u32;
-      p <- list_nth_mut T tl i1;
+      p <- list_nth_mut tl i1;
       let (t, list_nth_mut_back) := p in
       let back :=
         fun (ret : T) => tl1 <- list_nth_mut_back ret; Ok (List_Cons x tl1) in
@@ -95,7 +95,7 @@ Fixpoint sum (l : List_t i32) : result i32 :=
 Definition test_nth : result unit :=
   let l := List_Cons 3%i32 List_Nil in
   let l1 := List_Cons 2%i32 l in
-  p <- list_nth_mut i32 (List_Cons 1%i32 l1) 2%u32;
+  p <- list_nth_mut (List_Cons 1%i32 l1) 2%u32;
   let (x, list_nth_mut_back) := p in
   x1 <- i32_add x 1%i32;
   l2 <- list_nth_mut_back x1;
@@ -110,7 +110,7 @@ Check (test_nth)%return.
     Source: 'tests/src/paper.rs', lines 79:0-85:1 *)
 Definition call_choose (p : (u32 * u32)) : result u32 :=
   let (px, py) := p in
-  p1 <- choose u32 true px py;
+  p1 <- choose true px py;
   let (pz, choose_back) := p1 in
   pz1 <- u32_add pz 1%u32;
   p2 <- choose_back pz1;

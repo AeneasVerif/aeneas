@@ -15,7 +15,7 @@ Module External_FunsExternal_Template.
     Source: '/rustc/library/core/src/cell.rs', lines 536:4-536:26
     Name pattern: core::cell::{core::cell::Cell<@T>}::get *)
 Axiom core_cell_Cell_get :
-  forall(T : Type) (markerCopyInst : core_marker_Copy_t T),
+  forall{T : Type} (markerCopyInst : core_marker_Copy_t T),
         core_cell_Cell_t T -> state -> result (state * T)
 .
 
@@ -23,7 +23,7 @@ Axiom core_cell_Cell_get :
     Source: '/rustc/library/core/src/cell.rs', lines 614:4-614:39
     Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut *)
 Axiom core_cell_Cell_get_mut :
-  forall(T : Type),
+  forall{T : Type},
         core_cell_Cell_t T -> state -> result (state * (T * (T -> state ->
           result (state * (core_cell_Cell_t T)))))
 .

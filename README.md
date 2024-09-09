@@ -35,9 +35,13 @@ You need to install OCaml, together with some packages.
 We suggest you to follow those [instructions](https://ocaml.org/docs/install.html),
 and install OPAM on the way (same instructions).
 
-We use **OCaml 4.13.1**: `opam switch create 4.13.1+options`
+Any recent version of **OCaml 4** should do. For instance, if you want to use OCaml
+4.14.2:
+```
+opam switch create 4.14.2
+```
 
-The dependencies can then be installed with the following command:
+You can then install the dependencies with the following command:
 
 ```
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \

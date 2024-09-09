@@ -29,11 +29,11 @@ def OrdI32 : Ord I32 := {
 /- [avl::{avl::Node<T>}#1::rotate_left]:
    Source: 'src/avl.rs', lines 41:4-90:5 -/
 def Node.rotate_left
-  (T : Type) (root : Node T) (z : Node T) : Result (Node T) :=
-  let (b, o) := core.mem.replace (Option (Node T)) z.left none
+  {T : Type} (root : Node T) (z : Node T) : Result (Node T) :=
+  let (b, o) := core.mem.replace z.left none
   let (x, root1) :=
-    core.mem.replace (Node T) (Node.mk root.value root.left b
-      root.balance_factor) (Node.mk z.value o z.right z.balance_factor)
+    core.mem.replace (Node.mk root.value root.left b root.balance_factor)
+      (Node.mk z.value o z.right z.balance_factor)
   if root1.balance_factor = 0#i8
   then
     Result.ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 1#i8))
@@ -45,11 +45,11 @@ def Node.rotate_left
 /- [avl::{avl::Node<T>}#1::rotate_right]:
    Source: 'src/avl.rs', lines 92:4-136:5 -/
 def Node.rotate_right
-  (T : Type) (root : Node T) (z : Node T) : Result (Node T) :=
-  let (b, o) := core.mem.replace (Option (Node T)) z.right none
+  {T : Type} (root : Node T) (z : Node T) : Result (Node T) :=
+  let (b, o) := core.mem.replace z.right none
   let (x, root1) :=
-    core.mem.replace (Node T) (Node.mk root.value b root.right
-      root.balance_factor) (Node.mk z.value z.left o z.balance_factor)
+    core.mem.replace (Node.mk root.value b root.right root.balance_factor)
+      (Node.mk z.value z.left o z.balance_factor)
   if root1.balance_factor = 0#i8
   then
     Result.ok (Node.mk root1.value root1.left (some (Node.mk x.value 
@@ -61,15 +61,15 @@ def Node.rotate_right
 /- [avl::{avl::Node<T>}#1::rotate_left_right]:
    Source: 'src/avl.rs', lines 138:4-186:5 -/
 def Node.rotate_left_right
-  (T : Type) (root : Node T) (z : Node T) : Result (Node T) :=
+  {T : Type} (root : Node T) (z : Node T) : Result (Node T) :=
   do
-  let (o, _) := core.mem.replace (Option (Node T)) z.right none
-  let y ← core.option.Option.unwrap (Node T) o
-  let (a, o1) := core.mem.replace (Option (Node T)) y.left none
-  let (b, o2) := core.mem.replace (Option (Node T)) y.right none
+  let (o, _) := core.mem.replace z.right none
+  let y ← core.option.Option.unwrap o
+  let (a, o1) := core.mem.replace y.left none
+  let (b, o2) := core.mem.replace y.right none
   let (x, root1) :=
-    core.mem.replace (Node T) (Node.mk root.value b root.right
-      root.balance_factor) (Node.mk y.value o1 o2 y.balance_factor)
+    core.mem.replace (Node.mk root.value b root.right root.balance_factor)
+      (Node.mk y.value o1 o2 y.balance_factor)
   if root1.balance_factor = 0#i8
   then
     Result.ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8)) (some
@@ -86,15 +86,15 @@ def Node.rotate_left_right
 /- [avl::{avl::Node<T>}#1::rotate_right_left]:
    Source: 'src/avl.rs', lines 188:4-236:5 -/
 def Node.rotate_right_left
-  (T : Type) (root : Node T) (z : Node T) : Result (Node T) :=
+  {T : Type} (root : Node T) (z : Node T) : Result (Node T) :=
   do
-  let (o, _) := core.mem.replace (Option (Node T)) z.left none
-  let y ← core.option.Option.unwrap (Node T) o
-  let (b, o1) := core.mem.replace (Option (Node T)) y.left none
-  let (a, o2) := core.mem.replace (Option (Node T)) y.right none
+  let (o, _) := core.mem.replace z.left none
+  let y ← core.option.Option.unwrap o
+  let (b, o1) := core.mem.replace y.left none
+  let (a, o2) := core.mem.replace y.right none
   let (x, root1) :=
-    core.mem.replace (Node T) (Node.mk root.value root.left b
-      root.balance_factor) (Node.mk y.value o1 o2 y.balance_factor)
+    core.mem.replace (Node.mk root.value root.left b root.balance_factor)
+      (Node.mk y.value o1 o2 y.balance_factor)
   if root1.balance_factor = 0#i8
   then
     Result.ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
@@ -111,11 +111,11 @@ def Node.rotate_right_left
 /- [avl::{avl::Node<T>}#2::insert_in_left]:
    Source: 'src/avl.rs', lines 240:4-275:5 -/
 mutual divergent def Node.insert_in_left
-  (T : Type) (OrdInst : Ord T) (node : Node T) (value : T) :
+  {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
   :=
   do
-  let (b, o) ← Tree.insert_in_opt_node T OrdInst node.left value
+  let (b, o) ← Tree.insert_in_opt_node OrdInst node.left value
   if b
   then
     do
@@ -123,18 +123,18 @@ mutual divergent def Node.insert_in_left
     if i = (-2)#i8
     then
       do
-      let (o1, o2) := core.mem.replace (Option (Node T)) o none
-      let left ← core.option.Option.unwrap (Node T) o1
+      let (o1, o2) := core.mem.replace o none
+      let left ← core.option.Option.unwrap o1
       if left.balance_factor <= 0#i8
       then
         do
         let node1 ←
-          Node.rotate_right T (Node.mk node.value o2 node.right i) left
+          Node.rotate_right (Node.mk node.value o2 node.right i) left
         Result.ok (false, node1)
       else
         do
         let node1 ←
-          Node.rotate_left_right T (Node.mk node.value o2 node.right i) left
+          Node.rotate_left_right (Node.mk node.value o2 node.right i) left
         Result.ok (false, node1)
     else Result.ok (i != 0#i8, Node.mk node.value o node.right i)
   else Result.ok (false, Node.mk node.value o node.right node.balance_factor)
@@ -142,7 +142,7 @@ mutual divergent def Node.insert_in_left
 /- [avl::{avl::Tree<T>}#3::insert_in_opt_node]:
    Source: 'src/avl.rs', lines 356:4-371:5 -/
 divergent def Tree.insert_in_opt_node
-  (T : Type) (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
+  {T : Type} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
   Result (Bool × (Option (Node T)))
   :=
   match node with
@@ -150,17 +150,17 @@ divergent def Tree.insert_in_opt_node
             Result.ok (true, some n)
   | some node1 =>
     do
-    let (b, node2) ← Node.insert T OrdInst node1 value
+    let (b, node2) ← Node.insert OrdInst node1 value
     Result.ok (b, some node2)
 
 /- [avl::{avl::Node<T>}#2::insert_in_right]:
    Source: 'src/avl.rs', lines 277:4-315:5 -/
 divergent def Node.insert_in_right
-  (T : Type) (OrdInst : Ord T) (node : Node T) (value : T) :
+  {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
   :=
   do
-  let (b, o) ← Tree.insert_in_opt_node T OrdInst node.right value
+  let (b, o) ← Tree.insert_in_opt_node OrdInst node.right value
   if b
   then
     do
@@ -168,18 +168,18 @@ divergent def Node.insert_in_right
     if i = 2#i8
     then
       do
-      let (o1, o2) := core.mem.replace (Option (Node T)) o none
-      let right ← core.option.Option.unwrap (Node T) o1
+      let (o1, o2) := core.mem.replace o none
+      let right ← core.option.Option.unwrap o1
       if right.balance_factor >= 0#i8
       then
         do
         let node1 ←
-          Node.rotate_left T (Node.mk node.value node.left o2 i) right
+          Node.rotate_left (Node.mk node.value node.left o2 i) right
         Result.ok (false, node1)
       else
         do
         let node1 ←
-          Node.rotate_right_left T (Node.mk node.value node.left o2 i) right
+          Node.rotate_right_left (Node.mk node.value node.left o2 i) right
         Result.ok (false, node1)
     else Result.ok (i != 0#i8, Node.mk node.value node.left o i)
   else Result.ok (false, Node.mk node.value node.left o node.balance_factor)
@@ -187,27 +187,27 @@ divergent def Node.insert_in_right
 /- [avl::{avl::Node<T>}#2::insert]:
    Source: 'src/avl.rs', lines 318:4-334:5 -/
 divergent def Node.insert
-  (T : Type) (OrdInst : Ord T) (node : Node T) (value : T) :
+  {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
   :=
   do
   let ordering ← OrdInst.cmp value node.value
   match ordering with
-  | Ordering.Less => Node.insert_in_left T OrdInst node value
+  | Ordering.Less => Node.insert_in_left OrdInst node value
   | Ordering.Equal => Result.ok (false, node)
-  | Ordering.Greater => Node.insert_in_right T OrdInst node value
+  | Ordering.Greater => Node.insert_in_right OrdInst node value
 
 end
 
 /- [avl::{avl::Tree<T>}#3::new]:
    Source: 'src/avl.rs', lines 338:4-340:5 -/
-def Tree.new (T : Type) (OrdInst : Ord T) : Result (Tree T) :=
+def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) :=
   Result.ok { root := none }
 
 /- [avl::{avl::Tree<T>}#3::find]: loop 0:
    Source: 'src/avl.rs', lines 342:4-354:5 -/
 divergent def Tree.find_loop
-  (T : Type) (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
+  {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool
   :=
   match current_tree with
@@ -216,24 +216,24 @@ divergent def Tree.find_loop
     do
     let o ← OrdInst.cmp current_node.value value
     match o with
-    | Ordering.Less => Tree.find_loop T OrdInst value current_node.right
+    | Ordering.Less => Tree.find_loop OrdInst value current_node.right
     | Ordering.Equal => Result.ok true
-    | Ordering.Greater => Tree.find_loop T OrdInst value current_node.left
+    | Ordering.Greater => Tree.find_loop OrdInst value current_node.left
 
 /- [avl::{avl::Tree<T>}#3::find]:
    Source: 'src/avl.rs', lines 342:4-354:5 -/
 def Tree.find
-  (T : Type) (OrdInst : Ord T) (self : Tree T) (value : T) : Result Bool :=
-  Tree.find_loop T OrdInst value self.root
+  {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) : Result Bool :=
+  Tree.find_loop OrdInst value self.root
 
 /- [avl::{avl::Tree<T>}#3::insert]:
    Source: 'src/avl.rs', lines 374:4-376:5 -/
 def Tree.insert
-  (T : Type) (OrdInst : Ord T) (self : Tree T) (value : T) :
+  {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) :
   Result (Bool × (Tree T))
   :=
   do
-  let (b, o) ← Tree.insert_in_opt_node T OrdInst self.root value
+  let (b, o) ← Tree.insert_in_opt_node OrdInst self.root value
   Result.ok (b, { root := o })
 
 end avl
