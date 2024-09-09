@@ -1327,10 +1327,10 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
       if backend () <> HOL4 then (
         (* Print the type parameters *)
         if type_params <> [] then (
-          insert_req_space ();
           List.iter
             (fun (expl, s) ->
               (* ( *)
+              insert_req_space ();
               left_bracket expl;
               print_implicit_symbol expl;
               F.pp_print_string fmt s;

@@ -208,8 +208,18 @@ let extract_global (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   if use_brackets then F.pp_print_string fmt "(";
   (* Extract the global name *)
   F.pp_print_string fmt (ctx_get_global span id ctx);
-  (* Extract the generics *)
-  extract_generic_args span ctx fmt TypeDeclId.Set.empty generics;
+  (* Extract the generics.
+
+     We have to lookup the information about the implicit/explicit parameters.
+     Note that the global declaration (from which we retrieve this information)
+     may be missing if there were some errors.
+  *)
+  let explicit =
+    Option.map
+      (fun (d : global_decl) -> d.explicit_info)
+      (GlobalDeclId.Map.find_opt id ctx.trans_globals)
+  in
+  extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit generics;
   if use_brackets then F.pp_print_string fmt ")";
   F.pp_close_box fmt ()
 
@@ -2080,6 +2090,19 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
         (Some
            (fun fmt ->
              let all_params =
+               (* Filter *)
+               let filter : 'a. explicit list -> 'a list -> 'a list =
+                fun el l ->
+                 List.filter_map
+                   (fun (b, x) -> if b = Explicit then Some x else None)
+                   (List.combine el l)
+               in
+               let type_params =
+                 filter global.explicit_info.explicit_types type_params
+               in
+               let cg_params =
+                 filter global.explicit_info.explicit_const_generics cg_params
+               in
                List.concat [ type_params; cg_params; trait_clauses ]
              in
              let extract_params () =
@@ -2712,7 +2735,9 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
           i_cgs,
           f_tys,
           f_cgs,
+          f_all_explicit_tys,
           f_explicit_tys,
+          f_all_explicit_cgs,
           f_explicit_cgs ) =
       match FunDeclId.Map.find_opt f.def_id ctx.funs_filter_type_args_map with
       | None ->
@@ -2723,6 +2748,8 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
             f.signature.generics.types,
             f.signature.generics.const_generics,
             f.signature.explicit_info.explicit_types,
+            f.signature.explicit_info.explicit_types,
+            f.signature.explicit_info.explicit_const_generics,
             f.signature.explicit_info.explicit_const_generics )
       | Some filter ->
           let filter_list : 'a. bool list -> 'a list -> 'a list =
@@ -2745,7 +2772,9 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
             filter_list (i_filter i_cgs) i_cgs,
             filter_list filter f.signature.generics.types,
             filter_list filter f.signature.generics.const_generics,
+            f.signature.explicit_info.explicit_types,
             filter_list filter f.signature.explicit_info.explicit_types,
+            f.signature.explicit_info.explicit_const_generics,
             filter_list filter f.signature.explicit_info.explicit_const_generics
           )
     in
@@ -2790,10 +2819,20 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt fun_name;
     let all_generics =
       let _, _, i_tcs = impl_generics in
-      List.concat [ i_tys; f_tys; i_cgs; f_cgs; i_tcs; f_tcs ]
+      (* Filter the implicit arguments *)
+      let filter : 'a. explicit list -> 'a list -> 'a list =
+       fun bl l ->
+        List.filter_map
+          (fun (e, x) -> if e = Explicit then Some x else None)
+          (List.combine bl l)
+      in
+      let tys = filter f_all_explicit_tys (i_tys @ f_tys) in
+      let cgs = filter f_all_explicit_cgs (i_cgs @ f_cgs) in
+
+      (* Put everything together *)
+      List.concat [ tys; cgs; i_tcs; f_tcs ]
     in
 
-    (* Filter the generics if the function is builtin *)
     List.iter
       (fun p ->
         F.pp_print_space fmt ();
@@ -2913,9 +2952,16 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         let item_name =
           ctx_get_trait_const impl.item_meta.span trait_decl_id name ctx
         in
+        (* Lookup the information about the explicit/implicit parameters *)
+        let explicit =
+          match GlobalDeclId.Map.find_opt gref.global_id ctx.trans_globals with
+          | None ->
+              (* The declaration might be missing if there was an error *) None
+          | Some d -> Some d.explicit_info
+        in
         let print_params () =
           extract_generic_args impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-            gref.global_generics
+            ~explicit gref.global_generics
         in
         let ty () =
           F.pp_print_space fmt ();

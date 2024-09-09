@@ -221,6 +221,7 @@ let translate_crate_to_pure (crate : crate) :
     trans_ctx
     * Pure.type_decl list
     * pure_fun_translation list
+    * Pure.global_decl list
     * Pure.trait_decl list
     * Pure.trait_impl list =
   (* Debug *)
@@ -236,6 +237,25 @@ let translate_crate_to_pure (crate : crate) :
   let type_decls_map =
     Pure.TypeDeclId.Map.of_list
       (List.map (fun (def : Pure.type_decl) -> (def.def_id, def)) type_decls)
+  in
+
+  (* Translate the globals (remark: their bodies are translated at the same time
+     as the "regular" functions) *)
+  let global_decls =
+    List.filter_map
+      (fun (global : global_decl) ->
+        try Some (SymbolicToPure.translate_global trans_ctx global)
+        with CFailure (span, _) ->
+          let name = name_to_string trans_ctx global.item_meta.name in
+          let name_pattern =
+            name_to_pattern_string trans_ctx global.item_meta.name
+          in
+          save_error __FILE__ __LINE__ span
+            ("Could not translate the global declaration '" ^ name
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
+          None)
+      (GlobalDeclId.Map.values crate.global_decls)
   in
 
   (* Compute the decomposed fun sigs for the whole crate *)
@@ -310,7 +330,12 @@ let translate_crate_to_pure (crate : crate) :
   in
 
   (* Return *)
-  (trans_ctx, type_decls, pure_translations, trait_decls, trait_impls)
+  ( trans_ctx,
+    type_decls,
+    pure_translations,
+    global_decls,
+    trait_decls,
+    trait_impls )
 
 type gen_ctx = ExtractBase.extraction_ctx
 
@@ -531,18 +556,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
        groups are always singletons, so the [extract_global_decl] function
        takes care of generating the delimiters.
     *)
-    let global =
-      try Some (SymbolicToPure.translate_global ctx.trans_ctx global)
-      with CFailure (span, _) ->
-        let name = name_to_string ctx.trans_ctx global.item_meta.name in
-        let name_pattern =
-          name_to_pattern_string ctx.trans_ctx global.item_meta.name
-        in
-        save_error __FILE__ __LINE__ span
-          ("Could not translate the global declaration '" ^ name
-         ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
-        None
-    in
+    let global = GlobalDeclId.Map.find_opt id ctx.trans_globals in
     Extract.extract_global_decl ctx fmt global body config.interface
 
 (** Utility.
@@ -1010,7 +1024,12 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
 let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     unit =
   (* Translate the module to the pure AST *)
-  let trans_ctx, trans_types, trans_funs, trans_trait_decls, trans_trait_impls =
+  let ( trans_ctx,
+        trans_types,
+        trans_funs,
+        trans_globals,
+        trans_trait_decls,
+        trans_trait_impls ) =
     translate_crate_to_pure crate
   in
 
@@ -1066,6 +1085,10 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
 
   (* Put everything in the context *)
   let ctx =
+    let trans_globals =
+      GlobalDeclId.Map.of_list
+        (List.map (fun (d : Pure.global_decl) -> (d.def_id, d)) trans_globals)
+    in
     let trans_trait_decls =
       TraitDeclId.Map.of_list
         (List.map
@@ -1092,6 +1115,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
       trans_types;
       trans_funs;
       builtin_sigs;
+      trans_globals;
       functions_with_decreases_clause = rec_functions;
       types_filter_type_args_map = Pure.TypeDeclId.Map.empty;
       funs_filter_type_args_map = Pure.FunDeclId.Map.empty;
