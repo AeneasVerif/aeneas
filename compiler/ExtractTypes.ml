@@ -1706,10 +1706,12 @@ let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
   F.pp_print_string fmt cons_name;
   (* Print the type/const params and the trait clauses (`{T}`) *)
-  List.iter (fun e ->
-    F.pp_print_space fmt ();
-    if e = Implicit then F.pp_print_string fmt "{ _ }" else
-    F.pp_print_string fmt "_") params;
+  List.iter
+    (fun e ->
+      F.pp_print_space fmt ();
+      if e = Implicit then F.pp_print_string fmt "{ _ }"
+      else F.pp_print_string fmt "_")
+    params;
   F.pp_print_string fmt ".";
 
   (* Close the box *)
@@ -1731,7 +1733,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
   if num_params = 0 then ()
   else
     (* Generate the [Arguments] instruction *)
-    let params = (Collections.List.repeat num_params Implicit) in
+    let params = Collections.List.repeat num_params Implicit in
     match decl.kind with
     | Opaque -> ()
     | Struct fields ->
