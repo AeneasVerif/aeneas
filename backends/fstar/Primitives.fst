@@ -557,7 +557,7 @@ let core_clone_CloneI128 : core_clone_Clone i128 = {
 }
 
 (** [core::option::{core::option::Option<T>}::unwrap] *)
-let core_option_Option_unwrap (t : Type0) (x : option t) : result t =
+let core_option_Option_unwrap (#t : Type0) (x : option t) : result t =
   match x with
   | None -> Fail Failure
   | Some x -> Ok x
@@ -678,7 +678,7 @@ let array_subslice (#a : Type0) (#n : usize) (x : array a n) (r : core_ops_range
 let array_update_subslice (#a : Type0) (#n : usize) (x : array a n) (r : core_ops_range_Range usize) (ns : slice a) : result (array a n) =
   admit()
 
-let array_repeat (#a : Type0) (#n : usize) (x : a) : array a n =
+let array_repeat (#a : Type0) (n : usize) (x : a) : array a n =
   admit()
 
 let slice_subslice (#a : Type0) (x : slice a) (r : core_ops_range_Range usize) : result (slice a) =
