@@ -873,7 +873,7 @@ Definition core_slice_index_private_slice_index_SealedRangeUsizeInst
   : core_slice_index_private_slice_index_Sealed (core_ops_range_Range usize) := tt.
 
 (* Trait implementation: [core::slice::index::Range] *)
-Definition core_slice_index_SliceIndexRangeUsizeSliceTInst {T : Type} :
+Definition core_slice_index_SliceIndexRangeUsizeSliceTInst (T : Type) :
   core_slice_index_SliceIndex (core_ops_range_Range usize) (slice T) := {|
   core_slice_index_SliceIndex_sealedInst := core_slice_index_private_slice_index_SealedRangeUsizeInst;
   core_slice_index_SliceIndex_Output := slice T;
