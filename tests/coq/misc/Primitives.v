@@ -67,7 +67,7 @@ Definition string := Coq.Strings.String.string.
 Definition char := Coq.Strings.Ascii.ascii.
 Definition char_of_byte := Coq.Strings.Ascii.ascii_of_byte.
 
-Definition core_mem_replace (a : Type) (x : a) (y : a) : a * a := (x, x) .
+Definition core_mem_replace {a : Type} (x : a) (y : a) : a * a := (x, x) .
 
 Record mut_raw_ptr (T : Type) := { mut_raw_ptr_v : T }.
 Record const_raw_ptr (T : Type) := { const_raw_ptr_v : T }.
@@ -676,7 +676,7 @@ Qed.
 Axiom mk_array : forall {T : Type} (n : usize) (l : list T), array T n.
 
 (* For initialization *)
-Axiom array_repeat : forall {T : Type} {n : usize} (x : T), array T n.
+Axiom array_repeat : forall {T : Type} (n : usize) (x : T), array T n.
 
 Axiom array_index_usize : forall {T : Type} {n : usize} (x : array T n) (i : usize), result T.
 Axiom array_update_usize : forall {T : Type} {n : usize} (x : array T n) (i : usize) (nx : T), result (array T n).
@@ -944,7 +944,7 @@ Definition core_slice_index_private_slice_index_SealedUsizeInst
   : core_slice_index_private_slice_index_Sealed usize := tt.
 
 (* Trait implementation: [core::slice::index::usize] *)
-Definition core_slice_index_SliceIndexUsizeSliceTInst {T : Type} :
+Definition core_slice_index_SliceIndexUsizeSliceTInst (T : Type) :
   core_slice_index_SliceIndex usize (slice T) := {|
   core_slice_index_SliceIndex_sealedInst := core_slice_index_private_slice_index_SealedUsizeInst;
   core_slice_index_SliceIndex_Output := T;
@@ -957,39 +957,39 @@ Definition core_slice_index_SliceIndexUsizeSliceTInst {T : Type} :
 |}.
 
 (* [alloc::vec::Vec::index]: forward function *)
-Axiom alloc_vec_Vec_index : forall (T Idx : Type) (inst : core_slice_index_SliceIndex Idx (slice T))
+Axiom alloc_vec_Vec_index : forall {T Idx : Type} (inst : core_slice_index_SliceIndex Idx (slice T))
   (Self : alloc_vec_Vec T) (i : Idx), result inst.(core_slice_index_SliceIndex_Output).
 
 (* [alloc::vec::Vec::index_mut]: forward function *)
-Axiom alloc_vec_Vec_index_mut : forall (T Idx : Type) (inst : core_slice_index_SliceIndex Idx (slice T))
+Axiom alloc_vec_Vec_index_mut : forall {T Idx : Type} (inst : core_slice_index_SliceIndex Idx (slice T))
   (Self : alloc_vec_Vec T) (i : Idx),
   result (inst.(core_slice_index_SliceIndex_Output) *
           (inst.(core_slice_index_SliceIndex_Output) -> result (alloc_vec_Vec T))).
 
 (* Trait implementation: [alloc::vec::Vec] *)
-Definition alloc_vec_Vec_coreopsindexIndexInst (T Idx : Type)
+Definition alloc_vec_Vec_coreopsindexIndexInst {T Idx : Type}
   (inst : core_slice_index_SliceIndex Idx (slice T)) :
   core_ops_index_Index (alloc_vec_Vec T) Idx := {|
   core_ops_index_Index_Output := inst.(core_slice_index_SliceIndex_Output);
-  core_ops_index_Index_index := alloc_vec_Vec_index T Idx inst;
+  core_ops_index_Index_index := alloc_vec_Vec_index inst;
 |}.
 
 (* Trait implementation: [alloc::vec::Vec] *)
-Definition alloc_vec_Vec_coreopsindexIndexMutInst (T Idx : Type)
+Definition alloc_vec_Vec_coreopsindexIndexMutInst {T Idx : Type}
   (inst : core_slice_index_SliceIndex Idx (slice T)) :
   core_ops_index_IndexMut (alloc_vec_Vec T) Idx := {|
-  core_ops_index_IndexMut_indexInst := alloc_vec_Vec_coreopsindexIndexInst T Idx inst;
-  core_ops_index_IndexMut_index_mut := alloc_vec_Vec_index_mut T Idx inst;
+  core_ops_index_IndexMut_indexInst := alloc_vec_Vec_coreopsindexIndexInst inst;
+  core_ops_index_IndexMut_index_mut := alloc_vec_Vec_index_mut inst;
 |}.
 
 (*** Theorems *)
 
 Axiom alloc_vec_Vec_index_eq : forall {a : Type} (v : alloc_vec_Vec a) (i : usize) (x : a),
-  alloc_vec_Vec_index a usize core_slice_index_SliceIndexUsizeSliceTInst v i =
+  alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceTInst a) v i =
     alloc_vec_Vec_index_usize v i.
 
 Axiom alloc_vec_Vec_index_mut_eq : forall {a : Type} (v : alloc_vec_Vec a) (i : usize) (x : a),
-  alloc_vec_Vec_index_mut a usize core_slice_index_SliceIndexUsizeSliceTInst v i =
+  alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst a) v i =
     alloc_vec_Vec_index_mut_usize v i.
 
 End Primitives.

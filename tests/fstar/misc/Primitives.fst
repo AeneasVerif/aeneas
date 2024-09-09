@@ -887,7 +887,7 @@ let core_slice_index_private_slice_index_SealedUsizeInst
   : core_slice_index_private_slice_index_Sealed usize = ()
 
 // Trait implementation: [core::slice::index::usize]
-let core_slice_index_SliceIndexUsizeSliceTInst (#t : Type0) :
+let core_slice_index_SliceIndexUsizeSliceTInst (t : Type0) :
   core_slice_index_SliceIndex usize (slice t) = {
   sealedInst = core_slice_index_private_slice_index_SealedUsizeInst;
   output = t;
@@ -930,16 +930,16 @@ let alloc_vec_Vec_coreopsindexIndexMutInst (#t #idx : Type0)
 
 let alloc_vec_Vec_index_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) :
   Lemma (
-    alloc_vec_Vec_index core_slice_index_SliceIndexUsizeSliceTInst v i ==
+    alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceTInst a) v i ==
       alloc_vec_Vec_index_usize v i)
-  [SMTPat (alloc_vec_Vec_index core_slice_index_SliceIndexUsizeSliceTInst v i)]
+  [SMTPat (alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceTInst a) v i)]
   =
   admit()
 
 let alloc_vec_Vec_index_mut_eq (#a : Type0) (v : alloc_vec_Vec a) (i : usize) :
   Lemma (
-    alloc_vec_Vec_index_mut core_slice_index_SliceIndexUsizeSliceTInst v i ==
+    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst a) v i ==
       alloc_vec_Vec_index_mut_usize v i)
-  [SMTPat (alloc_vec_Vec_index_mut core_slice_index_SliceIndexUsizeSliceTInst v i)]
+  [SMTPat (alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst a) v i)]
   =
   admit()
