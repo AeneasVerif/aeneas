@@ -1803,7 +1803,7 @@ let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
 let translate_mprojection_elem (pe : E.projection_elem) :
     mprojection_elem option =
   match pe with
-  | Deref | DerefBox -> None
+  | Deref -> None
   | Field (pkind, field_id) -> Some { pkind; field_id }
 
 let translate_mprojection (p : E.projection) : mprojection =
