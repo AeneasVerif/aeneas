@@ -1481,7 +1481,7 @@ let ctx_compute_variant_name (ctx : extraction_ctx) (def : type_decl)
     (variant : variant) : string =
   (* Replace the name of the variant if the user annotated it with the [rename] attribute. *)
   let variant =
-    Option.value variant.attr_info.rename ~default:variant.variant_name
+    Option.value variant.variant_attr_info.rename ~default:variant.variant_name
   in
   match backend () with
   | FStar | Coq | HOL4 ->

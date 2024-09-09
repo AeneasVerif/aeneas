@@ -11,7 +11,6 @@ module V = Values
 module C = Contexts
 module A = LlbcAst
 module S = SymbolicAst
-module PP = PrintPure
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
@@ -554,8 +553,8 @@ let translate_generic_params (span : Meta.span) (generics : T.generic_params) :
 let translate_field (span : Meta.span) (f : T.field) : field =
   let field_name = f.field_name in
   let field_ty = translate_sty span f.field_ty in
-  let attr_info = f.attr_info in
-  { field_name; field_ty; attr_info }
+  let field_attr_info = f.attr_info in
+  { field_name; field_ty; field_attr_info }
 
 let translate_fields (span : Meta.span) (fl : T.field list) : field list =
   List.map (translate_field span) fl
@@ -563,8 +562,8 @@ let translate_fields (span : Meta.span) (fl : T.field list) : field list =
 let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_name = v.variant_name in
   let fields = translate_fields span v.fields in
-  let attr_info = v.attr_info in
-  { variant_name; fields; attr_info }
+  let variant_attr_info = v.attr_info in
+  { variant_name; fields; variant_attr_info }
 
 let translate_variants (span : Meta.span) (vl : T.variant list) : variant list =
   List.map (translate_variant span) vl
@@ -1398,6 +1397,13 @@ let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_sig) : ty =
     then it should be implicit. For instance, the type parameter of [Vec::get]
     should be implicit, while the type parameter of [Vec::new] should be explicit
     (it only appears in the output).
+    Also note that here we consider the trait obligations as inputs from which
+    we can deduce an implicit parameter. For instance:
+    {[
+      let f {a : Type} (clause0 : Foo a) : ...
+             ^^^^^^^^
+          implied by clause0
+    ]}
  *)
 let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     : explicit_info =
@@ -1405,7 +1411,7 @@ let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
   let implicit_cgs = ref Pure.ConstGenericVarId.Set.empty in
   let visitor =
     object
-      inherit [_] Pure.iter_ty
+      inherit [_] Pure.iter_type_decl
 
       method! visit_type_var_id _ id =
         implicit_tys := Pure.TypeVarId.Set.add id !implicit_tys
@@ -1414,6 +1420,7 @@ let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
         implicit_cgs := Pure.ConstGenericVarId.Set.add id !implicit_cgs
     end
   in
+  List.iter (visitor#visit_trait_clause ()) generics.trait_clauses;
   List.iter (visitor#visit_ty ()) input_tys;
   let make_explicit_ty (v : Pure.type_var) : Pure.explicit =
     if Pure.TypeVarId.Set.mem v.index !implicit_tys then Implicit else Explicit

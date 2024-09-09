@@ -792,7 +792,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   FieldId.mapi
                     (fun fid (field : field) ->
                       ( fid,
-                        ctx_compute_field_name def field.attr_info ctx
+                        ctx_compute_field_name def field.field_attr_info ctx
                           def.item_meta.name fid field.field_name ))
                     fields
                 in
