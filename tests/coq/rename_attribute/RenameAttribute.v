@@ -15,7 +15,7 @@ Record BoolTest_t (Self : Type) := mkBoolTest_t {
 }.
 
 Arguments mkBoolTest_t { _ }.
-Arguments BoolTest_t_getTest { _ }.
+Arguments BoolTest_t_getTest { _ } _.
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 22:4-24:5 *)

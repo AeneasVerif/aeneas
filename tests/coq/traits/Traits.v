@@ -15,7 +15,7 @@ Record BoolTrait_t (Self : Type) := mkBoolTrait_t {
 }.
 
 Arguments mkBoolTrait_t { _ }.
-Arguments BoolTrait_t_get_bool { _ }.
+Arguments BoolTrait_t_get_bool { _ } _.
 
 (** [traits::{traits::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/traits.rs', lines 13:4-15:5 *)
@@ -76,7 +76,7 @@ Record ToU64_t (Self : Type) := mkToU64_t {
 }.
 
 Arguments mkToU64_t { _ }.
-Arguments ToU64_t_to_u64 { _ }.
+Arguments ToU64_t_to_u64 { _ } _.
 
 (** [traits::{traits::ToU64 for u64}#2::to_u64]:
     Source: 'tests/src/traits.rs', lines 45:4-47:5 *)
@@ -161,8 +161,8 @@ Record ToType_t (Self : Type) (T : Type) := mkToType_t {
   ToType_t_to_type : Self -> result T;
 }.
 
-Arguments mkToType_t { _ _ }.
-Arguments ToType_t_to_type { _ _ }.
+Arguments mkToType_t { _ } { _ }.
+Arguments ToType_t_to_type { _ } { _ } _.
 
 (** [traits::{traits::ToType<bool> for u64}#5::to_type]:
     Source: 'tests/src/traits.rs', lines 94:4-96:5 *)
@@ -184,7 +184,7 @@ Record OfType_t (Self : Type) := mkOfType_t {
 }.
 
 Arguments mkOfType_t { _ }.
-Arguments OfType_t_of_type { _ }.
+Arguments OfType_t_of_type { _ } _ { _ }.
 
 (** [traits::h3]:
     Source: 'tests/src/traits.rs', lines 105:0-107:1 *)
@@ -203,9 +203,9 @@ Record OfTypeBis_t (Self : Type) (T : Type) := mkOfTypeBis_t {
   OfTypeBis_t_of_type : T -> result Self;
 }.
 
-Arguments mkOfTypeBis_t { _ _ }.
-Arguments OfTypeBis_tOfTypeBis_t_ToTypeInst { _ _ }.
-Arguments OfTypeBis_t_of_type { _ _ }.
+Arguments mkOfTypeBis_t { _ } { _ }.
+Arguments OfTypeBis_tOfTypeBis_t_ToTypeInst { _ } { _ } _.
+Arguments OfTypeBis_t_of_type { _ } { _ } _.
 
 (** [traits::h4]:
     Source: 'tests/src/traits.rs', lines 119:0-121:1 *)
@@ -232,7 +232,7 @@ Record TestType_test_TestTrait_t (Self : Type) := mkTestType_test_TestTrait_t {
 }.
 
 Arguments mkTestType_test_TestTrait_t { _ }.
-Arguments TestType_test_TestTrait_t_test { _ }.
+Arguments TestType_test_TestTrait_t_test { _ } _.
 
 (** [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}::test]:
     Source: 'tests/src/traits.rs', lines 140:12-142:13 *)
@@ -304,13 +304,13 @@ Record WithConstTy_t (Self : Type) (LEN : usize) := mkWithConstTy_t {
     WithConstTy_tWithConstTy_t_W;
 }.
 
-Arguments mkWithConstTy_t { _ _ }.
-Arguments WithConstTy_tWithConstTy_t_LEN1 { _ _ }.
-Arguments WithConstTy_tWithConstTy_t_LEN2 { _ _ }.
-Arguments WithConstTy_tWithConstTy_t_V { _ _ }.
-Arguments WithConstTy_tWithConstTy_t_W { _ _ }.
-Arguments WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst { _ _ }.
-Arguments WithConstTy_t_f { _ _ }.
+Arguments mkWithConstTy_t { _ } { _ }.
+Arguments WithConstTy_tWithConstTy_t_LEN1 { _ } { _ } _.
+Arguments WithConstTy_tWithConstTy_t_LEN2 { _ } { _ } _.
+Arguments WithConstTy_tWithConstTy_t_V { _ } { _ } _.
+Arguments WithConstTy_tWithConstTy_t_W { _ } { _ } _.
+Arguments WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst { _ } { _ } _.
+Arguments WithConstTy_t_f { _ } { _ } _.
 
 (** [traits::{traits::WithConstTy<32: usize> for bool}#8::LEN1]
     Source: 'tests/src/traits.rs', lines 176:4-176:27 *)
@@ -390,9 +390,9 @@ Record ParentTrait0_t (Self : Type) := mkParentTrait0_t {
 }.
 
 Arguments mkParentTrait0_t { _ }.
-Arguments ParentTrait0_tParentTrait0_t_W { _ }.
-Arguments ParentTrait0_t_get_name { _ }.
-Arguments ParentTrait0_t_get_w { _ }.
+Arguments ParentTrait0_tParentTrait0_t_W { _ } _.
+Arguments ParentTrait0_t_get_name { _ } _.
+Arguments ParentTrait0_t_get_w { _ } _.
 
 (** Trait declaration: [traits::ParentTrait1]
     Source: 'tests/src/traits.rs', lines 206:0-206:25 *)
@@ -408,8 +408,8 @@ Record ChildTrait_t (Self : Type) := mkChildTrait_t {
 }.
 
 Arguments mkChildTrait_t { _ }.
-Arguments ChildTrait_tChildTrait_t_ParentTrait0Inst { _ }.
-Arguments ChildTrait_tChildTrait_t_ParentTrait1Inst { _ }.
+Arguments ChildTrait_tChildTrait_t_ParentTrait0Inst { _ } _.
+Arguments ChildTrait_tChildTrait_t_ParentTrait1Inst { _ } _.
 
 (** [traits::test_child_trait1]:
     Source: 'tests/src/traits.rs', lines 210:0-212:1 *)
@@ -447,7 +447,7 @@ Record ChildTrait1_t (Self : Type) := mkChildTrait1_t {
 }.
 
 Arguments mkChildTrait1_t { _ }.
-Arguments ChildTrait1_tChildTrait1_t_ParentTrait1Inst { _ }.
+Arguments ChildTrait1_tChildTrait1_t_ParentTrait1Inst { _ } _.
 
 (** Trait implementation: [traits::{traits::ParentTrait1 for usize}#9]
     Source: 'tests/src/traits.rs', lines 225:0-225:30 *)
@@ -466,7 +466,7 @@ Record Iterator_t (Self : Type) := mkIterator_t {
 }.
 
 Arguments mkIterator_t { _ }.
-Arguments Iterator_tIterator_t_Item { _ }.
+Arguments Iterator_tIterator_t_Item { _ } _.
 
 (** Trait declaration: [traits::IntoIterator]
     Source: 'tests/src/traits.rs', lines 234:0-240:1 *)
@@ -480,17 +480,17 @@ Record IntoIterator_t (Self : Type) := mkIntoIterator_t {
 }.
 
 Arguments mkIntoIterator_t { _ }.
-Arguments IntoIterator_tIntoIterator_t_Item { _ }.
-Arguments IntoIterator_tIntoIterator_t_IntoIter { _ }.
-Arguments IntoIterator_tIntoIterator_t_IteratortraitsIntoIteratorIntoIterInst {
-  _ }.
-Arguments IntoIterator_t_into_iter { _ }.
+Arguments IntoIterator_tIntoIterator_t_Item { _ } _.
+Arguments IntoIterator_tIntoIterator_t_IntoIter { _ } _.
+Arguments IntoIterator_tIntoIterator_t_IteratortraitsIntoIteratorIntoIterInst
+  { _ } _.
+Arguments IntoIterator_t_into_iter { _ } _.
 
 (** Trait declaration: [traits::FromResidual]
     Source: 'tests/src/traits.rs', lines 251:0-251:24 *)
 Record FromResidual_t (Self : Type) (T : Type) := mkFromResidual_t{}.
 
-Arguments mkFromResidual_t { _ _ }.
+Arguments mkFromResidual_t { _ } { _ }.
 
 (** Trait declaration: [traits::Try]
     Source: 'tests/src/traits.rs', lines 247:0-249:1 *)
@@ -501,8 +501,8 @@ Record Try_t (Self : Type) := mkTry_t {
 }.
 
 Arguments mkTry_t { _ }.
-Arguments Try_tTry_t_Residual { _ }.
-Arguments Try_tTry_t_FromResidualSelftraitsTryResidualInst { _ }.
+Arguments Try_tTry_t_Residual { _ } _.
+Arguments Try_tTry_t_FromResidualSelftraitsTryResidualInst { _ } _.
 
 (** Trait declaration: [traits::WithTarget]
     Source: 'tests/src/traits.rs', lines 253:0-255:1 *)
@@ -511,7 +511,7 @@ Record WithTarget_t (Self : Type) := mkWithTarget_t {
 }.
 
 Arguments mkWithTarget_t { _ }.
-Arguments WithTarget_tWithTarget_t_Target { _ }.
+Arguments WithTarget_tWithTarget_t_Target { _ } _.
 
 (** Trait declaration: [traits::ParentTrait2]
     Source: 'tests/src/traits.rs', lines 257:0-259:1 *)
@@ -522,8 +522,9 @@ Record ParentTrait2_t (Self : Type) := mkParentTrait2_t {
 }.
 
 Arguments mkParentTrait2_t { _ }.
-Arguments ParentTrait2_tParentTrait2_t_U { _ }.
-Arguments ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst { _ }.
+Arguments ParentTrait2_tParentTrait2_t_U { _ } _.
+Arguments ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst { _ }
+  _.
 
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 261:0-263:1 *)
@@ -536,8 +537,8 @@ Record ChildTrait2_t (Self : Type) := mkChildTrait2_t {
 }.
 
 Arguments mkChildTrait2_t { _ }.
-Arguments ChildTrait2_tChildTrait2_t_ParentTrait2Inst { _ }.
-Arguments ChildTrait2_t_convert { _ }.
+Arguments ChildTrait2_tChildTrait2_t_ParentTrait2Inst { _ } _.
+Arguments ChildTrait2_t_convert { _ } _.
 
 (** Trait implementation: [traits::{traits::WithTarget for u32}#11]
     Source: 'tests/src/traits.rs', lines 265:0-267:1 *)
@@ -572,9 +573,9 @@ Record CFnOnce_t (Self : Type) (Args : Type) := mkCFnOnce_t {
   CFnOnce_t_call_once : Self -> Args -> result CFnOnce_tCFnOnce_t_Output;
 }.
 
-Arguments mkCFnOnce_t { _ _ }.
-Arguments CFnOnce_tCFnOnce_t_Output { _ _ }.
-Arguments CFnOnce_t_call_once { _ _ }.
+Arguments mkCFnOnce_t { _ } { _ }.
+Arguments CFnOnce_tCFnOnce_t_Output { _ } { _ } _.
+Arguments CFnOnce_t_call_once { _ } { _ } _.
 
 (** Trait declaration: [traits::CFnMut]
     Source: 'tests/src/traits.rs', lines 293:0-295:1 *)
@@ -584,9 +585,9 @@ Record CFnMut_t (Self : Type) (Args : Type) := mkCFnMut_t {
     ((CFnMut_tCFnMut_t_CFnOnceInst).(CFnOnce_tCFnOnce_t_Output) * Self);
 }.
 
-Arguments mkCFnMut_t { _ _ }.
-Arguments CFnMut_tCFnMut_t_CFnOnceInst { _ _ }.
-Arguments CFnMut_t_call_mut { _ _ }.
+Arguments mkCFnMut_t { _ } { _ }.
+Arguments CFnMut_tCFnMut_t_CFnOnceInst { _ } { _ } _.
+Arguments CFnMut_t_call_mut { _ } { _ } _.
 
 (** Trait declaration: [traits::CFn]
     Source: 'tests/src/traits.rs', lines 297:0-299:1 *)
@@ -596,9 +597,9 @@ Record CFn_t (Self : Type) (Args : Type) := mkCFn_t {
     (CFn_tCFn_t_CFnMutInst).(CFnMut_tCFnMut_t_CFnOnceInst).(CFnOnce_tCFnOnce_t_Output);
 }.
 
-Arguments mkCFn_t { _ _ }.
-Arguments CFn_tCFn_t_CFnMutInst { _ _ }.
-Arguments CFn_t_call { _ _ }.
+Arguments mkCFn_t { _ } { _ }.
+Arguments CFn_tCFn_t_CFnMutInst { _ } { _ } _.
+Arguments CFn_t_call { _ } { _ } _.
 
 (** Trait declaration: [traits::GetTrait]
     Source: 'tests/src/traits.rs', lines 301:0-304:1 *)
@@ -608,8 +609,8 @@ Record GetTrait_t (Self : Type) := mkGetTrait_t {
 }.
 
 Arguments mkGetTrait_t { _ }.
-Arguments GetTrait_tGetTrait_t_W { _ }.
-Arguments GetTrait_t_get_w { _ }.
+Arguments GetTrait_tGetTrait_t_W { _ } _.
+Arguments GetTrait_t_get_w { _ } _.
 
 (** [traits::test_get_trait]:
     Source: 'tests/src/traits.rs', lines 306:0-308:1 *)
@@ -625,7 +626,7 @@ Definition test_get_trait
 Record Trait_t (Self : Type) := mkTrait_t { Trait_tTrait_t_LEN : usize; }.
 
 Arguments mkTrait_t { _ }.
-Arguments Trait_tTrait_t_LEN { _ }.
+Arguments Trait_tTrait_t_LEN { _ } _.
 
 (** [traits::{traits::Trait for @Array<T, N>}#14::LEN]
     Source: 'tests/src/traits.rs', lines 316:4-316:25 *)
@@ -668,9 +669,9 @@ Definition use_wrapper_len {T : Type} (traitInst : Trait_t T) : result usize :=
     Source: 'tests/src/traits.rs', lines 327:0-330:1 *)
 Record Foo_t (T : Type) (U : Type) := mkFoo_t { foo_x : T; foo_y : U; }.
 
-Arguments mkFoo_t { _ _ }.
-Arguments foo_x { _ _ }.
-Arguments foo_y { _ _ }.
+Arguments mkFoo_t { _ } { _ }.
+Arguments foo_x { _ } { _ }.
+Arguments foo_y { _ } { _ }.
 
 (** [core::result::Result]
     Source: '/rustc/library/core/src/result.rs', lines 527:0-527:21
@@ -680,8 +681,8 @@ Inductive core_result_Result_t (T : Type) (E : Type) :=
 | Core_result_Result_Err : E -> core_result_Result_t T E
 .
 
-Arguments Core_result_Result_Ok { _ _ }.
-Arguments Core_result_Result_Err { _ _ }.
+Arguments Core_result_Result_Ok { _ } { _ }.
+Arguments Core_result_Result_Err { _ } { _ }.
 
 (** [traits::{traits::Foo<T, U>}#16::FOO]
     Source: 'tests/src/traits.rs', lines 333:4-333:43 *)

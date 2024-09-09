@@ -18,6 +18,6 @@ Record core_marker_Copy_t (Self : Type) := mkcore_marker_Copy_t {
 }.
 
 Arguments mkcore_marker_Copy_t { _ }.
-Arguments core_marker_Copy_tcore_marker_Copy_t_cloneCloneInst { _ }.
+Arguments core_marker_Copy_tcore_marker_Copy_t_cloneCloneInst { _ } _.
 
 End External_Types.

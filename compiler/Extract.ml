@@ -2654,25 +2654,28 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     that we don't have to provide the implicit arguments when projecting the fields. *)
 let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (decl : trait_decl) : unit =
-  (* Generating the [Arguments] instructions is useful only if there are parameters *)
-  let num_params =
+  (* Counting the number of parameters of the trait declaration itself *)
+  let num_prefix_params =
     List.length decl.generics.types
     + List.length decl.generics.const_generics
     + List.length decl.generics.trait_clauses
   in
-  if num_params > 0 then (
+  let params = Collections.List.repeat num_prefix_params Implicit in
+  (
     (* The constructor *)
     let cons_name =
       ctx_get_trait_constructor decl.item_meta.span decl.def_id ctx
     in
-    extract_coq_arguments_instruction ctx fmt cons_name num_params;
+    extract_coq_arguments_instruction ctx fmt cons_name params;
+    (* Add the record itself as a parameter for the projectors *)
+    let params = params @ [Explicit] in
     (* The constants *)
     List.iter
       (fun (name, _) ->
         let item_name =
           ctx_get_trait_const decl.item_meta.span decl.def_id name ctx
         in
-        extract_coq_arguments_instruction ctx fmt item_name num_params)
+        extract_coq_arguments_instruction ctx fmt item_name params)
       decl.consts;
     (* The types *)
     List.iter
@@ -2681,7 +2684,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
         let item_name =
           ctx_get_trait_type decl.item_meta.span decl.def_id name ctx
         in
-        extract_coq_arguments_instruction ctx fmt item_name num_params)
+        extract_coq_arguments_instruction ctx fmt item_name params)
       decl.types;
     (* The parent clauses *)
     List.iter
@@ -2690,16 +2693,22 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
           ctx_get_trait_parent_clause decl.item_meta.span decl.def_id
             clause.clause_id ctx
         in
-        extract_coq_arguments_instruction ctx fmt item_name num_params)
+        extract_coq_arguments_instruction ctx fmt item_name params)
       decl.parent_clauses;
     (* The required methods *)
     List.iter
-      (fun (item_name, _) ->
-        (* Extract the items *)
+      (fun (item_name, id) ->
+        (* Lookup the definition to retrieve the information about the explicit/implicit parameters *)
+        let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+        let f = trans.f in
+        let explicit_info = explicit_info_drop_prefix decl.generics f.signature.explicit_info
+        in
+        let params = params @ List.concat [explicit_info.explicit_types; explicit_info.explicit_const_generics] in
+        (* Extract *)
         let item_name =
           ctx_get_trait_method decl.item_meta.span decl.def_id item_name ctx
         in
-        extract_coq_arguments_instruction ctx fmt item_name num_params)
+        extract_coq_arguments_instruction ctx fmt item_name params)
       decl.required_methods;
     (* Add a space *)
     F.pp_print_space fmt ())

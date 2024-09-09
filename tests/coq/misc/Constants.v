@@ -46,9 +46,9 @@ mkPair_t {
 }
 .
 
-Arguments mkPair_t { _ _ }.
-Arguments pair_x { _ _ }.
-Arguments pair_y { _ _ }.
+Arguments mkPair_t { _ } { _ }.
+Arguments pair_x { _ } { _ }.
+Arguments pair_y { _ } { _ }.
 
 (** [constants::mk_pair1]:
     Source: 'tests/src/constants.rs', lines 30:0-32:1 *)
@@ -165,8 +165,8 @@ Definition s4 : Pair_t u32 u32 := s4_body%global.
     Source: 'tests/src/constants.rs', lines 89:0-91:1 *)
 Record V_t (T : Type) (N : usize) := mkV_t { v_x : array T N; }.
 
-Arguments mkV_t { _ _ }.
-Arguments v_x { _ _ }.
+Arguments mkV_t { _ } { _ }.
+Arguments v_x { _ } { _ }.
 
 (** [constants::{constants::V<T, N>}#1::LEN]
     Source: 'tests/src/constants.rs', lines 94:4-94:29 *)

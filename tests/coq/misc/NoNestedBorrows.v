@@ -16,9 +16,9 @@ mkPair_t {
 }
 .
 
-Arguments mkPair_t { _ _ }.
-Arguments pair_x { _ _ }.
-Arguments pair_y { _ _ }.
+Arguments mkPair_t { _ } { _ }.
+Arguments pair_x { _ } { _ }.
+Arguments pair_y { _ } { _ }.
 
 (** [no_nested_borrows::List]
     Source: 'tests/src/no_nested_borrows.rs', lines 12:0-15:1 *)
@@ -55,8 +55,8 @@ Inductive Sum_t (T1 : Type) (T2 : Type) :=
 | Sum_Right : T2 -> Sum_t T1 T2
 .
 
-Arguments Sum_Left { _ _ }.
-Arguments Sum_Right { _ _ }.
+Arguments Sum_Left { _ } { _ }.
+Arguments Sum_Right { _ } { _ }.
 
 (** [no_nested_borrows::cast_u32_to_i32]:
     Source: 'tests/src/no_nested_borrows.rs', lines 49:0-51:1 *)
@@ -415,8 +415,8 @@ mkStructWithTuple_t {
 }
 .
 
-Arguments mkStructWithTuple_t { _ _ }.
-Arguments structWithTuple_p { _ _ }.
+Arguments mkStructWithTuple_t { _ } { _ }.
+Arguments structWithTuple_p { _ } { _ }.
 
 (** [no_nested_borrows::new_tuple1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 370:0-372:1 *)
@@ -444,8 +444,8 @@ mkStructWithPair_t {
 }
 .
 
-Arguments mkStructWithPair_t { _ _ }.
-Arguments structWithPair_p { _ _ }.
+Arguments mkStructWithPair_t { _ } { _ }.
+Arguments structWithPair_p { _ } { _ }.
 
 (** [no_nested_borrows::new_pair1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 387:0-393:1 *)

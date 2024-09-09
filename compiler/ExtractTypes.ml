@@ -1696,7 +1696,7 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
     ]}
  *)
 let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
-    (cons_name : string) (num_implicit_params : int) : unit =
+    (cons_name : string) (params : explicit list) : unit =
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Open a box *)
@@ -1706,13 +1706,11 @@ let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
   F.pp_print_string fmt cons_name;
   (* Print the type/const params and the trait clauses (`{T}`) *)
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "{";
-  Collections.List.iter_times num_implicit_params (fun () ->
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt "_");
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "}.";
+  List.iter (fun e ->
+    F.pp_print_space fmt ();
+    if e = Implicit then F.pp_print_string fmt "{ _ }" else
+    F.pp_print_string fmt "_") params;
+  F.pp_print_string fmt ".";
 
   (* Close the box *)
   F.pp_close_box fmt ()
@@ -1733,13 +1731,14 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
   if num_params = 0 then ()
   else
     (* Generate the [Arguments] instruction *)
+    let params = (Collections.List.repeat num_params Implicit) in
     match decl.kind with
     | Opaque -> ()
     | Struct fields ->
         let adt_id = TAdtId decl.def_id in
         (* Generate the instruction for the record constructor *)
         let cons_name = ctx_get_struct decl.item_meta.span adt_id ctx in
-        extract_coq_arguments_instruction ctx fmt cons_name num_params;
+        extract_coq_arguments_instruction ctx fmt cons_name params;
         (* Generate the instruction for the record projectors, if there are *)
         let is_rec = decl_is_from_rec_group kind in
         if not is_rec then
@@ -1748,7 +1747,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
               let cons_name =
                 ctx_get_field decl.item_meta.span adt_id fid ctx
               in
-              extract_coq_arguments_instruction ctx fmt cons_name num_params)
+              extract_coq_arguments_instruction ctx fmt cons_name params)
             fields;
         (* Add breaks to insert new lines between definitions *)
         F.pp_print_break fmt 0 0
@@ -1759,7 +1758,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
             let cons_name =
               ctx_get_variant decl.item_meta.span (TAdtId decl.def_id) vid ctx
             in
-            extract_coq_arguments_instruction ctx fmt cons_name num_params)
+            extract_coq_arguments_instruction ctx fmt cons_name params)
           variants;
         (* Add breaks to insert new lines between definitions *)
         F.pp_print_break fmt 0 0

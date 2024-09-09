@@ -155,7 +155,7 @@ Record Counter_t (Self : Type) := mkCounter_t {
 }.
 
 Arguments mkCounter_t { _ }.
-Arguments Counter_t_incr { _ }.
+Arguments Counter_t_incr { _ } _.
 
 (** [demo::{demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 104:4-108:5 *)
