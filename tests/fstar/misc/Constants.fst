@@ -37,7 +37,7 @@ let mk_pair0 (x : u32) (y1 : u32) : result (u32 & u32) =
 
 (** [constants::Pair]
     Source: 'tests/src/constants.rs', lines 39:0-42:1 *)
-type pair_t (t1 t2 : Type0) = { x : t1; y : t2; }
+type pair_t (t1 : Type0) (t2 : Type0) = { x : t1; y : t2; }
 
 (** [constants::mk_pair1]:
     Source: 'tests/src/constants.rs', lines 30:0-32:1 *)
@@ -70,12 +70,12 @@ type wrap_t (t : Type0) = { value : t; }
 
 (** [constants::{constants::Wrap<T>}::new]:
     Source: 'tests/src/constants.rs', lines 57:4-59:5 *)
-let wrap_new (t : Type0) (value : t) : result (wrap_t t) =
+let wrap_new (#t : Type0) (value : t) : result (wrap_t t) =
   Ok { value = value }
 
 (** [constants::Y]
     Source: 'tests/src/constants.rs', lines 44:0-44:38 *)
-let y_body : result (wrap_t i32) = wrap_new i32 2
+let y_body : result (wrap_t i32) = wrap_new 2
 let y : wrap_t i32 = eval_global y_body
 
 (** [constants::unwrap_y]:
