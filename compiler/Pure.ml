@@ -514,7 +514,15 @@ and predicates = { trait_type_constraints : trait_type_constraint list }
         polymorphic = false;
       }]
 
-type type_decl = {
+(** Characterize an input parameter as explicit or implicit *)
+type explicit = Explicit | Implicit
+
+and explicit_info = {
+  explicit_types : explicit list;
+  explicit_const_generics : explicit list;
+}
+
+and type_decl = {
   def_id : type_decl_id;
   name : string;
       (** We use the name only for printing purposes (for debugging):
@@ -523,6 +531,8 @@ type type_decl = {
        *)
   item_meta : T.item_meta;
   generics : generic_params;
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
   llbc_generics : (Types.generic_params[@opaque]);
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive
@@ -1178,15 +1188,6 @@ type decomposed_fun_sig = {
 }
 [@@deriving show]
 
-(** Characterize an input parameter as explicit or implicit *)
-type explicit = Explicit | Implicit [@@deriving show]
-
-type explicit_info = {
-  explicit_types : explicit list;
-  explicit_const_generics : explicit list;
-}
-[@@deriving show]
-
 (** A function signature.
 
     We have the following cases:
@@ -1223,7 +1224,7 @@ type explicit_info = {
 type fun_sig = {
   generics : generic_params;
   explicit_info : explicit_info;
-      (** Information about the inputs parameters which are explicit/implicit *)
+      (** Information about which inputs parameters are explicit/implicit *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive
@@ -1320,6 +1321,8 @@ type global_decl = {
   llbc_generics : Types.generic_params;
       (** See the comment for [llbc_generics] in fun_decl. *)
   generics : generic_params;
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
   preds : predicates;
   ty : ty;
   kind : item_kind;
@@ -1332,6 +1335,8 @@ type trait_decl = {
   name : string;
   item_meta : T.item_meta;
   generics : generic_params;
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive
@@ -1356,6 +1361,8 @@ type trait_impl = {
   llbc_impl_trait : Types.trait_decl_ref;
       (** Same remark as for {!field:llbc_generics}. *)
   generics : generic_params;
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive

@@ -4,6 +4,7 @@ open Values
 open LlbcAst
 open Contexts
 open Errors
+open Assumed
 module SA = SymbolicAst
 module Micro = PureMicroPasses
 open TranslateCore
@@ -1013,6 +1014,16 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
     translate_crate_to_pure crate
   in
 
+  (* Translate the signatures of the builtin functions *)
+  let builtin_sigs =
+    AssumedFunIdMap.map
+      (fun (info : assumed_fun_info) ->
+        SymbolicToPure.translate_fun_sig trans_ctx (FAssumed info.fun_id)
+          info.name info.fun_sig
+          (List.map (fun _ -> None) info.fun_sig.inputs))
+      assumed_fun_infos
+  in
+
   (* Initialize the names map by registering the keywords used in the
      language, as well as some primitive names ("u32", etc.).
      We insert the names of the local declarations later. *)
@@ -1080,6 +1091,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
       trans_trait_impls;
       trans_types;
       trans_funs;
+      builtin_sigs;
       functions_with_decreases_clause = rec_functions;
       types_filter_type_args_map = Pure.TypeDeclId.Map.empty;
       funs_filter_type_args_map = Pure.FunDeclId.Map.empty;

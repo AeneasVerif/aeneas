@@ -1235,29 +1235,32 @@ let extract_trait_self_clause (insert_req_space : unit -> unit)
 (**
  - [trait_decl]: if [Some], it means we are extracting the generics for a provided
    method and need to insert a trait self clause (see {!TraitSelfClauseId}).
+ - [as_implicits]: if [explicit] is [None], then we use this parameter to control
+   whether the parameters should be extract as explicit or implicit.
  *)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
     ?(trait_decl : trait_decl option = None) (generics : generic_params)
-    (type_params : string list) (cg_params : string list)
-    (trait_clauses : string list) : unit =
+    (explicit : explicit_info option) (type_params : string list)
+    (cg_params : string list) (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
   cassert __FILE__ __LINE__
     (cg_params = [] || backend () <> HOL4)
     span "Constant generics are not supported yet when generating code for HOL4";
-  let left_bracket (implicit : bool) =
-    if implicit && backend () <> FStar then F.pp_print_string fmt "{"
+  let left_bracket (explicit : explicit) =
+    if explicit = Implicit && backend () <> FStar then F.pp_print_string fmt "{"
     else F.pp_print_string fmt "("
   in
-  let right_bracket (implicit : bool) =
-    if implicit && backend () <> FStar then F.pp_print_string fmt "}"
+  let right_bracket (explicit : explicit) =
+    if explicit = Implicit && backend () <> FStar then F.pp_print_string fmt "}"
     else F.pp_print_string fmt ")"
   in
-  let print_implicit_symbol (implicit : bool) =
-    if implicit && backend () = FStar then F.pp_print_string fmt "#" else ()
+  let print_implicit_symbol (explicit : explicit) =
+    if explicit = Implicit && backend () = FStar then F.pp_print_string fmt "#"
+    else ()
   in
   let insert_req_space () =
     match space with
@@ -1273,68 +1276,82 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
       insert_req_space ();
       F.pp_print_string fmt "forall");
     (* Small helper - we may need to split the parameters *)
-    let print_generics (as_implicits : bool) (type_params : string list)
-        (const_generics : const_generic_var list)
-        (trait_clauses : trait_clause list) : unit =
+    let print_generics (type_params : (explicit * string) list)
+        (const_generics : (explicit * const_generic_var) list)
+        (trait_clauses : (explicit * trait_clause) list) : unit =
       (* Note that in HOL4 we don't print the type parameters. *)
       if backend () <> HOL4 then (
         (* Print the type parameters *)
         if type_params <> [] then (
           insert_req_space ();
-          (* ( *)
-          left_bracket as_implicits;
           List.iter
-            (fun s ->
-              print_implicit_symbol as_implicits;
+            (fun (expl, s) ->
+              (* ( *)
+              left_bracket expl;
+              print_implicit_symbol expl;
               F.pp_print_string fmt s;
-              F.pp_print_space fmt ())
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt ":";
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt (type_keyword span);
+              (* ) *)
+              right_bracket expl)
             type_params;
-          F.pp_print_string fmt ":";
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt (type_keyword span);
-          (* ) *)
-          right_bracket as_implicits;
           if use_arrows then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "->"));
         (* Print the const generic parameters *)
         List.iter
-          (fun (var : const_generic_var) ->
+          (fun ((expl, var) : explicit * const_generic_var) ->
             insert_req_space ();
             (* ( *)
-            left_bracket as_implicits;
+            left_bracket expl;
             let n = ctx_get_const_generic_var span var.index ctx in
-            print_implicit_symbol as_implicits;
+            print_implicit_symbol expl;
             F.pp_print_string fmt n;
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
             F.pp_print_space fmt ();
             extract_literal_type ctx fmt var.ty;
             (* ) *)
-            right_bracket as_implicits;
+            right_bracket expl;
             if use_arrows then (
               F.pp_print_space fmt ();
               F.pp_print_string fmt "->"))
           const_generics);
       (* Print the trait clauses *)
       List.iter
-        (fun (clause : trait_clause) ->
+        (fun ((expl, clause) : explicit * trait_clause) ->
           insert_req_space ();
           (* ( *)
-          left_bracket as_implicits;
+          left_bracket expl;
           let n = ctx_get_local_trait_clause span clause.clause_id ctx in
-          print_implicit_symbol as_implicits;
+          print_implicit_symbol expl;
           F.pp_print_string fmt n;
           F.pp_print_space fmt ();
           F.pp_print_string fmt ":";
           F.pp_print_space fmt ();
           extract_trait_clause_type span ctx fmt no_params_tys clause;
           (* ) *)
-          right_bracket as_implicits;
+          right_bracket expl;
           if use_arrows then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "->"))
         trait_clauses
+    in
+    (* Associate the explicit/implicit information with the parameters *)
+    let type_params, const_generics, trait_clauses =
+      match explicit with
+      | None ->
+          let expl = if as_implicits then Implicit else Explicit in
+          ( List.map (fun x -> (expl, x)) type_params,
+            List.map (fun x -> (expl, x)) generics.const_generics,
+            List.map (fun x -> (expl, x)) generics.trait_clauses )
+      | Some explicit ->
+          ( List.combine explicit.explicit_types type_params,
+            List.combine explicit.explicit_const_generics
+              generics.const_generics,
+            List.map (fun x -> (Explicit, x)) generics.trait_clauses )
     in
     (* If we extract the generics for a provided method for a trait declaration
        (indicated by the trait decl given as input), we need to split the generics:
@@ -1343,9 +1360,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
        - we print the generics for the trait method
     *)
     match trait_decl with
-    | None ->
-        print_generics as_implicits type_params generics.const_generics
-          generics.trait_clauses
+    | None -> print_generics type_params const_generics trait_clauses
     | Some trait_decl ->
         (* Split the generics between the generics specific to the trait decl
            and those specific to the trait method *)
@@ -1354,29 +1369,34 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
           split_at type_params (length trait_decl.generics.types)
         in
         let dcgs, mcgs =
-          split_at generics.const_generics
-            (length trait_decl.generics.const_generics)
+          split_at const_generics (length trait_decl.generics.const_generics)
         in
         let dtrait_clauses, mtrait_clauses =
-          split_at generics.trait_clauses
-            (length trait_decl.generics.trait_clauses)
+          split_at trait_clauses (length trait_decl.generics.trait_clauses)
         in
         (* Extract the trait decl generics - note that we can always deduce
            those parameters from the trait self clause: for this reason
            they are always implicit *)
-        print_generics true dtype_params dcgs dtrait_clauses;
+        let dtype_params =
+          List.map (fun (_, x) -> (Implicit, x)) dtype_params
+        in
+        let dcgs = List.map (fun (_, x) -> (Implicit, x)) dcgs in
+        let dtrait_clauses =
+          List.map (fun (_, x) -> (Implicit, x)) dtrait_clauses
+        in
+        print_generics dtype_params dcgs dtrait_clauses;
         (* Extract the trait self clause *)
         let params =
           concat
             [
-              dtype_params;
+              map snd dtype_params;
               map
-                (fun (cg : const_generic_var) ->
+                (fun ((_, cg) : _ * const_generic_var) ->
                   ctx_get_const_generic_var trait_decl.item_meta.span cg.index
                     ctx)
                 dcgs;
               map
-                (fun c ->
+                (fun (_, c) ->
                   ctx_get_local_trait_clause trait_decl.item_meta.span
                     c.clause_id ctx)
                 dtrait_clauses;
@@ -1384,7 +1404,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
         in
         extract_trait_self_clause insert_req_space ctx fmt trait_decl params;
         (* Extract the method generics *)
-        print_generics as_implicits mtype_params mcgs mtrait_clauses)
+        print_generics mtype_params mcgs mtrait_clauses)
 
 (** Extract a type declaration.
 
@@ -1481,7 +1501,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      supported yet when generating code for HOL4";
   (* Print the generic parameters *)
   extract_generic_params def.item_meta.span ctx_body fmt type_decl_group
-    ~use_forall def.generics type_params cg_params trait_clauses;
+    ~use_forall def.generics (Some def.explicit_info) type_params cg_params
+    trait_clauses;
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
@@ -1780,7 +1801,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           (* Print the generics *)
           let as_implicits = true in
           extract_generic_params decl.item_meta.span ctx fmt
-            TypeDeclId.Set.empty ~as_implicits decl.generics type_params
+            TypeDeclId.Set.empty ~as_implicits decl.generics None type_params
             cg_params trait_clauses;
 
           (* Print the record parameter as "(x : ADT)" *)
@@ -1967,7 +1988,7 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
           (* Print the generics *)
           let as_implicits = true in
           extract_generic_params span ctx fmt TypeDeclId.Set.empty ~as_implicits
-            decl.generics type_params cg_params trait_clauses;
+            decl.generics None type_params cg_params trait_clauses;
 
           (* Print the input parameters (the fields) *)
           let print_field (ctx : extraction_ctx) (field_id : FieldId.id)

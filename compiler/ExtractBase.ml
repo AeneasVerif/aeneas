@@ -584,6 +584,7 @@ type extraction_ctx = {
   is_provided_method : bool;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : pure_fun_translation A.FunDeclId.Map.t;
+  builtin_sigs : Pure.fun_sig Assumed.AssumedFunIdMap.t;
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
