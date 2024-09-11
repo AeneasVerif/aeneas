@@ -47,7 +47,7 @@ open CList
 /-- Theorem about `list_nth_mut1`: verbose version -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
+  ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
   x = l.toList.index i.toNat ∧
   ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
@@ -99,7 +99,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
  -/
 theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
+  ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
   x = l.toList.index i.toNat ∧
   ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
@@ -126,7 +126,7 @@ theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
 /-- Theorem about `list_tail`: verbose version -/
 @[pspec]
 theorem list_tail_spec {T : Type} (l : CList T) :
-  ∃ back, list_tail T l = ok (CList.CNil, back) ∧
+  ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
   split
@@ -148,7 +148,7 @@ theorem list_tail_spec {T : Type} (l : CList T) :
 /-- Theorem about `list_tail: simple version -/
 @[pspec]
 theorem list_tail_spec' {T : Type} (l : CList T) :
-  ∃ back, list_tail T l = ok (CList.CNil, back) ∧
+  ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
   split
@@ -164,7 +164,7 @@ theorem list_tail_spec' {T : Type} (l : CList T) :
 /-- Theorem about `append_in_place` -/
 @[pspec]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
-  ∃ l2, append_in_place T l0 l1 = ok l2 ∧
+  ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
   rw [append_in_place]
   progress as ⟨ tl, back ⟩
@@ -174,7 +174,7 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
 
 @[pspec]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
-  ∃ l', reverse_loop T l out = ok l' ∧
+  ∃ l', reverse_loop l out = ok l' ∧
   l'.toList = l.toList.reverse ++ out.toList := by
   rw [reverse_loop]
   split
@@ -184,7 +184,7 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   . simp
 
 theorem reverse_spec {T : Type} (l : CList T) :
-  ∃ l', reverse T l = ok l' ∧
+  ∃ l', reverse l = ok l' ∧
   l'.toList = l.toList.reverse := by
   rw [reverse]
   progress as ⟨ l', hl' ⟩

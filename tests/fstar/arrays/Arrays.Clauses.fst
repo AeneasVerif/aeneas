@@ -33,5 +33,5 @@ let iter_mut_slice_loop_decreases (len : usize) (i : usize) : nat =
     Source: 'src/arrays.rs', lines 320:0-328:1 *)
 unfold
 let sum_mut_slice_loop_decreases (a : slice u32) (i : usize) (s : u32) : nat =
-  if i < slice_len u32 a then slice_len u32 a - i else 0
+  if i < slice_len a then slice_len a - i else 0
 

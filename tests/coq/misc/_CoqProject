@@ -11,6 +11,8 @@ External_FunsExternal_Template.v
 External_Types.v 
 External_TypesExternal.v 
 External_TypesExternal_Template.v 
+InfiniteLoop.v 
+Issue194RecursiveStructProjector.v 
 Loops.v 
 NoNestedBorrows.v 
 Paper.v 

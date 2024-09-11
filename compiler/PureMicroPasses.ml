@@ -1432,6 +1432,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
             let loop_sig =
               {
                 generics = fun_sig.generics;
+                explicit_info = fun_sig.explicit_info;
                 llbc_generics = fun_sig.llbc_generics;
                 preds = fun_sig.preds;
                 inputs = inputs_tys;
@@ -2157,6 +2158,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           in
           let {
             generics;
+            explicit_info = _;
             llbc_generics;
             preds;
             inputs;
@@ -2198,6 +2200,8 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           let signature =
             {
               generics;
+              explicit_info =
+                SymbolicToPure.compute_explicit_info generics inputs;
               llbc_generics;
               preds;
               inputs;

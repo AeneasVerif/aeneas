@@ -58,22 +58,22 @@ def clone.CloneBool : clone.Clone Bool := {
    This acts like a swap effectively in a functional pure world.
    We return the old value of `dst`, i.e. `dst` itself.
    The new value of `dst` is `src`. -/
-@[simp] def mem.replace (a : Type) (dst : a) (src : a) : a × a := (dst, src)
+@[simp] def mem.replace {a : Type} (dst : a) (src : a) : a × a := (dst, src)
 
 /- [core::mem::swap] -/
-@[simp] def mem.swap (T: Type) (a b: T): T × T := (b, a)
+@[simp] def mem.swap {T : Type} (a b : T): T × T := (b, a)
 
 end core
 
 /- [core::option::{core::option::Option<T>}::unwrap] -/
-@[simp] def core.option.Option.unwrap (T : Type) (x : Option T) : Result T :=
+@[simp] def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
 
 /- [core::option::Option::take] -/
-@[simp] def core.option.Option.take (T: Type) (self: Option T): Option T × Option T := (self, .none)
+@[simp] def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
 
 /- [core::option::Option::is_none] -/
-@[simp] def core.option.Option.is_none (T: Type) (self: Option T): Bool := self.isNone
+@[simp] def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
 
 /- [core::clone::Clone::clone_from]:
    Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43

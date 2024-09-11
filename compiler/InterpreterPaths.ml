@@ -143,7 +143,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
           (* Expand the symbolic value *)
           Error (FailSymbolic (1 + List.length p', sp))
       (* Box dereferencement *)
-      | ( DerefBox,
+      | ( Deref,
           VAdt { variant_id = None; field_values = [ bv ] },
           TAdt (TAssumed TBox, _) ) -> (
           (* We allow moving outside of boxes. In practice, this kind of

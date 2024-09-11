@@ -8,7 +8,9 @@ open Primitives
 (** [demo::choose]:
     Source: 'tests/src/demo.rs', lines 7:0-13:1 *)
 let choose
-  (t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> result (t & t))) =
+  (#t : Type0) (b : bool) (x : t) (y : t) :
+  result (t & (t -> result (t & t)))
+  =
   if b
   then let back = fun ret -> Ok (ret, y) in Ok (x, back)
   else let back = fun ret -> Ok (x, ret) in Ok (y, back)
@@ -41,42 +43,40 @@ type cList_t (t : Type0) =
 
 (** [demo::list_nth]:
     Source: 'tests/src/demo.rs', lines 41:0-54:1 *)
-let rec list_nth (t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
+let rec list_nth (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
   if is_zero n
   then Fail OutOfFuel
   else
     let n1 = decrease n in
     begin match l with
     | CList_CCons x tl ->
-      if i = 0 then Ok x else let* i1 = u32_sub i 1 in list_nth t n1 tl i1
+      if i = 0 then Ok x else let* i1 = u32_sub i 1 in list_nth n1 tl i1
     | CList_CNil -> Fail Failure
     end
 
 (** [demo::list_nth1]: loop 0:
     Source: 'tests/src/demo.rs', lines 56:0-65:1 *)
 let rec list_nth1_loop
-  (t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
+  (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
   if is_zero n
   then Fail OutOfFuel
   else
     let n1 = decrease n in
     begin match l with
     | CList_CCons x tl ->
-      if i = 0
-      then Ok x
-      else let* i1 = u32_sub i 1 in list_nth1_loop t n1 tl i1
+      if i = 0 then Ok x else let* i1 = u32_sub i 1 in list_nth1_loop n1 tl i1
     | CList_CNil -> Fail Failure
     end
 
 (** [demo::list_nth1]:
     Source: 'tests/src/demo.rs', lines 56:0-65:1 *)
-let list_nth1 (t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
-  list_nth1_loop t n l i
+let list_nth1 (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
+  list_nth1_loop n l i
 
 (** [demo::list_nth_mut]:
     Source: 'tests/src/demo.rs', lines 67:0-80:1 *)
 let rec list_nth_mut
-  (t : Type0) (n : nat) (l : cList_t t) (i : u32) :
+  (#t : Type0) (n : nat) (l : cList_t t) (i : u32) :
   result (t & (t -> result (cList_t t)))
   =
   if is_zero n
@@ -89,7 +89,7 @@ let rec list_nth_mut
       then let back = fun ret -> Ok (CList_CCons ret tl) in Ok (x, back)
       else
         let* i1 = u32_sub i 1 in
-        let* (x1, list_nth_mut_back) = list_nth_mut t n1 tl i1 in
+        let* (x1, list_nth_mut_back) = list_nth_mut n1 tl i1 in
         let back =
           fun ret -> let* tl1 = list_nth_mut_back ret in Ok (CList_CCons x tl1)
           in
@@ -111,7 +111,7 @@ let rec i32_id (n : nat) (i : i32) : result i32 =
 (** [demo::list_tail]:
     Source: 'tests/src/demo.rs', lines 90:0-95:1 *)
 let rec list_tail
-  (t : Type0) (n : nat) (l : cList_t t) :
+  (#t : Type0) (n : nat) (l : cList_t t) :
   result ((cList_t t) & (cList_t t -> result (cList_t t)))
   =
   if is_zero n
@@ -120,7 +120,7 @@ let rec list_tail
     let n1 = decrease n in
     begin match l with
     | CList_CCons x tl ->
-      let* (c, list_tail_back) = list_tail t n1 tl in
+      let* (c, list_tail_back) = list_tail n1 tl in
       let back =
         fun ret -> let* tl1 = list_tail_back ret in Ok (CList_CCons x tl1) in
       Ok (c, back)
@@ -143,6 +143,6 @@ let counterUsize : counter_t usize = { incr = counterUsize_incr; }
 (** [demo::use_counter]:
     Source: 'tests/src/demo.rs', lines 111:0-113:1 *)
 let use_counter
-  (t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
+  (#t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
   counterInst.incr cnt
 

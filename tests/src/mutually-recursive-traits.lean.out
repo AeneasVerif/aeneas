@@ -1,17 +1,17 @@
 [[92mInfo[39m ] Imported: tests/llbc/mutually_recursive_traits.llbc
-[[91mError[39m] In file Translate.ml, line 830:
+[[91mError[39m] In file Translate.ml, line 845:
 Mutually recursive trait declarations are not supported
 
 Uncaught exception:
   
   (Failure
-    "In file Translate.ml, line 830:\
-   \nIn file Translate.ml, line 830:\
+    "In file Translate.ml, line 845:\
+   \nIn file Translate.ml, line 845:\
    \nMutually recursive trait declarations are not supported")
 
 Raised at Aeneas__Errors.craise_opt_span in file "Errors.ml", line 52, characters 4-76
 Called from Stdlib__List.iter in file "list.ml", line 110, characters 12-15
-Called from Aeneas__Translate.extract_definitions in file "Translate.ml", line 859, characters 2-52
-Called from Aeneas__Translate.extract_file in file "Translate.ml", line 986, characters 2-36
-Called from Aeneas__Translate.translate_crate in file "Translate.ml", line 1535, characters 5-42
+Called from Aeneas__Translate.extract_definitions in file "Translate.ml", line 874, characters 2-52
+Called from Aeneas__Translate.extract_file in file "Translate.ml", line 1001, characters 2-36
+Called from Aeneas__Translate.translate_crate in file "Translate.ml", line 1571, characters 5-42
 Called from Dune__exe__Main in file "Main.ml", line 317, characters 14-66

@@ -10,11 +10,15 @@ Module NoNestedBorrows.
 
 (** [no_nested_borrows::Pair]
     Source: 'tests/src/no_nested_borrows.rs', lines 7:0-10:1 *)
-Record Pair_t (T1 T2 : Type) := mkPair_t { pair_x : T1; pair_y : T2; }.
+Record Pair_t (T1 : Type) (T2 : Type) :=
+mkPair_t {
+  pair_x : T1; pair_y : T2;
+}
+.
 
-Arguments mkPair_t { _ _ }.
-Arguments pair_x { _ _ }.
-Arguments pair_y { _ _ }.
+Arguments mkPair_t { _ } { _ }.
+Arguments pair_x { _ } { _ }.
+Arguments pair_y { _ } { _ }.
 
 (** [no_nested_borrows::List]
     Source: 'tests/src/no_nested_borrows.rs', lines 12:0-15:1 *)
@@ -46,13 +50,13 @@ Definition EmptyStruct_t : Type := unit.
 
 (** [no_nested_borrows::Sum]
     Source: 'tests/src/no_nested_borrows.rs', lines 44:0-47:1 *)
-Inductive Sum_t (T1 T2 : Type) :=
+Inductive Sum_t (T1 : Type) (T2 : Type) :=
 | Sum_Left : T1 -> Sum_t T1 T2
 | Sum_Right : T2 -> Sum_t T1 T2
 .
 
-Arguments Sum_Left { _ _ }.
-Arguments Sum_Right { _ _ }.
+Arguments Sum_Left { _ } { _ }.
+Arguments Sum_Right { _ } { _ }.
 
 (** [no_nested_borrows::cast_u32_to_i32]:
     Source: 'tests/src/no_nested_borrows.rs', lines 49:0-51:1 *)
@@ -141,10 +145,10 @@ Check (test_list1)%return.
 (** [no_nested_borrows::test_box1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 129:0-137:1 *)
 Definition test_box1 : result unit :=
-  p <- alloc_boxed_Box_deref_mut i32 0%i32;
+  p <- alloc_boxed_Box_deref_mut 0%i32;
   let (_, deref_mut_back) := p in
   b <- deref_mut_back 1%i32;
-  x <- alloc_boxed_Box_deref i32 b;
+  x <- alloc_boxed_Box_deref b;
   if x s= 1%i32 then Ok tt else Fail_ Failure
 .
 
@@ -185,15 +189,14 @@ Check (test_copy_int)%return.
 
 (** [no_nested_borrows::is_cons]:
     Source: 'tests/src/no_nested_borrows.rs', lines 174:0-179:1 *)
-Definition is_cons (T : Type) (l : List_t T) : result bool :=
+Definition is_cons {T : Type} (l : List_t T) : result bool :=
   match l with | List_Cons _ _ => Ok true | List_Nil => Ok false end
 .
 
 (** [no_nested_borrows::test_is_cons]:
     Source: 'tests/src/no_nested_borrows.rs', lines 181:0-185:1 *)
 Definition test_is_cons : result unit :=
-  b <- is_cons i32 (List_Cons 0%i32 List_Nil);
-  if b then Ok tt else Fail_ Failure
+  b <- is_cons (List_Cons 0%i32 List_Nil); if b then Ok tt else Fail_ Failure
 .
 
 (** Unit test for [no_nested_borrows::test_is_cons] *)
@@ -201,14 +204,14 @@ Check (test_is_cons)%return.
 
 (** [no_nested_borrows::split_list]:
     Source: 'tests/src/no_nested_borrows.rs', lines 187:0-192:1 *)
-Definition split_list (T : Type) (l : List_t T) : result (T * (List_t T)) :=
+Definition split_list {T : Type} (l : List_t T) : result (T * (List_t T)) :=
   match l with | List_Cons hd tl => Ok (hd, tl) | List_Nil => Fail_ Failure end
 .
 
 (** [no_nested_borrows::test_split_list]:
     Source: 'tests/src/no_nested_borrows.rs', lines 195:0-200:1 *)
 Definition test_split_list : result unit :=
-  p <- split_list i32 (List_Cons 0%i32 List_Nil);
+  p <- split_list (List_Cons 0%i32 List_Nil);
   let (hd, _) := p in
   if hd s= 0%i32 then Ok tt else Fail_ Failure
 .
@@ -219,7 +222,7 @@ Check (test_split_list)%return.
 (** [no_nested_borrows::choose]:
     Source: 'tests/src/no_nested_borrows.rs', lines 202:0-208:1 *)
 Definition choose
-  (T : Type) (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
+  {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
   if b
   then let back := fun (ret : T) => Ok (ret, y) in Ok (x, back)
   else let back := fun (ret : T) => Ok (x, ret) in Ok (y, back)
@@ -228,7 +231,7 @@ Definition choose
 (** [no_nested_borrows::choose_test]:
     Source: 'tests/src/no_nested_borrows.rs', lines 210:0-219:1 *)
 Definition choose_test : result unit :=
-  p <- choose i32 true 0%i32 0%i32;
+  p <- choose true 0%i32 0%i32;
   let (z, choose_back) := p in
   z1 <- i32_add z 1%i32;
   if z1 s= 1%i32
@@ -275,21 +278,19 @@ Arguments NodeElem_Nil { _ }.
 
 (** [no_nested_borrows::list_length]:
     Source: 'tests/src/no_nested_borrows.rs', lines 272:0-277:1 *)
-Fixpoint list_length (T : Type) (l : List_t T) : result u32 :=
+Fixpoint list_length {T : Type} (l : List_t T) : result u32 :=
   match l with
-  | List_Cons _ l1 => i <- list_length T l1; u32_add 1%u32 i
+  | List_Cons _ l1 => i <- list_length l1; u32_add 1%u32 i
   | List_Nil => Ok 0%u32
   end
 .
 
 (** [no_nested_borrows::list_nth_shared]:
     Source: 'tests/src/no_nested_borrows.rs', lines 280:0-293:1 *)
-Fixpoint list_nth_shared (T : Type) (l : List_t T) (i : u32) : result T :=
+Fixpoint list_nth_shared {T : Type} (l : List_t T) (i : u32) : result T :=
   match l with
   | List_Cons x tl =>
-    if i s= 0%u32
-    then Ok x
-    else (i1 <- u32_sub i 1%u32; list_nth_shared T tl i1)
+    if i s= 0%u32 then Ok x else (i1 <- u32_sub i 1%u32; list_nth_shared tl i1)
   | List_Nil => Fail_ Failure
   end
 .
@@ -297,7 +298,7 @@ Fixpoint list_nth_shared (T : Type) (l : List_t T) (i : u32) : result T :=
 (** [no_nested_borrows::list_nth_mut]:
     Source: 'tests/src/no_nested_borrows.rs', lines 296:0-309:1 *)
 Fixpoint list_nth_mut
-  (T : Type) (l : List_t T) (i : u32) :
+  {T : Type} (l : List_t T) (i : u32) :
   result (T * (T -> result (List_t T)))
   :=
   match l with
@@ -306,7 +307,7 @@ Fixpoint list_nth_mut
     then let back := fun (ret : T) => Ok (List_Cons ret tl) in Ok (x, back)
     else (
       i1 <- u32_sub i 1%u32;
-      p <- list_nth_mut T tl i1;
+      p <- list_nth_mut tl i1;
       let (t, list_nth_mut_back) := p in
       let back :=
         fun (ret : T) => tl1 <- list_nth_mut_back ret; Ok (List_Cons x tl1) in
@@ -318,18 +319,17 @@ Fixpoint list_nth_mut
 (** [no_nested_borrows::list_rev_aux]:
     Source: 'tests/src/no_nested_borrows.rs', lines 312:0-322:1 *)
 Fixpoint list_rev_aux
-  (T : Type) (li : List_t T) (lo : List_t T) : result (List_t T) :=
+  {T : Type} (li : List_t T) (lo : List_t T) : result (List_t T) :=
   match li with
-  | List_Cons hd tl => list_rev_aux T tl (List_Cons hd lo)
+  | List_Cons hd tl => list_rev_aux tl (List_Cons hd lo)
   | List_Nil => Ok lo
   end
 .
 
 (** [no_nested_borrows::list_rev]:
     Source: 'tests/src/no_nested_borrows.rs', lines 326:0-329:1 *)
-Definition list_rev (T : Type) (l : List_t T) : result (List_t T) :=
-  let (li, _) := core_mem_replace (List_t T) l List_Nil in
-  list_rev_aux T li List_Nil
+Definition list_rev {T : Type} (l : List_t T) : result (List_t T) :=
+  let (li, _) := core_mem_replace l List_Nil in list_rev_aux li List_Nil
 .
 
 (** [no_nested_borrows::test_list_functions]:
@@ -337,28 +337,28 @@ Definition list_rev (T : Type) (l : List_t T) : result (List_t T) :=
 Definition test_list_functions : result unit :=
   let l := List_Cons 2%i32 List_Nil in
   let l1 := List_Cons 1%i32 l in
-  i <- list_length i32 (List_Cons 0%i32 l1);
+  i <- list_length (List_Cons 0%i32 l1);
   if i s= 3%u32
   then (
-    i1 <- list_nth_shared i32 (List_Cons 0%i32 l1) 0%u32;
+    i1 <- list_nth_shared (List_Cons 0%i32 l1) 0%u32;
     if i1 s= 0%i32
     then (
-      i2 <- list_nth_shared i32 (List_Cons 0%i32 l1) 1%u32;
+      i2 <- list_nth_shared (List_Cons 0%i32 l1) 1%u32;
       if i2 s= 1%i32
       then (
-        i3 <- list_nth_shared i32 (List_Cons 0%i32 l1) 2%u32;
+        i3 <- list_nth_shared (List_Cons 0%i32 l1) 2%u32;
         if i3 s= 2%i32
         then (
-          p <- list_nth_mut i32 (List_Cons 0%i32 l1) 1%u32;
+          p <- list_nth_mut (List_Cons 0%i32 l1) 1%u32;
           let (_, list_nth_mut_back) := p in
           ls <- list_nth_mut_back 3%i32;
-          i4 <- list_nth_shared i32 ls 0%u32;
+          i4 <- list_nth_shared ls 0%u32;
           if i4 s= 0%i32
           then (
-            i5 <- list_nth_shared i32 ls 1%u32;
+            i5 <- list_nth_shared ls 1%u32;
             if i5 s= 3%i32
             then (
-              i6 <- list_nth_shared i32 ls 2%u32;
+              i6 <- list_nth_shared ls 2%u32;
               if i6 s= 2%i32 then Ok tt else Fail_ Failure)
             else Fail_ Failure)
           else Fail_ Failure)
@@ -374,7 +374,7 @@ Check (test_list_functions)%return.
 (** [no_nested_borrows::id_mut_pair1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 347:0-349:1 *)
 Definition id_mut_pair1
-  (T1 T2 : Type) (x : T1) (y : T2) :
+  {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   result ((T1 * T2) * ((T1 * T2) -> result (T1 * T2)))
   :=
   Ok ((x, y), Ok)
@@ -383,7 +383,7 @@ Definition id_mut_pair1
 (** [no_nested_borrows::id_mut_pair2]:
     Source: 'tests/src/no_nested_borrows.rs', lines 351:0-353:1 *)
 Definition id_mut_pair2
-  (T1 T2 : Type) (p : (T1 * T2)) :
+  {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
   result ((T1 * T2) * ((T1 * T2) -> result (T1 * T2)))
   :=
   let (t, t1) := p in Ok ((t, t1), Ok)
@@ -392,7 +392,7 @@ Definition id_mut_pair2
 (** [no_nested_borrows::id_mut_pair3]:
     Source: 'tests/src/no_nested_borrows.rs', lines 355:0-357:1 *)
 Definition id_mut_pair3
-  (T1 T2 : Type) (x : T1) (y : T2) :
+  {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   result ((T1 * T2) * (T1 -> result T1) * (T2 -> result T2))
   :=
   Ok ((x, y), Ok, Ok)
@@ -401,7 +401,7 @@ Definition id_mut_pair3
 (** [no_nested_borrows::id_mut_pair4]:
     Source: 'tests/src/no_nested_borrows.rs', lines 359:0-361:1 *)
 Definition id_mut_pair4
-  (T1 T2 : Type) (p : (T1 * T2)) :
+  {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
   result ((T1 * T2) * (T1 -> result T1) * (T2 -> result T2))
   :=
   let (t, t1) := p in Ok ((t, t1), Ok, Ok)
@@ -409,14 +409,14 @@ Definition id_mut_pair4
 
 (** [no_nested_borrows::StructWithTuple]
     Source: 'tests/src/no_nested_borrows.rs', lines 366:0-368:1 *)
-Record StructWithTuple_t (T1 T2 : Type) :=
+Record StructWithTuple_t (T1 : Type) (T2 : Type) :=
 mkStructWithTuple_t {
   structWithTuple_p : (T1 * T2);
 }
 .
 
-Arguments mkStructWithTuple_t { _ _ }.
-Arguments structWithTuple_p { _ _ }.
+Arguments mkStructWithTuple_t { _ } { _ }.
+Arguments structWithTuple_p { _ } { _ }.
 
 (** [no_nested_borrows::new_tuple1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 370:0-372:1 *)
@@ -438,14 +438,14 @@ Definition new_tuple3 : result (StructWithTuple_t u64 i64) :=
 
 (** [no_nested_borrows::StructWithPair]
     Source: 'tests/src/no_nested_borrows.rs', lines 383:0-385:1 *)
-Record StructWithPair_t (T1 T2 : Type) :=
+Record StructWithPair_t (T1 : Type) (T2 : Type) :=
 mkStructWithPair_t {
   structWithPair_p : Pair_t T1 T2;
 }
 .
 
-Arguments mkStructWithPair_t { _ _ }.
-Arguments structWithPair_p { _ _ }.
+Arguments mkStructWithPair_t { _ } { _ }.
+Arguments structWithPair_p { _ } { _ }.
 
 (** [no_nested_borrows::new_pair1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 387:0-393:1 *)
@@ -491,7 +491,7 @@ Check (test_weird_borrows1)%return.
 (** [no_nested_borrows::test_mem_replace]:
     Source: 'tests/src/no_nested_borrows.rs', lines 414:0-418:1 *)
 Definition test_mem_replace (px : u32) : result u32 :=
-  let (y, _) := core_mem_replace u32 px 1%u32 in
+  let (y, _) := core_mem_replace px 1%u32 in
   if y s= 0%u32 then Ok 2%u32 else Fail_ Failure
 .
 
@@ -535,7 +535,7 @@ Definition read_then_incr (x : u32) : result (u32 * u32) :=
 
 (** [no_nested_borrows::Tuple]
     Source: 'tests/src/no_nested_borrows.rs', lines 487:0-487:33 *)
-Definition Tuple_t (T1 T2 : Type) : Type := T1 * T2.
+Definition Tuple_t (T1 : Type) (T2 : Type) : Type := T1 * T2.
 
 (** [no_nested_borrows::read_tuple]:
     Source: 'tests/src/no_nested_borrows.rs', lines 489:0-491:1 *)
@@ -575,12 +575,12 @@ Definition IdType_t (T : Type) : Type := T.
 
 (** [no_nested_borrows::use_id_type]:
     Source: 'tests/src/no_nested_borrows.rs', lines 512:0-514:1 *)
-Definition use_id_type (T : Type) (x : IdType_t T) : result T :=
+Definition use_id_type {T : Type} (x : IdType_t T) : result T :=
   Ok x.
 
 (** [no_nested_borrows::create_id_type]:
     Source: 'tests/src/no_nested_borrows.rs', lines 516:0-518:1 *)
-Definition create_id_type (T : Type) (x : T) : result (IdType_t T) :=
+Definition create_id_type {T : Type} (x : T) : result (IdType_t T) :=
   Ok x.
 
 (** [no_nested_borrows::not_bool]:

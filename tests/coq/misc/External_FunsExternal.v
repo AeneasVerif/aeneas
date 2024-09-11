@@ -10,12 +10,12 @@ Include External_Types.
 Module External_FunsExternal.
 
 Axiom core_cell_Cell_get :
-  forall(T : Type) (markerCopyInst : core_marker_Copy_t T),
+  forall{T : Type} (markerCopyInst : core_marker_Copy_t T),
         core_cell_Cell_t T -> state -> result (state * T)
 .
 
 Axiom core_cell_Cell_get_mut :
-  forall(T : Type),
+  forall{T : Type},
         core_cell_Cell_t T -> state -> result (state * (T * (T -> state ->
           result (state * (core_cell_Cell_t T)))))
 .

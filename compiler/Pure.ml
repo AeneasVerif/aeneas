@@ -354,51 +354,176 @@ and trait_instance_id =
         polymorphic = false;
       }]
 
+type type_var = T.type_var [@@deriving show, ord]
+
+(** Ancestor for iter visitor for [type_decl] *)
+class ['self] iter_type_decl_base =
+  object (self : 'self)
+    inherit [_] iter_ty
+
+    method visit_type_var : 'env -> type_var -> unit =
+      fun e var ->
+        self#visit_type_var_id e var.index;
+        self#visit_string e var.name
+
+    method visit_const_generic_var : 'env -> const_generic_var -> unit =
+      fun e var ->
+        self#visit_const_generic_var_id e var.index;
+        self#visit_string e var.name;
+        self#visit_literal_type e var.ty
+
+    method visit_item_meta : 'env -> T.item_meta -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for map visitor for [type_decl] *)
+class ['self] map_type_decl_base =
+  object (self : 'self)
+    inherit [_] map_ty
+
+    method visit_type_var : 'env -> type_var -> type_var =
+      fun e var ->
+        {
+          index = self#visit_type_var_id e var.index;
+          name = self#visit_string e var.name;
+        }
+
+    method visit_const_generic_var
+        : 'env -> const_generic_var -> const_generic_var =
+      fun e var ->
+        {
+          index = self#visit_const_generic_var_id e var.index;
+          name = self#visit_string e var.name;
+          ty = self#visit_literal_type e var.ty;
+        }
+
+    method visit_item_meta : 'env -> T.item_meta -> T.item_meta = fun _ x -> x
+  end
+
+(** Ancestor for reduce visitor for [type_decl] *)
+class virtual ['self] reduce_type_decl_base =
+  object (self : 'self)
+    inherit [_] reduce_ty
+
+    method visit_type_var : 'env -> type_var -> 'a =
+      fun e var ->
+        let x0 = self#visit_type_var_id e var.index in
+        let x1 = self#visit_string e var.name in
+        self#plus x0 x1
+
+    method visit_const_generic_var : 'env -> const_generic_var -> 'a =
+      fun e var ->
+        let x0 = self#visit_const_generic_var_id e var.index in
+        let x1 = self#visit_string e var.name in
+        let x2 = self#visit_literal_type e var.ty in
+        self#plus (self#plus x0 x1) x2
+
+    method visit_item_meta : 'env -> T.item_meta -> 'a = fun _ _ -> self#zero
+  end
+
+(** Ancestor for mapreduce visitor for [type_decl] *)
+class virtual ['self] mapreduce_type_decl_base =
+  object (self : 'self)
+    inherit [_] mapreduce_ty
+
+    method visit_type_var : 'env -> type_var -> type_var * 'a =
+      fun e var ->
+        let index, x0 = self#visit_type_var_id e var.index in
+        let name, x1 = self#visit_string e var.name in
+        ({ index; name }, self#plus x0 x1)
+
+    method visit_const_generic_var
+        : 'env -> const_generic_var -> const_generic_var * 'a =
+      fun e var ->
+        let index, x0 = self#visit_const_generic_var_id e var.index in
+        let name, x1 = self#visit_string e var.name in
+        let ty, x2 = self#visit_literal_type e var.ty in
+        ({ index; name; ty }, self#plus (self#plus x0 x1) x2)
+
+    method visit_item_meta : 'env -> T.item_meta -> T.item_meta * 'a =
+      fun _ x -> (x, self#zero)
+  end
+
 type field = {
   field_name : string option;
   field_ty : ty;
-  attr_info : attr_info;
+  field_attr_info : (attr_info[@opaque]);
 }
-[@@deriving show]
 
-type variant = {
+and variant = {
   variant_name : string;
   fields : field list;
-  attr_info : attr_info;
+  variant_attr_info : (attr_info[@opaque]);
 }
-[@@deriving show]
 
-type type_decl_kind = Struct of field list | Enum of variant list | Opaque
-[@@deriving show]
+and type_decl_kind = Struct of field list | Enum of variant list | Opaque
 
-type type_var = T.type_var [@@deriving show]
-
-type trait_clause = {
+and trait_clause = {
   clause_id : trait_clause_id;
   trait_id : trait_decl_id;
   generics : generic_args;
 }
-[@@deriving show]
 
-type generic_params = {
+and generic_params = {
   types : type_var list;
   const_generics : const_generic_var list;
   trait_clauses : trait_clause list;
 }
-[@@deriving show]
 
-type trait_type_constraint = {
+and trait_type_constraint = {
   trait_ref : trait_ref;
   type_name : trait_item_name;
   ty : ty;
 }
-[@@deriving show, ord]
 
-type predicates = { trait_type_constraints : trait_type_constraint list }
-[@@deriving show]
+and predicates = { trait_type_constraints : trait_type_constraint list }
+[@@deriving
+  show,
+    ord,
+    visitors
+      {
+        name = "iter_type_decl_base1";
+        variety = "iter";
+        ancestors = [ "iter_type_decl_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "map_type_decl_base1";
+        variety = "map";
+        ancestors = [ "map_type_decl_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.map} *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "reduce_type_decl_base1";
+        variety = "reduce";
+        ancestors = [ "reduce_type_decl_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.reduce} *);
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "mapreduce_type_decl_base1";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_type_decl_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.mapreduce} *);
+        polymorphic = false;
+      }]
 
-type type_decl = {
-  def_id : TypeDeclId.id;
+(** Characterize an input parameter as explicit or implicit *)
+type explicit = Explicit | Implicit
+
+and explicit_info = {
+  explicit_types : explicit list;
+  explicit_const_generics : explicit list;
+}
+
+and type_decl = {
+  def_id : type_decl_id;
   name : string;
       (** We use the name only for printing purposes (for debugging):
           the name used at extraction time will be derived from the
@@ -406,7 +531,9 @@ type type_decl = {
        *)
   item_meta : T.item_meta;
   generics : generic_params;
-  llbc_generics : Types.generic_params;
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
+  llbc_generics : (Types.generic_params[@opaque]);
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive
           those names from the types, and when doing so it is more meaningful
@@ -415,24 +542,47 @@ type type_decl = {
   kind : type_decl_kind;
   preds : predicates;
 }
-[@@deriving show]
+[@@deriving
+  show,
+    ord,
+    visitors
+      {
+        name = "iter_type_decl";
+        variety = "iter";
+        ancestors = [ "iter_type_decl_base1" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "map_type_decl";
+        variety = "map";
+        ancestors = [ "map_type_decl_base1" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.map} *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "reduce_type_decl";
+        variety = "reduce";
+        ancestors = [ "reduce_type_decl_base1" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.reduce} *);
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "mapreduce_type_decl";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_type_decl_base1" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.mapreduce} *);
+        polymorphic = false;
+      }]
 
 type scalar_value = V.scalar_value [@@deriving show, ord]
 type literal = V.literal [@@deriving show, ord]
-
-(** Because we introduce a lot of temporary variables, the list of variables
-    is not fixed: we thus must carry all its information with the variable
-    itself.
- *)
-type var = {
-  id : VarId.id;
-  basename : string option;
-      (** The "basename" is used to generate a meaningful name for the variable
-          (by potentially adding an index to uniquely identify it).
-       *)
-  ty : ty;
-}
-[@@deriving show]
+type var_id = VarId.id [@@deriving show, ord]
 
 (* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
  * on enumerations.
@@ -459,44 +609,88 @@ type mplace = {
 
 type variant_id = VariantId.id [@@deriving show]
 
+(** Because we introduce a lot of temporary variables, the list of variables
+    is not fixed: we thus must carry all its information with the variable
+    itself.
+ *)
+type var = {
+  id : var_id;
+  basename : string option;
+      (** The "basename" is used to generate a meaningful name for the variable
+          (by potentially adding an index to uniquely identify it).
+       *)
+  ty : ty;
+}
+[@@deriving show]
+
 (** Ancestor for {!iter_typed_pattern} visitor *)
 class ['self] iter_typed_pattern_base =
-  object (_self : 'self)
-    inherit [_] iter_ty
-    method visit_var : 'env -> var -> unit = fun _ _ -> ()
+  object (self : 'self)
+    inherit [_] iter_type_decl
+    method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
+
+    method visit_var : 'env -> var -> unit =
+      fun e var ->
+        self#visit_var_id e var.id;
+        self#visit_option self#visit_string e var.basename;
+        self#visit_ty e var.ty
   end
 
 (** Ancestor for {!map_typed_pattern} visitor *)
 class ['self] map_typed_pattern_base =
-  object (_self : 'self)
-    inherit [_] map_ty
-    method visit_var : 'env -> var -> var = fun _ x -> x
+  object (self : 'self)
+    inherit [_] map_type_decl
+    method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
+
+    method visit_var : 'env -> var -> var =
+      fun e var ->
+        {
+          id = self#visit_var_id e var.id;
+          basename = self#visit_option self#visit_string e var.basename;
+          ty = self#visit_ty e var.ty;
+        }
   end
 
 (** Ancestor for {!reduce_typed_pattern} visitor *)
 class virtual ['self] reduce_typed_pattern_base =
   object (self : 'self)
-    inherit [_] reduce_ty
-    method visit_var : 'env -> var -> 'a = fun _ _ -> self#zero
+    inherit [_] reduce_type_decl
+    method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
     method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
+
+    method visit_var : 'env -> var -> 'a =
+      fun e var ->
+        let x0 = self#visit_var_id e var.id in
+        let x1 = self#visit_option self#visit_string e var.basename in
+        let x2 = self#visit_ty e var.ty in
+        self#plus (self#plus x0 x1) x2
   end
 
 (** Ancestor for {!mapreduce_typed_pattern} visitor *)
 class virtual ['self] mapreduce_typed_pattern_base =
   object (self : 'self)
-    inherit [_] mapreduce_ty
-    method visit_var : 'env -> var -> var * 'a = fun _ x -> (x, self#zero)
+    inherit [_] mapreduce_type_decl
+
+    method visit_var_id : 'env -> var_id -> var_id * 'a =
+      fun _ x -> (x, self#zero)
 
     method visit_mplace : 'env -> mplace -> mplace * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_variant_id : 'env -> variant_id -> variant_id * 'a =
       fun _ x -> (x, self#zero)
+
+    method visit_var : 'env -> var -> var * 'a =
+      fun e var ->
+        let id, x0 = self#visit_var_id e var.id in
+        let basename, x1 = self#visit_option self#visit_string e var.basename in
+        let ty, x2 = self#visit_ty e var.ty in
+        ({ id; basename; ty }, self#plus (self#plus x0 x1) x2)
   end
 
 (** A pattern (which appears on the left of assignments, in matches, etc.). *)
@@ -625,14 +819,12 @@ type qualif_id =
 type qualif = { id : qualif_id; generics : generic_args } [@@deriving show]
 
 type field_id = FieldId.id [@@deriving show, ord]
-type var_id = VarId.id [@@deriving show, ord]
 
 (** Ancestor for {!iter_expression} visitor *)
 class ['self] iter_expression_base =
   object (_self : 'self)
     inherit [_] iter_typed_pattern
     inherit! [_] iter_type_id
-    method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
@@ -644,7 +836,6 @@ class ['self] map_expression_base =
   object (_self : 'self)
     inherit [_] map_typed_pattern
     inherit! [_] map_type_id
-    method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
@@ -656,7 +847,6 @@ class virtual ['self] reduce_expression_base =
   object (self : 'self)
     inherit [_] reduce_typed_pattern
     inherit! [_] reduce_type_id
-    method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
@@ -668,9 +858,6 @@ class virtual ['self] mapreduce_expression_base =
   object (self : 'self)
     inherit [_] mapreduce_typed_pattern
     inherit! [_] mapreduce_type_id
-
-    method visit_var_id : 'env -> var_id -> var_id * 'a =
-      fun _ x -> (x, self#zero)
 
     method visit_qualif : 'env -> qualif -> qualif * 'a =
       fun _ x -> (x, self#zero)
@@ -1036,7 +1223,8 @@ type decomposed_fun_sig = {
  *)
 type fun_sig = {
   generics : generic_params;
-      (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive
@@ -1046,6 +1234,7 @@ type fun_sig = {
   preds : predicates;
   inputs : ty list;
       (** The types of the inputs.
+
 
           Note that those input types take into account the [fuel] parameter,
           if the function uses fuel for termination, and the [state] parameter,
@@ -1132,6 +1321,8 @@ type global_decl = {
   llbc_generics : Types.generic_params;
       (** See the comment for [llbc_generics] in fun_decl. *)
   generics : generic_params;
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
   preds : predicates;
   ty : ty;
   kind : item_kind;
@@ -1144,6 +1335,8 @@ type trait_decl = {
   name : string;
   item_meta : T.item_meta;
   generics : generic_params;
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive
@@ -1168,6 +1361,8 @@ type trait_impl = {
   llbc_impl_trait : Types.trait_decl_ref;
       (** Same remark as for {!field:llbc_generics}. *)
   generics : generic_params;
+  explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive

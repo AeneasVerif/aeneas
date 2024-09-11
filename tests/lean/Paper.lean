@@ -28,7 +28,7 @@ def test_incr : Result Unit :=
 /- [paper::choose]:
    Source: 'tests/src/paper.rs', lines 18:0-24:1 -/
 def choose
-  (T : Type) (b : Bool) (x : T) (y : T) :
+  {T : Type} (b : Bool) (x : T) (y : T) :
   Result (T × (T → Result (T × T)))
   :=
   if b
@@ -41,7 +41,7 @@ def choose
    Source: 'tests/src/paper.rs', lines 26:0-34:1 -/
 def test_choose : Result Unit :=
   do
-  let (z, choose_back) ← choose I32 true 0#i32 0#i32
+  let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
   if z1 = 1#i32
   then
@@ -66,7 +66,7 @@ inductive List (T : Type) :=
 /- [paper::list_nth_mut]:
    Source: 'tests/src/paper.rs', lines 45:0-58:1 -/
 divergent def list_nth_mut
-  (T : Type) (l : List T) (i : U32) : Result (T × (T → Result (List T))) :=
+  {T : Type} (l : List T) (i : U32) : Result (T × (T → Result (List T))) :=
   match l with
   | List.Cons x tl =>
     if i = 0#u32
@@ -76,7 +76,7 @@ divergent def list_nth_mut
     else
       do
       let i1 ← i - 1#u32
-      let (t, list_nth_mut_back) ← list_nth_mut T tl i1
+      let (t, list_nth_mut_back) ← list_nth_mut tl i1
       let back :=
         fun ret =>
           do
@@ -100,7 +100,7 @@ def test_nth : Result Unit :=
   do
   let l := List.Cons 3#i32 List.Nil
   let l1 := List.Cons 2#i32 l
-  let (x, list_nth_mut_back) ← list_nth_mut I32 (List.Cons 1#i32 l1) 2#u32
+  let (x, list_nth_mut_back) ← list_nth_mut (List.Cons 1#i32 l1) 2#u32
   let x1 ← x + 1#i32
   let l2 ← list_nth_mut_back x1
   let i ← sum l2
@@ -116,7 +116,7 @@ def test_nth : Result Unit :=
 def call_choose (p : (U32 × U32)) : Result U32 :=
   do
   let (px, py) := p
-  let (pz, choose_back) ← choose U32 true px py
+  let (pz, choose_back) ← choose true px py
   let pz1 ← pz + 1#u32
   let (px1, _) ← choose_back pz1
   Result.ok px1

@@ -59,6 +59,7 @@ tests/fstar/misc/obj/
 *.d
 *Makefile.coq
 *CoqMakefile.conf
+*_CoqProject*
 
 # HOL4
 .HOLMK

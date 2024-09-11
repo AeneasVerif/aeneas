@@ -21,7 +21,7 @@ let sum_with_shared_borrows_loop_decreases (max : u32) (i : u32) (s : u32) : nat
 
 (** [loops::sum_array]: decreases clause *)
 unfold
-let sum_array_loop_decreases (n : usize) (_ : array u32 n) (i : usize) (_ : u32) : nat =
+let sum_array_loop_decreases (#n : usize) (_ : array u32 n) (i : usize) (_ : u32) : nat =
   if n >= i then n - i else 0
 
 (** [loops::clear]: decreases clause *)
@@ -34,12 +34,12 @@ unfold let list_mem_loop_decreases (i : u32) (ls : list_t u32) : list_t u32 =
 
 (** [loops::list_nth_mut_loop]: decreases clause *)
 unfold
-let list_nth_mut_loop_loop_decreases (t : Type0) (ls : list_t t) (i : u32) : nat =
+let list_nth_mut_loop_loop_decreases (#t : Type0) (ls : list_t t) (i : u32) : nat =
   i
 
 (** [loops::list_nth_shared_loop]: decreases clause *)
 unfold
-let list_nth_shared_loop_loop_decreases (t : Type0) (ls : list_t t) (i : u32) : list_t t =
+let list_nth_shared_loop_loop_decreases (#t : Type0) (ls : list_t t) (i : u32) : list_t t =
   ls
 
 (** [loops::get_elem_mut]: decreases clause *)
@@ -53,61 +53,61 @@ let get_elem_shared_loop_decreases (x : usize) (ls : list_t usize) : list_t usiz
 
 (** [loops::list_nth_mut_loop_with_id]: decreases clause *)
 unfold
-let list_nth_mut_loop_with_id_loop_decreases (t : Type0) (i : u32) (ls : list_t t) :
+let list_nth_mut_loop_with_id_loop_decreases (#t : Type0) (i : u32) (ls : list_t t) :
   list_t t =
   ls
 
 (** [loops::list_nth_shared_loop_with_id]: decreases clause *)
 unfold
-let list_nth_shared_loop_with_id_loop_decreases (t : Type0) (i : u32)
+let list_nth_shared_loop_with_id_loop_decreases (#t : Type0) (i : u32)
   (ls : list_t t) : list_t t =
   ls
 
 (** [loops::list_nth_mut_loop_pair]: decreases clause *)
 unfold
-let list_nth_mut_loop_pair_loop_decreases (t : Type0) (l : list_t t) (l0 : list_t t)
+let list_nth_mut_loop_pair_loop_decreases (#t : Type0) (l : list_t t) (l0 : list_t t)
   (i : u32) : nat =
   i
 
 (** [loops::list_nth_shared_loop_pair]: decreases clause *)
 unfold
-let list_nth_shared_loop_pair_loop_decreases (t : Type0) (l : list_t t)
+let list_nth_shared_loop_pair_loop_decreases (#t : Type0) (l : list_t t)
   (l0 : list_t t) (i : u32) : list_t t =
   l
 
 (** [loops::list_nth_mut_loop_pair_merge]: decreases clause *)
 unfold
-let list_nth_mut_loop_pair_merge_loop_decreases (t : Type0) (l : list_t t)
+let list_nth_mut_loop_pair_merge_loop_decreases (#t : Type0) (l : list_t t)
   (l0 : list_t t) (i : u32) : nat =
   i
 
 (** [loops::list_nth_shared_loop_pair_merge]: decreases clause *)
 unfold
-let list_nth_shared_loop_pair_merge_loop_decreases (t : Type0) (l : list_t t)
+let list_nth_shared_loop_pair_merge_loop_decreases (#t : Type0) (l : list_t t)
   (l0 : list_t t) (i : u32) : list_t t =
   l
 
 (** [loops::list_nth_mut_shared_loop_pair]: decreases clause *)
 unfold
-let list_nth_mut_shared_loop_pair_loop_decreases (t : Type0) (l : list_t t)
+let list_nth_mut_shared_loop_pair_loop_decreases (#t : Type0) (l : list_t t)
   (l0 : list_t t) (i : u32) : list_t t =
   l
 
 (** [loops::list_nth_mut_shared_loop_pair_merge]: decreases clause *)
 unfold
-let list_nth_mut_shared_loop_pair_merge_loop_decreases (t : Type0) (l : list_t t)
+let list_nth_mut_shared_loop_pair_merge_loop_decreases (#t : Type0) (l : list_t t)
   (l0 : list_t t) (i : u32) : list_t t =
   l
 
 (** [loops::list_nth_shared_mut_loop_pair]: decreases clause *)
 unfold
-let list_nth_shared_mut_loop_pair_loop_decreases (t : Type0) (l : list_t t)
+let list_nth_shared_mut_loop_pair_loop_decreases (#t : Type0) (l : list_t t)
   (l0 : list_t t) (i : u32) : list_t t =
   l
 
 (** [loops::list_nth_shared_mut_loop_pair_merge]: decreases clause *)
 unfold
-let list_nth_shared_mut_loop_pair_merge_loop_decreases (t : Type0) (l : list_t t)
+let list_nth_shared_mut_loop_pair_merge_loop_decreases (#t : Type0) (l : list_t t)
   (l0 : list_t t) (i : u32) : list_t t =
   l
 
