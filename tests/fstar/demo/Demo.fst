@@ -55,7 +55,7 @@ let rec list_nth (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
     end
 
 (** [demo::list_nth1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 56:0-65:1 *)
+    Source: 'tests/src/demo.rs', lines 57:4-65:1 *)
 let rec list_nth1_loop
   (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
   if is_zero n

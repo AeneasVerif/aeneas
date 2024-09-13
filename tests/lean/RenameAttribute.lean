@@ -75,7 +75,7 @@ divergent def Factfn (n : U64) : Result U64 :=
        n * i1
 
 /- [rename_attribute::sum]: loop 0:
-   Source: 'tests/src/rename_attribute.rs', lines 67:4-75:1 -/
+   Source: 'tests/src/rename_attribute.rs', lines 68:4-71:5 -/
 divergent def No_borrows_sum_loop
   (max : U32) (i : U32) (s : U32) : Result U32 :=
   if i < max

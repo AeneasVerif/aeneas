@@ -67,7 +67,7 @@ divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
   | CList.CNil => Result.fail .panic
 
 /- [demo::list_nth1]: loop 0:
-   Source: 'tests/src/demo.rs', lines 56:0-65:1 -/
+   Source: 'tests/src/demo.rs', lines 57:4-65:1 -/
 divergent def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>

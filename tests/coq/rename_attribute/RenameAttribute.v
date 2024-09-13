@@ -79,7 +79,7 @@ Fixpoint factfn (n : nat) (n1 : u64) : result u64 :=
 .
 
 (** [rename_attribute::sum]: loop 0:
-    Source: 'tests/src/rename_attribute.rs', lines 67:4-75:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 68:4-71:5 *)
 Fixpoint no_borrows_sum_loop
   (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with

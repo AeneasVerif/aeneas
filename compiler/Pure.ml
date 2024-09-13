@@ -198,12 +198,6 @@ class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] iter_type_id
     inherit! [_] T.iter_const_generic
-    method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
-    method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
-    method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
-
-    method visit_trait_clause_id : 'env -> trait_clause_id -> unit =
-      fun _ _ -> ()
 
     method visit_trait_item_name : 'env -> trait_item_name -> unit =
       fun _ _ -> ()
@@ -214,16 +208,6 @@ class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] map_type_id
     inherit! [_] T.map_const_generic
-    method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
-
-    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id =
-      fun _ x -> x
-
-    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id =
-      fun _ x -> x
-
-    method visit_trait_clause_id : 'env -> trait_clause_id -> trait_clause_id =
-      fun _ x -> x
 
     method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
       fun _ x -> x
@@ -234,16 +218,6 @@ class virtual ['self] reduce_ty_base =
   object (self : 'self)
     inherit [_] reduce_type_id
     inherit! [_] T.reduce_const_generic
-    method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
-
-    method visit_trait_decl_id : 'env -> trait_decl_id -> 'a =
-      fun _ _ -> self#zero
-
-    method visit_trait_impl_id : 'env -> trait_impl_id -> 'a =
-      fun _ _ -> self#zero
-
-    method visit_trait_clause_id : 'env -> trait_clause_id -> 'a =
-      fun _ _ -> self#zero
 
     method visit_trait_item_name : 'env -> trait_item_name -> 'a =
       fun _ _ -> self#zero
@@ -254,19 +228,6 @@ class virtual ['self] mapreduce_ty_base =
   object (self : 'self)
     inherit [_] mapreduce_type_id
     inherit! [_] T.mapreduce_const_generic
-
-    method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_clause_id
-        : 'env -> trait_clause_id -> trait_clause_id * 'a =
-      fun _ x -> (x, self#zero)
 
     method visit_trait_item_name
         : 'env -> trait_item_name -> trait_item_name * 'a =

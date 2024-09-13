@@ -36,7 +36,7 @@ let filter_drop_assigns (f : fun_decl) : fun_decl =
         | Drop p1, Assign (p2, _) ->
             if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
-        | Drop p1, Sequence ({ content = Assign (p2, _); span = _ }, _) ->
+        | Drop p1, Sequence ({ content = Assign (p2, _); _ }, _) ->
             if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
         | _ -> super#visit_Sequence env st1 st2
