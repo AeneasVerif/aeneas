@@ -341,7 +341,7 @@ def non_copyable_array : Result Unit :=
   take_array_t (Array.make 2#usize [ AB.A, AB.B ])
 
 /- [arrays::sum]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 247:4-253:1 -/
+   Source: 'tests/src/arrays.rs', lines 248:4-251:5 -/
 divergent def sum_loop (s : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
   let i1 := Slice.len s
   if i < i1
@@ -359,7 +359,7 @@ def sum (s : Slice U32) : Result U32 :=
   sum_loop s 0#u32 0#usize
 
 /- [arrays::sum2]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 258:4-264:1 -/
+   Source: 'tests/src/arrays.rs', lines 259:4-262:5 -/
 divergent def sum2_loop
   (s : Slice U32) (s2 : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
   let i1 := Slice.len s
@@ -451,7 +451,7 @@ def ite : Result Unit :=
   Result.ok ()
 
 /- [arrays::zero_slice]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 308:4-313:1 -/
+   Source: 'tests/src/arrays.rs', lines 309:4-312:5 -/
 divergent def zero_slice_loop
   (a : Slice U8) (i : Usize) (len : Usize) : Result (Slice U8) :=
   if i < len
@@ -470,7 +470,7 @@ def zero_slice (a : Slice U8) : Result (Slice U8) :=
   zero_slice_loop a 0#usize len
 
 /- [arrays::iter_mut_slice]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 317:4-321:1 -/
+   Source: 'tests/src/arrays.rs', lines 318:4-320:5 -/
 divergent def iter_mut_slice_loop (len : Usize) (i : Usize) : Result Unit :=
   if i < len
   then do
@@ -487,7 +487,7 @@ def iter_mut_slice (a : Slice U8) : Result (Slice U8) :=
   Result.ok a
 
 /- [arrays::sum_mut_slice]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 325:4-331:1 -/
+   Source: 'tests/src/arrays.rs', lines 326:4-329:5 -/
 divergent def sum_mut_slice_loop
   (a : Slice U32) (i : Usize) (s : U32) : Result U32 :=
   let i1 := Slice.len a

@@ -11,7 +11,7 @@ let bar : result unit =
   Ok ()
 
 (** [infinite_loop::foo]: loop 0:
-    Source: 'tests/src/infinite-loop.rs', lines 6:0-10:1 *)
+    Source: 'tests/src/infinite-loop.rs', lines 8:8-8:13 *)
 let rec foo_loop (n : nat) : result unit =
   if is_zero n
   then Fail OutOfFuel

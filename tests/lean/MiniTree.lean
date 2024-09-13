@@ -26,7 +26,7 @@ structure Tree where
   root : Option Node
 
 /- [mini_tree::{mini_tree::Tree}::explore]: loop 0:
-   Source: 'tests/src/mini_tree.rs', lines 15:8-20:5 -/
+   Source: 'tests/src/mini_tree.rs', lines 17:8-19:9 -/
 divergent def Tree.explore_loop (current_tree : Option Node) : Result Unit :=
   match current_tree with
   | none => Result.ok ()

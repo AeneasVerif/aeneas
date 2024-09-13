@@ -91,7 +91,7 @@ divergent def list_nth_mut
   | CList.CNil => Result.fail .panic
 
 /- [tutorial::list_nth1]: loop 0:
-   Source: 'src/lib.rs', lines 65:0-74:1 -/
+   Source: 'src/lib.rs', lines 66:4-74:1 -/
 divergent def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
@@ -164,7 +164,7 @@ def use_counter
   CounterInst.incr cnt
 
 /- [tutorial::list_nth_mut1]: loop 0:
-   Source: 'src/lib.rs', lines 123:0-132:1 -/
+   Source: 'src/lib.rs', lines 124:4-132:1 -/
 divergent def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))
@@ -196,7 +196,7 @@ def list_nth_mut1
   list_nth_mut1_loop l i
 
 /- [tutorial::list_tail]: loop 0:
-   Source: 'src/lib.rs', lines 134:0-139:1 -/
+   Source: 'src/lib.rs', lines 135:4-137:5 -/
 divergent def list_tail_loop
   {T : Type} (l : CList T) :
   Result ((CList T) × (CList T → Result (CList T)))
@@ -230,7 +230,7 @@ def append_in_place
   list_tail_back l1
 
 /- [tutorial::reverse]: loop 0:
-   Source: 'src/lib.rs', lines 147:4-154:1 -/
+   Source: 'src/lib.rs', lines 148:4-152:5 -/
 divergent def reverse_loop
   {T : Type} (l : CList T) (out : CList T) : Result (CList T) :=
   match l with
@@ -243,7 +243,7 @@ def reverse {T : Type} (l : CList T) : Result (CList T) :=
   reverse_loop l CList.CNil
 
 /- [tutorial::zero]: loop 0:
-   Source: 'src/lib.rs', lines 163:4-168:1 -/
+   Source: 'src/lib.rs', lines 164:4-167:5 -/
 divergent def zero_loop
   (x : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
   let i1 := alloc.vec.Vec.len x
@@ -264,7 +264,7 @@ def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
   zero_loop x 0#usize
 
 /- [tutorial::add_no_overflow]: loop 0:
-   Source: 'src/lib.rs', lines 176:4-181:1 -/
+   Source: 'src/lib.rs', lines 177:4-180:5 -/
 divergent def add_no_overflow_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize) :
   Result (alloc.vec.Vec U32)
@@ -293,7 +293,7 @@ def add_no_overflow
   add_no_overflow_loop x y 0#usize
 
 /- [tutorial::add_with_carry]: loop 0:
-   Source: 'src/lib.rs', lines 188:4-199:1 -/
+   Source: 'src/lib.rs', lines 190:4-197:5 -/
 divergent def add_with_carry_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize) :
   Result (U8 × (alloc.vec.Vec U32))
@@ -346,7 +346,7 @@ def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
   else Result.ok 0#u32
 
 /- [tutorial::add]: loop 0:
-   Source: 'src/lib.rs', lines 219:4-235:1 -/
+   Source: 'src/lib.rs', lines 221:4-229:5 -/
 divergent def add_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (max1 : Usize) (c0 : U8)
   (i : Usize) :

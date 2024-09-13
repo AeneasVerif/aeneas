@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module Loops.
 
 (** [loops::sum]: loop 0:
-    Source: 'tests/src/loops.rs', lines 10:4-18:1 *)
+    Source: 'tests/src/loops.rs', lines 11:4-14:5 *)
 Fixpoint sum_loop (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
   | O => Fail_ OutOfFuel
@@ -27,7 +27,7 @@ Definition sum (n : nat) (max : u32) : result u32 :=
 .
 
 (** [loops::sum_with_mut_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 25:4-35:1 *)
+    Source: 'tests/src/loops.rs', lines 26:4-31:5 *)
 Fixpoint sum_with_mut_borrows_loop
   (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
@@ -49,7 +49,7 @@ Definition sum_with_mut_borrows (n : nat) (max : u32) : result u32 :=
 .
 
 (** [loops::sum_with_shared_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 40:4-52:1 *)
+    Source: 'tests/src/loops.rs', lines 41:4-48:5 *)
 Fixpoint sum_with_shared_borrows_loop
   (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
@@ -71,7 +71,7 @@ Definition sum_with_shared_borrows (n : nat) (max : u32) : result u32 :=
 .
 
 (** [loops::sum_array]: loop 0:
-    Source: 'tests/src/loops.rs', lines 56:4-62:1 *)
+    Source: 'tests/src/loops.rs', lines 57:4-60:5 *)
 Fixpoint sum_array_loop
   {N : usize} (n : nat) (a : array u32 N) (i : usize) (s : u32) : result u32 :=
   match n with
@@ -94,7 +94,7 @@ Definition sum_array {N : usize} (n : nat) (a : array u32 N) : result u32 :=
 .
 
 (** [loops::clear]: loop 0:
-    Source: 'tests/src/loops.rs', lines 67:4-72:1 *)
+    Source: 'tests/src/loops.rs', lines 68:4-71:5 *)
 Fixpoint clear_loop
   (n : nat) (v : alloc_vec_Vec u32) (i : usize) : result (alloc_vec_Vec u32) :=
   match n with
@@ -132,7 +132,7 @@ Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
 (** [loops::list_mem]: loop 0:
-    Source: 'tests/src/loops.rs', lines 80:0-89:1 *)
+    Source: 'tests/src/loops.rs', lines 81:4-89:1 *)
 Fixpoint list_mem_loop (n : nat) (x : u32) (ls : List_t u32) : result bool :=
   match n with
   | O => Fail_ OutOfFuel
@@ -151,7 +151,7 @@ Definition list_mem (n : nat) (x : u32) (ls : List_t u32) : result bool :=
 .
 
 (** [loops::list_nth_mut_loop]: loop 0:
-    Source: 'tests/src/loops.rs', lines 92:0-102:1 *)
+    Source: 'tests/src/loops.rs', lines 93:4-102:1 *)
 Fixpoint list_nth_mut_loop_loop
   {T : Type} (n : nat) (ls : List_t T) (i : u32) :
   result (T * (T -> result (List_t T)))
@@ -184,7 +184,7 @@ Definition list_nth_mut_loop
 .
 
 (** [loops::list_nth_shared_loop]: loop 0:
-    Source: 'tests/src/loops.rs', lines 105:0-115:1 *)
+    Source: 'tests/src/loops.rs', lines 106:4-115:1 *)
 Fixpoint list_nth_shared_loop_loop
   {T : Type} (n : nat) (ls : List_t T) (i : u32) : result T :=
   match n with
@@ -208,7 +208,7 @@ Definition list_nth_shared_loop
 .
 
 (** [loops::get_elem_mut]: loop 0:
-    Source: 'tests/src/loops.rs', lines 117:0-131:1 *)
+    Source: 'tests/src/loops.rs', lines 119:4-131:1 *)
 Fixpoint get_elem_mut_loop
   (n : nat) (x : usize) (ls : List_t usize) :
   result (usize * (usize -> result (List_t usize)))
@@ -249,7 +249,7 @@ Definition get_elem_mut
 .
 
 (** [loops::get_elem_shared]: loop 0:
-    Source: 'tests/src/loops.rs', lines 133:0-147:1 *)
+    Source: 'tests/src/loops.rs', lines 135:4-147:1 *)
 Fixpoint get_elem_shared_loop
   (n : nat) (x : usize) (ls : List_t usize) : result usize :=
   match n with
@@ -289,7 +289,7 @@ Definition id_shared {T : Type} (ls : List_t T) : result (List_t T) :=
   Ok ls.
 
 (** [loops::list_nth_mut_loop_with_id]: loop 0:
-    Source: 'tests/src/loops.rs', lines 158:0-169:1 *)
+    Source: 'tests/src/loops.rs', lines 160:4-169:1 *)
 Fixpoint list_nth_mut_loop_with_id_loop
   {T : Type} (n : nat) (i : u32) (ls : List_t T) :
   result (T * (T -> result (List_t T)))
@@ -327,7 +327,7 @@ Definition list_nth_mut_loop_with_id
 .
 
 (** [loops::list_nth_shared_loop_with_id]: loop 0:
-    Source: 'tests/src/loops.rs', lines 172:0-183:1 *)
+    Source: 'tests/src/loops.rs', lines 174:4-183:1 *)
 Fixpoint list_nth_shared_loop_with_id_loop
   {T : Type} (n : nat) (i : u32) (ls : List_t T) : result T :=
   match n with
@@ -351,7 +351,7 @@ Definition list_nth_shared_loop_with_id
 .
 
 (** [loops::list_nth_mut_loop_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 188:0-209:1 *)
+    Source: 'tests/src/loops.rs', lines 194:8-194:24 *)
 Fixpoint list_nth_mut_loop_pair_loop
   {T : Type} (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result ((T * T) * (T -> result (List_t T)) * (T -> result (List_t T)))
@@ -394,7 +394,7 @@ Definition list_nth_mut_loop_pair
 .
 
 (** [loops::list_nth_shared_loop_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 212:0-233:1 *)
+    Source: 'tests/src/loops.rs', lines 218:8-218:24 *)
 Fixpoint list_nth_shared_loop_pair_loop
   {T : Type} (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -427,7 +427,7 @@ Definition list_nth_shared_loop_pair
 .
 
 (** [loops::list_nth_mut_loop_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 237:0-252:1 *)
+    Source: 'tests/src/loops.rs', lines 242:4-252:1 *)
 Fixpoint list_nth_mut_loop_pair_merge_loop
   {T : Type} (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result ((T * T) * ((T * T) -> result ((List_t T) * (List_t T))))
@@ -472,7 +472,7 @@ Definition list_nth_mut_loop_pair_merge
 .
 
 (** [loops::list_nth_shared_loop_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 255:0-270:1 *)
+    Source: 'tests/src/loops.rs', lines 260:4-270:1 *)
 Fixpoint list_nth_shared_loop_pair_merge_loop
   {T : Type} (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
@@ -506,7 +506,7 @@ Definition list_nth_shared_loop_pair_merge
 .
 
 (** [loops::list_nth_mut_shared_loop_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 273:0-288:1 *)
+    Source: 'tests/src/loops.rs', lines 278:4-288:1 *)
 Fixpoint list_nth_mut_shared_loop_pair_loop
   {T : Type} (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result ((T * T) * (T -> result (List_t T)))
@@ -546,7 +546,7 @@ Definition list_nth_mut_shared_loop_pair
 .
 
 (** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 292:0-307:1 *)
+    Source: 'tests/src/loops.rs', lines 297:4-307:1 *)
 Fixpoint list_nth_mut_shared_loop_pair_merge_loop
   {T : Type} (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result ((T * T) * (T -> result (List_t T)))
@@ -586,7 +586,7 @@ Definition list_nth_mut_shared_loop_pair_merge
 .
 
 (** [loops::list_nth_shared_mut_loop_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 311:0-326:1 *)
+    Source: 'tests/src/loops.rs', lines 316:4-326:1 *)
 Fixpoint list_nth_shared_mut_loop_pair_loop
   {T : Type} (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result ((T * T) * (T -> result (List_t T)))
@@ -626,7 +626,7 @@ Definition list_nth_shared_mut_loop_pair
 .
 
 (** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 330:0-345:1 *)
+    Source: 'tests/src/loops.rs', lines 335:4-345:1 *)
 Fixpoint list_nth_shared_mut_loop_pair_merge_loop
   {T : Type} (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result ((T * T) * (T -> result (List_t T)))
@@ -666,7 +666,7 @@ Definition list_nth_shared_mut_loop_pair_merge
 .
 
 (** [loops::ignore_input_mut_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 349:0-353:1 *)
+    Source: 'tests/src/loops.rs', lines 350:4-352:5 *)
 Fixpoint ignore_input_mut_borrow_loop (n : nat) (i : u32) : result unit :=
   match n with
   | O => Fail_ OutOfFuel
@@ -685,7 +685,7 @@ Definition ignore_input_mut_borrow
 .
 
 (** [loops::incr_ignore_input_mut_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 357:0-362:1 *)
+    Source: 'tests/src/loops.rs', lines 359:4-361:5 *)
 Fixpoint incr_ignore_input_mut_borrow_loop (n : nat) (i : u32) : result unit :=
   match n with
   | O => Fail_ OutOfFuel
@@ -704,7 +704,7 @@ Definition incr_ignore_input_mut_borrow
 .
 
 (** [loops::ignore_input_shared_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 366:0-370:1 *)
+    Source: 'tests/src/loops.rs', lines 367:4-369:5 *)
 Fixpoint ignore_input_shared_borrow_loop (n : nat) (i : u32) : result unit :=
   match n with
   | O => Fail_ OutOfFuel

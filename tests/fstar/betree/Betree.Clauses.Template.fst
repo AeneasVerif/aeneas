@@ -7,28 +7,28 @@ open Betree.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [betree::betree::{betree::betree::List<T>}#1::len]: decreases clause
-    Source: 'src/betree.rs', lines 278:8-284:5 *)
+    Source: 'src/betree.rs', lines 279:8-282:9 *)
 unfold
 let betree_List_len_loop_decreases (#t : Type0) (self : betree_List_t t)
   (len : u64) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::List<T>}#1::reverse]: decreases clause
-    Source: 'src/betree.rs', lines 305:8-312:5 *)
+    Source: 'src/betree.rs', lines 306:8-310:9 *)
 unfold
 let betree_List_reverse_loop_decreases (#t : Type0) (self : betree_List_t t)
   (out : betree_List_t t) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::List<T>}#1::split_at]: decreases clause
-    Source: 'src/betree.rs', lines 289:8-302:5 *)
+    Source: 'src/betree.rs', lines 290:8-300:9 *)
 unfold
 let betree_List_split_at_loop_decreases (#t : Type0) (n : u64)
   (beg : betree_List_t t) (self : betree_List_t t) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::List<(u64, T)>}#2::partition_at_pivot]: decreases clause
-    Source: 'src/betree.rs', lines 358:8-370:5 *)
+    Source: 'src/betree.rs', lines 359:8-368:9 *)
 unfold
 let betree_ListPairU64T_partition_at_pivot_loop_decreases (#t : Type0)
   (pivot : u64) (beg : betree_List_t (u64 & t))
@@ -36,14 +36,14 @@ let betree_ListPairU64T_partition_at_pivot_loop_decreases (#t : Type0)
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]: decreases clause
-    Source: 'src/betree.rs', lines 792:4-810:5 *)
+    Source: 'src/betree.rs', lines 796:8-810:5 *)
 unfold
 let betree_Node_lookup_first_message_for_key_loop_decreases (key : u64)
   (msgs : betree_List_t (u64 & betree_Message_t)) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::apply_upserts]: decreases clause
-    Source: 'src/betree.rs', lines 820:4-844:5 *)
+    Source: 'src/betree.rs', lines 821:8-838:9 *)
 unfold
 let betree_Node_apply_upserts_loop_decreases
   (msgs : betree_List_t (u64 & betree_Message_t)) (prev : option u64)
@@ -51,7 +51,7 @@ let betree_Node_apply_upserts_loop_decreases
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: decreases clause
-    Source: 'src/betree.rs', lines 649:4-660:5 *)
+    Source: 'src/betree.rs', lines 650:8-660:5 *)
 unfold
 let betree_Node_lookup_in_bindings_loop_decreases (key : u64)
   (bindings : betree_List_t (u64 & u64)) : nat =
@@ -72,21 +72,21 @@ let betree_Node_lookup_decreases (self : betree_Node_t) (key : u64)
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]: decreases clause
-    Source: 'src/betree.rs', lines 683:4-692:5 *)
+    Source: 'src/betree.rs', lines 684:8-691:9 *)
 unfold
 let betree_Node_filter_messages_for_key_loop_decreases (key : u64)
   (msgs : betree_List_t (u64 & betree_Message_t)) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]: decreases clause
-    Source: 'src/betree.rs', lines 694:4-706:5 *)
+    Source: 'src/betree.rs', lines 698:8-704:9 *)
 unfold
 let betree_Node_lookup_first_message_after_key_loop_decreases (key : u64)
   (msgs : betree_List_t (u64 & betree_Message_t)) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::apply_messages_to_internal]: decreases clause
-    Source: 'src/betree.rs', lines 518:4-526:5 *)
+    Source: 'src/betree.rs', lines 522:8-525:9 *)
 unfold
 let betree_Node_apply_messages_to_internal_loop_decreases
   (msgs : betree_List_t (u64 & betree_Message_t))
@@ -94,14 +94,14 @@ let betree_Node_apply_messages_to_internal_loop_decreases
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_mut_in_bindings]: decreases clause
-    Source: 'src/betree.rs', lines 664:4-677:5 *)
+    Source: 'src/betree.rs', lines 668:8-675:9 *)
 unfold
 let betree_Node_lookup_mut_in_bindings_loop_decreases (key : u64)
   (bindings : betree_List_t (u64 & u64)) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::apply_messages_to_leaf]: decreases clause
-    Source: 'src/betree.rs', lines 463:4-471:5 *)
+    Source: 'src/betree.rs', lines 467:8-470:9 *)
 unfold
 let betree_Node_apply_messages_to_leaf_loop_decreases
   (bindings : betree_List_t (u64 & u64))

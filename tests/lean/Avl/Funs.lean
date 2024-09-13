@@ -205,7 +205,7 @@ def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) :=
   Result.ok { root := none }
 
 /- [avl::{avl::Tree<T>}#3::find]: loop 0:
-   Source: 'src/avl.rs', lines 342:4-354:5 -/
+   Source: 'src/avl.rs', lines 345:8-354:5 -/
 divergent def Tree.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool

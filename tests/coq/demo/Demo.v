@@ -65,7 +65,7 @@ Fixpoint list_nth {T : Type} (n : nat) (l : CList_t T) (i : u32) : result T :=
 .
 
 (** [demo::list_nth1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 56:0-65:1 *)
+    Source: 'tests/src/demo.rs', lines 57:4-65:1 *)
 Fixpoint list_nth1_loop
   {T : Type} (n : nat) (l : CList_t T) (i : u32) : result T :=
   match n with

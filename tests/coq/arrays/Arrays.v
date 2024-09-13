@@ -371,7 +371,7 @@ Definition non_copyable_array : result unit :=
 .
 
 (** [arrays::sum]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 247:4-253:1 *)
+    Source: 'tests/src/arrays.rs', lines 248:4-251:5 *)
 Fixpoint sum_loop
   (n : nat) (s : slice u32) (sum1 : u32) (i : usize) : result u32 :=
   match n with
@@ -395,7 +395,7 @@ Definition sum (n : nat) (s : slice u32) : result u32 :=
 .
 
 (** [arrays::sum2]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 258:4-264:1 *)
+    Source: 'tests/src/arrays.rs', lines 259:4-262:5 *)
 Fixpoint sum2_loop
   (n : nat) (s : slice u32) (s2 : slice u32) (sum1 : u32) (i : usize) :
   result u32
@@ -498,7 +498,7 @@ Definition ite : result unit :=
 .
 
 (** [arrays::zero_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 308:4-313:1 *)
+    Source: 'tests/src/arrays.rs', lines 309:4-312:5 *)
 Fixpoint zero_slice_loop
   (n : nat) (a : slice u8) (i : usize) (len : usize) : result (slice u8) :=
   match n with
@@ -522,7 +522,7 @@ Definition zero_slice (n : nat) (a : slice u8) : result (slice u8) :=
 .
 
 (** [arrays::iter_mut_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 317:4-321:1 *)
+    Source: 'tests/src/arrays.rs', lines 318:4-320:5 *)
 Fixpoint iter_mut_slice_loop
   (n : nat) (len : usize) (i : usize) : result unit :=
   match n with
@@ -541,7 +541,7 @@ Definition iter_mut_slice (n : nat) (a : slice u8) : result (slice u8) :=
 .
 
 (** [arrays::sum_mut_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 325:4-331:1 *)
+    Source: 'tests/src/arrays.rs', lines 326:4-329:5 *)
 Fixpoint sum_mut_slice_loop
   (n : nat) (a : slice u32) (i : usize) (s : u32) : result u32 :=
   match n with
