@@ -133,7 +133,9 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
       List.fold_left_map
         (fun tr_map (c : trait_clause) ->
           let subst = mk_subst tr_map in
-          let { trait_decl_id; decl_generics; _ } = c.trait in
+          (* *)
+          sanity_check __FILE__ __LINE__ (c.trait.binder_regions = []) span;
+          let { trait_decl_id; decl_generics; _ } = c.trait.binder_value in
           let generics =
             Substitute.generic_args_substitute subst decl_generics
           in
@@ -141,7 +143,17 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
           (* Note that because we directly refer to the clause, we give it
              empty generics *)
           let trait_id = Clause c.clause_id in
-          let trait_ref = { trait_id; trait_decl_ref } in
+          let trait_ref =
+            {
+              trait_id;
+              trait_decl_ref =
+                {
+                  (* Empty list of bound regions: we don't support the other cases for now *)
+                  binder_regions = [];
+                  binder_value = trait_decl_ref;
+                };
+            }
+          in
           (* Update the traits map *)
           let tr_map = TraitClauseId.Map.add c.clause_id trait_id tr_map in
           (tr_map, trait_ref))

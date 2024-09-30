@@ -405,6 +405,11 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
     A.fun_decl =
   A.FunDeclId.Map.find id ctx.fun_ctx.llbc_fun_decls
 
+(* We simply ignore the bound regions *)
+let translate_region_binder (translate_value : 'a -> 'b)
+    (rb : 'a T.region_binder) : 'b =
+  translate_value rb.binder_value
+
 (* Some generic translation functions (we need to translate different "flavours"
    of types: forward types, backward types, etc.) *)
 let rec translate_generic_args (span : Meta.span option)
@@ -422,7 +427,9 @@ and translate_trait_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
     (tr : T.trait_ref) : trait_ref =
   let trait_id = translate_trait_instance_id span translate_ty tr.trait_id in
   let trait_decl_ref =
-    translate_trait_decl_ref span translate_ty tr.trait_decl_ref
+    translate_region_binder
+      (translate_trait_decl_ref span translate_ty)
+      tr.trait_decl_ref
   in
   { trait_id; trait_decl_ref }
 
@@ -526,11 +533,15 @@ and translate_strait_instance_id (span : Meta.span option)
     (id : T.trait_instance_id) : trait_instance_id =
   translate_trait_instance_id span (translate_sty span) id
 
+let translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
+    : trait_decl_ref =
+  translate_trait_decl_ref span (translate_sty span) tr
+
 let translate_trait_clause (span : Meta.span option) (clause : T.trait_clause) :
     trait_clause =
   let { T.clause_id; span = _; trait } = clause in
-  let generics = translate_sgeneric_args span trait.decl_generics in
-  { clause_id; trait_id = trait.trait_decl_id; generics }
+  let trait = translate_region_binder (translate_strait_decl_ref span) trait in
+  { clause_id; trait_id = trait.trait_decl_id; generics = trait.decl_generics }
 
 let translate_strait_type_constraint (span : Meta.span option)
     (ttc : T.trait_type_constraint) : trait_type_constraint =
@@ -553,7 +564,9 @@ let translate_generic_params (span : Meta.span option)
   in
   let trait_clauses = List.map (translate_trait_clause span) trait_clauses in
   let trait_type_constraints =
-    List.map (translate_strait_type_constraint span) trait_type_constraints
+    List.map
+      (translate_region_binder (translate_strait_type_constraint span))
+      trait_type_constraints
   in
   ({ types; const_generics; trait_clauses }, { trait_type_constraints })
 
@@ -4135,8 +4148,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let span = item_meta.span in
   let type_infos = ctx.type_ctx.type_infos in
   let impl_trait =
-    translate_trait_decl_ref (Some span)
-      (translate_fwd_ty (Some span) type_infos)
+    (translate_trait_decl_ref (Some span)
+       (translate_fwd_ty (Some span) type_infos))
       llbc_impl_trait
   in
   let name =
