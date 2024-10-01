@@ -683,7 +683,13 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
              ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
               ^ generic_args_to_string ctx func.generics
               ^ "\n- trait_ref.trait_decl_ref: "
-              ^ trait_decl_ref_to_string ctx trait_ref.trait_decl_ref));
+              ^ trait_decl_ref_region_binder_to_string ctx
+                  trait_ref.trait_decl_ref));
+          (* Check that there are no bound regions *)
+          cassert __FILE__ __LINE__
+            (trait_ref.trait_decl_ref.binder_regions = [])
+            span "Unexpected bound regions";
+          let trait_decl_ref = trait_ref.trait_decl_ref.binder_value in
           (* Lookup the trait method signature - there are several possibilities
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
@@ -737,8 +743,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     (trait_impl.provided_methods = [])
                     span "Overriding provided methods is currently forbidden";
                   let trait_decl =
-                    ctx_lookup_trait_decl ctx
-                      trait_ref.trait_decl_ref.trait_decl_id
+                    ctx_lookup_trait_decl ctx trait_decl_ref.trait_decl_id
                   in
                   let _, method_id =
                     List.find
@@ -764,8 +769,8 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                      ]}
                   *)
                   let all_generics =
-                    TypesUtils.merge_generic_args
-                      trait_ref.trait_decl_ref.decl_generics func.generics
+                    TypesUtils.merge_generic_args trait_decl_ref.decl_generics
+                      func.generics
                   in
                   log#ldebug
                     (lazy
@@ -793,7 +798,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
           | _ ->
               (* We are using a local clause - we lookup the trait decl *)
               let trait_decl =
-                ctx_lookup_trait_decl ctx trait_ref.trait_decl_ref.trait_decl_id
+                ctx_lookup_trait_decl ctx trait_decl_ref.trait_decl_id
               in
               (* Lookup the method decl in the required *and* the provided methods *)
               let _, method_id =
@@ -809,8 +814,8 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               (* When instantiating, we need to group the generics for the
                  trait ref and the generics for the method *)
               let generics =
-                TypesUtils.merge_generic_args
-                  trait_ref.trait_decl_ref.decl_generics func.generics
+                TypesUtils.merge_generic_args trait_decl_ref.decl_generics
+                  func.generics
               in
               let regions_hierarchy =
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)

@@ -1656,9 +1656,12 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
         (fun (c : Types.trait_clause) -> c.clause_id = clause_id)
         clauses
     in
-    let trait_id = clause.trait.trait_decl_id in
+    (* Note that we ignore the binder *)
+    let clause_trait = clause.trait.binder_value in
+    (* *)
+    let trait_id = clause_trait.trait_decl_id in
     let impl_trait_decl = TraitDeclId.Map.find trait_id ctx.crate.trait_decls in
-    let args = clause.trait.decl_generics in
+    let args = clause_trait.decl_generics in
     trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
       impl_trait_decl.item_meta.name params args
   in

@@ -35,8 +35,8 @@ end
 module TyMap = Collections.MakeMap (TyOrd)
 
 let compute_norm_trait_types_from_preds (span : Meta.span option)
-    (trait_type_constraints : trait_type_constraint list) : ty TraitTypeRefMap.t
-    =
+    (trait_type_constraints : trait_type_constraint region_binder list) :
+    ty TraitTypeRefMap.t =
   (* Compute a union-find structure by recursively exploring the predicates and clauses *)
   let norm : ty UnionFind.elem TyMap.t ref = ref TyMap.empty in
   let get_ref (ty : ty) : ty UnionFind.elem =
@@ -47,10 +47,13 @@ let compute_norm_trait_types_from_preds (span : Meta.span option)
         norm := TyMap.add ty r !norm;
         r
   in
-  let add_trait_type_constraint (c : trait_type_constraint) =
-    (* Sanity check: the type constraint can't make use of regions - Remark
+  let add_trait_type_constraint (c : trait_type_constraint region_binder) =
+    (* Sanity check: there are no bound regions *)
+    sanity_check_opt_span __FILE__ __LINE__ (c.binder_regions = []) span;
+    (* Sanity check: the type constraint can't make use of regions - Note
        that it would be enough to only visit the field [ty] of the trait type
        constraint, but for safety we visit all the fields *)
+    let c = c.binder_value in
     sanity_check_opt_span __FILE__ __LINE__
       (trait_type_constraint_no_regions c)
       span;
@@ -83,7 +86,8 @@ let compute_norm_trait_types_from_preds (span : Meta.span option)
   TraitTypeRefMap.of_list rbindings
 
 let ctx_add_norm_trait_types_from_preds (span : Meta.span option)
-    (ctx : eval_ctx) (trait_type_constraints : trait_type_constraint list) :
+    (ctx : eval_ctx)
+    (trait_type_constraints : trait_type_constraint region_binder list) :
     eval_ctx =
   let norm_trait_types =
     compute_norm_trait_types_from_preds span trait_type_constraints
@@ -397,12 +401,24 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
 
   (* Check if the id is an impl, otherwise normalize it *)
   let trait_id = norm_ctx_normalize_trait_instance_id ctx trait_id in
-  let trait_decl_ref = norm_ctx_normalize_trait_decl_ref ctx trait_decl_ref in
+  let trait_decl_ref =
+    norm_ctx_normalize_region_binder norm_ctx_normalize_trait_decl_ref ctx
+      trait_decl_ref
+  in
   log#ldebug
     (lazy
       ("norm_ctx_normalize_trait_ref: no norm: "
       ^ trait_instance_id_to_string ctx trait_id));
   { trait_id; trait_decl_ref }
+
+and norm_ctx_normalize_region_binder :
+      'a.
+      (norm_ctx -> 'a -> 'a) -> norm_ctx -> 'a region_binder -> 'a region_binder
+    =
+ fun norm_value ctx rb ->
+  let { binder_regions; binder_value } = rb in
+  let binder_value = norm_value ctx binder_value in
+  { binder_regions; binder_value }
 
 (* Not sure this one is really necessary *)
 and norm_ctx_normalize_trait_decl_ref (ctx : norm_ctx)
@@ -439,9 +455,12 @@ let ctx_normalize_erase_ty (span : Meta.span) (ctx : eval_ctx) (ty : ty) : ty =
   let ty = ctx_normalize_ty (Some span) ctx ty in
   Subst.erase_regions ty
 
-let ctx_normalize_trait_type_constraint (span : Meta.span) (ctx : eval_ctx)
-    (ttc : trait_type_constraint) : trait_type_constraint =
-  norm_ctx_normalize_trait_type_constraint (mk_norm_ctx (Some span) ctx) ttc
+let ctx_normalize_trait_type_constraint_region_binder (span : Meta.span)
+    (ctx : eval_ctx) (ttc : trait_type_constraint region_binder) :
+    trait_type_constraint region_binder =
+  norm_ctx_normalize_region_binder norm_ctx_normalize_trait_type_constraint
+    (mk_norm_ctx (Some span) ctx)
+    ttc
 
 (** Same as [type_decl_get_instantiated_variants_fields_types] but normalizes the types *)
 let type_decl_get_inst_norm_variants_fields_rtypes (span : Meta.span)
@@ -512,7 +531,7 @@ let ctx_subst_norm_signature (span : Meta.span) (ctx : eval_ctx)
   let output = ctx_normalize_ty (Some span) ctx output in
   let trait_type_constraints =
     List.map
-      (ctx_normalize_trait_type_constraint span ctx)
+      (ctx_normalize_trait_type_constraint_region_binder span ctx)
       trait_type_constraints
   in
   { regions_hierarchy; inputs; output; trait_type_constraints }

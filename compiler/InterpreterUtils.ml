@@ -34,6 +34,9 @@ let generic_args_to_string = Print.EvalCtx.generic_args_to_string
 let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
 let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
 
+let trait_decl_ref_region_binder_to_string =
+  Print.EvalCtx.trait_decl_ref_region_binder_to_string
+
 let fun_id_or_trait_method_ref_to_string =
   Print.EvalCtx.fun_id_or_trait_method_ref_to_string
 
