@@ -12,7 +12,7 @@ Include External_Types.
 Module External_FunsExternal_Template.
 
 (** [core::cell::{core::cell::Cell<T>}#10::get]:
-    Source: '/rustc/library/core/src/cell.rs', lines 536:4-536:26
+    Source: '/rustc/library/core/src/cell.rs', lines 540:4-540:32
     Name pattern: core::cell::{core::cell::Cell<@T>}::get *)
 Axiom core_cell_Cell_get :
   forall{T : Type} (markerCopyInst : core_marker_Copy_t T),
@@ -20,7 +20,7 @@ Axiom core_cell_Cell_get :
 .
 
 (** [core::cell::{core::cell::Cell<T>}#11::get_mut]:
-    Source: '/rustc/library/core/src/cell.rs', lines 614:4-614:39
+    Source: '/rustc/library/core/src/cell.rs', lines 619:4-619:45
     Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut *)
 Axiom core_cell_Cell_get_mut :
   forall{T : Type},
@@ -29,7 +29,7 @@ Axiom core_cell_Cell_get_mut :
 .
 
 (** [core::clone::Clone::clone_from]:
-    Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
+    Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43
     Name pattern: core::clone::Clone::clone_from *)
 Axiom core_clone_Clone_clone_from :
   forall{Self : Type} (self_clause : core_clone_Clone Self),
