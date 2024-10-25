@@ -6,7 +6,7 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::cell::Cell]
-    Source: '/rustc/library/core/src/cell.rs', lines 309:0-309:26
+    Source: '/rustc/library/core/src/cell.rs', lines 310:0-310:26
     Name pattern: core::cell::Cell *)
 val core_cell_Cell_t (t : Type0) : Type0
 
