@@ -1140,9 +1140,7 @@ theorem core.num.U8.saturating_add_spec (x y : U8) :
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> try scalar_tac
-  scalar_tac_preprocess
-  omega
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.U16.saturating_add_spec (x y : U16) :
@@ -1151,9 +1149,7 @@ theorem core.num.U16.saturating_add_spec (x y : U16) :
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> try scalar_tac
-  scalar_tac_preprocess
-  omega
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.U32.saturating_add_spec (x y : U32) :
@@ -1162,9 +1158,7 @@ theorem core.num.U32.saturating_add_spec (x y : U32) :
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> try scalar_tac
-  scalar_tac_preprocess
-  omega
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.U64.saturating_add_spec (x y : U64) :
@@ -1173,9 +1167,7 @@ theorem core.num.U64.saturating_add_spec (x y : U64) :
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> try scalar_tac
-  scalar_tac_preprocess
-  omega
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.U128.saturating_add_spec (x y : U128) :
@@ -1184,9 +1176,7 @@ theorem core.num.U128.saturating_add_spec (x y : U128) :
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> try scalar_tac
-  scalar_tac_preprocess
-  omega
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.Usize.saturating_add_spec (x y : Usize) :
@@ -1195,9 +1185,7 @@ theorem core.num.Usize.saturating_add_spec (x y : Usize) :
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> try scalar_tac
-  scalar_tac_preprocess
-  omega
+  split <;> split <;> split <;> scalar_tac
 
 -- Saturating sub
 def int_saturating_sub (ty : ScalarTy) (x y : Int) : Int :=
@@ -1260,8 +1248,7 @@ theorem core.num.U8.saturating_sub_spec (x y : U8) :
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> try scalar_tac
-  simp
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.U16.saturating_sub_spec (x y : U16) :
@@ -1270,8 +1257,7 @@ theorem core.num.U16.saturating_sub_spec (x y : U16) :
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> try scalar_tac
-  simp
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.U32.saturating_sub_spec (x y : U32) :
@@ -1280,8 +1266,7 @@ theorem core.num.U32.saturating_sub_spec (x y : U32) :
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> try scalar_tac
-  simp
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.U64.saturating_sub_spec (x y : U64) :
@@ -1290,8 +1275,7 @@ theorem core.num.U64.saturating_sub_spec (x y : U64) :
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> try scalar_tac
-  simp
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.U128.saturating_sub_spec (x y : U128) :
@@ -1300,8 +1284,7 @@ theorem core.num.U128.saturating_sub_spec (x y : U128) :
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> try scalar_tac
-  simp
+  split <;> split <;> split <;> scalar_tac
 
 @[pspec]
 theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
@@ -1310,7 +1293,6 @@ theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> try scalar_tac
-  simp
+  split <;> split <;> split <;> scalar_tac
 
 end Primitives
