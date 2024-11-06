@@ -1,9 +1,5 @@
-import Lean
 import Base.Utils
-import Base.Primitives.Base
-
-import Lean.Meta.DiscrTree
-import Lean.Meta.Tactic.Simp
+import Lean.Elab.Tactic.Rewrites
 
 /-! Various state extensions used in the library -/
 namespace Extensions
