@@ -10,7 +10,7 @@ type abs_region_groups = abs_region_group list [@@deriving show]
 (** A function signature, after instantiation *)
 type inst_fun_sig = {
   regions_hierarchy : abs_region_groups;
-  trait_type_constraints : trait_type_constraint list;
+  trait_type_constraints : trait_type_constraint region_binder list;
   inputs : rty list;
   output : rty;
 }

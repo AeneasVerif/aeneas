@@ -14,11 +14,11 @@ type aVLNode_t (t : Type0) =
 
 (** [issue_194_recursive_struct_projector::get_val]:
     Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 10:0-12:1 *)
-let get_val (t : Type0) (x : aVLNode_t t) : result t =
+let get_val (#t : Type0) (x : aVLNode_t t) : result t =
   Ok x.value
 
 (** [issue_194_recursive_struct_projector::get_left]:
     Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 14:0-16:1 *)
-let get_left (t : Type0) (x : aVLNode_t t) : result (option (aVLNode_t t)) =
+let get_left (#t : Type0) (x : aVLNode_t t) : result (option (aVLNode_t t)) =
   Ok x.left
 

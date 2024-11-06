@@ -34,6 +34,9 @@ let generic_args_to_string = Print.EvalCtx.generic_args_to_string
 let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
 let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
 
+let trait_decl_ref_region_binder_to_string =
+  Print.EvalCtx.trait_decl_ref_region_binder_to_string
+
 let fun_id_or_trait_method_ref_to_string =
   Print.EvalCtx.fun_id_or_trait_method_ref_to_string
 
@@ -69,12 +72,15 @@ let mk_place_from_var_id (var_id : VarId.id) : place =
   { var_id; projection = [] }
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value (span : Meta.span) (ty : ty) : symbolic_value =
+let mk_fresh_symbolic_value_opt_span (span : Meta.span option) (ty : ty) :
+    symbolic_value =
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
+  sanity_check_opt_span __FILE__ __LINE__ (ty_is_rty ty) span;
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue
+
+let mk_fresh_symbolic_value span = mk_fresh_symbolic_value_opt_span (Some span)
 
 let mk_fresh_symbolic_value_from_no_regions_ty (span : Meta.span) (ty : ty) :
     symbolic_value =
@@ -82,13 +88,17 @@ let mk_fresh_symbolic_value_from_no_regions_ty (span : Meta.span) (ty : ty) :
   mk_fresh_symbolic_value span ty
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_typed_value (span : Meta.span) (rty : ty) : typed_value =
-  sanity_check __FILE__ __LINE__ (ty_is_rty rty) span;
+let mk_fresh_symbolic_typed_value_opt_span (span : Meta.span option) (rty : ty)
+    : typed_value =
+  sanity_check_opt_span __FILE__ __LINE__ (ty_is_rty rty) span;
   let ty = Substitute.erase_regions rty in
   (* Generate the fresh a symbolic value *)
-  let value = mk_fresh_symbolic_value span rty in
+  let value = mk_fresh_symbolic_value_opt_span span rty in
   let value = VSymbolic value in
   { value; ty }
+
+let mk_fresh_symbolic_typed_value span =
+  mk_fresh_symbolic_typed_value_opt_span (Some span)
 
 let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
     (ty : ty) : typed_value =
@@ -298,9 +308,9 @@ let rvalue_get_place (rv : rvalue) : place option =
   | UnaryOp _
   | BinaryOp _
   | Global _
+  | GlobalRef _
   | Discriminant _
   | Aggregate _ -> None
-  | ShallowInitBox _ -> failwith "ShallowInitBox"
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows (ctx : eval_ctx) (sv : symbolic_value) : bool =
@@ -431,7 +441,7 @@ let empty_ids_set = fst (compute_ctxs_ids [])
 (** **WARNING**: this function doesn't compute the normalized types
     (for the trait type aliases). This should be computed afterwards.
  *)
-let initialize_eval_ctx (span : Meta.span) (ctx : decls_ctx)
+let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     (region_groups : RegionGroupId.id list) (type_vars : type_var list)
     (const_generic_vars : const_generic_var list) : eval_ctx =
   reset_global_counters ();
@@ -440,7 +450,7 @@ let initialize_eval_ctx (span : Meta.span) (ctx : decls_ctx)
       (List.map
          (fun (cg : const_generic_var) ->
            let ty = TLiteral cg.ty in
-           let cv = mk_fresh_symbolic_typed_value span ty in
+           let cv = mk_fresh_symbolic_typed_value_opt_span span ty in
            (cg.index, cv))
          const_generic_vars)
   in

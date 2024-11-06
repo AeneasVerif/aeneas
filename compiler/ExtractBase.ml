@@ -584,6 +584,8 @@ type extraction_ctx = {
   is_provided_method : bool;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : pure_fun_translation A.FunDeclId.Map.t;
+  trans_globals : Pure.global_decl Pure.GlobalDeclId.Map.t;
+  builtin_sigs : Pure.fun_sig Assumed.AssumedFunIdMap.t;
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
@@ -1152,23 +1154,31 @@ let assumed_llbc_functions () : (A.assumed_fun_id * string) list =
   match backend () with
   | FStar | Coq | HOL4 ->
       [
-        (ArrayIndexShared, "array_index_usize");
-        (ArrayIndexMut, "array_index_mut_usize");
         (ArrayToSliceShared, "array_to_slice");
         (ArrayToSliceMut, "array_to_slice_mut");
         (ArrayRepeat, "array_repeat");
-        (SliceIndexShared, "slice_index_usize");
-        (SliceIndexMut, "slice_index_mut_usize");
+        ( Index { is_array = true; mutability = RShared; is_range = false },
+          "array_index_usize" );
+        ( Index { is_array = true; mutability = RMut; is_range = false },
+          "array_index_mut_usize" );
+        ( Index { is_array = false; mutability = RShared; is_range = false },
+          "slice_index_usize" );
+        ( Index { is_array = false; mutability = RMut; is_range = false },
+          "slice_index_mut_usize" );
       ]
   | Lean ->
       [
-        (ArrayIndexShared, "Array.index_usize");
-        (ArrayIndexMut, "Array.index_mut_usize");
         (ArrayToSliceShared, "Array.to_slice");
         (ArrayToSliceMut, "Array.to_slice_mut");
         (ArrayRepeat, "Array.repeat");
-        (SliceIndexShared, "Slice.index_usize");
-        (SliceIndexMut, "Slice.index_mut_usize");
+        ( Index { is_array = true; mutability = RShared; is_range = false },
+          "Array.index_usize" );
+        ( Index { is_array = true; mutability = RMut; is_range = false },
+          "Array.index_mut_usize" );
+        ( Index { is_array = false; mutability = RShared; is_range = false },
+          "Slice.index_usize" );
+        ( Index { is_array = false; mutability = RMut; is_range = false },
+          "Slice.index_mut_usize" );
       ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
@@ -1473,7 +1483,7 @@ let ctx_compute_variant_name (ctx : extraction_ctx) (def : type_decl)
     (variant : variant) : string =
   (* Replace the name of the variant if the user annotated it with the [rename] attribute. *)
   let variant =
-    Option.value variant.attr_info.rename ~default:variant.variant_name
+    Option.value variant.variant_attr_info.rename ~default:variant.variant_name
   in
   match backend () with
   | FStar | Coq | HOL4 ->
@@ -1646,9 +1656,12 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
         (fun (c : Types.trait_clause) -> c.clause_id = clause_id)
         clauses
     in
-    let trait_id = clause.trait.trait_decl_id in
+    (* Note that we ignore the binder *)
+    let clause_trait = clause.trait.binder_value in
+    (* *)
+    let trait_id = clause_trait.trait_decl_id in
     let impl_trait_decl = TraitDeclId.Map.find trait_id ctx.crate.trait_decls in
-    let args = clause.trait.decl_generics in
+    let args = clause_trait.decl_generics in
     trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
       impl_trait_decl.item_meta.name params args
   in

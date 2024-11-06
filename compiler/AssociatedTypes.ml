@@ -35,8 +35,8 @@ end
 module TyMap = Collections.MakeMap (TyOrd)
 
 let compute_norm_trait_types_from_preds (span : Meta.span option)
-    (trait_type_constraints : trait_type_constraint list) : ty TraitTypeRefMap.t
-    =
+    (trait_type_constraints : trait_type_constraint region_binder list) :
+    ty TraitTypeRefMap.t =
   (* Compute a union-find structure by recursively exploring the predicates and clauses *)
   let norm : ty UnionFind.elem TyMap.t ref = ref TyMap.empty in
   let get_ref (ty : ty) : ty UnionFind.elem =
@@ -47,10 +47,13 @@ let compute_norm_trait_types_from_preds (span : Meta.span option)
         norm := TyMap.add ty r !norm;
         r
   in
-  let add_trait_type_constraint (c : trait_type_constraint) =
-    (* Sanity check: the type constraint can't make use of regions - Remark
+  let add_trait_type_constraint (c : trait_type_constraint region_binder) =
+    (* Sanity check: there are no bound regions *)
+    sanity_check_opt_span __FILE__ __LINE__ (c.binder_regions = []) span;
+    (* Sanity check: the type constraint can't make use of regions - Note
        that it would be enough to only visit the field [ty] of the trait type
        constraint, but for safety we visit all the fields *)
+    let c = c.binder_value in
     sanity_check_opt_span __FILE__ __LINE__
       (trait_type_constraint_no_regions c)
       span;
@@ -82,10 +85,12 @@ let compute_norm_trait_types_from_preds (span : Meta.span option)
   in
   TraitTypeRefMap.of_list rbindings
 
-let ctx_add_norm_trait_types_from_preds (span : Meta.span) (ctx : eval_ctx)
-    (trait_type_constraints : trait_type_constraint list) : eval_ctx =
+let ctx_add_norm_trait_types_from_preds (span : Meta.span option)
+    (ctx : eval_ctx)
+    (trait_type_constraints : trait_type_constraint region_binder list) :
+    eval_ctx =
   let norm_trait_types =
-    compute_norm_trait_types_from_preds (Some span) trait_type_constraints
+    compute_norm_trait_types_from_preds span trait_type_constraints
   in
   { ctx with norm_trait_types }
 
@@ -396,12 +401,24 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
 
   (* Check if the id is an impl, otherwise normalize it *)
   let trait_id = norm_ctx_normalize_trait_instance_id ctx trait_id in
-  let trait_decl_ref = norm_ctx_normalize_trait_decl_ref ctx trait_decl_ref in
+  let trait_decl_ref =
+    norm_ctx_normalize_region_binder norm_ctx_normalize_trait_decl_ref ctx
+      trait_decl_ref
+  in
   log#ldebug
     (lazy
       ("norm_ctx_normalize_trait_ref: no norm: "
       ^ trait_instance_id_to_string ctx trait_id));
   { trait_id; trait_decl_ref }
+
+and norm_ctx_normalize_region_binder :
+      'a.
+      (norm_ctx -> 'a -> 'a) -> norm_ctx -> 'a region_binder -> 'a region_binder
+    =
+ fun norm_value ctx rb ->
+  let { binder_regions; binder_value } = rb in
+  let binder_value = norm_value ctx binder_value in
+  { binder_regions; binder_value }
 
 (* Not sure this one is really necessary *)
 and norm_ctx_normalize_trait_decl_ref (ctx : norm_ctx)
@@ -417,9 +434,9 @@ let norm_ctx_normalize_trait_type_constraint (ctx : norm_ctx)
   let ty = norm_ctx_normalize_ty ctx ty in
   { trait_ref; type_name; ty }
 
-let mk_norm_ctx (span : Meta.span) (ctx : eval_ctx) : norm_ctx =
+let mk_norm_ctx (span : Meta.span option) (ctx : eval_ctx) : norm_ctx =
   {
-    span = Some span;
+    span;
     norm_trait_types = ctx.norm_trait_types;
     type_decls = ctx.type_ctx.type_decls;
     fun_decls = ctx.fun_ctx.fun_decls;
@@ -430,17 +447,20 @@ let mk_norm_ctx (span : Meta.span) (ctx : eval_ctx) : norm_ctx =
     const_generic_vars = ctx.const_generic_vars;
   }
 
-let ctx_normalize_ty (span : Meta.span) (ctx : eval_ctx) (ty : ty) : ty =
+let ctx_normalize_ty (span : Meta.span option) (ctx : eval_ctx) (ty : ty) : ty =
   norm_ctx_normalize_ty (mk_norm_ctx span ctx) ty
 
 (** Normalize a type and erase the regions at the same time *)
 let ctx_normalize_erase_ty (span : Meta.span) (ctx : eval_ctx) (ty : ty) : ty =
-  let ty = ctx_normalize_ty span ctx ty in
+  let ty = ctx_normalize_ty (Some span) ctx ty in
   Subst.erase_regions ty
 
-let ctx_normalize_trait_type_constraint (span : Meta.span) (ctx : eval_ctx)
-    (ttc : trait_type_constraint) : trait_type_constraint =
-  norm_ctx_normalize_trait_type_constraint (mk_norm_ctx span ctx) ttc
+let ctx_normalize_trait_type_constraint_region_binder (span : Meta.span)
+    (ctx : eval_ctx) (ttc : trait_type_constraint region_binder) :
+    trait_type_constraint region_binder =
+  norm_ctx_normalize_region_binder norm_ctx_normalize_trait_type_constraint
+    (mk_norm_ctx (Some span) ctx)
+    ttc
 
 (** Same as [type_decl_get_instantiated_variants_fields_types] but normalizes the types *)
 let type_decl_get_inst_norm_variants_fields_rtypes (span : Meta.span)
@@ -451,7 +471,7 @@ let type_decl_get_inst_norm_variants_fields_rtypes (span : Meta.span)
   in
   List.map
     (fun (variant_id, types) ->
-      (variant_id, List.map (ctx_normalize_ty span ctx) types))
+      (variant_id, List.map (ctx_normalize_ty (Some span) ctx) types))
     res
 
 (** Same as [type_decl_get_instantiated_field_types] but normalizes the types *)
@@ -461,7 +481,7 @@ let type_decl_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
   let types =
     Subst.type_decl_get_instantiated_field_types def opt_variant_id generics
   in
-  List.map (ctx_normalize_ty span ctx) types
+  List.map (ctx_normalize_ty (Some span) ctx) types
 
 (** Same as [ctx_adt_value_get_instantiated_field_rtypes] but normalizes the types *)
 let ctx_adt_value_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
@@ -469,7 +489,7 @@ let ctx_adt_value_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
   let types =
     Subst.ctx_adt_value_get_instantiated_field_types span ctx adt id generics
   in
-  List.map (ctx_normalize_ty span ctx) types
+  List.map (ctx_normalize_ty (Some span) ctx) types
 
 (** Same as [ctx_adt_value_get_instantiated_field_types] but normalizes the types
     and erases the regions. *)
@@ -479,7 +499,7 @@ let type_decl_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
   let types =
     Subst.type_decl_get_instantiated_field_types def opt_variant_id generics
   in
-  let types = List.map (ctx_normalize_ty span ctx) types in
+  let types = List.map (ctx_normalize_ty (Some span) ctx) types in
   List.map Subst.erase_regions types
 
 (** Same as [ctx_adt_get_instantiated_field_types] but normalizes the types and
@@ -491,7 +511,7 @@ let ctx_adt_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
     Subst.ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id
       generics
   in
-  let types = List.map (ctx_normalize_ty span ctx) types in
+  let types = List.map (ctx_normalize_ty (Some span) ctx) types in
   List.map Subst.erase_regions types
 
 (** Same as [substitute_signature] but normalizes the types *)
@@ -507,11 +527,11 @@ let ctx_subst_norm_signature (span : Meta.span) (ctx : eval_ctx)
       sg regions_hierarchy
   in
   let { regions_hierarchy; inputs; output; trait_type_constraints } = sg in
-  let inputs = List.map (ctx_normalize_ty span ctx) inputs in
-  let output = ctx_normalize_ty span ctx output in
+  let inputs = List.map (ctx_normalize_ty (Some span) ctx) inputs in
+  let output = ctx_normalize_ty (Some span) ctx output in
   let trait_type_constraints =
     List.map
-      (ctx_normalize_trait_type_constraint span ctx)
+      (ctx_normalize_trait_type_constraint_region_binder span ctx)
       trait_type_constraints
   in
   { regions_hierarchy; inputs; output; trait_type_constraints }

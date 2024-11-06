@@ -11,7 +11,7 @@ namespace demo
 /- [demo::choose]:
    Source: 'tests/src/demo.rs', lines 7:0-13:1 -/
 def choose
-  (T : Type) (b : Bool) (x : T) (y : T) :
+  {T : Type} (b : Bool) (x : T) (y : T) :
   Result (T × (T → Result (T × T)))
   :=
   if b
@@ -56,38 +56,38 @@ inductive CList (T : Type) :=
 
 /- [demo::list_nth]:
    Source: 'tests/src/demo.rs', lines 41:0-54:1 -/
-divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
+divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then Result.ok x
     else do
          let i1 ← i - 1#u32
-         list_nth T tl i1
+         list_nth tl i1
   | CList.CNil => Result.fail .panic
 
 /- [demo::list_nth1]: loop 0:
-   Source: 'tests/src/demo.rs', lines 56:0-65:1 -/
-divergent def list_nth1_loop (T : Type) (l : CList T) (i : U32) : Result T :=
+   Source: 'tests/src/demo.rs', lines 57:4-65:1 -/
+divergent def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then Result.ok x
     else do
          let i1 ← i - 1#u32
-         list_nth1_loop T tl i1
+         list_nth1_loop tl i1
   | CList.CNil => Result.fail .panic
 
 /- [demo::list_nth1]:
    Source: 'tests/src/demo.rs', lines 56:0-65:1 -/
 @[reducible]
-def list_nth1 (T : Type) (l : CList T) (i : U32) : Result T :=
-  list_nth1_loop T l i
+def list_nth1 {T : Type} (l : CList T) (i : U32) : Result T :=
+  list_nth1_loop l i
 
 /- [demo::list_nth_mut]:
    Source: 'tests/src/demo.rs', lines 67:0-80:1 -/
 divergent def list_nth_mut
-  (T : Type) (l : CList T) (i : U32) :
+  {T : Type} (l : CList T) (i : U32) :
   Result (T × (T → Result (CList T)))
   :=
   match l with
@@ -99,7 +99,7 @@ divergent def list_nth_mut
     else
       do
       let i1 ← i - 1#u32
-      let (t, list_nth_mut_back) ← list_nth_mut T tl i1
+      let (t, list_nth_mut_back) ← list_nth_mut tl i1
       let back :=
         fun ret =>
           do
@@ -121,13 +121,13 @@ divergent def i32_id (i : I32) : Result I32 :=
 /- [demo::list_tail]:
    Source: 'tests/src/demo.rs', lines 90:0-95:1 -/
 divergent def list_tail
-  (T : Type) (l : CList T) :
+  {T : Type} (l : CList T) :
   Result ((CList T) × (CList T → Result (CList T)))
   :=
   match l with
   | CList.CCons t tl =>
     do
-    let (c, list_tail_back) ← list_tail T tl
+    let (c, list_tail_back) ← list_tail tl
     let back :=
       fun ret =>
         do
@@ -158,7 +158,7 @@ def CounterUsize : Counter Usize := {
 /- [demo::use_counter]:
    Source: 'tests/src/demo.rs', lines 111:0-113:1 -/
 def use_counter
-  (T : Type) (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
+  {T : Type} (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
   CounterInst.incr cnt
 
 end demo

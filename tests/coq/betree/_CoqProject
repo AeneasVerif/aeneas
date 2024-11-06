@@ -3,10 +3,10 @@
 -arg -w
 -arg all
 
-Betree_TypesExternal_Template.v
-Betree_Types.v
+Betree_Funs.v 
+Betree_FunsExternal.v 
+Betree_FunsExternal_Template.v 
+Betree_Types.v 
+Betree_TypesExternal.v 
+Betree_TypesExternal_Template.v 
 Primitives.v
-Betree_FunsExternal_Template.v
-Betree_Funs.v
-Betree_TypesExternal.v
-Betree_FunsExternal.v

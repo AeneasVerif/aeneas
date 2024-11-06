@@ -6,18 +6,102 @@ set_option maxHeartbeats 1000000
 
 namespace tutorial
 
+/- # Basic tactics -/
+
+/- Exercise 1: Version 1: -/
+example α (n : Nat) (x y : α) (l0 l1 l2 : List α)
+  (h0 : l1 = x :: l0)
+  (h1 : l2 = y :: l1)
+  (h2 : l0.length = n) :
+  l2.length = n + 2 := by
+  -- Using the keyword `only` to decompose what happens step by step
+  simp only [h1]
+  simp only [h0]
+  simp only [List.length_cons]
+  simp -- This simplifies the `... + 1 + 1 = ... + 2`
+  simp [h2]
+
+/- Exercise 1: Version 2: the proof can be reduced to a one-liner. -/
+example α (n : Nat) (x y : α) (l0 l1 l2 : List α)
+  (h0 : l1 = x :: l0)
+  (h1 : l2 = y :: l1)
+  (h2 : l0.length = n) :
+  l2.length = n + 2 := by
+  simp [*]
+
+example (a b c d : Prop) (h0 : a → b → c) (h1 : c → d → e)
+  (ha : a) (hb : b) (hd : d) : e := by
+  have hc := h0 ha hb
+  have he := h1 hc hd
+  apply he
+
+/- # Some proofs of programs -/
+
 open CList
 
-@[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
+@[simp] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
-  | CCons hd tl => hd :: tl.to_list
+  | CCons hd tl => hd :: tl.toList
 
+/-- Theorem about `list_nth_mut1`: verbose version -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.to_list.length) :
-  ∃ x back, list_nth_mut1 T l i = ok (x, back) ∧
-  x = l.to_list.index i.toNat ∧
-  ∀ x', ∃ l', back x' = ok l' ∧ l'.to_list = l.to_list.update i.toNat x' := by
+  (h : i.val < l.toList.length) :
+  ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
+  x = l.toList.index i.toNat ∧
+  ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
+  rw [list_nth_mut1, list_nth_mut1_loop]
+  split
+  . rename_i hd tl
+    split
+    . -- This call to `simp` simplifies the `∃ x back, ...`
+      simp
+      split_conjs
+      . -- Reasoning about `List.index`:
+        have hi : i.toNat = 0 := by scalar_tac
+        simp only [hi] -- Without the `only`, this actually finished the goal
+        have hIndex := List.index_zero_cons hd tl.toList
+        simp only [hIndex]
+      . intro x
+        -- Reasoning about `List.update`:
+        have hi : i.toNat = 0 := by scalar_tac
+        simp only [hi] -- Without the `only`, this actually finished the goal
+        have hUpdate := List.update_zero_cons hd tl.toList x
+        simp only [hUpdate]
+    . simp at *
+      progress as ⟨ i1, hi1 ⟩
+      progress as ⟨ tl1, back, htl1 ⟩
+      simp
+      split_conjs
+      . have hIndex := List.index_nzero_cons hd tl.toList i.toNat (by scalar_tac)
+        simp only [hIndex]
+        simp only [htl1]
+        have hiEq : i1.toNat = i.toNat - 1 := by scalar_tac
+        simp only [hiEq]
+      . -- Backward function
+        intro x'
+        progress as ⟨ tl2, htl2 ⟩
+        simp
+        have hUpdate := List.update_nzero_cons hd tl.toList i.toNat x' (by scalar_tac)
+        simp only [hUpdate]
+        simp only [htl2]
+        have hiEq : i1.toNat = i.toNat - 1 := by scalar_tac
+        simp only [hiEq]
+  . simp_all
+    scalar_tac
+
+/-- Theorem about `list_nth_mut1`: simple version.
+
+    Remark: a simple way of simplifying the context is simply to
+    call `simp_all`. Below, we're trying to be a bit more precise with
+    the calls to the simplifier, for instance by using `simp [*]`
+    or `simp at *` when it is enough.
+ -/
+theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
+  (h : i.val < l.toList.length) :
+  ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
+  x = l.toList.index i.toNat ∧
+  ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   split
   . split
@@ -26,47 +110,92 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       . simp_all
       . intro x
         simp_all
-    . simp_all
+    . simp at *
       progress as ⟨ i1 ⟩
       progress as ⟨ tl1, back ⟩
       simp
       split_conjs
-      . simp_all
+      . simp [*]
       . -- Backward function
         intro x'
         progress as ⟨ tl2 ⟩
-        simp_all
+        simp [*]
   . simp_all
     scalar_tac
 
-/-- Theorem about `list_tail` -/
+/-- Theorem about `list_tail`: verbose version -/
 @[pspec]
 theorem list_tail_spec {T : Type} (l : CList T) :
-  ∃ back, list_tail T l = ok (CList.CNil, back) ∧
-  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
+  ∃ back, list_tail l = ok (CList.CNil, back) ∧
+  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
   split
-  . simp_all
+  . rename_i hd tl
+    simp
+    progress as ⟨ back, hBack ⟩
+    -- This call to `simp` simplifies the `∃ ...`
+    simp
+    -- Proving the post-condition about the backward function
+    intro tl1
+    progress as ⟨ tl2, htl2 ⟩
+    -- Simplify the `toList` and the equality
+    simp
+    -- Finish
+    simp only [htl2]
+  . -- Quite a few things automatically happen here
+    simp
+
+/-- Theorem about `list_tail: simple version -/
+@[pspec]
+theorem list_tail_spec' {T : Type} (l : CList T) :
+  ∃ back, list_tail l = ok (CList.CNil, back) ∧
+  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
+  rw [list_tail, list_tail_loop]
+  split
+  . simp
     progress as ⟨ back ⟩
     simp
-    -- Proving the backward function
+    -- Proving the post-condition about the backward function
     intro tl'
     progress
-    simp_all
-  . simp_all
+    simp [*]
+  . simp
 
 /-- Theorem about `append_in_place` -/
 @[pspec]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
-  ∃ l2, append_in_place T l0 l1 = ok l2 ∧
-  l2.to_list = l0.to_list ++ l1.to_list := by
+  ∃ l2, append_in_place l0 l1 = ok l2 ∧
+  l2.toList = l0.toList ++ l1.toList := by
   rw [append_in_place]
   progress as ⟨ tl, back ⟩
   progress as ⟨ l2 ⟩
-  simp_all
+  -- Nothing much to do here
+  simp [*]
 
+@[pspec]
+theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
+  ∃ l', reverse_loop l out = ok l' ∧
+  l'.toList = l.toList.reverse ++ out.toList := by
+  rw [reverse_loop]
+  split
+  . progress as ⟨ l1, hl1 ⟩
+    simp at *
+    simp [hl1]
+  . simp
 
-/- Big numbers -/
+theorem reverse_spec {T : Type} (l : CList T) :
+  ∃ l', reverse l = ok l' ∧
+  l'.toList = l.toList.reverse := by
+  rw [reverse]
+  progress as ⟨ l', hl' ⟩
+  simp at hl'
+  simp [hl']
+
+/-
+  # BIG NUMBERS
+ -/
+
+attribute [-simp] Int.reducePow Nat.reducePow
 
 -- Auxiliary definitions to interpret a vector of u32 as a mathematical integer
 @[simp]
@@ -79,7 +208,6 @@ def toInt_aux (l : List U32) : ℤ :=
 @[reducible]
 def toInt (x : alloc.vec.Vec U32) : ℤ := toInt_aux x.val
 
--- TODO: have := lemma x (by tactic)
 /-- The theorem about `zero_loop` -/
 @[pspec]
 theorem zero_loop_spec
@@ -136,6 +264,10 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
   apply all_nil_impl_toInt_eq_zero
   simp_all
 
+/-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
+
+    Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
+ -/
 @[simp]
 theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
   toInt_aux (l.drop i) = l.index i + 2 ^ 32 * toInt_aux (l.drop (i + 1)) := by
@@ -203,35 +335,36 @@ theorem add_no_overflow_loop_spec
   . progress as ⟨ yv ⟩
     progress as ⟨ xv ⟩
     progress as ⟨ sum ⟩
-    . have := hNoOverflow i.toNat (by scalar_tac) (by scalar_tac)
+    . -- This precondition is not proven automatically
+      have := hNoOverflow i.toNat (by scalar_tac) (by scalar_tac)
       scalar_tac
-    . progress as ⟨ i' ⟩
-      progress as ⟨ x1 ⟩
-      progress as ⟨ x2 ⟩
-      . -- This precondition is not proven automatically
-        intro j h0 h1
-        simp_all
-        -- Simplifying (x.update ...).index:
-        have := List.index_update_neq x.val i.toNat j sum (by scalar_tac)
-        simp [*]
-        apply hNoOverflow j (by scalar_tac) (by scalar_tac)
-      . -- Postcondition
-        /- Note that you don't have to manually call the lemmas `toInt_aux_update`
-           and `toInt_aux_drop` below if you first do:
-           ```
-           have : i.toNat < x.length := by scalar_tac
-           ```
-           (simp_all will automatically apply the lemmas and prove the
-            the precondition sby using the context)
-         -/
-        simp_all [toInt]
-        scalar_eq_nf
-        -- Simplifying: toInt_aux ((↑x).update (↑i).toNat sum)
-        have := toInt_aux_update x.val i.toNat sum (by scalar_tac)
-        simp [*]; scalar_eq_nf
-        -- Simplifying: toInt_aux (List.drop (1 + (↑i).toNat) ↑y
-        have := toInt_aux_drop y.val i.toNat (by scalar_tac)
-        simp [*]; scalar_eq_nf
+    progress as ⟨ i' ⟩
+    progress as ⟨ x1 ⟩
+    progress as ⟨ x2 ⟩
+    . -- This precondition is not proven automatically
+      intro j h0 h1
+      simp_all
+      -- Simplifying (x.update ...).index:
+      have := List.index_update_neq x.val i.toNat j sum (by scalar_tac)
+      simp [*]
+      apply hNoOverflow j (by scalar_tac) (by scalar_tac)
+    -- Postcondition
+    /- Note that you don't have to manually call the lemmas `toInt_aux_update`
+        and `toInt_aux_drop` below if you first do:
+        ```
+        have : i.toNat < x.length := by scalar_tac
+        ```
+        (simp_all will automatically apply the lemmas and prove the
+        the precondition sby using the context)
+      -/
+    simp_all [toInt]
+    scalar_eq_nf
+    -- Simplifying: toInt_aux ((↑x).update (↑i).toNat sum)
+    have := toInt_aux_update x.val i.toNat sum (by scalar_tac)
+    simp [*]; scalar_eq_nf
+    -- Simplifying: toInt_aux (List.drop (1 + (↑i).toNat) ↑y
+    have := toInt_aux_drop y.val i.toNat (by scalar_tac)
+    simp [*]; scalar_eq_nf
   . simp_all
 termination_by (x.length - i.val).toNat
 decreasing_by scalar_decr_tac

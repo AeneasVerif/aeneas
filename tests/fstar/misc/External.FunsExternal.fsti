@@ -7,22 +7,22 @@ include External.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::cell::{core::cell::Cell<T>}#10::get]:
-    Source: '/rustc/library/core/src/cell.rs', lines 536:4-536:26
+    Source: '/rustc/library/core/src/cell.rs', lines 540:4-540:32
     Name pattern: core::cell::{core::cell::Cell<@T>}::get *)
 val core_cell_Cell_get
-  (t : Type0) (markerCopyInst : core_marker_Copy_t t) :
+  (#t : Type0) (markerCopyInst : core_marker_Copy_t t) :
   core_cell_Cell_t t -> state -> result (state & t)
 
 (** [core::cell::{core::cell::Cell<T>}#11::get_mut]:
-    Source: '/rustc/library/core/src/cell.rs', lines 614:4-614:39
+    Source: '/rustc/library/core/src/cell.rs', lines 619:4-619:45
     Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut *)
 val core_cell_Cell_get_mut
-  (t : Type0) :
+  (#t : Type0) :
   core_cell_Cell_t t -> state -> result (state & (t & (t -> state -> result
     (state & (core_cell_Cell_t t)))))
 
 (** [core::clone::Clone::clone_from]:
-    Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
+    Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43
     Name pattern: core::clone::Clone::clone_from *)
 val core_clone_Clone_clone_from
   (#self : Type0) (self_clause : core_clone_Clone self) :

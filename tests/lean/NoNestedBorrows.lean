@@ -10,7 +10,7 @@ namespace no_nested_borrows
 
 /- [no_nested_borrows::Pair]
    Source: 'tests/src/no_nested_borrows.rs', lines 7:0-10:1 -/
-structure Pair (T1 T2 : Type) where
+structure Pair (T1 : Type) (T2 : Type) where
   x : T1
   y : T2
 
@@ -42,7 +42,7 @@ inductive Enum :=
 
 /- [no_nested_borrows::Sum]
    Source: 'tests/src/no_nested_borrows.rs', lines 44:0-47:1 -/
-inductive Sum (T1 T2 : Type) :=
+inductive Sum (T1 : Type) (T2 : Type) :=
 | Left : T1 → Sum T1 T2
 | Right : T2 → Sum T1 T2
 
@@ -144,9 +144,9 @@ def test_list1 : Result Unit :=
    Source: 'tests/src/no_nested_borrows.rs', lines 129:0-137:1 -/
 def test_box1 : Result Unit :=
   do
-  let (_, deref_mut_back) ← alloc.boxed.Box.deref_mut I32 0#i32
+  let (_, deref_mut_back) ← alloc.boxed.Box.deref_mut 0#i32
   let b ← deref_mut_back 1#i32
-  let x ← alloc.boxed.Box.deref I32 b
+  let x ← alloc.boxed.Box.deref b
   if x = 1#i32
   then Result.ok ()
   else Result.fail .panic
@@ -194,7 +194,7 @@ def test_copy_int : Result Unit :=
 
 /- [no_nested_borrows::is_cons]:
    Source: 'tests/src/no_nested_borrows.rs', lines 174:0-179:1 -/
-def is_cons (T : Type) (l : List T) : Result Bool :=
+def is_cons {T : Type} (l : List T) : Result Bool :=
   match l with
   | List.Cons _ _ => Result.ok true
   | List.Nil => Result.ok false
@@ -203,7 +203,7 @@ def is_cons (T : Type) (l : List T) : Result Bool :=
    Source: 'tests/src/no_nested_borrows.rs', lines 181:0-185:1 -/
 def test_is_cons : Result Unit :=
   do
-  let b ← is_cons I32 (List.Cons 0#i32 List.Nil)
+  let b ← is_cons (List.Cons 0#i32 List.Nil)
   if b
   then Result.ok ()
   else Result.fail .panic
@@ -213,7 +213,7 @@ def test_is_cons : Result Unit :=
 
 /- [no_nested_borrows::split_list]:
    Source: 'tests/src/no_nested_borrows.rs', lines 187:0-192:1 -/
-def split_list (T : Type) (l : List T) : Result (T × (List T)) :=
+def split_list {T : Type} (l : List T) : Result (T × (List T)) :=
   match l with
   | List.Cons hd tl => Result.ok (hd, tl)
   | List.Nil => Result.fail .panic
@@ -222,7 +222,7 @@ def split_list (T : Type) (l : List T) : Result (T × (List T)) :=
    Source: 'tests/src/no_nested_borrows.rs', lines 195:0-200:1 -/
 def test_split_list : Result Unit :=
   do
-  let p ← split_list I32 (List.Cons 0#i32 List.Nil)
+  let p ← split_list (List.Cons 0#i32 List.Nil)
   let (hd, _) := p
   if hd = 0#i32
   then Result.ok ()
@@ -234,7 +234,7 @@ def test_split_list : Result Unit :=
 /- [no_nested_borrows::choose]:
    Source: 'tests/src/no_nested_borrows.rs', lines 202:0-208:1 -/
 def choose
-  (T : Type) (b : Bool) (x : T) (y : T) :
+  {T : Type} (b : Bool) (x : T) (y : T) :
   Result (T × (T → Result (T × T)))
   :=
   if b
@@ -247,7 +247,7 @@ def choose
    Source: 'tests/src/no_nested_borrows.rs', lines 210:0-219:1 -/
 def choose_test : Result Unit :=
   do
-  let (z, choose_back) ← choose I32 true 0#i32 0#i32
+  let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
   if z1 = 1#i32
   then
@@ -291,29 +291,29 @@ end
 
 /- [no_nested_borrows::list_length]:
    Source: 'tests/src/no_nested_borrows.rs', lines 272:0-277:1 -/
-divergent def list_length (T : Type) (l : List T) : Result U32 :=
+divergent def list_length {T : Type} (l : List T) : Result U32 :=
   match l with
   | List.Cons _ l1 => do
-                      let i ← list_length T l1
+                      let i ← list_length l1
                       1#u32 + i
   | List.Nil => Result.ok 0#u32
 
 /- [no_nested_borrows::list_nth_shared]:
    Source: 'tests/src/no_nested_borrows.rs', lines 280:0-293:1 -/
-divergent def list_nth_shared (T : Type) (l : List T) (i : U32) : Result T :=
+divergent def list_nth_shared {T : Type} (l : List T) (i : U32) : Result T :=
   match l with
   | List.Cons x tl =>
     if i = 0#u32
     then Result.ok x
     else do
          let i1 ← i - 1#u32
-         list_nth_shared T tl i1
+         list_nth_shared tl i1
   | List.Nil => Result.fail .panic
 
 /- [no_nested_borrows::list_nth_mut]:
    Source: 'tests/src/no_nested_borrows.rs', lines 296:0-309:1 -/
 divergent def list_nth_mut
-  (T : Type) (l : List T) (i : U32) : Result (T × (T → Result (List T))) :=
+  {T : Type} (l : List T) (i : U32) : Result (T × (T → Result (List T))) :=
   match l with
   | List.Cons x tl =>
     if i = 0#u32
@@ -323,7 +323,7 @@ divergent def list_nth_mut
     else
       do
       let i1 ← i - 1#u32
-      let (t, list_nth_mut_back) ← list_nth_mut T tl i1
+      let (t, list_nth_mut_back) ← list_nth_mut tl i1
       let back :=
         fun ret =>
           do
@@ -335,16 +335,16 @@ divergent def list_nth_mut
 /- [no_nested_borrows::list_rev_aux]:
    Source: 'tests/src/no_nested_borrows.rs', lines 312:0-322:1 -/
 divergent def list_rev_aux
-  (T : Type) (li : List T) (lo : List T) : Result (List T) :=
+  {T : Type} (li : List T) (lo : List T) : Result (List T) :=
   match li with
-  | List.Cons hd tl => list_rev_aux T tl (List.Cons hd lo)
+  | List.Cons hd tl => list_rev_aux tl (List.Cons hd lo)
   | List.Nil => Result.ok lo
 
 /- [no_nested_borrows::list_rev]:
    Source: 'tests/src/no_nested_borrows.rs', lines 326:0-329:1 -/
-def list_rev (T : Type) (l : List T) : Result (List T) :=
-  let (li, _) := core.mem.replace (List T) l List.Nil
-  list_rev_aux T li List.Nil
+def list_rev {T : Type} (l : List T) : Result (List T) :=
+  let (li, _) := core.mem.replace l List.Nil
+  list_rev_aux li List.Nil
 
 /- [no_nested_borrows::test_list_functions]:
    Source: 'tests/src/no_nested_borrows.rs', lines 331:0-345:1 -/
@@ -352,34 +352,34 @@ def test_list_functions : Result Unit :=
   do
   let l := List.Cons 2#i32 List.Nil
   let l1 := List.Cons 1#i32 l
-  let i ← list_length I32 (List.Cons 0#i32 l1)
+  let i ← list_length (List.Cons 0#i32 l1)
   if i = 3#u32
   then
     do
-    let i1 ← list_nth_shared I32 (List.Cons 0#i32 l1) 0#u32
+    let i1 ← list_nth_shared (List.Cons 0#i32 l1) 0#u32
     if i1 = 0#i32
     then
       do
-      let i2 ← list_nth_shared I32 (List.Cons 0#i32 l1) 1#u32
+      let i2 ← list_nth_shared (List.Cons 0#i32 l1) 1#u32
       if i2 = 1#i32
       then
         do
-        let i3 ← list_nth_shared I32 (List.Cons 0#i32 l1) 2#u32
+        let i3 ← list_nth_shared (List.Cons 0#i32 l1) 2#u32
         if i3 = 2#i32
         then
           do
           let (_, list_nth_mut_back) ←
-            list_nth_mut I32 (List.Cons 0#i32 l1) 1#u32
+            list_nth_mut (List.Cons 0#i32 l1) 1#u32
           let ls ← list_nth_mut_back 3#i32
-          let i4 ← list_nth_shared I32 ls 0#u32
+          let i4 ← list_nth_shared ls 0#u32
           if i4 = 0#i32
           then
             do
-            let i5 ← list_nth_shared I32 ls 1#u32
+            let i5 ← list_nth_shared ls 1#u32
             if i5 = 3#i32
             then
               do
-              let i6 ← list_nth_shared I32 ls 2#u32
+              let i6 ← list_nth_shared ls 2#u32
               if i6 = 2#i32
               then Result.ok ()
               else Result.fail .panic
@@ -396,7 +396,7 @@ def test_list_functions : Result Unit :=
 /- [no_nested_borrows::id_mut_pair1]:
    Source: 'tests/src/no_nested_borrows.rs', lines 347:0-349:1 -/
 def id_mut_pair1
-  (T1 T2 : Type) (x : T1) (y : T2) :
+  {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   Result ((T1 × T2) × ((T1 × T2) → Result (T1 × T2)))
   :=
   Result.ok ((x, y), Result.ok)
@@ -404,7 +404,7 @@ def id_mut_pair1
 /- [no_nested_borrows::id_mut_pair2]:
    Source: 'tests/src/no_nested_borrows.rs', lines 351:0-353:1 -/
 def id_mut_pair2
-  (T1 T2 : Type) (p : (T1 × T2)) :
+  {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × ((T1 × T2) → Result (T1 × T2)))
   :=
   let (t, t1) := p
@@ -413,7 +413,7 @@ def id_mut_pair2
 /- [no_nested_borrows::id_mut_pair3]:
    Source: 'tests/src/no_nested_borrows.rs', lines 355:0-357:1 -/
 def id_mut_pair3
-  (T1 T2 : Type) (x : T1) (y : T2) :
+  {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   Result ((T1 × T2) × (T1 → Result T1) × (T2 → Result T2))
   :=
   Result.ok ((x, y), Result.ok, Result.ok)
@@ -421,7 +421,7 @@ def id_mut_pair3
 /- [no_nested_borrows::id_mut_pair4]:
    Source: 'tests/src/no_nested_borrows.rs', lines 359:0-361:1 -/
 def id_mut_pair4
-  (T1 T2 : Type) (p : (T1 × T2)) :
+  {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × (T1 → Result T1) × (T2 → Result T2))
   :=
   let (t, t1) := p
@@ -429,7 +429,7 @@ def id_mut_pair4
 
 /- [no_nested_borrows::StructWithTuple]
    Source: 'tests/src/no_nested_borrows.rs', lines 366:0-368:1 -/
-structure StructWithTuple (T1 T2 : Type) where
+structure StructWithTuple (T1 : Type) (T2 : Type) where
   p : (T1 × T2)
 
 /- [no_nested_borrows::new_tuple1]:
@@ -449,7 +449,7 @@ def new_tuple3 : Result (StructWithTuple U64 I64) :=
 
 /- [no_nested_borrows::StructWithPair]
    Source: 'tests/src/no_nested_borrows.rs', lines 383:0-385:1 -/
-structure StructWithPair (T1 T2 : Type) where
+structure StructWithPair (T1 : Type) (T2 : Type) where
   p : Pair T1 T2
 
 /- [no_nested_borrows::new_pair1]:
@@ -498,7 +498,7 @@ def test_weird_borrows1 : Result Unit :=
 /- [no_nested_borrows::test_mem_replace]:
    Source: 'tests/src/no_nested_borrows.rs', lines 414:0-418:1 -/
 def test_mem_replace (px : U32) : Result U32 :=
-  let (y, _) := core.mem.replace U32 px 1#u32
+  let (y, _) := core.mem.replace px 1#u32
   if y = 0#u32
   then Result.ok 2#u32
   else Result.fail .panic
@@ -546,7 +546,7 @@ def read_then_incr (x : U32) : Result (U32 × U32) :=
 
 /- [no_nested_borrows::Tuple]
    Source: 'tests/src/no_nested_borrows.rs', lines 487:0-487:33 -/
-def Tuple (T1 T2 : Type) := T1 × T2
+def Tuple (T1 : Type) (T2 : Type) := T1 × T2
 
 /- [no_nested_borrows::read_tuple]:
    Source: 'tests/src/no_nested_borrows.rs', lines 489:0-491:1 -/
@@ -583,12 +583,12 @@ def create_tuple_struct (x : U32) (y : U64) : Result (Tuple U32 U64) :=
 
 /- [no_nested_borrows::use_id_type]:
    Source: 'tests/src/no_nested_borrows.rs', lines 512:0-514:1 -/
-def use_id_type (T : Type) (x : IdType T) : Result T :=
+def use_id_type {T : Type} (x : IdType T) : Result T :=
   Result.ok x
 
 /- [no_nested_borrows::create_id_type]:
    Source: 'tests/src/no_nested_borrows.rs', lines 516:0-518:1 -/
-def create_id_type (T : Type) (x : T) : Result (IdType T) :=
+def create_id_type {T : Type} (x : T) : Result (IdType T) :=
   Result.ok x
 
 /- [no_nested_borrows::not_bool]:

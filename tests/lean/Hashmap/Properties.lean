@@ -163,7 +163,7 @@ open AList
 theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : Usize)
   (Hslots : ∀ (i : Nat), i < slots.length → slots.val.index i = Nil)
   (Hlen : slots.len + n.val ≤ Usize.max) :
-  ∃ slots1, allocate_slots α slots n = ok slots1 ∧
+  ∃ slots1, allocate_slots slots n = ok slots1 ∧
   (∀ (i : Nat), i < slots1.length → slots1.val.index i = Nil) ∧
   slots1.len = slots.len + n.val := by
   rw [allocate_slots]
@@ -182,7 +182,7 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
         simp_all (config := {maxDischargeDepth := 1})
         have : i - slots.val.length = 0 := by scalar_tac
         simp [*]
-    have Hslots1Len : alloc.vec.Vec.len (AList α) slots1 + n1.val ≤ Usize.max := by
+    have Hslots1Len : alloc.vec.Vec.len slots1 + n1.val ≤ Usize.max := by
       simp_all (config := {maxDischargeDepth := 1})
     progress as ⟨ slots2 ⟩
     constructor
@@ -268,7 +268,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ b l1,
-    insert_in_list α key value l0 = ok (b, l1) ∧
+    insert_in_list key value l0 = ok (b, l1) ∧
     -- The boolean is true ↔ we inserted a new binding
     (b ↔ (l0.lookup key = none)) ∧
     -- We update the binding
@@ -322,7 +322,7 @@ theorem insert_in_list_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: 
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ b l1,
-    insert_in_list α key value l0 = ok (b, l1) ∧
+    insert_in_list key value l0 = ok (b, l1) ∧
     (b ↔ (l0.lookup key = none)) ∧
     -- We update the binding
     l1.lookup key = value ∧
@@ -351,7 +351,7 @@ theorem if_update_eq
 @[pspec]
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
-  ∃ nhm, hm.insert_no_resize α key value = ok nhm  ∧
+  ∃ nhm, hm.insert_no_resize key value = ok nhm  ∧
   -- We preserve the invariant
   nhm.inv ∧
   -- We updated the binding for key
@@ -457,8 +457,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       scalar_tac
     cases h_hm: k_hash_mod == hash_mod.val <;> simp_all (config := {zetaDelta := true, maxDischargeDepth := 2})
 
-  simp_all
-    (config := {maxDischargeDepth := 1})
+  simp_all (config := {maxDischargeDepth := 1})
 
 private theorem slot_allP_not_key_lookup (slot : AList α) (h : slot.v.allP fun (k', _) => ¬k = k') :
   slot.lookup k = none := by
@@ -473,7 +472,7 @@ theorem move_elements_from_list_spec
   (hDisjoint2 : ∀ key v, slot.lookup key = some v → ntable.lookup key = none)
   (hLen : ntable.al_v.length + slot.v.length ≤ Usize.max)
   :
-  ∃ ntable1, ntable.move_elements_from_list T slot = ok ntable1 ∧
+  ∃ ntable1, ntable.move_elements_from_list slot = ok ntable1 ∧
   ntable1.inv ∧
   (∀ key v, ntable1.lookup key = some v → ntable.lookup key = some v ∨ slot.lookup key = some v) ∧
   (∀ key v, ntable.lookup key = some v → ntable1.lookup key = some v) ∧
@@ -702,7 +701,7 @@ private theorem slots_forall_nil_imp_al_v_nil
 theorem move_elements_loop_spec
   {α : Type} (ntable : HashMap α) (slots : Slots α)
   (i : Usize)
-  (hi : i ≤ alloc.vec.Vec.len (AList α) slots)
+  (hi : i ≤ alloc.vec.Vec.len slots)
   (hinv : ntable.inv)
   (hSlotsNonZero : slots.val.length ≠ 0)
   (hSlotsInv : slots_t_inv slots)
@@ -711,7 +710,7 @@ theorem move_elements_loop_spec
   (hDisjoint2 : ∀ key v, slots.lookup key = some v → ntable.lookup key = none)
   (hLen : ntable.al_v.length + slots.al_v.length ≤ Usize.max)
   :
-  ∃ ntable1 slots1, ntable.move_elements_loop α slots i = ok (ntable1, slots1) ∧
+  ∃ ntable1 slots1, ntable.move_elements_loop slots i = ok (ntable1, slots1) ∧
   ntable1.inv ∧
   ntable1.al_v.length = ntable.al_v.length + slots.al_v.length ∧
   (∀ key v, ntable1.lookup key = some v → ntable.lookup key = some v ∨ slots.lookup key = some v) ∧
@@ -755,7 +754,7 @@ theorem move_elements_loop_spec
 
     progress as ⟨ i' ⟩
     progress as ⟨ slots1, hSlots1Eq ⟩
-    have : i' ≤ alloc.vec.Vec.len (AList α) slots1 := by simp_all (config := {maxDischargeDepth := 1}) [alloc.vec.Vec.len]; scalar_tac
+    have : i' ≤ alloc.vec.Vec.len slots1 := by simp_all (config := {maxDischargeDepth := 1}) [alloc.vec.Vec.len]; scalar_tac
     have : slots_t_inv slots1 := by
       simp [slots_t_inv] at *
       intro j h0
@@ -818,7 +817,7 @@ theorem move_elements_loop_spec
   else
     simp [hi, *]
     -- TODO: simp_all (config := {maxDischargeDepth := 1}) removes hEmpty!!
-    have hi : i = alloc.vec.Vec.len (AList α) slots := by scalar_tac
+    have hi : i = alloc.vec.Vec.len slots := by scalar_tac
     have hEmpty : ∀ (j : Nat), j < slots.val.length → slots.val.index j = AList.Nil := by
       simp [hi] at hEmpty
       exact hEmpty
@@ -841,7 +840,7 @@ theorem move_elements_spec
   (hTableLen : ntable.al_v.length = 0)
   (hSlotsLen : slots.al_v.length ≤ Usize.max)
   :
-  ∃ ntable1 slots1, ntable.move_elements α slots = ok (ntable1, slots1) ∧
+  ∃ ntable1 slots1, ntable.move_elements slots = ok (ntable1, slots1) ∧
   ntable1.inv ∧
   ntable1.al_v.length = ntable.al_v.length + slots.al_v.length ∧
   (∀ key v, ntable1.lookup key = some v ↔ slots.lookup key = some v)
@@ -864,7 +863,7 @@ theorem move_elements_spec
 
 @[pspec]
 theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
-  ∃ hm', hm.try_resize α = ok hm' ∧
+  ∃ hm', hm.try_resize = ok hm' ∧
   (∀ key, hm'.lookup key = hm.lookup key) ∧
   hm'.al_v.length = hm.al_v.length := by
   rw [try_resize]
@@ -878,7 +877,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
   progress as ⟨ n2 ⟩
   if hSmaller : hm.slots.val.length ≤ n2.val then
     simp [hSmaller]
-    have : (alloc.vec.Vec.len (AList α) hm.slots).val * 2 ≤ Usize.max := by
+    have : (alloc.vec.Vec.len hm.slots).val * 2 ≤ Usize.max := by
           simp [alloc.vec.Vec.len, inv, inv_load] at *
           -- TODO: this should be automated
           have hIneq1 : n1.val ≤ Usize.max / 2 := by simp [*]
@@ -929,7 +928,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
 theorem insert_spec {α} (hm : HashMap α) (key : Usize) (value : α)
   (hInv : hm.inv)
   (hNotSat : hm.lookup key = none → hm.len_s < Usize.max) :
-  ∃ hm1, insert α hm key value = ok hm1 ∧
+  ∃ hm1, insert hm key value = ok hm1 ∧
   --
   hm1.lookup key = value ∧
   (∀ key', key' ≠ key → hm1.lookup key' = hm.lookup key') ∧
@@ -952,7 +951,7 @@ theorem insert_spec {α} (hm : HashMap α) (key : Usize) (value : α)
 
 @[pspec]
 theorem get_in_list_spec {α} (key : Usize) (slot : AList α) (hLookup : slot.lookup key ≠ none) :
-  ∃ v, get_in_list α key slot = ok v ∧ slot.lookup key = some v := by
+  ∃ v, get_in_list key slot = ok v ∧ slot.lookup key = some v := by
   induction slot <;>
   rw [get_in_list, get_in_list_loop] <;>
   simp_all (config := {maxDischargeDepth := 1})
@@ -960,7 +959,7 @@ theorem get_in_list_spec {α} (key : Usize) (slot : AList α) (hLookup : slot.lo
 
 @[pspec]
 theorem get_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLookup : hm.lookup key ≠ none) :
-  ∃ v, get α hm key = ok v ∧ hm.lookup key = some v := by
+  ∃ v, get hm key = ok v ∧ hm.lookup key = some v := by
   rw [get]
   simp [hash_key, alloc.vec.Vec.len]
   progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
@@ -973,7 +972,7 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
   {l i : Int}
   (hInv : slot_t_inv l i slot)
   (hLookup : slot.lookup key ≠ none) :
-  ∃ v back, get_mut_in_list α slot key = ok (v, back) ∧
+  ∃ v back, get_mut_in_list slot key = ok (v, back) ∧
   slot.lookup key = some v ∧
   ∀ v', ∃ slot', back v' = ok slot' ∧
     slot_t_inv l i slot' ∧
@@ -1004,7 +1003,7 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
 
 @[pspec]
 theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLookup : hm.lookup key ≠ none) :
-  ∃ v back, get_mut α hm key = ok (v, back) ∧
+  ∃ v back, get_mut hm key = ok (v, back) ∧
   hm.lookup key = some v ∧
   ∀ v', ∃ hm', back v' = ok hm' ∧
     hm'.lookup key = v' ∧
@@ -1041,7 +1040,7 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) (hLook
 
 @[pspec]
 theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv : slot_t_inv l i slot) :
-  ∃ v slot', remove_from_list α key slot = ok (v, slot') ∧
+  ∃ v slot', remove_from_list key slot = ok (v, slot') ∧
   slot.lookup key = v ∧
   slot'.lookup key = none ∧
   (∀ key', key' ≠ key → slot'.lookup key' = slot.lookup key') ∧
@@ -1079,7 +1078,7 @@ private theorem lookup_not_none_imp_len_s_pos (hm : HashMap α) (key : Usize) (h
 
 @[pspec]
 theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
-  ∃ v hm', remove α hm key = ok (v, hm') ∧
+  ∃ v hm', remove hm key = ok (v, hm') ∧
   hm.lookup key = v ∧
   hm'.lookup key = none ∧
   (∀ key', key' ≠ key → hm'.lookup key' = hm.lookup key') ∧

@@ -23,7 +23,7 @@ Definition core_marker_CopyU32 : core_marker_Copy_t u32 := {|
     Source: 'tests/src/external.rs', lines 9:0-11:1 *)
 Definition use_get
   (rc : core_cell_Cell_t u32) (st : state) : result (state * u32) :=
-  core_cell_Cell_get u32 core_marker_CopyU32 rc st
+  core_cell_Cell_get core_marker_CopyU32 rc st
 .
 
 (** [external::incr]:
@@ -32,7 +32,7 @@ Definition incr
   (rc : core_cell_Cell_t u32) (st : state) :
   result (state * (core_cell_Cell_t u32))
   :=
-  p <- core_cell_Cell_get_mut u32 rc st;
+  p <- core_cell_Cell_get_mut rc st;
   let (st1, p1) := p in
   let (i, get_mut_back) := p1 in
   i1 <- u32_add i 1%u32;

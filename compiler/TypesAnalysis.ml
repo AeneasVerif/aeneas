@@ -294,6 +294,8 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
       | Alias _ ->
           craise __FILE__ __LINE__ def.item_meta.span
             "type aliases should have been removed earlier"
+      | Union _ ->
+          craise __FILE__ __LINE__ def.item_meta.span "unions are not supported"
       | Opaque | Error _ ->
           craise __FILE__ __LINE__ def.item_meta.span "unreachable"
     in

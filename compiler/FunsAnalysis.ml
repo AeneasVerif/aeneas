@@ -107,12 +107,12 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             | Use _
             | RvRef _
             | Global _
+            | GlobalRef _
             | Discriminant _
             | Aggregate _
             | Len _
             | NullaryOp _
-            | RawPtr _
-            | ShallowInitBox _ -> ()
+            | RawPtr _ -> ()
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail

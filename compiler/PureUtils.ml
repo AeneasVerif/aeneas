@@ -92,9 +92,9 @@ let compute_literal_type (cv : literal) : literal_type =
   | VScalar sv -> TInteger sv.int_ty
   | VBool _ -> TBool
   | VChar _ -> TChar
-  | VStr _ | VByteStr _ ->
+  | VFloat _ | VStr _ | VByteStr _ ->
       craise_opt_span __FILE__ __LINE__ None
-        "String and byte string literals are unsupported"
+        "Float, string and byte string literals are unsupported"
 
 let var_get_id (v : var) : VarId.id = v.id
 
@@ -719,6 +719,7 @@ let trait_decl_is_empty (trait_decl : trait_decl) : bool =
     name = _;
     item_meta = _;
     generics = _;
+    explicit_info = _;
     llbc_generics = _;
     preds = _;
     parent_clauses;
@@ -741,6 +742,7 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
     impl_trait = _;
     llbc_impl_trait = _;
     generics = _;
+    explicit_info = _;
     llbc_generics = _;
     preds = _;
     parent_trait_refs;

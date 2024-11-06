@@ -36,7 +36,7 @@ let filter_drop_assigns (f : fun_decl) : fun_decl =
         | Drop p1, Assign (p2, _) ->
             if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
-        | Drop p1, Sequence ({ content = Assign (p2, _); span = _ }, _) ->
+        | Drop p1, Sequence ({ content = Assign (p2, _); _ }, _) ->
             if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
         | _ -> super#visit_Sequence env st1 st2
@@ -110,7 +110,8 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
     | Assign (_, rv) -> (
         match rv with
         | Use _ | RvRef _ -> not must_end_with_exit
-        | Aggregate (AggregatedAdt (TTuple, _, _), []) -> not must_end_with_exit
+        | Aggregate (AggregatedAdt (TTuple, _, _, _), []) ->
+            not must_end_with_exit
         | _ -> false)
     | FakeRead _ | Drop _ | Nop -> not must_end_with_exit
     | Panic | Return -> true

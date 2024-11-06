@@ -12,6 +12,14 @@ let ty_has_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
   let info = TypesAnalysis.analyze_ty infos ty in
   info.TypesAnalysis.contains_borrow
 
+(** Checks that a type is copyable.
+  *
+  * This used to recursively traverse the type to ensure all its fields were
+  * `Copy`. Instead we trust rustc's typechecking like we do for other marker
+  * traits.
+  *)
+let ty_is_copyable (_ty : ty) : bool = true
+
 let ty_has_adt_with_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool
     =
   let visitor =

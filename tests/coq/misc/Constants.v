@@ -40,11 +40,15 @@ Definition mk_pair0 (x : u32) (y1 : u32) : result (u32 * u32) :=
 
 (** [constants::Pair]
     Source: 'tests/src/constants.rs', lines 39:0-42:1 *)
-Record Pair_t (T1 T2 : Type) := mkPair_t { pair_x : T1; pair_y : T2; }.
+Record Pair_t (T1 : Type) (T2 : Type) :=
+mkPair_t {
+  pair_x : T1; pair_y : T2;
+}
+.
 
-Arguments mkPair_t { _ _ }.
-Arguments pair_x { _ _ }.
-Arguments pair_y { _ _ }.
+Arguments mkPair_t { _ } { _ }.
+Arguments pair_x { _ } { _ }.
+Arguments pair_y { _ } { _ }.
 
 (** [constants::mk_pair1]:
     Source: 'tests/src/constants.rs', lines 30:0-32:1 *)
@@ -83,13 +87,13 @@ Arguments wrap_value { _ }.
 
 (** [constants::{constants::Wrap<T>}::new]:
     Source: 'tests/src/constants.rs', lines 57:4-59:5 *)
-Definition wrap_new (T : Type) (value : T) : result (Wrap_t T) :=
+Definition wrap_new {T : Type} (value : T) : result (Wrap_t T) :=
   Ok {| wrap_value := value |}
 .
 
 (** [constants::Y]
     Source: 'tests/src/constants.rs', lines 44:0-44:38 *)
-Definition y_body : result (Wrap_t i32) := wrap_new i32 2%i32.
+Definition y_body : result (Wrap_t i32) := wrap_new 2%i32.
 Definition y : Wrap_t i32 := y_body%global.
 
 (** [constants::unwrap_y]:
@@ -161,8 +165,8 @@ Definition s4 : Pair_t u32 u32 := s4_body%global.
     Source: 'tests/src/constants.rs', lines 89:0-91:1 *)
 Record V_t (T : Type) (N : usize) := mkV_t { v_x : array T N; }.
 
-Arguments mkV_t { _ _ }.
-Arguments v_x { _ _ }.
+Arguments mkV_t { _ } { _ }.
+Arguments v_x { _ } { _ }.
 
 (** [constants::{constants::V<T, N>}#1::LEN]
     Source: 'tests/src/constants.rs', lines 94:4-94:29 *)

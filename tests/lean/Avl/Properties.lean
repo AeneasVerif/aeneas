@@ -226,7 +226,7 @@ theorem Tree.find_loop_spec
   {T : Type} (OrdInst : Ord T)
   [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (value : T) (t : Subtree T) (hInv : Subtree.inv t) :
-  ∃ b, Tree.find_loop T OrdInst value t = ok b ∧
+  ∃ b, Tree.find_loop OrdInst value t = ok b ∧
   (b ↔ value ∈ Subtree.v t) := by
   rewrite [find_loop]
   match t with
@@ -255,7 +255,7 @@ theorem Tree.find_spec
   {T : Type} (OrdInst : Ord T)
   [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (t : Tree T) (value : T) (hInv : t.inv) :
-  ∃ b, Tree.find T OrdInst t value = ok b ∧
+  ∃ b, Tree.find OrdInst t value = ok b ∧
   (b ↔ value ∈ t.v) := by
   rw [find]
   progress
@@ -278,7 +278,7 @@ theorem Node.rotate_left_spec
   -- Z has a positive balance factor
   (hBfZ : 0 ≤ bf_z.val)
   :
-  ∃ ntree, rotate_left T ⟨ x, a, none, bf_x ⟩ ⟨ z, b, c, bf_z ⟩ = ok ntree ∧
+  ∃ ntree, rotate_left ⟨ x, a, none, bf_x ⟩ ⟨ z, b, c, bf_z ⟩ = ok ntree ∧
   let tree : Node T := ⟨ x, a, some ⟨ z, b, c, bf_z ⟩, bf_x ⟩
   -- We reestablished the invariant
   Node.inv ntree ∧
@@ -392,7 +392,7 @@ theorem Node.rotate_right_spec
   -- Z has a positive balance factor
   (hBfZ : bf_z.val ≤ 0)
   :
-  ∃ ntree, rotate_right T ⟨ x, none, c, bf_x ⟩ ⟨ z, a, b, bf_z ⟩ = ok ntree ∧
+  ∃ ntree, rotate_right ⟨ x, none, c, bf_x ⟩ ⟨ z, a, b, bf_z ⟩ = ok ntree ∧
   let tree : Node T := ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩
   -- We reestablished the invariant
   Node.inv ntree ∧
@@ -508,7 +508,7 @@ theorem Node.rotate_left_right_spec
   let y_tree := ⟨ y, a, b, bf_y ⟩
   let z_tree := ⟨ z, t0, some y_tree, bf_z ⟩
   let tree : Node T := ⟨ x, some z_tree, t1, bf_x ⟩
-  ∃ ntree, rotate_left_right T x_tree z_tree = ok ntree ∧
+  ∃ ntree, rotate_left_right x_tree z_tree = ok ntree ∧
   -- We reestablished the invariant
   Node.inv ntree ∧
   -- The tree contains the nodes we expect
@@ -633,7 +633,7 @@ theorem Node.rotate_right_left_spec
   let y_tree := ⟨ y, b, a, bf_y ⟩
   let z_tree := ⟨ z, some y_tree, t0, bf_z ⟩
   let tree : Node T := ⟨ x, t1, some z_tree, bf_x ⟩
-  ∃ ntree, rotate_right_left T x_tree z_tree = ok ntree ∧
+  ∃ ntree, rotate_right_left x_tree z_tree = ok ntree ∧
   -- We reestablished the invariant
   Node.inv ntree ∧
   -- The tree contains the nodes we expect
@@ -761,7 +761,7 @@ theorem Node.insert_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (node : Node T) (value : T)
   (hInv : Node.inv node) :
-  ∃ b node', Node.insert T OrdInst node value = ok (b, node') ∧
+  ∃ b node', Node.insert OrdInst node value = ok (b, node') ∧
   Node.inv node' ∧
   Node.v node' = Node.v node ∪ {value} ∧
   (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
@@ -787,7 +787,7 @@ theorem Tree.insert_in_opt_node_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (tree : Option (Node T)) (value : T)
   (hInv : Subtree.inv tree) :
-  ∃ b tree', Tree.insert_in_opt_node T OrdInst tree value = ok (b, tree') ∧
+  ∃ b tree', Tree.insert_in_opt_node OrdInst tree value = ok (b, tree') ∧
   Subtree.inv tree' ∧
   Subtree.v tree' = Subtree.v tree ∪ {value} ∧
   (if b then Subtree.height tree' = Subtree.height tree + 1
@@ -815,7 +815,7 @@ theorem Node.insert_in_left_spec
   (node : Node T) (value : T)
   (hInv : Node.inv node)
   (hLt : value < node.value) :
-  ∃ b node', Node.insert_in_left T OrdInst node value = ok (b, node') ∧
+  ∃ b node', Node.insert_in_left OrdInst node value = ok (b, node') ∧
   Node.inv node' ∧
   Node.v node' = Node.v node ∪ {value} ∧
   (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
@@ -915,7 +915,7 @@ theorem Node.insert_in_right_spec
   (node : Node T) (value : T)
   (hInv : Node.inv node)
   (hGt : value > node.value) :
-  ∃ b node', Node.insert_in_right T OrdInst node value = ok (b, node') ∧
+  ∃ b node', Node.insert_in_right OrdInst node value = ok (b, node') ∧
   Node.inv node' ∧
   Node.v node' = Node.v node ∪ {value} ∧
   (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
@@ -1010,7 +1010,7 @@ theorem Tree.insert_spec {T : Type}
   (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (tree : Tree T) (value : T)
   (hInv : tree.inv) :
-  ∃ updt tree', Tree.insert T OrdInst tree value = ok (updt, tree') ∧
+  ∃ updt tree', Tree.insert OrdInst tree value = ok (updt, tree') ∧
   tree'.inv ∧
   (if updt then tree'.height = tree.height + 1 else tree'.height = tree.height) ∧
   tree'.v = tree.v ∪ {value} := by
@@ -1020,7 +1020,7 @@ theorem Tree.insert_spec {T : Type}
 
 @[pspec]
 theorem Tree.new_spec {T : Type} (OrdInst : Ord T) :
-  ∃ t, Tree.new T OrdInst = ok t ∧ t.v = ∅ ∧ t.height = 0 := by
+  ∃ t, Tree.new OrdInst = ok t ∧ t.v = ∅ ∧ t.height = 0 := by
   simp [new, Tree.v, Tree.height]
 
 end avl

@@ -10,7 +10,7 @@ Local Open Scope Primitives_scope.
 Module External_TypesExternal_Template.
 
 (** [core::cell::Cell]
-    Source: '/rustc/library/core/src/cell.rs', lines 309:0-309:26
+    Source: '/rustc/library/core/src/cell.rs', lines 310:0-310:26
     Name pattern: core::cell::Cell *)
 Axiom core_cell_Cell_t : forall (T : Type), Type.
 

@@ -1207,6 +1207,9 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   match adt_decl.kind with
                   | Enum _ | Alias _ | Opaque | Error _ ->
                       craise __FILE__ __LINE__ def.item_meta.span "Unreachable"
+                  | Union _ ->
+                      craise __FILE__ __LINE__ def.item_meta.span
+                        "Unions are not supported"
                   | Struct fields -> fields
                 in
                 let num_fields = List.length fields in
@@ -1429,6 +1432,7 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
             let loop_sig =
               {
                 generics = fun_sig.generics;
+                explicit_info = fun_sig.explicit_info;
                 llbc_generics = fun_sig.llbc_generics;
                 preds = fun_sig.preds;
                 inputs = inputs_tys;
@@ -1587,13 +1591,8 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 | BoxNew ->
                     let arg, args = Collections.List.pop args in
                     mk_apps def.item_meta.span arg args
-                | SliceIndexShared
-                | SliceIndexMut
-                | ArrayIndexShared
-                | ArrayIndexMut
-                | ArrayToSliceShared
-                | ArrayToSliceMut
-                | ArrayRepeat -> super#visit_texpression env e)
+                | Index _ | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat
+                  -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end
@@ -2159,6 +2158,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           in
           let {
             generics;
+            explicit_info = _;
             llbc_generics;
             preds;
             inputs;
@@ -2200,6 +2200,8 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
           let signature =
             {
               generics;
+              explicit_info =
+                SymbolicToPure.compute_explicit_info generics inputs;
               llbc_generics;
               preds;
               inputs;

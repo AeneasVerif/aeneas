@@ -200,8 +200,7 @@ module Sig = struct
     mk_sig generics inputs output
 end
 
-type raw_assumed_fun_info =
-  assumed_fun_id * fun_sig * bool * string * bool list option
+type raw_assumed_fun_info = assumed_fun_id * fun_sig * bool * bool list option
 
 type assumed_fun_info = {
   fun_id : assumed_fun_id;
@@ -216,9 +215,11 @@ type assumed_fun_info = {
        *)
 }
 
-let mk_assumed_fun_info (raw : raw_assumed_fun_info) : assumed_fun_info =
-  let fun_id, fun_sig, can_fail, name, keep_types = raw in
-  { fun_id; fun_sig; can_fail; name; keep_types }
+let mk_assumed_fun_info (raw : raw_assumed_fun_info) :
+    assumed_fun_id * assumed_fun_info =
+  let fun_id, fun_sig, can_fail, keep_types = raw in
+  let name = Charon.PrintExpressions.assumed_fun_id_to_string fun_id in
+  (fun_id, { fun_id; fun_sig; can_fail; name; keep_types })
 
 (** The list of assumed functions and all their information:
     - their signature
@@ -235,45 +236,48 @@ let raw_assumed_fun_infos : raw_assumed_fun_info list =
   [
     (* TODO: the names are not correct ("Box" should be an impl elem for instance)
        but it's not important) *)
-    ( BoxNew,
-      Sig.box_new_sig,
-      false,
-      "alloc::boxed::Box::new",
-      Some [ true; false ] );
-    (* Array Index *)
-    ( ArrayIndexShared,
+    (BoxNew, Sig.box_new_sig, false, Some [ true; false ]);
+    (* Array to slice*)
+    (ArrayToSliceShared, Sig.array_to_slice_sig false, true, None);
+    (ArrayToSliceMut, Sig.array_to_slice_sig true, true, None);
+    (* Array Repeat *)
+    (ArrayRepeat, Sig.array_repeat_sig, false, None);
+    (* Indexing *)
+    ( Index { is_array = true; mutability = RShared; is_range = false },
       Sig.array_index_sig false,
       true,
-      "@ArrayIndexShared",
       None );
-    (ArrayIndexMut, Sig.array_index_sig true, true, "@ArrayIndexMut", None);
-    (* Array to slice*)
-    ( ArrayToSliceShared,
-      Sig.array_to_slice_sig false,
+    ( Index { is_array = true; mutability = RMut; is_range = false },
+      Sig.array_index_sig true,
       true,
-      "@ArrayToSliceShared",
       None );
-    ( ArrayToSliceMut,
-      Sig.array_to_slice_sig true,
-      true,
-      "@ArrayToSliceMut",
-      None );
-    (* Array Repeat *)
-    (ArrayRepeat, Sig.array_repeat_sig, false, "@ArrayRepeat", None);
-    (* Slice Index *)
-    ( SliceIndexShared,
+    ( Index { is_array = false; mutability = RShared; is_range = false },
       Sig.slice_index_sig false,
       true,
-      "@SliceIndexShared",
       None );
-    (SliceIndexMut, Sig.slice_index_sig true, true, "@SliceIndexMut", None);
+    ( Index { is_array = false; mutability = RMut; is_range = false },
+      Sig.slice_index_sig true,
+      true,
+      None );
   ]
 
-let assumed_fun_infos : assumed_fun_info list =
-  List.map mk_assumed_fun_info raw_assumed_fun_infos
+module OrderedAssumedFunId :
+  Collections.OrderedType with type t = assumed_fun_id = struct
+  type t = assumed_fun_id
+
+  let compare x y = compare_assumed_fun_id x y
+  let to_string x = show_assumed_fun_id x
+  let pp_t fmt x = Format.pp_print_string fmt (show_assumed_fun_id x)
+  let show_t x = show_assumed_fun_id x
+end
+
+module AssumedFunIdMap = Collections.MakeMap (OrderedAssumedFunId)
+
+let assumed_fun_infos : assumed_fun_info AssumedFunIdMap.t =
+  AssumedFunIdMap.of_list (List.map mk_assumed_fun_info raw_assumed_fun_infos)
 
 let get_assumed_fun_info (id : assumed_fun_id) : assumed_fun_info =
-  match List.find_opt (fun x -> id = x.fun_id) assumed_fun_infos with
+  match AssumedFunIdMap.find_opt id assumed_fun_infos with
   | Some info -> info
   | None ->
       raise

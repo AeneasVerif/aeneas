@@ -143,6 +143,17 @@ pub fn append_in_place<'a, T>(l0: &'a mut CList<T>,  l1 : CList<T>) {
     *tl = l1;
 }
 
+pub fn reverse<T>(mut l : CList<T>) -> CList<T> {
+    let mut out = CList::CNil;
+    while let CList::CCons(hd, mut tl) = l {
+        l = *tl;
+        *tl = out;
+        out = CList::CCons(hd, tl);
+    }
+    out
+}
+
+
 /* Big numbers */
 
 pub type Bignum = Vec<u32>;

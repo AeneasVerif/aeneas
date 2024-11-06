@@ -120,6 +120,13 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
         g := RegionMap.add short s m
   in
 
+  let add_edges_from_region_binder :
+        'a. ('a -> unit) -> 'a region_binder -> unit =
+   fun visit c ->
+    sanity_check_opt_span __FILE__ __LINE__ (c.binder_regions = []) span;
+    visit c.binder_value
+  in
+
   let add_edge_from_region_constraint ((long, short) : region_outlives) =
     add_edge ~short ~long
   in
@@ -130,7 +137,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
 
   (* Explore the clauses - we only explore the "region outlives" clause,
      not the "type outlives" clauses *)
-  List.iter add_edge_from_region_constraint sg.generics.regions_outlive;
+  List.iter
+    (add_edges_from_region_binder add_edge_from_region_constraint)
+    sg.generics.regions_outlive;
 
   (* Explore the types in the signature to add the edges *)
   let rec explore_ty (outer : region list) (ty : ty) =
@@ -151,11 +160,17 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
             let predicates = Subst.predicates_substitute subst decl.generics in
             (* Note that because we also explore the generics below, we may
                explore several times the same type - this is ok *)
+            let add_edges_from_regions_outlive (long, short) =
+              add_edges ~long ~shorts:(short :: outer)
+            in
             List.iter
-              (fun (long, short) -> add_edges ~long ~shorts:(short :: outer))
+              (add_edges_from_region_binder add_edges_from_regions_outlive)
               predicates.regions_outlive;
+            let add_edges_from_types_outlive (ty, short) =
+              explore_ty (short :: outer) ty
+            in
             List.iter
-              (fun (ty, short) -> explore_ty (short :: outer) ty)
+              (add_edges_from_region_binder add_edges_from_types_outlive)
               predicates.types_outlive
         | TTuple -> (* No clauses for tuples *) ()
         | TAssumed aid -> (
@@ -332,7 +347,7 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
     List.map
       (fun (info : assumed_fun_info) ->
         (FAssumed info.fun_id, (info.name, info.fun_sig, None)))
-      assumed_fun_infos
+      (AssumedFunIdMap.values assumed_fun_infos)
   in
   FunIdMap.of_list
     (List.map

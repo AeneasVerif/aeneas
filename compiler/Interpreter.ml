@@ -54,7 +54,7 @@ let normalize_inst_fun_sig (span : Meta.span) (ctx : eval_ctx)
   let { regions_hierarchy = _; trait_type_constraints = _; inputs; output } =
     sg
   in
-  let norm = AssociatedTypes.ctx_normalize_ty span ctx in
+  let norm = AssociatedTypes.ctx_normalize_ty (Some span) ctx in
   let inputs = List.map norm inputs in
   let output = norm output in
   { sg with inputs; output }
@@ -133,7 +133,9 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
       List.fold_left_map
         (fun tr_map (c : trait_clause) ->
           let subst = mk_subst tr_map in
-          let { trait_decl_id; decl_generics; _ } = c.trait in
+          (* *)
+          sanity_check __FILE__ __LINE__ (c.trait.binder_regions = []) span;
+          let { trait_decl_id; decl_generics; _ } = c.trait.binder_value in
           let generics =
             Substitute.generic_args_substitute subst decl_generics
           in
@@ -141,7 +143,17 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
           (* Note that because we directly refer to the clause, we give it
              empty generics *)
           let trait_id = Clause c.clause_id in
-          let trait_ref = { trait_id; trait_decl_ref } in
+          let trait_ref =
+            {
+              trait_id;
+              trait_decl_ref =
+                {
+                  (* Empty list of bound regions: we don't support the other cases for now *)
+                  binder_regions = [];
+                  binder_value = trait_decl_ref;
+                };
+            }
+          in
           (* Update the traits map *)
           let tr_map = TraitClauseId.Map.add c.clause_id trait_id tr_map in
           (tr_map, trait_ref))
@@ -154,7 +166,7 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   in
   (* Compute the normalization maps *)
   let ctx =
-    AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
+    AssociatedTypes.ctx_add_norm_trait_types_from_preds (Some span) ctx
       inst_sg.trait_type_constraints
   in
   (* Normalize the signature *)
@@ -209,8 +221,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
   in
   let ctx =
-    initialize_eval_ctx fdef.item_meta.span ctx region_groups sg.generics.types
-      sg.generics.const_generics
+    initialize_eval_ctx (Some fdef.item_meta.span) ctx region_groups
+      sg.generics.types sg.generics.const_generics
   in
   (* Instantiate the signature. This updates the context because we compute
      at the same time the normalization map for the associated types.
@@ -681,7 +693,9 @@ module Test = struct
     sanity_check __FILE__ __LINE__ (body.arg_count = 0) fdef.item_meta.span;
 
     (* Create the evaluation context *)
-    let ctx = initialize_eval_ctx fdef.item_meta.span decls_ctx [] [] [] in
+    let ctx =
+      initialize_eval_ctx (Some fdef.item_meta.span) decls_ctx [] [] []
+    in
 
     (* Insert the (uninitialized) local variables *)
     let ctx = ctx_push_uninitialized_vars fdef.item_meta.span ctx body.locals in

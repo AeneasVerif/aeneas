@@ -41,7 +41,7 @@ val insert_on_disk_lem (key : usize) (value : u64) (st : state) : Lemma (
   | Fail _ -> True
   | Ok (st', ()) ->
     let hm = state_v st in
-    match hashMap_insert u64 hm key value with
+    match hashMap_insert hm key value with
     | Fail _ -> False
     | Ok hm' -> hm' == state_v st')
 

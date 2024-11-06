@@ -34,7 +34,7 @@ open CList
 
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.to_list.length) :
-  ∃ x, list_nth T l i = ok x ∧
+  ∃ x, list_nth l i = ok x ∧
   x = l.to_list.index i.toNat
   := by
   rw [list_nth]
@@ -64,7 +64,7 @@ termination_by n.toNat
 decreasing_by simp_wf; scalar_tac
 
 theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
-  ∃ back, list_tail T l = ok (CList.CNil, back) ∧
+  ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', ∃ l', back tl' = ok l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
   rw [list_tail]
   match l with
