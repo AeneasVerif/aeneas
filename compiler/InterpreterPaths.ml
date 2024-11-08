@@ -167,83 +167,80 @@ let rec access_projection (span : Meta.span) (access : projection_access)
           | Ok (ctx, res) -> backward (ctx, res)
         end
       (* Borrows *)
-      | Deref, VBorrow bc, _ -> begin
-          match bc with
-          | VSharedBorrow _ when not access.lookup_shared_borrows ->
-              Error (FailBorrow bc)
-          | VSharedBorrow bid -> begin
-              (* Lookup the loan content, and explore from there *)
-              match lookup_loan span ek bid ctx with
-              | _, Concrete (VMutLoan _) ->
-                  craise __FILE__ __LINE__ span "Expected a shared loan"
-              | _, Concrete (VSharedLoan (bids, sv)) -> begin
-                  let backward (ctx, res) =
-                    (* Update the shared loan with the new value returned
-                       by {!access_projection} *)
-                    let ctx =
-                      update_loan span ek bid
-                        (VSharedLoan (bids, res.updated))
-                        ctx
-                    in
-                    (* Return - note that we don't need to update the borrow itself *)
-                    Ok (ctx, { res with updated = v })
-                  in
-                  (* Explore the shared value *)
-                  match access_projection span access ctx update p' sv with
-                  | Error err -> Error err
-                  | Ok (ctx, res) -> backward (ctx, res)
-                end
-              | ( _,
-                  Abstract
-                    ( AMutLoan _
-                    | AEndedMutLoan _
-                    | AEndedSharedLoan _
-                    | AIgnoredMutLoan _
-                    | AEndedIgnoredMutLoan _
-                    | AIgnoredSharedLoan _ ) ) ->
-                  craise __FILE__ __LINE__ span
-                    "Expected a shared (abstraction) loan"
-              | _, Abstract (ASharedLoan (pm, bids, sv, _av)) -> begin
-                  (* Sanity check: projection markers can only appear when we're doing a join *)
-                  sanity_check __FILE__ __LINE__ (pm = PNone) span;
-                  (* Explore the shared value *)
-                  let backward (ctx, res) =
-                    (* Relookup the child avalue *)
-                    let av =
-                      match lookup_loan span ek bid ctx with
-                      | _, Abstract (ASharedLoan (_, _, _, av)) -> av
-                      | _ -> craise __FILE__ __LINE__ span "Unexpected"
-                    in
-                    (* Update the shared loan with the new value returned
-                         by {!access_projection} *)
-                    let ctx =
-                      update_aloan span ek bid
-                        (ASharedLoan (pm, bids, res.updated, av))
-                        ctx
-                    in
-                    (* Return - note that we don't need to update the borrow itself *)
-                    Ok (ctx, { res with updated = v })
-                  in
-                  match access_projection span access ctx update p' sv with
-                  | Error err -> Error err
-                  | Ok (ctx, res) -> backward (ctx, res)
-                end
-            end
-          | VReservedMutBorrow bid -> Error (FailReservedMutBorrow bid)
-          | VMutBorrow _ when not access.enter_mut_borrows ->
-              Error (FailBorrow bc)
-          | VMutBorrow (bid, bv) -> begin
-              let backward (ctx, res) =
-                let nv =
-                  { v with value = VBorrow (VMutBorrow (bid, res.updated)) }
-                in
-                Ok (ctx, { res with updated = nv })
-              in
-              match access_projection span access ctx update p' bv with
-              | Error err -> Error err
-              | Ok (ctx, res) -> backward (ctx, res)
-            end
-        end
+      | Deref, VBorrow bc, _ ->
+          (* Compute the projected value to explore and a backward function to update the result *)
+          let res : _ path_access_result =
+            match bc with
+            | VSharedBorrow _ when not access.lookup_shared_borrows ->
+                Error (FailBorrow bc)
+            | VSharedBorrow bid -> begin
+                (* Lookup the loan content, and explore from there *)
+                match lookup_loan span ek bid ctx with
+                | _, Concrete (VMutLoan _) ->
+                    craise __FILE__ __LINE__ span "Expected a shared loan"
+                | _, Concrete (VSharedLoan (bids, sv)) ->
+                    (* Explore the shared value *)
+                    Ok
+                      ( sv,
+                        fun (ctx, updated) ->
+                          let ctx =
+                            update_loan span ek bid
+                              (VSharedLoan (bids, updated))
+                              ctx
+                          in
+                          (ctx, v) )
+                | ( _,
+                    Abstract
+                      ( AMutLoan _
+                      | AEndedMutLoan _
+                      | AEndedSharedLoan _
+                      | AIgnoredMutLoan _
+                      | AEndedIgnoredMutLoan _
+                      | AIgnoredSharedLoan _ ) ) ->
+                    craise __FILE__ __LINE__ span
+                      "Expected a shared (abstraction) loan"
+                | _, Abstract (ASharedLoan (pm, bids, sv, _av)) -> begin
+                    (* Sanity check: projection markers can only appear when we're doing a join *)
+                    sanity_check __FILE__ __LINE__ (pm = PNone) span;
+                    (* Explore the shared value *)
+                    Ok
+                      ( sv,
+                        fun (ctx, updated) ->
+                          let av =
+                            match lookup_loan span ek bid ctx with
+                            | _, Abstract (ASharedLoan (_, _, _, av)) -> av
+                            | _ -> craise __FILE__ __LINE__ span "Unexpected"
+                          in
+                          let ctx =
+                            update_aloan span ek bid
+                              (ASharedLoan (pm, bids, updated, av))
+                              ctx
+                          in
+                          (ctx, v) )
+                  end
+              end
+            | VReservedMutBorrow bid -> Error (FailReservedMutBorrow bid)
+            | VMutBorrow _ when not access.enter_mut_borrows ->
+                Error (FailBorrow bc)
+            | VMutBorrow (bid, bv) ->
+                Ok
+                  ( bv,
+                    fun (ctx, updated) ->
+                      let value = VBorrow (VMutBorrow (bid, updated)) in
+                      (ctx, { v with value }) )
+          in
+          begin
+            match res with
+            | Error err -> Error err
+            | Ok (pv, backward) -> begin
+                (* Continue projecting the value then update the result *)
+                match access_projection span access ctx update p' pv with
+                | Error err -> Error err
+                | Ok (ctx, res) ->
+                    let ctx, updated = backward (ctx, res.updated) in
+                    Ok (ctx, { res with updated })
+              end
+          end
       | _, VLoan lc, _ -> begin
           match lc with
           | VMutLoan bid -> Error (FailMutLoan bid)
