@@ -68,8 +68,10 @@ let mk_var (index : VarId.id) (name : string option) (var_ty : ty) : var =
   { index; name; var_ty }
 
 (** Small helper - TODO: move *)
-let mk_place_from_var_id (var_id : VarId.id) : place =
-  { var_id; projection = [] }
+let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span) (var_id : VarId.id)
+    : place =
+  let _, typed_val = env_lookup_var span ctx.env var_id in
+  { kind = PlaceBase var_id; ty = typed_val.ty }
 
 (** Create a fresh symbolic value *)
 let mk_fresh_symbolic_value_opt_span (span : Meta.span option) (ty : ty) :

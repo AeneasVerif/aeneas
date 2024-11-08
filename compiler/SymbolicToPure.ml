@@ -1900,7 +1900,7 @@ let translate_mprojection_elem (pe : E.projection_elem) :
   | Deref -> None
   | Field (pkind, field_id) -> Some { pkind; field_id }
 
-let translate_mprojection (p : E.projection) : mprojection =
+let translate_mprojection (p : E.projection_elem list) : mprojection =
   List.filter_map translate_mprojection_elem p
 
 (** Translate a "span"-place *)

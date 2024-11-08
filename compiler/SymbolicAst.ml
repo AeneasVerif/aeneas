@@ -23,7 +23,7 @@ type mplace = {
           because the most important information in a place is the name of the
           variable!
        *)
-  projection : projection;
+  projection : projection_elem list;
       (** We store the projection because we can, but it is actually not that useful *)
 }
 [@@deriving show]

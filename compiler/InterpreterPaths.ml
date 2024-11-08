@@ -214,30 +214,43 @@ let rec project_value (span : Meta.span) (access : projection_access)
         ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty)
     end
 
-(** Generic function to access (read/write) the value at the end of a projection.
+(** Generic function to access (read/write) the value inside a place.
 
     We return the read value and a backward function that propagates any
-    changes to the projected value back to the original one.
+    changes to the projected value back to the original local.
  *)
-let rec access_projection (span : Meta.span) (access : projection_access)
-    (ctx : eval_ctx) (p : projection) (v : typed_value) :
+let rec access_place (span : Meta.span) (access : projection_access)
+    (ek : exploration_kind) (ctx : eval_ctx) (depth : int) (p : place) :
     (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
     path_access_result =
-  (* For looking up/updating shared loans *)
-  let ek : exploration_kind =
-    { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
-  in
-  match p with
-  | [] -> Ok (v, Core.Fn.id)
-  | pe :: p' -> begin
-      match project_value span access ek (1 + List.length p') ctx pe v with
+  match p.kind with
+  | PlaceBase var_id ->
+      (* Lookup the variable's value *)
+      let v = ctx_lookup_var_value span ctx var_id in
+      let backward (ctx, updated) =
+        let ctx = ctx_update_var_value span ctx var_id updated in
+        (* Type checking *)
+        if updated.ty <> v.ty then (
+          log#ltrace
+            (lazy
+              ("Not the same type:\n- nv.ty: " ^ show_ety updated.ty
+             ^ "\n- v.ty: " ^ show_ety v.ty));
+          craise __FILE__ __LINE__ span
+            "Assertion failed: new value doesn't have the same type as its \
+             destination");
+        (ctx, updated)
+      in
+      Ok (v, backward)
+  | PlaceProjection (p', pe) -> begin
+      match access_place span access ek ctx (depth + 1) p' with
       | Error err -> Error err
-      | Ok (pv, new_back) -> begin
-          match access_projection span access ctx p' pv with
+      | Ok (v, backward) -> begin
+          match project_value span access ek depth ctx pe v with
           | Error err -> Error err
-          | Ok (v, backward) ->
-              let backward = Core.Fn.compose new_back backward in
-              Ok (v, backward)
+          | Ok (pv, new_back) -> begin
+              let backward = Core.Fn.compose backward new_back in
+              Ok (pv, backward)
+            end
         end
     end
 
@@ -247,29 +260,21 @@ let rec access_projection (span : Meta.span) (access : projection_access)
     environment, if we managed to access the place, or the precise reason
     why we failed.
  *)
-let access_place (span : Meta.span) (access : projection_access)
+let access_update_place (span : Meta.span) (access : projection_access)
     (* Function to (eventually) update the value we find *)
       (update : typed_value -> typed_value) (p : place) (ctx : eval_ctx) :
     (eval_ctx * typed_value) path_access_result =
-  (* Lookup the variable's value *)
-  let value = ctx_lookup_var_value span ctx p.var_id in
+  (* For looking up/updating shared loans *)
+  let ek : exploration_kind =
+    { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
+  in
   (* Apply the projection *)
-  match access_projection span access ctx p.projection value with
+  match access_place span access ek ctx 0 p with
   | Error err -> Error err
   | Ok (v, backward) ->
       let nv = update v in
-      (* Type checking *)
-      if nv.ty <> v.ty then (
-        log#ltrace
-          (lazy
-            ("Not the same type:\n- nv.ty: " ^ show_ety nv.ty ^ "\n- v.ty: "
-           ^ show_ety v.ty));
-        craise __FILE__ __LINE__ span
-          "Assertion failed: new value doesn't have the same type as its \
-           destination");
-      let ctx, updated = backward (ctx, nv) in
       (* Update the ctx with the updated value *)
-      let ctx = ctx_update_var_value span ctx p.var_id updated in
+      let ctx, _ = backward (ctx, nv) in
       Ok (ctx, v)
 
 type access_kind =
@@ -309,7 +314,7 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
   let update v = v in
-  match access_place span access update p ctx with
+  match access_update_place span access update p ctx with
   | Error err -> Error err
   | Ok (ctx1, read_value) ->
       (* Note that we ignore the new environment: it should be the same as the
@@ -337,7 +342,7 @@ let try_write_place (span : Meta.span) (access : access_kind) (p : place)
   let access = access_kind_to_projection_access access in
   (* The update function substitutes the value with the new value *)
   let update _ = nv in
-  match access_place span access update p ctx with
+  match access_update_place span access update p ctx with
   | Error err -> Error err
   | Ok (ctx, _) ->
       (* We ignore the read value *)
@@ -384,6 +389,15 @@ let compute_expanded_bottom_tuple_value (span : Meta.span)
   let ty = TAdt (TTuple, generics) in
   { value = v; ty }
 
+(* Compute the subplace obtained by discarding the `depth` outermost projection elements from `p`. *)
+let rec sub_place (depth : int) (p : place) : place =
+  if depth == 0 then p
+  else begin
+    match p.kind with
+    | PlaceBase _ -> p
+    | PlaceProjection (subp, _) -> sub_place (depth - 1) subp
+  end
+
 (** Auxiliary helper to expand {!Bottom} values.
 
     During compilation, rustc desaggregates the ADT initializations. The
@@ -406,7 +420,7 @@ let compute_expanded_bottom_tuple_value (span : Meta.span)
     variant index when writing one of its fields).
 *)
 let expand_bottom_value_from_projection (span : Meta.span)
-    (access : access_kind) (p : place) (remaining_pes : int)
+    (access : access_kind) (p : place) (subplace_depth : int)
     (pe : projection_elem) (ty : ety) (ctx : eval_ctx) : eval_ctx =
   (* Debugging *)
   log#ldebug
@@ -415,14 +429,9 @@ let expand_bottom_value_from_projection (span : Meta.span)
      ^ show_projection_elem pe ^ "\n" ^ "ty: " ^ show_ety ty));
   (* Prepare the update: we need to take the proper prefix of the place
      during whose evaluation we got stuck *)
-  let projection' =
-    fst
-      (Collections.List.split_at p.projection
-         (List.length p.projection - remaining_pes))
-  in
-  let p' = { p with projection = projection' } in
+  let p' = sub_place subplace_depth p in
   (* Compute the expanded value.
-     The type of the {!Bottom} value should be a tuple or an AD
+     The type of the {!Bottom} value should be a tuple or an ADT
      Note that the projection element we got stuck at should be a
      field projection, and gives the variant id if the {!Bottom} value
      is an enumeration value.
@@ -469,11 +478,7 @@ let rec update_ctx_along_read_place (config : config) (span : Meta.span)
             promote_reserved_mut_borrow config span bid ctx
         | FailSymbolic (i, sp) ->
             (* Expand the symbolic value *)
-            let proj, _ =
-              Collections.List.split_at p.projection
-                (List.length p.projection - i)
-            in
-            let prefix = { p with projection = proj } in
+            let prefix = sub_place i p in
             expand_symbolic_value_no_branching config span sp
               (Some (Synth.mk_mplace span prefix ctx))
               ctx

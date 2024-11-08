@@ -423,20 +423,23 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
         inherit [_] map_statement as super
 
         method! visit_Assign env p rv =
-          match (p.projection, rv) with
-          | [], RvRef (_, BShallow) ->
+          match (p.kind, rv) with
+          | PlaceBase var_id, RvRef (_, BShallow) ->
               (* Filter *)
-              filtered := VarId.Set.add p.var_id !filtered;
+              filtered := VarId.Set.add var_id !filtered;
               Nop
           | _ ->
               (* Don't filter *)
               super#visit_Assign env p rv
 
         method! visit_FakeRead env p =
-          if p.projection = [] && VarId.Set.mem p.var_id !filtered then
-            (* Filter *)
-            Nop
-          else super#visit_FakeRead env p
+          match p.kind with
+          | PlaceBase var_id when VarId.Set.mem var_id !filtered ->
+              (* filter *)
+              Nop
+          | _ ->
+              (* Don't filter *)
+              super#visit_FakeRead env p
       end
     in
 
