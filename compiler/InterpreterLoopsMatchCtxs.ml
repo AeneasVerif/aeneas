@@ -1410,9 +1410,13 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
 
     log#ldebug (lazy "match_abstractions: matching values");
     let _ =
-      List.map
-        (fun (v0, v1) -> M.match_typed_avalues ctx0 ctx1 v0 v1)
-        (List.combine avalues0 avalues1)
+      if List.length avalues0 <> List.length avalues1 then
+        raise
+          (Distinct "Region abstractions with not the same number of values")
+      else
+        List.map
+          (fun (v0, v1) -> M.match_typed_avalues ctx0 ctx1 v0 v1)
+          (List.combine avalues0 avalues1)
     in
     log#ldebug (lazy "match_abstractions: values matched OK");
     ()
