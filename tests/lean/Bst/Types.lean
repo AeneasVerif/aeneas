@@ -20,15 +20,8 @@ inductive Ordering :=
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 
-/- Trait declaration: [bst::Bounded]
-   Source: 'src/bst.rs', lines 15:0-19:1 -/
-structure Bounded (Self : Type) where
-  Value : Type
-  max_value : Result Value
-  min_value : Result Value
-
 /- [bst::Node]
-   Source: 'src/bst.rs', lines 21:0-25:1 -/
+   Source: 'src/bst.rs', lines 15:0-19:1 -/
 inductive Node (T : Type) :=
 | mk : T → Option (Node T) → Option (Node T) → Node T
 
@@ -59,7 +52,7 @@ theorem Node.right._simpLemma_ {T : Type} (value : T) (left : Option (Node T))
   by rfl
 
 /- [bst::TreeSet]
-   Source: 'src/bst.rs', lines 29:0-31:1 -/
+   Source: 'src/bst.rs', lines 23:0-25:1 -/
 structure TreeSet (T : Type) where
   root : Option (Node T)
 

@@ -12,12 +12,6 @@ trait Ord {
     fn cmp(&self, other: &Self) -> Ordering;
 }
 
-trait Bounded {
-    type Value;
-    fn max_value() -> Self::Value;
-    fn min_value() -> Self::Value;
-}
-
 struct Node<T> {
     value: T,
     left: Tree<T>,
@@ -83,6 +77,12 @@ mod tests {
                 Ordering::Greater
             }
         }
+    }
+
+    trait Bounded {
+        type Value;
+        fn max_value() -> Self::Value;
+        fn min_value() -> Self::Value;
     }
 
     impl Bounded for i32 {
