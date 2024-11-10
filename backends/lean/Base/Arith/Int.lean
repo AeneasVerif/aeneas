@@ -121,9 +121,9 @@ def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit)
   -- Pre-preprocessing
   extraPrePreprocess
   -- Apply the forward rules
-  intTacSaturateForward
+  allGoalsNoRecover intTacSaturateForward
   -- Extra preprocessing
-  extraPreprocess
+  allGoalsNoRecover extraPreprocess
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `allGoals`
   let dsimp :=
@@ -195,9 +195,10 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
         Utils.tryTac (
           -- TODO: is there a simproc to simplify propositional logic?
           Utils.simpAll {failIfUnchanged := false, maxSteps := 75} true [``reduceIte] []
-            [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq, ``not_false_eq_true,
-             ``true_and, ``and_true, ``false_and, ``and_false, ``true_or, ``or_true,
-             ``false_or, ``or_false] [])
+            [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
+             ``not_false_eq_true, ``not_true_eq_false,
+             ``true_and, ``and_true, ``false_and, ``and_false,
+             ``true_or, ``or_true,``false_or, ``or_false] [])
         allGoalsNoRecover (do
           trace[Arith] "Goal after simplification: {← getMainGoal}"
           Tactic.Omega.omegaTactic {})
@@ -214,7 +215,7 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
         simpThenOmega
     catch _ =>
       let g ← Tactic.getMainGoal
-      throwError "{tacName} failed to prove the goal below.\n\nNote that {tacName} is equivalent to:\n  {tacName}_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
+      throwError "{tacName} failed to prove the goal below.\n\nNote that {tacName} is almost equivalent to:\n  {tacName}_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
 
 elab "int_tac" args:(" split_goal"?): tactic =>
   let splitConjs := args.raw.getArgs.size > 0

@@ -431,7 +431,14 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
                mk_fun
                  ("core::num::" ^ "{" ^ int_name ^ "}::" ^ op)
                  ~can_fail:false ())
-             [ "wrapping_add"; "wrapping_sub"; "rotate_left"; "rotate_right" ])
+             [
+               "saturating_add";
+               "saturating_sub";
+               "wrapping_add";
+               "wrapping_sub";
+               "rotate_left";
+               "rotate_right";
+             ])
          all_int_names)
   @ List.flatten
       (List.map

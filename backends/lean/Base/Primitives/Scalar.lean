@@ -1079,4 +1079,220 @@ theorem core.num.Usize.overflowing_add_spec (x y : Usize) :
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
   split <;> split <;> simp_all <;> scalar_tac
 
+-- Saturating add
+def int_saturating_add (ty : ScalarTy) (x y : Int) : Int :=
+  let r := x + y
+  let r := if r > Scalar.max ty then Scalar.max ty else r
+  let r := if r < Scalar.min ty then Scalar.min ty else r
+  r
+
+def int_saturating_add_in_bounds {ty} (x y : Scalar ty) :
+  let r := int_saturating_add ty x.val y.val
+  Scalar.min ty ≤ r ∧ r ≤ Scalar.max ty := by
+  simp [int_saturating_add]
+  split <;> constructor <;> cases ty <;> scalar_tac
+
+def Scalar.saturating_add {ty} (x y : Scalar ty) : Result (Scalar ty) :=
+  let r := int_saturating_add ty x.val y.val
+  have h := int_saturating_add_in_bounds x y
+  ok ⟨ r, h.1, h.2 ⟩
+
+/- [core::num::{u8}::saturating_add] -/
+def core.num.U8.saturating_add := @Scalar.saturating_add ScalarTy.U8
+
+/- [core::num::{u16}::saturating_add] -/
+def core.num.U16.saturating_add := @Scalar.saturating_add ScalarTy.U16
+
+/- [core::num::{u32}::saturating_add] -/
+def core.num.U32.saturating_add := @Scalar.saturating_add ScalarTy.U32
+
+/- [core::num::{u64}::saturating_add] -/
+def core.num.U64.saturating_add := @Scalar.saturating_add ScalarTy.U64
+
+/- [core::num::{u128}::saturating_add] -/
+def core.num.U128.saturating_add := @Scalar.saturating_add ScalarTy.U128
+
+/- [core::num::{usize}::saturating_add] -/
+def core.num.Usize.saturating_add := @Scalar.saturating_add ScalarTy.Usize
+
+/- [core::num::{i8}::saturating_add] -/
+def core.num.I8.saturating_add := @Scalar.saturating_add ScalarTy.I8
+
+/- [core::num::{i16}::saturating_add] -/
+def core.num.I16.saturating_add := @Scalar.saturating_add ScalarTy.I16
+
+/- [core::num::{i32}::saturating_add] -/
+def core.num.I32.saturating_add := @Scalar.saturating_add ScalarTy.I32
+
+/- [core::num::{i64}::saturating_add] -/
+def core.num.I64.saturating_add := @Scalar.saturating_add ScalarTy.I64
+
+/- [core::num::{i128}::saturating_add] -/
+def core.num.I128.saturating_add := @Scalar.saturating_add ScalarTy.I128
+
+/- [core::num::{isize}::saturating_add] -/
+def core.num.Isize.saturating_add := @Scalar.saturating_add ScalarTy.Isize
+
+@[pspec]
+theorem core.num.U8.saturating_add_spec (x y : U8) :
+  ∃ z, saturating_add x y = ok z ∧
+  if x.val + y.val > U8.max then z.val = U8.max
+  else z.val = x.val + y.val
+  := by
+  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.U16.saturating_add_spec (x y : U16) :
+  ∃ z, saturating_add x y = ok z ∧
+  if x.val + y.val > U16.max then z.val = U16.max
+  else z.val = x.val + y.val
+  := by
+  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.U32.saturating_add_spec (x y : U32) :
+  ∃ z, saturating_add x y = ok z ∧
+  if x.val + y.val > U32.max then z.val = U32.max
+  else z.val = x.val + y.val
+  := by
+  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.U64.saturating_add_spec (x y : U64) :
+  ∃ z, saturating_add x y = ok z ∧
+  if x.val + y.val > U64.max then z.val = U64.max
+  else z.val = x.val + y.val
+  := by
+  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.U128.saturating_add_spec (x y : U128) :
+  ∃ z, saturating_add x y = ok z ∧
+  if x.val + y.val > U128.max then z.val = U128.max
+  else z.val = x.val + y.val
+  := by
+  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.Usize.saturating_add_spec (x y : Usize) :
+  ∃ z, saturating_add x y = ok z ∧
+  if x.val + y.val > Usize.max then z.val = Usize.max
+  else z.val = x.val + y.val
+  := by
+  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
+  split <;> split <;> split <;> scalar_tac
+
+-- Saturating sub
+def int_saturating_sub (ty : ScalarTy) (x y : Int) : Int :=
+  let r := x - y
+  let r := if r > Scalar.max ty then Scalar.max ty else r
+  let r := if r < Scalar.min ty then Scalar.min ty else r
+  r
+
+def int_saturating_sub_in_bounds {ty} (x y : Scalar ty) :
+  let r := int_saturating_sub ty x.val y.val
+  Scalar.min ty ≤ r ∧ r ≤ Scalar.max ty := by
+  simp [int_saturating_sub]
+  split <;> constructor <;> cases ty <;> scalar_tac
+
+def Scalar.saturating_sub {ty} (x y : Scalar ty) : Result (Scalar ty) :=
+  let r := int_saturating_sub ty x.val y.val
+  have h := int_saturating_sub_in_bounds x y
+  ok ⟨ r, h.1, h.2 ⟩
+
+/- [core::num::{u8}::saturating_sub] -/
+def core.num.U8.saturating_sub := @Scalar.saturating_sub ScalarTy.U8
+
+/- [core::num::{u16}::saturating_sub] -/
+def core.num.U16.saturating_sub := @Scalar.saturating_sub ScalarTy.U16
+
+/- [core::num::{u32}::saturating_sub] -/
+def core.num.U32.saturating_sub := @Scalar.saturating_sub ScalarTy.U32
+
+/- [core::num::{u64}::saturating_sub] -/
+def core.num.U64.saturating_sub := @Scalar.saturating_sub ScalarTy.U64
+
+/- [core::num::{u128}::saturating_sub] -/
+def core.num.U128.saturating_sub := @Scalar.saturating_sub ScalarTy.U128
+
+/- [core::num::{usize}::saturating_sub] -/
+def core.num.Usize.saturating_sub := @Scalar.saturating_sub ScalarTy.Usize
+
+/- [core::num::{i8}::saturating_sub] -/
+def core.num.I8.saturating_sub := @Scalar.saturating_sub ScalarTy.I8
+
+/- [core::num::{i16}::saturating_sub] -/
+def core.num.I16.saturating_sub := @Scalar.saturating_sub ScalarTy.I16
+
+/- [core::num::{i32}::saturating_sub] -/
+def core.num.I32.saturating_sub := @Scalar.saturating_sub ScalarTy.I32
+
+/- [core::num::{i64}::saturating_sub] -/
+def core.num.I64.saturating_sub := @Scalar.saturating_sub ScalarTy.I64
+
+/- [core::num::{i128}::saturating_sub] -/
+def core.num.I128.saturating_sub := @Scalar.saturating_sub ScalarTy.I128
+
+/- [core::num::{isize}::saturating_sub] -/
+def core.num.Isize.saturating_sub := @Scalar.saturating_sub ScalarTy.Isize
+
+@[pspec]
+theorem core.num.U8.saturating_sub_spec (x y : U8) :
+  ∃ z, saturating_sub x y = ok z ∧
+  if x.val - y.val < 0 then z.val = 0
+  else z.val = x.val - y.val
+  := by
+  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.U16.saturating_sub_spec (x y : U16) :
+  ∃ z, saturating_sub x y = ok z ∧
+  if x.val - y.val < 0 then z.val = 0
+  else z.val = x.val - y.val
+  := by
+  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.U32.saturating_sub_spec (x y : U32) :
+  ∃ z, saturating_sub x y = ok z ∧
+  if x.val - y.val < 0 then z.val = 0
+  else z.val = x.val - y.val
+  := by
+  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.U64.saturating_sub_spec (x y : U64) :
+  ∃ z, saturating_sub x y = ok z ∧
+  if x.val - y.val < 0 then z.val = 0
+  else z.val = x.val - y.val
+  := by
+  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.U128.saturating_sub_spec (x y : U128) :
+  ∃ z, saturating_sub x y = ok z ∧
+  if x.val - y.val < 0 then z.val = 0
+  else z.val = x.val - y.val
+  := by
+  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
+  split <;> split <;> split <;> scalar_tac
+
+@[pspec]
+theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
+  ∃ z, saturating_sub x y = ok z ∧
+  if x.val - y.val < 0 then z.val = 0
+  else z.val = x.val - y.val
+  := by
+  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
+  split <;> split <;> split <;> scalar_tac
+
 end Primitives
