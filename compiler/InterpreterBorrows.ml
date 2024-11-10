@@ -1960,12 +1960,13 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             cassert __FILE__ __LINE__
               (not (value_has_borrows ctx sv.value))
               span "Nested borrows are not supported yet";
-            (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
-            (* For avalues, a loan has the borrow type *)
+            (* Push the avalue *)
             cassert __FILE__ __LINE__ (ty_no_regions ty) span
               "Nested borrows are not supported yet";
-            let ty = mk_ref_ty (RFVar r_id) ty RShared in
+            (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty in
+            (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
+            let ty = mk_ref_ty (RFVar r_id) ty RShared in
             (* Rem.: the shared value might contain loans *)
             let avl, sv = to_avalues false true true r_id sv in
             let av = ALoan (ASharedLoan (PNone, bids, sv, ignored)) in
@@ -1979,12 +1980,13 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let value = { v with value } in
             (av :: avl, value)
         | VMutLoan bid ->
-            (* Push the avalue - note that we use [AIgnore] for the inner avalue *)
-            (* For avalues, a loan has the borrow type *)
+            (* Push the avalue *)
             cassert __FILE__ __LINE__ (ty_no_regions ty) span
               "Nested borrows are not supported yet";
-            let ty = mk_ref_ty (RFVar r_id) ty RMut in
+            (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty in
+            (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
+            let ty = mk_ref_ty (RFVar r_id) ty RMut in
             let av = ALoan (AMutLoan (PNone, bid, ignored)) in
             let av = { value = av; ty } in
             ([ av ], v))
