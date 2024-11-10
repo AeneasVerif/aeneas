@@ -10,14 +10,14 @@ set_option linter.unusedVariables false
 namespace bst
 
 /- [bst::{bst::TreeSet<T>}::new]:
-   Source: 'src/bst.rs', lines 34:4-34:24 -/
-def TreeSet.new (T : Type) (OrdInst : Ord T) : Result (TreeSet T) :=
+   Source: 'src/bst.rs', lines 34:4-36:5 -/
+def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) :=
   Result.ok { root := none }
 
 /- [bst::{bst::TreeSet<T>}::find]: loop 0:
-   Source: 'src/bst.rs', lines 38:4-50:5 -/
+   Source: 'src/bst.rs', lines 41:8-50:5 -/
 divergent def TreeSet.find_loop
-  (T : Type) (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
+  {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool
   :=
   match current_tree with
@@ -26,20 +26,20 @@ divergent def TreeSet.find_loop
     do
     let o ← OrdInst.cmp current_node.value value
     match o with
-    | Ordering.Less => TreeSet.find_loop T OrdInst value current_node.right
+    | Ordering.Less => TreeSet.find_loop OrdInst value current_node.right
     | Ordering.Equal => Result.ok true
-    | Ordering.Greater => TreeSet.find_loop T OrdInst value current_node.left
+    | Ordering.Greater => TreeSet.find_loop OrdInst value current_node.left
 
 /- [bst::{bst::TreeSet<T>}::find]:
-   Source: 'src/bst.rs', lines 38:4-38:40 -/
+   Source: 'src/bst.rs', lines 38:4-50:5 -/
 def TreeSet.find
-  (T : Type) (OrdInst : Ord T) (self : TreeSet T) (value : T) : Result Bool :=
-  TreeSet.find_loop T OrdInst value self.root
+  {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) : Result Bool :=
+  TreeSet.find_loop OrdInst value self.root
 
 /- [bst::{bst::TreeSet<T>}::insert]: loop 0:
-   Source: 'src/bst.rs', lines 51:4-69:5 -/
+   Source: 'src/bst.rs', lines 54:8-69:5 -/
 divergent def TreeSet.insert_loop
-  (T : Type) (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
+  {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result (Bool × (Option (Node T)))
   :=
   match current_tree with
@@ -52,25 +52,25 @@ divergent def TreeSet.insert_loop
     | Ordering.Less =>
       do
       let (b, current_tree1) ←
-        TreeSet.insert_loop T OrdInst value current_node.right
+        TreeSet.insert_loop OrdInst value current_node.right
       Result.ok (b, some (Node.mk current_node.value current_node.left
         current_tree1))
     | Ordering.Equal => Result.ok (false, some current_node)
     | Ordering.Greater =>
       do
       let (b, current_tree1) ←
-        TreeSet.insert_loop T OrdInst value current_node.left
+        TreeSet.insert_loop OrdInst value current_node.left
       Result.ok (b, some (Node.mk current_node.value current_tree1
         current_node.right))
 
 /- [bst::{bst::TreeSet<T>}::insert]:
-   Source: 'src/bst.rs', lines 51:4-51:46 -/
+   Source: 'src/bst.rs', lines 51:4-69:5 -/
 def TreeSet.insert
-  (T : Type) (OrdInst : Ord T) (self : TreeSet T) (value : T) :
+  {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
   Result (Bool × (TreeSet T))
   :=
   do
-  let (b, ts) ← TreeSet.insert_loop T OrdInst value self.root
+  let (b, ts) ← TreeSet.insert_loop OrdInst value self.root
   Result.ok (b, { root := ts })
 
 end bst

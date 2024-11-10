@@ -9,26 +9,26 @@ set_option linter.unusedVariables false
 namespace bst
 
 /- [bst::Ordering]
-   Source: 'src/bst.rs', lines 5:0-5:17 -/
+   Source: 'src/bst.rs', lines 5:0-9:1 -/
 inductive Ordering :=
 | Less : Ordering
 | Equal : Ordering
 | Greater : Ordering
 
 /- Trait declaration: [bst::Ord]
-   Source: 'src/bst.rs', lines 11:0-11:9 -/
+   Source: 'src/bst.rs', lines 11:0-13:1 -/
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 
 /- Trait declaration: [bst::Bounded]
-   Source: 'src/bst.rs', lines 15:0-15:13 -/
+   Source: 'src/bst.rs', lines 15:0-19:1 -/
 structure Bounded (Self : Type) where
   Value : Type
   max_value : Result Value
   min_value : Result Value
 
 /- [bst::Node]
-   Source: 'src/bst.rs', lines 21:0-21:14 -/
+   Source: 'src/bst.rs', lines 21:0-25:1 -/
 inductive Node (T : Type) :=
 | mk : T → Option (Node T) → Option (Node T) → Node T
 
@@ -59,7 +59,7 @@ theorem Node.right._simpLemma_ {T : Type} (value : T) (left : Option (Node T))
   by rfl
 
 /- [bst::TreeSet]
-   Source: 'src/bst.rs', lines 29:0-29:17 -/
+   Source: 'src/bst.rs', lines 29:0-31:1 -/
 structure TreeSet (T : Type) where
   root : Option (Node T)
 
