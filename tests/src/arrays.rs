@@ -202,6 +202,14 @@ pub fn update_all() {
     update_mut_slice(&mut x);
 }
 
+pub fn incr_array(mut x: &mut [u32; 2]) {
+    x[0] += 1
+}
+
+pub fn incr_slice(mut x: &mut [u32]) {
+    x[0] += 1
+}
+
 // Nano-tests, with ranges
 // -----------------------
 
