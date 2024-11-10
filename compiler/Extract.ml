@@ -589,6 +589,14 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
         | FromLlbc (FunId (FAssumed aid), _) ->
             Some
               (Assumed.AssumedFunIdMap.find aid ctx.builtin_sigs).explicit_info
+        | Pure (UpdateAtIndex Array) ->
+            Some
+              {
+                explicit_types = [ Implicit ];
+                explicit_const_generics = [ Implicit ];
+              }
+        | Pure (UpdateAtIndex Slice) ->
+            Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
         | Pure _ -> None
       in
       (* Filter the generics.

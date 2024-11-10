@@ -54,6 +54,7 @@ type loc = Meta.loc [@@deriving show, ord]
 type file_name = Meta.file_name [@@deriving show, ord]
 type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
+type ref_kind = Types.ref_kind [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -712,6 +713,8 @@ type unop =
   | Cast of literal_type * literal_type
 [@@deriving show, ord]
 
+type array_or_slice = Array | Slice [@@deriving show, ord]
+
 (** Identifiers of assumed functions that we use only in the pure translation *)
 type pure_assumed_fun_id =
   | Return  (** The monadic return *)
@@ -720,6 +723,14 @@ type pure_assumed_fun_id =
   | FuelDecrease
       (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is ugly *)
   | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
+  | UpdateAtIndex of array_or_slice
+      (** Update an array or a slice at a given index.
+
+          Note that in LLBC we only use an index function: if we want to
+          modify an element in an array/slice, we create a mutable borrow
+          to this element, then use the borrow to perform the update. The
+          update functions are introduced in the pure code by a micro-pass.
+       *)
 [@@deriving show, ord]
 
 type fun_id_or_trait_method_ref =

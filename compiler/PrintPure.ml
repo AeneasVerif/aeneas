@@ -503,6 +503,11 @@ let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
   | Assert -> "assert"
   | FuelDecrease -> "fuel_decrease"
   | FuelEqZero -> "fuel_eq_zero"
+  | UpdateAtIndex array_or_slice -> begin
+      match array_or_slice with
+      | Array -> "array_update"
+      | Slice -> "slice_update"
+    end
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with
