@@ -1365,17 +1365,6 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
 (** Remark: it might be better to use egraphs *)
 type simp_aggr_env = {
-  (* Map from expanded expression to non-expanded expression.
-
-     For instance, if we see the expression [let (x, y) = p in ...]
-     we store the mappings:
-     {[
-       (x, y) -> p
-       x -> p.0
-       y -> p.1
-     ]}
-  *)
-  contract_map : expression ExprMap.t;
   (* Expansion map that we use in particular to simplify fields.
 
      For instance, if we see the expression [let (x, y) = p in ...]
@@ -1387,16 +1376,6 @@ type simp_aggr_env = {
      ]}
   *)
   expand_map : expression ExprMap.t;
-  (* Map from variable to the adt it comes from.
-
-     For instance, if we see the expression [let (x, y) = p in ...]
-     we store the mappings:
-     {[
-       x -> (x, y)
-       y -> (x, y)
-     ]}
-  *)
-  var_to_adt : expression ExprMap.t;
   (* The list of values which were expanded through matches or let-bindings.
 
      For instance, if we see the expression [let (x, y) = p in ...] we push
@@ -1424,49 +1403,27 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
   let log = Logging.simplify_aggregates_unchanged_fields_log in
   let span = def.item_meta.span in
   (* Some helpers *)
-  let empty_simp_aggr_env =
-    {
-      contract_map = ExprMap.empty;
-      expand_map = ExprMap.empty;
-      var_to_adt = ExprMap.empty;
-      expanded = [];
-    }
-  in
-  let add_contract e0 e1 m =
-    { m with contract_map = ExprMap.add e0 e1 m.contract_map }
-  in
-  let add_contracts eqs m =
-    { m with contract_map = ExprMap.add_list eqs m.contract_map }
-  in
-  let get_contract v m = ExprMap.find_opt v m.contract_map in
+  let empty_simp_aggr_env = { expand_map = ExprMap.empty; expanded = [] } in
   let add_expand v e m = { m with expand_map = ExprMap.add v e m.expand_map } in
   let add_expands l m =
     { m with expand_map = ExprMap.add_list l m.expand_map }
   in
   let get_expand v m = ExprMap.find_opt v m.expand_map in
-  let add_var v e m = { m with var_to_adt = ExprMap.add v e m.var_to_adt } in
-  let add_vars l m = { m with var_to_adt = ExprMap.add_list l m.var_to_adt } in
   let add_expanded e m = { m with expanded = e :: m.expanded } in
   let add_pattern_eqs (bound_adt : texpression) (pat : typed_pattern)
       (env : simp_aggr_env) : simp_aggr_env =
     (* Register the pattern - note that we may not be able to convert the
        pattern to an expression if, for instance, it contains [_] *)
-    let pat_expr, env =
+    let env =
       match typed_pattern_to_texpression span pat with
-      | Some pat_expr -> (Some pat_expr.e, add_expand bound_adt.e pat_expr.e env)
-      | None -> (None, env)
+      | Some pat_expr -> add_expand bound_adt.e pat_expr.e env
+      | None -> env
     in
     (* Register the fact that the scrutinee got expanded *)
     let env = add_expanded bound_adt.e env in
     (* Check if we are decomposing an ADT to introduce variables for its fields *)
     match pat.value with
     | PatAdt adt ->
-        (* Introduce a contraction *)
-        let env =
-          match pat_expr with
-          | Some pat_expr -> add_contract pat_expr bound_adt.e env
-          | None -> env
-        in
         (* Check if the fields are all variables, and compute the tuple:
            (variable introduced for the field, projection) *)
         let fields = FieldId.mapi (fun id x -> (id, x)) adt.field_values in
@@ -1482,17 +1439,8 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
             fields
         in
         (* We register the various mappings *)
-        let env = add_contracts vars_to_projs env in
         let env =
           add_expands (List.map (fun (x, y) -> (y, x)) vars_to_projs) env
-        in
-        let env =
-          match pat_expr with
-          | None -> env
-          | Some pat_expr ->
-              add_vars
-                (List.map (fun (x, _) -> (x, pat_expr)) vars_to_projs)
-                env
         in
         env
     | _ -> env
