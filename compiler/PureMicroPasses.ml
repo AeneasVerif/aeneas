@@ -1941,10 +1941,10 @@ let simplify_array_slice_update (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               | App (app, back_v) when is_call_to_back app ->
                   (super#visit_texpression env (mk_call_to_update back_v)).e
               (* let a' = back x in ... *)
-              | Let (monadic', pat', { e = App (app, back_v); _ }, e3)
+              | Let (_, pat', { e = App (app, back_v); _ }, e3)
                 when is_call_to_back app ->
                   super#visit_expression env
-                    (Let (monadic', pat', mk_call_to_update back_v, e3))
+                    (Let (true, pat', mk_call_to_update back_v, e3))
               | _ -> super#visit_Let env monadic pat e1 e2
             end
         | _ -> super#visit_Let env monadic pat e1 e2

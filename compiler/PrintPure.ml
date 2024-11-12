@@ -498,15 +498,15 @@ let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
 
 let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
   match fid with
-  | Return -> "return"
-  | Fail -> "fail"
-  | Assert -> "assert"
-  | FuelDecrease -> "fuel_decrease"
-  | FuelEqZero -> "fuel_eq_zero"
+  | Return -> "@return"
+  | Fail -> "@fail"
+  | Assert -> "@assert"
+  | FuelDecrease -> "@fuel_decrease"
+  | FuelEqZero -> "@fuel_eq_zero"
   | UpdateAtIndex array_or_slice -> begin
       match array_or_slice with
-      | Array -> "array_update"
-      | Slice -> "slice_update"
+      | Array -> "@ArrayUpdate"
+      | Slice -> "@SliceUpdate"
     end
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =

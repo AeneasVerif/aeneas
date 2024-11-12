@@ -1025,16 +1025,18 @@ let compute_raw_fun_effect_info (span : Meta.span option)
         stateful_group && ((not !Config.backward_no_state_update) || gid = None)
       in
       {
-        can_fail = info.can_fail;
+        (* Note that backward functions can't fail *)
+        can_fail = info.can_fail && gid = None;
         stateful_group;
         stateful;
         can_diverge = info.can_diverge;
-        is_rec = info.is_rec || Option.is_some lid;
+        is_rec = (info.is_rec || Option.is_some lid) && gid = None;
       }
   | FunId (FAssumed aid) ->
       sanity_check_opt_span __FILE__ __LINE__ (lid = None) span;
       {
-        can_fail = Assumed.assumed_fun_can_fail aid;
+        (* Note that backward functions can't fail *)
+        can_fail = Assumed.assumed_fun_can_fail aid && gid = None;
         stateful_group = false;
         stateful = false;
         can_diverge = false;
@@ -1055,7 +1057,10 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
             | None -> dsg.fwd_info.effect_info
             | Some gid -> (RegionGroupId.Map.find gid dsg.back_sg).effect_info
           in
-          { info with is_rec = info.is_rec || Option.is_some lid }
+          {
+            info with
+            is_rec = (info.is_rec || Option.is_some lid) && gid = None;
+          }
       | FunId (FAssumed _) ->
           compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos
             fun_id lid gid)
@@ -2202,8 +2207,12 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
       mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
     else output
   in
-  (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-  mk_espan (Tag "return_with_loop") (mk_result_ok_texpression ctx.span output)
+  (* Wrap in a result if the backward function cal fail *)
+  let output =
+    if effect_info.can_fail then mk_result_ok_texpression ctx.span output
+    else output
+  in
+  mk_espan (Tag "return_with_loop") output
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
@@ -3210,8 +3219,10 @@ and translate_forward_end (ectx : C.eval_ctx)
                   mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
                 else output
               in
-              (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-              mk_result_ok_texpression ctx.span output
+              (* Wrap in a result if the backward function can fail *)
+              if effect_info.can_fail then
+                mk_result_ok_texpression ctx.span output
+              else output
             in
             let mk_panic =
               (* TODO: we should use a [Fail] function *)
@@ -3633,7 +3644,6 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
              function.
           *)
           let effect_info = back_sg.effect_info in
-          let effect_info = { effect_info with is_rec = true } in
           (* Compute the input/output types *)
           let inputs = List.map snd back_sg.inputs in
           let outputs = given_back in
@@ -3656,16 +3666,18 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     let back_info = RegionGroupId.Map.of_list back_info in
     let back_tys = List.filter_map snd back_info_tys in
     let output =
-      if ctx.sg.fwd_info.ignore_output then back_tys
-      else ctx.sg.fwd_output :: back_tys
+      let output =
+        if ctx.sg.fwd_info.ignore_output then back_tys
+        else ctx.sg.fwd_output :: back_tys
+      in
+      let output = mk_simpl_tuple_ty output in
+      let effect_info = ctx.sg.fwd_info.effect_info in
+      let output =
+        if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; output ]
+        else output
+      in
+      if effect_info.can_fail then mk_result_ty output else output
     in
-    let output = mk_simpl_tuple_ty output in
-    let effect_info = ctx.sg.fwd_info.effect_info in
-    let output =
-      if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; output ]
-      else output
-    in
-    let output = if effect_info.can_fail then mk_result_ty output else output in
     (back_info, output)
   in
 
@@ -3732,8 +3744,9 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
               mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
             else output
           in
-          (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-          mk_result_ok_texpression ctx.span output
+          (* Wrap in a result if the function can fail *)
+          if effect_info.can_fail then mk_result_ok_texpression ctx.span output
+          else output
     in
 
     let loop_info =
@@ -3949,8 +3962,10 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
                   mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
                 else output
               in
-              (* Wrap in a result - TODO: check effect_info.can_fail to not always wrap *)
-              mk_result_ok_texpression ctx.span output
+              (* Wrap in a result if the function can fail *)
+              if effect_info.can_fail then
+                mk_result_ok_texpression ctx.span output
+              else output
         in
         let mk_panic =
           (* TODO: we should use a [Fail] function *)
