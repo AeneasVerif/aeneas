@@ -117,7 +117,7 @@ let _ = assert_norm (test_list1 = Ok ())
     Source: 'tests/src/no_nested_borrows.rs', lines 129:0-137:1 *)
 let test_box1 : result unit =
   let* (_, deref_mut_back) = alloc_boxed_Box_deref_mut 0 in
-  let* b = deref_mut_back 1 in
+  let b = deref_mut_back 1 in
   let* x = alloc_boxed_Box_deref b in
   if x = 1 then Ok () else Fail Failure
 
@@ -186,12 +186,10 @@ let _ = assert_norm (test_split_list = Ok ())
 (** [no_nested_borrows::choose]:
     Source: 'tests/src/no_nested_borrows.rs', lines 202:0-208:1 *)
 let choose
-  (#t : Type0) (b : bool) (x : t) (y : t) :
-  result (t & (t -> result (t & t)))
-  =
+  (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
   if b
-  then let back = fun ret -> Ok (ret, y) in Ok (x, back)
-  else let back = fun ret -> Ok (x, ret) in Ok (y, back)
+  then let back = fun ret -> (ret, y) in Ok (x, back)
+  else let back = fun ret -> (x, ret) in Ok (y, back)
 
 (** [no_nested_borrows::choose_test]:
     Source: 'tests/src/no_nested_borrows.rs', lines 210:0-219:1 *)
@@ -200,7 +198,7 @@ let choose_test : result unit =
   let* z1 = i32_add z 1 in
   if z1 = 1
   then
-    let* (x, y) = choose_back z1 in
+    let (x, y) = choose_back z1 in
     if x = 1 then if y = 0 then Ok () else Fail Failure else Fail Failure
   else Fail Failure
 
@@ -249,18 +247,16 @@ let rec list_nth_shared (#t : Type0) (l : list_t t) (i : u32) : result t =
 (** [no_nested_borrows::list_nth_mut]:
     Source: 'tests/src/no_nested_borrows.rs', lines 296:0-309:1 *)
 let rec list_nth_mut
-  (#t : Type0) (l : list_t t) (i : u32) :
-  result (t & (t -> result (list_t t)))
-  =
+  (#t : Type0) (l : list_t t) (i : u32) : result (t & (t -> list_t t)) =
   begin match l with
   | List_Cons x tl ->
     if i = 0
-    then let back = fun ret -> Ok (List_Cons ret tl) in Ok (x, back)
+    then let back = fun ret -> List_Cons ret tl in Ok (x, back)
     else
       let* i1 = u32_sub i 1 in
       let* (x1, list_nth_mut_back) = list_nth_mut tl i1 in
-      let back =
-        fun ret -> let* tl1 = list_nth_mut_back ret in Ok (List_Cons x tl1) in
+      let back = fun ret -> let tl1 = list_nth_mut_back ret in List_Cons x tl1
+        in
       Ok (x1, back)
   | List_Nil -> Fail Failure
   end
@@ -297,7 +293,7 @@ let test_list_functions : result unit =
         if i3 = 2
         then
           let* (_, list_nth_mut_back) = list_nth_mut (List_Cons 0 l1) 1 in
-          let* ls = list_nth_mut_back 3 in
+          let ls = list_nth_mut_back 3 in
           let* i4 = list_nth_shared ls 0 in
           if i4 = 0
           then
@@ -320,33 +316,38 @@ let _ = assert_norm (test_list_functions = Ok ())
     Source: 'tests/src/no_nested_borrows.rs', lines 347:0-349:1 *)
 let id_mut_pair1
   (#t1 : Type0) (#t2 : Type0) (x : t1) (y : t2) :
-  result ((t1 & t2) & ((t1 & t2) -> result (t1 & t2)))
+  result ((t1 & t2) & ((t1 & t2) -> (t1 & t2)))
   =
-  Ok ((x, y), Ok)
+  let back = fun ret -> ret in Ok ((x, y), back)
 
 (** [no_nested_borrows::id_mut_pair2]:
     Source: 'tests/src/no_nested_borrows.rs', lines 351:0-353:1 *)
 let id_mut_pair2
   (#t1 : Type0) (#t2 : Type0) (p : (t1 & t2)) :
-  result ((t1 & t2) & ((t1 & t2) -> result (t1 & t2)))
+  result ((t1 & t2) & ((t1 & t2) -> (t1 & t2)))
   =
-  let (x, x1) = p in Ok (p, Ok)
+  let (x, x1) = p in let back = fun ret -> ret in Ok (p, back)
 
 (** [no_nested_borrows::id_mut_pair3]:
     Source: 'tests/src/no_nested_borrows.rs', lines 355:0-357:1 *)
 let id_mut_pair3
   (#t1 : Type0) (#t2 : Type0) (x : t1) (y : t2) :
-  result ((t1 & t2) & (t1 -> result t1) & (t2 -> result t2))
+  result ((t1 & t2) & (t1 -> t1) & (t2 -> t2))
   =
-  Ok ((x, y), Ok, Ok)
+  let back'a = fun ret -> ret in
+  let back'b = fun ret -> ret in
+  Ok ((x, y), back'a, back'b)
 
 (** [no_nested_borrows::id_mut_pair4]:
     Source: 'tests/src/no_nested_borrows.rs', lines 359:0-361:1 *)
 let id_mut_pair4
   (#t1 : Type0) (#t2 : Type0) (p : (t1 & t2)) :
-  result ((t1 & t2) & (t1 -> result t1) & (t2 -> result t2))
+  result ((t1 & t2) & (t1 -> t1) & (t2 -> t2))
   =
-  let (x, x1) = p in Ok (p, Ok, Ok)
+  let (x, x1) = p in
+  let back'a = fun ret -> ret in
+  let back'b = fun ret -> ret in
+  Ok (p, back'a, back'b)
 
 (** [no_nested_borrows::StructWithTuple]
     Source: 'tests/src/no_nested_borrows.rs', lines 366:0-368:1 *)

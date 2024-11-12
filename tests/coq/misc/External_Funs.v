@@ -36,8 +36,7 @@ Definition incr
   let (st1, p1) := p in
   let (i, get_mut_back) := p1 in
   i1 <- u32_add i 1%u32;
-  p2 <- get_mut_back i1 st1;
-  let (_, rc1) := p2 in
+  let (_, rc1) := get_mut_back i1 st1 in
   Ok (st1, rc1)
 .
 

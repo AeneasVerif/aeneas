@@ -74,7 +74,7 @@ let rec hashMap_clear_loop
       alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst
         (aList_t t)) slots i in
     let* i2 = usize_add i 1 in
-    let* slots1 = index_mut_back AList_Nil in
+    let slots1 = index_mut_back AList_Nil in
     hashMap_clear_loop slots1 i2
   else Ok slots
 
@@ -130,9 +130,9 @@ let hashMap_insert_no_resize
   if inserted
   then
     let* i1 = usize_add self.num_entries 1 in
-    let* v = index_mut_back a1 in
+    let v = index_mut_back a1 in
     Ok { self with num_entries = i1; slots = v }
-  else let* v = index_mut_back a1 in Ok { self with slots = v }
+  else let v = index_mut_back a1 in Ok { self with slots = v }
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
     Source: 'tests/src/hashmap.rs', lines 197:12-204:17 *)
@@ -171,7 +171,7 @@ let rec hashMap_move_elements_loop
     let (ls, a1) = core_mem_replace a AList_Nil in
     let* ntable1 = hashMap_move_elements_from_list ntable ls in
     let* i2 = usize_add i 1 in
-    let* slots1 = index_mut_back a1 in
+    let slots1 = index_mut_back a1 in
     hashMap_move_elements_loop ntable1 slots1 i2
   else Ok (ntable, slots)
 
@@ -276,17 +276,17 @@ let hashMap_get (#t : Type0) (self : hashMap_t t) (key : usize) : result t =
     Source: 'tests/src/hashmap.rs', lines 257:8-265:5 *)
 let rec hashMap_get_mut_in_list_loop
   (#t : Type0) (ls : aList_t t) (key : usize) :
-  Tot (result (t & (t -> result (aList_t t))))
+  Tot (result (t & (t -> aList_t t)))
   (decreases (hashMap_get_mut_in_list_loop_decreases ls key))
   =
   begin match ls with
   | AList_Cons ckey cvalue tl ->
     if ckey = key
-    then let back = fun ret -> Ok (AList_Cons ckey ret tl) in Ok (cvalue, back)
+    then let back = fun ret -> AList_Cons ckey ret tl in Ok (cvalue, back)
     else
       let* (x, back) = hashMap_get_mut_in_list_loop tl key in
-      let back1 =
-        fun ret -> let* tl1 = back ret in Ok (AList_Cons ckey cvalue tl1) in
+      let back1 = fun ret -> let tl1 = back ret in AList_Cons ckey cvalue tl1
+        in
       Ok (x, back1)
   | AList_Nil -> Fail Failure
   end
@@ -294,16 +294,14 @@ let rec hashMap_get_mut_in_list_loop
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
     Source: 'tests/src/hashmap.rs', lines 256:4-265:5 *)
 let hashMap_get_mut_in_list
-  (#t : Type0) (ls : aList_t t) (key : usize) :
-  result (t & (t -> result (aList_t t)))
-  =
+  (#t : Type0) (ls : aList_t t) (key : usize) : result (t & (t -> aList_t t)) =
   hashMap_get_mut_in_list_loop ls key
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut]:
     Source: 'tests/src/hashmap.rs', lines 268:4-272:5 *)
 let hashMap_get_mut
   (#t : Type0) (self : hashMap_t t) (key : usize) :
-  result (t & (t -> result (hashMap_t t)))
+  result (t & (t -> hashMap_t t))
   =
   let* hash = hash_key key in
   let i = alloc_vec_Vec_len self.slots in
@@ -314,9 +312,9 @@ let hashMap_get_mut
   let* (x, get_mut_in_list_back) = hashMap_get_mut_in_list a key in
   let back =
     fun ret ->
-      let* a1 = get_mut_in_list_back ret in
-      let* v = index_mut_back a1 in
-      Ok { self with slots = v } in
+      let a1 = get_mut_in_list_back ret in
+      let v = index_mut_back a1 in
+      { self with slots = v } in
   Ok (x, back)
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
@@ -363,10 +361,10 @@ let hashMap_remove
       (aList_t t)) self.slots hash_mod in
   let* (x, a1) = hashMap_remove_from_list key a in
   begin match x with
-  | None -> let* v = index_mut_back a1 in Ok (None, { self with slots = v })
+  | None -> let v = index_mut_back a1 in Ok (None, { self with slots = v })
   | Some x1 ->
     let* i1 = usize_sub self.num_entries 1 in
-    let* v = index_mut_back a1 in
+    let v = index_mut_back a1 in
     Ok (x, { self with num_entries = i1; slots = v })
   end
 
@@ -390,7 +388,7 @@ let test1 : result unit =
   if i = 18
   then
     let* (_, get_mut_back) = hashMap_get_mut hm4 1024 in
-    let* hm5 = get_mut_back 56 in
+    let hm5 = get_mut_back 56 in
     let* i1 = hashMap_get hm5 1024 in
     if i1 = 56
     then

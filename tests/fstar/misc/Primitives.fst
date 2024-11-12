@@ -573,7 +573,7 @@ noeq type core_ops_index_Index (self idx : Type0) = {
 // Trait declaration: [core::ops::index::IndexMut]
 noeq type core_ops_index_IndexMut (self idx : Type0) = {
   indexInst : core_ops_index_Index self idx;
-  index_mut : self → idx → result (indexInst.output & (indexInst.output → result self));
+  index_mut : self → idx → result (indexInst.output & (indexInst.output → self));
 }
 
 // Trait declaration [core::ops::deref::Deref]
@@ -585,7 +585,7 @@ noeq type core_ops_deref_Deref (self : Type0) = {
 // Trait declaration [core::ops::deref::DerefMut]
 noeq type core_ops_deref_DerefMut (self : Type0) = {
   derefInst : core_ops_deref_Deref self;
-  deref_mut : self → result (derefInst.target & (derefInst.target → result self));
+  deref_mut : self → result (derefInst.target & (derefInst.target → self));
 }
 
 type core_ops_range_Range (a : Type0) = {
@@ -596,8 +596,8 @@ type core_ops_range_Range (a : Type0) = {
 (*** [alloc] *)
 
 let alloc_boxed_Box_deref (#t : Type0) (x : t) : result t = Ok x
-let alloc_boxed_Box_deref_mut (#t : Type0) (x : t) : result (t & (t -> result t)) =
-  Ok (x, (fun x -> Ok x))
+let alloc_boxed_Box_deref_mut (#t : Type0) (x : t) : result (t & (t -> t)) =
+  Ok (x, (fun x -> x))
 
 // Trait instance
 let alloc_boxed_Box_coreopsDerefInst (self : Type0) : core_ops_deref_Deref self = {
@@ -633,12 +633,17 @@ let array_update_usize (#a : Type0) (#n : usize) (x : array a n) (i : usize) (nx
   if i < length x then Ok (list_update x i nx)
   else Fail Failure
 
+let array_update (#a : Type0) (#n : usize) (x : array a n) (i : usize) (nx : a) :
+  array a n =
+  if i < length x then list_update x i nx
+  else x
+
 let array_index_mut_usize (#a : Type0) (#n : usize) (x : array a n) (i : usize) :
-  result (a & (a -> result (array a n))) =
+  result (a & (a -> array a n)) =
   match array_index_usize x i with
   | Fail e -> Fail e
   | Ok v ->
-    Ok (v, array_update_usize x i)
+    Ok (v, array_update x i)
 
 (*** Slice *)
 type slice (a : Type0) = s:list a{length s <= usize_max}
@@ -653,22 +658,26 @@ let slice_update_usize (#a : Type0) (x : slice a) (i : usize) (nx : a) : result 
   if i < length x then Ok (list_update x i nx)
   else Fail Failure
 
+let slice_update (#a : Type0) (x : slice a) (i : usize) (nx : a) : slice a =
+  if i < length x then list_update x i nx
+  else x
+
 let slice_index_mut_usize (#a : Type0) (s : slice a) (i : usize) :
-  result (a & (a -> result (slice a))) =
+  result (a & (a -> slice a)) =
   match slice_index_usize s i with
   | Fail e -> Fail e
   | Ok x ->
-    Ok (x, slice_update_usize s i)
+    Ok (x, slice_update s i)
 
 (*** Subslices *)
 
 let array_to_slice (#a : Type0) (#n : usize) (x : array a n) : result (slice a) = Ok x
-let array_from_slice (#a : Type0) (#n : usize) (x : array a n) (s : slice a) : result (array a n) =
-  if length s = n then Ok s
-  else Fail Failure
+let array_from_slice (#a : Type0) (#n : usize) (x : array a n) (s : slice a) : array a n =
+  if length s = n then s
+  else (* Unreachable case *) x
 
 let array_to_slice_mut (#a : Type0) (#n : usize) (x : array a n) :
-  result (slice a & (slice a -> result (array a n))) =
+  result (slice a & (slice a -> array a n)) =
   Ok (x, array_from_slice x)
 
 // TODO: finish the definitions below (there lacks [List.drop] and [List.take] in the standard library *)
@@ -693,18 +702,22 @@ type alloc_vec_Vec (a : Type0) = v:list a{length v <= usize_max}
 let alloc_vec_Vec_new (a  : Type0) : alloc_vec_Vec a = assert_norm(length #a [] == 0); []
 let alloc_vec_Vec_len (#a : Type0) (v : alloc_vec_Vec a) : usize = length v
 
-// Helper
+
 let alloc_vec_Vec_index_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) : result a =
   if i < length v then Ok (index v i) else Fail Failure
-// Helper
+
 let alloc_vec_Vec_update_usize (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : result (alloc_vec_Vec a) =
   if i < length v then Ok (list_update v i x) else Fail Failure
 
+// Helper
+let alloc_vec_Vec_update (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : alloc_vec_Vec a =
+  if i < length v then list_update v i x else v
+
 let alloc_vec_Vec_index_mut_usize (#a : Type0) (v: alloc_vec_Vec a) (i: usize) :
-  result (a & (a → result (alloc_vec_Vec a))) =
+  result (a & (a → alloc_vec_Vec a)) =
   match alloc_vec_Vec_index_usize v i with
   | Ok x ->
-    Ok (x, alloc_vec_Vec_update_usize v i)
+    Ok (x, alloc_vec_Vec_update v i)
   | Fail e -> Fail e
 
 let alloc_vec_Vec_push (#a  : Type0) (v : alloc_vec_Vec a) (x : a) :
@@ -733,11 +746,11 @@ noeq type core_slice_index_SliceIndex (self t : Type0) = {
   sealedInst : core_slice_index_private_slice_index_Sealed self;
   output : Type0;
   get : self → t → result (option output);
-  get_mut : self → t → result (option output & (option output -> result t));
+  get_mut : self → t → result (option output & (option output -> t));
   get_unchecked : self → const_raw_ptr t → result (const_raw_ptr output);
   get_unchecked_mut : self → mut_raw_ptr t → result (mut_raw_ptr output);
   index : self → t → result output;
-  index_mut : self → t → result (output & (output -> result t));
+  index_mut : self → t → result (output & (output -> t));
 }
 
 // [core::slice::index::[T]::index]: forward function
@@ -756,7 +769,7 @@ let core_slice_index_RangeUsize_get (#t : Type0) (i : core_ops_range_Range usize
 
 // [core::slice::index::Range::get_mut]: forward function
 let core_slice_index_RangeUsize_get_mut (#t : Type0) :
-  core_ops_range_Range usize → slice t → result (option (slice t) & (option (slice t) -> result (slice t))) =
+  core_ops_range_Range usize → slice t → result (option (slice t) & (option (slice t) -> slice t)) =
   admit () // TODO
 
 // [core::slice::index::Range::get_unchecked]: forward function
@@ -782,13 +795,13 @@ let core_slice_index_RangeUsize_index
 
 // [core::slice::index::Range::index_mut]: forward function
 let core_slice_index_RangeUsize_index_mut (#t : Type0) :
-  core_ops_range_Range usize → slice t → result (slice t & (slice t -> result (slice t))) =
+  core_ops_range_Range usize → slice t → result (slice t & (slice t -> slice t)) =
   admit () // TODO
 
 // [core::slice::index::[T]::index_mut]: forward function
 let core_slice_index_Slice_index_mut
   (#t #idx : Type0) (inst : core_slice_index_SliceIndex idx (slice t)) :
-  slice t → idx → result (inst.output & (inst.output -> result (slice t))) =
+  slice t → idx → result (inst.output & (inst.output -> slice t)) =
   admit () // 
 
 // [core::array::[T; N]::index]: forward function
@@ -801,7 +814,7 @@ let core_array_Array_index
 let core_array_Array_index_mut
   (#t #idx : Type0) (#n : usize) (inst : core_ops_index_IndexMut (slice t) idx)
   (a : array t n) (i : idx) :
-  result (inst.indexInst.output & (inst.indexInst.output -> result (array t n))) =
+  result (inst.indexInst.output & (inst.indexInst.output -> array t n)) =
   admit () // TODO
 
 // Trait implementation: [core::slice::index::private_slice_index::Range]
@@ -860,7 +873,7 @@ let core_slice_index_usize_get
 
 // [core::slice::index::usize::get_mut]: forward function
 let core_slice_index_usize_get_mut (#t : Type0) :
-  usize → slice t → result (option t & (option t -> result (slice t))) =
+  usize → slice t → result (option t & (option t -> slice t)) =
   admit () // TODO
 
 // [core::slice::index::usize::get_unchecked]: forward function
@@ -879,7 +892,7 @@ let core_slice_index_usize_index (#t : Type0) : usize → slice t → result t =
 
 // [core::slice::index::usize::index_mut]: forward function
 let core_slice_index_usize_index_mut (#t : Type0) :
-  usize → slice t → result (t & (t -> result (slice t))) =
+  usize → slice t → result (t & (t -> slice t)) =
   admit () // TODO
 
 // Trait implementation: [core::slice::index::private_slice_index::usize]
@@ -907,7 +920,7 @@ let alloc_vec_Vec_index (#t #idx : Type0) (inst : core_slice_index_SliceIndex id
 // [alloc::vec::Vec::index_mut]: forward function
 let alloc_vec_Vec_index_mut (#t #idx : Type0) (inst : core_slice_index_SliceIndex idx (slice t))
   (self : alloc_vec_Vec t) (i : idx) :
-  result (inst.output & (inst.output -> result (alloc_vec_Vec t))) =
+  result (inst.output & (inst.output -> alloc_vec_Vec t)) =
   admit () // TODO
 
 // Trait implementation: [alloc::vec::Vec]

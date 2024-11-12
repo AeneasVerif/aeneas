@@ -28,13 +28,11 @@ def test_incr : Result Unit :=
 /- [paper::choose]:
    Source: 'tests/src/paper.rs', lines 18:0-24:1 -/
 def choose
-  {T : Type} (b : Bool) (x : T) (y : T) :
-  Result (T × (T → Result (T × T)))
-  :=
+  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) :=
   if b
-  then let back := fun ret => Result.ok (ret, y)
+  then let back := fun ret => (ret, y)
        Result.ok (x, back)
-  else let back := fun ret => Result.ok (x, ret)
+  else let back := fun ret => (x, ret)
        Result.ok (y, back)
 
 /- [paper::test_choose]:
@@ -45,8 +43,7 @@ def test_choose : Result Unit :=
   let z1 ← z + 1#i32
   if z1 = 1#i32
   then
-    do
-    let (x, y) ← choose_back z1
+    let (x, y) := choose_back z1
     if x = 1#i32
     then if y = 0#i32
          then Result.ok ()
@@ -66,22 +63,18 @@ inductive List (T : Type) :=
 /- [paper::list_nth_mut]:
    Source: 'tests/src/paper.rs', lines 45:0-58:1 -/
 divergent def list_nth_mut
-  {T : Type} (l : List T) (i : U32) : Result (T × (T → Result (List T))) :=
+  {T : Type} (l : List T) (i : U32) : Result (T × (T → List T)) :=
   match l with
   | List.Cons x tl =>
     if i = 0#u32
-    then
-      let back := fun ret => Result.ok (List.Cons ret tl)
-      Result.ok (x, back)
+    then let back := fun ret => List.Cons ret tl
+         Result.ok (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut tl i1
-      let back :=
-        fun ret =>
-          do
-          let tl1 ← list_nth_mut_back ret
-          Result.ok (List.Cons x tl1)
+      let back := fun ret => let tl1 := list_nth_mut_back ret
+                             List.Cons x tl1
       Result.ok (t, back)
   | List.Nil => Result.fail .panic
 
@@ -102,7 +95,7 @@ def test_nth : Result Unit :=
   let l1 := List.Cons 2#i32 l
   let (x, list_nth_mut_back) ← list_nth_mut (List.Cons 1#i32 l1) 2#u32
   let x1 ← x + 1#i32
-  let l2 ← list_nth_mut_back x1
+  let l2 := list_nth_mut_back x1
   let i ← sum l2
   if i = 7#i32
   then Result.ok ()
@@ -118,7 +111,7 @@ def call_choose (p : (U32 × U32)) : Result U32 :=
   let (px, py) := p
   let (pz, choose_back) ← choose true px py
   let pz1 ← pz + 1#u32
-  let (px1, _) ← choose_back pz1
+  let (px1, _) := choose_back pz1
   Result.ok px1
 
 end paper

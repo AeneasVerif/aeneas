@@ -145,7 +145,7 @@ def test_list1 : Result Unit :=
 def test_box1 : Result Unit :=
   do
   let (_, deref_mut_back) ← alloc.boxed.Box.deref_mut 0#i32
-  let b ← deref_mut_back 1#i32
+  let b := deref_mut_back 1#i32
   let x ← alloc.boxed.Box.deref b
   if x = 1#i32
   then Result.ok ()
@@ -234,13 +234,11 @@ def test_split_list : Result Unit :=
 /- [no_nested_borrows::choose]:
    Source: 'tests/src/no_nested_borrows.rs', lines 202:0-208:1 -/
 def choose
-  {T : Type} (b : Bool) (x : T) (y : T) :
-  Result (T × (T → Result (T × T)))
-  :=
+  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) :=
   if b
-  then let back := fun ret => Result.ok (ret, y)
+  then let back := fun ret => (ret, y)
        Result.ok (x, back)
-  else let back := fun ret => Result.ok (x, ret)
+  else let back := fun ret => (x, ret)
        Result.ok (y, back)
 
 /- [no_nested_borrows::choose_test]:
@@ -251,8 +249,7 @@ def choose_test : Result Unit :=
   let z1 ← z + 1#i32
   if z1 = 1#i32
   then
-    do
-    let (x, y) ← choose_back z1
+    let (x, y) := choose_back z1
     if x = 1#i32
     then if y = 0#i32
          then Result.ok ()
@@ -313,22 +310,18 @@ divergent def list_nth_shared {T : Type} (l : List T) (i : U32) : Result T :=
 /- [no_nested_borrows::list_nth_mut]:
    Source: 'tests/src/no_nested_borrows.rs', lines 296:0-309:1 -/
 divergent def list_nth_mut
-  {T : Type} (l : List T) (i : U32) : Result (T × (T → Result (List T))) :=
+  {T : Type} (l : List T) (i : U32) : Result (T × (T → List T)) :=
   match l with
   | List.Cons x tl =>
     if i = 0#u32
-    then
-      let back := fun ret => Result.ok (List.Cons ret tl)
-      Result.ok (x, back)
+    then let back := fun ret => List.Cons ret tl
+         Result.ok (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut tl i1
-      let back :=
-        fun ret =>
-          do
-          let tl1 ← list_nth_mut_back ret
-          Result.ok (List.Cons x tl1)
+      let back := fun ret => let tl1 := list_nth_mut_back ret
+                             List.Cons x tl1
       Result.ok (t, back)
   | List.Nil => Result.fail .panic
 
@@ -370,7 +363,7 @@ def test_list_functions : Result Unit :=
           do
           let (_, list_nth_mut_back) ←
             list_nth_mut (List.Cons 0#i32 l1) 1#u32
-          let ls ← list_nth_mut_back 3#i32
+          let ls := list_nth_mut_back 3#i32
           let i4 ← list_nth_shared ls 0#u32
           if i4 = 0#i32
           then
@@ -397,35 +390,41 @@ def test_list_functions : Result Unit :=
    Source: 'tests/src/no_nested_borrows.rs', lines 347:0-349:1 -/
 def id_mut_pair1
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
-  Result ((T1 × T2) × ((T1 × T2) → Result (T1 × T2)))
+  Result ((T1 × T2) × ((T1 × T2) → (T1 × T2)))
   :=
-  Result.ok ((x, y), Result.ok)
+  let back := fun ret => ret
+  Result.ok ((x, y), back)
 
 /- [no_nested_borrows::id_mut_pair2]:
    Source: 'tests/src/no_nested_borrows.rs', lines 351:0-353:1 -/
 def id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
-  Result ((T1 × T2) × ((T1 × T2) → Result (T1 × T2)))
+  Result ((T1 × T2) × ((T1 × T2) → (T1 × T2)))
   :=
   let (t, t1) := p
-  Result.ok (p, Result.ok)
+  let back := fun ret => ret
+  Result.ok (p, back)
 
 /- [no_nested_borrows::id_mut_pair3]:
    Source: 'tests/src/no_nested_borrows.rs', lines 355:0-357:1 -/
 def id_mut_pair3
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
-  Result ((T1 × T2) × (T1 → Result T1) × (T2 → Result T2))
+  Result ((T1 × T2) × (T1 → T1) × (T2 → T2))
   :=
-  Result.ok ((x, y), Result.ok, Result.ok)
+  let back'a := fun ret => ret
+  let back'b := fun ret => ret
+  Result.ok ((x, y), back'a, back'b)
 
 /- [no_nested_borrows::id_mut_pair4]:
    Source: 'tests/src/no_nested_borrows.rs', lines 359:0-361:1 -/
 def id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
-  Result ((T1 × T2) × (T1 → Result T1) × (T2 → Result T2))
+  Result ((T1 × T2) × (T1 → T1) × (T2 → T2))
   :=
   let (t, t1) := p
-  Result.ok (p, Result.ok, Result.ok)
+  let back'a := fun ret => ret
+  let back'b := fun ret => ret
+  Result.ok (p, back'a, back'b)
 
 /- [no_nested_borrows::StructWithTuple]
    Source: 'tests/src/no_nested_borrows.rs', lines 366:0-368:1 -/

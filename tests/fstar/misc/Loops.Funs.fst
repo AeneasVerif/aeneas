@@ -90,7 +90,7 @@ let rec clear_loop
       alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst u32)
         v i in
     let* i2 = usize_add i 1 in
-    let* v1 = index_mut_back 0 in
+    let v1 = index_mut_back 0 in
     clear_loop v1 i2
   else Ok v
 
@@ -119,17 +119,17 @@ let list_mem (x : u32) (ls : list_t u32) : result bool =
     Source: 'tests/src/loops.rs', lines 93:4-102:1 *)
 let rec list_nth_mut_loop_loop
   (#t : Type0) (ls : list_t t) (i : u32) :
-  Tot (result (t & (t -> result (list_t t))))
+  Tot (result (t & (t -> list_t t)))
   (decreases (list_nth_mut_loop_loop_decreases ls i))
   =
   begin match ls with
   | List_Cons x tl ->
     if i = 0
-    then let back = fun ret -> Ok (List_Cons ret tl) in Ok (x, back)
+    then let back = fun ret -> List_Cons ret tl in Ok (x, back)
     else
       let* i1 = u32_sub i 1 in
       let* (x1, back) = list_nth_mut_loop_loop tl i1 in
-      let back1 = fun ret -> let* tl1 = back ret in Ok (List_Cons x tl1) in
+      let back1 = fun ret -> let tl1 = back ret in List_Cons x tl1 in
       Ok (x1, back1)
   | List_Nil -> Fail Failure
   end
@@ -137,9 +137,7 @@ let rec list_nth_mut_loop_loop
 (** [loops::list_nth_mut_loop]:
     Source: 'tests/src/loops.rs', lines 92:0-102:1 *)
 let list_nth_mut_loop
-  (#t : Type0) (ls : list_t t) (i : u32) :
-  result (t & (t -> result (list_t t)))
-  =
+  (#t : Type0) (ls : list_t t) (i : u32) : result (t & (t -> list_t t)) =
   list_nth_mut_loop_loop ls i
 
 (** [loops::list_nth_shared_loop]: loop 0:
@@ -165,16 +163,16 @@ let list_nth_shared_loop (#t : Type0) (ls : list_t t) (i : u32) : result t =
     Source: 'tests/src/loops.rs', lines 119:4-131:1 *)
 let rec get_elem_mut_loop
   (x : usize) (ls : list_t usize) :
-  Tot (result (usize & (usize -> result (list_t usize))))
+  Tot (result (usize & (usize -> list_t usize)))
   (decreases (get_elem_mut_loop_decreases x ls))
   =
   begin match ls with
   | List_Cons y tl ->
     if y = x
-    then let back = fun ret -> Ok (List_Cons ret tl) in Ok (y, back)
+    then let back = fun ret -> List_Cons ret tl in Ok (y, back)
     else
       let* (i, back) = get_elem_mut_loop x tl in
-      let back1 = fun ret -> let* tl1 = back ret in Ok (List_Cons y tl1) in
+      let back1 = fun ret -> let tl1 = back ret in List_Cons y tl1 in
       Ok (i, back1)
   | List_Nil -> Fail Failure
   end
@@ -183,13 +181,13 @@ let rec get_elem_mut_loop
     Source: 'tests/src/loops.rs', lines 117:0-131:1 *)
 let get_elem_mut
   (slots : alloc_vec_Vec (list_t usize)) (x : usize) :
-  result (usize & (usize -> result (alloc_vec_Vec (list_t usize))))
+  result (usize & (usize -> alloc_vec_Vec (list_t usize)))
   =
   let* (ls, index_mut_back) =
     alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst (list_t
       usize)) slots 0 in
   let* (i, back) = get_elem_mut_loop x ls in
-  let back1 = fun ret -> let* l = back ret in index_mut_back l in
+  let back1 = fun ret -> let l = back ret in index_mut_back l in
   Ok (i, back1)
 
 (** [loops::get_elem_shared]: loop 0:
@@ -215,10 +213,8 @@ let get_elem_shared
 (** [loops::id_mut]:
     Source: 'tests/src/loops.rs', lines 149:0-151:1 *)
 let id_mut
-  (#t : Type0) (ls : list_t t) :
-  result ((list_t t) & (list_t t -> result (list_t t)))
-  =
-  Ok (ls, Ok)
+  (#t : Type0) (ls : list_t t) : result ((list_t t) & (list_t t -> list_t t)) =
+  let back = fun ret -> ret in Ok (ls, back)
 
 (** [loops::id_shared]:
     Source: 'tests/src/loops.rs', lines 153:0-155:1 *)
@@ -229,17 +225,17 @@ let id_shared (#t : Type0) (ls : list_t t) : result (list_t t) =
     Source: 'tests/src/loops.rs', lines 160:4-169:1 *)
 let rec list_nth_mut_loop_with_id_loop
   (#t : Type0) (i : u32) (ls : list_t t) :
-  Tot (result (t & (t -> result (list_t t))))
+  Tot (result (t & (t -> list_t t)))
   (decreases (list_nth_mut_loop_with_id_loop_decreases i ls))
   =
   begin match ls with
   | List_Cons x tl ->
     if i = 0
-    then let back = fun ret -> Ok (List_Cons ret tl) in Ok (x, back)
+    then let back = fun ret -> List_Cons ret tl in Ok (x, back)
     else
       let* i1 = u32_sub i 1 in
       let* (x1, back) = list_nth_mut_loop_with_id_loop i1 tl in
-      let back1 = fun ret -> let* tl1 = back ret in Ok (List_Cons x tl1) in
+      let back1 = fun ret -> let tl1 = back ret in List_Cons x tl1 in
       Ok (x1, back1)
   | List_Nil -> Fail Failure
   end
@@ -247,12 +243,10 @@ let rec list_nth_mut_loop_with_id_loop
 (** [loops::list_nth_mut_loop_with_id]:
     Source: 'tests/src/loops.rs', lines 158:0-169:1 *)
 let list_nth_mut_loop_with_id
-  (#t : Type0) (ls : list_t t) (i : u32) :
-  result (t & (t -> result (list_t t)))
-  =
+  (#t : Type0) (ls : list_t t) (i : u32) : result (t & (t -> list_t t)) =
   let* (ls1, id_mut_back) = id_mut ls in
   let* (x, back) = list_nth_mut_loop_with_id_loop i ls1 in
-  let back1 = fun ret -> let* l = back ret in id_mut_back l in
+  let back1 = fun ret -> let l = back ret in id_mut_back l in
   Ok (x, back1)
 
 (** [loops::list_nth_shared_loop_with_id]: loop 0:
@@ -279,7 +273,7 @@ let list_nth_shared_loop_with_id
     Source: 'tests/src/loops.rs', lines 194:8-194:24 *)
 let rec list_nth_mut_loop_pair_loop
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  Tot (result ((t & t) & (t -> result (list_t t)) & (t -> result (list_t t))))
+  Tot (result ((t & t) & (t -> list_t t) & (t -> list_t t)))
   (decreases (list_nth_mut_loop_pair_loop_decreases ls0 ls1 i))
   =
   begin match ls0 with
@@ -288,16 +282,14 @@ let rec list_nth_mut_loop_pair_loop
     | List_Cons x1 tl1 ->
       if i = 0
       then
-        let back'a = fun ret -> Ok (List_Cons ret tl0) in
-        let back'b = fun ret -> Ok (List_Cons ret tl1) in
+        let back'a = fun ret -> List_Cons ret tl0 in
+        let back'b = fun ret -> List_Cons ret tl1 in
         Ok ((x0, x1), back'a, back'b)
       else
         let* i1 = u32_sub i 1 in
         let* (p, back'a, back'b) = list_nth_mut_loop_pair_loop tl0 tl1 i1 in
-        let back'a1 =
-          fun ret -> let* tl01 = back'a ret in Ok (List_Cons x0 tl01) in
-        let back'b1 =
-          fun ret -> let* tl11 = back'b ret in Ok (List_Cons x1 tl11) in
+        let back'a1 = fun ret -> let tl01 = back'a ret in List_Cons x0 tl01 in
+        let back'b1 = fun ret -> let tl11 = back'b ret in List_Cons x1 tl11 in
         Ok (p, back'a1, back'b1)
     | List_Nil -> Fail Failure
     end
@@ -308,7 +300,7 @@ let rec list_nth_mut_loop_pair_loop
     Source: 'tests/src/loops.rs', lines 188:0-209:1 *)
 let list_nth_mut_loop_pair
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  result ((t & t) & (t -> result (list_t t)) & (t -> result (list_t t)))
+  result ((t & t) & (t -> list_t t) & (t -> list_t t))
   =
   list_nth_mut_loop_pair_loop ls0 ls1 i
 
@@ -341,7 +333,7 @@ let list_nth_shared_loop_pair
     Source: 'tests/src/loops.rs', lines 242:4-252:1 *)
 let rec list_nth_mut_loop_pair_merge_loop
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  Tot (result ((t & t) & ((t & t) -> result ((list_t t) & (list_t t)))))
+  Tot (result ((t & t) & ((t & t) -> ((list_t t) & (list_t t)))))
   (decreases (list_nth_mut_loop_pair_merge_loop_decreases ls0 ls1 i))
   =
   begin match ls0 with
@@ -351,16 +343,16 @@ let rec list_nth_mut_loop_pair_merge_loop
       if i = 0
       then
         let back =
-          fun ret ->
-            let (x, x2) = ret in Ok (List_Cons x tl0, List_Cons x2 tl1) in
+          fun ret -> let (x, x2) = ret in (List_Cons x tl0, List_Cons x2 tl1)
+          in
         Ok ((x0, x1), back)
       else
         let* i1 = u32_sub i 1 in
         let* (p, back) = list_nth_mut_loop_pair_merge_loop tl0 tl1 i1 in
         let back1 =
           fun ret ->
-            let* (tl01, tl11) = back ret in
-            Ok (List_Cons x0 tl01, List_Cons x1 tl11) in
+            let (tl01, tl11) = back ret in
+            (List_Cons x0 tl01, List_Cons x1 tl11) in
         Ok (p, back1)
     | List_Nil -> Fail Failure
     end
@@ -371,7 +363,7 @@ let rec list_nth_mut_loop_pair_merge_loop
     Source: 'tests/src/loops.rs', lines 237:0-252:1 *)
 let list_nth_mut_loop_pair_merge
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  result ((t & t) & ((t & t) -> result ((list_t t) & (list_t t))))
+  result ((t & t) & ((t & t) -> ((list_t t) & (list_t t))))
   =
   list_nth_mut_loop_pair_merge_loop ls0 ls1 i
 
@@ -406,7 +398,7 @@ let list_nth_shared_loop_pair_merge
     Source: 'tests/src/loops.rs', lines 278:4-288:1 *)
 let rec list_nth_mut_shared_loop_pair_loop
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  Tot (result ((t & t) & (t -> result (list_t t))))
+  Tot (result ((t & t) & (t -> list_t t)))
   (decreases (list_nth_mut_shared_loop_pair_loop_decreases ls0 ls1 i))
   =
   begin match ls0 with
@@ -414,12 +406,11 @@ let rec list_nth_mut_shared_loop_pair_loop
     begin match ls1 with
     | List_Cons x1 tl1 ->
       if i = 0
-      then let back = fun ret -> Ok (List_Cons ret tl0) in Ok ((x0, x1), back)
+      then let back = fun ret -> List_Cons ret tl0 in Ok ((x0, x1), back)
       else
         let* i1 = u32_sub i 1 in
         let* (p, back) = list_nth_mut_shared_loop_pair_loop tl0 tl1 i1 in
-        let back1 = fun ret -> let* tl01 = back ret in Ok (List_Cons x0 tl01)
-          in
+        let back1 = fun ret -> let tl01 = back ret in List_Cons x0 tl01 in
         Ok (p, back1)
     | List_Nil -> Fail Failure
     end
@@ -430,7 +421,7 @@ let rec list_nth_mut_shared_loop_pair_loop
     Source: 'tests/src/loops.rs', lines 273:0-288:1 *)
 let list_nth_mut_shared_loop_pair
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  result ((t & t) & (t -> result (list_t t)))
+  result ((t & t) & (t -> list_t t))
   =
   list_nth_mut_shared_loop_pair_loop ls0 ls1 i
 
@@ -438,7 +429,7 @@ let list_nth_mut_shared_loop_pair
     Source: 'tests/src/loops.rs', lines 297:4-307:1 *)
 let rec list_nth_mut_shared_loop_pair_merge_loop
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  Tot (result ((t & t) & (t -> result (list_t t))))
+  Tot (result ((t & t) & (t -> list_t t)))
   (decreases (list_nth_mut_shared_loop_pair_merge_loop_decreases ls0 ls1 i))
   =
   begin match ls0 with
@@ -446,12 +437,11 @@ let rec list_nth_mut_shared_loop_pair_merge_loop
     begin match ls1 with
     | List_Cons x1 tl1 ->
       if i = 0
-      then let back = fun ret -> Ok (List_Cons ret tl0) in Ok ((x0, x1), back)
+      then let back = fun ret -> List_Cons ret tl0 in Ok ((x0, x1), back)
       else
         let* i1 = u32_sub i 1 in
         let* (p, back) = list_nth_mut_shared_loop_pair_merge_loop tl0 tl1 i1 in
-        let back1 = fun ret -> let* tl01 = back ret in Ok (List_Cons x0 tl01)
-          in
+        let back1 = fun ret -> let tl01 = back ret in List_Cons x0 tl01 in
         Ok (p, back1)
     | List_Nil -> Fail Failure
     end
@@ -462,7 +452,7 @@ let rec list_nth_mut_shared_loop_pair_merge_loop
     Source: 'tests/src/loops.rs', lines 292:0-307:1 *)
 let list_nth_mut_shared_loop_pair_merge
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  result ((t & t) & (t -> result (list_t t)))
+  result ((t & t) & (t -> list_t t))
   =
   list_nth_mut_shared_loop_pair_merge_loop ls0 ls1 i
 
@@ -470,7 +460,7 @@ let list_nth_mut_shared_loop_pair_merge
     Source: 'tests/src/loops.rs', lines 316:4-326:1 *)
 let rec list_nth_shared_mut_loop_pair_loop
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  Tot (result ((t & t) & (t -> result (list_t t))))
+  Tot (result ((t & t) & (t -> list_t t)))
   (decreases (list_nth_shared_mut_loop_pair_loop_decreases ls0 ls1 i))
   =
   begin match ls0 with
@@ -478,12 +468,11 @@ let rec list_nth_shared_mut_loop_pair_loop
     begin match ls1 with
     | List_Cons x1 tl1 ->
       if i = 0
-      then let back = fun ret -> Ok (List_Cons ret tl1) in Ok ((x0, x1), back)
+      then let back = fun ret -> List_Cons ret tl1 in Ok ((x0, x1), back)
       else
         let* i1 = u32_sub i 1 in
         let* (p, back) = list_nth_shared_mut_loop_pair_loop tl0 tl1 i1 in
-        let back1 = fun ret -> let* tl11 = back ret in Ok (List_Cons x1 tl11)
-          in
+        let back1 = fun ret -> let tl11 = back ret in List_Cons x1 tl11 in
         Ok (p, back1)
     | List_Nil -> Fail Failure
     end
@@ -494,7 +483,7 @@ let rec list_nth_shared_mut_loop_pair_loop
     Source: 'tests/src/loops.rs', lines 311:0-326:1 *)
 let list_nth_shared_mut_loop_pair
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  result ((t & t) & (t -> result (list_t t)))
+  result ((t & t) & (t -> list_t t))
   =
   list_nth_shared_mut_loop_pair_loop ls0 ls1 i
 
@@ -502,7 +491,7 @@ let list_nth_shared_mut_loop_pair
     Source: 'tests/src/loops.rs', lines 335:4-345:1 *)
 let rec list_nth_shared_mut_loop_pair_merge_loop
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  Tot (result ((t & t) & (t -> result (list_t t))))
+  Tot (result ((t & t) & (t -> list_t t)))
   (decreases (list_nth_shared_mut_loop_pair_merge_loop_decreases ls0 ls1 i))
   =
   begin match ls0 with
@@ -510,12 +499,11 @@ let rec list_nth_shared_mut_loop_pair_merge_loop
     begin match ls1 with
     | List_Cons x1 tl1 ->
       if i = 0
-      then let back = fun ret -> Ok (List_Cons ret tl1) in Ok ((x0, x1), back)
+      then let back = fun ret -> List_Cons ret tl1 in Ok ((x0, x1), back)
       else
         let* i1 = u32_sub i 1 in
         let* (p, back) = list_nth_shared_mut_loop_pair_merge_loop tl0 tl1 i1 in
-        let back1 = fun ret -> let* tl11 = back ret in Ok (List_Cons x1 tl11)
-          in
+        let back1 = fun ret -> let tl11 = back ret in List_Cons x1 tl11 in
         Ok (p, back1)
     | List_Nil -> Fail Failure
     end
@@ -526,7 +514,7 @@ let rec list_nth_shared_mut_loop_pair_merge_loop
     Source: 'tests/src/loops.rs', lines 330:0-345:1 *)
 let list_nth_shared_mut_loop_pair_merge
   (#t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
-  result ((t & t) & (t -> result (list_t t)))
+  result ((t & t) & (t -> list_t t))
   =
   list_nth_shared_mut_loop_pair_merge_loop ls0 ls1 i
 

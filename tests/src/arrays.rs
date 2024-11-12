@@ -114,7 +114,7 @@ pub fn update_update_slice(s: &mut [&mut [u32]], i: usize, j: usize) {
 }
 */
 
-pub fn update_update_array(mut s: [[u32; 32]; 32], i: usize, j: usize) {
+pub fn update_update_array(mut s: &mut [[u32; 32]; 32], i: usize, j: usize) {
     s[i][j] = 0;
 }
 

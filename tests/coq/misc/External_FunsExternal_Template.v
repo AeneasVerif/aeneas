@@ -25,7 +25,7 @@ Axiom core_cell_Cell_get :
 Axiom core_cell_Cell_get_mut :
   forall{T : Type},
         core_cell_Cell_t T -> state -> result (state * (T * (T -> state ->
-          result (state * (core_cell_Cell_t T)))))
+          (state * (core_cell_Cell_t T)))))
 .
 
 (** [core::clone::Clone::clone_from]:

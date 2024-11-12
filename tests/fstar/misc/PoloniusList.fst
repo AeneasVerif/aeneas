@@ -15,18 +15,17 @@ type list_t (t : Type0) =
     Source: 'tests/src/polonius_list.rs', lines 16:0-30:1 *)
 let rec get_list_at_x
   (ls : list_t u32) (x : u32) :
-  result ((list_t u32) & (list_t u32 -> result (list_t u32)))
+  result ((list_t u32) & (list_t u32 -> list_t u32))
   =
   begin match ls with
   | List_Cons hd tl ->
     if hd = x
-    then Ok (ls, Ok)
+    then let back = fun ret -> ret in Ok (ls, back)
     else
       let* (l, get_list_at_x_back) = get_list_at_x tl x in
       let back =
-        fun ret -> let* tl1 = get_list_at_x_back ret in Ok (List_Cons hd tl1)
-        in
+        fun ret -> let tl1 = get_list_at_x_back ret in List_Cons hd tl1 in
       Ok (l, back)
-  | List_Nil -> Ok (List_Nil, Ok)
+  | List_Nil -> let back = fun ret -> ret in Ok (List_Nil, back)
   end
 

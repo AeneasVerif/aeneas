@@ -87,7 +87,7 @@ Fixpoint hashMap_clear_loop
           (AList_t T)) slots i;
       let (_, index_mut_back) := p in
       i2 <- usize_add i 1%usize;
-      slots1 <- index_mut_back AList_Nil;
+      let slots1 := index_mut_back AList_Nil in
       hashMap_clear_loop n1 slots1 i2)
     else Ok slots
   end
@@ -163,7 +163,7 @@ Definition hashMap_insert_no_resize
   if inserted
   then (
     i1 <- usize_add self.(hashMap_num_entries) 1%usize;
-    v <- index_mut_back a1;
+    let v := index_mut_back a1 in
     Ok
       {|
         hashMap_num_entries := i1;
@@ -172,8 +172,8 @@ Definition hashMap_insert_no_resize
         hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := v
       |})
-  else (
-    v <- index_mut_back a1;
+  else
+    let v := index_mut_back a1 in
     Ok
       {|
         hashMap_num_entries := self.(hashMap_num_entries);
@@ -181,7 +181,7 @@ Definition hashMap_insert_no_resize
         hashMap_max_load := self.(hashMap_max_load);
         hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := v
-      |})
+      |}
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
@@ -231,7 +231,7 @@ Fixpoint hashMap_move_elements_loop
       let (ls, a1) := core_mem_replace a AList_Nil in
       ntable1 <- hashMap_move_elements_from_list n1 ntable ls;
       i2 <- usize_add i 1%usize;
-      slots1 <- index_mut_back a1;
+      let slots1 := index_mut_back a1 in
       hashMap_move_elements_loop n1 ntable1 slots1 i2)
     else Ok (ntable, slots)
   end
@@ -388,7 +388,7 @@ Definition hashMap_get
     Source: 'tests/src/hashmap.rs', lines 257:8-265:5 *)
 Fixpoint hashMap_get_mut_in_list_loop
   {T : Type} (n : nat) (ls : AList_t T) (key : usize) :
-  result (T * (T -> result (AList_t T)))
+  result (T * (T -> AList_t T))
   :=
   match n with
   | O => Fail_ OutOfFuel
@@ -397,13 +397,13 @@ Fixpoint hashMap_get_mut_in_list_loop
     | AList_Cons ckey cvalue tl =>
       if ckey s= key
       then
-        let back := fun (ret : T) => Ok (AList_Cons ckey ret tl) in
+        let back := fun (ret : T) => AList_Cons ckey ret tl in
         Ok (cvalue, back)
       else (
         p <- hashMap_get_mut_in_list_loop n1 tl key;
         let (t, back) := p in
         let back1 :=
-          fun (ret : T) => tl1 <- back ret; Ok (AList_Cons ckey cvalue tl1) in
+          fun (ret : T) => let tl1 := back ret in AList_Cons ckey cvalue tl1 in
         Ok (t, back1))
     | AList_Nil => Fail_ Failure
     end
@@ -414,7 +414,7 @@ Fixpoint hashMap_get_mut_in_list_loop
     Source: 'tests/src/hashmap.rs', lines 256:4-265:5 *)
 Definition hashMap_get_mut_in_list
   {T : Type} (n : nat) (ls : AList_t T) (key : usize) :
-  result (T * (T -> result (AList_t T)))
+  result (T * (T -> AList_t T))
   :=
   hashMap_get_mut_in_list_loop n ls key
 .
@@ -423,7 +423,7 @@ Definition hashMap_get_mut_in_list
     Source: 'tests/src/hashmap.rs', lines 268:4-272:5 *)
 Definition hashMap_get_mut
   {T : Type} (n : nat) (self : HashMap_t T) (key : usize) :
-  result (T * (T -> result (HashMap_t T)))
+  result (T * (T -> HashMap_t T))
   :=
   hash <- hash_key key;
   let i := alloc_vec_Vec_len self.(hashMap_slots) in
@@ -436,16 +436,15 @@ Definition hashMap_get_mut
   let (t, get_mut_in_list_back) := p1 in
   let back :=
     fun (ret : T) =>
-      a1 <- get_mut_in_list_back ret;
-      v <- index_mut_back a1;
-      Ok
-        {|
-          hashMap_num_entries := self.(hashMap_num_entries);
-          hashMap_max_load_factor := self.(hashMap_max_load_factor);
-          hashMap_max_load := self.(hashMap_max_load);
-          hashMap_saturated := self.(hashMap_saturated);
-          hashMap_slots := v
-        |} in
+      let a1 := get_mut_in_list_back ret in
+      let v := index_mut_back a1 in
+      {|
+        hashMap_num_entries := self.(hashMap_num_entries);
+        hashMap_max_load_factor := self.(hashMap_max_load_factor);
+        hashMap_max_load := self.(hashMap_max_load);
+        hashMap_saturated := self.(hashMap_saturated);
+        hashMap_slots := v
+      |} in
   Ok (t, back)
 .
 
@@ -502,7 +501,7 @@ Definition hashMap_remove
   let (x, a1) := p1 in
   match x with
   | None =>
-    v <- index_mut_back a1;
+    let v := index_mut_back a1 in
     Ok (None,
       {|
         hashMap_num_entries := self.(hashMap_num_entries);
@@ -513,7 +512,7 @@ Definition hashMap_remove
       |})
   | Some x1 =>
     i1 <- usize_sub self.(hashMap_num_entries) 1%usize;
-    v <- index_mut_back a1;
+    let v := index_mut_back a1 in
     Ok (x,
       {|
         hashMap_num_entries := i1;
@@ -548,7 +547,7 @@ Definition test1 (n : nat) : result unit :=
   then (
     p <- hashMap_get_mut n hm4 1024%usize;
     let (_, get_mut_back) := p in
-    hm5 <- get_mut_back 56%u64;
+    let hm5 := get_mut_back 56%u64 in
     i1 <- hashMap_get n hm5 1024%usize;
     if i1 s= 56%u64
     then (

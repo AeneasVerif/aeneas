@@ -280,7 +280,7 @@ Definition betree_Leaf_split
 Fixpoint betree_Node_lookup_first_message_for_key_loop
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
   result ((betree_List_t (u64 * betree_Message_t)) * (betree_List_t (u64 *
-    betree_Message_t) -> result (betree_List_t (u64 * betree_Message_t))))
+    betree_Message_t) -> betree_List_t (u64 * betree_Message_t)))
   :=
   match n with
   | O => Fail_ OutOfFuel
@@ -289,15 +289,20 @@ Fixpoint betree_Node_lookup_first_message_for_key_loop
     | Betree_List_Cons x next_msgs =>
       let (i, m) := x in
       if i s>= key
-      then Ok (msgs, Ok)
+      then
+        let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret
+          in
+        Ok (msgs, back)
       else (
         p <- betree_Node_lookup_first_message_for_key_loop n1 key next_msgs;
         let (l, back) := p in
         let back1 :=
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
-            next_msgs1 <- back ret; Ok (Betree_List_Cons x next_msgs1) in
+            let next_msgs1 := back ret in Betree_List_Cons x next_msgs1 in
         Ok (l, back1))
-    | Betree_List_Nil => Ok (Betree_List_Nil, Ok)
+    | Betree_List_Nil =>
+      let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret in
+      Ok (Betree_List_Nil, back)
     end
   end
 .
@@ -307,7 +312,7 @@ Fixpoint betree_Node_lookup_first_message_for_key_loop
 Definition betree_Node_lookup_first_message_for_key
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
   result ((betree_List_t (u64 * betree_Message_t)) * (betree_List_t (u64 *
-    betree_Message_t) -> result (betree_List_t (u64 * betree_Message_t))))
+    betree_Message_t) -> betree_List_t (u64 * betree_Message_t)))
   :=
   betree_Node_lookup_first_message_for_key_loop n key msgs
 .
@@ -431,23 +436,18 @@ with betree_Node_lookup
           p3 <- betree_Internal_lookup_in_children n1 node key st1;
           let (st2, p4) := p3 in
           let (o, node1) := p4 in
-          _ <- lookup_first_message_for_key_back pending;
           Ok (st2, (o, Betree_Node_Internal node1)))
         else
           match msg with
-          | Betree_Message_Insert v =>
-            _ <- lookup_first_message_for_key_back pending;
-            Ok (st1, (Some v, self))
-          | Betree_Message_Delete =>
-            _ <- lookup_first_message_for_key_back pending;
-            Ok (st1, (None, self))
+          | Betree_Message_Insert v => Ok (st1, (Some v, self))
+          | Betree_Message_Delete => Ok (st1, (None, self))
           | Betree_Message_Upsert ufs =>
             p3 <- betree_Internal_lookup_in_children n1 node key st1;
             let (st2, p4) := p3 in
             let (v, node1) := p4 in
             p5 <- betree_Node_apply_upserts n1 pending v key;
             let (v1, pending1) := p5 in
-            msgs1 <- lookup_first_message_for_key_back pending1;
+            let msgs1 := lookup_first_message_for_key_back pending1 in
             p6 <-
               betree_store_internal_node node1.(betree_Internal_id) msgs1 st2;
             let (st3, _) := p6 in
@@ -457,7 +457,6 @@ with betree_Node_lookup
         p2 <- betree_Internal_lookup_in_children n1 node key st1;
         let (st2, p3) := p2 in
         let (o, node1) := p3 in
-        _ <- lookup_first_message_for_key_back Betree_List_Nil;
         Ok (st2, (o, Betree_Node_Internal node1))
       end
     | Betree_Node_Leaf node =>
@@ -506,7 +505,7 @@ Definition betree_Node_filter_messages_for_key
 Fixpoint betree_Node_lookup_first_message_after_key_loop
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
   result ((betree_List_t (u64 * betree_Message_t)) * (betree_List_t (u64 *
-    betree_Message_t) -> result (betree_List_t (u64 * betree_Message_t))))
+    betree_Message_t) -> betree_List_t (u64 * betree_Message_t)))
   :=
   match n with
   | O => Fail_ OutOfFuel
@@ -520,10 +519,15 @@ Fixpoint betree_Node_lookup_first_message_after_key_loop
         let (l, back) := p1 in
         let back1 :=
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
-            next_msgs1 <- back ret; Ok (Betree_List_Cons p next_msgs1) in
+            let next_msgs1 := back ret in Betree_List_Cons p next_msgs1 in
         Ok (l, back1))
-      else Ok (msgs, Ok)
-    | Betree_List_Nil => Ok (Betree_List_Nil, Ok)
+      else
+        let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret
+          in
+        Ok (msgs, back)
+    | Betree_List_Nil =>
+      let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret in
+      Ok (Betree_List_Nil, back)
     end
   end
 .
@@ -533,7 +537,7 @@ Fixpoint betree_Node_lookup_first_message_after_key_loop
 Definition betree_Node_lookup_first_message_after_key
   (n : nat) (key : u64) (msgs : betree_List_t (u64 * betree_Message_t)) :
   result ((betree_List_t (u64 * betree_Message_t)) * (betree_List_t (u64 *
-    betree_Message_t) -> result (betree_List_t (u64 * betree_Message_t))))
+    betree_Message_t) -> betree_List_t (u64 * betree_Message_t)))
   :=
   betree_Node_lookup_first_message_after_key_loop n key msgs
 .
@@ -554,11 +558,11 @@ Definition betree_Node_apply_to_internal
     | Betree_Message_Insert i =>
       msgs2 <- betree_Node_filter_messages_for_key n key msgs1;
       msgs3 <- betree_List_push_front msgs2 (key, new_msg);
-      lookup_first_message_for_key_back msgs3
+      Ok (lookup_first_message_for_key_back msgs3)
     | Betree_Message_Delete =>
       msgs2 <- betree_Node_filter_messages_for_key n key msgs1;
       msgs3 <- betree_List_push_front msgs2 (key, Betree_Message_Delete);
-      lookup_first_message_for_key_back msgs3
+      Ok (lookup_first_message_for_key_back msgs3)
     | Betree_Message_Upsert s =>
       p1 <- betree_List_hd msgs1;
       let (_, m) := p1 in
@@ -568,24 +572,24 @@ Definition betree_Node_apply_to_internal
         p2 <- betree_List_pop_front msgs1;
         let (_, msgs2) := p2 in
         msgs3 <- betree_List_push_front msgs2 (key, Betree_Message_Insert v);
-        lookup_first_message_for_key_back msgs3
+        Ok (lookup_first_message_for_key_back msgs3)
       | Betree_Message_Delete =>
         p2 <- betree_List_pop_front msgs1;
         let (_, msgs2) := p2 in
         v <- betree_upsert_update None s;
         msgs3 <- betree_List_push_front msgs2 (key, Betree_Message_Insert v);
-        lookup_first_message_for_key_back msgs3
+        Ok (lookup_first_message_for_key_back msgs3)
       | Betree_Message_Upsert _ =>
         p2 <- betree_Node_lookup_first_message_after_key n key msgs1;
         let (msgs2, lookup_first_message_after_key_back) := p2 in
         msgs3 <- betree_List_push_front msgs2 (key, new_msg);
-        msgs4 <- lookup_first_message_after_key_back msgs3;
-        lookup_first_message_for_key_back msgs4
+        let msgs4 := lookup_first_message_after_key_back msgs3 in
+        Ok (lookup_first_message_for_key_back msgs4)
       end
     end
   else (
     msgs2 <- betree_List_push_front msgs1 (key, new_msg);
-    lookup_first_message_for_key_back msgs2)
+    Ok (lookup_first_message_for_key_back msgs2))
 .
 
 (** [betree::betree::{betree::betree::Node}#5::apply_messages_to_internal]: loop 0:
@@ -622,8 +626,8 @@ Definition betree_Node_apply_messages_to_internal
     Source: 'src/betree.rs', lines 668:8-675:9 *)
 Fixpoint betree_Node_lookup_mut_in_bindings_loop
   (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
-  result ((betree_List_t (u64 * u64)) * (betree_List_t (u64 * u64) -> result
-    (betree_List_t (u64 * u64))))
+  result ((betree_List_t (u64 * u64)) * (betree_List_t (u64 * u64) ->
+    betree_List_t (u64 * u64)))
   :=
   match n with
   | O => Fail_ OutOfFuel
@@ -632,15 +636,19 @@ Fixpoint betree_Node_lookup_mut_in_bindings_loop
     | Betree_List_Cons hd tl =>
       let (i, i1) := hd in
       if i s>= key
-      then Ok (bindings, Ok)
+      then
+        let back := fun (ret : betree_List_t (u64 * u64)) => ret in
+        Ok (bindings, back)
       else (
         p <- betree_Node_lookup_mut_in_bindings_loop n1 key tl;
         let (l, back) := p in
         let back1 :=
           fun (ret : betree_List_t (u64 * u64)) =>
-            tl1 <- back ret; Ok (Betree_List_Cons hd tl1) in
+            let tl1 := back ret in Betree_List_Cons hd tl1 in
         Ok (l, back1))
-    | Betree_List_Nil => Ok (Betree_List_Nil, Ok)
+    | Betree_List_Nil =>
+      let back := fun (ret : betree_List_t (u64 * u64)) => ret in
+      Ok (Betree_List_Nil, back)
     end
   end
 .
@@ -649,8 +657,8 @@ Fixpoint betree_Node_lookup_mut_in_bindings_loop
     Source: 'src/betree.rs', lines 664:4-677:5 *)
 Definition betree_Node_lookup_mut_in_bindings
   (n : nat) (key : u64) (bindings : betree_List_t (u64 * u64)) :
-  result ((betree_List_t (u64 * u64)) * (betree_List_t (u64 * u64) -> result
-    (betree_List_t (u64 * u64))))
+  result ((betree_List_t (u64 * u64)) * (betree_List_t (u64 * u64) ->
+    betree_List_t (u64 * u64)))
   :=
   betree_Node_lookup_mut_in_bindings_loop n key bindings
 .
@@ -672,24 +680,24 @@ Definition betree_Node_apply_to_leaf
     match new_msg with
     | Betree_Message_Insert v =>
       bindings3 <- betree_List_push_front bindings2 (key, v);
-      lookup_mut_in_bindings_back bindings3
-    | Betree_Message_Delete => lookup_mut_in_bindings_back bindings2
+      Ok (lookup_mut_in_bindings_back bindings3)
+    | Betree_Message_Delete => Ok (lookup_mut_in_bindings_back bindings2)
     | Betree_Message_Upsert s =>
       let (_, i) := hd in
       v <- betree_upsert_update (Some i) s;
       bindings3 <- betree_List_push_front bindings2 (key, v);
-      lookup_mut_in_bindings_back bindings3
+      Ok (lookup_mut_in_bindings_back bindings3)
     end)
   else
     match new_msg with
     | Betree_Message_Insert v =>
       bindings2 <- betree_List_push_front bindings1 (key, v);
-      lookup_mut_in_bindings_back bindings2
-    | Betree_Message_Delete => lookup_mut_in_bindings_back bindings1
+      Ok (lookup_mut_in_bindings_back bindings2)
+    | Betree_Message_Delete => Ok (lookup_mut_in_bindings_back bindings1)
     | Betree_Message_Upsert s =>
       v <- betree_upsert_update None s;
       bindings2 <- betree_List_push_front bindings1 (key, v);
-      lookup_mut_in_bindings_back bindings2
+      Ok (lookup_mut_in_bindings_back bindings2)
     end
 .
 

@@ -21,12 +21,10 @@ let _ = assert_norm (test_incr = Ok ())
 (** [paper::choose]:
     Source: 'tests/src/paper.rs', lines 18:0-24:1 *)
 let choose
-  (#t : Type0) (b : bool) (x : t) (y : t) :
-  result (t & (t -> result (t & t)))
-  =
+  (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
   if b
-  then let back = fun ret -> Ok (ret, y) in Ok (x, back)
-  else let back = fun ret -> Ok (x, ret) in Ok (y, back)
+  then let back = fun ret -> (ret, y) in Ok (x, back)
+  else let back = fun ret -> (x, ret) in Ok (y, back)
 
 (** [paper::test_choose]:
     Source: 'tests/src/paper.rs', lines 26:0-34:1 *)
@@ -35,7 +33,7 @@ let test_choose : result unit =
   let* z1 = i32_add z 1 in
   if z1 = 1
   then
-    let* (x, y) = choose_back z1 in
+    let (x, y) = choose_back z1 in
     if x = 1 then if y = 0 then Ok () else Fail Failure else Fail Failure
   else Fail Failure
 
@@ -51,18 +49,16 @@ type list_t (t : Type0) =
 (** [paper::list_nth_mut]:
     Source: 'tests/src/paper.rs', lines 45:0-58:1 *)
 let rec list_nth_mut
-  (#t : Type0) (l : list_t t) (i : u32) :
-  result (t & (t -> result (list_t t)))
-  =
+  (#t : Type0) (l : list_t t) (i : u32) : result (t & (t -> list_t t)) =
   begin match l with
   | List_Cons x tl ->
     if i = 0
-    then let back = fun ret -> Ok (List_Cons ret tl) in Ok (x, back)
+    then let back = fun ret -> List_Cons ret tl in Ok (x, back)
     else
       let* i1 = u32_sub i 1 in
       let* (x1, list_nth_mut_back) = list_nth_mut tl i1 in
-      let back =
-        fun ret -> let* tl1 = list_nth_mut_back ret in Ok (List_Cons x tl1) in
+      let back = fun ret -> let tl1 = list_nth_mut_back ret in List_Cons x tl1
+        in
       Ok (x1, back)
   | List_Nil -> Fail Failure
   end
@@ -82,7 +78,7 @@ let test_nth : result unit =
   let l1 = List_Cons 2 l in
   let* (x, list_nth_mut_back) = list_nth_mut (List_Cons 1 l1) 2 in
   let* x1 = i32_add x 1 in
-  let* l2 = list_nth_mut_back x1 in
+  let l2 = list_nth_mut_back x1 in
   let* i = sum l2 in
   if i = 7 then Ok () else Fail Failure
 
@@ -95,6 +91,6 @@ let call_choose (p : (u32 & u32)) : result u32 =
   let (px, py) = p in
   let* (pz, choose_back) = choose true px py in
   let* pz1 = u32_add pz 1 in
-  let* (px1, _) = choose_back pz1 in
+  let (px1, _) = choose_back pz1 in
   Ok px1
 

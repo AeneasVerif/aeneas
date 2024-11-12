@@ -21,6 +21,6 @@ axiom core.cell.Cell.get
    Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut -/
 axiom core.cell.Cell.get_mut
   {T : Type} :
-  core.cell.Cell T → State → Result (State × (T × (T → State → Result
-    (State × (core.cell.Cell T)))))
+  core.cell.Cell T → State → Result (State × (T × (T → State → (State
+    × (core.cell.Cell T)))))
 

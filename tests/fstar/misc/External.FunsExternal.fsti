@@ -18,8 +18,8 @@ val core_cell_Cell_get
     Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut *)
 val core_cell_Cell_get_mut
   (#t : Type0) :
-  core_cell_Cell_t t -> state -> result (state & (t & (t -> state -> result
-    (state & (core_cell_Cell_t t)))))
+  core_cell_Cell_t t -> state -> result (state & (t & (t -> state -> (state &
+    (core_cell_Cell_t t)))))
 
 (** [core::clone::Clone::clone_from]:
     Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43

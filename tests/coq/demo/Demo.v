@@ -11,10 +11,10 @@ Module Demo.
 (** [demo::choose]:
     Source: 'tests/src/demo.rs', lines 7:0-13:1 *)
 Definition choose
-  {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
+  {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> (T * T))) :=
   if b
-  then let back := fun (ret : T) => Ok (ret, y) in Ok (x, back)
-  else let back := fun (ret : T) => Ok (x, ret) in Ok (y, back)
+  then let back := fun (ret : T) => (ret, y) in Ok (x, back)
+  else let back := fun (ret : T) => (x, ret) in Ok (y, back)
 .
 
 (** [demo::mul2_add1]:
@@ -92,7 +92,7 @@ Definition list_nth1
     Source: 'tests/src/demo.rs', lines 67:0-80:1 *)
 Fixpoint list_nth_mut
   {T : Type} (n : nat) (l : CList_t T) (i : u32) :
-  result (T * (T -> result (CList_t T)))
+  result (T * (T -> CList_t T))
   :=
   match n with
   | O => Fail_ OutOfFuel
@@ -100,14 +100,14 @@ Fixpoint list_nth_mut
     match l with
     | CList_CCons x tl =>
       if i s= 0%u32
-      then let back := fun (ret : T) => Ok (CList_CCons ret tl) in Ok (x, back)
+      then let back := fun (ret : T) => CList_CCons ret tl in Ok (x, back)
       else (
         i1 <- u32_sub i 1%u32;
         p <- list_nth_mut n1 tl i1;
         let (t, list_nth_mut_back) := p in
         let back :=
-          fun (ret : T) => tl1 <- list_nth_mut_back ret; Ok (CList_CCons x tl1)
-          in
+          fun (ret : T) =>
+            let tl1 := list_nth_mut_back ret in CList_CCons x tl1 in
         Ok (t, back))
     | CList_CNil => Fail_ Failure
     end
@@ -130,7 +130,7 @@ Fixpoint i32_id (n : nat) (i : i32) : result i32 :=
     Source: 'tests/src/demo.rs', lines 90:0-95:1 *)
 Fixpoint list_tail
   {T : Type} (n : nat) (l : CList_t T) :
-  result ((CList_t T) * (CList_t T -> result (CList_t T)))
+  result ((CList_t T) * (CList_t T -> CList_t T))
   :=
   match n with
   | O => Fail_ OutOfFuel
@@ -141,9 +141,10 @@ Fixpoint list_tail
       let (c, list_tail_back) := p in
       let back :=
         fun (ret : CList_t T) =>
-          tl1 <- list_tail_back ret; Ok (CList_CCons t tl1) in
+          let tl1 := list_tail_back ret in CList_CCons t tl1 in
       Ok (c, back)
-    | CList_CNil => Ok (CList_CNil, Ok)
+    | CList_CNil =>
+      let back := fun (ret : CList_t T) => ret in Ok (CList_CNil, back)
     end
   end
 .
