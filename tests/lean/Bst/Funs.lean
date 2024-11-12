@@ -55,7 +55,7 @@ divergent def TreeSet.insert_loop
         TreeSet.insert_loop OrdInst value current_node.right
       Result.ok (b, some (Node.mk current_node.value current_node.left
         current_tree1))
-    | Ordering.Equal => Result.ok (false, some current_node)
+    | Ordering.Equal => Result.ok (false, current_tree)
     | Ordering.Greater =>
       do
       let (b, current_tree1) ←

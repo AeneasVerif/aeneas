@@ -205,14 +205,8 @@ def HashMap.try_resize {T : Type} (self : HashMap T) : Result (HashMap T) :=
     let p ← HashMap.move_elements ntable self.slots
     let (ntable1, _) := p
     Result.ok
-      {
-        self
-          with
-          max_load_factor := (i, i1),
-          max_load := ntable1.max_load,
-          slots := ntable1.slots
-      }
-  else Result.ok { self with max_load_factor := (i, i1), saturated := true }
+      { self with max_load := ntable1.max_load, slots := ntable1.slots }
+  else Result.ok { self with saturated := true }
 
 /- [hashmap::{hashmap::HashMap<T>}::insert]:
    Source: 'tests/src/hashmap.rs', lines 143:4-150:5 -/
@@ -224,10 +218,9 @@ def HashMap.insert
   let self1 ← HashMap.insert_no_resize self key value
   let i ← HashMap.len self1
   if i > self1.max_load
-  then
-    if self1.saturated
-    then Result.ok { self1 with saturated := true }
-    else HashMap.try_resize { self1 with saturated := false }
+  then if self1.saturated
+       then Result.ok self1
+       else HashMap.try_resize self1
   else Result.ok self1
 
 /- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
@@ -352,7 +345,7 @@ divergent def HashMap.remove_from_list_loop
   | AList.Cons ckey t tl =>
     if ckey = key
     then
-      let (mv_ls, _) := core.mem.replace (AList.Cons ckey t tl) AList.Nil
+      let (mv_ls, _) := core.mem.replace ls AList.Nil
       match mv_ls with
       | AList.Cons _ cvalue tl1 => Result.ok (some cvalue, tl1)
       | AList.Nil => Result.fail .panic
@@ -392,7 +385,7 @@ def HashMap.remove
     do
     let i1 ← self.num_entries - 1#usize
     let v ← index_mut_back a1
-    Result.ok (some x1, { self with num_entries := i1, slots := v })
+    Result.ok (x, { self with num_entries := i1, slots := v })
 
 /- [hashmap::insert_on_disk]:
    Source: 'tests/src/hashmap.rs', lines 336:0-343:1 -/

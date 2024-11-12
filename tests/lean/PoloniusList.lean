@@ -23,7 +23,7 @@ divergent def get_list_at_x
   match ls with
   | List.Cons hd tl =>
     if hd = x
-    then Result.ok (List.Cons hd tl, Result.ok)
+    then Result.ok (ls, Result.ok)
     else
       do
       let (l, get_list_at_x_back) ← get_list_at_x tl x

@@ -528,3 +528,29 @@ pub fn not_u32(x: u32) -> u32 {
 pub fn not_i32(x: i32) -> i32 {
     !x
 }
+
+// Testing the simplification of the ADT aggregates in the presence of symbolic expansions
+mod ExpandSimpliy {
+    pub struct Wrapper<T>(T, T);
+
+    pub fn check_expand_simplify_symb1(x: Wrapper<bool>) -> Wrapper<bool> {
+        if x.0 {
+            x
+        } else {
+            x
+        }
+    }
+
+    pub struct Wrapper2 {
+        b: bool,
+        x: u32,
+    }
+
+    pub fn check_expand_simplify_symb2(x: Wrapper2) -> Wrapper2 {
+        if x.b {
+            x
+        } else {
+            x
+        }
+    }
+}
