@@ -61,7 +61,7 @@ type projection_access = {
 }
 
 (* Projects a value with a `projection_elem`. Returns the projected value and a
-   backwards function that propagates any changes to the projected value back
+   continuation that propagates any changes to the projected value back
    to the original one. *)
 let rec project_value (span : Meta.span) (access : projection_access)
     (ek : exploration_kind) (depth : int) (ctx : eval_ctx)
