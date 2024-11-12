@@ -191,7 +191,33 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
         }
       };
     ]}
- *)
+
+    We also insert the statements occurring after branchings (matches or
+    if then else) inside the branches. For instance:
+    {[
+      if b {
+        s0;
+      }
+      else {
+        s1;
+      }
+      return;
+
+        ~~>
+
+      if b {
+        s0;
+        return;
+      }
+      else {
+        s1;
+        return;
+      }
+    ]}
+
+    This is necessary because loops might appear inside branchings: if we don't
+    do this some paths inside the loop might not end with a break/continue/return.Aeneas
+  *)
 let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
 
@@ -229,7 +255,11 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
           | Break i ->
               cassert __FILE__ __LINE__ (i = 0) st.span
                 "Breaks to outer loops are not supported yet";
-              { st with content = nst.content }
+              {
+                st with
+                content = nst.content;
+                comments_before = st.comments_before @ nst.comments_before;
+              }
           | _ -> super#visit_statement entered_loop st
       end
     in
@@ -237,27 +267,36 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
   in
 
   (* The visitor *)
-  let obj =
+  let replace_visitor =
     object
       inherit [_] map_statement as super
 
-      method! visit_Sequence env st1 st2 =
-        match st1.content with
-        | Loop _ ->
-            cassert __FILE__ __LINE__
-              (statement_has_no_loop_break_continue st2)
-              st2.span "Sequences of loops are not supported yet";
-            (replace_breaks_with st1 st2).content
-        | _ -> super#visit_Sequence env st1 st2
+      method! visit_statement env st =
+        match st.content with
+        | Sequence (st1, st2) -> begin
+            match st1.content with
+            | Loop _ ->
+                cassert __FILE__ __LINE__
+                  (statement_has_no_loop_break_continue st2)
+                  st2.span "Sequences of loops are not supported yet";
+                super#visit_statement env (replace_breaks_with st st2)
+            | Switch _ ->
+                (* This pushes st2 inside of the switch *)
+                super#visit_statement env (chain_statements st1 st2)
+            | _ -> super#visit_statement env st
+          end
+        | _ -> super#visit_statement env st
     end
   in
 
   (* Map  *)
   let body =
     match f.body with
-    | Some body -> Some { body with body = obj#visit_statement () body.body }
+    | Some body ->
+        Some { body with body = replace_visitor#visit_statement () body.body }
     | None -> None
   in
+
   let f = { f with body } in
   log#ldebug
     (lazy

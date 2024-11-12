@@ -395,7 +395,7 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
       in
 
       (* We want to make sure the loop will *not* manipulate shared avalues
-         containing themselves shared loans (i.e., nested shared loans in
+         themselves containing shared loans (i.e., nested shared loans in
          the abstractions), because it complexifies the matches between values
          (when joining environments, or checking that two environments are
          equivalent).
