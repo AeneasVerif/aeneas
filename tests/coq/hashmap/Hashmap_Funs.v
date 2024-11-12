@@ -264,7 +264,7 @@ Definition hashMap_try_resize
     Ok
       {|
         hashMap_num_entries := self.(hashMap_num_entries);
-        hashMap_max_load_factor := (i, i1);
+        hashMap_max_load_factor := self.(hashMap_max_load_factor);
         hashMap_max_load := ntable1.(hashMap_max_load);
         hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := ntable1.(hashMap_slots)
@@ -273,7 +273,7 @@ Definition hashMap_try_resize
     Ok
       {|
         hashMap_num_entries := self.(hashMap_num_entries);
-        hashMap_max_load_factor := (i, i1);
+        hashMap_max_load_factor := self.(hashMap_max_load_factor);
         hashMap_max_load := self.(hashMap_max_load);
         hashMap_saturated := true;
         hashMap_slots := self.(hashMap_slots)
@@ -462,7 +462,7 @@ Fixpoint hashMap_remove_from_list_loop
     | AList_Cons ckey t tl =>
       if ckey s= key
       then
-        let (mv_ls, _) := core_mem_replace (AList_Cons ckey t tl) AList_Nil in
+        let (mv_ls, _) := core_mem_replace ls AList_Nil in
         match mv_ls with
         | AList_Cons _ cvalue tl1 => Ok (Some cvalue, tl1)
         | AList_Nil => Fail_ Failure
@@ -514,7 +514,7 @@ Definition hashMap_remove
   | Some x1 =>
     i1 <- usize_sub self.(hashMap_num_entries) 1%usize;
     v <- index_mut_back a1;
-    Ok (Some x1,
+    Ok (x,
       {|
         hashMap_num_entries := i1;
         hashMap_max_load_factor := self.(hashMap_max_load_factor);

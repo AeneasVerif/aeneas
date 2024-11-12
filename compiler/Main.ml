@@ -37,6 +37,7 @@ let _ =
   pure_utils_log#set_level EL.Info;
   symbolic_to_pure_log#set_level EL.Info;
   pure_micro_passes_log#set_level EL.Info;
+  simplify_aggregates_unchanged_fields_log#set_level EL.Info;
   extract_log#set_level EL.Info;
   builtin_log#set_level EL.Info;
   translate_log#set_level EL.Info;

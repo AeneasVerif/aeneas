@@ -185,10 +185,10 @@ let rec betree_ListPairU64T_partition_at_pivot_loop
     if i >= pivot
     then
       betree_ListPairU64T_partition_at_pivot_loop pivot beg (Betree_List_Cons
-        (i, x) end1) tl
+        hd end1) tl
     else
-      betree_ListPairU64T_partition_at_pivot_loop pivot (Betree_List_Cons (i,
-        x) beg) end1 tl
+      betree_ListPairU64T_partition_at_pivot_loop pivot (Betree_List_Cons hd
+        beg) end1 tl
   | Betree_List_Nil ->
     let* l = betree_List_reverse beg in
     let* l1 = betree_List_reverse end1 in
@@ -238,14 +238,13 @@ let rec betree_Node_lookup_first_message_for_key_loop
   | Betree_List_Cons x next_msgs ->
     let (i, m) = x in
     if i >= key
-    then Ok (Betree_List_Cons (i, m) next_msgs, Ok)
+    then Ok (msgs, Ok)
     else
       let* (l, back) =
         betree_Node_lookup_first_message_for_key_loop key next_msgs in
       let back1 =
         fun ret ->
-          let* next_msgs1 = back ret in Ok (Betree_List_Cons (i, m) next_msgs1)
-        in
+          let* next_msgs1 = back ret in Ok (Betree_List_Cons x next_msgs1) in
       Ok (l, back1)
   | Betree_List_Nil -> Ok (Betree_List_Nil, Ok)
   end
@@ -350,27 +349,20 @@ and betree_Node_lookup
       then
         let* (st2, (o, node1)) =
           betree_Internal_lookup_in_children node key st1 in
-        let* _ =
-          lookup_first_message_for_key_back (Betree_List_Cons (k, msg) l) in
+        let* _ = lookup_first_message_for_key_back pending in
         Ok (st2, (o, Betree_Node_Internal node1))
       else
         begin match msg with
         | Betree_Message_Insert v ->
-          let* _ =
-            lookup_first_message_for_key_back (Betree_List_Cons (k,
-              Betree_Message_Insert v) l) in
-          Ok (st1, (Some v, Betree_Node_Internal node))
+          let* _ = lookup_first_message_for_key_back pending in
+          Ok (st1, (Some v, self))
         | Betree_Message_Delete ->
-          let* _ =
-            lookup_first_message_for_key_back (Betree_List_Cons (k,
-              Betree_Message_Delete) l) in
-          Ok (st1, (None, Betree_Node_Internal node))
+          let* _ = lookup_first_message_for_key_back pending in
+          Ok (st1, (None, self))
         | Betree_Message_Upsert ufs ->
           let* (st2, (v, node1)) =
             betree_Internal_lookup_in_children node key st1 in
-          let* (v1, pending1) =
-            betree_Node_apply_upserts (Betree_List_Cons (k,
-              Betree_Message_Upsert ufs) l) v key in
+          let* (v1, pending1) = betree_Node_apply_upserts pending v key in
           let* msgs1 = lookup_first_message_for_key_back pending1 in
           let* (st3, _) = betree_store_internal_node node1.id msgs1 st2 in
           Ok (st3, (Some v1, Betree_Node_Internal node1))
@@ -384,7 +376,7 @@ and betree_Node_lookup
   | Betree_Node_Leaf node ->
     let* (st1, bindings) = betree_load_leaf_node node.id st in
     let* o = betree_Node_lookup_in_bindings key bindings in
-    Ok (st1, (o, Betree_Node_Leaf node))
+    Ok (st1, (o, self))
   end
 
 (** [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]: loop 0:
@@ -399,9 +391,9 @@ let rec betree_Node_filter_messages_for_key_loop
     let (k, m) = p in
     if k = key
     then
-      let* (_, msgs1) = betree_List_pop_front (Betree_List_Cons (k, m) l) in
+      let* (_, msgs1) = betree_List_pop_front msgs in
       betree_Node_filter_messages_for_key_loop key msgs1
-    else Ok (Betree_List_Cons (k, m) l)
+    else Ok msgs
   | Betree_List_Nil -> Ok Betree_List_Nil
   end
 
@@ -431,10 +423,9 @@ let rec betree_Node_lookup_first_message_after_key_loop
         betree_Node_lookup_first_message_after_key_loop key next_msgs in
       let back1 =
         fun ret ->
-          let* next_msgs1 = back ret in Ok (Betree_List_Cons (k, m) next_msgs1)
-        in
+          let* next_msgs1 = back ret in Ok (Betree_List_Cons p next_msgs1) in
       Ok (l, back1)
-    else Ok (Betree_List_Cons (k, m) next_msgs, Ok)
+    else Ok (msgs, Ok)
   | Betree_List_Nil -> Ok (Betree_List_Nil, Ok)
   end
 
@@ -462,8 +453,7 @@ let betree_Node_apply_to_internal
     begin match new_msg with
     | Betree_Message_Insert i ->
       let* msgs2 = betree_Node_filter_messages_for_key key msgs1 in
-      let* msgs3 = betree_List_push_front msgs2 (key, Betree_Message_Insert i)
-        in
+      let* msgs3 = betree_List_push_front msgs2 (key, new_msg) in
       lookup_first_message_for_key_back msgs3
     | Betree_Message_Delete ->
       let* msgs2 = betree_Node_filter_messages_for_key key msgs1 in
@@ -488,8 +478,7 @@ let betree_Node_apply_to_internal
       | Betree_Message_Upsert _ ->
         let* (msgs2, lookup_first_message_after_key_back) =
           betree_Node_lookup_first_message_after_key key msgs1 in
-        let* msgs3 =
-          betree_List_push_front msgs2 (key, Betree_Message_Upsert s) in
+        let* msgs3 = betree_List_push_front msgs2 (key, new_msg) in
         let* msgs4 = lookup_first_message_after_key_back msgs3 in
         lookup_first_message_for_key_back msgs4
       end
@@ -536,11 +525,11 @@ let rec betree_Node_lookup_mut_in_bindings_loop
   | Betree_List_Cons hd tl ->
     let (i, i1) = hd in
     if i >= key
-    then Ok (Betree_List_Cons (i, i1) tl, Ok)
+    then Ok (bindings, Ok)
     else
       let* (l, back) = betree_Node_lookup_mut_in_bindings_loop key tl in
       let back1 =
-        fun ret -> let* tl1 = back ret in Ok (Betree_List_Cons (i, i1) tl1) in
+        fun ret -> let* tl1 = back ret in Ok (Betree_List_Cons hd tl1) in
       Ok (l, back1)
   | Betree_List_Nil -> Ok (Betree_List_Nil, Ok)
   end
@@ -675,7 +664,7 @@ and betree_Node_apply_messages
       Ok (st3, (Betree_Node_Internal node1, node_id_cnt1))
     else
       let* (st2, _) = betree_store_internal_node node.id content1 st1 in
-      Ok (st2, (Betree_Node_Internal node, node_id_cnt))
+      Ok (st2, (self, node_id_cnt))
   | Betree_Node_Leaf node ->
     let* (st1, content) = betree_load_leaf_node node.id st in
     let* content1 = betree_Node_apply_messages_to_leaf content msgs in
@@ -704,7 +693,7 @@ let betree_Node_apply
     betree_Node_apply_messages self params node_id_cnt (Betree_List_Cons (key,
       new_msg) Betree_List_Nil) st in
   let (self1, node_id_cnt1) = p in
-  Ok (st1, (self1, node_id_cnt1))
+  Ok (st1, p)
 
 (** [betree::betree::{betree::betree::BeTree}#6::new]:
     Source: 'src/betree.rs', lines 848:4-862:5 *)

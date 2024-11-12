@@ -20,7 +20,7 @@ let rec get_list_at_x
   begin match ls with
   | List_Cons hd tl ->
     if hd = x
-    then Ok (List_Cons hd tl, Ok)
+    then Ok (ls, Ok)
     else
       let* (l, get_list_at_x_back) = get_list_at_x tl x in
       let back =

@@ -330,7 +330,7 @@ let id_mut_pair2
   (#t1 : Type0) (#t2 : Type0) (p : (t1 & t2)) :
   result ((t1 & t2) & ((t1 & t2) -> result (t1 & t2)))
   =
-  let (x, x1) = p in Ok ((x, x1), Ok)
+  let (x, x1) = p in Ok (p, Ok)
 
 (** [no_nested_borrows::id_mut_pair3]:
     Source: 'tests/src/no_nested_borrows.rs', lines 355:0-357:1 *)
@@ -346,7 +346,7 @@ let id_mut_pair4
   (#t1 : Type0) (#t2 : Type0) (p : (t1 & t2)) :
   result ((t1 & t2) & (t1 -> result t1) & (t2 -> result t2))
   =
-  let (x, x1) = p in Ok ((x, x1), Ok, Ok)
+  let (x, x1) = p in Ok (p, Ok, Ok)
 
 (** [no_nested_borrows::StructWithTuple]
     Source: 'tests/src/no_nested_borrows.rs', lines 366:0-368:1 *)
@@ -503,4 +503,24 @@ let not_u32 (x : u32) : result u32 =
     Source: 'tests/src/no_nested_borrows.rs', lines 528:0-530:1 *)
 let not_i32 (x : i32) : result i32 =
   Ok (i32_not x)
+
+(** [no_nested_borrows::ExpandSimpliy::Wrapper]
+    Source: 'tests/src/no_nested_borrows.rs', lines 534:4-534:32 *)
+type expandSimpliy_Wrapper_t (t : Type0) = t * t
+
+(** [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb1]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 536:4-542:5 *)
+let expandSimpliy_check_expand_simplify_symb1
+  (x : expandSimpliy_Wrapper_t bool) : result (expandSimpliy_Wrapper_t bool) =
+  let (b, b1) = x in if b then Ok x else Ok x
+
+(** [no_nested_borrows::ExpandSimpliy::Wrapper2]
+    Source: 'tests/src/no_nested_borrows.rs', lines 544:4-547:5 *)
+type expandSimpliy_Wrapper2_t = { b : bool; x : u32; }
+
+(** [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb2]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 549:4-555:5 *)
+let expandSimpliy_check_expand_simplify_symb2
+  (x : expandSimpliy_Wrapper2_t) : result expandSimpliy_Wrapper2_t =
+  if x.b then Ok x else Ok x
 

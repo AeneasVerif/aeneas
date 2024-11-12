@@ -186,10 +186,10 @@ divergent def betree.ListPairU64T.partition_at_pivot_loop
     if i >= pivot
     then
       betree.ListPairU64T.partition_at_pivot_loop pivot beg (betree.List.Cons
-        (i, t) end1) tl
+        hd end1) tl
     else
-      betree.ListPairU64T.partition_at_pivot_loop pivot (betree.List.Cons (i,
-        t) beg) end1 tl
+      betree.ListPairU64T.partition_at_pivot_loop pivot (betree.List.Cons hd
+        beg) end1 tl
   | betree.List.Nil =>
     do
     let l ← betree.List.reverse beg
@@ -236,7 +236,7 @@ divergent def betree.Node.lookup_first_message_for_key_loop
   | betree.List.Cons x next_msgs =>
     let (i, m) := x
     if i >= key
-    then Result.ok (betree.List.Cons (i, m) next_msgs, Result.ok)
+    then Result.ok (msgs, Result.ok)
     else
       do
       let (l, back) ←
@@ -245,7 +245,7 @@ divergent def betree.Node.lookup_first_message_for_key_loop
         fun ret =>
           do
           let next_msgs1 ← back ret
-          Result.ok (betree.List.Cons (i, m) next_msgs1)
+          Result.ok (betree.List.Cons x next_msgs1)
       Result.ok (l, back1)
   | betree.List.Nil => Result.ok (betree.List.Nil, Result.ok)
 
@@ -354,30 +354,23 @@ divergent def betree.Node.lookup
         do
         let (st2, (o, node1)) ←
           betree.Internal.lookup_in_children node key st1
-        let _ ←
-          lookup_first_message_for_key_back (betree.List.Cons (k, msg) l)
+        let _ ← lookup_first_message_for_key_back pending
         Result.ok (st2, (o, betree.Node.Internal node1))
       else
         match msg with
         | betree.Message.Insert v =>
           do
-          let _ ←
-            lookup_first_message_for_key_back (betree.List.Cons (k,
-              betree.Message.Insert v) l)
-          Result.ok (st1, (some v, betree.Node.Internal node))
+          let _ ← lookup_first_message_for_key_back pending
+          Result.ok (st1, (some v, self))
         | betree.Message.Delete =>
           do
-          let _ ←
-            lookup_first_message_for_key_back (betree.List.Cons (k,
-              betree.Message.Delete) l)
-          Result.ok (st1, (none, betree.Node.Internal node))
+          let _ ← lookup_first_message_for_key_back pending
+          Result.ok (st1, (none, self))
         | betree.Message.Upsert ufs =>
           do
           let (st2, (v, node1)) ←
             betree.Internal.lookup_in_children node key st1
-          let (v1, pending1) ←
-            betree.Node.apply_upserts (betree.List.Cons (k,
-              betree.Message.Upsert ufs) l) v key
+          let (v1, pending1) ← betree.Node.apply_upserts pending v key
           let msgs1 ← lookup_first_message_for_key_back pending1
           let (st3, _) ← betree.store_internal_node node1.id msgs1 st2
           Result.ok (st3, (some v1, betree.Node.Internal node1))
@@ -390,7 +383,7 @@ divergent def betree.Node.lookup
     do
     let (st1, bindings) ← betree.load_leaf_node node.id st
     let o ← betree.Node.lookup_in_bindings key bindings
-    Result.ok (st1, (o, betree.Node.Leaf node))
+    Result.ok (st1, (o, self))
 
 end
 
@@ -406,9 +399,9 @@ divergent def betree.Node.filter_messages_for_key_loop
     if k = key
     then
       do
-      let (_, msgs1) ← betree.List.pop_front (betree.List.Cons (k, m) l)
+      let (_, msgs1) ← betree.List.pop_front msgs
       betree.Node.filter_messages_for_key_loop key msgs1
-    else Result.ok (betree.List.Cons (k, m) l)
+    else Result.ok msgs
   | betree.List.Nil => Result.ok betree.List.Nil
 
 /- [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]:
@@ -439,9 +432,9 @@ divergent def betree.Node.lookup_first_message_after_key_loop
         fun ret =>
           do
           let next_msgs1 ← back ret
-          Result.ok (betree.List.Cons (k, m) next_msgs1)
+          Result.ok (betree.List.Cons p next_msgs1)
       Result.ok (l, back1)
-    else Result.ok (betree.List.Cons (k, m) next_msgs, Result.ok)
+    else Result.ok (msgs, Result.ok)
   | betree.List.Nil => Result.ok (betree.List.Nil, Result.ok)
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]:
@@ -471,7 +464,7 @@ def betree.Node.apply_to_internal
     | betree.Message.Insert i =>
       do
       let msgs2 ← betree.Node.filter_messages_for_key key msgs1
-      let msgs3 ← betree.List.push_front msgs2 (key, betree.Message.Insert i)
+      let msgs3 ← betree.List.push_front msgs2 (key, new_msg)
       lookup_first_message_for_key_back msgs3
     | betree.Message.Delete =>
       do
@@ -501,8 +494,7 @@ def betree.Node.apply_to_internal
         do
         let (msgs2, lookup_first_message_after_key_back) ←
           betree.Node.lookup_first_message_after_key key msgs1
-        let msgs3 ←
-          betree.List.push_front msgs2 (key, betree.Message.Upsert s)
+        let msgs3 ← betree.List.push_front msgs2 (key, new_msg)
         let msgs4 ← lookup_first_message_after_key_back msgs3
         lookup_first_message_for_key_back msgs4
   else
@@ -546,15 +538,14 @@ divergent def betree.Node.lookup_mut_in_bindings_loop
   | betree.List.Cons hd tl =>
     let (i, i1) := hd
     if i >= key
-    then Result.ok (betree.List.Cons (i, i1) tl, Result.ok)
+    then Result.ok (bindings, Result.ok)
     else
       do
       let (l, back) ← betree.Node.lookup_mut_in_bindings_loop key tl
       let back1 :=
-        fun ret =>
-          do
-          let tl1 ← back ret
-          Result.ok (betree.List.Cons (i, i1) tl1)
+        fun ret => do
+                   let tl1 ← back ret
+                   Result.ok (betree.List.Cons hd tl1)
       Result.ok (l, back1)
   | betree.List.Nil => Result.ok (betree.List.Nil, Result.ok)
 
@@ -698,7 +689,7 @@ divergent def betree.Node.apply_messages
     else
       do
       let (st2, _) ← betree.store_internal_node node.id content1 st1
-      Result.ok (st2, (betree.Node.Internal node, node_id_cnt))
+      Result.ok (st2, (self, node_id_cnt))
   | betree.Node.Leaf node =>
     do
     let (st1, content) ← betree.load_leaf_node node.id st
@@ -733,7 +724,7 @@ def betree.Node.apply
     betree.Node.apply_messages self params node_id_cnt (betree.List.Cons (key,
       new_msg) betree.List.Nil) st
   let (self1, node_id_cnt1) := p
-  Result.ok (st1, (self1, node_id_cnt1))
+  Result.ok (st1, p)
 
 /- [betree::betree::{betree::betree::BeTree}#6::new]:
    Source: 'src/betree.rs', lines 848:4-862:5 -/

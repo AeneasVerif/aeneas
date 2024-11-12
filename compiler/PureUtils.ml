@@ -58,6 +58,30 @@ end
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 module FunLoopIdSet = Collections.MakeSet (FunLoopIdOrderedType)
 
+module ExprOrderedType = struct
+  type t = expression
+
+  let compare = compare_expression
+  let to_string = show_expression
+  let pp_t = pp_expression
+  let show_t = show_expression
+end
+
+module ExprMap = Collections.MakeMap (ExprOrderedType)
+module ExprSet = Collections.MakeSet (ExprOrderedType)
+
+module TExprOrderedType = struct
+  type t = texpression
+
+  let compare = compare_texpression
+  let to_string = show_texpression
+  let pp_t = pp_texpression
+  let show_t = show_texpression
+end
+
+module TExprMap = Collections.MakeMap (TExprOrderedType)
+module TExprSet = Collections.MakeSet (TExprOrderedType)
+
 let inputs_info_is_wf (info : inputs_info) : bool =
   let {
     has_fuel;
@@ -272,6 +296,11 @@ let is_global (e : texpression) : bool =
 let is_const (e : texpression) : bool =
   match e.e with
   | Const _ -> true
+  | _ -> false
+
+let is_adt_cons (e : texpression) : bool =
+  match e.e with
+  | Qualif { id = AdtCons _; _ } -> true
   | _ -> false
 
 let ty_as_adt (span : Meta.span) (ty : ty) : type_id * generic_args =
@@ -492,6 +521,12 @@ let mk_bool_ty : ty = TLiteral TBool
 let mk_unit_ty : ty = TAdt (TTuple, empty_generic_args)
 let ty_is_unit ty : bool = ty = mk_unit_ty
 
+let mk_bool_value (b : bool) : texpression =
+  { e = Const (VBool b); ty = TLiteral TBool }
+
+let mk_true : texpression = mk_bool_value true
+let mk_false : texpression = mk_bool_value false
+
 let mk_unit_rvalue : texpression =
   let id = AdtCons { adt_id = TTuple; variant_id = None } in
   let qualif = { id; generics = empty_generic_args } in
@@ -561,6 +596,25 @@ let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
     (vl : typed_pattern list) : typed_pattern =
   let value = PatAdt { variant_id; field_values = vl } in
   { value; ty = adt_ty }
+
+let mk_adt_value (span : span) (adt_ty : ty) (variant_id : VariantId.id option)
+    (fields : texpression list) : texpression =
+  let adt_id, generics = ty_as_adt span adt_ty in
+  let qualif : expression =
+    Qualif { id = AdtCons { adt_id; variant_id }; generics }
+  in
+  let qualif_ty =
+    mk_arrows (List.map (fun (f : texpression) -> f.ty) fields) adt_ty
+  in
+  let qualif = { e = qualif; ty = qualif_ty } in
+  mk_apps span qualif fields
+
+let mk_adt_proj (span : span) (adt : texpression) (field_id : field_id)
+    (field_ty : ty) : texpression =
+  let adt_id, generics = ty_as_adt span adt.ty in
+  let qualif = Qualif { id = Proj { adt_id; field_id }; generics } in
+  let qualif = { e = qualif; ty = mk_arrow adt.ty field_ty } in
+  mk_app span qualif adt
 
 let ty_as_integer (span : Meta.span) (t : ty) : T.integer_type =
   match t with

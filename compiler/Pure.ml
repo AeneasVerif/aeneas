@@ -54,6 +54,7 @@ type loc = Meta.loc [@@deriving show, ord]
 type file_name = Meta.file_name [@@deriving show, ord]
 type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
+type ref_kind = Types.ref_kind [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -544,16 +545,18 @@ and type_decl = {
 type scalar_value = V.scalar_value [@@deriving show, ord]
 type literal = V.literal [@@deriving show, ord]
 type var_id = VarId.id [@@deriving show, ord]
+type field_proj_kind = E.field_proj_kind [@@deriving show, ord]
+type field_id = FieldId.id [@@deriving show, ord]
 
 (* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
  * on enumerations.
  * Also: tuples...
  * Rmk: projections are actually only used as span-data.
  * *)
-type mprojection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
-[@@deriving show]
+type mprojection_elem = { pkind : field_proj_kind; field_id : field_id }
+[@@deriving show, ord]
 
-type mprojection = mprojection_elem list [@@deriving show]
+type mprojection = mprojection_elem list [@@deriving show, ord]
 
 (** "Meta" place.
 
@@ -566,9 +569,9 @@ type mplace = {
   name : string option;
   projection : mprojection;
 }
-[@@deriving show]
+[@@deriving show, ord]
 
-type variant_id = VariantId.id [@@deriving show]
+type variant_id = VariantId.id [@@deriving show, ord]
 
 (** Because we introduce a lot of temporary variables, the list of variables
     is not fixed: we thus must carry all its information with the variable
@@ -582,7 +585,7 @@ type var = {
        *)
   ty : ty;
 }
-[@@deriving show]
+[@@deriving show, ord]
 
 (** Ancestor for {!iter_typed_pattern} visitor *)
 class ['self] iter_typed_pattern_base =
@@ -671,6 +674,7 @@ and adt_pattern = {
 and typed_pattern = { value : pattern; ty : ty }
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_typed_pattern";
@@ -712,6 +716,8 @@ type unop =
   | Cast of literal_type * literal_type
 [@@deriving show, ord]
 
+type array_or_slice = Array | Slice [@@deriving show, ord]
+
 (** Identifiers of assumed functions that we use only in the pure translation *)
 type pure_assumed_fun_id =
   | Return  (** The monadic return *)
@@ -720,6 +726,14 @@ type pure_assumed_fun_id =
   | FuelDecrease
       (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is ugly *)
   | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
+  | UpdateAtIndex of array_or_slice
+      (** Update an array or a slice at a given index.
+
+          Note that in LLBC we only use an index function: if we want to
+          modify an element in an array/slice, we create a mutable borrow
+          to this element, then use the borrow to perform the update. The
+          update functions are introduced in the pure code by a micro-pass.
+       *)
 [@@deriving show, ord]
 
 type fun_id_or_trait_method_ref =
@@ -756,12 +770,13 @@ type fun_or_op_id =
 
 (** An identifier for an ADT constructor *)
 type adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
-[@@deriving show]
+[@@deriving show, ord]
 
 (** Projection - For now we don't support projection of tuple fields
     (because not all the backends have syntax for this).
  *)
-type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
+type projection = { adt_id : type_id; field_id : field_id }
+[@@deriving show, ord]
 
 type qualif_id =
   | FunOrOp of fun_or_op_id  (** A function or an operation *)
@@ -769,7 +784,7 @@ type qualif_id =
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
   | TraitConst of trait_ref * string  (** A trait associated constant *)
-[@@deriving show]
+[@@deriving show, ord]
 
 (** An instantiated qualifier.
 
@@ -777,9 +792,7 @@ type qualif_id =
     which explains why we have the [generics] field: a function or ADT
     constructor is always fully instantiated.
  *)
-type qualif = { id : qualif_id; generics : generic_args } [@@deriving show]
-
-type field_id = FieldId.id [@@deriving show, ord]
+type qualif = { id : qualif_id; generics : generic_args } [@@deriving show, ord]
 
 (** Ancestor for {!iter_expression} visitor *)
 class ['self] iter_expression_base =
@@ -993,6 +1006,7 @@ and espan =
   | Tag of string  (** A tag - typically used for debugging *)
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_expression";

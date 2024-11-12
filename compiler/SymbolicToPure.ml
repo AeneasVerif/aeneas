@@ -359,7 +359,7 @@ let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
 
 let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.texpression_to_string ~spandata:(Some ctx.span) env false "" "  " e
+  PrintPure.texpression_to_string ~span:(Some ctx.span) env false "" "  " e
 
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in

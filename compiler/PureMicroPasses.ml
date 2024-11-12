@@ -24,6 +24,18 @@ let texpression_to_string (ctx : trans_ctx) (x : texpression) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx in
   PrintPure.texpression_to_string fmt false "" "  " x
 
+let switch_to_string (ctx : trans_ctx) scrut (x : switch_body) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.switch_to_string fmt "" "  " scrut x
+
+let struct_update_to_string (ctx : trans_ctx) supd : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.struct_update_to_string fmt "" "  " supd
+
+let typed_pattern_to_string (ctx : trans_ctx) pat : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.typed_pattern_to_string fmt pat
+
 (** Small utility.
 
     We sometimes have to insert new fresh variables in a function body, in which
@@ -833,8 +845,9 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
     leave the let-bindings where they are, and eliminated them in a subsequent
     pass (if they are useless).
  *)
-let inline_useless_var_reassignments (ctx : trans_ctx) ~(inline_named : bool)
-    ~(inline_const : bool) ~(inline_pure : bool) (def : fun_decl) : fun_decl =
+let inline_useless_var_reassignments ~(inline_named : bool)
+    ~(inline_const : bool) ~(inline_pure : bool) (ctx : trans_ctx)
+    (def : fun_decl) : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -1350,6 +1363,247 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = { body with body = body_exp } in
       { def with body = Some body }
 
+(** Remark: it might be better to use egraphs *)
+type simp_aggr_env = {
+  (* Expansion map that we use in particular to simplify fields.
+
+     For instance, if we see the expression [let (x, y) = p in ...]
+     we store the mappings:
+     {[
+       p   -> (x, y)
+       p.0 -> x
+       p.1 -> y
+     ]}
+  *)
+  expand_map : expression ExprMap.t;
+  (* The list of values which were expanded through matches or let-bindings.
+
+     For instance, if we see the expression [let (x, y) = p in ...] we push
+     the expression [p].
+  *)
+  expanded : expression list;
+}
+
+(** Simplify the unchanged fields in the aggregated ADTs.
+
+    Because of the way the symbolic execution works, we often see the following
+    pattern:
+    {[
+      if x.field then { x with field = true }
+      else { x with field = false }
+    ]}
+    This micro-pass simplifies it to:
+    {[
+      if x.field then x
+      else x
+    ]}
+ *)
+let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
+    fun_decl =
+  let log = Logging.simplify_aggregates_unchanged_fields_log in
+  let span = def.item_meta.span in
+  (* Some helpers *)
+  let empty_simp_aggr_env = { expand_map = ExprMap.empty; expanded = [] } in
+  let add_expand v e m = { m with expand_map = ExprMap.add v e m.expand_map } in
+  let add_expands l m =
+    { m with expand_map = ExprMap.add_list l m.expand_map }
+  in
+  let get_expand v m = ExprMap.find_opt v m.expand_map in
+  let add_expanded e m = { m with expanded = e :: m.expanded } in
+  let add_pattern_eqs (bound_adt : texpression) (pat : typed_pattern)
+      (env : simp_aggr_env) : simp_aggr_env =
+    (* Register the pattern - note that we may not be able to convert the
+       pattern to an expression if, for instance, it contains [_] *)
+    let env =
+      match typed_pattern_to_texpression span pat with
+      | Some pat_expr -> add_expand bound_adt.e pat_expr.e env
+      | None -> env
+    in
+    (* Register the fact that the scrutinee got expanded *)
+    let env = add_expanded bound_adt.e env in
+    (* Check if we are decomposing an ADT to introduce variables for its fields *)
+    match pat.value with
+    | PatAdt adt ->
+        (* Check if the fields are all variables, and compute the tuple:
+           (variable introduced for the field, projection) *)
+        let fields = FieldId.mapi (fun id x -> (id, x)) adt.field_values in
+        let vars_to_projs =
+          Collections.List.filter_map
+            (fun ((fid, f) : _ * typed_pattern) ->
+              match f.value with
+              | PatVar (var, _) ->
+                  let proj = mk_adt_proj span bound_adt fid f.ty in
+                  let var = { e = Var var.id; ty = f.ty } in
+                  Some (var.e, proj.e)
+              | _ -> None)
+            fields
+        in
+        (* We register the various mappings *)
+        let env =
+          add_expands (List.map (fun (x, y) -> (y, x)) vars_to_projs) env
+        in
+        env
+    | _ -> env
+  in
+
+  (* Recursively expand a value and its subvalues *)
+  let expand_expression simp_env (v : expression) : expression =
+    let visitor =
+      object
+        inherit [_] map_expression as super
+
+        method! visit_expression env e =
+          match get_expand e simp_env with
+          | None -> super#visit_expression env e
+          | Some e -> super#visit_expression env e
+      end
+    in
+    visitor#visit_expression () v
+  in
+
+  (* The visitor *)
+  let visitor =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_Switch env scrut switch =
+        log#ldebug
+          (lazy ("Visiting switch: " ^ switch_to_string ctx scrut switch));
+        (* Update the scrutinee *)
+        let scrut = self#visit_texpression env scrut in
+        let switch =
+          match switch with
+          | If (b0, b1) ->
+              (* Register the expansions:
+                 {[
+                   scrut -> true    (for the then branch)
+                   scrut -> false   (for the else branch)
+                 ]}
+              *)
+              let update v st =
+                self#visit_texpression
+                  (add_expand scrut.e (mk_bool_value v).e env)
+                  st
+              in
+              let b0 = update true b0 in
+              let b1 = update false b1 in
+              If (b0, b1)
+          | Match branches ->
+              let update_branch (b : match_branch) =
+                (* Register the information introduced by the patterns *)
+                let env = add_pattern_eqs scrut b.pat env in
+                { b with branch = self#visit_texpression env b.branch }
+              in
+              let branches = List.map update_branch branches in
+              Match branches
+        in
+        Switch (scrut, switch)
+
+      (* We need to detect patterns of the shape: [let (x, y) = t in ...] *)
+      method! visit_Let env monadic pat bound next =
+        (* Register the pattern if it is not a monadic let binding *)
+        let env = if monadic then env else add_pattern_eqs bound pat env in
+        (* Continue *)
+        super#visit_Let env monadic pat bound next
+
+      (* Update the ADT values *)
+      method! visit_texpression env e0 =
+        let e =
+          match e0.e with
+          | StructUpdate updt ->
+              log#ldebug
+                (lazy
+                  ("Visiting struct update: " ^ struct_update_to_string ctx updt));
+              (* Update the fields *)
+              let updt = super#visit_struct_update env updt in
+              (* Simplify *)
+              begin
+                match updt.init with
+                | None -> super#visit_StructUpdate env updt
+                | Some var_id ->
+                    let update_field ((fid, e) : field_id * texpression) :
+                        (field_id * texpression) option =
+                      (* Recursively expand the value of the field, to check if it is
+                         equal to the updated value: if it is the case, we can omit
+                         the update. *)
+                      let adt = { e = Var var_id; ty = e0.ty } in
+                      let field_value = mk_adt_proj span adt fid e.ty in
+                      let field_value = expand_expression env field_value.e in
+                      (* If this value is equal to the value we update the field
+                         with, we can simply ignore the update *)
+                      if field_value = expand_expression env e.e then (
+                        log#ldebug
+                          (lazy
+                            ("Simplifying field: " ^ texpression_to_string ctx e));
+                        None)
+                      else (
+                        log#ldebug
+                          (lazy
+                            ("Not simplifying field: "
+                            ^ texpression_to_string ctx e));
+                        Some (fid, e))
+                    in
+                    let updates = List.filter_map update_field updt.updates in
+                    if updates = [] then (
+                      let e1 = Var var_id in
+                      log#ldebug
+                        (lazy
+                          ("StructUpdate: "
+                          ^ texpression_to_string ctx e0
+                          ^ " ~~> "
+                          ^ texpression_to_string ctx { e0 with e = e1 }));
+                      e1)
+                    else
+                      let updt1 = { updt with updates } in
+                      log#ldebug
+                        (lazy
+                          ("StructUpdate: "
+                          ^ struct_update_to_string ctx updt
+                          ^ " ~~> "
+                          ^ struct_update_to_string ctx updt1));
+                      super#visit_StructUpdate env updt1
+              end
+          | App _ ->
+              log#ldebug
+                (lazy ("Visiting app: " ^ texpression_to_string ctx e0));
+              (* It may be an ADT expression (e.g., [Cons x y] or [(x, y)]):
+                 check if it is the case, and if it is, compute the expansion
+                 of all the values expanded so far, and see if exactly one of
+                 those is equal to the current expression *)
+              let e1 = super#visit_texpression env e0 in
+              let e1_exp = expand_expression env e1.e in
+              let f, _ = destruct_apps e1 in
+              if is_adt_cons f then
+                let expanded =
+                  List.filter_map
+                    (fun e ->
+                      let e' = expand_expression env e in
+                      if e1_exp = e' then Some e else None)
+                    env.expanded
+                in
+                begin
+                  match expanded with
+                  | [ e2 ] ->
+                      log#ldebug
+                        (lazy
+                          ("Simplified: "
+                          ^ texpression_to_string ctx e1
+                          ^ " ~~> "
+                          ^ texpression_to_string ctx { e1 with e = e2 }));
+                      e2
+                  | _ -> e1.e
+                end
+              else e1.e
+          | _ -> super#visit_expression env e0.e
+        in
+        { e0 with e }
+    end
+  in
+  let simplify (body : fun_body) : fun_body =
+    { body with body = visitor#visit_texpression empty_simp_aggr_env body.body }
+  in
+  { def with body = Option.map simplify def.body }
+
 (** Retrieve the loop definitions from the function definition.
 
     {!SymbolicToPure} generates an AST in which the loop bodies are part of
@@ -1604,6 +1858,103 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = Some { body with body = obj#visit_texpression () body.body } in
       { def with body }
 
+(** This pass simplifies uses of array/slice index operations.
+
+    We perform the following transformations:
+    {[
+      let (_, back) = Array.index_mut_usize a i in
+      let a' = back x in
+      ...
+
+       ~~>
+
+      let a' = Array.update a i x in
+      ...
+
+      let (_, back) = Array.index_mut_usize a i in
+      back x
+
+       ~~>
+
+      Array.update a i x
+    ]}
+  *)
+let simplify_array_slice_update (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+  let visitor =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_Let env monadic pat e1 e2 =
+        let e1_app, e1_args = destruct_apps e1 in
+        match (pat.value, e1_app.e, e1_args) with
+        | ( (* let (_, back) = ... *)
+            PatAdt
+              {
+                variant_id = None;
+                field_values =
+                  [
+                    { value = PatDummy; _ }; { value = PatVar (back_var, _); _ };
+                  ];
+              },
+            (* ... = Array.index_mut_usize a i *)
+            Qualif
+              {
+                id =
+                  FunOrOp
+                    (Fun
+                      (FromLlbc
+                        ( FunId
+                            (FAssumed
+                              (Index
+                                {
+                                  is_array;
+                                  mutability = RMut;
+                                  is_range = false;
+                                })),
+                          None )));
+                generics = index_generics;
+              },
+            [ a; i ] ) ->
+            let is_call_to_back (app : texpression) =
+              match app.e with
+              | Var id -> id = back_var.id
+              | _ -> false
+            in
+            let mk_call_to_update (back_v : texpression) =
+              let array_or_slice = if is_array then Array else Slice in
+              let qualif =
+                Qualif
+                  {
+                    id = FunOrOp (Fun (Pure (UpdateAtIndex array_or_slice)));
+                    generics = index_generics;
+                  }
+              in
+              let qualif =
+                { e = qualif; ty = mk_arrows [ a.ty; i.ty; back_v.ty ] e2.ty }
+              in
+              mk_apps span qualif [ a; i; back_v ]
+            in
+            begin
+              match e2.e with
+              (* back x *)
+              | App (app, back_v) when is_call_to_back app ->
+                  (super#visit_texpression env (mk_call_to_update back_v)).e
+              (* let a' = back x in ... *)
+              | Let (monadic', pat', { e = App (app, back_v); _ }, e3)
+                when is_call_to_back app ->
+                  super#visit_expression env
+                    (Let (monadic', pat', mk_call_to_update back_v, e3))
+              | _ -> super#visit_Let env monadic pat e1 e2
+            end
+        | _ -> super#visit_Let env monadic pat e1 e2
+    end
+  in
+  let simplify (body : fun_body) : fun_body =
+    { body with body = visitor#visit_texpression () body.body }
+  in
+  { def with body = Option.map simplify def.body }
+
 (** Decompose let-bindings by introducing intermediate let-bindings.
 
     This is a utility function: see {!decompose_monadic_let_bindings} and
@@ -1814,147 +2165,103 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       (* Return *)
       { def with body = Some body }
 
+let end_passes :
+    (bool ref option * string * (trans_ctx -> fun_decl -> fun_decl)) list =
+  [
+    (* Convert the unit variables to [()] if they are used as right-values or
+     * [_] if they are used as left values. *)
+    (None, "unit_vars_to_unit", fun _ -> unit_vars_to_unit);
+    (* Introduce the special structure create/update expressions *)
+    (None, "intro_struct_updates", intro_struct_updates);
+    (* Simplify the let-bindings *)
+    (None, "simplify_let_bindings", simplify_let_bindings);
+    (* Inline the useless variable reassignments *)
+    ( None,
+      "inline_useless_var_assignments",
+      inline_useless_var_reassignments ~inline_named:true ~inline_const:true
+        ~inline_pure:true );
+    (* Eliminate the box functions - note that the "box" types were eliminated
+     * during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
+    (None, "eliminate_box_functions", eliminate_box_functions);
+    (* Filter the useless variables, assignments, function calls, etc. *)
+    (None, "filter_useless", filter_useless);
+    (* Simplify the lets immediately followed by a return.
+
+       Ex.:
+       {[
+         x <-- f y;
+         Return x
+
+           ~~>
+
+         f y
+       ]}
+    *)
+    (None, "simplify_let_then_ok", simplify_let_then_ok);
+    (* Simplify the aggregated ADTs.
+
+       Ex.:
+       {[
+         (* type struct = { f0 : nat; f1 : nat; f2 : nat } *)
+
+         Mkstruct x.f0 x.f1 x.f2                 ~~> x
+         { f0 := x.f0; f1 := x.f1; f2 := x.f2 }  ~~> x
+         { f0 := x.f0; f1 := x.f1; f2 := v }     ~~> { x with f2 = v }
+       ]}
+    *)
+    (None, "simplify_aggregates", simplify_aggregates);
+    (* Simplify the aggregated ADTs further. *)
+    ( None,
+      "simplify_aggregates_unchanged_fields",
+      simplify_aggregates_unchanged_fields );
+    (* Simplify the let-bindings - some simplifications may have been unlocked by
+       the pass above (for instance, the lambda simplification) *)
+    (None, "simplify_let_bindings", simplify_let_bindings);
+    (* Inline the useless vars again *)
+    ( None,
+      "inline_useless_var_reassignments",
+      inline_useless_var_reassignments ~inline_named:true ~inline_const:true
+        ~inline_pure:false );
+    (* Simplify the let-then return again (the lambda simplification may have
+       unlocked more simplifications here) *)
+    (None, "simplify_let_then_ok (pass 2)", simplify_let_then_ok);
+    (* Simplify the array/slice manipulations by introducing calls to [array_update]
+       [slice_update] *)
+    (None, "simplify_array_slice_update", simplify_array_slice_update);
+    (* Decompose the monadic let-bindings - used by Coq *)
+    ( Some Config.decompose_monadic_let_bindings,
+      "decompose_monadic_let_bindings",
+      decompose_monadic_let_bindings );
+    (* Decompose nested let-patterns *)
+    ( Some Config.decompose_nested_let_patterns,
+      "decompose_nested_let_patterns",
+      decompose_nested_let_patterns );
+    (* Unfold the monadic let-bindings *)
+    ( Some Config.unfold_monadic_let_bindings,
+      "unfold_monadic_let_bindings",
+      unfold_monadic_let_bindings );
+  ]
+
 (** Auxiliary function for {!apply_passes_to_def} *)
 let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
-  (* Convert the unit variables to [()] if they are used as right-values or
-   * [_] if they are used as left values. *)
-  let def = unit_vars_to_unit def in
-  log#ldebug
-    (lazy ("unit_vars_to_unit:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  List.fold_left
+    (fun def (option, pass_name, pass) ->
+      let apply =
+        match option with
+        | None -> true
+        | Some option -> !option
+      in
 
-  (* Introduce the special structure create/update expressions *)
-  let def = intro_struct_updates ctx def in
-  log#ldebug
-    (lazy ("intro_struct_updates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Simplify the let-bindings *)
-  let def = simplify_let_bindings ctx def in
-  log#ldebug
-    (lazy ("simplify_let_bindings:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Inline the useless variable reassignments *)
-  let def =
-    inline_useless_var_reassignments ctx ~inline_named:true ~inline_const:true
-      ~inline_pure:true def
-  in
-  log#ldebug
-    (lazy
-      ("inline_useless_var_assignments:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Eliminate the box functions - note that the "box" types were eliminated
-   * during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
-  let def = eliminate_box_functions ctx def in
-  log#ldebug
-    (lazy ("eliminate_box_functions:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Filter the useless variables, assignments, function calls, etc. *)
-  let def = filter_useless ctx def in
-  log#ldebug (lazy ("filter_useless:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Simplify the lets immediately followed by a return.
-
-     Ex.:
-     {[
-       x <-- f y;
-       Return x
-
-         ~~>
-
-       f y
-     ]}
-  *)
-  let def = simplify_let_then_ok ctx def in
-  log#ldebug
-    (lazy ("simplify_let_then_ok:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Simplify the aggregated ADTs.
-
-     Ex.:
-     {[
-       (* type struct = { f0 : nat; f1 : nat; f2 : nat } *)
-
-       Mkstruct x.f0 x.f1 x.f2                 ~~> x
-       { f0 := x.f0; f1 := x.f1; f2 := x.f2 }  ~~> x
-       { f0 := x.f0; f1 := x.f1; f2 := v }     ~~> { x with f2 = v }
-     ]}
-  *)
-  let def = simplify_aggregates ctx def in
-  log#ldebug
-    (lazy ("simplify_aggregates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Simplify the let-bindings - some simplifications may have been unlocked by
-     the pass above (for instance, the lambda simplification) *)
-  let def = simplify_let_bindings ctx def in
-  log#ldebug
-    (lazy
-      ("simplify_let_bindings (pass 2):\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Inline the useless vars again *)
-  let def =
-    inline_useless_var_reassignments ctx ~inline_named:true ~inline_const:true
-      ~inline_pure:false def
-  in
-  log#ldebug
-    (lazy
-      ("inline_useless_var_assignments (pass 2):\n\n"
-     ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Simplify the let-then return again (the lambda simplification may have
-     unlocked more simplifications here) *)
-  let def = simplify_let_then_ok ctx def in
-  log#ldebug
-    (lazy
-      ("simplify_let_then_ok (pass 2):\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
-
-  (* Decompose the monadic let-bindings - used by Coq *)
-  let def =
-    if !Config.decompose_monadic_let_bindings then (
-      let def = decompose_monadic_let_bindings ctx def in
-      log#ldebug
-        (lazy
-          ("decompose_monadic_let_bindings:\n\n" ^ fun_decl_to_string ctx def
-         ^ "\n"));
-      def)
-    else (
-      log#ldebug
-        (lazy
-          "ignoring decompose_monadic_let_bindings due to the configuration\n");
-      def)
-  in
-
-  (* Decompose nested let-patterns *)
-  let def =
-    if !Config.decompose_nested_let_patterns then (
-      let def = decompose_nested_let_patterns ctx def in
-      log#ldebug
-        (lazy
-          ("decompose_nested_let_patterns:\n\n" ^ fun_decl_to_string ctx def
-         ^ "\n"));
-      def)
-    else (
-      log#ldebug
-        (lazy
-          "ignoring decompose_nested_let_patterns due to the configuration\n");
-      def)
-  in
-
-  (* Unfold the monadic let-bindings *)
-  let def =
-    if !Config.unfold_monadic_let_bindings then (
-      let def = unfold_monadic_let_bindings ctx def in
-      log#ldebug
-        (lazy
-          ("unfold_monadic_let_bindings:\n\n" ^ fun_decl_to_string ctx def
-         ^ "\n"));
-      def)
-    else (
-      log#ldebug
-        (lazy "ignoring unfold_monadic_let_bindings due to the configuration\n");
-      def)
-  in
-
-  (* We are done *)
-  def
+      if apply then (
+        let def = pass ctx def in
+        log#ldebug
+          (lazy (pass_name ^ ":\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+        def)
+      else (
+        log#ldebug
+          (lazy ("ignoring " ^ pass_name ^ " due to the configuration\n"));
+        def))
+    def end_passes
 
 (** Small utility for {!filter_loop_inputs} *)
 let filter_prefix (keep : bool list) (ls : 'a list) : 'a list =

@@ -386,7 +386,7 @@ Definition id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
   result ((T1 * T2) * ((T1 * T2) -> result (T1 * T2)))
   :=
-  let (t, t1) := p in Ok ((t, t1), Ok)
+  let (t, t1) := p in Ok (p, Ok)
 .
 
 (** [no_nested_borrows::id_mut_pair3]:
@@ -404,7 +404,7 @@ Definition id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
   result ((T1 * T2) * (T1 -> result T1) * (T2 -> result T2))
   :=
-  let (t, t1) := p in Ok ((t, t1), Ok, Ok)
+  let (t, t1) := p in Ok (p, Ok, Ok)
 .
 
 (** [no_nested_borrows::StructWithTuple]
@@ -597,5 +597,43 @@ Definition not_u32 (x : u32) : result u32 :=
     Source: 'tests/src/no_nested_borrows.rs', lines 528:0-530:1 *)
 Definition not_i32 (x : i32) : result i32 :=
   Ok (scalar_not x).
+
+(** [no_nested_borrows::ExpandSimpliy::Wrapper]
+    Source: 'tests/src/no_nested_borrows.rs', lines 534:4-534:32 *)
+Definition ExpandSimpliy_Wrapper_t (T : Type) : Type := T * T.
+
+(** [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb1]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 536:4-542:5 *)
+Definition expandSimpliy_check_expand_simplify_symb1
+  (x : ExpandSimpliy_Wrapper_t bool) : result (ExpandSimpliy_Wrapper_t bool) :=
+  let (b, b1) := x in if b then Ok x else Ok x
+.
+
+(** [no_nested_borrows::ExpandSimpliy::Wrapper2]
+    Source: 'tests/src/no_nested_borrows.rs', lines 544:4-547:5 *)
+Record ExpandSimpliy_Wrapper2_t :=
+mkExpandSimpliy_Wrapper2_t {
+  expandSimpliy_Wrapper2_b : bool; expandSimpliy_Wrapper2_x : u32;
+}
+.
+
+(** [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb2]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 549:4-555:5 *)
+Definition expandSimpliy_check_expand_simplify_symb2
+  (x : ExpandSimpliy_Wrapper2_t) : result ExpandSimpliy_Wrapper2_t :=
+  if x.(expandSimpliy_Wrapper2_b)
+  then
+    Ok
+      {|
+        expandSimpliy_Wrapper2_b := true;
+        expandSimpliy_Wrapper2_x := x.(expandSimpliy_Wrapper2_x)
+      |}
+  else
+    Ok
+      {|
+        expandSimpliy_Wrapper2_b := false;
+        expandSimpliy_Wrapper2_x := x.(expandSimpliy_Wrapper2_x)
+      |}
+.
 
 End NoNestedBorrows.

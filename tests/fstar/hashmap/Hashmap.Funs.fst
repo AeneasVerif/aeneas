@@ -197,15 +197,8 @@ let hashMap_try_resize
     let* ntable = hashMap_new_with_capacity t i3 i i1 in
     let* p = hashMap_move_elements ntable self.slots in
     let (ntable1, _) = p in
-    Ok
-      {
-        self
-          with
-          max_load_factor = (i, i1);
-          max_load = ntable1.max_load;
-          slots = ntable1.slots
-      }
-  else Ok { self with max_load_factor = (i, i1); saturated = true }
+    Ok { self with max_load = ntable1.max_load; slots = ntable1.slots }
+  else Ok { self with saturated = true }
 
 (** [hashmap::{hashmap::HashMap<T>}::insert]:
     Source: 'tests/src/hashmap.rs', lines 143:4-150:5 *)
@@ -216,10 +209,7 @@ let hashMap_insert
   let* self1 = hashMap_insert_no_resize self key value in
   let* i = hashMap_len self1 in
   if i > self1.max_load
-  then
-    if self1.saturated
-    then Ok { self1 with saturated = true }
-    else hashMap_try_resize { self1 with saturated = false }
+  then if self1.saturated then Ok self1 else hashMap_try_resize self1
   else Ok self1
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
@@ -340,7 +330,7 @@ let rec hashMap_remove_from_list_loop
   | AList_Cons ckey x tl ->
     if ckey = key
     then
-      let (mv_ls, _) = core_mem_replace (AList_Cons ckey x tl) AList_Nil in
+      let (mv_ls, _) = core_mem_replace ls AList_Nil in
       begin match mv_ls with
       | AList_Cons _ cvalue tl1 -> Ok (Some cvalue, tl1)
       | AList_Nil -> Fail Failure
@@ -377,7 +367,7 @@ let hashMap_remove
   | Some x1 ->
     let* i1 = usize_sub self.num_entries 1 in
     let* v = index_mut_back a1 in
-    Ok (Some x1, { self with num_entries = i1; slots = v })
+    Ok (x, { self with num_entries = i1; slots = v })
   end
 
 (** [hashmap::insert_on_disk]:

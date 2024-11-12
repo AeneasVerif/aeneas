@@ -503,6 +503,11 @@ let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
   | Assert -> "assert"
   | FuelDecrease -> "fuel_decrease"
   | FuelEqZero -> "fuel_eq_zero"
+  | UpdateAtIndex array_or_slice -> begin
+      match array_or_slice with
+      | Array -> "array_update"
+      | Slice -> "slice_update"
+    end
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with
@@ -535,9 +540,9 @@ let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
 
 (** [inside]: controls the introduction of parentheses *)
-let rec texpression_to_string ?(spandata : Meta.span option = None)
-    (env : fmt_env) (inside : bool) (indent : string) (indent_incr : string)
-    (e : texpression) : string =
+let rec texpression_to_string ?(span : Meta.span option = None) (env : fmt_env)
+    (inside : bool) (indent : string) (indent_incr : string) (e : texpression) :
+    string =
   match e.e with
   | Var var_id -> var_id_to_string env var_id
   | CVar cg_id -> const_generic_var_id_to_string env cg_id
@@ -546,65 +551,29 @@ let rec texpression_to_string ?(spandata : Meta.span option = None)
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
       let app, args = destruct_apps e in
       (* Convert to string *)
-      app_to_string ~span:spandata env inside indent indent_incr app args
+      app_to_string ~span env inside indent indent_incr app args
   | Lambda _ ->
       let xl, e = destruct_lambdas e in
-      let e = lambda_to_string ~span:spandata env indent indent_incr xl e in
+      let e = lambda_to_string ~span env indent indent_incr xl e in
       if inside then "(" ^ e ^ ")" else e
   | Qualif _ ->
       (* Qualifier without arguments *)
-      app_to_string ~span:spandata env inside indent indent_incr e []
+      app_to_string ~span env inside indent indent_incr e []
   | Let (monadic, lv, re, e) ->
-      let e =
-        let_to_string ~span:spandata env indent indent_incr monadic lv re e
-      in
+      let e = let_to_string ~span env indent indent_incr monadic lv re e in
       if inside then "(" ^ e ^ ")" else e
   | Switch (scrutinee, body) ->
-      let e =
-        switch_to_string ~span:spandata env indent indent_incr scrutinee body
-      in
+      let e = switch_to_string ~span env indent indent_incr scrutinee body in
       if inside then "(" ^ e ^ ")" else e
   | Loop loop ->
-      let e = loop_to_string ~span:spandata env indent indent_incr loop in
+      let e = loop_to_string ~span env indent indent_incr loop in
       if inside then "(" ^ e ^ ")" else e
-  | StructUpdate supd -> (
-      let s =
-        match supd.init with
-        | None -> ""
-        | Some vid -> " " ^ var_id_to_string env vid ^ " with"
-      in
-      let indent1 = indent ^ indent_incr in
-      let indent2 = indent1 ^ indent_incr in
-      (* The id should be a custom type decl id or an array *)
-      match supd.struct_id with
-      | TAdtId aid ->
-          let field_names = Option.get (adt_field_names env aid None) in
-          let fields =
-            List.map
-              (fun (fid, fe) ->
-                let field = FieldId.nth field_names fid in
-                let fe =
-                  texpression_to_string ~spandata env false indent2 indent_incr
-                    fe
-                in
-                "\n" ^ indent1 ^ field ^ " := " ^ fe ^ ";")
-              supd.updates
-          in
-          let bl = if fields = [] then "" else "\n" ^ indent in
-          "{" ^ s ^ String.concat "" fields ^ bl ^ "}"
-      | TAssumed TArray ->
-          let fields =
-            List.map
-              (fun (_, fe) ->
-                texpression_to_string ~spandata env false indent2 indent_incr fe)
-              supd.updates
-          in
-          "[ " ^ String.concat ", " fields ^ " ]"
-      | _ -> craise_opt_span __FILE__ __LINE__ spandata "Unexpected")
-  | Meta (span, e) -> (
-      let span_s = espan_to_string ~spandata env span in
-      let e = texpression_to_string ~spandata env inside indent indent_incr e in
-      match span with
+  | StructUpdate supd ->
+      struct_update_to_string ~span env indent indent_incr supd
+  | Meta (span', e) -> (
+      let span_s = espan_to_string ~span env span' in
+      let e = texpression_to_string ~span env inside indent indent_incr e in
+      match span' with
       | Assignment _ | SymbolicAssignments _ | SymbolicPlaces _ | Tag _ ->
           let e = span_s ^ "\n" ^ indent ^ e in
           if inside then "(" ^ e ^ ")" else e
@@ -647,8 +616,7 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in
-        ( texpression_to_string ~spandata:span env inside indent indent_incr app,
-          [] )
+        (texpression_to_string ~span env inside indent indent_incr app, [])
   in
   (* Convert the arguments.
    * The arguments are expressions, so indentation might get weird... (though
@@ -656,7 +624,7 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let arg_to_string =
     let inside = true in
     let indent1 = indent ^ indent_incr in
-    texpression_to_string ~spandata:span env inside indent1 indent_incr
+    texpression_to_string ~span env inside indent1 indent_incr
   in
   let args = List.map arg_to_string args in
   let all_args = List.append generics args in
@@ -671,7 +639,7 @@ and lambda_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (xl : typed_pattern list)
     (e : texpression) : string =
   let xl = List.map (typed_pattern_to_string ~span env) xl in
-  let e = texpression_to_string ~spandata:span env false indent indent_incr e in
+  let e = texpression_to_string ~span env false indent indent_incr e in
   "λ " ^ String.concat " " xl ^ ". " ^ e
 
 and let_to_string ?(span : Meta.span option = None) (env : fmt_env)
@@ -679,12 +647,8 @@ and let_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (lv : typed_pattern) (re : texpression) (e : texpression) : string =
   let indent1 = indent ^ indent_incr in
   let inside = false in
-  let re =
-    texpression_to_string ~spandata:span env inside indent1 indent_incr re
-  in
-  let e =
-    texpression_to_string ~spandata:span env inside indent indent_incr e
-  in
+  let re = texpression_to_string ~span env inside indent1 indent_incr re in
+  let e = texpression_to_string ~span env inside indent indent_incr e in
   let lv = typed_pattern_to_string ~span env lv in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
@@ -697,11 +661,9 @@ and switch_to_string ?(span : Meta.span option = None) (env : fmt_env)
    * in most situations it will be a value or a function call, so it should be
    * ok*)
   let scrut =
-    texpression_to_string ~spandata:span env true indent1 indent_incr scrutinee
+    texpression_to_string ~span env true indent1 indent_incr scrutinee
   in
-  let e_to_string =
-    texpression_to_string ~spandata:span env false indent1 indent_incr
-  in
+  let e_to_string = texpression_to_string ~span env false indent1 indent_incr in
   match body with
   | If (e_true, e_false) ->
       let e_true = e_to_string e_true in
@@ -716,6 +678,41 @@ and switch_to_string ?(span : Meta.span option = None) (env : fmt_env)
       let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
 
+and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
+    (indent : string) (indent_incr : string) (supd : struct_update) : string =
+  let s =
+    match supd.init with
+    | None -> ""
+    | Some vid -> " " ^ var_id_to_string env vid ^ " with"
+  in
+  let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
+  (* The id should be a custom type decl id or an array *)
+  match supd.struct_id with
+  | TAdtId aid ->
+      let field_names = Option.get (adt_field_names env aid None) in
+      let fields =
+        List.map
+          (fun (fid, fe) ->
+            let field = FieldId.nth field_names fid in
+            let fe =
+              texpression_to_string ~span env false indent2 indent_incr fe
+            in
+            "\n" ^ indent1 ^ field ^ " := " ^ fe ^ ";")
+          supd.updates
+      in
+      let bl = if fields = [] then "" else "\n" ^ indent in
+      "{" ^ s ^ String.concat "" fields ^ bl ^ "}"
+  | TAssumed TArray ->
+      let fields =
+        List.map
+          (fun (_, fe) ->
+            texpression_to_string ~span env false indent2 indent_incr fe)
+          supd.updates
+      in
+      "[ " ^ String.concat ", " fields ^ " ]"
+  | _ -> craise_opt_span __FILE__ __LINE__ span "Unexpected"
+
 and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
@@ -727,22 +724,20 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   in
   let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
   let fun_end =
-    texpression_to_string ~spandata:span env false indent2 indent_incr
-      loop.fun_end
+    texpression_to_string ~span env false indent2 indent_incr loop.fun_end
   in
   let loop_body =
-    texpression_to_string ~spandata:span env false indent2 indent_incr
-      loop.loop_body
+    texpression_to_string ~span env false indent2 indent_incr loop.loop_body
   in
   "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n"
   ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n"
   ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n"
   ^ indent ^ "}"
 
-and espan_to_string ?(spandata : Meta.span option = None) (env : fmt_env)
-    (span : espan) : string =
-  let span =
-    match span with
+and espan_to_string ?(span : Meta.span option = None) (env : fmt_env)
+    (espan : espan) : string =
+  let espan =
+    match espan with
     | Assignment (lp, rv, rp) ->
         let rp =
           match rp with
@@ -750,14 +745,14 @@ and espan_to_string ?(spandata : Meta.span option = None) (env : fmt_env)
           | Some rp -> " [@src=" ^ mplace_to_string env rp ^ "]"
         in
         "@assign(" ^ mplace_to_string env lp ^ " := "
-        ^ texpression_to_string ~spandata env false "" "" rv
+        ^ texpression_to_string ~span env false "" "" rv
         ^ rp ^ ")"
     | SymbolicAssignments info ->
         let infos =
           List.map
             (fun (var_id, rv) ->
               VarId.to_string var_id ^ " == "
-              ^ texpression_to_string ~spandata env false "" "" rv)
+              ^ texpression_to_string ~span env false "" "" rv)
             info
         in
         let infos = String.concat ", " infos in
@@ -774,7 +769,7 @@ and espan_to_string ?(spandata : Meta.span option = None) (env : fmt_env)
     | MPlace mp -> "@mplace=" ^ mplace_to_string env mp
     | Tag msg -> "@tag \"" ^ msg ^ "\""
   in
-  "@span[" ^ span ^ "]"
+  "@span[" ^ espan ^ "]"
 
 let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
   let env = { env with generics = def.signature.generics } in
@@ -791,7 +786,7 @@ let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
         else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
       in
       let body =
-        texpression_to_string ~spandata:(Some def.item_meta.span) env inside
-          indent indent body.body
+        texpression_to_string ~span:(Some def.item_meta.span) env inside indent
+          indent body.body
       in
       "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body

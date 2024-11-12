@@ -1190,16 +1190,36 @@ let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
         (Assert, "massert");
         (FuelDecrease, "decrease");
         (FuelEqZero, "is_zero");
+        (UpdateAtIndex Slice, "slice_update_usize");
+        (UpdateAtIndex Array, "array_update_usize");
       ]
   | Coq ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
-      [ (Return, "return_"); (Fail, "fail_"); (Assert, "massert") ]
+      [
+        (Return, "return_");
+        (Fail, "fail_");
+        (Assert, "massert");
+        (UpdateAtIndex Slice, "slice_update_usize");
+        (UpdateAtIndex Array, "array_update_usize");
+      ]
   | Lean ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
-      [ (Return, "return"); (Fail, "fail_"); (Assert, "massert") ]
+      [
+        (Return, "return");
+        (Fail, "fail_");
+        (Assert, "massert");
+        (UpdateAtIndex Slice, "Slice.update_usize");
+        (UpdateAtIndex Array, "Array.update_usize");
+      ]
   | HOL4 ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
-      [ (Return, "return"); (Fail, "fail"); (Assert, "massert") ]
+      [
+        (Return, "return");
+        (Fail, "fail");
+        (Assert, "massert");
+        (UpdateAtIndex Slice, "slice_update_usize");
+        (UpdateAtIndex Array, "array_update_usize");
+      ]
 
 let names_map_init () : names_map_init =
   {

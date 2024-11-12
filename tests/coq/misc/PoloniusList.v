@@ -27,7 +27,7 @@ Fixpoint get_list_at_x
   match ls with
   | List_Cons hd tl =>
     if hd s= x
-    then Ok (List_Cons hd tl, Ok)
+    then Ok (ls, Ok)
     else (
       p <- get_list_at_x tl x;
       let (l, get_list_at_x_back) := p in
