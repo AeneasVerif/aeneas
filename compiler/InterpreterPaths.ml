@@ -54,8 +54,6 @@ type path_fail_kind =
 type 'a path_access_result = ('a, path_fail_kind) result
 (** The result of reading from/writing to a place *)
 
-type updated_read_value = { read : typed_value; updated : typed_value }
-
 type projection_access = {
   enter_shared_loans : bool;
   enter_mut_borrows : bool;
@@ -72,8 +70,10 @@ type projection_access = {
 let rec access_projection (span : Meta.span) (access : projection_access)
     (ctx : eval_ctx)
     (* Function to (eventually) update the value we find *)
-      (update : typed_value -> typed_value) (p : projection) (v : typed_value) :
-    (eval_ctx * updated_read_value) path_access_result =
+      (update : typed_value -> typed_value)
+    (backward : eval_ctx * typed_value -> eval_ctx * typed_value)
+    (p : projection) (v : typed_value) :
+    (eval_ctx * typed_value) path_access_result =
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -90,7 +90,10 @@ let rec access_projection (span : Meta.span) (access : projection_access)
         craise __FILE__ __LINE__ span
           "Assertion failed: new value doesn't have the same type as its \
            destination");
-      Ok (ctx, { read = v; updated = nv })
+      (* This updates the ctx with the updated value *)
+      let ctx, _ = backward (ctx, nv) in
+      (* Return the read value *)
+      Ok (ctx, v)
   | pe :: p' -> begin
       (* Match on the projection element and the value *)
       match (pe, v.value, v.ty) with
@@ -108,13 +111,9 @@ let rec access_projection (span : Meta.span) (access : projection_access)
               FieldId.update_nth adt.field_values field_id updated
             in
             let value = VAdt { adt with field_values = nvalues } in
-            (ctx, { v with value })
+            backward (ctx, { v with value })
           in
-          match access_projection span access ctx update p' fv with
-          | Error err -> Error err
-          | Ok (ctx, res) ->
-              let ctx, updated = backward (ctx, res.updated) in
-              Ok (ctx, { res with updated })
+          access_projection span access ctx update backward p' fv
         end
       (* Tuples *)
       | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> begin
@@ -128,14 +127,10 @@ let rec access_projection (span : Meta.span) (access : projection_access)
               FieldId.update_nth adt.field_values field_id updated
             in
             let value = VAdt { adt with field_values = nvalues } in
-            (ctx, { v with value })
+            backward (ctx, { v with value })
           in
           (* Project *)
-          match access_projection span access ctx update p' fv with
-          | Error err -> Error err
-          | Ok (ctx, res) ->
-              let ctx, updated = backward (ctx, res.updated) in
-              Ok (ctx, { res with updated })
+          access_projection span access ctx update backward p' fv
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *)
         end
@@ -158,13 +153,9 @@ let rec access_projection (span : Meta.span) (access : projection_access)
             let value =
               VAdt { variant_id = None; field_values = [ updated ] }
             in
-            (ctx, { v with value })
+            backward (ctx, { v with value })
           in
-          match access_projection span access ctx update p' bv with
-          | Error err -> Error err
-          | Ok (ctx, res) ->
-              let ctx, updated = backward (ctx, res.updated) in
-              Ok (ctx, { res with updated })
+          access_projection span access ctx update backward p' bv
         end
       (* Borrows *)
       | Deref, VBorrow bc, _ ->
@@ -188,7 +179,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                               (VSharedLoan (bids, updated))
                               ctx
                           in
-                          (ctx, v) )
+                          backward (ctx, v) )
                 | ( _,
                     Abstract
                       ( AMutLoan _
@@ -216,7 +207,7 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                               (ASharedLoan (pm, bids, updated, av))
                               ctx
                           in
-                          (ctx, v) )
+                          backward (ctx, v) )
                   end
               end
             | VReservedMutBorrow bid -> Error (FailReservedMutBorrow bid)
@@ -227,18 +218,14 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                   ( bv,
                     fun (ctx, updated) ->
                       let value = VBorrow (VMutBorrow (bid, updated)) in
-                      (ctx, { v with value }) )
+                      backward (ctx, { v with value }) )
           in
           begin
             match res with
             | Error err -> Error err
             | Ok (pv, backward) -> begin
                 (* Continue projecting the value then update the result *)
-                match access_projection span access ctx update p' pv with
-                | Error err -> Error err
-                | Ok (ctx, res) ->
-                    let ctx, updated = backward (ctx, res.updated) in
-                    Ok (ctx, { res with updated })
+                access_projection span access ctx update backward p' pv
               end
           end
       | _, VLoan lc, _ -> begin
@@ -252,13 +239,9 @@ let rec access_projection (span : Meta.span) (access : projection_access)
                  we mustn't ignore the current projection element *)
               let backward (ctx, updated) =
                 let value = VLoan (VSharedLoan (bids, updated)) in
-                (ctx, { v with value })
+                backward (ctx, { v with value })
               in
-              match access_projection span access ctx update (pe :: p') sv with
-              | Error err -> Error err
-              | Ok (ctx, res) ->
-                  let ctx, updated = backward (ctx, res.updated) in
-                  Ok (ctx, { res with updated })
+              access_projection span access ctx update backward (pe :: p') sv
             end
         end
       | _, VBottom, _ ->
@@ -286,13 +269,12 @@ let access_place (span : Meta.span) (access : projection_access)
   (* Lookup the variable's value *)
   let value = ctx_lookup_var_value span ctx p.var_id in
   (* Apply the projection *)
-  match access_projection span access ctx update p.projection value with
-  | Error err -> Error err
-  | Ok (ctx, res) ->
-      (* Update the value *)
-      let ctx = ctx_update_var_value span ctx p.var_id res.updated in
-      (* Return *)
-      Ok (ctx, res.read)
+  let backward (ctx, updated) =
+    (* Update the value *)
+    let ctx = ctx_update_var_value span ctx p.var_id updated in
+    (ctx, updated)
+  in
+  access_projection span access ctx update backward p.projection value
 
 type access_kind =
   | Read  (** We can go inside borrows and loans *)
