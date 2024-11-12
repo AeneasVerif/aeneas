@@ -11,6 +11,12 @@ exception FoundSymbolicValue of symbolic_value
 let mk_unit_value : typed_value =
   { value = VAdt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
+let mk_bool_value (b : bool) : typed_value =
+  { value = VLiteral (VBool b); ty = TLiteral TBool }
+
+let mk_true : typed_value = mk_bool_value true
+let mk_false : typed_value = mk_bool_value false
+
 let mk_typed_value (span : Meta.span) (ty : ty) (value : value) : typed_value =
   sanity_check __FILE__ __LINE__ (ty_is_ety ty) span;
   { value; ty }

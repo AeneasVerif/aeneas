@@ -24,6 +24,18 @@ let texpression_to_string (ctx : trans_ctx) (x : texpression) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx in
   PrintPure.texpression_to_string fmt false "" "  " x
 
+let switch_to_string (ctx : trans_ctx) scrut (x : switch_body) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.switch_to_string fmt "" "  " scrut x
+
+let struct_update_to_string (ctx : trans_ctx) supd : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.struct_update_to_string fmt "" "  " supd
+
+let typed_pattern_to_string (ctx : trans_ctx) pat : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx in
+  PrintPure.typed_pattern_to_string fmt pat
+
 (** Small utility.
 
     We sometimes have to insert new fresh variables in a function body, in which
@@ -1351,6 +1363,299 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = { body with body = body_exp } in
       { def with body = Some body }
 
+(** Remark: it might be better to use egraphs *)
+type simp_aggr_env = {
+  (* Map from expanded expression to non-expanded expression.
+
+     For instance, if we see the expression [let (x, y) = p in ...]
+     we store the mappings:
+     {[
+       (x, y) -> p
+       x -> p.0
+       y -> p.1
+     ]}
+  *)
+  contract_map : expression ExprMap.t;
+  (* Expansion map that we use in particular to simplify fields.
+
+     For instance, if we see the expression [let (x, y) = p in ...]
+     we store the mappings:
+     {[
+       p   -> (x, y)
+       p.0 -> x
+       p.1 -> y
+     ]}
+  *)
+  expand_map : expression ExprMap.t;
+  (* Map from variable to the adt it comes from.
+
+     For instance, if we see the expression [let (x, y) = p in ...]
+     we store the mappings:
+     {[
+       x -> (x, y)
+       y -> (x, y)
+     ]}
+  *)
+  var_to_adt : expression ExprMap.t;
+  (* The list of values which were expanded through matches or let-bindings.
+
+     For instance, if we see the expression [let (x, y) = p in ...] we push
+     the expression [p].
+  *)
+  expanded : expression list;
+}
+
+(** Simplify the unchanged fields in the aggregated ADTs.
+
+    Because of the way the symbolic execution works, we often see the following
+    pattern:
+    {[
+      if x.field then { x with field = true }
+      else { x with field = false }
+    ]}
+    This micro-pass simplifies it to:
+    {[
+      if x.field then x
+      else x
+    ]}
+ *)
+let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
+    fun_decl =
+  let log = Logging.simplify_aggregates_unchanged_fields_log in
+  let span = def.item_meta.span in
+  (* Some helpers *)
+  let empty_simp_aggr_env =
+    {
+      contract_map = ExprMap.empty;
+      expand_map = ExprMap.empty;
+      var_to_adt = ExprMap.empty;
+      expanded = [];
+    }
+  in
+  let add_contract e0 e1 m =
+    { m with contract_map = ExprMap.add e0 e1 m.contract_map }
+  in
+  let add_contracts eqs m =
+    { m with contract_map = ExprMap.add_list eqs m.contract_map }
+  in
+  let get_contract v m = ExprMap.find_opt v m.contract_map in
+  let add_expand v e m = { m with expand_map = ExprMap.add v e m.expand_map } in
+  let add_expands l m =
+    { m with expand_map = ExprMap.add_list l m.expand_map }
+  in
+  let get_expand v m = ExprMap.find_opt v m.expand_map in
+  let add_var v e m = { m with var_to_adt = ExprMap.add v e m.var_to_adt } in
+  let add_vars l m = { m with var_to_adt = ExprMap.add_list l m.var_to_adt } in
+  let add_expanded e m = { m with expanded = e :: m.expanded } in
+  let add_pattern_eqs (bound_adt : texpression) (pat : typed_pattern)
+      (env : simp_aggr_env) : simp_aggr_env =
+    (* Register the pattern - note that we may not be able to convert the
+       pattern to an expression if, for instance, it contains [_] *)
+    let pat_expr, env =
+      match typed_pattern_to_texpression span pat with
+      | Some pat_expr -> (Some pat_expr.e, add_expand bound_adt.e pat_expr.e env)
+      | None -> (None, env)
+    in
+    (* Register the fact that the scrutinee got expanded *)
+    let env = add_expanded bound_adt.e env in
+    (* Check if we are decomposing an ADT to introduce variables for its fields *)
+    match pat.value with
+    | PatAdt adt ->
+        (* Introduce a contraction *)
+        let env =
+          match pat_expr with
+          | Some pat_expr -> add_contract pat_expr bound_adt.e env
+          | None -> env
+        in
+        (* Check if the fields are all variables, and compute the tuple:
+           (variable introduced for the field, projection) *)
+        let fields = FieldId.mapi (fun id x -> (id, x)) adt.field_values in
+        let vars_to_projs =
+          Collections.List.filter_map
+            (fun ((fid, f) : _ * typed_pattern) ->
+              match f.value with
+              | PatVar (var, _) ->
+                  let proj = mk_adt_proj span bound_adt fid f.ty in
+                  let var = { e = Var var.id; ty = f.ty } in
+                  Some (var.e, proj.e)
+              | _ -> None)
+            fields
+        in
+        (* We register the various mappings *)
+        let env = add_contracts vars_to_projs env in
+        let env =
+          add_expands (List.map (fun (x, y) -> (y, x)) vars_to_projs) env
+        in
+        let env =
+          match pat_expr with
+          | None -> env
+          | Some pat_expr ->
+              add_vars
+                (List.map (fun (x, _) -> (x, pat_expr)) vars_to_projs)
+                env
+        in
+        env
+    | _ -> env
+  in
+
+  (* Recursively expand a value and its subvalues *)
+  let expand_expression simp_env (v : expression) : expression =
+    let visitor =
+      object
+        inherit [_] map_expression as super
+
+        method! visit_expression env e =
+          match get_expand e simp_env with
+          | None -> super#visit_expression env e
+          | Some e -> super#visit_expression env e
+      end
+    in
+    visitor#visit_expression () v
+  in
+
+  (* The visitor *)
+  let visitor =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_Switch env scrut switch =
+        log#ldebug
+          (lazy ("Visiting switch: " ^ switch_to_string ctx scrut switch));
+        (* Update the scrutinee *)
+        let scrut = self#visit_texpression env scrut in
+        let switch =
+          match switch with
+          | If (b0, b1) ->
+              (* Register the expansions:
+                 {[
+                   scrut -> true    (for the then branch)
+                   scrut -> false   (for the else branch)
+                 ]}
+              *)
+              let update v st =
+                self#visit_texpression
+                  (add_expand scrut.e (mk_bool_value v).e env)
+                  st
+              in
+              let b0 = update true b0 in
+              let b1 = update false b1 in
+              If (b0, b1)
+          | Match branches ->
+              let update_branch (b : match_branch) =
+                (* Register the information introduced by the patterns *)
+                let env = add_pattern_eqs scrut b.pat env in
+                { b with branch = self#visit_texpression env b.branch }
+              in
+              let branches = List.map update_branch branches in
+              Match branches
+        in
+        Switch (scrut, switch)
+
+      (* We need to detect patterns of the shape: [let (x, y) = t in ...] *)
+      method! visit_Let env monadic pat bound next =
+        (* Register the pattern if it is not a monadic let binding *)
+        let env = if monadic then env else add_pattern_eqs bound pat env in
+        (* Continue *)
+        super#visit_Let env monadic pat bound next
+
+      (* Update the ADT values *)
+      method! visit_texpression env e0 =
+        let e =
+          match e0.e with
+          | StructUpdate updt ->
+              log#ldebug
+                (lazy
+                  ("Visiting struct update: " ^ struct_update_to_string ctx updt));
+              (* Update the fields *)
+              let updt = super#visit_struct_update env updt in
+              (* Simplify *)
+              begin
+                match updt.init with
+                | None -> super#visit_StructUpdate env updt
+                | Some var_id ->
+                    let update_field ((fid, e) : field_id * texpression) :
+                        (field_id * texpression) option =
+                      (* Recursively expand the value of the field, to check if it is
+                         equal to the updated value: if it is the case, we can omit
+                         the update. *)
+                      let adt = { e = Var var_id; ty = e0.ty } in
+                      let field_value = mk_adt_proj span adt fid e.ty in
+                      let field_value = expand_expression env field_value.e in
+                      (* If this value is equal to the value we update the field
+                         with, we can simply ignore the update *)
+                      if field_value = expand_expression env e.e then (
+                        log#ldebug
+                          (lazy
+                            ("Simplifying field: " ^ texpression_to_string ctx e));
+                        None)
+                      else (
+                        log#ldebug
+                          (lazy
+                            ("Not simplifying field: "
+                            ^ texpression_to_string ctx e));
+                        Some (fid, e))
+                    in
+                    let updates = List.filter_map update_field updt.updates in
+                    if updates = [] then (
+                      let e1 = Var var_id in
+                      log#ldebug
+                        (lazy
+                          ("StructUpdate: "
+                          ^ texpression_to_string ctx e0
+                          ^ " ~~> "
+                          ^ texpression_to_string ctx { e0 with e = e1 }));
+                      e1)
+                    else
+                      let updt1 = { updt with updates } in
+                      log#ldebug
+                        (lazy
+                          ("StructUpdate: "
+                          ^ struct_update_to_string ctx updt
+                          ^ " ~~> "
+                          ^ struct_update_to_string ctx updt1));
+                      super#visit_StructUpdate env updt1
+              end
+          | App _ ->
+              log#ldebug
+                (lazy ("Visiting app: " ^ texpression_to_string ctx e0));
+              (* It may be an ADT expression (e.g., [Cons x y] or [(x, y)]):
+                 check if it is the case, and if it is, compute the expansion
+                 of all the values expanded so far, and see if exactly one of
+                 those is equal to the current expression *)
+              let e1 = super#visit_texpression env e0 in
+              let e1_exp = expand_expression env e1.e in
+              let f, _ = destruct_apps e1 in
+              if is_adt_cons f then
+                let expanded =
+                  List.filter_map
+                    (fun e ->
+                      let e' = expand_expression env e in
+                      if e1_exp = e' then Some e else None)
+                    env.expanded
+                in
+                begin
+                  match expanded with
+                  | [ e2 ] ->
+                      log#ldebug
+                        (lazy
+                          ("Simplified: "
+                          ^ texpression_to_string ctx e1
+                          ^ " ~~> "
+                          ^ texpression_to_string ctx { e1 with e = e2 }));
+                      e2
+                  | _ -> e1.e
+                end
+              else e1.e
+          | _ -> super#visit_expression env e0.e
+        in
+        { e0 with e }
+    end
+  in
+  let simplify (body : fun_body) : fun_body =
+    { body with body = visitor#visit_texpression empty_simp_aggr_env body.body }
+  in
+  { def with body = Option.map simplify def.body }
+
 (** Retrieve the loop definitions from the function definition.
 
     {!SymbolicToPure} generates an AST in which the loop bodies are part of
@@ -1957,6 +2262,10 @@ let end_passes :
        ]}
     *)
     (None, "simplify_aggregates", simplify_aggregates);
+    (* Simplify the aggregated ADTs further. *)
+    ( None,
+      "simplify_aggregates_unchanged_fields",
+      simplify_aggregates_unchanged_fields );
     (* Simplify the let-bindings - some simplifications may have been unlocked by
        the pass above (for instance, the lambda simplification) *)
     (None, "simplify_let_bindings", simplify_let_bindings);

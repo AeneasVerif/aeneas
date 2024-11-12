@@ -30,6 +30,10 @@ let symbolic_to_pure_log = L.get_logger "MainLogger.SymbolicToPure"
 (** Logger for PureMicroPasses *)
 let pure_micro_passes_log = L.get_logger "MainLogger.PureMicroPasses"
 
+(** Logger for PureMicroPasses.simplify_aggregates_unchanged_fields *)
+let simplify_aggregates_unchanged_fields_log =
+  L.get_logger "MainLogger.PureMicroPasses.simplify_aggregates_unchanged_fields"
+
 (** Logger for ExtractBase *)
 let extract_log = L.get_logger "MainLogger.ExtractBase"
 
