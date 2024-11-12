@@ -91,6 +91,18 @@ def Array.update_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: 
   | some _ =>
     ok ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
 
+def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
+  ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
+
+@[simp]
+theorem Array.update_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
+  (v.update i x).val = v.val.update i.toNat x := by
+  simp [update]
+
+@[scalar_tac v.update i x]
+theorem Array.update_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
+  (v.update i x).length = v.length := by simp
+
 @[pspec]
 theorem Array.update_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
   (hbound : i.toNat < v.length) :
@@ -105,14 +117,14 @@ theorem Array.update_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Us
   . simp_all
 
 def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
-  Result (α × (α -> Result (Array α n))) := do
+  Result (α × (α -> Array α n)) := do
   let x ← index_usize v i
-  ok (x, update_usize v i)
+  ok (x, update v i)
 
 @[pspec]
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.toNat < v.length) :
-  ∃ x, v.index_mut_usize i = ok (x, update_usize v i) ∧
+  ∃ x, v.index_mut_usize i = ok (x, update v i) ∧
   x = v.val.index i.toNat := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := index_usize_spec v i hbound
@@ -190,6 +202,18 @@ def Slice.update_usize {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (
   | some _ =>
     ok ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
 
+def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Slice α :=
+  ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
+
+@[simp]
+theorem Slice.update_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: α) :
+  (v.update i x) = v.val.update i.toNat x := by
+  simp [update]
+
+@[scalar_tac v.update i x]
+theorem Slice.update_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
+  (v.update i x).length = v.length := by simp
+
 @[pspec]
 theorem Slice.update_usize_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   (hbound : i.toNat < v.length) :
@@ -203,14 +227,14 @@ theorem Slice.update_usize_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   . simp_all
 
 def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
-  Result (α × (α → Result (Slice α))) := do
+  Result (α × (α → Slice α)) := do
   let x ← Slice.index_usize v i
-  ok (x, Slice.update_usize v i)
+  ok (x, Slice.update v i)
 
 @[pspec]
 theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
   (hbound : i.toNat < v.length) :
-  ∃ x, v.index_mut_usize i = ok (x, Slice.update_usize v i) ∧
+  ∃ x, v.index_mut_usize i = ok (x, Slice.update v i) ∧
   x = v.val.index i.toNat := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := Slice.index_usize_spec v i hbound
@@ -229,26 +253,25 @@ def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Result (Slice α
 theorem Array.to_slice_spec {α : Type u} {n : Usize} (v : Array α n) :
   ∃ s, to_slice v = ok s ∧ v.val = s.val := by simp [to_slice]
 
-def Array.from_slice {α : Type u} {n : Usize} (_ : Array α n) (s : Slice α) : Result (Array α n) :=
-  if h: s.val.length= n.val then
-    ok ⟨ s.val, by simp [*] ⟩
-  else fail panic
+def Array.from_slice {α : Type u} {n : Usize} (a : Array α n) (s : Slice α) : Array α n :=
+  if h: s.val.length = n.val then
+    ⟨ s.val, by simp [*] ⟩
+  else a -- Unreachable case
 
-@[pspec]
-theorem Array.from_slice_spec {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.length = n.val) :
-  ∃ na, from_slice a ns = ok na ∧ na.val = ns.val
+@[simp]
+theorem Array.from_slice_val {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.length = n.val) :
+  (from_slice a ns).val = ns.val
   := by simp [from_slice, *]
 
 def Array.to_slice_mut {α : Type u} {n : Usize} (a : Array α n) :
-  Result (Slice α × (Slice α → Result (Array α n))) := do
+  Result (Slice α × (Slice α → Array α n)) := do
   let s ← Array.to_slice a
   ok (s, Array.from_slice a)
 
 @[pspec]
 theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (v : Array α n) :
-  ∃ s back, to_slice_mut v = ok (s, back) ∧
-  v.val = s.val ∧
-  back = Array.from_slice v
+  ∃ s, to_slice_mut v = ok (s, Array.from_slice v) ∧
+  v.val = s.val
   := by simp [to_slice_mut, to_slice]
 
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
@@ -387,11 +410,11 @@ structure core.slice.index.SliceIndex (Self T : Type) where
   sealedInst : core.slice.index.private_slice_index.Sealed Self
   Output : Type
   get : Self → T → Result (Option Output)
-  get_mut : Self → T → Result (Option Output × (Option Output → Result T))
+  get_mut : Self → T → Result (Option Output × (Option Output → T))
   get_unchecked : Self → ConstRawPtr T → Result (ConstRawPtr Output)
   get_unchecked_mut : Self → MutRawPtr T → Result (MutRawPtr Output)
   index : Self → T → Result Output
-  index_mut : Self → T → Result (Output × (Output → Result T))
+  index_mut : Self → T → Result (Output × (Output → T))
 
 /- [core::slice::index::[T]::index]: forward function -/
 def core.slice.index.Slice.index
@@ -409,7 +432,7 @@ def core.slice.index.RangeUsize.get {T : Type} (i : Range Usize) (slice : Slice 
 
 /- [core::slice::index::Range::get_mut]: forward function -/
 def core.slice.index.RangeUsize.get_mut
-  {T : Type} : Range Usize → Slice T → Result (Option (Slice T) × (Option (Slice T) → Result (Slice T))) :=
+  {T : Type} : Range Usize → Slice T → Result (Option (Slice T) × (Option (Slice T) → Slice T)) :=
   sorry -- TODO
 
 /- [core::slice::index::Range::get_unchecked]: forward function -/
@@ -435,13 +458,13 @@ def core.slice.index.RangeUsize.index
 
 /- [core::slice::index::Range::index_mut]: forward function -/
 def core.slice.index.RangeUsize.index_mut
-  {T : Type} : Range Usize → Slice T → Result (Slice T × (Slice T → Result (Slice T))) :=
+  {T : Type} : Range Usize → Slice T → Result (Slice T × (Slice T → Slice T)) :=
   sorry -- TODO
 
 /- [core::slice::index::[T]::index_mut]: forward function -/
 def core.slice.index.Slice.index_mut
   {T I : Type} (inst : core.slice.index.SliceIndex I (Slice T)) :
-  Slice T → I → Result (inst.Output × (inst.Output → Result (Slice T))) :=
+  Slice T → I → Result (inst.Output × (inst.Output → Slice T)) :=
   sorry -- TODO
 
 /- [core::array::[T; N]::index]: forward function -/
@@ -454,7 +477,7 @@ def core.array.Array.index
 def core.array.Array.index_mut
   {T I : Type} {N : Usize} (inst : core.ops.index.IndexMut (Slice T) I)
   (a : Array T N) (i : I) :
-  Result (inst.indexInst.Output × (inst.indexInst.Output → Result (Array T N))) :=
+  Result (inst.indexInst.Output × (inst.indexInst.Output → Array T N)) :=
   sorry -- TODO
 
 /- Trait implementation: [core::slice::index::private_slice_index::Range] -/
@@ -514,7 +537,7 @@ def core.slice.index.Usize.get
 
 /- [core::slice::index::usize::get_mut]: forward function -/
 def core.slice.index.Usize.get_mut
-  {T : Type} : Usize → Slice T → Result (Option T × (Option T → Result (Slice T))) :=
+  {T : Type} : Usize → Slice T → Result (Option T × (Option T → Slice T)) :=
   sorry -- TODO
 
 /- [core::slice::index::usize::get_unchecked]: forward function -/
@@ -533,7 +556,7 @@ def core.slice.index.Usize.index {T : Type} : Usize → Slice T → Result T :=
 
 /- [core::slice::index::usize::index_mut]: forward function -/
 def core.slice.index.Usize.index_mut {T : Type} :
-  Usize → Slice T → Result (T × (T → Result (Slice T))) :=
+  Usize → Slice T → Result (T × (T → (Slice T))) :=
   sorry -- TODO
 
 /- Trait implementation: [core::slice::index::private_slice_index::usize] -/
