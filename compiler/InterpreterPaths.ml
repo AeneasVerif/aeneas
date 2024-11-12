@@ -102,18 +102,19 @@ let rec access_projection (span : Meta.span) (access : projection_access)
           sanity_check __FILE__ __LINE__ (opt_variant_id = adt.variant_id) span;
           (* Actually project *)
           let fv = FieldId.nth adt.field_values field_id in
-          let backward (ctx, res) =
+          let backward (ctx, updated) =
             (* Update the field value *)
             let nvalues =
-              FieldId.update_nth adt.field_values field_id res.updated
+              FieldId.update_nth adt.field_values field_id updated
             in
-            let nadt = VAdt { adt with field_values = nvalues } in
-            let updated = { v with value = nadt } in
-            Ok (ctx, { res with updated })
+            let value = VAdt { adt with field_values = nvalues } in
+            (ctx, { v with value })
           in
           match access_projection span access ctx update p' fv with
           | Error err -> Error err
-          | Ok (ctx, res) -> backward (ctx, res)
+          | Ok (ctx, res) ->
+              let ctx, updated = backward (ctx, res.updated) in
+              Ok (ctx, { res with updated })
         end
       (* Tuples *)
       | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> begin
@@ -121,19 +122,20 @@ let rec access_projection (span : Meta.span) (access : projection_access)
             (arity = List.length adt.field_values)
             span;
           let fv = FieldId.nth adt.field_values field_id in
-          let backward (ctx, res) =
+          let backward (ctx, updated) =
             (* Update the field value *)
             let nvalues =
-              FieldId.update_nth adt.field_values field_id res.updated
+              FieldId.update_nth adt.field_values field_id updated
             in
-            let ntuple = VAdt { adt with field_values = nvalues } in
-            let updated = { v with value = ntuple } in
-            Ok (ctx, { res with updated })
+            let value = VAdt { adt with field_values = nvalues } in
+            (ctx, { v with value })
           in
           (* Project *)
           match access_projection span access ctx update p' fv with
           | Error err -> Error err
-          | Ok (ctx, res) -> backward (ctx, res)
+          | Ok (ctx, res) ->
+              let ctx, updated = backward (ctx, res.updated) in
+              Ok (ctx, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *)
         end
@@ -152,19 +154,17 @@ let rec access_projection (span : Meta.span) (access : projection_access)
            * it shouldn't happen due to user code, and we leverage it
            * when implementing box dereferencement for the concrete
            * interpreter *)
-          let backward (ctx, res) =
-            let nv =
-              {
-                v with
-                value =
-                  VAdt { variant_id = None; field_values = [ res.updated ] };
-              }
+          let backward (ctx, updated) =
+            let value =
+              VAdt { variant_id = None; field_values = [ updated ] }
             in
-            Ok (ctx, { res with updated = nv })
+            (ctx, { v with value })
           in
           match access_projection span access ctx update p' bv with
           | Error err -> Error err
-          | Ok (ctx, res) -> backward (ctx, res)
+          | Ok (ctx, res) ->
+              let ctx, updated = backward (ctx, res.updated) in
+              Ok (ctx, { res with updated })
         end
       (* Borrows *)
       | Deref, VBorrow bc, _ ->
@@ -250,15 +250,15 @@ let rec access_projection (span : Meta.span) (access : projection_access)
               (* If we can enter shared loan, we ignore the loan. Pay attention
                  to the fact that we need to reexplore the *whole* place (i.e,
                  we mustn't ignore the current projection element *)
-              let backward (ctx, res) =
-                let nv =
-                  { v with value = VLoan (VSharedLoan (bids, res.updated)) }
-                in
-                Ok (ctx, { res with updated = nv })
+              let backward (ctx, updated) =
+                let value = VLoan (VSharedLoan (bids, updated)) in
+                (ctx, { v with value })
               in
               match access_projection span access ctx update (pe :: p') sv with
               | Error err -> Error err
-              | Ok (ctx, res) -> backward (ctx, res)
+              | Ok (ctx, res) ->
+                  let ctx, updated = backward (ctx, res.updated) in
+                  Ok (ctx, { res with updated })
             end
         end
       | _, VBottom, _ ->
