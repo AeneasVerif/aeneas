@@ -216,44 +216,29 @@ let rec project_value (span : Meta.span) (access : projection_access)
 
 (** Generic function to access (read/write) the value at the end of a projection.
 
-    We return the (eventually) updated value, the value we read at the end of
-    the place and the (eventually) updated environment.
-    
-    TODO: use exceptions?
+    We return the read value and a backward function that propagates any
+    changes to the projected value back to the original one.
  *)
 let rec access_projection (span : Meta.span) (access : projection_access)
-    (ctx : eval_ctx)
-    (* Function to (eventually) update the value we find *)
-      (update : typed_value -> typed_value)
-    (backward : eval_ctx * typed_value -> eval_ctx * typed_value)
-    (p : projection) (v : typed_value) :
-    (eval_ctx * typed_value) path_access_result =
+    (ctx : eval_ctx) (p : projection) (v : typed_value) :
+    (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
+    path_access_result =
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
   in
   match p with
-  | [] ->
-      let nv = update v in
-      (* Type checking *)
-      if nv.ty <> v.ty then (
-        log#ltrace
-          (lazy
-            ("Not the same type:\n- nv.ty: " ^ show_ety nv.ty ^ "\n- v.ty: "
-           ^ show_ety v.ty));
-        craise __FILE__ __LINE__ span
-          "Assertion failed: new value doesn't have the same type as its \
-           destination");
-      (* This updates the ctx with the updated value *)
-      let ctx, _ = backward (ctx, nv) in
-      (* Return the read value *)
-      Ok (ctx, v)
+  | [] -> Ok (v, Core.Fn.id)
   | pe :: p' -> begin
       match project_value span access ek (1 + List.length p') ctx pe v with
       | Error err -> Error err
-      | Ok (fv, new_back) ->
-          let backward = Core.Fn.compose backward new_back in
-          access_projection span access ctx update backward p' fv
+      | Ok (pv, new_back) -> begin
+          match access_projection span access ctx p' pv with
+          | Error err -> Error err
+          | Ok (v, backward) ->
+              let backward = Core.Fn.compose new_back backward in
+              Ok (v, backward)
+        end
     end
 
 (** Generic function to access (read/write) the value at a given place.
@@ -269,12 +254,23 @@ let access_place (span : Meta.span) (access : projection_access)
   (* Lookup the variable's value *)
   let value = ctx_lookup_var_value span ctx p.var_id in
   (* Apply the projection *)
-  let backward (ctx, updated) =
-    (* Update the value *)
-    let ctx = ctx_update_var_value span ctx p.var_id updated in
-    (ctx, updated)
-  in
-  access_projection span access ctx update backward p.projection value
+  match access_projection span access ctx p.projection value with
+  | Error err -> Error err
+  | Ok (v, backward) ->
+      let nv = update v in
+      (* Type checking *)
+      if nv.ty <> v.ty then (
+        log#ltrace
+          (lazy
+            ("Not the same type:\n- nv.ty: " ^ show_ety nv.ty ^ "\n- v.ty: "
+           ^ show_ety v.ty));
+        craise __FILE__ __LINE__ span
+          "Assertion failed: new value doesn't have the same type as its \
+           destination");
+      let ctx, updated = backward (ctx, nv) in
+      (* Update the ctx with the updated value *)
+      let ctx = ctx_update_var_value span ctx p.var_id updated in
+      Ok (ctx, v)
 
 type access_kind =
   | Read  (** We can go inside borrows and loans *)
