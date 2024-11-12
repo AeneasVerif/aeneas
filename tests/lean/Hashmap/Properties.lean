@@ -943,10 +943,8 @@ theorem insert_spec {α} (hm : HashMap α) (key : Usize) (value : α)
   split
   . split
     . simp_all (config := {maxDischargeDepth := 1})
-      tauto
     . progress as ⟨ hm2 ⟩
       simp_all (config := {maxDischargeDepth := 1})
-      tauto
   . simp_all (config := {maxDischargeDepth := 1})
 
 @[pspec]
