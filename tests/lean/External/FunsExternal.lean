@@ -12,5 +12,5 @@ def core.cell.Cell.get
 
 /- [core::cell::{core::cell::Cell<T>#11}::get_mut]: -/
 def core.cell.Cell.get_mut {T : Type} (c : core.cell.Cell T) (s : State) :
-  Result (State × (T × (T → State → Result (State × (core.cell.Cell T))))) :=
+  Result (State × (T × (T → State → State × (core.cell.Cell T)))) :=
   sorry

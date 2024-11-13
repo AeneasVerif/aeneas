@@ -65,7 +65,7 @@ decreasing_by simp_wf; scalar_tac
 
 theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
-  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
+  ∀ tl', ∃ l', back tl' = l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
   rw [list_tail]
   match l with
   | CNil =>
@@ -76,7 +76,6 @@ theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
     simp
     -- Proving the backward function
     intro tl'
-    progress
     simp_all
 
 end demo

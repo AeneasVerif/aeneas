@@ -17,22 +17,19 @@ inductive List (T : Type) :=
 /- [polonius_list::get_list_at_x]:
    Source: 'tests/src/polonius_list.rs', lines 16:0-30:1 -/
 divergent def get_list_at_x
-  (ls : List U32) (x : U32) :
-  Result ((List U32) × (List U32 → Result (List U32)))
-  :=
+  (ls : List U32) (x : U32) : Result ((List U32) × (List U32 → List U32)) :=
   match ls with
   | List.Cons hd tl =>
     if hd = x
-    then Result.ok (ls, Result.ok)
+    then let back := fun ret => ret
+         Result.ok (ls, back)
     else
       do
       let (l, get_list_at_x_back) ← get_list_at_x tl x
-      let back :=
-        fun ret =>
-          do
-          let tl1 ← get_list_at_x_back ret
-          Result.ok (List.Cons hd tl1)
+      let back := fun ret => let tl1 := get_list_at_x_back ret
+                             List.Cons hd tl1
       Result.ok (l, back)
-  | List.Nil => Result.ok (List.Nil, Result.ok)
+  | List.Nil => let back := fun ret => ret
+                Result.ok (List.Nil, back)
 
 end polonius_list

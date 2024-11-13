@@ -121,18 +121,30 @@ theorem Vec.update_usize_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   . simp_all [length]; scalar_tac
   . simp_all
 
+def Vec.update {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
+  ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
+
+@[simp]
+theorem Vec.update_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: α) :
+  (v.update i x).val = v.val.update i.toNat x := by
+  simp [update]
+
+@[scalar_tac v.update i x]
+theorem Vec.update_length {α : Type u} (v: Vec α) (i: Usize) (x: α) :
+  (v.update i x).length = v.length := by simp
+
 def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
-  Result (α × (α → Result (Vec α))) :=
+  Result (α × (α → Vec α)) :=
   match Vec.index_usize v i with
   | ok x =>
-    ok (x, Vec.update_usize v i)
+    ok (x, Vec.update v i)
   | fail e => fail e
   | div => div
 
 @[pspec]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_mut_usize i = ok (x, v.update_usize i) ∧
+  ∃ x, v.index_mut_usize i = ok (x, v.update i) ∧
   x = v.val.index i.toNat
   := by
   simp only [index_mut_usize]
@@ -147,7 +159,7 @@ def Vec.index {T I : Type} (inst : core.slice.index.SliceIndex I (Slice T))
 /- [alloc::vec::Vec::index_mut]: forward function -/
 def Vec.index_mut {T I : Type} (inst : core.slice.index.SliceIndex I (Slice T))
   (self : Vec T) (i : I) :
-  Result (inst.Output × (inst.Output → Result (Vec T))) :=
+  Result (inst.Output × (inst.Output → Vec T)) :=
   sorry -- TODO
 
 /- Trait implementation: [alloc::vec::Vec] -/
@@ -210,8 +222,8 @@ def core.ops.deref.DerefVec {T : Type} : core.ops.deref.Deref (alloc.vec.Vec T) 
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2632:4-2632:39
    Name pattern: alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>>}::deref_mut -/
 def alloc.vec.DerefMutVec.deref_mut {T : Type} (v :  alloc.vec.Vec T) :
-   Result ((Slice T) × (Slice T → Result (alloc.vec.Vec T))) :=
-   ok (⟨ v.val, v.property ⟩, λ s => ok ⟨ s.val, s.property ⟩)
+   Result ((Slice T) × (Slice T → alloc.vec.Vec T)) :=
+   ok (⟨ v.val, v.property ⟩, λ s => ⟨ s.val, s.property ⟩)
 
 /- Trait implementation: [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}]
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2630:0-2630:49

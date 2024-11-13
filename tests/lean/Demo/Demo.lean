@@ -11,13 +11,11 @@ namespace demo
 /- [demo::choose]:
    Source: 'tests/src/demo.rs', lines 7:0-13:1 -/
 def choose
-  {T : Type} (b : Bool) (x : T) (y : T) :
-  Result (T × (T → Result (T × T)))
-  :=
+  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) :=
   if b
-  then let back := fun ret => Result.ok (ret, y)
+  then let back := fun ret => (ret, y)
        Result.ok (x, back)
-  else let back := fun ret => Result.ok (x, ret)
+  else let back := fun ret => (x, ret)
        Result.ok (y, back)
 
 /- [demo::mul2_add1]:
@@ -87,24 +85,18 @@ def list_nth1 {T : Type} (l : CList T) (i : U32) : Result T :=
 /- [demo::list_nth_mut]:
    Source: 'tests/src/demo.rs', lines 67:0-80:1 -/
 divergent def list_nth_mut
-  {T : Type} (l : CList T) (i : U32) :
-  Result (T × (T → Result (CList T)))
-  :=
+  {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
-    then
-      let back := fun ret => Result.ok (CList.CCons ret tl)
-      Result.ok (x, back)
+    then let back := fun ret => CList.CCons ret tl
+         Result.ok (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, list_nth_mut_back) ← list_nth_mut tl i1
-      let back :=
-        fun ret =>
-          do
-          let tl1 ← list_nth_mut_back ret
-          Result.ok (CList.CCons x tl1)
+      let back := fun ret => let tl1 := list_nth_mut_back ret
+                             CList.CCons x tl1
       Result.ok (t, back)
   | CList.CNil => Result.fail .panic
 
@@ -121,20 +113,16 @@ divergent def i32_id (i : I32) : Result I32 :=
 /- [demo::list_tail]:
    Source: 'tests/src/demo.rs', lines 90:0-95:1 -/
 divergent def list_tail
-  {T : Type} (l : CList T) :
-  Result ((CList T) × (CList T → Result (CList T)))
-  :=
+  {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) :=
   match l with
   | CList.CCons t tl =>
     do
     let (c, list_tail_back) ← list_tail tl
-    let back :=
-      fun ret =>
-        do
-        let tl1 ← list_tail_back ret
-        Result.ok (CList.CCons t tl1)
+    let back := fun ret => let tl1 := list_tail_back ret
+                           CList.CCons t tl1
     Result.ok (c, back)
-  | CList.CNil => Result.ok (CList.CNil, Result.ok)
+  | CList.CNil => let back := fun ret => ret
+                  Result.ok (CList.CNil, back)
 
 /- Trait declaration: [demo::Counter]
    Source: 'tests/src/demo.rs', lines 99:0-101:1 -/

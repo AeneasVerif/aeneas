@@ -8,12 +8,10 @@ open Primitives
 (** [demo::choose]:
     Source: 'tests/src/demo.rs', lines 7:0-13:1 *)
 let choose
-  (#t : Type0) (b : bool) (x : t) (y : t) :
-  result (t & (t -> result (t & t)))
-  =
+  (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
   if b
-  then let back = fun ret -> Ok (ret, y) in Ok (x, back)
-  else let back = fun ret -> Ok (x, ret) in Ok (y, back)
+  then let back = fun ret -> (ret, y) in Ok (x, back)
+  else let back = fun ret -> (x, ret) in Ok (y, back)
 
 (** [demo::mul2_add1]:
     Source: 'tests/src/demo.rs', lines 15:0-17:1 *)
@@ -77,7 +75,7 @@ let list_nth1 (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
     Source: 'tests/src/demo.rs', lines 67:0-80:1 *)
 let rec list_nth_mut
   (#t : Type0) (n : nat) (l : cList_t t) (i : u32) :
-  result (t & (t -> result (cList_t t)))
+  result (t & (t -> cList_t t))
   =
   if is_zero n
   then Fail OutOfFuel
@@ -86,13 +84,12 @@ let rec list_nth_mut
     begin match l with
     | CList_CCons x tl ->
       if i = 0
-      then let back = fun ret -> Ok (CList_CCons ret tl) in Ok (x, back)
+      then let back = fun ret -> CList_CCons ret tl in Ok (x, back)
       else
         let* i1 = u32_sub i 1 in
         let* (x1, list_nth_mut_back) = list_nth_mut n1 tl i1 in
         let back =
-          fun ret -> let* tl1 = list_nth_mut_back ret in Ok (CList_CCons x tl1)
-          in
+          fun ret -> let tl1 = list_nth_mut_back ret in CList_CCons x tl1 in
         Ok (x1, back)
     | CList_CNil -> Fail Failure
     end
@@ -112,7 +109,7 @@ let rec i32_id (n : nat) (i : i32) : result i32 =
     Source: 'tests/src/demo.rs', lines 90:0-95:1 *)
 let rec list_tail
   (#t : Type0) (n : nat) (l : cList_t t) :
-  result ((cList_t t) & (cList_t t -> result (cList_t t)))
+  result ((cList_t t) & (cList_t t -> cList_t t))
   =
   if is_zero n
   then Fail OutOfFuel
@@ -121,10 +118,10 @@ let rec list_tail
     begin match l with
     | CList_CCons x tl ->
       let* (c, list_tail_back) = list_tail n1 tl in
-      let back =
-        fun ret -> let* tl1 = list_tail_back ret in Ok (CList_CCons x tl1) in
+      let back = fun ret -> let tl1 = list_tail_back ret in CList_CCons x tl1
+        in
       Ok (c, back)
-    | CList_CNil -> Ok (CList_CNil, Ok)
+    | CList_CNil -> let back = fun ret -> ret in Ok (CList_CNil, back)
     end
 
 (** Trait declaration: [demo::Counter]

@@ -603,7 +603,7 @@ Record core_ops_index_IndexMut (Self Idx : Type) := mk_core_ops_index_IndexMut {
     Self ->
     Idx ->
     result (core_ops_index_IndexMut_indexInst.(core_ops_index_Index_Output) *
-            (core_ops_index_IndexMut_indexInst.(core_ops_index_Index_Output) -> result Self));
+            (core_ops_index_IndexMut_indexInst.(core_ops_index_Index_Output) -> Self));
 }.
 Arguments mk_core_ops_index_IndexMut {_ _}.
 Arguments core_ops_index_IndexMut_indexInst {_ _}.
@@ -624,7 +624,7 @@ Record core_ops_deref_DerefMut (Self : Type) := mk_core_ops_deref_DerefMut {
   core_ops_deref_DerefMut_deref_mut :
     Self ->
     result (core_ops_deref_DerefMut_derefInst.(core_ops_deref_Deref_target) *
-            (core_ops_deref_DerefMut_derefInst.(core_ops_deref_Deref_target) -> result Self));
+            (core_ops_deref_DerefMut_derefInst.(core_ops_deref_Deref_target) -> Self));
 }.
 Arguments mk_core_ops_deref_DerefMut {_}.
 Arguments core_ops_deref_DerefMut_derefInst {_}.
@@ -641,8 +641,8 @@ Arguments core_ops_range_Range_end_ {_}.
 (*** [alloc] *)
 
 Definition alloc_boxed_Box_deref {T : Type} (x : T) : result T := Ok x.
-Definition alloc_boxed_Box_deref_mut {T : Type} (x : T) : result (T * (T -> result T)) :=
-  Ok (x, fun x => Ok x).
+Definition alloc_boxed_Box_deref_mut {T : Type} (x : T) : result (T * (T -> T)) :=
+  Ok (x, fun x => x).
 
 (* Trait instance *)
 Definition alloc_boxed_Box_coreopsDerefInst (Self : Type) : core_ops_deref_Deref Self := {|
@@ -680,12 +680,13 @@ Axiom array_repeat : forall {T : Type} (n : usize) (x : T), array T n.
 
 Axiom array_index_usize : forall {T : Type} {n : usize} (x : array T n) (i : usize), result T.
 Axiom array_update_usize : forall {T : Type} {n : usize} (x : array T n) (i : usize) (nx : T), result (array T n).
+Axiom array_update : forall {T : Type} {n : usize} (x : array T n) (i : usize) (nx : T), array T n.
 
 Definition array_index_mut_usize {T : Type} {n : usize} (a : array T n) (i : usize) :
-  result (T * (T -> result (array T n))) :=
+  result (T * (T -> array T n)) :=
   match array_index_usize a i with
   | Fail_ e => Fail_ e
-  | Ok x => Ok (x, array_update_usize a i)
+  | Ok x => Ok (x, array_update a i)
   end.
 
 (*** Slice *)
@@ -694,21 +695,22 @@ Definition slice T := { l: list T | Z.of_nat (length l) <= usize_max}.
 Axiom slice_len : forall {T : Type} (s : slice T), usize.
 Axiom slice_index_usize : forall {T : Type} (x : slice T) (i : usize), result T.
 Axiom slice_update_usize : forall {T : Type} (x : slice T) (i : usize) (nx : T), result (slice T).
+Axiom slice_update : forall {T : Type} (x : slice T) (i : usize) (nx : T), slice T.
 
 Definition slice_index_mut_usize {T : Type} (s : slice T) (i : usize) :
-  result (T * (T -> result (slice T))) :=
+  result (T * (T -> slice T)) :=
   match slice_index_usize s i with
   | Fail_ e => Fail_ e
-  | Ok x => Ok (x, slice_update_usize s i)
+  | Ok x => Ok (x, slice_update s i)
   end.
 
 (*** Subslices *)
 
 Axiom array_to_slice : forall {T : Type} {n : usize} (x : array T n), result (slice T).
-Axiom array_from_slice : forall {T : Type} {n : usize} (x : array T n) (s : slice T), result (array T n).
+Axiom array_from_slice : forall {T : Type} {n : usize} (x : array T n) (s : slice T), array T n.
 
 Definition array_to_slice_mut {T : Type} {n : usize} (a : array T n) :
-  result (slice T * (slice T -> result (array T n))) :=
+  result (slice T * (slice T -> array T n)) :=
   match array_to_slice a with
   | Fail_ e => Fail_ e
   | Ok x => Ok (x, array_from_slice a)
@@ -771,12 +773,13 @@ Axiom alloc_vec_Vec_index_usize : forall {T : Type} (v : alloc_vec_Vec T) (i : u
 
 (* Helper *)
 Axiom alloc_vec_Vec_update_usize : forall {T : Type} (v : alloc_vec_Vec T) (i : usize) (x : T), result (alloc_vec_Vec T).
+Axiom alloc_vec_Vec_update : forall {T : Type} (v : alloc_vec_Vec T) (i : usize) (x : T), alloc_vec_Vec T.
 
 Definition alloc_vec_Vec_index_mut_usize {T : Type} (v: alloc_vec_Vec T) (i: usize) :
-  result (T * (T -> result (alloc_vec_Vec T))) :=
+  result (T * (T -> alloc_vec_Vec T)) :=
   match alloc_vec_Vec_index_usize v i with
   | Ok x =>
-    Ok (x, alloc_vec_Vec_update_usize v i)
+    Ok (x, alloc_vec_Vec_update v i)
   | Fail_ e => Fail_ e
   end.
 
@@ -789,12 +792,12 @@ Record core_slice_index_SliceIndex (Self T : Type) := mk_core_slice_index_SliceI
   core_slice_index_SliceIndex_Output : Type;
   core_slice_index_SliceIndex_get : Self -> T -> result (option core_slice_index_SliceIndex_Output);
   core_slice_index_SliceIndex_get_mut :
-    Self -> T -> result (option core_slice_index_SliceIndex_Output * (option core_slice_index_SliceIndex_Output -> result T));
+    Self -> T -> result (option core_slice_index_SliceIndex_Output * (option core_slice_index_SliceIndex_Output -> T));
   core_slice_index_SliceIndex_get_unchecked : Self -> const_raw_ptr T -> result (const_raw_ptr core_slice_index_SliceIndex_Output);
   core_slice_index_SliceIndex_get_unchecked_mut : Self -> mut_raw_ptr T -> result (mut_raw_ptr core_slice_index_SliceIndex_Output);
   core_slice_index_SliceIndex_index : Self -> T -> result core_slice_index_SliceIndex_Output;
   core_slice_index_SliceIndex_index_mut :
-    Self -> T -> result (core_slice_index_SliceIndex_Output * (core_slice_index_SliceIndex_Output -> result T));
+    Self -> T -> result (core_slice_index_SliceIndex_Output * (core_slice_index_SliceIndex_Output -> T));
 }.
 Arguments mk_core_slice_index_SliceIndex {_ _}.
 Arguments core_slice_index_SliceIndex_sealedInst {_ _}.
@@ -823,7 +826,7 @@ Axiom core_slice_index_RangeUsize_get : forall {T : Type} (i : core_ops_range_Ra
 Axiom core_slice_index_RangeUsize_get_mut :
   forall {T : Type},
     core_ops_range_Range usize -> slice T ->
-    result (option (slice T) * (option (slice T) -> result (slice T))).
+    result (option (slice T) * (option (slice T) -> slice T)).
 
 (* [core::slice::index::Range::get_unchecked]: forward function *)
 Definition core_slice_index_RangeUsize_get_unchecked
@@ -847,14 +850,14 @@ Axiom core_slice_index_RangeUsize_index :
 
 (* [core::slice::index::Range::index_mut]: forward function *)
 Axiom core_slice_index_RangeUsize_index_mut :
-  forall {T : Type}, core_ops_range_Range usize -> slice T -> result (slice T * (slice T -> result (slice T))).
+  forall {T : Type}, core_ops_range_Range usize -> slice T -> result (slice T * (slice T -> slice T)).
 
 (* [core::slice::index::[T]::index_mut]: forward function *)
 Axiom core_slice_index_Slice_index_mut :
   forall {T Idx : Type} (inst : core_slice_index_SliceIndex Idx (slice T)),
   slice T -> Idx ->
   result (inst.(core_slice_index_SliceIndex_Output) *
-          (inst.(core_slice_index_SliceIndex_Output) -> result (slice T))).
+          (inst.(core_slice_index_SliceIndex_Output) -> slice T)).
 
 (* [core::array::[T; N]::index]: forward function *)
 Axiom core_array_Array_index :
@@ -866,7 +869,7 @@ Axiom core_array_Array_index_mut :
   forall {T Idx : Type} {N : usize} (inst : core_ops_index_IndexMut (slice T) Idx)
   (a : array T N) (i : Idx),
   result (inst.(core_ops_index_IndexMut_indexInst).(core_ops_index_Index_Output) *
-          (inst.(core_ops_index_IndexMut_indexInst).(core_ops_index_Index_Output) -> result (array T N))).
+          (inst.(core_ops_index_IndexMut_indexInst).(core_ops_index_Index_Output) -> array T N)).
 
 (* Trait implementation: [core::slice::index::private_slice_index::Range] *)
 Definition core_slice_index_private_slice_index_SealedRangeUsizeInst
@@ -922,7 +925,7 @@ Axiom core_slice_index_usize_get : forall {T : Type}, usize -> slice T -> result
 
 (* [core::slice::index::usize::get_mut]: forward function *)
 Axiom core_slice_index_usize_get_mut :
-  forall {T : Type}, usize -> slice T -> result (option T * (option T -> result (slice T))).
+  forall {T : Type}, usize -> slice T -> result (option T * (option T -> slice T)).
 
 (* [core::slice::index::usize::get_unchecked]: forward function *)
 Axiom core_slice_index_usize_get_unchecked :
@@ -937,7 +940,7 @@ Axiom core_slice_index_usize_index : forall {T : Type}, usize -> slice T -> resu
 
 (* [core::slice::index::usize::index_mut]: forward function *)
 Axiom core_slice_index_usize_index_mut :
-  forall {T : Type}, usize -> slice T -> result (T * (T -> result (slice T))).
+  forall {T : Type}, usize -> slice T -> result (T * (T -> slice T)).
 
 (* Trait implementation: [core::slice::index::private_slice_index::usize] *)
 Definition core_slice_index_private_slice_index_SealedUsizeInst
@@ -964,7 +967,7 @@ Axiom alloc_vec_Vec_index : forall {T Idx : Type} (inst : core_slice_index_Slice
 Axiom alloc_vec_Vec_index_mut : forall {T Idx : Type} (inst : core_slice_index_SliceIndex Idx (slice T))
   (Self : alloc_vec_Vec T) (i : Idx),
   result (inst.(core_slice_index_SliceIndex_Output) *
-          (inst.(core_slice_index_SliceIndex_Output) -> result (alloc_vec_Vec T))).
+          (inst.(core_slice_index_SliceIndex_Output) -> alloc_vec_Vec T)).
 
 (* Trait implementation: [alloc::vec::Vec] *)
 Definition alloc_vec_Vec_coreopsindexIndexInst {T Idx : Type}

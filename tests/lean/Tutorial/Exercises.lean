@@ -563,7 +563,7 @@ divergent def zero_loop
       alloc.vec.Vec.index_mut
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i2 ← i + 1#usize
-    let x1 ← index_mut_back 0#u32
+    let x1 := index_mut_back 0#u32
     zero_loop x1 i2
   else Result.ok x
 
@@ -662,7 +662,7 @@ divergent def add_no_overflow_loop
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i4 ← i3 + i2
     let i5 ← i + 1#usize
-    let x1 ← index_mut_back i4
+    let x1 := index_mut_back i4
     add_no_overflow_loop x1 y i5
   else Result.ok x
 
@@ -763,7 +763,7 @@ divergent def add_with_carry_loop
       alloc.vec.Vec.index_mut
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i7 ← i + 1#usize
-    let x1 ← index_mut_back sum1
+    let x1 := index_mut_back sum1
     add_with_carry_loop x1 y c01 i7
   else Result.ok (c0, x)
 
@@ -848,7 +848,7 @@ divergent def add_loop
       alloc.vec.Vec.index_mut
         (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i5 ← i + 1#usize
-    let x1 ← index_mut_back sum1
+    let x1 := index_mut_back sum1
     add_loop x1 y max1 c01 i5
   else
     if c0 != 0#u8

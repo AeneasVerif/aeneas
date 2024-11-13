@@ -22,20 +22,21 @@ Arguments List_Nil { _ }.
     Source: 'tests/src/polonius_list.rs', lines 16:0-30:1 *)
 Fixpoint get_list_at_x
   (ls : List_t u32) (x : u32) :
-  result ((List_t u32) * (List_t u32 -> result (List_t u32)))
+  result ((List_t u32) * (List_t u32 -> List_t u32))
   :=
   match ls with
   | List_Cons hd tl =>
     if hd s= x
-    then Ok (ls, Ok)
+    then let back := fun (ret : List_t u32) => ret in Ok (ls, back)
     else (
       p <- get_list_at_x tl x;
       let (l, get_list_at_x_back) := p in
       let back :=
         fun (ret : List_t u32) =>
-          tl1 <- get_list_at_x_back ret; Ok (List_Cons hd tl1) in
+          let tl1 := get_list_at_x_back ret in List_Cons hd tl1 in
       Ok (l, back))
-  | List_Nil => Ok (List_Nil, Ok)
+  | List_Nil =>
+    let back := fun (ret : List_t u32) => ret in Ok (List_Nil, back)
   end
 .
 

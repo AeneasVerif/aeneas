@@ -27,6 +27,6 @@ let incr
   =
   let* (st1, (i, get_mut_back)) = core_cell_Cell_get_mut rc st in
   let* i1 = u32_add i 1 in
-  let* (_, rc1) = get_mut_back i1 st1 in
+  let (_, rc1) = get_mut_back i1 st1 in
   Ok (st1, rc1)
 

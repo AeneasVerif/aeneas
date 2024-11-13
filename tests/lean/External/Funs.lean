@@ -32,7 +32,7 @@ def incr
   do
   let (st1, (i, get_mut_back)) ← core.cell.Cell.get_mut rc st
   let i1 ← i + 1#u32
-  let (_, rc1) ← get_mut_back i1 st1
+  let (_, rc1) := get_mut_back i1 st1
   Result.ok (st1, rc1)
 
 end external

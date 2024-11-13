@@ -147,7 +147,7 @@ Check (test_list1)%return.
 Definition test_box1 : result unit :=
   p <- alloc_boxed_Box_deref_mut 0%i32;
   let (_, deref_mut_back) := p in
-  b <- deref_mut_back 1%i32;
+  let b := deref_mut_back 1%i32 in
   x <- alloc_boxed_Box_deref b;
   if x s= 1%i32 then Ok tt else Fail_ Failure
 .
@@ -222,10 +222,10 @@ Check (test_split_list)%return.
 (** [no_nested_borrows::choose]:
     Source: 'tests/src/no_nested_borrows.rs', lines 202:0-208:1 *)
 Definition choose
-  {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> result (T * T))) :=
+  {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> (T * T))) :=
   if b
-  then let back := fun (ret : T) => Ok (ret, y) in Ok (x, back)
-  else let back := fun (ret : T) => Ok (x, ret) in Ok (y, back)
+  then let back := fun (ret : T) => (ret, y) in Ok (x, back)
+  else let back := fun (ret : T) => (x, ret) in Ok (y, back)
 .
 
 (** [no_nested_borrows::choose_test]:
@@ -235,12 +235,11 @@ Definition choose_test : result unit :=
   let (z, choose_back) := p in
   z1 <- i32_add z 1%i32;
   if z1 s= 1%i32
-  then (
-    p1 <- choose_back z1;
-    let (x, y) := p1 in
+  then
+    let (x, y) := choose_back z1 in
     if x s= 1%i32
     then if y s= 0%i32 then Ok tt else Fail_ Failure
-    else Fail_ Failure)
+    else Fail_ Failure
   else Fail_ Failure
 .
 
@@ -298,19 +297,17 @@ Fixpoint list_nth_shared {T : Type} (l : List_t T) (i : u32) : result T :=
 (** [no_nested_borrows::list_nth_mut]:
     Source: 'tests/src/no_nested_borrows.rs', lines 296:0-309:1 *)
 Fixpoint list_nth_mut
-  {T : Type} (l : List_t T) (i : u32) :
-  result (T * (T -> result (List_t T)))
-  :=
+  {T : Type} (l : List_t T) (i : u32) : result (T * (T -> List_t T)) :=
   match l with
   | List_Cons x tl =>
     if i s= 0%u32
-    then let back := fun (ret : T) => Ok (List_Cons ret tl) in Ok (x, back)
+    then let back := fun (ret : T) => List_Cons ret tl in Ok (x, back)
     else (
       i1 <- u32_sub i 1%u32;
       p <- list_nth_mut tl i1;
       let (t, list_nth_mut_back) := p in
       let back :=
-        fun (ret : T) => tl1 <- list_nth_mut_back ret; Ok (List_Cons x tl1) in
+        fun (ret : T) => let tl1 := list_nth_mut_back ret in List_Cons x tl1 in
       Ok (t, back))
   | List_Nil => Fail_ Failure
   end
@@ -351,7 +348,7 @@ Definition test_list_functions : result unit :=
         then (
           p <- list_nth_mut (List_Cons 0%i32 l1) 1%u32;
           let (_, list_nth_mut_back) := p in
-          ls <- list_nth_mut_back 3%i32;
+          let ls := list_nth_mut_back 3%i32 in
           i4 <- list_nth_shared ls 0%u32;
           if i4 s= 0%i32
           then (
@@ -375,36 +372,41 @@ Check (test_list_functions)%return.
     Source: 'tests/src/no_nested_borrows.rs', lines 347:0-349:1 *)
 Definition id_mut_pair1
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
-  result ((T1 * T2) * ((T1 * T2) -> result (T1 * T2)))
+  result ((T1 * T2) * ((T1 * T2) -> (T1 * T2)))
   :=
-  Ok ((x, y), Ok)
+  let back := fun (ret : (T1 * T2)) => ret in Ok ((x, y), back)
 .
 
 (** [no_nested_borrows::id_mut_pair2]:
     Source: 'tests/src/no_nested_borrows.rs', lines 351:0-353:1 *)
 Definition id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
-  result ((T1 * T2) * ((T1 * T2) -> result (T1 * T2)))
+  result ((T1 * T2) * ((T1 * T2) -> (T1 * T2)))
   :=
-  let (t, t1) := p in Ok (p, Ok)
+  let (t, t1) := p in let back := fun (ret : (T1 * T2)) => ret in Ok (p, back)
 .
 
 (** [no_nested_borrows::id_mut_pair3]:
     Source: 'tests/src/no_nested_borrows.rs', lines 355:0-357:1 *)
 Definition id_mut_pair3
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
-  result ((T1 * T2) * (T1 -> result T1) * (T2 -> result T2))
+  result ((T1 * T2) * (T1 -> T1) * (T2 -> T2))
   :=
-  Ok ((x, y), Ok, Ok)
+  let back'a := fun (ret : T1) => ret in
+  let back'b := fun (ret : T2) => ret in
+  Ok ((x, y), back'a, back'b)
 .
 
 (** [no_nested_borrows::id_mut_pair4]:
     Source: 'tests/src/no_nested_borrows.rs', lines 359:0-361:1 *)
 Definition id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
-  result ((T1 * T2) * (T1 -> result T1) * (T2 -> result T2))
+  result ((T1 * T2) * (T1 -> T1) * (T2 -> T2))
   :=
-  let (t, t1) := p in Ok (p, Ok, Ok)
+  let (t, t1) := p in
+  let back'a := fun (ret : T1) => ret in
+  let back'b := fun (ret : T2) => ret in
+  Ok (p, back'a, back'b)
 .
 
 (** [no_nested_borrows::StructWithTuple]
