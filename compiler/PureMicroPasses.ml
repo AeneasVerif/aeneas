@@ -250,14 +250,14 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     | None -> (
         match VarId.Map.find_opt v.id ctx.pure_vars with
         | Some basename -> { v with basename = Some basename }
-        | None ->
-            if Option.is_some mp then
-              match
-                E.VarId.Map.find_opt (Option.get mp).var_id ctx.llbc_vars
-              with
-              | None -> v
-              | Some basename -> { v with basename = Some basename }
-            else v)
+        | None -> (
+            match mp with
+            | None -> v
+            | Some mp -> (
+                let var_id, _, _ = decompose_mplace mp in
+                match E.VarId.Map.find_opt var_id ctx.llbc_vars with
+                | None -> v
+                | Some basename -> { v with basename = Some basename })))
   in
   (* Update an pattern - used to update an expression after we computed constraints *)
   let update_typed_pattern ctx (lv : typed_pattern) : typed_pattern =
@@ -272,9 +272,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
 
   (* Register an mplace the first time we find one *)
   let register_mplace (mp : mplace) (ctx : pn_ctx) : pn_ctx =
-    match (E.VarId.Map.find_opt mp.var_id ctx.llbc_vars, mp.name) with
+    let var_id, name, _ = decompose_mplace mp in
+    match (E.VarId.Map.find_opt var_id ctx.llbc_vars, name) with
     | None, Some name ->
-        let llbc_vars = E.VarId.Map.add mp.var_id name ctx.llbc_vars in
+        let llbc_vars = E.VarId.Map.add var_id name ctx.llbc_vars in
         { ctx with llbc_vars }
     | _ -> ctx
   in
@@ -304,11 +305,11 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
     (* Update the variable name *)
-    match (mp.name, mp.projection) with
-    | Some name, [] ->
+    match decompose_mplace mp with
+    | mp_var_id, Some name, [] ->
         (* Check if the variable already has a name - if not: insert the new name *)
         let ctx = add_pure_var_constraint var_id name ctx in
-        let ctx = add_llbc_var_constraint mp.var_id name ctx in
+        let ctx = add_llbc_var_constraint mp_var_id name ctx in
         ctx
     | _ -> ctx
   in
@@ -386,18 +387,21 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             (* Add the constraint for the LLBC variable *)
             match lmp with
             | None -> ctx
-            | Some lmp -> add_llbc_var_constraint lmp.var_id name ctx
+            | Some lmp ->
+                let var_id, _, _ = decompose_mplace lmp in
+                add_llbc_var_constraint var_id name ctx
           in
           (* We try to use the right-place information *)
           let rmp, re = opt_unspan_mplace re in
           let ctx =
             match rmp with
-            | Some { var_id; name; projection = [] } -> (
+            | Some (PlaceBase (var_id, name)) ->
                 if Option.is_some name then add (Option.get name) ctx
-                else
+                else begin
                   match E.VarId.Map.find_opt var_id ctx.llbc_vars with
                   | None -> ctx
-                  | Some name -> add name ctx)
+                  | Some name -> add name ctx
+                end
             | _ -> ctx
           in
           (* We try to use the rvalue information, if it is a variable *)
@@ -541,8 +545,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Assignment (mp, rvalue, rmp) ->
           let ctx = add_right_constraint mp rvalue ctx in
           let ctx =
-            match (mp.projection, rmp) with
-            | [], Some { var_id; name; projection = [] } -> (
+            match (mp, rmp) with
+            | PlaceBase (mp_var_id, _), Some (PlaceBase (var_id, name)) -> (
                 let name =
                   match name with
                   | Some name -> Some name
@@ -550,7 +554,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
                 in
                 match name with
                 | None -> ctx
-                | Some name -> add_llbc_var_constraint mp.var_id name ctx)
+                | Some name -> add_llbc_var_constraint mp_var_id name ctx)
             | _ -> ctx
           in
           ctx

@@ -17,15 +17,13 @@ open LlbcAst
     We later use this place information to generate meaningful name, to prettify
     the generated code.
  *)
-type mplace = {
-  bv : Contexts.var_binder;
+type mplace =
+  | PlaceBase of Contexts.var_binder
       (** It is important that we store the binder, and not just the variable id,
           because the most important information in a place is the name of the
           variable!
        *)
-  projection : projection_elem list;
-      (** We store the projection because we can, but it is actually not that useful *)
-}
+  | PlaceProjection of mplace * projection_elem
 [@@deriving show]
 
 type call_id =

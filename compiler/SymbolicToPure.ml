@@ -1900,15 +1900,16 @@ let translate_mprojection_elem (pe : E.projection_elem) :
   | Deref -> None
   | Field (pkind, field_id) -> Some { pkind; field_id }
 
-let translate_mprojection (p : E.projection_elem list) : mprojection =
-  List.filter_map translate_mprojection_elem p
-
 (** Translate a "span"-place *)
-let translate_mplace (p : S.mplace) : mplace =
-  let var_id = p.bv.index in
-  let name = p.bv.name in
-  let projection = translate_mprojection p.projection in
-  { var_id; name; projection }
+let rec translate_mplace (p : S.mplace) : mplace =
+  match p with
+  | PlaceBase bv -> PlaceBase (bv.index, bv.name)
+  | PlaceProjection (p, pe) -> (
+      let p = translate_mplace p in
+      let pe = translate_mprojection_elem pe in
+      match pe with
+      | None -> p
+      | Some pe -> PlaceProjection (p, pe))
 
 let translate_opt_mplace (p : S.mplace option) : mplace option =
   match p with
