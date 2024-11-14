@@ -54,13 +54,21 @@ jobs:
       - uses: actions/checkout@v4
       - run: nix develop --command bash -c "cd tests/lean && make"
 
-  check-charon-pin:
+  charon-pin-is-forward:
     runs-on: [self-hosted, linux, nix]
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # deep clone in order to get access to other commits
-      - run: nix develop --command ./scripts/ci-check-charon-pin.sh
+      - run: nix develop --command ./scripts/ci-check-charon-pin-is-forward.sh
+
+  charon-pin-is-merged:
+    runs-on: [self-hosted, linux, nix]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # deep clone in order to get access to other commits
+      - run: nix develop --command ./scripts/ci-check-charon-pin-is-merged.sh
 
   userdocs:
     runs-on: [self-hosted, linux, nix]
