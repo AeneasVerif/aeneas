@@ -4,7 +4,7 @@ open Values
 open LlbcAst
 open Contexts
 open Errors
-open Assumed
+open Builtin
 module SA = SymbolicAst
 module Micro = PureMicroPasses
 open TranslateCore
@@ -374,13 +374,13 @@ type gen_config = {
 
 (** Returns the pair: (has opaque type decls, has opaque fun decls).
 
-    [filter_assumed]: if [true], do not consider as opaque the external definitions
+    [filter_builtin]: if [true], do not consider as opaque the external definitions
     that we will map to definitions from the standard library.
  *)
-let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_assumed : bool) :
+let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
     bool * bool =
   let types, funs =
-    LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_assumed
+    LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_builtin
   in
   log#ldebug
     (lazy
@@ -409,7 +409,7 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     | Enum _ | Struct _ -> (false, kind)
     | Opaque ->
         let kind =
-          if config.interface then ExtractBase.Declared else ExtractBase.Assumed
+          if config.interface then ExtractBase.Declared else ExtractBase.Builtin
         in
         (true, kind)
   in
@@ -615,7 +615,7 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
         let kind =
           if is_opaque then
             if config.interface then ExtractBase.Declared
-            else ExtractBase.Assumed
+            else ExtractBase.Builtin
           else if not is_rec then ExtractBase.SingleNonRec
           else if is_mut_rec then
             (* If the functions are mutually recursive, we need to distinguish:
@@ -800,7 +800,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
 
   let export_state_type () : unit =
     let kind =
-      if config.interface then ExtractBase.Declared else ExtractBase.Assumed
+      if config.interface then ExtractBase.Declared else ExtractBase.Builtin
     in
     Extract.extract_state_type fmt ctx kind
   in
@@ -1035,12 +1035,12 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
 
   (* Translate the signatures of the builtin functions *)
   let builtin_sigs =
-    AssumedFunIdMap.map
-      (fun (info : assumed_fun_info) ->
-        SymbolicToPure.translate_fun_sig trans_ctx (FAssumed info.fun_id)
+    BuiltinFunIdMap.map
+      (fun (info : builtin_fun_info) ->
+        SymbolicToPure.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
           info.name info.fun_sig
           (List.map (fun _ -> None) info.fun_sig.inputs))
-      assumed_fun_infos
+      builtin_fun_infos
   in
 
   (* Initialize the names map by registering the keywords used in the

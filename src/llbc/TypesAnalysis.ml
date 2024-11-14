@@ -197,7 +197,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
     | TRawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
         analyze expl_info ty_info rty
-    | TAdt ((TTuple | TAssumed (TBox | TSlice | TArray | TStr)), generics) ->
+    | TAdt ((TTuple | TBuiltin (TBox | TSlice | TArray | TStr)), generics) ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze expl_info ty_info ty)

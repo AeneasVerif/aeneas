@@ -77,8 +77,8 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | TAdt (TAssumed aty, _) -> (
-            (* Assumed type *)
+        | TAdt (TBuiltin aty, _) -> (
+            (* Builtin type *)
             match (aty, field_values) with
             | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
             | TArray, _ ->
@@ -187,8 +187,8 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | TAdt (TAssumed aty, _) -> (
-            (* Assumed type *)
+        | TAdt (TBuiltin aty, _) -> (
+            (* Builtin type *)
             match (aty, field_values) with
             | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
             | _ -> craise_opt_span __FILE__ __LINE__ span "Inconsistent value")

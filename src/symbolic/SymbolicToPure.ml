@@ -487,7 +487,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
             (generics.const_generics = [])
             span;
           mk_simpl_tuple_ty generics.types
-      | T.TAssumed aty -> (
+      | T.TBuiltin aty -> (
           match aty with
           | T.TBox -> (
               (* Eliminate the boxes *)
@@ -496,9 +496,9 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
               | _ ->
                   craise_opt_span __FILE__ __LINE__ span
                     "Box/vec/option type with incorrect number of arguments")
-          | T.TArray -> TAdt (TAssumed TArray, generics)
-          | T.TSlice -> TAdt (TAssumed TSlice, generics)
-          | T.TStr -> TAdt (TAssumed TStr, generics)))
+          | T.TArray -> TAdt (TBuiltin TArray, generics)
+          | T.TSlice -> TAdt (TBuiltin TSlice, generics)
+          | T.TStr -> TAdt (TBuiltin TStr, generics)))
   | TVar vid -> TVar vid
   | TLiteral ty -> TLiteral ty
   | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
@@ -511,7 +511,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       in
       let ty = translate span ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
-      TAdt (TAssumed (TRawPtr mut), generics)
+      TAdt (TBuiltin (TRawPtr mut), generics)
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_strait_ref span trait_ref in
       TTraitType (trait_ref, type_name)
@@ -688,7 +688,7 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
 let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
   match id with
   | TAdtId adt_id -> TAdtId adt_id
-  | TAssumed aty ->
+  | TBuiltin aty ->
       let aty =
         match aty with
         | T.TArray -> TArray
@@ -699,7 +699,7 @@ let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
                be translated *)
             craise_opt_span __FILE__ __LINE__ span "Unexpected box type"
       in
-      TAssumed aty
+      TBuiltin aty
   | TTuple -> TTuple
 
 (** Translate a type, seen as an input/output of a forward function
@@ -718,14 +718,14 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       let t_generics = translate_fwd_generic_args span type_infos generics in
       (* Eliminate boxes and simplify tuples *)
       match type_id with
-      | TAdtId _ | TAssumed (TArray | TSlice | TStr) ->
+      | TAdtId _ | TBuiltin (TArray | TSlice | TStr) ->
           let type_id = translate_type_id span type_id in
           TAdt (type_id, t_generics)
       | TTuple ->
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
              identity *)
           mk_simpl_tuple_ty t_generics.types
-      | TAssumed TBox -> (
+      | TBuiltin TBox -> (
           (* We eliminate boxes *)
           (* No general parametricity for now *)
           cassert_opt_span __FILE__ __LINE__
@@ -752,7 +752,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       in
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
-      TAdt (TAssumed (TRawPtr mut), generics)
+      TAdt (TBuiltin (TRawPtr mut), generics)
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
       TTraitType (trait_ref, type_name)
@@ -800,7 +800,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
   match ty with
   | T.TAdt (type_id, generics) -> (
       match type_id with
-      | TAdtId _ | TAssumed (TArray | TSlice | TStr) ->
+      | TAdtId _ | TBuiltin (TArray | TSlice | TStr) ->
           let type_id = translate_type_id span type_id in
           if inside_mut then
             (* We do not want to filter anything, so we translate the generics
@@ -823,7 +823,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
               in
               Some (TAdt (type_id, generics))
             else None
-      | TAssumed TBox -> (
+      | TBuiltin TBox -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           cassert_opt_span __FILE__ __LINE__
             (not (TypesUtils.ty_has_borrows type_infos ty))
@@ -1032,11 +1032,11 @@ let compute_raw_fun_effect_info (span : Meta.span option)
         can_diverge = info.can_diverge;
         is_rec = (info.is_rec || Option.is_some lid) && gid = None;
       }
-  | FunId (FAssumed aid) ->
+  | FunId (FBuiltin aid) ->
       sanity_check_opt_span __FILE__ __LINE__ (lid = None) span;
       {
         (* Note that backward functions can't fail *)
-        can_fail = Assumed.assumed_fun_can_fail aid && gid = None;
+        can_fail = Builtin.builtin_fun_can_fail aid && gid = None;
         stateful_group = false;
         stateful = false;
         can_diverge = false;
@@ -1061,7 +1061,7 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
             info with
             is_rec = (info.is_rec || Option.is_some lid) && gid = None;
           }
-      | FunId (FAssumed _) ->
+      | FunId (FBuiltin _) ->
           compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos
             fun_id lid gid)
   | Some lid -> (
@@ -1664,7 +1664,7 @@ let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
 let rec unbox_typed_value (span : Meta.span) (v : V.typed_value) : V.typed_value
     =
   match (v.value, v.ty) with
-  | V.VAdt av, T.TAdt (T.TAssumed T.TBox, _) -> (
+  | V.VAdt av, T.TAdt (T.TBuiltin T.TBox, _) -> (
       match av.field_values with
       | [ bv ] -> unbox_typed_value span bv
       | _ -> craise __FILE__ __LINE__ span "Unreachable")
@@ -1801,7 +1801,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* For now, only tuples can contain borrows *)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
+        | TAdtId _ | TBuiltin (TBox | TArray | TSlice | TStr) ->
             cassert __FILE__ __LINE__ (field_values = []) ctx.span
               "ADTs containing borrows are not supported yet";
             None
@@ -1951,7 +1951,7 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
          * vector value upon visiting the "abstraction borrow" node *)
         let adt_id, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | TAdtId _ | TAssumed (TBox | TArray | TSlice | TStr) ->
+        | TAdtId _ | TBuiltin (TBox | TArray | TSlice | TStr) ->
             cassert __FILE__ __LINE__ (field_values = []) ctx.span
               "ADTs with borrows are not supported yet";
             (ctx, None)
@@ -2291,7 +2291,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           let back_fun_name =
             let name =
               match fid with
-              | FunId (FAssumed fid) -> begin
+              | FunId (FBuiltin fid) -> begin
                   match fid with
                   | BoxNew -> "box_new"
                   | ArrayRepeat -> "array_repeat"
@@ -3096,7 +3096,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
         (mk_simpl_tuple_pattern vars)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
-  | TAssumed TBox ->
+  | TBuiltin TBox ->
       (* There should be exactly one variable *)
       let var =
         match vars with
@@ -3110,7 +3110,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
         (mk_typed_pattern_from_var var None)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
-  | TAssumed (TArray | TSlice | TStr) ->
+  | TBuiltin (TArray | TSlice | TStr) ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
@@ -3147,7 +3147,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let values = List.map (typed_value_to_texpression ctx ectx) values in
         let values = FieldId.mapi (fun fid v -> (fid, v)) values in
         let su : struct_update =
-          { struct_id = TAssumed TArray; init = None; updates = values }
+          { struct_id = TBuiltin TArray; init = None; updates = values }
         in
         { e = StructUpdate su; ty = var.ty }
     | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }

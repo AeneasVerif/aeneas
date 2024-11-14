@@ -21,7 +21,7 @@ module FunIdMap = Collections.MakeMap (FunIdOrderedType)
 module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
 (** Compute the dependencies of a function body, taking only into account
-    the *custom* (i.e., not assumed) functions ids (ignoring operations, types,
+    the *custom* (i.e., not builtin) functions ids (ignoring operations, types,
     globals, etc.).
  *)
 let compute_body_fun_deps (e : texpression) : FunIdSet.t =
@@ -40,7 +40,7 @@ let compute_body_fun_deps (e : texpression) : FunIdSet.t =
             | Pure _ -> ()
             | FromLlbc (fid, lp_id) -> (
                 match fid with
-                | FunId (FAssumed _) -> ()
+                | FunId (FBuiltin _) -> ()
                 | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
                     let id = { def_id = fid; lp_id } in
                     ids := FunIdSet.add id !ids))

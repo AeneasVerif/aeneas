@@ -125,7 +125,7 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     used to copy concrete ADT values, while ADT copy should be done through the
     Copy trait (i.e., by calling a dedicated function). This is why we added a
     parameter to control this copy ([allow_adt_copy]). Note that here by ADT we
-    mean the user-defined ADTs (not tuples or assumed types).
+    mean the user-defined ADTs (not tuples or builtin types).
  *)
 let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     (ctx : eval_ctx) (v : typed_value) : eval_ctx * typed_value =
@@ -144,16 +144,16 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
   | VAdt av ->
       (* Sanity check *)
       (match v.ty with
-      | TAdt (TAssumed TBox, _) ->
+      | TAdt (TBuiltin TBox, _) ->
           exec_raise __FILE__ __LINE__ span
-            "Can't copy an assumed value other than Option"
+            "Can't copy an builtin value other than Option"
       | TAdt (TAdtId _, _) as ty ->
           sanity_check __FILE__ __LINE__
             (allow_adt_copy || ty_is_copyable ty)
             span
       | TAdt (TTuple, _) -> () (* Ok *)
       | TAdt
-          ( TAssumed (TSlice | TArray),
+          ( TBuiltin (TSlice | TArray),
             {
               regions = [];
               types = [ ty ];
@@ -814,7 +814,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             let aggregated : typed_value = { value = VAdt av; ty = aty } in
             (* Call the continuation *)
             (aggregated, fun e -> e)
-        | TAssumed _ -> craise __FILE__ __LINE__ span "Unreachable")
+        | TBuiltin _ -> craise __FILE__ __LINE__ span "Unreachable")
     | AggregatedArray (ety, cg) ->
         (* Sanity check: all the values have the proper type *)
         sanity_check __FILE__ __LINE__
@@ -826,7 +826,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
           (len = Z.of_int (List.length values))
           span;
         let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
-        let ty = TAdt (TAssumed TArray, generics) in
+        let ty = TAdt (TBuiltin TArray, generics) in
         (* In order to generate a better AST, we introduce a symbolic
            value equal to the array. The reason is that otherwise, the
            array we introduce here might be duplicated in the generated

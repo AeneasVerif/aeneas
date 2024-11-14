@@ -763,7 +763,7 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                       id =
                         AdtCons
                           {
-                            adt_id = TAssumed TResult;
+                            adt_id = TBuiltin TResult;
                             variant_id = Some variant_id;
                           };
                       generics = _;
@@ -1844,7 +1844,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
              * could have: [box_new f x])
              * *)
             match fun_id with
-            | Fun (FromLlbc (FunId (FAssumed aid), _lp_id)) -> (
+            | Fun (FromLlbc (FunId (FBuiltin aid), _lp_id)) -> (
                 match aid with
                 | BoxNew ->
                     let arg, args = Collections.List.pop args in
@@ -1909,7 +1909,7 @@ let simplify_array_slice_update (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     (Fun
                       (FromLlbc
                         ( FunId
-                            (FAssumed
+                            (FBuiltin
                               (Index
                                 {
                                   is_array;

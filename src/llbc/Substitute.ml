@@ -63,7 +63,7 @@ let ctx_adt_get_instantiated_field_types (ctx : eval_ctx)
   type_decl_get_instantiated_field_types def opt_variant_id generics
 
 (** Return the types of the properly instantiated ADT value (note that
-    here, ADT is understood in its broad meaning: ADT, assumed value or tuple).
+    here, ADT is understood in its broad meaning: ADT, builtin value or tuple).
 
     **IMPORTANT**: this function doesn't normalize the types, you may want to
     use the [AssociatedTypes] equivalent instead.
@@ -79,7 +79,7 @@ let ctx_adt_value_get_instantiated_field_types (span : Meta.span)
       cassert __FILE__ __LINE__ (generics.regions = []) span
         "Tuples don't have region parameters";
       generics.types
-  | TAssumed aty -> (
+  | TBuiltin aty -> (
       match aty with
       | TBox ->
           sanity_check __FILE__ __LINE__ (generics.regions = []) span;

@@ -462,8 +462,8 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
               (fun ((v, ty) : typed_value * ty) ->
                 sanity_check __FILE__ __LINE__ (v.ty = ty) span)
               fields_with_types
-        (* Assumed type case *)
-        | VAdt av, TAdt (TAssumed aty_id, generics) -> (
+        (* Builtin type case *)
+        | VAdt av, TAdt (TBuiltin aty_id, generics) -> (
             sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
             match
               ( aty_id,
@@ -598,8 +598,8 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
               (fun ((v, ty) : typed_avalue * ty) ->
                 sanity_check __FILE__ __LINE__ (v.ty = ty) span)
               fields_with_types
-        (* Assumed type case *)
-        | AAdt av, TAdt (TAssumed aty_id, generics) -> (
+        (* Builtin type case *)
+        | AAdt av, TAdt (TBuiltin aty_id, generics) -> (
             sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
             match
               ( aty_id,

@@ -586,9 +586,9 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             lookup false fun_decl_id lp_id
         | FromLlbc (TraitMethod (_trait_ref, _method_name, fun_decl_id), lp_id)
           -> lookup true fun_decl_id lp_id
-        | FromLlbc (FunId (FAssumed aid), _) ->
+        | FromLlbc (FunId (FBuiltin aid), _) ->
             Some
-              (Assumed.AssumedFunIdMap.find aid ctx.builtin_sigs).explicit_info
+              (Builtin.BuiltinFunIdMap.find aid ctx.builtin_sigs).explicit_info
         | Pure (UpdateAtIndex Array) ->
             Some
               {
@@ -1180,7 +1180,7 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         if need_paren then F.pp_print_string fmt ")";
         print_bracket false orb;
         F.pp_close_box fmt ()
-    | TAssumed TArray ->
+    | TBuiltin TArray ->
         (* Open the boxes *)
         F.pp_open_hvbox fmt ctx.indent_incr;
         let need_paren = inside in
@@ -1191,7 +1191,7 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
 
            Note that we don't need to print the type parameter, which
            is implicit. *)
-        let cs = ctx_get_struct span (TAssumed TArray) ctx in
+        let cs = ctx_get_struct span (TBuiltin TArray) ctx in
         F.pp_print_string fmt cs;
         (* Print the parameters *)
         let _, generics = ty_as_adt span e_ty in
@@ -1552,7 +1552,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a function declaration.
 
     This function is for all function declarations and all backends **at the exception**
-    of opaque (assumed/declared) functions for HOL4.
+    of opaque (builtin/declared) functions for HOL4.
 
     See {!extract_fun_decl}.
  *)
@@ -2076,7 +2076,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   match body.body with
   | None ->
       (* No body: only generate a [val x_c : u32] declaration *)
-      let kind = if interface then Declared else Assumed in
+      let kind = if interface then Declared else Builtin in
       if backend () = HOL4 then
         extract_global_decl_hol4_opaque span ctx fmt decl_name global.generics
           decl_ty
@@ -3095,7 +3095,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "=";
         F.pp_print_space fmt ();
         let success =
-          ctx_get_variant def.item_meta.span (TAssumed TResult) result_ok_id ctx
+          ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id ctx
         in
         F.pp_print_string fmt (success ^ " ())")
     | Coq ->
@@ -3126,7 +3126,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
         let success =
-          ctx_get_variant def.item_meta.span (TAssumed TResult) result_ok_id ctx
+          ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id ctx
         in
         F.pp_print_string fmt (success ^ " ())")
     | HOL4 ->

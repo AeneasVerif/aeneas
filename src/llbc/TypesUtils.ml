@@ -159,4 +159,4 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
   | TAdtId id ->
       let info = TypeDeclId.Map.find id ctx in
       info.is_tuple_struct
-  | TAssumed _ -> false
+  | TBuiltin _ -> false

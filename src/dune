@@ -17,8 +17,8 @@
  (libraries charon core_unix unionFind ocamlgraph str)
  (modules
   AssociatedTypes
-  Assumed
   BorrowCheck
+  Builtin
   Collections
   Config
   ConstStrings

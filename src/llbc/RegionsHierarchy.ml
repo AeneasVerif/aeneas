@@ -32,7 +32,7 @@ open TypesUtils
 open Expressions
 open LlbcAst
 open LlbcAstUtils
-open Assumed
+open Builtin
 open SCC
 open Errors
 module Subst = Substitute
@@ -173,7 +173,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
               (add_edges_from_region_binder add_edges_from_types_outlive)
               predicates.types_outlive
         | TTuple -> (* No clauses for tuples *) ()
-        | TAssumed aid -> (
+        | TBuiltin aid -> (
             match aid with
             | TBox | TArray | TSlice | TStr -> (* No clauses for those *) ()));
         (* Explore the generics *)
@@ -343,11 +343,11 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
             Some d.item_meta.span ) ))
       (FunDeclId.Map.bindings fun_decls)
   in
-  let assumed =
+  let builtin =
     List.map
-      (fun (info : assumed_fun_info) ->
-        (FAssumed info.fun_id, (info.name, info.fun_sig, None)))
-      (AssumedFunIdMap.values assumed_fun_infos)
+      (fun (info : builtin_fun_info) ->
+        (FBuiltin info.fun_id, (info.name, info.fun_sig, None)))
+      (BuiltinFunIdMap.values builtin_fun_infos)
   in
   FunIdMap.of_list
     (List.map
@@ -355,4 +355,4 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
          ( fid,
            compute_regions_hierarchy_for_sig span type_decls fun_decls
              global_decls trait_decls trait_impls name sg ))
-       (regular @ assumed))
+       (regular @ builtin))

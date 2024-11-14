@@ -56,7 +56,7 @@ type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 
-(** The assumed types for the pure AST.
+(** The builtin types for the pure AST.
 
     In comparison with LLBC:
     - we removed [Box] (because it is translated as the identity: [Box T = T])
@@ -70,11 +70,11 @@ type ref_kind = Types.ref_kind [@@deriving show, ord]
         parameter to do partial verification)
       - [State]: the type of the state, when using state-error monads. Note that
         this state is opaque to Aeneas (the user can define it, or leave it as
-        assumed)
+        builtin)
 
     TODO: add a prefix "T"
   *)
-type assumed_ty =
+type builtin_ty =
   | TState
   | TResult
   | TError
@@ -116,7 +116,7 @@ class ['self] iter_type_id_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
     method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
-    method visit_assumed_ty : 'env -> assumed_ty -> unit = fun _ _ -> ()
+    method visit_builtin_ty : 'env -> builtin_ty -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
@@ -127,7 +127,7 @@ class ['self] map_type_id_base =
     method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id =
       fun _ x -> x
 
-    method visit_assumed_ty : 'env -> assumed_ty -> assumed_ty = fun _ x -> x
+    method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty = fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
@@ -138,7 +138,7 @@ class virtual ['self] reduce_type_id_base =
     method visit_type_decl_id : 'env -> type_decl_id -> 'a =
       fun _ _ -> self#zero
 
-    method visit_assumed_ty : 'env -> assumed_ty -> 'a = fun _ _ -> self#zero
+    method visit_builtin_ty : 'env -> builtin_ty -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
@@ -149,11 +149,11 @@ class virtual ['self] mapreduce_type_id_base =
     method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_assumed_ty : 'env -> assumed_ty -> assumed_ty * 'a =
+    method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty * 'a =
       fun _ x -> (x, self#zero)
   end
 
-type type_id = TAdtId of type_decl_id | TTuple | TAssumed of assumed_ty
+type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
 [@@deriving
   show,
     ord,
@@ -237,7 +237,7 @@ class virtual ['self] mapreduce_ty_base =
 
 type ty =
   | TAdt of type_id * generic_args
-      (** {!TAdt} encodes ADTs and tuples and assumed types.
+      (** {!TAdt} encodes ADTs and tuples and builtin types.
 
           TODO: what about the ended regions? (ADTs may be parameterized
           with several region variables. When giving back an ADT value, we may
@@ -714,8 +714,8 @@ type unop =
 
 type array_or_slice = Array | Slice [@@deriving show, ord]
 
-(** Identifiers of assumed functions that we use only in the pure translation *)
-type pure_assumed_fun_id =
+(** Identifiers of builtin functions that we use only in the pure translation *)
+type pure_builtin_fun_id =
   | Return  (** The monadic return *)
   | Fail  (** The monadic fail *)
   | Assert  (** Assertion *)
@@ -738,7 +738,7 @@ type fun_id_or_trait_method_ref =
       (** The fun decl id is not really needed and here for convenience purposes *)
 [@@deriving show, ord]
 
-(** A function id for a non-assumed function *)
+(** A function id for a non-builtin function *)
 type regular_fun_id = fun_id_or_trait_method_ref * LoopId.id option
 [@@deriving show, ord]
 
@@ -753,7 +753,7 @@ type fun_id =
           The region group id is the backward id:: [Some] if the function is a
           backward function, [None] if it is a forward function.
        *)
-  | Pure of pure_assumed_fun_id
+  | Pure of pure_builtin_fun_id
       (** A function only used in the pure translation *)
 [@@deriving show, ord]
 
