@@ -56,11 +56,11 @@ endif
 
 .PHONY: build-bin
 build-bin: check-charon
-	cd compiler && dune build
+	cd src && dune build
 
 .PHONY: build-lib
 build-lib: check-charon
-	cd compiler && dune build aeneas.cmxs
+	cd src && dune build aeneas.cmxs
 
 .PHONY: build-runner
 build-runner: check-charon
@@ -69,8 +69,8 @@ build-runner: check-charon
 .PHONY: build-bin-dir
 build-bin-dir: build-bin build-lib build-runner
 	mkdir -p bin
-	cp -f compiler/_build/default/main.exe bin/aeneas
-	cp -f compiler/_build/default/main.exe bin/aeneas.cmxs
+	cp -f src/_build/default/main.exe bin/aeneas
+	cp -f src/_build/default/main.exe bin/aeneas.cmxs
 	cp -f tests/test_runner/_build/default/run_test.exe bin/test_runner
 	mkdir -p bin/backends/fstar
 	mkdir -p bin/backends/coq
@@ -79,7 +79,7 @@ build-bin-dir: build-bin build-lib build-runner
 
 .PHONY: doc
 doc:
-	cd compiler && dune build @doc
+	cd src && dune build @doc
 
 # Updates `flake.lock` and `charon-pin` with the latest commit from Charon. If
 # we're using a symlink, this takes the commit from our local charon.
@@ -108,14 +108,14 @@ endif
 .PHONY: format
 format:
 	@# `|| `true` because the command returns an error if it changed anything, which we don't care about.
-	cd compiler && dune fmt || true
+	cd src && dune fmt || true
 	cd tests/test_runner && dune fmt || true
 	rustfmt $(RUSTFMT_FLAGS) $(INPUTS_DIR)/*.rs
 	cd $(INPUTS_DIR)/betree && cargo fmt $(RUSTFMT_FLAGS)
 
 .PHONY: clean
 clean: clean-generated
-	cd compiler && dune clean
+	cd src && dune clean
 	cd $(INPUTS_DIR)/betree && $(MAKE) clean
 
 .PHONY: clean-generated
