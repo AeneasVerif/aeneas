@@ -30,17 +30,20 @@ type path_fail_kind =
   | FailReservedMutBorrow of BorrowId.id
       (** Failure because we couldn't go inside a reserved mutable borrow
           (which should get activated) *)
-  | FailSymbolic of int * symbolic_value
+  | FailSymbolic of place * symbolic_value
       (** Failure because we need to enter a symbolic value (and thus need to
           expand it).
-          We return the number of elements which remained in the path when we
-          reached the error - this allows to retrieve the path prefix, which
-          is useful for the synthesis. *)
-  | FailBottom of int * projection_elem * ety
+
+          We store the place at which the symbolic value was found, which is
+          useful for the synthesis. *)
+  | FailBottom of place * projection_elem
       (** Failure because we need to enter an any value - we can expand Bottom
-          values if they are left values. We return the number of elements which
-          remained in the path when we reached the error - this allows to
-          properly update the Bottom value, if needs be.
+          values if they are left values.
+
+          We store the place at which the bottom value appears (we need it to
+          properly update the Bottom if we need to expand it, for instance
+          if we want to expand a bottom pair to a pair of bottoms), together
+          with the projection element that could not be evaluated.
        *)
   | FailBorrow of borrow_content
       (** We got stuck because we couldn't enter a borrow *)
@@ -64,7 +67,7 @@ type projection_access = {
    continuation that propagates any changes to the projected value back
    to the original one. *)
 let rec project_value (span : Meta.span) (access : projection_access)
-    (ek : exploration_kind) (depth : int) (ctx : eval_ctx)
+    (ek : exploration_kind) (current_place : place) (ctx : eval_ctx)
     (pe : projection_elem) (v : typed_value) :
     (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
     path_access_result =
@@ -100,11 +103,11 @@ let rec project_value (span : Meta.span) (access : projection_access)
   | Field ((ProjAdt (_, _) | ProjTuple _), _), VBottom, _ ->
       (* If we reach Bottom, it may mean we need to expand an uninitialized
        * enumeration value *)
-      Error (FailBottom (depth, pe, v.ty))
+      Error (FailBottom (current_place, pe))
   (* Symbolic value: needs to be expanded *)
   | _, VSymbolic sp, _ ->
       (* Expand the symbolic value *)
-      Error (FailSymbolic (depth, sp))
+      Error (FailSymbolic (current_place, sp))
   (* Box dereferencement *)
   | ( Deref,
       VAdt { variant_id = None; field_values = [ fv ] },
@@ -192,8 +195,18 @@ let rec project_value (span : Meta.span) (access : projection_access)
       | VSharedLoan (bids, sv) -> begin
           (* If we can enter a shared loan, we ignore the loan. Pay attention
              to the fact that we need to reexplore the *whole* place (i.e, we
-             mustn't ignore the current projection element) *)
-          match project_value span access ek depth ctx pe sv with
+             mustn't ignore the current projection element).
+
+             Remark about the [current_place]: if we dive into a shared loan,
+             the [current_place] doesn't unambiguously designate this value.
+             This is not an issue in any of the two situations in which we
+             use this current place:
+             - if we use it in the synthesis, it is only to drive some heuristics,
+               meaning that it is not important for the soundness
+             - we can also use it to expand bottom values, but bottom values
+               can not appear inside of shared loans
+          *)
+          match project_value span access ek current_place ctx pe sv with
           | Error err -> Error err
           | Ok (fv, backward) ->
               let backward (ctx, updated) =
@@ -220,7 +233,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
     changes to the projected value back to the original local.
  *)
 let rec access_place (span : Meta.span) (access : projection_access)
-    (ek : exploration_kind) (ctx : eval_ctx) (depth : int) (p : place) :
+    (ek : exploration_kind) (ctx : eval_ctx) (p : place) :
     (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
     path_access_result =
   match p.kind with
@@ -242,10 +255,10 @@ let rec access_place (span : Meta.span) (access : projection_access)
       in
       Ok (v, backward)
   | PlaceProjection (p', pe) -> begin
-      match access_place span access ek ctx (depth + 1) p' with
+      match access_place span access ek ctx p' with
       | Error err -> Error err
       | Ok (v, backward) -> begin
-          match project_value span access ek depth ctx pe v with
+          match project_value span access ek p' ctx pe v with
           | Error err -> Error err
           | Ok (pv, new_back) -> begin
               let backward = Core.Fn.compose backward new_back in
@@ -269,7 +282,7 @@ let access_update_place (span : Meta.span) (access : projection_access)
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
   in
   (* Apply the projection *)
-  match access_place span access ek ctx 0 p with
+  match access_place span access ek ctx p with
   | Error err -> Error err
   | Ok (v, backward) ->
       let nv = update v in
@@ -389,15 +402,6 @@ let compute_expanded_bottom_tuple_value (span : Meta.span)
   let ty = TAdt (TTuple, generics) in
   { value = v; ty }
 
-(* Compute the subplace obtained by discarding the `depth` outermost projection elements from `p`. *)
-let rec sub_place (depth : int) (p : place) : place =
-  if depth == 0 then p
-  else begin
-    match p.kind with
-    | PlaceBase _ -> p
-    | PlaceProjection (subp, _) -> sub_place (depth - 1) subp
-  end
-
 (** Auxiliary helper to expand {!Bottom} values.
 
     During compilation, rustc desaggregates the ADT initializations. The
@@ -418,18 +422,19 @@ let rec sub_place (depth : int) (p : place) : place =
     to, say, [Cons Bottom Bottom] (note that field projection contains information
     about which variant we should project to, which is why we *can* set the
     variant index when writing one of its fields).
+
+    Parameters:
+    - [p]: the place where the {!Bottom} value appears
+    - [pe]: the projection element we wish to evaluate
 *)
 let expand_bottom_value_from_projection (span : Meta.span)
-    (access : access_kind) (p : place) (subplace_depth : int)
-    (pe : projection_elem) (ty : ety) (ctx : eval_ctx) : eval_ctx =
+    (access : access_kind) (p : place) (pe : projection_elem) (ctx : eval_ctx) :
+    eval_ctx =
   (* Debugging *)
   log#ldebug
     (lazy
       ("expand_bottom_value_from_projection:\n" ^ "pe: "
-     ^ show_projection_elem pe ^ "\n" ^ "ty: " ^ show_ety ty));
-  (* Prepare the update: we need to take the proper prefix of the place
-     during whose evaluation we got stuck *)
-  let p' = sub_place subplace_depth p in
+     ^ show_projection_elem pe ^ "\n" ^ "ty: " ^ show_ety p.ty));
   (* Compute the expanded value.
      The type of the {!Bottom} value should be a tuple or an ADT
      Note that the projection element we got stuck at should be a
@@ -439,7 +444,7 @@ let expand_bottom_value_from_projection (span : Meta.span)
      with the proper arity, with all the fields initialized to {!Bottom}
   *)
   let nv =
-    match (pe, ty) with
+    match (pe, p.ty) with
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         TAdt (TAdtId def_id', generics) ) ->
@@ -456,10 +461,10 @@ let expand_bottom_value_from_projection (span : Meta.span)
         compute_expanded_bottom_tuple_value span types
     | _ ->
         craise __FILE__ __LINE__ span
-          ("Unreachable: " ^ show_projection_elem pe ^ ", " ^ show_ety ty)
+          ("Unreachable: " ^ show_projection_elem pe ^ ", " ^ show_ety p.ty)
   in
   (* Update the context by inserting the expanded value at the proper place *)
-  match try_write_place span access p' nv ctx with
+  match try_write_place span access p nv ctx with
   | Ok ctx -> ctx
   | Error _ -> craise __FILE__ __LINE__ span "Unreachable"
 
@@ -476,13 +481,12 @@ let rec update_ctx_along_read_place (config : config) (span : Meta.span)
         | FailMutLoan bid -> end_borrow config span bid ctx
         | FailReservedMutBorrow bid ->
             promote_reserved_mut_borrow config span bid ctx
-        | FailSymbolic (i, sp) ->
+        | FailSymbolic (p, sv) ->
             (* Expand the symbolic value *)
-            let prefix = sub_place i p in
-            expand_symbolic_value_no_branching config span sp
-              (Some (Synth.mk_mplace span prefix ctx))
+            expand_symbolic_value_no_branching config span sv
+              (Some (Synth.mk_mplace span p ctx))
               ctx
-        | FailBottom (_, _, _) ->
+        | FailBottom (_, _) ->
             (* We can't expand {!Bottom} values while reading them *)
             craise __FILE__ __LINE__ span "Found bottom while reading a place"
         | FailBorrow _ ->
@@ -510,11 +514,10 @@ let rec update_ctx_along_write_place (config : config) (span : Meta.span)
             expand_symbolic_value_no_branching config span sp
               (Some (Synth.mk_mplace span p ctx))
               ctx
-        | FailBottom (remaining_pes, pe, ty) ->
+        | FailBottom (p, pe) ->
             (* Expand the {!Bottom} value *)
             let ctx =
-              expand_bottom_value_from_projection span access p remaining_pes pe
-                ty ctx
+              expand_bottom_value_from_projection span access p pe ctx
             in
             (ctx, fun e -> e)
         | FailBorrow _ ->
