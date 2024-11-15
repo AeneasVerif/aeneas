@@ -35,8 +35,7 @@ type fun_info = {
 type modules_funs_info = fun_info FunDeclId.Map.t
 
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
-    (globals_map : global_decl GlobalDeclId.Map.t) (use_state : bool) :
-    modules_funs_info =
+    (use_state : bool) : modules_funs_info =
   let infos = ref FunDeclId.Map.empty in
   let register_info (id : FunDeclId.id) (info : fun_info) : unit =
     assert (not (FunDeclId.Map.mem id !infos));
@@ -156,7 +155,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       in
       (* Sanity check: global bodies don't contain stateful calls *)
       cassert __FILE__ __LINE__
-        ((not f.is_global_decl_body) || not !stateful)
+        (Option.is_none f.is_global_initializer || not !stateful)
         f.item_meta.span
         "Global definition containing a stateful call in its body";
       let builtin_info = get_builtin_info f in
@@ -171,7 +170,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
           in
           obj#may_fail info_can_fail;
           obj#maybe_stateful
-            (if f.is_global_decl_body then false
+            (if Option.is_some f.is_global_initializer then false
              else if not use_state then false
              else info_stateful)
       | Some body -> obj#visit_statement () body.body
@@ -179,7 +178,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
-    let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
+    let is_global_decl_body =
+      List.exists (fun f -> Option.is_some f.is_global_initializer) d
+    in
     cassert __FILE__ __LINE__
       ((not is_global_decl_body) || List.length d = 1)
       (List.hd d).item_meta.span
@@ -219,22 +220,10 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
   let rec analyze_decl_groups (decls : declaration_group list) : unit =
     match decls with
     | [] -> ()
-    | (TypeGroup _ | TraitDeclGroup _ | TraitImplGroup _) :: decls' ->
-        analyze_decl_groups decls'
+    | (TypeGroup _ | TraitDeclGroup _ | TraitImplGroup _ | GlobalGroup _)
+      :: decls' -> analyze_decl_groups decls'
     | FunGroup decl :: decls' ->
         analyze_fun_decl_group (g_declaration_group_to_list decl);
-        analyze_decl_groups decls'
-    | GlobalGroup decl :: decls' ->
-        let global_ids = g_declaration_group_to_list decl in
-        (* Analyze a global by analyzing its body function *)
-        let funs =
-          List.map
-            (fun id ->
-              let global = GlobalDeclId.Map.find id globals_map in
-              global.body)
-            global_ids
-        in
-        analyze_fun_decl_group funs;
         analyze_decl_groups decls'
     | MixedGroup ids :: _ ->
         craise_opt_span __FILE__ __LINE__ None

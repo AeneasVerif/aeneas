@@ -631,10 +631,13 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
         let has_decr_clause =
           has_decreases_clause def && config.extract_decreases_clauses
         in
-        (* Check if the definition needs to be filtered or not *)
+        (* Check if the definition needs to be filtered or not. Functions that
+           are the initializers of globals are processed when we process the
+           corresponding global. *)
         if
-          ((not is_opaque) && config.extract_transparent)
-          || (is_opaque && config.extract_opaque)
+          (((not is_opaque) && config.extract_transparent)
+          || (is_opaque && config.extract_opaque))
+          && not def.is_global_decl_body
         then
           Some
             (fun () ->
