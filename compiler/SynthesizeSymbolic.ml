@@ -8,8 +8,14 @@ open Errors
 
 let mk_mplace (span : Meta.span) (p : place) (ctx : Contexts.eval_ctx) : mplace
     =
-  let bv = Contexts.ctx_lookup_var_binder span ctx p.var_id in
-  { bv; projection = p.projection }
+  let rec place_to_mplace (place : place) : mplace =
+    match place.kind with
+    | PlaceBase var_id ->
+        PlaceBase (Contexts.ctx_lookup_var_binder span ctx var_id)
+    | PlaceProjection (subplace, pe) ->
+        PlaceProjection (place_to_mplace subplace, pe)
+  in
+  place_to_mplace p
 
 let mk_opt_mplace (span : Meta.span) (p : place option)
     (ctx : Contexts.eval_ctx) : mplace option =

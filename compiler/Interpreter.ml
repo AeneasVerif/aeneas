@@ -256,9 +256,9 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   in
   (* Split the variables between return var, inputs and remaining locals *)
   let body = Option.get fdef.body in
-  let ret_var = List.hd body.locals in
+  let ret_var = List.hd body.locals.vars in
   let input_vars, local_vars =
-    Collections.List.split_at (List.tl body.locals) body.arg_count
+    Collections.List.split_at (List.tl body.locals.vars) body.locals.arg_count
   in
   (* Push the return variable (initialized with ⊥) *)
   let ctx = ctx_push_uninitialized_var fdef.item_meta.span ctx ret_var in
@@ -690,7 +690,9 @@ module Test = struct
     sanity_check __FILE__ __LINE__
       (fdef.signature.generics = empty_generic_params)
       fdef.item_meta.span;
-    sanity_check __FILE__ __LINE__ (body.arg_count = 0) fdef.item_meta.span;
+    sanity_check __FILE__ __LINE__
+      (body.locals.arg_count = 0)
+      fdef.item_meta.span;
 
     (* Create the evaluation context *)
     let ctx =
@@ -698,7 +700,9 @@ module Test = struct
     in
 
     (* Insert the (uninitialized) local variables *)
-    let ctx = ctx_push_uninitialized_vars fdef.item_meta.span ctx body.locals in
+    let ctx =
+      ctx_push_uninitialized_vars fdef.item_meta.span ctx body.locals.vars
+    in
 
     (* Create the continuation to check the function's result *)
     let config = mk_config ConcreteMode in

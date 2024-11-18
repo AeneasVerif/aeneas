@@ -262,40 +262,40 @@ let var_to_string (env : fmt_env) (v : var) : string =
   let varname = var_to_varname v in
   "(" ^ varname ^ " : " ^ ty_to_string env false v.ty ^ ")"
 
-let rec mprojection_to_string (env : fmt_env) (inside : string)
-    (p : mprojection) : string =
-  match p with
-  | [] -> inside
-  | pe :: p' -> (
-      let s = mprojection_to_string env inside p' in
-      match pe.pkind with
-      | E.ProjTuple _ -> "(" ^ s ^ ")." ^ T.FieldId.to_string pe.field_id
-      | E.ProjAdt (adt_id, opt_variant_id) -> (
-          let field_name =
-            match adt_field_to_string env adt_id opt_variant_id pe.field_id with
-            | Some field_name -> field_name
-            | None -> T.FieldId.to_string pe.field_id
+let mprojection_elem_to_string (env : fmt_env) (inside : string)
+    (pe : mprojection_elem) : string =
+  match pe.pkind with
+  | E.ProjTuple _ -> "(" ^ inside ^ ")." ^ T.FieldId.to_string pe.field_id
+  | E.ProjAdt (adt_id, opt_variant_id) -> (
+      let field_name =
+        match adt_field_to_string env adt_id opt_variant_id pe.field_id with
+        | Some field_name -> field_name
+        | None -> T.FieldId.to_string pe.field_id
+      in
+      match opt_variant_id with
+      | None -> "(" ^ inside ^ ")." ^ field_name
+      | Some variant_id ->
+          let variant_name =
+            adt_variant_from_type_decl_id_to_string env adt_id variant_id
           in
-          match opt_variant_id with
-          | None -> "(" ^ s ^ ")." ^ field_name
-          | Some variant_id ->
-              let variant_name =
-                adt_variant_from_type_decl_id_to_string env adt_id variant_id
-              in
-              "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
+          "(" ^ inside ^ " as " ^ variant_name ^ ")." ^ field_name)
 
-let mplace_to_string (env : fmt_env) (p : mplace) : string =
-  let name =
-    match p.name with
-    | None -> ""
-    | Some name -> name
-  in
-  (* We add the "llbc" suffix to the variable index, because span-places
-   * use indices of the variables in the original LLBC program, while
-   * regular places use indices for the pure variables: we want to make
-   * this explicit, otherwise it is confusing. *)
-  let name = name ^ "^" ^ E.VarId.to_string p.var_id ^ "llbc" in
-  mprojection_to_string env name p.projection
+let rec mplace_to_string (env : fmt_env) (p : mplace) : string =
+  match p with
+  | PlaceBase (var_id, name) ->
+      let name =
+        match name with
+        | None -> ""
+        | Some name -> name
+      in
+      (* We add the "llbc" suffix to the variable index, because span-places
+       * use indices of the variables in the original LLBC program, while
+       * regular places use indices for the pure variables: we want to make
+       * this explicit, otherwise it is confusing. *)
+      name ^ "^" ^ E.VarId.to_string var_id ^ "llbc"
+  | PlaceProjection (p, pe) ->
+      let inside = mplace_to_string env p in
+      mprojection_elem_to_string env inside pe
 
 let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
     (variant_id : VariantId.id option) : string =

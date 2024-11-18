@@ -304,7 +304,9 @@ let move_return_value (config : config) (span : Meta.span)
   if pop_return_value then
     let ret_vid = VarId.zero in
     let v, ctx, cc =
-      eval_operand config span (Move (mk_place_from_var_id ret_vid)) ctx
+      eval_operand config span
+        (Move (mk_place_from_var_id ctx span ret_vid))
+        ctx
     in
     (Some v, ctx, cc)
   else (None, ctx, fun e -> e)
@@ -355,7 +357,9 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
        let locals = List.rev locals in
        fold_left_apply_continuation
          (fun lid ctx ->
-           drop_outer_loans_at_lplace config span (mk_place_from_var_id lid) ctx)
+           drop_outer_loans_at_lplace config span
+             (mk_place_from_var_id ctx span lid)
+             ctx)
          locals ctx)
   in
   (* Debug *)
@@ -410,7 +414,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       (* Move the input value *)
       let v, ctx, cc =
         eval_operand config span
-          (Move (mk_place_from_var_id input_var.index))
+          (Move (mk_place_from_var_id ctx span input_var.index))
           ctx
       in
 
@@ -422,7 +426,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       let box_v = mk_typed_value span box_ty box_v in
 
       (* Move this value to the return variable *)
-      let dest = mk_place_from_var_id VarId.zero in
+      let dest = mk_place_from_var_id ctx span VarId.zero in
       comp cc (assign_to_place config span box_v dest ctx)
   | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
 
@@ -1290,7 +1294,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
 
       (* Evaluate the input operands *)
       sanity_check __FILE__ __LINE__
-        (List.length args = body.arg_count)
+        (List.length args = body.locals.arg_count)
         body.span;
       let vl, ctx, cc = eval_operands config body.span args ctx in
 
@@ -1307,7 +1311,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
         | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       let input_locals, locals =
-        Collections.List.split_at locals body.arg_count
+        Collections.List.split_at locals body.locals.arg_count
       in
 
       let ctx = push_var span ret_var (mk_bottom span ret_var.var_ty) ctx in

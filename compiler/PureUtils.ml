@@ -137,10 +137,6 @@ let mk_tag (msg : string) (next_e : texpression) : texpression =
   let ty = next_e.ty in
   { e; ty }
 
-let mk_mplace (var_id : E.VarId.id) (name : string option)
-    (projection : mprojection) : mplace =
-  { var_id; name; projection }
-
 let empty_generic_params : generic_params =
   { types = []; const_generics = []; trait_clauses = [] }
 
@@ -872,3 +868,12 @@ let opt_destruct_ret (e : texpression) : texpression option =
         arg )
     when variant_id = Some result_ok_id -> Some arg
   | _ -> None
+
+let decompose_mplace (p : mplace) :
+    E.VarId.id * string option * mprojection_elem list =
+  let rec decompose (proj : mprojection_elem list) (p : mplace) =
+    match p with
+    | PlaceBase (id, name) -> (id, name, proj)
+    | PlaceProjection (p, pe) -> decompose (pe :: proj) p
+  in
+  decompose [] p

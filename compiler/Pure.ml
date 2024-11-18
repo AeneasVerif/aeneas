@@ -556,19 +556,15 @@ type field_id = FieldId.id [@@deriving show, ord]
 type mprojection_elem = { pkind : field_proj_kind; field_id : field_id }
 [@@deriving show, ord]
 
-type mprojection = mprojection_elem list [@@deriving show, ord]
-
 (** "Meta" place.
 
     Meta-data retrieved from the symbolic execution, which gives provenance
     information about the values. We use this to generate names for the variables
     we introduce.
  *)
-type mplace = {
-  var_id : E.VarId.id;
-  name : string option;
-  projection : mprojection;
-}
+type mplace =
+  | PlaceBase of E.VarId.id * string option
+  | PlaceProjection of mplace * mprojection_elem
 [@@deriving show, ord]
 
 type variant_id = VariantId.id [@@deriving show, ord]
