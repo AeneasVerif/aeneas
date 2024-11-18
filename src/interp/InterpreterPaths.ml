@@ -111,7 +111,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
   (* Box dereferencement *)
   | ( Deref,
       VAdt { variant_id = None; field_values = [ fv ] },
-      TAdt (TAssumed TBox, _) ) -> begin
+      TAdt (TBuiltin TBox, _) ) -> begin
       (* We allow moving outside of boxes. In practice, this kind of
        * manipulations should happen only inside unsafe code, so
        * it shouldn't happen due to user code, and we leverage it

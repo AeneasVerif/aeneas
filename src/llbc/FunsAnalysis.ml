@@ -135,9 +135,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             | FnOpRegular func -> (
                 match func.func with
                 | FunId (FRegular id) -> self#visit_fid id
-                | FunId (FAssumed id) ->
-                    (* None of the assumed functions can diverge nor are considered stateful *)
-                    can_fail := !can_fail || Assumed.assumed_fun_can_fail id
+                | FunId (FBuiltin id) ->
+                    (* None of the builtin functions can diverge nor are considered stateful *)
+                    can_fail := !can_fail || Builtin.builtin_fun_can_fail id
                 | TraitMethod _ ->
                     (* We consider trait functions can fail, but can not diverge and are not stateful.
                        TODO: this may cause issues if we use use a fuel parameter.

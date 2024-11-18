@@ -276,13 +276,13 @@ let ctx_push_frame (ctx : eval_ctx) : eval_ctx =
 let push_frame (ctx : eval_ctx) : eval_ctx = ctx_push_frame ctx
 
 (** Small helper: compute the type of the return value for a specific
-    instantiation of an assumed function.
+    instantiation of an builtin function.
  *)
-let get_assumed_function_return_type (span : Meta.span) (ctx : eval_ctx)
-    (fid : assumed_fun_id) (generics : generic_args) : ety =
+let get_builtin_function_return_type (span : Meta.span) (ctx : eval_ctx)
+    (fid : builtin_fun_id) (generics : generic_args) : ety =
   sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
   (* Retrieve the function's signature *)
-  let sg = Assumed.get_assumed_fun_sig fid in
+  let sg = Builtin.get_builtin_fun_sig fid in
   (* Instantiate the return type  *)
   (* There shouldn't be any reference to Self *)
   let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
@@ -392,7 +392,7 @@ let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
   let v, ctx, cc = pop_frame config span true ctx in
   comp cc (assign_to_place config span (Option.get v) dest ctx)
 
-(** Auxiliary function - see {!eval_assumed_function_call} *)
+(** Auxiliary function - see {!eval_builtin_function_call} *)
 let eval_box_new_concrete (config : config) (span : Meta.span)
     (generics : generic_args) : cm_fun =
  fun ctx ->
@@ -421,7 +421,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       (* Create the new box *)
       (* Create the box value *)
       let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
-      let box_ty = TAdt (TAssumed TBox, generics) in
+      let box_ty = TAdt (TBuiltin TBox, generics) in
       let box_v = VAdt { variant_id = None; field_values = [ v ] } in
       let box_v = mk_typed_value span box_ty box_v in
 
@@ -431,8 +431,8 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
   | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
 
 (** Evaluate a non-local function call in concrete mode *)
-let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
-    (fid : assumed_fun_id) (call : call) : cm_fun =
+let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
+    (fid : builtin_fun_id) (call : call) : cm_fun =
  fun ctx ->
   let args = call.args in
   let dest = call.dest in
@@ -463,7 +463,7 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
 
       (* Create and push the return variable *)
       let ret_vid = VarId.zero in
-      let ret_ty = get_assumed_function_return_type span ctx fid generics in
+      let ret_ty = get_builtin_function_return_type span ctx fid generics in
       let ret_var = mk_var ret_vid (Some "@return") ret_ty in
       let ctx = push_uninitialized_var span ret_var ctx in
 
@@ -475,7 +475,7 @@ let eval_assumed_function_call_concrete (config : config) (span : Meta.span)
       in
       let ctx = push_vars span input_vars ctx in
 
-      (* "Execute" the function body. As the functions are assumed, here we call
+      (* "Execute" the function body. As the functions are builtin, here we call
        * custom functions to perform the proper manipulations: we don't have
        * access to a body. *)
       let ctx, cf_eval_body =
@@ -677,7 +677,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               regions_hierarchy
           in
           (func.func, func.generics, None, def, regions_hierarchy, inst_sg)
-      | FunId (FAssumed _) ->
+      | FunId (FBuiltin _) ->
           (* Unreachable: must be a transparent function *)
           craise __FILE__ __LINE__ span "Unreachable"
       | TraitMethod (trait_ref, method_name, _) -> (
@@ -1220,7 +1220,7 @@ and eval_function_call (config : config) (span : Meta.span) (call : call) :
     stl_cm_fun =
   (* There are several cases:
      - this is a local function, in which case we execute its body
-     - this is an assumed function, in which case there is a special treatment
+     - this is an builtin function, in which case there is a special treatment
      - this is a trait method
   *)
   match config.mode with
@@ -1236,13 +1236,13 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
       match func.func with
       | FunId (FRegular fid) ->
           eval_transparent_function_call_concrete config span fid call ctx
-      | FunId (FAssumed fid) ->
+      | FunId (FBuiltin fid) ->
           (* Continue - note that we do as if the function call has been successful,
            * by giving {!Unit} to the continuation, because we place us in the case
            * where we haven't panicked. Of course, the translation needs to take the
            * panic case into account... *)
           let ctx, cc =
-            eval_assumed_function_call_concrete config span fid call ctx
+            eval_builtin_function_call_concrete config span fid call ctx
           in
           ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
       | TraitMethod _ -> craise __FILE__ __LINE__ span "Unimplemented")
@@ -1255,10 +1255,10 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
       match func.func with
       | FunId (FRegular _) | TraitMethod _ ->
           eval_transparent_function_call_symbolic config span call
-      | FunId (FAssumed fid) ->
-          eval_assumed_function_call_symbolic config span fid call func)
+      | FunId (FBuiltin fid) ->
+          eval_builtin_function_call_symbolic config span fid call func)
 
-(** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
+(** Evaluate a local (i.e., non-builtin) function call in concrete mode *)
 and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
     (fid : FunDeclId.id) (call : call) : stl_cm_fun =
  fun ctx ->
@@ -1354,7 +1354,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
       (* Continue *)
       (ctx_resl, cc_comp cc cf_pop)
 
-(** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
+(** Evaluate a local (i.e., non-builtin) function call in symbolic mode *)
 and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
@@ -1538,8 +1538,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
 
 (** Evaluate a non-local function call in symbolic mode *)
-and eval_assumed_function_call_symbolic (config : config) (span : Meta.span)
-    (fid : assumed_fun_id) (call : call) (func : fn_ptr) : stl_cm_fun =
+and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
+    (fid : builtin_fun_id) (call : call) (func : fn_ptr) : stl_cm_fun =
  fun ctx ->
   let generics = func.generics in
   let args = call.args in
@@ -1556,17 +1556,17 @@ and eval_assumed_function_call_symbolic (config : config) (span : Meta.span)
    * by the signature of the function: we thus simply generate correctly
    * instantiated signatures, and delegate the work to an auxiliary function *)
   let regions_hierarchy =
-    LlbcAstUtils.FunIdMap.find (FAssumed fid) ctx.fun_ctx.regions_hierarchies
+    LlbcAstUtils.FunIdMap.find (FBuiltin fid) ctx.fun_ctx.regions_hierarchies
   in
   (* There shouldn't be any reference to Self *)
   let tr_self = UnknownTrait __FUNCTION__ in
-  let sg = Assumed.get_assumed_fun_sig fid in
+  let sg = Builtin.get_builtin_fun_sig fid in
   let inst_sig =
     instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
   in
 
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config span (FunId (FAssumed fid))
+  eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
     sg regions_hierarchy inst_sig generics None args dest ctx
 
 (** Evaluate a statement seen as a function body *)

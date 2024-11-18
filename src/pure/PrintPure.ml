@@ -111,7 +111,7 @@ let integer_type_to_string = Print.Values.integer_type_to_string
 let scalar_value_to_string = Print.Values.scalar_value_to_string
 let literal_to_string = Print.Values.literal_to_string
 
-let assumed_ty_to_string (aty : assumed_ty) : string =
+let builtin_ty_to_string (aty : builtin_ty) : string =
   match aty with
   | TState -> "State"
   | TResult -> "Result"
@@ -127,7 +127,7 @@ let type_id_to_string (env : fmt_env) (id : type_id) : string =
   match id with
   | TAdtId id -> type_decl_id_to_string env id
   | TTuple -> ""
-  | TAssumed aty -> assumed_ty_to_string aty
+  | TBuiltin aty -> builtin_ty_to_string aty
 
 (* TODO: duplicates  Charon.PrintTypes.const_generic_to_string *)
 let const_generic_to_string (env : fmt_env) (cg : const_generic) : string =
@@ -143,7 +143,7 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
       | TTuple ->
           let generics = generic_args_to_strings env false generics in
           "(" ^ String.concat " * " generics ^ ")"
-      | TAdtId _ | TAssumed _ ->
+      | TAdtId _ | TBuiltin _ ->
           let generics = generic_args_to_strings env true generics in
           let generics_s =
             if generics = [] then "" else " " ^ String.concat " " generics
@@ -306,8 +306,8 @@ let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
       match variant_id with
       | Some vid -> adt_variant_from_type_decl_id_to_string env def_id vid
       | None -> type_decl_id_to_string env def_id)
-  | TAssumed aty -> (
-      (* Assumed type *)
+  | TBuiltin aty -> (
+      (* Builtin type *)
       match aty with
       | TState | TArray | TSlice | TStr | TRawPtr _ ->
           (* Those types are opaque: we can't get there *)
@@ -346,8 +346,8 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
       match fields with
       | None -> FieldId.to_string field_id
       | Some fields -> FieldId.nth fields field_id)
-  | TAssumed aty -> (
-      (* Assumed type *)
+  | TBuiltin aty -> (
+      (* Builtin type *)
       match aty with
       | TState | TFuel | TArray | TSlice | TStr ->
           (* Opaque types: we can't get there *)
@@ -389,8 +389,8 @@ let adt_g_value_to_string ?(span : Meta.span option = None) (env : fmt_env)
             let field_values = String.concat " " field_values in
             adt_ident ^ " { " ^ field_values ^ " }"
       else adt_ident
-  | TAdt (TAssumed aty, _) -> (
-      (* Assumed type *)
+  | TAdt (TBuiltin aty, _) -> (
+      (* Builtin type *)
       match aty with
       | TState | TRawPtr _ ->
           (* This type is opaque: we can't get there *)
@@ -442,7 +442,7 @@ let adt_g_value_to_string ?(span : Meta.span option = None) (env : fmt_env)
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in
-          let id = assumed_ty_to_string aty in
+          let id = builtin_ty_to_string aty in
           id ^ " [" ^ String.concat "; " field_values ^ "]")
   | _ ->
       craise_opt_span __FILE__ __LINE__ span
@@ -488,15 +488,15 @@ let fun_suffix (lp_id : LoopId.id option) : string =
   in
   lp_suff
 
-let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
-  Charon.PrintExpressions.assumed_fun_id_to_string fid
+let llbc_builtin_fun_id_to_string (fid : A.builtin_fun_id) : string =
+  Charon.PrintExpressions.builtin_fun_id_to_string fid
 
 let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
   match fid with
   | FRegular fid -> fun_decl_id_to_string env fid
-  | FAssumed fid -> llbc_assumed_fun_id_to_string fid
+  | FBuiltin fid -> llbc_builtin_fun_id_to_string fid
 
-let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
+let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   match fid with
   | Return -> "@return"
   | Fail -> "@fail"
@@ -515,12 +515,12 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
       let f =
         match fid with
         | FunId (FRegular fid) -> fun_decl_id_to_string env fid
-        | FunId (FAssumed fid) -> llbc_assumed_fun_id_to_string fid
+        | FunId (FBuiltin fid) -> llbc_builtin_fun_id_to_string fid
         | TraitMethod (trait_ref, method_name, _) ->
             trait_ref_to_string env true trait_ref ^ "." ^ method_name
       in
       f ^ fun_suffix lp_id
-  | Pure fid -> pure_assumed_fun_id_to_string fid
+  | Pure fid -> pure_builtin_fun_id_to_string fid
 
 let unop_to_string (unop : unop) : string =
   match unop with
@@ -703,7 +703,7 @@ and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
       in
       let bl = if fields = [] then "" else "\n" ^ indent in
       "{" ^ s ^ String.concat "" fields ^ bl ^ "}"
-  | TAssumed TArray ->
+  | TBuiltin TArray ->
       let fields =
         List.map
           (fun (_, fe) ->

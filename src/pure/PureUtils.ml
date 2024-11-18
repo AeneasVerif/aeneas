@@ -431,7 +431,7 @@ let opt_destruct_function_call (e : texpression) :
 
 let opt_destruct_result (span : Meta.span) (ty : ty) : ty option =
   match ty with
-  | TAdt (TAssumed TResult, generics) ->
+  | TAdt (TBuiltin TResult, generics) ->
       sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
       sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
       Some (Collections.List.to_cons_nil generics.types)
@@ -622,17 +622,17 @@ let ty_as_literal (span : Meta.span) (t : ty) : T.literal_type =
   | TLiteral ty -> ty
   | _ -> craise __FILE__ __LINE__ span "Unreachable"
 
-let mk_state_ty : ty = TAdt (TAssumed TState, empty_generic_args)
+let mk_state_ty : ty = TAdt (TBuiltin TState, empty_generic_args)
 
 let mk_result_ty (ty : ty) : ty =
-  TAdt (TAssumed TResult, mk_generic_args_from_types [ ty ])
+  TAdt (TBuiltin TResult, mk_generic_args_from_types [ ty ])
 
-let mk_error_ty : ty = TAdt (TAssumed TError, empty_generic_args)
-let mk_fuel_ty : ty = TAdt (TAssumed TFuel, empty_generic_args)
+let mk_error_ty : ty = TAdt (TBuiltin TError, empty_generic_args)
+let mk_fuel_ty : ty = TAdt (TBuiltin TFuel, empty_generic_args)
 
 let mk_error (error : VariantId.id) : texpression =
   let ty = mk_error_ty in
-  let id = AdtCons { adt_id = TAssumed TError; variant_id = Some error } in
+  let id = AdtCons { adt_id = TBuiltin TError; variant_id = Some error } in
   let qualif = { id; generics = empty_generic_args } in
   let e = Qualif qualif in
   { e; ty }
@@ -640,16 +640,16 @@ let mk_error (error : VariantId.id) : texpression =
 let unwrap_result_ty (span : Meta.span) (ty : ty) : ty =
   match ty with
   | TAdt
-      ( TAssumed TResult,
+      ( TBuiltin TResult,
         { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> ty
   | _ -> craise __FILE__ __LINE__ span "not a result type"
 
 let mk_result_fail_texpression (span : Meta.span) (error : texpression)
     (ty : ty) : texpression =
   let type_args = [ ty ] in
-  let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
+  let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types type_args) in
   let id =
-    AdtCons { adt_id = TAssumed TResult; variant_id = Some result_fail_id }
+    AdtCons { adt_id = TBuiltin TResult; variant_id = Some result_fail_id }
   in
   let qualif = { id; generics = mk_generic_args_from_types type_args } in
   let cons_e = Qualif qualif in
@@ -665,9 +665,9 @@ let mk_result_fail_texpression_with_error_id (span : Meta.span)
 let mk_result_ok_texpression (span : Meta.span) (v : texpression) : texpression
     =
   let type_args = [ v.ty ] in
-  let ty = TAdt (TAssumed TResult, mk_generic_args_from_types type_args) in
+  let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types type_args) in
   let id =
-    AdtCons { adt_id = TAssumed TResult; variant_id = Some result_ok_id }
+    AdtCons { adt_id = TBuiltin TResult; variant_id = Some result_ok_id }
   in
   let qualif = { id; generics = mk_generic_args_from_types type_args } in
   let cons_e = Qualif qualif in
@@ -678,7 +678,7 @@ let mk_result_ok_texpression (span : Meta.span) (v : texpression) : texpression
 (** Create a [Fail err] pattern which captures the error *)
 let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : typed_pattern =
   let error_pat : typed_pattern = { value = error_pat; ty = mk_error_ty } in
-  let ty = TAdt (TAssumed TResult, mk_generic_args_from_types [ ty ]) in
+  let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ ty ]) in
   let value =
     PatAdt { variant_id = Some result_fail_id; field_values = [ error_pat ] }
   in
@@ -690,7 +690,7 @@ let mk_result_fail_pattern_ignore_error (ty : ty) : typed_pattern =
   mk_result_fail_pattern error_pat ty
 
 let mk_result_ok_pattern (v : typed_pattern) : typed_pattern =
-  let ty = TAdt (TAssumed TResult, mk_generic_args_from_types [ v.ty ]) in
+  let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ v.ty ]) in
   let value = PatAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
   { value; ty }
 
@@ -815,7 +815,7 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
   | TAdtId id ->
       let info = TypeDeclId.Map.find id ctx in
       info.is_tuple_struct
-  | TAssumed _ -> false
+  | TBuiltin _ -> false
 
 let mk_lambda (x : typed_pattern) (e : texpression) : texpression =
   let ty = TArrow (x.ty, e.ty) in
@@ -860,7 +860,7 @@ let opt_destruct_ret (e : texpression) : texpression option =
           e =
             Qualif
               {
-                id = AdtCons { adt_id = TAssumed TResult; variant_id };
+                id = AdtCons { adt_id = TBuiltin TResult; variant_id };
                 generics = _;
               };
           ty = _;

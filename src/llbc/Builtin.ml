@@ -81,10 +81,10 @@ module Sig = struct
     mk_ref_ty r ty ref_kind
 
   let mk_array_ty (ty : ty) (cg : const_generic) : ty =
-    TAdt (TAssumed TArray, mk_generic_args [] [ ty ] [ cg ])
+    TAdt (TBuiltin TArray, mk_generic_args [] [ ty ] [ cg ])
 
   let mk_slice_ty (ty : ty) : ty =
-    TAdt (TAssumed TSlice, mk_generic_args [] [ ty ] [])
+    TAdt (TBuiltin TSlice, mk_generic_args [] [ ty ] [])
 
   let mk_sig generics inputs output : fun_sig =
     {
@@ -200,10 +200,10 @@ module Sig = struct
     mk_sig generics inputs output
 end
 
-type raw_assumed_fun_info = assumed_fun_id * fun_sig * bool * bool list option
+type raw_builtin_fun_info = builtin_fun_id * fun_sig * bool * bool list option
 
-type assumed_fun_info = {
-  fun_id : assumed_fun_id;
+type builtin_fun_info = {
+  fun_id : builtin_fun_id;
   fun_sig : fun_sig;
   can_fail : bool;
   name : string;
@@ -215,13 +215,13 @@ type assumed_fun_info = {
        *)
 }
 
-let mk_assumed_fun_info (raw : raw_assumed_fun_info) :
-    assumed_fun_id * assumed_fun_info =
+let mk_builtin_fun_info (raw : raw_builtin_fun_info) :
+    builtin_fun_id * builtin_fun_info =
   let fun_id, fun_sig, can_fail, keep_types = raw in
-  let name = Charon.PrintExpressions.assumed_fun_id_to_string fun_id in
+  let name = Charon.PrintExpressions.builtin_fun_id_to_string fun_id in
   (fun_id, { fun_id; fun_sig; can_fail; name; keep_types })
 
-(** The list of assumed functions and all their information:
+(** The list of builtin functions and all their information:
     - their signature
     - a boolean indicating whether the function can fail or not (if true: can fail)
     - their name
@@ -232,7 +232,7 @@ let mk_assumed_fun_info (raw : raw_assumed_fun_info) :
     a [usize], we have to make sure that vectors are bounded by the max usize.
     As a consequence, [Vec::push] is monadic.
  *)
-let raw_assumed_fun_infos : raw_assumed_fun_info list =
+let raw_builtin_fun_infos : raw_builtin_fun_info list =
   [
     (* TODO: the names are not correct ("Box" should be an impl elem for instance)
        but it's not important) *)
@@ -261,33 +261,33 @@ let raw_assumed_fun_infos : raw_assumed_fun_info list =
       None );
   ]
 
-module OrderedAssumedFunId :
-  Collections.OrderedType with type t = assumed_fun_id = struct
-  type t = assumed_fun_id
+module OrderedBuiltinFunId :
+  Collections.OrderedType with type t = builtin_fun_id = struct
+  type t = builtin_fun_id
 
-  let compare x y = compare_assumed_fun_id x y
-  let to_string x = show_assumed_fun_id x
-  let pp_t fmt x = Format.pp_print_string fmt (show_assumed_fun_id x)
-  let show_t x = show_assumed_fun_id x
+  let compare x y = compare_builtin_fun_id x y
+  let to_string x = show_builtin_fun_id x
+  let pp_t fmt x = Format.pp_print_string fmt (show_builtin_fun_id x)
+  let show_t x = show_builtin_fun_id x
 end
 
-module AssumedFunIdMap = Collections.MakeMap (OrderedAssumedFunId)
+module BuiltinFunIdMap = Collections.MakeMap (OrderedBuiltinFunId)
 
-let assumed_fun_infos : assumed_fun_info AssumedFunIdMap.t =
-  AssumedFunIdMap.of_list (List.map mk_assumed_fun_info raw_assumed_fun_infos)
+let builtin_fun_infos : builtin_fun_info BuiltinFunIdMap.t =
+  BuiltinFunIdMap.of_list (List.map mk_builtin_fun_info raw_builtin_fun_infos)
 
-let get_assumed_fun_info (id : assumed_fun_id) : assumed_fun_info =
-  match AssumedFunIdMap.find_opt id assumed_fun_infos with
+let get_builtin_fun_info (id : builtin_fun_id) : builtin_fun_info =
+  match BuiltinFunIdMap.find_opt id builtin_fun_infos with
   | Some info -> info
   | None ->
       raise
-        (Failure ("get_assumed_fun_info: not found: " ^ show_assumed_fun_id id))
+        (Failure ("get_builtin_fun_info: not found: " ^ show_builtin_fun_id id))
 
-let get_assumed_fun_sig (id : assumed_fun_id) : fun_sig =
-  (get_assumed_fun_info id).fun_sig
+let get_builtin_fun_sig (id : builtin_fun_id) : fun_sig =
+  (get_builtin_fun_info id).fun_sig
 
-let get_assumed_fun_name (id : assumed_fun_id) : string =
-  (get_assumed_fun_info id).name
+let get_builtin_fun_name (id : builtin_fun_id) : string =
+  (get_builtin_fun_info id).name
 
-let assumed_fun_can_fail (id : assumed_fun_id) : bool =
-  (get_assumed_fun_info id).can_fail
+let builtin_fun_can_fail (id : builtin_fun_id) : bool =
+  (get_builtin_fun_info id).can_fail

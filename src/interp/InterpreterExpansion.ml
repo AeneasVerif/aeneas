@@ -204,7 +204,7 @@ let apply_symbolic_expansion_non_borrow (config : config) (span : Meta.span)
   apply_symbolic_expansion_to_avalues config span allow_reborrows original_sv
     expansion ctx
 
-(** Compute the expansion of a non-assumed (i.e.: not [Box], etc.)
+(** Compute the expansion of a non-builtin (e.g.: not [Box], etc.)
     adt value.
 
     The function might return a list of values if the symbolic value to expand
@@ -214,7 +214,7 @@ let apply_symbolic_expansion_non_borrow (config : config) (span : Meta.span)
     [expand_enumerations] controls the expansion of enumerations: if false, it
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
-let compute_expanded_symbolic_non_assumed_adt_value (span : Meta.span)
+let compute_expanded_symbolic_non_builtin_adt_value (span : Meta.span)
     (expand_enumerations : bool) (def_id : TypeDeclId.id)
     (generics : generic_args) (ctx : eval_ctx) : symbolic_expansion list =
   (* Lookup the definition and check if it is an enumeration with several
@@ -275,11 +275,11 @@ let compute_expanded_symbolic_adt_value (span : Meta.span)
     (ctx : eval_ctx) : symbolic_expansion list =
   match (adt_id, generics.regions, generics.types) with
   | TAdtId def_id, _, _ ->
-      compute_expanded_symbolic_non_assumed_adt_value span expand_enumerations
+      compute_expanded_symbolic_non_builtin_adt_value span expand_enumerations
         def_id generics ctx
   | TTuple, [], _ ->
       [ compute_expanded_symbolic_tuple_value span generics.types ]
-  | TAssumed TBox, [], [ boxed_ty ] ->
+  | TBuiltin TBox, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value span boxed_ty ]
   | _ ->
       craise __FILE__ __LINE__ span
@@ -662,10 +662,10 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
                   [greedy_expand_symbolics_with_borrows] of [config]): "
                 ^ name_to_string ctx def.item_meta.name)
             else expand_symbolic_value_no_branching config span sv None ctx
-        | TAdt ((TTuple | TAssumed TBox), _) | TRef (_, _, _) ->
+        | TAdt ((TTuple | TBuiltin TBox), _) | TRef (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config span sv None ctx
-        | TAdt (TAssumed (TArray | TSlice | TStr), _) ->
+        | TAdt (TBuiltin (TArray | TSlice | TStr), _) ->
             (* We can't expand those *)
             craise __FILE__ __LINE__ span
               "Attempted to greedily expand an ADT which can't be expanded "

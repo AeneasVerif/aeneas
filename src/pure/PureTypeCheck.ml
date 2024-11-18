@@ -23,8 +23,8 @@ let get_adt_field_types (span : Meta.span)
       (* "Regular" ADT *)
       let def = TypeDeclId.Map.find def_id type_decls in
       type_decl_get_instantiated_fields_types def variant_id generics
-  | TAssumed aty -> (
-      (* Assumed type *)
+  | TBuiltin aty -> (
+      (* Builtin type *)
       match aty with
       | TState ->
           (* This type is opaque *)
@@ -224,7 +224,7 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
               sanity_check __FILE__ __LINE__ (expected_field_ty = fe.ty) span;
               check_texpression span ctx fe)
             supd.updates
-      | TAssumed TArray ->
+      | TBuiltin TArray ->
           let expected_field_ty =
             Collections.List.to_cons_nil adt_generics.types
           in

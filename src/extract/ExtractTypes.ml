@@ -494,7 +494,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                 F.pp_print_space fmt ())
               (extract_rec true) generics.types;
             F.pp_print_string fmt ")")
-      | TAdtId _ | TAssumed _ -> (
+      | TAdtId _ | TBuiltin _ -> (
           (* HOL4 behaves differently. Where in Coq/FStar/Lean we would write:
               `tree a b`
 
@@ -506,7 +506,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               let print_paren = inside && has_params in
               if print_paren then F.pp_print_string fmt "(";
               (* TODO: for now, only the opaque *functions* are extracted in the
-                 opaque module. The opaque *types* are assumed. *)
+                 opaque module. The opaque *types* are builtin. *)
               F.pp_print_string fmt (ctx_get_type (Some span) type_id ctx);
               (* We might need to:
                  - lookup the information about the implicit/explicit parameters
@@ -560,7 +560,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               let print_tys =
                 match type_id with
                 | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
-                | TAssumed _ -> true
+                | TBuiltin _ -> true
                 | _ -> craise __FILE__ __LINE__ span "Unreachable"
               in
               if types <> [] && print_tys then (
@@ -1453,7 +1453,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
 (** Extract a type declaration.
 
     This function is for all type declarations and all backends **at the exception**
-    of opaque (assumed/declared) types format4 HOL4.
+    of opaque (builtin/declared) types format4 HOL4.
 
     See {!extract_type_decl}.
  *)
@@ -1667,7 +1667,7 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let extract_body =
     match kind with
     | SingleNonRec | SingleRec | MutRecFirst | MutRecInner | MutRecLast -> true
-    | Assumed | Declared -> false
+    | Builtin | Declared -> false
   in
   if extract_body then
     if backend () = HOL4 && is_empty_record_type_decl def then
@@ -2139,7 +2139,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
    * one line *)
   F.pp_open_hvbox fmt 0;
   (* Retrieve the name *)
-  let state_name = ctx_get_assumed_type None TState ctx in
+  let state_name = ctx_get_builtin_type None TState ctx in
   (* The syntax for Lean and Coq is almost identical. *)
   let print_axiom () =
     let axiom =
@@ -2157,11 +2157,11 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
     F.pp_print_string fmt "Type";
     if backend () = Coq then F.pp_print_string fmt "."
   in
-  (* The kind should be [Assumed] or [Declared] *)
+  (* The kind should be [Builtin] or [Declared] *)
   (match kind with
   | SingleNonRec | SingleRec | MutRecFirst | MutRecInner | MutRecLast ->
       raise (Failure "Unexpected")
-  | Assumed -> (
+  | Builtin -> (
       match backend () with
       | FStar ->
           F.pp_print_string fmt "assume";

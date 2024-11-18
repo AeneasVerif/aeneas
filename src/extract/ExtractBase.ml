@@ -60,8 +60,8 @@ type decl_kind =
           delimit group of mutually recursive definitions (in particular, we
           need to insert an end delimiter).
        *)
-  | Assumed
-      (** An assumed definition.
+  | Builtin
+      (** An builtin definition.
 
          F*:  [assume val x]
          Coq: [Axiom x : Type.]
@@ -84,22 +84,22 @@ type decl_kind =
  *)
 let decl_is_last_from_group (kind : decl_kind) : bool =
   match kind with
-  | SingleNonRec | SingleRec | MutRecLast | Assumed | Declared -> true
+  | SingleNonRec | SingleRec | MutRecLast | Builtin | Declared -> true
   | MutRecFirst | MutRecInner -> false
 
 let decl_is_from_rec_group (kind : decl_kind) : bool =
   match kind with
-  | SingleNonRec | Assumed | Declared -> false
+  | SingleNonRec | Builtin | Declared -> false
   | SingleRec | MutRecFirst | MutRecInner | MutRecLast -> true
 
 let decl_is_from_mut_rec_group (kind : decl_kind) : bool =
   match kind with
-  | SingleNonRec | SingleRec | Assumed | Declared -> false
+  | SingleNonRec | SingleRec | Builtin | Declared -> false
   | MutRecFirst | MutRecInner | MutRecLast -> true
 
 let decl_is_first_from_group (kind : decl_kind) : bool =
   match kind with
-  | SingleNonRec | SingleRec | MutRecFirst | Assumed | Declared -> true
+  | SingleNonRec | SingleRec | MutRecFirst | Builtin | Declared -> true
   | MutRecLast | MutRecInner -> false
 
 (** Return [true] if the declaration is not the last from its group of declarations.
@@ -397,8 +397,8 @@ let allow_collisions (id : id) : bool =
   match id with
   | FieldId _ | TraitParentClauseId _ | TraitItemId _ | TraitMethodId _ ->
       !Config.record_fields_short_names
-  | FunId (Pure _ | FromLlbc (FunId (FAssumed _), _)) ->
-      (* We map several assumed functions to the same id *)
+  | FunId (Pure _ | FromLlbc (FunId (FBuiltin _), _)) ->
+      (* We map several builtin functions to the same id *)
       true
   | _ -> false
 
@@ -430,7 +430,7 @@ let names_maps_add (id_to_string : id -> string) (id : id)
        - we add the id to the strict collisions map
        - we check that the id doesn't collide with the unsafe map
        TODO: we might not check that:
-       - a user defined function doesn't collide with an assumed function
+       - a user defined function doesn't collide with an builtin function
        - two trait decl items don't collide with each other
     *)
     let strict_names_map =
@@ -479,25 +479,25 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
 
 type names_map_init = {
   keywords : string list;
-  assumed_adts : (assumed_ty * string) list;
-  assumed_structs : (assumed_ty * string) list;
-  assumed_variants : (assumed_ty * VariantId.id * string) list;
-  assumed_llbc_functions : (A.assumed_fun_id * string) list;
-  assumed_pure_functions : (pure_assumed_fun_id * string) list;
+  builtin_adts : (builtin_ty * string) list;
+  builtin_structs : (builtin_ty * string) list;
+  builtin_variants : (builtin_ty * VariantId.id * string) list;
+  builtin_llbc_functions : (A.builtin_fun_id * string) list;
+  builtin_pure_functions : (pure_builtin_fun_id * string) list;
 }
 
-let names_maps_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
+let names_maps_add_builtin_type (id_to_string : id -> string) (id : builtin_ty)
     (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (TypeId (TAssumed id)) None name nm
+  names_maps_add id_to_string (TypeId (TBuiltin id)) None name nm
 
-let names_maps_add_assumed_struct (id_to_string : id -> string)
-    (id : assumed_ty) (name : string) (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (StructId (TAssumed id)) None name nm
+let names_maps_add_builtin_struct (id_to_string : id -> string)
+    (id : builtin_ty) (name : string) (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (StructId (TBuiltin id)) None name nm
 
-let names_maps_add_assumed_variant (id_to_string : id -> string)
-    (id : assumed_ty) (variant_id : VariantId.id) (name : string)
+let names_maps_add_builtin_variant (id_to_string : id -> string)
+    (id : builtin_ty) (variant_id : VariantId.id) (name : string)
     (nm : names_maps) : names_maps =
-  names_maps_add id_to_string (VariantId (TAssumed id, variant_id)) None name nm
+  names_maps_add id_to_string (VariantId (TBuiltin id, variant_id)) None name nm
 
 let names_maps_add_function (id_to_string : id -> string)
     ((fid, span) : fun_id * span option) (name : string) (nm : names_maps) :
@@ -585,7 +585,7 @@ type extraction_ctx = {
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : pure_fun_translation A.FunDeclId.Map.t;
   trans_globals : Pure.global_decl Pure.GlobalDeclId.Map.t;
-  builtin_sigs : Pure.fun_sig Assumed.AssumedFunIdMap.t;
+  builtin_sigs : Pure.fun_sig Builtin.BuiltinFunIdMap.t;
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
@@ -726,9 +726,9 @@ let ctx_get_local_type (span : Meta.span) (id : TypeDeclId.id)
     (ctx : extraction_ctx) : string =
   ctx_get_type (Some span) (TAdtId id) ctx
 
-let ctx_get_assumed_type (span : Meta.span option) (id : assumed_ty)
+let ctx_get_builtin_type (span : Meta.span option) (id : builtin_ty)
     (ctx : extraction_ctx) : string =
-  ctx_get_type span (TAssumed id) ctx
+  ctx_get_type span (TBuiltin id) ctx
 
 let ctx_get_trait_constructor (span : Meta.span) (id : trait_decl_id)
     (ctx : extraction_ctx) : string =
@@ -1067,7 +1067,7 @@ let keywords () =
   in
   List.concat [ named_unops; named_binops; misc ]
 
-let assumed_adts () : (assumed_ty * string) list =
+let builtin_adts () : (builtin_ty * string) list =
   let state =
     if !use_state then
       match backend () with
@@ -1103,14 +1103,14 @@ let assumed_adts () : (assumed_ty * string) list =
   in
   state @ adts
 
-let assumed_struct_constructors () : (assumed_ty * string) list =
+let builtin_struct_constructors () : (builtin_ty * string) list =
   match backend () with
   | Lean -> [ (TArray, "Array.make") ]
   | Coq -> [ (TArray, "mk_array") ]
   | FStar -> [ (TArray, "mk_array") ]
   | HOL4 -> [ (TArray, "mk_array") ]
 
-let assumed_variants () : (assumed_ty * VariantId.id * string) list =
+let builtin_variants () : (builtin_ty * VariantId.id * string) list =
   match backend () with
   | FStar ->
       [
@@ -1150,7 +1150,7 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (* No Fuel::Succ on purpose *)
       ]
 
-let assumed_llbc_functions () : (A.assumed_fun_id * string) list =
+let builtin_llbc_functions () : (A.builtin_fun_id * string) list =
   match backend () with
   | FStar | Coq | HOL4 ->
       [
@@ -1181,7 +1181,7 @@ let assumed_llbc_functions () : (A.assumed_fun_id * string) list =
           "Slice.index_mut_usize" );
       ]
 
-let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
+let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
   match backend () with
   | FStar ->
       [
@@ -1224,11 +1224,11 @@ let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
 let names_map_init () : names_map_init =
   {
     keywords = keywords ();
-    assumed_adts = assumed_adts ();
-    assumed_structs = assumed_struct_constructors ();
-    assumed_variants = assumed_variants ();
-    assumed_llbc_functions = assumed_llbc_functions ();
-    assumed_pure_functions = assumed_pure_functions ();
+    builtin_adts = builtin_adts ();
+    builtin_structs = builtin_struct_constructors ();
+    builtin_variants = builtin_variants ();
+    builtin_llbc_functions = builtin_llbc_functions ();
+    builtin_pure_functions = builtin_pure_functions ();
   }
 
 (** Initialize names maps with a proper set of keywords/names coming from the
@@ -1250,7 +1250,7 @@ let initialize_names_maps () : names_maps =
   let names_map = { id_to_name; name_to_id; names_set } in
   let unsafe_names_map = empty_unsafe_names_map in
   let strict_names_map = empty_names_map in
-  (* For debugging - we are creating bindings for assumed types and functions, so
+  (* For debugging - we are creating bindings for builtin types and functions, so
    * it is ok if we simply use the "show" function (those aren't simply identified
    * by numbers) *)
   let id_to_string = show_id in
@@ -1266,42 +1266,42 @@ let initialize_names_maps () : names_maps =
   in
   let nm = { names_map; unsafe_names_map; strict_names_map } in
   (* Then we add:
-   * - the assumed types
-   * - the assumed struct constructors
-   * - the assumed variants
-   * - the assumed functions
+   * - the builtin types
+   * - the builtin struct constructors
+   * - the builtin variants
+   * - the builtin functions
    *)
   let nm =
     List.fold_left
       (fun nm (type_id, name) ->
-        names_maps_add_assumed_type id_to_string type_id name nm)
-      nm init.assumed_adts
+        names_maps_add_builtin_type id_to_string type_id name nm)
+      nm init.builtin_adts
   in
   let nm =
     List.fold_left
       (fun nm (type_id, name) ->
-        names_maps_add_assumed_struct id_to_string type_id name nm)
-      nm init.assumed_structs
+        names_maps_add_builtin_struct id_to_string type_id name nm)
+      nm init.builtin_structs
   in
   let nm =
     List.fold_left
       (fun nm (type_id, variant_id, name) ->
-        names_maps_add_assumed_variant id_to_string type_id variant_id name nm)
-      nm init.assumed_variants
+        names_maps_add_builtin_variant id_to_string type_id variant_id name nm)
+      nm init.builtin_variants
   in
-  let assumed_functions =
+  let builtin_functions =
     List.map
       (fun (fid, name) ->
-        ((FromLlbc (Pure.FunId (FAssumed fid), None), None), name))
-      init.assumed_llbc_functions
+        ((FromLlbc (Pure.FunId (FBuiltin fid), None), None), name))
+      init.builtin_llbc_functions
     @ List.map
         (fun (fid, name) -> ((Pure fid, None), name))
-        init.assumed_pure_functions
+        init.builtin_pure_functions
   in
   let nm =
     List.fold_left
       (fun nm (fid, name) -> names_maps_add_function id_to_string fid name nm)
-      nm assumed_functions
+      nm builtin_functions
   in
   (* Return *)
   nm
@@ -1322,7 +1322,7 @@ let type_decl_kind_to_qualif (span : Meta.span) (kind : decl_kind)
       | MutRecFirst -> Some "type"
       | MutRecInner -> Some "and"
       | MutRecLast -> Some "and"
-      | Assumed -> Some "assume type"
+      | Builtin -> Some "assume type"
       | Declared -> Some "val")
   | Coq -> (
       match (kind, type_kind) with
@@ -1335,7 +1335,7 @@ let type_decl_kind_to_qualif (span : Meta.span) (kind : decl_kind)
            * records and inductives: we convert everything to records if this happens
            *)
           Some "with"
-      | (Assumed | Declared), None -> Some "Axiom"
+      | (Builtin | Declared), None -> Some "Axiom"
       | SingleNonRec, None ->
           (* This is for traits *)
           Some "Record"
@@ -1352,7 +1352,7 @@ let type_decl_kind_to_qualif (span : Meta.span) (kind : decl_kind)
           | Some Struct -> Some "structure"
           | _ -> Some "inductive")
       | SingleRec | MutRecFirst | MutRecInner | MutRecLast -> Some "inductive"
-      | Assumed -> Some "axiom"
+      | Builtin -> Some "axiom"
       | Declared -> Some "axiom")
   | HOL4 -> None
 
@@ -1371,7 +1371,7 @@ let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
       | MutRecFirst -> Some "let rec"
       | MutRecInner -> Some "and"
       | MutRecLast -> Some "and"
-      | Assumed -> Some "assume val"
+      | Builtin -> Some "assume val"
       | Declared -> Some "val")
   | Coq -> (
       match kind with
@@ -1380,7 +1380,7 @@ let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
       | MutRecFirst -> Some "Fixpoint"
       | MutRecInner -> Some "with"
       | MutRecLast -> Some "with"
-      | Assumed -> Some "Axiom"
+      | Builtin -> Some "Axiom"
       | Declared -> Some "Axiom")
   | Lean -> (
       match kind with
@@ -1389,7 +1389,7 @@ let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
       | MutRecFirst -> Some "mutual divergent def"
       | MutRecInner -> Some "divergent def"
       | MutRecLast -> Some "divergent def"
-      | Assumed -> Some "axiom"
+      | Builtin -> Some "axiom"
       | Declared -> Some "axiom")
   | HOL4 -> None
 
@@ -1572,15 +1572,15 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
   (* We only generate a suffix for the functions we generate from the loops *)
   default_fun_loop_suffix num_loops loop_id
 
-(** Compute the name of a regular (non-assumed) function.
+(** Compute the name of a regular (non-builtin) function.
 
     Inputs:
-    - function basename (TODO: shouldn't appear for assumed functions?...)
+    - function basename (TODO: shouldn't appear for builtin functions?...)
     - number of loops in the function (useful to check if we need to use
       indices to derive unique names for the loops for instance - if there is
       exactly one loop, we don't need to use indices)
     - loop id (if pertinent)
-    TODO: use the fun id for the assumed functions.
+    TODO: use the fun id for the builtin functions.
  *)
 let ctx_compute_fun_name (span : Meta.span) (ctx : extraction_ctx)
     (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option) : string
@@ -1759,7 +1759,7 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
 
     Inputs:
     - function id: this is especially useful to identify whether the
-      function is an assumed function or a local function
+      function is an builtin function or a local function
     - function basename
     - the number of loops in the parent function. This is used for
       the same purpose as in [llbc_name].
@@ -1788,7 +1788,7 @@ let ctx_compute_termination_measure_name (span : Meta.span)
 
     Inputs:
     - function id: this is especially useful to identify whether the
-      function is an assumed function or a local function
+      function is an builtin function or a local function
     - function basename
     - the number of loops in the parent function. This is used for
       the same purpose as in [llbc_name].
@@ -1853,14 +1853,14 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TTuple ->
               (* The "pair" case is frequent enough to have its special treatment *)
               if List.length generics.types = 2 then "p" else "t"
-          | TAssumed TResult -> "r"
-          | TAssumed TError -> ConstStrings.error_basename
-          | TAssumed TFuel -> ConstStrings.fuel_basename
-          | TAssumed TArray -> "a"
-          | TAssumed TSlice -> "s"
-          | TAssumed TStr -> "s"
-          | TAssumed TState -> ConstStrings.state_basename
-          | TAssumed (TRawPtr _) -> "p"
+          | TBuiltin TResult -> "r"
+          | TBuiltin TError -> ConstStrings.error_basename
+          | TBuiltin TFuel -> ConstStrings.fuel_basename
+          | TBuiltin TArray -> "a"
+          | TBuiltin TSlice -> "s"
+          | TBuiltin TStr -> "s"
+          | TBuiltin TState -> ConstStrings.state_basename
+          | TBuiltin (TRawPtr _) -> "p"
           | TAdtId adt_id ->
               let def =
                 TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
@@ -2091,7 +2091,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   (* TODO: update once the body id can be an option *)
   let decl = GlobalId def.def_id in
 
-  (* Check if the global corresponds to an assumed global that we should map
+  (* Check if the global corresponds to an builtin global that we should map
      to a custom definition in our standard library (for instance, happens
      with "core::num::usize::MAX") *)
   match
