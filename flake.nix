@@ -33,7 +33,7 @@
 
         aeneas-check-tidiness = pkgs.stdenv.mkDerivation {
           name = "aeneas-check-tidiness";
-          src = ./compiler;
+          src = ./src;
           buildInputs = [
             ocamlPackages.dune_3
             ocamlPackages.ocaml
@@ -52,7 +52,7 @@
           pname = "aeneas";
           version = "0.1.0";
           duneVersion = "3";
-          src = ./compiler;
+          src = ./src;
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = [
             easy_logging
@@ -107,7 +107,7 @@
             src = ./.;
             filter = path: type:
               path == toString ./Makefile
-              || pkgs.lib.hasPrefix (toString ./compiler) path
+              || pkgs.lib.hasPrefix (toString ./src) path
               || pkgs.lib.hasPrefix (toString ./backends) path
               || (pkgs.lib.hasPrefix (toString ./tests) path
               && !pkgs.lib.hasSuffix ".llbc" path);

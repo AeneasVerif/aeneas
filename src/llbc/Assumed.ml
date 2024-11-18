@@ -1,4 +1,4 @@
-(** This module contains various utilities for the assumed functions.
+(** This module contains various utilities for the builtin functions.
 
     Note that [Box::free] is peculiar: we don't really handle it as a function,
     because it is legal to free a box whose boxed value is [⊥] (it often
@@ -7,10 +7,10 @@
     not as a function call, and thus never need its signature.
     
     TODO: implementing the concrete evaluation functions for the
-    assumed functions is really annoying (see
+    builtin functions is really annoying (see
     [InterpreterStatements.eval_non_local_function_call_concrete]),
     I think it should be possible, in most situations, to write bodies which
-    model the behaviour of those unsafe functions. For instance, [Box::deref_mut]
+    model the behavior of those functions. For instance, [Box::deref_mut]
     should simply be:
     {[
       fn deref_mut<'a, T>(x : &'a mut Box<T>) -> &'a mut T {

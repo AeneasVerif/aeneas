@@ -5,6 +5,10 @@
  (libraries aeneas)
  (modules Main))
 
+(include_subdirs unqualified)
+
+;; Scan all subdirectories for OCaml files
+
 (library
  (name aeneas) ;; The name as used in the project
  (public_name aeneas) ;; The name as revealed to the projects importing this library
