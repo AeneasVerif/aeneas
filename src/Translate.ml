@@ -631,13 +631,10 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
         let has_decr_clause =
           has_decreases_clause def && config.extract_decreases_clauses
         in
-        (* Check if the definition needs to be filtered or not. Functions that
-           are the initializers of globals are processed when we process the
-           corresponding global. *)
+        (* Check if the definition needs to be filtered or not *)
         if
-          (((not is_opaque) && config.extract_transparent)
-          || (is_opaque && config.extract_opaque))
-          && not def.is_global_decl_body
+          ((not is_opaque) && config.extract_transparent)
+          || (is_opaque && config.extract_opaque)
         then
           Some
             (fun () ->
@@ -826,6 +823,8 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         | Some pure_fun -> (
             match pure_fun.f.Pure.kind with
             | TraitDeclItem (_, _, false) -> ()
+            (* Global initializers are translated along with the global definition *)
+            | _ when pure_fun.f.is_global_decl_body -> ()
             | _ ->
                 (* Translate *)
                 export_functions_group [ pure_fun ])
@@ -838,8 +837,11 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
             (fun id -> FunDeclId.Map.find_opt id ctx.trans_funs)
             ids
         in
-        (* Translate *)
-        export_functions_group pure_funs
+        if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
+          craise_opt_span __FILE__ __LINE__ None
+            "Mutually recursive globals are not supported"
+        else (* Translate *)
+          export_functions_group pure_funs
     | GlobalGroup (NonRecGroup id) -> export_global id
     | GlobalGroup (RecGroup _ids) ->
         craise_opt_span __FILE__ __LINE__ None
