@@ -2,7 +2,7 @@ let log = Logging.errors_log
 
 let raw_span_to_string (raw_span : Meta.raw_span) =
   let file =
-    match raw_span.file with
+    match raw_span.file.name with
     | Virtual s | Local s -> s
   in
   let loc_to_string (l : Meta.loc) : string =
