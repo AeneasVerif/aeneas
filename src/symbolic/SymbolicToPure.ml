@@ -4067,7 +4067,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
       loop_id;
       name;
       signature;
-      is_global_decl_body = def.is_global_decl_body;
+      is_global_decl_body = Option.is_some def.is_global_initializer;
       body;
     }
   in

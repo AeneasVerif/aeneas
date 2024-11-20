@@ -30,9 +30,7 @@ let compute_contexts (m : crate) : decls_ctx =
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list
   in
   let type_ctx = { type_decls_groups; type_decls; type_infos } in
-  let fun_infos =
-    FunsAnalysis.analyze_module m fun_decls global_decls !Config.use_state
-  in
+  let fun_infos = FunsAnalysis.analyze_module m fun_decls !Config.use_state in
   let regions_hierarchies =
     RegionsHierarchy.compute_regions_hierarchies type_decls fun_decls
       global_decls trait_decls trait_impls
