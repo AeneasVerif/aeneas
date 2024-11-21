@@ -377,6 +377,14 @@ let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.typed_pattern_to_string ~span:(Some ctx.span) env p
 
+let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  let verbose = false in
+  let indent = "" in
+  let indent_incr = "  " in
+  Print.Values.abs_to_string ~span:(Some ctx.span) env verbose indent
+    indent_incr abs
+
 let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
     fun_effect_info =
   match bid with
@@ -387,15 +395,6 @@ let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
 
 let ctx_get_effect_info (ctx : bs_ctx) : fun_effect_info =
   ctx_get_effect_info_for_bid ctx ctx.bid
-
-(* TODO: move *)
-let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
-  let env = bs_ctx_to_fmt_env ctx in
-  let verbose = false in
-  let indent = "" in
-  let indent_incr = "  " in
-  Print.Values.abs_to_string ~span:(Some ctx.span) env verbose indent
-    indent_incr abs
 
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
@@ -811,20 +810,20 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
               translate_fwd_generic_args span type_infos generics
             in
             Some (TAdt (type_id, generics))
-          else
-            (* If not inside a mutable reference: check if at least one
-               of the generics contains a mutable reference (i.e., is not
-               translated to `None`. If yes, keep the whole type, and
-               translate all the generics as "forward" types (the backward
-               function will extract the proper information from the ADT value)
+          else if
+            (* If not inside a mutable reference: check if the type contains
+               a mutable reference (through one of its generics.
+               If yes, keep the whole type, and translate all the generics as
+               "forward" types (the backward function will extract the proper
+               information from the ADT value).
             *)
-            let types = List.filter_map translate generics.types in
-            if types <> [] then
-              let generics =
-                translate_fwd_generic_args span type_infos generics
-              in
-              Some (TAdt (type_id, generics))
-            else None
+            TypesUtils.ty_has_regions_in_pred keep_region ty
+          then
+            let generics =
+              translate_fwd_generic_args span type_infos generics
+            in
+            Some (TAdt (type_id, generics))
+          else None
       | TBuiltin TBox -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           cassert_opt_span __FILE__ __LINE__
@@ -837,14 +836,21 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
               craise_opt_span __FILE__ __LINE__ span
                 "Unreachable: boxes receive exactly one type parameter")
       | TTuple -> (
-          (* Tuples can contain borrows (which we eliminate) *)
-          let tys_t = List.filter_map translate generics.types in
-          match tys_t with
-          | [] -> None
-          | _ ->
-              (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
-               * is the identity *)
-              Some (mk_simpl_tuple_ty tys_t)))
+          if inside_mut then
+            (* We do not filter anything *)
+            let tys_t =
+              List.map (translate_fwd_ty span type_infos) generics.types
+            in
+            Some (mk_simpl_tuple_ty tys_t)
+          else
+            (* Tuples can contain borrows (which we eliminate) *)
+            let tys_t = List.filter_map translate generics.types in
+            match tys_t with
+            | [] -> None
+            | _ ->
+                (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
+                 * is the identity *)
+                Some (mk_simpl_tuple_ty tys_t)))
   | TVar vid -> wrap (TVar vid)
   | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
   | TLiteral lty -> wrap (TLiteral lty)
@@ -1164,7 +1170,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     in
     let keep_region r =
       match r with
-      | T.RStatic -> raise Unimplemented
+      | T.RStatic -> craise_opt_span __FILE__ __LINE__ span "Unimplemented"
       | RErased ->
           craise_opt_span __FILE__ __LINE__ span "Unexpected erased region"
       | RBVar _ ->
@@ -1175,7 +1181,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     translate_back_ty span type_infos keep_region inside_mut ty
   in
   let translate_back_inputs_for_gid (gid : T.RegionGroupId.id) : ty list =
-    (* For now we don't supported nested borrows, so we check that there
+    (* For now we don't support nested borrows, so we check that there
        aren't parent regions *)
     let parents = list_ancestor_region_groups regions_hierarchy gid in
     cassert_opt_span __FILE__ __LINE__
@@ -1754,7 +1760,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
             translate sv
         | VReservedMutBorrow bid ->
             (* Same as for shared borrows. However, note that we use reserved borrows
-             * only in *span-data*: a value *actually used* in the translation can't come
+             * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
             let sv =
               InterpreterBorrowsCore.lookup_shared_value ctx.span ectx bid
@@ -1848,7 +1854,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
-      raise Unimplemented
+      craise __FILE__ __LINE__ ctx.span "Unimplemented"
   | AIgnoredSharedLoan _ ->
       (* Ignore *)
       None
@@ -1863,7 +1869,7 @@ and aborrow_content_to_consumed (ctx : bs_ctx) (bc : V.aborrow_content) :
       None
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
-      raise Unimplemented
+      craise __FILE__ __LINE__ ctx.span "Unimplemented"
   | AEndedSharedBorrow | AProjSharedBorrow _ ->
       (* Ignore *)
       None
@@ -1882,7 +1888,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
   | V.AEndedProjLoans (_, _) ->
       (* The symbolic value was updated, and the given back values come from sevearl
        * abstractions *)
-      raise Unimplemented
+      craise __FILE__ __LINE__ ctx.span "Unimplemented"
   | AEndedProjBorrows _ -> (* We consider consumed values *) None
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
@@ -1918,62 +1924,105 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
   | None -> None
   | Some p -> Some (translate_mplace p)
 
-(** Explore an abstraction value and convert it to a given back value
-    by collecting all the meta-values from the ended *borrows*.
+(** An avalue is either produced from a borrow projector (if it is an input
+    to a function) or from a loan projector (if it is an ouptput).
+    This means that an avalue has either:
+    - only borrows and borrow projections over symbolic values
+    - only loans and loan projections over symbolic values
+    - none of those
 
-    Given back values are patterns, because when an abstraction ends, we
-    introduce a call to a backward function in the synthesized program,
-    which introduces new values:
+    **REMARK:** this will not be valid anymore once we have nested borrows,
+    as an ended proj loan can contain borrows in one of its children.
+    In this situation, we will need to first project the avalues at the proper
+    level, before translating them.
+ *)
+type typed_avalue_kind =
+  | BorrowProj
+      (** The value was produced by a borrow projector (it contains borrows
+          or borrow projections) *)
+  | LoanProj
+      (** The value was produced by a loan projector (it contains loans or
+          loan projections) *)
+  | UnknownProj
+      (** No borrows, loans or projections inside the value so we can't know for sure *)
+
+let compute_typed_avalue_proj_kind span (av : V.typed_avalue) :
+    typed_avalue_kind =
+  let has_borrows = ref false in
+  let has_loans = ref false in
+  let visitor =
+    object
+      inherit [_] V.iter_typed_avalue as super
+
+      method! visit_ALoan env lc =
+        has_loans := true;
+        (* Continue exploring as a sanity check: we want to make sure we don't find borrows *)
+        super#visit_ALoan env lc
+
+      method! visit_ABorrow env bc =
+        has_borrows := true;
+        (* Continue exploring as a sanity check: we want to make sure we don't find loans *)
+        super#visit_ABorrow env bc
+
+      method! visit_ASymbolic env aproj =
+        match aproj with
+        | V.AEndedProjLoans (_, _) | AProjLoans (_, _) ->
+            has_loans := true;
+            (* Continue exploring (same reasons as above) *)
+            super#visit_ASymbolic env aproj
+        | AEndedProjBorrows _ | AIgnoredProjBorrows | AProjBorrows (_, _) ->
+            has_borrows := true;
+            (* Continue exploring (same reasons as above) *)
+            super#visit_ASymbolic env aproj
+    end
+  in
+  visitor#visit_typed_avalue () av;
+  cassert __FILE__ __LINE__
+    ((not !has_borrows) || not !has_loans)
+    span "Unreachable";
+  if !has_borrows then BorrowProj
+  else if !has_loans then LoanProj
+  else UnknownProj
+
+(** Explore an abstraction value which we know **was generated by a borrow projection**
+    (this means we won't find loans or loan projectors inside it) and convert it to a
+    given back value by collecting all the meta-values from the ended *borrows*.
+
+    Note that given back values are patterns, because when an abstraction ends we
+    introduce a call to a backward function in the synthesized program, which introduces
+    new values:
     {[
       let (nx, ny) = f_back ... in
           ^^^^^^^^
     ]}
     
-    [mp]: it is possible to provide some span-place information, to guide
+    [mp]: it is possible to provide some meta-place information, to guide
     the heuristics which later find pretty names for the variables.
+
+    - [under_mut]: if [true] it means we are below a mutable borrow.
+      This influences whether we filter values or not.
  *)
-let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
-    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
-  let ctx, value =
+let rec typed_avalue_to_given_back_aux ~(filter : bool) (mp : mplace option)
+    (av : V.typed_avalue) (ctx : bs_ctx) : bs_ctx * typed_pattern option =
+  let (ctx, value) : _ * typed_pattern option =
     match av.value with
-    | AAdt adt_v -> (
-        (* Translate the field values *)
-        (* For now we forget the span-place information so that it doesn't get used
-         * by several fields (which would then all have the same name...), but we
-         * might want to do something smarter *)
-        let mp = None in
-        let ctx, field_values =
-          List.fold_left_map
-            (fun ctx fv -> typed_avalue_to_given_back mp fv ctx)
-            ctx adt_v.field_values
-        in
-        let field_values = List.filter_map (fun x -> x) field_values in
-        (* For now, only tuples can contain borrows - note that if we gave
-         * something like a [&mut Vec] to a function, we give back the
-         * vector value upon visiting the "abstraction borrow" node *)
-        let adt_id, _ = TypesUtils.ty_as_adt av.ty in
-        match adt_id with
-        | TAdtId _ | TBuiltin (TBox | TArray | TSlice | TStr) ->
-            cassert __FILE__ __LINE__ (field_values = []) ctx.span
-              "ADTs with borrows are not supported yet";
-            (ctx, None)
-        | TTuple ->
-            (* Return *)
-            let variant_id = adt_v.variant_id in
-            sanity_check __FILE__ __LINE__ (variant_id = None) ctx.span;
-            if field_values = [] then (ctx, None)
-            else
-              (* Note that if there is exactly one field value, [mk_simpl_tuple_pattern]
-               * is the identity *)
-              let lv = mk_simpl_tuple_pattern field_values in
-              (ctx, Some lv))
+    | AAdt adt_v -> adt_avalue_to_given_back_aux ~filter mp av adt_v ctx
     | ABottom -> craise __FILE__ __LINE__ ctx.span "Unreachable"
-    | ALoan lc -> aloan_content_to_given_back mp lc ctx
-    | ABorrow bc -> aborrow_content_to_given_back mp bc ctx
-    | ASymbolic aproj -> aproj_to_given_back mp aproj ctx
-    | AIgnored -> (ctx, None)
+    | ALoan _ ->
+        (* The avalue should have been generated by a borrow projector: this case is unreachable *)
+        craise __FILE__ __LINE__ ctx.span "Unreachable"
+    | ABorrow bc -> aborrow_content_to_given_back_aux ~filter mp bc av.ty ctx
+    | ASymbolic aproj -> aproj_to_given_back_aux mp aproj ctx
+    | AIgnored ->
+        (* If we do not filter, we have to create a dummy pattern *)
+        if filter then (ctx, None)
+        else
+          let ty =
+            translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
+          in
+          (ctx, Some (mk_dummy_pattern ty))
   in
-  (* Sanity check - Rk.: we do this at every recursive call, which is a bit
+  (* Sanity checks - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
   (match value with
   | None -> ()
@@ -1981,59 +2030,160 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
   (* Return *)
   (ctx, value)
 
-and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
-    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
-  match lc with
-  | AMutLoan (_, _, _) | ASharedLoan (_, _, _, _) ->
-      craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AEndedMutLoan { child = _; given_back = _; given_back_span = _ }
-  | AEndedSharedLoan (_, _) ->
-      (* We consider given back values, and thus ignore those *)
-      (ctx, None)
-  | AIgnoredMutLoan (_, _) ->
-      (* There can be *inner* not ended mutable loans, but not outer ones *)
-      craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AEndedIgnoredMutLoan _ ->
-      (* This happens with nested borrows: we need to dive in *)
-      raise Unimplemented
-  | AIgnoredSharedLoan _ ->
-      (* Ignore *)
-      (ctx, None)
+and adt_avalue_to_given_back_aux ~(filter : bool) (mp : mplace option)
+    (av : V.typed_avalue) (adt_v : V.adt_avalue) (ctx : bs_ctx) :
+    bs_ctx * typed_pattern option =
+  (* Check if the ADT contains borrows *)
+  match compute_typed_avalue_proj_kind ctx.span av with
+  | LoanProj -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+  | UnknownProj ->
+      (* If we filter: ignore the pattern.
+         Otherwise, return a dummy value. *)
+      if filter then (ctx, None)
+      else
+        let ty =
+          translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
+        in
+        (ctx, Some (mk_dummy_pattern ty))
+  | BorrowProj -> begin
+      (* We do not do the same thing depending on whether we visit a tuple
+         or a "regular" ADT *)
+      let adt_id, _ = TypesUtils.ty_as_adt av.ty in
+      (* Translate the field values *)
+      (* For now we forget the meta-place information so that it doesn't get used
+         by several fields (which would then all have the same name...), but we
+         might want to do something smarter *)
+      let mp = None in
+      let ctx, field_values =
+        let filter =
+          filter
+          &&
+          match adt_id with
+          | TTuple | TBuiltin TBox -> true
+          | TBuiltin _ | TAdtId _ -> false
+        in
+        List.fold_left_map
+          (fun ctx fv -> typed_avalue_to_given_back_aux ~filter mp fv ctx)
+          ctx adt_v.field_values
+      in
+      match adt_id with
+      | TAdtId _ ->
+          (* Two cases depending on whether we filter or not *)
+          if filter then begin
+            (* Either at least one field contains a borrow, in which case
+               we preserve the whole ADT, or no field contains a borrow, in
+               which case we ignore it. *)
+            if List.for_all Option.is_none field_values then (ctx, None)
+            else
+              (* Some fields give back something: we have to preserve the ADT,
+                 using the "ignored" (i.e., [_]) for the values which give back
+                 nothing. *)
+              (* First retrieve the types *)
+              let field_tys =
+                List.map
+                  (fun (f : V.typed_avalue) ->
+                    translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos
+                      f.ty)
+                  adt_v.field_values
+              in
+              let fields = List.combine field_tys field_values in
+              let fields =
+                List.map
+                  (fun (ty, value) ->
+                    match value with
+                    | None -> mk_dummy_pattern ty
+                    | Some v -> v)
+                  fields
+              in
+              let adt_ty =
+                translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
+              in
+              let pat = mk_adt_pattern adt_ty adt_v.variant_id fields in
+              (ctx, Some pat)
+          end
+          else
+            (* We do not filter *)
+            let fields = List.map Option.get field_values in
+            let adt_ty =
+              translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
+            in
+            let pat = mk_adt_pattern adt_ty adt_v.variant_id fields in
+            (ctx, Some pat)
+      | TBuiltin TBox -> begin
+          (* The box type becomes the identity in the translation *)
+          match field_values with
+          | [ pat ] -> (ctx, pat)
+          | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+        end
+      | TBuiltin (TArray | TSlice | TStr) ->
+          (* This case is unreachable: in order to access the elements of an
+             array or a slice, we need to go through an index function, while
+             the [str] is not polymorphic. *)
+          craise __FILE__ __LINE__ ctx.span "Unreachable"
+      | TTuple ->
+          (* Sanity checks *)
+          let variant_id = adt_v.variant_id in
+          sanity_check __FILE__ __LINE__ (variant_id = None) ctx.span;
+          (* If the filtering is activated, we ignore the fields which do not
+             give values back (i.e., which do not contain mutable borrows). *)
+          if filter then
+            let field_values = List.filter_map (fun x -> x) field_values in
+            if field_values = [] then (ctx, None)
+            else
+              (* Note that if there is exactly one field value, [mk_simpl_tuple_pattern]
+               * is the identity *)
+              let lv = mk_simpl_tuple_pattern field_values in
+              (ctx, Some lv)
+          else
+            (* If we do not filter the fields, all the patterns should be [Some ...] *)
+            let field_values = List.map Option.get field_values in
+            let lv = mk_simpl_tuple_pattern field_values in
+            (ctx, Some lv)
+    end
 
-and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
-    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
+and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
+    (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) :
+    bs_ctx * typed_pattern option =
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow (_, _) | AIgnoredMutBorrow (_, _) ->
+      (* All the borrows should have been ended upon ending the abstraction *)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutBorrow (msv, _) ->
-      (* Return the span-symbolic-value *)
+      (* Return the meta symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
-      raise Unimplemented
+      craise __FILE__ __LINE__ ctx.span "Unimplemented"
   | AEndedSharedBorrow | AProjSharedBorrow _ ->
       (* Ignore *)
-      (ctx, None)
+      if filter then (ctx, None)
+      else
+        let ty = translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty in
+        (ctx, Some (mk_dummy_pattern ty))
 
-and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
-    bs_ctx * typed_pattern option =
+and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj)
+    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match aproj with
-  | V.AEndedProjLoans (_, child_projs) ->
-      (* There may be children borrow projections in case of nested borrows,
-       * in which case we need to dive in - we disallow nested borrows for now *)
-      cassert __FILE__ __LINE__
-        (List.for_all
-           (fun (_, aproj) -> aproj = V.AIgnoredProjBorrows)
-           child_projs)
-        ctx.span "Nested borrows are not supported yet";
-      (ctx, None)
+  | V.AEndedProjLoans (_, _) -> craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedProjBorrows mv ->
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
+
+let typed_avalue_to_given_back (mp : mplace option) (v : V.typed_avalue)
+    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
+  (* Check if the value was generated from a loan projector or a borrow
+     projector. If it is a loan projector we ignore it. *)
+  match compute_typed_avalue_proj_kind ctx.span v with
+  | BorrowProj -> typed_avalue_to_given_back_aux mp ~filter:true v ctx
+  | LoanProj | UnknownProj ->
+      (* If it is a loan proj we ignore it. If it is an unknown projection,
+         it means the value doesn't contain loans nor borrows, so nothing
+         is given back: we can ignore it as well. *)
+      (ctx, None)
 
 (** Convert the abstraction values in an abstraction to given back values.
 
@@ -2071,7 +2221,7 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
   let abs_ancestors = list_ancestor_abstractions ctx abs call_id in
   (call_info.forward, abs_ancestors)
 
-(** Add span-information to an expression *)
+(** Add meta-information to an expression *)
 let mk_espan_symbolic_assignments (vars : var list) (values : texpression list)
     (e : texpression) : texpression =
   let var_values = List.combine (List.map var_get_id vars) values in
@@ -2626,7 +2776,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   let back_inputs = List.append back_inputs back_state in
   (* Retrieve the values given back by this function: those are the output
    * values. We rely on the fact that there are no nested borrows to use the
-   * span-place information from the input values given to the forward function
+   * meta-place information from the input values given to the forward function
    * (we need to add [None] for the return avalue) *)
   let output_mpl =
     List.append (List.map translate_opt_mplace call.args_places) [ None ]
@@ -2688,6 +2838,8 @@ and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
 and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpression
     =
+  log#ldebug
+    (lazy ("Translating ended synthesis abstraction: " ^ abs_to_string ctx abs));
   (* If we end the abstraction which consumed the return value of the function
      we are synthesizing, we get back the borrows which were inside. Those borrows
      are actually input arguments of the backward function we are synthesizing.
@@ -2719,16 +2871,24 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* First, retrieve the list of variables used for the inputs for the
    * backward function *)
   let inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs_no_state in
+  log#ldebug
+    (lazy
+      ("Consumed inputs: "
+      ^ Print.list_to_string (pure_var_to_string ctx) inputs));
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: as there are no nested borrows, there should be none. *)
   let consumed = abs_to_consumed ctx ectx abs in
   cassert __FILE__ __LINE__ (consumed = []) ctx.span
     "Nested borrows are not supported yet";
   (* Retrieve the values given back upon ending this abstraction - note that
-   * we don't provide span-place information, because those assignments will
+   * we don't provide meta-place information, because those assignments will
    * be inlined anyway... *)
   log#ldebug (lazy ("abs: " ^ abs_to_string ctx abs));
   let ctx, given_back = abs_to_given_back_no_mp abs ctx in
+  log#ldebug
+    (lazy
+      ("given back: "
+      ^ Print.list_to_string (typed_pattern_to_string ctx) given_back));
   (* Link the inputs to those given back values - note that this also
    * checks we have the same number of values, of course *)
   let given_back_inputs = List.combine given_back inputs in
@@ -2829,7 +2989,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       | None -> next_e
       | Some func ->
           let call = mk_apps ctx.span func args in
-          (* Add span-information - this is slightly hacky: we look at the
+          (* Add meta-information - this is slightly hacky: we look at the
              values consumed by the abstraction (note that those come from
              *before* we applied the fixed-point context) and use them to
              guide the naming of the output vars.
@@ -3537,7 +3697,7 @@ and translate_forward_end (ectx : C.eval_ctx)
       (* Create the let expression with the loop call *)
       let e = mk_let effect_info.can_fail out_pat loop_call next_e in
 
-      (* Add span-information linking the loop input parameters and the
+      (* Add meta-information linking the loop input parameters and the
          loop input values - we use this to derive proper names.
 
          There is something important here: as we group the end of the function

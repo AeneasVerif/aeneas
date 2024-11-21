@@ -1,11 +1,9 @@
 open Types
-open TypesUtils
 open Expressions
 open Values
 open LlbcAst
 open LlbcAstUtils
 open ValuesUtils
-open Identifiers
 open Errors
 include ContextsBase
 
