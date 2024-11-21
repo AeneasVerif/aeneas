@@ -349,11 +349,15 @@ and avalue =
   | ALoan of aloan_content
   | ABorrow of aborrow_content
   | ASymbolic of aproj
-  | AIgnored
+  | AIgnored of mvalue option
       (** A value which doesn't contain borrows, or which borrows we
           don't own and thus ignore.
 
           In the comments, we display it as [_].
+
+          Note that we store the ignored value as a meta value.
+          Also note that this value is not always present (when we introduce
+          abstractions because of a join for instance).
        *)
 
 and adt_avalue = {

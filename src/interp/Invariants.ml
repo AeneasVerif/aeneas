@@ -716,7 +716,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                     | _ -> craise __FILE__ __LINE__ span "Unexpected")
                   given_back_ls
             | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
-        | AIgnored, _ -> ()
+        | AIgnored _, _ -> ()
         | _ ->
             log#ltrace
               (lazy

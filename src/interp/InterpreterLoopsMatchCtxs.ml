@@ -364,7 +364,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         else (* Merge *)
           M.match_distinct_aadts ctx0 ctx1 v0.ty av0 v1.ty av1 ty
     | ABottom, ABottom -> mk_abottom M.span ty
-    | AIgnored, AIgnored -> mk_aignored M.span ty
+    | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
         log#ldebug (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
@@ -529,7 +529,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       let loan =
         ASharedLoan
-          (PNone, BorrowId.Set.singleton bid2, sv, mk_aignored span bv_ty)
+          (PNone, BorrowId.Set.singleton bid2, sv, mk_aignored span bv_ty None)
       in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
@@ -634,14 +634,16 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let borrow_av =
           let ty = borrow_ty in
           let value =
-            ABorrow (AMutBorrow (PNone, bid0, mk_aignored span bv_ty))
+            ABorrow (AMutBorrow (PNone, bid0, mk_aignored span bv_ty None))
           in
           mk_typed_avalue span ty value
         in
 
         let loan_av =
           let ty = borrow_ty in
-          let value = ALoan (AMutLoan (PNone, nbid, mk_aignored span bv_ty)) in
+          let value =
+            ALoan (AMutLoan (PNone, nbid, mk_aignored span bv_ty None))
+          in
           mk_typed_avalue span ty value
         in
 
@@ -687,12 +689,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let bv_ty = bv.ty in
         cassert __FILE__ __LINE__ (ty_no_regions bv_ty) span
           "Nested borrows are not supported yet";
-        let value = ABorrow (AMutBorrow (pm, bid, mk_aignored span bv_ty)) in
+        let value =
+          ABorrow (AMutBorrow (pm, bid, mk_aignored span bv_ty None))
+        in
         { value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow PLeft bid0 bv0; mk_aborrow PRight bid1 bv1 ] in
 
-      let loan = AMutLoan (PNone, bid2, mk_aignored span bv_ty) in
+      let loan = AMutLoan (PNone, bid2, mk_aignored span bv_ty None) in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
 

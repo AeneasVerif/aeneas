@@ -100,11 +100,12 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
   let ety = Substitute.erase_regions ty in
   sanity_check __FILE__ __LINE__ (ty_is_rty ty && ety = v.ty) span;
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
-  if not (ty_has_regions_in_set regions ty) then { value = AIgnored; ty }
+  if not (ty_has_regions_in_set regions ty) then
+    { value = AIgnored (Some v); ty }
   else
     let value : avalue =
       match (v.value, ty) with
-      | VLiteral _, TLiteral _ -> AIgnored
+      | VLiteral _, TLiteral _ -> AIgnored (Some v)
       | VAdt adt, TAdt (id, generics) ->
           (* Retrieve the types of the fields *)
           let field_types =
@@ -270,7 +271,9 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
   (* Match *)
   let (value, ty) : avalue * ty =
     match (see, original_sv_ty) with
-    | SeLiteral _, TLiteral _ -> (AIgnored, original_sv_ty)
+    | SeLiteral lit, TLiteral _ ->
+        ( AIgnored (Some { value = VLiteral lit; ty = original_sv_ty }),
+          original_sv_ty )
     | SeAdt (variant_id, field_values), TAdt (_id, _generics) ->
         (* Project over the field values *)
         let field_values =

@@ -1654,7 +1654,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       (av : typed_avalue) : unit =
     let ty = av.ty in
     match av.value with
-    | ABottom | AIgnored -> ()
+    | ABottom | AIgnored _ -> ()
     | AAdt adt ->
         (* Simply explore the children *)
         List.iter (list_avalues allow_borrows push) adt.field_values
@@ -1671,7 +1671,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
               if destructure_shared_values then list_values sv else ([], sv)
             in
             (* Push a value *)
-            let ignored = mk_aignored span child_av.ty in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ALoan (ASharedLoan (pm, bids, sv, ignored)) in
             push { value; ty };
             (* Explore the child *)
@@ -1687,7 +1687,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the whole loan *)
-            let ignored = mk_aignored span child_av.ty in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ALoan (AMutLoan (pm, bid, ignored)) in
             push { value; ty }
         | AIgnoredMutLoan (opt_bid, child_av) ->
@@ -1719,7 +1719,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the borrow *)
-            let ignored = mk_aignored span child_av.ty in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ABorrow (AMutBorrow (pm, bid, ignored)) in
             push { value; ty }
         | ASharedBorrow _ ->
@@ -1801,7 +1801,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                 let sv = mk_value_with_fresh_sids sv in
                 (* Create the new avalue *)
                 let value =
-                  ALoan (ASharedLoan (PNone, bids, sv, mk_aignored span ty))
+                  ALoan
+                    (ASharedLoan (PNone, bids, sv, mk_aignored span ty None))
                 in
                 (* We need to update the type of the value: abstract shared loans
                    have the type `& ...` - TODO: this is annoying and not very clean... *)
@@ -1941,7 +1942,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               span "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
             let ty = TRef (RFVar r_id, ref_ty, kind) in
-            let ignored = mk_aignored span ref_ty in
+            let ignored = mk_aignored span ref_ty None in
             let av = ABorrow (AMutBorrow (PNone, bid, ignored)) in
             let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
@@ -1964,7 +1965,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             cassert __FILE__ __LINE__ (ty_no_regions ty) span
               "Nested borrows are not supported yet";
             (* We use [AIgnore] for the inner value *)
-            let ignored = mk_aignored span ty in
+            let ignored = mk_aignored span ty None in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ty = mk_ref_ty (RFVar r_id) ty RShared in
             (* Rem.: the shared value might contain loans *)
@@ -1987,7 +1988,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let ignored = mk_aignored span ty in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ty = mk_ref_ty (RFVar r_id) ty RMut in
-            let av = ALoan (AMutLoan (PNone, bid, ignored)) in
+            let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
             let av = { value = av; ty } in
             ([ av ], v))
     | VSymbolic _ ->
@@ -2251,7 +2252,7 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
     if pm = PNone then [ mk_value PLeft; mk_value PRight ] else [ av ]
   in
   match av.value with
-  | AAdt _ | ABottom | ASymbolic _ | AIgnored ->
+  | AAdt _ | ABottom | ASymbolic _ | AIgnored _ ->
       craise __FILE__ __LINE__ span "Unexpected"
   | ABorrow bc -> (
       match bc with

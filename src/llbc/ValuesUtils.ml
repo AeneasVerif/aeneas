@@ -34,9 +34,10 @@ let mk_abottom (span : Meta.span) (ty : ty) : typed_avalue =
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
   { value = ABottom; ty }
 
-let mk_aignored (span : Meta.span) (ty : ty) : typed_avalue =
+let mk_aignored (span : Meta.span) (ty : ty) (v : typed_value option) :
+    typed_avalue =
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
-  { value = AIgnored; ty }
+  { value = AIgnored v; ty }
 
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
@@ -56,7 +57,7 @@ let is_bottom (v : value) : bool =
 
 let is_aignored (v : avalue) : bool =
   match v with
-  | AIgnored -> true
+  | AIgnored _ -> true
   | _ -> false
 
 let is_symbolic (v : value) : bool =

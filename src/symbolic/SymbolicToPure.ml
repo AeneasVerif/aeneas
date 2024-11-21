@@ -1825,7 +1825,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
     | ALoan lc -> aloan_content_to_consumed ctx ectx lc
     | ABorrow bc -> aborrow_content_to_consumed ctx bc
     | ASymbolic aproj -> aproj_to_consumed ctx aproj
-    | AIgnored -> None
+    | AIgnored _ -> None
   in
   (* Sanity check - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
@@ -2013,7 +2013,7 @@ let rec typed_avalue_to_given_back_aux ~(filter : bool) (mp : mplace option)
         craise __FILE__ __LINE__ ctx.span "Unreachable"
     | ABorrow bc -> aborrow_content_to_given_back_aux ~filter mp bc av.ty ctx
     | ASymbolic aproj -> aproj_to_given_back_aux mp aproj ctx
-    | AIgnored ->
+    | AIgnored _ ->
         (* If we do not filter, we have to create a dummy pattern *)
         if filter then (ctx, None)
         else

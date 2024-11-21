@@ -128,7 +128,11 @@ let mk_aproj_loans_value_from_symbolic_value (regions : RegionId.Set.t)
     let av = ASymbolic (AProjLoans (svalue, [])) in
     let av : typed_avalue = { value = av; ty = svalue.sv_ty } in
     av
-  else { value = AIgnored; ty = svalue.sv_ty }
+  else
+    {
+      value = AIgnored (Some (mk_typed_value_from_symbolic_value svalue));
+      ty = svalue.sv_ty;
+    }
 
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
