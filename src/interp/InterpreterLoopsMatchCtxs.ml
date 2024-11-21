@@ -90,7 +90,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Recurse with the old marker *)
             self#visit_typed_avalue (abs_id, pm) child
         | AIgnoredMutLoan (_, child)
-        | AEndedIgnoredMutLoan { child; given_back = _; given_back_span = _ }
+        | AEndedIgnoredMutLoan { child; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the loan, if there is *)
@@ -115,7 +115,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Process those normally *)
             super#visit_aborrow_content (abs_id, pm) bc
         | AIgnoredMutBorrow (_, child)
-        | AEndedIgnoredMutBorrow { child; given_back = _; given_back_span = _ }
+        | AEndedIgnoredMutBorrow { child; given_back = _; given_back_meta = _ }
           ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the borrow, if there is *)

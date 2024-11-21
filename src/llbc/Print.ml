@@ -261,7 +261,7 @@ module Values = struct
         ^ ")"
     | AEndedMutBorrow (_mv, child) ->
         "@ended_mut_borrow(" ^ typed_avalue_to_string ~span env child ^ ")"
-    | AEndedIgnoredMutBorrow { child; given_back; given_back_span = _ } ->
+    | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
         ^ typed_avalue_to_string ~span env child
         ^ "; "

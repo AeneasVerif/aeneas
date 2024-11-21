@@ -456,11 +456,11 @@ let apply_reborrows (span : Meta.span)
             super#visit_ASharedLoan env pm bids sv av
         | AIgnoredSharedLoan _
         | AMutLoan (_, _, _)
-        | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _)
         | AIgnoredMutLoan (_, _)
         | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_span = _ } ->
+            { given_back = _; child = _; given_back_meta = _ } ->
             (* Nothing particular to do *)
             super#visit_aloan_content env lc
     end

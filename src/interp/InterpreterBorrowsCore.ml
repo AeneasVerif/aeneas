@@ -269,11 +269,11 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
             if BorrowId.Set.mem l bids then
               raise (FoundGLoanContent (Abstract lc))
             else super#visit_ASharedLoan env pm bids v av
-        | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _)
         | AIgnoredMutLoan (_, _)
         | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | AIgnoredSharedLoan _ -> super#visit_aloan_content env lc
 
       method! visit_EBinding env bv v =
@@ -411,11 +411,11 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if BorrowId.Set.mem l bids then update ()
             else super#visit_ASharedLoan env pm bids v av
-        | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _)
         | AIgnoredMutLoan (_, _)
         | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | AIgnoredSharedLoan _ -> super#visit_aloan_content env lc
 
       (** Note that once inside the abstractions, we don't control diving
@@ -475,7 +475,7 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         | AIgnoredMutBorrow (_, _)
         | AEndedMutBorrow _
         | AEndedIgnoredMutBorrow
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedBorrow -> super#visit_aborrow_content env bc
         | AProjSharedBorrow asb ->
             if borrow_in_asb l asb then
@@ -1213,13 +1213,13 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             raise (FoundBorrowIds (Borrows bids))
-        | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _) -> super#visit_aloan_content env lc
         | AIgnoredMutLoan (_, _) ->
             (* Ignore *)
             super#visit_aloan_content env lc
         | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | AIgnoredSharedLoan _ ->
             (* Ignore *)
             super#visit_aloan_content env lc

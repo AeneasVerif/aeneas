@@ -154,10 +154,10 @@ and typed_value = { value : value; ty : ty }
 (** "Meta"-value: information we store for the synthesis.
 
      Note that we never automatically visit the meta-values with the
-     visitors: they really are span information, and shouldn't be considered
+     visitors: they really are meta information, and shouldn't be considered
      as part of the environment during a symbolic execution.
 
-     TODO: we may want to create wrappers, to prevent accidently mixing span
+     TODO: we may want to create wrappers, to prevent accidently mixing meta
      values and regular values.
  *)
 type mvalue = typed_value [@@deriving show, ord]
@@ -415,7 +415,7 @@ and aloan_content =
   | AEndedMutLoan of {
       child : typed_avalue;
       given_back : typed_avalue;
-      given_back_span : mvalue;
+      given_back_meta : mvalue;
     }
       (** An ended mutable loan in an abstraction.
           We need it because abstractions must keep track of the values
@@ -440,7 +440,7 @@ and aloan_content =
           After ending [l0]:
           
           {[
-            abs0 { a_ended_mut_loan { child = _; given_back = _; given_back_span = U32 3; }
+            abs0 { a_ended_mut_loan { child = _; given_back = _; given_back_meta = U32 3; }
             x -> ⊥
           ]}
 
@@ -459,7 +459,7 @@ and aloan_content =
               a_ended_mut_loan {
                 child = _;
                 given_back = a_mut_borrow l1 _;
-                given_back_span = (mut_borrow l1 (U32 3));
+                given_back_meta = (mut_borrow l1 (U32 3));
               }
             }
             ...
@@ -503,7 +503,7 @@ and aloan_content =
               a_ended_ignored_mut_loan {
                 child = a_mut_loan l1 _;
                 given_back = a_mut_borrow l1 _;
-                given_back_span = mut_borrow l1 @s1
+                given_back_meta = mut_borrow l1 @s1
               }
             }
             x -> ⊥
@@ -513,7 +513,7 @@ and aloan_content =
   | AEndedIgnoredMutLoan of {
       child : typed_avalue;
       given_back : typed_avalue;
-      given_back_span : mvalue;
+      given_back_meta : mvalue;
     }
       (** Similar to {!AEndedMutLoan}, for ignored loans.
           See the comments for {!AIgnoredMutLoan}.
@@ -661,8 +661,8 @@ and aborrow_content =
   | AEndedIgnoredMutBorrow of {
       child : typed_avalue;
       given_back : typed_avalue;
-      given_back_span : msymbolic_value;
-          (** [given_back_span] is used to store the (symbolic) value we gave back
+      given_back_meta : msymbolic_value;
+          (** [given_back_meta] is used to store the (symbolic) value we gave back
               upon ending the borrow.
 
               Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan].
