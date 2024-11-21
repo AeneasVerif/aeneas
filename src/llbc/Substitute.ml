@@ -198,16 +198,20 @@ let env_subst_rids (r_subst : RegionId.id -> RegionId.id) (x : env) : env =
 
 let generic_args_of_params_erase_regions span (generics : generic_params) :
     generic_args =
-  let generics =
-    st_substitute_visitor#visit_generic_params erase_regions_subst generics
-  in
-  (* Note that from here we don't need to perform any susbtitutions actually *)
+  (* Note that put aside erasing the regions, we don't need to perform any susbtitutions
+     actually, and we only need to erase the regions inside the trait clauses. *)
   let regions = List.map (fun _ -> RErased) generics.regions in
   let types = List.map (fun (v : type_var) -> TVar v.index) generics.types in
   let const_generics =
     List.map
       (fun (v : const_generic_var) -> CgVar v.index)
       generics.const_generics
+  in
+  (* Erase the regions in the trait clauses. *)
+  let trait_clauses =
+    List.map
+      (st_substitute_visitor#visit_trait_clause erase_regions_subst)
+      generics.trait_clauses
   in
   let trait_refs =
     List.map
@@ -227,6 +231,6 @@ let generic_args_of_params_erase_regions span (generics : generic_params) :
               binder_value = trait_decl_ref;
             };
         })
-      generics.trait_clauses
+      trait_clauses
   in
   { regions; types; const_generics; trait_refs }

@@ -664,9 +664,11 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let env = Print.Contexts.decls_ctx_to_fmt_env ctx in
   let def_id = def.T.def_id in
   let name = Print.Types.name_to_string env def.item_meta.name in
-  (* Can't translate types with regions for now *)
+  (* Can't translate types with nested borrows for now *)
   cassert __FILE__ __LINE__
-    (def.generics.regions = [])
+    (not
+       (TypesUtils.type_decl_has_nested_borrows def.item_meta.span
+          ctx.type_ctx.type_infos def))
     def.item_meta.span "ADTs containing borrows are not supported yet";
   let generics, preds =
     translate_generic_params (Some def.item_meta.span) def.generics

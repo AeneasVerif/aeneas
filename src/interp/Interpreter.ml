@@ -199,17 +199,12 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
    * do it, and because it gives a bit of sanity.
    * *)
   let sg = fdef.signature in
-  (* Sanity check: no nested borrows, borrows in ADTs, etc. *)
+  (* Sanity check: no nested borrows *)
   cassert __FILE__ __LINE__
     (List.for_all
        (fun ty -> not (ty_has_nested_borrows ctx.type_ctx.type_infos ty))
        (sg.output :: sg.inputs))
     fdef.item_meta.span "Nested borrows are not supported yet";
-  cassert __FILE__ __LINE__
-    (List.for_all
-       (fun ty -> not (ty_has_adt_with_borrows ctx.type_ctx.type_infos ty))
-       (sg.output :: sg.inputs))
-    fdef.item_meta.span "ADTs containing borrows are not supported yet";
 
   (* Create the context *)
   let regions_hierarchy =
