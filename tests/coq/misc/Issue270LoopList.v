@@ -19,13 +19,13 @@ Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
 (** [issue_270_loop_list::foo]: loop 0:
-    Source: 'tests/src/issue-270-loop-list.rs', lines 11:8-14:9 *)
+    Source: 'tests/src/issue-270-loop-list.rs', lines 10:8-12:9 *)
 Fixpoint foo_loop (t : List_t (List_t u8)) : result unit :=
   match t with | List_Cons _ tt1 => foo_loop tt1 | List_Nil => Ok tt end
 .
 
 (** [issue_270_loop_list::foo]:
-    Source: 'tests/src/issue-270-loop-list.rs', lines 8:0-16:1 *)
+    Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 *)
 Definition foo (v : List_t (List_t u8)) : result unit :=
   match v with | List_Cons l t => foo_loop t | List_Nil => Ok tt end
 .
