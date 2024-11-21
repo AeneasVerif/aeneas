@@ -11,16 +11,16 @@ open TypesUtils
 open Values
 open LlbcAst
 open Contexts
+open Substitute
 open Errors
-module Subst = Substitute
 
 (** The local logger *)
 let log = Logging.associated_types_log
 
-let trait_type_ref_substitute (subst : Subst.subst) (r : trait_type_ref) :
+let trait_type_ref_substitute (subst : subst) (r : trait_type_ref) :
     trait_type_ref =
   let { trait_ref; type_name } = r in
-  let trait_ref = Subst.trait_ref_substitute subst trait_ref in
+  let trait_ref = trait_ref_substitute subst trait_ref in
   { trait_ref; type_name }
 
 module TyOrd = struct
@@ -173,14 +173,12 @@ let generic_params_to_string (ctx : norm_ctx) (x : generic_params) : string =
 
 (** Small utility to lookup trait impls, together with a substitution. *)
 let norm_ctx_lookup_trait_impl (ctx : norm_ctx) (impl_id : TraitImplId.id)
-    (generics : generic_args) : trait_impl * Subst.subst =
+    (generics : generic_args) : trait_impl * subst =
   (* Lookup the implementation *)
   let trait_impl = TraitImplId.Map.find impl_id ctx.trait_impls in
   (* The substitution *)
   let tr_self = UnknownTrait __FUNCTION__ in
-  let subst =
-    Subst.make_subst_from_generics trait_impl.generics generics tr_self
-  in
+  let subst = make_subst_from_generics trait_impl.generics generics tr_self in
   (* Return *)
   (trait_impl, subst)
 
@@ -191,7 +189,7 @@ let norm_ctx_lookup_trait_impl_ty (ctx : norm_ctx) (impl_id : TraitImplId.id)
   (* Lookup the type *)
   let ty = List.assoc type_name trait_impl.types in
   (* Substitute *)
-  Subst.ty_substitute subst ty
+  ty_substitute subst ty
 
 let norm_ctx_lookup_trait_impl_parent_clause (ctx : norm_ctx)
     (impl_id : TraitImplId.id) (generics : generic_args)
@@ -203,7 +201,7 @@ let norm_ctx_lookup_trait_impl_parent_clause (ctx : norm_ctx)
   (* Sanity check: the clause necessarily refers to an impl *)
   let _ = TypesUtils.trait_instance_id_as_trait_impl clause.trait_id in
   (* Substitute *)
-  Subst.trait_ref_substitute subst clause
+  trait_ref_substitute subst clause
 
 (** Normalize a type by simplifying the references to trait associated types
     and choosing a representative when there are equalities between types
@@ -453,7 +451,7 @@ let ctx_normalize_ty (span : Meta.span option) (ctx : eval_ctx) (ty : ty) : ty =
 (** Normalize a type and erase the regions at the same time *)
 let ctx_normalize_erase_ty (span : Meta.span) (ctx : eval_ctx) (ty : ty) : ty =
   let ty = ctx_normalize_ty (Some span) ctx ty in
-  Subst.erase_regions ty
+  erase_regions ty
 
 let ctx_normalize_trait_type_constraint_region_binder (span : Meta.span)
     (ctx : eval_ctx) (ttc : trait_type_constraint region_binder) :
@@ -466,9 +464,7 @@ let ctx_normalize_trait_type_constraint_region_binder (span : Meta.span)
 let type_decl_get_inst_norm_variants_fields_rtypes (span : Meta.span)
     (ctx : eval_ctx) (def : type_decl) (generics : generic_args) :
     (VariantId.id option * ty list) list =
-  let res =
-    Subst.type_decl_get_instantiated_variants_fields_types def generics
-  in
+  let res = type_decl_get_instantiated_variants_fields_types def generics in
   List.map
     (fun (variant_id, types) ->
       (variant_id, List.map (ctx_normalize_ty (Some span) ctx) types))
@@ -479,7 +475,7 @@ let type_decl_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
     (def : type_decl) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   let types =
-    Subst.type_decl_get_instantiated_field_types def opt_variant_id generics
+    type_decl_get_instantiated_field_types def opt_variant_id generics
   in
   List.map (ctx_normalize_ty (Some span) ctx) types
 
@@ -487,7 +483,7 @@ let type_decl_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
 let ctx_adt_value_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
     (adt : adt_value) (id : type_id) (generics : generic_args) : ty list =
   let types =
-    Subst.ctx_adt_value_get_instantiated_field_types span ctx adt id generics
+    ctx_adt_value_get_instantiated_field_types span ctx adt id generics
   in
   List.map (ctx_normalize_ty (Some span) ctx) types
 
@@ -497,10 +493,10 @@ let type_decl_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
     (def : type_decl) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   let types =
-    Subst.type_decl_get_instantiated_field_types def opt_variant_id generics
+    type_decl_get_instantiated_field_types def opt_variant_id generics
   in
   let types = List.map (ctx_normalize_ty (Some span) ctx) types in
-  List.map Subst.erase_regions types
+  List.map erase_regions types
 
 (** Same as [ctx_adt_get_instantiated_field_types] but normalizes the types and
     erases the regions. *)
@@ -508,11 +504,10 @@ let ctx_adt_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   let types =
-    Subst.ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id
-      generics
+    ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id generics
   in
   let types = List.map (ctx_normalize_ty (Some span) ctx) types in
-  List.map Subst.erase_regions types
+  List.map erase_regions types
 
 (** Same as [substitute_signature] but normalizes the types *)
 let ctx_subst_norm_signature (span : Meta.span) (ctx : eval_ctx)
@@ -523,8 +518,8 @@ let ctx_subst_norm_signature (span : Meta.span) (ctx : eval_ctx)
     (tr_self : trait_instance_id) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
   let sg =
-    Subst.substitute_signature asubst r_subst ty_subst cg_subst tr_subst tr_self
-      sg regions_hierarchy
+    substitute_signature asubst r_subst ty_subst cg_subst tr_subst tr_self sg
+      regions_hierarchy
   in
   let { regions_hierarchy; inputs; output; trait_type_constraints } = sg in
   let inputs = List.map (ctx_normalize_ty (Some span) ctx) inputs in

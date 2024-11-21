@@ -6,7 +6,7 @@ include Charon.Substitute
 open Types
 open Values
 open LlbcAst
-open Contexts
+open ContextsBase
 open Errors
 
 (** Generate fresh regions for region variables.
@@ -49,46 +49,6 @@ let fresh_regions_with_substs_from_vars ~(fail_if_not_found : bool)
     * (region -> region) =
   fresh_regions_with_substs ~fail_if_not_found
     (List.map (fun (r : region_var) -> r.index) region_vars)
-
-(** Return the types of the properly instantiated ADT's variant, provided a
-    context.
-
-    **IMPORTANT**: this function doesn't normalize the types, you may want to
-    use the [AssociatedTypes] equivalent instead.
-*)
-let ctx_adt_get_instantiated_field_types (ctx : eval_ctx)
-    (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
-    (generics : generic_args) : ty list =
-  let def = ctx_lookup_type_decl ctx def_id in
-  type_decl_get_instantiated_field_types def opt_variant_id generics
-
-(** Return the types of the properly instantiated ADT value (note that
-    here, ADT is understood in its broad meaning: ADT, builtin value or tuple).
-
-    **IMPORTANT**: this function doesn't normalize the types, you may want to
-    use the [AssociatedTypes] equivalent instead.
- *)
-let ctx_adt_value_get_instantiated_field_types (span : Meta.span)
-    (ctx : eval_ctx) (adt : adt_value) (id : type_id) (generics : generic_args)
-    : ty list =
-  match id with
-  | TAdtId id ->
-      (* Retrieve the types of the fields *)
-      ctx_adt_get_instantiated_field_types ctx id adt.variant_id generics
-  | TTuple ->
-      cassert __FILE__ __LINE__ (generics.regions = []) span
-        "Tuples don't have region parameters";
-      generics.types
-  | TBuiltin aty -> (
-      match aty with
-      | TBox ->
-          sanity_check __FILE__ __LINE__ (generics.regions = []) span;
-          sanity_check __FILE__ __LINE__ (List.length generics.types = 1) span;
-          sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
-          generics.types
-      | TArray | TSlice | TStr ->
-          (* Those types don't have fields *)
-          craise __FILE__ __LINE__ span "Unreachable")
 
 (** Substitute a function signature, together with the regions hierarchy
     associated to that signature.
@@ -235,3 +195,38 @@ let env_subst_rids (r_subst : RegionId.id -> RegionId.id) (x : env) : env =
       (fun x -> x)
   in
   vis#visit_env () x
+
+let generic_args_of_params_erase_regions span (generics : generic_params) :
+    generic_args =
+  let generics =
+    st_substitute_visitor#visit_generic_params erase_regions_subst generics
+  in
+  (* Note that from here we don't need to perform any susbtitutions actually *)
+  let regions = List.map (fun _ -> RErased) generics.regions in
+  let types = List.map (fun (v : type_var) -> TVar v.index) generics.types in
+  let const_generics =
+    List.map
+      (fun (v : const_generic_var) -> CgVar v.index)
+      generics.const_generics
+  in
+  let trait_refs =
+    List.map
+      (fun (c : trait_clause) ->
+        sanity_check __FILE__ __LINE__ (c.trait.binder_regions = []) span;
+        let { trait_decl_id; decl_generics; _ } = c.trait.binder_value in
+        let trait_decl_ref = { trait_decl_id; decl_generics } in
+        (* Note that because we directly refer to the clause, we give it
+           empty generics *)
+        let trait_id = Clause c.clause_id in
+        {
+          trait_id;
+          trait_decl_ref =
+            {
+              (* Empty list of bound regions: we don't support the other cases for now *)
+              binder_regions = [];
+              binder_value = trait_decl_ref;
+            };
+        })
+      generics.trait_clauses
+  in
+  { regions; types; const_generics; trait_refs }
