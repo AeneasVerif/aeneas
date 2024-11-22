@@ -1368,12 +1368,14 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
   (* Sanity check: no nested borrows, borrows in ADTs, etc. *)
   cassert __FILE__ __LINE__
     (List.for_all
-       (fun ty -> not (ty_has_nested_borrows ctx.type_ctx.type_infos ty))
+       (fun ty ->
+         not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
        (inst_sg.output :: inst_sg.inputs))
     span "Nested borrows are not supported yet";
   cassert __FILE__ __LINE__
     (List.for_all
-       (fun ty -> not (ty_has_adt_with_borrows ctx.type_ctx.type_infos ty))
+       (fun ty ->
+         not (ty_has_adt_with_borrows (Some span) ctx.type_ctx.type_infos ty))
        (inst_sg.output :: inst_sg.inputs))
     span "ADTs containing borrows are not supported yet";
   (* Evaluate the function call *)
@@ -1444,7 +1446,9 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   sanity_check __FILE__ __LINE__
     (List.for_all
        (fun arg ->
-         not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
+         not
+           (value_has_ret_symbolic_value_with_borrow_under_mut (Some span) ctx
+              arg))
        args)
     span;
 
@@ -1548,7 +1552,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
    * this is a current limitation of our synthesis *)
   sanity_check __FILE__ __LINE__
     (List.for_all
-       (fun ty -> not (ty_has_borrows ctx.type_ctx.type_infos ty))
+       (fun ty -> not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
        generics.types)
     span;
 

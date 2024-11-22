@@ -1664,7 +1664,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         | ASharedLoan (pm, bids, sv, child_av) ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (value_has_borrows ctx sv.value))
+              (not (value_has_borrows (Some span) ctx sv.value))
               span "Nested borrows are not supported yet";
             (* Destructure the shared value *)
             let avl, sv =
@@ -1693,7 +1693,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         | AIgnoredMutLoan (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               span "Nested borrows are not supported yet";
             sanity_check __FILE__ __LINE__ (opt_bid = None) span;
             (* Simply explore the child *)
@@ -1706,7 +1707,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         | AIgnoredSharedLoan child_av ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               span "Nested borrows are not supported yet";
             (* Simply explore the child *)
             list_avalues false push_fail child_av)
@@ -1728,7 +1730,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         | AIgnoredMutBorrow (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               span "Nested borrows are not supported yet";
             sanity_check __FILE__ __LINE__ (opt_bid = None) span;
             (* Just explore the child *)
@@ -1737,7 +1740,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             { child = child_av; given_back = _; given_back_meta = _ } ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               span "Nested borrows are not supported yet";
             (* Just explore the child *)
             list_avalues false push_fail child_av
@@ -1757,7 +1761,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
         sanity_check __FILE__ __LINE__
-          (not (ty_has_borrows ctx.type_ctx.type_infos ty))
+          (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
           span
   and list_values (v : typed_value) : typed_avalue list * typed_value =
     let ty = v.ty in
@@ -1784,7 +1788,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                 "Nested borrows are not supported yet";
               let av : typed_avalue =
                 sanity_check __FILE__ __LINE__
-                  (not (value_has_loans_or_borrows ctx sv.value))
+                  (not (value_has_loans_or_borrows (Some span) ctx sv.value))
                   span;
                 (* We introduce fresh ids for the symbolic values *)
                 let mk_value_with_fresh_sids (v : typed_value) : typed_value =
@@ -1821,7 +1825,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
         sanity_check __FILE__ __LINE__
-          (not (ty_has_borrows ctx.type_ctx.type_infos ty))
+          (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
           span;
         ([], v)
   in
@@ -1938,7 +1942,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (value_has_borrows ctx bv.value))
+              (not (value_has_borrows (Some span) ctx bv.value))
               span "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
             let ty = TRef (RFVar r_id, ref_ty, kind) in
@@ -1959,7 +1963,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (value_has_borrows ctx sv.value))
+              (not (value_has_borrows (Some span) ctx sv.value))
               span "Nested borrows are not supported yet";
             (* Push the avalue *)
             cassert __FILE__ __LINE__ (ty_no_regions ty) span
@@ -1995,7 +1999,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
         cassert __FILE__ __LINE__
-          (not (value_has_borrows ctx v.value))
+          (not (value_has_borrows (Some span) ctx v.value))
           span "Nested borrows are not supported yet";
         (* Return nothing *)
         ([], v)
@@ -2151,7 +2155,7 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
       method! visit_symbolic_value _ sv =
         (* Sanity check: no borrows *)
         sanity_check __FILE__ __LINE__
-          (not (symbolic_value_has_borrows ctx sv))
+          (not (symbolic_value_has_borrows (Some span) ctx sv))
           span
     end
   in
@@ -2279,7 +2283,7 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
       | ASharedLoan (pm, bids, sv, child) ->
           sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
           sanity_check __FILE__ __LINE__
-            (not (value_has_borrows ctx sv.value))
+            (not (value_has_borrows (Some span) ctx sv.value))
             span;
           let mk_value pm =
             { av with value = ALoan (ASharedLoan (pm, bids, sv, child)) }
@@ -2547,7 +2551,9 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                               sanity_check __FILE__ __LINE__
                                 (is_aignored child.value) span;
                               sanity_check __FILE__ __LINE__
-                                (not (value_has_loans_or_borrows ctx sv.value))
+                                (not
+                                   (value_has_loans_or_borrows (Some span) ctx
+                                      sv.value))
                                 span;
                               let lc = ASharedLoan (pm, bids, sv, child) in
                               set_loans_as_merged pm bids;

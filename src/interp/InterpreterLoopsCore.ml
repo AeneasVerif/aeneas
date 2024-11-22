@@ -451,7 +451,7 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
 
       method! visit_symbolic_value _ sv =
         sanity_check __FILE__ __LINE__
-          (not (symbolic_value_has_borrows ctx sv))
+          (not (symbolic_value_has_borrows (Some span) ctx sv))
           span;
         sv
 

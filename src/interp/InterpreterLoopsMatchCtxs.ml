@@ -217,7 +217,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
        one of the two contexts (ctx0 here) to call value_has_borrows,
        it doesn't matter here. *)
     let value_has_borrows =
-      ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
+      ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
     in
     match (v0.value, v1.value) with
     | VLiteral lv0, VLiteral lv1 ->
@@ -256,8 +256,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
 
               cassert __FILE__ __LINE__
                 (not
-                   (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
-                      bv.value))
+                   (ValuesUtils.value_has_borrows (Some span)
+                      ctx0.type_ctx.type_infos bv.value))
                 M.span "The join of nested borrows is not supported yet";
               let bid, bv =
                 M.match_mut_borrows ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
@@ -344,7 +344,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
        one of the two contexts (ctx0 here) to call value_has_borrows,
        it doesn't matter here. *)
     let value_has_borrows =
-      ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
+      ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
     in
 
     let match_rec = match_typed_values ctx0 ctx1 in
@@ -469,7 +469,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
        updates
     *)
     let check_no_borrows ctx (v : typed_value) =
-      sanity_check __FILE__ __LINE__ (not (value_has_borrows ctx v.value)) span
+      sanity_check __FILE__ __LINE__
+        (not (value_has_borrows (Some span) ctx v.value))
+        span
     in
     List.iter (check_no_borrows ctx0) adt0.field_values;
     List.iter (check_no_borrows ctx1) adt1.field_values;
@@ -615,7 +617,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          will update [v], while the backward loop function will return nothing.
       *)
       cassert __FILE__ __LINE__
-        (not (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos bv.value))
+        (not
+           (ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
+              bv.value))
         span "Nested borrows are not supported yet";
 
       if bv0 = bv1 then (
@@ -764,7 +768,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* The caller should have checked that the symbolic values don't contain
          borrows *)
       sanity_check __FILE__ __LINE__
-        (not (ty_has_borrows ctx0.type_ctx.type_infos sv0.sv_ty))
+        (not (ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty))
         span;
       (* TODO: the symbolic values may contain bottoms: we're being conservatice,
          and fail (for now) if part of a symbolic value contains a bottom.
@@ -784,10 +788,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     *)
     let type_infos = ctx0.type_ctx.type_infos in
     sanity_check __FILE__ __LINE__
-      (not (ty_has_borrows type_infos sv.sv_ty))
+      (not (ty_has_borrows (Some span) type_infos sv.sv_ty))
       span;
     sanity_check __FILE__ __LINE__
-      (not (ValuesUtils.value_has_borrows type_infos v.value))
+      (not (ValuesUtils.value_has_borrows (Some span) type_infos v.value))
       span;
     let value_is_left = not left in
     (* If there are loans in the regular value, raise an exception. *)
@@ -1231,7 +1235,7 @@ struct
        a continue, where the fixed point contains some bottom values. *)
     let value_is_left = not left in
     let ctx = if value_is_left then ctx0 else ctx1 in
-    if left && not (value_has_loans_or_borrows ctx v.value) then
+    if left && not (value_has_loans_or_borrows (Some span) ctx v.value) then
       mk_bottom span v.ty
     else
       raise

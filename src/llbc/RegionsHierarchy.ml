@@ -87,6 +87,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
   let bound_regions, bound_regions_id_subst, bound_regions_subst =
     Subst.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
       sg.generics.regions
+      (snd (RegionId.fresh_stateful_generator ()))
   in
   let region_id_to_var_map : RegionVarId.id RegionId.Map.t =
     RegionId.Map.of_list

@@ -580,10 +580,10 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
       let _, ty0, _ = ty_as_ref ty0 in
       let _, ty1, _ = ty_as_ref ty1 in
       sanity_check __FILE__ __LINE__
-        (not (ty_has_borrows ctx.type_ctx.type_infos ty0))
+        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty0))
         span;
       sanity_check __FILE__ __LINE__
-        (not (ty_has_borrows ctx.type_ctx.type_infos ty1))
+        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty1))
         span
     in
 
@@ -615,10 +615,10 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
        join matcher [JM] to do so.
     *)
     sanity_check __FILE__ __LINE__
-      (not (value_has_loans_or_borrows ctx sv0.value))
+      (not (value_has_loans_or_borrows (Some span) ctx sv0.value))
       span;
     sanity_check __FILE__ __LINE__
-      (not (value_has_loans_or_borrows ctx sv1.value))
+      (not (value_has_loans_or_borrows (Some span) ctx sv1.value))
       span;
 
     let ty = ty0 in

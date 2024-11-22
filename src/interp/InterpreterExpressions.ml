@@ -32,7 +32,8 @@ let expand_primitively_copyable_at_place (config : config) (span : Meta.span)
    fun ctx ->
     let v = read_place span access p ctx in
     match
-      find_first_primitively_copyable_sv_with_borrows ctx.type_ctx.type_infos v
+      find_first_primitively_copyable_sv_with_borrows (Some span)
+        ctx.type_ctx.type_infos v
     with
     | None -> (ctx, fun e -> e)
     | Some sv ->
@@ -345,7 +346,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
         span "Can not copy a value containing bottom";
       sanity_check __FILE__ __LINE__
         (Option.is_none
-           (find_first_primitively_copyable_sv_with_borrows
+           (find_first_primitively_copyable_sv_with_borrows (Some span)
               ctx.type_ctx.type_infos v))
         span;
       (* Copy the value *)

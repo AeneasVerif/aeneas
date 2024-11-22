@@ -662,17 +662,16 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let env = Print.Contexts.decls_ctx_to_fmt_env ctx in
   let def_id = def.T.def_id in
   let name = Print.Types.name_to_string env def.item_meta.name in
+  let span = def.item_meta.span in
   (* Can't translate types with nested borrows for now *)
   cassert __FILE__ __LINE__
     (not
-       (TypesUtils.type_decl_has_nested_borrows def.item_meta.span
+       (TypesUtils.type_decl_has_nested_borrows (Some span)
           ctx.type_ctx.type_infos def))
-    def.item_meta.span "ADTs containing borrows are not supported yet";
-  let generics, preds =
-    translate_generic_params (Some def.item_meta.span) def.generics
-  in
+    span "ADTs containing borrows are not supported yet";
+  let generics, preds = translate_generic_params (Some span) def.generics in
   let explicit_info = compute_explicit_info generics [] in
-  let kind = translate_type_decl_kind def.item_meta.span def.T.kind in
+  let kind = translate_type_decl_kind span def.T.kind in
   let item_meta = def.item_meta in
   {
     def_id;
@@ -731,7 +730,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
           cassert_opt_span __FILE__ __LINE__
             (not
                (List.exists
-                  (TypesUtils.ty_has_borrows type_infos)
+                  (TypesUtils.ty_has_borrows span type_infos)
                   generics.types))
             span "ADTs containing borrows are not supported yet";
           match t_generics.types with
@@ -811,12 +810,14 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
             Some (TAdt (type_id, generics))
           else if
             (* If not inside a mutable reference: check if the type contains
-               a mutable reference (through one of its generics.
+               a mutable reference (through one of its generics, inside
+               its definition, etc.).
                If yes, keep the whole type, and translate all the generics as
                "forward" types (the backward function will extract the proper
                information from the ADT value).
             *)
-            TypesUtils.ty_has_regions_in_pred keep_region ty
+            TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+              keep_region ty
           then
             let generics =
               translate_fwd_generic_args span type_infos generics
@@ -826,7 +827,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       | TBuiltin TBox -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           cassert_opt_span __FILE__ __LINE__
-            (not (TypesUtils.ty_has_borrows type_infos ty))
+            (not (TypesUtils.ty_has_borrows span type_infos ty))
             span "ADTs containing borrows are not supported yet";
           (* Eliminate the box *)
           match generics.types with
@@ -1159,6 +1160,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     let _, rid_subst, r_subst =
       Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
         sg.generics.regions
+        (snd (T.RegionId.fresh_stateful_generator ()))
     in
     let subst = { Substitute.empty_subst with r_subst } in
     let ty = Substitute.ty_substitute subst ty in
@@ -3824,7 +3826,9 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         List.map
           (fun ty ->
             cassert __FILE__ __LINE__
-              (not (TypesUtils.ty_has_borrows ctx.type_ctx.type_infos ty))
+              (not
+                 (TypesUtils.ty_has_borrows (Some ctx.span)
+                    ctx.type_ctx.type_infos ty))
               ctx.span "The types shouldn't contain borrows";
             ctx_translate_fwd_ty ctx ty)
           tys)
