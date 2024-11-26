@@ -335,6 +335,9 @@ let type_check_pure_code = ref false
     as far as possible while leaving "holes" in the generated code? *)
 let fail_hard = ref false
 
+(** Shall we emit errors instead of warnings? *)
+let warnings_as_errors = ref true
+
 (** If true, add the type name as a prefix
     to the variant names.
     Ex.:
