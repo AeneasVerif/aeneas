@@ -743,7 +743,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       ...
     ]}
  *)
-let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let simplify_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -810,7 +810,19 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   | _ -> false
                 in
                 if List.for_all check_pat_arg (List.combine pats args) then
-                  self#visit_Let env monadic lv g next
+                  (* Check if the application is a tuple constructor or will
+                     be extracted as a tuple constructor: if it is, keep
+                     the lambdas, otherwise simplify *)
+                  let extract_as_tuple =
+                    match g.e with
+                    | Qualif { id = AdtCons { adt_id; _ }; _ } ->
+                        PureUtils.type_decl_from_type_id_is_tuple_struct
+                          ctx.type_ctx.type_infos adt_id
+                    | _ -> false
+                  in
+                  if extract_as_tuple then
+                    super#visit_Let env monadic lv rv next
+                  else self#visit_Let env monadic lv g next
                 else super#visit_Let env monadic lv rv next
               else super#visit_Let env monadic lv rv next
             else super#visit_Let env monadic lv rv next

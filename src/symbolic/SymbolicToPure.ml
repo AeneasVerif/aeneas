@@ -318,7 +318,7 @@ let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
     trait_decls;
     trait_impls;
     generics;
-    locals = [];
+    vars = VarId.Map.empty;
   }
 
 let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
@@ -1208,7 +1208,10 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
          let inputs =
            Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
          in
-         "translate_back_inputs_for_gid:" ^ "\n- gid: "
+         "translate_back_inputs_for_gid:" ^ "\n- function:"
+         ^ Charon.PrintExpressions.fun_id_or_trait_method_ref_to_string ctx
+             fun_id
+         ^ "\n- gid: "
          ^ RegionGroupId.to_string gid
          ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs ^ "\n"));
     inputs
@@ -1246,7 +1249,10 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
          let outputs =
            Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
          in
-         "compute_back_outputs_for_gid:" ^ "\n- gid: "
+         "compute_back_outputs_for_gid:" ^ "\n- function:"
+         ^ Charon.PrintExpressions.fun_id_or_trait_method_ref_to_string ctx
+             fun_id
+         ^ "\n- gid: "
          ^ RegionGroupId.to_string gid
          ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs ^ "\n"));
     (names, outputs)
@@ -2084,7 +2090,14 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     texpression list =
   log#ldebug (lazy ("abs_to_consumed:\n" ^ abs_to_string ctx abs));
-  List.filter_map (typed_avalue_to_consumed ctx ectx) abs.avalues
+  let values =
+    List.filter_map (typed_avalue_to_consumed ctx ectx) abs.avalues
+  in
+  log#ldebug
+    (lazy
+      ("abs_to_consumed:\n- abs: " ^ abs_to_string ctx abs ^ "\n- values: "
+      ^ Print.list_to_string (texpression_to_string ctx) values));
+  values
 
 let translate_mprojection_elem (pe : E.projection_elem) :
     mprojection_elem option =
@@ -2294,6 +2307,10 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
       ctx avalues
   in
   let values = List.filter_map (fun x -> x) values in
+  log#ldebug
+    (lazy
+      ("abs_to_given_back:\n- abs: " ^ abs_to_string ctx abs ^ "\n- values: "
+      ^ Print.list_to_string (typed_pattern_to_string ctx) values));
   (ctx, values)
 
 (** Simply calls [abs_to_given_back] *)
