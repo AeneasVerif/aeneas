@@ -13,7 +13,9 @@ impl<'a, T> SharedWrapper<'a, T> {
     }
 }
 
-struct SharedWrapper1<'a, T>{ x : &'a T }
+struct SharedWrapper1<'a, T> {
+    x: &'a T,
+}
 
 impl<'a, T> SharedWrapper1<'a, T> {
     fn create(x: &'a T) -> Self {
@@ -25,7 +27,10 @@ impl<'a, T> SharedWrapper1<'a, T> {
     }
 }
 
-struct SharedWrapper2<'a, 'b, T>{ x : &'a T, y : &'b T }
+struct SharedWrapper2<'a, 'b, T> {
+    x: &'a T,
+    y: &'b T,
+}
 
 impl<'a, 'b, T> SharedWrapper2<'a, 'b, T> {
     fn create(x: &'a T, y: &'b T) -> Self {
@@ -49,7 +54,9 @@ impl<'a, T> MutWrapper<'a, T> {
     }
 }
 
-struct MutWrapper1<'a, T>{ x : &'a mut T }
+struct MutWrapper1<'a, T> {
+    x: &'a mut T,
+}
 
 impl<'a, T> MutWrapper1<'a, T> {
     fn create(x: &'a mut T) -> Self {
@@ -61,7 +68,10 @@ impl<'a, T> MutWrapper1<'a, T> {
     }
 }
 
-struct MutWrapper2<'a, 'b, T>{ x : &'a mut T, y : &'b mut T }
+struct MutWrapper2<'a, 'b, T> {
+    x: &'a mut T,
+    y: &'b mut T,
+}
 
 impl<'a, 'b, T> MutWrapper2<'a, 'b, T> {
     fn create(x: &'a mut T, y: &'b mut T) -> Self {
