@@ -19,19 +19,89 @@ let sharedWrapper_create (#t : Type0) (x : t) : result (sharedWrapper_t t) =
 let sharedWrapper_unwrap (#t : Type0) (self : sharedWrapper_t t) : result t =
   Ok self
 
+(** [adt_borrows::SharedWrapper1]
+    Source: 'tests/src/adt-borrows.rs', lines 16:0-16:41 *)
+type sharedWrapper1_t (t : Type0) = { x : t; }
+
+(** [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::create]:
+    Source: 'tests/src/adt-borrows.rs', lines 19:4-21:5 *)
+let sharedWrapper1_create (#t : Type0) (x : t) : result (sharedWrapper1_t t) =
+  Ok { x = x }
+
+(** [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::unwrap]:
+    Source: 'tests/src/adt-borrows.rs', lines 23:4-25:5 *)
+let sharedWrapper1_unwrap (#t : Type0) (self : sharedWrapper1_t t) : result t =
+  Ok self.x
+
+(** [adt_borrows::SharedWrapper2]
+    Source: 'tests/src/adt-borrows.rs', lines 28:0-28:56 *)
+type sharedWrapper2_t (t : Type0) = { x : t; y : t; }
+
+(** [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}#2::create]:
+    Source: 'tests/src/adt-borrows.rs', lines 31:4-33:5 *)
+let sharedWrapper2_create
+  (#t : Type0) (x : t) (y : t) : result (sharedWrapper2_t t) =
+  Ok { x = x; y = y }
+
+(** [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}#2::unwrap]:
+    Source: 'tests/src/adt-borrows.rs', lines 35:4-37:5 *)
+let sharedWrapper2_unwrap
+  (#t : Type0) (self : sharedWrapper2_t t) : result (t & t) =
+  Ok (self.x, self.y)
+
 (** [adt_borrows::MutWrapper]
-    Source: 'tests/src/adt-borrows.rs', lines 16:0-16:36 *)
+    Source: 'tests/src/adt-borrows.rs', lines 40:0-40:36 *)
 type mutWrapper_t (t : Type0) = t
 
-(** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#1::create]:
-    Source: 'tests/src/adt-borrows.rs', lines 19:4-21:5 *)
+(** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::create]:
+    Source: 'tests/src/adt-borrows.rs', lines 43:4-45:5 *)
 let mutWrapper_create
   (#t : Type0) (x : t) : result ((mutWrapper_t t) & (mutWrapper_t t -> t)) =
   let back = fun ret -> ret in Ok (x, back)
 
-(** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#1::unwrap]:
-    Source: 'tests/src/adt-borrows.rs', lines 23:4-25:5 *)
+(** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::unwrap]:
+    Source: 'tests/src/adt-borrows.rs', lines 47:4-49:5 *)
 let mutWrapper_unwrap
   (#t : Type0) (self : mutWrapper_t t) : result (t & (t -> mutWrapper_t t)) =
   let back = fun ret -> ret in Ok (self, back)
+
+(** [adt_borrows::MutWrapper1]
+    Source: 'tests/src/adt-borrows.rs', lines 52:0-52:42 *)
+type mutWrapper1_t (t : Type0) = { x : t; }
+
+(** [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::create]:
+    Source: 'tests/src/adt-borrows.rs', lines 55:4-57:5 *)
+let mutWrapper1_create
+  (#t : Type0) (x : t) : result ((mutWrapper1_t t) & (mutWrapper1_t t -> t)) =
+  let back = fun ret -> ret.x in Ok ({ x = x }, back)
+
+(** [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::unwrap]:
+    Source: 'tests/src/adt-borrows.rs', lines 59:4-61:5 *)
+let mutWrapper1_unwrap
+  (#t : Type0) (self : mutWrapper1_t t) : result (t & (t -> mutWrapper1_t t)) =
+  let back = fun ret -> { x = ret } in Ok (self.x, back)
+
+(** [adt_borrows::MutWrapper2]
+    Source: 'tests/src/adt-borrows.rs', lines 64:0-64:61 *)
+type mutWrapper2_t (t : Type0) = { x : t; y : t; }
+
+(** [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::create]:
+    Source: 'tests/src/adt-borrows.rs', lines 67:4-69:5 *)
+let mutWrapper2_create
+  (#t : Type0) (x : t) (y : t) :
+  result ((mutWrapper2_t t) & (mutWrapper2_t t -> t) & (mutWrapper2_t t -> t))
+  =
+  let back'a = fun ret -> ret.x in
+  let back'b = fun ret -> ret.y in
+  Ok ({ x = x; y = y }, back'a, back'b)
+
+(** [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::unwrap]:
+    Source: 'tests/src/adt-borrows.rs', lines 71:4-73:5 *)
+let mutWrapper2_unwrap
+  (#t : Type0) (self : mutWrapper2_t t) :
+  result ((t & t) & (t -> mutWrapper2_t t) & (t -> mutWrapper2_t t))
+  =
+  let back'a = fun ret -> { self with x = ret } in
+  let back'b = fun ret -> { self with y = ret } in
+  Ok ((self.x, self.y), back'a, back'b)
 
