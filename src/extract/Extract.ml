@@ -1253,8 +1253,10 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   *)
   let ctx, trait_decl =
     match def.kind with
-    | TraitDeclItem (decl_id, _, true) ->
-        let trait_decl = T.TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
+    | TraitDeclItem (trait_ref, _, true) ->
+        let trait_decl =
+          T.TraitDeclId.Map.find trait_ref.trait_decl_id ctx.trans_trait_decls
+        in
         let ctx, _ = ctx_add_trait_self_clause def.item_meta.span ctx in
         let ctx = { ctx with is_provided_method = true } in
         (ctx, Some trait_decl)
