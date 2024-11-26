@@ -26,4 +26,22 @@ Definition sharedWrapper_unwrap
   Ok self
 .
 
+(** [adt_borrows::MutWrapper]
+    Source: 'tests/src/adt-borrows.rs', lines 16:0-16:36 *)
+Definition MutWrapper_t (T : Type) : Type := T.
+
+(** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#1::create]:
+    Source: 'tests/src/adt-borrows.rs', lines 19:4-21:5 *)
+Definition mutWrapper_create
+  {T : Type} (x : T) : result ((MutWrapper_t T) * (MutWrapper_t T -> T)) :=
+  let back := fun (ret : MutWrapper_t T) => ret in Ok (x, back)
+.
+
+(** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#1::unwrap]:
+    Source: 'tests/src/adt-borrows.rs', lines 23:4-25:5 *)
+Definition mutWrapper_unwrap
+  {T : Type} (self : MutWrapper_t T) : result (T * (T -> MutWrapper_t T)) :=
+  let back := fun (ret : T) => ret in Ok (self, back)
+.
+
 End AdtBorrows.
