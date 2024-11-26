@@ -2131,13 +2131,14 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
   *)
   let item_meta =
     match def.kind with
-    | TraitImplItem (_, trait_decl_id, item_name, _) -> (
+    | TraitImplItem (_, trait_decl_ref, item_name, _) -> (
         if Option.is_some def.item_meta.attr_info.rename then def.item_meta
         else
           (* Lookup the declaration. TODO: the trait item impl info
              should directly give us the id of the method declaration. *)
           match
-            TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls
+            TraitDeclId.Map.find_opt trait_decl_ref.trait_decl_id
+              ctx.trans_trait_decls
           with
           | None -> def.item_meta
           | Some trait_decl -> (
