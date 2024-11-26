@@ -1784,6 +1784,8 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
   (* Return *)
   value
 
+type borrow_kind = BMut | BShared
+
 (** An avalue is either produced from a borrow projector (if it is an input
     to a function) or from a loan projector (if it is an ouptput).
     This means that an avalue has either:
@@ -1797,30 +1799,58 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
     level, before translating them.
  *)
 type typed_avalue_kind =
-  | BorrowProj
+  | BorrowProj of borrow_kind
       (** The value was produced by a borrow projector (it contains borrows
-          or borrow projections) *)
-  | LoanProj
+          or borrow projections).
+
+          The kind is [BMut] if we found at least one (non-ignored) mutable
+          borrow, [BShared] otherwise.
+      *)
+  | LoanProj of borrow_kind
       (** The value was produced by a loan projector (it contains loans or
-          loan projections) *)
+          loan projections).
+
+          The kind is [BMut] if we found at least one (non-ignored) mutable loan,
+          [BShared] otherwise.
+      *)
   | UnknownProj
       (** No borrows, loans or projections inside the value so we can't know for sure *)
 
 let compute_typed_avalue_proj_kind span (av : V.typed_avalue) :
     typed_avalue_kind =
   let has_borrows = ref false in
+  let has_mut_borrows = ref false in
   let has_loans = ref false in
+  let has_mut_loans = ref false in
   let visitor =
     object
       inherit [_] V.iter_typed_avalue as super
 
       method! visit_ALoan env lc =
         has_loans := true;
+        begin
+          match lc with
+          | ASharedLoan _
+          | AEndedSharedLoan _
+          | AIgnoredMutLoan _
+          | AEndedIgnoredMutLoan _
+          | AIgnoredSharedLoan _ -> ()
+          | AMutLoan _ | AEndedMutLoan _ -> has_mut_loans := true
+        end;
         (* Continue exploring as a sanity check: we want to make sure we don't find borrows *)
         super#visit_ALoan env lc
 
       method! visit_ABorrow env bc =
         has_borrows := true;
+        begin
+          match bc with
+          | ASharedBorrow _
+          | AEndedSharedBorrow
+          | AIgnoredMutBorrow _
+          | AEndedIgnoredMutBorrow _
+          | AProjSharedBorrow _ -> ()
+          | AMutBorrow _ | AEndedMutBorrow _ -> has_mut_borrows := true
+        end;
         (* Continue exploring as a sanity check: we want to make sure we don't find loans *)
         super#visit_ABorrow env bc
 
@@ -1840,8 +1870,9 @@ let compute_typed_avalue_proj_kind span (av : V.typed_avalue) :
   cassert __FILE__ __LINE__
     ((not !has_borrows) || not !has_loans)
     span "Unreachable";
-  if !has_borrows then BorrowProj
-  else if !has_loans then LoanProj
+  let to_borrow_kind b = if b then BMut else BShared in
+  if !has_borrows then BorrowProj (to_borrow_kind !has_mut_borrows)
+  else if !has_loans then LoanProj (to_borrow_kind !has_mut_loans)
   else UnknownProj
 
 (** Explore an abstraction value and convert it to a consumed value
@@ -1901,7 +1932,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   let adt_id, _ = TypesUtils.ty_as_adt av.ty in
   (* Check if the ADT contains borrows *)
   match compute_typed_avalue_proj_kind ctx.span av with
-  | BorrowProj -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+  | BorrowProj _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
   | UnknownProj ->
       (* If we filter: ignore the value.
          Otherwise, translate everything. *)
@@ -1922,7 +1953,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
               Some (mk_adt_value ctx.span ty adt_v.variant_id fields)
           | TTuple -> Some (mk_simpl_tuple_texpression ctx.span fields)
         end
-  | LoanProj -> begin
+  | LoanProj borrow_kind -> begin
       (* Translate the field values *)
       let field_values =
         let filter =
@@ -1930,7 +1961,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
           &&
           match adt_id with
           | TTuple | TBuiltin TBox -> true
-          | TBuiltin _ | TAdtId _ -> false
+          | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
         in
         List.map
           (typed_avalue_to_consumed_aux ~filter ctx ectx)
@@ -2034,11 +2065,13 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (aproj : V.aproj) : texpression option
 
 let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
     (av : V.typed_avalue) : texpression option =
-  (* Check if the value was generated from a loan projector or a borrow
-     projector. If it is a borrow projector we ignore it. *)
+  (* Check if the value was generated from a loan projector: if yes, and if
+     it contains mutable loans, then we generate a consumed value (because
+     upon ending the borrow we consumed a value).
+     Otherwise we ignore it. *)
   match compute_typed_avalue_proj_kind ctx.span av with
-  | LoanProj -> typed_avalue_to_consumed_aux ~filter:true ctx ectx av
-  | BorrowProj | UnknownProj ->
+  | LoanProj BMut -> typed_avalue_to_consumed_aux ~filter:true ctx ectx av
+  | LoanProj BShared | BorrowProj _ | UnknownProj ->
       (* If it is a borrow proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
          is consumed upon ending the abstraction: we can ignore it as well. *)
@@ -2125,7 +2158,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool) (av : V.typed_avalue)
     (adt_v : V.adt_avalue) (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   (* Check if the ADT contains borrows *)
   match compute_typed_avalue_proj_kind ctx.span av with
-  | LoanProj -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+  | LoanProj _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
   | UnknownProj ->
       (* If we filter: ignore the pattern.
          Otherwise, return a dummy value. *)
@@ -2135,7 +2168,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool) (av : V.typed_avalue)
           translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
         in
         (ctx, Some (mk_dummy_pattern ty))
-  | BorrowProj -> begin
+  | BorrowProj borrow_kind -> begin
       (* We do not do the same thing depending on whether we visit a tuple
          or a "regular" ADT *)
       let adt_id, _ = TypesUtils.ty_as_adt av.ty in
@@ -2150,7 +2183,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool) (av : V.typed_avalue)
           &&
           match adt_id with
           | TTuple | TBuiltin TBox -> true
-          | TBuiltin _ | TAdtId _ -> false
+          | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
         in
         List.fold_left_map
           (fun ctx fv -> typed_avalue_to_given_back_aux ~filter mp fv ctx)
@@ -2232,11 +2265,13 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj)
 
 let typed_avalue_to_given_back (mp : mplace option) (v : V.typed_avalue)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
-  (* Check if the value was generated from a loan projector or a borrow
-     projector. If it is a loan projector we ignore it. *)
+  (* Check if the value was generated from a borrow projector: if yes, and if
+     it contains mutable borrows we generate a given back pattern (because
+     upon ending the borrow the abstraction gave back a value).
+     Otherwise we ignore it. *)
   match compute_typed_avalue_proj_kind ctx.span v with
-  | BorrowProj -> typed_avalue_to_given_back_aux mp ~filter:true v ctx
-  | LoanProj | UnknownProj ->
+  | BorrowProj BMut -> typed_avalue_to_given_back_aux mp ~filter:true v ctx
+  | BorrowProj BShared | LoanProj _ | UnknownProj ->
       (* If it is a loan proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
          is given back: we can ignore it as well. *)
