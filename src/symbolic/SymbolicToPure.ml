@@ -3279,26 +3279,11 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
 
 (* Translate and [ExpandAdt] when there is no branching (i.e., one branch).
 
-   There are several possibilities:
-   - if the ADT is an enumeration, we attempt to deconstruct it with a let-binding:
+   We generate something of the shape:
    {[
      let Cons x0 ... xn = y in
      ...
    ]}
-
-   - if the ADT is a structure, we attempt to introduce one let-binding per field:
-   {[
-     let x0 = y.f0 in
-     ...
-       let xn = y.fn in
-       ...
-   ]}
-
-   Of course, this is not always possible depending on the backend.
-   Also, recursive structures, and more specifically structures mutually recursive
-   with inductives, are usually not supported. We define such recursive structures
-   as inductives, in which case it is not always possible to use a notation
-   for the field projections.
 *)
 and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
     (scrutinee : texpression) (scrutinee_mplace : mplace option)
@@ -3310,56 +3295,13 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
   let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
   let branch = translate_expression branch ctx in
   match type_id with
-  | TAdtId adt_id ->
-      (* Detect if this is an enumeration or not *)
-      let tdef = bs_ctx_lookup_llbc_type_decl adt_id ctx in
-      let is_enum = TypesUtils.type_decl_is_enum tdef in
-      (* We deconstruct the ADT with a single let-binding in two situations:
-         - if the ADT is an enumeration (which must have exactly one branch)
-         - if we forbid using field projectors.
-      *)
-      let use_let_with_cons =
-        is_enum
-        || !Config.dont_use_field_projectors
-        (* Also, there is a special case when the ADT is to be extracted as
-           a tuple, because it is a structure with unnamed fields. Some backends
-           like Lean have projectors for tuples (like so: `x.3`), but others
-           like Coq don't, in which case we have to deconstruct the whole ADT
-           at once (`let (a, b, c) = x in`) *)
-        || TypesUtils.type_decl_from_type_id_is_tuple_struct
-             ctx.type_ctx.type_infos type_id
-           && not !Config.use_tuple_projectors
-      in
-      if use_let_with_cons then
-        (* Introduce a let binding which expands the ADT *)
-        let lvars = List.map (fun v -> mk_typed_pattern_from_var v None) vars in
-        let lv = mk_adt_pattern scrutinee.ty variant_id lvars in
-        let monadic = false in
-
-        mk_let monadic lv
-          (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
-          branch
-      else
-        (* This is not an enumeration: introduce let-bindings for every
-         * field.
-         * We use the [dest] variable in order not to have to recompute
-         * the type of the result of the projection... *)
-        let adt_id, generics = ty_as_adt ctx.span scrutinee.ty in
-        let gen_field_proj (field_id : FieldId.id) (dest : var) : texpression =
-          let proj_kind = { adt_id; field_id } in
-          let qualif = { id = Proj proj_kind; generics } in
-          let proj_e = Qualif qualif in
-          let proj_ty = mk_arrow scrutinee.ty dest.ty in
-          let proj = { e = proj_e; ty = proj_ty } in
-          mk_app ctx.span proj scrutinee
-        in
-        let id_var_pairs = FieldId.mapi (fun fid v -> (fid, v)) vars in
-        let monadic = false in
-        List.fold_right
-          (fun (fid, var) e ->
-            let field_proj = gen_field_proj fid var in
-            mk_let monadic (mk_typed_pattern_from_var var None) field_proj e)
-          id_var_pairs branch
+  | TAdtId _ ->
+      let lvars = List.map (fun v -> mk_typed_pattern_from_var v None) vars in
+      let lv = mk_adt_pattern scrutinee.ty variant_id lvars in
+      let monadic = false in
+      mk_let monadic lv
+        (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
+        branch
   | TTuple ->
       let vars = List.map (fun x -> mk_typed_pattern_from_var x None) vars in
       let monadic = false in
