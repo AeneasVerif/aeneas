@@ -605,12 +605,21 @@ def not_u32 (x : U32) : Result U32 :=
 def not_i32 (x : I32) : Result I32 :=
   Result.ok (￢ x)
 
+/- [no_nested_borrows::borrow_mut_tuple]:
+   Source: 'tests/src/no_nested_borrows.rs', lines 532:0-534:1 -/
+def borrow_mut_tuple
+  {T : Type} {U : Type} (x : (T × U)) :
+  Result ((T × U) × ((T × U) → (T × U)))
+  :=
+  let back := fun ret => ret
+  Result.ok (x, back)
+
 /- [no_nested_borrows::ExpandSimpliy::Wrapper]
-   Source: 'tests/src/no_nested_borrows.rs', lines 534:4-534:32 -/
+   Source: 'tests/src/no_nested_borrows.rs', lines 538:4-538:32 -/
 def ExpandSimpliy.Wrapper (T : Type) := T × T
 
 /- [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb1]:
-   Source: 'tests/src/no_nested_borrows.rs', lines 536:4-542:5 -/
+   Source: 'tests/src/no_nested_borrows.rs', lines 540:4-546:5 -/
 def ExpandSimpliy.check_expand_simplify_symb1
   (x : ExpandSimpliy.Wrapper Bool) : Result (ExpandSimpliy.Wrapper Bool) :=
   let (b, b1) := x
@@ -619,13 +628,13 @@ def ExpandSimpliy.check_expand_simplify_symb1
   else Result.ok x
 
 /- [no_nested_borrows::ExpandSimpliy::Wrapper2]
-   Source: 'tests/src/no_nested_borrows.rs', lines 544:4-547:5 -/
+   Source: 'tests/src/no_nested_borrows.rs', lines 548:4-551:5 -/
 structure ExpandSimpliy.Wrapper2 where
   b : Bool
   x : U32
 
 /- [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb2]:
-   Source: 'tests/src/no_nested_borrows.rs', lines 549:4-555:5 -/
+   Source: 'tests/src/no_nested_borrows.rs', lines 553:4-559:5 -/
 def ExpandSimpliy.check_expand_simplify_symb2
   (x : ExpandSimpliy.Wrapper2) : Result ExpandSimpliy.Wrapper2 :=
   if x.b

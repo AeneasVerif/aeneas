@@ -19,3 +19,19 @@ let sharedWrapper_create (#t : Type0) (x : t) : result (sharedWrapper_t t) =
 let sharedWrapper_unwrap (#t : Type0) (self : sharedWrapper_t t) : result t =
   Ok self
 
+(** [adt_borrows::MutWrapper]
+    Source: 'tests/src/adt-borrows.rs', lines 16:0-16:36 *)
+type mutWrapper_t (t : Type0) = t
+
+(** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#1::create]:
+    Source: 'tests/src/adt-borrows.rs', lines 19:4-21:5 *)
+let mutWrapper_create
+  (#t : Type0) (x : t) : result ((mutWrapper_t t) & (mutWrapper_t t -> t)) =
+  let back = fun ret -> ret in Ok (x, back)
+
+(** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#1::unwrap]:
+    Source: 'tests/src/adt-borrows.rs', lines 23:4-25:5 *)
+let mutWrapper_unwrap
+  (#t : Type0) (self : mutWrapper_t t) : result (t & (t -> mutWrapper_t t)) =
+  let back = fun ret -> ret in Ok (self, back)
+
