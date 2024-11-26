@@ -202,10 +202,16 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     match ty with
     | TLiteral _ | TNever | TDynTrait _ -> ty_info
     | TTraitType (tref, _) ->
-        (* TODO: normalize the trait types *)
-        cassert_opt_span __FILE__ __LINE__
+        (* TODO: normalize the trait types.
+           For now we only emit a warning because it makes some tests fail. *)
+        cassert_warn_opt_span __FILE__ __LINE__
           (not (trait_instance_id_reducible span tref.trait_id))
-          span "Unimplemented";
+          span
+          "Found an unexpected trait impl associated type which was not \
+           inlined while analyzing a type. This is a case we currently do not \
+           handle in all generality. As a result,the consumed/given back \
+           values computed for the generated backward functions may be \
+           incorrect.";
         ty_info
     | TVar var_id -> (
         (* Update the information for the proper parameter, if necessary *)

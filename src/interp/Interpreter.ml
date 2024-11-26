@@ -49,9 +49,13 @@ let compute_contexts (m : crate) : decls_ctx =
  *)
 let normalize_inst_fun_sig (span : Meta.span) (ctx : eval_ctx)
     (sg : inst_fun_sig) : inst_fun_sig =
-  let { regions_hierarchy = _; trait_type_constraints = _; inputs; output } =
-    sg
-  in
+  let { regions_hierarchy = _; trait_type_constraints; inputs; output } = sg in
+  cassert_warn __FILE__ __LINE__
+    (trait_type_constraints = [])
+    span
+    "Detected type constraints over associated traits (of the shape: `where \
+     Foo::T = U`). We do not handle this properly yet: the translation may be \
+     incorrect, and the generated output will likely not typecheck.";
   let norm = AssociatedTypes.ctx_normalize_ty (Some span) ctx in
   let inputs = List.map norm inputs in
   let output = norm output in

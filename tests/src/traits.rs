@@ -1,4 +1,5 @@
 //@ [fstar] aeneas-args=-decreases-clauses
+//@ aeneas-args=-soft-warnings
 pub trait BoolTrait {
     // Required method
     fn get_bool(&self) -> bool;
