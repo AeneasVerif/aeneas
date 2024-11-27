@@ -1171,11 +1171,24 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
             F.pp_open_hvbox fmt ctx.indent_incr;
             let f = ctx_get_field span supd.struct_id fid ctx in
             F.pp_print_string fmt f;
-            F.pp_print_string fmt (" " ^ assign);
-            F.pp_print_space fmt ();
-            F.pp_open_hvbox fmt ctx.indent_incr;
-            extract_texpression span ctx fmt true fe;
-            F.pp_close_box fmt ();
+            (* Simplification: if the field value is a variable the same
+               name as the field, we do not print it.
+
+               Example: we generate [{ x }] instead of [{ x := x }].
+            *)
+            let has_same_name =
+              match fe.e with
+              | Var vid ->
+                  let var_name = ctx_get_var span vid ctx in
+                  f = var_name
+              | _ -> false
+            in
+            if not has_same_name then (
+              F.pp_print_string fmt (" " ^ assign);
+              F.pp_print_space fmt ();
+              F.pp_open_hvbox fmt ctx.indent_incr;
+              extract_texpression span ctx fmt true fe;
+              F.pp_close_box fmt ());
             F.pp_close_box fmt ())
           supd.updates;
         F.pp_close_box fmt ();
