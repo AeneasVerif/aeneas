@@ -78,7 +78,7 @@ def use_shared_wrapper2 : Result Unit :=
   let w ← SharedWrapper2.create 0#i32 1#i32
   let p ← SharedWrapper2.unwrap w
   let (px, py) := p
-  let _ ← massert (0#i32 = px)
+  massert (0#i32 = px)
   massert (1#i32 = py)
 
 /- [adt_borrows::MutWrapper]
@@ -174,7 +174,7 @@ def use_mut_wrapper2 : Result Unit :=
   let px1 ← px + 1#i32
   let py1 ← py + 1#i32
   let x := create_back { w with x := (unwrap_back px1).x }
-  let _ ← massert (x = 1#i32)
+  massert (x = 1#i32)
   let y := create_back1 { w with y := (unwrap_back1 py1).y }
   massert (y = 11#i32)
 

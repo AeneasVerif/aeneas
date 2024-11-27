@@ -39,9 +39,9 @@ def test_choose : Result Unit :=
   do
   let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
-  let _ ← massert (z1 = 1#i32)
+  massert (z1 = 1#i32)
   let (x, y) := choose_back z1
-  let _ ← massert (x = 1#i32)
+  massert (x = 1#i32)
   massert (y = 0#i32)
 
 /- Unit test for [paper::test_choose] -/

@@ -213,11 +213,11 @@ def const_slice : Result Unit :=
    Source: 'tests/src/arrays.rs', lines 144:0-156:1 -/
 def take_all : Result Unit :=
   do
-  let _ ← take_array (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let _ ← take_array (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let _ ← take_array_borrow (Array.make 2#usize [ 0#u32, 0#u32 ])
+  take_array (Array.make 2#usize [ 0#u32, 0#u32 ])
+  take_array (Array.make 2#usize [ 0#u32, 0#u32 ])
+  take_array_borrow (Array.make 2#usize [ 0#u32, 0#u32 ])
   let s ← Array.to_slice (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let _ ← take_slice s
+  take_slice s
   let (s1, _) ← Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ])
   let _ ← take_mut_slice s1
   Result.ok ()
@@ -286,8 +286,8 @@ def update_mut_slice (x : Slice U32) : Result (Slice U32) :=
    Source: 'tests/src/arrays.rs', lines 197:0-203:1 -/
 def update_all : Result Unit :=
   do
-  let _ ← update_array (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let _ ← update_array (Array.make 2#usize [ 0#u32, 0#u32 ])
+  update_array (Array.make 2#usize [ 0#u32, 0#u32 ])
+  update_array (Array.make 2#usize [ 0#u32, 0#u32 ])
   let x ← update_array_mut_borrow (Array.make 2#usize [ 0#u32, 0#u32 ])
   let (s, _) ← Array.to_slice_mut x
   let _ ← update_mut_slice s
@@ -386,7 +386,7 @@ def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
   do
   let i := Slice.len s
   let i1 := Slice.len s2
-  let _ ← massert (i = i1)
+  massert (i = i1)
   sum2_loop s s2 0#u32 0#usize
 
 /- [arrays::f0]:
@@ -421,7 +421,7 @@ def f4 (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) :=
 def f3 : Result U32 :=
   do
   let i ← Array.index_usize (Array.make 2#usize [ 1#u32, 2#u32 ]) 0#usize
-  let _ ← f2 i
+  f2 i
   let b := Array.repeat 32#usize 0#u32
   let s ← Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ])
   let s1 ← f4 b 16#usize 18#usize
@@ -480,7 +480,7 @@ divergent def iter_mut_slice_loop (len : Usize) (i : Usize) : Result Unit :=
 def iter_mut_slice (a : Slice U8) : Result (Slice U8) :=
   do
   let len := Slice.len a
-  let _ ← iter_mut_slice_loop len 0#usize
+  iter_mut_slice_loop len 0#usize
   Result.ok a
 
 /- [arrays::sum_mut_slice]: loop 0:

@@ -17,7 +17,7 @@ def bar : Result Unit :=
    Source: 'tests/src/infinite-loop.rs', lines 8:8-8:13 -/
 divergent def foo_loop : Result Unit :=
   do
-  let _ ← bar
+  bar
   foo_loop
 
 /- [infinite_loop::foo]:
