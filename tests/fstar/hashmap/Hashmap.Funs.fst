@@ -385,21 +385,31 @@ let test1 : result unit =
   let* hm3 = hashMap_insert hm2 1024 138 in
   let* hm4 = hashMap_insert hm3 1056 256 in
   let* i = hashMap_get hm4 128 in
-  let* _ = massert (i = 18) in
-  let* (_, get_mut_back) = hashMap_get_mut hm4 1024 in
-  let hm5 = get_mut_back 56 in
-  let* i1 = hashMap_get hm5 1024 in
-  let* _ = massert (i1 = 56) in
-  let* (x, hm6) = hashMap_remove hm5 1024 in
-  begin match x with
-  | None -> Fail Failure
-  | Some x1 ->
-    let* _ = massert (x1 = 56) in
-    let* i2 = hashMap_get hm6 0 in
-    let* _ = massert (i2 = 42) in
-    let* i3 = hashMap_get hm6 128 in
-    let* _ = massert (i3 = 18) in
-    let* i4 = hashMap_get hm6 1056 in
-    massert (i4 = 256)
-  end
+  if i = 18
+  then
+    let* (_, get_mut_back) = hashMap_get_mut hm4 1024 in
+    let hm5 = get_mut_back 56 in
+    let* i1 = hashMap_get hm5 1024 in
+    if i1 = 56
+    then
+      let* (x, hm6) = hashMap_remove hm5 1024 in
+      begin match x with
+      | None -> Fail Failure
+      | Some x1 ->
+        if x1 = 56
+        then
+          let* i2 = hashMap_get hm6 0 in
+          if i2 = 42
+          then
+            let* i3 = hashMap_get hm6 128 in
+            if i3 = 18
+            then
+              let* i4 = hashMap_get hm6 1056 in
+              if i4 = 256 then Ok () else Fail Failure
+            else Fail Failure
+          else Fail Failure
+        else Fail Failure
+      end
+    else Fail Failure
+  else Fail Failure
 

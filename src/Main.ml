@@ -239,7 +239,9 @@ let () =
         match backend with
         | FStar ->
             (* F* can disambiguate the field names *)
-            record_fields_short_names := true
+            record_fields_short_names := true;
+            (* Introducing [massert] leads to type inferencing issues *)
+            intro_massert := false
         | Coq ->
             (* Some patterns are not supported *)
             decompose_monadic_let_bindings := true;
