@@ -28,9 +28,7 @@ def use_shared_wrapper : Result Unit :=
   do
   let w ← SharedWrapper.create 0#i32
   let p ← SharedWrapper.unwrap w
-  if 0#i32 = p
-  then Result.ok ()
-  else Result.fail .panic
+  massert (0#i32 = p)
 
 /- [adt_borrows::SharedWrapper1]
    Source: 'tests/src/adt-borrows.rs', lines 23:0-25:1 -/
@@ -53,9 +51,7 @@ def use_shared_wrapper1 : Result Unit :=
   do
   let w ← SharedWrapper1.create 0#i32
   let p ← SharedWrapper1.unwrap w
-  if 0#i32 = p
-  then Result.ok ()
-  else Result.fail .panic
+  massert (0#i32 = p)
 
 /- [adt_borrows::SharedWrapper2]
    Source: 'tests/src/adt-borrows.rs', lines 44:0-47:1 -/
@@ -82,11 +78,8 @@ def use_shared_wrapper2 : Result Unit :=
   let w ← SharedWrapper2.create 0#i32 1#i32
   let p ← SharedWrapper2.unwrap w
   let (px, py) := p
-  if 0#i32 = px
-  then if 1#i32 = py
-       then Result.ok ()
-       else Result.fail .panic
-  else Result.fail .panic
+  let _ ← massert (0#i32 = px)
+  massert (1#i32 = py)
 
 /- [adt_borrows::MutWrapper]
    Source: 'tests/src/adt-borrows.rs', lines 68:0-68:36 -/
@@ -114,9 +107,7 @@ def use_mut_wrapper : Result Unit :=
   let (p, unwrap_back) ← MutWrapper.unwrap w
   let p1 ← p + 1#i32
   let x := create_back (unwrap_back p1)
-  if x = 1#i32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (x = 1#i32)
 
 /- [adt_borrows::MutWrapper1]
    Source: 'tests/src/adt-borrows.rs', lines 88:0-90:1 -/
@@ -145,9 +136,7 @@ def use_mut_wrapper1 : Result Unit :=
   let (p, unwrap_back) ← MutWrapper1.unwrap w
   let p1 ← p + 1#i32
   let x := create_back (unwrap_back p1)
-  if x = 1#i32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (x = 1#i32)
 
 /- [adt_borrows::MutWrapper2]
    Source: 'tests/src/adt-borrows.rs', lines 110:0-113:1 -/
@@ -185,12 +174,8 @@ def use_mut_wrapper2 : Result Unit :=
   let px1 ← px + 1#i32
   let py1 ← py + 1#i32
   let x := create_back { w with x := (unwrap_back px1).x }
-  if x = 1#i32
-  then
-    let y := create_back1 { w with y := (unwrap_back1 py1).y }
-    if y = 11#i32
-    then Result.ok ()
-    else Result.fail .panic
-  else Result.fail .panic
+  let _ ← massert (x = 1#i32)
+  let y := create_back1 { w with y := (unwrap_back1 py1).y }
+  massert (y = 11#i32)
 
 end adt_borrows

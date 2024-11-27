@@ -383,11 +383,11 @@ divergent def sum2_loop
 /- [arrays::sum2]:
    Source: 'tests/src/arrays.rs', lines 263:0-272:1 -/
 def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
+  do
   let i := Slice.len s
   let i1 := Slice.len s2
-  if i = i1
-  then sum2_loop s s2 0#u32 0#usize
-  else Result.fail .panic
+  let _ ← massert (i = i1)
+  sum2_loop s s2 0#u32 0#usize
 
 /- [arrays::f0]:
    Source: 'tests/src/arrays.rs', lines 274:0-277:1 -/

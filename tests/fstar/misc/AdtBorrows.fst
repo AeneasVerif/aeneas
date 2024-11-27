@@ -24,7 +24,7 @@ let sharedWrapper_unwrap (#t : Type0) (self : sharedWrapper_t t) : result t =
 let use_shared_wrapper : result unit =
   let* w = sharedWrapper_create 0 in
   let* p = sharedWrapper_unwrap w in
-  if 0 = p then Ok () else Fail Failure
+  massert (0 = p)
 
 (** [adt_borrows::SharedWrapper1]
     Source: 'tests/src/adt-borrows.rs', lines 23:0-25:1 *)
@@ -45,7 +45,7 @@ let sharedWrapper1_unwrap (#t : Type0) (self : sharedWrapper1_t t) : result t =
 let use_shared_wrapper1 : result unit =
   let* w = sharedWrapper1_create 0 in
   let* p = sharedWrapper1_unwrap w in
-  if 0 = p then Ok () else Fail Failure
+  massert (0 = p)
 
 (** [adt_borrows::SharedWrapper2]
     Source: 'tests/src/adt-borrows.rs', lines 44:0-47:1 *)
@@ -69,7 +69,8 @@ let use_shared_wrapper2 : result unit =
   let* w = sharedWrapper2_create 0 1 in
   let* p = sharedWrapper2_unwrap w in
   let (px, py) = p in
-  if 0 = px then if 1 = py then Ok () else Fail Failure else Fail Failure
+  let* _ = massert (0 = px) in
+  massert (1 = py)
 
 (** [adt_borrows::MutWrapper]
     Source: 'tests/src/adt-borrows.rs', lines 68:0-68:36 *)
@@ -94,7 +95,7 @@ let use_mut_wrapper : result unit =
   let* (p, unwrap_back) = mutWrapper_unwrap w in
   let* p1 = i32_add p 1 in
   let x = create_back (unwrap_back p1) in
-  if x = 1 then Ok () else Fail Failure
+  massert (x = 1)
 
 (** [adt_borrows::MutWrapper1]
     Source: 'tests/src/adt-borrows.rs', lines 88:0-90:1 *)
@@ -119,7 +120,7 @@ let use_mut_wrapper1 : result unit =
   let* (p, unwrap_back) = mutWrapper1_unwrap w in
   let* p1 = i32_add p 1 in
   let x = create_back (unwrap_back p1) in
-  if x = 1 then Ok () else Fail Failure
+  massert (x = 1)
 
 (** [adt_borrows::MutWrapper2]
     Source: 'tests/src/adt-borrows.rs', lines 110:0-113:1 *)
@@ -154,9 +155,7 @@ let use_mut_wrapper2 : result unit =
   let* px1 = i32_add px 1 in
   let* py1 = i32_add py 1 in
   let x = create_back { w with x = (unwrap_back px1).x } in
-  if x = 1
-  then
-    let y = create_back1 { w with y = (unwrap_back1 py1).y } in
-    if y = 11 then Ok () else Fail Failure
-  else Fail Failure
+  let* _ = massert (x = 1) in
+  let y = create_back1 { w with y = (unwrap_back1 py1).y } in
+  massert (y = 11)
 

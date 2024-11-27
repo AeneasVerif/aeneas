@@ -31,7 +31,7 @@ Definition sharedWrapper_unwrap
 Definition use_shared_wrapper : result unit :=
   w <- sharedWrapper_create 0%i32;
   p <- sharedWrapper_unwrap w;
-  if 0%i32 s= p then Ok tt else Fail_ Failure
+  massert (0%i32 s= p)
 .
 
 (** [adt_borrows::SharedWrapper1]
@@ -64,7 +64,7 @@ Definition sharedWrapper1_unwrap
 Definition use_shared_wrapper1 : result unit :=
   w <- sharedWrapper1_create 0%i32;
   p <- sharedWrapper1_unwrap w;
-  if 0%i32 s= p then Ok tt else Fail_ Failure
+  massert (0%i32 s= p)
 .
 
 (** [adt_borrows::SharedWrapper2]
@@ -99,9 +99,8 @@ Definition use_shared_wrapper2 : result unit :=
   w <- sharedWrapper2_create 0%i32 1%i32;
   p <- sharedWrapper2_unwrap w;
   let (px, py) := p in
-  if 0%i32 s= px
-  then if 1%i32 s= py then Ok tt else Fail_ Failure
-  else Fail_ Failure
+  _ <- massert (0%i32 s= px);
+  massert (1%i32 s= py)
 .
 
 (** [adt_borrows::MutWrapper]
@@ -131,7 +130,7 @@ Definition use_mut_wrapper : result unit :=
   let (p2, unwrap_back) := p1 in
   p3 <- i32_add p2 1%i32;
   let x := create_back (unwrap_back p3) in
-  if x s= 1%i32 then Ok tt else Fail_ Failure
+  massert (x s= 1%i32)
 .
 
 (** [adt_borrows::MutWrapper1]
@@ -166,7 +165,7 @@ Definition use_mut_wrapper1 : result unit :=
   let (p2, unwrap_back) := p1 in
   p3 <- i32_add p2 1%i32;
   let x := create_back (unwrap_back p3) in
-  if x s= 1%i32 then Ok tt else Fail_ Failure
+  massert (x s= 1%i32)
 .
 
 (** [adt_borrows::MutWrapper2]
@@ -223,16 +222,14 @@ Definition use_mut_wrapper2 : result unit :=
         mutWrapper2_x := (unwrap_back px1).(mutWrapper2_x);
         mutWrapper2_y := w.(mutWrapper2_y)
       |} in
-  if x s= 1%i32
-  then
-    let y :=
-      create_back1
-        {|
-          mutWrapper2_x := w.(mutWrapper2_x);
-          mutWrapper2_y := (unwrap_back1 py1).(mutWrapper2_y)
-        |} in
-    if y s= 11%i32 then Ok tt else Fail_ Failure
-  else Fail_ Failure
+  _ <- massert (x s= 1%i32);
+  let y :=
+    create_back1
+      {|
+        mutWrapper2_x := w.(mutWrapper2_x);
+        mutWrapper2_y := (unwrap_back1 py1).(mutWrapper2_y)
+      |} in
+  massert (y s= 11%i32)
 .
 
 End AdtBorrows.

@@ -16,7 +16,7 @@ Definition ref_incr (x : i32) : result i32 :=
 (** [paper::test_incr]:
     Source: 'tests/src/paper.rs', lines 11:0-15:1 *)
 Definition test_incr : result unit :=
-  x <- ref_incr 0%i32; if x s= 1%i32 then Ok tt else Fail_ Failure
+  x <- ref_incr 0%i32; massert (x s= 1%i32)
 .
 
 (** Unit test for [paper::test_incr] *)
@@ -37,13 +37,10 @@ Definition test_choose : result unit :=
   p <- choose true 0%i32 0%i32;
   let (z, choose_back) := p in
   z1 <- i32_add z 1%i32;
-  if z1 s= 1%i32
-  then
-    let (x, y) := choose_back z1 in
-    if x s= 1%i32
-    then if y s= 0%i32 then Ok tt else Fail_ Failure
-    else Fail_ Failure
-  else Fail_ Failure
+  _ <- massert (z1 s= 1%i32);
+  let (x, y) := choose_back z1 in
+  _ <- massert (x s= 1%i32);
+  massert (y s= 0%i32)
 .
 
 (** Unit test for [paper::test_choose] *)
@@ -97,7 +94,7 @@ Definition test_nth : result unit :=
   x1 <- i32_add x 1%i32;
   let l2 := list_nth_mut_back x1 in
   i <- sum l2;
-  if i s= 7%i32 then Ok tt else Fail_ Failure
+  massert (i s= 7%i32)
 .
 
 (** Unit test for [paper::test_nth] *)

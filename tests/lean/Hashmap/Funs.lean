@@ -395,38 +395,22 @@ def test1 : Result Unit :=
   let hm3 ← HashMap.insert hm2 1024#usize 138#u64
   let hm4 ← HashMap.insert hm3 1056#usize 256#u64
   let i ← HashMap.get hm4 128#usize
-  if i = 18#u64
-  then
+  let _ ← massert (i = 18#u64)
+  let (_, get_mut_back) ← HashMap.get_mut hm4 1024#usize
+  let hm5 := get_mut_back 56#u64
+  let i1 ← HashMap.get hm5 1024#usize
+  let _ ← massert (i1 = 56#u64)
+  let (x, hm6) ← HashMap.remove hm5 1024#usize
+  match x with
+  | none => Result.fail .panic
+  | some x1 =>
     do
-    let (_, get_mut_back) ← HashMap.get_mut hm4 1024#usize
-    let hm5 := get_mut_back 56#u64
-    let i1 ← HashMap.get hm5 1024#usize
-    if i1 = 56#u64
-    then
-      do
-      let (x, hm6) ← HashMap.remove hm5 1024#usize
-      match x with
-      | none => Result.fail .panic
-      | some x1 =>
-        if x1 = 56#u64
-        then
-          do
-          let i2 ← HashMap.get hm6 0#usize
-          if i2 = 42#u64
-          then
-            do
-            let i3 ← HashMap.get hm6 128#usize
-            if i3 = 18#u64
-            then
-              do
-              let i4 ← HashMap.get hm6 1056#usize
-              if i4 = 256#u64
-              then Result.ok ()
-              else Result.fail .panic
-            else Result.fail .panic
-          else Result.fail .panic
-        else Result.fail .panic
-    else Result.fail .panic
-  else Result.fail .panic
+    let _ ← massert (x1 = 56#u64)
+    let i2 ← HashMap.get hm6 0#usize
+    let _ ← massert (i2 = 42#u64)
+    let i3 ← HashMap.get hm6 128#usize
+    let _ ← massert (i3 = 18#u64)
+    let i4 ← HashMap.get hm6 1056#usize
+    massert (i4 = 256#u64)
 
 end hashmap

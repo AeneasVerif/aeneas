@@ -343,7 +343,8 @@ let rec sum2_loop
 let sum2 (s : slice u32) (s2 : slice u32) : result u32 =
   let i = slice_len s in
   let i1 = slice_len s2 in
-  if i = i1 then sum2_loop s s2 0 0 else Fail Failure
+  let* _ = massert (i = i1) in
+  sum2_loop s s2 0 0
 
 (** [arrays::f0]:
     Source: 'tests/src/arrays.rs', lines 274:0-277:1 *)

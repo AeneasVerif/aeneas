@@ -543,35 +543,25 @@ Definition test1 (n : nat) : result unit :=
   hm3 <- hashMap_insert n hm2 1024%usize 138%u64;
   hm4 <- hashMap_insert n hm3 1056%usize 256%u64;
   i <- hashMap_get n hm4 128%usize;
-  if i s= 18%u64
-  then (
-    p <- hashMap_get_mut n hm4 1024%usize;
-    let (_, get_mut_back) := p in
-    let hm5 := get_mut_back 56%u64 in
-    i1 <- hashMap_get n hm5 1024%usize;
-    if i1 s= 56%u64
-    then (
-      p1 <- hashMap_remove n hm5 1024%usize;
-      let (x, hm6) := p1 in
-      match x with
-      | None => Fail_ Failure
-      | Some x1 =>
-        if x1 s= 56%u64
-        then (
-          i2 <- hashMap_get n hm6 0%usize;
-          if i2 s= 42%u64
-          then (
-            i3 <- hashMap_get n hm6 128%usize;
-            if i3 s= 18%u64
-            then (
-              i4 <- hashMap_get n hm6 1056%usize;
-              if i4 s= 256%u64 then Ok tt else Fail_ Failure)
-            else Fail_ Failure)
-          else Fail_ Failure)
-        else Fail_ Failure
-      end)
-    else Fail_ Failure)
-  else Fail_ Failure
+  _ <- massert (i s= 18%u64);
+  p <- hashMap_get_mut n hm4 1024%usize;
+  let (_, get_mut_back) := p in
+  let hm5 := get_mut_back 56%u64 in
+  i1 <- hashMap_get n hm5 1024%usize;
+  _ <- massert (i1 s= 56%u64);
+  p1 <- hashMap_remove n hm5 1024%usize;
+  let (x, hm6) := p1 in
+  match x with
+  | None => Fail_ Failure
+  | Some x1 =>
+    _ <- massert (x1 s= 56%u64);
+    i2 <- hashMap_get n hm6 0%usize;
+    _ <- massert (i2 s= 42%u64);
+    i3 <- hashMap_get n hm6 128%usize;
+    _ <- massert (i3 s= 18%u64);
+    i4 <- hashMap_get n hm6 1056%usize;
+    massert (i4 s= 256%u64)
+  end
 .
 
 End Hashmap_Funs.
