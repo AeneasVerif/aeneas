@@ -428,7 +428,8 @@ Fixpoint sum2_loop
 Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
   let i := slice_len s in
   let i1 := slice_len s2 in
-  if i s= i1 then sum2_loop n s s2 0%u32 0%usize else Fail_ Failure
+  _ <- massert (i s= i1);
+  sum2_loop n s s2 0%u32 0%usize
 .
 
 (** [arrays::f0]:

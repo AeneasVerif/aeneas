@@ -18,9 +18,7 @@ def ref_incr (x : I32) : Result I32 :=
 def test_incr : Result Unit :=
   do
   let x ← ref_incr 0#i32
-  if x = 1#i32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (x = 1#i32)
 
 /- Unit test for [paper::test_incr] -/
 #assert (test_incr == Result.ok ())
@@ -41,15 +39,10 @@ def test_choose : Result Unit :=
   do
   let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
-  if z1 = 1#i32
-  then
-    let (x, y) := choose_back z1
-    if x = 1#i32
-    then if y = 0#i32
-         then Result.ok ()
-         else Result.fail .panic
-    else Result.fail .panic
-  else Result.fail .panic
+  massert (z1 = 1#i32)
+  let (x, y) := choose_back z1
+  massert (x = 1#i32)
+  massert (y = 0#i32)
 
 /- Unit test for [paper::test_choose] -/
 #assert (test_choose == Result.ok ())
@@ -97,9 +90,7 @@ def test_nth : Result Unit :=
   let x1 ← x + 1#i32
   let l2 := list_nth_mut_back x1
   let i ← sum l2
-  if i = 7#i32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (i = 7#i32)
 
 /- Unit test for [paper::test_nth] -/
 #assert (test_nth == Result.ok ())

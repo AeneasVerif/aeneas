@@ -215,7 +215,7 @@ Fixpoint betree_ListPairU64T_partition_at_pivot_loop
   | S n1 =>
     match self with
     | Betree_List_Cons hd tl =>
-      let (i, t) := hd in
+      let (i, _) := hd in
       if i s>= pivot
       then
         betree_ListPairU64T_partition_at_pivot_loop n1 pivot beg
@@ -287,7 +287,7 @@ Fixpoint betree_Node_lookup_first_message_for_key_loop
   | S n1 =>
     match msgs with
     | Betree_List_Cons x next_msgs =>
-      let (i, m) := x in
+      let (i, _) := x in
       if i s>= key
       then
         let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret
@@ -429,7 +429,7 @@ with betree_Node_lookup
       p1 <- betree_Node_lookup_first_message_for_key n1 key msgs;
       let (pending, lookup_first_message_for_key_back) := p1 in
       match pending with
-      | Betree_List_Cons p2 l =>
+      | Betree_List_Cons p2 _ =>
         let (k, msg) := p2 in
         if k s<> key
         then (
@@ -441,7 +441,7 @@ with betree_Node_lookup
           match msg with
           | Betree_Message_Insert v => Ok (st1, (Some v, self))
           | Betree_Message_Delete => Ok (st1, (None, self))
-          | Betree_Message_Upsert ufs =>
+          | Betree_Message_Upsert _ =>
             p3 <- betree_Internal_lookup_in_children n1 node key st1;
             let (st2, p4) := p3 in
             let (v, node1) := p4 in
@@ -478,8 +478,8 @@ Fixpoint betree_Node_filter_messages_for_key_loop
   | O => Fail_ OutOfFuel
   | S n1 =>
     match msgs with
-    | Betree_List_Cons p l =>
-      let (k, m) := p in
+    | Betree_List_Cons p _ =>
+      let (k, _) := p in
       if k s= key
       then (
         p1 <- betree_List_pop_front msgs;
@@ -512,7 +512,7 @@ Fixpoint betree_Node_lookup_first_message_after_key_loop
   | S n1 =>
     match msgs with
     | Betree_List_Cons p next_msgs =>
-      let (k, m) := p in
+      let (k, _) := p in
       if k s= key
       then (
         p1 <- betree_Node_lookup_first_message_after_key_loop n1 key next_msgs;
@@ -555,7 +555,7 @@ Definition betree_Node_apply_to_internal
   if b
   then
     match new_msg with
-    | Betree_Message_Insert i =>
+    | Betree_Message_Insert _ =>
       msgs2 <- betree_Node_filter_messages_for_key n key msgs1;
       msgs3 <- betree_List_push_front msgs2 (key, new_msg);
       Ok (lookup_first_message_for_key_back msgs3)
@@ -634,7 +634,7 @@ Fixpoint betree_Node_lookup_mut_in_bindings_loop
   | S n1 =>
     match bindings with
     | Betree_List_Cons hd tl =>
-      let (i, i1) := hd in
+      let (i, _) := hd in
       if i s>= key
       then
         let back := fun (ret : betree_List_t (u64 * u64)) => ret in
@@ -845,12 +845,8 @@ Definition betree_Node_apply
   (new_msg : betree_Message_t) (st : state) :
   result (state * (betree_Node_t * betree_NodeIdCounter_t))
   :=
-  p <-
-    betree_Node_apply_messages n self params node_id_cnt (Betree_List_Cons
-      (key, new_msg) Betree_List_Nil) st;
-  let (st1, p1) := p in
-  let (self1, node_id_cnt1) := p1 in
-  Ok (st1, p1)
+  betree_Node_apply_messages n self params node_id_cnt (Betree_List_Cons (key,
+    new_msg) Betree_List_Nil) st
 .
 
 (** [betree::betree::{betree::betree::BeTree}#6::new]:

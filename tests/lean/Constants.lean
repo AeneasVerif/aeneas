@@ -47,7 +47,7 @@ structure Pair (T1 : Type) (T2 : Type) where
 /- [constants::mk_pair1]:
    Source: 'tests/src/constants.rs', lines 30:0-32:1 -/
 def mk_pair1 (x : U32) (y : U32) : Result (Pair U32 U32) :=
-  Result.ok { x := x, y := y }
+  Result.ok { x, y }
 
 /- [constants::P0]
    Source: 'tests/src/constants.rs', lines 34:0-34:42 -/
@@ -77,7 +77,7 @@ structure Wrap (T : Type) where
 /- [constants::{constants::Wrap<T>}::new]:
    Source: 'tests/src/constants.rs', lines 57:4-59:5 -/
 def Wrap.new {T : Type} (value : T) : Result (Wrap T) :=
-  Result.ok { value := value }
+  Result.ok { value }
 
 /- [constants::Y]
    Source: 'tests/src/constants.rs', lines 44:0-44:38 -/

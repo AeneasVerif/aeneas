@@ -1372,12 +1372,6 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
          not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
        (inst_sg.output :: inst_sg.inputs))
     span "Nested borrows are not supported yet";
-  cassert __FILE__ __LINE__
-    (List.for_all
-       (fun ty ->
-         not (ty_has_adt_with_borrows (Some span) ctx.type_ctx.type_infos ty))
-       (inst_sg.output :: inst_sg.inputs))
-    span "ADTs containing borrows are not supported yet";
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.item_meta.span func
     def.signature regions_hierarchy inst_sg generics trait_method_generics

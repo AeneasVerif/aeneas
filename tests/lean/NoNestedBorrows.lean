@@ -85,9 +85,7 @@ def test3 : Result Unit :=
   let x ← get_max 4#u32 3#u32
   let y ← get_max 10#u32 11#u32
   let z ← x + y
-  if z = 15#u32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (z = 15#u32)
 
 /- Unit test for [no_nested_borrows::test3] -/
 #assert (test3 == Result.ok ())
@@ -97,9 +95,7 @@ def test3 : Result Unit :=
 def test_neg1 : Result Unit :=
   do
   let y ← -. 3#i32
-  if y = (-3)#i32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (y = (-3)#i32)
 
 /- Unit test for [no_nested_borrows::test_neg1] -/
 #assert (test_neg1 == Result.ok ())
@@ -107,9 +103,7 @@ def test_neg1 : Result Unit :=
 /- [no_nested_borrows::refs_test1]:
    Source: 'tests/src/no_nested_borrows.rs', lines 97:0-106:1 -/
 def refs_test1 : Result Unit :=
-  if 1#i32 = 1#i32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (1#i32 = 1#i32)
 
 /- Unit test for [no_nested_borrows::refs_test1] -/
 #assert (refs_test1 == Result.ok ())
@@ -117,17 +111,11 @@ def refs_test1 : Result Unit :=
 /- [no_nested_borrows::refs_test2]:
    Source: 'tests/src/no_nested_borrows.rs', lines 108:0-120:1 -/
 def refs_test2 : Result Unit :=
-  if 2#i32 = 2#i32
-  then
-    if 0#i32 = 0#i32
-    then
-      if 2#i32 = 2#i32
-      then if 2#i32 = 2#i32
-           then Result.ok ()
-           else Result.fail .panic
-      else Result.fail .panic
-    else Result.fail .panic
-  else Result.fail .panic
+  do
+  massert (2#i32 = 2#i32)
+  massert (0#i32 = 0#i32)
+  massert (2#i32 = 2#i32)
+  massert (2#i32 = 2#i32)
 
 /- Unit test for [no_nested_borrows::refs_test2] -/
 #assert (refs_test2 == Result.ok ())
@@ -147,9 +135,7 @@ def test_box1 : Result Unit :=
   let (_, deref_mut_back) ← alloc.boxed.Box.deref_mut 0#i32
   let b := deref_mut_back 1#i32
   let x ← alloc.boxed.Box.deref b
-  if x = 1#i32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (x = 1#i32)
 
 /- Unit test for [no_nested_borrows::test_box1] -/
 #assert (test_box1 == Result.ok ())
@@ -185,9 +171,7 @@ def test_panic_msg (b : Bool) : Result Unit :=
 def test_copy_int : Result Unit :=
   do
   let y ← copy_int 0#i32
-  if 0#i32 = y
-  then Result.ok ()
-  else Result.fail .panic
+  massert (0#i32 = y)
 
 /- Unit test for [no_nested_borrows::test_copy_int] -/
 #assert (test_copy_int == Result.ok ())
@@ -204,9 +188,7 @@ def is_cons {T : Type} (l : List T) : Result Bool :=
 def test_is_cons : Result Unit :=
   do
   let b ← is_cons (List.Cons 0#i32 List.Nil)
-  if b
-  then Result.ok ()
-  else Result.fail .panic
+  massert b
 
 /- Unit test for [no_nested_borrows::test_is_cons] -/
 #assert (test_is_cons == Result.ok ())
@@ -224,9 +206,7 @@ def test_split_list : Result Unit :=
   do
   let p ← split_list (List.Cons 0#i32 List.Nil)
   let (hd, _) := p
-  if hd = 0#i32
-  then Result.ok ()
-  else Result.fail .panic
+  massert (hd = 0#i32)
 
 /- Unit test for [no_nested_borrows::test_split_list] -/
 #assert (test_split_list == Result.ok ())
@@ -247,15 +227,10 @@ def choose_test : Result Unit :=
   do
   let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
-  if z1 = 1#i32
-  then
-    let (x, y) := choose_back z1
-    if x = 1#i32
-    then if y = 0#i32
-         then Result.ok ()
-         else Result.fail .panic
-    else Result.fail .panic
-  else Result.fail .panic
+  massert (z1 = 1#i32)
+  let (x, y) := choose_back z1
+  massert (x = 1#i32)
+  massert (y = 0#i32)
 
 /- Unit test for [no_nested_borrows::choose_test] -/
 #assert (choose_test == Result.ok ())
@@ -346,42 +321,21 @@ def test_list_functions : Result Unit :=
   let l := List.Cons 2#i32 List.Nil
   let l1 := List.Cons 1#i32 l
   let i ← list_length (List.Cons 0#i32 l1)
-  if i = 3#u32
-  then
-    do
-    let i1 ← list_nth_shared (List.Cons 0#i32 l1) 0#u32
-    if i1 = 0#i32
-    then
-      do
-      let i2 ← list_nth_shared (List.Cons 0#i32 l1) 1#u32
-      if i2 = 1#i32
-      then
-        do
-        let i3 ← list_nth_shared (List.Cons 0#i32 l1) 2#u32
-        if i3 = 2#i32
-        then
-          do
-          let (_, list_nth_mut_back) ←
-            list_nth_mut (List.Cons 0#i32 l1) 1#u32
-          let ls := list_nth_mut_back 3#i32
-          let i4 ← list_nth_shared ls 0#u32
-          if i4 = 0#i32
-          then
-            do
-            let i5 ← list_nth_shared ls 1#u32
-            if i5 = 3#i32
-            then
-              do
-              let i6 ← list_nth_shared ls 2#u32
-              if i6 = 2#i32
-              then Result.ok ()
-              else Result.fail .panic
-            else Result.fail .panic
-          else Result.fail .panic
-        else Result.fail .panic
-      else Result.fail .panic
-    else Result.fail .panic
-  else Result.fail .panic
+  massert (i = 3#u32)
+  let i1 ← list_nth_shared (List.Cons 0#i32 l1) 0#u32
+  massert (i1 = 0#i32)
+  let i2 ← list_nth_shared (List.Cons 0#i32 l1) 1#u32
+  massert (i2 = 1#i32)
+  let i3 ← list_nth_shared (List.Cons 0#i32 l1) 2#u32
+  massert (i3 = 2#i32)
+  let (_, list_nth_mut_back) ← list_nth_mut (List.Cons 0#i32 l1) 1#u32
+  let ls := list_nth_mut_back 3#i32
+  let i4 ← list_nth_shared ls 0#u32
+  massert (i4 = 0#i32)
+  let i5 ← list_nth_shared ls 1#u32
+  massert (i5 = 3#i32)
+  let i6 ← list_nth_shared ls 2#u32
+  massert (i6 = 2#i32)
 
 /- Unit test for [no_nested_borrows::test_list_functions] -/
 #assert (test_list_functions == Result.ok ())
@@ -401,7 +355,6 @@ def id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × ((T1 × T2) → (T1 × T2)))
   :=
-  let (t, t1) := p
   let back := fun ret => ret
   Result.ok (p, back)
 
@@ -421,7 +374,6 @@ def id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × (T1 → T1) × (T2 → T2))
   :=
-  let (t, t1) := p
   let back'a := fun ret => ret
   let back'b := fun ret => ret
   Result.ok (p, back'a, back'b)
@@ -462,26 +414,15 @@ def test_constants : Result Unit :=
   do
   let swt ← new_tuple1
   let (i, _) := swt.p
-  if i = 1#u32
-  then
-    do
-    let swt1 ← new_tuple2
-    let (i1, _) := swt1.p
-    if i1 = 1#i16
-    then
-      do
-      let swt2 ← new_tuple3
-      let (i2, _) := swt2.p
-      if i2 = 1#u64
-      then
-        do
-        let swp ← new_pair1
-        if swp.p.x = 1#u32
-        then Result.ok ()
-        else Result.fail .panic
-      else Result.fail .panic
-    else Result.fail .panic
-  else Result.fail .panic
+  massert (i = 1#u32)
+  let swt1 ← new_tuple2
+  let (i1, _) := swt1.p
+  massert (i1 = 1#i16)
+  let swt2 ← new_tuple3
+  let (i2, _) := swt2.p
+  massert (i2 = 1#u64)
+  let swp ← new_pair1
+  massert (swp.p.x = 1#u32)
 
 /- Unit test for [no_nested_borrows::test_constants] -/
 #assert (test_constants == Result.ok ())
@@ -497,10 +438,10 @@ def test_weird_borrows1 : Result Unit :=
 /- [no_nested_borrows::test_mem_replace]:
    Source: 'tests/src/no_nested_borrows.rs', lines 414:0-418:1 -/
 def test_mem_replace (px : U32) : Result U32 :=
+  do
   let (y, _) := core.mem.replace px 1#u32
-  if y = 0#u32
-  then Result.ok 2#u32
-  else Result.fail .panic
+  massert (y = 0#u32)
+  Result.ok 2#u32
 
 /- [no_nested_borrows::test_shared_borrow_bool1]:
    Source: 'tests/src/no_nested_borrows.rs', lines 421:0-430:1 -/
@@ -622,7 +563,7 @@ def ExpandSimpliy.Wrapper (T : Type) := T × T
    Source: 'tests/src/no_nested_borrows.rs', lines 540:4-546:5 -/
 def ExpandSimpliy.check_expand_simplify_symb1
   (x : ExpandSimpliy.Wrapper Bool) : Result (ExpandSimpliy.Wrapper Bool) :=
-  let (b, b1) := x
+  let (b, _) := x
   if b
   then Result.ok x
   else Result.ok x

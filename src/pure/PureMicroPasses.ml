@@ -606,6 +606,59 @@ let remove_span (def : fun_decl) : fun_decl =
       let body = { body with body = PureUtils.remove_span body.body } in
       { def with body = Some body }
 
+(** Introduce calls to [massert] (monadic assertion).
+
+    The pattern below is very frequent especially as it is introduced by
+    the [assert!] macro. We perform the following simplification:
+    {[
+      if b then e
+      else fail
+
+         ~~>
+      massert b;
+      e
+    ]}
+ *)
+let intro_massert (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+  let visitor =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_Switch env scrut switch =
+        match switch with
+        | If (e_true, e_false) ->
+            if is_fail_panic e_false.e then begin
+              (* Introduce a call to [massert] *)
+              let massert =
+                Qualif
+                  {
+                    id = FunOrOp (Fun (Pure Assert));
+                    generics = empty_generic_args;
+                  }
+              in
+              let massert =
+                {
+                  e = massert;
+                  ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty);
+                }
+              in
+              let massert = mk_app span massert scrut in
+              (* Introduce the let-binding *)
+              let monadic = true in
+              let pat = mk_dummy_pattern mk_unit_ty in
+              super#visit_Let env monadic pat massert e_true
+            end
+            else super#visit_Switch env scrut switch
+        | _ -> super#visit_Switch env scrut switch
+    end
+  in
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body = { body with body = visitor#visit_texpression () body.body } in
+      { def with body = Some body }
+
 (** Simplify the let-bindings which bind the fields of structures.
 
     For instance, given the following structure definition:
@@ -1089,20 +1142,20 @@ let inline_useless_var_reassignments ~(inline_named : bool)
     the function calls) *)
 let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   (* We first need a transformation on *left-values*, which filters the useless
-   * variables and tells us whether the value contains any variable which has
-   * not been replaced by [_] (in which case we need to keep the assignment,
-   * etc.).
-   * 
-   * This is implemented as a map-reduce.
-   *
-   * Returns: ( filtered_left_value, *all_dummies* )
-   *
-   * [all_dummies]:
-   * If the returned boolean is true, it means that all the variables appearing
-   * in the filtered left-value are *dummies* (meaning that if this left-value
-   * appears at the left of a let-binding, this binding might potentially be
-   * removed).
-   *)
+     variables and tells us whether the value contains any variable which has
+     not been replaced by [_] (in which case we need to keep the assignment,
+     etc.).
+
+     This is implemented as a map-reduce.
+
+     Returns: ( filtered_left_value, *all_dummies* )
+
+     [all_dummies]:
+     If the returned boolean is true, it means that all the variables appearing
+     in the filtered left-value are *dummies* (meaning that if this left-value
+     appears at the left of a let-binding, this binding might potentially be
+     removed).
+  *)
   let lv_visitor =
     object
       inherit [_] mapreduce_typed_pattern
@@ -1121,10 +1174,10 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   in
 
   (* We then implement the transformation on *expressions* through a mapreduce.
-   * Note that the transformation is bottom-up.
-   * The map filters the useless assignments, the reduce computes the set of
-   * used variables.
-   *)
+     Note that the transformation is bottom-up.
+     The map filters the useless assignments, the reduce computes the set of
+     used variables.
+  *)
   let expr_visitor =
     object (self)
       inherit [_] mapreduce_expression as super
@@ -1197,11 +1250,11 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       (* Visit the body *)
       let body_exp, used_vars = expr_visitor#visit_texpression () body.body in
       (* Visit the parameters - TODO: update: we can filter only if the definition
-       * is not recursive (otherwise it might mess up with the decrease clauses:
-       * the decrease clauses uses all the inputs given to the function, if some
-       * inputs are replaced by '_' we can't give it to the function used in the
-       * decreases clause).
-       * For now we deactivate the filtering. *)
+         is not recursive (otherwise it might mess up with the decrease clauses:
+         the decrease clauses uses all the inputs given to the function, if some
+         inputs are replaced by '_' we can't give it to the function used in the
+         decreases clause).
+         For now we deactivate the filtering. *)
       let used_vars = used_vars () in
       let inputs_lvs =
         if false then
@@ -1393,57 +1446,57 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             let adt_ty = e.ty in
             (* Attempt to convert all the field updates to projections
                of fields from an ADT with the same type *)
-            let to_var_proj ((fid, arg) : FieldId.id * texpression) :
-                var_id option =
+            let to_expr_proj ((fid, arg) : FieldId.id * texpression) :
+                texpression option =
               match arg.e with
               | App (proj, x) -> (
-                  match (proj.e, x.e) with
-                  | ( Qualif
-                        {
-                          id = Proj { adt_id = TAdtId proj_adt_id; field_id };
-                          generics = _;
-                        },
-                      Var v ) ->
+                  match proj.e with
+                  | Qualif
+                      {
+                        id = Proj { adt_id = TAdtId proj_adt_id; field_id };
+                        generics = _;
+                      } ->
                       (* We check that this is the proper ADT, and the proper field *)
                       if
                         TAdtId proj_adt_id = struct_id
                         && field_id = fid && x.ty = adt_ty
-                      then Some v
+                      then Some x
                       else None
                   | _ -> None)
               | _ -> None
             in
-            let var_projs = List.map to_var_proj updates in
-            let filt_var_projs = List.filter_map (fun x -> x) var_projs in
-            if filt_var_projs = [] then super#visit_texpression env e
+            let expr_projs = List.map to_expr_proj updates in
+            let filt_expr_projs = List.filter_map (fun x -> x) expr_projs in
+            if filt_expr_projs = [] then super#visit_texpression env e
             else
-              (* If all the projections are from the same variable [x], we
+              (* If all the projections are from the same expression [x], we
                  simply replace the whole expression with [x] *)
-              let x = List.hd filt_var_projs in
+              let x = List.hd filt_expr_projs in
               if
-                List.length filt_var_projs = List.length updates
-                && List.for_all (fun y -> y = x) filt_var_projs
-              then { e with e = Var x }
+                List.length filt_expr_projs = List.length updates
+                && List.for_all (fun y -> y = x) filt_expr_projs
+              then x
               else if
                 (* Attempt to create an "update" expression (i.e., of
                    the shape [{ x with f := v }]).
 
-                   This is not supported by Coq *)
+                   This is not supported by Coq.
+                *)
                 Config.backend () <> Coq
               then (
-                (* Compute the number of occurrences of each variable *)
-                let occurs = ref VarId.Map.empty in
+                (* Compute the number of occurrences of each init value *)
+                let occurs = ref TExprMap.empty in
                 List.iter
                   (fun x ->
                     let num =
-                      match VarId.Map.find_opt x !occurs with
+                      match TExprMap.find_opt x !occurs with
                       | None -> 1
                       | Some n -> n + 1
                     in
-                    occurs := VarId.Map.add x num !occurs)
-                  filt_var_projs;
+                    occurs := TExprMap.add x num !occurs)
+                  filt_expr_projs;
                 (* Find the max - note that we can initialize the max at 0,
-                   because there is at least one variable *)
+                   because there is at least one init value *)
                 let max = ref 0 in
                 let x = ref x in
                 List.iter
@@ -1451,13 +1504,13 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     if n > !max then (
                       max := n;
                       x := y))
-                  (VarId.Map.bindings !occurs);
+                  (TExprMap.bindings !occurs);
                 (* Create the update expression *)
                 let updates =
                   List.filter_map
                     (fun ((fid, fe), y_opt) ->
                       if y_opt = Some !x then None else Some (fid, fe))
-                    (List.combine updates var_projs)
+                    (List.combine updates expr_projs)
                 in
                 let supd =
                   StructUpdate { struct_id; init = Some !x; updates }
@@ -1634,13 +1687,13 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
               begin
                 match updt.init with
                 | None -> super#visit_StructUpdate env updt
-                | Some var_id ->
+                | Some init ->
                     let update_field ((fid, e) : field_id * texpression) :
                         (field_id * texpression) option =
                       (* Recursively expand the value of the field, to check if it is
                          equal to the updated value: if it is the case, we can omit
                          the update. *)
-                      let adt = { e = Var var_id; ty = e0.ty } in
+                      let adt = init in
                       let field_value = mk_adt_proj span adt fid e.ty in
                       let field_value = expand_expression env field_value.e in
                       (* If this value is equal to the value we update the field
@@ -1659,14 +1712,13 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
                     in
                     let updates = List.filter_map update_field updt.updates in
                     if updates = [] then (
-                      let e1 = Var var_id in
                       log#ldebug
                         (lazy
                           ("StructUpdate: "
                           ^ texpression_to_string ctx e0
                           ^ " ~~> "
-                          ^ texpression_to_string ctx { e0 with e = e1 }));
-                      e1)
+                          ^ texpression_to_string ctx init));
+                      init.e)
                     else
                       let updt1 = { updt with updates } in
                       log#ldebug
@@ -2285,6 +2337,9 @@ let end_passes :
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
     (None, "unit_vars_to_unit", fun _ -> unit_vars_to_unit);
+    (* Introduce [massert] - we do this early because it makes the AST nicer to
+       read by removing indentation. *)
+    (Some Config.intro_massert, "intro_massert", intro_massert);
     (* Simplify the let-bindings which bind the fields of ADTs
        which only have one variant (i.e., enumerations with one variant
        and structures). *)
@@ -2340,10 +2395,12 @@ let end_passes :
       "inline_useless_var_reassignments",
       inline_useless_var_reassignments ~inline_named:true ~inline_const:true
         ~inline_pure:false );
+    (* Filter the useless variables again *)
+    (None, "filter_useless (pass 2)", filter_useless);
     (* Simplify the let-then return again (the lambda simplification may have
        unlocked more simplifications here) *)
     (None, "simplify_let_then_ok (pass 2)", simplify_let_then_ok);
-    (* Simplify the array/slice manipulations by introducing calls to [array_update]
+    (* Simplify the array/slice manipulations by intrdoucing calls to [array_update]
        [slice_update] *)
     (None, "simplify_array_slice_update", simplify_array_slice_update);
     (* Decompose the monadic let-bindings - used by Coq *)

@@ -181,7 +181,7 @@ let rec betree_ListPairU64T_partition_at_pivot_loop
   =
   begin match self with
   | Betree_List_Cons hd tl ->
-    let (i, x) = hd in
+    let (i, _) = hd in
     if i >= pivot
     then
       betree_ListPairU64T_partition_at_pivot_loop pivot beg (Betree_List_Cons
@@ -222,8 +222,7 @@ let betree_Leaf_split
   let* (st2, _) = betree_store_leaf_node id1 content1 st1 in
   let n = Betree_Node_Leaf { id = id0; size = params.split_size } in
   let n1 = Betree_Node_Leaf { id = id1; size = params.split_size } in
-  Ok (st2, ({ id = self.id; pivot = pivot; left = n; right = n1 },
-    node_id_cnt2))
+  Ok (st2, ({ id = self.id; pivot; left = n; right = n1 }, node_id_cnt2))
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]: loop 0:
     Source: 'src/betree.rs', lines 796:8-810:5 *)
@@ -236,7 +235,7 @@ let rec betree_Node_lookup_first_message_for_key_loop
   =
   begin match msgs with
   | Betree_List_Cons x next_msgs ->
-    let (i, m) = x in
+    let (i, _) = x in
     if i >= key
     then let back = fun ret -> ret in Ok (msgs, back)
     else
@@ -343,7 +342,7 @@ and betree_Node_lookup
     let* (pending, lookup_first_message_for_key_back) =
       betree_Node_lookup_first_message_for_key key msgs in
     begin match pending with
-    | Betree_List_Cons p l ->
+    | Betree_List_Cons p _ ->
       let (k, msg) = p in
       if k <> key
       then
@@ -354,7 +353,7 @@ and betree_Node_lookup
         begin match msg with
         | Betree_Message_Insert v -> Ok (st1, (Some v, self))
         | Betree_Message_Delete -> Ok (st1, (None, self))
-        | Betree_Message_Upsert ufs ->
+        | Betree_Message_Upsert _ ->
           let* (st2, (v, node1)) =
             betree_Internal_lookup_in_children node key st1 in
           let* (v1, pending1) = betree_Node_apply_upserts pending v key in
@@ -381,8 +380,8 @@ let rec betree_Node_filter_messages_for_key_loop
   (decreases (betree_Node_filter_messages_for_key_loop_decreases key msgs))
   =
   begin match msgs with
-  | Betree_List_Cons p l ->
-    let (k, m) = p in
+  | Betree_List_Cons p _ ->
+    let (k, _) = p in
     if k = key
     then
       let* (_, msgs1) = betree_List_pop_front msgs in
@@ -410,7 +409,7 @@ let rec betree_Node_lookup_first_message_after_key_loop
   =
   begin match msgs with
   | Betree_List_Cons p next_msgs ->
-    let (k, m) = p in
+    let (k, _) = p in
     if k = key
     then
       let* (l, back) =
@@ -445,7 +444,7 @@ let betree_Node_apply_to_internal
   if b
   then
     begin match new_msg with
-    | Betree_Message_Insert i ->
+    | Betree_Message_Insert _ ->
       let* msgs2 = betree_Node_filter_messages_for_key key msgs1 in
       let* msgs3 = betree_List_push_front msgs2 (key, new_msg) in
       Ok (lookup_first_message_for_key_back msgs3)
@@ -517,7 +516,7 @@ let rec betree_Node_lookup_mut_in_bindings_loop
   =
   begin match bindings with
   | Betree_List_Cons hd tl ->
-    let (i, i1) = hd in
+    let (i, _) = hd in
     if i >= key
     then let back = fun ret -> ret in Ok (bindings, back)
     else
@@ -682,11 +681,8 @@ let betree_Node_apply
   (new_msg : betree_Message_t) (st : state) :
   result (state & (betree_Node_t & betree_NodeIdCounter_t))
   =
-  let* (st1, p) =
-    betree_Node_apply_messages self params node_id_cnt (Betree_List_Cons (key,
-      new_msg) Betree_List_Nil) st in
-  let (self1, node_id_cnt1) = p in
-  Ok (st1, p)
+  betree_Node_apply_messages self params node_id_cnt (Betree_List_Cons (key,
+    new_msg) Betree_List_Nil) st
 
 (** [betree::betree::{betree::betree::BeTree}#6::new]:
     Source: 'src/betree.rs', lines 848:4-862:5 *)
@@ -699,9 +695,9 @@ let betree_BeTree_new
   let* (st1, _) = betree_store_leaf_node id Betree_List_Nil st in
   Ok (st1,
     {
-      params = { min_flush_size = min_flush_size; split_size = split_size };
+      params = { min_flush_size; split_size };
       node_id_cnt = node_id_cnt1;
-      root = (Betree_Node_Leaf { id = id; size = 0 })
+      root = (Betree_Node_Leaf { id; size = 0 })
     })
 
 (** [betree::betree::{betree::betree::BeTree}#6::apply]:

@@ -536,7 +536,7 @@ divergent def ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
    Source: 'tests/src/loops.rs', lines 349:0-353:1 -/
 def ignore_input_mut_borrow (_a : U32) (i : U32) : Result U32 :=
   do
-  let _ ← ignore_input_mut_borrow_loop i
+  ignore_input_mut_borrow_loop i
   Result.ok _a
 
 /- [loops::incr_ignore_input_mut_borrow]: loop 0:
@@ -553,7 +553,7 @@ divergent def incr_ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
 def incr_ignore_input_mut_borrow (a : U32) (i : U32) : Result U32 :=
   do
   let a1 ← a + 1#u32
-  let _ ← incr_ignore_input_mut_borrow_loop i
+  incr_ignore_input_mut_borrow_loop i
   Result.ok a1
 
 /- [loops::ignore_input_shared_borrow]: loop 0:
@@ -569,7 +569,7 @@ divergent def ignore_input_shared_borrow_loop (i : U32) : Result Unit :=
    Source: 'tests/src/loops.rs', lines 366:0-370:1 -/
 def ignore_input_shared_borrow (_a : U32) (i : U32) : Result U32 :=
   do
-  let _ ← ignore_input_shared_borrow_loop i
+  ignore_input_shared_borrow_loop i
   Result.ok _a
 
 end loops

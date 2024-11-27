@@ -698,13 +698,16 @@ and switch_to_string ?(span : Meta.span option = None) (env : fmt_env)
 
 and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (supd : struct_update) : string =
+  let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
   let s =
     match supd.init with
     | None -> ""
-    | Some vid -> " " ^ var_id_to_string env vid ^ " with"
+    | Some init ->
+        " "
+        ^ texpression_to_string ~span env false indent1 indent_incr init
+        ^ " with"
   in
-  let indent1 = indent ^ indent_incr in
-  let indent2 = indent1 ^ indent_incr in
   (* The id should be a custom type decl id or an array *)
   match supd.struct_id with
   | TAdtId aid ->

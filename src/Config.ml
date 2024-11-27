@@ -278,6 +278,22 @@ let decompose_nested_let_patterns = ref false
  *)
 let unfold_monadic_let_bindings = ref false
 
+(** Introduce calls to [massert] (monadic assertion).
+
+    The pattern below is very frequent especially as it is introduced by
+    the [assert!] macro. If the option is [true], we perform the following
+    simplification:
+    {[
+      if b then e
+      else fail
+
+         ~~>
+      massert b;
+      e
+    ]}
+ *)
+let intro_massert = ref true
+
 (** Simplify the forward/backward functions, in case we merge them
     (i.e., the forward functions return the backward functions).
 
