@@ -225,29 +225,12 @@ Definition TestType_t (T : Type) : Type := T.
     Source: 'tests/src/traits.rs', lines 129:8-129:30 *)
 Definition TestType_test_TestType1_t : Type := u64.
 
-(** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
-    Source: 'tests/src/traits.rs', lines 130:8-132:9 *)
-Record TestType_test_TestTrait_t (Self : Type) := mkTestType_test_TestTrait_t {
-  TestType_test_TestTrait_t_test : Self -> result bool;
-}.
-
-Arguments mkTestType_test_TestTrait_t { _ }.
-Arguments TestType_test_TestTrait_t_test { _ } _.
-
 (** [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}::test]:
     Source: 'tests/src/traits.rs', lines 141:12-143:13 *)
 Definition testType_test_TestTraittraitsTestTypetestTestType1_test
   (self : TestType_test_TestType1_t) : result bool :=
   Ok (self s> 1%u64)
 .
-
-(** Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
-    Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
-Definition TestType_test_TestTraittraitsTestTypetestTestType1 :
-  TestType_test_TestTrait_t TestType_test_TestType1_t := {|
-  TestType_test_TestTrait_t_test :=
-    testType_test_TestTraittraitsTestTypetestTestType1_test;
-|}.
 
 (** [traits::{traits::TestType<T>}#6::test]:
     Source: 'tests/src/traits.rs', lines 128:4-149:5 *)
@@ -712,5 +695,22 @@ Definition use_foo2
   :=
   Ok (foo_foo T traitInst)
 .
+
+(** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
+    Source: 'tests/src/traits.rs', lines 130:8-132:9 *)
+Record TestType_test_TestTrait_t (Self : Type) := mkTestType_test_TestTrait_t {
+  TestType_test_TestTrait_t_test : Self -> result bool;
+}.
+
+Arguments mkTestType_test_TestTrait_t { _ }.
+Arguments TestType_test_TestTrait_t_test { _ } _.
+
+(** Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
+    Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
+Definition TestType_test_TestTraittraitsTestTypetestTestType1 :
+  TestType_test_TestTrait_t TestType_test_TestType1_t := {|
+  TestType_test_TestTrait_t_test :=
+    testType_test_TestTraittraitsTestTypetestTestType1_test;
+|}.
 
 End Traits.
