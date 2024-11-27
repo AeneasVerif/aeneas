@@ -401,7 +401,6 @@ def id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × ((T1 × T2) → (T1 × T2)))
   :=
-  let (t, t1) := p
   let back := fun ret => ret
   Result.ok (p, back)
 
@@ -421,7 +420,6 @@ def id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × (T1 → T1) × (T2 → T2))
   :=
-  let (t, t1) := p
   let back'a := fun ret => ret
   let back'b := fun ret => ret
   Result.ok (p, back'a, back'b)
@@ -622,7 +620,7 @@ def ExpandSimpliy.Wrapper (T : Type) := T × T
    Source: 'tests/src/no_nested_borrows.rs', lines 540:4-546:5 -/
 def ExpandSimpliy.check_expand_simplify_symb1
   (x : ExpandSimpliy.Wrapper Bool) : Result (ExpandSimpliy.Wrapper Bool) :=
-  let (b, b1) := x
+  let (b, _) := x
   if b
   then Result.ok x
   else Result.ok x

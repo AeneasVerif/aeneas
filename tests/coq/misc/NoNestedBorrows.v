@@ -383,7 +383,7 @@ Definition id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
   result ((T1 * T2) * ((T1 * T2) -> (T1 * T2)))
   :=
-  let (t, t1) := p in let back := fun (ret : (T1 * T2)) => ret in Ok (p, back)
+  let back := fun (ret : (T1 * T2)) => ret in Ok (p, back)
 .
 
 (** [no_nested_borrows::id_mut_pair3]:
@@ -403,7 +403,6 @@ Definition id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
   result ((T1 * T2) * (T1 -> T1) * (T2 -> T2))
   :=
-  let (t, t1) := p in
   let back'a := fun (ret : T1) => ret in
   let back'b := fun (ret : T2) => ret in
   Ok (p, back'a, back'b)
@@ -617,7 +616,7 @@ Definition ExpandSimpliy_Wrapper_t (T : Type) : Type := T * T.
     Source: 'tests/src/no_nested_borrows.rs', lines 540:4-546:5 *)
 Definition expandSimpliy_check_expand_simplify_symb1
   (x : ExpandSimpliy_Wrapper_t bool) : result (ExpandSimpliy_Wrapper_t bool) :=
-  let (b, b1) := x in if b then Ok x else Ok x
+  let (b, _) := x in if b then Ok x else Ok x
 .
 
 (** [no_nested_borrows::ExpandSimpliy::Wrapper2]

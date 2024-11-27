@@ -370,7 +370,7 @@ def HashMap.remove
   | none =>
     let v := index_mut_back a1
     Result.ok (none, { self with slots := v })
-  | some x1 =>
+  | some _ =>
     do
     let i1 ← self.num_entries - 1#usize
     let v := index_mut_back a1

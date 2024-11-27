@@ -510,7 +510,7 @@ Definition hashMap_remove
         hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := v
       |})
-  | Some x1 =>
+  | Some _ =>
     i1 <- usize_sub self.(hashMap_num_entries) 1%usize;
     let v := index_mut_back a1 in
     Ok (x,
