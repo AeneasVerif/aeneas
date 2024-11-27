@@ -202,10 +202,13 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
       check_texpression span ctx loop.loop_body
   | StructUpdate supd -> (
       (* Check the init value *)
-      (if Option.is_some supd.init then
-         match VarId.Map.find_opt (Option.get supd.init) ctx.env with
-         | None -> ()
-         | Some ty -> sanity_check __FILE__ __LINE__ (ty = e.ty) span);
+      begin
+        match supd.init with
+        | None -> ()
+        | Some init ->
+            check_texpression span ctx init;
+            sanity_check __FILE__ __LINE__ (init.ty = e.ty) span
+      end;
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
       let adt_id, adt_generics = ty_as_adt span e.ty in

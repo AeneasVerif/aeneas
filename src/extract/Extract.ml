@@ -1146,8 +1146,8 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         if need_paren then F.pp_print_string fmt "(";
         F.pp_open_hvbox fmt ctx.indent_incr;
         if supd.init <> None then (
-          let var_name = ctx_get_var span (Option.get supd.init) ctx in
-          F.pp_print_string fmt var_name;
+          let init = Option.get supd.init in
+          extract_texpression span ctx fmt false init;
           F.pp_print_space fmt ();
           F.pp_print_string fmt "with";
           F.pp_print_space fmt ());

@@ -1393,57 +1393,57 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             let adt_ty = e.ty in
             (* Attempt to convert all the field updates to projections
                of fields from an ADT with the same type *)
-            let to_var_proj ((fid, arg) : FieldId.id * texpression) :
-                var_id option =
+            let to_expr_proj ((fid, arg) : FieldId.id * texpression) :
+                texpression option =
               match arg.e with
               | App (proj, x) -> (
-                  match (proj.e, x.e) with
-                  | ( Qualif
-                        {
-                          id = Proj { adt_id = TAdtId proj_adt_id; field_id };
-                          generics = _;
-                        },
-                      Var v ) ->
+                  match proj.e with
+                  | Qualif
+                      {
+                        id = Proj { adt_id = TAdtId proj_adt_id; field_id };
+                        generics = _;
+                      } ->
                       (* We check that this is the proper ADT, and the proper field *)
                       if
                         TAdtId proj_adt_id = struct_id
                         && field_id = fid && x.ty = adt_ty
-                      then Some v
+                      then Some x
                       else None
                   | _ -> None)
               | _ -> None
             in
-            let var_projs = List.map to_var_proj updates in
-            let filt_var_projs = List.filter_map (fun x -> x) var_projs in
-            if filt_var_projs = [] then super#visit_texpression env e
+            let expr_projs = List.map to_expr_proj updates in
+            let filt_expr_projs = List.filter_map (fun x -> x) expr_projs in
+            if filt_expr_projs = [] then super#visit_texpression env e
             else
-              (* If all the projections are from the same variable [x], we
+              (* If all the projections are from the same expression [x], we
                  simply replace the whole expression with [x] *)
-              let x = List.hd filt_var_projs in
+              let x = List.hd filt_expr_projs in
               if
-                List.length filt_var_projs = List.length updates
-                && List.for_all (fun y -> y = x) filt_var_projs
-              then { e with e = Var x }
+                List.length filt_expr_projs = List.length updates
+                && List.for_all (fun y -> y = x) filt_expr_projs
+              then x
               else if
                 (* Attempt to create an "update" expression (i.e., of
                    the shape [{ x with f := v }]).
 
-                   This is not supported by Coq *)
+                   This is not supported by Coq.
+                *)
                 Config.backend () <> Coq
               then (
-                (* Compute the number of occurrences of each variable *)
-                let occurs = ref VarId.Map.empty in
+                (* Compute the number of occurrences of each init value *)
+                let occurs = ref TExprMap.empty in
                 List.iter
                   (fun x ->
                     let num =
-                      match VarId.Map.find_opt x !occurs with
+                      match TExprMap.find_opt x !occurs with
                       | None -> 1
                       | Some n -> n + 1
                     in
-                    occurs := VarId.Map.add x num !occurs)
-                  filt_var_projs;
+                    occurs := TExprMap.add x num !occurs)
+                  filt_expr_projs;
                 (* Find the max - note that we can initialize the max at 0,
-                   because there is at least one variable *)
+                   because there is at least one init value *)
                 let max = ref 0 in
                 let x = ref x in
                 List.iter
@@ -1451,13 +1451,13 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     if n > !max then (
                       max := n;
                       x := y))
-                  (VarId.Map.bindings !occurs);
+                  (TExprMap.bindings !occurs);
                 (* Create the update expression *)
                 let updates =
                   List.filter_map
                     (fun ((fid, fe), y_opt) ->
                       if y_opt = Some !x then None else Some (fid, fe))
-                    (List.combine updates var_projs)
+                    (List.combine updates expr_projs)
                 in
                 let supd =
                   StructUpdate { struct_id; init = Some !x; updates }
@@ -1634,13 +1634,13 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
               begin
                 match updt.init with
                 | None -> super#visit_StructUpdate env updt
-                | Some var_id ->
+                | Some init ->
                     let update_field ((fid, e) : field_id * texpression) :
                         (field_id * texpression) option =
                       (* Recursively expand the value of the field, to check if it is
                          equal to the updated value: if it is the case, we can omit
                          the update. *)
-                      let adt = { e = Var var_id; ty = e0.ty } in
+                      let adt = init in
                       let field_value = mk_adt_proj span adt fid e.ty in
                       let field_value = expand_expression env field_value.e in
                       (* If this value is equal to the value we update the field
@@ -1659,14 +1659,13 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
                     in
                     let updates = List.filter_map update_field updt.updates in
                     if updates = [] then (
-                      let e1 = Var var_id in
                       log#ldebug
                         (lazy
                           ("StructUpdate: "
                           ^ texpression_to_string ctx e0
                           ^ " ~~> "
-                          ^ texpression_to_string ctx { e0 with e = e1 }));
-                      e1)
+                          ^ texpression_to_string ctx init));
+                      init.e)
                     else
                       let updt1 = { updt with updates } in
                       log#ldebug

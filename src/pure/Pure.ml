@@ -963,7 +963,7 @@ and loop = {
  *)
 and struct_update = {
   struct_id : type_id;
-  init : var_id option;
+  init : texpression option;
   updates : (field_id * texpression) list;
 }
 
