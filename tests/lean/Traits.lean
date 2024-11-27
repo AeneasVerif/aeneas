@@ -202,24 +202,11 @@ def h4
    Source: 'tests/src/traits.rs', lines 129:8-129:30 -/
 @[reducible] def TestType.test.TestType1 := U64
 
-/- Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
-   Source: 'tests/src/traits.rs', lines 130:8-132:9 -/
-structure TestType.test.TestTrait (Self : Type) where
-  test : Self → Result Bool
-
 /- [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}::test]:
    Source: 'tests/src/traits.rs', lines 141:12-143:13 -/
 def TestType.test.TestTraittraitsTestTypetestTestType1.test
   (self : TestType.test.TestType1) : Result Bool :=
   Result.ok (self > 1#u64)
-
-/- Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
-   Source: 'tests/src/traits.rs', lines 140:8-144:9 -/
-@[reducible]
-def TestType.test.TestTraittraitsTestTypetestTestType1 :
-  TestType.test.TestTrait TestType.test.TestType1 := {
-  test := TestType.test.TestTraittraitsTestTypetestTestType1.test
-}
 
 /- [traits::{traits::TestType<T>}#6::test]:
    Source: 'tests/src/traits.rs', lines 128:4-149:5 -/
@@ -562,5 +549,18 @@ def use_foo2
   Result (core.result.Result U I32)
   :=
   Result.ok (Foo.FOO T TraitInst)
+
+/- Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
+   Source: 'tests/src/traits.rs', lines 130:8-132:9 -/
+structure TestType.test.TestTrait (Self : Type) where
+  test : Self → Result Bool
+
+/- Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
+   Source: 'tests/src/traits.rs', lines 140:8-144:9 -/
+@[reducible]
+def TestType.test.TestTraittraitsTestTypetestTestType1 :
+  TestType.test.TestTrait TestType.test.TestType1 := {
+  test := TestType.test.TestTraittraitsTestTypetestTestType1.test
+}
 
 end traits

@@ -178,24 +178,11 @@ type testType_t (t : Type0) = t
     Source: 'tests/src/traits.rs', lines 129:8-129:30 *)
 type testType_test_TestType1_t = u64
 
-(** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
-    Source: 'tests/src/traits.rs', lines 130:8-132:9 *)
-noeq type testType_test_TestTrait_t (self : Type0) = {
-  test : self -> result bool;
-}
-
 (** [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}::test]:
     Source: 'tests/src/traits.rs', lines 141:12-143:13 *)
 let testType_test_TestTraittraitsTestTypetestTestType1_test
   (self : testType_test_TestType1_t) : result bool =
   Ok (self > 1)
-
-(** Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
-    Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
-let testType_test_TestTraittraitsTestTypetestTestType1 :
-  testType_test_TestTrait_t testType_test_TestType1_t = {
-  test = testType_test_TestTraittraitsTestTypetestTestType1_test;
-}
 
 (** [traits::{traits::TestType<T>}#6::test]:
     Source: 'tests/src/traits.rs', lines 128:4-149:5 *)
@@ -534,4 +521,17 @@ let use_foo2
   result (core_result_Result_t u i32)
   =
   Ok (foo_foo t traitInst)
+
+(** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
+    Source: 'tests/src/traits.rs', lines 130:8-132:9 *)
+noeq type testType_test_TestTrait_t (self : Type0) = {
+  test : self -> result bool;
+}
+
+(** Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
+    Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
+let testType_test_TestTraittraitsTestTypetestTestType1 :
+  testType_test_TestTrait_t testType_test_TestType1_t = {
+  test = testType_test_TestTraittraitsTestTypetestTestType1_test;
+}
 
