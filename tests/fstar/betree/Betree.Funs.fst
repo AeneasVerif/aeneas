@@ -222,8 +222,7 @@ let betree_Leaf_split
   let* (st2, _) = betree_store_leaf_node id1 content1 st1 in
   let n = Betree_Node_Leaf { id = id0; size = params.split_size } in
   let n1 = Betree_Node_Leaf { id = id1; size = params.split_size } in
-  Ok (st2, ({ id = self.id; pivot = pivot; left = n; right = n1 },
-    node_id_cnt2))
+  Ok (st2, ({ id = self.id; pivot; left = n; right = n1 }, node_id_cnt2))
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]: loop 0:
     Source: 'src/betree.rs', lines 796:8-810:5 *)
@@ -696,9 +695,9 @@ let betree_BeTree_new
   let* (st1, _) = betree_store_leaf_node id Betree_List_Nil st in
   Ok (st1,
     {
-      params = { min_flush_size = min_flush_size; split_size = split_size };
+      params = { min_flush_size; split_size };
       node_id_cnt = node_id_cnt1;
-      root = (Betree_Node_Leaf { id = id; size = 0 })
+      root = (Betree_Node_Leaf { id; size = 0 })
     })
 
 (** [betree::betree::{betree::betree::BeTree}#6::apply]:

@@ -42,7 +42,7 @@ type pair_t (t1 : Type0) (t2 : Type0) = { x : t1; y : t2; }
 (** [constants::mk_pair1]:
     Source: 'tests/src/constants.rs', lines 30:0-32:1 *)
 let mk_pair1 (x : u32) (y1 : u32) : result (pair_t u32 u32) =
-  Ok { x = x; y = y1 }
+  Ok { x; y = y1 }
 
 (** [constants::P0]
     Source: 'tests/src/constants.rs', lines 34:0-34:42 *)
@@ -71,7 +71,7 @@ type wrap_t (t : Type0) = { value : t; }
 (** [constants::{constants::Wrap<T>}::new]:
     Source: 'tests/src/constants.rs', lines 57:4-59:5 *)
 let wrap_new (#t : Type0) (value : t) : result (wrap_t t) =
-  Ok { value = value }
+  Ok { value }
 
 (** [constants::Y]
     Source: 'tests/src/constants.rs', lines 44:0-44:38 *)

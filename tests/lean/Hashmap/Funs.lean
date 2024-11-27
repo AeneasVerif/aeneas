@@ -55,7 +55,7 @@ def HashMap.new_with_capacity
       max_load_factor := (max_load_dividend, max_load_divisor),
       max_load := i1,
       saturated := false,
-      slots := slots
+      slots
     }
 
 /- [hashmap::{hashmap::HashMap<T>}::new]:

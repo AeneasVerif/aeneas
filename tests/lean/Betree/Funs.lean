@@ -731,9 +731,9 @@ def betree.BeTree.new
   let (st1, _) ← betree.store_leaf_node id betree.List.Nil st
   Result.ok (st1,
     {
-      params := { min_flush_size := min_flush_size, split_size := split_size },
+      params := { min_flush_size, split_size },
       node_id_cnt := node_id_cnt1,
-      root := (betree.Node.Leaf { id := id, size := 0#u64 })
+      root := (betree.Node.Leaf { id, size := 0#u64 })
     })
 
 /- [betree::betree::{betree::betree::BeTree}#6::apply]:
