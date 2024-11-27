@@ -1089,20 +1089,20 @@ let inline_useless_var_reassignments ~(inline_named : bool)
     the function calls) *)
 let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   (* We first need a transformation on *left-values*, which filters the useless
-   * variables and tells us whether the value contains any variable which has
-   * not been replaced by [_] (in which case we need to keep the assignment,
-   * etc.).
-   * 
-   * This is implemented as a map-reduce.
-   *
-   * Returns: ( filtered_left_value, *all_dummies* )
-   *
-   * [all_dummies]:
-   * If the returned boolean is true, it means that all the variables appearing
-   * in the filtered left-value are *dummies* (meaning that if this left-value
-   * appears at the left of a let-binding, this binding might potentially be
-   * removed).
-   *)
+     variables and tells us whether the value contains any variable which has
+     not been replaced by [_] (in which case we need to keep the assignment,
+     etc.).
+
+     This is implemented as a map-reduce.
+
+     Returns: ( filtered_left_value, *all_dummies* )
+
+     [all_dummies]:
+     If the returned boolean is true, it means that all the variables appearing
+     in the filtered left-value are *dummies* (meaning that if this left-value
+     appears at the left of a let-binding, this binding might potentially be
+     removed).
+  *)
   let lv_visitor =
     object
       inherit [_] mapreduce_typed_pattern
@@ -1121,10 +1121,10 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   in
 
   (* We then implement the transformation on *expressions* through a mapreduce.
-   * Note that the transformation is bottom-up.
-   * The map filters the useless assignments, the reduce computes the set of
-   * used variables.
-   *)
+     Note that the transformation is bottom-up.
+     The map filters the useless assignments, the reduce computes the set of
+     used variables.
+  *)
   let expr_visitor =
     object (self)
       inherit [_] mapreduce_expression as super
@@ -1197,11 +1197,11 @@ let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       (* Visit the body *)
       let body_exp, used_vars = expr_visitor#visit_texpression () body.body in
       (* Visit the parameters - TODO: update: we can filter only if the definition
-       * is not recursive (otherwise it might mess up with the decrease clauses:
-       * the decrease clauses uses all the inputs given to the function, if some
-       * inputs are replaced by '_' we can't give it to the function used in the
-       * decreases clause).
-       * For now we deactivate the filtering. *)
+         is not recursive (otherwise it might mess up with the decrease clauses:
+         the decrease clauses uses all the inputs given to the function, if some
+         inputs are replaced by '_' we can't give it to the function used in the
+         decreases clause).
+         For now we deactivate the filtering. *)
       let used_vars = used_vars () in
       let inputs_lvs =
         if false then
@@ -2340,6 +2340,8 @@ let end_passes :
       "inline_useless_var_reassignments",
       inline_useless_var_reassignments ~inline_named:true ~inline_const:true
         ~inline_pure:false );
+    (* Filter the useless variables again *)
+    (None, "filter_useless (pass 2)", filter_useless);
     (* Simplify the let-then return again (the lambda simplification may have
        unlocked more simplifications here) *)
     (None, "simplify_let_then_ok (pass 2)", simplify_let_then_ok);
