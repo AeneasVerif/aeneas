@@ -851,31 +851,43 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         extract_texpression span ctx fmt false re;
         F.pp_print_string fmt ";";
         ctx)
-      else (
-        (* Print the "let" *)
-        if monadic then
-          match backend () with
-          | FStar ->
-              F.pp_print_string fmt "let*";
-              F.pp_print_space fmt ()
-          | Coq | Lean ->
-              F.pp_print_string fmt "let";
-              F.pp_print_space fmt ()
-          | HOL4 -> ()
-        else (
-          F.pp_print_string fmt "let";
-          F.pp_print_space fmt ());
-        let ctx = extract_typed_pattern span ctx fmt true true lv in
-        F.pp_print_space fmt ();
-        let eq =
-          match backend () with
-          | FStar -> "="
-          | Coq -> ":="
-          | Lean -> if monadic then "←" else ":="
-          | HOL4 -> if monadic then "<-" else "="
+      else
+        (* Check if we can ignore the [let] - it is possible for some backends,
+           if the monadic expression evaluates to [()] *)
+        let ignore_let =
+          monadic && is_dummy_pattern lv && ty_is_unit lv.ty
+          && backend () = Lean
         in
-        F.pp_print_string fmt eq;
-        F.pp_print_space fmt ();
+        (* Print the [let] *)
+        let ctx =
+          if not ignore_let then (
+            if monadic then
+              match backend () with
+              | FStar ->
+                  F.pp_print_string fmt "let*";
+                  F.pp_print_space fmt ()
+              | Coq | Lean ->
+                  F.pp_print_string fmt "let";
+                  F.pp_print_space fmt ()
+              | HOL4 -> ()
+            else (
+              F.pp_print_string fmt "let";
+              F.pp_print_space fmt ());
+            let ctx = extract_typed_pattern span ctx fmt true true lv in
+            F.pp_print_space fmt ();
+            let eq =
+              match backend () with
+              | FStar -> "="
+              | Coq -> ":="
+              | Lean -> if monadic then "←" else ":="
+              | HOL4 -> if monadic then "<-" else "="
+            in
+            F.pp_print_string fmt eq;
+            F.pp_print_space fmt ();
+            ctx)
+          else ctx
+        in
+        (* Print the bound expression *)
         extract_texpression span ctx fmt false re;
         (* End the let-binding *)
         (match backend () with
@@ -885,7 +897,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         | Coq | FStar | HOL4 ->
             F.pp_print_space fmt ();
             F.pp_print_string fmt "in");
-        ctx)
+        ctx
     in
     (* Close the box for the let-binding *)
     F.pp_close_box fmt ();

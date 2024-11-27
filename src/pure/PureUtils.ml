@@ -571,6 +571,11 @@ let mk_dummy_pattern (ty : ty) : typed_pattern =
   let value = PatDummy in
   { value; ty }
 
+let is_dummy_pattern (p : typed_pattern) : bool =
+  match p.value with
+  | PatDummy -> true
+  | _ -> false
+
 let mk_espan (m : espan) (e : texpression) : texpression =
   let ty = e.ty in
   let e = Meta (m, e) in
