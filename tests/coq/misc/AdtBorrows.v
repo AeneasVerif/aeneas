@@ -130,7 +130,6 @@ Definition use_mut_wrapper : result unit :=
   p1 <- mutWrapper_unwrap w;
   let (p2, unwrap_back) := p1 in
   p3 <- i32_add p2 1%i32;
-  let i := unwrap_back p3 in
   let x := create_back (unwrap_back p3) in
   if x s= 1%i32 then Ok tt else Fail_ Failure
 .
@@ -166,8 +165,7 @@ Definition use_mut_wrapper1 : result unit :=
   p1 <- mutWrapper1_unwrap w;
   let (p2, unwrap_back) := p1 in
   p3 <- i32_add p2 1%i32;
-  let x := create_back {| mutWrapper1_x := (unwrap_back p3).(mutWrapper1_x) |}
-    in
+  let x := create_back (unwrap_back p3) in
   if x s= 1%i32 then Ok tt else Fail_ Failure
 .
 

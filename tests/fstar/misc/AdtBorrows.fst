@@ -33,7 +33,7 @@ type sharedWrapper1_t (t : Type0) = { x : t; }
 (** [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::create]:
     Source: 'tests/src/adt-borrows.rs', lines 28:4-30:5 *)
 let sharedWrapper1_create (#t : Type0) (x : t) : result (sharedWrapper1_t t) =
-  Ok { x = x }
+  Ok { x }
 
 (** [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 32:4-34:5 *)
@@ -55,7 +55,7 @@ type sharedWrapper2_t (t : Type0) = { x : t; y : t; }
     Source: 'tests/src/adt-borrows.rs', lines 50:4-52:5 *)
 let sharedWrapper2_create
   (#t : Type0) (x : t) (y : t) : result (sharedWrapper2_t t) =
-  Ok { x = x; y = y }
+  Ok { x; y }
 
 (** [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}#2::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 54:4-56:5 *)
@@ -93,7 +93,6 @@ let use_mut_wrapper : result unit =
   let* (w, create_back) = mutWrapper_create 0 in
   let* (p, unwrap_back) = mutWrapper_unwrap w in
   let* p1 = i32_add p 1 in
-  let i = unwrap_back p1 in
   let x = create_back (unwrap_back p1) in
   if x = 1 then Ok () else Fail Failure
 
@@ -105,7 +104,7 @@ type mutWrapper1_t (t : Type0) = { x : t; }
     Source: 'tests/src/adt-borrows.rs', lines 93:4-95:5 *)
 let mutWrapper1_create
   (#t : Type0) (x : t) : result ((mutWrapper1_t t) & (mutWrapper1_t t -> t)) =
-  let back = fun ret -> ret.x in Ok ({ x = x }, back)
+  let back = fun ret -> ret.x in Ok ({ x }, back)
 
 (** [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 97:4-99:5 *)
@@ -119,7 +118,7 @@ let use_mut_wrapper1 : result unit =
   let* (w, create_back) = mutWrapper1_create 0 in
   let* (p, unwrap_back) = mutWrapper1_unwrap w in
   let* p1 = i32_add p 1 in
-  let x = create_back { x = (unwrap_back p1).x } in
+  let x = create_back (unwrap_back p1) in
   if x = 1 then Ok () else Fail Failure
 
 (** [adt_borrows::MutWrapper2]
@@ -134,7 +133,7 @@ let mutWrapper2_create
   =
   let back'a = fun ret -> ret.x in
   let back'b = fun ret -> ret.y in
-  Ok ({ x = x; y = y }, back'a, back'b)
+  Ok ({ x; y }, back'a, back'b)
 
 (** [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 120:4-122:5 *)

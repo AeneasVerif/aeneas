@@ -40,7 +40,7 @@ structure SharedWrapper1 (T : Type) where
 /- [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::create]:
    Source: 'tests/src/adt-borrows.rs', lines 28:4-30:5 -/
 def SharedWrapper1.create {T : Type} (x : T) : Result (SharedWrapper1 T) :=
-  Result.ok { x := x }
+  Result.ok { x }
 
 /- [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 32:4-34:5 -/
@@ -67,7 +67,7 @@ structure SharedWrapper2 (T : Type) where
    Source: 'tests/src/adt-borrows.rs', lines 50:4-52:5 -/
 def SharedWrapper2.create
   {T : Type} (x : T) (y : T) : Result (SharedWrapper2 T) :=
-  Result.ok { x := x, y := y }
+  Result.ok { x, y }
 
 /- [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}#2::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 54:4-56:5 -/
@@ -113,7 +113,6 @@ def use_mut_wrapper : Result Unit :=
   let (w, create_back) ← MutWrapper.create 0#i32
   let (p, unwrap_back) ← MutWrapper.unwrap w
   let p1 ← p + 1#i32
-  let i := unwrap_back p1
   let x := create_back (unwrap_back p1)
   if x = 1#i32
   then Result.ok ()
@@ -129,7 +128,7 @@ structure MutWrapper1 (T : Type) where
 def MutWrapper1.create
   {T : Type} (x : T) : Result ((MutWrapper1 T) × (MutWrapper1 T → T)) :=
   let back := fun ret => ret.x
-  Result.ok ({ x := x }, back)
+  Result.ok ({ x }, back)
 
 /- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 97:4-99:5 -/
@@ -145,7 +144,7 @@ def use_mut_wrapper1 : Result Unit :=
   let (w, create_back) ← MutWrapper1.create 0#i32
   let (p, unwrap_back) ← MutWrapper1.unwrap w
   let p1 ← p + 1#i32
-  let x := create_back { x := (unwrap_back p1).x }
+  let x := create_back (unwrap_back p1)
   if x = 1#i32
   then Result.ok ()
   else Result.fail .panic
@@ -164,7 +163,7 @@ def MutWrapper2.create
   :=
   let back'a := fun ret => ret.x
   let back'b := fun ret => ret.y
-  Result.ok ({ x := x, y := y }, back'a, back'b)
+  Result.ok ({ x, y }, back'a, back'b)
 
 /- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 120:4-122:5 -/
