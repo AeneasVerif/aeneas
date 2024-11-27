@@ -8,8 +8,9 @@ include Charon.TypesUtils
     we erase the lists of regions (by replacing them with [[]] when using {!type:Types.ty},
     and when a type uses 'static this region doesn't appear in the region parameters.
  *)
-let ty_has_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
-  let info = TypesAnalysis.analyze_ty infos ty in
+let ty_has_borrows (span : Meta.span option) (infos : TypesAnalysis.type_infos)
+    (ty : ty) : bool =
+  let info = TypesAnalysis.analyze_ty span infos ty in
   info.TypesAnalysis.contains_borrow
 
 (** Checks that a type is copyable.
@@ -20,8 +21,8 @@ let ty_has_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
   *)
 let ty_is_copyable (_ty : ty) : bool = true
 
-let ty_has_adt_with_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool
-    =
+let ty_has_adt_with_borrows span (infos : TypesAnalysis.type_infos) (ty : ty) :
+    bool =
   let visitor =
     object
       inherit [_] iter_ty as super
@@ -29,7 +30,7 @@ let ty_has_adt_with_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool
       method! visit_ty env ty =
         match ty with
         | TAdt (type_id, _) when type_id <> TTuple ->
-            let info = TypesAnalysis.analyze_ty infos ty in
+            let info = TypesAnalysis.analyze_ty span infos ty in
             if info.TypesAnalysis.contains_borrow then raise Found
             else super#visit_ty env ty
         | _ -> super#visit_ty env ty
@@ -46,24 +47,63 @@ let ty_has_adt_with_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool
     we erase the lists of regions (by replacing them with [[]] when using {!type:Types.ty},
     and when a type uses 'static this region doesn't appear in the region parameters.
  *)
-let ty_has_nested_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
-  let info = TypesAnalysis.analyze_ty infos ty in
+let ty_has_nested_borrows (span : Meta.span option)
+    (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
+  let info = TypesAnalysis.analyze_ty span infos ty in
   info.TypesAnalysis.contains_nested_borrows
 
 (** Retuns true if the type decl contains nested borrows. *)
-let type_decl_has_nested_borrows span (infos : TypesAnalysis.type_infos)
-    (type_decl : type_decl) : bool =
+let type_decl_has_nested_borrows (span : Meta.span option)
+    (infos : TypesAnalysis.type_infos) (type_decl : type_decl) : bool =
   let generics =
     Substitute.generic_args_of_params_erase_regions span type_decl.generics
   in
   let ty = TAdt (TAdtId type_decl.def_id, generics) in
-  ty_has_nested_borrows infos ty
+  ty_has_nested_borrows span infos ty
 
 (** Retuns true if the type contains a borrow under a mutable borrow *)
-let ty_has_borrow_under_mut (infos : TypesAnalysis.type_infos) (ty : ty) : bool
-    =
-  let info = TypesAnalysis.analyze_ty infos ty in
+let ty_has_borrow_under_mut span (infos : TypesAnalysis.type_infos) (ty : ty) :
+    bool =
+  let info = TypesAnalysis.analyze_ty span infos ty in
   info.TypesAnalysis.contains_borrow_under_mut
+
+(** Check if a {!type:Charon.Types.ty} contains a mutable borrow which uses a
+    region from a given set. *)
+let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
+    (pred : region -> bool) (ty : ty) : bool =
+  let obj =
+    object
+      inherit [_] iter_ty as super
+
+      method! visit_TRef env r ty rkind =
+        begin
+          match rkind with
+          | RMut -> if pred r then raise Found
+          | RShared -> ()
+        end;
+        super#visit_TRef env r ty rkind
+
+      method! visit_TAdt env type_id generics =
+        (* Lookup the information for this ADT *)
+        begin
+          match type_id with
+          | TTuple | TBuiltin (TBox | TArray | TSlice | TStr) -> ()
+          | TAdtId adt_id ->
+              let info = TypeDeclId.Map.find adt_id infos in
+              RegionVarId.iteri
+                (fun adt_rid r ->
+                  if RegionVarId.Set.mem adt_rid info.mut_regions && pred r then
+                    raise Found
+                  else ())
+                generics.regions
+        end;
+        super#visit_TAdt env type_id generics
+    end
+  in
+  try
+    obj#visit_ty () ty;
+    false
+  with Found -> true
 
 (** Small helper *)
 let raise_if_not_rty_visitor =

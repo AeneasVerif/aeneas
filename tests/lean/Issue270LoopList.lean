@@ -15,14 +15,14 @@ inductive List (T : Type) :=
 | Nil : List T
 
 /- [issue_270_loop_list::foo]: loop 0:
-   Source: 'tests/src/issue-270-loop-list.rs', lines 11:8-14:9 -/
+   Source: 'tests/src/issue-270-loop-list.rs', lines 10:8-12:9 -/
 divergent def foo_loop (t : List (List U8)) : Result Unit :=
   match t with
   | List.Cons _ tt => foo_loop tt
   | List.Nil => Result.ok ()
 
 /- [issue_270_loop_list::foo]:
-   Source: 'tests/src/issue-270-loop-list.rs', lines 8:0-16:1 -/
+   Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 -/
 def foo (v : List (List U8)) : Result Unit :=
   match v with
   | List.Cons l t => foo_loop t

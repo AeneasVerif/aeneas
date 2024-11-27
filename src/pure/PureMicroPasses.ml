@@ -606,6 +606,103 @@ let remove_span (def : fun_decl) : fun_decl =
       let body = { body with body = PureUtils.remove_span body.body } in
       { def with body = Some body }
 
+(** Simplify the let-bindings which bind the fields of structures.
+
+    For instance, given the following structure definition:
+    {[
+      struct Struct {
+        x : u32,
+        y : u32,
+      }
+    ]}
+
+    We perform the following transformation:
+    {[
+      let StructCons x y = s in
+      ...
+
+       ~~>
+
+      let x = s.x in
+      let y = s.y in
+      ...
+    ]}
+
+    Of course, this is not always possible depending on the backend.
+    Also, recursive structures, and more specifically structures mutually recursive
+    with inductives, are usually not supported. We define such recursive structures
+    as inductives, in which case it is not always possible to use a notation
+    for the field projections.
+
+    The subsequent passes, in particular the ones which inline the useless
+    assignments, simplify this further.
+  *)
+let simplify_decompose_struct (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+  let visitor =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_Let env (monadic : bool) (lv : typed_pattern)
+          (scrutinee : texpression) (next : texpression) =
+        match (lv.value, lv.ty) with
+        | PatAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
+            (* Detect if this is an enumeration or not *)
+            let tdef = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
+            let is_enum = TypesUtils.type_decl_is_enum tdef in
+            (* We deconstruct the ADT with a single let-binding in two situations:
+               - if the ADT is an enumeration (which must have exactly one branch)
+               - if we forbid using field projectors
+            *)
+            let use_let_with_cons =
+              is_enum
+              || !Config.dont_use_field_projectors
+              (* Also, there is a special case when the ADT is to be extracted as
+                 a tuple, because it is a structure with unnamed fields. Some backends
+                 like Lean have projectors for tuples (like so: `x.3`), but others
+                 like Coq don't, in which case we have to deconstruct the whole ADT
+                 at once (`let (a, b, c) = x in`) *)
+              || TypesUtils.type_decl_from_type_id_is_tuple_struct
+                   ctx.type_ctx.type_infos (T.TAdtId adt_id)
+                 && not !Config.use_tuple_projectors
+            in
+            if use_let_with_cons then
+              super#visit_Let env monadic lv scrutinee next
+            else
+              (* This is not an enumeration: introduce let-bindings for every
+                 field.
+                 We use the [dest] variable in order not to have to recompute
+                 the type of the result of the projection... *)
+              let gen_field_proj (field_id : FieldId.id) (dest : typed_pattern)
+                  : texpression =
+                let proj_kind = { adt_id = TAdtId adt_id; field_id } in
+                let qualif = { id = Proj proj_kind; generics } in
+                let proj_e = Qualif qualif in
+                let proj_ty = mk_arrow scrutinee.ty dest.ty in
+                let proj = { e = proj_e; ty = proj_ty } in
+                mk_app span proj scrutinee
+              in
+              let id_var_pairs =
+                FieldId.mapi (fun fid v -> (fid, v)) adt_pat.field_values
+              in
+              let monadic = false in
+              let e =
+                List.fold_right
+                  (fun (fid, pat) e ->
+                    let field_proj = gen_field_proj fid pat in
+                    mk_let monadic pat field_proj e)
+                  id_var_pairs next
+              in
+              (super#visit_texpression env e).e
+        | _ -> super#visit_Let env monadic lv scrutinee next
+    end
+  in
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body = { body with body = visitor#visit_texpression () body.body } in
+      { def with body = Some body }
+
 (** Introduce the special structure create/update expressions.
 
     Upon generating the pure code, we introduce structure values by using
@@ -625,7 +722,7 @@ let remove_span (def : fun_decl) : fun_decl =
     structure is to be extracted as a tuple.
  *)
 let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
-  let obj =
+  let visitor =
     object (self)
       inherit [_] map_expression as super
 
@@ -691,7 +788,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
   | Some body ->
-      let body = { body with body = obj#visit_texpression () body.body } in
+      let body = { body with body = visitor#visit_texpression () body.body } in
       { def with body = Some body }
 
 (** Simplify the let-bindings by performing the following rewritings:
@@ -743,7 +840,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       ...
     ]}
  *)
-let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let simplify_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -810,7 +907,20 @@ let simplify_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   | _ -> false
                 in
                 if List.for_all check_pat_arg (List.combine pats args) then
-                  self#visit_Let env monadic lv g next
+                  (* Check if the application is a tuple constructor
+                     or will be extracted as a projector: if
+                     it is, keep the lambdas, otherwise simplify *)
+                  let simplify =
+                    match g.e with
+                    | Qualif { id = AdtCons { adt_id; _ }; _ } ->
+                        not
+                          (PureUtils.type_decl_from_type_id_is_tuple_struct
+                             ctx.type_ctx.type_infos adt_id)
+                    | Qualif { id = Proj _; _ } -> false
+                    | _ -> true
+                  in
+                  if simplify then self#visit_Let env monadic lv g next
+                  else super#visit_Let env monadic lv rv next
                 else super#visit_Let env monadic lv rv next
               else super#visit_Let env monadic lv rv next
             else super#visit_Let env monadic lv rv next
@@ -2175,6 +2285,10 @@ let end_passes :
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
     (None, "unit_vars_to_unit", fun _ -> unit_vars_to_unit);
+    (* Simplify the let-bindings which bind the fields of ADTs
+       which only have one variant (i.e., enumerations with one variant
+       and structures). *)
+    (None, "simplify_decompose_struct", simplify_decompose_struct);
     (* Introduce the special structure create/update expressions *)
     (None, "intro_struct_updates", intro_struct_updates);
     (* Simplify the let-bindings *)

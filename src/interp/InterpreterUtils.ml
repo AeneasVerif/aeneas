@@ -128,7 +128,11 @@ let mk_aproj_loans_value_from_symbolic_value (regions : RegionId.Set.t)
     let av = ASymbolic (AProjLoans (svalue, [])) in
     let av : typed_avalue = { value = av; ty = svalue.sv_ty } in
     av
-  else { value = AIgnored; ty = svalue.sv_ty }
+  else
+    {
+      value = AIgnored (Some (mk_typed_value_from_symbolic_value svalue));
+      ty = svalue.sv_ty;
+    }
 
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
@@ -280,14 +284,14 @@ let bottom_in_adt_value (ended_regions : RegionId.Set.t) (v : adt_value) : bool
     false
   with Found -> true
 
-let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : eval_ctx)
+let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
     (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
 
       method! visit_symbolic_value _ s =
-        if ty_has_borrow_under_mut ctx.type_ctx.type_infos s.sv_ty then
+        if ty_has_borrow_under_mut span ctx.type_ctx.type_infos s.sv_ty then
           raise Found
         else ()
     end
@@ -315,16 +319,17 @@ let rvalue_get_place (rv : rvalue) : place option =
   | Aggregate _ -> None
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
-let symbolic_value_has_borrows (ctx : eval_ctx) (sv : symbolic_value) : bool =
-  ValuesUtils.symbolic_value_has_borrows ctx.type_ctx.type_infos sv
+let symbolic_value_has_borrows span (ctx : eval_ctx) (sv : symbolic_value) :
+    bool =
+  ValuesUtils.symbolic_value_has_borrows span ctx.type_ctx.type_infos sv
 
 (** See {!ValuesUtils.value_has_borrows}. *)
-let value_has_borrows (ctx : eval_ctx) (v : value) : bool =
-  ValuesUtils.value_has_borrows ctx.type_ctx.type_infos v
+let value_has_borrows span (ctx : eval_ctx) (v : value) : bool =
+  ValuesUtils.value_has_borrows span ctx.type_ctx.type_infos v
 
 (** See {!ValuesUtils.value_has_loans_or_borrows}. *)
-let value_has_loans_or_borrows (ctx : eval_ctx) (v : value) : bool =
-  ValuesUtils.value_has_loans_or_borrows ctx.type_ctx.type_infos v
+let value_has_loans_or_borrows span (ctx : eval_ctx) (v : value) : bool =
+  ValuesUtils.value_has_loans_or_borrows span ctx.type_ctx.type_infos v
 
 (** See {!ValuesUtils.value_has_loans}. *)
 let value_has_loans (v : value) : bool = ValuesUtils.value_has_loans v
@@ -508,7 +513,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   (* Generate fresh regions and their substitutions *)
   let _, rsubst, _ =
     Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
-      sg.generics.regions
+      sg.generics.regions fresh_region_id
   in
   let rsubst r = Option.get (rsubst r) in
   (* Generate the type substitution

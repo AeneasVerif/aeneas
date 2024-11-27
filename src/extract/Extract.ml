@@ -646,6 +646,11 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
     (generics : generic_args) (args : texpression list) : unit =
   let e_ty = TAdt (adt_cons.adt_id, generics) in
   let is_single_pat = false in
+  (* Sanity check: make sure the expression is not a tuple constructor
+     with no arguments (the properly extracted expression would be a function) *)
+  cassert __FILE__ __LINE__
+    (not (adt_cons.adt_id = TTuple && generics.types != [] && args = []))
+    span "Unreachable";
   let _ =
     extract_adt_g_value span
       (fun ctx inside e ->

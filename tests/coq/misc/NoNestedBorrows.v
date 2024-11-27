@@ -600,19 +600,28 @@ Definition not_u32 (x : u32) : result u32 :=
 Definition not_i32 (x : i32) : result i32 :=
   Ok (scalar_not x).
 
+(** [no_nested_borrows::borrow_mut_tuple]:
+    Source: 'tests/src/no_nested_borrows.rs', lines 532:0-534:1 *)
+Definition borrow_mut_tuple
+  {T : Type} {U : Type} (x : (T * U)) :
+  result ((T * U) * ((T * U) -> (T * U)))
+  :=
+  let back := fun (ret : (T * U)) => ret in Ok (x, back)
+.
+
 (** [no_nested_borrows::ExpandSimpliy::Wrapper]
-    Source: 'tests/src/no_nested_borrows.rs', lines 534:4-534:32 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 538:4-538:32 *)
 Definition ExpandSimpliy_Wrapper_t (T : Type) : Type := T * T.
 
 (** [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 536:4-542:5 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 540:4-546:5 *)
 Definition expandSimpliy_check_expand_simplify_symb1
   (x : ExpandSimpliy_Wrapper_t bool) : result (ExpandSimpliy_Wrapper_t bool) :=
   let (b, b1) := x in if b then Ok x else Ok x
 .
 
 (** [no_nested_borrows::ExpandSimpliy::Wrapper2]
-    Source: 'tests/src/no_nested_borrows.rs', lines 544:4-547:5 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 548:4-551:5 *)
 Record ExpandSimpliy_Wrapper2_t :=
 mkExpandSimpliy_Wrapper2_t {
   expandSimpliy_Wrapper2_b : bool; expandSimpliy_Wrapper2_x : u32;
@@ -620,7 +629,7 @@ mkExpandSimpliy_Wrapper2_t {
 .
 
 (** [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb2]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 549:4-555:5 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 553:4-559:5 *)
 Definition expandSimpliy_check_expand_simplify_symb2
   (x : ExpandSimpliy_Wrapper2_t) : result ExpandSimpliy_Wrapper2_t :=
   if x.(expandSimpliy_Wrapper2_b)

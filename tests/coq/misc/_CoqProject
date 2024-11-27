@@ -13,6 +13,7 @@ External_TypesExternal.v
 External_TypesExternal_Template.v 
 InfiniteLoop.v 
 Issue194RecursiveStructProjector.v 
+Issue270LoopList.v 
 Loops.v 
 NoNestedBorrows.v 
 Paper.v 

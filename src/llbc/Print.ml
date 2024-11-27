@@ -198,7 +198,7 @@ module Values = struct
     | ABorrow bc -> aborrow_content_to_string ~span env bc
     | ALoan lc -> aloan_content_to_string ~span env lc
     | ASymbolic s -> aproj_to_string env s
-    | AIgnored -> "_"
+    | AIgnored _ -> "_"
 
   and aloan_content_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (lc : aloan_content) : string =
@@ -261,7 +261,7 @@ module Values = struct
         ^ ")"
     | AEndedMutBorrow (_mv, child) ->
         "@ended_mut_borrow(" ^ typed_avalue_to_string ~span env child ^ ")"
-    | AEndedIgnoredMutBorrow { child; given_back; given_back_span = _ } ->
+    | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
         ^ typed_avalue_to_string ~span env child
         ^ "; "

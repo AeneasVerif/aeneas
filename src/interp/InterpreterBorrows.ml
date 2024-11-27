@@ -148,12 +148,12 @@ let end_borrow_get_borrow (span : Meta.span)
             let av = super#visit_typed_avalue outer av in
             (* Reconstruct *)
             ALoan (ASharedLoan (pm, bids, v, av))
-        | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan _
         (* The loan has ended, so no need to update the outer borrows *)
         | AIgnoredMutLoan _ (* Nothing special to do *)
         | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         (* Nothing special to do *)
         | AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
@@ -207,7 +207,7 @@ let end_borrow_get_borrow (span : Meta.span)
         | AIgnoredMutBorrow (_, _)
         | AEndedMutBorrow _
         | AEndedIgnoredMutBorrow
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedBorrow ->
             (* Nothing special to do *)
             super#visit_ABorrow outer bc
@@ -345,7 +345,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                   (* Remember the given back value as a meta-value
                    * TODO: it is a bit annoying to have to deconstruct
                    * the value... Think about a more elegant way. *)
-                  let given_back_span = as_symbolic span nv.value in
+                  let given_back_meta = as_symbolic span nv.value in
                   (* The loan projector *)
                   let given_back =
                     mk_aproj_loans_value_from_symbolic_value abs.regions sv
@@ -355,7 +355,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                   (* Return *)
                   ABorrow
                     (AEndedIgnoredMutBorrow
-                       { given_back; child; given_back_span })
+                       { given_back; child; given_back_meta })
               | _ -> craise __FILE__ __LINE__ span "Unreachable"
             else
               (* Continue exploring *)
@@ -390,7 +390,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               (* Register the insertion *)
               set_replaced ();
               (* Remember the given back value as a meta-value *)
-              let given_back_span = nv in
+              let given_back_meta = nv in
               (* Apply the projection *)
               let given_back =
                 apply_proj_borrows span check_symbolic_no_ended ctx
@@ -399,14 +399,14 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
               (* Return the new value *)
-              ALoan (AEndedMutLoan { child; given_back; given_back_span }))
+              ALoan (AEndedMutLoan { child; given_back; given_back_meta }))
             else (* Continue exploring *)
               super#visit_ALoan opt_abs lc
         | ASharedLoan (pm, _, _, _) ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* We are giving back a value to a *mutable* loan: nothing special to do *)
             super#visit_ALoan opt_abs lc
-        | AEndedMutLoan { child = _; given_back = _; given_back_span = _ }
+        | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
@@ -415,7 +415,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
              * of the value which is given back *)
             if opt_bid = Some bid then
               (* Remember the given back value as a meta-value *)
-              let given_back_span = nv in
+              let given_back_meta = nv in
               (* Note that we replace the ignored mut loan by an *ended* ignored
                * mut loan. Also, this is not the loan we are looking for *per se*:
                * we don't register the fact that we inserted the value somewhere
@@ -427,10 +427,10 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
               ALoan
-                (AEndedIgnoredMutLoan { given_back; child; given_back_span })
+                (AEndedIgnoredMutLoan { given_back; child; given_back_meta })
             else super#visit_ALoan opt_abs lc
         | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
@@ -557,12 +557,12 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
               set_replaced ();
               (* Return the new value *)
               ALoan
-                (AEndedMutLoan { given_back = nv; child; given_back_span = nsv }))
+                (AEndedMutLoan { given_back = nv; child; given_back_meta = nsv }))
             else (* Continue exploring *)
               super#visit_ALoan opt_abs lc
         | ASharedLoan (PNone, _, _, _)
         (* We are giving back a value to a *mutable* loan: nothing special to do *)
-        | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
@@ -581,10 +581,10 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
               sanity_check __FILE__ __LINE__ (nv.ty = ty) span;
               ALoan
                 (AEndedIgnoredMutLoan
-                   { given_back = nv; child; given_back_span = nsv }))
+                   { given_back = nv; child; given_back_meta = nsv }))
             else super#visit_ALoan opt_abs lc
         | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
@@ -662,14 +662,14 @@ let give_back_shared _config (span : Meta.span) (bid : BorrowId.id)
             else
               (* Not the loan we are looking for: continue exploring *)
               super#visit_ALoan opt_abs lc
-        | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
+        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         (* Nothing special to do (the loan has ended) *)
         | AEndedSharedLoan (_, _)
         (* Nothing special to do (the loan has ended) *)
         | AIgnoredMutLoan (_, _)
         (* Nothing special to do (we are giving back a *shared* borrow) *)
         | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_span = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         (* Nothing special to do *)
         | AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
@@ -1654,7 +1654,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       (av : typed_avalue) : unit =
     let ty = av.ty in
     match av.value with
-    | ABottom | AIgnored -> ()
+    | ABottom | AIgnored _ -> ()
     | AAdt adt ->
         (* Simply explore the children *)
         List.iter (list_avalues allow_borrows push) adt.field_values
@@ -1664,14 +1664,14 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         | ASharedLoan (pm, bids, sv, child_av) ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (value_has_borrows ctx sv.value))
+              (not (value_has_borrows (Some span) ctx sv.value))
               span "Nested borrows are not supported yet";
             (* Destructure the shared value *)
             let avl, sv =
               if destructure_shared_values then list_values sv else ([], sv)
             in
             (* Push a value *)
-            let ignored = mk_aignored span child_av.ty in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ALoan (ASharedLoan (pm, bids, sv, ignored)) in
             push { value; ty };
             (* Explore the child *)
@@ -1687,26 +1687,28 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the whole loan *)
-            let ignored = mk_aignored span child_av.ty in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ALoan (AMutLoan (pm, bid, ignored)) in
             push { value; ty }
         | AIgnoredMutLoan (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               span "Nested borrows are not supported yet";
             sanity_check __FILE__ __LINE__ (opt_bid = None) span;
             (* Simply explore the child *)
             list_avalues false push_fail child_av
         | AEndedMutLoan
-            { child = child_av; given_back = _; given_back_span = _ }
+            { child = child_av; given_back = _; given_back_meta = _ }
         | AEndedSharedLoan (_, child_av)
         | AEndedIgnoredMutLoan
-            { child = child_av; given_back = _; given_back_span = _ }
+            { child = child_av; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child_av ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               span "Nested borrows are not supported yet";
             (* Simply explore the child *)
             list_avalues false push_fail child_av)
@@ -1719,7 +1721,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the borrow *)
-            let ignored = mk_aignored span child_av.ty in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ABorrow (AMutBorrow (pm, bid, ignored)) in
             push { value; ty }
         | ASharedBorrow _ ->
@@ -1728,16 +1730,18 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         | AIgnoredMutBorrow (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               span "Nested borrows are not supported yet";
             sanity_check __FILE__ __LINE__ (opt_bid = None) span;
             (* Just explore the child *)
             list_avalues false push_fail child_av
         | AEndedIgnoredMutBorrow
-            { child = child_av; given_back = _; given_back_span = _ } ->
+            { child = child_av; given_back = _; given_back_meta = _ } ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (ty_has_borrows ctx.type_ctx.type_infos child_av.ty))
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               span "Nested borrows are not supported yet";
             (* Just explore the child *)
             list_avalues false push_fail child_av
@@ -1757,7 +1761,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
         sanity_check __FILE__ __LINE__
-          (not (ty_has_borrows ctx.type_ctx.type_infos ty))
+          (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
           span
   and list_values (v : typed_value) : typed_avalue list * typed_value =
     let ty = v.ty in
@@ -1784,7 +1788,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                 "Nested borrows are not supported yet";
               let av : typed_avalue =
                 sanity_check __FILE__ __LINE__
-                  (not (value_has_loans_or_borrows ctx sv.value))
+                  (not (value_has_loans_or_borrows (Some span) ctx sv.value))
                   span;
                 (* We introduce fresh ids for the symbolic values *)
                 let mk_value_with_fresh_sids (v : typed_value) : typed_value =
@@ -1801,7 +1805,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                 let sv = mk_value_with_fresh_sids sv in
                 (* Create the new avalue *)
                 let value =
-                  ALoan (ASharedLoan (PNone, bids, sv, mk_aignored span ty))
+                  ALoan
+                    (ASharedLoan (PNone, bids, sv, mk_aignored span ty None))
                 in
                 (* We need to update the type of the value: abstract shared loans
                    have the type `& ...` - TODO: this is annoying and not very clean... *)
@@ -1820,7 +1825,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
         sanity_check __FILE__ __LINE__
-          (not (ty_has_borrows ctx.type_ctx.type_infos ty))
+          (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
           span;
         ([], v)
   in
@@ -1937,11 +1942,11 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (value_has_borrows ctx bv.value))
+              (not (value_has_borrows (Some span) ctx bv.value))
               span "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
             let ty = TRef (RFVar r_id, ref_ty, kind) in
-            let ignored = mk_aignored span ref_ty in
+            let ignored = mk_aignored span ref_ty None in
             let av = ABorrow (AMutBorrow (PNone, bid, ignored)) in
             let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
@@ -1958,13 +1963,13 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
-              (not (value_has_borrows ctx sv.value))
+              (not (value_has_borrows (Some span) ctx sv.value))
               span "Nested borrows are not supported yet";
             (* Push the avalue *)
             cassert __FILE__ __LINE__ (ty_no_regions ty) span
               "Nested borrows are not supported yet";
             (* We use [AIgnore] for the inner value *)
-            let ignored = mk_aignored span ty in
+            let ignored = mk_aignored span ty None in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ty = mk_ref_ty (RFVar r_id) ty RShared in
             (* Rem.: the shared value might contain loans *)
@@ -1987,14 +1992,14 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let ignored = mk_aignored span ty in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ty = mk_ref_ty (RFVar r_id) ty RMut in
-            let av = ALoan (AMutLoan (PNone, bid, ignored)) in
+            let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
             let av = { value = av; ty } in
             ([ av ], v))
     | VSymbolic _ ->
         (* For now, we force all the symbolic values containing borrows to
            be eagerly expanded, and we don't support nested borrows *)
         cassert __FILE__ __LINE__
-          (not (value_has_borrows ctx v.value))
+          (not (value_has_borrows (Some span) ctx v.value))
           span "Nested borrows are not supported yet";
         (* Return nothing *)
         ([], v)
@@ -2150,7 +2155,7 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
       method! visit_symbolic_value _ sv =
         (* Sanity check: no borrows *)
         sanity_check __FILE__ __LINE__
-          (not (symbolic_value_has_borrows ctx sv))
+          (not (symbolic_value_has_borrows (Some span) ctx sv))
           span
     end
   in
@@ -2251,7 +2256,7 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
     if pm = PNone then [ mk_value PLeft; mk_value PRight ] else [ av ]
   in
   match av.value with
-  | AAdt _ | ABottom | ASymbolic _ | AIgnored ->
+  | AAdt _ | ABottom | ASymbolic _ | AIgnored _ ->
       craise __FILE__ __LINE__ span "Unexpected"
   | ABorrow bc -> (
       match bc with
@@ -2278,7 +2283,7 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
       | ASharedLoan (pm, bids, sv, child) ->
           sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
           sanity_check __FILE__ __LINE__
-            (not (value_has_borrows ctx sv.value))
+            (not (value_has_borrows (Some span) ctx sv.value))
             span;
           let mk_value pm =
             { av with value = ALoan (ASharedLoan (pm, bids, sv, child)) }
@@ -2546,7 +2551,9 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                               sanity_check __FILE__ __LINE__
                                 (is_aignored child.value) span;
                               sanity_check __FILE__ __LINE__
-                                (not (value_has_loans_or_borrows ctx sv.value))
+                                (not
+                                   (value_has_loans_or_borrows (Some span) ctx
+                                      sv.value))
                                 span;
                               let lc = ASharedLoan (pm, bids, sv, child) in
                               set_loans_as_merged pm bids;

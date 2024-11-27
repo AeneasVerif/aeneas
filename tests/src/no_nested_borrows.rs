@@ -529,6 +529,10 @@ pub fn not_i32(x: i32) -> i32 {
     !x
 }
 
+fn borrow_mut_tuple<T, U>(x: &mut (T, U)) -> &mut (T, U) {
+    x
+}
+
 // Testing the simplification of the ADT aggregates in the presence of symbolic expansions
 mod ExpandSimpliy {
     pub struct Wrapper<T>(T, T);

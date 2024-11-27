@@ -16,10 +16,19 @@ type fmt_env = {
   trait_decls : LlbcAst.trait_decl TraitDeclId.Map.t;
   trait_impls : LlbcAst.trait_impl TraitImplId.Map.t;
   generics : generic_params;
-  locals : (VarId.id * string option) list;
+  vars : string VarId.Map.t;
 }
 
-let var_id_to_pretty_string (id : var_id) : string = "v@" ^ VarId.to_string id
+let fmt_env_push_var (env : fmt_env) (var : var) : fmt_env =
+  (* Only push the binding if the name is not [None] *)
+  match var.basename with
+  | None -> env
+  | Some name -> { env with vars = VarId.Map.add var.id name env.vars }
+
+let fmt_env_push_locals (env : fmt_env) (vars : var list) : fmt_env =
+  List.fold_left fmt_env_push_var env vars
+
+let var_id_to_pretty_string (id : var_id) : string = "^" ^ VarId.to_string id
 
 let type_var_id_to_string (env : fmt_env) (id : type_var_id) : string =
   (* Note that the types are not necessarily ordered following their indices *)
@@ -41,12 +50,9 @@ let const_generic_var_id_to_string (env : fmt_env) (id : const_generic_var_id) :
   | Some x -> Print.Types.const_generic_var_to_string x
 
 let var_id_to_string (env : fmt_env) (id : VarId.id) : string =
-  match List.find_opt (fun (i, _) -> i = id) env.locals with
+  match VarId.Map.find_opt id env.vars with
   | None -> var_id_to_pretty_string id
-  | Some (_, name) -> (
-      match name with
-      | None -> var_id_to_pretty_string id
-      | Some name -> name ^ "^" ^ VarId.to_string id)
+  | Some name -> name ^ "^" ^ VarId.to_string id
 
 let trait_clause_id_to_string = Print.Types.trait_clause_id_to_string
 
@@ -70,7 +76,7 @@ let decls_ctx_to_fmt_env (ctx : Contexts.decls_ctx) : fmt_env =
     trait_decls = ctx.trait_decls_ctx.trait_decls;
     trait_impls = ctx.trait_impls_ctx.trait_impls;
     generics = empty_generic_params;
-    locals = [];
+    vars = VarId.Map.empty;
   }
 
 let name_to_string (env : fmt_env) =
@@ -356,115 +362,125 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
           (* Enumerations: we can't get there *)
           craise_opt_span __FILE__ __LINE__ span "Unreachable")
 
-(** TODO: we don't need a general function anymore (it is now only used for
-    patterns)
- *)
-let adt_g_value_to_string ?(span : Meta.span option = None) (env : fmt_env)
-    (value_to_string : 'v -> string) (variant_id : VariantId.id option)
-    (field_values : 'v list) (ty : ty) : string =
-  let field_values = List.map value_to_string field_values in
-  match ty with
-  | TAdt (TTuple, _) ->
-      (* Tuple *)
-      "(" ^ String.concat ", " field_values ^ ")"
-  | TAdt (TAdtId def_id, _) ->
-      (* "Regular" ADT *)
-      let adt_ident =
-        match variant_id with
-        | Some vid -> adt_variant_from_type_decl_id_to_string env def_id vid
-        | None -> type_decl_id_to_string env def_id
-      in
-      if field_values <> [] then
-        match adt_field_names env def_id variant_id with
-        | None ->
-            let field_values = String.concat ", " field_values in
-            adt_ident ^ " (" ^ field_values ^ ")"
-        | Some field_names ->
-            let field_values = List.combine field_names field_values in
-            let field_values =
-              List.map
-                (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                field_values
-            in
-            let field_values = String.concat " " field_values in
-            adt_ident ^ " { " ^ field_values ^ " }"
-      else adt_ident
-  | TAdt (TBuiltin aty, _) -> (
-      (* Builtin type *)
-      match aty with
-      | TState | TRawPtr _ ->
-          (* This type is opaque: we can't get there *)
-          craise_opt_span __FILE__ __LINE__ span "Unreachable"
-      | TResult ->
-          let variant_id = Option.get variant_id in
-          if variant_id = result_ok_id then
-            match field_values with
-            | [ v ] -> "@Result::Return " ^ v
-            | _ ->
-                craise_opt_span __FILE__ __LINE__ span
-                  "Result::Return takes exactly one value"
-          else if variant_id = result_fail_id then
-            match field_values with
-            | [ v ] -> "@Result::Fail " ^ v
-            | _ ->
-                craise_opt_span __FILE__ __LINE__ span
-                  "Result::Fail takes exactly one value"
-          else
-            craise_opt_span __FILE__ __LINE__ span
-              "Unreachable: improper variant id for result type"
-      | TError ->
-          cassert_opt_span __FILE__ __LINE__ (field_values = []) span
-            "Ill-formed error value";
-          let variant_id = Option.get variant_id in
-          if variant_id = error_failure_id then "@Error::Failure"
-          else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
-          else
-            craise_opt_span __FILE__ __LINE__ span
-              "Unreachable: improper variant id for error type"
-      | TFuel ->
-          let variant_id = Option.get variant_id in
-          if variant_id = fuel_zero_id then (
-            cassert_opt_span __FILE__ __LINE__ (field_values = []) span
-              "Ill-formed full value";
-            "@Fuel::Zero")
-          else if variant_id = fuel_succ_id then
-            match field_values with
-            | [ v ] -> "@Fuel::Succ " ^ v
-            | _ ->
-                craise_opt_span __FILE__ __LINE__ span
-                  "@Fuel::Succ takes exactly one value"
-          else
-            craise_opt_span __FILE__ __LINE__ span
-              "Unreachable: improper variant id for fuel type"
-      | TArray | TSlice | TStr ->
-          cassert_opt_span __FILE__ __LINE__ (variant_id = None) span
-            "Ill-formed value";
-          let field_values =
-            List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
-          in
-          let id = builtin_ty_to_string aty in
-          id ^ " [" ^ String.concat "; " field_values ^ "]")
-  | _ ->
-      craise_opt_span __FILE__ __LINE__ span
-        ("Inconsistently typed value: expected ADT type but found:" ^ "\n- ty: "
-       ^ ty_to_string env false ty ^ "\n- variant_id: "
-        ^ Print.option_to_string VariantId.to_string variant_id)
-
-let rec typed_pattern_to_string ?(span : Meta.span option = None)
-    (env : fmt_env) (v : typed_pattern) : string =
+let rec typed_pattern_to_string_aux (span : Meta.span option) (env : fmt_env)
+    (v : typed_pattern) : fmt_env * string =
   match v.value with
-  | PatConstant cv -> literal_to_string cv
-  | PatVar (v, None) -> var_to_string env v
+  | PatConstant cv -> (env, literal_to_string cv)
+  | PatVar (v, None) -> (fmt_env_push_var env v, var_to_string env v)
   | PatVar (v, Some mp) ->
       let mp = "[@mplace=" ^ mplace_to_string env mp ^ "]" in
-      "(" ^ var_to_varname v ^ " " ^ mp ^ " : "
-      ^ ty_to_string env false v.ty
-      ^ ")"
-  | PatDummy -> "_"
+      let env = fmt_env_push_var env v in
+      let s =
+        "(" ^ var_to_varname v ^ " " ^ mp ^ " : "
+        ^ ty_to_string env false v.ty
+        ^ ")"
+      in
+      (env, s)
+  | PatDummy -> (env, "_")
   | PatAdt av ->
-      adt_g_value_to_string ~span env
-        (typed_pattern_to_string ~span env)
-        av.variant_id av.field_values v.ty
+      adt_pattern_to_string span env av.variant_id av.field_values v.ty
+
+(* TODO: can't make the [span] parameter optional because OCaml infers its type
+   to be [span option option]?? *)
+and adt_pattern_to_string (span : Meta.span option) (env : fmt_env)
+    (variant_id : VariantId.id option) (field_values : typed_pattern list)
+    (ty : ty) : fmt_env * string =
+  let env, field_values =
+    List.fold_left_map (typed_pattern_to_string_aux span) env field_values
+  in
+  let s =
+    match ty with
+    | TAdt (TTuple, _) ->
+        (* Tuple *)
+        "(" ^ String.concat ", " field_values ^ ")"
+    | TAdt (TAdtId def_id, _) ->
+        (* "Regular" ADT *)
+        let adt_ident =
+          match variant_id with
+          | Some vid -> adt_variant_from_type_decl_id_to_string env def_id vid
+          | None -> type_decl_id_to_string env def_id
+        in
+        if field_values <> [] then
+          match adt_field_names env def_id variant_id with
+          | None ->
+              let field_values = String.concat ", " field_values in
+              adt_ident ^ " (" ^ field_values ^ ")"
+          | Some field_names ->
+              let field_values = List.combine field_names field_values in
+              let field_values =
+                List.map
+                  (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                  field_values
+              in
+              let field_values = String.concat " " field_values in
+              adt_ident ^ " { " ^ field_values ^ " }"
+        else adt_ident
+    | TAdt (TBuiltin aty, _) -> (
+        (* Builtin type *)
+        match aty with
+        | TState | TRawPtr _ ->
+            (* This type is opaque: we can't get there *)
+            craise_opt_span __FILE__ __LINE__ span "Unreachable"
+        | TResult ->
+            let variant_id = Option.get variant_id in
+            if variant_id = result_ok_id then
+              match field_values with
+              | [ v ] -> "@Result::Return " ^ v
+              | _ ->
+                  craise_opt_span __FILE__ __LINE__ span
+                    "Result::Return takes exactly one value"
+            else if variant_id = result_fail_id then
+              match field_values with
+              | [ v ] -> "@Result::Fail " ^ v
+              | _ ->
+                  craise_opt_span __FILE__ __LINE__ span
+                    "Result::Fail takes exactly one value"
+            else
+              craise_opt_span __FILE__ __LINE__ span
+                "Unreachable: improper variant id for result type"
+        | TError ->
+            cassert_opt_span __FILE__ __LINE__ (field_values = []) span
+              "Ill-formed error value";
+            let variant_id = Option.get variant_id in
+            if variant_id = error_failure_id then "@Error::Failure"
+            else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
+            else
+              craise_opt_span __FILE__ __LINE__ span
+                "Unreachable: improper variant id for error type"
+        | TFuel ->
+            let variant_id = Option.get variant_id in
+            if variant_id = fuel_zero_id then (
+              cassert_opt_span __FILE__ __LINE__ (field_values = []) span
+                "Ill-formed full value";
+              "@Fuel::Zero")
+            else if variant_id = fuel_succ_id then
+              match field_values with
+              | [ v ] -> "@Fuel::Succ " ^ v
+              | _ ->
+                  craise_opt_span __FILE__ __LINE__ span
+                    "@Fuel::Succ takes exactly one value"
+            else
+              craise_opt_span __FILE__ __LINE__ span
+                "Unreachable: improper variant id for fuel type"
+        | TArray | TSlice | TStr ->
+            cassert_opt_span __FILE__ __LINE__ (variant_id = None) span
+              "Ill-formed value";
+            let field_values =
+              List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
+            in
+            let id = builtin_ty_to_string aty in
+            id ^ " [" ^ String.concat "; " field_values ^ "]")
+    | _ ->
+        craise_opt_span __FILE__ __LINE__ span
+          ("Inconsistently typed value: expected ADT type but found:"
+         ^ "\n- ty: " ^ ty_to_string env false ty ^ "\n- variant_id: "
+          ^ Print.option_to_string VariantId.to_string variant_id)
+  in
+  (env, s)
+
+let typed_pattern_to_string ?(span : Meta.span option = None) (env : fmt_env)
+    (v : typed_pattern) : string =
+  snd (typed_pattern_to_string_aux span env v)
 
 let fun_sig_to_string (env : fmt_env) (sg : fun_sig) : string =
   let env = { env with generics = sg.generics } in
@@ -638,7 +654,7 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
 and lambda_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (xl : typed_pattern list)
     (e : texpression) : string =
-  let xl = List.map (typed_pattern_to_string ~span env) xl in
+  let env, xl = List.fold_left_map (typed_pattern_to_string_aux span) env xl in
   let e = texpression_to_string ~span env false indent indent_incr e in
   "λ " ^ String.concat " " xl ^ ". " ^ e
 
@@ -648,8 +664,8 @@ and let_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let indent1 = indent ^ indent_incr in
   let inside = false in
   let re = texpression_to_string ~span env inside indent1 indent_incr re in
+  let env, lv = typed_pattern_to_string_aux span env lv in
   let e = texpression_to_string ~span env inside indent indent_incr e in
-  let lv = typed_pattern_to_string ~span env lv in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
@@ -663,17 +679,19 @@ and switch_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let scrut =
     texpression_to_string ~span env true indent1 indent_incr scrutinee
   in
-  let e_to_string = texpression_to_string ~span env false indent1 indent_incr in
+  let e_to_string env =
+    texpression_to_string ~span env false indent1 indent_incr
+  in
   match body with
   | If (e_true, e_false) ->
-      let e_true = e_to_string e_true in
-      let e_false = e_to_string e_false in
+      let e_true = e_to_string env e_true in
+      let e_false = e_to_string env e_false in
       "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent1 ^ e_true ^ "\n"
       ^ indent ^ "else\n" ^ indent1 ^ e_false
   | Match branches ->
       let branch_to_string (b : match_branch) : string =
-        let pat = typed_pattern_to_string ~span env b.pat in
-        indent ^ "| " ^ pat ^ " ->\n" ^ indent1 ^ e_to_string b.branch
+        let env, pat = typed_pattern_to_string_aux span env b.pat in
+        indent ^ "| " ^ pat ^ " ->\n" ^ indent1 ^ e_to_string env b.branch
       in
       let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches

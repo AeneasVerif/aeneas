@@ -82,7 +82,8 @@ let rec end_useless_fresh_borrows_and_abs (config : config) (span : Meta.span)
 
 (* Explore the fresh anonymous values and replace all the values which are not
    borrows/loans with ⊥ *)
-let cleanup_fresh_values (fixed_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
+let cleanup_fresh_values (span : Meta.span option) (fixed_ids : ids_sets)
+    (ctx : eval_ctx) : eval_ctx =
   let rec explore_env (env : env) : env =
     match env with
     | [] -> [] (* Done *)
@@ -90,7 +91,7 @@ let cleanup_fresh_values (fixed_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
       when not (DummyVarId.Set.mem vid fixed_ids.dids) ->
         let env = explore_env env in
         (* Eliminate the value altogether if it doesn't contain loans/borrows *)
-        if not (value_has_loans_or_borrows ctx v.value) then env
+        if not (value_has_loans_or_borrows span ctx v.value) then env
         else
           (* Explore the anonymous value - raises an exception if it finds
              a borrow to end *)
@@ -103,7 +104,7 @@ let cleanup_fresh_values (fixed_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
                 VBorrow v (* Don't enter inside borrows *)
 
               method! visit_value _ v =
-                if not (value_has_loans_or_borrows ctx v) then VBottom
+                if not (value_has_loans_or_borrows span ctx v) then VBottom
                 else super#visit_value () v
             end
           in
@@ -123,7 +124,7 @@ let cleanup_fresh_values_and_abs (config : config) (span : Meta.span)
     (fixed_ids : ids_sets) : cm_fun =
  fun ctx ->
   let ctx, cc = end_useless_fresh_borrows_and_abs config span fixed_ids ctx in
-  let ctx = cleanup_fresh_values fixed_ids ctx in
+  let ctx = cleanup_fresh_values (Some span) fixed_ids ctx in
   (ctx, cc)
 
 let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
@@ -226,7 +227,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
 
     (* Create the shared loan child *)
     let child_rty = rty in
-    let child_av = mk_aignored span child_rty in
+    let child_av = mk_aignored span child_rty None in
 
     (* Create the shared loan *)
     let loan_rty = TRef (RFVar nrid, rty, RShared) in
@@ -272,7 +273,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
   let collect_shared_values_in_abs (abs : abs) : unit =
     let collect_shared_value lids (sv : typed_value) =
       (* Sanity check: we don't support nested borrows for now *)
-      sanity_check __FILE__ __LINE__ (not (value_has_borrows ctx sv.value)) span;
+      sanity_check __FILE__ __LINE__
+        (not (value_has_borrows (Some span) ctx sv.value))
+        span;
 
       (* Filter the loan ids whose corresponding borrows appear in abstractions
          (see the documentation of the function) *)
@@ -307,7 +310,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
          *)
         method! visit_symbolic_value env sv =
           cassert __FILE__ __LINE__
-            (not (symbolic_value_has_borrows ctx sv))
+            (not (symbolic_value_has_borrows (Some span) ctx sv))
             span
             "There should be no symbolic values with borrows inside the \
              abstraction";

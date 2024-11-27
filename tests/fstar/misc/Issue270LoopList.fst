@@ -12,12 +12,12 @@ type list_t (t : Type0) =
 | List_Nil : list_t t
 
 (** [issue_270_loop_list::foo]: loop 0:
-    Source: 'tests/src/issue-270-loop-list.rs', lines 11:8-14:9 *)
+    Source: 'tests/src/issue-270-loop-list.rs', lines 10:8-12:9 *)
 let rec foo_loop (t : list_t (list_t u8)) : result unit =
   begin match t with | List_Cons _ tt -> foo_loop tt | List_Nil -> Ok () end
 
 (** [issue_270_loop_list::foo]:
-    Source: 'tests/src/issue-270-loop-list.rs', lines 8:0-16:1 *)
+    Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 *)
 let foo (v : list_t (list_t u8)) : result unit =
   begin match v with | List_Cons l t -> foo_loop t | List_Nil -> Ok () end
 

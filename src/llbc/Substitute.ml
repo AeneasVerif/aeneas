@@ -17,7 +17,7 @@ open Errors
     TODO: simplify? we only need the subst [RegionVarId.id -> RegionId.id]
   *)
 let fresh_regions_with_substs ~(fail_if_not_found : bool)
-    (region_vars : RegionVarId.id list) :
+    (region_vars : RegionVarId.id list) (fresh_region_id : unit -> region_id) :
     RegionId.id list
     * (RegionVarId.id -> RegionId.id option)
     * (region -> region) =
@@ -43,12 +43,13 @@ let fresh_regions_with_substs ~(fail_if_not_found : bool)
   (fresh_region_ids, rid_subst, r_subst)
 
 let fresh_regions_with_substs_from_vars ~(fail_if_not_found : bool)
-    (region_vars : region_var list) :
+    (region_vars : region_var list) (fresh_region_id : unit -> region_id) :
     RegionId.id list
     * (RegionVarId.id -> RegionId.id option)
     * (region -> region) =
   fresh_regions_with_substs ~fail_if_not_found
     (List.map (fun (r : region_var) -> r.index) region_vars)
+    fresh_region_id
 
 (** Substitute a function signature, together with the regions hierarchy
     associated to that signature.
@@ -196,12 +197,10 @@ let env_subst_rids (r_subst : RegionId.id -> RegionId.id) (x : env) : env =
   in
   vis#visit_env () x
 
-let generic_args_of_params_erase_regions span (generics : generic_params) :
-    generic_args =
-  let generics =
-    st_substitute_visitor#visit_generic_params erase_regions_subst generics
-  in
-  (* Note that from here we don't need to perform any susbtitutions actually *)
+let generic_args_of_params_erase_regions (span : Meta.span option)
+    (generics : generic_params) : generic_args =
+  (* Note that put aside erasing the regions, we don't need to perform any susbtitutions
+     actually, and we only need to erase the regions inside the trait clauses. *)
   let regions = List.map (fun _ -> RErased) generics.regions in
   let types = List.map (fun (v : type_var) -> TVar v.index) generics.types in
   let const_generics =
@@ -209,10 +208,18 @@ let generic_args_of_params_erase_regions span (generics : generic_params) :
       (fun (v : const_generic_var) -> CgVar v.index)
       generics.const_generics
   in
+  (* Erase the regions in the trait clauses. *)
+  let trait_clauses =
+    List.map
+      (st_substitute_visitor#visit_trait_clause erase_regions_subst)
+      generics.trait_clauses
+  in
   let trait_refs =
     List.map
       (fun (c : trait_clause) ->
-        sanity_check __FILE__ __LINE__ (c.trait.binder_regions = []) span;
+        sanity_check_opt_span __FILE__ __LINE__
+          (c.trait.binder_regions = [])
+          span;
         let { trait_decl_id; decl_generics; _ } = c.trait.binder_value in
         let trait_decl_ref = { trait_decl_id; decl_generics } in
         (* Note that because we directly refer to the clause, we give it
@@ -227,6 +234,6 @@ let generic_args_of_params_erase_regions span (generics : generic_params) :
               binder_value = trait_decl_ref;
             };
         })
-      generics.trait_clauses
+      trait_clauses
   in
   { regions; types; const_generics; trait_refs }

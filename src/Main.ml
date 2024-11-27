@@ -122,6 +122,9 @@ let () =
       ( "-abort-on-error",
         Arg.Set fail_hard,
         " Abort on the first encountered error" );
+      ( "-soft-warnings",
+        Arg.Clear warnings_as_errors,
+        " Do not treat warnings as errors" );
       ( "-tuple-nested-proj",
         Arg.Set use_nested_tuple_projectors,
         " Use nested projectors for tuples (e.g., (0, 1).snd.fst instead of \

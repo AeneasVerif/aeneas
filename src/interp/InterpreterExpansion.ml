@@ -608,7 +608,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
       inherit [_] iter_eval_ctx
 
       method! visit_VSymbolic _ sv =
-        if ty_has_borrows ctx.type_ctx.type_infos sv.sv_ty then
+        if ty_has_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty then
           raise (FoundSymbolicValue sv)
         else ()
 

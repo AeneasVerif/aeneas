@@ -90,7 +90,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Recurse with the old marker *)
             self#visit_typed_avalue (abs_id, pm) child
         | AIgnoredMutLoan (_, child)
-        | AEndedIgnoredMutLoan { child; given_back = _; given_back_span = _ }
+        | AEndedIgnoredMutLoan { child; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the loan, if there is *)
@@ -115,7 +115,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Process those normally *)
             super#visit_aborrow_content (abs_id, pm) bc
         | AIgnoredMutBorrow (_, child)
-        | AEndedIgnoredMutBorrow { child; given_back = _; given_back_span = _ }
+        | AEndedIgnoredMutBorrow { child; given_back = _; given_back_meta = _ }
           ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the borrow, if there is *)
@@ -217,7 +217,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
        one of the two contexts (ctx0 here) to call value_has_borrows,
        it doesn't matter here. *)
     let value_has_borrows =
-      ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
+      ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
     in
     match (v0.value, v1.value) with
     | VLiteral lv0, VLiteral lv1 ->
@@ -256,8 +256,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
 
               cassert __FILE__ __LINE__
                 (not
-                   (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
-                      bv.value))
+                   (ValuesUtils.value_has_borrows (Some span)
+                      ctx0.type_ctx.type_infos bv.value))
                 M.span "The join of nested borrows is not supported yet";
               let bid, bv =
                 M.match_mut_borrows ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
@@ -344,7 +344,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
        one of the two contexts (ctx0 here) to call value_has_borrows,
        it doesn't matter here. *)
     let value_has_borrows =
-      ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos
+      ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
     in
 
     let match_rec = match_typed_values ctx0 ctx1 in
@@ -364,7 +364,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         else (* Merge *)
           M.match_distinct_aadts ctx0 ctx1 v0.ty av0 v1.ty av1 ty
     | ABottom, ABottom -> mk_abottom M.span ty
-    | AIgnored, AIgnored -> mk_aignored M.span ty
+    | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
         log#ldebug (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
@@ -469,7 +469,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
        updates
     *)
     let check_no_borrows ctx (v : typed_value) =
-      sanity_check __FILE__ __LINE__ (not (value_has_borrows ctx v.value)) span
+      sanity_check __FILE__ __LINE__
+        (not (value_has_borrows (Some span) ctx v.value))
+        span
     in
     List.iter (check_no_borrows ctx0) adt0.field_values;
     List.iter (check_no_borrows ctx1) adt1.field_values;
@@ -529,7 +531,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       let loan =
         ASharedLoan
-          (PNone, BorrowId.Set.singleton bid2, sv, mk_aignored span bv_ty)
+          (PNone, BorrowId.Set.singleton bid2, sv, mk_aignored span bv_ty None)
       in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
@@ -615,7 +617,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          will update [v], while the backward loop function will return nothing.
       *)
       cassert __FILE__ __LINE__
-        (not (ValuesUtils.value_has_borrows ctx0.type_ctx.type_infos bv.value))
+        (not
+           (ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
+              bv.value))
         span "Nested borrows are not supported yet";
 
       if bv0 = bv1 then (
@@ -634,14 +638,16 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let borrow_av =
           let ty = borrow_ty in
           let value =
-            ABorrow (AMutBorrow (PNone, bid0, mk_aignored span bv_ty))
+            ABorrow (AMutBorrow (PNone, bid0, mk_aignored span bv_ty None))
           in
           mk_typed_avalue span ty value
         in
 
         let loan_av =
           let ty = borrow_ty in
-          let value = ALoan (AMutLoan (PNone, nbid, mk_aignored span bv_ty)) in
+          let value =
+            ALoan (AMutLoan (PNone, nbid, mk_aignored span bv_ty None))
+          in
           mk_typed_avalue span ty value
         in
 
@@ -687,12 +693,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let bv_ty = bv.ty in
         cassert __FILE__ __LINE__ (ty_no_regions bv_ty) span
           "Nested borrows are not supported yet";
-        let value = ABorrow (AMutBorrow (pm, bid, mk_aignored span bv_ty)) in
+        let value =
+          ABorrow (AMutBorrow (pm, bid, mk_aignored span bv_ty None))
+        in
         { value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow PLeft bid0 bv0; mk_aborrow PRight bid1 bv1 ] in
 
-      let loan = AMutLoan (PNone, bid2, mk_aignored span bv_ty) in
+      let loan = AMutLoan (PNone, bid2, mk_aignored span bv_ty None) in
       (* Note that an aloan has a borrow type *)
       let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
 
@@ -760,7 +768,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* The caller should have checked that the symbolic values don't contain
          borrows *)
       sanity_check __FILE__ __LINE__
-        (not (ty_has_borrows ctx0.type_ctx.type_infos sv0.sv_ty))
+        (not (ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty))
         span;
       (* TODO: the symbolic values may contain bottoms: we're being conservatice,
          and fail (for now) if part of a symbolic value contains a bottom.
@@ -780,10 +788,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     *)
     let type_infos = ctx0.type_ctx.type_infos in
     sanity_check __FILE__ __LINE__
-      (not (ty_has_borrows type_infos sv.sv_ty))
+      (not (ty_has_borrows (Some span) type_infos sv.sv_ty))
       span;
     sanity_check __FILE__ __LINE__
-      (not (ValuesUtils.value_has_borrows type_infos v.value))
+      (not (ValuesUtils.value_has_borrows (Some span) type_infos v.value))
       span;
     let value_is_left = not left in
     (* If there are loans in the regular value, raise an exception. *)
@@ -1227,7 +1235,7 @@ struct
        a continue, where the fixed point contains some bottom values. *)
     let value_is_left = not left in
     let ctx = if value_is_left then ctx0 else ctx1 in
-    if left && not (value_has_loans_or_borrows ctx v.value) then
+    if left && not (value_has_loans_or_borrows (Some span) ctx v.value) then
       mk_bottom span v.ty
     else
       raise

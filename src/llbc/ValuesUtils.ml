@@ -34,9 +34,10 @@ let mk_abottom (span : Meta.span) (ty : ty) : typed_avalue =
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
   { value = ABottom; ty }
 
-let mk_aignored (span : Meta.span) (ty : ty) : typed_avalue =
+let mk_aignored (span : Meta.span) (ty : ty) (v : typed_value option) :
+    typed_avalue =
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
-  { value = AIgnored; ty }
+  { value = AIgnored v; ty }
 
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
@@ -56,7 +57,7 @@ let is_bottom (v : value) : bool =
 
 let is_aignored (v : avalue) : bool =
   match v with
-  | AIgnored -> true
+  | AIgnored _ -> true
   | _ -> false
 
 let is_symbolic (v : value) : bool =
@@ -163,7 +164,7 @@ let outer_loans_in_value (v : typed_value) : bool =
     false
   with Found -> true
 
-let find_first_primitively_copyable_sv_with_borrows
+let find_first_primitively_copyable_sv_with_borrows span
     (type_infos : TypesAnalysis.type_infos) (v : typed_value) :
     symbolic_value option =
   (* The visitor *)
@@ -173,7 +174,7 @@ let find_first_primitively_copyable_sv_with_borrows
 
       method! visit_VSymbolic _ sv =
         let ty = sv.sv_ty in
-        if ty_is_copyable ty && ty_has_borrows type_infos ty then
+        if ty_is_copyable ty && ty_has_borrows span type_infos ty then
           raise (FoundSymbolicValue sv)
         else ()
     end
@@ -195,9 +196,9 @@ let rec value_strip_shared_loans (v : typed_value) : typed_value =
   | _ -> v
 
 (** Check if a symbolic value has borrows *)
-let symbolic_value_has_borrows (infos : TypesAnalysis.type_infos)
+let symbolic_value_has_borrows span (infos : TypesAnalysis.type_infos)
     (sv : symbolic_value) : bool =
-  ty_has_borrows infos sv.sv_ty
+  ty_has_borrows span infos sv.sv_ty
 
 (** Check if a value has borrows in **a general sense**.
 
@@ -205,14 +206,15 @@ let symbolic_value_has_borrows (infos : TypesAnalysis.type_infos)
     - there are concrete borrows
     - there are symbolic values which may contain borrows
  *)
-let value_has_borrows (infos : TypesAnalysis.type_infos) (v : value) : bool =
+let value_has_borrows span (infos : TypesAnalysis.type_infos) (v : value) : bool
+    =
   let obj =
     object
       inherit [_] iter_typed_value
       method! visit_borrow_content _env _ = raise Found
 
       method! visit_symbolic_value _ sv =
-        if symbolic_value_has_borrows infos sv then raise Found else ()
+        if symbolic_value_has_borrows span infos sv then raise Found else ()
     end
   in
   (* We use exceptions *)
@@ -246,8 +248,8 @@ let value_has_loans (v : value) : bool =
     - there are symbolic values which may contain borrows (symbolic values
       can't contain loans).
  *)
-let value_has_loans_or_borrows (infos : TypesAnalysis.type_infos) (v : value) :
-    bool =
+let value_has_loans_or_borrows span (infos : TypesAnalysis.type_infos)
+    (v : value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
@@ -255,7 +257,7 @@ let value_has_loans_or_borrows (infos : TypesAnalysis.type_infos) (v : value) :
       method! visit_loan_content _env _ = raise Found
 
       method! visit_symbolic_value _ sv =
-        if ty_has_borrow_under_mut infos sv.sv_ty then raise Found else ()
+        if ty_has_borrow_under_mut span infos sv.sv_ty then raise Found else ()
     end
   in
   (* We use exceptions *)

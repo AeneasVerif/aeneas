@@ -1,6 +1,7 @@
 open Types
 open LlbcAst
 open Errors
+open Substitute
 
 type subtype_info = {
   under_borrow : bool;  (** Are we inside a borrow? *)
@@ -17,6 +18,8 @@ type type_borrows_info = {
   contains_static : bool;
       (** Does the type (transitively) contain a static borrow? *)
   contains_borrow : bool;  (** Does the type (transitively) contain a borrow? *)
+  contains_mut_borrow : bool;
+      (** Does the type (transitively) contain a mutable borrow? *)
   contains_nested_borrows : bool;
       (** Does the type (transitively) contain nested borrows? *)
   contains_borrow_under_mut : bool;
@@ -31,7 +34,9 @@ type 'p g_type_info = {
   is_tuple_struct : bool;
       (** If true, it means the type is a record that we should extract as a tuple.
           This field is only valid for type declarations.
-       *)
+      *)
+  mut_regions : RegionVarId.Set.t;
+      (** The set of regions used in mutable borrows *)
 }
 [@@deriving show]
 
@@ -56,6 +61,7 @@ let type_borrows_info_init : type_borrows_info =
   {
     contains_static = false;
     contains_borrow = false;
+    contains_mut_borrow = false;
     contains_nested_borrows = false;
     contains_borrow_under_mut = false;
   }
@@ -73,7 +79,12 @@ let type_decl_is_tuple_struct (x : type_decl) : bool =
 
 let initialize_g_type_info (is_tuple_struct : bool) (param_infos : 'p) :
     'p g_type_info =
-  { borrows_info = type_borrows_info_init; is_tuple_struct; param_infos }
+  {
+    borrows_info = type_borrows_info_init;
+    is_tuple_struct;
+    param_infos;
+    mut_regions = RegionVarId.Set.empty;
+  }
 
 let initialize_type_decl_info (is_rec : bool) (def : type_decl) : type_decl_info
     =
@@ -90,6 +101,7 @@ let type_decl_info_to_partial_type_info (info : type_decl_info) :
     borrows_info = info.borrows_info;
     is_tuple_struct = info.is_tuple_struct;
     param_infos = Some info.param_infos;
+    mut_regions = info.mut_regions;
   }
 
 let partial_type_info_to_type_decl_info (info : partial_type_info) :
@@ -98,13 +110,25 @@ let partial_type_info_to_type_decl_info (info : partial_type_info) :
     borrows_info = info.borrows_info;
     is_tuple_struct = info.is_tuple_struct;
     param_infos = Option.get info.param_infos;
+    mut_regions = info.mut_regions;
   }
 
 let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
   info.borrows_info
 
-let analyze_full_ty (updated : bool ref) (infos : type_infos)
-    (ty_info : partial_type_info) (ty : ty) : partial_type_info =
+let rec trait_instance_id_reducible (span : Meta.span option)
+    (id : trait_instance_id) : bool =
+  match id with
+  | BuiltinOrAuto _ | TraitImpl _ -> true
+  | Self | Clause _ -> false
+  | ParentClause (id, _, _) -> trait_instance_id_reducible span id
+  | FnPointer _ | Closure _ | Dyn _ ->
+      craise_opt_span __FILE__ __LINE__ span "Unreachable"
+  | Unsolved _ | UnknownTrait _ -> false
+
+let analyze_full_ty (span : Meta.span option) (updated : bool ref)
+    (infos : type_infos) (ty_info : partial_type_info) (ty : ty) :
+    partial_type_info =
   (* Small utility *)
   let check_update_bool (original : bool) (nv : bool) : bool =
     if nv && not original then (
@@ -113,9 +137,23 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
     else original
   in
   let r_is_static (r : region) : bool = r = RStatic in
+  let update_mut_regions_with_rid mut_regions rid =
+    let rid = RegionVarId.of_int (RegionId.to_int rid) in
+    if RegionVarId.Set.mem rid mut_regions then ty_info.mut_regions
+    else (
+      updated := true;
+      RegionVarId.Set.add rid mut_regions)
+  in
+  let update_mut_regions mut_regions mut_region =
+    match mut_region with
+    | RStatic | RBVar _ ->
+        mut_regions (* We can have bound vars because of arrows *)
+    | RErased -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
+    | RFVar rid -> update_mut_regions_with_rid mut_regions rid
+  in
 
   (* Update a partial_type_info, while registering if we actually performed an update *)
-  let update_ty_info (ty_info : partial_type_info)
+  let update_ty_info (ty_info : partial_type_info) (mut_region : region option)
       (ty_b_info : type_borrows_info) : partial_type_info =
     let original = ty_info.borrows_info in
     let contains_static =
@@ -123,6 +161,10 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
     in
     let contains_borrow =
       check_update_bool original.contains_borrow ty_b_info.contains_borrow
+    in
+    let contains_mut_borrow =
+      check_update_bool original.contains_mut_borrow
+        ty_b_info.contains_mut_borrow
     in
     let contains_nested_borrows =
       check_update_bool original.contains_nested_borrows
@@ -136,18 +178,41 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
       {
         contains_static;
         contains_borrow;
+        contains_mut_borrow;
         contains_nested_borrows;
         contains_borrow_under_mut;
       }
     in
-    { ty_info with borrows_info = updated_borrows_info }
+    (* Add the region *)
+    let updated_mut_regions =
+      match mut_region with
+      | None -> ty_info.mut_regions
+      | Some mut_region -> update_mut_regions ty_info.mut_regions mut_region
+    in
+    {
+      ty_info with
+      borrows_info = updated_borrows_info;
+      mut_regions = updated_mut_regions;
+    }
   in
 
   (* The recursive function which explores the type *)
-  let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
-      (ty : ty) : partial_type_info =
+  let rec analyze (span : Meta.span option) (expl_info : expl_info)
+      (ty_info : partial_type_info) (ty : ty) : partial_type_info =
     match ty with
-    | TLiteral _ | TNever | TTraitType _ | TDynTrait _ -> ty_info
+    | TLiteral _ | TNever | TDynTrait _ -> ty_info
+    | TTraitType (tref, _) ->
+        (* TODO: normalize the trait types.
+           For now we only emit a warning because it makes some tests fail. *)
+        cassert_warn_opt_span __FILE__ __LINE__
+          (not (trait_instance_id_reducible span tref.trait_id))
+          span
+          "Found an unexpected trait impl associated type which was not \
+           inlined while analyzing a type. This is a case we currently do not \
+           handle in all generality. As a result,the consumed/given back \
+           values computed for the generated backward functions may be \
+           incorrect.";
+        ty_info
     | TVar var_id -> (
         (* Update the information for the proper parameter, if necessary *)
         match ty_info.param_infos with
@@ -174,17 +239,23 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         (* Update the type info *)
         let contains_static = r_is_static r in
         let contains_borrow = true in
+        let contains_mut_borrow, region =
+          match rkind with
+          | RMut -> (true, Some r)
+          | RShared -> (false, None)
+        in
         let contains_nested_borrows = expl_info.under_borrow in
         let contains_borrow_under_mut = expl_info.under_mut_borrow in
         let ty_b_info =
           {
             contains_static;
             contains_borrow;
+            contains_mut_borrow;
             contains_nested_borrows;
             contains_borrow_under_mut;
           }
         in
-        let ty_info = update_ty_info ty_info ty_b_info in
+        let ty_info = update_ty_info ty_info region ty_b_info in
         (* Update the exploration info *)
         let expl_info =
           {
@@ -193,20 +264,20 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
           }
         in
         (* Continue exploring *)
-        analyze expl_info ty_info rty
+        analyze span expl_info ty_info rty
     | TRawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
-        analyze expl_info ty_info rty
+        analyze span expl_info ty_info rty
     | TAdt ((TTuple | TBuiltin (TBox | TSlice | TArray | TStr)), generics) ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
-          (fun ty_info ty -> analyze expl_info ty_info ty)
+          (fun ty_info ty -> analyze span expl_info ty_info ty)
           ty_info generics.types
     | TAdt (TAdtId adt_id, generics) ->
         (* Lookup the information for this type definition *)
         let adt_info = TypeDeclId.Map.find adt_id infos in
         (* Update the type info with the information from the adt *)
-        let ty_info = update_ty_info ty_info adt_info.borrows_info in
+        let ty_info = update_ty_info ty_info None adt_info.borrows_info in
         (* Check if 'static appears in the region parameters *)
         let found_static = List.exists r_is_static generics.regions in
         let borrows_info = ty_info.borrows_info in
@@ -219,7 +290,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         in
         let ty_info = { ty_info with borrows_info } in
         (* For every instantiated type parameter: update the exploration info
-         * then explore the type *)
+           then explore the type *)
         let params_tys = List.combine adt_info.param_infos generics.types in
         let ty_info =
           List.fold_left
@@ -229,6 +300,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
                * by taking the type parameter into account. *)
               let contains_static = false in
               let contains_borrow = param_info.under_borrow in
+              let contains_mut_borrow = param_info.under_mut_borrow in
               let contains_nested_borrows =
                 expl_info.under_borrow && param_info.under_borrow
               in
@@ -239,11 +311,12 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
                 {
                   contains_static;
                   contains_borrow;
+                  contains_mut_borrow;
                   contains_nested_borrows;
                   contains_borrow_under_mut;
                 }
               in
-              let ty_info = update_ty_info ty_info ty_b_info in
+              let ty_info = update_ty_info ty_info None ty_b_info in
               (* Update the exploration info *)
               let expl_info =
                 {
@@ -254,22 +327,38 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
                 }
               in
               (* Continue exploring *)
-              analyze expl_info ty_info ty)
+              analyze span expl_info ty_info ty)
             ty_info params_tys
         in
+        (* For every region parameter: do the same *)
+        let mut_regions =
+          List.fold_left
+            (fun mut_regions (adt_rid, r) ->
+              (* Check if the region is a variable and is used for mutable borrows *)
+              match r with
+              | RStatic | RBVar _ | RErased -> mut_regions
+              (* We can have bound vars because of arrows, and erased regions
+                 when analyzing types appearing in function bodies *)
+              | RFVar rid ->
+                  if RegionVarId.Set.mem adt_rid adt_info.mut_regions then
+                    update_mut_regions_with_rid mut_regions rid
+                  else mut_regions)
+            ty_info.mut_regions
+            (RegionVarId.mapi (fun adt_rid r -> (adt_rid, r)) generics.regions)
+        in
         (* Return *)
-        ty_info
+        { ty_info with mut_regions }
     | TArrow (_regions, inputs, output) ->
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left
-            (fun ty_info ty -> analyze expl_info ty_info ty)
+            (fun ty_info ty -> analyze span expl_info ty_info ty)
             ty_info inputs
         in
-        analyze expl_info ty_info output
+        analyze span expl_info ty_info output
   in
   (* Explore *)
-  analyze expl_info_init ty_info ty
+  analyze span expl_info_init ty_info ty
 
 let type_decl_is_opaque (d : type_decl) : bool =
   match d.kind with
@@ -299,13 +388,23 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
       | Opaque | Error _ ->
           craise __FILE__ __LINE__ def.item_meta.span "unreachable"
     in
+    (* Substitute the regions in the fields *)
+    let _, _, r_subst =
+      Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
+        def.generics.regions
+        (snd (RegionId.fresh_stateful_generator ()))
+    in
+    let subst = { Substitute.empty_subst with r_subst } in
+    let fields_tys = List.map (Substitute.ty_substitute subst) fields_tys in
     (* Explore the types and accumulate information *)
     let type_decl_info = TypeDeclId.Map.find def.def_id infos in
     let type_decl_info = type_decl_info_to_partial_type_info type_decl_info in
+    (* TODO: substitute the types *)
     let type_decl_info =
       List.fold_left
         (fun type_decl_info ty ->
-          analyze_full_ty updated infos type_decl_info ty)
+          analyze_full_ty (Some def.item_meta.span) updated infos type_decl_info
+            ty)
         type_decl_info fields_tys
     in
     let type_decl_info = partial_type_info_to_type_decl_info type_decl_info in
@@ -363,11 +462,12 @@ let analyze_type_declarations (type_decls : type_decl TypeDeclId.Map.t)
 (** Analyze a type to check whether it contains borrows, etc., provided
     we have already analyzed the type definitions in the context.
  *)
-let analyze_ty (infos : type_infos) (ty : ty) : ty_info =
+let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
+    ty_info =
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
   let ty_info = initialize_g_type_info false None in
-  let ty_info = analyze_full_ty updated infos ty_info ty in
+  let ty_info = analyze_full_ty span updated infos ty_info ty in
   (* Convert the ty_info *)
   partial_type_info_to_ty_info ty_info

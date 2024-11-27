@@ -155,10 +155,10 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
           | AIgnoredMutLoan (Some bid, _) -> register_ignored_loan RMut bid
           | AIgnoredMutLoan (None, _)
           | AIgnoredSharedLoan _
-          | AEndedMutLoan { given_back = _; child = _; given_back_span = _ }
+          | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
           | AEndedSharedLoan (_, _)
           | AEndedIgnoredMutLoan
-              { given_back = _; child = _; given_back_span = _ } ->
+              { given_back = _; child = _; given_back_meta = _ } ->
               (* Do nothing *)
               ()
         in
@@ -345,12 +345,12 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
           match lc with
           | AMutLoan (_, _, _) -> set_outer_mut info
           | ASharedLoan (_, _, _, _) -> set_outer_shared info
-          | AEndedMutLoan { given_back = _; child = _; given_back_span = _ } ->
+          | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ } ->
               set_outer_mut info
           | AEndedSharedLoan (_, _) -> set_outer_shared info
           | AIgnoredMutLoan (_, _) -> set_outer_mut info
           | AEndedIgnoredMutLoan
-              { given_back = _; child = _; given_back_span = _ } ->
+              { given_back = _; child = _; given_back_meta = _ } ->
               set_outer_mut info
           | AIgnoredSharedLoan _ -> set_outer_shared info
         in
@@ -632,7 +632,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
             | AIgnoredMutBorrow (_opt_bid, av), RMut ->
                 sanity_check __FILE__ __LINE__ (av.ty = ref_ty) span
-            | ( AEndedIgnoredMutBorrow { given_back; child; given_back_span = _ },
+            | ( AEndedIgnoredMutBorrow { given_back; child; given_back_meta = _ },
                 RMut ) ->
                 sanity_check __FILE__ __LINE__ (given_back.ty = ref_ty) span;
                 sanity_check __FILE__ __LINE__ (child.ty = ref_ty) span
@@ -674,8 +674,8 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
             | ASharedLoan (_, _, _, _) ->
                 (* We get there if the projection marker is not [PNone] *)
                 internal_error __FILE__ __LINE__ span
-            | AEndedMutLoan { given_back; child; given_back_span = _ }
-            | AEndedIgnoredMutLoan { given_back; child; given_back_span = _ } ->
+            | AEndedMutLoan { given_back; child; given_back_meta = _ }
+            | AEndedIgnoredMutLoan { given_back; child; given_back_meta = _ } ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 sanity_check __FILE__ __LINE__
                   (given_back.ty = borrowed_aty)
@@ -716,7 +716,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                     | _ -> craise __FILE__ __LINE__ span "Unexpected")
                   given_back_ls
             | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
-        | AIgnored, _ -> ()
+        | AIgnored _, _ -> ()
         | _ ->
             log#ltrace
               (lazy
@@ -836,7 +836,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
       span;
     (* A symbolic value containing borrows can't be duplicated (i.e., copied):
      * it must be expanded first *)
-    if ty_has_borrows ctx.type_ctx.type_infos info.ty then
+    if ty_has_borrows (Some span) ctx.type_ctx.type_infos info.ty then
       sanity_check __FILE__ __LINE__ (info.env_count <= 1) span;
     (* A duplicated symbolic value is necessarily copyable *)
     sanity_check __FILE__ __LINE__

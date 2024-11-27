@@ -49,7 +49,7 @@ let craise_opt_span (file : string) (line : int) (span : Meta.span option)
   if !Config.fail_hard then (
     let msg = format_error_message_with_file_line file line span msg in
     log#serror (msg ^ "\n");
-    raise (Failure (format_error_message_with_file_line file line span msg)))
+    raise (Failure msg))
   else
     let () = push_error span msg in
     raise (CFailure (span, msg))
@@ -73,6 +73,23 @@ let sanity_check_opt_span (file : string) (line : int) b span =
 
 let internal_error (file : string) (line : int) span =
   craise file line span "Internal error, please file an issue"
+
+let warn_opt_span (file : string) (line : int) (span : Meta.span option)
+    (msg : string) =
+  if !Config.warnings_as_errors then
+    craise_opt_span file line span
+      (msg ^ "\nYou can deactivate this error with the option -soft-warnings")
+  else
+    let msg = format_error_message_with_file_line file line span msg in
+    log#swarning (msg ^ "\n")
+
+let cassert_warn_opt_span (file : string) (line : int) (b : bool)
+    (span : Meta.span option) (msg : string) =
+  if not b then warn_opt_span file line span msg
+
+let cassert_warn (file : string) (line : int) (b : bool) (span : Meta.span)
+    (msg : string) =
+  if not b then warn_opt_span file line (Some span) msg
 
 let exec_raise = craise
 let exec_assert = cassert
