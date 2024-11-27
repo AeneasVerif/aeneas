@@ -606,6 +606,59 @@ let remove_span (def : fun_decl) : fun_decl =
       let body = { body with body = PureUtils.remove_span body.body } in
       { def with body = Some body }
 
+(** Introduce calls to [massert] (monadic assertion).
+
+    The pattern below is very frequent especially as it is introduced by
+    the [assert!] macro. We perform the following simplification:
+    {[
+      if b then e
+      else fail
+
+         ~~>
+      massert b;
+      e
+    ]}
+ *)
+let intro_massert (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+  let visitor =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_Switch env scrut switch =
+        match switch with
+        | If (e_true, e_false) ->
+            if is_fail_panic e_false.e then begin
+              (* Introduce a call to [massert] *)
+              let massert =
+                Qualif
+                  {
+                    id = FunOrOp (Fun (Pure Assert));
+                    generics = empty_generic_args;
+                  }
+              in
+              let massert =
+                {
+                  e = massert;
+                  ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty);
+                }
+              in
+              let massert = mk_app span massert scrut in
+              (* Introduce the let-binding *)
+              let monadic = true in
+              let pat = mk_dummy_pattern mk_unit_ty in
+              super#visit_Let env monadic pat massert e_true
+            end
+            else super#visit_Switch env scrut switch
+        | _ -> super#visit_Switch env scrut switch
+    end
+  in
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body = { body with body = visitor#visit_texpression () body.body } in
+      { def with body = Some body }
+
 (** Simplify the let-bindings which bind the fields of structures.
 
     For instance, given the following structure definition:
@@ -2284,6 +2337,9 @@ let end_passes :
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
     (None, "unit_vars_to_unit", fun _ -> unit_vars_to_unit);
+    (* Introduce [massert] - we do this early because it makes the AST nicer to
+       read by removing indentation. *)
+    (Some Config.intro_massert, "intro_massert", intro_massert);
     (* Simplify the let-bindings which bind the fields of ADTs
        which only have one variant (i.e., enumerations with one variant
        and structures). *)
@@ -2344,7 +2400,7 @@ let end_passes :
     (* Simplify the let-then return again (the lambda simplification may have
        unlocked more simplifications here) *)
     (None, "simplify_let_then_ok (pass 2)", simplify_let_then_ok);
-    (* Simplify the array/slice manipulations by introducing calls to [array_update]
+    (* Simplify the array/slice manipulations by intrdoucing calls to [array_update]
        [slice_update] *)
     (None, "simplify_array_slice_update", simplify_array_slice_update);
     (* Decompose the monadic let-bindings - used by Coq *)

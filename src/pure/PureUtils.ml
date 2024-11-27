@@ -299,6 +299,33 @@ let is_adt_cons (e : texpression) : bool =
   | Qualif { id = AdtCons _; _ } -> true
   | _ -> false
 
+let is_fail_panic (e : expression) : bool =
+  match e with
+  | App
+      ( {
+          e =
+            Qualif
+              {
+                id =
+                  AdtCons
+                    { adt_id = TBuiltin TResult; variant_id = Some res_id };
+                generics = _;
+              };
+          ty = _;
+        },
+        {
+          e =
+            Qualif
+              {
+                id =
+                  AdtCons
+                    { adt_id = TBuiltin TError; variant_id = Some error_id };
+                generics = _;
+              };
+          ty = _;
+        } ) -> res_id = result_fail_id && error_id = error_failure_id
+  | _ -> false
+
 let ty_as_adt (span : Meta.span) (ty : ty) : type_id * generic_args =
   match ty with
   | TAdt (id, generics) -> (id, generics)
