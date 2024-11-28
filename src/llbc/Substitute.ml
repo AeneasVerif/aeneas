@@ -199,41 +199,18 @@ let env_subst_rids (r_subst : RegionId.id -> RegionId.id) (x : env) : env =
 
 let generic_args_of_params_erase_regions (span : Meta.span option)
     (generics : generic_params) : generic_args =
+  let generics = Charon.TypesUtils.generic_args_of_params span generics in
   (* Note that put aside erasing the regions, we don't need to perform any susbtitutions
      actually, and we only need to erase the regions inside the trait clauses. *)
   let regions = List.map (fun _ -> RErased) generics.regions in
-  let types = List.map (fun (v : type_var) -> TVar v.index) generics.types in
-  let const_generics =
-    List.map
-      (fun (v : const_generic_var) -> CgVar v.index)
-      generics.const_generics
-  in
   (* Erase the regions in the trait clauses. *)
-  let trait_clauses =
-    List.map
-      (st_substitute_visitor#visit_trait_clause erase_regions_subst)
-      generics.trait_clauses
-  in
   let trait_refs =
     List.map
-      (fun (c : trait_clause) ->
+      (fun (tref : trait_ref) ->
         sanity_check_opt_span __FILE__ __LINE__
-          (c.trait.binder_regions = [])
+          (tref.trait_decl_ref.binder_regions = [])
           span;
-        let { trait_decl_id; decl_generics; _ } = c.trait.binder_value in
-        let trait_decl_ref = { trait_decl_id; decl_generics } in
-        (* Note that because we directly refer to the clause, we give it
-           empty generics *)
-        let trait_id = Clause c.clause_id in
-        {
-          trait_id;
-          trait_decl_ref =
-            {
-              (* Empty list of bound regions: we don't support the other cases for now *)
-              binder_regions = [];
-              binder_value = trait_decl_ref;
-            };
-        })
-      trait_clauses
+        st_substitute_visitor#visit_trait_ref erase_regions_subst tref)
+      generics.trait_refs
   in
-  { regions; types; const_generics; trait_refs }
+  { generics with regions; trait_refs }
