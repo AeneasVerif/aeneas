@@ -80,20 +80,17 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     | TraitDeclItem _ -> Self
   in
   let generics =
-    let { regions; types; const_generics; trait_clauses; _ } = sg.generics in
-    let regions = List.map (fun _ -> RErased) regions in
-    let types = List.map (fun (v : type_var) -> TVar v.index) types in
-    let const_generics =
-      List.map (fun (v : const_generic_var) -> CgVar v.index) const_generics
+    let identity_args =
+      Substitute.generic_args_of_params_erase_regions (Some span) sg.generics
     in
     (* Annoying that we have to generate this substitution here *)
     let r_subst _ = craise __FILE__ __LINE__ span "Unexpected region" in
     let ty_subst =
-      Substitute.make_type_subst_from_vars sg.generics.types types
+      Substitute.make_type_subst_from_vars sg.generics.types identity_args.types
     in
     let cg_subst =
       Substitute.make_const_generic_subst_from_vars sg.generics.const_generics
-        const_generics
+        identity_args.const_generics
     in
     (* TODO: some clauses may use the types of other clauses, so we may have to
        reorder them.
@@ -121,47 +118,28 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
        ]}
     *)
     (* We will need to update the trait refs map while we perform the instantiations *)
-    let mk_tr_subst (tr_map : trait_instance_id TraitClauseId.Map.t) clause_id :
-        trait_instance_id =
+    let tr_map =
+      List.fold_left
+        (fun tr_map (c : trait_clause) ->
+          TraitClauseId.Map.add c.clause_id (Clause c.clause_id) tr_map)
+        TraitClauseId.Map.empty sg.generics.trait_clauses
+    in
+    let tr_subst clause_id : trait_instance_id =
       match TraitClauseId.Map.find_opt clause_id tr_map with
       | Some tr -> tr
       | None -> craise __FILE__ __LINE__ span "Local trait clause not found"
     in
-    let mk_subst tr_map =
-      let tr_subst = mk_tr_subst tr_map in
-      { Substitute.r_subst; ty_subst; cg_subst; tr_subst; tr_self }
+    let subst = { Substitute.r_subst; ty_subst; cg_subst; tr_subst; tr_self } in
+    let trait_refs =
+      List.map
+        (fun (trait_ref : trait_ref) ->
+          sanity_check __FILE__ __LINE__
+            (trait_ref.trait_decl_ref.binder_regions = [])
+            span;
+          Substitute.trait_ref_substitute subst trait_ref)
+        identity_args.trait_refs
     in
-    let _, trait_refs =
-      List.fold_left_map
-        (fun tr_map (c : trait_clause) ->
-          let subst = mk_subst tr_map in
-          (* *)
-          sanity_check __FILE__ __LINE__ (c.trait.binder_regions = []) span;
-          let { trait_decl_id; decl_generics; _ } = c.trait.binder_value in
-          let generics =
-            Substitute.generic_args_substitute subst decl_generics
-          in
-          let trait_decl_ref = { trait_decl_id; decl_generics = generics } in
-          (* Note that because we directly refer to the clause, we give it
-             empty generics *)
-          let trait_id = Clause c.clause_id in
-          let trait_ref =
-            {
-              trait_id;
-              trait_decl_ref =
-                {
-                  (* Empty list of bound regions: we don't support the other cases for now *)
-                  binder_regions = [];
-                  binder_value = trait_decl_ref;
-                };
-            }
-          in
-          (* Update the traits map *)
-          let tr_map = TraitClauseId.Map.add c.clause_id trait_id tr_map in
-          (tr_map, trait_ref))
-        TraitClauseId.Map.empty trait_clauses
-    in
-    { regions; types; const_generics; trait_refs }
+    { identity_args with trait_refs }
   in
   let inst_sg =
     instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
