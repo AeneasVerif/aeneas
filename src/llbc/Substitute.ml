@@ -77,27 +77,10 @@ let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
     ({ id; regions; parents } : abs_region_group)
   in
   let regions_hierarchy = List.map subst_region_group regions_hierarchy in
-  let push_region_group (subst : subst) : subst =
-    let r_subst (r : region) : region =
-      match r with
-      | RStatic | RErased | RFVar _ -> r
-      | RBVar (bdid, rid) ->
-          if bdid = 0 then r else subst.r_subst (RBVar (bdid - 1, rid))
-    in
-    { subst with r_subst }
-  in
-  let subst_region_binder :
-        'a. (subst -> 'a -> 'a) -> subst -> 'a region_binder -> 'a region_binder
-      =
-   fun subst_value subst rb ->
-    let subst = push_region_group subst in
-    let { binder_regions; binder_value } = rb in
-    let binder_value = subst_value subst binder_value in
-    { binder_regions; binder_value }
-  in
   let trait_type_constraints =
     List.map
-      (subst_region_binder trait_type_constraint_substitute subst)
+      (st_substitute_visitor#visit_region_binder
+         trait_type_constraint_substitute subst)
       sg.generics.trait_type_constraints
   in
   { inputs; output; regions_hierarchy; trait_type_constraints }
