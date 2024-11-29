@@ -595,7 +595,7 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
   | Alias _ ->
       craise __FILE__ __LINE__ span
         "type aliases should have been removed earlier"
-  | T.Union _ | T.Opaque | T.Error _ -> Opaque
+  | T.Union _ | T.Opaque | T.TError _ -> Opaque
 
 (** Compute which input parameters should be implicit or explicit.
 

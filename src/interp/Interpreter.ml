@@ -11,7 +11,6 @@ open LlbcAst
 open Contexts
 open SynthesizeSymbolic
 open Errors
-open Meta
 module SA = SymbolicAst
 
 (** The local logger *)
@@ -36,66 +35,38 @@ let compute_contexts (m : crate) : decls_ctx =
       locals = [];
     }
   in
+  (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
   let type_decls_groups =
     match split_declarations_to_group_maps m.declarations with
     | Ok (type_decls_groups, _, _, _, _) -> type_decls_groups
     | Error mixed_groups ->
+        (* We detected mixed groups: print a nice error message *)
         let any_decl_id_to_string (id : any_decl_id) : string =
-          let get_meta :
-                'a. ('a -> item_meta) -> 'a option -> (span * name) option =
-           fun get x ->
-            match x with
-            | None -> None
-            | Some d ->
-                let meta = get d in
-                Some (meta.span, meta.name)
-          in
-          let kind, info =
-            match id with
-            | IdType id ->
-                ( "type decl",
-                  get_meta
-                    (fun (d : type_decl) -> d.item_meta)
-                    (TypeDeclId.Map.find_opt id type_decls) )
-            | IdFun id ->
-                ( "fun decl",
-                  get_meta
-                    (fun (d : fun_decl) -> d.item_meta)
-                    (FunDeclId.Map.find_opt id fun_decls) )
-            | IdGlobal id ->
-                ( "global decl",
-                  get_meta
-                    (fun (d : global_decl) -> d.item_meta)
-                    (GlobalDeclId.Map.find_opt id global_decls) )
-            | IdTraitDecl id ->
-                ( "trait decl",
-                  get_meta
-                    (fun (d : trait_decl) -> d.item_meta)
-                    (TraitDeclId.Map.find_opt id trait_decls) )
-            | IdTraitImpl id ->
-                ( "trait impl",
-                  get_meta
-                    (fun (d : trait_impl) -> d.item_meta)
-                    (TraitImplId.Map.find_opt id trait_impls) )
-          in
+          let kind = any_decl_id_to_kind_name id in
+          let meta = LlbcAstUtils.crate_get_item_meta m id in
           let s =
-            match info with
+            match meta with
             | None -> show_any_decl_id id
-            | Some (span, name) ->
-                kind ^ "(" ^ span_to_string span ^ "): "
-                ^ Print.name_to_string fmt_env name
+            | Some meta ->
+                kind ^ "(" ^ span_to_string meta.span ^ "): "
+                ^ Print.name_to_string fmt_env meta.name
           in
           "- " ^ s
         in
-        let msgs =
-          List.map
-            (fun (g : mixed_declaration_group) ->
-              let decls =
-                List.map any_decl_id_to_string (g_declaration_group_to_list g)
-              in
-              String.concat "\n" decls)
-            mixed_groups
+        let group_to_msg (g : mixed_declaration_group) : string =
+          let ids = g_declaration_group_to_list g in
+          let decls = List.map any_decl_id_to_string ids in
+          let local_requires =
+            LlbcAstUtils.find_local_transitive_dep m (AnyDeclIdSet.of_list ids)
+          in
+          let local_requires = List.map span_to_string local_requires in
+          "# Group:\n" ^ String.concat "\n" decls
+          ^ "\n\n\
+             The declarations in this group are (transitively) used at the \
+             following location(s):\n"
+          ^ String.concat "\n" local_requires
         in
+        let msgs = List.map group_to_msg mixed_groups in
         let msgs =
           String.concat "\n\n" (List.map (fun s -> "Group:\n" ^ s) msgs)
         in
