@@ -16,8 +16,8 @@ open Errors
     
     TODO: simplify? we only need the subst [RegionVarId.id -> RegionId.id]
   *)
-let fresh_regions_with_substs ~(fail_if_not_found : bool)
-    (region_vars : RegionVarId.id list) (fresh_region_id : unit -> region_id) :
+let fresh_regions_with_substs (region_vars : RegionVarId.id list)
+    (fresh_region_id : unit -> region_id) :
     RegionId.id list
     * (RegionVarId.id -> RegionId.id option)
     * (region -> region) =
@@ -34,20 +34,19 @@ let fresh_regions_with_substs ~(fail_if_not_found : bool)
     | RStatic | RErased | RFVar _ -> r
     | RBVar (bdid, id) ->
         if bdid = 0 then
-          match rid_subst id with
-          | None -> if fail_if_not_found then raise Not_found else r
-          | Some r -> RFVar r
+          let r = Option.get (rid_subst id) in
+          RFVar r
         else r
   in
   (* Return *)
   (fresh_region_ids, rid_subst, r_subst)
 
-let fresh_regions_with_substs_from_vars ~(fail_if_not_found : bool)
-    (region_vars : region_var list) (fresh_region_id : unit -> region_id) :
+let fresh_regions_with_substs_from_vars (region_vars : region_var list)
+    (fresh_region_id : unit -> region_id) :
     RegionId.id list
     * (RegionVarId.id -> RegionId.id option)
     * (region -> region) =
-  fresh_regions_with_substs ~fail_if_not_found
+  fresh_regions_with_substs
     (List.map (fun (r : region_var) -> r.index) region_vars)
     fresh_region_id
 
