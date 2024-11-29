@@ -7,18 +7,17 @@
     charon.url = "github:aeneasverif/charon";
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
-    hacl-nix.url = "github:hacl-star/hacl-nix";
+    fstar.url = "github:FStarLang/fstar";
     flake-compat.url = "github:nix-community/flake-compat";
   };
 
   # Remark: keep the list of outputs in sync with the list of inputs above
   # (see above remark)
-  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix, flake-compat }:
+  outputs = { self, charon, flake-utils, nixpkgs, fstar, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
         ocamlPackages = pkgs.ocamlPackages;
-        coqPackages = pkgs.coqPackages;
         easy_logging = ocamlPackages.buildDunePackage rec {
           pname = "easy_logging";
           version = "0.8.2";
@@ -154,7 +153,7 @@
         aeneas-verify-fstar = pkgs.stdenv.mkDerivation {
           name = "aeneas_verify_fstar";
           src = ./tests/fstar;
-          FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
+          FSTAR_EXE = "${fstar.packages.${system}.fstar}/bin/fstar.exe";
           buildPhase = ''
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
@@ -200,6 +199,14 @@
           installPhase = "touch $out";
         };
 
+        aeneas-checks = pkgs.runCommand "aeneas-checks" { } ''
+          echo ${aeneas-tests}
+          echo ${aeneas-verify-coq}
+          echo ${aeneas-verify-fstar}
+          echo ${aeneas-verify-hol4}
+          touch $out
+        '';
+
         check-charon-pin = pkgs.runCommand "aeneas-check-charon-pin"
           {
             buildInputs = [ pkgs.jq ];
@@ -242,12 +249,8 @@
           ];
         };
         checks = {
-          inherit aeneas aeneas-tests
-            aeneas-verify-fstar
-            aeneas-verify-coq
-            aeneas-verify-hol4
-            aeneas-check-tidiness
-            check-charon-pin;
+          default = aeneas-checks;
+          inherit aeneas-check-tidiness check-charon-pin;
         };
       });
 }
