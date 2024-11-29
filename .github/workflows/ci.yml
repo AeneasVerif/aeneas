@@ -39,18 +39,14 @@ jobs:
       - run: nix build -L .#checks.x86_64-linux.aeneas-check-tidiness
       - run: nix build -L .#checks.x86_64-linux.check-charon-pin
       - run: nix build -L .#aeneas
-      - run: nix build -L .#checks.x86_64-linux.aeneas-tests
-      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-fstar
-      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-coq
-      - run: nix build -L .#checks.x86_64-linux.aeneas-verify-hol4
-      # Lean cannot run its tests in the sandbox because `elan` will download things
-      #- run: nix build -L .#checks.x86_64-linux.aeneas-verify-lean
+      - run: nix build -L .#checks.x86_64-linux.default
 
   lean:
     runs-on: [self-hosted, linux, nix]
     needs: check_if_skip_duplicate_job
     if: needs.check_if_skip_duplicate_job.outputs.should_skip != 'true'
     steps:
+      # Lean cannot run its tests in the sandbox because `elan` will download things
       - uses: actions/checkout@v4
       - run: nix develop --command bash -c "cd tests/lean && make"
 
