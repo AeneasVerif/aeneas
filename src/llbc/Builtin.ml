@@ -126,15 +126,15 @@ module Sig = struct
       borrow.
    *)
   let mk_array_slice_borrow_sig (cgs : const_generic_var list)
-      (input_ty : TypeVarId.id -> ty) (index_ty : ty option)
-      (output_ty : TypeVarId.id -> ty) (is_mut : bool) : fun_sig =
+      (input_ty : ty -> ty) (index_ty : ty option) (output_ty : ty -> ty)
+      (is_mut : bool) : fun_sig =
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] cgs (* <'a, T> *)
     in
     let inputs =
       [
         mk_ref_ty rvar_0
-          (input_ty type_param_0.index)
+          (input_ty (TVar type_param_0.index))
           is_mut (* &'a (mut) input_ty<T> *);
       ]
     in
@@ -146,20 +146,20 @@ module Sig = struct
     in
     let output =
       mk_ref_ty rvar_0
-        (output_ty type_param_0.index)
+        (output_ty (TVar type_param_0.index))
         is_mut (* &'a (mut) output_ty<T> *)
     in
     mk_sig generics inputs output
 
   let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : fun_sig =
     (* Array<T, N> *)
-    let input_ty id =
-      if is_array then mk_array_ty (TVar id) cgvar_0 else mk_slice_ty (TVar id)
+    let input_ty ty =
+      if is_array then mk_array_ty ty cgvar_0 else mk_slice_ty ty
     in
     (* usize *)
     let index_ty = usize_ty in
     (* T *)
-    let output_ty id = TVar id in
+    let output_ty ty = ty in
     let cgs = if is_array then [ cg_param_0 ] else [] in
     mk_array_slice_borrow_sig cgs input_ty (Some index_ty) output_ty is_mut
 
@@ -168,9 +168,9 @@ module Sig = struct
 
   let array_to_slice_sig (is_mut : bool) : fun_sig =
     (* Array<T, N> *)
-    let input_ty id = mk_array_ty (TVar id) cgvar_0 in
+    let input_ty ty = mk_array_ty ty cgvar_0 in
     (* Slice<T> *)
-    let output_ty id = mk_slice_ty (TVar id) in
+    let output_ty ty = mk_slice_ty ty in
     let cgs = [ cg_param_0 ] in
     mk_array_slice_borrow_sig cgs input_ty None output_ty is_mut
 
