@@ -125,96 +125,11 @@ let normalize_inst_fun_sig (span : Meta.span) (ctx : eval_ctx)
     normalize because a trait clause was instantiated with a specific trait ref).
  *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : fun_sig) (regions_hierarchy : region_var_groups) (kind : item_kind) :
+    (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_kind) :
     eval_ctx * inst_fun_sig =
-  let tr_self =
-    match kind with
-    | RegularItem | TraitImplItem _ -> UnknownTrait __FUNCTION__
-    | TraitDeclItem _ -> Self
-  in
+  let tr_self = Self in
   let generics =
-    let { regions; types; const_generics; trait_clauses; _ } = sg.generics in
-    let regions = List.map (fun _ -> RErased) regions in
-    let types = List.map (fun (v : type_var) -> TVar v.index) types in
-    let const_generics =
-      List.map (fun (v : const_generic_var) -> CgVar v.index) const_generics
-    in
-    (* Annoying that we have to generate this substitution here *)
-    let r_subst _ = craise __FILE__ __LINE__ span "Unexpected region" in
-    let ty_subst =
-      Substitute.make_type_subst_from_vars sg.generics.types types
-    in
-    let cg_subst =
-      Substitute.make_const_generic_subst_from_vars sg.generics.const_generics
-        const_generics
-    in
-    (* TODO: some clauses may use the types of other clauses, so we may have to
-       reorder them.
-
-       Example:
-       If in Rust we write:
-       {[
-         pub fn use_get<'a, T: Get>(x: &'a mut T) -> u32
-         where
-             T::Item: ToU32,
-         {
-             x.get().to_u32()
-         }
-       ]}
-
-       In LLBC we get:
-       {[
-         fn demo::use_get<'a, T>(@1: &'a mut (T)) -> u32
-         where
-             [@TraitClause0]: demo::Get<T>,
-             [@TraitClause1]: demo::ToU32<@TraitClause0::Item>, // HERE
-         {
-             ... // Omitted
-         }
-       ]}
-    *)
-    (* We will need to update the trait refs map while we perform the instantiations *)
-    let mk_tr_subst (tr_map : trait_instance_id TraitClauseId.Map.t) clause_id :
-        trait_instance_id =
-      match TraitClauseId.Map.find_opt clause_id tr_map with
-      | Some tr -> tr
-      | None -> craise __FILE__ __LINE__ span "Local trait clause not found"
-    in
-    let mk_subst tr_map =
-      let tr_subst = mk_tr_subst tr_map in
-      { Substitute.r_subst; ty_subst; cg_subst; tr_subst; tr_self }
-    in
-    let _, trait_refs =
-      List.fold_left_map
-        (fun tr_map (c : trait_clause) ->
-          let subst = mk_subst tr_map in
-          (* *)
-          sanity_check __FILE__ __LINE__ (c.trait.binder_regions = []) span;
-          let { trait_decl_id; decl_generics; _ } = c.trait.binder_value in
-          let generics =
-            Substitute.generic_args_substitute subst decl_generics
-          in
-          let trait_decl_ref = { trait_decl_id; decl_generics = generics } in
-          (* Note that because we directly refer to the clause, we give it
-             empty generics *)
-          let trait_id = Clause c.clause_id in
-          let trait_ref =
-            {
-              trait_id;
-              trait_decl_ref =
-                {
-                  (* Empty list of bound regions: we don't support the other cases for now *)
-                  binder_regions = [];
-                  binder_value = trait_decl_ref;
-                };
-            }
-          in
-          (* Update the traits map *)
-          let tr_map = TraitClauseId.Map.add c.clause_id trait_id tr_map in
-          (tr_map, trait_ref))
-        TraitClauseId.Map.empty trait_clauses
-    in
-    { regions; types; const_generics; trait_refs }
+    Substitute.generic_args_of_params_erase_regions (Some span) sg.generics
   in
   let inst_sg =
     instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
