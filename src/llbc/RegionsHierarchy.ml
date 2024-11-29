@@ -99,7 +99,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     let m =
       List.map
         (fun (r : region_var) ->
-          (RFVar (Option.get (bound_regions_id_subst r.index)), s_set))
+          (RFVar (bound_regions_id_subst r.index), s_set))
         sg.generics.regions
     in
     let s = (RStatic, RegionSet.empty) in

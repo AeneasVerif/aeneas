@@ -515,7 +515,6 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
       fresh_region_id
   in
-  let rsubst r = Option.get (rsubst r) in
   (* Generate the type substitution
      Note that for now we don't support instantiating the type parameters with
      types containing regions. *)
