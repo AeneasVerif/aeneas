@@ -87,6 +87,28 @@ let find_local_transitive_dep (m : crate) (marked_externals : AnyDeclIdSet.t) :
         in
         super#visit_statement decl_span_info st
 
+      method! visit_variant decl_span_info (variant : variant) =
+        let decl_span_info =
+          Option.map
+            (fun (decl_id, _) -> (decl_id, variant.span))
+            decl_span_info
+        in
+        super#visit_variant decl_span_info variant
+
+      method! visit_trait_clause decl_span_info (clause : trait_clause) =
+        let decl_span_info =
+          match (decl_span_info, clause.span) with
+          | Some (decl_id, _), Some span -> Some (decl_id, span)
+          | _ -> decl_span_info
+        in
+        super#visit_trait_clause decl_span_info clause
+
+      method! visit_field decl_span_info (field : field) =
+        let decl_span_info =
+          Option.map (fun (decl_id, _) -> (decl_id, field.span)) decl_span_info
+        in
+        super#visit_field decl_span_info field
+
       method! visit_type_decl_id decl_span_info id =
         Option.iter
           (fun info -> edges := (info, IdType id) :: !edges)
