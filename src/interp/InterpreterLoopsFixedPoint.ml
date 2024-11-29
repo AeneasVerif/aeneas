@@ -158,16 +158,17 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     (* Remove the shared loans *)
     let v = value_remove_shared_loans v in
     (* Substitute the symbolic values and the region *)
-    Substitute.typed_value_subst_ids span
-      (fun r -> if RegionId.Set.mem r rids then nrid else r)
-      (fun x -> x)
-      (fun x -> x)
-      (fun id ->
-        let nid = fresh_symbolic_value_id () in
-        let sv = SymbolicValueId.Map.find id absl_id_maps.sids_to_values in
-        sid_subst := (nid, sv) :: !sid_subst;
-        nid)
-      (fun x -> x)
+    Substitute.typed_value_subst_ids
+      {
+        (Substitute.no_abs_id_subst span) with
+        r_subst = (fun r -> if RegionId.Set.mem r rids then nrid else r);
+        ssubst =
+          (fun id ->
+            let nid = fresh_symbolic_value_id () in
+            let sv = SymbolicValueId.Map.find id absl_id_maps.sids_to_values in
+            sid_subst := (nid, sv) :: !sid_subst;
+            nid);
+      }
       v
   in
 

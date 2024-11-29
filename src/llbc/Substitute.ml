@@ -85,20 +85,38 @@ let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
   in
   { inputs; output; regions_hierarchy; trait_type_constraints }
 
-let subst_ids_visitor (r_subst : RegionId.id -> RegionId.id)
-    (ty_subst : TypeVarId.id -> TypeVarId.id)
-    (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
-    (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
-    (bsubst : BorrowId.id -> BorrowId.id)
-    (asubst : AbstractionId.id -> AbstractionId.id) =
+type id_subst = {
+  r_subst : RegionId.id -> RegionId.id;
+  ty_subst : TypeVarId.id -> TypeVarId.id;
+  cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id;
+  ssubst : SymbolicValueId.id -> SymbolicValueId.id;
+  bsubst : BorrowId.id -> BorrowId.id;
+  asubst : AbstractionId.id -> AbstractionId.id;
+}
+
+let empty_id_subst =
+  {
+    r_subst = (fun x -> x);
+    ty_subst = (fun x -> x);
+    cg_subst = (fun x -> x);
+    ssubst = (fun x -> x);
+    bsubst = (fun x -> x);
+    asubst = (fun x -> x);
+  }
+
+let no_abs_id_subst span =
+  let asubst _ = craise __FILE__ __LINE__ span "Unreachable" in
+  { empty_id_subst with asubst }
+
+let subst_ids_visitor (subst : id_subst) =
   object (self : 'self)
     inherit [_] map_env
-    method! visit_type_var_id _ id = ty_subst id
-    method! visit_const_generic_var_id _ id = cg_subst id
-    method! visit_region_id _ rid = r_subst rid
-    method! visit_borrow_id _ bid = bsubst bid
-    method! visit_loan_id _ bid = bsubst bid
-    method! visit_symbolic_value_id _ id = ssubst id
+    method! visit_type_var_id _ id = subst.ty_subst id
+    method! visit_const_generic_var_id _ id = subst.cg_subst id
+    method! visit_region_id _ rid = subst.r_subst rid
+    method! visit_borrow_id _ bid = subst.bsubst bid
+    method! visit_loan_id _ bid = subst.bsubst bid
+    method! visit_symbolic_value_id _ id = subst.ssubst id
 
     (** We *do* visit meta-values *)
     method! visit_msymbolic_value env sv = self#visit_symbolic_value env sv
@@ -106,78 +124,32 @@ let subst_ids_visitor (r_subst : RegionId.id -> RegionId.id)
     (** We *do* visit meta-values *)
     method! visit_mvalue env v = self#visit_typed_value env v
 
-    method! visit_abstraction_id _ id = asubst id
+    method! visit_abstraction_id _ id = subst.asubst id
   end
 
-let typed_value_subst_ids (span : Meta.span)
-    (r_subst : RegionId.id -> RegionId.id)
-    (ty_subst : TypeVarId.id -> TypeVarId.id)
-    (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
-    (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
-    (bsubst : BorrowId.id -> BorrowId.id) (v : typed_value) : typed_value =
-  let asubst _ = craise __FILE__ __LINE__ span "Unreachable" in
-  let vis = subst_ids_visitor r_subst ty_subst cg_subst ssubst bsubst asubst in
+let typed_value_subst_ids (subst : id_subst) (v : typed_value) : typed_value =
+  let vis = subst_ids_visitor subst in
   vis#visit_typed_value () v
 
 let typed_value_subst_rids (span : Meta.span)
     (r_subst : RegionId.id -> RegionId.id) (v : typed_value) : typed_value =
-  typed_value_subst_ids span r_subst
-    (fun x -> x)
-    (fun x -> x)
-    (fun x -> x)
-    (fun x -> x)
-    v
+  typed_value_subst_ids { (no_abs_id_subst span) with r_subst } v
 
-let typed_avalue_subst_ids (span : Meta.span)
-    (r_subst : RegionId.id -> RegionId.id)
-    (ty_subst : TypeVarId.id -> TypeVarId.id)
-    (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
-    (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
-    (bsubst : BorrowId.id -> BorrowId.id) (v : typed_avalue) : typed_avalue =
-  let asubst _ = craise __FILE__ __LINE__ span "Unreachable" in
-  let vis = subst_ids_visitor r_subst ty_subst cg_subst ssubst bsubst asubst in
-  vis#visit_typed_avalue () v
-
-let abs_subst_ids (r_subst : RegionId.id -> RegionId.id)
-    (ty_subst : TypeVarId.id -> TypeVarId.id)
-    (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
-    (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
-    (bsubst : BorrowId.id -> BorrowId.id)
-    (asubst : AbstractionId.id -> AbstractionId.id) (x : abs) : abs =
-  let vis = subst_ids_visitor r_subst ty_subst cg_subst ssubst bsubst asubst in
+let abs_subst_ids (subst : id_subst) (x : abs) : abs =
+  let vis = subst_ids_visitor subst in
   vis#visit_abs () x
 
-let env_subst_ids (r_subst : RegionId.id -> RegionId.id)
-    (ty_subst : TypeVarId.id -> TypeVarId.id)
-    (cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id)
-    (ssubst : SymbolicValueId.id -> SymbolicValueId.id)
-    (bsubst : BorrowId.id -> BorrowId.id)
-    (asubst : AbstractionId.id -> AbstractionId.id) (x : env) : env =
-  let vis = subst_ids_visitor r_subst ty_subst cg_subst ssubst bsubst asubst in
+let env_subst_ids (subst : id_subst) (x : env) : env =
+  let vis = subst_ids_visitor subst in
   vis#visit_env () x
 
 let typed_avalue_subst_rids (span : Meta.span)
     (r_subst : RegionId.id -> RegionId.id) (x : typed_avalue) : typed_avalue =
-  let asubst _ = craise __FILE__ __LINE__ span "Unreachable" in
-  let vis =
-    subst_ids_visitor r_subst
-      (fun x -> x)
-      (fun x -> x)
-      (fun x -> x)
-      (fun x -> x)
-      asubst
-  in
+  let vis = subst_ids_visitor { (no_abs_id_subst span) with r_subst } in
   vis#visit_typed_avalue () x
 
 let env_subst_rids (r_subst : RegionId.id -> RegionId.id) (x : env) : env =
-  let vis =
-    subst_ids_visitor r_subst
-      (fun x -> x)
-      (fun x -> x)
-      (fun x -> x)
-      (fun x -> x)
-      (fun x -> x)
-  in
+  let vis = subst_ids_visitor { empty_id_subst with r_subst } in
   vis#visit_env () x
 
 let generic_args_of_params_erase_regions (span : Meta.span option)
