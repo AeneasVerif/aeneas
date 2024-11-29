@@ -23,9 +23,6 @@ exception Distinct of string
 
 type ctx_or_update = (eval_ctx, updt_env_kind) result
 
-(** Union Find *)
-module UF = UnionFind.Make (UnionFind.StoreMap)
-
 (** A small utility.
 
     Remark: we use projection markers, meaning we compute maps from/to

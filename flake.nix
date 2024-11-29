@@ -64,7 +64,6 @@
             yojson
             zarith
             ocamlgraph
-            unionFind
           ]);
           afterBuild = ''
             echo charon.packages.${system}.tests

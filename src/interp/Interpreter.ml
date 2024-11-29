@@ -23,8 +23,61 @@ let compute_contexts (m : crate) : decls_ctx =
   let global_decls = m.global_decls in
   let trait_decls = m.trait_decls in
   let trait_impls = m.trait_impls in
-  let type_decls_groups, _, _, _, _ =
-    split_declarations_to_group_maps m.declarations
+  let fmt_env : Print.fmt_env =
+    {
+      type_decls;
+      fun_decls;
+      global_decls;
+      trait_decls;
+      trait_impls;
+      regions = [];
+      generics = empty_generic_params;
+      locals = [];
+    }
+  in
+  (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
+  let type_decls_groups =
+    match split_declarations_to_group_maps m.declarations with
+    | Ok (type_decls_groups, _, _, _, _) -> type_decls_groups
+    | Error mixed_groups ->
+        (* We detected mixed groups: print a nice error message *)
+        let any_decl_id_to_string (id : any_decl_id) : string =
+          let kind = any_decl_id_to_kind_name id in
+          let meta = LlbcAstUtils.crate_get_item_meta m id in
+          let s =
+            match meta with
+            | None -> show_any_decl_id id
+            | Some meta ->
+                kind ^ "(" ^ span_to_string meta.span ^ "): "
+                ^ Print.name_to_string fmt_env meta.name
+          in
+          "- " ^ s
+        in
+        let group_to_msg (i : int) (g : mixed_declaration_group) : string =
+          let ids = g_declaration_group_to_list g in
+          let decls = List.map any_decl_id_to_string ids in
+          let local_requires =
+            LlbcAstUtils.find_local_transitive_dep m (AnyDeclIdSet.of_list ids)
+          in
+          let local_requires = List.map span_to_string local_requires in
+          let local_requires =
+            if local_requires <> [] then
+              "\n\n\
+               The declarations in this group are (transitively) used at the \
+               following location(s):\n"
+              ^ String.concat "\n" local_requires
+            else ""
+          in
+          "# Group "
+          ^ string_of_int (i + 1)
+          ^ ":\n" ^ String.concat "\n" decls ^ local_requires
+        in
+        let msgs = List.mapi group_to_msg mixed_groups in
+        let msgs = String.concat "\n\n" msgs in
+        craise_opt_span __FILE__ __LINE__ None
+          ("Detected groups of mixed mutually recursive definitions (such as a \
+            type mutually recursive with a function, or a function mutually \
+            recursive with a trait implementation):\n\n" ^ msgs)
   in
   let type_infos =
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list

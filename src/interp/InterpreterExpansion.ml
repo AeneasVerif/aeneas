@@ -649,7 +649,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
                       > 1 variants (option \
                       [greedy_expand_symbolics_with_borrows] of [config]): "
                     ^ name_to_string ctx def.item_meta.name)
-              | Alias _ | Opaque | Error _ ->
+              | Alias _ | Opaque | TError _ ->
                   craise __FILE__ __LINE__ span
                     "Attempted to greedily expand an alias or opaque type"
               | Union _ ->
