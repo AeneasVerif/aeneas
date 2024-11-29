@@ -60,11 +60,15 @@ let compute_contexts (m : crate) : decls_ctx =
             LlbcAstUtils.find_local_transitive_dep m (AnyDeclIdSet.of_list ids)
           in
           let local_requires = List.map span_to_string local_requires in
-          "# Group:\n" ^ String.concat "\n" decls
-          ^ "\n\n\
-             The declarations in this group are (transitively) used at the \
-             following location(s):\n"
-          ^ String.concat "\n" local_requires
+          let local_requires =
+            if local_requires <> [] then
+              "\n\n\
+               The declarations in this group are (transitively) used at the \
+               following location(s):\n"
+              ^ String.concat "\n" local_requires
+            else ""
+          in
+          "# Group:\n" ^ String.concat "\n" decls ^ local_requires
         in
         let msgs = List.map group_to_msg mixed_groups in
         let msgs =
