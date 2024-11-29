@@ -53,7 +53,7 @@ let compute_contexts (m : crate) : decls_ctx =
           in
           "- " ^ s
         in
-        let group_to_msg (g : mixed_declaration_group) : string =
+        let group_to_msg (i : int) (g : mixed_declaration_group) : string =
           let ids = g_declaration_group_to_list g in
           let decls = List.map any_decl_id_to_string ids in
           let local_requires =
@@ -68,12 +68,12 @@ let compute_contexts (m : crate) : decls_ctx =
               ^ String.concat "\n" local_requires
             else ""
           in
-          "# Group:\n" ^ String.concat "\n" decls ^ local_requires
+          "# Group "
+          ^ string_of_int (i + 1)
+          ^ ":\n" ^ String.concat "\n" decls ^ local_requires
         in
-        let msgs = List.map group_to_msg mixed_groups in
-        let msgs =
-          String.concat "\n\n" (List.map (fun s -> "Group:\n" ^ s) msgs)
-        in
+        let msgs = List.mapi group_to_msg mixed_groups in
+        let msgs = String.concat "\n\n" msgs in
         craise_opt_span __FILE__ __LINE__ None
           ("Detected groups of mixed mutually recursive definitions (such as a \
             type mutually recursive with a function, or a function mutually \
