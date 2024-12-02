@@ -493,13 +493,16 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
   (* Clone<bool> *)
   @ [
       mk_fun "core::clone::impls::{core::clone::Clone<bool>}::clone"
-        ~extract_name:(Some "core.clone.CloneBool.clone") ~can_fail:false ();
+        ~extract_name:(Some "core.clone.impls.CloneBool.clone") ~can_fail:false
+        ();
     ]
   (* Clone<INT> *)
   @ mk_scalar_fun
       (fun ty -> "core::clone::impls::{core::clone::Clone<" ^ ty ^ ">}::clone")
       (fun ty ->
-        "core.clone.Clone" ^ StringUtils.capitalize_first_letter ty ^ ".clone")
+        "core.clone.impls.Clone"
+        ^ StringUtils.capitalize_first_letter ty
+        ^ ".clone")
       ~can_fail:false ()
   (* Lean-only definitions *)
   @ mk_lean_only
