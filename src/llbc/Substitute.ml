@@ -25,22 +25,26 @@ let make_region_subst_from_fn (subst : RegionVarId.id -> region) :
   *)
 let fresh_regions_with_substs (region_vars : RegionVarId.id list)
     (fresh_region_id : unit -> region_id) :
-    RegionId.id list * (RegionVarId.id -> RegionId.id) * (region -> region) =
-  (* Generate fresh regions *)
-  let fresh_region_ids = List.map (fun _ -> fresh_region_id ()) region_vars in
-  (* Generate the map from region var ids to regions *)
-  let ls = List.combine region_vars fresh_region_ids in
-  let rid_map = RegionVarId.Map.of_list ls in
+    RegionId.id RegionVarId.Map.t
+    * (RegionVarId.id -> RegionId.id)
+    * (region -> region) =
+  (* Map each region var ids to a fresh region *)
+  let rid_map =
+    RegionVarId.Map.of_list
+      (List.map (fun var -> (var, fresh_region_id ())) region_vars)
+  in
   (* Generate the substitution from region var id to region *)
   let rid_subst id = RegionVarId.Map.find id rid_map in
   (* Generate the substitution from region to region *)
   let r_subst = make_region_subst_from_fn (fun id -> RFVar (rid_subst id)) in
   (* Return *)
-  (fresh_region_ids, rid_subst, r_subst)
+  (rid_map, rid_subst, r_subst)
 
 let fresh_regions_with_substs_from_vars (region_vars : region_var list)
     (fresh_region_id : unit -> region_id) :
-    RegionId.id list * (RegionVarId.id -> RegionId.id) * (region -> region) =
+    RegionId.id RegionVarId.Map.t
+    * (RegionVarId.id -> RegionId.id)
+    * (region -> region) =
   fresh_regions_with_substs
     (List.map (fun (r : region_var) -> r.index) region_vars)
     fresh_region_id
