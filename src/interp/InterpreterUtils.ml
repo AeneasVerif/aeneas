@@ -495,17 +495,9 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   let tr_self = Substitute.trait_instance_id_erase_regions tr_self in
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
-  let rg_abs_ids_bindings =
-    List.map
-      (fun rg ->
-        let abs_id = fresh_abstraction_id () in
-        (rg.id, abs_id))
-      regions_hierarchy
-  in
   let asubst_map : AbstractionId.id RegionGroupId.Map.t =
-    List.fold_left
-      (fun mp (rg_id, abs_id) -> RegionGroupId.Map.add rg_id abs_id mp)
-      RegionGroupId.Map.empty rg_abs_ids_bindings
+    RegionGroupId.Map.of_list
+      (List.map (fun rg -> (rg.id, fresh_abstraction_id ())) regions_hierarchy)
   in
   let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
     RegionGroupId.Map.find rg_id asubst_map
