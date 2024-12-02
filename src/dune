@@ -3,6 +3,7 @@
  (public_name aeneas)
  (package aeneas)
  (libraries aeneas)
+ (modes byte exe)
  (modules Main))
 
 (include_subdirs unqualified)
