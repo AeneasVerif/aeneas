@@ -152,12 +152,8 @@ verify:
 
 # List the files and directories in `INPUTS_DIR`
 INPUTS_LIST = $(wildcard $(INPUTS_DIR)/*)
-# Remove the committed output files
-INPUTS_LIST := $(filter-out %.out,$(INPUTS_LIST))
-# Remove some temporary files which are inserted by, for instance, Emacs
-INPUTS_LIST := $(filter-out %~,$(INPUTS_LIST))
-INPUTS_LIST := $(filter-out .%,$(INPUTS_LIST))
-INPUTS_LIST := $(filter-out #%,$(INPUTS_LIST))
+# Remove the committed output files, as well as the temporary files
+INPUTS_LIST := $(filter-out %.out %~ .% %#,$(INPUTS_LIST))
 # Remove the directory prefix, replace with `test-`
 INPUTS_LIST := $(subst $(INPUTS_DIR)/,test-,$(INPUTS_LIST))
 
