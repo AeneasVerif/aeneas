@@ -3920,7 +3920,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         List.map
           (fun (c : trait_clause) ->
             let trait_decl_ref =
-              { trait_decl_id = c.trait_id; decl_generics = empty_generic_args }
+              { trait_decl_id = c.trait_id; decl_generics = c.generics }
             in
             { trait_id = Clause c.clause_id; trait_decl_ref })
           trait_clauses
