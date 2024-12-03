@@ -237,6 +237,13 @@ let builtin_types () : builtin_type_info list =
              ]);
     };
   ]
+  @ mk_lean_only
+      [
+        mk_type "core::fmt::Formatter" ();
+        mk_type "core::result::Result" ();
+        mk_type "core::fmt::Error" ();
+        mk_type "core::array::TryFromSliceError" ();
+      ]
 
 let mk_builtin_types_map () =
   NameMatcherMap.of_list
@@ -540,6 +547,7 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
            ~can_fail:false ~extract_name:(Some "core.convert.FromSame.from_") ();
          (* [core::slice::{@Slice<T>}::copy_from_slice] *)
          mk_fun "core::slice::{[@T]}::copy_from_slice" ();
+         mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap" ();
        ]
       @ List.map
           (fun ty ->
@@ -705,6 +713,10 @@ let builtin_trait_decls_info () =
         (* Into *)
         mk_trait "core::convert::Into" ~types:[ "T"; "U" ] ~methods:[ "into" ]
           ();
+        (* Debug *)
+        mk_trait "core::fmt::Debug" ~types:[ "T" ] ~methods:[ "fmt" ] ();
+        mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
+        mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
       ]
 
 let mk_builtin_trait_decls_map () =
@@ -795,6 +807,9 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
         (* From<T, T> *)
         fmt "core::convert::From<@Self, @Self>"
           ~extract_name:(Some "core::convert::FromSame") ();
+        (* TryInto<T, U : TryFrom<T>> *)
+        fmt "core::convert::{core::convert::TryInto<@T, @U>}"
+          ~extract_name:(Some "core::convert::TryIntoFrom") ();
       ]
   (* From<INT, bool> *)
   @ List.map
@@ -827,6 +842,15 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
           ("core::clone::Clone<" ^ ty ^ ">")
           ~extract_name:
             (Some ("core.clone.Clone" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* Copy<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::marker::Copy<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.marker.Copy" ^ StringUtils.capitalize_first_letter ty))
           ())
       all_int_names
 

@@ -111,3 +111,43 @@ def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U 
 def core.convert.FromSame (T : Type) : core.convert.From T T := {
   from_ := fun x => ok (core.convert.FromSame.from_ x)
 }
+
+/- [core::result::Result] -/
+inductive core.result.Result (T : Type) (E : Type) :=
+| Ok : T → core.result.Result T E
+| Err : E → core.result.Result T E
+
+/- [core::fmt::Error] -/
+@[reducible] def core.fmt.Error := Unit
+
+structure core.convert.TryFrom (Self T : Type) where
+  Error : Type
+  try_from : T → Result (core.result.Result Self Error)
+
+structure core.convert.TryInto (Self T : Type) where
+  Error : Type
+  try_into : Self → Result (core.result.Result T Error)
+
+@[reducible, simp]
+def core.convert.TryIntoFrom.try_into {T U : Type} (fromInst : core.convert.TryFrom U T)
+  (x : T) : Result (core.result.Result U fromInst.Error) :=
+  fromInst.try_from x
+
+@[reducible]
+def core.convert.TryIntoFrom {T U : Type} (fromInst : core.convert.TryFrom U T) :
+  core.convert.TryInto T U := {
+  Error := fromInst.Error
+  try_into := core.convert.TryIntoFrom.try_into fromInst
+}
+
+/- TODO: -/
+axiom Formatter : Type
+
+structure core.fmt.Debug (T : Type) where
+  fmt : T → Formatter → Result (Formatter × Formatter → Formatter)
+
+def core.result.Result.unwrap {T E : Type}
+  (_ : core.fmt.Debug T) (e : core.result.Result T E) : Primitives.Result T :=
+  match e with
+  | .Ok x => ok x
+  | .Err _ => fail .panic

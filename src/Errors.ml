@@ -57,6 +57,16 @@ let craise_opt_span (file : string) (line : int) (span : Meta.span option)
 let craise (file : string) (line : int) (span : Meta.span) (msg : string) =
   craise_opt_span file line (Some span) msg
 
+(** Lazy assert *)
+let classert_opt_span (file : string) (line : int) (b : bool)
+    (span : Meta.span option) (msg : string Lazy.t) =
+  if not b then craise_opt_span file line span (Lazy.force msg)
+
+(** Lazy assert *)
+let classert (file : string) (line : int) (b : bool) (span : Meta.span)
+    (msg : string Lazy.t) =
+  classert_opt_span file line b (Some span) msg
+
 let cassert_opt_span (file : string) (line : int) (b : bool)
     (span : Meta.span option) (msg : string) =
   if not b then craise_opt_span file line span msg

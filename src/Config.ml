@@ -45,6 +45,9 @@ let if_backend (f : unit -> 'a) (default : 'a) : 'a =
   | None -> default
   | Some _ -> f ()
 
+(** Print all the external definitions which are not listed in the builtin functions *)
+let print_unknown_externals = ref false
+
 (** {1 Interpreter} *)
 
 (** Activate the sanity checks, and in particular the invariant checks

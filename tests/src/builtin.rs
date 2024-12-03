@@ -1,3 +1,4 @@
+//@ charon-args=--exclude=core::fmt::Debug::fmt --opaque=core::fmt::Formatter
 //@[!lean] skip
 //! This file uses a list of builtin definitions, to make sure they are properly
 //! detected and mapped to definitions in the standard library.
@@ -33,3 +34,5 @@ fn u32_from_le_bytes(x: [u8; 4]) -> u32 {
 fn u32_to_le_bytes(x: u32) -> [u8; 4] {
     x.to_le_bytes()
 }
+
+fn use_debug_clause<T: core::fmt::Debug>(_: T) {}

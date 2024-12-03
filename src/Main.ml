@@ -57,6 +57,37 @@ Usage: %s [OPTIONS] FILE
 |}
     Sys.argv.(0)
 
+let matches_name (c : crate) (name : Types.name)
+    (m : 'a ExtractName.NameMatcherMap.t) : bool =
+  let open Charon.NameMatcher in
+  let open ExtractBuiltin in
+  let mctx : ctx =
+    {
+      type_decls = c.type_decls;
+      global_decls = c.global_decls;
+      fun_decls = c.fun_decls;
+      trait_decls = c.trait_decls;
+      trait_impls = c.trait_impls;
+    }
+  in
+  NameMatcherMap.mem mctx name m
+
+let matches_name_with_generics (c : crate) (name : Types.name)
+    (generics : Types.generic_args) (m : 'a ExtractName.NameMatcherMap.t) : bool
+    =
+  let open Charon.NameMatcher in
+  let open ExtractBuiltin in
+  let mctx : ctx =
+    {
+      type_decls = c.type_decls;
+      global_decls = c.global_decls;
+      fun_decls = c.fun_decls;
+      trait_decls = c.trait_decls;
+      trait_impls = c.trait_impls;
+    }
+  in
+  Option.is_some (NameMatcherMap.find_with_generics_opt mctx name generics m)
+
 let () =
   (* Measure start time *)
   let start_time = Unix.gettimeofday () in
@@ -129,6 +160,10 @@ let () =
         Arg.Set use_nested_tuple_projectors,
         " Use nested projectors for tuples (e.g., (0, 1, 2).snd.fst instead of \
          (0, 1, 2).1)." );
+      ( "-print-unknown-externals",
+        Arg.Set print_unknown_externals,
+        " Print all the external definitions which are not listed in the \
+         builtin functions" );
     ]
   in
 
@@ -189,8 +224,6 @@ let () =
   let check_not (cond : bool) (msg : string) =
     if cond then fail_with_error msg
   in
-
-  if !print_llbc then main_log#set_level EL.Debug;
 
   (* Sanity check (now that the arguments are parsed!) *)
   check_arg_implies
@@ -300,7 +333,9 @@ let () =
   | Ok m ->
       (* Logging *)
       log#linfo (lazy ("Imported: " ^ filename));
-      log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
+      if !print_llbc then
+        log#linfo (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"))
+      else log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
 
       (* Check the Charon CLI options *)
       check_no_doc m.options.hide_marker_traits
@@ -322,6 +357,144 @@ let () =
            decreasing_by/termination_by clauses with mutually recursive \
            definitions";
         fail true);
+
+      (* Print the external definitions which are not listed in the builtin functions *)
+      if !print_unknown_externals then (
+        let open TranslateCore in
+        let { type_decls; fun_decls; global_decls; trait_decls; trait_impls; _ }
+            =
+          m
+        in
+        (* Filter the definitions *)
+        let type_decls =
+          Types.TypeDeclId.Map.filter
+            (fun _ (d : Types.type_decl) ->
+              let names_map = ExtractBuiltin.builtin_types_map () in
+              (not d.item_meta.is_local)
+              && not (matches_name m d.item_meta.name names_map))
+            type_decls
+        in
+        let fun_decls =
+          LlbcAst.FunDeclId.Map.filter
+            (fun _ (d : LlbcAst.fun_decl) ->
+              let names_map = ExtractBuiltin.builtin_funs_map () in
+              (not d.item_meta.is_local)
+              && (not (matches_name m d.item_meta.name names_map))
+              (* We also ignore the trait method declarations *)
+              &&
+              match d.kind with
+              | TraitDeclItem _ -> false
+              | _ -> true)
+            fun_decls
+        in
+        let global_decls =
+          LlbcAst.GlobalDeclId.Map.filter
+            (fun _ (d : LlbcAst.global_decl) ->
+              let funs_map = ExtractBuiltin.builtin_globals_map in
+              (not d.item_meta.is_local)
+              && not (matches_name m d.item_meta.name funs_map))
+            global_decls
+        in
+        let trait_decls =
+          LlbcAst.TraitDeclId.Map.filter
+            (fun _ (d : LlbcAst.trait_decl) ->
+              let names_map = ExtractBuiltin.builtin_trait_decls_map () in
+              (not d.item_meta.is_local)
+              && not (matches_name m d.item_meta.name names_map))
+            trait_decls
+        in
+        let trait_impls =
+          List.filter_map
+            (fun (d : LlbcAst.trait_impl) ->
+              let names_map = ExtractBuiltin.builtin_trait_impls_map () in
+              match
+                LlbcAst.TraitDeclId.Map.find_opt d.impl_trait.trait_decl_id
+                  m.trait_decls
+              with
+              | None -> None (* Just ignore it *)
+              | Some trait_decl ->
+                  if
+                    (not d.item_meta.is_local)
+                    && not
+                         (matches_name_with_generics m trait_decl.item_meta.name
+                            d.impl_trait.decl_generics names_map)
+                  then Some (d, trait_decl)
+                  else None)
+            (LlbcAst.TraitImplId.Map.values trait_impls)
+        in
+        (* Print *)
+        let fmt_env = Print.Crate.crate_to_fmt_env m in
+        let type_decls =
+          List.map
+            (fun (d : Types.type_decl) ->
+              let pattern =
+                TranslateCore.name_with_crate_to_pattern_string m
+                  d.item_meta.name
+              in
+              "Type decl (pattern: [" ^ pattern ^ "]]):\n"
+              ^ Print.type_decl_to_string fmt_env d)
+            (Types.TypeDeclId.Map.values type_decls)
+        in
+        let fun_decls =
+          List.map
+            (fun (d : LlbcAst.fun_decl) ->
+              let pattern =
+                TranslateCore.name_with_crate_to_pattern_string m
+                  d.item_meta.name
+              in
+              let d =
+                (* FIXME: there is a bug in the formatter when splitting the predicates
+                   and trait clauses between the inherited ones and the others (the
+                   index is sometimes out of bounds).
+                   See: https://github.com/AeneasVerif/charon/issues/482
+                *)
+                try Print.Ast.fun_decl_to_string fmt_env "" "  " d
+                with _ -> "UNKNOWN"
+              in
+              "Fun decl (pattern: [" ^ pattern ^ "]]):\n" ^ d)
+            (LlbcAst.FunDeclId.Map.values fun_decls)
+        in
+        let global_decls =
+          List.map
+            (fun (d : LlbcAst.global_decl) ->
+              let pattern =
+                TranslateCore.name_with_crate_to_pattern_string m
+                  d.item_meta.name
+              in
+              "Global decl (pattern: [" ^ pattern ^ "]]):\n"
+              ^ Print.Ast.global_decl_to_string fmt_env "" "  " d)
+            (LlbcAst.GlobalDeclId.Map.values global_decls)
+        in
+        let trait_decls =
+          List.map
+            (fun (d : LlbcAst.trait_decl) ->
+              let pattern =
+                TranslateCore.name_with_crate_to_pattern_string m
+                  d.item_meta.name
+              in
+              "Trait decl (pattern: [" ^ pattern ^ "]]):\n"
+              ^ Print.Ast.trait_decl_to_string fmt_env "" "  " d)
+            (LlbcAst.TraitDeclId.Map.values trait_decls)
+        in
+        let trait_impls =
+          List.map
+            (fun ((d, trait_decl) : LlbcAst.trait_impl * LlbcAst.trait_decl) ->
+              let pattern =
+                TranslateCore.name_with_generics_crate_to_pattern_string m
+                  trait_decl.item_meta.name trait_decl.generics
+                  d.impl_trait.decl_generics
+              in
+              "Trait impl (pattern: [" ^ pattern ^ "]]):\n"
+              ^ Print.Ast.trait_impl_to_string fmt_env "" "  " d)
+            trait_impls
+        in
+
+        log#linfo
+          (lazy
+            (String.concat "\n\n"
+               (type_decls @ fun_decls @ global_decls @ trait_decls
+              @ trait_impls)));
+        ());
 
       (* There may be exceptions to catch *)
       (try
