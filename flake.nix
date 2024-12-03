@@ -198,14 +198,6 @@
           installPhase = "touch $out";
         };
 
-        aeneas-checks = pkgs.runCommand "aeneas-checks" { } ''
-          echo ${aeneas-tests}
-          echo ${aeneas-verify-coq}
-          echo ${aeneas-verify-fstar}
-          echo ${aeneas-verify-hol4}
-          touch $out
-        '';
-
         check-charon-pin = pkgs.runCommand "aeneas-check-charon-pin"
           {
             buildInputs = [ pkgs.jq ];
@@ -248,8 +240,20 @@
           ];
         };
         checks = {
-          default = aeneas-checks;
-          inherit aeneas-check-tidiness check-charon-pin;
+          default = pkgs.runCommand "aeneas-checks" { } ''
+            echo ${aeneas-tests}
+            echo ${aeneas-verify-coq}
+            echo ${aeneas-verify-fstar}
+            echo ${aeneas-verify-hol4}
+            touch $out
+          '';
+          inherit
+            aeneas-tests
+            aeneas-verify-coq
+            aeneas-verify-fstar
+            aeneas-verify-hol4
+            aeneas-check-tidiness
+            check-charon-pin;
         };
       });
 }
