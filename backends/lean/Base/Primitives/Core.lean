@@ -53,6 +53,10 @@ def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
 }
 
+/- [core::marker::Copy] -/
+structure marker.Copy (Self : Type) where
+  cloneInst : core.clone.Clone Self
+
 /- [core::mem::replace]
 
    This acts like a swap effectively in a functional pure world.
@@ -81,3 +85,29 @@ end core
 @[simp] def core.clone.Clone.clone_from
   {Self : Type} (cloneInst : core.clone.Clone Self) (_self : Self) (source : Self) : Result Self :=
   cloneInst.clone source
+
+/- [core::convert::Into] -/
+structure core.convert.Into (Self : Type) (T : Type) where
+  into : Self → Result T
+
+/- [core::convert::{core::convert::Into<U> for T}::into] -/
+@[reducible, simp]
+def core.convert.IntoFrom.into {T : Type} {U : Type}
+  (fromInst : core.convert.From U T) (x : T) : Result U :=
+  fromInst.from_ x
+
+/- Trait implementation: [core::convert::{core::convert::Into<U> for T}] -/
+@[reducible]
+def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U T)
+  : core.convert.Into T U := {
+  into := core.convert.IntoFrom.into fromInst
+}
+
+/- [core::convert::{core::convert::From<T> for T}::from] -/
+@[simp] def core.convert.FromSame.from_ {T : Type} (x : T) : T := x
+
+/- [core::convert::{core::convert::From<T> for T}] -/
+@[reducible]
+def core.convert.FromSame (T : Type) : core.convert.From T T := {
+  from_ := fun x => ok (core.convert.FromSame.from_ x)
+}

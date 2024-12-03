@@ -490,6 +490,18 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       (fun ty ->
         "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".to_be_bytes")
       ~can_fail:false ()
+  (* from_le_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::from_le_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_le_bytes")
+      ~can_fail:false ()
+  (* from_be_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::from_be_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_be_bytes")
+      ~can_fail:false ()
   (* Clone<bool> *)
   @ [
       mk_fun "core::clone::impls::{core::clone::Clone<bool>}::clone"
@@ -512,13 +524,22 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
            ();
          mk_fun "core::mem::swap" ~can_fail:false ();
          mk_fun "core::option::{core::option::Option<@T>}::take"
-           ~extract_name:(Some (backend_choice "" "core::option::Option::take"))
+           ~extract_name:
+             (backend_choice None (Some "core::option::Option::take"))
            ~can_fail:false ();
          mk_fun "core::option::{core::option::Option<@T>}::is_none"
            ~extract_name:
-             (Some (backend_choice "" "core::option::Option::is_none"))
+             (backend_choice None (Some "core::option::Option::is_none"))
            ~can_fail:false ();
          mk_fun "core::clone::Clone::clone_from" ();
+         (* Into<T, U: From<T>> *)
+         mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
+           ~extract_name:(Some "core.convert.IntoFrom.into") ();
+         (* From<T, T> *)
+         mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
+           ~can_fail:false ~extract_name:(Some "core.convert.FromSame.from_") ();
+         (* [core::slice::{@Slice<T>}::copy_from_slice] *)
+         mk_fun "core::slice::{[@T]}::copy_from_slice" ();
        ]
       @ List.map
           (fun ty ->
@@ -676,7 +697,15 @@ let builtin_trait_decls_info () =
       ();
     (* Clone *)
     mk_trait "core::clone::Clone" ~methods:[ "clone" ] ();
+    (* Copy *)
+    mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
   ]
+  @ mk_lean_only
+      [
+        (* Into *)
+        mk_trait "core::convert::Into" ~types:[ "T"; "U" ] ~methods:[ "into" ]
+          ();
+      ]
 
 let mk_builtin_trait_decls_map () =
   NameMatcherMap.of_list
@@ -758,6 +787,15 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
       ~filter:(Some [ true; false ])
       ();
   ]
+  @ mk_lean_only
+      [
+        (* Into<T, U: From<T>> *)
+        fmt "core::convert::Into<@Self, @T>"
+          ~extract_name:(Some "core::convert::IntoFrom") ();
+        (* From<T, T> *)
+        fmt "core::convert::From<@Self, @Self>"
+          ~extract_name:(Some "core::convert::FromSame") ();
+      ]
   (* From<INT, bool> *)
   @ List.map
       (fun ty ->

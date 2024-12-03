@@ -127,8 +127,8 @@ let () =
         " Do not treat warnings as errors" );
       ( "-tuple-nested-proj",
         Arg.Set use_nested_tuple_projectors,
-        " Use nested projectors for tuples (e.g., (0, 1).snd.fst instead of \
-         (0, 1).1)." );
+        " Use nested projectors for tuples (e.g., (0, 1, 2).snd.fst instead of \
+         (0, 1, 2).1)." );
     ]
   in
 
