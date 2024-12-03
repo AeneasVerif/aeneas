@@ -179,15 +179,15 @@
         # reuse the build of ./backends/hol4.
         aeneas-verify-hol4 = pkgs.stdenv.mkDerivation {
           name = "aeneas_verify_hol4";
-          # Remark: we tried to filter the sources to only include ./backends/hol4
-          # and ./tests/hol4 (see comment below), but it didn't work
-          src = ./.;
-          # src = pkgs.lib.cleanSourceWith {
-          #   src = ./.;
-          #   filter = path: type:
-          #     pkgs.lib.hasPrefix (toString ./backends/hol4) path
-          #     || pkgs.lib.hasPrefix (toString ./tests/hol4) path;
-          # };
+          src = pkgs.lib.cleanSourceWith {
+            src = ./.;
+            filter = path: type:
+              # If we exclude these, the filter won't recurse into them.
+              path == toString ./backends || path == toString ./tests
+              || pkgs.lib.hasPrefix (toString ./backends/hol4) path
+              || pkgs.lib.hasPrefix (toString ./tests/hol4) path
+            ;
+          };
           buildInputs = [ pkgs.hol ];
           buildPhase = ''
             cd ./tests/hol4
