@@ -8,7 +8,6 @@
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
     fstar.url = "github:FStarLang/fstar";
-    flake-compat.url = "github:nix-community/flake-compat";
   };
 
   # Remark: keep the list of outputs in sync with the list of inputs above
