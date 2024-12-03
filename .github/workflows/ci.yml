@@ -1,7 +1,8 @@
 on:
   # Run the checks on any push to any branch of the repo that doesn't start with `_`.
   push:
-    branches-ignore: [ '_**' ]
+    branches:
+      - main
   # Run the check for any pull request. The check is run on a merge between the
   # PR commit and the `main` branch at the time of running the check.
   pull_request:
@@ -10,30 +11,15 @@ on:
   # Makes it possible to run the forkflow by hand from GItHub's interface.
   workflow_dispatch:
 
-# Minimum permissions required by skip-duplicate-actions
-permissions:
-  actions: write
-  contents: read
+# Cancel previous versions of this job that are still running.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # Avoid `push` and `pull_request` running the same job twice
-  check_if_skip_duplicate_job:
-    runs-on: [self-hosted, linux, nix]
-    steps:
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5
-        with:
-          concurrent_skipping: 'same_content_newer'
-          skip_after_successful_duplicate: 'true'
-          cancel_others: 'true'
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-
   nix:
     #runs-on: ubuntu-latest
     runs-on: [self-hosted, linux, nix]
-    needs: check_if_skip_duplicate_job
-    if: needs.check_if_skip_duplicate_job.outputs.should_skip != 'true'
     steps:
       - uses: actions/checkout@v4
       - run: nix build -L .#checks.x86_64-linux.aeneas-check-tidiness
@@ -43,8 +29,6 @@ jobs:
 
   lean:
     runs-on: [self-hosted, linux, nix]
-    needs: check_if_skip_duplicate_job
-    if: needs.check_if_skip_duplicate_job.outputs.should_skip != 'true'
     steps:
       # Lean cannot run its tests in the sandbox because `elan` will download things
       - uses: actions/checkout@v4
