@@ -15,6 +15,7 @@ all: build-tests-verify nix
 
 # Paths to the executables we need for tests. They are overriden in CI.
 AENEAS_EXE ?= $(PWD)/bin/aeneas
+AENEAS_DEBUG ?= $(PWD)/src/_build/default/main
 TEST_RUNNER_EXE ?= $(PWD)/bin/test_runner
 CHARON_EXE ?= $(PWD)/charon/bin/charon
 

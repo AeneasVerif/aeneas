@@ -168,12 +168,8 @@ let ty_substitute (subst : subst) (ty : ty) : ty =
 
 let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
     =
-  let ls = List.combine vars tys in
-  let mp =
-    List.fold_left
-      (fun mp (k, v) -> TypeVarId.Map.add (k : type_var).index v mp)
-      TypeVarId.Map.empty ls
-  in
+  let var_ids = List.map (fun k -> (k : type_var).index) vars in
+  let mp = TypeVarId.Map.of_list (List.combine var_ids tys) in
   fun id -> TypeVarId.Map.find id mp
 
 let make_const_generic_subst (vars : const_generic_var list)
@@ -184,12 +180,7 @@ let make_trait_subst (clauses : trait_clause list) (refs : trait_ref list) :
     TraitClauseId.id -> trait_instance_id =
   let clauses = List.map (fun x -> x.clause_id) clauses in
   let refs = List.map (fun (x : trait_ref) -> x.trait_id) refs in
-  let ls = List.combine clauses refs in
-  let mp =
-    List.fold_left
-      (fun mp (k, v) -> TraitClauseId.Map.add k v mp)
-      TraitClauseId.Map.empty ls
-  in
+  let mp = TraitClauseId.Map.of_list (List.combine clauses refs) in
   fun id -> TraitClauseId.Map.find id mp
 
 (** Retrieve the list of fields for the given variant of a {!type:Aeneas.Pure.type_decl}.

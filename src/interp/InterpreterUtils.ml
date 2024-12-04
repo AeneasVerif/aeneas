@@ -495,27 +495,18 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   let tr_self = Substitute.trait_instance_id_erase_regions tr_self in
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
-  let rg_abs_ids_bindings =
-    List.map
-      (fun rg ->
-        let abs_id = fresh_abstraction_id () in
-        (rg.id, abs_id))
-      regions_hierarchy
-  in
   let asubst_map : AbstractionId.id RegionGroupId.Map.t =
-    List.fold_left
-      (fun mp (rg_id, abs_id) -> RegionGroupId.Map.add rg_id abs_id mp)
-      RegionGroupId.Map.empty rg_abs_ids_bindings
+    RegionGroupId.Map.of_list
+      (List.map (fun rg -> (rg.id, fresh_abstraction_id ())) regions_hierarchy)
   in
   let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
     RegionGroupId.Map.find rg_id asubst_map
   in
   (* Generate fresh regions and their substitutions *)
   let _, rsubst, _ =
-    Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
-      sg.generics.regions fresh_region_id
+    Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
+      fresh_region_id
   in
-  let rsubst r = Option.get (rsubst r) in
   (* Generate the type substitution
      Note that for now we don't support instantiating the type parameters with
      types containing regions. *)

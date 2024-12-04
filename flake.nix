@@ -232,6 +232,7 @@
             pkgs.ocamlPackages.ocaml-lsp
             pkgs.jq
             pkgs.rustup
+            pkgs.rlwrap
           ];
 
           inputsFrom = [

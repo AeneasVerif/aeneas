@@ -908,19 +908,13 @@ let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
       (AbstractionId.Set.elements abs_to_refresh)
   in
   let aids_subst = AbstractionId.Map.of_list aids_subst in
-  let subst id =
+  let asubst id =
     match AbstractionId.Map.find_opt id aids_subst with
     | None -> id
     | Some id -> id
   in
   let env =
-    Substitute.env_subst_ids
-      (fun x -> x)
-      (fun x -> x)
-      (fun x -> x)
-      (fun x -> x)
-      (fun x -> x)
-      subst ctx.env
+    Substitute.env_subst_ids { Substitute.empty_id_subst with asubst } ctx.env
   in
   { ctx with env }
 

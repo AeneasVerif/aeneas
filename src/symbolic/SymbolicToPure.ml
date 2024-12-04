@@ -1158,17 +1158,13 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     let rg = T.RegionGroupId.nth regions_hierarchy gid in
     (* Turn *all* the outer bound regions into free regions *)
     let _, rid_subst, r_subst =
-      Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
-        sg.generics.regions
+      Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
         (snd (T.RegionId.fresh_stateful_generator ()))
     in
     let subst = { Substitute.empty_subst with r_subst } in
     let ty = Substitute.ty_substitute subst ty in
     (* Compute the set of regions belonging to this group *)
-    let gr_regions =
-      T.RegionId.Set.of_list
-        (List.map (fun rid -> Option.get (rid_subst rid)) rg.regions)
-    in
+    let gr_regions = T.RegionId.Set.of_list (List.map rid_subst rg.regions) in
     let keep_region r =
       match r with
       | T.RStatic -> craise_opt_span __FILE__ __LINE__ span "Unimplemented"

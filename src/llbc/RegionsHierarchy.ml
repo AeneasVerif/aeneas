@@ -84,15 +84,15 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
      level of the signature (this excludes the regions locally bound inside
      the types, for instance at the level of an arrow type).
   *)
-  let bound_regions, bound_regions_id_subst, bound_regions_subst =
-    Subst.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
-      sg.generics.regions
+  let region_var_to_id_map, bound_regions_id_subst, bound_regions_subst =
+    Subst.fresh_regions_with_substs_from_vars sg.generics.regions
       (snd (RegionId.fresh_stateful_generator ()))
   in
   let region_id_to_var_map : RegionVarId.id RegionId.Map.t =
     RegionId.Map.of_list
-      (List.combine bound_regions
-         (List.map (fun (r : region_var) -> r.index) sg.generics.regions))
+      (List.map
+         (fun (var_id, id) -> (id, var_id))
+         (RegionVarId.Map.bindings region_var_to_id_map))
   in
   let subst = { Subst.empty_subst with r_subst = bound_regions_subst } in
   let g : RegionSet.t RegionMap.t ref =
@@ -100,7 +100,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     let m =
       List.map
         (fun (r : region_var) ->
-          (RFVar (Option.get (bound_regions_id_subst r.index)), s_set))
+          (RFVar (bound_regions_id_subst r.index), s_set))
         sg.generics.regions
     in
     let s = (RStatic, RegionSet.empty) in
