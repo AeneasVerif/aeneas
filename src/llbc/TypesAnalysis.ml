@@ -390,8 +390,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
     in
     (* Substitute the regions in the fields *)
     let _, _, r_subst =
-      Substitute.fresh_regions_with_substs_from_vars ~fail_if_not_found:true
-        def.generics.regions
+      Substitute.fresh_regions_with_substs_from_vars def.generics.regions
         (snd (RegionId.fresh_stateful_generator ()))
     in
     let subst = { Substitute.empty_subst with r_subst } in
