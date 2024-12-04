@@ -28,7 +28,7 @@ let fresh_regions_with_substs (region_vars : RegionVarId.id list)
     RegionId.id RegionVarId.Map.t
     * (RegionVarId.id -> RegionId.id)
     * (region -> region) =
-  (* Map each region var ids to a fresh region *)
+  (* Map each region var id to a fresh region *)
   let rid_map =
     RegionVarId.Map.of_list
       (List.map (fun var -> (var, fresh_region_id ())) region_vars)
