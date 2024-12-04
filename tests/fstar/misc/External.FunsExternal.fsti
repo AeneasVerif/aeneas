@@ -10,7 +10,7 @@ include External.Types
     Source: '/rustc/library/core/src/cell.rs', lines 540:4-540:32
     Name pattern: core::cell::{core::cell::Cell<@T>}::get *)
 val core_cell_Cell_get
-  (#t : Type0) (markerCopyInst : core_marker_Copy_t t) :
+  (#t : Type0) (markerCopyInst : core_marker_Copy t) :
   core_cell_Cell_t t -> state -> result (state & t)
 
 (** [core::cell::{core::cell::Cell<T>}#11::get_mut]:
