@@ -27,11 +27,32 @@ jobs:
       - run: nix build -L .#aeneas
       - run: nix build -L .#checks.x86_64-linux.default
 
-  lean:
+  diff_lean_files:
     runs-on: [self-hosted, linux, nix]
     steps:
-      # Lean cannot run its tests in the sandbox because `elan` will download things
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # deep clone in order to get access to other commits
+      - id: skip_check
+        run: |
+          # Compares this version with `main`, and checks whether the lean files changed.
+          if git diff origin/main --quiet -- tests/lean && git diff origin/main --quiet -- backends/lean; then
+              echo 'lean files were not changed in this PR.'
+              echo "CHECK_LEAN=false" >> "$GITHUB_ENV"
+          else
+              echo 'lean files were changed in this PR.'
+              echo "CHECK_LEAN=true" >> "$GITHUB_ENV"
+          fi
+    outputs:
+      check_lean: ${{ env.CHECK_LEAN }}
+
+  lean:
+    needs: [diff_lean_files]
+    runs-on: [self-hosted, linux, nix]
+    if: needs.diff_lean_files.outputs.check_lean == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      # Lean cannot run its tests in the nix sandbox because `elan` will download things
       - run: nix develop --command bash -c "cd tests/lean && make"
 
   charon-pin-is-forward:
