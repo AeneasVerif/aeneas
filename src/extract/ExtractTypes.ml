@@ -859,7 +859,10 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 (field_names, cons_name)
             | Some info ->
                 craise __FILE__ __LINE__ def.item_meta.span
-                  ("Invalid builtin information: " ^ show_builtin_type_info info)
+                  ("Invalid builtin information for type "
+                  ^ name_to_string ctx def.item_meta.name
+                  ^ ": expected builtin information about a structure, got:\n"
+                  ^ show_builtin_type_info info)
           in
           (* Add the fields *)
           let ctx =
@@ -902,9 +905,12 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   (fun variant_id (variant : variant) ->
                     (variant_id, StringMap.find variant.variant_name variant_map))
                   variants
-            | _ ->
+            | Some info ->
                 craise __FILE__ __LINE__ def.item_meta.span
-                  "Invalid builtin information"
+                  ("Invalid builtin information for type "
+                  ^ name_to_string ctx def.item_meta.name
+                  ^ ": expected builtin information about an enumeration, got:\n"
+                  ^ show_builtin_type_info info)
           in
           List.fold_left
             (fun ctx (vid, vname) ->

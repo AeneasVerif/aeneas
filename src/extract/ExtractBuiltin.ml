@@ -134,8 +134,7 @@ type builtin_type_info = {
 type type_variant_kind =
   | KOpaque
   | KStruct of (string * string) list
-  (* TODO: handle the tuple case *)
-  | KEnum (* TODO *)
+  | KEnum of string list
 
 let mk_struct_constructor (type_name : string) : string =
   let prefix =
@@ -182,7 +181,18 @@ let builtin_types () : builtin_type_info list =
           in
           let constructor = mk_struct_constructor extract_name in
           Some (Struct (constructor, fields))
-      | KEnum -> raise (Failure "TODO")
+      | KEnum variants ->
+          let variants =
+            List.map
+              (fun variant ->
+                {
+                  rust_variant_name = variant;
+                  extract_variant_name = variant;
+                  fields = None;
+                })
+              variants
+          in
+          Some (Enum variants)
     in
     { rust_name; extract_name; keep_params; body_info }
   in
@@ -240,7 +250,7 @@ let builtin_types () : builtin_type_info list =
   @ mk_lean_only
       [
         mk_type "core::fmt::Formatter" ();
-        mk_type "core::result::Result" ();
+        mk_type "core::result::Result" ~kind:(KEnum [ "Ok"; "Err" ]) ();
         mk_type "core::fmt::Error" ();
         mk_type "core::array::TryFromSliceError" ();
       ]
