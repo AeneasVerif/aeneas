@@ -196,11 +196,13 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
           span;
         (* We have nothing to do *)
         ()
-    | TArrow (regions, inputs, output) ->
+    | TArrow binder ->
         (* TODO: *)
-        cassert_opt_span __FILE__ __LINE__ (regions = []) span
-          "We don't support arrow types with locally quantified regions";
+        cassert_opt_span __FILE__ __LINE__
+          (binder.binder_regions = [])
+          span "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
+        let inputs, output = binder.binder_value in
         List.iter (explore_ty []) (output :: inputs)
     | TDynTrait _ ->
         craise_opt_span __FILE__ __LINE__ span

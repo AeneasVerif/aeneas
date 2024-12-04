@@ -221,13 +221,14 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
   | TRawPtr (ty, rkind) ->
       let ty = norm_ctx_normalize_ty ctx ty in
       TRawPtr (ty, rkind)
-  | TArrow (regions, inputs, output) ->
+  | TArrow binder ->
       (* TODO: for now it works because we don't support predicates with
          bound regions. If we do support them, we probably need to do
          something smarter here. *)
+      let { binder_regions; binder_value = inputs, output } = binder in
       let inputs = List.map (norm_ctx_normalize_ty ctx) inputs in
       let output = norm_ctx_normalize_ty ctx output in
-      TArrow (regions, inputs, output)
+      TArrow { binder_regions; binder_value = (inputs, output) }
   | TTraitType (trait_ref, type_name) -> (
       log#ldebug
         (lazy

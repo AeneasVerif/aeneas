@@ -348,7 +348,8 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         (* Return *)
         { ty_info with mut_regions }
-    | TArrow (_regions, inputs, output) ->
+    | TArrow binder ->
+        let inputs, output = binder.binder_value in
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left
