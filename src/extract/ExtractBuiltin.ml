@@ -185,9 +185,15 @@ let builtin_types () : builtin_type_info list =
           let variants =
             List.map
               (fun variant ->
+                let extract_variant_name =
+                  match backend () with
+                  | FStar | Coq -> extract_name ^ "_" ^ variant
+                  | Lean -> extract_name ^ "." ^ variant
+                  | HOL4 -> extract_name ^ variant
+                in
                 {
                   rust_variant_name = variant;
-                  extract_variant_name = variant;
+                  extract_variant_name;
                   fields = None;
                 })
               variants
