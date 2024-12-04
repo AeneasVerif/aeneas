@@ -388,7 +388,7 @@ let compute_ids () =
         loan_ids := BorrowId.Set.add id !loan_ids
 
       method! visit_abstraction_id _ id = aids := AbstractionId.Set.add id !aids
-      method! visit_region_id _ id = rids := RegionId.Set.add id !rids
+      method! visit_free_region _ id = rids := RegionId.Set.add id !rids
 
       method! visit_symbolic_value env sv =
         sids := SymbolicValueId.Set.add sv.sv_id !sids;
