@@ -49,11 +49,11 @@ jobs:
   lean:
     needs: [diff_lean_files]
     runs-on: [self-hosted, linux, nix]
-    if: needs.diff_lean_files.outputs.check_lean == 'true'
     steps:
       - uses: actions/checkout@v4
-      # Lean cannot run its tests in the nix sandbox because `elan` will download things
-      - run: nix develop --command bash -c "cd tests/lean && make"
+      - if: needs.diff_lean_files.outputs.check_lean == 'true'
+        # Lean cannot run its tests in the nix sandbox because `elan` will download things
+        run: nix develop --command bash -c "cd tests/lean && make"
 
   charon-pin-is-forward:
     runs-on: [self-hosted, linux, nix]
