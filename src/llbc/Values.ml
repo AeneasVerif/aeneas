@@ -171,8 +171,6 @@ type mvalue = typed_value [@@deriving show, ord]
  *)
 type msymbolic_value = symbolic_value [@@deriving show, ord]
 
-type region_id = RegionId.id [@@deriving show, ord]
-type region_id_set = RegionId.Set.t [@@deriving show, ord]
 type abstraction_id = AbstractionId.id [@@deriving show, ord]
 type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 

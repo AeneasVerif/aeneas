@@ -1624,7 +1624,7 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
         let rg = RegionGroupId.nth regions_hierarchy gid in
         let region_names =
           List.map
-            (fun rid -> (T.RegionVarId.nth sg.generics.regions rid).name)
+            (fun rid -> (T.BoundRegionId.nth sg.generics.regions rid).name)
             rg.regions
         in
         let name =

@@ -10,7 +10,7 @@ open ContextsBase
 open Errors
 
 (** Substitute regions at the binding level where we start to substitute *)
-let make_region_subst_from_fn (subst : RegionVarId.id -> region) :
+let make_region_subst_from_fn (subst : BoundRegionId.id -> region) :
     region -> region = function
   (* The DeBruijn index is kept correct wrt the start of the substituttion *)
   | RBVar (bdid, rid) when bdid = 0 -> subst rid
@@ -21,20 +21,20 @@ let make_region_subst_from_fn (subst : RegionVarId.id -> region) :
     Return the list of new regions and appropriate substitutions from the
     original region variables to the fresh regions.
     
-    TODO: simplify? we only need the subst [RegionVarId.id -> RegionId.id]
+    TODO: simplify? we only need the subst [BoundRegionId.id -> RegionId.id]
   *)
-let fresh_regions_with_substs (region_vars : RegionVarId.id list)
+let fresh_regions_with_substs (region_vars : BoundRegionId.id list)
     (fresh_region_id : unit -> region_id) :
-    RegionId.id RegionVarId.Map.t
-    * (RegionVarId.id -> RegionId.id)
+    RegionId.id BoundRegionId.Map.t
+    * (BoundRegionId.id -> RegionId.id)
     * (region -> region) =
   (* Map each region var id to a fresh region *)
   let rid_map =
-    RegionVarId.Map.of_list
+    BoundRegionId.Map.of_list
       (List.map (fun var -> (var, fresh_region_id ())) region_vars)
   in
   (* Generate the substitution from region var id to region *)
-  let rid_subst id = RegionVarId.Map.find id rid_map in
+  let rid_subst id = BoundRegionId.Map.find id rid_map in
   (* Generate the substitution from region to region *)
   let r_subst = make_region_subst_from_fn (fun id -> RFVar (rid_subst id)) in
   (* Return *)
@@ -42,8 +42,8 @@ let fresh_regions_with_substs (region_vars : RegionVarId.id list)
 
 let fresh_regions_with_substs_from_vars (region_vars : region_var list)
     (fresh_region_id : unit -> region_id) :
-    RegionId.id RegionVarId.Map.t
-    * (RegionVarId.id -> RegionId.id)
+    RegionId.id BoundRegionId.Map.t
+    * (BoundRegionId.id -> RegionId.id)
     * (region -> region) =
   fresh_regions_with_substs
     (List.map (fun (r : region_var) -> r.index) region_vars)
@@ -55,7 +55,7 @@ let fresh_regions_with_substs_from_vars (region_vars : region_var list)
     **IMPORTANT:** this function doesn't normalize the types.
  *)
 let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
-    (r_subst : RegionVarId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
+    (r_subst : BoundRegionId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
     (cg_subst : ConstGenericVarId.id -> const_generic)
     (tr_subst : TraitClauseId.id -> trait_instance_id)
     (tr_self : trait_instance_id) (sg : fun_sig)
