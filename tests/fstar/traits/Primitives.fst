@@ -556,6 +556,58 @@ let core_clone_CloneI128 : core_clone_Clone i128 = {
   clone = fun x -> Ok (core_clone_impls_CloneI128_clone x)
 }
 
+noeq type core_marker_Copy (self : Type0) = {
+  cloneCloneInst : core_clone_Clone self;
+}
+
+let core_marker_CopyU8 : core_marker_Copy u8 = {
+  cloneCloneInst = core_clone_CloneU8;
+}
+
+let core_marker_CopyU16 : core_marker_Copy u16 = {
+  cloneCloneInst = core_clone_CloneU16;
+}
+
+let core_marker_CopyU32 : core_marker_Copy u32 = {
+  cloneCloneInst = core_clone_CloneU32;
+}
+
+let core_marker_CopyU64 : core_marker_Copy u64 = {
+  cloneCloneInst = core_clone_CloneU64;
+}
+
+let core_marker_CopyU128 : core_marker_Copy u128 = {
+  cloneCloneInst = core_clone_CloneU128;
+}
+
+let core_marker_CopyUsize : core_marker_Copy usize = {
+  cloneCloneInst = core_clone_CloneUsize;
+}
+
+let core_marker_CopyI8 : core_marker_Copy i8 = {
+  cloneCloneInst = core_clone_CloneI8;
+}
+
+let core_marker_CopyI16 : core_marker_Copy i16 = {
+  cloneCloneInst = core_clone_CloneI16;
+}
+
+let core_marker_CopyI32 : core_marker_Copy i32 = {
+  cloneCloneInst = core_clone_CloneI32;
+}
+
+let core_marker_CopyI64 : core_marker_Copy i64 = {
+  cloneCloneInst = core_clone_CloneI64;
+}
+
+let core_marker_CopyI128 : core_marker_Copy i128 = {
+  cloneCloneInst = core_clone_CloneI128;
+}
+
+let core_marker_CopyIsize : core_marker_Copy isize = {
+  cloneCloneInst = core_clone_CloneIsize;
+}
+
 (** [core::option::{core::option::Option<T>}::unwrap] *)
 let core_option_Option_unwrap (#t : Type0) (x : option t) : result t =
   match x with

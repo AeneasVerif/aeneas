@@ -578,61 +578,60 @@ Definition core_clone_CloneBool : core_clone_Clone bool := {|
   clone := fun b => Ok (core_clone_impls_CloneBool_clone b)
 |}.
 
-Record core_marker_Copy_t (Self : Type) := mkcore_marker_Copy_t {
+Record core_marker_Copy (Self : Type) := mkcore_marker_Copy {
   coreCloneInst : core_clone_Clone Self;
 }.
 
-Arguments mkcore_marker_Copy_t { _ }.
+Arguments mkcore_marker_Copy { _ }.
 Arguments coreCloneInst { _ } _.
 
-Definition core_marker_CopyU8 : core_marker_Copy_t u8 := {|
+Definition core_marker_CopyU8 : core_marker_Copy u8 := {|
   coreCloneInst := core_clone_CloneU8;
 |}.
 
-Definition core_marker_CopyU16 : core_marker_Copy_t u16 := {|
+Definition core_marker_CopyU16 : core_marker_Copy u16 := {|
   coreCloneInst := core_clone_CloneU16;
 |}.
 
-Definition core_marker_CopyU32 : core_marker_Copy_t u32 := {|
+Definition core_marker_CopyU32 : core_marker_Copy u32 := {|
   coreCloneInst := core_clone_CloneU32;
 |}.
 
-Definition core_marker_CopyU64 : core_marker_Copy_t u64 := {|
+Definition core_marker_CopyU64 : core_marker_Copy u64 := {|
   coreCloneInst := core_clone_CloneU64;
 |}.
 
-Definition core_marker_CopyU128 : core_marker_Copy_t u128 := {|
+Definition core_marker_CopyU128 : core_marker_Copy u128 := {|
   coreCloneInst := core_clone_CloneU128;
 |}.
 
-Definition core_marker_CopyUsize : core_marker_Copy_t usize := {|
+Definition core_marker_CopyUsize : core_marker_Copy usize := {|
   coreCloneInst := core_clone_CloneUsize;
 |}.
 
-Definition core_marker_CopyI8 : core_marker_Copy_t i8 := {|
+Definition core_marker_CopyI8 : core_marker_Copy i8 := {|
   coreCloneInst := core_clone_CloneI8;
 |}.
 
-Definition core_marker_CopyI16 : core_marker_Copy_t i16 := {|
+Definition core_marker_CopyI16 : core_marker_Copy i16 := {|
   coreCloneInst := core_clone_CloneI16;
 |}.
 
-Definition core_marker_CopyI32 : core_marker_Copy_t i32 := {|
+Definition core_marker_CopyI32 : core_marker_Copy i32 := {|
   coreCloneInst := core_clone_CloneI32;
 |}.
 
-Definition core_marker_CopyI64 : core_marker_Copy_t i64 := {|
+Definition core_marker_CopyI64 : core_marker_Copy i64 := {|
   coreCloneInst := core_clone_CloneI64;
 |}.
 
-Definition core_marker_CopyI128 : core_marker_Copy_t i128 := {|
+Definition core_marker_CopyI128 : core_marker_Copy i128 := {|
   coreCloneInst := core_clone_CloneI128;
 |}.
 
-Definition core_marker_CopyIsize : core_marker_Copy_t isize := {|
+Definition core_marker_CopyIsize : core_marker_Copy isize := {|
   coreCloneInst := core_clone_CloneIsize;
 |}.
-
 
 (** [core::option::{core::option::Option<T>}::unwrap] *)
 Definition core_option_Option_unwrap {T : Type} (x : option T) : result T :=
