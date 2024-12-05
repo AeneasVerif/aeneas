@@ -1,5 +1,4 @@
 import Base.Extensions
-import Aesop
 open Lean
 
 /-!

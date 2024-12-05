@@ -1,4 +1,5 @@
 import Base.Arith.Scalar
+import Mathlib.Tactic.Ring.RingNF
 
 namespace Arith
 
