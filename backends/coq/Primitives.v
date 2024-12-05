@@ -510,12 +510,6 @@ Record core_clone_Clone (self : Type) := {
   clone : self -> result self
 }.
 
-Definition core_clone_impls_CloneBool_clone (b : bool) : bool := b.
-
-Definition core_clone_CloneBool : core_clone_Clone bool := {|
-  clone := fun b => Ok (core_clone_impls_CloneBool_clone b)
-|}.
-
 Definition core_clone_impls_CloneUsize_clone (x : usize) : usize := x.
 Definition core_clone_impls_CloneU8_clone (x : u8) : u8 := x.
 Definition core_clone_impls_CloneU16_clone (x : u16) : u16 := x.
@@ -577,6 +571,68 @@ Definition core_clone_CloneI64 : core_clone_Clone i64 := {|
 Definition core_clone_CloneI128 : core_clone_Clone i128 := {|
   clone := fun x => Ok (core_clone_impls_CloneI128_clone x)
 |}.
+
+Definition core_clone_impls_CloneBool_clone (b : bool) : bool := b.
+
+Definition core_clone_CloneBool : core_clone_Clone bool := {|
+  clone := fun b => Ok (core_clone_impls_CloneBool_clone b)
+|}.
+
+Record core_marker_Copy_t (Self : Type) := mkcore_marker_Copy_t {
+  coreCloneInst : core_clone_Clone Self;
+}.
+
+Arguments mkcore_marker_Copy_t { _ }.
+Arguments coreCloneInst { _ } _.
+
+Definition core_marker_CopyU8 : core_marker_Copy_t u8 := {|
+  coreCloneInst := core_clone_CloneU8;
+|}.
+
+Definition core_marker_CopyU16 : core_marker_Copy_t u16 := {|
+  coreCloneInst := core_clone_CloneU16;
+|}.
+
+Definition core_marker_CopyU32 : core_marker_Copy_t u32 := {|
+  coreCloneInst := core_clone_CloneU32;
+|}.
+
+Definition core_marker_CopyU64 : core_marker_Copy_t u64 := {|
+  coreCloneInst := core_clone_CloneU64;
+|}.
+
+Definition core_marker_CopyU128 : core_marker_Copy_t u128 := {|
+  coreCloneInst := core_clone_CloneU128;
+|}.
+
+Definition core_marker_CopyUsize : core_marker_Copy_t usize := {|
+  coreCloneInst := core_clone_CloneUsize;
+|}.
+
+Definition core_marker_CopyI8 : core_marker_Copy_t i8 := {|
+  coreCloneInst := core_clone_CloneI8;
+|}.
+
+Definition core_marker_CopyI16 : core_marker_Copy_t i16 := {|
+  coreCloneInst := core_clone_CloneI16;
+|}.
+
+Definition core_marker_CopyI32 : core_marker_Copy_t i32 := {|
+  coreCloneInst := core_clone_CloneI32;
+|}.
+
+Definition core_marker_CopyI64 : core_marker_Copy_t i64 := {|
+  coreCloneInst := core_clone_CloneI64;
+|}.
+
+Definition core_marker_CopyI128 : core_marker_Copy_t i128 := {|
+  coreCloneInst := core_clone_CloneI128;
+|}.
+
+Definition core_marker_CopyIsize : core_marker_Copy_t isize := {|
+  coreCloneInst := core_clone_CloneIsize;
+|}.
+
 
 (** [core::option::{core::option::Option<T>}::unwrap] *)
 Definition core_option_Option_unwrap {T : Type} (x : option T) : result T :=
