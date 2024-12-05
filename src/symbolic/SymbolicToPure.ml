@@ -1181,9 +1181,15 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     (* For now we don't support nested borrows, so we check that there
        aren't parent regions *)
     let parents = list_ancestor_region_groups regions_hierarchy gid in
-    cassert_opt_span __FILE__ __LINE__
+    classert_opt_span __FILE__ __LINE__
       (T.RegionGroupId.Set.is_empty parents)
-      span "Nested borrows are not supported yet";
+      span
+      (lazy
+        (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+         "Nested borrows are not supported yet (found in the signature of: "
+         ^ Charon.PrintExpressions.fun_id_or_trait_method_ref_to_string ctx
+             fun_id
+         ^ ")"));
     (* For now, we don't allow nested borrows, so the additional inputs to the
        backward function can only come from borrows that were returned like
        in (for the backward function we introduce for 'a):

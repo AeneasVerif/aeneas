@@ -2206,6 +2206,16 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
             (c.clause_id, name))
           trait_decl.parent_clauses
     | Some info ->
+        cassert __FILE__ __LINE__
+          (List.length trait_decl.parent_clauses
+          = List.length info.parent_clauses)
+          trait_decl.item_meta.span
+          ("Invalid builtin information for trait decl: "
+          ^ name_to_string ctx trait_decl.item_meta.name
+          ^ "; expected "
+          ^ string_of_int (List.length trait_decl.parent_clauses)
+          ^ " parent clauses, found "
+          ^ string_of_int (List.length info.parent_clauses));
         List.map
           (fun (c, name) -> (c.clause_id, name))
           (List.combine trait_decl.parent_clauses info.parent_clauses)
@@ -2306,8 +2316,15 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         let compute_item_name (item_name : string) (id : fun_decl_id) :
             string * string =
           let trans : pure_fun_translation =
-            FunDeclId.Map.find id ctx.trans_funs
+            match FunDeclId.Map.find_opt id ctx.trans_funs with
+            | Some decl -> decl
+            | None ->
+                craise __FILE__ __LINE__ trait_decl.item_meta.span
+                  ("Unexpected error: could not find the declaration for \
+                    method " ^ item_name ^ " for trait declaration "
+                  ^ name_to_string ctx trait_decl.item_meta.name)
           in
+
           let f = trans.f in
           (* We do something special to reuse the [ctx_compute_fun_decl]
              function. TODO: make it cleaner. *)
@@ -2425,7 +2442,9 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl.provided_methods = [])
     trait_impl.item_meta.span
     ("Overriding trait provided methods in trait implementations is not \
-      supported yet (overriden methods: "
+      supported yet (trait impl: "
+    ^ name_to_string ctx trait_impl.item_meta.name
+    ^ ", overriden methods: "
     ^ String.concat ", " (List.map fst trait_impl.provided_methods)
     ^ ")");
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*

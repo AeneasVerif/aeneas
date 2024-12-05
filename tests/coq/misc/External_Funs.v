@@ -12,13 +12,6 @@ Require Import External_FunsExternal.
 Include External_FunsExternal.
 Module External_Funs.
 
-(** Trait implementation: [core::marker::{core::marker::Copy for u32}#40]
-    Source: '/rustc/library/core/src/marker.rs', lines 48:25-48:62
-    Name pattern: core::marker::Copy<u32> *)
-Definition core_marker_CopyU32 : core_marker_Copy_t u32 := {|
-  core_marker_Copy_tcore_marker_Copy_t_cloneCloneInst := core_clone_CloneU32;
-|}.
-
 (** [external::use_get]:
     Source: 'tests/src/external.rs', lines 9:0-11:1 *)
 Definition use_get

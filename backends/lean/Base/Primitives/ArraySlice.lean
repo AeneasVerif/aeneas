@@ -577,4 +577,12 @@ def core.slice.index.SliceIndexUsizeSliceTInst (T : Type) :
   index_mut := core.slice.index.Usize.index_mut
 }
 
+def core.slice.Slice.copy_from_slice {T : Type} (_ : core.marker.Copy T)
+  (s : Slice T) (src: Slice T) : Result (Slice T) :=
+  if s.len = src.len then ok src
+  else fail panic
+
+/- [core::array::TryFromSliceError] -/
+def core.array.TryFromSliceError := ()
+
 end Primitives

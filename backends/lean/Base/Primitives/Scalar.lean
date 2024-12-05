@@ -958,6 +958,66 @@ def core.clone.CloneI128 : core.clone.Clone I128 := {
   clone := fun x => ok (core.clone.impls.CloneI128.clone x)
 }
 
+@[reducible]
+def core.marker.CopyU8 : core.marker.Copy U8 := {
+  cloneInst := core.clone.CloneU8
+}
+
+@[reducible]
+def core.marker.CopyU16 : core.marker.Copy U16 := {
+  cloneInst := core.clone.CloneU16
+}
+
+@[reducible]
+def core.marker.CopyU32 : core.marker.Copy U32 := {
+  cloneInst := core.clone.CloneU32
+}
+
+@[reducible]
+def core.marker.CopyU64 : core.marker.Copy U64 := {
+  cloneInst := core.clone.CloneU64
+}
+
+@[reducible]
+def core.marker.CopyU128 : core.marker.Copy U128 := {
+  cloneInst := core.clone.CloneU128
+}
+
+@[reducible]
+def core.marker.CopyUsize : core.marker.Copy Usize := {
+  cloneInst := core.clone.CloneUsize
+}
+
+@[reducible]
+def core.marker.CopyI8 : core.marker.Copy I8 := {
+  cloneInst := core.clone.CloneI8
+}
+
+@[reducible]
+def core.marker.CopyI16 : core.marker.Copy I16 := {
+  cloneInst := core.clone.CloneI16
+}
+
+@[reducible]
+def core.marker.CopyI32 : core.marker.Copy I32 := {
+  cloneInst := core.clone.CloneI32
+}
+
+@[reducible]
+def core.marker.CopyI64 : core.marker.Copy I64 := {
+  cloneInst := core.clone.CloneI64
+}
+
+@[reducible]
+def core.marker.CopyI128 : core.marker.Copy I128 := {
+  cloneInst := core.clone.CloneI128
+}
+
+@[reducible]
+def core.marker.CopyIsize : core.marker.Copy Isize := {
+  cloneInst := core.clone.CloneIsize
+}
+
 -- This is easier defined this way than with the modulo operation (because of the
 -- unsigned cases).
 def int_overflowing_add (ty : ScalarTy) (x y : Int) : Int × Bool :=

@@ -518,13 +518,6 @@ structure Foo (T : Type) (U : Type) where
   x : T
   y : U
 
-/- [core::result::Result]
-   Source: '/rustc/library/core/src/result.rs', lines 527:0-527:21
-   Name pattern: core::result::Result -/
-inductive core.result.Result (T : Type) (E : Type) :=
-| Ok : T → core.result.Result T E
-| Err : E → core.result.Result T E
-
 /- [traits::{traits::Foo<T, U>}#16::FOO]
    Source: 'tests/src/traits.rs', lines 334:4-334:43 -/
 def Foo.FOO_body {T : Type} (U : Type) (TraitInst : Trait T)

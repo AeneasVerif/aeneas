@@ -92,7 +92,6 @@ module Sig = struct
       is_closure = false;
       closure_info = None;
       generics;
-      parent_params_info = None;
       inputs;
       output;
     }

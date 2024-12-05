@@ -780,10 +780,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     (lazy
                       ("provided method call:" ^ "\n- method name: "
                      ^ method_name ^ "\n- all_generics:\n"
-                      ^ generic_args_to_string ctx all_generics
-                      ^ "\n- parent params info: "
-                      ^ Print.option_to_string show_params_info
-                          method_def.signature.parent_params_info));
+                      ^ generic_args_to_string ctx all_generics));
                   let regions_hierarchy =
                     LlbcAstUtils.FunIdMap.find (FRegular method_id)
                       ctx.fun_ctx.regions_hierarchies

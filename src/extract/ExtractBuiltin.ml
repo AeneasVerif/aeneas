@@ -134,8 +134,7 @@ type builtin_type_info = {
 type type_variant_kind =
   | KOpaque
   | KStruct of (string * string) list
-  (* TODO: handle the tuple case *)
-  | KEnum (* TODO *)
+  | KEnum of string list
 
 let mk_struct_constructor (type_name : string) : string =
   let prefix =
@@ -182,7 +181,24 @@ let builtin_types () : builtin_type_info list =
           in
           let constructor = mk_struct_constructor extract_name in
           Some (Struct (constructor, fields))
-      | KEnum -> raise (Failure "TODO")
+      | KEnum variants ->
+          let variants =
+            List.map
+              (fun variant ->
+                let extract_variant_name =
+                  match backend () with
+                  | FStar | Coq -> extract_name ^ "_" ^ variant
+                  | Lean -> extract_name ^ "." ^ variant
+                  | HOL4 -> extract_name ^ variant
+                in
+                {
+                  rust_variant_name = variant;
+                  extract_variant_name;
+                  fields = None;
+                })
+              variants
+          in
+          Some (Enum variants)
     in
     { rust_name; extract_name; keep_params; body_info }
   in
@@ -237,6 +253,13 @@ let builtin_types () : builtin_type_info list =
              ]);
     };
   ]
+  @ mk_lean_only
+      [
+        mk_type "core::fmt::Formatter" ();
+        mk_type "core::result::Result" ~kind:(KEnum [ "Ok"; "Err" ]) ();
+        mk_type "core::fmt::Error" ();
+        mk_type "core::array::TryFromSliceError" ();
+      ]
 
 let mk_builtin_types_map () =
   NameMatcherMap.of_list
@@ -490,6 +513,18 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       (fun ty ->
         "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".to_be_bytes")
       ~can_fail:false ()
+  (* from_le_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::from_le_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_le_bytes")
+      ~can_fail:false ()
+  (* from_be_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::from_be_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_be_bytes")
+      ~can_fail:false ()
   (* Clone<bool> *)
   @ [
       mk_fun "core::clone::impls::{core::clone::Clone<bool>}::clone"
@@ -512,13 +547,23 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
            ();
          mk_fun "core::mem::swap" ~can_fail:false ();
          mk_fun "core::option::{core::option::Option<@T>}::take"
-           ~extract_name:(Some (backend_choice "" "core::option::Option::take"))
+           ~extract_name:
+             (backend_choice None (Some "core::option::Option::take"))
            ~can_fail:false ();
          mk_fun "core::option::{core::option::Option<@T>}::is_none"
            ~extract_name:
-             (Some (backend_choice "" "core::option::Option::is_none"))
+             (backend_choice None (Some "core::option::Option::is_none"))
            ~can_fail:false ();
          mk_fun "core::clone::Clone::clone_from" ();
+         (* Into<T, U: From<T>> *)
+         mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
+           ~extract_name:(Some "core.convert.IntoFrom.into") ();
+         (* From<T, T> *)
+         mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
+           ~can_fail:false ~extract_name:(Some "core.convert.FromSame.from_") ();
+         (* [core::slice::{@Slice<T>}::copy_from_slice] *)
+         mk_fun "core::slice::{[@T]}::copy_from_slice" ();
+         mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap" ();
        ]
       @ List.map
           (fun ty ->
@@ -676,7 +721,19 @@ let builtin_trait_decls_info () =
       ();
     (* Clone *)
     mk_trait "core::clone::Clone" ~methods:[ "clone" ] ();
+    (* Copy *)
+    mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
   ]
+  @ mk_lean_only
+      [
+        (* Into *)
+        mk_trait "core::convert::Into" ~types:[ "T"; "U" ] ~methods:[ "into" ]
+          ();
+        (* Debug *)
+        mk_trait "core::fmt::Debug" ~types:[ "T" ] ~methods:[ "fmt" ] ();
+        mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
+        mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
+      ]
 
 let mk_builtin_trait_decls_map () =
   NameMatcherMap.of_list
@@ -758,6 +815,18 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
       ~filter:(Some [ true; false ])
       ();
   ]
+  @ mk_lean_only
+      [
+        (* Into<T, U: From<T>> *)
+        fmt "core::convert::Into<@Self, @T>"
+          ~extract_name:(Some "core::convert::IntoFrom") ();
+        (* From<T, T> *)
+        fmt "core::convert::From<@Self, @Self>"
+          ~extract_name:(Some "core::convert::FromSame") ();
+        (* TryInto<T, U : TryFrom<T>> *)
+        fmt "core::convert::{core::convert::TryInto<@T, @U>}"
+          ~extract_name:(Some "core::convert::TryIntoFrom") ();
+      ]
   (* From<INT, bool> *)
   @ List.map
       (fun ty ->
@@ -789,6 +858,15 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
           ("core::clone::Clone<" ^ ty ^ ">")
           ~extract_name:
             (Some ("core.clone.Clone" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* Copy<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::marker::Copy<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.marker.Copy" ^ StringUtils.capitalize_first_letter ty))
           ())
       all_int_names
 
