@@ -13,7 +13,7 @@ open Errors
 let make_region_subst_from_fn (subst : BoundRegionId.id -> region) :
     region -> region = function
   (* The DeBruijn index is kept correct wrt the start of the substituttion *)
-  | RBVar (bdid, rid) when bdid = 0 -> subst rid
+  | RVar (Bound (bdid, rid)) when bdid = 0 -> subst rid
   | r -> r
 
 (** Generate fresh regions for region variables.
@@ -36,7 +36,9 @@ let fresh_regions_with_substs (region_vars : BoundRegionId.id list)
   (* Generate the substitution from region var id to region *)
   let rid_subst id = BoundRegionId.Map.find id rid_map in
   (* Generate the substitution from region to region *)
-  let r_subst = make_region_subst_from_fn (fun id -> RFVar (rid_subst id)) in
+  let r_subst =
+    make_region_subst_from_fn (fun id -> RVar (Free (rid_subst id)))
+  in
   (* Return *)
   (rid_map, rid_subst, r_subst)
 
@@ -60,7 +62,9 @@ let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
     (tr_subst : TraitClauseId.id -> trait_instance_id)
     (tr_self : trait_instance_id) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
-  let r_subst' = make_region_subst_from_fn (fun id -> RFVar (r_subst id)) in
+  let r_subst' =
+    make_region_subst_from_fn (fun id -> RVar (Free (r_subst id)))
+  in
   let subst = { r_subst = r_subst'; ty_subst; cg_subst; tr_subst; tr_self } in
   let inputs = List.map (ty_substitute subst) sg.inputs in
   let output = ty_substitute subst sg.output in

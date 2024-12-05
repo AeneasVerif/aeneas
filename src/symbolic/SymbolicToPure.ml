@@ -1170,9 +1170,9 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
       | T.RStatic -> craise_opt_span __FILE__ __LINE__ span "Unimplemented"
       | RErased ->
           craise_opt_span __FILE__ __LINE__ span "Unexpected erased region"
-      | RBVar _ ->
+      | RVar (Bound _) ->
           craise_opt_span __FILE__ __LINE__ span "Unexpected bound region"
-      | RFVar rid -> T.RegionId.Set.mem rid gr_regions
+      | RVar (Free rid) -> T.RegionId.Set.mem rid gr_regions
     in
     let inside_mut = false in
     translate_back_ty span type_infos keep_region inside_mut ty

@@ -146,10 +146,10 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
   in
   let update_mut_regions mut_regions mut_region =
     match mut_region with
-    | RStatic | RBVar _ ->
+    | RStatic | RVar (Bound _) ->
         mut_regions (* We can have bound vars because of arrows *)
     | RErased -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
-    | RFVar rid -> update_mut_regions_with_rid mut_regions rid
+    | RVar (Free rid) -> update_mut_regions_with_rid mut_regions rid
   in
 
   (* Update a partial_type_info, while registering if we actually performed an update *)
@@ -336,15 +336,17 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             (fun mut_regions (adt_rid, r) ->
               (* Check if the region is a variable and is used for mutable borrows *)
               match r with
-              | RStatic | RBVar _ | RErased -> mut_regions
+              | RStatic | RVar (Bound _) | RErased -> mut_regions
               (* We can have bound vars because of arrows, and erased regions
                  when analyzing types appearing in function bodies *)
-              | RFVar rid ->
+              | RVar (Free rid) ->
                   if BoundRegionId.Set.mem adt_rid adt_info.mut_regions then
                     update_mut_regions_with_rid mut_regions rid
                   else mut_regions)
             ty_info.mut_regions
-            (BoundRegionId.mapi (fun adt_rid r -> (adt_rid, r)) generics.regions)
+            (BoundRegionId.mapi
+               (fun adt_rid r -> (adt_rid, r))
+               generics.regions)
         in
         (* Return *)
         { ty_info with mut_regions }

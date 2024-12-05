@@ -520,7 +520,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       (* Update the type of the shared loan to use the fresh region *)
       let _, bv_ty, kind = ty_as_ref ty in
-      let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
+      let borrow_ty = mk_ref_ty (RVar (Free rid)) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (pm : proj_marker) (bid : borrow_id) : typed_avalue =
@@ -633,7 +633,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let bv_ty = bv.ty in
         cassert __FILE__ __LINE__ (ty_no_regions bv_ty) span
           "Nested borrows are not supported yet";
-        let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
+        let borrow_ty = mk_ref_ty (RVar (Free rid)) bv_ty kind in
 
         let borrow_av =
           let ty = borrow_ty in
@@ -685,7 +685,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let _, bv_ty, kind = ty_as_ref ty in
       let sv = mk_fresh_symbolic_typed_value_from_no_regions_ty span bv_ty in
 
-      let borrow_ty = mk_ref_ty (RFVar rid) bv_ty kind in
+      let borrow_ty = mk_ref_ty (RVar (Free rid)) bv_ty kind in
 
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (pm : proj_marker) (bid : borrow_id) (bv : typed_value) :
@@ -1110,9 +1110,9 @@ struct
     let match_regions r0 r1 =
       match (r0, r1) with
       | RStatic, RStatic -> r1
-      | RFVar rid0, RFVar rid1 ->
+      | RVar (Free rid0), RVar (Free rid1) ->
           let rid = match_rid rid0 rid1 in
-          RFVar rid
+          RVar (Free rid)
       | _ -> raise (Distinct "match_rtys")
     in
     match_types span ctx0 ctx1 match_distinct_types match_regions ty0 ty1

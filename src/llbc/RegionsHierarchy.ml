@@ -100,7 +100,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     let m =
       List.map
         (fun (r : region_var) ->
-          (RFVar (bound_regions_id_subst r.index), s_set))
+          (RVar (Free (bound_regions_id_subst r.index)), s_set))
         sg.generics.regions
     in
     let s = (RStatic, RegionSet.empty) in
@@ -113,7 +113,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     sanity_check_opt_span __FILE__ __LINE__ (long <> RErased) span;
     (* Ignore the locally bound regions (at the level of arrow types for instance *)
     match (short, long) with
-    | RBVar _, _ | _, RBVar _ -> ()
+    | RVar (Bound _), _ | _, RVar (Bound _) -> ()
     | _, _ ->
         let m = !g in
         let s = RegionMap.find short !g in
@@ -302,7 +302,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
         List.map
           (fun r ->
             match r with
-            | RFVar rid -> RegionId.Map.find rid region_id_to_var_map
+            | RVar (Free rid) -> RegionId.Map.find rid region_id_to_var_map
             | _ -> craise __FILE__ __LINE__ (Option.get span) "Unreachable")
           scc
       in

@@ -92,8 +92,8 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
               let info = TypeDeclId.Map.find adt_id infos in
               BoundRegionId.iteri
                 (fun adt_rid r ->
-                  if BoundRegionId.Set.mem adt_rid info.mut_regions && pred r then
-                    raise Found
+                  if BoundRegionId.Set.mem adt_rid info.mut_regions && pred r
+                  then raise Found
                   else ())
                 generics.regions
         end;
@@ -112,8 +112,8 @@ let raise_if_not_rty_visitor =
 
     method! visit_region _ r =
       match r with
-      | RBVar _ | RErased -> raise Found
-      | RStatic | RFVar _ -> ()
+      | RVar (Bound _) | RErased -> raise Found
+      | RStatic | RVar (Free _) -> ()
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased
@@ -131,7 +131,7 @@ let raise_if_not_erased_ty_visitor =
 
     method! visit_region _ r =
       match r with
-      | RStatic | RBVar _ | RFVar _ -> raise Found
+      | RStatic | RVar _ -> raise Found
       | RErased -> ()
   end
 
