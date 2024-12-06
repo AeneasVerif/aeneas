@@ -88,11 +88,11 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     Subst.fresh_regions_with_substs_from_vars sg.generics.regions
       (snd (RegionId.fresh_stateful_generator ()))
   in
-  let region_id_to_var_map : RegionVarId.id RegionId.Map.t =
+  let region_id_to_var_map : BoundRegionId.id RegionId.Map.t =
     RegionId.Map.of_list
       (List.map
          (fun (var_id, id) -> (id, var_id))
-         (RegionVarId.Map.bindings region_var_to_id_map))
+         (BoundRegionId.Map.bindings region_var_to_id_map))
   in
   let subst = { Subst.empty_subst with r_subst = bound_regions_subst } in
   let g : RegionSet.t RegionMap.t ref =
@@ -100,7 +100,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     let m =
       List.map
         (fun (r : region_var) ->
-          (RFVar (bound_regions_id_subst r.index), s_set))
+          (RVar (Free (bound_regions_id_subst r.index)), s_set))
         sg.generics.regions
     in
     let s = (RStatic, RegionSet.empty) in
@@ -113,7 +113,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     sanity_check_opt_span __FILE__ __LINE__ (long <> RErased) span;
     (* Ignore the locally bound regions (at the level of arrow types for instance *)
     match (short, long) with
-    | RBVar _, _ | _, RBVar _ -> ()
+    | RVar (Bound _), _ | _, RVar (Bound _) -> ()
     | _, _ ->
         let m = !g in
         let s = RegionMap.find short !g in
@@ -196,11 +196,13 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
           span;
         (* We have nothing to do *)
         ()
-    | TArrow (regions, inputs, output) ->
+    | TArrow binder ->
         (* TODO: *)
-        cassert_opt_span __FILE__ __LINE__ (regions = []) span
-          "We don't support arrow types with locally quantified regions";
+        cassert_opt_span __FILE__ __LINE__
+          (binder.binder_regions = [])
+          span "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
+        let inputs, output = binder.binder_value in
         List.iter (explore_ty []) (output :: inputs)
     | TDynTrait _ ->
         craise_opt_span __FILE__ __LINE__ span
@@ -296,11 +298,11 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
       let id = RegionGroupId.of_int i in
 
       (* Retrieve the set of regions in the group *)
-      let regions : RegionVarId.id list =
+      let regions : BoundRegionId.id list =
         List.map
           (fun r ->
             match r with
-            | RFVar rid -> RegionId.Map.find rid region_id_to_var_map
+            | RVar (Free rid) -> RegionId.Map.find rid region_id_to_var_map
             | _ -> craise __FILE__ __LINE__ (Option.get span) "Unreachable")
           scc
       in

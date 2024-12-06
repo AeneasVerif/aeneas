@@ -1170,9 +1170,9 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
       | T.RStatic -> craise_opt_span __FILE__ __LINE__ span "Unimplemented"
       | RErased ->
           craise_opt_span __FILE__ __LINE__ span "Unexpected erased region"
-      | RBVar _ ->
+      | RVar (Bound _) ->
           craise_opt_span __FILE__ __LINE__ span "Unexpected bound region"
-      | RFVar rid -> T.RegionId.Set.mem rid gr_regions
+      | RVar (Free rid) -> T.RegionId.Set.mem rid gr_regions
     in
     let inside_mut = false in
     translate_back_ty span type_infos keep_region inside_mut ty
@@ -1624,7 +1624,7 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
         let rg = RegionGroupId.nth regions_hierarchy gid in
         let region_names =
           List.map
-            (fun rid -> (T.RegionVarId.nth sg.generics.regions rid).name)
+            (fun rid -> (T.BoundRegionId.nth sg.generics.regions rid).name)
             rg.regions
         in
         let name =
@@ -3920,7 +3920,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         List.map
           (fun (c : trait_clause) ->
             let trait_decl_ref =
-              { trait_decl_id = c.trait_id; decl_generics = empty_generic_args }
+              { trait_decl_id = c.trait_id; decl_generics = c.generics }
             in
             { trait_id = Clause c.clause_id; trait_decl_ref })
           trait_clauses

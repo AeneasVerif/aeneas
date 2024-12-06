@@ -25,6 +25,11 @@ class ['self] iter_typed_value_base =
   object (self : 'self)
     inherit [_] iter_ty
 
+    (** Rename the charon name for consistency *)
+    method! visit_free_region_id env id = self#visit_region_id env id
+
+    method visit_region_id _ _ = ()
+
     method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
       fun _ _ -> ()
 
@@ -43,6 +48,11 @@ class ['self] iter_typed_value_base =
 class ['self] map_typed_value_base =
   object (self : 'self)
     inherit [_] map_ty
+
+    (** Rename the charon name for consistency *)
+    method! visit_free_region_id env id = self#visit_region_id env id
+
+    method visit_region_id _ id = id
 
     method visit_symbolic_value_id
         : 'env -> symbolic_value_id -> symbolic_value_id =
@@ -171,8 +181,6 @@ type mvalue = typed_value [@@deriving show, ord]
  *)
 type msymbolic_value = symbolic_value [@@deriving show, ord]
 
-type region_id = RegionId.id [@@deriving show, ord]
-type region_id_set = RegionId.Set.t [@@deriving show, ord]
 type abstraction_id = AbstractionId.id [@@deriving show, ord]
 type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 

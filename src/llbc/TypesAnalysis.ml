@@ -35,7 +35,7 @@ type 'p g_type_info = {
       (** If true, it means the type is a record that we should extract as a tuple.
           This field is only valid for type declarations.
       *)
-  mut_regions : RegionVarId.Set.t;
+  mut_regions : BoundRegionId.Set.t;
       (** The set of regions used in mutable borrows *)
 }
 [@@deriving show]
@@ -83,7 +83,7 @@ let initialize_g_type_info (is_tuple_struct : bool) (param_infos : 'p) :
     borrows_info = type_borrows_info_init;
     is_tuple_struct;
     param_infos;
-    mut_regions = RegionVarId.Set.empty;
+    mut_regions = BoundRegionId.Set.empty;
   }
 
 let initialize_type_decl_info (is_rec : bool) (def : type_decl) : type_decl_info
@@ -138,18 +138,18 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
   in
   let r_is_static (r : region) : bool = r = RStatic in
   let update_mut_regions_with_rid mut_regions rid =
-    let rid = RegionVarId.of_int (RegionId.to_int rid) in
-    if RegionVarId.Set.mem rid mut_regions then ty_info.mut_regions
+    let rid = BoundRegionId.of_int (RegionId.to_int rid) in
+    if BoundRegionId.Set.mem rid mut_regions then ty_info.mut_regions
     else (
       updated := true;
-      RegionVarId.Set.add rid mut_regions)
+      BoundRegionId.Set.add rid mut_regions)
   in
   let update_mut_regions mut_regions mut_region =
     match mut_region with
-    | RStatic | RBVar _ ->
+    | RStatic | RVar (Bound _) ->
         mut_regions (* We can have bound vars because of arrows *)
     | RErased -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
-    | RFVar rid -> update_mut_regions_with_rid mut_regions rid
+    | RVar (Free rid) -> update_mut_regions_with_rid mut_regions rid
   in
 
   (* Update a partial_type_info, while registering if we actually performed an update *)
@@ -336,19 +336,22 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             (fun mut_regions (adt_rid, r) ->
               (* Check if the region is a variable and is used for mutable borrows *)
               match r with
-              | RStatic | RBVar _ | RErased -> mut_regions
+              | RStatic | RVar (Bound _) | RErased -> mut_regions
               (* We can have bound vars because of arrows, and erased regions
                  when analyzing types appearing in function bodies *)
-              | RFVar rid ->
-                  if RegionVarId.Set.mem adt_rid adt_info.mut_regions then
+              | RVar (Free rid) ->
+                  if BoundRegionId.Set.mem adt_rid adt_info.mut_regions then
                     update_mut_regions_with_rid mut_regions rid
                   else mut_regions)
             ty_info.mut_regions
-            (RegionVarId.mapi (fun adt_rid r -> (adt_rid, r)) generics.regions)
+            (BoundRegionId.mapi
+               (fun adt_rid r -> (adt_rid, r))
+               generics.regions)
         in
         (* Return *)
         { ty_info with mut_regions }
-    | TArrow (_regions, inputs, output) ->
+    | TArrow binder ->
+        let inputs, output = binder.binder_value in
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left

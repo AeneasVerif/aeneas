@@ -221,13 +221,14 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
   | TRawPtr (ty, rkind) ->
       let ty = norm_ctx_normalize_ty ctx ty in
       TRawPtr (ty, rkind)
-  | TArrow (regions, inputs, output) ->
+  | TArrow binder ->
       (* TODO: for now it works because we don't support predicates with
          bound regions. If we do support them, we probably need to do
          something smarter here. *)
+      let { binder_regions; binder_value = inputs, output } = binder in
       let inputs = List.map (norm_ctx_normalize_ty ctx) inputs in
       let output = norm_ctx_normalize_ty ctx output in
-      TArrow (regions, inputs, output)
+      TArrow { binder_regions; binder_value = (inputs, output) }
   | TTraitType (trait_ref, type_name) -> (
       log#ldebug
         (lazy
@@ -512,7 +513,7 @@ let ctx_adt_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
 (** Same as [substitute_signature] but normalizes the types *)
 let ctx_subst_norm_signature (span : Meta.span) (ctx : eval_ctx)
     (asubst : RegionGroupId.id -> AbstractionId.id)
-    (r_subst : RegionVarId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
+    (r_subst : BoundRegionId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
     (cg_subst : ConstGenericVarId.id -> const_generic)
     (tr_subst : TraitClauseId.id -> trait_instance_id)
     (tr_self : trait_instance_id) (sg : fun_sig)

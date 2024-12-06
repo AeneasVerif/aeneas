@@ -231,7 +231,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     let child_av = mk_aignored span child_rty None in
 
     (* Create the shared loan *)
-    let loan_rty = TRef (RFVar nrid, rty, RShared) in
+    let loan_rty = TRef (RVar (Free nrid), rty, RShared) in
     let loan_value =
       ALoan (ASharedLoan (PNone, BorrowId.Set.singleton nlid, nsv, child_av))
     in

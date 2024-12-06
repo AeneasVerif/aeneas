@@ -1813,7 +1813,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                 let ty =
                   (* Take the first region of the abstraction - this doesn't really matter *)
                   let r = RegionId.Set.min_elt abs0.regions in
-                  TRef (RFVar r, ty, RShared)
+                  TRef (RVar (Free r), ty, RShared)
                 in
                 { value; ty }
               in
@@ -1935,7 +1935,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         | VSharedBorrow bid ->
             cassert __FILE__ __LINE__ (ty_no_regions ref_ty) span
               "Nested borrows are not supported yet";
-            let ty = TRef (RFVar r_id, ref_ty, kind) in
+            let ty = TRef (RVar (Free r_id), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid)) in
             ([ { value; ty } ], v)
         | VMutBorrow (bid, bv) ->
@@ -1945,7 +1945,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               (not (value_has_borrows (Some span) ctx bv.value))
               span "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
-            let ty = TRef (RFVar r_id, ref_ty, kind) in
+            let ty = TRef (RVar (Free r_id), ref_ty, kind) in
             let ignored = mk_aignored span ref_ty None in
             let av = ABorrow (AMutBorrow (PNone, bid, ignored)) in
             let av = { value = av; ty } in
@@ -1971,7 +1971,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty None in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
-            let ty = mk_ref_ty (RFVar r_id) ty RShared in
+            let ty = mk_ref_ty (RVar (Free r_id)) ty RShared in
             (* Rem.: the shared value might contain loans *)
             let avl, sv = to_avalues false true true r_id sv in
             let av = ALoan (ASharedLoan (PNone, bids, sv, ignored)) in
@@ -1991,7 +1991,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
-            let ty = mk_ref_ty (RFVar r_id) ty RMut in
+            let ty = mk_ref_ty (RVar (Free r_id)) ty RMut in
             let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
             let av = { value = av; ty } in
             ([ av ], v))
