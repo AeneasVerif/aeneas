@@ -9,6 +9,13 @@ open LlbcAst
 open ContextsBase
 open Errors
 
+(* Fails if the variable is bound *)
+let expect_free_var span (var : ('b, 'f) de_bruijn_var) : 'f =
+  match var with
+  | Bound _ ->
+      craise_opt_span __FILE__ __LINE__ span "Found unexpected bound variable"
+  | Free id -> id
+
 (** Substitute regions at the binding level where we start to substitute *)
 let make_region_subst_from_fn (subst : BoundRegionId.id -> region) :
     region_db_var -> region = function

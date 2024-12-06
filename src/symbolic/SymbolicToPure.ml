@@ -458,7 +458,7 @@ and translate_trait_instance_id (span : Meta.span option)
   | BuiltinOrAuto _ ->
       (* We should have eliminated those in the prepasses *)
       craise_opt_span __FILE__ __LINE__ span "Unreachable"
-  | Clause id -> Clause id
+  | Clause var -> Clause (TypesUtils.expect_free_var span var)
   | ParentClause (inst_id, decl_id, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
       ParentClause (inst_id, decl_id, clause_id)
@@ -493,7 +493,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
           | T.TArray -> TAdt (TBuiltin TArray, generics)
           | T.TSlice -> TAdt (TBuiltin TSlice, generics)
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
-  | TVar vid -> TVar vid
+  | TVar var -> TVar (TypesUtils.expect_free_var span var)
   | TLiteral ty -> TLiteral ty
   | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
   | TRef (_, rty, _) -> translate span rty
@@ -735,7 +735,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
               craise_opt_span __FILE__ __LINE__ span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
-  | TVar vid -> TVar vid
+  | TVar var -> TVar (TypesUtils.expect_free_var span var)
   | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
@@ -847,7 +847,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
                 (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
                  * is the identity *)
                 Some (mk_simpl_tuple_ty tys_t)))
-  | TVar vid -> wrap (TVar vid)
+  | TVar var -> wrap (TVar (TypesUtils.expect_free_var span var))
   | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
   | TLiteral lty -> wrap (TLiteral lty)
   | TRef (r, rty, rkind) -> (
@@ -3909,7 +3909,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       let types = List.map (fun (ty : T.type_var) -> TVar ty.T.index) types in
       let const_generics =
         List.map
-          (fun (cg : T.const_generic_var) -> T.CgVar cg.T.index)
+          (fun (cg : T.const_generic_var) -> T.CgVar (Free cg.T.index))
           const_generics
       in
       let trait_refs =

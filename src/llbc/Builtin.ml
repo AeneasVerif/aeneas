@@ -40,9 +40,9 @@ module Sig = struct
   let rvar_0 : region = RVar (zero_db_var rvar_id_0)
   let rg_id_0 = RegionGroupId.of_int 0
   let tvar_id_0 = TypeVarId.of_int 0
-  let tvar_0 : ty = TVar tvar_id_0
+  let tvar_0 : ty = TVar (Free tvar_id_0)
   let cgvar_id_0 = ConstGenericVarId.of_int 0
-  let cgvar_0 : const_generic = CgVar cgvar_id_0
+  let cgvar_0 : const_generic = CgVar (Free cgvar_id_0)
 
   (** Region 'a of id 0 *)
   let region_param_0 : region_var = { index = rvar_id_0; name = Some "'a" }
@@ -131,11 +131,7 @@ module Sig = struct
       mk_generic_params [ region_param_0 ] [ type_param_0 ] cgs (* <'a, T> *)
     in
     let inputs =
-      [
-        mk_ref_ty rvar_0
-          (input_ty (TVar type_param_0.index))
-          is_mut (* &'a (mut) input_ty<T> *);
-      ]
+      [ mk_ref_ty rvar_0 (input_ty tvar_0) is_mut (* &'a (mut) input_ty<T> *) ]
     in
     let inputs =
       List.append inputs
@@ -144,9 +140,7 @@ module Sig = struct
         | Some ty -> [ ty ])
     in
     let output =
-      mk_ref_ty rvar_0
-        (output_ty (TVar type_param_0.index))
-        is_mut (* &'a (mut) output_ty<T> *)
+      mk_ref_ty rvar_0 (output_ty tvar_0) is_mut (* &'a (mut) output_ty<T> *)
     in
     mk_sig generics inputs output
 
