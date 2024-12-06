@@ -111,7 +111,7 @@ let subst_ids_visitor (subst : id_subst) =
     inherit [_] map_env
     method! visit_type_var_id _ id = subst.ty_subst id
     method! visit_const_generic_var_id _ id = subst.cg_subst id
-    method! visit_free_region_id _ rid = subst.r_subst rid
+    method! visit_region_id _ rid = subst.r_subst rid
     method! visit_borrow_id _ bid = subst.bsubst bid
     method! visit_loan_id _ bid = subst.bsubst bid
     method! visit_symbolic_value_id _ id = subst.ssubst id
