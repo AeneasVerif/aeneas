@@ -122,9 +122,8 @@ let rec trait_instance_id_reducible (span : Meta.span option)
   | BuiltinOrAuto _ | TraitImpl _ -> true
   | Self | Clause _ -> false
   | ParentClause (id, _, _) -> trait_instance_id_reducible span id
-  | FnPointer _ | Closure _ | Dyn _ ->
-      craise_opt_span __FILE__ __LINE__ span "Unreachable"
-  | Unsolved _ | UnknownTrait _ -> false
+  | Dyn _ -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
+  | UnknownTrait _ -> false
 
 let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     (infos : type_infos) (ty_info : partial_type_info) (ty : ty) :

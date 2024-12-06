@@ -116,11 +116,6 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail
 
-          method! visit_Closure env id args =
-            (* Remark: `Closure` is a trait instance id - TODO: rename this variant *)
-            self#visit_fid id;
-            super#visit_Closure env id args
-
           method! visit_AggregatedClosure env id args =
             self#visit_fid id;
             super#visit_AggregatedClosure env id args

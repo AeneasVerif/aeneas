@@ -114,7 +114,7 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
             not must_end_with_exit
         | _ -> false)
     | FakeRead _ | Drop _ | Nop -> not must_end_with_exit
-    | Panic | Return -> true
+    | Abort _ | Return -> true
     | Sequence (st1, st2) ->
         can_be_moved_aux false st1 && can_be_moved_aux must_end_with_exit st2
   in

@@ -100,13 +100,7 @@ let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
   | ParentClause (id, _, _) -> trait_instance_id_is_local_clause id
-  | TraitImpl _
-  | BuiltinOrAuto _
-  | UnknownTrait _
-  | FnPointer _
-  | Closure _
-  | Unsolved _
-  | Dyn _ -> false
+  | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn _ -> false
 
 (** About the conversion functions: for now we need them (TODO: merge ety, rty, etc.),
     but they should be applied to types without regions.
@@ -367,15 +361,7 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
             ctx.span;
           ParentClause (inst_id, decl_id, clause_id)
     end
-  | FnPointer ty ->
-      let ty = norm_ctx_normalize_ty ctx ty in
-      (* TODO: we might want to return the ref to the function pointer,
-         in order to later normalize a call to this function pointer *)
-      FnPointer ty
-  | Closure (fid, generics) ->
-      let generics = norm_ctx_normalize_generic_args ctx generics in
-      Closure (fid, generics)
-  | Unsolved _ | UnknownTrait _ ->
+  | UnknownTrait _ ->
       (* This is actually an error case *)
       id
   | Dyn _ ->
