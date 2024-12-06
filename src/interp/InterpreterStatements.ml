@@ -959,7 +959,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Call call -> eval_function_call config st.span call ctx
-  | Panic -> ([ (ctx, Panic) ], cf_singleton __FILE__ __LINE__ st.span)
+  | Abort _ -> ([ (ctx, Panic) ], cf_singleton __FILE__ __LINE__ st.span)
   | Return -> ([ (ctx, Return) ], cf_singleton __FILE__ __LINE__ st.span)
   | Break i -> ([ (ctx, Break i) ], cf_singleton __FILE__ __LINE__ st.span)
   | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)

@@ -462,13 +462,9 @@ and translate_trait_instance_id (span : Meta.span option)
   | ParentClause (inst_id, decl_id, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
       ParentClause (inst_id, decl_id, clause_id)
-  | FnPointer _ | Closure _ ->
-      craise_opt_span __FILE__ __LINE__ span "Closures are not supported yet"
   | Dyn _ ->
       craise_opt_span __FILE__ __LINE__ span
         "Dynamic trait types are not supported yet"
-  | Unsolved _ ->
-      craise_opt_span __FILE__ __LINE__ span "Couldn't solve trait bound"
   | UnknownTrait s ->
       craise_opt_span __FILE__ __LINE__ span ("Unknown trait found: " ^ s)
 

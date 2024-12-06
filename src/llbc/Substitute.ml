@@ -11,7 +11,7 @@ open Errors
 
 (** Substitute regions at the binding level where we start to substitute *)
 let make_region_subst_from_fn (subst : BoundRegionId.id -> region) :
-    de_bruijn_var -> region = function
+    region_db_var -> region = function
   (* The DeBruijn index is kept correct wrt the start of the substituttion *)
   | Bound (bdid, rid) when bdid = 0 -> subst rid
   | r -> RVar r
@@ -27,7 +27,7 @@ let fresh_regions_with_substs (region_vars : BoundRegionId.id list)
     (fresh_region_id : unit -> region_id) :
     RegionId.id BoundRegionId.Map.t
     * (BoundRegionId.id -> RegionId.id)
-    * (de_bruijn_var -> region) =
+    * (region_db_var -> region) =
   (* Map each region var id to a fresh region *)
   let rid_map =
     BoundRegionId.Map.of_list
@@ -46,7 +46,7 @@ let fresh_regions_with_substs_from_vars (region_vars : region_var list)
     (fresh_region_id : unit -> region_id) :
     RegionId.id BoundRegionId.Map.t
     * (BoundRegionId.id -> RegionId.id)
-    * (de_bruijn_var -> region) =
+    * (region_db_var -> region) =
   fresh_regions_with_substs
     (List.map (fun (r : region_var) -> r.index) region_vars)
     fresh_region_id
