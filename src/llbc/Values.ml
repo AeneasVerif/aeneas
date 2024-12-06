@@ -219,7 +219,7 @@ class ['self] iter_typed_avalue_base =
       fun _ _ -> ()
 
     method visit_region_id_set : 'env -> region_id_set -> unit =
-      fun env ids -> RegionId.Set.iter (self#visit_free_region env) ids
+      fun env ids -> RegionId.Set.iter (self#visit_free_region_id env) ids
 
     method visit_abstraction_id : 'env -> abstraction_id -> unit = fun _ _ -> ()
 
@@ -239,7 +239,7 @@ class ['self] map_typed_avalue_base =
       fun _ m -> m
 
     method visit_region_id_set : 'env -> region_id_set -> region_id_set =
-      fun env ids -> RegionId.Set.map (self#visit_free_region env) ids
+      fun env ids -> RegionId.Set.map (self#visit_free_region_id env) ids
 
     method visit_abstraction_id : 'env -> abstraction_id -> abstraction_id =
       fun _ x -> x

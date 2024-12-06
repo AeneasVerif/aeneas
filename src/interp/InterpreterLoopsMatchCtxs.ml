@@ -1965,7 +1965,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
       method! visit_abstraction_id _ _ = fresh_abstraction_id ()
-      method! visit_free_region _ id = get_rid id
+      method! visit_free_region_id _ id = get_rid id
 
       (** We also need to change the abstraction kind *)
       method! visit_abs env abs =
