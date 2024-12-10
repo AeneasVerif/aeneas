@@ -1992,7 +1992,14 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
       method! visit_abstraction_id _ id = get_abs_id id
-      method! visit_region_id _ id = get_region_id id
+
+      method! visit_RVar _ var =
+        match var with
+        | Free id -> RVar (Free (get_region_id id))
+        | Bound _ -> RVar var
+
+      method! visit_region_id_set _ (ids : region_id_set) : region_id_set =
+        RegionId.Set.map get_region_id ids
 
       (** We also need to change the abstraction kind *)
       method! visit_abs env abs =

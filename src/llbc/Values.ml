@@ -25,11 +25,6 @@ class ['self] iter_typed_value_base =
   object (self : 'self)
     inherit [_] iter_ty
 
-    (** Rename the charon name for consistency *)
-    method! visit_free_region_id env id = self#visit_region_id env id
-
-    method visit_region_id _ _ = ()
-
     method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
       fun _ _ -> ()
 
@@ -48,11 +43,6 @@ class ['self] iter_typed_value_base =
 class ['self] map_typed_value_base =
   object (self : 'self)
     inherit [_] map_ty
-
-    (** Rename the charon name for consistency *)
-    method! visit_free_region_id env id = self#visit_region_id env id
-
-    method visit_region_id _ id = id
 
     method visit_symbolic_value_id
         : 'env -> symbolic_value_id -> symbolic_value_id =
@@ -228,9 +218,7 @@ class ['self] iter_typed_avalue_base =
     method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
       fun _ _ -> ()
 
-    method visit_region_id_set : 'env -> region_id_set -> unit =
-      fun env ids -> RegionId.Set.iter (self#visit_region_id env) ids
-
+    method visit_region_id_set : 'env -> region_id_set -> unit = fun _ _ -> ()
     method visit_abstraction_id : 'env -> abstraction_id -> unit = fun _ _ -> ()
 
     method visit_abstraction_id_set : 'env -> abstraction_id_set -> unit =
@@ -249,7 +237,7 @@ class ['self] map_typed_avalue_base =
       fun _ m -> m
 
     method visit_region_id_set : 'env -> region_id_set -> region_id_set =
-      fun env ids -> RegionId.Set.map (self#visit_region_id env) ids
+      fun _ s -> s
 
     method visit_abstraction_id : 'env -> abstraction_id -> abstraction_id =
       fun _ x -> x
