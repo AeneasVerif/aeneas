@@ -88,11 +88,11 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     Subst.fresh_regions_with_substs_from_vars sg.generics.regions
       (snd (RegionId.fresh_stateful_generator ()))
   in
-  let region_id_to_var_map : BoundRegionId.id RegionId.Map.t =
+  let region_id_to_var_map : RegionId.id RegionId.Map.t =
     RegionId.Map.of_list
       (List.map
          (fun (var_id, id) -> (id, var_id))
-         (BoundRegionId.Map.bindings region_var_to_id_map))
+         (RegionId.Map.bindings region_var_to_id_map))
   in
   let subst = { Subst.empty_subst with r_subst = bound_regions_subst } in
   let g : RegionSet.t RegionMap.t ref =
@@ -298,7 +298,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
       let id = RegionGroupId.of_int i in
 
       (* Retrieve the set of regions in the group *)
-      let regions : BoundRegionId.id list =
+      let regions : RegionId.id list =
         List.map
           (fun r ->
             match r with

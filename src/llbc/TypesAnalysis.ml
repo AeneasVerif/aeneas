@@ -35,7 +35,7 @@ type 'p g_type_info = {
       (** If true, it means the type is a record that we should extract as a tuple.
           This field is only valid for type declarations.
       *)
-  mut_regions : BoundRegionId.Set.t;
+  mut_regions : RegionId.Set.t;
       (** The set of regions used in mutable borrows *)
 }
 [@@deriving show]
@@ -83,7 +83,7 @@ let initialize_g_type_info (is_tuple_struct : bool) (param_infos : 'p) :
     borrows_info = type_borrows_info_init;
     is_tuple_struct;
     param_infos;
-    mut_regions = BoundRegionId.Set.empty;
+    mut_regions = RegionId.Set.empty;
   }
 
 let initialize_type_decl_info (is_rec : bool) (def : type_decl) : type_decl_info
@@ -137,11 +137,11 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
   in
   let r_is_static (r : region) : bool = r = RStatic in
   let update_mut_regions_with_rid mut_regions rid =
-    let rid = BoundRegionId.of_int (RegionId.to_int rid) in
-    if BoundRegionId.Set.mem rid mut_regions then ty_info.mut_regions
+    let rid = RegionId.of_int (RegionId.to_int rid) in
+    if RegionId.Set.mem rid mut_regions then ty_info.mut_regions
     else (
       updated := true;
-      BoundRegionId.Set.add rid mut_regions)
+      RegionId.Set.add rid mut_regions)
   in
   let update_mut_regions mut_regions mut_region =
     match mut_region with
@@ -343,11 +343,11 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
               (* We can have bound vars because of arrows, and erased regions
                  when analyzing types appearing in function bodies *)
               | RVar (Free rid) ->
-                  if BoundRegionId.Set.mem adt_rid adt_info.mut_regions then
+                  if RegionId.Set.mem adt_rid adt_info.mut_regions then
                     update_mut_regions_with_rid mut_regions rid
                   else mut_regions)
             ty_info.mut_regions
-            (BoundRegionId.mapi
+            (RegionId.mapi
                (fun adt_rid r -> (adt_rid, r))
                generics.regions)
         in

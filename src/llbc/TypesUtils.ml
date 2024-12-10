@@ -92,10 +92,10 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
           | TTuple | TBuiltin (TBox | TArray | TSlice | TStr) -> ()
           | TAdtId adt_id ->
               let info = TypeDeclId.Map.find adt_id infos in
-              BoundRegionId.iteri
+              RegionId.iteri
                 (fun adt_rid r ->
-                  if BoundRegionId.Set.mem adt_rid info.mut_regions && pred r
-                  then raise Found
+                  if RegionId.Set.mem adt_rid info.mut_regions && pred r then
+                    raise Found
                   else ())
                 generics.regions
         end;

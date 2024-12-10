@@ -1993,6 +1993,11 @@ let match_ctx_with_target (config : config) (span : Meta.span)
       method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
       method! visit_abstraction_id _ id = get_abs_id id
 
+      method! visit_region_id _ _ =
+        craise_opt_span __FILE__ __LINE__ None
+          "Region ids should not be visited directly; the visitor should catch \
+           cases that contain region ids earlier."
+
       method! visit_RVar _ var =
         match var with
         | Free id -> RVar (Free (get_region_id id))
