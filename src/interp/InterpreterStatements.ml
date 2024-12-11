@@ -287,13 +287,8 @@ let get_builtin_function_return_type (span : Meta.span) (ctx : eval_ctx)
   (* There shouldn't be any reference to Self *)
   let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
   let generics = Subst.generic_args_erase_regions generics in
-  let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
-    Subst.make_subst_from_generics sg.generics generics tr_self
-  in
-  let ty =
-    Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
-      sg.output
-  in
+  let subst = Subst.make_subst_from_generics sg.generics generics tr_self in
+  let ty = Subst.erase_regions_substitute_types subst sg.output in
   AssociatedTypes.ctx_normalize_erase_ty span ctx ty
 
 let move_return_value (config : config) (span : Meta.span)
@@ -845,13 +840,8 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
   (* There shouldn't be any reference to Self *)
   let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
   let generics = Subst.generic_args_erase_regions generics in
-  let { Subst.r_subst = _; ty_subst; cg_subst; tr_subst; tr_self } =
-    Subst.make_subst_from_generics global.generics generics tr_self
-  in
-  let ty =
-    Subst.erase_regions_substitute_types ty_subst cg_subst tr_subst tr_self
-      global.ty
-  in
+  let subst = Subst.make_subst_from_generics global.generics generics tr_self in
+  let ty = Subst.erase_regions_substitute_types subst global.ty in
   mk_fresh_symbolic_value span ty
 
 (** Evaluate a statement *)

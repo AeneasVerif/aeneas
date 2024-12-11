@@ -388,7 +388,19 @@ let compute_ids () =
         loan_ids := BorrowId.Set.add id !loan_ids
 
       method! visit_abstraction_id _ id = aids := AbstractionId.Set.add id !aids
-      method! visit_region_id _ id = rids := RegionId.Set.add id !rids
+
+      method! visit_region_id _ _ =
+        craise_opt_span __FILE__ __LINE__ None
+          "Region ids should not be visited directly; the visitor should catch \
+           cases that contain region ids earlier."
+
+      method! visit_RVar _ var =
+        match var with
+        | Free id -> rids := RegionId.Set.add id !rids
+        | Bound _ -> ()
+
+      method! visit_region_id_set _ (ids : region_id_set) : unit =
+        rids := RegionId.Set.union ids !rids
 
       method! visit_symbolic_value env sv =
         sids := SymbolicValueId.Set.add sv.sv_id !sids;
@@ -502,8 +514,8 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
     RegionGroupId.Map.find rg_id asubst_map
   in
-  (* Generate fresh regions and their substitutions *)
-  let _, rsubst, _ =
+  (* Refresh the region ids so that we can subsequently generate more fresh regions without clash *)
+  let rsubst =
     Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
       fresh_region_id
   in

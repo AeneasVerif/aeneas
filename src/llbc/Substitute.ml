@@ -10,50 +10,24 @@ open ContextsBase
 open Errors
 
 (* Fails if the variable is bound *)
-let expect_free_var span (var : ('b, 'f) de_bruijn_var) : 'f =
+let expect_free_var span (var : 'id de_bruijn_var) : 'id =
   match var with
   | Bound _ ->
       craise_opt_span __FILE__ __LINE__ span "Found unexpected bound variable"
   | Free id -> id
 
-(** Substitute regions at the binding level where we start to substitute *)
-let make_region_subst_from_fn (subst : BoundRegionId.id -> region) :
-    region_db_var -> region = function
-  (* The DeBruijn index is kept correct wrt the start of the substituttion *)
-  | Bound (bdid, rid) when bdid = 0 -> subst rid
-  | r -> RVar r
-
-(** Generate fresh regions for region variables.
-
-    Return the list of new regions and appropriate substitutions from the
-    original region variables to the fresh regions.
-    
-    TODO: simplify? we only need the subst [BoundRegionId.id -> RegionId.id]
-  *)
-let fresh_regions_with_substs (region_vars : BoundRegionId.id list)
-    (fresh_region_id : unit -> region_id) :
-    RegionId.id BoundRegionId.Map.t
-    * (BoundRegionId.id -> RegionId.id)
-    * (region_db_var -> region) =
+(** Generate fresh regions for region variables. *)
+let fresh_regions_with_substs (region_vars : RegionId.id list)
+    (fresh_region_id : unit -> region_id) : RegionId.id -> RegionId.id =
   (* Map each region var id to a fresh region *)
   let rid_map =
-    BoundRegionId.Map.of_list
+    RegionId.Map.of_list
       (List.map (fun var -> (var, fresh_region_id ())) region_vars)
   in
-  (* Generate the substitution from region var id to region *)
-  let rid_subst id = BoundRegionId.Map.find id rid_map in
-  (* Generate the substitution from region to region *)
-  let r_subst =
-    make_region_subst_from_fn (fun id -> RVar (Free (rid_subst id)))
-  in
-  (* Return *)
-  (rid_map, rid_subst, r_subst)
+  fun id -> RegionId.Map.find id rid_map
 
 let fresh_regions_with_substs_from_vars (region_vars : region_var list)
-    (fresh_region_id : unit -> region_id) :
-    RegionId.id BoundRegionId.Map.t
-    * (BoundRegionId.id -> RegionId.id)
-    * (region_db_var -> region) =
+    (fresh_region_id : unit -> region_id) : RegionId.id -> RegionId.id =
   fresh_regions_with_substs
     (List.map (fun (r : region_var) -> r.index) region_vars)
     fresh_region_id
@@ -64,20 +38,21 @@ let fresh_regions_with_substs_from_vars (region_vars : region_var list)
     **IMPORTANT:** this function doesn't normalize the types.
  *)
 let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
-    (r_subst : BoundRegionId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
-    (cg_subst : ConstGenericVarId.id -> const_generic)
-    (tr_subst : TraitClauseId.id -> trait_instance_id)
-    (tr_self : trait_instance_id) (sg : fun_sig)
+    (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
+    (cg_sb_subst : ConstGenericVarId.id -> const_generic)
+    (tr_sb_subst : TraitClauseId.id -> trait_instance_id)
+    (tr_sb_self : trait_instance_id) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
-  let r_subst' =
-    make_region_subst_from_fn (fun id -> RVar (Free (r_subst id)))
+  let r_sb_subst id = RVar (Free (r_id_subst id)) in
+  let subst =
+    subst_free_vars
+      { r_sb_subst; ty_sb_subst; cg_sb_subst; tr_sb_subst; tr_sb_self }
   in
-  let subst = { r_subst = r_subst'; ty_subst; cg_subst; tr_subst; tr_self } in
   let inputs = List.map (ty_substitute subst) sg.inputs in
   let output = ty_substitute subst sg.output in
   let subst_region_group (rg : region_var_group) : abs_region_group =
     let id = asubst rg.id in
-    let regions = List.map r_subst rg.regions in
+    let regions = List.map r_id_subst rg.regions in
     let parents = List.map asubst rg.parents in
     ({ id; regions; parents } : abs_region_group)
   in
@@ -118,7 +93,20 @@ let subst_ids_visitor (subst : id_subst) =
     inherit [_] map_env
     method! visit_type_var_id _ id = subst.ty_subst id
     method! visit_const_generic_var_id _ id = subst.cg_subst id
-    method! visit_region_id _ rid = subst.r_subst rid
+
+    method! visit_region_id _ _ =
+      craise_opt_span __FILE__ __LINE__ None
+        "Region ids should not be visited directly; the visitor should catch \
+         cases that contain region ids earlier."
+
+    method! visit_region_id_set _ (ids : region_id_set) : region_id_set =
+      RegionId.Set.map subst.r_subst ids
+
+    method! visit_RVar _ var =
+      match var with
+      | Free rid -> RVar (Free (subst.r_subst rid))
+      | Bound _ -> RVar var
+
     method! visit_borrow_id _ bid = subst.bsubst bid
     method! visit_loan_id _ bid = subst.bsubst bid
     method! visit_symbolic_value_id _ id = subst.ssubst id
