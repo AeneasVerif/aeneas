@@ -1152,22 +1152,18 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
   let translate_back_ty_for_gid (gid : T.RegionGroupId.id) (ty : T.ty) :
       ty option =
     let rg = T.RegionGroupId.nth regions_hierarchy gid in
-    (* Turn *all* the outer bound regions into free regions *)
-    let _, rid_subst, r_subst =
-      Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
-        (snd (T.RegionId.fresh_stateful_generator ()))
-    in
-    let subst = { Substitute.empty_subst with r_subst } in
-    let ty = Substitute.ty_substitute subst ty in
     (* Compute the set of regions belonging to this group *)
-    let gr_regions = T.RegionId.Set.of_list (List.map rid_subst rg.regions) in
+    let gr_regions = T.RegionId.Set.of_list rg.regions in
     let keep_region r =
       match r with
-      | T.RStatic -> craise_opt_span __FILE__ __LINE__ span "Unimplemented"
+      | T.RStatic ->
+          craise_opt_span __FILE__ __LINE__ span "Unimplemented: static region"
       | RErased ->
           craise_opt_span __FILE__ __LINE__ span "Unexpected erased region"
-      | RVar (Bound _) ->
-          craise_opt_span __FILE__ __LINE__ span "Unexpected bound region"
+      | RVar (Bound _ as var) ->
+          craise_opt_span __FILE__ __LINE__ span
+            ("Unexpected bound region: "
+            ^ Charon.PrintTypes.region_db_var_to_pretty_string var)
       | RVar (Free rid) -> T.RegionId.Set.mem rid gr_regions
     in
     let inside_mut = false in

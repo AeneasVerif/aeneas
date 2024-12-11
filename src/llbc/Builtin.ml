@@ -37,7 +37,7 @@ module Sig = struct
   (** A few utilities *)
 
   let rvar_id_0 = RegionId.of_int 0
-  let rvar_0 : region = RVar (zero_db_var rvar_id_0)
+  let rvar_0 : region = RVar (Free rvar_id_0)
   let rg_id_0 = RegionGroupId.of_int 0
   let tvar_id_0 = TypeVarId.of_int 0
   let tvar_0 : ty = TVar (Free tvar_id_0)

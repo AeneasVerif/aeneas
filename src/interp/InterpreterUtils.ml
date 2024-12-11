@@ -514,8 +514,8 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
     RegionGroupId.Map.find rg_id asubst_map
   in
-  (* Generate fresh regions and their substitutions *)
-  let _, rsubst, _ =
+  (* Refresh the region ids so that we can subsequently generate more fresh regions without clash *)
+  let rsubst =
     Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
       fresh_region_id
   in

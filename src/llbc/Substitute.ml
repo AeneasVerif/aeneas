@@ -16,44 +16,18 @@ let expect_free_var span (var : 'id de_bruijn_var) : 'id =
       craise_opt_span __FILE__ __LINE__ span "Found unexpected bound variable"
   | Free id -> id
 
-(** Substitute regions at the binding level where we start to substitute *)
-let make_region_subst_from_fn (subst : RegionId.id -> region) :
-    region_db_var -> region = function
-  (* The DeBruijn index is kept correct wrt the start of the substituttion *)
-  | Bound (bdid, rid) when bdid = 0 -> subst rid
-  | r -> RVar r
-
-(** Generate fresh regions for region variables.
-
-    Return the list of new regions and appropriate substitutions from the
-    original region variables to the fresh regions.
-    
-    TODO: simplify? we only need the subst [RegionId.id -> RegionId.id]
-  *)
+(** Generate fresh regions for region variables. *)
 let fresh_regions_with_substs (region_vars : RegionId.id list)
-    (fresh_region_id : unit -> region_id) :
-    RegionId.id RegionId.Map.t
-    * (RegionId.id -> RegionId.id)
-    * (region_db_var -> region) =
+    (fresh_region_id : unit -> region_id) : RegionId.id -> RegionId.id =
   (* Map each region var id to a fresh region *)
   let rid_map =
     RegionId.Map.of_list
       (List.map (fun var -> (var, fresh_region_id ())) region_vars)
   in
-  (* Generate the substitution from region var id to region *)
-  let rid_subst id = RegionId.Map.find id rid_map in
-  (* Generate the substitution from region to region *)
-  let r_subst =
-    make_region_subst_from_fn (fun id -> RVar (Free (rid_subst id)))
-  in
-  (* Return *)
-  (rid_map, rid_subst, r_subst)
+  fun id -> RegionId.Map.find id rid_map
 
 let fresh_regions_with_substs_from_vars (region_vars : region_var list)
-    (fresh_region_id : unit -> region_id) :
-    RegionId.id RegionId.Map.t
-    * (RegionId.id -> RegionId.id)
-    * (region_db_var -> region) =
+    (fresh_region_id : unit -> region_id) : RegionId.id -> RegionId.id =
   fresh_regions_with_substs
     (List.map (fun (r : region_var) -> r.index) region_vars)
     fresh_region_id
@@ -69,8 +43,9 @@ let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
     (tr_subst : TraitClauseId.id -> trait_instance_id)
     (tr_self : trait_instance_id) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
-  let r_subst' =
-    make_region_subst_from_fn (fun id -> RVar (Free (r_subst id)))
+  let r_subst' = function
+    | Bound _ as var -> RVar var
+    | Free id -> RVar (Free (r_subst id))
   in
   let subst = { r_subst = r_subst'; ty_subst; cg_subst; tr_subst; tr_self } in
   let inputs = List.map (ty_substitute subst) sg.inputs in

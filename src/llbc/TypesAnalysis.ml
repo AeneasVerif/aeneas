@@ -347,9 +347,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
                     update_mut_regions_with_rid mut_regions rid
                   else mut_regions)
             ty_info.mut_regions
-            (RegionId.mapi
-               (fun adt_rid r -> (adt_rid, r))
-               generics.regions)
+            (RegionId.mapi (fun adt_rid r -> (adt_rid, r)) generics.regions)
         in
         (* Return *)
         { ty_info with mut_regions }
@@ -394,13 +392,6 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
       | Opaque | TError _ ->
           craise __FILE__ __LINE__ def.item_meta.span "unreachable"
     in
-    (* Substitute the regions in the fields *)
-    let _, _, r_subst =
-      Substitute.fresh_regions_with_substs_from_vars def.generics.regions
-        (snd (RegionId.fresh_stateful_generator ()))
-    in
-    let subst = { Substitute.empty_subst with r_subst } in
-    let fields_tys = List.map (Substitute.ty_substitute subst) fields_tys in
     (* Explore the types and accumulate information *)
     let type_decl_info = TypeDeclId.Map.find def.def_id infos in
     let type_decl_info = type_decl_info_to_partial_type_info type_decl_info in

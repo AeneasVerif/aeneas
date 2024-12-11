@@ -80,27 +80,15 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
      - the static region
      - edges from the region variables to the static region
 
-     Note that we introduce free variables for all the regions bound at the
+     Note that we only consider the regions bound at the
      level of the signature (this excludes the regions locally bound inside
      the types, for instance at the level of an arrow type).
   *)
-  let region_var_to_id_map, bound_regions_id_subst, bound_regions_subst =
-    Subst.fresh_regions_with_substs_from_vars sg.generics.regions
-      (snd (RegionId.fresh_stateful_generator ()))
-  in
-  let region_id_to_var_map : RegionId.id RegionId.Map.t =
-    RegionId.Map.of_list
-      (List.map
-         (fun (var_id, id) -> (id, var_id))
-         (RegionId.Map.bindings region_var_to_id_map))
-  in
-  let subst = { Subst.empty_subst with r_subst = bound_regions_subst } in
   let g : RegionSet.t RegionMap.t ref =
     let s_set = RegionSet.singleton RStatic in
     let m =
       List.map
-        (fun (r : region_var) ->
-          (RVar (Free (bound_regions_id_subst r.index)), s_set))
+        (fun (r : region_var) -> (RVar (Free r.index), s_set))
         sg.generics.regions
     in
     let s = (RStatic, RegionSet.empty) in
@@ -214,10 +202,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
   in
 
   (* Substitute the regions in a type, then explore *)
-  let explore_ty_subst ty =
-    let ty = Subst.ty_substitute subst ty in
-    explore_ty [] ty
-  in
+  let explore_ty_subst ty = explore_ty [] ty in
 
   (* Normalize the types then explore *)
   let tys =
@@ -302,7 +287,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
         List.map
           (fun r ->
             match r with
-            | RVar (Free rid) -> RegionId.Map.find rid region_id_to_var_map
+            | RVar (Free rid) -> rid
             | _ -> craise __FILE__ __LINE__ (Option.get span) "Unreachable")
           scc
       in
