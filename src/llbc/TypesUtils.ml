@@ -2,6 +2,8 @@ open Types
 open Utils
 include Charon.TypesUtils
 
+let expect_free_var = Substitute.expect_free_var
+
 (** Retuns true if the type contains borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes

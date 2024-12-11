@@ -299,7 +299,8 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 e )
           in
           (v, ctx, cf)
-      | CVar vid ->
+      | CVar var ->
+          let vid = expect_free_var (Some span) var in
           let ctx0 = ctx in
           (* In concrete mode: lookup the const generic value.
              In symbolic mode: introduce a fresh symbolic value.
