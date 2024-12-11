@@ -139,7 +139,8 @@ let type_id_to_string (env : fmt_env) (id : type_id) : string =
 let const_generic_to_string (env : fmt_env) (cg : const_generic) : string =
   match cg with
   | CgGlobal id -> global_decl_id_to_string env id
-  | CgVar id -> const_generic_var_id_to_string env id
+  | CgVar var ->
+      const_generic_var_id_to_string env (Substitute.expect_free_var None var)
   | CgValue lit -> literal_to_string lit
 
 let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =

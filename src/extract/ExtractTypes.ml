@@ -428,7 +428,8 @@ let extract_const_generic (span : Meta.span) (ctx : extraction_ctx)
       let s = ctx_get_global span id ctx in
       F.pp_print_string fmt s
   | CgValue v -> extract_literal span fmt false inside v
-  | CgVar id ->
+  | CgVar var ->
+      let id = TypesUtils.expect_free_var (Some span) var in
       let s = ctx_get_const_generic_var span id ctx in
       F.pp_print_string fmt s
 

@@ -217,7 +217,9 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         match ty_info.param_infos with
         | None -> ty_info
         | Some param_infos ->
-            let param_info = TypeVarId.nth param_infos var_id in
+            let param_info =
+              TypeVarId.nth param_infos (expect_free_var span var_id)
+            in
             (* Set [under_borrow] *)
             let under_borrow =
               check_update_bool param_info.under_borrow expl_info.under_borrow
@@ -230,7 +232,9 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             (* Update param_info *)
             let param_info = { under_borrow; under_mut_borrow } in
             let param_infos =
-              TypeVarId.update_nth param_infos var_id param_info
+              TypeVarId.update_nth param_infos
+                (expect_free_var span var_id)
+                param_info
             in
             let param_infos = Some param_infos in
             { ty_info with param_infos })
