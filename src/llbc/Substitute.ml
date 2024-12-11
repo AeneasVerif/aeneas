@@ -10,7 +10,7 @@ open ContextsBase
 open Errors
 
 (* Fails if the variable is bound *)
-let expect_free_var span (var : ('b, 'f) de_bruijn_var) : 'f =
+let expect_free_var span (var : 'id de_bruijn_var) : 'id =
   match var with
   | Bound _ ->
       craise_opt_span __FILE__ __LINE__ span "Found unexpected bound variable"
