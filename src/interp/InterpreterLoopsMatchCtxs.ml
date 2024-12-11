@@ -1903,15 +1903,42 @@ let match_ctx_with_target (config : config) (span : Meta.span)
        abs@2 { MB l5, ML l6 }
      ]}
   *)
-  let region_id_map = ref RegionId.Map.empty in
-  let get_rid rid =
-    match RegionId.Map.find_opt rid !region_id_map with
-    | Some rid -> rid
-    | None ->
-        let nid = fresh_region_id () in
-        region_id_map := RegionId.Map.add rid nid !region_id_map;
-        nid
-  in
+  let module MkGenerator (M : sig
+    include Collections.Map
+
+    type id
+
+    val fresh_id : unit -> id
+  end) =
+  struct
+    let id_map = ref M.empty
+
+    let get_id id =
+      match M.find_opt id !id_map with
+      | Some id -> id
+      | None ->
+          let nid = M.fresh_id () in
+          id_map := M.add id nid !id_map;
+          nid
+  end in
+  let module RegionIdGen = MkGenerator (struct
+    include RegionId.Map
+
+    type id = RegionId.id
+
+    let fresh_id = fresh_region_id
+  end) in
+  let get_region_id = RegionIdGen.get_id in
+
+  let module AbstractionIdGen = MkGenerator (struct
+    include AbstractionId.Map
+
+    type id = AbstractionId.id
+
+    let fresh_id = fresh_abstraction_id
+  end) in
+  let get_abs_id = AbstractionIdGen.get_id in
+
   let visit_src =
     object
       inherit [_] map_eval_ctx as super
@@ -1964,8 +1991,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         | Some id -> id
 
       method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
-      method! visit_abstraction_id _ _ = fresh_abstraction_id ()
-      method! visit_region_id _ id = get_rid id
+      method! visit_abstraction_id _ id = get_abs_id id
+      method! visit_region_id _ id = get_region_id id
 
       (** We also need to change the abstraction kind *)
       method! visit_abs env abs =
