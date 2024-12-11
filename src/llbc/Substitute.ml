@@ -38,21 +38,21 @@ let fresh_regions_with_substs_from_vars (region_vars : region_var list)
     **IMPORTANT:** this function doesn't normalize the types.
  *)
 let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
-    (r_subst : RegionId.id -> RegionId.id) (ty_subst : TypeVarId.id -> ty)
-    (cg_subst : ConstGenericVarId.id -> const_generic)
-    (tr_subst : TraitClauseId.id -> trait_instance_id)
-    (tr_self : trait_instance_id) (sg : fun_sig)
+    (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
+    (cg_sb_subst : ConstGenericVarId.id -> const_generic)
+    (tr_sb_subst : TraitClauseId.id -> trait_instance_id)
+    (tr_sb_self : trait_instance_id) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
-  let r_subst' = function
-    | Bound _ as var -> RVar var
-    | Free id -> RVar (Free (r_subst id))
+  let r_sb_subst id = RVar (Free (r_id_subst id)) in
+  let subst =
+    subst_free_vars
+      { r_sb_subst; ty_sb_subst; cg_sb_subst; tr_sb_subst; tr_sb_self }
   in
-  let subst = { r_subst = r_subst'; ty_subst; cg_subst; tr_subst; tr_self } in
   let inputs = List.map (ty_substitute subst) sg.inputs in
   let output = ty_substitute subst sg.output in
   let subst_region_group (rg : region_var_group) : abs_region_group =
     let id = asubst rg.id in
-    let regions = List.map r_subst rg.regions in
+    let regions = List.map r_id_subst rg.regions in
     let parents = List.map asubst rg.parents in
     ({ id; regions; parents } : abs_region_group)
   in
