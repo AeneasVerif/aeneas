@@ -86,8 +86,8 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
 
       method! visit_ASymbolic current_abs aproj =
         let current_abs = Option.get current_abs in
-        let proj_regions = current_abs.regions in
-        let ancestors_regions = current_abs.ancestors_regions in
+        let proj_regions = current_abs.regions.owned in
+        let ancestors_regions = current_abs.regions.ancestors in
         (* Explore in depth first - we won't update anything: we simply
          * want to check we don't have to expand inner symbolic value *)
         match (aproj, proj_kind) with
@@ -336,7 +336,7 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
 
       method! visit_EAbs proj_regions abs =
         sanity_check __FILE__ __LINE__ (Option.is_none proj_regions) span;
-        let proj_regions = Some abs.regions in
+        let proj_regions = Some abs.regions.owned in
         super#visit_EAbs proj_regions abs
 
       method! visit_AProjSharedBorrow proj_regions asb =

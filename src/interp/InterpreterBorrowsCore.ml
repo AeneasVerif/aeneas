@@ -738,7 +738,7 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
   let check_add_proj_borrows (is_shared : bool) abs sv' proj_ty =
     if
       proj_borrows_intersects_proj_loans span
-        (abs.regions, sv', proj_ty)
+        (abs.regions.owned, sv', proj_ty)
         (regions, sv)
     then
       let x = (abs.abs_id, proj_ty) in
@@ -832,7 +832,7 @@ let update_intersecting_aproj_borrows (span : Meta.span)
   let check_proj_borrows is_shared abs sv' proj_ty =
     if
       proj_borrows_intersects_proj_loans span
-        (abs.regions, sv', proj_ty)
+        (abs.regions.owned, sv', proj_ty)
         (regions, sv)
     then (
       if is_shared then add_shared () else set_non_shared ();
@@ -994,7 +994,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
               sanity_check __FILE__ __LINE__ (sv.sv_ty = sv'.sv_ty) span;
               if
                 projections_intersect span proj_ty proj_regions sv'.sv_ty
-                  abs.regions
+                  abs.regions.owned
               then update abs given_back
               else super#visit_aproj (Some abs) sproj)
             else super#visit_aproj (Some abs) sproj

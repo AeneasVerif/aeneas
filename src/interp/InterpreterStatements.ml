@@ -514,19 +514,18 @@ let create_empty_abstractions_from_abs_region_groups
         AbstractionId.Set.empty rg.parents
     in
     let regions =
-      List.fold_left
-        (fun s rid -> RegionId.Set.add rid s)
-        RegionId.Set.empty rg.regions
-    in
-    let ancestors_regions =
-      List.fold_left
-        (fun acc parent_id ->
-          RegionId.Set.union acc
-            (AbstractionId.Map.find parent_id !abs_to_ancestors_regions))
-        RegionId.Set.empty rg.parents
+      let owned = RegionId.Set.of_list rg.regions in
+      let ancestors =
+        List.fold_left
+          (fun acc parent_id ->
+            RegionId.Set.union acc
+              (AbstractionId.Map.find parent_id !abs_to_ancestors_regions))
+          RegionId.Set.empty rg.parents
+      in
+      { owned; ancestors }
     in
     let ancestors_regions_union_current_regions =
-      RegionId.Set.union ancestors_regions regions
+      RegionId.Set.union regions.owned regions.owned
     in
     let can_end = region_can_end rg_id in
     abs_to_ancestors_regions :=
@@ -540,7 +539,6 @@ let create_empty_abstractions_from_abs_region_groups
       parents;
       original_parents;
       regions;
-      ancestors_regions;
       avalues = [];
     }
   in
@@ -1443,12 +1441,12 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     let ctx, args_projs =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_on_input_value config span ctx abs.regions
-            abs.ancestors_regions arg arg_rty)
+          apply_proj_borrows_on_input_value config span ctx abs.regions.owned
+            abs.regions.ancestors arg arg_rty)
         ctx args_with_rtypes
     in
     (* Group the input and output values *)
-    (ctx, List.append args_projs [ ret_av abs.regions ])
+    (ctx, List.append args_projs [ ret_av abs.regions.owned ])
   in
   (* Actually initialize and insert the abstractions *)
   let call_id = fresh_fun_call_id () in
