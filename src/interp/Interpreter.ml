@@ -209,7 +209,9 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
       eval_ctx * typed_avalue list =
     (* Project over the values - we use *loan* projectors, as explained above *)
     let avalues =
-      List.map (mk_aproj_loans_value_from_symbolic_value abs.regions) input_svs
+      List.map
+        (mk_aproj_loans_value_from_symbolic_value abs.regions.owned)
+        input_svs
     in
     (ctx, avalues)
   in
@@ -308,8 +310,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
           eval_ctx * typed_avalue list =
         let ctx, avalue =
-          apply_proj_borrows_on_input_value config span ctx abs.regions
-            abs.ancestors_regions ret_value ret_rty
+          apply_proj_borrows_on_input_value config span ctx abs.regions.owned
+            abs.regions.ancestors ret_value ret_rty
         in
         (ctx, [ avalue ])
       in

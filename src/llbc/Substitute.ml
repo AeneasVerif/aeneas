@@ -99,8 +99,11 @@ let subst_ids_visitor (subst : id_subst) =
         "Region ids should not be visited directly; the visitor should catch \
          cases that contain region ids earlier."
 
-    method! visit_region_id_set _ (ids : region_id_set) : region_id_set =
-      RegionId.Set.map subst.r_subst ids
+    method! visit_abs_regions _ regions =
+      let { owned; ancestors } = regions in
+      let owned = RegionId.Set.map subst.r_subst owned in
+      let ancestors = RegionId.Set.map subst.r_subst ancestors in
+      { owned; ancestors }
 
     method! visit_RVar _ var =
       match var with

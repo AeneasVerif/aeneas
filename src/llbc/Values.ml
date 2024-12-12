@@ -831,15 +831,19 @@ type abs = {
           when generating the backward function for 'a, we have to make sure we
           don't need to end the return region for 'b (if it is the case, it means
           the function doesn't borrow check).
-       *)
+      *)
   parents : abstraction_id_set;  (** The parent abstractions *)
   original_parents : abstraction_id list;
       (** The original list of parents, ordered. This is used for synthesis. TODO: remove? *)
-  regions : region_id_set;  (** Regions owned by this abstraction *)
-  ancestors_regions : region_id_set;
+  regions : abs_regions;
+  avalues : typed_avalue list;  (** The values in this abstraction *)
+}
+
+and abs_regions = {
+  owned : region_id_set;  (** Regions owned by the abstraction *)
+  ancestors : region_id_set;
       (** Union of the regions owned by this abstraction's ancestors (not
           including the regions of this abstraction itself) *)
-  avalues : typed_avalue list;  (** The values in this abstraction *)
 }
 [@@deriving
   show,

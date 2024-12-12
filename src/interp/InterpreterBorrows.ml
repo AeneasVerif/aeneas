@@ -348,7 +348,8 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                   let given_back_meta = as_symbolic span nv.value in
                   (* The loan projector *)
                   let given_back =
-                    mk_aproj_loans_value_from_symbolic_value abs.regions sv
+                    mk_aproj_loans_value_from_symbolic_value abs.regions.owned
+                      sv
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in
@@ -372,7 +373,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
         let regions, ancestors_regions =
           match opt_abs with
           | None -> craise __FILE__ __LINE__ span "Unreachable"
-          | Some abs -> (abs.regions, abs.ancestors_regions)
+          | Some abs -> (abs.regions.owned, abs.regions.ancestors)
         in
         (* Rk.: there is a small issue with the types of the aloan values.
          * See the comment at the level of definition of {!typed_avalue} *)
@@ -1069,7 +1070,9 @@ and end_abstraction_aux (config : config) (span : Meta.span)
          relookup the abstraction: the set of regions in an abstraction never
          changes... *)
       let ctx =
-        let ended_regions = RegionId.Set.union ctx.ended_regions abs.regions in
+        let ended_regions =
+          RegionId.Set.union ctx.ended_regions abs.regions.owned
+        in
         { ctx with ended_regions }
       in
 
@@ -1137,7 +1140,8 @@ and end_abstraction_loans (config : config) (span : Meta.span)
       (* There is a proj_loans over a symbolic value: end the proj_borrows
          which intersect this proj_loans, then end the proj_loans itself *)
       let ctx, cc =
-        end_proj_loans_symbolic config span chain abs_id abs.regions sv ctx
+        end_proj_loans_symbolic config span chain abs_id abs.regions.owned sv
+          ctx
       in
       (* Reexplore, looking for loans *)
       comp cc (end_abstraction_loans config span chain abs_id ctx)
@@ -1287,7 +1291,8 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       let ctx = update_aproj_borrows span abs.abs_id sv ended_borrow ctx in
       (* Give back the symbolic value *)
       let ctx =
-        give_back_symbolic_value config span abs.regions proj_ty sv nsv ctx
+        give_back_symbolic_value config span abs.regions.owned proj_ty sv nsv
+          ctx
       in
       (* Reexplore *)
       end_abstraction_borrows config span chain abs_id ctx
@@ -1812,7 +1817,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                    have the type `& ...` - TODO: this is annoying and not very clean... *)
                 let ty =
                   (* Take the first region of the abstraction - this doesn't really matter *)
-                  let r = RegionId.Set.min_elt abs0.regions in
+                  let r = RegionId.Set.min_elt abs0.regions.owned in
                   TRef (RVar (Free r), ty, RShared)
                 in
                 { value; ty }
@@ -1860,8 +1865,11 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           can_end;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions = RegionId.Set.singleton r_id;
-          ancestors_regions = RegionId.Set.empty;
+          regions =
+            {
+              owned = RegionId.Set.singleton r_id;
+              ancestors = RegionId.Set.empty;
+            };
           avalues;
         }
       in
@@ -2924,9 +2932,14 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       (AbstractionId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
   in
   let original_parents = AbstractionId.Set.elements parents in
-  let regions = RegionId.Set.union abs0.regions abs1.regions in
-  let ancestors_regions =
-    RegionId.Set.diff (RegionId.Set.union abs0.regions abs1.regions) regions
+  let regions =
+    let owned = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
+    let ancestors =
+      RegionId.Set.diff
+        (RegionId.Set.union abs0.regions.ancestors abs1.regions.ancestors)
+        owned
+    in
+    { owned; ancestors }
   in
   let abs =
     {
@@ -2936,7 +2949,6 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       parents;
       original_parents;
       regions;
-      ancestors_regions;
       avalues;
     }
   in
@@ -2978,7 +2990,7 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
      is not the case if there are no nested borrows, but we anticipate).
   *)
   let ctx =
-    let regions = nabs.regions in
+    let regions = nabs.regions.owned in
     (* Pick the first region id (this is the smallest) *)
     let rid = RegionId.Set.min_elt regions in
     (* If there is only one region, do nothing *)

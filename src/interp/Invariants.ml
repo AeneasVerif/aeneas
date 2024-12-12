@@ -695,7 +695,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
                 sanity_check __FILE__ __LINE__
-                  (ty_has_regions_in_set abs.regions sv.sv_ty)
+                  (ty_has_regions_in_set abs.regions.owned sv.sv_ty)
                   span
             | AProjBorrows (sv, proj_ty) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
@@ -704,7 +704,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
                 sanity_check __FILE__ __LINE__
-                  (ty_has_regions_in_set abs.regions proj_ty)
+                  (ty_has_regions_in_set abs.regions.owned proj_ty)
                   span
             | AEndedProjLoans (_msv, given_back_ls) ->
                 List.iter
@@ -806,14 +806,14 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
         match asb with
         | AsbBorrow _ -> ()
         | AsbProjReborrows (sv, proj_ty) ->
-            add_aproj_borrows sv abs.abs_id abs.regions proj_ty true
+            add_aproj_borrows sv abs.abs_id abs.regions.owned proj_ty true
 
       method! visit_aproj abs aproj =
         (let abs = Option.get abs in
          match aproj with
-         | AProjLoans (sv, _) -> add_aproj_loans sv abs.abs_id abs.regions
+         | AProjLoans (sv, _) -> add_aproj_loans sv abs.abs_id abs.regions.owned
          | AProjBorrows (sv, proj_ty) ->
-             add_aproj_borrows sv abs.abs_id abs.regions proj_ty false
+             add_aproj_borrows sv abs.abs_id abs.regions.owned proj_ty false
          | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj abs aproj
     end

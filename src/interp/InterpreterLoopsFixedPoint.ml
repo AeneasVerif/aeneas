@@ -209,7 +209,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     let nrid = fresh_region_id () in
 
     (* Prepare the shared value *)
-    let nsv = mk_value_with_fresh_sids_no_shared_loans abs.regions nrid sv in
+    let nsv =
+      mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
+    in
 
     (* Save the borrow substitution, to apply it to the context later *)
     borrow_substs := (lid, nlid) :: !borrow_substs;
@@ -218,7 +220,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     sanity_check __FILE__ __LINE__ (AbstractionId.Set.is_empty abs.parents) span;
     sanity_check __FILE__ __LINE__ (abs.original_parents = []) span;
     sanity_check __FILE__ __LINE__
-      (RegionId.Set.is_empty abs.ancestors_regions)
+      (RegionId.Set.is_empty abs.regions.ancestors)
       span;
 
     (* Introduce the new abstraction for the shared values *)
@@ -250,6 +252,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
       | None -> Identity
     in
     let can_end = true in
+    let regions : abs_regions =
+      { owned = RegionId.Set.singleton nrid; ancestors = RegionId.Set.empty }
+    in
     let fresh_abs =
       {
         abs_id = fresh_abstraction_id ();
@@ -257,8 +262,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         can_end;
         parents = AbstractionId.Set.empty;
         original_parents = [];
-        regions = RegionId.Set.singleton nrid;
-        ancestors_regions = RegionId.Set.empty;
+        regions;
         avalues;
       }
     in

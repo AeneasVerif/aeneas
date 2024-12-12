@@ -314,7 +314,7 @@ module Values = struct
     ^ kind ^ "{parents="
     ^ AbstractionId.Set.to_string None abs.parents
     ^ "}" ^ "{regions="
-    ^ RegionId.Set.to_string None abs.regions
+    ^ RegionId.Set.to_string None abs.regions.owned
     ^ "}" ^ can_end ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
 
   let inst_fun_sig_to_string (env : fmt_env) (sg : LlbcAst.inst_fun_sig) :
