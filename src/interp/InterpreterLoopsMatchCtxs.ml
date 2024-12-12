@@ -1995,12 +1995,16 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_region_id _ _ =
         craise_opt_span __FILE__ __LINE__ None
-          "Region ids should not be visited directly; the visitor should catch \
-           cases that contain region ids earlier."
+          "Internal error: region ids should not be visited directly; the \
+           visitor should catch cases that contain region ids earlier."
 
       method! visit_RVar _ var =
         match var with
-        | Free id -> RVar (Free (get_region_id id))
+        | Free id ->
+            (* If the bound region is free, then it is a region owned
+               by an abstraction, so we do the same as for the case
+               [abs_region_id]. *)
+            RVar (Free (get_region_id id))
         | Bound _ -> RVar var
 
       method! visit_region_id_set _ (ids : region_id_set) : region_id_set =

@@ -342,6 +342,9 @@ type ids_sets = {
   loan_ids : BorrowId.Set.t;  (** Only the loan ids *)
   dids : DummyVarId.Set.t;
   rids : RegionId.Set.t;
+      (** This should only contain **free** region ids (note that we have to be
+          careful because we use the same index type for bound regions and free
+          regions - see the implementation of [compute_ids] below) *)
   sids : SymbolicValueId.Set.t;
 }
 [@@deriving show]
@@ -514,7 +517,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
     RegionGroupId.Map.find rg_id asubst_map
   in
-  (* Refresh the region ids so that we can subsequently generate more fresh regions without clash *)
+  (* Generate fresh regions *)
   let rsubst =
     Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
       fresh_region_id
