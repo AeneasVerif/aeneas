@@ -132,3 +132,26 @@ fn use_mut_wrapper2() {
     assert!(x == 1);
     assert!(y == 11);
 }
+
+//
+// Arrays/slices containing borrows
+//
+// Those have the peculiarity of requiring the manipulation of non-expandable
+// symbolic values containing borrows.
+//
+
+fn array_shared_borrow<'a, const N: usize>(x: [&'a u32; N]) -> [&'a u32; N] {
+    x
+}
+
+fn array_mut_borrow<'a, const N: usize>(x: [&'a mut u32; N]) -> [&'a mut u32; N] {
+    x
+}
+
+fn boxed_slice_shared_borrow(x : Box<[&u32]>) -> Box<[&u32]> {
+    x
+}
+
+fn boxed_slice_mut_borrow(x : Box<[&mut u32]>) -> Box<[&mut u32]> {
+    x
+}

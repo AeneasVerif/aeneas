@@ -160,3 +160,27 @@ let use_mut_wrapper2 : result unit =
     if y = 11 then Ok () else Fail Failure
   else Fail Failure
 
+(** [adt_borrows::array_shared_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 143:0-145:1 *)
+let array_shared_borrow (#n : usize) (x : array u32 n) : result (array u32 n) =
+  Ok x
+
+(** [adt_borrows::array_mut_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 147:0-149:1 *)
+let array_mut_borrow
+  (#n : usize) (x : array u32 n) :
+  result ((array u32 n) & (array u32 n -> array u32 n))
+  =
+  let back = fun ret -> ret in Ok (x, back)
+
+(** [adt_borrows::boxed_slice_shared_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 151:0-153:1 *)
+let boxed_slice_shared_borrow (x : slice u32) : result (slice u32) =
+  Ok x
+
+(** [adt_borrows::boxed_slice_mut_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 155:0-157:1 *)
+let boxed_slice_mut_borrow
+  (x : slice u32) : result ((slice u32) & (slice u32 -> slice u32)) =
+  let back = fun ret -> ret in Ok (x, back)
+

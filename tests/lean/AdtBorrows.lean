@@ -178,4 +178,30 @@ def use_mut_wrapper2 : Result Unit :=
   let y := create_back1 { w with y := (unwrap_back1 py1).y }
   massert (y = 11#i32)
 
+/- [adt_borrows::array_shared_borrow]:
+   Source: 'tests/src/adt-borrows.rs', lines 143:0-145:1 -/
+def array_shared_borrow {N : Usize} (x : Array U32 N) : Result (Array U32 N) :=
+  Result.ok x
+
+/- [adt_borrows::array_mut_borrow]:
+   Source: 'tests/src/adt-borrows.rs', lines 147:0-149:1 -/
+def array_mut_borrow
+  {N : Usize} (x : Array U32 N) :
+  Result ((Array U32 N) × (Array U32 N → Array U32 N))
+  :=
+  let back := fun ret => ret
+  Result.ok (x, back)
+
+/- [adt_borrows::boxed_slice_shared_borrow]:
+   Source: 'tests/src/adt-borrows.rs', lines 151:0-153:1 -/
+def boxed_slice_shared_borrow (x : Slice U32) : Result (Slice U32) :=
+  Result.ok x
+
+/- [adt_borrows::boxed_slice_mut_borrow]:
+   Source: 'tests/src/adt-borrows.rs', lines 155:0-157:1 -/
+def boxed_slice_mut_borrow
+  (x : Slice U32) : Result ((Slice U32) × (Slice U32 → Slice U32)) :=
+  let back := fun ret => ret
+  Result.ok (x, back)
+
 end adt_borrows

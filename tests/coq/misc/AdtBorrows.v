@@ -232,4 +232,33 @@ Definition use_mut_wrapper2 : result unit :=
   massert (y s= 11%i32)
 .
 
+(** [adt_borrows::array_shared_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 143:0-145:1 *)
+Definition array_shared_borrow
+  {N : usize} (x : array u32 N) : result (array u32 N) :=
+  Ok x
+.
+
+(** [adt_borrows::array_mut_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 147:0-149:1 *)
+Definition array_mut_borrow
+  {N : usize} (x : array u32 N) :
+  result ((array u32 N) * (array u32 N -> array u32 N))
+  :=
+  let back := fun (ret : array u32 N) => ret in Ok (x, back)
+.
+
+(** [adt_borrows::boxed_slice_shared_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 151:0-153:1 *)
+Definition boxed_slice_shared_borrow (x : slice u32) : result (slice u32) :=
+  Ok x
+.
+
+(** [adt_borrows::boxed_slice_mut_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 155:0-157:1 *)
+Definition boxed_slice_mut_borrow
+  (x : slice u32) : result ((slice u32) * (slice u32 -> slice u32)) :=
+  let back := fun (ret : slice u32) => ret in Ok (x, back)
+.
+
 End AdtBorrows.
