@@ -145,13 +145,13 @@ module Values = struct
         in
         "(" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ ")"
     | AEndedProjLoans (_, given_back) ->
-        if given_back = [] then "_"
+        if given_back = [] then "ended_aproj_loans _"
         else
           let given_back = List.map snd given_back in
           let given_back = List.map (aproj_to_string env) given_back in
           "ended_aproj_loans (" ^ String.concat "," given_back ^ ")"
     | AEndedProjBorrows (_, given_back) ->
-        if given_back = [] then "_"
+        if given_back = [] then "ended_aproj_borrows _"
         else
           let given_back = List.map snd given_back in
           let given_back = List.map (aproj_to_string env) given_back in

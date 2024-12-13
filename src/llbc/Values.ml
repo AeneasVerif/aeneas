@@ -310,6 +310,9 @@ and aproj =
           We can later end the projector of loans if [s@0] is not referenced
           anywhere in the context below a projector of borrows which intersects
           this projector of loans.
+
+          TODO: the projection type is redundant with the type of the avalue
+          TODO: we shouldn't use a symbolic value but rather a symbolic value id
        *)
   | AProjBorrows of symbolic_value * ty * (msymbolic_value * aproj) list
       (** Note that an AProjBorrows only operates on a value which is not below
@@ -333,6 +336,9 @@ and aproj =
             abs2 {'b} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
             ...
           ]}
+
+          TODO: the projection type is redundant with the type of the avalue
+          TODO: we shouldn't use a symbolic value but rather a symbolic value id
        *)
   | AEndedProjLoans of msymbolic_value * (msymbolic_value * aproj) list
       (** An ended projector of loans over a symbolic value.
