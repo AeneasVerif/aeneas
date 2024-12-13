@@ -164,7 +164,16 @@ let outer_loans_in_value (v : typed_value) : bool =
     false
   with Found -> true
 
-let find_first_primitively_copyable_sv_with_borrows span
+let symbolic_value_is_greedily_expandable (span : Meta.span option)
+    (type_infos : TypesAnalysis.type_infos) (sv : symbolic_value) : bool =
+  if ty_has_borrows span type_infos sv.sv_ty then
+    (* Ignore arrays and slices, as we can't expand them *)
+    match sv.sv_ty with
+    | TAdt (TBuiltin (TArray | TSlice), _) -> false
+    | _ -> true
+  else false
+
+let find_first_expandable_sv_with_borrows (span : Meta.span option)
     (type_infos : TypesAnalysis.type_infos) (v : typed_value) :
     symbolic_value option =
   (* The visitor *)
@@ -173,8 +182,7 @@ let find_first_primitively_copyable_sv_with_borrows span
       inherit [_] iter_typed_value
 
       method! visit_VSymbolic _ sv =
-        let ty = sv.sv_ty in
-        if ty_is_copyable ty && ty_has_borrows span type_infos ty then
+        if symbolic_value_is_greedily_expandable span type_infos sv then
           raise (FoundSymbolicValue sv)
         else ()
     end

@@ -620,11 +620,10 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
       inherit [_] iter_eval_ctx
 
       method! visit_VSymbolic _ sv =
-        if ty_has_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty then
-          (* Ignore arrays and slices, as we can't expand them *)
-          match sv.sv_ty with
-          | TAdt (TBuiltin (TArray | TSlice), _) -> ()
-          | _ -> raise (FoundSymbolicValue sv)
+        if
+          ValuesUtils.symbolic_value_is_greedily_expandable (Some span)
+            ctx.type_ctx.type_infos sv
+        then raise (FoundSymbolicValue sv)
         else ()
 
       (** Don't enter abstractions *)

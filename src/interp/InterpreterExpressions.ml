@@ -17,14 +17,14 @@ open Errors
 let log = Logging.expressions_log
 
 (** As long as there are symbolic values at a given place (potentially in subvalues)
-    which contain borrows and are primitively copyable, expand them.
+    which contain borrows and are expandable, expand them.
     
     We use this function before copying values.
     
     Note that the place should have been prepared so that there are no remaining
     loans.
 *)
-let expand_primitively_copyable_at_place (config : config) (span : Meta.span)
+let expand_if_borrows_at_place (config : config) (span : Meta.span)
     (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   (* Small helper *)
@@ -32,8 +32,8 @@ let expand_primitively_copyable_at_place (config : config) (span : Meta.span)
    fun ctx ->
     let v = read_place span access p ctx in
     match
-      find_first_primitively_copyable_sv_with_borrows (Some span)
-        ctx.type_ctx.type_infos v
+      find_first_expandable_sv_with_borrows (Some span) ctx.type_ctx.type_infos
+        v
     with
     | None -> (ctx, fun e -> e)
     | Some sv ->
@@ -67,8 +67,7 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
   v
 
 let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
-    (expand_prim_copy : bool) (access : access_kind) (p : place)
-    (ctx : eval_ctx) :
+    (greedy_expand : bool) (access : access_kind) (p : place) (ctx : eval_ctx) :
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   (* Make sure we can evaluate the path *)
@@ -79,8 +78,7 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
    * borrows) *)
   let ctx, cc =
     comp cc
-      (if expand_prim_copy then
-         expand_primitively_copyable_at_place config span access p ctx
+      (if greedy_expand then expand_if_borrows_at_place config span access p ctx
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
@@ -89,10 +87,10 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
   (ty_value, ctx, cc)
 
 let access_rplace_reorganize (config : config) (span : Meta.span)
-    (expand_prim_copy : bool) (access : access_kind) (p : place) : cm_fun =
+    (greedy_expand : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   let _, ctx, f =
-    access_rplace_reorganize_and_read config span expand_prim_copy access p ctx
+    access_rplace_reorganize_and_read config span greedy_expand access p ctx
   in
   (ctx, f)
 
@@ -256,13 +254,13 @@ let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
       (* Access the value *)
       let access = Read in
       (* Expand the symbolic values, if necessary *)
-      let expand_prim_copy = true in
-      access_rplace_reorganize config span expand_prim_copy access p ctx
+      let greedy_expand = true in
+      access_rplace_reorganize config span greedy_expand access p ctx
   | Move p ->
       (* Access the value *)
       let access = Move in
-      let expand_prim_copy = false in
-      access_rplace_reorganize config span expand_prim_copy access p ctx
+      let greedy_expand = false in
+      access_rplace_reorganize config span greedy_expand access p ctx
 
 (** Evaluate an operand, without reorganizing the context before *)
 let eval_operand_no_reorganize (config : config) (span : Meta.span)
@@ -347,7 +345,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
         span "Can not copy a value containing bottom";
       sanity_check __FILE__ __LINE__
         (Option.is_none
-           (find_first_primitively_copyable_sv_with_borrows (Some span)
+           (find_first_expandable_sv_with_borrows (Some span)
               ctx.type_ctx.type_infos v))
         span;
       (* Copy the value *)
@@ -709,10 +707,9 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
         | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
 
-      let expand_prim_copy = false in
+      let greedy_expand = false in
       let v, ctx, cc =
-        access_rplace_reorganize_and_read config span expand_prim_copy access p
-          ctx
+        access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Generate the fresh borrow id *)
       let bid = fresh_borrow_id () in
@@ -754,10 +751,9 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
   | BMut ->
       (* Access the value *)
       let access = Write in
-      let expand_prim_copy = false in
+      let greedy_expand = false in
       let v, ctx, cc =
-        access_rplace_reorganize_and_read config span expand_prim_copy access p
-          ctx
+        access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
       let bid = fresh_borrow_id () in
@@ -875,9 +871,9 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
 
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
-  let expand_prim_copy = false in
+  let greedy_expand = false in
   let v, ctx, cc =
-    access_rplace_reorganize_and_read config span expand_prim_copy Read p ctx
+    access_rplace_reorganize_and_read config span greedy_expand Read p ctx
   in
   cassert __FILE__ __LINE__
     (not (bottom_in_value ctx.ended_regions v))

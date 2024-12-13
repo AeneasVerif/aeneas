@@ -722,13 +722,6 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
           mk_simpl_tuple_ty t_generics.types
       | TBuiltin TBox -> (
           (* We eliminate boxes *)
-          (* No general parametricity for now *)
-          cassert_opt_span __FILE__ __LINE__
-            (not
-               (List.exists
-                  (TypesUtils.ty_has_borrows span type_infos)
-                  generics.types))
-            span "ADTs containing borrows are not supported yet";
           match t_generics.types with
           | [ bty ] -> bty
           | _ ->
@@ -821,10 +814,6 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
             Some (TAdt (type_id, generics))
           else None
       | TBuiltin TBox -> (
-          (* Don't accept ADTs (which are not tuples) with borrows for now *)
-          cassert_opt_span __FILE__ __LINE__
-            (not (TypesUtils.ty_has_borrows span type_infos ty))
-            span "ADTs containing borrows are not supported yet";
           (* Eliminate the box *)
           match generics.types with
           | [ bty ] -> translate bty
