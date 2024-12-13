@@ -26,13 +26,9 @@ let log = Logging.borrows_log
       allows us to use {!end_borrow_aux} as an auxiliary function for
       {!end_abstraction_aux} (we end all the borrows in the abstraction one by one
       before removing the abstraction from the context).
-    - [allow_inner_loans]: if [true], allow to end borrows containing inner
-      loans. This is used to merge borrows with abstractions, to compute loop
-      fixed points for instance.
 *)
 let end_borrow_get_borrow (span : Meta.span)
-    (allowed_abs : AbstractionId.id option) (allow_inner_loans : bool)
-    (l : BorrowId.id) (ctx : eval_ctx) :
+    (allowed_abs : AbstractionId.id option) (l : BorrowId.id) (ctx : eval_ctx) :
     ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
       priority_borrows_or_abs )
     result =
@@ -70,18 +66,16 @@ let end_borrow_get_borrow (span : Meta.span)
         | Some borrows -> raise (FoundPriority (OuterBorrows borrows))
         | None -> ()));
     (* Then check if there are inner loans *)
-    if not allow_inner_loans then
-      match borrowed_value with
-      | None -> ()
-      | Some v -> (
-          match get_first_loan_in_value v with
-          | None -> ()
-          | Some c -> (
-              match c with
-              | VSharedLoan (bids, _) ->
-                  raise (FoundPriority (InnerLoans (Borrows bids)))
-              | VMutLoan bid -> raise (FoundPriority (InnerLoans (Borrow bid))))
-          )
+    match borrowed_value with
+    | None -> ()
+    | Some v -> (
+        match get_first_loan_in_value v with
+        | None -> ()
+        | Some c -> (
+            match c with
+            | VSharedLoan (bids, _) ->
+                raise (FoundPriority (InnerLoans (Borrows bids)))
+            | VMutLoan bid -> raise (FoundPriority (InnerLoans (Borrow bid)))))
   in
 
   (* The environment is used to keep track of the outer loans *)
@@ -907,8 +901,7 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
   let ctx0 = ctx in
   let check = check_borrow_disappeared span "end borrow" l ctx0 in
   (* Start by ending the borrow itself (we lookup it up and replace it with [Bottom] *)
-  let allow_inner_loans = false in
-  match end_borrow_get_borrow span allowed_abs allow_inner_loans l ctx with
+  match end_borrow_get_borrow span allowed_abs l ctx with
   (* Two cases:
      - error: we found outer borrows (the borrow is inside a borrowed value) or
        inner loans (the borrow contains loans)
@@ -1306,20 +1299,14 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         match bc with
         | VSharedBorrow bid -> (
             (* Replace the shared borrow with bottom *)
-            let allow_inner_loans = false in
-            match
-              end_borrow_get_borrow span (Some abs_id) allow_inner_loans bid ctx
-            with
+            match end_borrow_get_borrow span (Some abs_id) bid ctx with
             | Error _ -> craise __FILE__ __LINE__ span "Unreachable"
             | Ok (ctx, _) ->
                 (* Give back *)
                 give_back_shared config span bid ctx)
         | VMutBorrow (bid, v) -> (
             (* Replace the mut borrow with bottom *)
-            let allow_inner_loans = false in
-            match
-              end_borrow_get_borrow span (Some abs_id) allow_inner_loans bid ctx
-            with
+            match end_borrow_get_borrow span (Some abs_id) bid ctx with
             | Error _ -> craise __FILE__ __LINE__ span "Unreachable"
             | Ok (ctx, _) ->
                 (* Give the value back - note that the mut borrow was below a
