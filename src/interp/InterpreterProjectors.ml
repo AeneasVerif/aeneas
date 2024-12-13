@@ -27,7 +27,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
     | VAdt adt, TAdt (id, generics) ->
         (* Retrieve the types of the fields *)
         let field_types =
-          Assoc.ctx_adt_value_get_inst_norm_field_rtypes span ctx adt id
+          Assoc.ctx_adt_get_inst_norm_field_rtypes span ctx id adt.variant_id
             generics
         in
 
@@ -109,7 +109,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
       | VAdt adt, TAdt (id, generics) ->
           (* Retrieve the types of the fields *)
           let field_types =
-            Assoc.ctx_adt_value_get_inst_norm_field_rtypes span ctx adt id
+            Assoc.ctx_adt_get_inst_norm_field_rtypes span ctx id adt.variant_id
               generics
           in
           (* Project over the field values *)
@@ -258,11 +258,14 @@ let symbolic_expansion_non_shared_borrow_to_value (span : Meta.span)
 
 (** Apply (and reduce) a projector over loans to a value.
 
+    Remark: we need the evaluation context only to access the type declarations.
+
     TODO: detailed comments. See [apply_proj_borrows]
 *)
 let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     (regions : RegionId.Set.t) (ancestors_regions : RegionId.Set.t)
-    (see : symbolic_expansion) (original_sv_ty : rty) : typed_avalue =
+    (see : symbolic_expansion) (original_sv_ty : rty) (proj_ty : rty)
+    (ctx : eval_ctx) : typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
   sanity_check __FILE__ __LINE__
@@ -270,23 +273,29 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     span;
   (* Match *)
   let (value, ty) : avalue * ty =
-    match (see, original_sv_ty) with
+    match (see, proj_ty) with
     | SeLiteral lit, TLiteral _ ->
         ( AIgnored (Some { value = VLiteral lit; ty = original_sv_ty }),
           original_sv_ty )
-    | SeAdt (variant_id, field_values), TAdt (_id, _generics) ->
+    | SeAdt (variant_id, field_values), TAdt (adt_id, generics) ->
         (* Project over the field values *)
+        let field_types =
+          AssociatedTypes.ctx_adt_get_inst_norm_field_rtypes span ctx adt_id
+            variant_id generics
+        in
         let field_values =
-          List.map
+          List.map2
             (mk_aproj_loans_value_from_symbolic_value regions)
-            field_values
+            field_values field_types
         in
         (AAdt { variant_id; field_values }, original_sv_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
         (* Sanity check *)
         sanity_check __FILE__ __LINE__ (spc.sv_ty = ref_ty) span;
         (* Apply the projector to the borrowed value *)
-        let child_av = mk_aproj_loans_value_from_symbolic_value regions spc in
+        let child_av =
+          mk_aproj_loans_value_from_symbolic_value regions spc ref_ty
+        in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)
         if region_in_set r regions then
@@ -304,7 +313,9 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
         (* Sanity check *)
         sanity_check __FILE__ __LINE__ (spc.sv_ty = ref_ty) span;
         (* Apply the projector to the borrowed value *)
-        let child_av = mk_aproj_loans_value_from_symbolic_value regions spc in
+        let child_av =
+          mk_aproj_loans_value_from_symbolic_value regions spc ref_ty
+        in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)
         if region_in_set r regions then

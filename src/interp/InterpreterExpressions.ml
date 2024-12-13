@@ -801,8 +801,8 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
               = List.length generics.regions)
               span;
             let expected_field_types =
-              AssociatedTypes.ctx_adt_get_inst_norm_field_etypes span ctx def_id
-                opt_variant_id generics
+              AssociatedTypes.ctx_type_get_inst_norm_field_etypes span ctx
+                def_id opt_variant_id generics
             in
             sanity_check __FILE__ __LINE__
               (expected_field_types

@@ -467,10 +467,11 @@ let type_decl_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
   List.map (ctx_normalize_ty (Some span) ctx) types
 
 (** Same as [ctx_adt_value_get_instantiated_field_rtypes] but normalizes the types *)
-let ctx_adt_value_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
-    (adt : adt_value) (id : type_id) (generics : generic_args) : ty list =
+let ctx_adt_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
+    (id : type_id) (variant_id : variant_id option) (generics : generic_args) :
+    ty list =
   let types =
-    ctx_adt_value_get_instantiated_field_types span ctx adt id generics
+    ctx_adt_get_instantiated_field_types span ctx id variant_id generics
   in
   List.map (ctx_normalize_ty (Some span) ctx) types
 
@@ -485,15 +486,23 @@ let type_decl_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
   let types = List.map (ctx_normalize_ty (Some span) ctx) types in
   List.map erase_regions types
 
-(** Same as [ctx_adt_get_instantiated_field_types] but normalizes the types and
-    erases the regions. *)
-let ctx_adt_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
+(** Same as [ctx_type_get_instantiated_field_types] but normalizes the types. *)
+let ctx_type_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   let types =
-    ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id generics
+    ctx_type_get_instantiated_field_types ctx def_id opt_variant_id generics
   in
-  let types = List.map (ctx_normalize_ty (Some span) ctx) types in
+  List.map (ctx_normalize_ty (Some span) ctx) types
+
+(** Same as [ctx_type_get_instantiated_field_types] but normalizes the types and
+    erases the regions. *)
+let ctx_type_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
+    (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
+  let types =
+    ctx_type_get_inst_norm_field_rtypes span ctx def_id opt_variant_id generics
+  in
   List.map erase_regions types
 
 (** Same as [substitute_signature] but normalizes the types *)

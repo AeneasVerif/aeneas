@@ -271,7 +271,7 @@ type abstract_shared_borrow =
 and abstract_shared_borrows = abstract_shared_borrow list
 
 and aproj =
-  | AProjLoans of symbolic_value * (msymbolic_value * aproj) list
+  | AProjLoans of symbolic_value * ty * (msymbolic_value * aproj) list
       (** A projector of loans over a symbolic value.
 
           Whenever we call a function, we introduce a symbolic value for

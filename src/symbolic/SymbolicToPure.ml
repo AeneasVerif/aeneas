@@ -1856,7 +1856,7 @@ let compute_typed_avalue_proj_kind span (av : V.typed_avalue) :
 
       method! visit_ASymbolic env aproj =
         match aproj with
-        | V.AEndedProjLoans (_, _) | AProjLoans (_, _) ->
+        | V.AEndedProjLoans (_, _) | AProjLoans (_, _, _) ->
             has_loans := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic env aproj
@@ -2058,7 +2058,7 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (aproj : V.aproj) : texpression option
       (* The value should have been introduced by a loan projector, and should not
          contain nested borrows, so we can't get there *)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AEmpty | AProjLoans (_, _) | AProjBorrows (_, _, _) ->
+  | AEmpty | AProjLoans (_, _, _) | AProjBorrows (_, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
@@ -2266,7 +2266,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj)
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
-  | AEmpty | AProjLoans (_, _) | AProjBorrows (_, _, _) ->
+  | AEmpty | AProjLoans (_, _, _) | AProjBorrows (_, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 let typed_avalue_to_given_back (mp : mplace option) (v : V.typed_avalue)

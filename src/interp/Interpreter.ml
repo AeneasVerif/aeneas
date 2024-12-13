@@ -210,7 +210,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     (* Project over the values - we use *loan* projectors, as explained above *)
     let avalues =
       List.map
-        (mk_aproj_loans_value_from_symbolic_value abs.regions.owned)
+        (fun (sv : symbolic_value) ->
+          mk_aproj_loans_value_from_symbolic_value abs.regions.owned sv sv.sv_ty)
         input_svs
     in
     (ctx, avalues)
@@ -286,9 +287,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let ret_value, ctx, cc = pop_frame config span pop_return_value ctx in
 
   (* We need to find the parents regions/abstractions of the region we
-   * will end - this will allow us to, first, mark the other return
-   * regions as non-endable, and, second, end those parent regions in
-   * proper order. *)
+     will end - this will allow us to, first, mark the other return
+     regions as non-endable, and, second, end those parent regions in
+     proper order. *)
   let parent_rgs = list_ancestor_region_groups regions_hierarchy back_id in
   let parent_input_abs_ids =
     RegionGroupId.mapi
@@ -317,11 +318,11 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       in
 
       (* Initialize and insert the abstractions in the context.
-       *
-       * We take care of allowing to end only the regions which should end (note
-       * that this is important for soundness: this is part of the borrow checking).
-       * Also see the documentation of the [can_end] field of [abs] for more
-       * information. *)
+
+         We take care of allowing to end only the regions which should end (note
+         that this is important for soundness: this is part of the borrow checking).
+         Also see the documentation of the [can_end] field of [abs] for more
+         information. *)
       let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
       let region_can_end rid =
         RegionGroupId.Set.mem rid parent_and_current_rgs

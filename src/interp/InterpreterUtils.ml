@@ -122,10 +122,10 @@ let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
     
     TODO: update to handle 'static
  *)
-let mk_aproj_loans_value_from_symbolic_value (regions : RegionId.Set.t)
-    (svalue : symbolic_value) : typed_avalue =
-  if ty_has_regions_in_set regions svalue.sv_ty then
-    let av = ASymbolic (AProjLoans (svalue, [])) in
+let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
+    (svalue : symbolic_value) (proj_ty : ty) : typed_avalue =
+  if ty_has_regions_in_set proj_regions proj_ty then
+    let av = ASymbolic (AProjLoans (svalue, proj_ty, [])) in
     let av : typed_avalue = { value = av; ty = svalue.sv_ty } in
     av
   else
@@ -210,6 +210,10 @@ exception FoundGLoanContent of g_loan_content
 exception
   FoundAProjBorrows of symbolic_value * ty * (msymbolic_value * aproj) list
 
+(** Utility exception *)
+exception
+  FoundAProjLoans of symbolic_value * ty * (msymbolic_value * aproj) list
+
 let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
     bool =
   let obj =
@@ -221,7 +225,7 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
 
       method! visit_aproj env aproj =
         (match aproj with
-        | AProjLoans (sv, _) | AProjBorrows (sv, _, _) ->
+        | AProjLoans (sv, _, _) | AProjBorrows (sv, _, _) ->
             if sv.sv_id = sv_id then raise Found else ()
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env aproj

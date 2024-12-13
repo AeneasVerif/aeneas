@@ -77,7 +77,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
         *)
       method! visit_aproj current_abs aproj =
         (match aproj with
-        | AProjLoans (sv, _) | AProjBorrows (sv, _, _) ->
+        | AProjLoans (sv, _, _) | AProjBorrows (sv, _, _) ->
             sanity_check __FILE__ __LINE__
               (not (same_symbolic_id sv original_sv))
               span
@@ -96,7 +96,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
             (* Explore the given back values to make sure we don't have to expand
              * anything in there *)
             ASymbolic (self#visit_aproj (Some current_abs) aproj)
-        | AProjLoans (sv, given_back), LoanProj ->
+        | AProjLoans (sv, proj_ty, given_back), LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then (
               (* There mustn't be any given back values *)
@@ -104,7 +104,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion span proj_regions
-                  ancestors_regions expansion original_sv.sv_ty
+                  ancestors_regions expansion original_sv.sv_ty proj_ty ctx
               in
               (* Replace *)
               projected_value.value)
@@ -365,7 +365,7 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
         *)
       method! visit_aproj proj_regions aproj =
         (match aproj with
-        | AProjLoans (sv, _) | AProjBorrows (sv, _, _) ->
+        | AProjLoans (sv, _, _) | AProjBorrows (sv, _, _) ->
             sanity_check __FILE__ __LINE__
               (not (same_symbolic_id sv original_sv))
               span

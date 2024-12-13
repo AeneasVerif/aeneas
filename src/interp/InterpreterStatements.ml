@@ -354,6 +354,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
   (* Move the return value out of the return variable *)
   let v, ctx, cc1 = move_return_value config span pop_return_value ctx in
   let cc = cc_comp cc cc1 in
+  (* Check that the return value is valid (i.e., it doesn't contain the bottom value) *)
   let _ =
     match v with
     | None -> ()
@@ -1397,7 +1398,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
   let ret_av regions =
-    mk_aproj_loans_value_from_symbolic_value regions ret_spc
+    mk_aproj_loans_value_from_symbolic_value regions ret_spc ret_sv_ty
   in
   let args_places =
     List.map (fun p -> S.mk_opt_place_from_op span p ctx) args

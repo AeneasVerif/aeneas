@@ -36,8 +36,7 @@ module Values = struct
 
   let symbolic_value_proj_to_string (env : fmt_env) (sv : symbolic_value)
       (rty : ty) : string =
-    symbolic_value_id_to_pretty_string sv.sv_id
-    ^ " : " ^ ty_to_string env sv.sv_ty ^ " <: " ^ ty_to_string env rty
+    symbolic_value_id_to_pretty_string sv.sv_id ^ " <: " ^ ty_to_string env rty
 
   (* TODO: it may be a good idea to try to factorize this function with
    * typed_avalue_to_string. At some point we had done it, because [typed_value]
@@ -127,7 +126,7 @@ module Values = struct
 
   let rec aproj_to_string (env : fmt_env) (pv : aproj) : string =
     match pv with
-    | AProjLoans (sv, given_back) ->
+    | AProjLoans (sv, rty, given_back) ->
         let given_back =
           if given_back = [] then ""
           else
@@ -135,7 +134,7 @@ module Values = struct
             let given_back = List.map (aproj_to_string env) given_back in
             " (" ^ String.concat "," given_back ^ ") "
         in
-        "⌊" ^ symbolic_value_to_string env sv ^ given_back ^ "⌋"
+        "⌊" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ "⌋"
     | AProjBorrows (sv, rty, given_back) ->
         let given_back =
           if given_back = [] then ""
