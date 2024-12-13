@@ -334,8 +334,26 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
       ^ String.concat "," (List.map VarId.to_string locals)
       ^ "]"));
 
+  (* Drop the outer *loans* we find in the local variables *)
+  let ctx, cc =
+    (* Drop the loans *)
+    let locals = List.rev locals in
+    fold_left_apply_continuation
+      (fun lid ctx ->
+        drop_outer_loans_at_lplace config span
+          (mk_place_from_var_id ctx span lid)
+          ctx)
+      locals ctx
+  in
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("pop_frame: after dropping outer loans in local variables:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx));
+
   (* Move the return value out of the return variable *)
-  let v, ctx, cc = move_return_value config span pop_return_value ctx in
+  let v, ctx, cc1 = move_return_value config span pop_return_value ctx in
+  let cc = cc_comp cc cc1 in
   let _ =
     match v with
     | None -> ()
@@ -344,24 +362,6 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
           (not (bottom_in_value ctx.ended_regions ret_value))
           span
   in
-
-  (* Drop the outer *loans* we find in the local variables *)
-  let ctx, cc =
-    comp cc
-      ((* Drop the loans *)
-       let locals = List.rev locals in
-       fold_left_apply_continuation
-         (fun lid ctx ->
-           drop_outer_loans_at_lplace config span
-             (mk_place_from_var_id ctx span lid)
-             ctx)
-         locals ctx)
-  in
-  (* Debug *)
-  log#ldebug
-    (lazy
-      ("pop_frame: after dropping outer loans in local variables:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx));
 
   (* Pop the frame - we remove the [Frame] delimiter, and reintroduce all
    * the local variables (which may still contain borrow permissions - but
