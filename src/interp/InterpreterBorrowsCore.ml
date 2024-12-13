@@ -563,13 +563,13 @@ let update_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
     The borrow is referred to by a borrow id.
 
-    This is a helper function: it might break invariants.     
+    This is a helper function: **it might break invariants**.
  *)
 let update_aborrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (nv : avalue) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
-   * inside values, we check we don't update more than one borrow. Then, upon
-   * returning we check that we updated at least once. *)
+     inside values, we check we don't update more than one borrow. Then, upon
+     returning we check that we updated at least once. *)
   let r = ref false in
   let update () : avalue =
     sanity_check __FILE__ __LINE__ (not !r) span;

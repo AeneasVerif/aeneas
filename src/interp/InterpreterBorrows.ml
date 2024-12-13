@@ -26,6 +26,8 @@ let log = Logging.borrows_log
       allows us to use {!end_borrow_aux} as an auxiliary function for
       {!end_abstraction_aux} (we end all the borrows in the abstraction one by one
       before removing the abstraction from the context).
+      We use this to end shared borrows and mutable borrows inside of **shared values**;
+      the other borrows are taken care of differently.
 *)
 let end_borrow_get_borrow (span : Meta.span)
     (allowed_abs : AbstractionId.id option) (l : BorrowId.id) (ctx : eval_ctx) :
@@ -78,8 +80,8 @@ let end_borrow_get_borrow (span : Meta.span)
             | VMutLoan bid -> raise (FoundPriority (InnerLoans (Borrow bid)))))
   in
 
-  (* The environment is used to keep track of the outer loans *)
-  let obj =
+  (* The environment in the visitor is used to keep track of the outer loans *)
+  let visitor =
     object
       inherit [_] map_eval_ctx as super
 
@@ -231,7 +233,7 @@ let end_borrow_get_borrow (span : Meta.span)
   in
   (* Catch the exceptions - raised if there are outer borrows *)
   try
-    let ctx = obj#visit_eval_ctx (None, None) ctx in
+    let ctx = visitor#visit_eval_ctx (None, None) ctx in
     Ok (ctx, !replaced_bc)
   with FoundPriority outers -> Error outers
 
@@ -294,7 +296,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
         match lc with
         | VSharedLoan (bids, v) ->
             (* We are giving back a value (i.e., the content of a *mutable*
-             * borrow): nothing special to do *)
+               borrow): nothing special to do *)
             VLoan (super#visit_VSharedLoan opt_abs bids v)
         | VMutLoan bid' ->
             (* Check if this is the loan we are looking for *)
@@ -1013,10 +1015,10 @@ and end_abstraction_aux (config : config) (span : Meta.span)
       ^ "\n- original context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx0));
 
-  (* Lookup the abstraction - note that if we end a list of abstractions,
-     ending one abstraction may lead to the current abstraction having
-     preemptively been ended, so the abstraction might not be in the context
-     anymore. *)
+  (* Lookup the abstraction - note that if we end a list of abstractions [A1, A0],
+     ending the first abstraction A1 may require the last abstraction A0 to
+     end first, so when reaching the end of the list, A0 might not be in the
+     context anymore, meaning we have to simply ignore it. *)
   match ctx_lookup_abs_opt ctx abs_id with
   | None ->
       log#ldebug
@@ -1155,21 +1157,21 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
      initially replaced the ended mut borrows with ⊥).
   *)
   (* We explore in-depth and use exceptions. When exploring a borrow, if
-   * the exploration didn't trigger an exception, it means there are no
-   * inner borrows to end: we can thus trigger an exception for the current
-   * borrow.
-   *
-   * TODO: there should be a function in InterpreterBorrowsCore which does just
-   * that.
-   *)
-  let obj =
+     the exploration didn't trigger an exception, it means there are no
+     inner borrows to end: we can thus trigger an exception for the current
+     borrow.
+
+     TODO: we should implement a function in InterpreterBorrowsCore to do
+     exactly that.
+  *)
+  let visitor =
     object
       inherit [_] iter_abs as super
 
       method! visit_aborrow_content env bc =
         (* In-depth exploration *)
         super#visit_aborrow_content env bc;
-        (* No exception was raise: we can raise an exception for the
+        (* No exception was raised: we can raise an exception for the
          * current borrow *)
         match bc with
         | AMutBorrow _ | ASharedBorrow _ ->
@@ -1211,11 +1213,11 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
   let abs = ctx_lookup_abs ctx abs_id in
   try
     (* Explore the abstraction, looking for borrows *)
-    obj#visit_abs () abs;
+    visitor#visit_abs () abs;
     (* No borrows: nothing to update *)
     (ctx, fun e -> e)
   with
-  (* There are concrete (i.e., not symbolic) borrows: end them, then reexplore *)
+  (* There are concrete (i.e., not symbolic) borrows: end them, then re-explore *)
   | FoundABorrowContent bc ->
       log#ldebug
         (lazy
@@ -1228,7 +1230,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             (* First, convert the avalue to a (fresh symbolic) value *)
             let sv = convert_avalue_to_given_back_value span av in
             (* Replace the mut borrow to register the fact that we ended
-             * it and store with it the freshly generated given back value *)
+               it and store with it the freshly generated given back value *)
             let ended_borrow = ABorrow (AEndedMutBorrow (sv, av)) in
             let ctx = update_aborrow span ek_all bid ended_borrow ctx in
             (* Give the value back *)
@@ -1252,7 +1254,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
                 asb
             in
             (* There should be at least one borrow identifier in the set, which we
-             * can use to identify the whole set *)
+               can use to identify the whole set *)
             let repr_bid = List.hd bids in
             (* Replace the shared borrow with Bottom *)
             let ctx = update_aborrow span ek_all repr_bid ABottom ctx in
