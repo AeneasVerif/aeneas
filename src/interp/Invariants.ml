@@ -697,7 +697,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 sanity_check __FILE__ __LINE__
                   (ty_has_regions_in_set abs.regions.owned sv.sv_ty)
                   span
-            | AProjBorrows (sv, proj_ty) ->
+            | AProjBorrows (sv, proj_ty, _) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
                 sanity_check __FILE__ __LINE__ (ty1 = ty2) span;
                 (* Also check that the symbolic values contain regions of interest -
@@ -710,12 +710,12 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 List.iter
                   (fun (_, proj) ->
                     match proj with
-                    | AProjBorrows (_sv, ty') ->
+                    | AProjBorrows (_sv, ty', _) ->
                         sanity_check __FILE__ __LINE__ (ty' = ty) span
-                    | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
+                    | AEndedProjBorrows _ | AEmpty -> ()
                     | _ -> craise __FILE__ __LINE__ span "Unexpected")
                   given_back_ls
-            | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
+            | AEndedProjBorrows _ | AEmpty -> ())
         | AIgnored _, _ -> ()
         | _ ->
             log#ltrace
@@ -812,9 +812,9 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
         (let abs = Option.get abs in
          match aproj with
          | AProjLoans (sv, _) -> add_aproj_loans sv abs.abs_id abs.regions.owned
-         | AProjBorrows (sv, proj_ty) ->
+         | AProjBorrows (sv, proj_ty, _) ->
              add_aproj_borrows sv abs.abs_id abs.regions.owned proj_ty false
-         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
+         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj abs aproj
     end
   in

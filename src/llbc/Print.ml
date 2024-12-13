@@ -136,16 +136,28 @@ module Values = struct
             " (" ^ String.concat "," given_back ^ ") "
         in
         "⌊" ^ symbolic_value_to_string env sv ^ given_back ^ "⌋"
-    | AProjBorrows (sv, rty) ->
-        "(" ^ symbolic_value_proj_to_string env sv rty ^ ")"
+    | AProjBorrows (sv, rty, given_back) ->
+        let given_back =
+          if given_back = [] then ""
+          else
+            let given_back = List.map snd given_back in
+            let given_back = List.map (aproj_to_string env) given_back in
+            " (" ^ String.concat "," given_back ^ ") "
+        in
+        "(" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ ")"
     | AEndedProjLoans (_, given_back) ->
         if given_back = [] then "_"
         else
           let given_back = List.map snd given_back in
           let given_back = List.map (aproj_to_string env) given_back in
           "ended_aproj_loans (" ^ String.concat "," given_back ^ ")"
-    | AEndedProjBorrows _mv -> "_"
-    | AIgnoredProjBorrows -> "_"
+    | AEndedProjBorrows (_, given_back) ->
+        if given_back = [] then "_"
+        else
+          let given_back = List.map snd given_back in
+          let given_back = List.map (aproj_to_string env) given_back in
+          "ended_aproj_borrows (" ^ String.concat "," given_back ^ ")"
+    | AEmpty -> "_"
 
   (** Wrap a value inside its marker, if there is one *)
   let add_proj_marker (pm : proj_marker) (s : string) : string =

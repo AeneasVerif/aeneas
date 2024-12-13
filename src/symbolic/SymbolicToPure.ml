@@ -1860,7 +1860,7 @@ let compute_typed_avalue_proj_kind span (av : V.typed_avalue) :
             has_loans := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic env aproj
-        | AEndedProjBorrows _ | AIgnoredProjBorrows | AProjBorrows (_, _) ->
+        | AEndedProjBorrows _ | AEmpty | AProjBorrows (_, _, _) ->
             has_borrows := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic env aproj
@@ -2047,9 +2047,7 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (aproj : V.aproj) : texpression option
       (* The symbolic value was left unchanged *)
       Some (symbolic_value_to_texpression ctx msv)
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
-      sanity_check __FILE__ __LINE__
-        (child_aproj = AIgnoredProjBorrows)
-        ctx.span;
+      sanity_check __FILE__ __LINE__ (child_aproj = AEmpty) ctx.span;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
@@ -2060,7 +2058,7 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (aproj : V.aproj) : texpression option
       (* The value should have been introduced by a loan projector, and should not
          contain nested borrows, so we can't get there *)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
+  | AEmpty | AProjLoans (_, _) | AProjBorrows (_, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
@@ -2263,11 +2261,12 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match aproj with
   | V.AEndedProjLoans (_, _) -> craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AEndedProjBorrows mv ->
+  | AEndedProjBorrows (mv, given_back) ->
+      cassert __FILE__ __LINE__ (given_back = []) ctx.span "Unreachable";
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))
-  | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
+  | AEmpty | AProjLoans (_, _) | AProjBorrows (_, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 let typed_avalue_to_given_back (mp : mplace option) (v : V.typed_avalue)

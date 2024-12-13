@@ -140,8 +140,8 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
     aproj =
   sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) span;
   if ty_has_regions_in_set proj_regions proj_ty then
-    AProjBorrows (svalue, proj_ty)
-  else AIgnoredProjBorrows
+    AProjBorrows (svalue, proj_ty, [])
+  else AEmpty
 
 (** TODO: move *)
 let borrow_is_asb (bid : BorrowId.id) (asb : abstract_shared_borrow) : bool =
@@ -207,7 +207,8 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 
 (** Utility exception *)
-exception FoundAProjBorrows of symbolic_value * ty
+exception
+  FoundAProjBorrows of symbolic_value * ty * (msymbolic_value * aproj) list
 
 let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
     bool =
@@ -220,9 +221,9 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
 
       method! visit_aproj env aproj =
         (match aproj with
-        | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
+        | AProjLoans (sv, _) | AProjBorrows (sv, _, _) ->
             if sv.sv_id = sv_id then raise Found else ()
-        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env aproj
 
       method! visit_abstract_shared_borrows _ asb =

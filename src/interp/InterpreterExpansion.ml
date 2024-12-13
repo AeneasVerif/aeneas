@@ -77,11 +77,11 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
         *)
       method! visit_aproj current_abs aproj =
         (match aproj with
-        | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
+        | AProjLoans (sv, _) | AProjBorrows (sv, _, _) ->
             sanity_check __FILE__ __LINE__
               (not (same_symbolic_id sv original_sv))
               span
-        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj current_abs aproj
 
       method! visit_ASymbolic current_abs aproj =
@@ -111,7 +111,13 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) aproj
-        | AProjBorrows (sv, proj_ty), BorrowProj ->
+        | AProjBorrows (sv, proj_ty, given_back), BorrowProj ->
+            (* We should never expand a symbolic value which has consumed given
+               back values (because then it means the symbolic value was consumed
+               by region abstractions, and is thus inaccessible: such a value can't
+               be expanded)
+            *)
+            cassert __FILE__ __LINE__ (given_back = []) span "Unreachable";
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then
               (* Convert the symbolic expansion to a value on which we can
@@ -135,8 +141,8 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) aproj
         | AProjLoans _, BorrowProj
-        | AProjBorrows (_, _), LoanProj
-        | AIgnoredProjBorrows, _ ->
+        | AProjBorrows (_, _, _), LoanProj
+        | AEmpty, _ ->
             (* Nothing to do *)
             ASymbolic aproj
     end
@@ -359,21 +365,27 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
         *)
       method! visit_aproj proj_regions aproj =
         (match aproj with
-        | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
+        | AProjLoans (sv, _) | AProjBorrows (sv, _, _) ->
             sanity_check __FILE__ __LINE__
               (not (same_symbolic_id sv original_sv))
               span
-        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj proj_regions aproj
 
       method! visit_ASymbolic proj_regions aproj =
         match aproj with
-        | AEndedProjBorrows _ | AIgnoredProjBorrows ->
+        | AEndedProjBorrows _ | AEmpty ->
             (* We ignore borrows *) ASymbolic aproj
         | AProjLoans _ ->
             (* Loans are handled later *)
             ASymbolic aproj
-        | AProjBorrows (sv, proj_ty) -> (
+        | AProjBorrows (sv, proj_ty, given_back) -> (
+            (* We should never expand a symbolic value which has consumed given
+               back values (because then it means the symbolic value was consumed
+               by region abstractions, and is thus inaccessible: such a value can't
+               be expanded)
+            *)
+            cassert __FILE__ __LINE__ (given_back = []) span "Unreachable";
             (* Check if we need to reborrow *)
             match reborrow_ashared (Option.get proj_regions) sv proj_ty with
             | None -> super#visit_ASymbolic proj_regions aproj
@@ -609,7 +621,10 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
 
       method! visit_VSymbolic _ sv =
         if ty_has_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty then
-          raise (FoundSymbolicValue sv)
+          (* Ignore arrays and slices, as we can't expand them *)
+          match sv.sv_ty with
+          | TAdt (TBuiltin (TArray | TSlice), _) -> ()
+          | _ -> raise (FoundSymbolicValue sv)
         else ()
 
       (** Don't enter abstractions *)

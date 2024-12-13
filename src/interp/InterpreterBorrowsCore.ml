@@ -768,11 +768,8 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
       method! visit_aproj abs sproj =
         (let abs = Option.get abs in
          match sproj with
-         | AProjLoans _
-         | AEndedProjLoans _
-         | AEndedProjBorrows _
-         | AIgnoredProjBorrows -> ()
-         | AProjBorrows (sv', proj_rty) ->
+         | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ()
+         | AProjBorrows (sv', proj_rty, _) ->
              let is_shared = false in
              check_add_proj_borrows is_shared abs sv' proj_rty);
         super#visit_aproj abs sproj
@@ -807,14 +804,21 @@ let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
 (** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the
     values.
 
-    This is a helper function: it might break invariants.
+    This is a helper function: **it might break invariants**.
+
+    [include_ancestors]: when exploring an abstraction and computing projection
+    intersections, use the ancestor regions.
+    [include_owned]: when exploring an abstraction and computing projection
+    intersections, use the owned regions.
  *)
 let update_intersecting_aproj_borrows (span : Meta.span)
-    (can_update_shared : bool)
-    (update_shared : AbstractionId.id -> rty -> abstract_shared_borrows)
-    (update_non_shared : AbstractionId.id -> rty -> aproj)
-    (regions : RegionId.Set.t) (sv : symbolic_value) (ctx : eval_ctx) : eval_ctx
-    =
+    ~(include_ancestors : bool) ~(include_owned : bool)
+    ~(update_shared :
+       (abs -> symbolic_value -> rty -> abstract_shared_borrows) option)
+    ~(update_mut :
+       abs -> symbolic_value -> rty -> (msymbolic_value * aproj) list -> aproj)
+    (proj_regions : RegionId.Set.t) (sv : symbolic_value) (ctx : eval_ctx) :
+    eval_ctx =
   (* Small helpers for sanity checks *)
   let shared = ref None in
   let add_shared () =
@@ -830,10 +834,18 @@ let update_intersecting_aproj_borrows (span : Meta.span)
           "Found unexpected intersecting proj_borrows"
   in
   let check_proj_borrows is_shared abs sv' proj_ty =
+    let intersect_regions =
+      let intersect_regions =
+        if include_ancestors then abs.regions.ancestors else RegionId.Set.empty
+      in
+      if include_owned then
+        RegionId.Set.union abs.regions.owned intersect_regions
+      else intersect_regions
+    in
     if
       proj_borrows_intersects_proj_loans span
-        (abs.regions.owned, sv', proj_ty)
-        (regions, sv)
+        (intersect_regions, sv', proj_ty)
+        (proj_regions, sv)
     then (
       if is_shared then add_shared () else set_non_shared ();
       true)
@@ -851,31 +863,31 @@ let update_intersecting_aproj_borrows (span : Meta.span)
         | Some b -> sanity_check __FILE__ __LINE__ b span
         | _ -> ());
         (* Explore *)
-        if can_update_shared then
-          let abs = Option.get abs in
-          let update (asb : abstract_shared_borrow) : abstract_shared_borrows =
-            match asb with
-            | AsbBorrow _ -> [ asb ]
-            | AsbProjReborrows (sv', proj_ty) ->
-                let is_shared = true in
-                if check_proj_borrows is_shared abs sv' proj_ty then
-                  update_shared abs.abs_id proj_ty
-                else [ asb ]
-          in
-          List.concat (List.map update asb)
-        else asb
+        match update_shared with
+        | Some update_shared ->
+            let abs = Option.get abs in
+            let update (asb : abstract_shared_borrow) : abstract_shared_borrows
+                =
+              match asb with
+              | AsbBorrow _ -> [ asb ]
+              | AsbProjReborrows (sv', proj_ty) ->
+                  let is_shared = true in
+                  if check_proj_borrows is_shared abs sv' proj_ty then
+                    update_shared abs sv' proj_ty
+                  else [ asb ]
+            in
+            List.concat (List.map update asb)
+        | _ -> asb
 
       method! visit_aproj abs sproj =
         match sproj with
-        | AProjLoans _
-        | AEndedProjLoans _
-        | AEndedProjBorrows _
-        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
-        | AProjBorrows (sv', proj_rty) ->
+        | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            super#visit_aproj abs sproj
+        | AProjBorrows (sv', proj_rty, given_back) ->
             let abs = Option.get abs in
             let is_shared = true in
             if check_proj_borrows is_shared abs sv' proj_rty then
-              update_non_shared abs.abs_id proj_rty
+              update_mut abs sv' proj_rty given_back
             else super#visit_aproj (Some abs) sproj
     end
   in
@@ -894,22 +906,21 @@ let update_intersecting_aproj_borrows (span : Meta.span)
 
     This is a helper function: it might break invariants.
  *)
-let update_intersecting_aproj_borrows_non_shared (span : Meta.span)
-    (regions : RegionId.Set.t) (sv : symbolic_value) (nv : aproj)
+let update_intersecting_aproj_borrows_mut (span : Meta.span)
+    ~(include_ancestors : bool) ~(include_owned : bool)
+    (proj_regions : RegionId.Set.t) (sv : symbolic_value) (nv : aproj)
     (ctx : eval_ctx) : eval_ctx =
   (* Small helpers *)
-  let can_update_shared = false in
-  let update_shared _ _ = craise __FILE__ __LINE__ span "Unexpected" in
   let updated = ref false in
-  let update_non_shared _ _ =
+  let update_mut _ _ _ _ =
     (* We can update more than one borrow! *)
     updated := true;
     nv
   in
   (* Update *)
   let ctx =
-    update_intersecting_aproj_borrows span can_update_shared update_shared
-      update_non_shared regions sv ctx
+    update_intersecting_aproj_borrows span ~include_ancestors ~include_owned
+      ~update_shared:None ~update_mut proj_regions sv ctx
   in
   (* Check that we updated at least once *)
   sanity_check __FILE__ __LINE__ !updated span;
@@ -922,15 +933,15 @@ let update_intersecting_aproj_borrows_non_shared (span : Meta.span)
     This is a helper function: it might break invariants.
  *)
 let remove_intersecting_aproj_borrows_shared (span : Meta.span)
+    ~(include_ancestors : bool) ~(include_owned : bool)
     (regions : RegionId.Set.t) (sv : symbolic_value) (ctx : eval_ctx) : eval_ctx
     =
   (* Small helpers *)
-  let can_update_shared = true in
-  let update_shared _ _ = [] in
-  let update_non_shared _ _ = craise __FILE__ __LINE__ span "Unexpected" in
+  let update_shared = Some (fun _ _ _ -> []) in
+  let update_mut _ _ = craise __FILE__ __LINE__ span "Unexpected" in
   (* Update *)
-  update_intersecting_aproj_borrows span can_update_shared update_shared
-    update_non_shared regions sv ctx
+  update_intersecting_aproj_borrows span ~include_ancestors ~include_owned
+    ~update_shared ~update_mut regions sv ctx
 
 (** Updates the proj_loans intersecting some projection.
 
@@ -962,8 +973,14 @@ let remove_intersecting_aproj_borrows_shared (span : Meta.span)
     loans where we perform the substitution (see the fields in {!Values.AProjLoans}).
     Note that the symbolic value at this place is necessarily equal to [sv],
     which is why we don't give it as parameters.
+
+    [include_ancestors]: when exploring an abstraction and computing projection
+    intersections, use the ancestor regions.
+    [include_owned]: when exploring an abstraction and computing projection
+    intersections, use the owned regions.
  *)
 let update_intersecting_aproj_loans (span : Meta.span)
+    ~(include_ancestors : bool) ~(include_owned : bool)
     (proj_regions : RegionId.Set.t) (proj_ty : rty) (sv : symbolic_value)
     (subst : abs -> (msymbolic_value * aproj) list -> aproj) (ctx : eval_ctx) :
     eval_ctx =
@@ -984,17 +1001,26 @@ let update_intersecting_aproj_loans (span : Meta.span)
 
       method! visit_aproj abs sproj =
         match sproj with
-        | AProjBorrows _
-        | AEndedProjLoans _
-        | AEndedProjBorrows _
-        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            super#visit_aproj abs sproj
         | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
             if same_symbolic_id sv sv' then (
               sanity_check __FILE__ __LINE__ (sv.sv_ty = sv'.sv_ty) span;
+              let regions = RegionId.Set.empty in
+              let regions =
+                if include_ancestors then
+                  RegionId.Set.union abs.regions.ancestors regions
+                else regions
+              in
+              let regions =
+                if include_owned then
+                  RegionId.Set.union abs.regions.owned regions
+                else regions
+              in
               if
                 projections_intersect span proj_ty proj_regions sv'.sv_ty
-                  abs.regions.owned
+                  regions
               then update abs given_back
               else super#visit_aproj (Some abs) sproj)
             else super#visit_aproj (Some abs) sproj
@@ -1036,10 +1062,8 @@ let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
 
       method! visit_aproj (abs : abs option) sproj =
         (match sproj with
-        | AProjBorrows _
-        | AEndedProjLoans _
-        | AEndedProjBorrows _
-        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            super#visit_aproj abs sproj
         | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
             sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
@@ -1083,10 +1107,8 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
 
       method! visit_aproj (abs : abs option) sproj =
         match sproj with
-        | AProjBorrows _
-        | AEndedProjLoans _
-        | AEndedProjBorrows _
-        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            super#visit_aproj abs sproj
         | AProjLoans (sv', _) ->
             let abs = Option.get abs in
             sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
@@ -1133,11 +1155,9 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
 
       method! visit_aproj (abs : abs option) sproj =
         match sproj with
-        | AProjLoans _
-        | AEndedProjLoans _
-        | AEndedProjBorrows _
-        | AIgnoredProjBorrows -> super#visit_aproj abs sproj
-        | AProjBorrows (sv', _proj_ty) ->
+        | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            super#visit_aproj abs sproj
+        | AProjBorrows (sv', _proj_ty, _given_back) ->
             let abs = Option.get abs in
             sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
             if sv'.sv_id = sv.sv_id then (
@@ -1178,8 +1198,8 @@ let no_aproj_over_symbolic_in_context (span : Meta.span) (sv : symbolic_value)
 
       method! visit_aproj env sproj =
         (match sproj with
-        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
-        | AProjLoans (sv', _) | AProjBorrows (sv', _) ->
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ()
+        | AProjLoans (sv', _) | AProjBorrows (sv', _, _) ->
             if sv'.sv_id = sv.sv_id then raise Found else ());
         super#visit_aproj env sproj
     end
@@ -1235,8 +1255,8 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
 
       method! visit_aproj env sproj =
         (match sproj with
-        | AProjBorrows (_, _)
-        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
+        | AProjBorrows (_, _, _)
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ()
         | AProjLoans (sv, _) -> raise (ValuesUtils.FoundSymbolicValue sv));
         super#visit_aproj env sproj
     end

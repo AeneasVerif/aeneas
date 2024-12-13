@@ -273,7 +273,7 @@ and abstract_shared_borrows = abstract_shared_borrow list
 and aproj =
   | AProjLoans of symbolic_value * (msymbolic_value * aproj) list
       (** A projector of loans over a symbolic value.
-      
+
           Whenever we call a function, we introduce a symbolic value for
           the returned value. We insert projectors of loans over this
           symbolic value in the abstractions introduced by this function
@@ -293,10 +293,10 @@ and aproj =
             g(move p);
 
             // Symbolic context after the call to g:
-            // abs'a {'a} { [s@0 <: (&'a mut u32, &'a mut u32)] }
+            // abs'a {'a} { proj_loans   [s@0 <: (&'a mut u32, &'a mut u32)] }
             //
-            // abs'b {'b} { (s@0 <: (&'b mut u32, &'c mut u32)) }
-            // abs'c {'c} { (s@0 <: (&'b mut u32, &'c mut u32)) }
+            // abs'b {'b} { proj_borrows (s@0 <: (&'b mut u32, &'c mut u32)) }
+            // abs'c {'c} { proj_borrows (s@0 <: (&'b mut u32, &'c mut u32)) }
           ]}
           
           Upon evaluating the call to [f], we introduce a symbolic value [s@0]
@@ -311,13 +311,28 @@ and aproj =
           anywhere in the context below a projector of borrows which intersects
           this projector of loans.
        *)
-  | AProjBorrows of symbolic_value * ty
+  | AProjBorrows of symbolic_value * ty * (msymbolic_value * aproj) list
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use {!abstract_shared_borrow}.
           
           Also note that once given to a borrow projection, a symbolic value
           can't get updated/expanded: this means that we don't need to save
           any meta-value here.
+
+          Finally, we have the same problem as with loans, that is we may
+          need to reproject loans coming from several abstractions. Consider
+          for instance what happens if we end abs1 and abs2 below: the borrow
+          projector inside of abs0 will receive parts of their given back symbolic
+          values:
+          {[
+            ...
+            abs0 {'c} { proj_borrows (s@0 : (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
+            ...
+
+            abs1 {'a} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
+            abs2 {'b} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
+            ...
+          ]}
        *)
   | AEndedProjLoans of msymbolic_value * (msymbolic_value * aproj) list
       (** An ended projector of loans over a symbolic value.
@@ -326,12 +341,12 @@ and aproj =
           
           Note that we keep the original symbolic value as a meta-value.
        *)
-  | AEndedProjBorrows of msymbolic_value
+  | AEndedProjBorrows of msymbolic_value * (msymbolic_value * aproj) list
       (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
           purposes, the symbolic value which was generated and given back upon
           ending the borrow.
        *)
-  | AIgnoredProjBorrows
+  | AEmpty  (** Nothing to project (because there are no borrows, etc.) *)
 
 (** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.
