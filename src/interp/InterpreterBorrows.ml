@@ -1211,6 +1211,11 @@ and end_abstractions_aux (config : config) (span : Meta.span)
 and end_abstraction_loans (config : config) (span : Meta.span)
     (chain : borrow_or_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
  fun ctx ->
+  log#ldebug
+    (lazy
+      ("end_abstraction_loans:" ^ "\n- abs_id: "
+      ^ AbstractionId.to_string abs_id
+      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx));
   (* Lookup the abstraction *)
   let abs = ctx_lookup_abs ctx abs_id in
   (* End the first loan we find.
@@ -1441,11 +1446,29 @@ and end_abstraction_remove_from_context (_config : config) (span : Meta.span)
       - if we put aside the proj_borrows_shared, there should be exactly one
         intersecting proj_borrows, either in the concrete context or in an
         abstraction
+
+    Note that we may get recursively get here after a sequence of updates which
+    look like this:
+    - attempt ending a loan projector
+    - end a borrow projector before, and by doing this actually end the loan projector
+    - retry ending the loan projector
+    We thus have to be careful about the fact that maybe the loan projector actually
+    doesn't exist anymore when we get here.
 *)
 and end_proj_loans_symbolic (config : config) (span : Meta.span)
     (chain : borrow_or_abs_ids) (abs_id : AbstractionId.id)
     (regions : RegionId.Set.t) (sv : symbolic_value) (proj_ty : rty) : cm_fun =
  fun ctx ->
+  log#ldebug
+    (lazy
+      ("end_proj_loans_symbolic:" ^ "\n- abs_id: "
+      ^ AbstractionId.to_string abs_id
+      ^ "\n- regions: "
+      ^ RegionId.Set.to_string None regions
+      ^ "\n- sv: "
+      ^ symbolic_value_to_string ctx sv
+      ^ "\n- projection type: " ^ ty_to_string ctx proj_ty ^ "\n- ctx:\n"
+      ^ eval_ctx_to_string ctx));
   (* Small helpers for sanity checks *)
   let check ctx = no_aproj_over_symbolic_in_context span sv ctx in
   (* Find the first proj_borrows which intersects the proj_loans *)
@@ -1456,9 +1479,10 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
   with
   | None ->
       (* We couldn't find any in the context: it means that the symbolic value
-       * is in the concrete environment (or that we dropped it, in which case
-       * it is completely absent). We thus simply need to replace the loans
-       * projector with an ended projector. *)
+         is in the concrete environment (or that we dropped it, in which case
+         it is completely absent). We thus simply need to replace the loans
+         projector with an ended projector.
+      *)
       let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
       (* Sanity check *)
       check ctx;
@@ -1519,40 +1543,42 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
       (ctx, cc)
   | Some (NonSharedProj (abs_id', _proj_ty)) ->
       (* We found one projector of borrows in an abstraction: if it comes
-       * from this abstraction, we can end it directly, otherwise we need
-       * to end the abstraction where it came from first *)
-      if abs_id' = abs_id then (
-        (* Note that it happens when a function returns a [&mut ...] which gets
-           expanded to [mut_borrow l s], and we end the borrow [l] (so [s] gets
-           reinjected in the parent abstraction without having been modified).
+         from this abstraction, we can end it directly, otherwise we need
+         to end the abstraction where it came from first *)
+      if abs_id' = abs_id then
+        (* TODO: what is below is wrong *)
+        raise (Failure "Unimplemented")
+        (* (* Note that it happens when a function returns a [&mut ...] which gets
+              expanded to [mut_borrow l s], and we end the borrow [l] (so [s] gets
+              reinjected in the parent abstraction without having been modified).
 
-           The context looks like this:
-           {[
-             abs'0 {
-               [s <: ...]
-               (s <: ...)
-             }
+              The context looks like this:
+              {[
+                abs'0 {
+                  [s <: ...]
+                  (s <: ...)
+                }
 
-             // Note that [s] can't appear in other abstractions or in the
-             // regular environment (because we forbid the duplication of
-             // symbolic values which contain borrows).
-           ]}
-        *)
-        (* End the projector of borrows - TODO: not completely sure what to
-         * replace it with... Maybe we should introduce an ABottomProj? *)
-        let ctx = update_aproj_borrows span abs_id sv AEmpty ctx in
-        (* Sanity check: no other occurrence of an intersecting projector of borrows *)
-        sanity_check __FILE__ __LINE__
-          (Option.is_none
-             (lookup_intersecting_aproj_borrows_opt span explore_shared regions
-                sv proj_ty ctx))
-          span;
-        (* End the projector of loans *)
-        let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
-        (* Sanity check *)
-        check ctx;
-        (* Continue *)
-        (ctx, fun e -> e))
+                // Note that [s] can't appear in other abstractions or in the
+                // regular environment (because we forbid the duplication of
+                // symbolic values which contain borrows).
+              ]}
+           *)
+           (* End the projector of borrows - TODO: not completely sure what to
+            * replace it with... Maybe we should introduce an ABottomProj? *)
+           let ctx = update_aproj_borrows span abs_id sv AEmpty ctx in
+           (* Sanity check: no other occurrence of an intersecting projector of borrows *)
+           sanity_check __FILE__ __LINE__
+             (Option.is_none
+                (lookup_intersecting_aproj_borrows_opt span explore_shared regions
+                   sv proj_ty ctx))
+             span;
+           (* End the projector of loans *)
+           let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
+           (* Sanity check *)
+           check ctx;
+           (* Continue *)
+                 (ctx, fun e -> e) *)
       else
         (* The borrows proj comes from a different abstraction: end it. *)
         let ctx, cc = end_abstraction_aux config span chain abs_id' ctx in

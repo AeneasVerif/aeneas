@@ -1047,11 +1047,12 @@ let update_intersecting_aproj_loans (span : Meta.span)
     fields in {!constructor:Values.aproj.AProjLoans} (we don't return the symbolic value, because it
     is equal to [sv]).
 
-    Sanity check: we check that there is exactly one projector which corresponds
+    Sanity check: we check that there is not more than one projector which corresponds
     to the couple (abstraction id, symbolic value).
  *)
-let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
-    (sv : symbolic_value) (ctx : eval_ctx) : (msymbolic_value * aproj) list =
+let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
+    (sv : symbolic_value) (ctx : eval_ctx) :
+    (msymbolic_value * aproj) list option =
   (* Small helpers for sanity checks *)
   let found = ref None in
   let set_found x =
@@ -1084,7 +1085,11 @@ let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
   (* Apply *)
   obj#visit_eval_ctx None ctx;
   (* Return *)
-  Option.get !found
+  !found
+
+let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
+    (sv : symbolic_value) (ctx : eval_ctx) : (msymbolic_value * aproj) list =
+  Option.get (lookup_aproj_loans_opt span abs_id sv ctx)
 
 (** Helper function: might break invariants.
 
@@ -1182,19 +1187,26 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
 
 (** Helper function: might break invariants.
 
-    Converts an {!Values.aproj.AProjLoans} to an {!Values.aproj.AEndedProjLoans}. The projector is identified
-    by a symbolic value and an abstraction id.
+    Converts an {!Values.aproj.AProjLoans} to an {!Values.aproj.AEndedProjLoans}. The
+    projector is identified by a symbolic value and an abstraction id.
+
+    **Remark:** the loan projector is allowed not to exist in the context anymore,
+    in which case this function does nothing.
  *)
 let update_aproj_loans_to_ended (span : Meta.span) (abs_id : AbstractionId.id)
     (sv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Lookup the projector of loans *)
-  let given_back = lookup_aproj_loans span abs_id sv ctx in
-  (* Create the new value for the projector *)
-  let nproj = AEndedProjLoans (sv, given_back) in
-  (* Insert it *)
-  let ctx = update_aproj_loans span abs_id sv nproj ctx in
-  (* Return *)
-  ctx
+  match lookup_aproj_loans_opt span abs_id sv ctx with
+  | Some given_back ->
+      (* Create the new value for the projector *)
+      let nproj = AEndedProjLoans (sv, given_back) in
+      (* Insert it *)
+      let ctx = update_aproj_loans span abs_id sv nproj ctx in
+      (* Return *)
+      ctx
+  | _ ->
+      (* The loan projector doesn't exist anymore: we have nothing to do *)
+      ctx
 
 let no_aproj_over_symbolic_in_context (span : Meta.span) (sv : symbolic_value)
     (ctx : eval_ctx) : unit =
